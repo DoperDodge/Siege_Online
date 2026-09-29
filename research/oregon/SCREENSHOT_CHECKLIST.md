@@ -2,7 +2,7 @@
 Verified against: Y11S3 (Operation Split Fire) — researched 2026-09-29
 Confidence: high that these shots are the ones we need (each item maps to an open question in `map_features.md` or `common_setups.md`). Menu names and hotkeys in Siege X are **UNVERIFIED** (written from older guides), so use whatever your client shows.
 
-Hi Ulo, this is the list of screenshots that will make our Oregon greybox match the real map. The web gives us the official blueprints, but **not** the live camera positions, the Siege X gas pipes and extinguishers, the exact bomb positions, or which walls are really reinforceable. You can answer all of that in one or two sessions. Items marked **P1** matter most. **P2** is nice to have.
+Hi Ulo, this is the list of screenshots that will make our Oregon greybox match the real map. The web gives us the official blueprints and a community vector map (r6calls) with *approximate* camera, extinguisher, gas-pipe and bomb icons. It does **not** tell us camera facing, exact bomb positions, where the ingredients sit on the walls, or which walls are really reinforceable. You can answer all of that in one or two sessions. Items marked **P1** matter most. **P2** is nice to have.
 
 If you only have 30 minutes, do the **Minimum set** at the end.
 
@@ -51,11 +51,23 @@ How: play attack, pick each spawn in turn (you can change spawn in prep).
 
 ## 3. Default cameras — P1 (the biggest unknown, **Q1**)
 How: play defense. During prep, open the camera view and cycle through every default camera.
-- [ ] Write the **total count** in NOTES.txt (pre-2020 Oregon had 7).
-- [ ] For each camera `NN`: `CAM_NN_<floor>_<room>_view.png` (the feed at its default angle).
-- [ ] For each camera: `CAM_NN_<floor>_<room>_mount.png`. Walk to it and look at the camera so we see which wall or corner it's on and how high.
+- [ ] Write the **total count** in NOTES.txt. A community map (r6calls, July 2026) shows **8**:
+
+| NN | Expected location | File |
+|---|---|---|
+| 01 | EXT, west / Junkyard–Bus side (by Small Tower's south-west corner) | `CAM_01_EXT_junkyard_view.png` |
+| 02 | EXT, south-east / Parking–Street side (beyond Garage) | `CAM_02_EXT_parking_view.png` |
+| 03 | EXT, north-east / Construction | `CAM_03_EXT_construction_view.png` |
+| 04 | B Freezer | `CAM_04_B_freezer_view.png` |
+| 05 | 1F Rear Stage (Big Tower ground floor), east end | `CAM_05_1F_rear_stage_view.png` |
+| 06 | 1F Lobby, north side of the hall | `CAM_06_1F_lobby_view.png` |
+| 07 | 1F Shower Corridor, south end | `CAM_07_1F_shower_corridor_view.png` |
+| 08 | 2F Armory Corridor, north end | `CAM_08_2F_armory_corridor_view.png` |
+
+- [ ] For each camera: the `_view.png` above (the feed at its default angle).
+- [ ] For each camera: `CAM_NN_<floor>_<room>_mount.png`. Walk to it and look at the camera so we see which wall or corner it's on, and how high.
+- [ ] If the game shows a camera that isn't in this table, or one of these is missing, tell me in NOTES.txt.
 - [ ] P2: `CAM_NN_..._view_left.png` / `_view_right.png` at the rotation limits.
-Pre-rework list to compare against: 2F Armory Corridor, 1F Lobby, 1F Dining Hall Corridor, 1F Rear Stage, EXT Junkyard, EXT Parking, EXT Construction Site. Note which ones still exist.
 
 ## 4. Hatches (6) — P1
 Standing on top, look down at the hatch. Standing below, look up at it. Take one shot **closed**, then break it (melee or shotgun) and take the same two shots **open**.
@@ -72,7 +84,7 @@ Standing on top, look down at the hatch. Standing below, look up at it. Take one
 - [ ] If you find a hatch that isn't in this table, shoot it and tell me.
 
 ## 5. Bomb sites — P1
-For each bomb room: **4 corner shots** (stand in the corner, look across the room), **one shot from each doorway** looking in, and a **close-up of the bomb** from 2 angles (answers **SQ3**). Kitchen belongs to two site pairs, so shoot it once.
+For each bomb room: **4 corner shots** (stand in the corner, look across the room), **one shot from each doorway** looking in, and a **close-up of the bomb** from 2 angles (answers **SQ3**). Kitchen belongs to two site pairs, so shoot it once. Also note the **in-game A/B letter** of each bomb. Expected rough positions (r6calls markers): Laundry SW part, Supply centre, Dining north-centre, Kitchen centre-east, Meeting Hall NW part, Kids' east part, Dorm Main Hall SW part.
 
 ### Basement — Laundry / Supply
 How: Custom → defense → pick Laundry/Supply (or walk down any stairs).
@@ -98,17 +110,24 @@ How: Custom → defense → pick Laundry/Supply (or walk down any stairs).
 - [ ] **S1 Tower/Back Stairs:** `STAIRS_S1_B_bottom.png`, `STAIRS_S1_1F_landing.png`, `STAIRS_S1_2F_top.png`
 - [ ] **S2 White/Freezer Stairs:** `STAIRS_S2_B_bottom_freezer.png`, `STAIRS_S2_1F_landing.png`, `STAIRS_S2_2F_top.png`
 - [ ] **S3 Main/Laundry Stairs:** `STAIRS_S3_B_bottom.png`, `STAIRS_S3_1F_landing.png`, `STAIRS_S3_2F_top.png`. In NOTES.txt: one stairwell or two separate flights? (**Q4**)
-- [ ] **S4 Small Tower:** is there a staircase inside Small Tower between 1F and 2F? `STAIRS_S4_small_tower_*.png` or "none" (**Q5**)
+- [ ] **S4 Small Tower ("Small Stairs" on r6calls):** confirm the staircase inside Small Tower between 1F and 2F. `STAIRS_S4_small_tower_bottom.png`, `STAIRS_S4_small_tower_top.png` (**Q5**)
 - [ ] **S5 Bunker stairs:** `STAIRS_S5_EXT_top.png`, `STAIRS_S5_B_blue_bunker_bottom.png` (**Q7**)
 - [ ] **L1 Big Tower ladder:** `LADDER_L1_2F_big_tower_bottom.png`, `LADDER_L1_3F_top.png`. In NOTES.txt: where in Big Tower is it? (**Q6**)
 
 ## 7. Siege X destructible ingredients — P1 (**Q2**)
-How: walk every room on every floor, and the exterior. For each **gas pipe** or **fire extinguisher**, take one wide shot that shows where it is in the room.
-- [ ] `ING_gaspipe_<floor>_<room>_<n>.png`
-- [ ] `ING_extinguisher_<floor>_<room>_<n>.png`
-- [ ] If you see a **metal detector**, `ING_metaldetector_<floor>_<room>_<n>.png` (I don't expect any on Oregon)
-- [ ] NOTES.txt: the total count of each type
-Tip: attackers and defenders can shoot these, so walk before you shoot anything.
+How: for each item, take one wide shot that shows where it sits in the room (which wall, how high). r6calls (July 2026) shows these 9. Confirm them, and add any it missed:
+- [ ] `ING_extinguisher_B_basement_hall_1.png` (Basement Hall/Corridor, between the Supply and Laundry doors)
+- [ ] `ING_extinguisher_B_freezer_1.png` (the dark north arm of Freezer)
+- [ ] `ING_extinguisher_1F_security_corridor_1.png`
+- [ ] `ING_extinguisher_1F_kitchen_corridor_1.png`
+- [ ] `ING_extinguisher_1F_lobby_1.png` (the east–west hall south of Split)
+- [ ] `ING_extinguisher_2F_trophy_room_1.png` (NE corner, top of Armory Corridor)
+- [ ] `ING_extinguisher_2F_low_attic_1.png` (the wide part of the Attic next to Kids')
+- [ ] `ING_gaspipe_1F_main_stairs_1.png`: by Main Stairs, or just outside the Garage's south-west corner. Which is it?
+- [ ] `ING_gaspipe_2F_attic_1.png` (north corridor from Big Tower)
+- [ ] Any others you spot: `ING_<type>_<floor>_<room>_<n>.png`. Any **metal detector**? (I don't expect any.)
+- [ ] P2: shoot one gas pipe and one extinguisher and record a short clip or 2–3 screenshots of the effect (flame length, smoke size). Note seconds in NOTES.txt.
+Tip: take the placement shots before you shoot anything.
 
 ## 8. Walls and floors: soft / hard / reinforceable — P1 for site walls
 How: play defense in prep. Walk up to each wall below and hold the reinforce key.
@@ -170,7 +189,7 @@ If you can, hide the HUD; otherwise just aim away from it.
 - [ ] Any really dark corners you know defenders hide in: `LIGHT_dark_corner_<room>.png`
 
 ## 13. Question sheet (copy into NOTES.txt and answer)
-From `map_features.md`: Q1 cameras · Q2 ingredients · Q3 Lobby hatch → which room · Q4 Main/Laundry stairs continuity · Q5 Small Tower stairs · Q6 ladder position and whether the tower top counts as inside · Q7 Bunker stairs · Q8 spawn names/count · Q9 rappel limits and Dining flat roof · Q10 common entry windows · Q11 spawn-peek spots · Q12 notable vaultable props.
+From `map_features.md`: Q1 cameras (8 expected) · Q2 ingredients (7 extinguishers + 2 gas pipes expected) · Q3 Lobby hatch → which room · Q4 Main/Laundry stairs continuity · Q5 Small Tower stairs · Q6 ladder position and whether the tower top counts as inside · Q7 Bunker stairs · Q8 spawn names/count · Q9 rappel limits and Dining flat roof · Q10 common entry windows · Q11 spawn-peek spots · Q12 notable vaultable props.
 From `common_setups.md`: SQ1 your usual reinforcements per site · SQ2 are the "breakable" walls reinforceable, and are exterior walls hard · SQ3 bomb positions · SQ4 standard Mira spots · SQ5 usual attack routes per site · SQ6 default plants and post-plant spots · SQ7 does anyone reinforce H1/H4 · SQ8 the Kids' north window · SQ9 standard rotation holes · SQ10 ingredients that change setups.
 
 ---
@@ -178,7 +197,7 @@ From `common_setups.md`: SQ1 your usual reinforcements per site · SQ2 are the "
 ## Minimum set (about 30 min, if that's all you have)
 1. `BP_*` for B, 1F, 2F (3 shots)
 2. `SPAWN_*_toward_building` (3 shots)
-3. Every `CAM_NN_*_view` + the camera count (≈7 shots)
+3. Every `CAM_NN_*_view` + the camera count (8 expected)
 4. Every `HATCH_H*_top_closed` + `_bottom_closed` (12 shots)
 5. `BOMB_*` one shot per bomb (7 bomb rooms, since Kitchen counts once)
 6. Every gas pipe / extinguisher you pass (`ING_*`)
@@ -204,5 +223,6 @@ From `common_setups.md`: SQ1 your usual reinforcements per site · SQ2 are the "
 ## Sources
 - `research/oregon/map_features.md` and `research/oregon/common_setups.md` (this repo) — the open questions these shots resolve
 - https://www.r6trainer.com/creating-a-custom-match-for-exploring-a-map/ — Custom Game → Local recipe for exploring a map (prep short, action at max)
+- https://r6calls.com/img/maps/oregon.svg — community vector map (July 2026). Expected camera, extinguisher, gas-pipe and bomb-marker locations (converted in `map_features.md` §2–3)
 - https://www.ubisoft.com/en-us/game/rainbow-six/siege/news-updates/seasons/silenthunt — Y11S1 Match Replay free-cam optimization and HUD-hiding options; Oregon modernization with new destructible ingredients
 - `PLAN.md` §1.1 (references stay private), §2.2 item 3 (screenshot priorities), §4 / `.gitattributes` (Git LFS patterns)

@@ -1,9 +1,9 @@
 # Oregon — Common Setups per Bomb Site (input for `bot_strats.json`, PLAN §15.4)
 Verified against: Y11S3 (Operation Split Fire) — researched 2026-09-29
-Confidence: **medium** for geometry: which walls are breakable, where the hatches go, which doors and stairs lead into each site. All of that comes from the official blueprints and Ubisoft's rework notes. **Low** for "what players commonly do". I found no trustworthy post-2020 setup guide I could reach (YouTube and Reddit were blocked; the reachable 2025–26 guides are low-quality SEO pages; the Steam and siege.gg guides predate the 2020 rework). So most reinforcement, gadget and plan choices below are **derived** from the geometry plus standard Siege practice, and are tagged `DER`. Ulo should review them (see Open questions).
+Confidence: **medium** for geometry: which walls are breakable, where the hatches go, which doors and stairs lead into each site. All of that comes from the official blueprints and Ubisoft's rework notes. **Low** for "what players commonly do". I found no trustworthy post-2020 setup guide I could reach (YouTube and Reddit were blocked; the reachable 2025–26 guides are low-quality SEO pages; the Steam and siege.gg guides predate the 2020 rework). So most reinforcement, gadget and plan choices below are **derived** from the geometry plus standard Siege practice, and are tagged `DER`. Ulo should review them (see Open questions). Bomb markers, default cameras and ingredients per site come from the r6calls vector map (July 2026, `R6C`), with **medium** confidence.
 
 How to read this file:
-- Every item has an `ev:` (evidence) tag: `BP` = official blueprint geometry; `OFF` = official Ubisoft text; `COMM` = community guide (named); `PRE` = pre-rework guide (context only); `DER` = derived by me (**UNVERIFIED** as "common practice").
+- Every item has an `ev:` (evidence) tag: `BP` = official blueprint geometry; `OFF` = official Ubisoft text; `COMM` = community guide (named); `R6C` = r6calls.com Oregon vector map (rev 5, 2026-07-25; bomb *markers* are icon anchors, not exact bomb-object positions); `PRE` = pre-rework guide (context only); `DER` = derived by me (**UNVERIFIED** as "common practice").
 - Wall IDs are `W_<floor>_<roomA>__<roomB>` and point at the **yellow "breakable wall"** segments of the official blueprint. `px` = blueprint pixel coordinates in the 1600×900 frame described in `map_features.md` §0.2. Hatch IDs H1–H6 and stair IDs S1–S5 match `map_features.md`.
 - "Breakable" means the blueprint's *Breakable walls* legend (soft/reinforceable). Whether each one is reinforceable, and how many reinforcement panels it takes, is **UNVERIFIED**. `layout_notes.md` and `research/destruction.md` own that. Bots should reinforce "the full wall" and let the map data decide the panel count.
 - The team reinforcement pool size and reinforcement rules: `research/destruction.md`. The priority lists below are **ordered**, so bots should spend the pool top-down and stop when it runs out.
@@ -19,6 +19,7 @@ How to read this file:
 | Basement has exactly 3 interior staircases (Back/Tower Stairs S1, Freezer/White Stairs S2, Laundry/Main Stairs S3) plus the outside **Bunker stairs** S5 | OFF, BP |
 | Attackers spawn at **A Junkyard** (west), **B Street** (south), **C Construction Site** (north-east). The drone spawns on the side of the first chosen spawn | LQ, OFF |
 | Hatches are one-way for our roster (no Oryx) | — |
+| **8 default cameras** (3 EXT, B Freezer, 1F Rear Stage / Lobby / Shower Corridor, 2F Armory Corridor), **7 fire extinguishers**, **2 gas pipes** (1F by Main Stairs/Garage, 2F Attic), **no metal detectors** | R6C (see `map_features.md` §2–3) |
 
 ### 0.1 Roster roles on Oregon (for the team planner) — ev: operator research files + DER
 | Operator | Side | Default role here | Key tools (details in `research/operators/<name>.md`) |
@@ -45,8 +46,8 @@ Default defender split (DER): **3 anchors (Mira, Mute, Skopós) + 2 roamers (Les
 ```yaml
 site_id: B_laundry_supply
 bomb_rooms:
-  - {room: B_laundry_room, bp_px_bbox: [796,524,941,587], bomb_object_pos: UNVERIFIED}
-  - {room: B_supply_room, bp_px_bbox: [844,394,930,515], includes: B_supply_closet [842,483,887,514], bomb_object_pos: UNVERIFIED}
+  - {room: B_laundry_room, bp_px_bbox: [796,524,941,587], r6calls_marker: {letter: 4A, bp_px: [803,577], note: "SW part, by the Freezer wall and the Basement Hall door"}}
+  - {room: B_supply_room, bp_px_bbox: [844,394,930,515], includes: B_supply_closet [842,483,887,514], r6calls_marker: {letter: 4B, bp_px: [888,449], note: "room centre"}}
 adjacent_rooms: [B_basement_hall (W of Supply/N of Laundry), B_freezer (W), B_boiler_room (N),
                  B_electric_room (NE, door into Supply), B_blue_bunker (E), B_laundry_storage (S),
                  B_laundry_stairs (SE), B_back_stairs (N, into Boiler)]           # ev: BP + R6T polygons
@@ -69,6 +70,11 @@ breakable_walls:                                                                
   W_B_electric__blue_bunker: {px: [934,346,934,384]}
   W_B_supplycloset__laundry: {px: [841,519,889,519], internal: true}
   W_B_supply__laundry:       {px: [901,519,926,519], internal: true}
+default_cams_and_ingredients:     # ev: R6C (r6calls, July 2026; single source) — see map_features.md §2-3
+  cameras: [CAM4 B Freezer, CAM6 1F Lobby (over H3/Main Stairs), CAM5 1F Rear Stage (top of Back Stairs)]
+  fire_extinguishers: [ING1 B Basement Hall (between the Supply and Laundry doors), ING2 B Freezer north arm]
+  gas_pipes: []
+  bot_use: "DEF: shoot ING1/ING2 to smoke and concuss attackers entering Basement Hall / Freezer. ATK: pre-shoot them from a distance or avoid standing next to them"   # DER
 defense:
   reinforce_priority:            # ev: DER for all. Spend top-down
     1: {id: W_B_laundry__freezer,      why: "stops Freezer hard breach / sightline (attackers via S2 + H2)"}
@@ -123,8 +129,8 @@ attack:
 ```yaml
 site_id: 1F_kitchen_dining
 bomb_rooms:
-  - {room: 1F_kitchen, bp_px_bbox: [643,441,788,528], bomb_object_pos: UNVERIFIED}
-  - {room: 1F_dining_hall, bp_px_bbox: [498,428,627,526], bomb_object_pos: UNVERIFIED}
+  - {room: 1F_kitchen, bp_px_bbox: [643,441,788,528], r6calls_marker: {letter: 2B, bp_px: [718,470], note: "centre-east (same bomb as 3B)"}}
+  - {room: 1F_dining_hall, bp_px_bbox: [498,428,627,526], r6calls_marker: {letter: 2A, bp_px: [569,438], note: "north-centre"}}
 adjacent_rooms: [1F_small_tower (W of Dining), 1F_showers (S of Dining), 1F_shower_corridor (S/E strip),
                  1F_security (S of Kitchen), 1F_security_hall_white_hall, 1F_kitchen_corridor (NE),
                  1F_meeting_hall (E), 2F_kids_dorms (above Kitchen)]                   # ev: BP + R6T
@@ -142,6 +148,11 @@ breakable_walls:                                                                
   W_1F_dining__small_tower:   {px: [491,482,491,525]}
   W_1F_dining__showers:       {px: [553,534,595,534]}
   W_1F_kitchen__dining:       {px: [634,475,634,492], internal: true}
+default_cams_and_ingredients:     # ev: R6C
+  cameras: [CAM7 1F Shower Corridor (south approach to Dining/Showers), CAM1 EXT Junkyard/Bus (Small Tower side), CAM5 1F Rear Stage]
+  fire_extinguishers: [ING3 1F Security Corridor, ING4 1F Kitchen Corridor]
+  gas_pipes: []
+  bot_use: "DEF: ING4 smokes the Kitchen Corridor push from Big Tower; ING3 the White Hall / Security push"   # DER
 defense:
   reinforce_priority:     # ev: DER
     1: {id: W_1F_kitchen__meeting,    why: "attackers who take Meeting Hall (from Big Tower / Split) breach into Kitchen"}
@@ -190,8 +201,8 @@ Community note, low trust (R6 Mobile guide): "The ceiling in the Kitchen consist
 ```yaml
 site_id: 1F_meeting_kitchen
 bomb_rooms:
-  - {room: 1F_meeting_hall, bp_px_bbox: [801,321,942,528], contains: 1F_split (829-908, 498-530), bomb_object_pos: UNVERIFIED}
-  - {room: 1F_kitchen, bp_px_bbox: [643,441,788,528], bomb_object_pos: UNVERIFIED}
+  - {room: 1F_meeting_hall, bp_px_bbox: [801,321,942,528], contains: 1F_split (829-908, 498-530), r6calls_marker: {letter: 3A, bp_px: [836,371], note: "NW part, near the Kitchen Corridor door and the Stage"}}
+  - {room: 1F_kitchen, bp_px_bbox: [643,441,788,528], r6calls_marker: {letter: 3B, bp_px: [718,486], note: "same bomb as 2B"}}
 adjacent_rooms: [1F_rear_stage_T1 (N, Big Tower ground floor), 1F_kitchen_corridor (NW), 1F_security (S of Kitchen),
                  1F_security_hall_white_hall (S), 1F_lobby (SE), 1F_dining_hall (W of Kitchen),
                  2F_attic (above Meeting, hatch H5 only), 2F_kids_dorms (above Kitchen), B_electric_room (below, H1)]
@@ -211,6 +222,11 @@ breakable_walls:                                                                
   W_1F_kitchen__security_e:     {px: [733,534,755,534]}
   W_1F_kitchen__dining:         {px: [634,475,634,492]}
   W_1F_kitchen__meeting:        {px: [795,480,795,512], internal: true}
+default_cams_and_ingredients:     # ev: R6C
+  cameras: [CAM5 1F Rear Stage (Big Tower side), CAM6 1F Lobby (Split / Lobby approach), CAM3 EXT Construction]
+  fire_extinguishers: [ING4 1F Kitchen Corridor, ING5 1F Lobby hall south of Split, ING3 1F Security Corridor]
+  gas_pipes: [ING8 by Main Stairs / Garage SW corner]
+  bot_use: "DEF: ING5 smokes the Split/Lobby approach; ING8 can flame-block the Main Stairs/Lobby-Garage path for 15 s"   # DER
 defense:
   reinforce_priority:      # ev: DER
     1: {id: W_1F_rear_stage__meeting, why: "Big Tower (Construction Site) attackers hard-breach into Meeting"}
@@ -261,8 +277,8 @@ attack:
 ```yaml
 site_id: 2F_kids_dorms
 bomb_rooms:
-  - {room: 2F_kids_dorms, bp_px_bbox: [649,447,777,526], bomb_object_pos: UNVERIFIED}
-  - {room: 2F_dorm_main_hall, bp_px_bbox: [648,504,855,624], note: "L-shaped; includes the NE sub-room south of the Attic", bomb_object_pos: UNVERIFIED}
+  - {room: 2F_kids_dorms, bp_px_bbox: [649,447,777,526], r6calls_marker: {letter: 1B, bp_px: [761,485], note: "east part, by the Kids'-Attic wall"}}
+  - {room: 2F_dorm_main_hall, bp_px_bbox: [648,504,855,624], note: "L-shaped; includes the NE sub-room ('Middle' on r6calls) south of the Attic", r6calls_marker: {letter: 1A, bp_px: [702,613], note: "south-west part, near the White Stairs door"}}
 adjacent_rooms: [2F_attic (N/NE; connector to Big Tower), 2F_trophy_room (E), 2F_game_room (S-centre, opening into Dorm),
                  2F_walk_in (S), 2F_master_bedroom (SE), 2F_white_stairs (SW, S2), 1F_kitchen (below Kids', H4),
                  EXT dining flat roof R5 and dorms roof R3 (W)]
@@ -285,6 +301,11 @@ breakable_walls:                                                                
   W_2F_kids__dorm:           {px: [662,532,714,532], internal: true}
   W_2F_master__armory_corr:  {px: [930,575,930,610]}
   W_2F_armory_corr__armory:  {px: [962,543,962,581]}
+default_cams_and_ingredients:     # ev: R6C
+  cameras: [CAM8 2F Armory Corridor (Master/Trophy side), CAM5 1F Rear Stage (Big Tower route), CAM1 EXT Junkyard/Bus (west windows)]
+  fire_extinguishers: [ING7 2F Low Attic (Attic entry into site), ING6 2F Trophy Room]
+  gas_pipes: [ING9 2F Attic north connector]
+  bot_use: "DEF: shoot ING9 when attackers push Big Tower -> Attic (15 s flame wall, then ~3 s ground fire); ING7 smokes/concusses at the Attic doorway. ATK: pre-shoot ING9 from Big Tower before committing to Attic"   # DER + SGG behaviour
 defense:
   reinforce_priority:        # ev: DER
     1: {id: W_2F_kids__attic,        why: "Attic is the attackers' main staging room (Big Tower side); hard-breach target into Kids'"}
@@ -342,7 +363,7 @@ Community notes (low trust, stated only as "consider" ideas): a 2025 Lemon8 5-st
 (Ulo: answer in any format. "yes/no + a screenshot" is ideal. File names are in `SCREENSHOT_CHECKLIST.md`.)
 - **SQ1:** For each site, which walls and hatches does your team usually reinforce? Is my priority list in each YAML close? The main doubts are B (Laundry–Freezer wall + Supply–Bunker wall + the Lobby and Meeting hatches?) and 2F (Kids'–Attic wall + Game Room–Walk-In?).
 - **SQ2:** Are all the yellow "breakable" walls listed here actually **reinforceable**? Are the **exterior** walls of Oregon hard? The blueprint only marks the Garage south exterior wall as breakable.
-- **SQ3:** Where exactly is each **bomb object** (8 total)? Screenshot each bomb from 2 angles.
+- **SQ3:** Where exactly is each **bomb object** (7 rooms; Kitchen is shared by two sites)? The r6calls markers suggest: Laundry SW part, Supply centre, Dining north-centre, Kitchen centre-east, Meeting NW part, Kids' east part, Dorm Main Hall SW part. Screenshot each bomb from 2 angles. Also, what are the in-game A/B letters?
 - **SQ4:** Standard Mira window spots on live Oregon (which wall, facing where) for Laundry/Supply and Kids'/Dorms.
 - **SQ5:** Which spawn and entry do attackers usually take for each site? E.g., is basement usually "Freezer + Bunker"? Is 2F usually "Attic + west window"?
 - **SQ6:** Common post-plant spots and default plant spots per bomb.
@@ -354,6 +375,8 @@ Community notes (low trust, stated only as "consider" ideas): a 2025 Lemon8 5-st
 ## Sources
 - https://ubistatic-a.ubisoft.com/0106/gamesites/rainbow6/blueprints/r6-maps-oregon-blueprints.zip — official blueprints (breakable walls, hatches, destructible floors, doors). Analysed in scratch only
 - https://www.r6trainer.com/oregon/ — PC callout room polygons over the blueprint crops (rework, 2020-03-19)
+- https://r6calls.com/img/maps/oregon.svg — r6calls vector map (rev 5, last-modified 2026-07-25): bomb markers with A/B letters, default cameras, fire extinguishers, gas pipes (converted to blueprint px; details in `map_features.md` §2–3)
+- https://siege.gg/news/destructible-ingredients-to-change-the-game-in-siege-x — gas pipe (15 s flame, ~3 s ground fire) and extinguisher (smoke + concussion) behaviour used in `bot_use` notes
 - https://www.ubisoft.com/en-us/game/rainbow-six/siege/news-updates/seasons/voidedge — rework changes (Kitchen Corridor, Freezer, removed doors, Attic doorway, ladder removal, site replacement)
 - https://news.ubisoft.com/en-us/article/7jpjTlTV0IuZAhvGXnYgDW/rainbow-six-siege-operation-void-edge-operator-and-map-guide — rework summary
 - https://www.ubisoft.com/en-us/game/rainbow-six/siege/news-updates/seasons/silenthunt — Y11S1 modernization (ingredients, lighting; no layout change announced)
