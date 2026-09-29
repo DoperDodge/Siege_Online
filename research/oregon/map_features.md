@@ -1,6 +1,6 @@
 # Oregon — Map Features (spawns, cameras, ingredients, hatches, stairs, ladders, vaults, rappel, OOB, entries, lighting)
 Verified against: Y11S3 (Operation Split Fire) — researched 2026-09-29
-Confidence: **medium** for hatches, stairs, ladder, spawns and site list (official blueprints + official Y5S1 rework notes + Liquipedia + R6 Trainer callouts all agree). **Low** for default cameras, destructible-ingredient locations, vault/rappel specifics and spawn-peek spots: no reachable source describes the live (post-2020) positions, so those need Ulo's screenshots (see `SCREENSHOT_CHECKLIST.md`).
+Confidence: **medium-high** for hatches, stairs, ladder, spawns and site list (official blueprints + official Y5S1 rework notes + Liquipedia + R6 Trainer callouts + the r6calls vector map all agree). **Medium** for default-camera and destructible-ingredient *positions*: one community source (r6calls.com vector map, revision 5, last modified 2026-07-25, which already includes the Y11S1 ingredients) with no second source. **Low** for camera facing, vault/rappel specifics and spawn-peek spots. Ulo's screenshots should confirm these (see `SCREENSHOT_CHECKLIST.md`).
 
 Scope: PLAN.md §2.2 item 9 and §9.2. Room geometry, wall surface types and the full door/window list belong to `layout_notes.md` (another agent). This file uses the same callout names and adds the features. Where the two files disagree, check the blueprint overlay method in §0.3.
 
@@ -9,6 +9,7 @@ Evidence tags used below:
 - `[BP]` official Ubisoft blueprint images (downloaded to scratch only, analysed by overlay; see §0.3)
 - `[LQ]` Liquipedia, `[FD]` Fandom, `[SGG]` siege.gg, `[R6T]` R6 Trainer room finder (callouts, updated for the rework on 2020-03-19)
 - `[R6M]` Game8 R6 Mobile callout map (same reworked layout, **different callout names**; use only as a cross-check)
+- `[R6C]` r6calls.com Oregon vector map (`https://r6calls.com/img/maps/oregon.svg`, map revision 5, file last-modified **2026-07-25**). Community-made, with per-floor layers for cameras, fire extinguishers, gas pipes, ladders, drone tunnels, hatches, bomb/secure/hostage markers, insertion points and labels. It already contains the Y11S1 ingredients, so it reflects the modernized map. The layout agent downloaded it; I converted its coordinates to blueprint px with the layout agent's published fit (`layout_notes.md` §0: `u = SVG_root − (617.588, 259.121)`, `px_x ≈ 2.019·u_x + 361.9`, `px_y ≈ 2.014·u_y + 115.7`). The conversion reproduces all 6 hatch positions within ~8 px.
 - `[PRE]` pre-rework data (r6maps.com v2.4.1 data, 2019). Kept only as a baseline. **Do not build from it.**
 - `[DER]` my inference from geometry plus general Siege rules. Treat as UNVERIFIED until Ulo confirms.
 
@@ -56,6 +57,8 @@ The R6 Trainer room finder (`r6trainer.com/oregon/`) has clickable room polygons
 | Basement Hall | Basement Hallway | Basement Corridor | |
 | Electric Room | Electrial [sic] Room | Electric Room | |
 
+r6calls labels `[R6C]` (community, 2026). **B:** Tower Stairs, Boiler?, Electric, Blue / Bunker, Supply, Closet, **Pillar**, Basement Corridor, Laundry, Storage, Laundry Stairs, Freezer, Freezer Stairs. **1F:** Tower, Tower Stairs, **Stage**, Kitchen Corridor, Meeting, Split, Kitchen, Dining, Small Tower, **Small Stairs**, Showers, Shower Corridor, Security, Security Corridor, White Stairs, Classroom, Lobby, Garage, **Armory Stairs**. **2F:** Tower, Tower Stairs, Attic, **Low Attic**, Kids, Dorm, **Middle**, **Gaming**, Walk In, Master, Trophy, Armory Corridor, Armory, Armory Stairs, White Stairs, Small Tower, Office, Small Stairs, **Balcony**. **3F:** **Cat Walk**. `layout_notes.md` owns the final room list.
+
 Community short names seen in 2026 guides (low-trust SEO source): "Freezer", "Bunker", "Pillar" (basement), "Trophy", "Master", "White", "Big Window". Keep them as aliases only.
 
 ---
@@ -68,8 +71,10 @@ Community short names seen in 2026 guides (low-trust SEO source): "Freezer", "Bu
 | B | **Street** | South edge: the road along the bottom of the image, south/south-east of Main Entrance and Garage (parked vans ≈ x 860–1100, y 700–800) | Main Entrance → Lobby, Garage, Classroom, Master/Balcony from rappel, Main/Laundry Stairs | `[LQ]` B - Street; `[PRE]` |
 | C | **Construction Site** | North-east: half-built timber house and yellow excavator ≈ x 1050–1430, y 100–350 | Big Tower (Rear Stage east door), Blue Bunker (outside basement stairs), Meeting Hall east windows, Garage north door, Armory from rappel | `[LQ]` C - Construction Site; `[PRE]` |
 
+- Spawn insertion points `[R6C]` (blueprint px; B lies **below the bottom edge** of the 1600×900 image): **A (79, 732)**, **B (942, 963)**, **C (1303, 109)**. r6calls also uses A = Junkyard, B = Street, C = Construction.
 - Drone spawn: "your drone will now always spawn on the same side of the building as the one you first chose your operator to spawn from" `[OFF]` (Void Edge). You can still change spawn after prep.
-- Other exterior callouts `[PRE]` (the exterior looks unchanged in the rework blueprints, but that is UNVERIFIED): **Bus Yard, Junkyard, Farmlands** (north-west gardens and greenhouse), **Shooting Range** (north-centre), **Construction Site, Parking** (east, beside Garage/Meeting Hall), **Main Entrance, Street**. Also mentioned in patch notes: "EXT Construction Site" and "EXT Dorms Roof" `[FD]` Patch 11.1.1.
+- Exterior callouts. Current `[R6C]`: **Junkyard, Bus, Garden, Shooting Range, Construction, Parking, Main Entrance, Street**. Pre-rework `[PRE]` used "Bus Yard" and "Farmlands" (= r6calls "Garden", the north-west vegetable plots and greenhouse). Official names from patch notes: "EXT Construction Site", "EXT Dorms Roof" `[FD]` Patch 11.1.1.
+- Roof callouts `[R6C]`: Tower Roof, Attic Roof, Meeting Roof, Kids Roof, Dorms Roof, Master Roof, Armory Roof, Small Tower Roof, Dining Roof, plus the 2F **Balcony**. The Big Tower top room is labelled **"Cat Walk"**.
 - Defender spawn = the chosen bomb-site pair. Sites (confirmed by `[LQ]`, `[FD]`, `[SGG]`; plan list is correct):
   1. 2F Kids' Dorms / 2F Dorms Main Hall
   2. 1F Kitchen / 1F Dining Hall
@@ -79,23 +84,25 @@ Community short names seen in 2026 guides (low-trust SEO source): "Freezer", "Bu
 
 ---
 
-## 2. Default (security) cameras — **live positions UNVERIFIED**
+## 2. Default (security) cameras — **8** per r6calls (July 2026); facing UNVERIFIED
 
-No reachable source lists the post-rework cameras. The only camera list I found is the **pre-rework** one (r6maps data, and a Twinfinite guide snippet that matches it exactly). Some of these rooms were renamed or rebuilt in Y5S1 (e.g., "Dining Hall Corridor" is not a current callout), so **expect changes**. The count and positions are the #1 screenshot priority.
+Primary source: the r6calls `cam` layers `[R6C]`, converted to blueprint px and matched to the R6 Trainer room polygons. This list fits the pre-rework list plus the rework's changes: the new Freezer area gained a camera, and the old "Dining Hall Corridor" camera now sits in "Shower Corridor". That fit supports it, but it's still a **single community source**. Mounting height and facing aren't in the data.
 
-| pre id | Floor | Location (pre-rework name) | Approx. facing `[PRE]` (from r6maps LOS polygons, blueprint frame) | Live status |
-|---|---|---|---|---|
-| 1 | 2F | Armory Corridor | south down the corridor toward Main Stairs, plus west | UNVERIFIED (room still exists) |
-| 2 | 1F | Lobby | wide east–west view across the Lobby toward Main Entrance and Main Stairs | UNVERIFIED (room still exists) |
-| 3 | 1F | Dining Hall Corridor | west and south | **Likely moved or renamed** (callout gone) |
-| 4 | 1F | Rear Stage | west along Rear Stage and north toward Tower Stairs | UNVERIFIED (room still exists as "Rear Stage (T1)") |
-| 5 | EXT | Junkyard | north–south along the west façade | UNVERIFIED |
-| 6 | EXT | Parking | north–south along the east façade | UNVERIFIED |
-| 7 | EXT | Construction Site | east–west across the construction yard north of the building | UNVERIFIED |
+| id | Floor | Room (PC callout) | Blueprint px (icon centre) | Placement note `[R6C]` | Pre-rework equivalent `[PRE]` | Conf. |
+|---|---|---|---|---|---|---|
+| CAM1 | EXT | **Junkyard / Bus** side (west–south-west, off the Small Tower corner) | (275, 636) | Exterior, west of Small Tower's south end | EXT Junkyard | medium |
+| CAM2 | EXT | **Parking / Street** side (south-east, beyond Garage) | (1101, 663) | Exterior, south-east of Garage | EXT Parking | medium |
+| CAM3 | EXT | **Construction** (north-east) | (1032, 90) | Exterior, north-east yard | EXT Construction Site | medium |
+| CAM4 | B | **Freezer** (west part) | (685, 532) | Watches the Freezer room | — (Freezer is new in Y5S1) | medium |
+| CAM5 | 1F | **Rear Stage (T1)**, east end | (943, 302) | Big Tower ground floor | 1F Rear Stage | medium |
+| CAM6 | 1F | **Lobby**, north edge of the east–west hall | (890, 544) | Near the Split door / Main Stairs | 1F Lobby | medium |
+| CAM7 | 1F | **Shower Corridor**, south end (near the south exterior door and White Stairs) | (621, 650) | South-west corridor | 1F Dining Hall Corridor (renamed/moved) | medium |
+| CAM8 | 2F | **Armory Corridor**, north end | (950, 508) | Looks down the corridor (south) toward Main/Armory Stairs `[PRE]` facing | 2F Armory Corridor | medium |
 
-- Pre-rework total: **7** (3 exterior + 4 interior) `[PRE]`. Live count: **UNVERIFIED**, placeholder 7.
+- Count: **8** `[R6C]` (pre-rework: 7 `[PRE]`, a Twinfinite snippet agrees with the 7). Ulo confirms (Q1).
+- Facing `[DER]`/`[PRE]`: CAM8 south along Armory Corridor. CAM6 east–west across the Lobby hall. CAM5 west along Rear Stage. EXT cams along the adjacent façades. CAM4 and CAM7 facing is **UNVERIFIED**.
 - Camera behaviour (rotation, zoom, destruction, ping) belongs to `research/intel.md` and `research/round_flow.md`.
-- Placeholder rule for the greybox: put one camera in each room listed above, wall-mounted at ceiling height, facing as described, and tag it `verified: UNVERIFIED`.
+- Greybox rule: wall- or ceiling-corner-mounted at ceiling height, tagged `verified: "r6calls_only"` until Ulo's `CAM_*` shots arrive.
 
 ---
 
@@ -104,12 +111,26 @@ No reachable source lists the post-rework cameras. The only camera list I found 
 | Item | Value | Evidence |
 |---|---|---|
 | Present on live Oregon? | **Yes.** Y11S1 added "new destructible ingredients" to modernized Oregon | `[OFF]` Silent Hunt |
-| Types on Oregon | **Gas pipes and fire extinguishers** (medium confidence). A community video titled "EVERY NEW Gas Pipe & Extinguisher Spot in Y11S1" covers the Y11S1 modernized maps (Coastline, Villa, Oregon); its content couldn't be fetched (HTTP 429). | YouTube title via search (dvZjsEc4XEg) |
-| Metal detectors | **None expected** (UNVERIFIED). siege.gg (updated Feb 2026) places metal detectors on **Bank and Border** only | `[SGG]` |
-| Count and locations | **UNVERIFIED.** See the checklist section "ING". Guessed places to look first (guesses only): Kitchen (gas), Boiler Room, Electric Room, Freezer, Garage, Laundry, Meeting Hall | — |
-| Behaviour (summary; `research/destruction.md` owns it) | **Gas pipe:** a shot releases a horizontal flame jet for **15 s**, then the pipe explodes and fire covers the area for **~3 s** `[SGG]`. **Fire extinguisher:** when shot it releases a smoke cloud and briefly **concusses** anyone close `[SGG]`. Bots should know both sides can pre-destroy them in prep `[SGG]` | `[SGG]` |
+| Types on Oregon | **Gas pipes and fire extinguishers.** r6calls has separate layers for them on Oregon `[R6C]`. A community video titled "EVERY NEW Gas Pipe & Extinguisher Spot in Y11S1" covers the Y11S1 modernized maps; its content couldn't be fetched | `[R6C]`; YouTube title (dvZjsEc4XEg) |
+| Metal detectors | **None.** r6calls defines a metal-detector layer type (`md`) but Oregon has no such layer `[R6C]`. siege.gg (updated Feb 2026) puts metal detectors on Bank and Border only | `[R6C]`, `[SGG]` |
+| Count | **7 fire extinguishers + 2 gas pipes** `[R6C]` | medium (single source) |
+| Behaviour (summary; `research/destruction.md` owns it) | **Gas pipe:** a shot releases a horizontal flame jet for **15 s**, then the pipe explodes and fire covers the area for **~3 s** `[SGG]`. **Fire extinguisher:** when shot it releases a smoke cloud and briefly **concusses** anyone close `[SGG]`. Both sides may pre-destroy them in prep `[SGG]` | `[SGG]` |
 
-Data placeholder (per instance): `{type: "gas_pipe"|"fire_extinguisher", floor, room, wall_or_pos, facing, verified: "UNVERIFIED"}`.
+Locations `[R6C]` (icon positions, blueprint px; mounting wall and height UNVERIFIED). `layout_notes.md` lists the same items in its room table, in u-coordinates.
+
+| id | Type | Floor | Room (PC callout) | Blueprint px | Tactical note `[DER]` |
+|---|---|---|---|---|---|
+| ING1 | fire extinguisher | B | **Basement Hall / Basement Corridor**, south part (between the Supply and Laundry doors) | (830, 481) | Smoke/concussion right at both basement-site doors |
+| ING2 | fire extinguisher | B | **Freezer**, north arm (dark passage to Basement Hall) | (784, 512) | On the Freezer → Basement Hall route; next to the Laundry–Freezer wall |
+| ING3 | fire extinguisher | 1F | **Security Corridor** (north wall, near the Security door) | (670, 589) | Over the White Stairs / Security approach |
+| ING4 | fire extinguisher | 1F | **Kitchen Corridor** | (789, 376) | Big Tower ↔ Kitchen/Meeting route |
+| ING5 | fire extinguisher | 1F | **Lobby hall / White Hall** junction (south of Split, near the Meeting SE corner) | (850, 541) | Lobby approach to Meeting and Kitchen |
+| ING6 | fire extinguisher | 2F | **Trophy Room**, NE corner (top of Armory Corridor) | (920, 505) | Master/Armory side of the Dorms site |
+| ING7 | fire extinguisher | 2F | **Low Attic** (the wide part of the Attic, beside Kids'/Dorm NE) | (853, 491) | On the Attic entry into the Dorms site |
+| ING8 | **gas pipe** | 1F | **Main Stairs / Garage SW corner**. `layout_notes.md` reads it as "just outside the SW corner of Garage" | (940, 655) | Can flame-block the Main Stairs / Lobby-to-Garage path |
+| ING9 | **gas pipe** | 2F | **Attic** (north connector, east wall) | (903, 411) | Can flame-block the Big Tower → Attic push on the Dorms site |
+
+Data per instance: `{id, type, floor, room, bp_px, wall: UNVERIFIED, height_m: UNVERIFIED, verified: "r6calls_only"}`.
 
 ---
 
@@ -121,11 +142,12 @@ Hatch = "Breakable floor trap" square on the blueprint of the **upper** floor `[
 |---|---|---|---|---|---|
 | H1 | **1F Meeting Hall** (north part, just south of the Rear Stage wall) | **B Electric Room** | (893, 372) | Electric Room opens into Supply by a door (§5.2 of `common_setups.md`). Pre-rework Meeting Hall had **2** basement hatches; rework has **1** (player.one) | high |
 | H2 | **1F Security** (east end) | **B Freezer** (east end, beside the Laundry–Freezer wall) | (742, 566) | Vertical route into Freezer. Its drop point is right next to the Laundry west wall | high |
-| H3 | **1F Lobby** (between Classroom and Main Stairs) | **B Laundry Storage** (north-east corner) | (891, 615) | The rework's "Laundry hatch", "shifted to a less central location" (PC Gamer). It lands a few px from the Laundry Storage / Laundry Stairs boundary, so **verify** which room it opens into (Q3) | medium |
+| H3 | **1F Lobby** (between Classroom and Main Stairs) | **B Laundry Storage** (north-east corner) | (891, 615) | The rework's "Laundry hatch", "shifted to a less central location" (PC Gamer). r6calls' basement ceiling-hatch layer puts it in Laundry Storage too `[R6C]`. It sits close to the Laundry Stairs boundary, so a screenshot is still worthwhile (Q3) | medium-high |
 | H4 | **2F Kids' Dorms** (west side) | **1F Kitchen** (west end) | (655, 490) | Kitchen ceiling under Kids' is also destructible floor (§9) | high |
 | H5 | **2F Attic** (narrow north connector toward Big Tower) | **1F Meeting Hall** (north part) | (873, 383) | Sits almost directly above H1 (~20 px), so Attic → Meeting → Electric is one vertical column | high |
 | H6 | **2F Armory** (south-east corner) | **1F Garage** | (1015, 610) | | high |
 
+- Cross-check `[R6C]`: r6calls' floor/ceiling hatch layers give the same 6 hatches with the same upper/lower rooms. Its centres in blueprint px: H1 (895,373), H2 (746,567), H3 (893,615), H4 (653,489), H5 (867,383), H6 (1014,609).
 - **No roof hatches** (no floor-trap squares on the roof blueprints) `[BP]`.
 - Hatch HP, reinforcement and hole size: `research/destruction.md`. (Thermite's research says one Exothermic Charge opens a reinforced hatch; see `research/operators/thermite.md`.)
 - Roster note: no roster operator can climb up through hatches (Oryx isn't on the roster). Hatches are **one-way drops** plus sightlines.
@@ -138,8 +160,8 @@ Hatch = "Breakable floor trap" square on the blueprint of the **upper** floor `[
 |---|---|---|---|---|---|
 | S1 | **Tower Stairs** (1F/2F) = **Back Stairs** (B) | **B** (comes out at the north side of Boiler Room) ↔ **1F** Big Tower ground floor (Rear Stage/T1) ↔ **2F** Big Tower (T2) | B x838–887 y223–295; 1F x854–896 y222–271; 2F x866–906 y220–270 | `[R6T]` room polygons on all 3 floors at one footprint; `[R6M]` "Tower Stairs" on B and 1F; stair treads visible on the 2F blueprint | high |
 | S2 | **White Stairs** (1F/2F; a.k.a. Dorm/West Stairs) → **Freezer Stairs** (B) | **2F** Dorm Main Hall (south-west) ↔ **1F** White Stairs, off Security Hall/White Hall (south-west) ↔ **B** Freezer Stairs → **Freezer** | 2F x649–756 y637–667; 1F x670–746 y629–649; B x644–713 y618–648 | `[OFF]` "the kids' dorm stairs now extending down one level and connecting through a new freezer section to the old basement"; `[OFF]` "Freezer … leads to the first floor with the Freezer Stairs" | high |
-| S3 | **Main Stairs** (1F/2F; a.k.a. East Stairs) → **Laundry Stairs** (B) | **2F** east, beside Armory Corridor/Master Bedroom ↔ **1F** east side of Lobby, beside Garage ↔ **B** Laundry Stairs → Laundry Room / Laundry Storage | 2F x936–956 y604–674; 1F x922–941 y580–665; B x908–931 y575–670 | `[R6T]` + `[R6M]` ("East/Laundry Stairs"). Whether the basement flight is the same continuous stairwell as the 1F↔2F flight is **UNVERIFIED** (pre-rework they were two separate stairs next to each other) | medium |
-| S4 | **Small Tower stairs** | **1F** Small Tower ↔ **2F** Small Tower | inside x378–484, y426–624 (a U-shaped stairwell cut-out is visible on 2F ≈ (395–445, 500–530)) | `[BP]` geometry only | **UNVERIFIED** |
+| S3 | **Main Stairs** (1F/2F; a.k.a. East Stairs; r6calls: **"Armory Stairs"**) → **Laundry Stairs** (B) | **2F** east, beside Armory Corridor/Master Bedroom ↔ **1F** east side of Lobby, beside Garage ↔ **B** Laundry Stairs → Laundry Room / Laundry Storage | 2F x936–956 y604–674; 1F x922–941 y580–665; B x908–931 y575–670 | `[R6T]` + `[R6M]` ("East/Laundry Stairs") + `[R6C]`. Whether the basement flight is the same continuous stairwell as the 1F↔2F flight is **UNVERIFIED** (pre-rework they were two separate stairs next to each other) | medium |
+| S4 | **Small Tower stairs** (r6calls: **"Small Stairs"**) | **1F** Small Tower ↔ **2F** Small Tower | inside x378–484, y426–624 (a U-shaped stairwell cut-out is visible on 2F ≈ (395–445, 500–530)) | `[BP]` geometry; `[R6C]` labels "Small Stairs" on both 1F and 2F at the NE corner of Small Tower | medium |
 | S5 | **Bunker stairs** (outside) | **EXT** (east side, Construction Site/Parking) ↔ **B Blue Bunker** | dark stairwell ≈ (945–1000, 385–445) inside Blue Bunker; exterior door on its east wall ≈ (1014, 369) | `[BP]`, `[R6M]` "Bunker Entrance", `[PRE]` "Bunker Entrance" | medium |
 
 - Basement access summary: **3 interior staircases** (S1, S2, S3), confirmed by `[OFF]`/player.one ("the bottom floor has three staircases instead of two"). Plus S5 from outside, plus hatches H1–H3.
@@ -151,11 +173,27 @@ Hatch = "Breakable floor trap" square on the blueprint of the **upper** floor `[
 
 | id | Connects | Position | Evidence | Conf. |
 |---|---|---|---|---|
-| L1 | **2F Big Tower (T2) ↔ Big Tower top** (roof-level room, the map's highest point) | Inside Big Tower. The roof blueprint shows the tower top as a **ring walkway around an open well** over Big Tower 2F's east room. An opening mark on the well's north edge ≈ (935, 232) is the most likely ladder spot (UNVERIFIED) | `[FD]`/`[SGG]` "big tower … ladder stairs that lead to the highest point on the map"; `[PRE]` ladder 2F↔roof at Big Tower | high (exists), low (exact spot) |
+| L1 | **2F Big Tower (T2) ↔ Big Tower top** ("Cat Walk" `[R6C]`; roof-level room, the map's highest point) | Inside Big Tower 2F's east room, at the north edge of the open well: r6calls ladder icon ≈ **(936–943, 239–247)** px `[R6C]` (my blueprint guess was (935, 232)). It's the only ladder in r6calls' ladder layers | `[FD]`/`[SGG]` "big tower … ladder stairs that lead to the highest point on the map"; `[R6C]`; `[PRE]` ladder 2F↔roof at Big Tower | high (exists), medium (spot) |
 | — | ~~Attic ↔ Meeting Hall~~ | **Removed in Y5S1** | `[OFF]` "Attic … losing its ladder down to Meeting Hall" | high |
 
-- Exterior ladders: none known (UNVERIFIED).
+- Exterior ladders: none. There are none in r6calls' ladder layers `[R6C]`, and none are known elsewhere.
 - Tower-top room: the floor is marked **destructible** ("line of sight floor"). It has openings on the north, west and south outer walls `[BP]`, likely windows.
+
+### 6.1 Drone tunnels (small holes drones can pass; useful for bot droning) `[R6C]`
+Icon positions in blueprint px, with the nearest rooms (which wall each one sits in is for `layout_notes.md` to confirm):
+| Floor | px | Between (approx.) |
+|---|---|---|
+| B | (734–740, 658–670) | Freezer Stairs, south end. An up/down icon marks the **same spot on 1F**, so this is probably a vertical drone passage beside the White/Freezer stairs (UNVERIFIED) |
+| B | (792, 499) | Freezer north arm ↔ Basement Hall |
+| B | (839, 489) | Basement Hall ↔ Supply Closet / Supply |
+| B | (942, 501) | Supply ↔ Blue Bunker (east wall) |
+| 1F | (815, 360) | Kitchen Corridor ↔ Meeting Hall |
+| 1F | (798, 449) | Kitchen Corridor ↔ Kitchen/Meeting |
+| 1F | (782, 534) | Kitchen ↔ Security / White Hall |
+| 1F | (625, 665) | Shower Corridor, south exterior wall |
+| 1F | (457, 459) | Small Tower, north side |
+| 2F | (864, 345) | Attic connector, north (Big Tower side) |
+| 2F | (862, 578) | Game Room ↔ Master / Trophy |
 
 ---
 
@@ -189,6 +227,7 @@ Generic rappel rules, including Siege X changes (horizontal sprint on the rope, 
 | R6 | Garage roof / Balcony (south-east, 2F level) | ≈ x 950–1070, y 640–715 | Master/Balcony, Garage | `[PRE]` "Garage Roof", "Balcony" |
 | R7 | Corrugated strip east of the Attic | x 918–962, y 320–490 | Attic east side. The 2F blueprint shows an opening from Big Tower 2F onto this strip ≈ (943, 313) (UNVERIFIED) | `[BP]` |
 
+- r6calls roof names `[R6C]` (use these as callouts): R1 = **Tower Roof** (+ "Cat Walk" = tower top room), R2 = **Meeting Roof**, R3 = **Kids Roof / Dorms Roof / Master Roof / Armory Roof** (split by the rooms below), R4 = **Small Tower Roof**, R5 = **Dining Roof**, R6 = **Balcony** (2F), R7 = **Attic Roof**.
 - Roof access for attackers: rappel up any exterior wall (generic), or reach R5 at 2F level from Small Tower 2F / the Dorms windows. No exterior ladders are known.
 - "EXT Dorms Roof" is an official location name (`[FD]` Patch 11.1.1: Solid Snake's radar could see 2F "from EXT Dorms Roof").
 
@@ -272,7 +311,7 @@ Only the first four rows have direct evidence. The rest are geometry-based candi
   "hatches": [
     {"id": "H1", "upper": "1F_meeting_hall", "lower": "B_electric_room", "bp_px": [893,372], "verified": "blueprint"},
     {"id": "H2", "upper": "1F_security", "lower": "B_freezer", "bp_px": [742,566], "verified": "blueprint"},
-    {"id": "H3", "upper": "1F_lobby", "lower": "B_laundry_storage", "bp_px": [891,615], "verified": "blueprint_UNVERIFIED_room"},
+    {"id": "H3", "upper": "1F_lobby", "lower": "B_laundry_storage", "bp_px": [891,615], "verified": "blueprint+r6calls"},
     {"id": "H4", "upper": "2F_kids_dorms", "lower": "1F_kitchen", "bp_px": [655,490], "verified": "blueprint"},
     {"id": "H5", "upper": "2F_attic", "lower": "1F_meeting_hall", "bp_px": [873,383], "verified": "blueprint"},
     {"id": "H6", "upper": "2F_armory", "lower": "1F_garage", "bp_px": [1015,610], "verified": "blueprint"}
@@ -280,26 +319,42 @@ Only the first four rows have direct evidence. The rest are geometry-based candi
   "stairs": [
     {"id": "S1", "names": ["Back Stairs","Tower Stairs"], "floors": ["B","1F","2F"], "verified": "yes"},
     {"id": "S2", "names": ["Freezer Stairs","White Stairs"], "floors": ["B","1F","2F"], "verified": "yes"},
-    {"id": "S3", "names": ["Laundry Stairs","Main Stairs"], "floors": ["B","1F","2F"], "verified": "UNVERIFIED_continuity"},
-    {"id": "S4", "names": ["Small Tower stairs"], "floors": ["1F","2F"], "verified": "UNVERIFIED"},
+    {"id": "S3", "names": ["Laundry Stairs","Main Stairs","Armory Stairs"], "floors": ["B","1F","2F"], "verified": "UNVERIFIED_continuity"},
+    {"id": "S4", "names": ["Small Stairs"], "floors": ["1F","2F"], "verified": "r6calls_label"},
     {"id": "S5", "names": ["Bunker stairs"], "floors": ["EXT","B"], "verified": "UNVERIFIED"}
   ],
-  "ladders": [{"id": "L1", "from": "2F_big_tower", "to": "3F_big_tower_top", "verified": "exists; position UNVERIFIED"}],
-  "default_cameras": {"count": 7, "verified": "UNVERIFIED (pre-rework list)",
-    "list": ["2F_armory_corridor","1F_lobby","1F_dining_hall_corridor(renamed?)","1F_rear_stage","EXT_junkyard","EXT_parking","EXT_construction_site"]},
-  "ingredients": {"types": ["gas_pipe","fire_extinguisher"], "instances": [], "verified": "UNVERIFIED"}
+  "ladders": [{"id": "L1", "from": "2F_big_tower", "to": "3F_cat_walk", "bp_px": [940,243], "verified": "r6calls"}],
+  "default_cameras": {"count": 8, "verified": "r6calls_only (facing UNVERIFIED)", "list": [
+    {"id": "CAM1", "floor": "EXT", "area": "junkyard_bus", "bp_px": [275,636]},
+    {"id": "CAM2", "floor": "EXT", "area": "parking_street", "bp_px": [1101,663]},
+    {"id": "CAM3", "floor": "EXT", "area": "construction", "bp_px": [1032,90]},
+    {"id": "CAM4", "floor": "B", "room": "freezer", "bp_px": [685,532]},
+    {"id": "CAM5", "floor": "1F", "room": "rear_stage", "bp_px": [943,302]},
+    {"id": "CAM6", "floor": "1F", "room": "lobby", "bp_px": [890,544]},
+    {"id": "CAM7", "floor": "1F", "room": "shower_corridor", "bp_px": [621,650]},
+    {"id": "CAM8", "floor": "2F", "room": "armory_corridor", "bp_px": [950,508]}]},
+  "ingredients": {"verified": "r6calls_only", "instances": [
+    {"id": "ING1", "type": "fire_extinguisher", "floor": "B", "room": "basement_hall", "bp_px": [830,481]},
+    {"id": "ING2", "type": "fire_extinguisher", "floor": "B", "room": "freezer", "bp_px": [784,512]},
+    {"id": "ING3", "type": "fire_extinguisher", "floor": "1F", "room": "security_corridor", "bp_px": [670,589]},
+    {"id": "ING4", "type": "fire_extinguisher", "floor": "1F", "room": "kitchen_corridor", "bp_px": [789,376]},
+    {"id": "ING5", "type": "fire_extinguisher", "floor": "1F", "room": "lobby_hall", "bp_px": [850,541]},
+    {"id": "ING6", "type": "fire_extinguisher", "floor": "2F", "room": "trophy_room", "bp_px": [920,505]},
+    {"id": "ING7", "type": "fire_extinguisher", "floor": "2F", "room": "low_attic", "bp_px": [853,491]},
+    {"id": "ING8", "type": "gas_pipe", "floor": "1F", "room": "main_stairs_or_ext_garage_sw", "bp_px": [940,655]},
+    {"id": "ING9", "type": "gas_pipe", "floor": "2F", "room": "attic", "bp_px": [903,411]}]}
 }
 ```
 
 ---
 
 ## Open questions
-- **Q1 (cameras):** How many default cameras does live Oregon have, and where? For each one, give room, wall, facing and a screenshot of its view. Pre-rework there were 7: Armory Corridor, Lobby, Dining Hall Corridor, Rear Stage, EXT Junkyard, EXT Parking, EXT Construction Site. Which moved?
-- **Q2 (ingredients):** Every gas pipe and fire extinguisher on Oregon (room, wall, height). Any metal detectors?
+- **Q1 (cameras):** r6calls shows **8** default cameras: EXT Junkyard/Bus, EXT Parking/Street, EXT Construction, B Freezer, 1F Rear Stage, 1F Lobby, 1F Shower Corridor, 2F Armory Corridor. Is that right? For each, which wall is it on and which way does it face (a screenshot of its view)?
+- **Q2 (ingredients):** r6calls shows **7 fire extinguishers** (B Basement Hall, B Freezer, 1F Security Corridor, 1F Kitchen Corridor, 1F Lobby hall, 2F Trophy, 2F Low Attic) and **2 gas pipes** (1F by Main Stairs / Garage SW corner, 2F Attic). Is that all? Which wall and height is each on? Any metal detectors?
 - **Q3 (Laundry hatch):** Does the 1F Lobby hatch (next to Classroom) drop into Laundry Storage, Laundry Room, or the Laundry Stairs?
 - **Q4 (stairs):** Are Main Stairs (1F↔2F) and Laundry Stairs (B↔1F) one stairwell or two separate flights? Where exactly does each flight start and end?
-- **Q5 (Small Tower):** Is there a staircase inside Small Tower between 1F and 2F? Is there an office on both floors ("1F Small Tower Office" appears in a patch note)?
-- **Q6 (Big Tower ladder):** Where is the ladder to the tower top, and is the tower top indoors (no out-of-bounds reveal)?
+- **Q5 (Small Tower):** r6calls labels "Small Stairs" in Small Tower. Confirm the staircase between 1F and 2F. Is there an office on both floors ("1F Small Tower Office" appears in a patch note)?
+- **Q6 (Big Tower ladder):** Confirm the ladder spot (north edge of the open well in Big Tower 2F's east room). Is the tower top ("Cat Walk") indoors, i.e. no out-of-bounds reveal?
 - **Q7 (Bunker):** Confirm the outside stairs down into Blue Bunker, and where they start outside.
 - **Q8 (spawn names):** Are the in-game spawn names exactly "Junkyard", "Street", "Construction Site"? Are there only 3?
 - **Q9 (rappel):** Any exterior walls or roofs where the game refuses rappel? Can you stand on the Dining Hall flat roof?
@@ -318,6 +373,7 @@ Only the first four rows have direct evidence. The rest are geometry-based candi
 - https://rainbowsix.fandom.com/wiki/Rainbow_Six_Siege_patches/Patch_5.1.1 (Y5S1.1, 2020-03-24), /Patch_5.1.2 (Y5S1.2, 2020-04-21), /Patch_5.2.1 (Y5S2.1, 2020-06-29), /Patch_5.4.2 (Y5S4.2, 2021-01-19), /Patch_11.1.0 , /Patch_11.1.1 , /Patch_11.1.3 — post-rework Oregon fixes (vaulting, fence, generator, excavator, Small Tower Office lighting, Main Entrance barricade, EXT Dorms Roof). /Patch_5.0 (2016-11-17) — pre-rework bunk-bed vault fix only. Note: Fandom's "Patch 5.x" numbering covers both 2016 and 2020 pages, so check the page date
 - https://rainbowsix.fandom.com/wiki/Rank_Up_Intermediate_Series:_Map_Navigation_Strategies — official Rank Up transcript: blueprints show soft walls, hatches, destructible floor
 - https://www.r6trainer.com/oregon/ and https://www.r6trainer.com/2020/03/19/oregon-updated/ — PC room polygons and callouts for the reworked map (updated 2020-03-19)
+- https://r6calls.com/img/maps/oregon.svg — r6calls Oregon vector map (map revision 5 per r6calls' map data; file last-modified 2026-07-25). Cameras, fire extinguishers, gas pipes, ladder, drone tunnels, hatches, bomb markers, insertion points, room and roof labels. Downloaded by the layout agent to scratch; coordinates converted with the fit in `layout_notes.md` §0
 - https://game8.co/games/Rainbow-Six-Mobile/archives/582535 — R6 Mobile Oregon callout maps (cross-check; its camera section shows Bank, not Oregon)
 - https://www.r6maps.com/js/release.2.4.1/main.min.js and https://github.com/capajon/r6maps — pre-rework camera, spawn, ladder, hatch and room data (baseline only)
 - https://www.player.one/rainbow-six-siege-all-major-changes-oregon-rework-133091 — rework change list (hatch count, three basement staircases)
