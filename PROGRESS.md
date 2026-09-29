@@ -20,11 +20,13 @@ known issues, and what's next.
   - Prone: turn speed and aim arc are limited, and you can't go prone or turn where your body wouldn't fit.
   - Lean: toggle or hold, in any stance, with camera roll; your head stops at walls.
   - Sprint: forward only, not while aiming, cancels lean, and stands you up.
-  - Vaulting: over, onto, and through open windows; tagged objects only.
+  - Vaulting/mantling: over, onto, and through open windows; tagged objects only. Works standing still — a
+    "Space to mantle" prompt shows whenever you face something you can mantle (your feedback).
   - Ladders: climb, slide down, dismount at the top, let go.
   - Stairs and ramps: speed holds on slopes, and 55° is too steep.
   - Fall damage.
-- **Player/pawn separation:** Skopós owns two shells and swaps with `Z`.
+- **Player/pawn separation:** Skopós owns two shells. `Z` opens the other shell's camera; `F` there transfers
+  (1.3 s + 1.3 s, then 0.5 s cooldown), per your feedback. The idle shell stays crouched.
 - **Hitboxes** follow stance and lean (F3 shows them). They're ready for lag compensation in Phase 2/3.
 - **Movement Lab** page:
   - Views: first person and third person (F4).
