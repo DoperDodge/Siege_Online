@@ -69,6 +69,8 @@ Flashes: stun grenades (and Blitz/Ying, not on roster) **still blind defenders t
 | Bullets (either side) | No effect. The glass is bulletproof (effectively infinite HP) | Fandom; r6siegecenter |
 | Explosives hitting the glass | No effect on the glass ("bullet- and blast-resistant"). Explosives **do** destroy the canister if they reach the defender side | Ubisoft device lore via Fandom; r6siegecenter |
 | Melee (1 hit, either side) | Shatters it: opaque both ways (§3.3) | Fandom |
+| Fuze Cluster Charge drilled through the Mirror | Glass **shatters** on a successful drill. Whether the Mirror is also destroyed or ejected is UNVERIFIED | Y6S3 / Y8S3 DNs |
+| Zero ARGUS camera piercing it (non-roster) | Pierces **without** shattering | Y8S3 DN |
 | Destruction of the **surrounding soft wall** | Removes the Mirror with it (Ash rounds, Zofia, frags, breach charges, etc.) | Fandom; siege.gg; r6siegecenter |
 | Thermal breach on the anchors | Instantly and completely destroyed | Fandom |
 
