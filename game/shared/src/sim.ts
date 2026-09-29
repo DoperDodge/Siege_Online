@@ -6,8 +6,8 @@ import { buildLevel, type BuiltLevel } from "./level/builder.js";
 import { initRapier, PLAYER_GROUPS, type CharacterController, type Rapier, type World } from "./physics/rapier.js";
 import { stepPawn, type MoveContext } from "./player/movement.js";
 import { initialPawnState, type Pawn, type PlayerController } from "./player/pawn.js";
-import { capsuleHalfHeight } from "./player/stance.js";
-import type { InputCmd } from "./player/types.js";
+import { capsuleHalfHeight, stanceDims } from "./player/stance.js";
+import { PawnMode, Stance, type InputCmd } from "./player/types.js";
 
 export class Sim {
   readonly pawns = new Map<number, Pawn>();
@@ -92,6 +92,37 @@ export class Sim {
     pawn.collider.setHalfHeight(hh);
     pawn.collider.setTranslation({ x: spawn.pos[0], y: spawn.pos[1] + hh + r + 0.02, z: spawn.pos[2] });
     pawn.state = initialPawnState(spawn.pos[0], spawn.pos[1] + 0.02, spawn.pos[2], Math.fround(spawn.yawDeg * DEG), pawn.state.maxHp);
+  }
+
+  /** Move a pawn to feet position (x, y, z) in a settled stance (lab "go to" menu, tests, admin tools). */
+  teleport(pawnId: number, x: number, y: number, z: number, yawDeg = 0, stance: Stance = Stance.Stand): void {
+    const pawn = this.pawns.get(pawnId);
+    if (!pawn) return;
+    const m = this.data.movement;
+    const r = m.stance.collisionRadius;
+    const hh = capsuleHalfHeight(stanceDims(m, stance).height, r);
+    pawn.collider.setHalfHeight(hh);
+    pawn.collider.setTranslation({ x, y: y + hh + r + 0.02, z });
+    const t = pawn.collider.translation();
+    Object.assign(pawn.state, {
+      x: t.x,
+      y: Math.fround(y + 0.02),
+      z: t.z,
+      vx: 0,
+      vy: 0,
+      vz: 0,
+      yaw: Math.fround(yawDeg * DEG),
+      stance,
+      stanceFrom: stance,
+      stanceT: 1,
+      lean: 0,
+      grounded: false,
+      sprinting: false,
+      mode: PawnMode.Walk,
+      ladder: -1,
+      airPeakY: Math.fround(y + 0.02),
+    });
+    if (pawn.state.hp === 0) pawn.state.hp = pawn.state.maxHp;
   }
 
   /** Advance one tick. Possessed pawns get their controller's input; idle pawns stand still (gravity only). */
