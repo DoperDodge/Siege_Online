@@ -2,7 +2,7 @@
 Verified against: Y11S3 (Operation Split Fire) — researched 2026-09-29
 Confidence: medium. Identity, loadout, and the list of what each hack does come from the official Ubisoft page, official patch notes, and Fandom. Ubisoft has never published the Kludge's numbers (hack time, range, charges, HP, speed, jump); where they appear below they come from low-priority sites or are UNVERIFIED.
 
-> Key finding vs PLAN.md §11.1: the baseline loadout (PARA-308/CAMRS; USP40/Super Shorty; Claymore/Smoke) is still correct in Y11S3. The Kludge **cannot** hack Mira's Black Mirror, Pulse's Cardiac Sensor, or Lesion's Gu mines (Gu mines have been mechanical since Y8S3). It **destroys** Skopós' inactive shell. It **converts** Mute's jammers and the generic electronic gadgets (Bulletproof Camera, Proximity Alarm, Observation Blocker). It **destroys** Nitro Cells.
+> Key finding vs PLAN.md §11.1: the baseline loadout (PARA-308/CAMRS; USP40/Super Shorty; Claymore/Smoke) is still correct in Y11S3. The Kludge **cannot** hack Mira's Black Mirror, Pulse's Cardiac Sensor, Lesion's Gu mines (Gu mines have been mechanical since Y8S3), or Skopós' *active* shell. It **destroys** Skopós' inactive shell by overheating it (Skopós is warned). It **converts** Mute's jammers and the generic electronic gadgets (Bulletproof Camera, Proximity Alarm, Observation Blocker). It **destroys** Nitro Cells.
 
 ---
 
@@ -76,8 +76,8 @@ Brava can also hack attacker devices that Mozzie has stolen, which returns them 
 | **Mira** | Black Mirror | **No** | Not electronic | dualshockers ("cannot hack ... Mira's Black Mirrors"); absent from the Fandom list |
 | Mira | Proximity Alarm | Yes | Converted | Fandom |
 | Mira | Nitro Cell | Yes | Destroyed | Fandom |
-| **Skopós** | V10 Pantheon **Inactive (idle) Shell** | **Yes** | **Overheats and destroys** the idle shell. Skopós is alerted and can stop it by switching control into that shell. Destroying the idle shell does not eliminate Skopós. | Fandom Skopós ("Brava can overheat and destroy the Inactive Shell with her Kludge Drone") |
-| Skopós | Active Shell | UNVERIFIED (not on any list; probably no) | — | — |
+| **Skopós** | V10 Pantheon **Inactive (idle) Shell** | **Yes** | **Overheats and destroys** the idle shell. Skopós gets a warning and can stop it by switching control into that shell. Destroying the idle shell does not eliminate Skopós. Overheat window: **~8 s** after the hack starts (UNVERIFIED; siege.gg). | Official Twin Shells guide ("Brava is able to use her Kludge Drone to overheat the inactive shell and destroy it, though Skopós does receive a warning"); Fandom Skopós; siege.gg Skopós guide (8 s) |
+| Skopós | **Active** Shell | **No** | Immune: "not vulnerable to EMPs, hacks, or Brava's drone sabotage" | Official Twin Shells guide |
 | Skopós | Proximity Alarm | Yes | Converted | Fandom |
 | Skopós | Impact Grenade | N/A | Thrown explosive, never a placed device | — |
 | **Lesion** (provisional for "Legion") | Gu Mine | **No (since Y8S3)** | Gu mines became *mechanical*: no EMP, no IQ detection, no Brava hack. Guides from Y8S1–Y8S2 that say otherwise are outdated. | Fandom Lesion; official Y8S3 Designer's Notes ("Gadget type is now Mechanical") |
@@ -146,7 +146,7 @@ The Kludge never hacks friendly (attacker) gadgets while Brava controls it.
 - Kludge **HP, move speed, and whether it can jump** (and the cooldown if it can).
 - Can a converted **Bulletproof Camera's EMP dart** be fired by attackers?
 - Exact behaviour of a converted **Proximity Alarm** (does it beep for defenders and show attackers a marker?) and a converted **Observation Blocker** (does it hide attackers from defender cams?).
-- Can the Kludge hack Skopós' **active** shell? (Only the inactive shell is documented.)
+- How long is the **overheat window** on Skopós' idle shell (siege.gg says 8 s)?
 - After the Y10S4 Mute rework, what exactly does a **converted** Mute jammer disable on the defender side?
 - Does a Bulletproof Camera EMP dart disable a Kludge (and for how long)?
 
@@ -171,6 +171,8 @@ The Kludge never hacks friendly (attacker) gadgets while Brava controls it.
 - https://www.ubisoft.com/en-us/game/rainbow-six/siege/news-updates/seasons/splitfire — Field Training addition
 - https://rainbowsix.fandom.com/wiki/Brava — hack result lists, 2 Kludges, counters, Mozzie interplay (also old revisions via API)
 - https://rainbowsix.fandom.com/wiki/Mute — jammer effects on the Kludge, converted jammer behaviour
+- https://news.ubisoft.com/en-us/article/6md8NyzcybEjZ2bMROA5fP/rainbow-six-siege-operation-twin-shells-operator-and-gadget-guide — official: the active shell is immune to hacks and Brava's sabotage; the Kludge overheats and destroys the inactive shell (with a warning)
+- https://siege.gg/news/rainbow-six-siege-operator-guide-skopos — 8 s overheat window (low-priority source)
 - https://rainbowsix.fandom.com/wiki/Skopós — Kludge overheats/destroys the inactive shell
 - https://rainbowsix.fandom.com/wiki/Lesion — Gu mechanical since Y8S3
 - https://rainbowsix.fandom.com/wiki/Thermite_(Siege) — "three hacking charges" remark, Brava/Thermite synergy
