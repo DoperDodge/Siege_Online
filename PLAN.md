@@ -26,7 +26,7 @@
 - 6v6-capable (up to **5v5 players** per match, like Siege — the "6 attackers / 6 defenders" is the operator roster per side).
 - One map: **Oregon**, recreated as completely and accurately as possible (current live layout).
 - Core objective: **Bomb** (Oregon's 4 bomb-site pairs). Secure Area / Hostage are stretch goals.
-- Lobby formats: **1v1**, **Unranked**, **Ranked**, **Bot Training**, plus **Custom** and **Practice** (additions). Every format must work with **any team size from 1 to 5**, including uneven teams (e.g., 2v3).
+- Lobby formats: **1v1**, **Quick Match**, **Unranked**, **Ranked**, **Bot Training**, plus **Custom** and **Practice** (additions). (Quick Match added by Ulo 2026-09-29.) Every format must work with **any team size from 1 to 5**, including uneven teams (e.g., 2v3).
 - Full Siege movement: walk, sprint, crouch, **prone**, **lean/tilt** (in all stances where Siege allows it), vaulting, rappelling, ladders.
 - Full Siege intel layer: **drones** (attackers), **cameras** (defenders, including Oregon's default cams), pinging, spectating.
 - Full Siege destruction: **soft walls, hard walls, reinforced walls, floors/ceilings, hatches, barricades**, bullet penetration, melee punching, explosives, hard breaching.
@@ -104,7 +104,7 @@ redmond/
     weapons/*.json
     gadgets/*.json
     surfaces.json            # material/penetration table
-    modes/*.json             # 1v1, unranked, ranked, custom, practice
+    modes/*.json             # 1v1, quick_match, unranked, ranked, custom, practice, bot_training
     maps/oregon/layout.json  # authoritative map description (see §9)
   game/                      # Godot project root
     src/
@@ -151,21 +151,25 @@ redmond/
 
 ### 6.2 Formats (all formats run the same game — they're rule presets)
 
-| Setting | 1v1 | Unranked | Ranked | Custom | Practice | Bot Training |
-|---|---|---|---|---|---|---|
-| Players per team | 1 | 1–5 | 1–5 | 1–5 | 1–5 (0 allowed on one side) | 1–5 humans + bots fill to chosen size (e.g., 1 human vs 5 bots, or 2 humans + 3 bots vs 5 bots) |
-| Rounds to win | match current Siege 1v1-style arcade if it exists, else first to 4 | match current Siege Unranked (research) | match current Siege Ranked incl. overtime (research) | any | ∞ | any (default Unranked rules) |
-| Pick & Ban | off | off | **on** (scaled — see below) | toggle | off | off (toggle) |
-| Prep / action time | research, default shorter for 1v1 | Siege values | Siege values | any | any | Siege values (adjustable) |
-| Reinforcement pool | scaled (see below) | scaled | scaled | any | infinite toggle | scaled |
-| Stats tracked | local | local | local MMR | none | none | local training stats (separate from ranked) |
-| Friendly fire | Siege's current rules | same | same | toggle | off | toggle |
+| Setting | 1v1 | Quick Match | Unranked | Ranked | Custom | Practice | Bot Training |
+|---|---|---|---|---|---|---|---|
+| Players per team | 1 | 1–5 | 1–5 | 1–5 | 1–5 | 1–5 (0 allowed on one side) | 1–5 humans + bots fill to chosen size (e.g., 1 human vs 5 bots, or 2 humans + 3 bots vs 5 bots) |
+| Rounds to win | match current Siege 1v1-style arcade if it exists, else first to 4 | match current Siege Quick Match (research: 4 rounds, first to 3, swap after round 2, 1 sudden-death OT round at 2–2) | match current Siege Unranked (research) | match current Siege Ranked incl. overtime (research) | any | ∞ | any (default Unranked rules) |
+| Pick & Ban | off | off (as in Siege) | **on** — same as Ranked (Siege Unranked = Ranked minus map ban) | **on** (scaled — see below) | toggle | off | off (toggle) |
+| Site selection | — | **random, revealed to attackers at round start** (as in Siege) | defenders pick | defenders pick | any | any | any |
+| Prep / action time | research, default shorter for 1v1 | Siege Quick Match values (research: op pick 20 s, prep 45 s, action 180 s) | Siege values | Siege values | any | any | Siege values (adjustable) |
+| Reinforcement pool | scaled (see below) | scaled, **plus Siege-style pre-setups** (pre-placed reinforcements and rotation holes per site, from `common_setups.md`) | scaled | scaled | any | infinite toggle | scaled |
+| Other | — | 10 s attacker spawn safeguard; drop-in/out allowed (research) | — | — | — | — | — |
+| Stats tracked | local | local | local | local MMR | none | none | local training stats (separate from ranked) |
+| Friendly fire | Siege's current rules | same | same | same | toggle | off | toggle |
+
+> Quick Match column and Unranked Pick & Ban **on** added 2026-09-29 by Ulo's decision (DECISIONS.md D-014, D-017). Siege's 3v3 Arcade was considered and **not** wanted.
 
 **Scaling for small teams (host toggle, default ON):** Siege's reinforcement pool and similar team-wide resources assume 5 defenders. Default scaling: `pool = round(Siege_pool × defenders / 5)`, minimum 2. The host can switch to "Full Siege values" regardless of team size.
 
-**Pick & Ban with small rosters:** only 6 operators per side exist, so Ranked bans **1 operator per side** by default (host-configurable 0–2). Never allow bans that leave a side with fewer operators than players.
+**Pick & Ban with small rosters:** only 6 operators per side exist, so Ranked and Unranked ban **1 operator per side** by default (host-configurable 0–2). Never allow bans that leave a side with fewer operators than players.
 
-**Bots in other formats:** host toggle to backfill empty slots with bots in Unranked, Custom, and Practice. **Never in Ranked.**
+**Bots in other formats:** host toggle to backfill empty slots with bots in Quick Match, Unranked, Custom, and Practice. **Never in Ranked.**
 
 **Operator uniqueness:** an operator can be picked by only one player per team, same as Siege.
 
