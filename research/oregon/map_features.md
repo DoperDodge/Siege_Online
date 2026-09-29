@@ -170,7 +170,7 @@ Generic vault rules (heights, speed, windows after the barricade breaks) live in
 | EXT construction area | **generator:** players could climb it for "an advantageous line of sight". Fixed in Y11S1.3, so treat it as **not climbable** | `[FD]` Patch 11.1.3 |
 | EXT Construction Site | excavator: clipping fixed (Y5S1.2). Treat as solid, not climbable | `[FD]` Patch 5.1.2 |
 | "some areas of Oregon" | "Inconsistent vaulting and vault issues" fixed in Y5S1.1 (no list) | `[FD]` Patch 5.1.1 |
-| Bunk beds (Kids'/Dorms) | not vaultable (a deployable-shield exploit to vault onto them was fixed) | `[FD]` Patch 5.0, **pre-rework** |
+| Bunk beds (Kids'/Dorms) | not vaultable (a deployable-shield exploit to vault onto them was fixed) | `[FD]` Patch 5.0 (2016-11-17, Red Crow), **pre-rework** |
 | Tables, counters, crates, low walls, sandbags | UNVERIFIED per object. Use the generic ≤ waist-height rule | — |
 
 ---
@@ -315,7 +315,7 @@ Only the first four rows have direct evidence. The rest are geometry-based candi
 - https://news.ubisoft.com/en-us/article/7jpjTlTV0IuZAhvGXnYgDW/rainbow-six-siege-operation-void-edge-operator-and-map-guide — small tower expanded, dorm stairs extended to basement, attic window, ladder removed
 - https://liquipedia.net/rainbowsix/Oregon — attacker spawns A/B/C, sites, rework date, day/night history
 - https://rainbowsix.fandom.com/wiki/Oregon — "6 Hatches", site lists, overview (dark colours, big tower ladder)
-- https://rainbowsix.fandom.com/wiki/Rainbow_Six_Siege_patches/Patch_5.0 , /Patch_5.1 , /Patch_5.1.1 , /Patch_5.1.2 , /Patch_5.2.1 , /Patch_5.4.2 , /Patch_11.1.0 , /Patch_11.1.1 , /Patch_11.1.3 — Oregon fixes (vaulting, fence, generator, excavator, Small Tower Office lighting, Main Entrance barricade, EXT Dorms Roof)
+- https://rainbowsix.fandom.com/wiki/Rainbow_Six_Siege_patches/Patch_5.1.1 (Y5S1.1, 2020-03-24), /Patch_5.1.2 (Y5S1.2, 2020-04-21), /Patch_5.2.1 (Y5S2.1, 2020-06-29), /Patch_5.4.2 (Y5S4.2, 2021-01-19), /Patch_11.1.0 , /Patch_11.1.1 , /Patch_11.1.3 — post-rework Oregon fixes (vaulting, fence, generator, excavator, Small Tower Office lighting, Main Entrance barricade, EXT Dorms Roof). /Patch_5.0 (2016-11-17) — pre-rework bunk-bed vault fix only. Note: Fandom's "Patch 5.x" numbering covers both 2016 and 2020 pages, so check the page date
 - https://rainbowsix.fandom.com/wiki/Rank_Up_Intermediate_Series:_Map_Navigation_Strategies — official Rank Up transcript: blueprints show soft walls, hatches, destructible floor
 - https://www.r6trainer.com/oregon/ and https://www.r6trainer.com/2020/03/19/oregon-updated/ — PC room polygons and callouts for the reworked map (updated 2020-03-19)
 - https://game8.co/games/Rainbow-Six-Mobile/archives/582535 — R6 Mobile Oregon callout maps (cross-check; its camera section shows Bank, not Oregon)
