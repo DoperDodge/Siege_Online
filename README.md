@@ -33,7 +33,7 @@ builds/          gitignored build output
 
 ## Developer setup (Windows 11)
 
-1. **Node.js 22 LTS or newer**: https://nodejs.org (the installer adds `node` and `npm`).
+1. **Node.js 22.12+ (22 or 24 LTS)**: https://nodejs.org (the installer adds `node` and `npm`).
 2. **Git LFS**: `git lfs install` once (binary assets such as `.glb`, `.png`, `.wav` are LFS-tracked).
 3. A current **Chrome or Edge**.
 
@@ -44,8 +44,9 @@ npm run build
 npm start
 ```
 Open http://localhost:8080 and pick **Movement Lab**. For development, `npm run dev` gives hot reload at
-http://localhost:5173. Checks: `npm run typecheck`, `npm test` (unit), `npm run test:e2e` (headless browser;
-needs `npm run build` first). The older multiplayer tech spike lives in `tools/spike/web_stack/`.
+http://localhost:5173. Checks: `npm run typecheck`, `npm test` (unit), and `npm run test:e2e` (headless
+browser; run `npm run e2e:setup` once to download Chromium, and `npm run build` first). `npm run check` runs
+all of them. The older multiplayer tech spike lives in `tools/spike/web_stack/`.
 
 ## Playing with friends
 

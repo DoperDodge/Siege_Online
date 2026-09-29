@@ -101,6 +101,24 @@ else here blocks Phase 1.
 - **SQ9:** Are there standard rotation holes (e.g., Laundry ↔ Supply Closet, Kids' ↔ Dorm) that everyone opens?
 - **SQ10:** Where do the Siege X gas pipes and extinguishers change setups (e.g., a gas pipe next to a site door that defenders shoot in prep)?
 
+### Placeholders added while building Phase 1 (not in the original research)
+
+These were invented to make movement work; each lives in `data/movement.json` or `data/hitboxes.json` and is
+marked `_unverified`. The Movement Lab is the easiest place to compare them against Siege.
+
+1. **Acceleration:** how long does it take to reach full speed from standing, and to stop? (Placeholders:
+   ground accel 30 m/s², decel 40 m/s², so ~0.1 s; almost no air control.)
+2. **Stance timings not in research:** stand→prone (0.9 s placeholder) and prone→crouch (0.9 s).
+3. **Ladder:** climb speed (1.5 m/s), slide-down speed (4 m/s), how close to the top you can still grab it,
+   and how long stepping off the top takes (0.5 s).
+4. **Slopes and steps:** the steepest ramp you can walk up (46° placeholder) and the tallest step you walk up
+   without vaulting (0.35 m).
+5. **Body proportions** for hitboxes (hip/chest/shoulder heights; the lying-down pose: how far the head and
+   gun reach in front of you and the legs behind). Screenshots of a teammate standing, crouched and prone,
+   side-on, would settle these.
+6. **Vault arc:** how high you rise when vaulting a 0.9 m obstacle, and how long a vault/mantle takes
+   (0.5 s + 0.3 s per meter of height placeholder).
+
 ### [core_mechanics.md](core_mechanics.md) — 16
 
 Most of these can be answered in a Custom Game (Local), usually in minutes, with a stopwatch or a 60 fps recording and known map distances.
