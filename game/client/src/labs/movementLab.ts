@@ -16,7 +16,7 @@ import {
   type Pawn,
   type PawnState,
 } from "@redmond/shared";
-import { Controls, type UiAction } from "../input/controls.js";
+import { Controls, type Action, type UiAction } from "../input/controls.js";
 import { horizontalFov, keyLabel, loadSettings, saveSettings, type HoldMode, type Settings } from "../input/settings.js";
 import { isTouchDevice, mountTouchControls } from "../input/touch.js";
 import { createLabScene, createRenderer, PawnView, updateLabels } from "../render/labScene.js";
@@ -70,10 +70,28 @@ for (const pawn of sim.pawns.values()) pawnViews.set(pawn.id, new PawnView(scene
 let showHitboxes = false;
 let thirdPerson = false;
 const controls = new Controls(settings, onUi);
-controls.yaw = possessed().state.yaw;
+controls.setView(possessed().state.yaw, 0);
 controls.attach(renderer.domElement);
-const touch = isTouchDevice();
-const touchLayer = touch ? mountTouchControls(app, controls) : null;
+controls.isBlocked = () => !$(".pause").classList.contains("hidden") || !$(".help").classList.contains("hidden");
+
+const MODE_KEY: Partial<Record<Action, "crouchMode" | "proneMode" | "leanMode" | "adsMode">> = {
+  crouch: "crouchMode",
+  prone: "proneMode",
+  leanLeft: "leanMode",
+  leanRight: "leanMode",
+  ads: "adsMode",
+};
+let touch = isTouchDevice();
+let touchLayer: HTMLElement | null = null;
+const mountTouch = () => {
+  touch = true;
+  touchLayer ??= mountTouchControls(app, controls, (a) => (MODE_KEY[a] ? settings[MODE_KEY[a]!] : undefined));
+};
+if (touch) mountTouch();
+// A touchscreen laptop keeps mouse controls, but gets touch controls the first time it is actually touched.
+addEventListener("pointerdown", (e) => {
+  if (e.pointerType === "touch" && !touchLayer) mountTouch();
+});
 
 addEventListener("resize", () => {
   renderer.setSize(view.clientWidth, view.clientHeight);
@@ -95,6 +113,7 @@ function onUi(a: UiAction) {
 function respawn() {
   sim.respawn(ctrl.possessedPawnId);
   controls.setView(possessed().state.yaw, 0);
+  controls.resetStance();
   snapshotAll();
 }
 
@@ -113,6 +132,7 @@ function goTo(i: number) {
   const [, x, y, z, yaw] = GOTO[i];
   sim.teleport(ctrl.possessedPawnId, x, y, z, yaw);
   controls.setView(yaw * DEG, 0);
+  controls.resetStance();
   snapshotAll();
 }
 
@@ -122,6 +142,7 @@ function togglePause(force?: boolean) {
   pause.classList.toggle("hidden", !show);
   if (show) {
     renderPause();
+    controls.releaseAll(); // keys held when the menu opened would otherwise stay "down"
     if (document.pointerLockElement) document.exitPointerLock();
   }
 }
@@ -265,6 +286,16 @@ function tick() {
     controls.syncView(v.state.yaw, v.state.pitch);
   }
   prompt = sim.prompt(ctrl.id);
+  // Keep toggles and view limits in step with what the simulation decided this tick.
+  const mv = data.movement;
+  controls.afterTick(
+    { sprinting: p.state.sprinting, onLadder: p.state.mode === PawnMode.Ladder },
+    { forcesStand: mv.sprint.forcesStand, sprintCancelsLean: mv.lean.sprintCancelsLean },
+  );
+  const proneView = v.state.stance === Stance.Prone && v.state.mode === PawnMode.Walk;
+  controls.limits = proneView
+    ? { pitchMin: mv.stance.pronePitchMinDeg * DEG, pitchMax: mv.stance.pronePitchMaxDeg * DEG, maxYawStep: mv.stance.proneTurnRateDeg * DEG * DT }
+    : { pitchMin: mv.look.pitchMinDeg * DEG, pitchMax: mv.look.pitchMaxDeg * DEG, maxYawStep: null };
   if (p.state.lastFallDamage > 0) flash(`-${p.state.lastFallDamage} HP (fall)`, "bad");
   observe(p);
 }
@@ -308,7 +339,7 @@ function frame(now: number) {
   }
 
   const rs = interpolated(viewed, alpha);
-  const eye = eyePose(data.movement, { ...rs, yaw: controls.yaw });
+  const eye = eyePose(data.movement, data.hitboxes, { ...rs, yaw: controls.yaw });
   if (thirdPerson) {
     const back = new THREE.Vector3(0, 0, 1).applyEuler(new THREE.Euler(controls.pitch, controls.yaw, 0, "YXZ"));
     camera.position.set(eye.pos[0] + back.x * 3 + Math.cos(controls.yaw) * 0.5, eye.pos[1] + back.y * 3 + 0.4, eye.pos[2] + back.z * 3 - Math.sin(controls.yaw) * 0.5);
@@ -471,6 +502,7 @@ function autoInput(n: number): InputCmd {
   if (phase >= PHASES.length) {
     report.done = true;
     const s = possessed().state;
+    controls.setView(s.yaw, 0);
     return { seq: n, forward: 0, strafe: 0, yaw: s.yaw, pitch: 0, buttons: 0, stance: s.stance, lean: 1 };
   }
   const ph = PHASES[phase];
@@ -478,7 +510,7 @@ function autoInput(n: number): InputCmd {
   phaseTick++;
   const { yawDeg, ...rest } = ph.input;
   const yaw = yawDeg !== undefined ? yawDeg * DEG : 0;
-  controls.yaw = yaw;
+  controls.setView(yaw, 0);
   return { seq: n, forward: 0, strafe: 0, yaw, pitch: 0, buttons: 0, stance: Stance.Stand, lean: 0, ...rest };
 }
 

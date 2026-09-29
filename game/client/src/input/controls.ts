@@ -11,9 +11,20 @@ export type UiAction = "respawn" | "hitboxes" | "thirdPerson" | "help" | "settin
 
 const UI_KEYS: Record<string, UiAction> = { F1: "help", F3: "hitboxes", F4: "thirdPerson", Escape: "settings" };
 
+/** View limits the simulation will enforce next tick, applied every frame so the camera never jitters. */
+export interface ViewLimits {
+  pitchMin: number;
+  pitchMax: number;
+  /** Max yaw change from the last sampled yaw (prone turn rate), or null for free turning. */
+  maxYawStep: number | null;
+}
+
 export class Controls {
   yaw = 0;
   pitch = 0;
+  limits: ViewLimits = { pitchMin: -89 * DEG, pitchMax: 89 * DEG, maxYawStep: null };
+  /** When this returns true (a menu is open), game keys are ignored. */
+  isBlocked: () => boolean = () => false;
   /** Touch joystick, -1..1 each. */
   touchMove = { x: 0, y: 0 };
   private held = new Set<Action>();
@@ -27,13 +38,30 @@ export class Controls {
   private sampledYaw = 0;
   private sampledPitch = 0;
 
+  private settings: Settings;
+
   constructor(
-    private settings: Settings,
+    settings: Settings,
     private readonly onUi: (a: UiAction) => void,
-  ) {}
+  ) {
+    // Keep a private copy: the lab edits its settings object in place, and mode-change detection in
+    // setSettings needs the previous values.
+    this.settings = { ...settings, keys: { ...settings.keys } };
+  }
 
   setSettings(s: Settings) {
-    this.settings = s;
+    // Switching a mode mid-toggle would otherwise leave you stuck crouched/prone/leaning/aiming.
+    if (s.crouchMode !== this.settings.crouchMode || s.proneMode !== this.settings.proneMode) this.stanceIntent = Stance.Stand;
+    if (s.leanMode !== this.settings.leanMode) this.leanIntent = 0;
+    if (s.adsMode !== this.settings.adsMode) this.adsToggled = false;
+    this.settings = { ...s, keys: { ...s.keys } };
+  }
+
+  /** Forget toggled stance/lean/ADS (respawn, teleport, or when the simulation forces a stance). */
+  resetStance(stance: Stance = Stance.Stand) {
+    this.stanceIntent = stance;
+    this.leanIntent = 0;
+    this.adsToggled = false;
   }
 
   get adsActive(): boolean {
@@ -47,6 +75,7 @@ export class Controls {
       for (const [action, code] of Object.entries(this.settings.keys)) map.set(code, action as Action);
       return map;
     };
+    const inMenu = (e: KeyboardEvent) => this.isBlocked() || (e.target instanceof Element && e.target.closest(".panel") !== null);
     addEventListener("keydown", (e) => {
       const ui = UI_KEYS[e.code];
       if (ui) {
@@ -54,6 +83,7 @@ export class Controls {
         if (!e.repeat) this.onUi(ui);
         return;
       }
+      if (inMenu(e)) return; // let menus keep their keys (arrow keys in selects, etc.)
       const action = byCode().get(e.code);
       if (!action) return;
       e.preventDefault();
@@ -81,9 +111,12 @@ export class Controls {
   }
 
   lockPointer(canvas: HTMLCanvasElement) {
-    const opts = this.settings.rawInput ? ({ unadjustedMovement: true } as const) : undefined;
-    // Raw input where the browser supports it (PLAN §7), plain pointer lock otherwise.
-    Promise.resolve(canvas.requestPointerLock(opts as PointerLockOptions)).catch(() => canvas.requestPointerLock());
+    const raw = this.settings.rawInput;
+    // Raw input where the browser supports it (PLAN §7); fall back to plain pointer lock only when raw
+    // input itself is unsupported. Other failures (e.g. no user gesture) are ignored.
+    Promise.resolve(canvas.requestPointerLock(raw ? ({ unadjustedMovement: true } as PointerLockOptions) : undefined))
+      .catch((e: unknown) => (raw && (e as { name?: string })?.name === "NotSupportedError" ? canvas.requestPointerLock() : undefined))
+      .catch(() => {});
   }
 
   /** Mouse or touch look, in counts/pixels. */
@@ -91,7 +124,17 @@ export class Controls {
     const sens = this.settings.sensitivity * (this.adsActive ? this.settings.adsSensitivityScale : 1) * scale * DEG;
     this.yaw -= dx * sens;
     this.pitch -= dy * sens * (this.settings.invertY ? -1 : 1);
-    this.pitch = clamp(this.pitch, -89 * DEG, 89 * DEG);
+    this.applyLimits();
+  }
+
+  /** Clamp the view to what the simulation will accept next tick (pitch arc, prone turn rate). */
+  applyLimits() {
+    const l = this.limits;
+    this.pitch = clamp(this.pitch, l.pitchMin, l.pitchMax);
+    if (l.maxYawStep !== null) {
+      const d = wrapAngle(this.yaw - this.sampledYaw);
+      if (Math.abs(d) > l.maxYawStep) this.yaw = this.sampledYaw + Math.sign(d) * l.maxYawStep;
+    }
     this.yaw = wrapAngle(this.yaw);
   }
 
@@ -117,8 +160,8 @@ export class Controls {
         if (s.adsMode === "toggle") this.adsToggled = !this.adsToggled;
         break;
       case "sprint":
-        // Sprinting stands you up and clears a crouch/prone toggle, like Siege.
-        this.stanceIntent = Stance.Stand;
+        // Pressing sprint drops a toggled aim; standing up and un-leaning follow the simulation's
+        // sprint rules (see afterTick), so data stays the only authority.
         this.adsToggled = false;
         break;
       case "interact":
@@ -202,6 +245,16 @@ export class Controls {
     if (Math.abs(dyaw) > 1e-4) this.yaw = wrapAngle(this.yaw + dyaw);
     const dpitch = simPitch - this.sampledPitch;
     if (Math.abs(dpitch) > 1e-4) this.pitch += dpitch;
+  }
+
+  /**
+   * Keep toggles in line with what the simulation did this tick: sprinting stands you up and cancels a
+   * lean (when data says so), and grabbing a ladder stands you up.
+   */
+  afterTick(state: { sprinting: boolean; onLadder: boolean }, rules: { forcesStand: boolean; sprintCancelsLean: boolean }) {
+    if (state.sprinting && rules.forcesStand) this.stanceIntent = Stance.Stand;
+    if (state.sprinting && rules.sprintCancelsLean) this.leanIntent = 0;
+    if (state.onLadder) this.stanceIntent = Stance.Stand;
   }
 
   /** Stance the player is asking for (for the HUD). */

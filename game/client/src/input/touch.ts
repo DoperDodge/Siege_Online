@@ -1,38 +1,50 @@
 // On-screen controls for touch devices (iPad etc.). A development convenience so the lab can be tried
 // without a keyboard — the game itself targets keyboard + mouse (DECISIONS D-021).
 import type { Action, Controls } from "./controls.js";
+import type { HoldMode } from "./settings.js";
 
 interface TouchButton {
   label: string;
   action?: Action;
-  /** "tap" = press+release, "hold" = held while touched, "latch" = sprint latch. */
-  kind: "tap" | "hold" | "latch";
+  /**
+   * "tap" = press+release; "hold" = held while touched; "latch" = sprint latch; "mode" = follows the
+   * player's toggle/hold setting for that action (hold mode: held while touched, toggle mode: tap).
+   */
+  kind: "tap" | "hold" | "latch" | "mode";
 }
 
 const BUTTONS: TouchButton[] = [
   { label: "Sprint", kind: "latch" },
   { label: "Vault", action: "vault", kind: "hold" },
-  { label: "Crouch", action: "crouch", kind: "tap" },
-  { label: "Prone", action: "prone", kind: "tap" },
-  { label: "Lean L", action: "leanLeft", kind: "tap" },
-  { label: "Lean R", action: "leanRight", kind: "tap" },
+  { label: "Crouch", action: "crouch", kind: "mode" },
+  { label: "Prone", action: "prone", kind: "mode" },
+  { label: "Lean L", action: "leanLeft", kind: "mode" },
+  { label: "Lean R", action: "leanRight", kind: "mode" },
   { label: "Use", action: "interact", kind: "tap" },
-  { label: "ADS", action: "ads", kind: "tap" },
+  { label: "ADS", action: "ads", kind: "mode" },
   { label: "Cam", action: "ability", kind: "tap" },
 ];
 
+/**
+ * Touch is the main input (phone/tablet without a mouse or trackpad). Touchscreen laptops have a fine
+ * pointer too, so they keep mouse controls; the lab also mounts touch controls on the first real touch.
+ */
 export function isTouchDevice(): boolean {
-  return matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 1;
+  return matchMedia("(pointer: coarse)").matches && !matchMedia("(any-pointer: fine)").matches;
 }
 
-export function mountTouchControls(root: HTMLElement, controls: Controls): HTMLElement {
+/** Hold/toggle setting for an action, or undefined when the action has no such setting. */
+export type ModeOf = (action: Action) => HoldMode | undefined;
+
+export function mountTouchControls(root: HTMLElement, controls: Controls, modeOf: ModeOf): HTMLElement {
   const layer = document.createElement("div");
   layer.className = "touch-layer";
   layer.innerHTML = `
     <div class="touch-look"></div>
     <div class="touch-stick"><div class="touch-knob"></div></div>
     <div class="touch-buttons"></div>`;
-  root.appendChild(layer);
+  // Below the settings button and panels so menus stay tappable.
+  root.insertBefore(layer, root.querySelector(".gear"));
 
   // Left: virtual thumbstick.
   const stick = layer.querySelector<HTMLElement>(".touch-stick")!;
@@ -90,6 +102,7 @@ export function mountTouchControls(root: HTMLElement, controls: Controls): HTMLE
     const el = document.createElement("button");
     el.className = "touch-btn";
     el.textContent = b.label;
+    let heldAction: Action | null = null;
     el.addEventListener("pointerdown", (e) => {
       e.preventDefault();
       el.classList.add("down");
@@ -97,13 +110,16 @@ export function mountTouchControls(root: HTMLElement, controls: Controls): HTMLE
         controls.toggleSprintLatch();
         el.classList.toggle("on", controls.sprintIsLatched);
       } else if (b.action) {
+        const hold = b.kind === "hold" || (b.kind === "mode" && modeOf(b.action) === "hold");
         controls.press(b.action);
-        if (b.kind === "tap") controls.release(b.action);
+        if (hold) heldAction = b.action;
+        else controls.release(b.action);
       }
     });
     const up = () => {
       el.classList.remove("down");
-      if (b.kind === "hold" && b.action) controls.release(b.action);
+      if (heldAction) controls.release(heldAction);
+      heldAction = null;
     };
     el.addEventListener("pointerup", up);
     el.addEventListener("pointercancel", up);
