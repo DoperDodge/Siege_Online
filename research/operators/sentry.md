@@ -86,7 +86,7 @@ Only rows relevant to Sentry's kit are listed.
 | Brava | Kludge → Observation Blocker | **Converted** | Fandom Brava |
 | Brava | Kludge → Nitro Cell (C4 emplacement) | **Destroyed** after the hack completes | Fandom Brava ("C4 emplacements") |
 | Brava | Kludge → Barbed Wire / Deployable Shield / Impact Grenade | No interaction (not electronic, not in the hack list) | Fandom Brava list (by omission) |
-| **Fuze** (atk) | Cluster Charge → Deployable Shield | Fuze can **mount a Cluster Charge on a Deployable Shield** | Fandom Fuze |
+| **Fuze** (atk) | Cluster Charge → Deployable Shield | Fuze can **mount a Cluster Charge on a Deployable Shield** (since Y8S3). A successful drill **shatters the shield's glass** | Official Y8S3 Designer's Notes; Fandom Fuze |
 | Fuze | Cluster sub-grenades → any Sentry gadget | Explosive damage destroys Barbed Wire, BP Camera (explosives kill it), Proximity Alarm, Observation Blocker, Deployable Shield. Each sub-grenade has a 4.2 m radius (Fandom) | Fandom Fuze, BP Camera, Deployable Shield pages |
 | **Thermite** (atk) | Exothermic Charge / his Stun & Smoke grenades | No special interaction. Sentry's gadgets in the blast volume take explosive damage (UNVERIFIED exact radius) | — |
 | **Striker** (atk) | Impact EMP Grenade → BP Camera, Proximity Alarm, Nitro Cell | **Disabled** temporarily (DSEG). Impact EMP radius **2.0 m** since Y11S2.3 (was 1.8 m). Duration: see `research/gadgets.md` | Y11S2.3 patch notes; Fandom EMP page |
@@ -146,6 +146,7 @@ Generic rules that also apply:
 - https://rainbowsix.fandom.com/wiki/Armor_and_Speed: health rating → HP (100/110/125)
 - https://rainbowsix.fandom.com/wiki/Brava: Kludge convert/destroy lists
 - https://rainbowsix.fandom.com/wiki/Fuze_(Siege): Cluster Charge on Deployable Shields; 4.2 m sub-grenade radius
+- https://www.ubisoft.com/en-us/game/rainbow-six/siege/news-updates/2Btj0mP7e7gVKIODGSLuiX/y8s3-designers-notes: Cluster Charge allowed on Deployable Shields; glass shatters on a successful drill
 - https://rainbowsix.fandom.com/wiki/Sledge_(Siege): hammer destroys Barbed Wire, Deployable Shields, BP Cameras
 - https://rainbowsix.fandom.com/wiki/Dokkaebi: Jegeo effects on phone loss
 - https://rainbowsix.fandom.com/wiki/Mute: jammer effects, Brava-hacked jammer

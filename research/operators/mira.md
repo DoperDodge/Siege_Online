@@ -128,6 +128,7 @@ Non-roster context (generic matrix): Hibana's pellets (one pellet opens it compl
 |---|---|---|
 | Y2S1 (2017) → Y5S2 (2020) | Introduced; Deployable Shield → Barbed Wire (Y4S3); Barbed Wire → **Proximity Alarm** (Y5S2) | Fandom |
 | Y6S2 (2021-06-14) | **Shatter mechanic**: melee from either side makes the glass opaque | Fandom |
+| Y6S3 (2021-09) | Fuze's Cluster Charge can be deployed **on** the Black Mirror (drills slower through it) | Y6S3 pre-season DN |
 | Y10S2 Daybreak / Siege X (2025-06) | No Mira change. Global: electricity team-neutral; limb-damage reductions | Y10S2 DN |
 | Y10S3 High Stakes (2025-09) | No Mira change | Y10S3 DN (Mira not listed) |
 | Y10S4 Tenfold Pursuit (2025-12) | **Ash's Breaching Rounds are now destroyed by electrified Black Mirrors.** Global: DSEG rework; Mute jams only wireless/remote triggers (still stops Thermite); Thermite +1 Exothermic Charge; reinforcement only detaches when a **full line is cut** | Y10S4 DN; Tenfold Pursuit season page |
@@ -157,6 +158,8 @@ Non-roster context (generic matrix): Hibana's pellets (one pellet opens it compl
 - https://www.ubisoft.com/en-us/game/rainbow-six/siege/news-updates/8dJbwMqIt5Y8lZgwJRjWZ/y10s2-designers-notes: Siege X global changes
 - https://www.ubisoft.com/en-us/game/rainbow-six/siege/news-updates/4czc3hlHtXrd27crELGDcc/y10s3-designers-notes: magnified-sight removal list (Mira not affected)
 - https://www.ubisoft.com/en-us/game/rainbow-six/siege/news-updates/2EIn06EmkAIG7su2fpITue: Y11S2.3: Fuze 1.75 s on reinforced, Mute 2.6 m
+- https://www.ubisoft.com/en-us/game/rainbow-six/siege/news-updates/2zsUnVBdSsc10rirkPl1K5/y6s3-preseason-designers-notes: Cluster Charge can be deployed on Mira's Black Mirror; drills slower through it
+- https://www.ubisoft.com/en-us/game/rainbow-six/siege/news-updates/2Btj0mP7e7gVKIODGSLuiX/y8s3-designers-notes: Cluster Charge shatters bulletproof glass on a successful drill; Zero's ARGUS piercing does not shatter the Black Mirror
 - https://www.ubisoft.com/en-us/game/rainbow-six/siege/news-updates/2MNhboDBmsQKkWb5p8zqsg/y11s2-designers-notes and https://www.ubisoft.com/en-us/game/rainbow-six/siege/news-updates/PONCuRt8LaCr3O31NkBQb/y11s3-designers-notes: Dokkaebi Jegeo / Breach Charges
 - https://rainbowsix.fandom.com/wiki/Brava, https://rainbowsix.fandom.com/wiki/Fuze_(Siege), https://rainbowsix.fandom.com/wiki/Thermite_(Siege), https://rainbowsix.fandom.com/wiki/Sledge_(Siege), https://rainbowsix.fandom.com/wiki/Mute, https://rainbowsix.fandom.com/wiki/EMP_Grenade: cross-operator interaction rules
 - https://rainbowsix.fandom.com/wiki/Hibana_(Siege), https://rainbowsix.fandom.com/wiki/Ace, https://rainbowsix.fandom.com/wiki/Maverick: non-roster thermal-breach interactions (via the destruction agent's cache)
