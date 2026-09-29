@@ -1,7 +1,8 @@
 # Project REDMOND
 
 A private, non-commercial fan project: a multiplayer tactical-breach shooter modeled on
-Rainbow Six Siege, played on a full recreation of **Oregon**. Built in Godot 4 (.NET/C#).
+Rainbow Six Siege, played on a full recreation of **Oregon**. It runs **in the web browser**
+(TypeScript + Three.js), with the game server hosted on **Railway**.
 
 - **The plan:** [`PLAN.md`](PLAN.md) — the source of truth for scope and phases.
 - **Where we are and how to test it:** [`PROGRESS.md`](PROGRESS.md)
@@ -16,42 +17,41 @@ Rainbow Six Siege, played on a full recreation of **Oregon**. Built in Godot 4 (
 
 ## Current status
 
-**Phase 0 — research.** There's no game to run yet. The plan requires the research in
-`research/` to exist and be reviewed before any gameplay code is written.
+**Phase 0 — research: done, plus the browser tech spike.** There's no game to play yet; Phase 1
+(movement) starts once you've skimmed `research/SUMMARY.md`. You can already run the spike (below).
 
 ## Repository layout
 
 ```
 PLAN.md  PROGRESS.md  DECISIONS.md  ASSET_SOURCES.md  README.md
 research/        Phase 0 output (reference only, never shipped)
-data/            operators, weapons, gadgets, surfaces, modes, maps   (from Phase 1)
-game/            Godot project root                                   (from Phase 1)
-tools/           blender/ (procedural assets), mapgen/, netsim/       (from Phase 1+)
+data/            operators, weapons, gadgets, surfaces, modes, maps     (from Phase 1)
+game/            shared/ (sim used by browser AND server), server/, client/   (from Phase 1)
+tools/           blender/, mapgen/, netsim/, spike/web_stack/
 builds/          gitignored build output
 ```
 
-## Developer setup (Windows 11) — needed from Phase 1
+## Developer setup (Windows 11)
 
-> ⚠️ This section and the next assume the plan's original **desktop** stack. You've asked for browser play
-> (DECISIONS.md D-019); if you confirm, these sections are rewritten for the web stack (open a URL, server on Railway).
+1. **Node.js 22 LTS or newer**: https://nodejs.org (the installer adds `node` and `npm`).
+2. **Git LFS**: `git lfs install` once (binary assets such as `.glb`, `.png`, `.wav` are LFS-tracked).
+3. A current **Chrome or Edge**.
 
-Verified in the §3 tech spike (see `DECISIONS.md`):
+Try the spike (a tiny multiplayer test yard):
+```
+cd tools/spike/web_stack
+npm install
+npm run build
+npm start
+```
+Open http://localhost:8080 — WASD to move, drag the mouse to turn. Open a second tab to see a second
+player. (Details: `tools/spike/web_stack/README.md`.)
 
-1. **Godot 4.7.2 — .NET edition** (the "Godot Engine - .NET" download, not the standard one):
-   https://godotengine.org/download/windows/
-2. **.NET 10 SDK**: https://dotnet.microsoft.com/download/dotnet/10.0
-3. **Git LFS**: `git lfs install` once (binary assets such as `.glb`, `.png`, `.wav` are LFS-tracked).
-4. Export templates for Windows/server builds: Godot → *Editor → Manage Export Templates → Download*.
+## Playing with friends
 
-## Playing with friends over the internet (from Phase 2)
-
-The game uses ENet over **UDP**. Pick one:
-
-1. **Tailscale or ZeroTier (easiest).** Everyone installs it and joins your network; friends join
-   your Tailscale IP. No router changes.
-2. **Port-forward UDP** on the host's router to the host PC (port will be listed here once chosen).
-3. **Rent a small VPS** and run the headless dedicated server build there. Note: many PaaS hosts
-   only proxy TCP/HTTP, so ENet/UDP won't work on them — use a real VM.
+Once the game is deployed (Phase 2), everyone just opens the game's **Railway URL** in a browser,
+one person creates a lobby, and the others join with the **room code**. No installs, no port
+forwarding, no VPN. For offline practice and solo Bot Training, the server runs inside your browser tab.
 
 ## Manual asset steps (from Phase 10)
 
