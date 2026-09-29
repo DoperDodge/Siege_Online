@@ -45,6 +45,8 @@ app.innerHTML = `
   </div>
   <div class="lean-ind lean-l">◀</div><div class="lean-ind lean-r">▶</div>
   <div class="flash"></div>
+  <div class="prompt hidden"></div>
+  <div class="shellcam hidden"><div class="shellcam-title"></div><div class="swap-bar"><div></div></div></div>
   <div class="center-msg hidden"></div>
   <button class="gear" title="Settings">⚙</button>
   <div class="panel pause hidden"></div>
@@ -88,17 +90,11 @@ function onUi(a: UiAction) {
   else if (a === "help") $(".help").classList.toggle("hidden");
   else if (a === "settings") togglePause();
   else if (a === "respawn") respawn();
-  else if (a === "ability" && op.pawns > 1) {
-    sim.cyclePossession(ctrl.id);
-    controls.yaw = possessed().state.yaw;
-    flash("Swapped shell", "info");
-  }
 }
 
 function respawn() {
   sim.respawn(ctrl.possessedPawnId);
-  controls.yaw = possessed().state.yaw;
-  controls.pitch = 0;
+  controls.setView(possessed().state.yaw, 0);
   snapshotAll();
 }
 
@@ -116,8 +112,7 @@ const GOTO: [string, number, number, number, number][] = [
 function goTo(i: number) {
   const [, x, y, z, yaw] = GOTO[i];
   sim.teleport(ctrl.possessedPawnId, x, y, z, yaw);
-  controls.yaw = yaw * DEG;
-  controls.pitch = 0;
+  controls.setView(yaw * DEG, 0);
   snapshotAll();
 }
 
@@ -154,7 +149,7 @@ function renderPause() {
     ${touch ? "" : `<button class="primary resume">Resume (click)</button>`}
     <section><h3>Operator</h3>
       <select class="op-select"><optgroup label="Attackers">${opts("attacker")}</optgroup><optgroup label="Defenders">${opts("defender")}</optgroup></select>
-      ${op.pawns > 1 ? `<p class="note">${op.name} has two shells — press <kbd>${keyLabel(settings.keys.ability)}</kbd> to swap.</p>` : ""}
+      ${op.pawns > 1 ? `<p class="note">${op.name} has two shells: press <kbd>${keyLabel(settings.keys.ability)}</kbd> to look through the other shell's camera, then <kbd>${keyLabel(settings.keys.interact)}</kbd> to transfer (1.3 s + 1.3 s).</p>` : ""}
     </section>
     <section><h3>Go to</h3><div class="goto">${GOTO.map((g, i) => `<button data-goto="${i}">${g[0]}</button>`).join("")}</div></section>
     <section><h3>Controls</h3>
@@ -218,11 +213,11 @@ function renderHelp() {
       ${row(`<kbd>${keyLabel(k.sprint)}</kbd>`, "Sprint (forward only; stands you up)")}
       ${row(`<kbd>${keyLabel(k.crouch)}</kbd> / <kbd>${keyLabel(k.prone)}</kbd>`, "Crouch / prone (toggle or hold — see settings)")}
       ${row(`<kbd>${keyLabel(k.leanLeft)}</kbd> / <kbd>${keyLabel(k.leanRight)}</kbd>`, "Lean left / right")}
-      ${row(`<kbd>${keyLabel(k.vault)}</kbd>`, "Vault (hold while running at an obstacle); also grabs ladders")}
-      ${row(`<kbd>${keyLabel(k.interact)}</kbd>`, "Use: grab / let go of a ladder")}
+      ${row(`<kbd>${keyLabel(k.vault)}</kbd>`, "Vault / mantle: face a low obstacle and press it — standing still works; a prompt shows when you can. Holding it while running also works.")}
+      ${row(`<kbd>${keyLabel(k.interact)}</kbd>`, "Use: grab / let go of a ladder; Skopós: transfer to the shell you're viewing")}
       ${row(`<kbd>${keyLabel(k.slowWalk)}</kbd>`, "Slow walk")}
       ${row("Right mouse", "Aim down sights (slower walk)")}
-      ${row(`<kbd>${keyLabel(k.ability)}</kbd>`, "Ability (Skopós: swap shell)")}
+      ${row(`<kbd>${keyLabel(k.ability)}</kbd>`, "Ability — Skopós: view your other shell's camera (press again to go back)")}
       ${row(`<kbd>${keyLabel(k.respawn)}</kbd>`, "Respawn")}
       ${row("<kbd>F3</kbd> / <kbd>F4</kbd>", "Hitboxes / third-person view")}
       ${row("<kbd>Esc</kbd>", "Pause: settings, operator, go-to menu")}
@@ -250,6 +245,8 @@ snapshotAll();
 
 let seq = 0;
 let acc = 0;
+let viewedId = sim.viewedPawnId(ctrl.id);
+let prompt: ReturnType<Sim["prompt"]> = null;
 let last = performance.now();
 let flashUntil = 0;
 
@@ -258,7 +255,16 @@ function tick() {
   const input = autotest ? autoInput(++seq) : controls.sample(++seq);
   sim.step(new Map([[ctrl.id, input]]));
   const p = possessed();
-  controls.syncView(p.state.yaw, p.state.pitch);
+  // The view follows the body you're looking through (Skopós' other shell while on its camera).
+  const nowViewed = sim.viewedPawnId(ctrl.id);
+  const v = sim.pawns.get(nowViewed)!;
+  if (nowViewed !== viewedId) {
+    viewedId = nowViewed;
+    controls.setView(v.state.yaw, v.state.pitch);
+  } else {
+    controls.syncView(v.state.yaw, v.state.pitch);
+  }
+  prompt = sim.prompt(ctrl.id);
   if (p.state.lastFallDamage > 0) flash(`-${p.state.lastFallDamage} HP (fall)`, "bad");
   observe(p);
 }
@@ -291,16 +297,17 @@ function frame(now: number) {
   const alpha = acc / DT;
 
   const me = possessed();
+  const viewed = sim.pawns.get(viewedId) ?? me;
   for (const pawn of sim.pawns.values()) {
     const v = pawnViews.get(pawn.id)!;
     const rs = interpolated(pawn, alpha);
     v.update(data, rs);
-    const mine = pawn.id === me.id;
-    v.body.visible = !mine || thirdPerson;
-    v.wire.visible = showHitboxes && (!mine || thirdPerson);
+    const eyes = pawn.id === viewed.id;
+    v.body.visible = !eyes || thirdPerson;
+    v.wire.visible = showHitboxes && (!eyes || thirdPerson);
   }
 
-  const rs = interpolated(me, alpha);
+  const rs = interpolated(viewed, alpha);
   const eye = eyePose(data.movement, { ...rs, yaw: controls.yaw });
   if (thirdPerson) {
     const back = new THREE.Vector3(0, 0, 1).applyEuler(new THREE.Euler(controls.pitch, controls.yaw, 0, "YXZ"));
@@ -351,6 +358,22 @@ function updateHud(p: Pawn) {
   msg.classList.toggle("hidden", !dead && !needClick);
   msg.textContent = dead ? `You died from the fall — press ${keyLabel(settings.keys.respawn)} to respawn` : "Click to play · F1 for controls";
   if (touchLayer) touchLayer.querySelector(".touch-btn")!.classList.toggle("on", controls.sprintIsLatched);
+
+  const k = settings.keys;
+  const promptText =
+    prompt === "mantle" ? `${keyLabel(k.vault)} to mantle` : prompt === "ladder" ? `${keyLabel(k.interact)} to climb` : prompt === "transfer" ? `${keyLabel(k.interact)} to transfer` : "";
+  $(".prompt").textContent = promptText;
+  $(".prompt").classList.toggle("hidden", !promptText || dead);
+  const onCam = ctrl.shellCam || ctrl.swapPhase !== 0;
+  $(".shellcam").classList.toggle("hidden", !onCam);
+  if (onCam) {
+    const params = op.ability.params;
+    const dur = ctrl.swapPhase === 1 ? (params.transferSeconds ?? 1.3) : (params.activationSeconds ?? 1.3);
+    $(".shellcam-title").textContent =
+      ctrl.swapPhase === 1 ? "TRANSFERRING…" : ctrl.swapPhase === 2 ? "ACTIVATING SHELL…" : `SHELL CAMERA · ${keyLabel(k.ability)} to go back`;
+    $(".swap-bar").classList.toggle("hidden", ctrl.swapPhase === 0);
+    $(".swap-bar div").style.width = `${Math.min(100, (100 * ctrl.swapT) / dur)}%`;
+  }
   $(".flash").classList.toggle("show", performance.now() < flashUntil);
 }
 
@@ -376,6 +399,8 @@ interface LabReport {
   maxLean: number;
   towerTop: boolean;
   laddered: boolean;
+  mantlePromptStandingStill: boolean;
+  mantledWithoutMoving: boolean;
 }
 const gl = renderer.getContext();
 const dbg = gl.getExtension("WEBGL_debug_renderer_info");
@@ -392,6 +417,8 @@ const report: LabReport = {
   maxLean: 0,
   towerTop: false,
   laddered: false,
+  mantlePromptStandingStill: false,
+  mantledWithoutMoving: false,
 };
 Object.defineProperty(window, "__lab", {
   value: {
@@ -411,7 +438,13 @@ const PHASES: Phase[] = [
   { ticks: 30, input: {} },
   { ticks: 64, input: { forward: 1 }, after: (p) => (report.walkSpeed = Math.hypot(p.state.vx, p.state.vz)) },
   { ticks: 64, input: { forward: 1, buttons: Btn.Sprint }, after: (p) => (report.sprintSpeed = Math.hypot(p.state.vx, p.state.vz)) },
-  { ticks: 64, input: { forward: 1, buttons: Btn.Vault }, setup: () => sim.teleport(ctrl.possessedPawnId, -6, 0, 3) },
+  {
+    ticks: 10,
+    input: {},
+    setup: () => sim.teleport(ctrl.possessedPawnId, -6, 0, 3),
+    after: () => (report.mantlePromptStandingStill = sim.prompt(ctrl.id) === "mantle"),
+  },
+  { ticks: 64, input: { buttons: Btn.Vault }, after: (p) => (report.mantledWithoutMoving = p.state.z < 1.8) },
   {
     ticks: 64,
     input: { forward: 1, buttons: Btn.Vault },

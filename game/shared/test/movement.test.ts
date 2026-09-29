@@ -194,21 +194,83 @@ describe("ladders, stairs, ramps and falls", () => {
 });
 
 describe("player/pawn separation (Skopós)", () => {
-  it("drives one shell at a time and swaps", async () => {
+  it("swaps only from the other shell's camera: Z opens it, F transfers after 1.3 s + 1.3 s", async () => {
     const { sim, ctrl } = await labWith("skopos");
     expect(ctrl.pawnIds).toHaveLength(2);
     const [a, b] = ctrl.pawnIds.map((id) => sim.pawns.get(id)!);
-    const bStart = b.state.z;
-    run(sim, ctrl, FWD, 0.5);
-    expect(a.state.z).toBeLessThan(11.5);
-    expect(b.state.z).toBeCloseTo(bStart, 3);
-    sim.cyclePossession(ctrl.id);
-    run(sim, ctrl, {}, 0.3); // the shell you left coasts to a stop
+    expect(b.state.stance).toBe(Stance.Crouch); // the idle shell stays crouched
+
+    // F on its own does nothing (it's the normal "use" key).
+    run(sim, ctrl, { buttons: Btn.Interact }, 1 / 64);
+    run(sim, ctrl, {}, 0.1);
+    expect(ctrl.possessedPawnId).toBe(a.id);
+    expect(sim.prompt(ctrl.id)).toBeNull();
+
+    // Z opens the idle shell's camera: the view moves to shell B, and moving no longer moves shell A.
+    run(sim, ctrl, { buttons: Btn.Ability }, 1 / 64);
+    expect(ctrl.shellCam).toBe(true);
+    expect(sim.viewedPawnId(ctrl.id)).toBe(b.id);
+    expect(sim.prompt(ctrl.id)).toBe("transfer");
+    const aZ = a.state.z;
+    run(sim, ctrl, { forward: 1, yawDeg: 30 }, 0.5);
+    expect(a.state.z).toBeCloseTo(aZ, 3);
+    expect(b.state.yaw).toBeCloseTo(30 * DEG, 3); // looking around through B's camera
+
+    // Z again closes the camera without swapping.
+    run(sim, ctrl, { buttons: Btn.Ability }, 1 / 64);
+    expect(ctrl.shellCam).toBe(false);
+    expect(ctrl.possessedPawnId).toBe(a.id);
+
+    // Z then F: transfer (A crouches), activation, then control is in B. (Keys are released between presses.)
+    run(sim, ctrl, {}, 1 / 64);
+    run(sim, ctrl, { buttons: Btn.Ability }, 1 / 64);
+    run(sim, ctrl, { buttons: Btn.Interact }, 1 / 64);
+    expect(ctrl.swapPhase).toBe(1);
+    run(sim, ctrl, {}, 1.35); // 1.3 s = 83.2 ticks
+    expect(ctrl.swapPhase).toBe(2);
+    expect(a.state.stance).toBe(Stance.Crouch);
+    run(sim, ctrl, {}, 1.35);
+    expect(ctrl.swapPhase).toBe(0);
+    expect(ctrl.possessedPawnId).toBe(b.id);
+    expect(b.state.stance).toBe(Stance.Stand);
+
+    // Now B moves and A stays put (crouched as the idle shell); the cooldown blocks an instant re-open.
+    const bZ = b.state.z;
     const aNow = a.state.z;
-    const bNow = b.state.z;
-    run(sim, ctrl, FWD, 0.5);
-    expect(b.state.z).toBeLessThan(bNow - 0.5);
+    run(sim, ctrl, { forward: 1 }, 0.5);
+    expect(b.state.z).toBeLessThan(bZ - 0.5);
     expect(a.state.z).toBeCloseTo(aNow, 3);
+    run(sim, ctrl, { buttons: Btn.Ability }, 1 / 64);
+    expect(ctrl.shellCam).toBe(true); // cooldown (0.5 s) has passed by now
+  });
+
+  it("an operator with one pawn has no shell camera", async () => {
+    const { sim, ctrl } = await labWith("mira");
+    run(sim, ctrl, { buttons: Btn.Ability }, 1 / 64);
+    expect(ctrl.shellCam).toBe(false);
+  });
+});
+
+describe("contextual prompts", () => {
+  it("shows the mantle prompt when standing still facing a vaultable object, and mantles without moving", async () => {
+    const { sim, ctrl, pawn } = await labWith();
+    teleport(sim, ctrl, -6, 0, 3.0); // facing the 0.9 m box, not moving
+    expect(sim.prompt(ctrl.id)).toBe("mantle");
+    teleport(sim, ctrl, -6, 0, 3.0, 180); // facing away: no prompt
+    expect(sim.prompt(ctrl.id)).toBeNull();
+    teleport(sim, ctrl, -6, 0, 3.0);
+    run(sim, ctrl, { buttons: Btn.Vault }, 1 / 64); // tap Space, no movement input
+    expect(pawn.state.mode).toBe(PawnMode.Vault);
+    run(sim, ctrl, {}, 1.0);
+    expect(pawn.state.z).toBeLessThan(1.8);
+  });
+
+  it("shows the ladder prompt at the ladder, and nothing for an unvaultable block", async () => {
+    const { sim, ctrl } = await labWith();
+    teleport(sim, ctrl, -16, 0, -5.8);
+    expect(sim.prompt(ctrl.id)).toBe("ladder");
+    teleport(sim, ctrl, -6, 0, -10); // 1.6 m block, not vaultable
+    expect(sim.prompt(ctrl.id)).toBeNull();
   });
 });
 

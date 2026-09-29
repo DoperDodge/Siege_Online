@@ -18,6 +18,7 @@ const BUTTONS: TouchButton[] = [
   { label: "Lean R", action: "leanRight", kind: "tap" },
   { label: "Use", action: "interact", kind: "tap" },
   { label: "ADS", action: "ads", kind: "tap" },
+  { label: "Cam", action: "ability", kind: "tap" },
 ];
 
 export function isTouchDevice(): boolean {

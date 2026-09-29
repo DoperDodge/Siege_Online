@@ -1,5 +1,5 @@
 {
-  "_doc": "Skopós — loadout and ratings from the official Ubisoft operator page (research/operators/skopos.md). Ability numbers arrive with Phase 8.",
+  "_doc": "Skopós — loadout and ratings from the official Ubisoft operator page (research/operators/skopos.md). Shell swap: the ability key opens the idle shell's camera, interact confirms; timings from the Y11S1 Designer's Notes.",
   "_season": "Y11S3",
   "id": "skopos",
   "name": "Skopós",
@@ -20,7 +20,12 @@
   },
   "ability": {
     "id": "pantheon_shells",
-    "name": "V10 Pantheon Shells"
+    "name": "V10 Pantheon Shells",
+    "params": {
+      "transferSeconds": 1.3,
+      "activationSeconds": 1.3,
+      "swapCooldownSeconds": 0.5
+    }
   },
   "pawns": 2
 }

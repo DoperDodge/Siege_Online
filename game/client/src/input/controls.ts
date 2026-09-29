@@ -7,7 +7,7 @@ import type { Keybinds, Settings } from "./settings.js";
 export type Action = keyof Keybinds | "ads" | "hitboxes" | "thirdPerson" | "help" | "settings";
 
 /** One-shot actions the lab handles itself (not sent to the simulation). */
-export type UiAction = "respawn" | "ability" | "hitboxes" | "thirdPerson" | "help" | "settings";
+export type UiAction = "respawn" | "hitboxes" | "thirdPerson" | "help" | "settings";
 
 const UI_KEYS: Record<string, UiAction> = { F1: "help", F3: "hitboxes", F4: "thirdPerson", Escape: "settings" };
 
@@ -22,6 +22,7 @@ export class Controls {
   private adsToggled = false;
   private sprintLatched = false;
   private interactPulse = false;
+  private abilityPulse = false;
   private lastLeanHold: -1 | 0 | 1 = 0;
   private sampledYaw = 0;
   private sampledPitch = 0;
@@ -123,8 +124,11 @@ export class Controls {
       case "interact":
         this.interactPulse = true;
         break;
-      case "respawn":
       case "ability":
+        // Sent for exactly one tick so a quick tap (keyboard or touch) is never missed.
+        this.abilityPulse = true;
+        break;
+      case "respawn":
         this.onUi(action);
         break;
     }
@@ -162,7 +166,9 @@ export class Controls {
     if (this.interactPulse) buttons |= Btn.Interact;
     if (this.adsActive) buttons |= Btn.Ads;
     if (this.held.has("slowWalk")) buttons |= Btn.SlowWalk;
+    if (this.abilityPulse) buttons |= Btn.Ability;
     this.interactPulse = false;
+    this.abilityPulse = false;
 
     const s = this.settings;
     let stance = this.stanceIntent;
@@ -179,6 +185,12 @@ export class Controls {
     this.sampledYaw = cmd.yaw;
     this.sampledPitch = cmd.pitch;
     return cmd;
+  }
+
+  /** Jump the view to a different body (Skopós camera / swap) without carrying over a stale clamp. */
+  setView(yaw: number, pitch: number) {
+    this.yaw = this.sampledYaw = yaw;
+    this.pitch = this.sampledPitch = pitch;
   }
 
   /**

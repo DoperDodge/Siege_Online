@@ -19,6 +19,8 @@ export const Btn = {
   Interact: 1 << 2,
   Ads: 1 << 3,
   SlowWalk: 1 << 4,
+  /** Unique-ability key (Skopós: open / close the idle shell's camera). */
+  Ability: 1 << 5,
 } as const;
 
 /**

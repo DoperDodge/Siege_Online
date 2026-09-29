@@ -105,7 +105,8 @@ export const operatorSchema = z.object({
     gadgets: z.array(z.string()),
     gadgetKit: z.object({ picks: z.number().int().positive(), distinct: z.boolean(), pool: z.array(z.string()) }).optional(),
   }),
-  ability: z.object({ id: z.string(), name: z.string() }),
+  /** Unique ability; `params` holds its tuning numbers (filled in per operator as abilities are built). */
+  ability: z.object({ id: z.string(), name: z.string(), params: z.record(z.string(), z.number()).default({}) }),
   /** Bodies the player controls (Skopós has two shells; PLAN §11.2). */
   pawns: z.number().int().min(1).max(2),
 });

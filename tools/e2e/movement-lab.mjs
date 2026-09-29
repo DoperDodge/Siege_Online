@@ -54,15 +54,24 @@ try {
   result.checks.helpOpensWithF1 = await page.evaluate(() => !document.querySelector(".help").classList.contains("hidden"));
   await page.screenshot({ path: `${OUT}lab-help.png` });
 
-  // Skopós: two shells, and the swap key changes the possessed shell.
+  // Skopós: F alone does nothing; Z opens the other shell's camera; F there transfers (1.3 s + 1.3 s).
   await page.goto(`${BASE}/labs/movement_lab.html?op=skopos`);
   await page.waitForFunction(() => window.__lab?.report?.ready, null, { timeout: 30000 });
   await sleep(500);
-  const before = await page.locator(".op-name").textContent();
+  const hud = () => page.locator(".op-name").textContent();
+  const start = await hud();
+  await page.keyboard.press("KeyF");
+  await sleep(300);
+  const afterF = await hud();
   await page.keyboard.press("KeyZ");
-  await sleep(200);
-  const after = await page.locator(".op-name").textContent();
-  result.checks.skoposShellSwap = before.includes("shell 1/2") && after.includes("shell 2/2");
+  await page.waitForFunction(() => !document.querySelector(".shellcam").classList.contains("hidden"), null, { timeout: 5000 });
+  const camPrompt = await page.locator(".prompt").textContent();
+  await page.screenshot({ path: `${OUT}skopos-shell-camera.png` });
+  await page.keyboard.press("KeyF");
+  await page.waitForFunction(() => document.querySelector(".op-name").textContent.includes("shell 2/2"), null, { timeout: 20000 });
+  const camClosed = await page.evaluate(() => document.querySelector(".shellcam").classList.contains("hidden"));
+  result.checks.skoposSwapViaCamera =
+    start.includes("shell 1/2") && afterF.includes("shell 1/2") && camPrompt.includes("F to transfer") && camClosed;
   await browser.close();
 
   result.report = report;
@@ -76,6 +85,8 @@ try {
   c.allStances = [0, 1, 2].every((s) => report.stancesSeen.includes(s));
   c.leaned = report.maxLean > 0.99;
   c.ladderToTowerTop = report.laddered && report.towerTop;
+  c.mantlePromptStandingStill = report.mantlePromptStandingStill;
+  c.mantleWithoutMoving = report.mantledWithoutMoving;
   ok = Object.values(c).every(Boolean);
 } catch (e) {
   result.error = String(e?.stack ?? e);

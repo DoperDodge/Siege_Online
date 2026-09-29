@@ -231,7 +231,23 @@ function trackFall(ctx: MoveContext, pawn: Pawn, wasGrounded: boolean) {
 
 // ---------------------------------------------------------------- vault
 
-function tryVault(ctx: MoveContext, pawn: Pawn): boolean {
+export interface VaultPlan {
+  /** true = vault over a low, thin obstacle; false = mantle onto it. */
+  over: boolean;
+  toX: number;
+  toY: number;
+  toZ: number;
+  apexY: number;
+  seconds: number;
+  /** Standing won't fit at the landing spot, so you land crouched. */
+  landCrouched: boolean;
+}
+
+/**
+ * Is there something to vault or mantle straight ahead (the direction you're facing, even standing
+ * still)? Read-only: used both to start a vault and to show the on-screen prompt.
+ */
+export function planVault(ctx: MoveContext, pawn: Pawn): VaultPlan | null {
   const m = ctx.data.movement;
   const v = m.vault;
   const s = pawn.state;
@@ -242,7 +258,7 @@ function tryVault(ctx: MoveContext, pawn: Pawn): boolean {
 
   // 1. A vaultable obstacle straight ahead at shin height (vaultability is tagged in map data).
   const front = ray(s.x, s.y + v.minHeight * 0.5, s.z, fx, 0, fz, r + v.reach);
-  if (!front || !ctx.level.solids.get(front.collider.handle)?.vaultable) return false;
+  if (!front || !ctx.level.solids.get(front.collider.handle)?.vaultable) return null;
   const face = front.timeOfImpact;
 
   // 2. Its top surface, found by casting down just past the front face.
@@ -250,12 +266,12 @@ function tryVault(ctx: MoveContext, pawn: Pawn): boolean {
   const px = s.x + fx * (face + 0.05);
   const pz = s.z + fz * (face + 0.05);
   const down = ray(px, topStart, pz, 0, -1, 0, v.maxOntoHeight + 0.35);
-  if (!down || down.collider.handle !== front.collider.handle) return false;
+  if (!down || down.collider.handle !== front.collider.handle) return null;
   const topY = topStart - down.timeOfImpact;
   const h = topY - s.y;
-  if (h < v.minHeight || h > v.maxOntoHeight) return false;
+  if (h < v.minHeight || h > v.maxOntoHeight) return null;
 
-  // 3. Depth: walk along the top until it ends. Thin + low enough = vault over; otherwise climb onto.
+  // 3. Depth: walk along the top until it ends. Thin + low enough = vault over; otherwise mantle onto.
   let depth = Infinity;
   for (let d = 0.1; d <= v.maxOverDepth + 0.1001; d += 0.1) {
     const probe = ray(s.x + fx * (face + d), topY + 0.2, s.z + fz * (face + d), 0, -1, 0, 0.35);
@@ -265,7 +281,7 @@ function tryVault(ctx: MoveContext, pawn: Pawn): boolean {
     }
   }
   const over = depth !== Infinity && h <= v.maxOverHeight;
-  if (!over && depth !== Infinity) return false; // too tall to vault over, too thin to stand on
+  if (!over && depth !== Infinity) return null; // too tall to vault over, too thin to stand on
 
   // 4. Landing spot.
   let toX: number;
@@ -276,7 +292,7 @@ function tryVault(ctx: MoveContext, pawn: Pawn): boolean {
     toX = s.x + fx * land;
     toZ = s.z + fz * land;
     const floor = ray(toX, topY + 0.2, toZ, 0, -1, 0, topY + 0.2 - s.y + 3);
-    if (!floor) return false;
+    if (!floor) return null;
     toY = topY + 0.2 - floor.timeOfImpact;
   } else {
     const land = face + r + 0.15;
@@ -288,14 +304,24 @@ function tryVault(ctx: MoveContext, pawn: Pawn): boolean {
   // 5. Clearance above the obstacle (body tucked) and at the landing spot (crouch if standing won't fit).
   const midX = s.x + fx * (face + Math.min(depth === Infinity ? 0.2 : depth, 0.5) / 2);
   const midZ = s.z + fz * (face + Math.min(depth === Infinity ? 0.2 : depth, 0.5) / 2);
-  if (!capsuleFree(ctx, pawn, midX, topY + v.clearance, midZ, v.apexBodyHeight)) return false;
+  if (!capsuleFree(ctx, pawn, midX, topY + v.clearance, midZ, v.apexBodyHeight)) return null;
+  let landCrouched = false;
   if (!capsuleFree(ctx, pawn, toX, toY, toZ, currentHeight(m, s))) {
-    if (!capsuleFree(ctx, pawn, toX, toY, toZ, m.stance.crouch.height)) return false;
+    if (!capsuleFree(ctx, pawn, toX, toY, toZ, m.stance.crouch.height)) return null;
+    landCrouched = true;
+  }
+  return { over, toX, toY, toZ, apexY: topY + v.clearance, seconds: v.secondsBase + v.secondsPerMeter * h, landCrouched };
+}
+
+function tryVault(ctx: MoveContext, pawn: Pawn): boolean {
+  const plan = planVault(ctx, pawn);
+  if (!plan) return false;
+  const s = pawn.state;
+  if (plan.landCrouched) {
     s.stance = s.stanceFrom = Stance.Crouch;
     s.stanceT = 1;
   }
-
-  startScriptedMove(s, toX, toY, toZ, topY + v.clearance, v.secondsBase + v.secondsPerMeter * h);
+  startScriptedMove(s, plan.toX, plan.toY, plan.toZ, plan.apexY, plan.seconds);
   return true;
 }
 
@@ -342,7 +368,8 @@ function ladderClimbPoint(ctx: MoveContext, i: number): [number, number] {
   return [L.base[0] - L.forward[0] * off, L.base[2] - L.forward[1] * off];
 }
 
-function tryAttachLadder(ctx: MoveContext, pawn: Pawn): boolean {
+/** Index of a ladder you're standing at and facing (you can grab it), or -1. Read-only. */
+export function findLadder(ctx: MoveContext, pawn: Pawn): number {
   const m = ctx.data.movement;
   const s = pawn.state;
   const [pfx, pfz] = forwardXZ(s.yaw);
@@ -352,21 +379,42 @@ function tryAttachLadder(ctx: MoveContext, pawn: Pawn): boolean {
     if (Math.hypot(s.x - cx, s.z - cz) > m.ladder.attachDistance) continue;
     if (s.y < L.base[1] - 0.5 || s.y > L.base[1] + L.height - 1.0) continue;
     if (pfx * L.forward[0] + pfz * L.forward[1] < 0.5) continue; // must face the ladder
-    if (s.stance !== Stance.Stand) {
-      if (!capsuleFree(ctx, pawn, cx, s.y, cz, m.stance.stand.height)) continue;
-      s.stance = s.stanceFrom = Stance.Stand;
-      s.stanceT = 1;
-    }
-    s.mode = PawnMode.Ladder;
-    s.ladder = i;
-    s.vx = s.vy = s.vz = 0;
-    s.lean = 0;
-    s.sprinting = false;
-    s.grounded = false;
-    setFeet(ctx, pawn, cx, s.y, cz, m.stance.stand.height);
-    return true;
+    if (s.stance !== Stance.Stand && !capsuleFree(ctx, pawn, cx, s.y, cz, m.stance.stand.height)) continue;
+    return i;
   }
-  return false;
+  return -1;
+}
+
+function tryAttachLadder(ctx: MoveContext, pawn: Pawn): boolean {
+  const i = findLadder(ctx, pawn);
+  if (i < 0) return false;
+  const m = ctx.data.movement;
+  const s = pawn.state;
+  const [cx, cz] = ladderClimbPoint(ctx, i);
+  s.stance = s.stanceFrom = Stance.Stand;
+  s.stanceT = 1;
+  s.mode = PawnMode.Ladder;
+  s.ladder = i;
+  s.vx = s.vy = s.vz = 0;
+  s.lean = 0;
+  s.sprinting = false;
+  s.grounded = false;
+  setFeet(ctx, pawn, cx, s.y, cz, m.stance.stand.height);
+  return true;
+}
+
+export type MovementPrompt = "mantle" | "ladder" | null;
+
+/**
+ * Which contextual prompt to show right now ("Space to mantle", "F to climb"). Like Siege, it appears
+ * whenever you face something usable — you don't need to be moving.
+ */
+export function movementPrompt(ctx: MoveContext, pawn: Pawn): MovementPrompt {
+  const s = pawn.state;
+  if (s.mode !== PawnMode.Walk) return null;
+  if (findLadder(ctx, pawn) >= 0) return "ladder";
+  if (s.grounded && s.stance !== Stance.Prone && s.stanceT >= 1 && planVault(ctx, pawn)) return "mantle";
+  return null;
 }
 
 function stepLadder(ctx: MoveContext, pawn: Pawn, input: InputCmd, pressed: number) {

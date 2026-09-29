@@ -20,6 +20,13 @@ export interface PlayerController {
   pawnIds: number[];
   /** The pawn currently receiving this controller's input. */
   possessedPawnId: number;
+  /** Skopós: looking through the idle shell's camera (the step before a swap). */
+  shellCam: boolean;
+  /** Skopós swap in progress: 0 none, 1 transfer (active shell idles), 2 activation (target shell wakes). */
+  swapPhase: 0 | 1 | 2;
+  swapT: number;
+  swapCooldown: number;
+  prevButtons: number;
 }
 
 export function initialPawnState(x: number, y: number, z: number, yaw: number, maxHp: number): PawnState {
