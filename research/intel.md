@@ -31,7 +31,7 @@ Legend: **Verified** = has a source below. **UNVERIFIED** = no reachable source;
 | strafe | drone strafes (mecanum-style wheels); full speed in all directions incl. diagonals (controller parity fix) | — | yes | Solar Raid (Y7S4) official notes; Fandom trivia (mecanum wheels). |
 | speed_boost | a **speed boost resource** (short-duration speed increase) on standard drones | — | yes (exists) | Twin Shells (Y9S3) official notes. Boost multiplier/duration/recharge **UNVERIFIED** (PLACEHOLDER ×1.5 for 2 s, 10 s recharge). |
 | hitbox | small; fits under door barricades and through drone vents | — | behaviour yes, size UNVERIFIED | PLACEHOLDER box 0.22 W × 0.12 H × 0.18 L m. Must be smaller than the map's drone-vent openings. |
-| battery / time limit | **none documented** for attacker drones (Extraction's drone has a battery; Siege's does not per all sources read) | — | UNVERIFIED (absence) | Only *defender* drones (Echo, Mozzie-hacked) lose signal after 10 s outdoors (Y6S4/Y5S4). |
+| battery / time limit | **none documented** for attacker drones (Extraction's drone has a battery; Siege's does not per all sources read) | — | UNVERIFIED (absence) | Only *defender* drones (Echo, Mozzie-hacked) lose signal after 10 s outdoors (Y6S4 DN; Demon Veil Y7S1). |
 | outdoors | attacker drones work outdoors without limit | — | yes (implied) | Only defender observation tools have the 10 s outdoor limit (Y6S4 official). |
 | noise | audible motor while moving; louder on jump and landing; destruction has its own SFX | — | yes | Fandom Drone; Y10S2.3 fix "Sound effects don't play when a drone is destroyed"; Y9S4 addendum fix on landing SFX. |
 | light (LED) | lights up when in use (see §3.3 for colour rules) | — | yes | Fandom Drone; Phantom Sight (Y4S2) official notes. |
@@ -96,7 +96,7 @@ Legend: **Verified** = has a source below. **UNVERIFIED** = no reachable source;
 | ping | input (PC default) | who sees | enemy notified? | behaviour | verified | source |
 |---|---|---|---|---|---|---|
 | Yellow / contextual ("smart") ping | Z (tap) | own team only; visible **map-wide through walls**; shown on compass with height indicator | **no** (silent) | Numbered per player (number assigned at match start). If it hits an object of interest (gadget, camera, drone, defuser…) the icon changes to that item; friendly gadgets = blue marker, enemy = red marker. Pinging an **enemy operator's unique gadget reveals (identifies) that operator** to your whole team. | yes | Shadow Legacy (Y5S3) official; Fandom Ping 2.0/Drone/CCTV; Gameplan "Non-Verbal Communication"; High Calibre (compass) |
-| Red ping (spot) on an enemy | X | own team; red marker at the enemy's feet, map-wide through walls; **last known position only (does not follow)** | **yes** ("spotted" alert) | Manual spot of an enemy operator in view. | yes | Gameplan "Non-Verbal Communication"; siege.gg yellow-ping article |
+| Red ping (spot) on an enemy | X (per Gameplan video; current default after the Y11S3 input overhaul UNVERIFIED) | own team; red marker at the enemy's feet, map-wide through walls; **last known position only (does not follow)** | **yes** ("spotted" alert) | Manual spot of an enemy operator in view. | yes | Gameplan "Non-Verbal Communication"; siege.gg yellow-ping article |
 | Danger ping | double-tap yellow ping (optional setting, Y11S2) or comm-wheel "Danger" | own team | UNVERIFIED (assume no) | Location warning marker. | yes (exists) | System Override (Y11S2) "Ping improvements"; hardcoregamer (wheel option) |
 | Comm-wheel pings | hold wheel input (see §2.3) | own team | no | Preset messages placed in the world. | yes | Daybreak; Siege X showcase |
 
@@ -230,11 +230,11 @@ Other ping rules:
 | Support mode (dead) — defenders | Access **all team cameras** (default cams, Bulletproof Cams, operator cams — view/rotate), ping and scan from them, spectate living teammates. | yes | Fandom Ping 2.0 (ping after death); siege.gg ("Even if you are dead, you can check the team's cameras"); Gameplan |
 | Support mode — attackers | **Drive their own surviving drones**, view teammates' drones, ping/scan from them, spectate teammates. | yes | Fandom Drone; North Star TS note |
 | Support mode — operator gadgets | Y6S2 TS "gameplay after death": Zero's ARGUS, Mozzie's stolen drones, Echo's Yokai, Maestro's Evil Eyes usable by their owners after death. Maestro: rotate yes, shoot no (Y6S4 DN). | yes (TS + DN) | North Star; Y6S4 DN |
-| Support mode HUD | player portraits show teammates' ability/gadget status (Y5S4) | yes | Demon Veil notes |
+| Support mode HUD | player portraits show teammates' ability/gadget status (Y7S1) | yes | Demon Veil (Y7S1) notes |
 | DBNO players using obs tools | **UNVERIFIED** — PLACEHOLDER: not allowed while DBNO | UNVERIFIED | Ask Ulo |
 | Killcam / death replay | Exists (enabled in Ranked since 2017 to deter cheating); skippable. Since Y6S2 the first-person death animation is skippable and the slow-motion + opponent close-up were removed from the death replay. Exact POV/length: UNVERIFIED (PLACEHOLDER: ~5 s replay from the killer's perspective). | yes (exists) | PC Gamer (2017); North Star (Y6S2) notes; Fandom patch pages (killcam fixes) |
 | End-of-round replay | Historically an EOR replay (round-deciding kill) exists; current status UNVERIFIED | UNVERIFIED | Fandom Patch 4.2.0 fix mentions "EOR replay"; Crimson Heist (red pings in Replay/EOR) |
-| Match Replay | Records recent matches locally: 12 (PC now **30** since Y11S2). First-person any player, top-down/tactical and **free camera**; fast-forward/rewind; report cheaters from replay; HUD customisable (Y11S1). Consoles since Y5S4. | yes | Fandom Match Replay; System Override; Dread Factor; Brutal Swarm; Silent Hunt |
+| Match Replay | Records recent matches locally: 12 (PC now **30** since Y11S2). First-person any player, top-down/tactical and **free camera**; fast-forward/rewind; report cheaters from replay (Y7S3); HUD customisable (Y11S1). Consoles since Demon Veil (Y7S1). | yes | Fandom Match Replay; System Override; Dread Factor; Brutal Swarm; Silent Hunt |
 | Custom-game spectators | Spectator Camera (11th+ player) only in Custom games; up to **4 spectators** (Y8S4); first/third person, tactical cut-away view, free cam (Y8S3) | yes | Fandom Spectator Camera; Deep Freeze; Heavy Mettle |
 
 ---
@@ -264,11 +264,11 @@ From the Siege audio director (Gamasutra/Game Developer deep dive, 2017):
 ### 7.3 Sounds that give away position/intent (build checklist)
 | sound | notes | verified | source |
 |---|---|---|---|
-| Footsteps (per stance, speed, armour) | details → `core_mechanics.md` | yes | Gamasutra deep dive; Vector Glare crouch-walk mix |
+| Footsteps (per stance, speed, armour) | details → `core_mechanics.md` | yes | Gamasutra deep dive; Vector Glare (Y7S2) "Updated the Crouch Walk sound mix" |
 | Drone motor, jump, landing, destruction | | yes | Fandom Drone; Y9S4/Y10S2.3 fixes |
 | Reinforcing, barricade placement/breaking, wall/floor destruction | | yes | Gamasutra ("gadget deployment … cues"); Y11S2 addendum destruction SFX fix |
 | Gadget deploy / activation (jammer, cams, breach charges, etc.) | | yes | Gamasutra |
-| Rappel | | yes (PLAN §13) | Y4S? occluded rappel SFX fix |
+| Rappel (incl. deploying gadgets while rappelling) | has occluded (through-wall) variants | yes | Shadow Legacy (Y5S3) addendum fix: "Missing occluded SFX when deploying while … rappelling" (Fandom Patch 5.3.0) |
 | Reloads, lean rustle, weapon handling | | partly | Y10S4.2 melee handling SFX fix |
 | Siege X metal detectors | loud noise when passed through; can be EMP-disabled or destroyed | yes | Daybreak; showcase → `destruction.md` |
 | Dokkaebi phone buzz | louder/"urgent" in Y11S2 | yes | Y11S2 DN |
@@ -382,7 +382,10 @@ From the Siege audio director (Gamasutra/Game Developer deep dive, 2017):
 - https://www.ubisoft.com/en-us/game/rainbow-six/siege/news-updates/seasons/heavymettle — Quick Match objective auto-reveal; spectator free camera
 - https://www.ubisoft.com/en-au/game/rainbow-six/siege/news-updates/2Btj0mP7e7gVKIODGSLuiX/y8s3-designers-notes — objective automatically revealed for attackers (QM)
 - https://www.ubisoft.com/en-us/game/rainbow-six/siege/news-updates/seasons/deepfreeze — 4 spectators in custom games
-- https://www.ubisoft.com/en-us/game/rainbow-six/siege/news-updates/seasons/demonveil — support-mode HUD; defender drones 10 s outside
+- https://www.ubisoft.com/en-us/game/rainbow-six/siege/news-updates/seasons/demonveil — Y7S1: support-mode HUD; defender drones 10 s outside
+- https://www.ubisoft.com/en-us/game/rainbow-six/siege/news-updates/seasons/vectorglare — Y7S2: crouch-walk sound mix
+- https://www.ubisoft.com/en-us/game/rainbow-six/siege/news-updates/seasons/brutalswarm — Y7S3: report cheaters from Match Replay
+- https://rainbowsix.fandom.com/wiki/Rainbow_Six_Siege_patches/Patch_5.3.0 — Y5S3: occluded rappel/deploy SFX fix; Ping 2.0 notes
 - https://www.ubisoft.com/en-us/game/rainbow-six/siege/news-updates/seasons/crimsonheist — Mozzie pest proximity pulse; red pings in replay/EOR
 - https://rainbowsix.fandom.com/wiki/Drone — drone count, jump cooldown 3 s, one-hit destruction, pick-up, throw, after-death use, scanning, LED, noise, Vigil interference
 - https://rainbowsix.fandom.com/wiki/CCTV — default camera behaviour, scanning, destruction, Dokkaebi hack, -10 pts, saturation trivia

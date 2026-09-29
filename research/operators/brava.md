@@ -66,7 +66,7 @@ Brava can also hack attacker devices that Mozzie has stolen, which returns them 
 
 | Owner | Gadget | Hackable? | Result of hack | Status / source |
 |---|---|---|---|---|
-| **Mute** | Signal Disruptor ("Moni" GC90) | **Yes** | **Converted.** It now disrupts *defender* gadgets instead of attacker ones. A Kludge that enters an enemy jammer's radius is jammed (static), so it must start the hack from outside the 2.475 m radius while it still has line of sight. | Fandom Brava + Mute; official CF guide; still hackable in Y11 (Y11S1.2 fix: "Glitch visual effect persists on any drone camera after Mute's Signal Disruptor is hacked by Brava's Kludge Drone") |
+| **Mute** | Signal Disruptor ("Moni" GC90) | **Yes** | **Converted.** It now disrupts *defender* gadgets instead of attacker ones. A Kludge that enters an enemy jammer's radius is jammed (static), so it must start the hack from outside the **2.6 m** radius (Y11S2.3; it was 2.475 m in Y10S4–Y11S2.2) while it still has line of sight. | Fandom Brava + Mute; official CF guide; still hackable in Y11 (Y11S1.2 fix: "Glitch visual effect persists on any drone camera after Mute's Signal Disruptor is hacked by Brava's Kludge Drone") |
 | Mute | Bulletproof Camera | Yes | Converted (attackers get the feed) | Fandom |
 | Mute | Nitro Cell | Yes | **Destroyed** after a short delay ("C4 emplacements") | Fandom |
 | **Pulse** | HB-5 Cardiac Sensor | **No** | Held in the hand, not a placed device, and on no hack list | Inferred from absence. UNVERIFIED explicit statement. |
@@ -99,7 +99,7 @@ Brava can also hack attacker devices that Mozzie has stolen, which returns them 
 | Default camera / Bulletproof Camera | Attackers can view the feed (green tint, Brava badge). It is marked by the team-colour glow. | Fandom, official. **Whether attackers can fire the BP camera's EMP dart is UNVERIFIED.** When Dokkaebi hacks the CCTV, attackers do *not* get the EMP (Fandom BP Camera page), so the safe assumption is that Brava's attackers don't either. |
 | Proximity Alarm | "Switches allegiance". It presumably now triggers on defenders and alerts attackers. | Exact behaviour UNVERIFIED |
 | Observation Blocker | "Switches allegiance". It presumably now blocks *defender* observation tools (cams) instead of attacker drones. | Exact behaviour UNVERIFIED |
-| Mute Signal Disruptor | Disrupts defender devices (e.g. a Y8S1.1 fix mentions glitch VFX on Bulletproof Cameras after a converted disruptor was destroyed). Since the Y10S4 rework, jammers only jam **wireless or remote-activated** devices, radius 2.475 m. | Converted behaviour per Fandom. How the Y10S4 rules apply to a converted jammer is UNVERIFIED. |
+| Mute Signal Disruptor | Disrupts defender devices (e.g. a Y8S1.1 fix mentions glitch VFX on Bulletproof Cameras after a converted disruptor was destroyed). Since the Y10S4 rework, jammers only jam **wireless or remote-activated** devices. Radius 2.6 m since Y11S2.3. | Converted behaviour per Fandom. How the Y10S4 rules apply to a converted jammer is UNVERIFIED. |
 
 ## 5. Interactions with roster attackers (allies)
 
@@ -117,7 +117,7 @@ The Kludge never hacks friendly (attacker) gadgets while Brava controls it.
 
 | Counter | Effect | Source |
 |---|---|---|
-| **Mute Signal Disruptor** (roster) | The Kludge "stops working" (static feed) inside the 2.475 m radius. Counter-play: hack the jammer from outside its radius first, or use the second Kludge to hack the jammer and free the first. | Fandom Mute/Brava; Strafe; official CF guide; radius from official Y10S4 DN |
+| **Mute Signal Disruptor** (roster) | The Kludge "stops working" (static feed) inside the **2.6 m** radius (Y11S2.3). The static warning starts at 4.875 m. Counter-play: hack the jammer from outside its radius first, or use the second Kludge to hack the jammer and free the first. | Fandom Mute/Brava; Strafe; official CF guide; radius from official Y10S4 DN |
 | **Observation Blocker** (Sentry, Pulse, Lesion) | Blocks the Kludge's vision (it counts as an observation tool). The blocker itself can be hacked if seen from outside its screen. | Official Y8S2 Designer's Notes ("blocks vision from any Observation Tool, such as drones ... or Brava's Kludge Drone") |
 | **Bulletproof Camera EMP dart** (Sentry, Mute, Lesion) | Disables attacker electronics (dart radius 0.75 m since Y11S2.1). Presumably disables the Kludge too. | Effect on the Kludge UNVERIFIED; radius from official Y11S2.1 notes |
 | Gunfire / any damage | The Kludge is large and fragile (one bullet) | siege.gg, official CF guide |
@@ -134,7 +134,7 @@ The Kludge never hacks friendly (attacker) gadgets while Brava controls it.
 | Y10S3 High Stakes | No Brava change found | Official Y10S3 DN, Y10S3.1–3.3 notes |
 | **Y10S4 Tenfold Pursuit** | No direct change. Indirect: **Mute's Signal Disruptor reworked**: it only jams wireless or remote-activated devices, and its radius went up to 2.475 m (from 2.225 m). **The DSEG system was consolidated**: a device inside a disabling field can't be triggered remotely, and an operator inside the field can't trigger devices. | Official Y10S4 DN; Tenfold Pursuit season page |
 | **Y11S1 Silent Hunt** | Price cut to 10,000 Renown / 240 credits. Observation Blocker deploy time 1 s (from 2.5 s). Y11S1.2 fixed the glitch VFX on drone cameras after a Mute disruptor is hacked by the Kludge. | Official Y11S1 DN, Y11S1.2 notes |
-| Y11S2 System Override | No direct change. Indirect: Mozzie Pest range 1.75 m (from 1.5 m); Pulse scan 10.5 m (from 9 m); BP camera EMP dart radius 0.75 m (from 0.55 m, Y11S2.1) | mp1st Y11S2 notes copy; official Y11S2.1 notes |
+| Y11S2 System Override | No direct change. Indirect: Mozzie Pest range 1.75 m (from 1.5 m); Pulse scan 10.5 m (from 9 m); BP camera EMP dart radius 0.75 m (from 0.55 m, Y11S2.1); **Y11S2.3: Mute Signal Disruptor radius 2.6 m (from 2.475 m), warning radius 4.875 m (from 4.75 m); Impact EMP radius 2 m (from 1.8 m)** | mp1st Y11S2 notes copy; official Y11S2.1 and Y11S2.3 notes |
 | **Y11S3 Split Fire** | No direct change. Claymore (her gadget) damage 155 (from 150). Brava added to the Field Training playlist. | Official Y11S3 DN / Split Fire season page |
 
 **Outdated-guide flags:** a guide is out of date if it says any of the following. Brava can hack Lesion's Gu (outdated since Y8S3). The Kludge overheats Kóna Stations (outdated since Y10S2). Mute jammers act as a permanent EMP bubble (outdated since Y10S4). Electricity damages players (outdated since Y10S2).
@@ -167,6 +167,7 @@ The Kludge never hacks friendly (attacker) gadgets while Brava controls it.
 - https://www.ubisoft.com/en-gb/game/rainbow-six/siege/news-updates/ivbm7sXcU7iG89d7wQtlx/y11s12-patch-notes — Kludge/Mute disruptor fix
 - https://mp1st.com/title-updates-and-patches/rainbow-six-siege-system-override-update-june-2-via-patch-3-38-1-000-143 — Y11S2 Mozzie/Pulse/Solis changes (copy of official notes)
 - https://www.ubisoft.com/en-us/game/rainbow-six/siege/news-updates/7tAny5W9p4yrHmIiH51noI/y11s21-patch-notes — BP camera EMP dart 0.75 m
+- https://www.ubisoft.com/en-us/game/rainbow-six/siege/news-updates/2EIn06EmkAIG7su2fpITue — Y11S2.3: Mute radius 2.6 m / warning 4.875 m; Impact EMP 2 m
 - https://www.ubisoft.com/en-us/game/rainbow-six/siege/news-updates/PONCuRt8LaCr3O31NkBQb/y11s3-designers-notes — Y11S3 (Claymore 155, no Brava change)
 - https://www.ubisoft.com/en-us/game/rainbow-six/siege/news-updates/seasons/splitfire — Field Training addition
 - https://rainbowsix.fandom.com/wiki/Brava — hack result lists, 2 Kludges, counters, Mozzie interplay (also old revisions via API)

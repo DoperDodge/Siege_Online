@@ -60,7 +60,7 @@ Official in-game description (Fandom): "Sets an exothermic charge that destroys 
 
 | Counter | Effect | In roster? | Source |
 |---|---|---|---|
-| **Mute Signal Disruptor** | The charge **can't be triggered** if **the charge or Thermite** is inside the jammer radius (**2.475 m** since Y10S4; 2.225 m before). Nothing happens until the jammer is gone. | Yes | Official Y10S4 DN (explicit Thermite example); Tenfold Pursuit page; Fandom Mute/Reinforcement |
+| **Mute Signal Disruptor** | The charge **can't be triggered** if **the charge or Thermite** is inside the jammer radius (**2.6 m** since Y11S2.3; 2.475 m in Y10S4–Y11S2.2; 2.225 m before). Nothing happens until the jammer is gone. | Yes | Official Y10S4 DN (explicit Thermite example); Tenfold Pursuit page; Fandom Mute/Reinforcement |
 | Bulletproof Camera EMP dart (Sentry, Mute, Lesion) | DSEG on Thermite or the charge → "can no longer trigger their remote devices (... Exothermic charges ...)". Dart radius 0.75 m. | Yes | Official Y10S4 DN; Y11S2.1 (radius). Duration UNVERIFIED. |
 | **Mira Black Mirror** | **Conflicting sources.** The official gameplay tip lists "Mira's Black Mirrors" among gadgets that "deny" Exothermic charges. Fandom says thermal breaching gadgets **can** be used on the opaque side and **destroy** the mirror when used on its reinforced wall. The likely reconciliation (UNVERIFIED): the charge can't be placed over the mirror glass itself, which leaves less usable wall, but breaching the rest of the wall destroys the mirror. | Yes | Official Thermite page tip; Fandom Mira |
 | Pulse (Cardiac Sensor + Nitro Cell) | Finds Thermite's heartbeat while he plants the charge (10.5 m, through walls). He can then Nitro him through an adjacent soft wall, floor or ceiling, or hold an angle outside the blast. | Yes | mp1st copy of Y11S2 notes (range); siege.gg Fuze guide (Nitro counter logic) |
@@ -75,7 +75,7 @@ Official in-game description (Fandom): "Sets an exothermic charge that destroys 
 
 | Defender gadget | Thermite → it | It → Thermite |
 |---|---|---|
-| **Mute** Signal Disruptor | The blast destroys jammers in radius, but only if the charge could trigger | Blocks triggering (charge or Thermite inside 2.475 m) |
+| **Mute** Signal Disruptor | The blast destroys jammers in radius, but only if the charge could trigger | Blocks triggering (charge or Thermite inside 2.6 m) |
 | Mute / Sentry / Lesion Bulletproof Camera | Destroyed by explosives in the blast radius | EMP dart → DSEG → can't trigger. It can also watch his plant. |
 | **Pulse** Cardiac Sensor | — | Detects him planting (10.5 m through walls) |
 | Mute / Pulse / Mira / Sentry Nitro Cell | Destroyed if in the blast | Kills him through adjacent soft surfaces, or when thrown out once the wall is open |
@@ -93,7 +93,7 @@ Official in-game description (Fandom): "Sets an exothermic charge that destroys 
 | Ally | Interaction |
 |---|---|
 | **Brava** | Kludge converts Mute's jammer (and destroys Bandit/Kaid devices, which are out of roster), clearing the wall. Fandom: this "costs one of the three hacking charges". |
-| **Fuze** | The cluster charge clears defender utility behind the wall (it can also go on reinforced walls, 1.75 s drill). The same jammer rule blocks it if planted within 2.475 m of a jammer. |
+| **Fuze** | The cluster charge clears defender utility behind the wall (it can also go on reinforced walls, 1.75 s drill). The same jammer rule blocks it if planted within 2.6 m of a jammer. |
 | **Sledge** | Impact EMP Grenade (in his loadout) DSEG-disables jammers and BP cams. His hammer opens soft floors/hatches for vertical angles on jammers. |
 | **Striker** | Can take Impact EMP. Hard Breach Charge ×2 is a backup hard breach (2 s plant, 4 s fuse, not remote-triggered). Whether Mute still stops the HBC after Y10S4 is UNVERIFIED. |
 | **Dokkaebi** | No direct interaction |
@@ -107,7 +107,7 @@ Official in-game description (Fandom): "Sets an exothermic charge that destroys 
 | Y10S3 High Stakes | No Thermite change found | Official Y10S3 DN; Y10S3.1–3.3 notes |
 | **Y10S4 Tenfold Pursuit** | **Charges 3 (from 2). ITA12S added.** Mute rework (wireless/remote only, radius 2.475 m): Thermite "will still not be able to trigger" inside it. DSEG: an affected character can't trigger Exothermic charges. Reinforcements only detach once a full line is cut. | Official Y10S4 DN; Tenfold Pursuit page |
 | Y11S1 Silent Hunt | Y11S1.2 bug fix only (pistol-cocking animation while idle with the ITA12S) | Official Y11S1.2 notes |
-| Y11S2 System Override | No Thermite change found. Indirect: Pulse scan range 10.5 m. | mp1st copy of official Y11S2 notes |
+| Y11S2 System Override | No Thermite change found. Indirect: Pulse scan range 10.5 m. **Y11S2.3: Mute jammer radius 2.6 m (from 2.475 m); Impact EMP radius 2 m (from 1.8 m).** | mp1st copy of official Y11S2 notes; official Y11S2.3 notes |
 | **Y11S3 Split Fire** | **Y11S3.1: Exothermic Charge damage 220 HP (from 200). M1014 damage 30 (from 28).** | Official Y11S3.1 patch notes |
 
 **Outdated-guide flags:** a guide is out of date if it says any of the following. Thermite has 2 charges or no ITA12S (pre-Y10S4). Mute's jammer is a permanent EMP zone (pre-Y10S4; the effect on Thermite is unchanged). Electricity damages players (pre-Y10S2). Exothermic does 200 damage (pre-Y11S3.1).
@@ -131,6 +131,7 @@ Official in-game description (Fandom): "Sets an exothermic charge that destroys 
 - https://siege.gg/news/siege-x-y10s2-2-patch-notes — Y10S2.2 electricity fix for Exothermic/HBC
 - https://www.ubisoft.com/en-gb/game/rainbow-six/siege/news-updates/4czc3hlHtXrd27crELGDcc/y10s3-designers-notes — checked, no Thermite change
 - https://www.ubisoft.com/en-gb/game/rainbow-six/siege/news-updates/ivbm7sXcU7iG89d7wQtlx/y11s12-patch-notes — ITA12S animation fix
+- https://www.ubisoft.com/en-us/game/rainbow-six/siege/news-updates/2EIn06EmkAIG7su2fpITue — Y11S2.3: Mute radius 2.6 m; Impact EMP 2 m
 - https://www.ubisoft.com/en-us/game/rainbow-six/siege/news-updates/7tAny5W9p4yrHmIiH51noI/y11s21-patch-notes — BP cam EMP dart radius
 - https://mp1st.com/title-updates-and-patches/rainbow-six-siege-system-override-update-june-2-via-patch-3-38-1-000-143 — Pulse 10.5 m
 - https://www.ubisoft.com/en-us/game/rainbow-six/siege/news-updates/2LqpNY95OdSdWBB8SBEmbg/y5s3-preseason-designers-notes — reinforced hatch 1M HP pool, per-device damage

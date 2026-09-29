@@ -63,7 +63,7 @@ Official: "Fuze's APM-6 cluster charge propels a group of explosive cluster gren
 
 | Counter | Effect | Source |
 |---|---|---|
-| **Mute Signal Disruptor** (roster) | If **the charge or Fuze** is inside the jammer radius (2.475 m since Y10S4), the charge **won't trigger** ("sub-grenades will not deploy"). If the jammer is placed **after** triggering, it has no effect. Y10S4.1 fixed a bug where the disruptor *could* deactivate a Cluster Charge. Our reading: an already-triggered charge (or one outside the rules) must not be cancelled. | Fandom Mute/Fuze; official Y6S3 DN; official Y10S4 DN/season page ("both the Operator and the device need to be outside of the field"); official Y10S4.1 notes (the fix's meaning is inferred, UNVERIFIED) |
+| **Mute Signal Disruptor** (roster) | If **the charge or Fuze** is inside the jammer radius (**2.6 m** since Y11S2.3; 2.475 m from Y10S4), the charge **won't trigger** ("sub-grenades will not deploy"). If the jammer is placed **after** triggering, it has no effect. Y10S4.1 fixed a bug where the disruptor *could* deactivate a Cluster Charge. Our reading: an already-triggered charge (or one outside the rules) must not be cancelled. | Fandom Mute/Fuze; official Y6S3 DN; official Y10S4 DN/season page ("both the Operator and the device need to be outside of the field"); official Y10S4.1 notes (the fix's meaning is inferred, UNVERIFIED) |
 | DSEG sources (Bulletproof Camera EMP dart — Sentry/Mute/Lesion) | A character under DSEG "can no longer trigger their remote devices (... Cluster charges ...)", and an affected device can't be triggered remotely | Official Y10S4 DN. The exact duration from a BP cam dart is UNVERIFIED (see `research/gadgets.md`). |
 | Gunfire / explosives on the charge | Destroyed (see §3.1 for the shooting window) | Fandom; Y6S3 DN |
 | Destroying the surface it is on | Destroys the charge | Fandom |
@@ -110,7 +110,7 @@ Fuze uses the standard Ballistic Shield. Blitz, Montagne, Blackbeard and Clash h
 
 | Defender gadget | Fuze → it | It → Fuze | Source / status |
 |---|---|---|---|
-| **Mute** Signal Disruptor | Sub-grenades destroy jammers in their blast. The charge must be planted more than 2.475 m from any jammer. | Stops the charge triggering if the charge **or Fuze** is inside the radius. Jams Breach Charges (remote). Post-Y10S4 behaviour vs the Hard Breach Charge (fuse, not remote) is UNVERIFIED; Fandom still lists HBC as jammed. | §3.2 sources; Fandom Hard Breach Charge |
+| **Mute** Signal Disruptor | Sub-grenades destroy jammers in their blast. The charge must be planted more than 2.6 m from any jammer (Y11S2.3). | Stops the charge triggering if the charge **or Fuze** is inside the radius. Jams Breach Charges (remote). Post-Y10S4 behaviour vs the Hard Breach Charge (fuse, not remote) is UNVERIFIED; Fandom still lists HBC as jammed. | §3.2 sources; Fandom Hard Breach Charge |
 | Mute Bulletproof Camera | Destroyed by explosives | EMP dart (0.75 m) puts DSEG on Fuze or the charge → can't trigger | Fandom BP cam; official Y10S4 DN, Y11S2.1 |
 | Mute / Pulse / Mira / Sentry Nitro Cell | Can be destroyed by explosion (a single bullet destroys one) | Main counter through soft walls. Bypasses his shield if thrown behind him; 66 % absorbed in front. | Fandom C4; siege.gg |
 | **Pulse** Cardiac Sensor | — | Detects Fuze's heartbeat through walls/floors within **10.5 m** (Y11S2) while he plants → Nitro. Not an electronic target for Fuze. | mp1st copy of Y11S2 notes |
@@ -128,7 +128,7 @@ Fuze uses the standard Ballistic Shield. Blitz, Montagne, Blackbeard and Clash h
 | Ally | Interaction |
 |---|---|
 | Brava | Converting a Mute jammer (Kludge) removes the trigger block. Kludge charges are finite, so plan who clears what. |
-| Thermite | Fuze can clear defender utility behind a reinforced wall before or after Thermite's breach. Both are blocked by the same jammer rule (charge or operator inside 2.475 m → no trigger). Cluster explosions can destroy friendly gadgets in the blast. |
+| Thermite | Fuze can clear defender utility behind a reinforced wall before or after Thermite's breach. Both are blocked by the same jammer rule (charge or operator inside 2.6 m → no trigger). Cluster explosions can destroy friendly gadgets in the blast. |
 | Sledge / Striker | Impact EMP Grenades (Sledge's loadout; Striker's pool) apply DSEG to jammers and BP cams so Fuze can trigger (DSEG rules per Y10S4). Sledge's hammer and Fuze both remove soft floors and hatches: vertical play. |
 | Dokkaebi | No direct interaction |
 
@@ -141,7 +141,7 @@ Fuze uses the standard Ballistic Shield. Blitz, Montagne, Blackbeard and Clash h
 | Y10S3 High Stakes | **Shields: a projectile-throw animation was added** (brief exposure) | Official Y10S3 DN |
 | **Y10S4 Tenfold Pursuit** | Mute rework: jams wireless/remote devices, radius 2.475 m. **DSEG: an operator under DSEG can't trigger Cluster Charges**, and both Fuze and the device must be outside any field. Kaid can electrify Castle Armor Panels (Fuze can't plant on them while electrified). **Y10S4.1: "FIXED – Mute's Signal Disruptor can deactivate Fuze's Cluster Charge."** | Official Y10S4 DN; Tenfold Pursuit page; Y10S4.1 notes |
 | **Y11S1 Silent Hunt** | **Shields can no longer break through full-HP barricades.** | Official Y11S1 DN |
-| **Y11S2 System Override** | **Y11S2.3: breaching time on reinforced surfaces and Armor Panels 1.75 s (was 2 s).** | Official Y11S2.3 notes |
+| **Y11S2 System Override** | **Y11S2.3: breaching time on reinforced surfaces and Armor Panels 1.75 s (was 2 s).** In the same patch: Mute jammer radius 2.6 m (from 2.475 m); Impact EMP radius 2 m (from 1.8 m). | Official Y11S2.3 notes |
 | **Y11S3 Split Fire** | No direct Fuze change. **Noor** (anti-shield defender) added. Y11S3.1 bug fixes to lance-vs-shield interactions. | Official Split Fire page, Y11S3 DN, Y11S3.1 notes |
 
 **Outdated-guide flags:** a guide is out of date if it says any of the following. "Can't go on reinforced walls" (pre-Y6S3). Drill time 3 s (pre-Y7S3). Shield hip-fire or a one-hit-DBNO bash (pre-Y9S1). Shields barge through barricades (pre-Y11S1). Reinforced drill time of 2 s (pre-Y11S2.3).
