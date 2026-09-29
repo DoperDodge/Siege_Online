@@ -1,0 +1,13 @@
+config_version=5
+
+[application]
+config/name="RedmondSpike"
+run/main_scene="res://main.tscn"
+config/features=PackedStringArray("4.7", "C#")
+
+[dotnet]
+project/assembly_name="RedmondSpike"
+
+[physics]
+3d/physics_engine="Jolt Physics"
+common/physics_ticks_per_second=64
