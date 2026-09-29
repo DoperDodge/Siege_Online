@@ -92,7 +92,8 @@ and destroyed only via **anchors (thermal)** or **host-wall destruction**.
 |---|---|---|---|
 | **Brava** (atk) | Kludge Drone → Black Mirror | **No interaction.** The Mirror isn't in the Kludge hack/destroy lists | Fandom Brava (by omission). UNVERIFIED in-game |
 | Brava | Kludge → Mira's Proximity Alarm / Nitro Cell | Prox Alarm **converted**; Nitro Cell **destroyed** | Fandom Brava |
-| **Fuze** (atk) | Cluster Charge | Can drill **reinforced surfaces** (1.75 s on reinforced since Y11S2.3). A charge on the Mirror's reinforced wall or an adjacent wall drops sub-grenades on the defender side. Explosives destroy the **canister**, so it can **eject** the Mirror. Destroys a soft-wall Mirror's host wall. Mounting a Cluster Charge **on the Mirror glass itself**: UNVERIFIED | Fandom Fuze; Y11S2.3 patch notes; Fandom Mira (canister vs explosives) |
+| **Fuze** (atk) | Cluster Charge **planted on the Black Mirror** | **Officially allowed since Y6S3** ("Can be deployed on reinforced surfaces and Mira's Black Mirror"). It "take[s] longer to drill through … Mira's Black Mirror" (exact time UNVERIFIED; reinforced surfaces are 1.75 s since Y11S2.3). A successful drill **shatters the bulletproof glass** ("as with any other bulletproof glass", Y8S3 DN), then sub-grenades land on the defender side | Official Y6S3 pre-season DN; Y8S3 DN; Y11S2.3 patch notes |
+| Fuze | Sub-grenades on the defender side | Explosives destroy the **canister**, so they can **eject** the Mirror (inferred from Fandom's "explosives destroy the canister"). A cluster on a soft host wall destroys the wall and removes the Mirror | Fandom Mira |
 | **Thermite** (atk) | Exothermic Charge on the Mirror's (reinforced) wall | **Destroys the Mirror completely** (thermal breach through anchors/wall). The charge can be placed on the **opaque side** of the wall carrying a Mirror | Fandom Mira; siege.gg; r6siegecenter |
 | Thermite | vs Mute / electricity | Mute jammer: Thermite **can't trigger** a charge inside the radius (Y10S4 DN). Bandit/Kaid electricity destroys placed charges (Fandom) | Y10S4 DN; Fandom Thermite |
 | **Striker** (atk) | **Hard Breach Charge** | Any hard breacher can destroy a Mirror on a reinforced wall (guides). Whether the Hard Breach Charge's hole must cover the anchors: UNVERIFIED | siege.gg; r6siegecenter |
@@ -140,7 +141,7 @@ Non-roster context (generic matrix): Hibana's pellets (one pellet opens it compl
 - **Hard Breach Charge vs Mirror** (Striker/Fuze): does one charge destroy a Mirror on a reinforced wall, or only if it covers an anchor?
 - **Sledge's hammer on the glass:** shatter only, or destroy? Hammer on a soft wall holding a Mirror: is the Mirror removed?
 - **Can a soft wall holding a Mirror still be reinforced?** (Fandom says no.)
-- Can Fuze mount a Cluster Charge directly on the Mirror glass/frame?
+- How long does a Fuze Cluster Charge take to drill a Black Mirror (the Y6S3 DN only says "longer"), and does the Mirror survive as shattered glass or get destroyed?
 - Exact defender-side tint (any colour grading, or fully clear)? A screenshot through an intact Mirror would settle it.
 - Official confirmation that Mira has **2** Mirrors, 1 Nitro Cell and 2 Proximity Alarms (loadout-screen screenshot).
 
