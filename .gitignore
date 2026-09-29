@@ -29,3 +29,9 @@ research/oregon/refs/web/
 
 # Blender backups
 *.blend1
+
+# Node / web build output
+node_modules/
+dist/
+dist-server/
+spike-screenshot.png
