@@ -5,16 +5,16 @@ Total: **259 questions from 25 files** (collected from each file's "Open questio
 
 **How to answer:** reply in chat, or edit this file and write your answer under the question (e.g.
 `> Ulo: 6 reinforcements`). Most of these take seconds in a **Custom Game → Local**, with the timer off.
-Anything you answer replaces an `UNVERIFIED` placeholder in the data. Nothing here blocks Phase 1
-except the first two items.
+Anything you answer replaces an `UNVERIFIED` placeholder in the data. Items 1–3 are answered; nothing
+else here blocks Phase 1.
 
 ## Answer these first
 
 | # | Question | Why it matters | Where |
 |---|---|---|---|
-| 1 | **Browser or desktop?** Switch the stack to a browser game (TypeScript + Three.js + a Node server on Railway, WebSockets), or keep the plan's Windows desktop build (Godot C#, ENet/UDP)? | Decides the whole tech stack before Phase 1. You said you want browser play; this confirms the switch. | DECISIONS.md D-019 |
-| 2 | **"Legion" = Lesion?** No Siege operator is named Legion. Lesion (Gu mines) was researched in its place. | Needs a yes, or the real name, before Phase 8. | [operators/legion_name_check.md](operators/legion_name_check.md) |
-| 3 | **1v1 reinforcements:** keep the plan's scaling (1 defender → **2** reinforcements), or use Siege's own 1v1 Arcade value (**6**)? | The plan formula makes 1v1 defense much harder than Siege's. | DECISIONS.md D-015 |
+| 1 | ✅ **Answered: browser** (D-019/D-020). ~~**Browser or desktop?** Switch the stack to a browser game (TypeScript + Three.js + a Node server on Railway, WebSockets), or keep the plan's Windows desktop build (Godot C#, ENet/UDP)? ~~ | Decides the whole tech stack before Phase 1. | DECISIONS.md D-019 |
+| 2 | ✅ **Answered: yes, Lesion** (D-011). ~~**"Legion" = Lesion?** No Siege operator is named Legion. Lesion (Gu mines) was researched in its place.~~ | Needs a yes, or the real name, before Phase 8. | [operators/legion_name_check.md](operators/legion_name_check.md) |
+| 3 | ✅ **Answered: 6, like Siege** (D-015). ~~**1v1 reinforcements:** keep the plan's scaling (1 defender → **2** reinforcements), or use Siege's own 1v1 Arcade value (**6**)?~~ | The plan formula makes 1v1 defense much harder than Siege's. | DECISIONS.md D-015 |
 | 4 | **Repo visibility:** the GitHub repo is **public**. Make it private before you add screenshots? | Your screenshots are Ubisoft game imagery. | [oregon/SCREENSHOT_CHECKLIST.md](oregon/SCREENSHOT_CHECKLIST.md) |
 | 5 | **Oregon layout:** since the March 2026 modernization, have you noticed any wall, door, window, or hatch that changed? | We build the 2020 layout plus the 2026 gas pipes and extinguishers, assuming no layout change. | [oregon/version.md](oregon/version.md) |
 | 6 | **Soft vs hard walls and reinforcement counts** per site, plus default camera facings. The 30-minute minimum screenshot set answers most of these at once. | This is what makes the map feel like Oregon; it's also what the bots' setups rely on. | [oregon/SCREENSHOT_CHECKLIST.md](oregon/SCREENSHOT_CHECKLIST.md), [oregon/surfaces.md](oregon/surfaces.md) |

@@ -9,7 +9,7 @@ Sources, in priority order (PLAN §0.3): official Ubisoft operator/map pages, pa
 - **Low (needs you in-game):** exact movement speeds, stance heights, hole sizes, drone and camera numbers, camera facings, and the site setups for bots (mostly inferred, tagged `DER`).
 
 ## The plan's baseline was out of date — main corrections
-- **"Legion" doesn't exist** in Siege (checked through the Y11S4 roadmap). **Lesion** was researched in its place → you need to confirm.
+- **"Legion" doesn't exist** in Siege (checked through the Y11S4 roadmap). **Lesion** was researched in its place, and Ulo confirmed that's who was meant.
 - **Thermite:** 3 Exothermic Charges (was 2), 220 dmg, and the ITA12S was added. **Fuze:** keeps the Ballistic Shield, but it has no hip-fire; his gadgets are Breach, Hard Breach, or Smoke; the Cluster Charge works on reinforced walls, Mira's Black Mirror, and deployable shields.
 - **Dokkaebi (remastered Y11S2):** Jegeo Payload (1 charge, max 5, +1 per 25 s, 7 s, 14 s per-target cooldown). Since Y11S3 the upload needs a continuous link and Mute interrupts it. Her gadgets are Smoke plus Breach (no EMP). She can still hack dead defenders' phones.
 - **Mute:** health 2 / speed 2. Since Y10S4 the jammer only blocks *remote* activation/control (2.6 m radius), so it no longer jams automated devices.
@@ -45,13 +45,14 @@ Sources, in priority order (PLAN §0.3): official Ubisoft operator/map pages, pa
 | Sentry | Commando 9, M870, TCSG12 | C75 Auto, Super Shorty | any 2 different of 7 |
 | Skopós | PCX-33 | P229 | Impact Grenade, Proximity Alarm |
 | Mira | Vector .45 ACP, ITA12L | USP40, ITA12S | Proximity Alarm, Nitro Cell |
-| Lesion (for "Legion") | SIX12 SD, T-5 SMG | Q-929 | Observation Blocker, Bulletproof Camera |
+| Lesion | SIX12 SD, T-5 SMG | Q-929 | Observation Blocker, Bulletproof Camera |
 | Pulse | UMP45, M1014 | 5.7 USG, M45 MEUSOC, Reaper MK2 | Nitro Cell, Deployable Shield, Observation Blocker |
 | Mute | MP5K, M590A1 | P226 Mk 25, SMG-11 | Bulletproof Camera, Nitro Cell |
 
 ## File map
 `core_mechanics.md` movement, health, DBNO, damage · `destruction.md` surfaces, penetration, reinforcement, ingredients · `round_flow.md` timers, playlists, Pick & Ban · `intel.md` drones, cameras, pings · `gadgets.md` all 14 generic gadgets · `weapons.csv` + `weapons_notes.md` 40 weapons · `operators/*.md` 12 operators (+ `legion_name_check.md`) · `interactions.csv` + `interactions_notes.md` 343 gadget interactions · `oregon/` version, layout, surfaces, map features, common setups, screenshot checklist, reference list.
 
-## Open decisions before Phase 1
-1. **Browser vs desktop stack** (DECISIONS D-019). You want browser play; confirm the switch to a web stack.
-2. **"Legion" = Lesion?** (D-011)  3. **1v1 reinforcement pool: 2 (plan formula) or 6 (Siege)?** (D-015)
+## Decisions made after this research (2026-09-29)
+- **Browser game on Railway** (D-019/D-020): TypeScript + Three.js + Rapier + Node WebSocket server. The web spike passed.
+- **"Legion" = Lesion**, confirmed (D-011). **Reinforcements:** `max(6, round(10 × defenders / 5))`, so 1v1 gets 6 like Siege (D-015).
+- **Unranked has Pick & Ban; Quick Match added; no 3v3 Arcade** (D-014, D-017).
