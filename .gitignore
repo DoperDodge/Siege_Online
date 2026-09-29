@@ -1,0 +1,37 @@
+# Build output (PLAN.md §4)
+builds/
+
+# Godot
+.godot/
+.import/
+export_credentials.cfg
+*.translation
+
+# Godot .NET / C#
+.mono/
+data_*/
+mono_crash.*.json
+bin/
+obj/
+*.user
+
+# Editors / OS
+.vs/
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+
+# Third-party reference images downloaded during research are personal reference only
+# and must never be committed (this repo is public). Link them from
+# research/oregon/refs/SOURCES.md instead. Ulo's own screenshots go in refs/ulo/ (tracked via LFS).
+research/oregon/refs/web/
+
+# Blender backups
+*.blend1
+
+# Node / web build output
+node_modules/
+dist/
+dist-server/
+spike-screenshot.png
