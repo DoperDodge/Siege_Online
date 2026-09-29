@@ -1,21 +1,48 @@
 {
-  "_doc": "Damage hitbox shapes per body part (PLAN §5 lag compensation, §7 lean). Heights are fractions of the current stance height; everything here is a placeholder until Phase 3 tuning and Ulo's stance measurements. Capsules are given as a segment (from, to) plus radius; the pose code places them per stance and lean.",
+  "_doc": "Damage hitbox shapes and body proportions (PLAN §5 lag compensation, §7 lean). Upright heights are fractions of the current stance height; the head sits at eye height (data/movement.json). The prone block is the single source for both the lying-down hitbox pose and the prone body clearance check. Everything is a placeholder until Phase 3 tuning and Ulo's stance measurements.",
   "_season": "Y11S3",
-  "_unverified": ["parts"],
+  "_unverified": [
+    "parts",
+    "standing",
+    "prone"
+  ],
   "parts": {
-    "head": { "radius": 0.12 },
-    "neck": { "radius": 0.07 },
-    "torso": { "radius": 0.19 },
-    "pelvis": { "radius": 0.17 },
-    "arm": { "radius": 0.07 },
-    "leg": { "radius": 0.09 }
+    "head": {
+      "radius": 0.12
+    },
+    "neck": {
+      "radius": 0.07
+    },
+    "torso": {
+      "radius": 0.19
+    },
+    "pelvis": {
+      "radius": 0.17
+    },
+    "arm": {
+      "radius": 0.07
+    },
+    "leg": {
+      "radius": 0.09
+    }
   },
   "standing": {
     "hipHeight": 0.52,
     "chestHeight": 0.78,
     "neckHeight": 0.85,
-    "headCenterHeight": 0.92,
     "shoulderHalfWidth": 0.2,
     "hipHalfWidth": 0.11
+  },
+  "prone": {
+    "headForward": 0.45,
+    "shoulderForward": 0.2,
+    "shoulderHalfWidth": 0.2,
+    "chestHeight": 0.2,
+    "handForward": 0.72,
+    "handHalfWidth": 0.12,
+    "hipBack": 0.42,
+    "hipHeight": 0.17,
+    "footBack": 1.15,
+    "footSpread": 1.4
   }
 }

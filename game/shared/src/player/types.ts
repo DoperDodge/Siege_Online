@@ -76,6 +76,8 @@ export interface PawnState {
   toY: number;
   toZ: number;
   apexY: number;
+  /** 0..1 how tucked the body is during a vault (lowers height and eye). */
+  tuck: number;
   // ladder
   ladder: number;
   // falls and health

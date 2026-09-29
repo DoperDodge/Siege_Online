@@ -2,38 +2,56 @@
   "_doc": "Player movement tuning (PLAN §7). Source: research/core_mechanics.md. Every path in _unverified is a placeholder until Ulo measures it in-game (research/OPEN_QUESTIONS.md). Distances in meters, speeds in m/s, times in seconds, angles in degrees.",
   "_season": "Y11S3",
   "_unverified": [
-    "speed.walkByRating",
-    "speed.sprintByRating",
-    "speed.crouchWalkFactor",
-    "speed.proneSpeed",
+    "fall",
+    "ladder",
+    "lean.allowInStances",
+    "lean.offset",
+    "lean.proneOffsetScale",
+    "lean.proneRollScale",
+    "lean.rollDeg",
+    "lean.seconds",
+    "lean.sprintCancelsLean",
+    "look",
     "speed.adsWalkSpeed",
-    "speed.slowWalkFactor",
+    "speed.airAccel",
+    "speed.crouchWalkFactor",
     "speed.groundAccel",
     "speed.groundDecel",
-    "speed.airAccel",
-    "stance.stand",
+    "speed.proneSpeed",
+    "speed.slowWalkFactor",
+    "speed.sprintByRating",
+    "speed.walkByRating",
+    "sprint.exitToFireSeconds",
+    "sprint.forcesStand",
+    "sprint.forwardThreshold",
+    "stance.collisionRadius",
     "stance.crouch",
     "stance.prone",
-    "stance.transitionSeconds",
-    "stance.proneTurnRateDeg",
-    "stance.pronePitchMinDeg",
     "stance.pronePitchMaxDeg",
-    "stance.proneBodyLength",
-    "lean.rollDeg",
-    "lean.offset",
-    "lean.seconds",
-    "lean.allowInStances",
-    "lean.sprintCancelsLean",
-    "sprint.exitToFireSeconds",
-    "vault",
-    "ladder",
-    "fall"
+    "stance.pronePitchMinDeg",
+    "stance.proneTurnRateDeg",
+    "stance.stand",
+    "stance.transitionSeconds",
+    "step",
+    "vault"
   ],
   "gravity": -9.81,
-  "healthByRating": { "1": 100, "2": 110, "3": 125 },
+  "healthByRating": {
+    "1": 100,
+    "2": 110,
+    "3": 125
+  },
   "speed": {
-    "walkByRating": { "1": 2.85, "2": 3.0, "3": 3.1 },
-    "sprintByRating": { "1": 4.25, "2": 4.75, "3": 5.0 },
+    "walkByRating": {
+      "1": 2.85,
+      "2": 3.0,
+      "3": 3.1
+    },
+    "sprintByRating": {
+      "1": 4.25,
+      "2": 4.75,
+      "3": 5.0
+    },
     "crouchWalkFactor": 0.55,
     "proneSpeed": 0.7,
     "adsWalkSpeed": 1.9,
@@ -44,9 +62,18 @@
   },
   "stance": {
     "collisionRadius": 0.3,
-    "stand": { "height": 1.8, "eye": 1.65 },
-    "crouch": { "height": 1.3, "eye": 1.15 },
-    "prone": { "height": 0.6, "eye": 0.35 },
+    "stand": {
+      "height": 1.8,
+      "eye": 1.65
+    },
+    "crouch": {
+      "height": 1.3,
+      "eye": 1.15
+    },
+    "prone": {
+      "height": 0.45,
+      "eye": 0.35
+    },
     "transitionSeconds": {
       "standToCrouch": 0.25,
       "crouchToStand": 0.25,
@@ -55,20 +82,32 @@
       "proneToCrouch": 0.9,
       "proneToStand": 1.0
     },
-    "proneBodyLength": 1.7,
     "proneTurnRateDeg": 90,
     "pronePitchMinDeg": -20,
     "pronePitchMaxDeg": 35
   },
-  "look": { "pitchMinDeg": -85, "pitchMaxDeg": 85 },
+  "look": {
+    "pitchMinDeg": -85,
+    "pitchMaxDeg": 85
+  },
   "lean": {
     "rollDeg": 15,
     "offset": 0.3,
     "seconds": 0.15,
-    "allowInStances": ["stand", "crouch", "prone"],
-    "sprintCancelsLean": true
+    "allowInStances": [
+      "stand",
+      "crouch",
+      "prone"
+    ],
+    "sprintCancelsLean": true,
+    "proneOffsetScale": 0.6,
+    "proneRollScale": 0.6
   },
-  "sprint": { "forwardThreshold": 0.5, "exitToFireSeconds": 0.25, "forcesStand": true },
+  "sprint": {
+    "forwardThreshold": 0.5,
+    "exitToFireSeconds": 0.25,
+    "forcesStand": true
+  },
   "vault": {
     "reach": 0.8,
     "minHeight": 0.3,
@@ -80,7 +119,22 @@
     "clearance": 0.1,
     "apexBodyHeight": 0.9
   },
-  "ladder": { "climbSpeed": 1.5, "slideSpeed": 4.0, "attachDistance": 0.7, "dismountForward": 0.6 },
-  "fall": { "safeHeight": 3.0, "lethalHeight": 6.0 },
-  "step": { "maxStepHeight": 0.35, "snapToGround": 0.3, "maxSlopeDeg": 46 }
+  "ladder": {
+    "climbSpeed": 1.5,
+    "slideSpeed": 4.0,
+    "attachDistance": 0.7,
+    "dismountForward": 0.6,
+    "dismountSeconds": 0.5,
+    "dismountApex": 0.15,
+    "topGrabMargin": 1.0
+  },
+  "fall": {
+    "safeHeight": 3.0,
+    "lethalHeight": 6.0
+  },
+  "step": {
+    "maxStepHeight": 0.35,
+    "snapToGround": 0.3,
+    "maxSlopeDeg": 46
+  }
 }

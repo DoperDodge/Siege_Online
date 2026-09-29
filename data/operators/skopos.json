@@ -24,8 +24,12 @@
     "params": {
       "transferSeconds": 1.3,
       "activationSeconds": 1.3,
-      "swapCooldownSeconds": 0.5
+      "swapCooldownSeconds": 0.5,
+      "idleShellOffset": 1.5
     }
   },
-  "pawns": 2
+  "pawns": 2,
+  "_unverified": [
+    "ability.params.idleShellOffset"
+  ]
 }

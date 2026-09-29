@@ -41,7 +41,6 @@ export const movementSchema = z.object({
       proneToCrouch: z.number().positive(),
       proneToStand: z.number().positive(),
     }),
-    proneBodyLength: z.number().positive(),
     proneTurnRateDeg: z.number().positive(),
     pronePitchMinDeg: z.number(),
     pronePitchMaxDeg: z.number(),
@@ -53,6 +52,9 @@ export const movementSchema = z.object({
     seconds: z.number().positive(),
     allowInStances: z.array(z.enum(STANCE_NAMES)),
     sprintCancelsLean: z.boolean(),
+    /** Prone lean moves the head/upper body less than upright lean. */
+    proneOffsetScale: z.number().nonnegative(),
+    proneRollScale: z.number().nonnegative(),
   }),
   sprint: z.object({ forwardThreshold: z.number(), exitToFireSeconds: z.number().nonnegative(), forcesStand: z.boolean() }),
   vault: z.object({
@@ -64,13 +66,17 @@ export const movementSchema = z.object({
     secondsBase: z.number().positive(),
     secondsPerMeter: z.number().nonnegative(),
     clearance: z.number().nonnegative(),
-    apexBodyHeight: z.number().positive().default(0.9),
+    apexBodyHeight: z.number().positive(),
   }),
   ladder: z.object({
     climbSpeed: z.number().positive(),
     slideSpeed: z.number().positive(),
     attachDistance: z.number().positive(),
     dismountForward: z.number().positive(),
+    dismountSeconds: z.number().positive(),
+    dismountApex: z.number().nonnegative(),
+    /** You can grab the ladder up to this far below its top. */
+    topGrabMargin: z.number().nonnegative(),
   }),
   fall: z.object({ safeHeight: z.number().nonnegative(), lethalHeight: z.number().positive() }),
   step: z.object({ maxStepHeight: z.number().nonnegative(), snapToGround: z.number().nonnegative(), maxSlopeDeg: z.number().positive() }),
@@ -81,13 +87,29 @@ const capsuleR = z.object({ radius: z.number().positive() });
 export const hitboxSchema = z.object({
   ...meta,
   parts: z.object({ head: capsuleR, neck: capsuleR, torso: capsuleR, pelvis: capsuleR, arm: capsuleR, leg: capsuleR }),
+  /** Upright pose. The head sits at the stance's eye height (data/movement.json). */
   standing: z.object({
     hipHeight: z.number(),
     chestHeight: z.number(),
     neckHeight: z.number(),
-    headCenterHeight: z.number(),
     shoulderHalfWidth: z.number(),
     hipHalfWidth: z.number(),
+  }),
+  /**
+   * Lying-down pose, in meters from the pawn's feet point (forward = along facing). Single source for the
+   * prone hitboxes and the prone body clearance check.
+   */
+  prone: z.object({
+    headForward: z.number(),
+    shoulderForward: z.number(),
+    shoulderHalfWidth: z.number(),
+    chestHeight: z.number(),
+    handForward: z.number(),
+    handHalfWidth: z.number(),
+    hipBack: z.number(),
+    hipHeight: z.number(),
+    footBack: z.number(),
+    footSpread: z.number(),
   }),
 });
 export type HitboxData = z.infer<typeof hitboxSchema>;
@@ -109,6 +131,13 @@ export const operatorSchema = z.object({
   ability: z.object({ id: z.string(), name: z.string(), params: z.record(z.string(), z.number()).default({}) }),
   /** Bodies the player controls (Skopós has two shells; PLAN §11.2). */
   pawns: z.number().int().min(1).max(2),
+}).superRefine((op, ctx) => {
+  if (op.pawns < 2) return;
+  for (const key of ["transferSeconds", "activationSeconds", "swapCooldownSeconds", "idleShellOffset"]) {
+    if (op.ability.params[key] === undefined) {
+      ctx.addIssue({ code: "custom", path: ["ability", "params", key], message: `a ${op.pawns}-pawn operator needs ability.params.${key}` });
+    }
+  }
 });
 export type OperatorData = z.infer<typeof operatorSchema>;
 
@@ -128,13 +157,13 @@ export const SURFACES = [
 export type Surface = (typeof SURFACES)[number];
 
 const vec3 = z.tuple([z.number(), z.number(), z.number()]);
-export const levelSchema = z.object({
+export const levelSchema = z.strictObject({
   _doc: z.string().optional(),
   id: z.string(),
   name: z.string(),
-  spawns: z.array(z.object({ id: z.string(), pos: vec3, yawDeg: z.number() })).min(1),
+  spawns: z.array(z.strictObject({ id: z.string(), pos: vec3, yawDeg: z.number() })).min(1),
   solids: z.array(
-    z.object({
+    z.strictObject({
       id: z.string(),
       center: vec3,
       size: vec3,
@@ -146,7 +175,7 @@ export const levelSchema = z.object({
   ),
   stairs: z
     .array(
-      z.object({
+      z.strictObject({
         id: z.string(),
         start: vec3,
         yawDeg: z.number(),
@@ -160,7 +189,7 @@ export const levelSchema = z.object({
     .default([]),
   ramps: z
     .array(
-      z.object({
+      z.strictObject({
         id: z.string(),
         start: vec3,
         yawDeg: z.number(),
@@ -174,7 +203,7 @@ export const levelSchema = z.object({
     .default([]),
   ladders: z
     .array(
-      z.object({
+      z.strictObject({
         id: z.string(),
         base: vec3,
         height: z.number().positive(),

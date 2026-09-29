@@ -114,12 +114,13 @@ export function buildLevel(R: Rapier, world: World, def: LevelDef): BuiltLevel {
     ladders.push({ id: l.id, base: l.base, height: l.height, yaw, width: l.width, forward });
     // Visual only: two rails and rungs just off the wall face.
     const quat = quatYawPitch(yaw, 0);
-    const [rx, rz] = rotateXZ(l.width / 2, 0.06, yaw);
     for (const side of [-1, 1]) {
+      // Rails sit half a ladder-width to each side and 6 cm off the wall, rotated with the ladder.
+      const [ox, oz] = rotateXZ((side * l.width) / 2, 0.06, yaw);
       renderables.push({
         id: `${l.id}_rail${side}`,
         kind: "ladder_rail",
-        center: [l.base[0] + rx * side, l.base[1] + l.height / 2, l.base[2] + rz],
+        center: [l.base[0] + ox, l.base[1] + l.height / 2, l.base[2] + oz],
         size: [0.05, l.height, 0.05],
         quat,
         surface: "LADDER",

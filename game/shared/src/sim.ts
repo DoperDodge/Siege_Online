@@ -5,9 +5,9 @@ import { rotateXZ, DEG } from "./core/math.js";
 import { loadGameData, type GameData } from "./data/load.js";
 import { buildLevel, type BuiltLevel } from "./level/builder.js";
 import { initRapier, PLAYER_GROUPS, type CharacterController, type Rapier, type World } from "./physics/rapier.js";
-import { movementPrompt, stepPawn, type MoveContext, type MovementPrompt } from "./player/movement.js";
+import { capsuleFree, movementPrompt, stepPawn, type MoveContext, type MovementPrompt } from "./player/movement.js";
 import { initialPawnState, type Pawn, type PlayerController } from "./player/pawn.js";
-import { capsuleHalfHeight, stanceDims } from "./player/stance.js";
+import { capsuleDims, stanceDims } from "./player/stance.js";
 import { Btn, PawnMode, Stance, type InputCmd } from "./player/types.js";
 
 /** Contextual hint for the HUD: "Space to mantle", "F to climb", "F to transfer" (Skopós camera). */
@@ -42,7 +42,14 @@ export class Sim {
     cc.enableSnapToGround(m.step.snapToGround);
     cc.setMaxSlopeClimbAngle(m.step.maxSlopeDeg * DEG);
     cc.setMinSlopeSlideAngle(m.step.maxSlopeDeg * DEG);
-    return new Sim(R, world, cc, data, level);
+    const sim = new Sim(R, world, cc, data, level);
+    // A capsule spawned inside geometry gets stuck (found in the §3 spike), so check every spawn at load.
+    for (const sp of def.spawns) {
+      if (!capsuleFree(sim.ctx, null, sp.pos[0], sp.pos[1] + 0.02, sp.pos[2], m.stance.stand.height)) {
+        throw new Error(`Level "${levelId}": spawn "${sp.id}" at ${sp.pos.join(", ")} overlaps level geometry`);
+      }
+    }
+    return sim;
   }
 
   /** Create a controller and its pawn(s) at a level spawn. Skopós gets two shells side by side. */
@@ -63,9 +70,15 @@ export class Sim {
       swapCooldown: 0,
       prevButtons: 0,
     };
+    const shellOffset = op.ability.params.idleShellOffset ?? 0; // required for 2-pawn operators (schema)
     for (let i = 0; i < op.pawns; i++) {
-      const [ox, oz] = rotateXZ(i * 1.5, 0, yaw);
-      const pawn = this.spawnPawn(operatorId, spawn.pos[0] + ox, spawn.pos[1], spawn.pos[2] + oz, yaw, controller.id);
+      const [ox, oz] = rotateXZ(i * shellOffset, 0, yaw);
+      const px = spawn.pos[0] + ox;
+      const pz = spawn.pos[2] + oz;
+      if (i > 0 && !capsuleFree(this.ctx, null, px, spawn.pos[1] + 0.02, pz, this.data.movement.stance.stand.height)) {
+        throw new Error(`${op.name}'s second shell would spawn inside level geometry at spawn "${spawn.id}"`);
+      }
+      const pawn = this.spawnPawn(operatorId, px, spawn.pos[1], pz, yaw, controller.id);
       if (i > 0) pawn.state.stance = pawn.state.stanceFrom = Stance.Crouch; // idle shells crouch behind their shield
       controller.pawnIds.push(pawn.id);
     }
@@ -78,8 +91,7 @@ export class Sim {
     const m = this.data.movement;
     const op = this.data.operators.get(operatorId);
     const maxHp = m.healthByRating[String(op?.healthRating ?? 2) as "1" | "2" | "3"];
-    const r = m.stance.collisionRadius;
-    const hh = capsuleHalfHeight(m.stance.stand.height, r);
+    const { r, hh } = capsuleDims(m.stance.stand.height, m.stance.collisionRadius);
     const collider = this.world.createCollider(
       this.R.ColliderDesc.capsule(hh, r).setTranslation(x, y + hh + r + 0.02, z).setCollisionGroups(PLAYER_GROUPS),
     );
@@ -123,8 +135,8 @@ export class Sim {
     if (!pawn) return;
     const spawn = this.level.def.spawns[spawnIndex % this.level.def.spawns.length];
     const m = this.data.movement;
-    const r = m.stance.collisionRadius;
-    const hh = capsuleHalfHeight(m.stance.stand.height, r);
+    const { r, hh } = capsuleDims(m.stance.stand.height, m.stance.collisionRadius);
+    pawn.collider.setRadius(r);
     pawn.collider.setHalfHeight(hh);
     pawn.collider.setTranslation({ x: spawn.pos[0], y: spawn.pos[1] + hh + r + 0.02, z: spawn.pos[2] });
     pawn.state = initialPawnState(spawn.pos[0], spawn.pos[1] + 0.02, spawn.pos[2], Math.fround(spawn.yawDeg * DEG), pawn.state.maxHp);
@@ -135,8 +147,8 @@ export class Sim {
     const pawn = this.pawns.get(pawnId);
     if (!pawn) return;
     const m = this.data.movement;
-    const r = m.stance.collisionRadius;
-    const hh = capsuleHalfHeight(stanceDims(m, stance).height, r);
+    const { r, hh } = capsuleDims(stanceDims(m, stance).height, m.stance.collisionRadius);
+    pawn.collider.setRadius(r);
     pawn.collider.setHalfHeight(hh);
     pawn.collider.setTranslation({ x, y: y + hh + r + 0.02, z });
     const t = pawn.collider.translation();
@@ -152,6 +164,7 @@ export class Sim {
       stanceFrom: stance,
       stanceT: 1,
       lean: 0,
+      tuck: 0,
       grounded: false,
       sprinting: false,
       mode: PawnMode.Walk,
@@ -182,13 +195,18 @@ export class Sim {
       }
     }
     for (const pawn of this.pawns.values()) {
-      let input = drive.get(pawn.id);
-      if (!input) {
-        const owner = pawn.ownerId !== null ? this.controllers.get(pawn.ownerId) : undefined;
-        const idleShell = owner !== undefined && owner.pawnIds.length > 1 && owner.possessedPawnId !== pawn.id;
-        input = idleInput(pawn, idleShell ? Stance.Crouch : pawn.state.stance);
+      const input = drive.get(pawn.id);
+      if (input) {
+        stepPawn(this.ctx, pawn, input);
+        continue;
       }
-      stepPawn(this.ctx, pawn, input);
+      const owner = pawn.ownerId !== null ? this.controllers.get(pawn.ownerId) : undefined;
+      const idleShell = owner !== undefined && owner.pawnIds.length > 1 && owner.possessedPawnId !== pawn.id;
+      // No input this tick (idle shell, or a dropped packet): stand still, and keep the held-button
+      // memory so keys still held when input resumes don't count as fresh presses.
+      const held = pawn.state.prevButtons;
+      stepPawn(this.ctx, pawn, idleInput(pawn, idleShell ? Stance.Crouch : pawn.state.stance));
+      pawn.state.prevButtons = held;
     }
     this.tick++;
   }
@@ -202,9 +220,9 @@ export class Sim {
     const pressed = input.buttons & ~c.prevButtons;
     c.prevButtons = input.buttons;
     if (c.pawnIds.length < 2) return;
-    const params = this.data.operators.get(c.operatorId)?.ability.params ?? {};
-    const transfer = params.transferSeconds ?? 1.3;
-    const activation = params.activationSeconds ?? 1.3;
+    const params = this.data.operators.get(c.operatorId)!.ability.params; // validated by the schema
+    const transfer = params.transferSeconds;
+    const activation = params.activationSeconds;
     c.swapCooldown = Math.max(0, c.swapCooldown - DT);
 
     if (c.swapPhase === 1) {
@@ -223,7 +241,7 @@ export class Sim {
         c.swapPhase = 0;
         c.swapT = 0;
         c.shellCam = false;
-        c.swapCooldown = params.swapCooldownSeconds ?? 0.5;
+        c.swapCooldown = params.swapCooldownSeconds;
       }
       return;
     }

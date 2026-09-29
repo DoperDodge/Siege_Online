@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Btn, DEG, eyePose, PawnMode, poseHitboxes, Sim, Stance, wrapAngle, type InputCmd } from "../src/index.js";
+import { buildLevel, Btn, DEG, eyePose, levelSchema, loadGameData, PawnMode, poseHitboxes, Sim, Stance, wrapAngle, type InputCmd } from "../src/index.js";
 import { hspeed, input, labWith, run, teleport } from "./helpers.js";
 
 const FWD = { forward: 1 } as const;
@@ -101,8 +101,8 @@ describe("lean", () => {
     run(sim, ctrl, { lean: 1 }, 0.3);
     expect(pawn.state.lean).toBeCloseTo(1, 3);
     const m = sim.data.movement;
-    const a = eyePose(m, pawn.state, 0).pos;
-    const b = eyePose(m, pawn.state).pos;
+    const a = eyePose(m, sim.data.hitboxes, pawn.state, 0).pos;
+    const b = eyePose(m, sim.data.hitboxes, pawn.state).pos;
     expect(Math.hypot(b[0] - a[0], b[2] - a[2])).toBeCloseTo(m.lean.offset, 3);
   });
 
@@ -317,5 +317,102 @@ describe("determinism", () => {
       states.push(JSON.stringify(state));
     }
     expect(states[1]).toBe(states[0]);
+  });
+});
+
+describe("review regressions (Phase 1 adversarial review)", () => {
+  it("crawling prone into a thin wall never puts the eye or any hitbox inside or past it", async () => {
+    const { sim, ctrl, pawn } = await labWith();
+    // sample_soft spans z 16.9..17.1. Crawl toward it from z = 19.5, facing -Z (yaw 0).
+    teleport(sim, ctrl, -4.5, 0, 19.5, 0, Stance.Prone);
+    run(sim, ctrl, { forward: 1, stance: Stance.Prone }, 6);
+    expect(pawn.state.z).toBeLessThan(18.2); // it really crawled up to the wall (started at 19.5)
+    const eye = eyePose(sim.data.movement, sim.data.hitboxes, pawn.state).pos;
+    expect(eye[2]).toBeGreaterThan(17.1);
+    for (const hb of poseHitboxes(sim.data.movement, sim.data.hitboxes, pawn.state)) {
+      expect(Math.min(hb.a[2], hb.b[2]) - hb.radius, hb.part).toBeGreaterThan(17.1 - 1e-3);
+    }
+  });
+
+  it("you can go prone on a gentle ramp (the body check follows the ground)", async () => {
+    const { sim, ctrl, pawn } = await labWith();
+    teleport(sim, ctrl, -24, 0, 14.8);
+    run(sim, ctrl, { forward: 1 }, 1.0); // walk onto the 15° ramp
+    run(sim, ctrl, { stance: Stance.Prone }, 1.2);
+    expect(pawn.state.stance).toBe(Stance.Prone);
+    expect(pawn.state.stanceT).toBe(1);
+  });
+
+  it("a slope steeper than maxSlopeDeg doesn't count as ground (you slide off)", async () => {
+    const { sim, ctrl, pawn } = await labWith();
+    // Drop onto the middle of the 55° ramp: never grounded while on it, ends up back on the floor.
+    sim.teleport(ctrl.possessedPawnId, -16, 1.8, 12.9);
+    let groundedHigh = false;
+    for (let i = 0; i < 128; i++) {
+      run(sim, ctrl, {}, 1 / 64);
+      if (pawn.state.grounded && pawn.state.y > 0.5) groundedHigh = true;
+    }
+    expect(groundedHigh).toBe(false);
+    expect(pawn.state.y).toBeLessThan(0.5);
+  });
+
+  it("the vault arc never lifts the camera into the window header, and peaks at the apex", async () => {
+    const { sim, ctrl, pawn } = await labWith();
+    teleport(sim, ctrl, 5.0, 0, 0.9);
+    run(sim, ctrl, { buttons: Btn.Vault }, 1 / 64);
+    expect(pawn.state.mode).toBe(PawnMode.Vault);
+    let maxEye = 0;
+    let maxFeet = 0;
+    while (pawn.state.mode === PawnMode.Vault) {
+      run(sim, ctrl, {}, 1 / 64);
+      maxFeet = Math.max(maxFeet, pawn.state.y);
+      const e = eyePose(sim.data.movement, sim.data.hitboxes, pawn.state).pos;
+      if (Math.abs(e[2]) < 0.4) maxEye = Math.max(maxEye, e[1]); // while passing through the opening
+    }
+    expect(maxEye).toBeLessThan(2.0 - sim.data.hitboxes.parts.head.radius); // header bottom is at 2.0 m
+    expect(maxFeet).toBeLessThanOrEqual(pawn.state.apexY + 1e-4);
+  });
+
+  it("a ladder can't be grabbed in the middle of a stance change", async () => {
+    const { sim, ctrl, pawn } = await labWith();
+    teleport(sim, ctrl, -16, 0, -5.8, 0, Stance.Crouch);
+    run(sim, ctrl, { stance: Stance.Stand }, 1 / 64); // start getting up
+    expect(pawn.state.stanceT).toBeLessThan(1);
+    run(sim, ctrl, { buttons: Btn.Interact, stance: Stance.Stand }, 1 / 64);
+    expect(pawn.state.mode).toBe(PawnMode.Walk);
+  });
+
+  it("a tick with no input doesn't turn a held key into a fresh press", async () => {
+    const { sim, ctrl, pawn } = await labWith("skopos");
+    run(sim, ctrl, { buttons: Btn.Ability }, 1 / 64); // opens the shell camera
+    expect(ctrl.shellCam).toBe(true);
+    sim.step(new Map()); // dropped packet
+    run(sim, ctrl, { buttons: Btn.Ability }, 1 / 64); // still held — must not toggle it closed
+    expect(ctrl.shellCam).toBe(true);
+    expect(pawn.state.mode).toBe(PawnMode.Walk);
+  });
+
+  it("a level whose spawn overlaps geometry fails to load with a readable error", async () => {
+    const data = loadGameData();
+    const lab = data.levels.get("movement_lab")!;
+    const bad = levelSchema.parse({ ...lab, id: "bad_spawn", spawns: [{ id: "in_wall", pos: [3.2, 0, 0], yawDeg: 0 }] });
+    const levels = new Map(data.levels).set("bad_spawn", bad);
+    await expect(Sim.create("bad_spawn", { ...data, levels })).rejects.toThrow(/spawn "in_wall".*overlaps/);
+  });
+
+  it("level files reject unknown fields (e.g. a misspelled rotDeg)", () => {
+    const lab = loadGameData().levels.get("movement_lab")!;
+    expect(() => levelSchema.parse({ ...lab, solids: [{ ...lab.solids[0], rotDeg: 45 }] })).toThrow();
+  });
+
+  it("ladder rails follow the ladder's yaw", async () => {
+    const sim = await Sim.create("movement_lab");
+    const lab = sim.data.levels.get("movement_lab")!;
+    const turned = { ...lab, ladders: [{ ...lab.ladders[0], yawDeg: 90 }] };
+    const built = buildLevel(sim.R, new sim.R.World({ x: 0, y: -9.81, z: 0 }), turned);
+    const rails = built.renderables.filter((r) => r.kind === "ladder_rail");
+    // Facing -X (yaw 90): rails are spread along Z around the base, not along X.
+    expect(Math.abs(rails[0].center[2] - rails[1].center[2])).toBeCloseTo(lab.ladders[0].width, 3);
+    expect(Math.abs(rails[0].center[0] - rails[1].center[0])).toBeLessThan(1e-6);
   });
 });

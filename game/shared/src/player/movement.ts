@@ -5,9 +5,9 @@ import { approach, clamp, DEG, forwardXZ, lerp, quatFromTo, rightXZ, smoothstep,
 import type { GameData } from "../data/load.js";
 import type { BuiltLevel } from "../level/builder.js";
 import { QUERY_STATIC, type CharacterController, type Rapier, type World } from "../physics/rapier.js";
-import { eyePose } from "./hitboxes.js";
+import { eyePose, proneBodyExtents } from "./hitboxes.js";
 import type { Pawn } from "./pawn.js";
-import { capsuleHalfHeight, currentHeight, stanceDims, transitionSeconds } from "./stance.js";
+import { capsuleDims, currentHeight, proneWeight, stanceDims, transitionSeconds } from "./stance.js";
 import { Btn, PawnMode, STANCE_KEYS, Stance, type InputCmd, type PawnState } from "./types.js";
 
 export interface MoveContext {
@@ -140,10 +140,24 @@ function stepWalk(ctx: MoveContext, pawn: Pawn, input: InputCmd, pressed: number
   }
   ctx.cc.computeColliderMovement(pawn.collider, { x: dx, y: dy, z: dz }, undefined, QUERY_STATIC);
   const mv = ctx.cc.computedMovement();
+  let mx = mv.x;
+  let mz = mv.z;
+  if (proneWeight(s) > 0 && (mx !== 0 || mz !== 0) && proneBodyFree(ctx, pawn, s.x, s.y, s.z, s.yaw)) {
+    // The movement capsule is small when prone; the lying body (head, arms, legs) must fit too, or the
+    // camera and hitboxes would end up inside walls. Slide along one axis if the full move doesn't fit.
+    const ny = s.y + mv.y;
+    if (!proneBodyFree(ctx, pawn, s.x + mx, ny, s.z + mz, s.yaw)) {
+      if (mx !== 0 && proneBodyFree(ctx, pawn, s.x + mx, ny, s.z, s.yaw)) mz = 0;
+      else if (mz !== 0 && proneBodyFree(ctx, pawn, s.x, ny, s.z + mz, s.yaw)) mx = 0;
+      else mx = mz = 0;
+    }
+  }
   const c = pawn.collider.translation();
-  pawn.collider.setTranslation({ x: c.x + mv.x, y: c.y + mv.y, z: c.z + mv.z });
+  pawn.collider.setTranslation({ x: c.x + mx, y: c.y + mv.y, z: c.z + mz });
   readFeet(ctx, pawn, height);
-  s.grounded = ctx.cc.computedGrounded();
+  // Only ground you could walk up counts: on steeper slopes you keep falling and slide off.
+  const n = groundNormal(ctx, pawn);
+  s.grounded = ctx.cc.computedGrounded() && (!n || n.y >= Math.cos(m.step.maxSlopeDeg * DEG) - 1e-6);
   if (s.grounded || (s.vy > 0 && mv.y < s.vy * DT - 1e-4)) s.vy = 0;
 
   trackFall(ctx, pawn, wasGrounded);
@@ -158,7 +172,8 @@ function updateStance(ctx: MoveContext, pawn: Pawn, input: InputCmd) {
     return;
   }
   let desired = input.stance;
-  const wantsSprint = (input.buttons & Btn.Sprint) !== 0 && input.forward > m.sprint.forwardThreshold;
+  const wantsSprint =
+    (input.buttons & Btn.Sprint) !== 0 && input.forward > m.sprint.forwardThreshold && (input.buttons & Btn.Ads) === 0 && s.grounded;
   // Sprinting forward overrides a crouch request (you stand up and run).
   if (wantsSprint && m.sprint.forcesStand && desired === Stance.Crouch) desired = Stance.Stand;
   if (desired === s.stance || !canEnterStance(ctx, pawn, desired)) return;
@@ -184,8 +199,8 @@ function updateLean(ctx: MoveContext, pawn: Pawn, input: InputCmd) {
   let lean = approach(s.lean, target, DT / m.lean.seconds);
   if (lean !== 0) {
     // The head can't pass through walls: sweep a head-sized sphere from the unleaned eye to the leaned eye.
-    const from = eyePose(m, s, 0).pos;
-    const to = eyePose(m, s, lean).pos;
+    const from = eyePose(m, ctx.data.hitboxes, s, 0).pos;
+    const to = eyePose(m, ctx.data.hitboxes, s, lean).pos;
     const hit = ctx.world.castShape(
       { x: from[0], y: from[1], z: from[2] },
       IDENTITY,
@@ -328,35 +343,41 @@ function tryVault(ctx: MoveContext, pawn: Pawn): boolean {
 function startScriptedMove(s: PawnState, toX: number, toY: number, toZ: number, apexY: number, seconds: number) {
   s.mode = PawnMode.Vault;
   s.moveT = 0;
-  s.moveDur = seconds;
+  s.moveDur = Math.fround(seconds);
   s.fromX = s.x;
   s.fromY = s.y;
   s.fromZ = s.z;
-  s.toX = toX;
-  s.toY = toY;
-  s.toZ = toZ;
-  s.apexY = apexY;
+  s.toX = Math.fround(toX);
+  s.toY = Math.fround(toY);
+  s.toZ = Math.fround(toZ);
+  s.apexY = Math.fround(Math.max(apexY, s.y, toY));
+  s.tuck = 0;
   s.vx = s.vy = s.vz = 0;
   s.lean = 0;
   s.sprinting = false;
 }
 
-/** Vaults and ladder dismounts: a timed arc from `from` to `to` peaking at `apexY` (collision-checked at start). */
+/**
+ * Vaults and ladder dismounts: a timed move from `from` to `to` that rises to exactly `apexY` halfway,
+ * with the body tucked (lower height and eye) in the middle. Clearance is checked when it starts.
+ */
 function stepScriptedMove(ctx: MoveContext, pawn: Pawn) {
   const s = pawn.state;
   s.moveT += DT;
   const u = Math.min(1, s.moveT / s.moveDur);
   const e = smoothstep(u);
-  const ctrl = 2 * s.apexY - (s.fromY + s.toY) / 2;
   const x = lerp(s.fromX, s.toX, e);
   const z = lerp(s.fromZ, s.toZ, e);
-  const y = (1 - e) * (1 - e) * s.fromY + 2 * e * (1 - e) * ctrl + e * e * s.toY;
-  const height = currentHeight(ctx.data.movement, s);
-  setFeet(ctx, pawn, x, y, z, height);
+  // Rise (ease out) to the apex over the first half, then settle (ease in) onto the landing spot.
+  const y = u < 0.5 ? lerp(s.fromY, s.apexY, 1 - (1 - 2 * u) ** 2) : lerp(s.apexY, s.toY, (2 * u - 1) ** 2);
+  s.tuck = Math.fround(Math.sin(Math.PI * u));
+  setFeet(ctx, pawn, x, y, z, currentHeight(ctx.data.movement, s));
   if (u >= 1) {
     s.mode = PawnMode.Walk;
+    s.tuck = 0;
     s.grounded = false;
     s.airPeakY = s.y;
+    setFeet(ctx, pawn, s.x, s.y, s.z, currentHeight(ctx.data.movement, s));
   }
 }
 
@@ -377,8 +398,9 @@ export function findLadder(ctx: MoveContext, pawn: Pawn): number {
     const L = ctx.level.ladders[i];
     const [cx, cz] = ladderClimbPoint(ctx, i);
     if (Math.hypot(s.x - cx, s.z - cz) > m.ladder.attachDistance) continue;
-    if (s.y < L.base[1] - 0.5 || s.y > L.base[1] + L.height - 1.0) continue;
+    if (s.y < L.base[1] - 0.5 || s.y > L.base[1] + L.height - m.ladder.topGrabMargin) continue;
     if (pfx * L.forward[0] + pfz * L.forward[1] < 0.5) continue; // must face the ladder
+    if (s.stanceT < 1) continue; // finish getting up / down first
     if (s.stance !== Stance.Stand && !capsuleFree(ctx, pawn, cx, s.y, cz, m.stance.stand.height)) continue;
     return i;
   }
@@ -436,7 +458,7 @@ function stepLadder(ctx: MoveContext, pawn: Pawn, input: InputCmd, pressed: numb
     // Climb off the top onto the platform.
     const d = m.stance.collisionRadius + 0.05 + m.ladder.dismountForward;
     s.ladder = -1;
-    startScriptedMove(s, cx + L.forward[0] * d, top, cz + L.forward[1] * d, top + 0.15, 0.5);
+    startScriptedMove(s, cx + L.forward[0] * d, top, cz + L.forward[1] * d, top + m.ladder.dismountApex, m.ladder.dismountSeconds);
     return;
   }
   if (vy < 0 && y <= L.base[1]) {
@@ -455,8 +477,8 @@ function placeCollider(ctx: MoveContext, pawn: Pawn, height: number) {
 }
 
 function setFeet(ctx: MoveContext, pawn: Pawn, x: number, y: number, z: number, height: number) {
-  const r = ctx.data.movement.stance.collisionRadius;
-  const hh = capsuleHalfHeight(height, r);
+  const { r, hh } = capsuleDims(height, ctx.data.movement.stance.collisionRadius);
+  pawn.collider.setRadius(r);
   pawn.collider.setHalfHeight(hh);
   pawn.collider.setTranslation({ x, y: y + hh + r, z });
   readFeet(ctx, pawn, height);
@@ -464,10 +486,10 @@ function setFeet(ctx: MoveContext, pawn: Pawn, x: number, y: number, z: number, 
 
 /** Copy the collider position (float32 as stored by Rapier) back into the state so both sides round alike. */
 function readFeet(ctx: MoveContext, pawn: Pawn, height: number) {
-  const r = ctx.data.movement.stance.collisionRadius;
+  const { r, hh } = capsuleDims(height, ctx.data.movement.stance.collisionRadius);
   const t = pawn.collider.translation();
   pawn.state.x = t.x;
-  pawn.state.y = Math.fround(t.y - (capsuleHalfHeight(height, r) + r));
+  pawn.state.y = Math.fround(t.y - (hh + r));
   pawn.state.z = t.z;
 }
 
@@ -486,32 +508,47 @@ function groundNormal(ctx: MoveContext, pawn: Pawn): { x: number; y: number; z: 
 }
 
 /** Is an upright capsule of `height` standing at these feet free of level geometry? */
-function capsuleFree(ctx: MoveContext, pawn: Pawn, x: number, y: number, z: number, height: number): boolean {
-  const r = ctx.data.movement.stance.collisionRadius - SKIN;
-  const hh = capsuleHalfHeight(height - SKIN * 2, r);
+export function capsuleFree(ctx: MoveContext, pawn: Pawn | null, x: number, y: number, z: number, height: number): boolean {
+  const { r, hh } = capsuleDims(height - SKIN * 2, ctx.data.movement.stance.collisionRadius - SKIN);
   const hit = ctx.world.intersectionWithShape(
     { x, y: y + SKIN * 1.5 + hh + r, z },
     IDENTITY,
     new ctx.R.Capsule(hh, r),
     undefined,
     QUERY_STATIC,
-    pawn.collider,
+    pawn?.collider,
   );
   return hit === null;
 }
 
-/** Is a lying-down body (horizontal capsule along the facing) free of geometry? */
+/**
+ * Does the lying-down body fit here? One capsule covering every prone hitbox (hitboxes.json "prone"),
+ * laid along the facing and tilted to follow the ground under its head and feet ends (ramps, stairs).
+ */
 function proneBodyFree(ctx: MoveContext, pawn: Pawn, x: number, y: number, z: number, yaw: number): boolean {
-  const len = ctx.data.movement.stance.proneBodyLength;
-  const r = 0.2;
+  const { front, back, radius: r } = proneBodyExtents(ctx.data.hitboxes);
   const [fx, fz] = forwardXZ(yaw);
-  // Body runs from the head (0.55 m ahead of the feet point) back toward the legs.
-  const back = len / 2 - 0.55;
-  const q = quatFromTo([0, 1, 0], [fx, 0, fz]);
+  const lift = 0.05;
+  const groundAt = (px: number, pz: number) => {
+    const hit = ctx.world.castRay(new ctx.R.Ray({ x: px, y: y + 0.6, z: pz }, { x: 0, y: -1, z: 0 }), 1.2, true, undefined, QUERY_STATIC, pawn.collider);
+    return hit ? y + 0.6 - hit.timeOfImpact : y;
+  };
+  const ax = x + fx * (front - r);
+  const az = z + fz * (front - r);
+  const bx = x - fx * (back - r);
+  const bz = z - fz * (back - r);
+  const ay = Math.max(groundAt(ax, az), y - 0.3) + r + lift;
+  const by = Math.max(groundAt(bx, bz), y - 0.3) + r + lift;
+  const dx = ax - bx;
+  const dy = ay - by;
+  const dz = az - bz;
+  const len = Math.hypot(dx, dy, dz);
+  if (Math.abs(dy) > Math.tan(ctx.data.movement.step.maxSlopeDeg * DEG) * Math.hypot(dx, dz)) return false; // too steep to lie on
+  const q = quatFromTo([0, 1, 0], [dx / len, dy / len, dz / len]);
   const hit = ctx.world.intersectionWithShape(
-    { x: x - fx * back, y: y + r + 0.05, z: z - fz * back },
+    { x: (ax + bx) / 2, y: (ay + by) / 2, z: (az + bz) / 2 },
     { x: q[0], y: q[1], z: q[2], w: q[3] },
-    new ctx.R.Capsule(Math.max(0.01, len / 2 - r), r),
+    new ctx.R.Capsule(Math.max(0.01, len / 2), r),
     undefined,
     QUERY_STATIC,
     pawn.collider,
@@ -530,5 +567,6 @@ function roundState(s: PawnState) {
   s.stanceT = Math.fround(s.stanceT);
   s.sinceSprint = Math.fround(s.sinceSprint);
   s.moveT = Math.fround(s.moveT);
+  s.tuck = Math.fround(s.tuck);
   s.airPeakY = Math.fround(s.airPeakY);
 }

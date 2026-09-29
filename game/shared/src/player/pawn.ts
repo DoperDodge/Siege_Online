@@ -57,6 +57,7 @@ export function initialPawnState(x: number, y: number, z: number, yaw: number, m
     toY: 0,
     toZ: 0,
     apexY: 0,
+    tuck: 0,
     ladder: -1,
     airPeakY: y,
     hp: maxHp,

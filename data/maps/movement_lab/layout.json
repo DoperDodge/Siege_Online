@@ -1,5 +1,5 @@
 {
-  "_doc": "Movement lab test yard (PLAN §7). Same format family as the future Oregon layout.json (§9): solids are axis-aligned boxes (optional rotDeg), stairs/ramps/ladders are generated. Coordinates: meters, Y up, yawDeg 0 faces -Z. Surface colors follow PLAN §9.1 greybox.",
+  "_doc": "Movement lab test yard (PLAN §7). Same format family as the future Oregon layout.json (§9): solids are boxes (optional yawDeg), stairs/ramps/ladders are generated. Coordinates: meters, Y up, yawDeg 0 faces -Z. Surface colors follow PLAN §9.1 greybox.",
   "id": "movement_lab",
   "name": "Movement Lab",
   "spawns": [{ "id": "start", "pos": [0, 0, 12], "yawDeg": 0 }],
