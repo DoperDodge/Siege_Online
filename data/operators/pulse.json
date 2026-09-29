@@ -1,0 +1,30 @@
+{
+  "_doc": "Pulse — loadout and ratings from the official Ubisoft operator page (research/operators/pulse.md). Ability numbers arrive with Phase 8.",
+  "_season": "Y11S3",
+  "id": "pulse",
+  "name": "Pulse",
+  "side": "defender",
+  "healthRating": 1,
+  "speedRating": 3,
+  "loadout": {
+    "primaries": [
+      "ump45",
+      "m1014"
+    ],
+    "secondaries": [
+      "5_7_usg",
+      "m45_meusoc",
+      "reaper_mk2"
+    ],
+    "gadgets": [
+      "nitro_cell",
+      "deployable_shield",
+      "observation_blocker"
+    ]
+  },
+  "ability": {
+    "id": "cardiac_sensor",
+    "name": "Cardiac Sensor"
+  },
+  "pawns": 1
+}

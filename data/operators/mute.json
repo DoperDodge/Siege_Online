@@ -1,0 +1,28 @@
+{
+  "_doc": "Mute — loadout and ratings from the official Ubisoft operator page (research/operators/mute.md). Ability numbers arrive with Phase 8.",
+  "_season": "Y11S3",
+  "id": "mute",
+  "name": "Mute",
+  "side": "defender",
+  "healthRating": 2,
+  "speedRating": 2,
+  "loadout": {
+    "primaries": [
+      "mp5k",
+      "m590a1"
+    ],
+    "secondaries": [
+      "p226_mk_25",
+      "smg_11"
+    ],
+    "gadgets": [
+      "bulletproof_camera",
+      "nitro_cell"
+    ]
+  },
+  "ability": {
+    "id": "signal_disruptor",
+    "name": "Signal Disruptor"
+  },
+  "pawns": 1
+}

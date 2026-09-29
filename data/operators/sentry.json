@@ -1,0 +1,39 @@
+{
+  "_doc": "Sentry — loadout and ratings from the official Ubisoft operator page (research/operators/sentry.md). Ability numbers arrive with Phase 8.",
+  "_season": "Y11S3",
+  "id": "sentry",
+  "name": "Sentry",
+  "side": "defender",
+  "healthRating": 2,
+  "speedRating": 2,
+  "loadout": {
+    "primaries": [
+      "commando_9",
+      "m870",
+      "tcsg12"
+    ],
+    "secondaries": [
+      "c75_auto",
+      "super_shorty"
+    ],
+    "gadgets": [],
+    "gadgetKit": {
+      "picks": 2,
+      "distinct": true,
+      "pool": [
+        "barbed_wire",
+        "bulletproof_camera",
+        "deployable_shield",
+        "observation_blocker",
+        "impact_grenade",
+        "nitro_cell",
+        "proximity_alarm"
+      ]
+    }
+  },
+  "ability": {
+    "id": "gadget_kit",
+    "name": "Gadget Kit"
+  },
+  "pawns": 1
+}

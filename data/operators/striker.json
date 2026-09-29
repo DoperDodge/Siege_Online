@@ -1,0 +1,39 @@
+{
+  "_doc": "Striker — loadout and ratings from the official Ubisoft operator page (research/operators/striker.md). Ability numbers arrive with Phase 8.",
+  "_season": "Y11S3",
+  "id": "striker",
+  "name": "Striker",
+  "side": "attacker",
+  "healthRating": 2,
+  "speedRating": 2,
+  "loadout": {
+    "primaries": [
+      "m4",
+      "m249",
+      "sr_25"
+    ],
+    "secondaries": [
+      "5_7_usg",
+      "ita12s"
+    ],
+    "gadgets": [],
+    "gadgetKit": {
+      "picks": 2,
+      "distinct": true,
+      "pool": [
+        "breach_charge",
+        "hard_breach_charge",
+        "claymore",
+        "frag",
+        "stun",
+        "smoke",
+        "impact_emp"
+      ]
+    }
+  },
+  "ability": {
+    "id": "gadget_kit",
+    "name": "Gadget Kit"
+  },
+  "pawns": 1
+}

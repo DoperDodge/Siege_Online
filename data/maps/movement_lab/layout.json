@@ -1,0 +1,60 @@
+{
+  "_doc": "Movement lab test yard (PLAN §7). Same format family as the future Oregon layout.json (§9): solids are axis-aligned boxes (optional rotDeg), stairs/ramps/ladders are generated. Coordinates: meters, Y up, yawDeg 0 faces -Z. Surface colors follow PLAN §9.1 greybox.",
+  "id": "movement_lab",
+  "name": "Movement Lab",
+  "spawns": [{ "id": "start", "pos": [0, 0, 12], "yawDeg": 0 }],
+  "solids": [
+    { "id": "floor", "center": [0, -0.25, 0], "size": [64, 0.5, 64], "surface": "HARD_FLOOR" },
+    { "id": "wall_n", "center": [0, 2, -32], "size": [64, 4, 0.5], "surface": "HARD_WALL" },
+    { "id": "wall_s", "center": [0, 2, 32], "size": [64, 4, 0.5], "surface": "HARD_WALL" },
+    { "id": "wall_e", "center": [32, 2, 0], "size": [0.5, 4, 64], "surface": "HARD_WALL" },
+    { "id": "wall_w", "center": [-32, 2, 0], "size": [0.5, 4, 64], "surface": "HARD_WALL" },
+
+    { "id": "sample_soft", "center": [-4.5, 1.25, 17], "size": [2, 2.5, 0.2], "surface": "SOFT_WALL", "label": "Soft wall" },
+    { "id": "sample_reinforceable", "center": [-1.5, 1.25, 17], "size": [2, 2.5, 0.2], "surface": "REINFORCEABLE", "label": "Reinforceable" },
+    { "id": "sample_hard", "center": [1.5, 1.25, 17], "size": [2, 2.5, 0.2], "surface": "HARD_WALL", "label": "Hard wall" },
+    { "id": "sample_hatch", "center": [4.5, 0.01, 17], "size": [1.6, 0.02, 1.6], "surface": "HATCH", "label": "Hatch" },
+
+    { "id": "curb", "center": [-6, 0.15, 9], "size": [2, 0.3, 0.6], "surface": "PROP", "label": "0.3 m curb (auto-step)" },
+    { "id": "vault_050", "center": [-6, 0.25, 6], "size": [2, 0.5, 0.4], "surface": "PROP", "vaultable": true, "label": "Vault over 0.5 m" },
+    { "id": "vault_090", "center": [-6, 0.45, 2], "size": [2, 0.9, 0.4], "surface": "PROP", "vaultable": true, "label": "Vault over 0.9 m" },
+    { "id": "vault_110", "center": [-6, 0.55, -2], "size": [2, 1.1, 0.3], "surface": "PROP", "vaultable": true, "label": "Vault over 1.1 m (max)" },
+    { "id": "vault_onto_130", "center": [-6, 0.65, -6.8], "size": [2, 1.3, 1.6], "surface": "PROP", "vaultable": true, "label": "Climb onto 1.3 m" },
+    { "id": "too_high_160", "center": [-6, 0.8, -11], "size": [2, 1.6, 0.5], "surface": "PROP", "label": "1.6 m — not vaultable" },
+
+    { "id": "winwall_left", "center": [3.2, 1.5, 0], "size": [2.4, 3, 0.2], "surface": "HARD_WALL" },
+    { "id": "winwall_sill", "center": [5.0, 0.45, 0], "size": [1.2, 0.9, 0.2], "surface": "HARD_WALL", "vaultable": true, "label": "Open window (vault through)" },
+    { "id": "winwall_header", "center": [5.0, 2.5, 0], "size": [1.2, 1.0, 0.2], "surface": "HARD_WALL" },
+    { "id": "winwall_mid", "center": [6.55, 1.5, 0], "size": [1.9, 3, 0.2], "surface": "HARD_WALL" },
+    { "id": "door_header", "center": [8.0, 2.55, 0], "size": [1.0, 0.9, 0.2], "surface": "HARD_WALL", "label": "Doorway" },
+    { "id": "winwall_right", "center": [9.25, 1.5, 0], "size": [1.5, 3, 0.2], "surface": "HARD_WALL" },
+
+    { "id": "platform_3m", "center": [14, 1.5, 2.9], "size": [3, 3, 3], "surface": "HARD_WALL", "label": "3 m platform (safe drop)" },
+    { "id": "tower_6m", "center": [-16, 3.25, -8], "size": [3, 6.5, 3], "surface": "HARD_WALL", "label": "6.5 m tower (lethal drop)" },
+
+    { "id": "crouch_wall_a", "center": [17.1, 1.25, -8.5], "size": [0.2, 2.5, 5], "surface": "HARD_WALL" },
+    { "id": "crouch_wall_b", "center": [18.9, 1.25, -8.5], "size": [0.2, 2.5, 5], "surface": "HARD_WALL" },
+    { "id": "crouch_ceiling", "center": [18, 1.975, -8.5], "size": [2, 1.05, 5], "surface": "HARD_WALL", "label": "Crouch tunnel (1.45 m)" },
+    { "id": "prone_wall_a", "center": [21.1, 1.25, -8.5], "size": [0.2, 2.5, 5], "surface": "HARD_WALL" },
+    { "id": "prone_wall_b", "center": [22.9, 1.25, -8.5], "size": [0.2, 2.5, 5], "surface": "HARD_WALL" },
+    { "id": "prone_ceiling", "center": [22, 1.625, -8.5], "size": [2, 1.75, 5], "surface": "HARD_WALL", "label": "Prone tunnel (0.75 m)" },
+
+    { "id": "lean_corner", "center": [-1.75, 1.25, -16], "size": [2.5, 2.5, 0.3], "surface": "HARD_WALL", "label": "Lean around this corner" },
+    { "id": "lean_post_a", "center": [2, 1.25, -12], "size": [0.4, 2.5, 0.4], "surface": "HARD_WALL" },
+    { "id": "lean_post_b", "center": [4, 1.25, -15], "size": [0.4, 2.5, 0.4], "surface": "HARD_WALL" },
+    { "id": "target_a", "center": [-4, 0.9, -24], "size": [0.5, 1.8, 0.1], "surface": "PROP", "label": "Target" },
+    { "id": "target_b", "center": [1, 0.9, -26], "size": [0.5, 1.8, 0.1], "surface": "PROP", "label": "Target" },
+    { "id": "target_c", "center": [5, 0.9, -24], "size": [0.5, 1.8, 0.1], "surface": "PROP", "label": "Target" }
+  ],
+  "stairs": [
+    { "id": "stairs_platform", "start": [14, 0, 8], "yawDeg": 0, "steps": 12, "rise": 0.25, "run": 0.3, "width": 1.6, "surface": "HARD_FLOOR" }
+  ],
+  "ramps": [
+    { "id": "ramp_15", "start": [-24, 0, 14], "yawDeg": 0, "length": 6, "angleDeg": 15, "width": 2, "surface": "HARD_FLOOR", "label": "15° ramp" },
+    { "id": "ramp_40", "start": [-20, 0, 14], "yawDeg": 0, "length": 4, "angleDeg": 40, "width": 2, "surface": "HARD_FLOOR", "label": "40° ramp (climbable)" },
+    { "id": "ramp_55", "start": [-16, 0, 14], "yawDeg": 0, "length": 4, "angleDeg": 55, "width": 2, "surface": "HARD_FLOOR", "label": "55° ramp (too steep)" }
+  ],
+  "ladders": [
+    { "id": "ladder_tower", "base": [-16, 0, -6.5], "height": 6.5, "yawDeg": 0, "width": 0.6, "label": "Ladder (6.5 m)" }
+  ]
+}

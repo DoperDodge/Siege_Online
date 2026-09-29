@@ -1,0 +1,29 @@
+{
+  "_doc": "Thermite — loadout and ratings from the official Ubisoft operator page (research/operators/thermite.md). Ability numbers arrive with Phase 8.",
+  "_season": "Y11S3",
+  "id": "thermite",
+  "name": "Thermite",
+  "side": "attacker",
+  "healthRating": 2,
+  "speedRating": 2,
+  "loadout": {
+    "primaries": [
+      "556xi",
+      "m1014"
+    ],
+    "secondaries": [
+      "5_7_usg",
+      "m45_meusoc",
+      "ita12s"
+    ],
+    "gadgets": [
+      "smoke",
+      "stun"
+    ]
+  },
+  "ability": {
+    "id": "exothermic_charge",
+    "name": "Exothermic Charge"
+  },
+  "pawns": 1
+}

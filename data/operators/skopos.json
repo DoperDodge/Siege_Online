@@ -1,0 +1,26 @@
+{
+  "_doc": "Skopós — loadout and ratings from the official Ubisoft operator page (research/operators/skopos.md). Ability numbers arrive with Phase 8.",
+  "_season": "Y11S3",
+  "id": "skopos",
+  "name": "Skopós",
+  "side": "defender",
+  "healthRating": 1,
+  "speedRating": 3,
+  "loadout": {
+    "primaries": [
+      "pcx_33"
+    ],
+    "secondaries": [
+      "p229"
+    ],
+    "gadgets": [
+      "impact_grenade",
+      "proximity_alarm"
+    ]
+  },
+  "ability": {
+    "id": "pantheon_shells",
+    "name": "V10 Pantheon Shells"
+  },
+  "pawns": 2
+}

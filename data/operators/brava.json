@@ -1,0 +1,28 @@
+{
+  "_doc": "Brava — loadout and ratings from the official Ubisoft operator page (research/operators/brava.md). Ability numbers arrive with Phase 8.",
+  "_season": "Y11S3",
+  "id": "brava",
+  "name": "Brava",
+  "side": "attacker",
+  "healthRating": 1,
+  "speedRating": 3,
+  "loadout": {
+    "primaries": [
+      "para_308",
+      "camrs"
+    ],
+    "secondaries": [
+      "usp40",
+      "super_shorty"
+    ],
+    "gadgets": [
+      "smoke",
+      "claymore"
+    ]
+  },
+  "ability": {
+    "id": "kludge_drone",
+    "name": "Kludge Drone"
+  },
+  "pawns": 1
+}
