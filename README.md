@@ -32,6 +32,9 @@ builds/          gitignored build output
 
 ## Developer setup (Windows 11) — needed from Phase 1
 
+> ⚠️ This section and the next assume the plan's original **desktop** stack. You've asked for browser play
+> (DECISIONS.md D-019); if you confirm, these sections are rewritten for the web stack (open a URL, server on Railway).
+
 Verified in the §3 tech spike (see `DECISIONS.md`):
 
 1. **Godot 4.7.2 — .NET edition** (the "Godot Engine - .NET" download, not the standard one):
