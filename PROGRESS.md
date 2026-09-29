@@ -5,6 +5,66 @@ known issues, and what's next.
 
 ---
 
+## Phase 1 — Skeleton + movement · ✅ built, ⏳ waiting for your feel test (2026-09-29)
+
+**Done when (PLAN §17):** it feels like Siege movement to you, offline.
+
+### What's done
+- **npm workspace** (PLAN §4): `game/shared` (simulation used by both browser and server), `game/client` (Vite +
+  Three.js), `game/server` (serves the built client; Railway-ready).
+- **Data-driven movement** in `data/movement.json`: per-rating walk and sprint speeds, crouch, prone, ADS and
+  slow-walk speeds, stance heights and transition times, lean, vault, ladder, fall damage. Health comes from
+  `data/operators/*.json` (all 12 operators). Placeholders are listed in `_unverified`.
+- **Movement:**
+  - Stances: stand, crouch and prone with timed transitions; you can't stand or crouch without headroom.
+  - Prone: turn speed and aim arc are limited, and you can't go prone or turn where your body wouldn't fit.
+  - Lean: toggle or hold, in any stance, with camera roll; your head stops at walls.
+  - Sprint: forward only, not while aiming, cancels lean, and stands you up.
+  - Vaulting: over, onto, and through open windows; tagged objects only.
+  - Ladders: climb, slide down, dismount at the top, let go.
+  - Stairs and ramps: speed holds on slopes, and 55° is too steep.
+  - Fall damage.
+- **Player/pawn separation:** Skopós owns two shells and swaps with `Z`.
+- **Hitboxes** follow stance and lean (F3 shows them). They're ready for lag compensation in Phase 2/3.
+- **Movement Lab** page:
+  - Views: first person and third person (F4).
+  - Settings: sensitivity, ADS sensitivity, vertical FOV with its horizontal equivalent, raw input, invert Y,
+    and separate toggle/hold modes for crouch, prone, lean and ADS.
+  - Tools: operator picker, "Go to" menu, HUD, help (F1).
+  - Touch controls for tablets.
+- **Tests:**
+  - 25 unit tests, including a determinism test: two independent simulations fed the same inputs end identical.
+  - A headless-browser test that plays through every mechanic.
+  - CI on every PR.
+
+### How to test (on your PC, needs Node 22+)
+```
+npm install
+npm run build
+npm start
+```
+Then open http://localhost:8080 → **Movement Lab**. Click to lock the mouse; `Esc` pauses (settings, operator,
+"Go to" menu). `F1` lists the keys and what to try. Things to judge:
+1. Walk and sprint speeds for a 1-, 2- and 3-speed operator (Fuze, Sledge, Brava). Do they *feel* like Siege?
+2. Crouch and prone transition times; the lean amount and speed.
+3. Vault heights and timing (vault course, window); ladder speed; the 3 m and 6.5 m drops.
+4. Anything that feels floaty, sticky, or wrong — tell me and I'll tune `data/movement.json`.
+
+For development there's also `npm run dev` (hot reload at http://localhost:5173/labs/movement_lab.html).
+
+### Known issues
+- The numbers are placeholders from research until you measure them (research/OPEN_QUESTIONS.md, core mechanics).
+- Simplifications and deferrals are listed in DECISIONS D-023 and D-024 (e.g. rappel moves to Phase 5, melee to
+  Phase 3).
+- Nothing is on Railway yet, so it can't be opened from an iPad until Phase 2 deploys it (or earlier, if you want).
+
+### Next: Phase 2 — Netcode core
+WebSocket match rooms on the Node server, room codes, client prediction + server reconciliation (the shared
+simulation is already deterministic), interpolation of other players, the lag-compensation framework, a headless
+multi-client test harness, and the first Railway deploy.
+
+---
+
 ## Phase 0 — Research · ✅ complete, ⏳ waiting for your SUMMARY skim (2026-09-29)
 
 **Done when (PLAN §17):** `research/` complete, SUMMARY.md, OPEN_QUESTIONS.md, screenshot checklist
