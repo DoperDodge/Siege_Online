@@ -13,7 +13,7 @@
 1. **Research before you build.** Phase 0 (below) is mandatory. You must deeply research Rainbow Six Siege's current mechanics, the 12 operators, their weapons/gadgets, and the Oregon map *before* writing gameplay code. Write what you learn to `research/` with source URLs. Use subagents to research in parallel.
 2. **Never invent Siege facts.** If you can't verify a value (damage, timer, gadget count, room name), mark it `UNVERIFIED` in the data file, use a sensible placeholder, and list it in `research/OPEN_QUESTIONS.md`. Ask Ulo when he can answer (he plays the game).
 3. **The baseline data in this plan may be outdated.** Siege changes every season. Treat every number and loadout below as a starting point to verify against the *current* official sources (Ubisoft operator pages, latest Designer's Notes and patch notes). When sources disagree, official Ubisoft > Liquipedia > Fandom wiki > siege.gg > everything else. Record the season you verified against.
-4. **Data-driven everything.** Operators, weapons, gadgets, surfaces, timers, and mode rules live in data files (`data/*.json` or Godot `.tres`), never hardcoded. Balancing should never require touching code.
+4. **Data-driven everything.** Operators, weapons, gadgets, surfaces, timers, and mode rules live in data files (`data/*.json`), never hardcoded. Balancing should never require touching code.
 5. **Server is the source of truth.** Every gameplay-relevant state (health, destruction, gadgets, round state) is decided by the server.
 6. **Playable at every milestone.** Each phase ends with something Ulo can launch and test. Keep `PROGRESS.md` updated and tell him exactly how to test each milestone.
 7. **Log decisions.** Any architectural choice or deviation from this plan goes in `DECISIONS.md` with a one-line reason.
@@ -23,6 +23,7 @@
 
 ## 1. Scope summary
 
+- **Runs in a web browser** — players open a URL, nothing to install; the server is hosted on **Railway** (changed 2026-09-29, DECISIONS D-019/D-020).
 - 6v6-capable (up to **5v5 players** per match, like Siege — the "6 attackers / 6 defenders" is the operator roster per side).
 - One map: **Oregon**, recreated as completely and accurately as possible (current live layout).
 - Core objective: **Bomb** (Oregon's 4 bomb-site pairs). Secure Area / Hostage are stretch goals.
@@ -79,17 +80,26 @@ Output: `research/oregon/`
 
 ## 3. Tech stack
 
+> **Changed 2026-09-29 (DECISIONS D-019/D-020):** the game must be playable in a web browser and hosted on
+> Railway, so the original Godot 4 / C# / ENet desktop stack was replaced. The old table is in git history.
+
 | Area | Choice | Why |
 |---|---|---|
-| Engine | **Godot 4.x (latest stable — check at start)**, .NET/C# build | Scenes and resources are text files Claude Code can read and edit directly; fast headless mode for automated tests; free; runs great on the target GPU. Unreal would look better out of the box but its Blueprint/asset files are binary and hard for an AI to author reliably. |
-| Language | **C# (.NET 8+)** for all core systems; GDScript only for tiny editor tools | Performance for netcode, destruction grids, lag compensation. |
-| Physics | Jolt (Godot's built-in Jolt integration) | Stable character/rigidbody behavior. |
-| Networking | ENet via `ENetConnection` / `ENetMultiplayerPeer`, **custom snapshot protocol** (not `MultiplayerSynchronizer` for gameplay-critical state) | Competitive shooters need prediction, reconciliation, lag compensation, and bandwidth control that the high-level sync nodes don't provide. |
-| Assets | **Blender 4.x run headless** (`blender -b -P script.py`) for procedural models + export to glTF | Lets Claude Code author and regenerate geometry from scripts. |
-| Tests | GdUnit4 (C#) + custom headless simulation harness | |
-| Source control | Git + Git LFS (`*.glb, *.png, *.wav, *.ogg, *.exr`) | |
+| Platform | **Web browser** (desktop Chrome / Edge / Firefox, keyboard + mouse). Players open a URL; nothing to install. | Ulo's requirement. |
+| Language | **TypeScript** (strict) for client, server, and tools | One language everywhere. The simulation (movement, destruction grid, damage, rules) is shared *verbatim* between browser and server — exactly what prediction, reconciliation, and deterministic destruction need. |
+| Rendering | **Three.js** (WebGL2 now; its WebGPU renderer where available) | Most widely used web 3D library; code-first, so everything is text Claude Code can author; full control of the frame. |
+| Physics / collision | **Rapier 3D, deterministic build** (`@dimforge/rapier3d-deterministic*`, WASM) — the same engine in the browser and in Node | Kinematic character controller, fast ray/shape queries for hitscan and penetration, and bit-identical results on client and server (verified in the spike). |
+| Networking | **WebSockets** with binary messages (`ws` on the server) and a **custom snapshot protocol** (§5) | Browsers can't open raw UDP sockets, and Railway exposes HTTP/WebSocket and TCP publicly, not UDP. Railway doesn't time out WebSockets. |
+| Server | **Node.js 22+** authoritative game server; one process hosts many match rooms; bots move to worker threads if the tick budget needs it | Runs the same TypeScript simulation as the client. |
+| Hosting | **Railway**: one service serves the built client **and** the game WebSocket on `$PORT` (`npm run build` → `npm start`). Configure with Railway IaC (`.railway/railway.ts`) when first deploying in Phase 2 (`railway.json` is deprecated). | Ulo's choice; friends just open the link. |
+| Offline modes | **Practice and solo Bot Training run the same server code in a Web Worker** inside the browser — no network needed | Free consequence of sharing TypeScript between client and server. |
+| Build tooling | **Vite** (client), **esbuild** (server), **npm workspaces** | Fast, standard, works on Windows. |
+| Assets | **Blender 4.x run headless** (`blender -b -P script.py`) for procedural models → **glTF (.glb)** with meshopt/Draco compression + **KTX2** textures | Claude Code authors and regenerates geometry from scripts; KTX2 keeps download size and GPU memory down. |
+| Audio | **Web Audio API** (positional panners + our own occlusion/propagation, §13) | Built into every browser. |
+| Tests | **Vitest** (unit, determinism) + **headless Node netsim** (many fake clients) + **Playwright** (browser smoke and perf) | All run headless in cloud sessions and CI. |
+| Source control | Git + Git LFS (`*.glb, *.png, *.wav, *.ogg, *.exr`, …) | |
 
-Before locking this in, spend a short spike (≤ 1 session) confirming Godot's current version supports everything in §5–§7 (C# export for Windows, headless server export, Jolt). Record the result in `DECISIONS.md`.
+The §3 spike was re-run for this stack on 2026-09-29 (`tools/spike/web_stack/`, DECISIONS D-020) and passed. Before signing off Phase 2, also confirm a real Railway deploy (latency from Ulo's location, WebSocket stability under load).
 
 ---
 
@@ -98,6 +108,7 @@ Before locking this in, spend a short spike (≤ 1 session) confirming Godot's c
 ```
 redmond/
   PLAN.md  PROGRESS.md  DECISIONS.md  ASSET_SOURCES.md  README.md
+  package.json               # npm workspaces root
   research/                  # Phase 0 output (never shipped)
   data/
     operators/*.json         # one per operator
@@ -106,19 +117,20 @@ redmond/
     surfaces.json            # material/penetration table
     modes/*.json             # 1v1, quick_match, unranked, ranked, custom, practice, bot_training
     maps/oregon/layout.json  # authoritative map description (see §9)
-  game/                      # Godot project root
-    src/
-      Core/ Net/ Player/ Weapons/ Destruction/ Gadgets/ Operators/
-      Intel/ (drones, cams, pings)  Match/ (rounds, modes, lobby)
-      UI/ Audio/ Bots/ Debug/
-    scenes/
-      maps/oregon/  test/ (movement_lab, destruction_lab, gadget_lab, net_lab)
-      ui/  operators/  weapons/
-    assets/ (models, textures, audio, anims)
+  game/
+    shared/src/              # runs on BOTH server and browser: no DOM, no Node APIs
+      core/ net/ player/ weapons/ destruction/ gadgets/ operators/
+      intel/ (drones, cams, pings)  match/ (rounds, modes, lobby rules)  bots/  data/ (loaders + schemas)
+    server/src/              # Node: WebSocket rooms, tick loop, lag-comp history, persistence
+    client/                  # Vite app
+      src/ render/ ui/ audio/ input/ debug/ worker/ (offline server-in-a-Web-Worker)
+      labs/                  # dev test pages: movement_lab, destruction_lab, gadget_lab, net_lab
+      public/assets/         # models, textures, audio, anims
   tools/
     blender/                 # procedural asset scripts
-    mapgen/                  # layout.json -> Godot scene generator
+    mapgen/                  # layout.json -> collision data + render meshes (+ top-down PNGs)
     netsim/                  # headless multi-client test harness
+    spike/web_stack/         # §3 spike (reference only)
   builds/                    # gitignored
 ```
 
@@ -126,18 +138,19 @@ redmond/
 
 ## 5. Networking architecture
 
-- **Topology:** Listen server (host plays) by default; **dedicated headless server** build for better fairness. Both use the same server code.
-- **Tick rate:** 64 Hz server simulation; client renders at uncapped FPS with interpolation.
+- **Topology:** **dedicated authoritative server** on Railway; one Node process runs many match rooms. Browsers can't host, so there's no listen server. Offline Practice and solo Bot Training run the same server code in a **Web Worker** in the browser. Self-hosting = run the same Node server anywhere (a Docker image ships in Phase 12).
+- **Transport:** WebSockets (TCP) with compact binary messages. A lost packet delays the ones behind it (head-of-line blocking); mitigate with small messages, app-level sequence numbers and acks, and the interpolation buffer. If Railway ever supports WebTransport (HTTP/3 datagrams), it can replace WebSockets behind the same message layer.
+- **Tick rate:** 64 Hz server simulation; the client renders at display refresh (`requestAnimationFrame`) with interpolation.
 - **Client-side prediction** for local movement, stance changes, lean, and firing feedback; **server reconciliation** by replaying unacknowledged inputs.
 - **Entity interpolation** for remote players (~100 ms buffer, adaptive).
 - **Lag compensation:** server keeps ~1 s of hitbox history per player; on a shot it rewinds hitboxes to the shooter's view time (cap ~200 ms), including **stance and lean** poses (leaning changes the hitbox — it must be rewound too). Destruction state at the rewound time must also be respected for wallbangs (see §8.6).
-- **Input packets:** sent every tick with the last 3 inputs for redundancy.
+- **Input packets:** one input per tick with a sequence number (TCP is reliable, so no redundant copies). The server caps how many queued inputs it applies per tick so a client can't speed-hack.
 - **Snapshots:** delta-compressed against last acked snapshot; interest management by rough visibility/hearing range.
 - **Destruction sync:** reliable, ordered event stream (§8.6). Late joiners/reconnects get a compressed full destruction snapshot.
-- **Reconnect** mid-match (Siege lets you rejoin) — stretch goal for Phase 6, required by Phase 11.
-- **Playing with friends over the internet:** document three options in README: port-forward UDP, **Tailscale/ZeroTier** virtual LAN (easiest), or a rented VPS for the dedicated server. (Note: many PaaS hosts only proxy TCP, so ENet/UDP won't work on them.)
-- **Anti-cheat (basic):** server validates movement speed, fire rate, ammo, gadget counts, line-of-fire; clients never send "I hit X", only inputs + view angles + timestamps.
-- **Lobby discovery:** LAN broadcast + direct IP + join code (encodes IP:port).
+- **Reconnect** mid-match (Siege lets you rejoin) — rejoin by room code after a refresh or dropped connection. Stretch goal for Phase 6, required by Phase 11.
+- **Playing with friends over the internet:** open the game's Railway URL, create a lobby, share the **room code**. No installs, port-forwarding, or VPN. Pick the Railway region closest to the players and check latency before signing off Phase 2.
+- **Anti-cheat (basic):** server validates movement speed, fire rate, ammo, gadget counts, line-of-fire; clients never send "I hit X", only inputs + view angles + timestamps. (Browser code is easy to inspect and modify, so server authority matters even more.)
+- **Lobby discovery:** server-side room list + join codes (browsers can't do LAN broadcast).
 
 ---
 
@@ -165,7 +178,7 @@ redmond/
 
 > Quick Match column and Unranked Pick & Ban **on** added 2026-09-29 by Ulo's decision (DECISIONS.md D-014, D-017). Siege's 3v3 Arcade was considered and **not** wanted.
 
-**Scaling for small teams (host toggle, default ON):** Siege's reinforcement pool and similar team-wide resources assume 5 defenders. Default scaling: `pool = round(Siege_pool × defenders / 5)`, minimum 2. The host can switch to "Full Siege values" regardless of team size.
+**Scaling for small teams (host toggle, default ON):** Siege's reinforcement pool and similar team-wide resources assume 5 defenders. Default scaling: `pool = max(6, round(Siege_pool × defenders / 5))` — i.e. 6 for 1–3 defenders, 8 for 4, 10 for 5 (Siege's pool is 10; Siege's own 1v1 gives the lone defender 6 — Ulo's decision 2026-09-29, D-015). The host can switch to "Full Siege values" regardless of team size.
 
 **Pick & Ban with small rosters:** only 6 operators per side exist, so Ranked and Unranked ban **1 operator per side** by default (host-configurable 0–2). Never allow bans that leave a side with fewer operators than players.
 
@@ -202,7 +215,7 @@ All values from `research/core_mechanics.md`, stored in `data/`.
 - **Footsteps and noise:** material-based footsteps, crouch walking quieter, sprint louder. Audio is core intel in Siege — treat it as gameplay, not polish (§13).
 - **Camera:** configurable FOV (Siege-style vertical/horizontal), ADS sensitivity multipliers per magnification, raw input.
 
-**Test scene:** `scenes/test/movement_lab.tscn` — stairs, ladders, vault boxes, windows, lean-target posts, a hitbox visualizer toggle (F3).
+**Test page:** `game/client/labs/movement_lab` — stairs, ladders, vault boxes, windows, lean-target posts, a hitbox visualizer toggle (F3).
 
 ---
 
@@ -230,7 +243,7 @@ Every property above (and anything research adds) lives in `data/surfaces.json` 
 - Bullets remove a small cell cluster sized by caliber; shotguns remove a spread of clusters; melee removes a bigger shaped cluster; explosives remove a large region leaving beams and a ragged edge.
 - **Rendering:** regenerate the panel mesh from the grid (marching squares on the cell mask for the skin, extruded to thickness; beams as separate meshes that can break under explosive thresholds). Bullet holes that don't fully clear a cell use decals + a "perforated" flag that still lets light/sight through a tiny aperture.
 - Debris is client-side cosmetic only (particles + a few short-lived rigidbody chunks, pooled).
-- Rebuild meshes on a worker thread; budget ≤ 1 ms/frame main-thread cost.
+- Rebuild meshes in a Web Worker; budget ≤ 1 ms/frame main-thread cost.
 
 ### 8.3 Reinforcement
 - Defenders hold interact on a reinforceable wall or hatch → channel (researched time) → steel panels deploy with animation and sound.
@@ -250,7 +263,7 @@ Every property above (and anything research adds) lives in `data/surfaces.json` 
 - Late-join / reconnect: server sends RLE-compressed cell masks for all modified panels.
 - Server keeps a short history of panel masks so lag-compensated shots test against the geometry the shooter actually saw (within the rewind window).
 
-**Test scene:** `scenes/test/destruction_lab.tscn` — one of every surface class, a weapon rack with every gun, every explosive, a reinforce station, and an "Oregon wall sample" row that uses the same wall configs as the map.
+**Test page:** `game/client/labs/destruction_lab` — one of every surface class, a weapon rack with every gun, every explosive, a reinforce station, and an "Oregon wall sample" row that uses the same wall configs as the map.
 
 ---
 
@@ -258,7 +271,7 @@ Every property above (and anything research adds) lives in `data/surfaces.json` 
 
 ### 9.1 Pipeline (layout-as-data)
 1. Write `data/maps/oregon/layout.json` from `research/oregon/`: floors, rooms, wall segments (start/end, height, thickness, **surface class**), openings (doors, windows, with barricade flag), floor/ceiling sections (soft/hard), hatches, stairs, ladders, rappel zones, spawn points, bomb site objects, default cameras, destructible ingredients, out-of-bounds volumes, callout names per room.
-2. `tools/mapgen/` generates a Godot scene: **greybox** first (colored by surface class — debug view toggles this in-game too: soft = yellow, hard = gray, reinforceable = blue, hatch = green).
+2. `tools/mapgen/` generates collision data (used by server and client) and render meshes: **greybox** first (colored by surface class — debug view toggles this in-game too: soft = yellow, hard = gray, reinforceable = blue, hatch = green).
 3. Validate: overlay generated top-down floor plans against reference blueprints (render orthographic PNGs of each floor and put them side by side in `research/oregon/compare/`). Ulo reviews these.
 4. Walk-through milestone: Ulo plays the greybox and lists every mismatch he notices. Iterate.
 5. **Art pass** (§12): swap greybox for modular architecture kit, props, lighting, exterior.
@@ -286,7 +299,7 @@ Every property above (and anything research adds) lives in `data/surfaces.json` 
 
 ## 11. Operators
 
-**Every entry below is a baseline to verify (§0.3).** Implement generic systems first (weapons, secondary gadgets, drones, cams, reinforcement), then add operators one at a time, each with a test in `scenes/test/gadget_lab.tscn`. Each operator's JSON lists loadout options by ID; the loadout screen reads from that.
+**Every entry below is a baseline to verify (§0.3).** Implement generic systems first (weapons, secondary gadgets, drones, cams, reinforcement), then add operators one at a time, each with a test in `game/client/labs/gadget_lab`. Each operator's JSON lists loadout options by ID; the loadout screen reads from that.
 
 ### 11.1 Attackers
 
@@ -342,8 +355,8 @@ Optional: AI 3D generators can make decent props/gadgets as GLB; if Ulo supplies
 ### 12.2 Quality bar & budgets (8 GB VRAM target)
 - Stylized-realistic PBR, consistent texel density (~512 px/m environment, 1024 px/m hero weapons in first person).
 - Characters: ≤ 40k tris LOD0, 3 LODs. Weapons (1P): ≤ 25k tris. Props: LODs + occlusion culling.
-- Texture memory budget: ≤ 3 GB total loaded for Oregon at High.
-- Lighting: baked GI (LightmapGI) for static geometry + dynamic lights for gadgets/explosions; **destruction must not break lighting** — use probe-based fill so holes in walls let light through plausibly.
+- Texture memory budget: ≤ 1.5 GB total loaded for Oregon at High (browsers/WebGL are tighter than native); KTX2-compressed textures.
+- Lighting: baked lightmaps (Blender bake) for static geometry + dynamic lights for gadgets/explosions; **destruction must not break lighting** — use probe-based fill so holes in walls let light through plausibly.
 
 ### 12.3 Animation requirements
 Third-person: idle/walk/sprint/crouch/prone locomotion (8-way), stance transitions, lean (procedural spine), rappel set, vault, ladder, DBNO crawl, revive, reinforce, barricade, plant/defuse, gadget throw/place, melee, shield set (Fuze), death ragdoll. First-person: per-weapon idle/ADS/fire/reload (tac + empty)/sprint/equip/melee, gadget use per operator.
@@ -355,12 +368,12 @@ Third-person: idle/walk/sprint/crouch/prone locomotion (8-way), stance transitio
 - **Propagation/occlusion:** sound paths through open doors, holes, and destroyed surfaces must be louder than through intact walls — use raycast occlusion + a room/portal graph that updates when surfaces are destroyed (mirror the spirit of Siege X's audio overhaul: players should hear roughly *where* and *in what room* enemies are).
 - Distinct cues: reinforcement, barricade break, drone motor, jammer hum, each gadget, reload, lean rustle, rappel.
 - Sources: CC0 (Freesound CC0, Sonniss GDC bundles) and procedural synthesis; credits in `ASSET_SOURCES.md`.
-- Optional voice chat (Phase 11+): team + all-chat, Opus codec, push-to-talk.
+- Optional voice chat (Phase 11+): team + all-chat via WebRTC (Opus), push-to-talk. Needs a TURN relay for some networks (Railway can't host public UDP, so a hosted TURN service would be required).
 
 ---
 
 ## 14. UI / UX
-- Main menu, Play (host/join/LAN list/join code), **Bot Training**, Settings, Practice.
+- Main menu, Play (create lobby / join by room code / room list), **Bot Training**, Settings, Practice.
 - Lobby screen with format presets and advanced options.
 - Operator select with loadout builder (weapon, attachments, secondary, gadget) and ban phase UI.
 - HUD: health, ammo, gadget counts, ability, round timer, team portraits, kill feed, ping markers, objective/site markers, plant/defuse progress, reinforcement pool counter.
@@ -389,7 +402,7 @@ A lobby format where bots fill every empty slot on both teams. Works offline (so
 - **React to destruction:** navigation updates when walls, floors, and hatches are opened or reinforced.
 
 ### 15.4 Architecture
-- Runs **server-side** on the host. Bots produce the same `InputCommand`s as human players, so netcode, lag compensation, anti-cheat validation, and replays work unchanged.
+- Runs **server-side** — on Railway, or in the browser's Web Worker for offline play. Bots produce the same `InputCommand`s as human players, so netcode, lag compensation, anti-cheat validation, and replays work unchanged.
 - **Team planner** ("commander") per side picks a strategy for the round from `data/maps/oregon/bot_strats.json` (built from `research/oregon/common_setups.md`): reinforcement list, gadget spots, anchor/roam roles, breach points, plant spots, rotates.
 - **Individual bots:** utility AI or behavior trees (document the choice in `DECISIONS.md`) for moment-to-moment decisions.
 - **Perception:** vision cones respecting stance, lean, smoke, and lighting; hearing from the audio system; shared team intel (cams, drones, pings).
@@ -423,8 +436,8 @@ Bot-vs-bot matches double as automated **soak tests** for netcode, destruction d
 | Phase | Deliverable | Done when |
 |---|---|---|
 | **0** Research | `research/` complete, SUMMARY.md, OPEN_QUESTIONS.md, screenshot checklist sent to Ulo | Ulo skims and answers open questions he can |
-| **1** Skeleton + movement | Godot C# project, player/pawn separation (Skopós-ready), stand/crouch/prone, lean (toggle/hold), sprint, vault, ladders; movement_lab | Feels like Siege movement to Ulo, offline |
-| **2** Netcode core | Host/join, prediction, reconciliation, interpolation, lag-comp framework, netsim harness with 10 headless clients | Two PCs play smoothly at 100 ms simulated latency |
+| **1** Skeleton + movement | TypeScript workspace (shared / server / client), player/pawn separation (Skopós-ready), stand/crouch/prone, lean (toggle/hold), sprint, vault, ladders; movement_lab | Feels like Siege movement to Ulo, offline |
+| **2** Netcode core | Railway deploy + room codes, prediction, reconciliation, interpolation, lag-comp framework, netsim harness with 10 headless clients | Two PCs play smoothly at 100 ms simulated latency |
 | **3** Gunplay | Weapon data system, recoil, ADS, attachments, hit reg with rewind incl. lean/stance hitboxes, DBNO, revive | Headshots/wallbang-free hit-reg feels right at 100 ms |
 | **4** Destruction v1 | Soft walls, floors, barricades, reinforcement, hatches, penetration, networked destruction + late join; destruction_lab | Wallbangs, punch holes, reinforcing all synced across clients |
 | **5** Oregon greybox | layout.json + generator + full greybox with correct surface tagging, sites, spawns, cams | Ulo walks it and signs off on layout accuracy |
@@ -434,26 +447,28 @@ Bot-vs-bot matches double as automated **soak tests** for netcode, destruction d
 | **9** Bot Training (uses placeholder audio events until Phase 11) | Navmesh + destruction rebake, perception, team planner, bot_strats.json for all 4 Oregon sites, all 12 operators playable by bots, difficulty levels, drills, training feedback | Ulo can play a full solo match vs 5 Normal bots on attack and defense, and it feels like Siege |
 | **10** Art pass | Architecture kit, props, lighting, weapons, gadgets, operator models, 1P/3P anims | Oregon looks finished at 1080p High, ≥ 120 FPS on target PC |
 | **11** Audio | Materials, propagation/occlusion, all cues | Ulo can locate an enemy by sound through a floor |
-| **12** Polish | Practice mode, killcam, settings, perf pass, reconnect, voice (stretch), packaged Windows build + dedicated server build | 5v5 over Tailscale for a full match with no desyncs |
+| **12** Polish | Practice mode, killcam, settings, perf pass, reconnect, voice (stretch), production Railway deployment + self-host Docker image | 5v5 over the internet via the Railway URL for a full match with no desyncs |
 
 ---
 
 ## 18. Performance targets
-- 1080p High: **≥ 120 FPS** average, ≥ 90 FPS 1% lows on RTX 3070 Ti / i5-12600K, during heavy destruction.
-- Server tick ≤ 5 ms at 10 players on the same machine as a client, **including 9 bots** in Bot Training.
+Browser targets (Chrome/Edge, updated 2026-09-29 for the web stack — DECISIONS D-020):
+- 1080p High on RTX 3070 Ti / i5-12600K: **≥ 120 FPS** average (on a ≥ 120 Hz display — browsers cap at display refresh), ≥ 90 FPS 1% lows, during heavy destruction. **Low** preset: ≥ 60 FPS on a mid-range laptop GPU.
+- Server tick ≤ 5 ms at 10 players, **including 9 bots** in Bot Training (spike baseline: 0.54 ms p99 for movement-only at 10 players).
 - Bandwidth ≤ 64 kbps down per client typical, ≤ 256 kbps peak during mass destruction.
-- VRAM ≤ 6 GB at High.
-- Load Oregon in ≤ 15 s from SSD.
+- GPU memory ≤ 2 GB at High.
+- Load: first visit ≤ 30 s on a 100 Mbps connection (assets download, then cache); repeat visits ≤ 10 s.
+- GPU performance must be measured on real hardware (Ulo's PC): cloud sessions only have software rendering.
 
 ---
 
 ## 19. Testing
-- **Unit tests** (GdUnit4): damage math, penetration, surface rules, gadget interactions, round state machine, mode presets with odd team sizes.
+- **Unit tests** (Vitest): damage math, penetration, surface rules, gadget interactions, round state machine, mode presets with odd team sizes.
 - **Determinism tests:** apply the same destruction event log on two headless instances → identical cell masks (hash compare).
 - **Netsim:** headless clients with scripted inputs + injected latency/loss; assert no desyncs over a 10-round match.
 - **Bot soak tests:** nightly headless 5v5 bot-vs-bot matches on every site; assert no desyncs, no stuck bots > 10 s, no crashes.
 - **Interaction tests:** one scripted test per row of `research/interactions.csv`.
-- **Perf captures:** automated fly-through of Oregon + scripted mass destruction; fail CI if frame time budget exceeded.
+- **Perf captures:** automated Playwright fly-through of Oregon + scripted mass destruction; CPU/frame-time budgets checked in CI, GPU numbers on Ulo's PC.
 
 ---
 
