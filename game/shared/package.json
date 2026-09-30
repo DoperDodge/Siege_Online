@@ -1,0 +1,12 @@
+{
+  "name": "@redmond/shared",
+  "private": true,
+  "type": "module",
+  "description": "Simulation code shared by the browser client and the Node server. No DOM, no Node APIs.",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "typecheck": "tsc --noEmit -p . && tsc --noEmit -p test" },
+  "dependencies": {
+    "@dimforge/rapier3d-deterministic-compat": "0.21.0",
+    "zod": "4.6.5"
+  }
+}

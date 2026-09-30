@@ -1,0 +1,30 @@
+{
+  "name": "redmond",
+  "private": true,
+  "type": "module",
+  "description": "Project REDMOND \u2014 browser tactical shooter (see PLAN.md).",
+  "engines": {
+    "node": "^22.12.0 || ^24.0.0 || >=26.0.0"
+  },
+  "workspaces": [
+    "game/shared",
+    "game/client",
+    "game/server"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @redmond/client",
+    "build": "npm run build -w @redmond/client && npm run build -w @redmond/server",
+    "start": "npm start -w @redmond/server",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "vitest run",
+    "test:e2e": "node tools/e2e/movement-lab.mjs",
+    "check": "npm run typecheck && npm test && npm run build && npm run test:e2e",
+    "e2e:setup": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "playwright": "1.56.1",
+    "typescript": "7.0.2",
+    "vitest": "5.0.2"
+  }
+}

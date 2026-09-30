@@ -1,0 +1,204 @@
+// Three.js scene for labs: greybox level colored by surface class (PLAN §9.1), labels, pawn bodies
+// built from hitbox capsules, and an F3 hitbox visualizer.
+import * as THREE from "three";
+import { poseHitboxes, type BuiltLevel, type GameData, type Hitbox, type PawnState, type Renderable } from "@redmond/shared";
+
+export const SURFACE_COLORS: Record<Renderable["surface"], number> = {
+  SOFT_WALL: 0xe6c34a,
+  REINFORCEABLE: 0x4d8fe0,
+  REINFORCED_WALL: 0x2f5f9e,
+  HARD_WALL: 0x8a8f96,
+  SOFT_FLOOR: 0xc9a86a,
+  HARD_FLOOR: 0x4a4f57,
+  HATCH: 0x58b36b,
+  BARRICADE: 0x9b6a3c,
+  WINDOW: 0x9fd6e8,
+  PROP: 0xa58156,
+  INGREDIENT: 0xd9534f,
+  LADDER: 0xe08a2e,
+};
+
+export function createRenderer(container: HTMLElement): THREE.WebGLRenderer {
+  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setSize(container.clientWidth, container.clientHeight);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  container.appendChild(renderer.domElement);
+  return renderer;
+}
+
+export function createLabScene(level: BuiltLevel): THREE.Scene {
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x9fb4c7);
+  scene.fog = new THREE.Fog(0x9fb4c7, 60, 140);
+
+  scene.add(new THREE.HemisphereLight(0xdfe9f5, 0x3a3f36, 1.1));
+  const sun = new THREE.DirectionalLight(0xfff1dc, 2.2);
+  sun.position.set(18, 30, 12);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  const sc = sun.shadow.camera;
+  sc.left = sc.bottom = -36;
+  sc.right = sc.top = 36;
+  sc.near = 1;
+  sc.far = 90;
+  sun.shadow.bias = -0.0005;
+  scene.add(sun);
+
+  const materials = new Map<string, THREE.Material>();
+  const material = (r: Renderable) => {
+    const key = r.id === "floor" ? "floor" : r.surface;
+    let mat = materials.get(key);
+    if (!mat) {
+      mat =
+        key === "floor"
+          ? new THREE.MeshStandardMaterial({ map: gridTexture(), roughness: 0.95 })
+          : new THREE.MeshStandardMaterial({ color: SURFACE_COLORS[r.surface], roughness: 0.85, metalness: r.surface === "LADDER" ? 0.4 : 0 });
+      materials.set(key, mat);
+    }
+    return mat;
+  };
+
+  for (const r of level.renderables) {
+    if (!r.visible) continue;
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(r.size[0], r.size[1], r.size[2]), material(r));
+    mesh.position.set(r.center[0], r.center[1], r.center[2]);
+    mesh.quaternion.set(r.quat[0], r.quat[1], r.quat[2], r.quat[3]);
+    if (r.id === "floor") {
+      const tex = (mesh.material as THREE.MeshStandardMaterial).map!;
+      tex.repeat.set(r.size[0] / 2, r.size[2] / 2);
+    }
+    mesh.castShadow = r.id !== "floor";
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+    if (r.label) labels.push(labelSprite(r.label, r.center[0], r.center[1] + r.size[1] / 2 + 0.4, r.center[2]));
+  }
+  scene.add(...labels);
+  return scene;
+}
+
+const labels: THREE.Sprite[] = [];
+
+/** Hide labels right next to the camera (they're sized in world units and would fill the screen). */
+export function updateLabels(camera: THREE.Camera) {
+  for (const l of labels) l.visible = l.position.distanceToSquared(camera.position) > 3.5 * 3.5;
+}
+
+function gridTexture(): THREE.CanvasTexture {
+  const c = document.createElement("canvas");
+  c.width = c.height = 128;
+  const g = c.getContext("2d")!;
+  g.fillStyle = "#4a4f57";
+  g.fillRect(0, 0, 128, 128);
+  g.strokeStyle = "#5a606a";
+  g.lineWidth = 2;
+  g.strokeRect(0, 0, 128, 128);
+  g.strokeStyle = "#51565f";
+  g.lineWidth = 1;
+  g.beginPath();
+  g.moveTo(64, 0);
+  g.lineTo(64, 128);
+  g.moveTo(0, 64);
+  g.lineTo(128, 64);
+  g.stroke();
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  return tex;
+}
+
+function labelSprite(text: string, x: number, y: number, z: number): THREE.Sprite {
+  const c = document.createElement("canvas");
+  const g = c.getContext("2d")!;
+  const font = "600 30px system-ui, sans-serif";
+  g.font = font;
+  const w = Math.ceil(g.measureText(text).width) + 28;
+  c.width = w;
+  c.height = 48;
+  g.font = font;
+  g.fillStyle = "rgba(10,12,16,0.72)";
+  g.beginPath();
+  g.roundRect(0, 0, w, 48, 10);
+  g.fill();
+  g.fillStyle = "#f3f4f6";
+  g.textBaseline = "middle";
+  g.fillText(text, 14, 25);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false }));
+  sprite.scale.set((w / 48) * 0.34, 0.34, 1);
+  sprite.position.set(x, y, z);
+  return sprite;
+}
+
+/** A pawn drawn as capsules around its hitboxes (placeholder body until the art pass), plus a wireframe. */
+export class PawnView {
+  readonly body = new THREE.Group();
+  readonly wire = new THREE.Group();
+  private readonly bodyParts: CapsuleParts[] = [];
+  private readonly wireParts: CapsuleParts[] = [];
+
+  constructor(scene: THREE.Scene, color: number) {
+    const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.6 });
+    const headMat = new THREE.MeshStandardMaterial({ color: 0x2b2f36, roughness: 0.5 });
+    const wireMat = new THREE.MeshBasicMaterial({ color: 0xff3b3b, wireframe: true, depthTest: false, transparent: true, opacity: 0.75 });
+    for (let i = 0; i < 8; i++) {
+      this.bodyParts.push(new CapsuleParts(this.body, i === 0 ? headMat : mat, true));
+      this.wireParts.push(new CapsuleParts(this.wire, wireMat, false));
+    }
+    scene.add(this.body, this.wire);
+  }
+
+  update(data: GameData, state: PawnState) {
+    poseHitboxes(data.movement, data.hitboxes, state).forEach((hb, i) => {
+      this.bodyParts[i].place(hb, 1);
+      this.wireParts[i].place(hb, 1.02);
+    });
+  }
+}
+
+const CYL = new THREE.CylinderGeometry(1, 1, 1, 14, 1, true);
+const SPH = new THREE.SphereGeometry(1, 14, 10);
+const WIRE_CYL = new THREE.CylinderGeometry(1, 1, 1, 8, 1, true);
+const WIRE_SPH = new THREE.SphereGeometry(1, 8, 6);
+const UP = new THREE.Vector3(0, 1, 0);
+
+/** An exact capsule from a unit cylinder plus two unit spheres, re-scaled every frame. */
+class CapsuleParts {
+  private readonly cyl: THREE.Mesh;
+  private readonly capA: THREE.Mesh;
+  private readonly capB: THREE.Mesh;
+
+  constructor(parent: THREE.Group, mat: THREE.Material, solid: boolean) {
+    this.cyl = new THREE.Mesh(solid ? CYL : WIRE_CYL, mat);
+    this.capA = new THREE.Mesh(solid ? SPH : WIRE_SPH, mat);
+    this.capB = new THREE.Mesh(solid ? SPH : WIRE_SPH, mat);
+    for (const m of [this.cyl, this.capA, this.capB]) {
+      m.castShadow = solid;
+      if (!solid) m.renderOrder = 10;
+      parent.add(m);
+    }
+  }
+
+  place(hb: Hitbox, grow: number) {
+    const a = new THREE.Vector3(...hb.a);
+    const b = new THREE.Vector3(...hb.b);
+    const r = hb.radius * grow;
+    const dir = b.clone().sub(a);
+    const len = dir.length();
+    this.capA.position.copy(a);
+    this.capB.position.copy(b);
+    this.capA.scale.setScalar(r);
+    this.capB.scale.setScalar(r);
+    this.cyl.visible = len > 1e-4;
+    if (this.cyl.visible) {
+      this.cyl.position.copy(a).add(b).multiplyScalar(0.5);
+      this.cyl.quaternion.setFromUnitVectors(UP, dir.normalize());
+      this.cyl.scale.set(r, len, r);
+    }
+  }
+}

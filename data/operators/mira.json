@@ -1,0 +1,28 @@
+{
+  "_doc": "Mira — loadout and ratings from the official Ubisoft operator page (research/operators/mira.md). Ability numbers arrive with Phase 8.",
+  "_season": "Y11S3",
+  "id": "mira",
+  "name": "Mira",
+  "side": "defender",
+  "healthRating": 3,
+  "speedRating": 1,
+  "loadout": {
+    "primaries": [
+      "vector_45_acp",
+      "ita12l"
+    ],
+    "secondaries": [
+      "usp40",
+      "ita12s"
+    ],
+    "gadgets": [
+      "proximity_alarm",
+      "nitro_cell"
+    ]
+  },
+  "ability": {
+    "id": "black_mirror",
+    "name": "Black Mirror"
+  },
+  "pawns": 1
+}

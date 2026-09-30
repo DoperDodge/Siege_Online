@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Project REDMOND</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <style>
+      main { max-width: 760px; margin: 0 auto; padding: 48px 16px 64px; }
+      h1 { font-size: 34px; letter-spacing: 0.08em; margin: 0 0 4px; }
+      .tag { color: var(--muted); margin: 0 0 32px; }
+      .card { display: block; padding: 18px 20px; margin: 0 0 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-solid); text-decoration: none; color: var(--text); }
+      .card:hover { border-color: var(--accent); }
+      .card h2 { margin: 0 0 4px; font-size: 18px; }
+      .card p { margin: 0; color: var(--muted); }
+      .soon { opacity: 0.5; pointer-events: none; }
+      .status { font-size: 12px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.06em; }
+      footer { margin-top: 40px; color: var(--muted); font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>REDMOND</h1>
+      <p class="tag">A private fan-made tactical breach shooter on Oregon. Work in progress — Phase 1 of 12.</p>
+      <a class="card" href="/labs/movement_lab.html">
+        <div class="status">Phase 1 · playable</div>
+        <h2>Movement Lab</h2>
+        <p>Walk, sprint, crouch, prone, lean, vault, climb ladders and test stairs, ramps and falls. Pick any of the 12 operators.</p>
+      </a>
+      <div class="card soon">
+        <div class="status">Phase 2</div>
+        <h2>Play online</h2>
+        <p>Create a lobby and share a room code.</p>
+      </div>
+      <div class="card soon">
+        <div class="status">Phase 9</div>
+        <h2>Bot Training</h2>
+        <p>Solo or with friends against bots on Oregon.</p>
+      </div>
+      <footer>Non-commercial fan project. No Ubisoft assets are used.</footer>
+    </main>
+  </body>
+</html>

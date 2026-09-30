@@ -1,0 +1,35 @@
+{
+  "_doc": "Skopós — loadout and ratings from the official Ubisoft operator page (research/operators/skopos.md). Shell swap: the ability key opens the idle shell's camera, interact confirms; timings from the Y11S1 Designer's Notes.",
+  "_season": "Y11S3",
+  "id": "skopos",
+  "name": "Skopós",
+  "side": "defender",
+  "healthRating": 1,
+  "speedRating": 3,
+  "loadout": {
+    "primaries": [
+      "pcx_33"
+    ],
+    "secondaries": [
+      "p229"
+    ],
+    "gadgets": [
+      "impact_grenade",
+      "proximity_alarm"
+    ]
+  },
+  "ability": {
+    "id": "pantheon_shells",
+    "name": "V10 Pantheon Shells",
+    "params": {
+      "transferSeconds": 1.3,
+      "activationSeconds": 1.3,
+      "swapCooldownSeconds": 0.5,
+      "idleShellOffset": 1.5
+    }
+  },
+  "pawns": 2,
+  "_unverified": [
+    "ability.params.idleShellOffset"
+  ]
+}

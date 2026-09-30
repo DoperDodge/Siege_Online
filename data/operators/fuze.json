@@ -1,0 +1,30 @@
+{
+  "_doc": "Fuze — loadout and ratings from the official Ubisoft operator page (research/operators/fuze.md). Ability numbers arrive with Phase 8.",
+  "_season": "Y11S3",
+  "id": "fuze",
+  "name": "Fuze",
+  "side": "attacker",
+  "healthRating": 3,
+  "speedRating": 1,
+  "loadout": {
+    "primaries": [
+      "ak_12",
+      "6p41",
+      "ballistic_shield"
+    ],
+    "secondaries": [
+      "pmm",
+      "gsh_18"
+    ],
+    "gadgets": [
+      "breach_charge",
+      "hard_breach_charge",
+      "smoke"
+    ]
+  },
+  "ability": {
+    "id": "cluster_charge",
+    "name": "Cluster Charge"
+  },
+  "pawns": 1
+}

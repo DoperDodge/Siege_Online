@@ -1,0 +1,30 @@
+{
+  "_doc": "Dokkaebi — loadout and ratings from the official Ubisoft operator page (research/operators/dokkaebi.md). Ability numbers arrive with Phase 8.",
+  "_season": "Y11S3",
+  "id": "dokkaebi",
+  "name": "Dokkaebi",
+  "side": "attacker",
+  "healthRating": 1,
+  "speedRating": 3,
+  "loadout": {
+    "primaries": [
+      "bosg_12_2",
+      "mk_14_ebr",
+      "xk23"
+    ],
+    "secondaries": [
+      "c75_auto",
+      "gonne_6",
+      "smg_12"
+    ],
+    "gadgets": [
+      "smoke",
+      "breach_charge"
+    ]
+  },
+  "ability": {
+    "id": "jegeo_payload",
+    "name": "Jegeo Payload"
+  },
+  "pawns": 1
+}

@@ -17,8 +17,8 @@ Rainbow Six Siege, played on a full recreation of **Oregon**. It runs **in the w
 
 ## Current status
 
-**Phase 0 — research: done, plus the browser tech spike.** There's no game to play yet; Phase 1
-(movement) starts once you've skimmed `research/SUMMARY.md`. You can already run the spike (below).
+**Phase 1 — movement: built.** The Movement Lab is playable in the browser (see "Run it" below and
+`PROGRESS.md` for what to test). Phase 2 (online play) is next.
 
 ## Repository layout
 
@@ -33,19 +33,20 @@ builds/          gitignored build output
 
 ## Developer setup (Windows 11)
 
-1. **Node.js 22 LTS or newer**: https://nodejs.org (the installer adds `node` and `npm`).
+1. **Node.js 22.12+ (22 or 24 LTS)**: https://nodejs.org (the installer adds `node` and `npm`).
 2. **Git LFS**: `git lfs install` once (binary assets such as `.glb`, `.png`, `.wav` are LFS-tracked).
 3. A current **Chrome or Edge**.
 
-Try the spike (a tiny multiplayer test yard):
+### Run it
 ```
-cd tools/spike/web_stack
 npm install
 npm run build
 npm start
 ```
-Open http://localhost:8080 — WASD to move, drag the mouse to turn. Open a second tab to see a second
-player. (Details: `tools/spike/web_stack/README.md`.)
+Open http://localhost:8080 and pick **Movement Lab**. For development, `npm run dev` gives hot reload at
+http://localhost:5173. Checks: `npm run typecheck`, `npm test` (unit), and `npm run test:e2e` (headless
+browser; run `npm run e2e:setup` once to download Chromium, and `npm run build` first). `npm run check` runs
+all of them. The older multiplayer tech spike lives in `tools/spike/web_stack/`.
 
 ## Playing with friends
 

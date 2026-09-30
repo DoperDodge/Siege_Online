@@ -1,0 +1,27 @@
+{
+  "_doc": "Lesion — loadout and ratings from the official Ubisoft operator page (research/operators/lesion.md). Ability numbers arrive with Phase 8.",
+  "_season": "Y11S3",
+  "id": "lesion",
+  "name": "Lesion",
+  "side": "defender",
+  "healthRating": 2,
+  "speedRating": 2,
+  "loadout": {
+    "primaries": [
+      "six12_sd",
+      "t_5_smg"
+    ],
+    "secondaries": [
+      "q_929"
+    ],
+    "gadgets": [
+      "observation_blocker",
+      "bulletproof_camera"
+    ]
+  },
+  "ability": {
+    "id": "gu_mine",
+    "name": "Gu Mines"
+  },
+  "pawns": 1
+}
