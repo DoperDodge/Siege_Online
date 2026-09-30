@@ -45,8 +45,16 @@ try {
   const landing = await fetch(`${BASE}/`);
   result.checks.landingPageServed = landing.ok && (await landing.text()).includes("Movement Lab");
 
-  // Server robustness: malformed and path-traversal requests get 4xx and the server stays up.
-  const bad = { pct: await rawGet("/%"), nul: await rawGet("/%00"), dotdot: await rawGet("/../../etc/passwd"), enc: await rawGet("/..%2f..%2fetc%2fpasswd") };
+  // Server robustness: malformed and path-traversal requests get 4xx and the server stays up. %5c is a
+  // backslash, a path separator on Windows.
+  const bad = {
+    pct: await rawGet("/%"),
+    nul: await rawGet("/%00"),
+    dotdot: await rawGet("/../../etc/passwd"),
+    enc: await rawGet("/..%2f..%2fetc%2fpasswd"),
+    backslash: await rawGet("/..%5c..%5cpackage.json"),
+    backslashAssets: await rawGet("/assets/..%5c..%5cREADME.md"),
+  };
   result.serverBadRequests = bad;
   result.checks.serverRejectsBadRequests = Object.values(bad).every((c) => c >= 400 && c < 500);
   result.checks.serverSurvivesBadRequests = (await fetch(`${BASE}/health`)).ok;
@@ -96,13 +104,16 @@ try {
   result.checks.skoposSwapViaCamera =
     start.includes("shell 1/2") && afterF.includes("shell 1/2") && camPrompt.includes("F to transfer") && camClosed;
 
-  // Real keyboard input (not the autotest script): C toggles crouch; sprint stands you up again.
+  // Real keyboard input (not the autotest script): C toggles crouch; sprint stands you up and clears the
+  // toggle, so you are still standing after letting go (the simulation alone would crouch you again).
   await page.goto(`${BASE}/labs/movement_lab.html?op=sledge`);
   await page.waitForFunction(() => window.__lab?.report?.ready, null, { timeout: 30000 });
   await sleep(300);
   const onStance = () => page.evaluate(() => document.querySelector(".stances span.on")?.textContent);
+  const waitStance = (name) =>
+    page.waitForFunction((n) => document.querySelector(".stances span.on")?.textContent === n, name, { timeout: 5000 }).catch(() => {});
   await page.keyboard.press("KeyC");
-  await page.waitForFunction(() => document.querySelector(".stances span.on")?.textContent === "CROUCH", null, { timeout: 5000 }).catch(() => {});
+  await waitStance("CROUCH");
   const crouched = await onStance();
   await page.keyboard.down("KeyW");
   await page.keyboard.down("ShiftLeft");
@@ -111,9 +122,28 @@ try {
   const standingAfterSprint = await onStance();
   await page.keyboard.up("ShiftLeft");
   await page.keyboard.up("KeyW");
-  result.keyboard = { crouched, readout, standingAfterSprint };
+  await sleep(1000);
+  const standingAfterRelease = await onStance();
+  const sprintReadoutSpeed = parseFloat(readout); // "4.75 m/s  ·  SPRINT"
+  result.keyboard = { crouched, readout, standingAfterSprint, standingAfterRelease };
   result.checks.keyboardCrouchToggle = crouched === "CROUCH";
   result.checks.keyboardSprintStandsUp = standingAfterSprint === "STAND" && readout.includes("SPRINT");
+  result.checks.keyboardSprintSpeed = Math.abs(sprintReadoutSpeed - 4.75) < 0.1;
+  result.checks.keyboardToggleClearedBySprint = standingAfterRelease === "STAND";
+
+  // Hold mode (from saved settings): C crouches only while held.
+  await page.evaluate(() => localStorage.setItem("redmond.settings.v1", JSON.stringify({ crouchMode: "hold" })));
+  await page.reload();
+  await page.waitForFunction(() => window.__lab?.report?.ready, null, { timeout: 30000 });
+  await sleep(300);
+  await page.keyboard.down("KeyC");
+  await waitStance("CROUCH");
+  const holdCrouched = await onStance();
+  await page.keyboard.up("KeyC");
+  await waitStance("STAND");
+  const holdReleased = await onStance();
+  result.keyboard.hold = { holdCrouched, holdReleased };
+  result.checks.keyboardHoldCrouch = holdCrouched === "CROUCH" && holdReleased === "STAND";
   await browser.close();
 
   result.report = report;
