@@ -5,10 +5,10 @@ import { rotateXZ, DEG } from "./core/math.js";
 import { loadGameData, type GameData } from "./data/load.js";
 import { buildLevel, type BuiltLevel } from "./level/builder.js";
 import { initRapier, PLAYER_GROUPS, type CharacterController, type Rapier, type World } from "./physics/rapier.js";
-import { capsuleFree, movementPrompt, stepPawn, type MoveContext, type MovementPrompt } from "./player/movement.js";
+import { capsuleFree, movementPrompt, poseCollider, stepPawn, type MoveContext, type MovementPrompt } from "./player/movement.js";
 import { initialPawnState, type Pawn, type PlayerController } from "./player/pawn.js";
 import { capsuleDims, stanceDims } from "./player/stance.js";
-import { Btn, PawnMode, Stance, type InputCmd } from "./player/types.js";
+import { Btn, PawnMode, Stance, type InputCmd, type PawnState } from "./player/types.js";
 
 /** Contextual hint for the HUD: "Space to mantle", "F to climb", "F to transfer" (Skopós camera). */
 export type Prompt = MovementPrompt | "transfer";
@@ -52,14 +52,20 @@ export class Sim {
     return sim;
   }
 
-  /** Create a controller and its pawn(s) at a level spawn. Skopós gets two shells side by side. */
-  addPlayer(name: string, operatorId: string, spawnIndex = 0): PlayerController {
+  /**
+   * Create a controller and its pawn(s) at a level spawn. Skopós gets two shells side by side. `ids` lets a
+   * client mirror the server's controller and pawn ids for the player it predicts.
+   */
+  addPlayer(name: string, operatorId: string, spawnIndex = 0, ids?: { controller: number; pawns: number[] }): PlayerController {
     const op = this.data.operators.get(operatorId);
     if (!op) throw new Error(`Unknown operator "${operatorId}"`);
+    if (ids && ids.pawns.length !== op.pawns) throw new Error(`${op.name} has ${op.pawns} pawn(s), got ${ids.pawns.length} ids`);
+    for (const id of ids?.pawns ?? []) if (this.pawns.has(id)) throw new Error(`pawn id ${id} is already in use`);
+    if (ids && this.controllers.has(ids.controller)) throw new Error(`controller id ${ids.controller} is already in use`);
     const spawn = this.level.def.spawns[spawnIndex % this.level.def.spawns.length];
     const yaw = spawn.yawDeg * DEG;
     const controller: PlayerController = {
-      id: this.nextId++,
+      id: ids ? this.claimId(ids.controller) : this.nextId++,
       name,
       operatorId,
       pawnIds: [],
@@ -87,7 +93,7 @@ export class Sim {
       spots.push([px, pz]);
     }
     for (const [i, [px, pz]] of spots.entries()) {
-      const pawn = this.spawnPawn(operatorId, px, spawn.pos[1], pz, yaw, controller.id);
+      const pawn = this.spawnPawn(operatorId, px, spawn.pos[1], pz, yaw, controller.id, ids?.pawns[i]);
       if (i > 0) pawn.state.stance = pawn.state.stanceFrom = Stance.Crouch; // idle shells crouch behind their shield
       controller.pawnIds.push(pawn.id);
     }
@@ -96,7 +102,13 @@ export class Sim {
     return controller;
   }
 
-  spawnPawn(operatorId: string, x: number, y: number, z: number, yaw: number, ownerId: number | null = null): Pawn {
+  private claimId(id: number): number {
+    if (!Number.isInteger(id) || id < 1) throw new Error(`bad id ${id}`);
+    this.nextId = Math.max(this.nextId, id + 1);
+    return id;
+  }
+
+  spawnPawn(operatorId: string, x: number, y: number, z: number, yaw: number, ownerId: number | null = null, id?: number): Pawn {
     const m = this.data.movement;
     const op = this.data.operators.get(operatorId);
     const maxHp = m.healthByRating[String(op?.healthRating ?? 2) as "1" | "2" | "3"];
@@ -104,9 +116,49 @@ export class Sim {
     const collider = this.world.createCollider(
       this.R.ColliderDesc.capsule(hh, r).setTranslation(x, y + hh + r + 0.02, z).setCollisionGroups(PLAYER_GROUPS),
     );
-    const pawn: Pawn = { id: this.nextId++, operatorId, ownerId, collider, state: initialPawnState(x, y + 0.02, z, Math.fround(yaw), maxHp) };
+    const pawnId = id !== undefined ? this.claimId(id) : this.nextId++;
+    const pawn: Pawn = { id: pawnId, operatorId, ownerId, collider, state: initialPawnState(x, y + 0.02, z, Math.fround(yaw), maxHp) };
     this.pawns.set(pawn.id, pawn);
     return pawn;
+  }
+
+  /**
+   * A stand-in for a pawn simulated somewhere else (another player, as seen by a client): it blocks
+   * movement like any pawn, but step() never moves it; setPawnState() places it.
+   */
+  addProxy(id: number, operatorId: string, state: PawnState): Pawn {
+    if (this.pawns.has(id)) throw new Error(`pawn id ${id} is already in use`);
+    const collider = this.world.createCollider(this.R.ColliderDesc.capsule(0.5, 0.3).setCollisionGroups(PLAYER_GROUPS));
+    const pawn: Pawn = { id: this.claimId(id), operatorId, ownerId: null, collider, state: { ...state }, proxy: true };
+    this.pawns.set(id, pawn);
+    poseCollider(this.ctx, pawn);
+    return pawn;
+  }
+
+  /**
+   * Overwrite a pawn's state exactly and move its collider to match (reconciliation restoring the
+   * server's state, or a proxy following snapshots). The state itself is copied untouched.
+   */
+  setPawnState(id: number, state: PawnState): void {
+    const pawn = this.pawns.get(id);
+    if (!pawn) throw new Error(`no pawn ${id}`);
+    pawn.state = { ...state };
+    poseCollider(this.ctx, pawn);
+  }
+
+  removePawn(id: number): void {
+    const pawn = this.pawns.get(id);
+    if (!pawn) return;
+    this.world.removeCollider(pawn.collider, false);
+    this.pawns.delete(id);
+  }
+
+  /** Remove a controller and every pawn it owns (a player leaving). */
+  removePlayer(controllerId: number): void {
+    const c = this.controllers.get(controllerId);
+    if (!c) return;
+    for (const id of c.pawnIds) this.removePawn(id);
+    this.controllers.delete(controllerId);
   }
 
   /** A controller's other, still-alive pawn (Skopós' idle shell), or null. */
@@ -223,6 +275,7 @@ export class Sim {
       }
     }
     for (const pawn of this.pawns.values()) {
+      if (pawn.proxy) continue; // simulated elsewhere
       const input = drive.get(pawn.id);
       if (input) {
         const held = pawn.state.prevButtons;
@@ -257,7 +310,7 @@ export class Sim {
     const params = this.data.operators.get(c.operatorId)!.ability.params; // validated by the schema
     const transfer = params.transferSeconds;
     const activation = params.activationSeconds;
-    c.swapCooldown = Math.max(0, c.swapCooldown - DT);
+    c.swapCooldown = Math.fround(Math.max(0, c.swapCooldown - DT)); // float32-exact, like pawn state
 
     if (c.swapPhase === 1) {
       c.swapT += DT;
@@ -275,7 +328,7 @@ export class Sim {
         c.swapPhase = 0;
         c.swapT = 0;
         c.shellCam = false;
-        c.swapCooldown = params.swapCooldownSeconds;
+        c.swapCooldown = Math.fround(params.swapCooldownSeconds);
       }
       return;
     }

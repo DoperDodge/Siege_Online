@@ -10,3 +10,5 @@ export * from "./player/stance.js";
 export * from "./player/hitboxes.js";
 export * from "./player/movement.js";
 export * from "./sim.js";
+export * from "./net/bytes.js";
+export * from "./net/pawnState.js";

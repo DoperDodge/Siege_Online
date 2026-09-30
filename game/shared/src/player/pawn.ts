@@ -11,6 +11,8 @@ export interface Pawn {
   ownerId: number | null;
   collider: Collider;
   state: PawnState;
+  /** Simulated elsewhere (another player on a client): never stepped here, only placed (Sim.addProxy). */
+  proxy?: boolean;
 }
 
 export interface PlayerController {

@@ -521,6 +521,18 @@ function placeCollider(ctx: MoveContext, pawn: Pawn, height: number) {
   setFeet(ctx, pawn, pawn.state.x, pawn.state.y, pawn.state.z, height);
 }
 
+/**
+ * Put a pawn's collider where its state says it is, without touching the state. Every step starts by
+ * placing the collider from the state the same way, so a restored state steps exactly like the original.
+ */
+export function poseCollider(ctx: MoveContext, pawn: Pawn): void {
+  const s = pawn.state;
+  const { r, hh } = capsuleDims(currentHeight(ctx.data.movement, s), ctx.data.movement.stance.collisionRadius);
+  pawn.collider.setRadius(r);
+  pawn.collider.setHalfHeight(hh);
+  pawn.collider.setTranslation({ x: s.x, y: s.y + hh + r, z: s.z });
+}
+
 function setFeet(ctx: MoveContext, pawn: Pawn, x: number, y: number, z: number, height: number) {
   const { r, hh } = capsuleDims(height, ctx.data.movement.stance.collisionRadius);
   pawn.collider.setRadius(r);
