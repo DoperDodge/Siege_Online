@@ -1,6 +1,6 @@
 // Lag-compensation framework (Phase 2): hitbox history, rewinding, and ray tests.
 import { describe, expect, it } from "vitest";
-import { HitboxHistory, initRapier, poseHitboxes, quatFromTo, rayCapsule, Stance, type Hitbox, type Vec3 } from "../src/index.js";
+import { HitboxHistory, initRapier, interpolateRemote, poseHitboxes, quantizeRemote, quatFromTo, rayCapsule, remoteState, Stance, type Hitbox, type PawnState, type Vec3 } from "../src/index.js";
 import { labWith, run } from "./helpers.js";
 
 describe("rayCapsule", () => {
@@ -53,48 +53,50 @@ describe("rayCapsule", () => {
 });
 
 describe("HitboxHistory", () => {
-  const same = (x: Hitbox[], y: Hitbox[]) => {
+  const close = (x: Hitbox[], y: Hitbox[], tol: number) => {
     expect(x.map((h) => h.part)).toEqual(y.map((h) => h.part));
     x.forEach((h, i) => {
       for (let k = 0; k < 3; k++) {
-        expect(h.a[k]).toBeCloseTo(y[i].a[k], 9);
-        expect(h.b[k]).toBeCloseTo(y[i].b[k], 9);
+        expect(Math.abs(h.a[k] - y[i].a[k])).toBeLessThanOrEqual(tol);
+        expect(Math.abs(h.b[k] - y[i].b[k])).toBeLessThanOrEqual(tol);
       }
     });
   };
 
-  it("rewinds to the exact pose of a past tick (stance and lean included) and interpolates between ticks", async () => {
+  it("rewinds to exactly what a client drew: the same snapshots, blended the same way (stance and lean included)", async () => {
     const { sim, ctrl, pawn } = await labWith();
-    const hist = new HitboxHistory(64);
-    const poses = new Map<number, Hitbox[]>();
+    const hist = new HitboxHistory(sim, 32);
+    const states = new Map<number, PawnState>();
     for (let i = 0; i < 100; i++) {
       run(sim, ctrl, { forward: 1, lean: i > 30 ? 1 : 0, stance: i > 60 ? Stance.Crouch : Stance.Stand, yawDeg: i }, 1 / 64);
-      hist.record(sim);
-      poses.set(sim.tick, poseHitboxes(sim.data.movement, sim.data.hitboxes, pawn.state));
+      hist.record();
+      states.set(sim.tick, { ...pawn.state });
     }
     const now = sim.tick;
-    expect(hist.range).toEqual({ oldest: now - 63, newest: now });
-    for (const back of [0, 1, 20, 63]) same(hist.at(now - back).get(pawn.id)!, poses.get(now - back)!);
-    same(hist.at(now - 63.5).get(pawn.id)!, poses.get(now - 63)!); // just past the oldest frame: clamps to it
-    expect(hist.at(now - 80).size).toBe(0); // far older than the buffer: nothing
-    const mid = hist.at(now - 10.5).get(pawn.id)!;
-    const p0 = poses.get(now - 11)!;
-    const p1 = poses.get(now - 10)!;
-    expect(mid[0].a[2]).toBeCloseTo((p0[0].a[2] + p1[0].a[2]) / 2, 9);
+    const drawn = (t: number) => {
+      const t0 = Math.floor(t / 2) * 2;
+      const qa = quantizeRemote(states.get(t0)!);
+      const qb = quantizeRemote(states.get(t0 + 2)!);
+      return poseHitboxes(sim.data.movement, sim.data.hitboxes, interpolateRemote(remoteState(qa, pawn.state.maxHp), remoteState(qb, pawn.state.maxHp), (t - t0) / 2));
+    };
+    const snapTick = now - (now % 2);
+    expect(hist.range).toEqual({ oldest: snapTick - 62, newest: snapTick });
+    for (const t of [snapTick - 2, snapTick - 11, snapTick - 40.5, snapTick - 61.25]) close(hist.at(t).get(pawn.id)!, drawn(t), 1e-12);
+    // ...and that is within a centimetre of the exact pose.
+    close(hist.at(snapTick - 20).get(pawn.id)!, poseHitboxes(sim.data.movement, sim.data.hitboxes, states.get(snapTick - 20)!), 0.01);
+    expect(hist.at(snapTick - 200).size).toBe(0); // far older than the buffer
   });
 
   it("a shot aimed where a moving target was hits only when rewound, and the rewind is capped", async () => {
     const { sim, ctrl, pawn } = await labWith();
-    const hist = new HitboxHistory(64);
-    const heads = new Map<number, Vec3>();
+    const hist = new HitboxHistory(sim, 32);
     for (let i = 0; i < 64; i++) {
       run(sim, ctrl, { strafe: 1 }, 1 / 64); // walking sideways at 3 m/s
-      hist.record(sim);
-      heads.set(sim.tick, poseHitboxes(sim.data.movement, sim.data.hitboxes, pawn.state).find((h) => h.part === "head")!.a);
+      hist.record();
     }
-    const now = sim.tick;
+    const now = sim.tick - (sim.tick % 2);
     const shoot = (back: number, maxRewind = 12.8) => {
-      const h = heads.get(now - back)!;
+      const h = hist.at(now - back).get(pawn.id)!.find((x) => x.part === "head")!.a;
       const origin: Vec3 = [h[0], h[1], h[2] + 10]; // from 10 m behind (+Z), aiming straight at that head
       return hist.raycast(origin, [0, 0, -1], 50, now - back, now, maxRewind);
     };
