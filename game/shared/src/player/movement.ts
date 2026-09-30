@@ -4,7 +4,7 @@ import { DT } from "../core/constants.js";
 import { approach, clamp, DEG, forwardXZ, lerp, quatYawPitchRoll, rightXZ, rotateXZ, smoothstep, wrapAngle } from "../core/math.js";
 import type { GameData } from "../data/load.js";
 import type { BuiltLevel } from "../level/builder.js";
-import { QUERY_STATIC, type CharacterController, type Rapier, type World } from "../physics/rapier.js";
+import { NONSOLID_PLAYER_GROUPS, PLAYER_GROUPS, QUERY_PLAYERS, QUERY_SOLID, QUERY_STATIC, type CharacterController, type Collider, type Rapier, type World } from "../physics/rapier.js";
 import { eyePose, proneBendLift, proneBodyExtents } from "./hitboxes.js";
 import type { Pawn } from "./pawn.js";
 import { capsuleDims, currentHeight, proneWeight, stanceDims, transitionSeconds } from "./stance.js";
@@ -40,6 +40,13 @@ export function stepPawn(ctx: MoveContext, pawn: Pawn, input: InputCmd): void {
     stepWalk(ctx, pawn, input, pressed);
   }
   roundState(s);
+  setSolidity(pawn);
+}
+
+/** Dead bodies stop blocking other players (collision groups apply at once, no refresh needed). */
+function setSolidity(pawn: Pawn) {
+  const groups = pawn.state.mode === PawnMode.Dead ? NONSOLID_PLAYER_GROUPS : PLAYER_GROUPS;
+  if (pawn.collider.collisionGroups() !== groups) pawn.collider.setCollisionGroups(groups);
 }
 
 // ---------------------------------------------------------------- look
@@ -144,6 +151,7 @@ function stepWalk(ctx: MoveContext, pawn: Pawn, input: InputCmd, pressed: number
   const fit = prone ? (proneFit(ctx, pawn, s.x, s.y, s.z, s.yaw) ?? { tF: s.tiltF, tB: s.tiltB, side: s.tiltSide }) : null;
   if (fit && (dx !== 0 || dz !== 0)) [dx, dz] = proneSweep(ctx, pawn, fit, dx, dz);
   let mv = moveCollider(ctx, pawn, dx, s.vy * DT, dz);
+  const perched = mv.perched;
   if (fit && (mv.x !== 0 || mv.z !== 0)) {
     const nx = s.x + mv.x;
     const ny = s.y + mv.y;
@@ -161,7 +169,8 @@ function stepWalk(ctx: MoveContext, pawn: Pawn, input: InputCmd, pressed: number
   readFeet(ctx, pawn, height);
   // Only ground you could walk up counts: on steeper slopes you keep falling and slide off.
   const n = groundNormal(ctx, pawn);
-  s.grounded = ctx.cc.computedGrounded() && (!n || n.y >= Math.cos(m.step.maxSlopeDeg * DEG) - 1e-6);
+  // Other players aren't ground: someone who lands on a head slides off instead of standing there.
+  s.grounded = !perched && ctx.cc.computedGrounded() && (!n || n.y >= Math.cos(m.step.maxSlopeDeg * DEG) - 1e-6);
   if (s.grounded || (s.vy > 0 && mv.y < s.vy * DT - 1e-4)) s.vy = 0;
   if (prone && !s.grounded && s.airPeakY - s.y > m.step.maxStepHeight && capsuleFree(ctx, pawn, s.x, s.y, s.z, m.stance.crouch.height)) {
     // Falling while lying down (it shouldn't happen: going prone and crawling both need ground): curl up
@@ -181,17 +190,74 @@ function stepWalk(ctx: MoveContext, pawn: Pawn, input: InputCmd, pressed: number
   trackFall(ctx, pawn, wasGrounded);
 }
 
-/** Run the character controller for one step; while grounded, the step follows the ground plane. */
-function moveCollider(ctx: MoveContext, pawn: Pawn, dx: number, dy: number, dz: number): { x: number; y: number; z: number } {
+/** Speed at which overlapping players are pushed apart, and a player perched on a head slides off. */
+const PLAYER_SEPARATION_SPEED = 1.5;
+/** How far below a pawn to look for a head it is standing on. */
+const PERCH_PROBE = 0.35;
+
+/**
+ * Run the character controller for one step; while grounded, the step follows the ground plane. Other
+ * players block (QUERY_SOLID); overlapping ones are pushed apart, and standing on a head slides you off.
+ */
+function moveCollider(ctx: MoveContext, pawn: Pawn, dx: number, dy: number, dz: number): { x: number; y: number; z: number; perched: boolean } {
   if (pawn.state.grounded) {
     // Follow the ground plane so horizontal speed holds on ramps and stairs (the controller would
     // otherwise project the step onto the slope and lose ~40% of it on a 40° incline).
     const n = groundNormal(ctx, pawn);
     if (n && n.y >= Math.cos(ctx.data.movement.step.maxSlopeDeg * DEG)) dy += -(n.x * dx + n.z * dz) / n.y;
   }
-  ctx.cc.computeColliderMovement(pawn.collider, { x: dx, y: dy, z: dz }, undefined, QUERY_STATIC);
+  const t = pawn.collider.translation();
+  const r = pawn.collider.radius();
+  const hh = pawn.collider.halfHeight();
+  const away = (o: { x: number; z: number }): [number, number] => {
+    const ax = t.x - o.x;
+    const az = t.z - o.z;
+    const l = Math.hypot(ax, az);
+    if (l < 1e-4) return forwardXZ(pawn.state.yaw + pawn.id * 2.399963); // exactly stacked: a fixed, per-pawn direction
+    return [ax / l, az / l];
+  };
+  // Push out of players we overlap (a spawn pile, a stance growing beside someone), in a fixed order.
+  // While overlapping someone, the controller ignores them (penetrating contacts would stall it) and
+  // instead any motion toward them is removed, so you still can't walk through them.
+  const overlapping: Collider[] = [];
+  ctx.world.intersectionsWithShape(t, IDENTITY, new ctx.R.Capsule(hh, r), (c) => (overlapping.push(c), true), undefined, QUERY_PLAYERS, pawn.collider);
+  overlapping.sort((a, b) => a.handle - b.handle);
+  const ignored = new Set<number>();
+  let px = 0;
+  let pz = 0;
+  for (const c of overlapping) {
+    const o = c.translation();
+    ignored.add(c.handle);
+    const [ax, az] = away(o);
+    const toward = dx * ax + dz * az;
+    if (toward < 0) {
+      dx -= ax * toward;
+      dz -= az * toward;
+    }
+    const depth = r + c.radius() + SKIN - Math.hypot(t.x - o.x, t.z - o.z);
+    if (depth <= 0) continue;
+    px += ax * depth;
+    pz += az * depth;
+  }
+  const push = Math.hypot(px, pz);
+  const cap = PLAYER_SEPARATION_SPEED * DT;
+  if (push > cap) {
+    px *= cap / push;
+    pz *= cap / push;
+  }
+  // Resting on someone's head or shoulder: slide off sideways, away from their axis.
+  let perched = false;
+  const notIgnored = ignored.size ? (c: Collider) => !ignored.has(c.handle) : undefined;
+  const below = ctx.world.castShape(t, IDENTITY, { x: 0, y: -1, z: 0 }, new ctx.R.Capsule(hh, r), 0, PERCH_PROBE, true, undefined, QUERY_PLAYERS, pawn.collider, undefined, notIgnored);
+  if (below && below.normal1.y > 0.05) {
+    const [ax, az] = away(below.collider.translation());
+    px += ax * cap;
+    pz += az * cap;
+    perched = true;
+  }
+  ctx.cc.computeColliderMovement(pawn.collider, { x: dx + px, y: dy, z: dz + pz }, undefined, QUERY_SOLID, notIgnored);
   const mv = ctx.cc.computedMovement();
-  return { x: mv.x, y: mv.y, z: mv.z };
+  return { x: mv.x, y: mv.y, z: mv.z, perched };
 }
 
 function updateStance(ctx: MoveContext, pawn: Pawn, input: InputCmd) {
@@ -366,10 +432,11 @@ export function planVault(ctx: MoveContext, pawn: Pawn): VaultPlan | null {
   // 5. Clearance above the obstacle (body tucked) and at the landing spot (crouch if standing won't fit).
   const midX = s.x + fx * (face + Math.min(depth === Infinity ? 0.2 : depth, 0.5) / 2);
   const midZ = s.z + fz * (face + Math.min(depth === Infinity ? 0.2 : depth, 0.5) / 2);
-  if (!capsuleFree(ctx, pawn, midX, topY + v.clearance, midZ, v.apexBodyHeight)) return null;
+  // (Other players count here: you can't vault into or onto someone.)
+  if (!capsuleFree(ctx, pawn, midX, topY + v.clearance, midZ, v.apexBodyHeight, QUERY_SOLID)) return null;
   let landCrouched = false;
-  if (!capsuleFree(ctx, pawn, toX, toY, toZ, currentHeight(m, s))) {
-    if (!capsuleFree(ctx, pawn, toX, toY, toZ, m.stance.crouch.height)) return null;
+  if (!capsuleFree(ctx, pawn, toX, toY, toZ, currentHeight(m, s), QUERY_SOLID)) {
+    if (!capsuleFree(ctx, pawn, toX, toY, toZ, m.stance.crouch.height, QUERY_SOLID)) return null;
     landCrouched = true;
   }
   return { over, toX, toY, toZ, apexY: topY + v.clearance, seconds: v.secondsBase + v.secondsPerMeter * h, landCrouched };
@@ -531,6 +598,7 @@ export function poseCollider(ctx: MoveContext, pawn: Pawn): void {
   pawn.collider.setRadius(r);
   pawn.collider.setHalfHeight(hh);
   pawn.collider.setTranslation({ x: s.x, y: s.y + hh + r, z: s.z });
+  setSolidity(pawn);
 }
 
 function setFeet(ctx: MoveContext, pawn: Pawn, x: number, y: number, z: number, height: number) {
@@ -573,15 +641,15 @@ function groundWithin(ctx: MoveContext, pawn: Pawn, x: number, y: number, z: num
   return ctx.world.castRay(ray, depth + 0.1 + SKIN, true, undefined, QUERY_STATIC, pawn.collider) !== null;
 }
 
-/** Is an upright capsule of `height` standing at these feet free of level geometry? */
-export function capsuleFree(ctx: MoveContext, pawn: Pawn | null, x: number, y: number, z: number, height: number): boolean {
+/** Is an upright capsule of `height` standing at these feet free of level geometry (and players, with QUERY_SOLID)? */
+export function capsuleFree(ctx: MoveContext, pawn: Pawn | null, x: number, y: number, z: number, height: number, filter = QUERY_STATIC): boolean {
   const { r, hh } = capsuleDims(height - SKIN * 2, ctx.data.movement.stance.collisionRadius - SKIN);
   const hit = ctx.world.intersectionWithShape(
     { x, y: y + SKIN * 1.5 + hh + r, z },
     IDENTITY,
     new ctx.R.Capsule(hh, r),
     undefined,
-    QUERY_STATIC,
+    filter,
     pawn?.collider,
   );
   return hit === null;

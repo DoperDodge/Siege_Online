@@ -4,7 +4,7 @@ import { DT } from "./core/constants.js";
 import { rotateXZ, DEG } from "./core/math.js";
 import { loadGameData, type GameData } from "./data/load.js";
 import { buildLevel, type BuiltLevel } from "./level/builder.js";
-import { initRapier, PLAYER_GROUPS, type CharacterController, type Rapier, type World } from "./physics/rapier.js";
+import { initRapier, PLAYER_GROUPS, QUERY_SOLID, QUERY_STATIC as QUERY_STATIC_FILTER, refreshBroadPhase, type CharacterController, type Rapier, type World } from "./physics/rapier.js";
 import { capsuleFree, movementPrompt, poseCollider, stepPawn, type MoveContext, type MovementPrompt } from "./player/movement.js";
 import { initialPawnState, type Pawn, type PlayerController } from "./player/pawn.js";
 import { capsuleDims, stanceDims } from "./player/stance.js";
@@ -36,6 +36,9 @@ export class Sim {
     if (!def) throw new Error(`Unknown level "${levelId}"`);
     const m = data.movement;
     const world = new R.World({ x: 0, y: m.gravity, z: 0 });
+    // Pawns are kinematic colliders moved by our own code; world.step() only refreshes query structures
+    // (refreshBroadPhase), so give it nothing to integrate.
+    world.timestep = 0;
     const level = buildLevel(R, world, def);
     const cc = world.createCharacterController(0.02);
     cc.enableAutostep(m.step.maxStepHeight, 0.2, false);
@@ -79,18 +82,35 @@ export class Sim {
     // Check every shell's spot before creating any, so a failed join leaves nothing behind.
     const m = this.data.movement;
     const shellOffset = op.ability.params.idleShellOffset ?? 0; // required for 2-pawn operators (schema)
-    if (op.pawns > 1 && shellOffset < 2 * m.stance.collisionRadius) {
-      throw new Error(`${op.name}: ability.params.idleShellOffset (${shellOffset}) must be at least two body radii (${2 * m.stance.collisionRadius})`);
+    const minOffset = 2 * m.stance.collisionRadius + 0.02; // two bodies plus the controller's contact gap
+    if (op.pawns > 1 && shellOffset < minOffset) {
+      throw new Error(`${op.name}: ability.params.idleShellOffset (${shellOffset}) must be at least two body radii (${minOffset})`);
     }
-    const spots: [number, number][] = [];
-    for (let i = 0; i < op.pawns; i++) {
-      const [ox, oz] = rotateXZ(i * shellOffset, 0, yaw);
-      const px = spawn.pos[0] + ox;
-      const pz = spawn.pos[2] + oz;
-      if (i > 0 && !capsuleFree(this.ctx, null, px, spawn.pos[1] + 0.02, pz, m.stance.stand.height)) {
-        throw new Error(`${op.name}'s second shell would spawn inside level geometry at spawn "${spawn.id}"`);
+    const shellSpots = (bx: number, bz: number): [number, number][] =>
+      Array.from({ length: op.pawns }, (_, i) => {
+        const [ox, oz] = rotateXZ(i * shellOffset, 0, yaw);
+        return [bx + ox, bz + oz];
+      });
+    // capsuleFree tests a slightly shrunken body (right for walls); between players, keep a full body gap.
+    const clearOfPlayers = ([px, pz]: [number, number]) =>
+      [...this.pawns.values()].every((p) => p.state.mode === PawnMode.Dead || Math.hypot(p.state.x - px, p.state.z - pz) >= minOffset);
+    const fits = (spots: [number, number][], filter: number) =>
+      spots.every(([px, pz]) => capsuleFree(this.ctx, null, px, spawn.pos[1] + 0.02, pz, m.stance.stand.height, filter) && (filter !== QUERY_SOLID || clearOfPlayers([px, pz])));
+    const home = shellSpots(spawn.pos[0], spawn.pos[2]);
+    if (!fits(home.slice(1), QUERY_STATIC_FILTER)) {
+      throw new Error(`${op.name}'s second shell would spawn inside level geometry at spawn "${spawn.id}"`);
+    }
+    // Other players already on the spawn: take the nearest free spot around it (rings 0.8 m apart).
+    let spots = home;
+    search: for (let ring = 0; ring <= 6; ring++) {
+      for (let k = 0; k < (ring === 0 ? 1 : 8); k++) {
+        const a = (k / 8) * 2 * Math.PI;
+        const cand = shellSpots(spawn.pos[0] + Math.cos(a) * ring * 0.8, spawn.pos[2] + Math.sin(a) * ring * 0.8);
+        if (fits(cand, QUERY_SOLID)) {
+          spots = cand;
+          break search;
+        }
       }
-      spots.push([px, pz]);
     }
     for (const [i, [px, pz]] of spots.entries()) {
       const pawn = this.spawnPawn(operatorId, px, spawn.pos[1], pz, yaw, controller.id, ids?.pawns[i]);
@@ -119,6 +139,7 @@ export class Sim {
     const pawnId = id !== undefined ? this.claimId(id) : this.nextId++;
     const pawn: Pawn = { id: pawnId, operatorId, ownerId, collider, state: initialPawnState(x, y + 0.02, z, Math.fround(yaw), maxHp) };
     this.pawns.set(pawn.id, pawn);
+    refreshBroadPhase(this.world); // a new collider is invisible to queries until the next refresh
     return pawn;
   }
 
@@ -132,6 +153,7 @@ export class Sim {
     const pawn: Pawn = { id: this.claimId(id), operatorId, ownerId: null, collider, state: { ...state }, proxy: true };
     this.pawns.set(id, pawn);
     poseCollider(this.ctx, pawn);
+    refreshBroadPhase(this.world);
     return pawn;
   }
 
@@ -144,6 +166,7 @@ export class Sim {
     if (!pawn) throw new Error(`no pawn ${id}`);
     pawn.state = { ...state };
     poseCollider(this.ctx, pawn);
+    refreshBroadPhase(this.world);
   }
 
   removePawn(id: number): void {
@@ -151,6 +174,7 @@ export class Sim {
     if (!pawn) return;
     this.world.removeCollider(pawn.collider, false);
     this.pawns.delete(id);
+    refreshBroadPhase(this.world);
   }
 
   /** Remove a controller and every pawn it owns (a player leaving). */
@@ -201,6 +225,8 @@ export class Sim {
     pawn.collider.setHalfHeight(hh);
     pawn.collider.setTranslation({ x: spawn.pos[0], y: spawn.pos[1] + hh + r + 0.02, z: spawn.pos[2] });
     pawn.state = initialPawnState(spawn.pos[0], spawn.pos[1] + 0.02, spawn.pos[2], Math.fround(spawn.yawDeg * DEG), pawn.state.maxHp);
+    poseCollider(this.ctx, pawn); // also makes a dead body solid again
+    refreshBroadPhase(this.world);
   }
 
   /** Move a pawn to feet position (x, y, z) in a settled stance (lab "go to" menu, tests, admin tools). */
@@ -236,6 +262,8 @@ export class Sim {
       airPeakY: Math.fround(y + 0.02),
     });
     if (pawn.state.hp === 0) pawn.state.hp = pawn.state.maxHp;
+    poseCollider(this.ctx, pawn); // also makes a dead body solid again
+    refreshBroadPhase(this.world);
   }
 
   /**
@@ -280,6 +308,7 @@ export class Sim {
       if (input) {
         const held = pawn.state.prevButtons;
         stepPawn(this.ctx, pawn, input);
+        refreshBroadPhase(this.world); // the next pawn must see this one where it now is
         if (idleDriven.has(pawn.id)) pawn.state.prevButtons = held;
         continue;
       }
@@ -289,6 +318,7 @@ export class Sim {
       // memory so keys still held when input resumes don't count as fresh presses.
       const held = pawn.state.prevButtons;
       stepPawn(this.ctx, pawn, idleInput(pawn, idleShell ? Stance.Crouch : pawn.state.stance));
+      refreshBroadPhase(this.world);
       pawn.state.prevButtons = held;
     }
     this.tick++;
