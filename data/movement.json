@@ -27,6 +27,7 @@
     "stance.collisionRadius",
     "stance.crouch",
     "stance.prone",
+    "stance.proneBodyLift",
     "stance.pronePitchMaxDeg",
     "stance.pronePitchMinDeg",
     "stance.proneTurnRateDeg",
@@ -84,7 +85,8 @@
     },
     "proneTurnRateDeg": 90,
     "pronePitchMinDeg": -20,
-    "pronePitchMaxDeg": 35
+    "pronePitchMaxDeg": 35,
+    "proneBodyLift": 0.04
   },
   "look": {
     "pitchMinDeg": -85,
@@ -126,7 +128,8 @@
     "dismountForward": 0.6,
     "dismountSeconds": 0.5,
     "dismountApex": 0.15,
-    "topGrabMargin": 1.0
+    "topGrabMargin": 1.0,
+    "bottomGrabMargin": 0.5
   },
   "fall": {
     "safeHeight": 3.0,

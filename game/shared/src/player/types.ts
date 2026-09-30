@@ -61,6 +61,14 @@ export interface PawnState {
   stanceT: number;
   /** -1..1 current lean amount (after wall clamping). */
   lean: number;
+  /**
+   * Prone body pitch (radians, positive = rising toward the head) of the upper body and of the legs, so
+   * the lying body follows ramps, stairs and crests. 0 when not prone.
+   */
+  tiltF: number;
+  tiltB: number;
+  /** Prone roll (radians, positive = right side up) for lying across a slope. 0 when not prone. */
+  tiltSide: number;
   sprinting: boolean;
   /** Seconds since sprint ended (for sprint-to-fire delay, Phase 3). */
   sinceSprint: number;

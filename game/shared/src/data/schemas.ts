@@ -44,6 +44,8 @@ export const movementSchema = z.object({
     proneTurnRateDeg: z.number().positive(),
     pronePitchMinDeg: z.number(),
     pronePitchMaxDeg: z.number(),
+    /** Gap kept between the ground and the bottom of the prone body clearance boxes. */
+    proneBodyLift: z.number().nonnegative(),
   }),
   look: z.object({ pitchMinDeg: z.number(), pitchMaxDeg: z.number() }),
   lean: z.object({
@@ -77,6 +79,8 @@ export const movementSchema = z.object({
     dismountApex: z.number().nonnegative(),
     /** You can grab the ladder up to this far below its top. */
     topGrabMargin: z.number().nonnegative(),
+    /** How far below a ladder's base you can still grab it. */
+    bottomGrabMargin: z.number().nonnegative(),
   }),
   fall: z.object({ safeHeight: z.number().nonnegative(), lethalHeight: z.number().positive() }),
   step: z.object({ maxStepHeight: z.number().nonnegative(), snapToGround: z.number().nonnegative(), maxSlopeDeg: z.number().positive() }),
@@ -89,11 +93,21 @@ export const hitboxSchema = z.object({
   parts: z.object({ head: capsuleR, neck: capsuleR, torso: capsuleR, pelvis: capsuleR, arm: capsuleR, leg: capsuleR }),
   /** Upright pose. The head sits at the stance's eye height (data/movement.json). */
   standing: z.object({
+    /** Fractions of the current stance height. */
     hipHeight: z.number(),
     chestHeight: z.number(),
     neckHeight: z.number(),
+    /** Meters. */
     shoulderHalfWidth: z.number(),
     hipHalfWidth: z.number(),
+    headForward: z.number(),
+    neckBaseAboveChest: z.number(),
+    torsoBaseAboveHip: z.number(),
+    handForward: z.number(),
+    handHalfWidth: z.number(),
+    handAboveHip: z.number(),
+    footForward: z.number(),
+    footHeight: z.number(),
   }),
   /**
    * Lying-down pose, in meters from the pawn's feet point (forward = along facing). Single source for the
@@ -101,15 +115,24 @@ export const hitboxSchema = z.object({
    */
   prone: z.object({
     headForward: z.number(),
+    neckFrontHeight: z.number(),
+    neckRearHeight: z.number(),
     shoulderForward: z.number(),
     shoulderHalfWidth: z.number(),
+    shoulderHeight: z.number(),
     chestHeight: z.number(),
+    torsoRearBack: z.number(),
+    torsoRearHeight: z.number(),
     handForward: z.number(),
     handHalfWidth: z.number(),
+    handHeight: z.number(),
     hipBack: z.number(),
     hipHeight: z.number(),
+    thighBack: z.number(),
+    thighHeight: z.number(),
     footBack: z.number(),
     footSpread: z.number(),
+    footHeight: z.number(),
   }),
 });
 export type HitboxData = z.infer<typeof hitboxSchema>;
@@ -133,9 +156,18 @@ export const operatorSchema = z.object({
   pawns: z.number().int().min(1).max(2),
 }).superRefine((op, ctx) => {
   if (op.pawns < 2) return;
-  for (const key of ["transferSeconds", "activationSeconds", "swapCooldownSeconds", "idleShellOffset"]) {
-    if (op.ability.params[key] === undefined) {
-      ctx.addIssue({ code: "custom", path: ["ability", "params", key], message: `a ${op.pawns}-pawn operator needs ability.params.${key}` });
+  // Swap timings must be positive (the cooldown may be 0); the shell offset is range-checked against the
+  // body size when the shells spawn (Sim.addPlayer).
+  const required: [string, (v: number) => boolean, string][] = [
+    ["transferSeconds", (v) => v > 0, "a positive number"],
+    ["activationSeconds", (v) => v > 0, "a positive number"],
+    ["swapCooldownSeconds", (v) => v >= 0, "zero or more"],
+    ["idleShellOffset", (v) => v > 0, "a positive number"],
+  ];
+  for (const [key, ok, what] of required) {
+    const v = op.ability.params[key];
+    if (v === undefined || !ok(v)) {
+      ctx.addIssue({ code: "custom", path: ["ability", "params", key], message: `a ${op.pawns}-pawn operator needs ability.params.${key} (${what})` });
     }
   }
 });

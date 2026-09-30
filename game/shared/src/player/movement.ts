@@ -1,11 +1,11 @@
 // The per-tick movement step. Pure function of (pawn state, input, static level, data), shared by the
 // server (authority) and the browser (prediction). Values come from data/movement.json (PLAN §7).
 import { DT } from "../core/constants.js";
-import { approach, clamp, DEG, forwardXZ, lerp, quatFromTo, rightXZ, smoothstep, wrapAngle } from "../core/math.js";
+import { approach, clamp, DEG, forwardXZ, lerp, quatYawPitchRoll, rightXZ, rotateXZ, smoothstep, wrapAngle } from "../core/math.js";
 import type { GameData } from "../data/load.js";
 import type { BuiltLevel } from "../level/builder.js";
 import { QUERY_STATIC, type CharacterController, type Rapier, type World } from "../physics/rapier.js";
-import { eyePose, proneBodyExtents } from "./hitboxes.js";
+import { eyePose, proneBendLift, proneBodyExtents } from "./hitboxes.js";
 import type { Pawn } from "./pawn.js";
 import { capsuleDims, currentHeight, proneWeight, stanceDims, transitionSeconds } from "./stance.js";
 import { Btn, PawnMode, STANCE_KEYS, Stance, type InputCmd, type PawnState } from "./types.js";
@@ -20,6 +20,8 @@ export interface MoveContext {
 
 const IDENTITY = { x: 0, y: 0, z: 0, w: 1 };
 const SKIN = 0.02;
+/** How far a prone body may sink into geometry after a move before the move is refused (float noise). */
+const PRONE_TOLERANCE = 0.005;
 
 export function stepPawn(ctx: MoveContext, pawn: Pawn, input: InputCmd): void {
   const s = pawn.state;
@@ -47,15 +49,20 @@ function updateLook(ctx: MoveContext, pawn: Pawn, input: InputCmd) {
   const s = pawn.state;
   let pitchMin = m.look.pitchMinDeg * DEG;
   let pitchMax = m.look.pitchMaxDeg * DEG;
-  if (s.mode === PawnMode.Walk && s.stance === Stance.Prone) {
-    // Prone limits turn speed and aim arc (PLAN §7); turning is also blocked if the body would clip a wall.
+  if (s.mode === PawnMode.Walk && proneWeight(s) > 0) {
+    // Lying down (and getting down or up) limits turn speed and aim arc (PLAN §7); turning is also
+    // blocked if the body would clip a wall.
     pitchMin = m.stance.pronePitchMinDeg * DEG;
     pitchMax = m.stance.pronePitchMaxDeg * DEG;
     const maxTurn = m.stance.proneTurnRateDeg * DEG * DT;
     const delta = clamp(wrapAngle(input.yaw - s.yaw), -maxTurn, maxTurn);
     if (delta !== 0) {
       const next = wrapAngle(s.yaw + delta);
-      if (proneBodyFree(ctx, pawn, s.x, s.y, s.z, next)) s.yaw = next;
+      const fit = proneFitFree(ctx, pawn, s.x, s.y, s.z, next, 0);
+      if (fit) {
+        s.yaw = next;
+        setTilt(s, fit);
+      }
     }
   } else {
     s.yaw = wrapAngle(input.yaw);
@@ -129,38 +136,52 @@ function stepWalk(ctx: MoveContext, pawn: Pawn, input: InputCmd, pressed: number
   s.vy = s.grounded ? m.gravity * DT : s.vy + m.gravity * DT;
 
   const wasGrounded = s.grounded;
-  const dx = s.vx * DT;
-  const dz = s.vz * DT;
-  let dy = s.vy * DT;
-  if (s.grounded) {
-    // Follow the ground plane so horizontal speed holds on ramps and stairs (the controller would
-    // otherwise project the step onto the slope and lose ~40% of it on a 40° incline).
-    const n = groundNormal(ctx, pawn);
-    if (n && n.y >= Math.cos(m.step.maxSlopeDeg * DEG)) dy += -(n.x * dx + n.z * dz) / n.y;
-  }
-  ctx.cc.computeColliderMovement(pawn.collider, { x: dx, y: dy, z: dz }, undefined, QUERY_STATIC);
-  const mv = ctx.cc.computedMovement();
-  let mx = mv.x;
-  let mz = mv.z;
-  if (proneWeight(s) > 0 && (mx !== 0 || mz !== 0) && proneBodyFree(ctx, pawn, s.x, s.y, s.z, s.yaw)) {
-    // The movement capsule is small when prone; the lying body (head, arms, legs) must fit too, or the
-    // camera and hitboxes would end up inside walls. Slide along one axis if the full move doesn't fit.
-    const ny = s.y + mv.y;
-    if (!proneBodyFree(ctx, pawn, s.x + mx, ny, s.z + mz, s.yaw)) {
-      if (mx !== 0 && proneBodyFree(ctx, pawn, s.x + mx, ny, s.z, s.yaw)) mz = 0;
-      else if (mz !== 0 && proneBodyFree(ctx, pawn, s.x, ny, s.z + mz, s.yaw)) mx = 0;
-      else mx = mz = 0;
-    }
+  let dx = s.vx * DT;
+  let dz = s.vz * DT;
+  // Lying down, the body reaches far beyond the small movement capsule: sweep it so the head, arms and
+  // legs stop short of walls (and slide along them) instead of crawling into them.
+  const prone = proneWeight(s) > 0;
+  const fit = prone ? (proneFit(ctx, pawn, s.x, s.y, s.z, s.yaw) ?? { tF: s.tiltF, tB: s.tiltB, side: s.tiltSide }) : null;
+  if (fit && (dx !== 0 || dz !== 0)) [dx, dz] = proneSweep(ctx, pawn, fit, dx, dz);
+  let mv = moveCollider(ctx, pawn, dx, s.vy * DT, dz);
+  if (
+    fit &&
+    (mv.x !== 0 || mv.z !== 0) &&
+    ((s.grounded && !groundWithin(ctx, pawn, s.x + mv.x, s.y + mv.y, s.z + mv.z, m.step.maxStepHeight)) ||
+      !proneFitFree(ctx, pawn, s.x + mv.x, s.y + mv.y, s.z + mv.z, s.yaw, -PRONE_TOLERANCE))
+  ) {
+    // Stay put if the body would have to bend into something there (a crest under a low ceiling, a slope
+    // beside a wall), or would crawl off a drop taller than a step (DECISIONS D-023: stand up to drop).
+    mv = moveCollider(ctx, pawn, 0, s.vy * DT, 0);
   }
   const c = pawn.collider.translation();
-  pawn.collider.setTranslation({ x: c.x + mx, y: c.y + mv.y, z: c.z + mz });
+  pawn.collider.setTranslation({ x: c.x + mv.x, y: c.y + mv.y, z: c.z + mv.z });
   readFeet(ctx, pawn, height);
   // Only ground you could walk up counts: on steeper slopes you keep falling and slide off.
   const n = groundNormal(ctx, pawn);
   s.grounded = ctx.cc.computedGrounded() && (!n || n.y >= Math.cos(m.step.maxSlopeDeg * DEG) - 1e-6);
   if (s.grounded || (s.vy > 0 && mv.y < s.vy * DT - 1e-4)) s.vy = 0;
+  if (prone) {
+    const f = proneFit(ctx, pawn, s.x, s.y, s.z, s.yaw);
+    if (f) setTilt(s, f);
+  } else {
+    s.tiltF = s.tiltB = s.tiltSide = 0;
+  }
 
   trackFall(ctx, pawn, wasGrounded);
+}
+
+/** Run the character controller for one step; while grounded, the step follows the ground plane. */
+function moveCollider(ctx: MoveContext, pawn: Pawn, dx: number, dy: number, dz: number): { x: number; y: number; z: number } {
+  if (pawn.state.grounded) {
+    // Follow the ground plane so horizontal speed holds on ramps and stairs (the controller would
+    // otherwise project the step onto the slope and lose ~40% of it on a 40° incline).
+    const n = groundNormal(ctx, pawn);
+    if (n && n.y >= Math.cos(ctx.data.movement.step.maxSlopeDeg * DEG)) dy += -(n.x * dx + n.z * dz) / n.y;
+  }
+  ctx.cc.computeColliderMovement(pawn.collider, { x: dx, y: dy, z: dz }, undefined, QUERY_STATIC);
+  const mv = ctx.cc.computedMovement();
+  return { x: mv.x, y: mv.y, z: mv.z };
 }
 
 function updateStance(ctx: MoveContext, pawn: Pawn, input: InputCmd) {
@@ -185,7 +206,7 @@ function updateStance(ctx: MoveContext, pawn: Pawn, input: InputCmd) {
 function canEnterStance(ctx: MoveContext, pawn: Pawn, target: Stance): boolean {
   const m = ctx.data.movement;
   const s = pawn.state;
-  if (target === Stance.Prone) return s.grounded && proneBodyFree(ctx, pawn, s.x, s.y, s.z, s.yaw);
+  if (target === Stance.Prone) return s.grounded && proneFitFree(ctx, pawn, s.x, s.y, s.z, s.yaw, SKIN / 2) !== null;
   const targetHeight = stanceDims(m, target).height;
   if (targetHeight <= currentHeight(m, s)) return true;
   return capsuleFree(ctx, pawn, s.x, s.y, s.z, targetHeight);
@@ -194,9 +215,21 @@ function canEnterStance(ctx: MoveContext, pawn: Pawn, target: Stance): boolean {
 function updateLean(ctx: MoveContext, pawn: Pawn, input: InputCmd) {
   const m = ctx.data.movement;
   const s = pawn.state;
+  const w = proneWeight(s);
   let target: number = input.lean;
   if (!m.lean.allowInStances.includes(STANCE_KEYS[s.stance]) || (s.sprinting && m.lean.sprintCancelsLean)) target = 0;
+  if (w > 0 && w < 1) target = 0; // no leaning while getting down or up
   let lean = approach(s.lean, target, DT / m.lean.seconds);
+  if (w > 0 && lean !== s.lean) {
+    // Lying down, leaning shifts the whole upper body sideways: sweep it so the arms stop at walls too.
+    const m0 = m.lean.offset * m.lean.proneOffsetScale;
+    const shift = (lean - s.lean) * m0;
+    const [rx, rz] = rightXZ(s.yaw);
+    const fit = { tF: s.tiltF, tB: s.tiltB, side: s.tiltSide };
+    const [upper] = proneBoxes(ctx, s.x, s.y, s.z, s.yaw, fit, s.lean, 0);
+    const hit = ctx.world.castShape(upper.pos, upper.rot, { x: rx * shift, y: 0, z: rz * shift }, upper.shape, 0, 1, false, undefined, QUERY_STATIC, pawn.collider);
+    if (hit) lean = s.lean + (lean - s.lean) * clamp(hit.time_of_impact - SKIN / Math.abs(shift), 0, 1);
+  }
   if (lean !== 0) {
     // The head can't pass through walls: sweep a head-sized sphere from the unleaned eye to the leaned eye.
     const from = eyePose(m, ctx.data.hitboxes, s, 0).pos;
@@ -398,10 +431,10 @@ export function findLadder(ctx: MoveContext, pawn: Pawn): number {
     const L = ctx.level.ladders[i];
     const [cx, cz] = ladderClimbPoint(ctx, i);
     if (Math.hypot(s.x - cx, s.z - cz) > m.ladder.attachDistance) continue;
-    if (s.y < L.base[1] - 0.5 || s.y > L.base[1] + L.height - m.ladder.topGrabMargin) continue;
+    if (s.y < L.base[1] - m.ladder.bottomGrabMargin || s.y > L.base[1] + L.height - m.ladder.topGrabMargin) continue;
     if (pfx * L.forward[0] + pfz * L.forward[1] < 0.5) continue; // must face the ladder
-    if (s.stanceT < 1) continue; // finish getting up / down first
-    if (s.stance !== Stance.Stand && !capsuleFree(ctx, pawn, cx, s.y, cz, m.stance.stand.height)) continue;
+    // Only from a settled stand: stand up first (Siege makes you wait out the transition too).
+    if (s.stance !== Stance.Stand || s.stanceT < 1) continue;
     return i;
   }
   return -1;
@@ -413,8 +446,6 @@ function tryAttachLadder(ctx: MoveContext, pawn: Pawn): boolean {
   const m = ctx.data.movement;
   const s = pawn.state;
   const [cx, cz] = ladderClimbPoint(ctx, i);
-  s.stance = s.stanceFrom = Stance.Stand;
-  s.stanceT = 1;
   s.mode = PawnMode.Ladder;
   s.ladder = i;
   s.vx = s.vy = s.vz = 0;
@@ -495,9 +526,12 @@ function readFeet(ctx: MoveContext, pawn: Pawn, height: number) {
 
 /** Surface normal of the ground directly under the feet, if any is within reach. */
 function groundNormal(ctx: MoveContext, pawn: Pawn): { x: number; y: number; z: number } | null {
-  const s = pawn.state;
+  return groundNormalAt(ctx, pawn, pawn.state.x, pawn.state.y, pawn.state.z);
+}
+
+function groundNormalAt(ctx: MoveContext, pawn: Pawn, x: number, y: number, z: number): { x: number; y: number; z: number } | null {
   const hit = ctx.world.castRayAndGetNormal(
-    new ctx.R.Ray({ x: s.x, y: s.y + 0.1, z: s.z }, { x: 0, y: -1, z: 0 }),
+    new ctx.R.Ray({ x, y: y + 0.1, z }, { x: 0, y: -1, z: 0 }),
     0.45,
     true,
     undefined,
@@ -505,6 +539,12 @@ function groundNormal(ctx: MoveContext, pawn: Pawn): { x: number; y: number; z: 
     pawn.collider,
   );
   return hit ? hit.normal : null;
+}
+
+/** Is there ground at most `depth` below these feet? */
+function groundWithin(ctx: MoveContext, pawn: Pawn, x: number, y: number, z: number, depth: number): boolean {
+  const ray = new ctx.R.Ray({ x, y: y + 0.1, z }, { x: 0, y: -1, z: 0 });
+  return ctx.world.castRay(ray, depth + 0.1 + SKIN, true, undefined, QUERY_STATIC, pawn.collider) !== null;
 }
 
 /** Is an upright capsule of `height` standing at these feet free of level geometry? */
@@ -521,39 +561,208 @@ export function capsuleFree(ctx: MoveContext, pawn: Pawn | null, x: number, y: n
   return hit === null;
 }
 
+// ---------------------------------------------------------------- the lying-down body
+
+interface ProneBody {
+  front: number;
+  back: number;
+  halfWidth: number;
+  top: number;
+  lift: number;
+}
+
+/** How the lying body rests on the ground (PawnState.tiltF / tiltB / tiltSide). */
+interface ProneFit {
+  tF: number;
+  tB: number;
+  side: number;
+}
+
+const proneBodies = new WeakMap<GameData, ProneBody>();
+/** Spacing of the ground probes under the lying body. */
+const PRONE_PROBE_SPACING = 0.15;
+/** Probes are at most this much further apart than the nominal spacing (reach / ceil(reach / spacing)). */
+const reachSpacingSlack = 1.05;
+/** The upper-body and leg boxes overlap this much at the hinge so nothing slips between them. */
+const PRONE_HINGE_OVERLAP = 0.1;
+
+function proneBody(ctx: MoveContext): ProneBody {
+  let b = proneBodies.get(ctx.data);
+  if (!b) {
+    const m = ctx.data.movement;
+    const e = proneBodyExtents(m, ctx.data.hitboxes);
+    // At least as wide as the standing clearance test (capsuleFree), so a body that fits can always get up.
+    b = { ...e, halfWidth: Math.max(e.halfWidth, m.stance.collisionRadius - SKIN), lift: m.stance.proneBodyLift };
+    proneBodies.set(ctx.data, b);
+  }
+  return b;
+}
+
+function setTilt(s: PawnState, fit: ProneFit) {
+  s.tiltF = Math.fround(fit.tF);
+  s.tiltB = Math.fround(fit.tB);
+  s.tiltSide = Math.fround(fit.side);
+}
+
 /**
- * Does the lying-down body fit here? One capsule covering every prone hitbox (hitboxes.json "prone"),
- * laid along the facing and tilted to follow the ground under its head and feet ends (ramps, stairs).
+ * How the lying body would rest here: the upper body and the legs each pitch about the feet point to lie
+ * on the highest ground beneath them (probed every 15 cm), so the body follows ramps, stairs, crests and
+ * troughs. Null if the ground is too steep to lie on, or something taller than a step is in the way.
  */
-function proneBodyFree(ctx: MoveContext, pawn: Pawn, x: number, y: number, z: number, yaw: number): boolean {
-  const { front, back, radius: r } = proneBodyExtents(ctx.data.hitboxes);
+function proneFit(ctx: MoveContext, pawn: Pawn, x: number, y: number, z: number, yaw: number): ProneFit | null {
+  const m = ctx.data.movement;
+  const b = proneBody(ctx);
+  const maxK = Math.tan(m.step.maxSlopeDeg * DEG);
   const [fx, fz] = forwardXZ(yaw);
-  const lift = 0.05;
-  const groundAt = (px: number, pz: number) => {
-    const hit = ctx.world.castRay(new ctx.R.Ray({ x: px, y: y + 0.6, z: pz }, { x: 0, y: -1, z: 0 }), 1.2, true, undefined, QUERY_STATIC, pawn.collider);
-    return hit ? y + 0.6 - hit.timeOfImpact : y;
+  const probeTop = y + b.top * 0.75; // below anything the body could crawl under
+  const ray = (px: number, py: number, pz: number, len: number) =>
+    ctx.world.castRay(new ctx.R.Ray({ x: px, y: py, z: pz }, { x: 0, y: -1, z: 0 }), len, true, undefined, QUERY_STATIC, pawn.collider);
+  // Ground height relative to the feet, `d` meters along the facing (negative = behind).
+  // -Infinity: nothing within reach (a drop). +Infinity: blocked (a wall).
+  const groundAt = (d: number): number => {
+    const px = x + fx * d;
+    const pz = z + fz * d;
+    const rise = Math.abs(d) * maxK;
+    const hit = ray(px, probeTop, pz, probeTop - y + rise + 0.2); // + the capsule's float above a slope
+    if (!hit) return -Infinity;
+    if (hit.timeOfImpact > 0) return probeTop - hit.timeOfImpact - y;
+    // The probe starts inside something: ground rising steeply (stairs, a ramp going up) or a wall.
+    const hi = y + rise + 0.05;
+    if (hi <= probeTop) return Infinity;
+    const top = ray(px, hi, pz, hi - probeTop);
+    return top && top.timeOfImpact > 0 ? hi - top.timeOfImpact - y : Infinity;
   };
-  const ax = x + fx * (front - r);
-  const az = z + fz * (front - r);
-  const bx = x - fx * (back - r);
-  const bz = z - fz * (back - r);
-  const ay = Math.max(groundAt(ax, az), y - 0.3) + r + lift;
-  const by = Math.max(groundAt(bx, bz), y - 0.3) + r + lift;
-  const dx = ax - bx;
-  const dy = ay - by;
-  const dz = az - bz;
-  const len = Math.hypot(dx, dy, dz);
-  if (Math.abs(dy) > Math.tan(ctx.data.movement.step.maxSlopeDeg * DEG) * Math.hypot(dx, dz)) return false; // too steep to lie on
-  const q = quatFromTo([0, 1, 0], [dx / len, dy / len, dz / len]);
-  const hit = ctx.world.intersectionWithShape(
-    { x: (ax + bx) / 2, y: (ay + by) / 2, z: (az + bz) / 2 },
-    { x: q[0], y: q[1], z: q[2], w: q[3] },
-    new ctx.R.Capsule(Math.max(0.01, len / 2), r),
-    undefined,
-    QUERY_STATIC,
-    pawn.collider,
-  );
-  return hit === null;
+  // Heights are measured from the ground under the feet (the capsule floats a skin above it), so flat
+  // ground gives exactly zero tilt.
+  const g0 = groundAt(0);
+  const base = Number.isFinite(g0) ? g0 : 0;
+  // Walk out from the feet point along one half of the body. Returns the slope (rise toward the head per
+  // meter) that keeps that half on or above every probe, or null if something too tall is in the way.
+  const slopeRise = (PRONE_PROBE_SPACING * reachSpacingSlack) * maxK; // most a walkable slope rises between probes
+  const half = (dir: 1 | -1, reach: number): number | null => {
+    const n = Math.max(1, Math.ceil(reach / PRONE_PROBE_SPACING));
+    let prev = 0;
+    let prevD = 0;
+    let k = dir > 0 ? -Infinity : Infinity;
+    // One extra probe past the end looks ahead, so the body starts to rise onto a step (a curb, stairs)
+    // before it gets there; a wall or a tall step out there doesn't block, the sweep handles those.
+    for (let i = 1; i <= n + 1; i++) {
+      const ahead = i > n;
+      const d = ahead ? reach + PRONE_PROBE_SPACING : (reach * i) / n;
+      const g = groundAt(dir * d) - base;
+      if (g === -Infinity) continue;
+      let at = d;
+      if (g - prev > slopeRise) {
+        // A step up, not a slope: only one you could step onto, and its edge could be anywhere since the
+        // last probe, so assume the nearest.
+        if (g - prev > m.step.maxStepHeight) {
+          if (ahead) break;
+          return null;
+        }
+        at = Math.max(prevD, PRONE_PROBE_SPACING / 2);
+      }
+      prev = g;
+      prevD = d;
+      k = dir > 0 ? Math.max(k, g / at) : Math.min(k, -g / at);
+    }
+    return Number.isFinite(k) ? k : 0;
+  };
+  const kF = half(1, b.front);
+  const kB = half(-1, b.back);
+  if (kF === null || kB === null || kF > maxK || kB < -maxK) return null;
+  // Lying across a slope, the body rolls to follow it (from the ground under the feet).
+  const n = groundNormalAt(ctx, pawn, x, y, z);
+  const [rx, rz] = rightXZ(yaw);
+  const kSide = n && n.y > 0 ? clamp(-(n.x * rx + n.z * rz) / n.y, -maxK, maxK) : 0;
+  return { tF: Math.atan(Math.max(kF, -maxK)), tB: Math.atan(Math.min(kB, maxK)), side: Math.atan(kSide) };
+}
+
+/**
+ * The lying body as two boxes hinged at the feet point: the upper body (shifted sideways by the prone
+ * lean) and the legs, pitched and rolled like the prone pose (hitboxes.ts). Together they contain every
+ * prone hitbox and the camera. `grow` pads every side.
+ */
+function proneBoxes(ctx: MoveContext, x: number, y: number, z: number, yaw: number, fit: ProneFit, lean: number, grow: number) {
+  const b = proneBody(ctx);
+  const m = ctx.data.movement;
+  const cr = Math.cos(fit.side);
+  const sr = Math.sin(fit.side);
+  const lift = proneBendLift(ctx.data.hitboxes, fit.tF, fit.tB); // the pose rises at a bend; so do the boxes
+  const make = (t: number, z0: number, z1: number, sx: number) => {
+    const c = Math.cos(t);
+    const sn = Math.sin(t);
+    // Each box overlaps the hinge; raise its bottom so that overlap doesn't dip into the ground when tilted.
+    const bottom = b.lift + PRONE_HINGE_OVERLAP * Math.abs(sn);
+    const hy = (b.top - bottom) / 2;
+    const cy = bottom + hy;
+    const cz = (z0 + z1) / 2;
+    const py = cy * c - cz * sn; // pitch about x, then roll about z (same order as the pose)
+    const [ox, oz] = rotateXZ(sx * cr - py * sr, cy * sn + cz * c, yaw);
+    const q = quatYawPitchRoll(yaw, t, fit.side);
+    return {
+      pos: { x: x + ox, y: y + sx * sr + py * cr + lift, z: z + oz },
+      rot: { x: q[0], y: q[1], z: q[2], w: q[3] },
+      shape: new ctx.R.Cuboid(b.halfWidth + grow, hy + grow, (z1 - z0) / 2 + grow),
+    };
+  };
+  const shift = lean * m.lean.offset * m.lean.proneOffsetScale;
+  return [make(fit.tF, -b.front, PRONE_HINGE_OVERLAP, shift), make(fit.tB, -PRONE_HINGE_OVERLAP, b.back, 0)];
+}
+
+/** The lying body's fit here if it doesn't overlap level geometry (padded by `grow`), else null. */
+function proneFitFree(ctx: MoveContext, pawn: Pawn, x: number, y: number, z: number, yaw: number, grow: number): ProneFit | null {
+  const fit = proneFit(ctx, pawn, x, y, z, yaw);
+  if (!fit) return null;
+  for (const box of proneBoxes(ctx, x, y, z, yaw, fit, pawn.state.lean, grow)) {
+    if (ctx.world.intersectionWithShape(box.pos, box.rot, box.shape, undefined, QUERY_STATIC, pawn.collider) !== null) return null;
+  }
+  return fit;
+}
+
+/**
+ * Clip a horizontal move of the lying body so it stops SKIN short of walls, sliding along them (up to
+ * two contacts). A body already touching something can still move away from it or along it.
+ */
+function proneSweep(ctx: MoveContext, pawn: Pawn, fit: ProneFit, dx: number, dz: number): [number, number] {
+  const s = pawn.state;
+  let ox = 0;
+  let oz = 0;
+  let rx = dx;
+  let rz = dz;
+  for (let iter = 0; iter < 2; iter++) {
+    const len = Math.hypot(rx, rz);
+    if (len < 1e-9) break;
+    const ux = rx / len;
+    const uz = rz / len;
+    const reach = len + SKIN;
+    let best: { time_of_impact: number; normal1: { x: number; y: number; z: number } } | null = null;
+    for (const box of proneBoxes(ctx, s.x + ox, s.y, s.z + oz, s.yaw, fit, s.lean, 0)) {
+      const hit = ctx.world.castShape(box.pos, box.rot, { x: ux * reach, y: 0, z: uz * reach }, box.shape, 0, 1, false, undefined, QUERY_STATIC, pawn.collider);
+      if (hit && (!best || hit.time_of_impact < best.time_of_impact)) best = hit;
+    }
+    if (!best) {
+      ox += rx;
+      oz += rz;
+      break;
+    }
+    const n = best.normal1; // points out of the obstacle
+    const approachCos = Math.max(0.2, -(ux * n.x + uz * n.z));
+    const allowed = clamp(best.time_of_impact * reach - SKIN / approachCos, 0, len);
+    ox += ux * allowed;
+    oz += uz * allowed;
+    const nl = Math.hypot(n.x, n.z);
+    if (nl < 0.3) break; // touching a floor or ceiling edge: no sensible slide direction
+    const nx = n.x / nl;
+    const nz = n.z / nl;
+    rx = ux * (len - allowed);
+    rz = uz * (len - allowed);
+    const into = rx * nx + rz * nz;
+    if (into < 0) {
+      rx -= nx * into;
+      rz -= nz * into;
+    }
+  }
+  return [ox, oz];
 }
 
 /** Keep continuous state float32-exact so snapshots (float32 on the wire) restore it without drift. */
@@ -564,6 +773,9 @@ function roundState(s: PawnState) {
   s.yaw = Math.fround(s.yaw);
   s.pitch = Math.fround(s.pitch);
   s.lean = Math.fround(s.lean);
+  s.tiltF = Math.fround(s.tiltF);
+  s.tiltB = Math.fround(s.tiltB);
+  s.tiltSide = Math.fround(s.tiltSide);
   s.stanceT = Math.fround(s.stanceT);
   s.sinceSprint = Math.fround(s.sinceSprint);
   s.moveT = Math.fround(s.moveT);

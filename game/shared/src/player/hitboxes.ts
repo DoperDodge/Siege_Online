@@ -19,6 +19,9 @@ export interface Hitbox {
 /** Local frame: x = right, y = up, z = backward (forward is -z); origin at the feet. */
 type Seg = [BodyPart, Vec3, Vec3];
 
+const partRadius = (hb: HitboxData, part: BodyPart) =>
+  hb.parts[part.startsWith("arm") ? "arm" : part.startsWith("leg") ? "leg" : (part as "head" | "neck" | "torso" | "pelvis")].radius;
+
 function uprightPose(hb: HitboxData, height: number, eye: number, leanOffset: number): Seg[] {
   const st = hb.standing;
   const hip = height * st.hipHeight;
@@ -30,50 +33,97 @@ function uprightPose(hb: HitboxData, height: number, eye: number, leanOffset: nu
   // Lean bends the spine: lateral shift grows linearly from the hips to the head (procedural spine).
   const bend = (y: number) => (head > hip ? leanOffset * Math.max(0, (y - hip) / (head - hip)) : 0);
   const p = (x: number, y: number, z: number): Vec3 => [x + bend(y), y, z];
+  const hand = hip + st.handAboveHip;
   return [
-    ["head", p(0, head, -0.02), p(0, head, -0.02)],
-    ["neck", p(0, chest + 0.02, 0), p(0, neckTop, 0)],
-    ["torso", p(0, hip + 0.08, 0), p(0, chest, 0)],
+    ["head", p(0, head, -st.headForward), p(0, head, -st.headForward)],
+    ["neck", p(0, chest + st.neckBaseAboveChest, 0), p(0, neckTop, 0)],
+    ["torso", p(0, hip + st.torsoBaseAboveHip, 0), p(0, chest, 0)],
     ["pelvis", p(-hw, hip, 0), p(hw, hip, 0)],
-    ["arm_l", p(-sw, chest, 0), p(-sw * 0.5, hip + 0.12, -0.35)],
-    ["arm_r", p(sw, chest, 0), p(sw * 0.5, hip + 0.12, -0.35)],
-    ["leg_l", p(-hw, hip, 0), p(-hw, 0.08, -0.08)],
-    ["leg_r", p(hw, hip, 0), p(hw, 0.08, -0.08)],
+    ["arm_l", p(-sw, chest, 0), p(-st.handHalfWidth, hand, -st.handForward)],
+    ["arm_r", p(sw, chest, 0), p(st.handHalfWidth, hand, -st.handForward)],
+    ["leg_l", p(-hw, hip, 0), p(-hw, st.footHeight, -st.footForward)],
+    ["leg_r", p(hw, hip, 0), p(hw, st.footHeight, -st.footForward)],
   ];
 }
 
-function pronePose(hb: HitboxData, eye: number, leanOffset: number): Seg[] {
+/** Lying-down pose on flat ground, before lean and tilt. */
+function pronePoseFlat(hb: HitboxData, eye: number): Seg[] {
   const p0 = hb.prone;
   const hw = hb.standing.hipHalfWidth;
-  // The upper body (everything ahead of the hips) shifts sideways when leaning prone.
-  const shift = (z: number) => (z < 0 ? leanOffset : 0);
-  const p = (x: number, y: number, z: number): Vec3 => [x + shift(z), y, z];
-  const neckTop = -p0.headForward + hb.parts.head.radius;
+  const neckFront = -p0.headForward + hb.parts.head.radius;
+  const sw = p0.shoulderHalfWidth;
   return [
-    ["head", p(0, eye, -p0.headForward), p(0, eye, -p0.headForward)],
-    ["neck", p(0, p0.chestHeight + 0.06, neckTop), p(0, p0.chestHeight + 0.05, -p0.shoulderForward)],
-    ["torso", p(0, p0.chestHeight, -p0.shoulderForward), p(0, p0.hipHeight + 0.02, p0.hipBack - 0.12)],
-    ["pelvis", p(-hw, p0.hipHeight, p0.hipBack), p(hw, p0.hipHeight, p0.hipBack)],
-    ["arm_l", p(-p0.shoulderHalfWidth, p0.chestHeight + 0.02, -p0.shoulderForward), p(-p0.handHalfWidth, p0.chestHeight + 0.04, -p0.handForward)],
-    ["arm_r", p(p0.shoulderHalfWidth, p0.chestHeight + 0.02, -p0.shoulderForward), p(p0.handHalfWidth, p0.chestHeight + 0.04, -p0.handForward)],
-    ["leg_l", p(-hw, 0.12, p0.hipBack + 0.08), p(-hw * p0.footSpread, 0.1, p0.footBack)],
-    ["leg_r", p(hw, 0.12, p0.hipBack + 0.08), p(hw * p0.footSpread, 0.1, p0.footBack)],
+    ["head", [0, eye, -p0.headForward], [0, eye, -p0.headForward]],
+    ["neck", [0, p0.neckFrontHeight, neckFront], [0, p0.neckRearHeight, -p0.shoulderForward]],
+    ["torso", [0, p0.chestHeight, -p0.shoulderForward], [0, p0.torsoRearHeight, p0.torsoRearBack]],
+    ["pelvis", [-hw, p0.hipHeight, p0.hipBack], [hw, p0.hipHeight, p0.hipBack]],
+    ["arm_l", [-sw, p0.shoulderHeight, -p0.shoulderForward], [-p0.handHalfWidth, p0.handHeight, -p0.handForward]],
+    ["arm_r", [sw, p0.shoulderHeight, -p0.shoulderForward], [p0.handHalfWidth, p0.handHeight, -p0.handForward]],
+    ["leg_l", [-hw, p0.thighHeight, p0.thighBack], [-hw * p0.footSpread, p0.footHeight, p0.footBack]],
+    ["leg_r", [hw, p0.thighHeight, p0.thighBack], [hw * p0.footSpread, p0.footHeight, p0.footBack]],
   ];
 }
 
 /**
- * The lying-down body as one horizontal capsule that covers every prone hitbox: how far it reaches in
- * front of and behind the feet point, and its radius. Used by the prone clearance check so the camera,
- * head, arms and legs can never end up inside a wall.
+ * Place a flat prone point on the ground. The upper body (ahead of the feet point) shifts sideways when
+ * leaning and pitches by `tiltF`; the legs (behind the hips) pitch by `tiltB` (radians, positive = rising
+ * toward the head), and the spine bends smoothly in between, so the body lies on ramps, stairs, crests
+ * and troughs. `tiltSide` then rolls the whole body to lie across a slope.
  */
-export function proneBodyExtents(hb: HitboxData): { front: number; back: number; radius: number } {
-  const p0 = hb.prone;
-  const parts = hb.parts;
-  return {
-    front: Math.max(p0.headForward + parts.head.radius, p0.handForward + parts.arm.radius),
-    back: p0.footBack + parts.leg.radius,
-    radius: Math.max(parts.torso.radius, p0.shoulderHalfWidth + parts.arm.radius, hb.standing.hipHalfWidth * p0.footSpread + parts.leg.radius),
-  };
+function proneLocal(hb: HitboxData, v: Vec3, leanShift: number, tF: number, tB: number, side: number, lift: number): Vec3 {
+  const z = v[2];
+  const hip = hb.prone.hipBack;
+  const t = z <= 0 ? tF : z >= hip ? tB : tF + ((tB - tF) * z) / hip;
+  const c = Math.cos(t);
+  const sn = Math.sin(t);
+  const x = v[0] + (z < 0 ? leanShift : 0);
+  const y = v[1] * c - z * sn;
+  const cr = Math.cos(side);
+  const sr = Math.sin(side);
+  return [x * cr - y * sr, x * sr + y * cr + lift, v[1] * sn + z * c];
+}
+
+/**
+ * How far the lying body rises where the ground bends under it (a crest or a trough): the torso spans
+ * the hinge, so without this it would sag into the ground there. 0 on flat ground and even slopes.
+ */
+export function proneBendLift(hb: HitboxData, tF: number, tB: number): number {
+  if (tF === tB) return 0;
+  const [, a, b] = pronePoseFlat(hb, 0)[2]; // the torso
+  const r = hb.parts.torso.radius;
+  const pa = proneLocal(hb, a, 0, tF, tB, 0, 0);
+  const pb = proneLocal(hb, b, 0, tF, tB, 0, 0);
+  let lift = 0;
+  for (let i = 0; i <= 8; i++) {
+    const y = lerp(pa[1], pb[1], i / 8);
+    const z = lerp(pa[2], pb[2], i / 8);
+    // The ground runs through the feet point along each half's tilt; keep the torso a radius above it.
+    const t = z < 0 ? tF : tB;
+    lift = Math.max(lift, r / Math.cos(t) - (y + z * Math.tan(t)));
+  }
+  return lift;
+}
+
+/**
+ * Size of the lying-down body on flat ground, measured from the feet point: how far every prone hitbox
+ * reaches forward, backward, sideways and up. The prone clearance boxes (movement.ts) use exactly this,
+ * so the camera, head, arms and legs can never end up inside a wall.
+ */
+export function proneBodyExtents(m: MovementData, hb: HitboxData): { front: number; back: number; halfWidth: number; top: number } {
+  let front = 0;
+  let back = 0;
+  let halfWidth = 0;
+  let top = 0;
+  for (const [part, a, b] of pronePoseFlat(hb, m.stance.prone.eye)) {
+    const r = partRadius(hb, part);
+    for (const [x, y, z] of [a, b]) {
+      front = Math.max(front, r - z);
+      back = Math.max(back, z + r);
+      halfWidth = Math.max(halfWidth, Math.abs(x) + r);
+      top = Math.max(top, y + r);
+    }
+  }
+  return { front, back, halfWidth, top };
 }
 
 function toWorld(s: PawnState, v: Vec3): Vec3 {
@@ -85,17 +135,19 @@ export function poseHitboxes(m: MovementData, hb: HitboxData, s: PawnState): Hit
   const leanOffset = s.lean * m.lean.offset;
   const up = uprightPose(hb, currentHeight(m, s), currentEyeHeight(m, s), leanOffset);
   const w = proneWeight(s);
-  const prone = w > 0 ? pronePose(hb, m.stance.prone.eye, leanOffset * m.lean.proneOffsetScale) : null;
-  const radius = (part: BodyPart) => hb.parts[part.startsWith("arm") ? "arm" : part.startsWith("leg") ? "leg" : (part as "head" | "neck" | "torso" | "pelvis")].radius;
+  const prone = w > 0 ? pronePoseFlat(hb, m.stance.prone.eye) : null;
+  const shift = leanOffset * m.lean.proneOffsetScale;
+  const lift = prone ? proneBendLift(hb, s.tiltF, s.tiltB) : 0;
   return up.map(([part, a, b], i) => {
     let la = a;
     let lb = b;
     if (prone) {
-      const [, pa, pb] = prone[i];
+      const pa = proneLocal(hb, prone[i][1], shift, s.tiltF, s.tiltB, s.tiltSide, lift);
+      const pb = proneLocal(hb, prone[i][2], shift, s.tiltF, s.tiltB, s.tiltSide, lift);
       la = [lerp(a[0], pa[0], w), lerp(a[1], pa[1], w), lerp(a[2], pa[2], w)];
       lb = [lerp(b[0], pb[0], w), lerp(b[1], pb[1], w), lerp(b[2], pb[2], w)];
     }
-    return { part, a: toWorld(s, la), b: toWorld(s, lb), radius: radius(part) };
+    return { part, a: toWorld(s, la), b: toWorld(s, lb), radius: partRadius(hb, part) };
   });
 }
 
@@ -104,7 +156,8 @@ export function eyePose(m: MovementData, hb: HitboxData, s: PawnState, leanOverr
   const lean = leanOverride ?? s.lean;
   const w = proneWeight(s);
   const upright: Vec3 = [lean * m.lean.offset, currentEyeHeight(m, s), 0];
-  const prone: Vec3 = [lean * m.lean.offset * m.lean.proneOffsetScale, m.stance.prone.eye, -hb.prone.headForward];
+  const shift = lean * m.lean.offset * m.lean.proneOffsetScale;
+  const prone = w > 0 ? proneLocal(hb, [0, m.stance.prone.eye, -hb.prone.headForward], shift, s.tiltF, s.tiltB, s.tiltSide, proneBendLift(hb, s.tiltF, s.tiltB)) : upright;
   const local: Vec3 = [lerp(upright[0], prone[0], w), lerp(upright[1], prone[1], w), lerp(upright[2], prone[2], w)];
   const rollScale = lerp(1, m.lean.proneRollScale, w);
   return { pos: toWorld(s, local), roll: -lean * m.lean.rollDeg * DEG * rollScale };

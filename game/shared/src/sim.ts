@@ -70,14 +70,23 @@ export class Sim {
       swapCooldown: 0,
       prevButtons: 0,
     };
+    // Check every shell's spot before creating any, so a failed join leaves nothing behind.
+    const m = this.data.movement;
     const shellOffset = op.ability.params.idleShellOffset ?? 0; // required for 2-pawn operators (schema)
+    if (op.pawns > 1 && shellOffset < 2 * m.stance.collisionRadius) {
+      throw new Error(`${op.name}: ability.params.idleShellOffset (${shellOffset}) must be at least two body radii (${2 * m.stance.collisionRadius})`);
+    }
+    const spots: [number, number][] = [];
     for (let i = 0; i < op.pawns; i++) {
       const [ox, oz] = rotateXZ(i * shellOffset, 0, yaw);
       const px = spawn.pos[0] + ox;
       const pz = spawn.pos[2] + oz;
-      if (i > 0 && !capsuleFree(this.ctx, null, px, spawn.pos[1] + 0.02, pz, this.data.movement.stance.stand.height)) {
+      if (i > 0 && !capsuleFree(this.ctx, null, px, spawn.pos[1] + 0.02, pz, m.stance.stand.height)) {
         throw new Error(`${op.name}'s second shell would spawn inside level geometry at spawn "${spawn.id}"`);
       }
+      spots.push([px, pz]);
+    }
+    for (const [i, [px, pz]] of spots.entries()) {
       const pawn = this.spawnPawn(operatorId, px, spawn.pos[1], pz, yaw, controller.id);
       if (i > 0) pawn.state.stance = pawn.state.stanceFrom = Stance.Crouch; // idle shells crouch behind their shield
       controller.pawnIds.push(pawn.id);
@@ -164,6 +173,9 @@ export class Sim {
       stanceFrom: stance,
       stanceT: 1,
       lean: 0,
+      tiltF: 0,
+      tiltB: 0,
+      tiltSide: 0,
       tuck: 0,
       grounded: false,
       sprinting: false,
@@ -181,23 +193,41 @@ export class Sim {
    */
   step(inputs: ReadonlyMap<number, InputCmd>): void {
     const drive = new Map<number, InputCmd>();
+    // Pawns driven without real buttons this tick (the body left behind on the shell camera, the shell
+    // being looked through): like the no-input case below, their held-button memory is kept.
+    const idleDriven = new Set<number>();
     for (const c of this.controllers.values()) {
       const input = inputs.get(c.id);
-      if (!input) continue;
+      const heldBefore = c.prevButtons;
+      const viewedBefore = this.viewedPawnId(c.id);
+      const onCamBefore = c.shellCam || c.swapPhase !== 0;
       this.updateShells(c, input);
+      // The view belongs to whichever body you were looking through: on the tick that changes (the camera
+      // opens or closes), the newly viewed body keeps its own facing instead of taking the old view's.
+      const viewChanged = this.viewedPawnId(c.id) !== viewedBefore;
       const target = c.shellCam || c.swapPhase ? this.otherPawn(c.id) : null;
       if (target) {
         const active = this.pawns.get(c.possessedPawnId);
-        if (active) drive.set(active.id, idleInput(active, c.swapPhase === 1 ? Stance.Crouch : active.state.stance));
-        drive.set(target.id, { ...idleInput(target, c.swapPhase === 2 ? Stance.Stand : target.state.stance), yaw: input.yaw, pitch: input.pitch });
-      } else {
-        drive.set(c.possessedPawnId, input);
+        if (active) {
+          drive.set(active.id, idleInput(active, c.swapPhase === 1 ? Stance.Crouch : active.state.stance));
+          idleDriven.add(active.id);
+        }
+        const view = input && !viewChanged ? { yaw: input.yaw, pitch: input.pitch } : {};
+        drive.set(target.id, { ...idleInput(target, c.swapPhase === 2 ? Stance.Stand : target.state.stance), ...view });
+        idleDriven.add(target.id);
+      } else if (input) {
+        const body = this.pawns.get(c.possessedPawnId);
+        // Back in a body after the camera or a swap: keys already held don't count as fresh presses.
+        if (body && onCamBefore) body.state.prevButtons = heldBefore;
+        drive.set(c.possessedPawnId, body && viewChanged ? { ...input, yaw: body.state.yaw, pitch: body.state.pitch } : input);
       }
     }
     for (const pawn of this.pawns.values()) {
       const input = drive.get(pawn.id);
       if (input) {
+        const held = pawn.state.prevButtons;
         stepPawn(this.ctx, pawn, input);
+        if (idleDriven.has(pawn.id)) pawn.state.prevButtons = held;
         continue;
       }
       const owner = pawn.ownerId !== null ? this.controllers.get(pawn.ownerId) : undefined;
@@ -214,11 +244,15 @@ export class Sim {
   /**
    * Skopós shell swap (research/operators/skopos.md §3.2): the ability key opens the idle shell's camera;
    * interact, while on that camera, starts the swap: transfer (the active shell idles), then activation
-   * (the target shell wakes up), then a short cooldown. Timings come from the operator's ability params.
+   * (the target shell wakes up), then a short cooldown. Timings come from the operator's ability params
+   * and run every tick, even when this tick's input is missing (it only carries the key presses).
    */
-  private updateShells(c: PlayerController, input: InputCmd) {
-    const pressed = input.buttons & ~c.prevButtons;
-    c.prevButtons = input.buttons;
+  private updateShells(c: PlayerController, input: InputCmd | undefined) {
+    let pressed = 0;
+    if (input) {
+      pressed = input.buttons & ~c.prevButtons;
+      c.prevButtons = input.buttons;
+    }
     if (c.pawnIds.length < 2) return;
     const params = this.data.operators.get(c.operatorId)!.ability.params; // validated by the schema
     const transfer = params.transferSeconds;

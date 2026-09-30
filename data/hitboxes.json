@@ -1,5 +1,5 @@
 {
-  "_doc": "Damage hitbox shapes and body proportions (PLAN §5 lag compensation, §7 lean). Upright heights are fractions of the current stance height; the head sits at eye height (data/movement.json). The prone block is the single source for both the lying-down hitbox pose and the prone body clearance check. Everything is a placeholder until Phase 3 tuning and Ulo's stance measurements.",
+  "_doc": "Damage hitbox shapes and body proportions (PLAN §5 lag compensation, §7 lean). Upright heights are fractions of the current stance height; the head sits at eye height (data/movement.json). The prone block (meters from the feet point, forward = along the facing) is the single source for both the lying-down hitbox pose and the prone body clearance boxes, which are sized to contain every prone hitbox. Everything is a placeholder until Phase 3 tuning and Ulo's stance measurements.",
   "_season": "Y11S3",
   "_unverified": [
     "parts",
@@ -31,18 +31,35 @@
     "chestHeight": 0.78,
     "neckHeight": 0.85,
     "shoulderHalfWidth": 0.2,
-    "hipHalfWidth": 0.11
+    "hipHalfWidth": 0.11,
+    "headForward": 0.02,
+    "neckBaseAboveChest": 0.02,
+    "torsoBaseAboveHip": 0.08,
+    "handForward": 0.35,
+    "handHalfWidth": 0.1,
+    "handAboveHip": 0.12,
+    "footForward": 0.08,
+    "footHeight": 0.08
   },
   "prone": {
     "headForward": 0.45,
+    "neckFrontHeight": 0.26,
+    "neckRearHeight": 0.25,
     "shoulderForward": 0.2,
     "shoulderHalfWidth": 0.2,
+    "shoulderHeight": 0.22,
     "chestHeight": 0.2,
+    "torsoRearBack": 0.3,
+    "torsoRearHeight": 0.19,
     "handForward": 0.72,
     "handHalfWidth": 0.12,
+    "handHeight": 0.24,
     "hipBack": 0.42,
     "hipHeight": 0.17,
+    "thighBack": 0.5,
+    "thighHeight": 0.12,
     "footBack": 1.15,
-    "footSpread": 1.4
+    "footSpread": 1.4,
+    "footHeight": 0.1
   }
 }

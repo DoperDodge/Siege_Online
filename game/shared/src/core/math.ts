@@ -44,7 +44,28 @@ export function quatYawPitch(yaw: number, pitch: number): [number, number, numbe
   return [cy * sp, sy * cp, -sy * sp, cy * cp];
 }
 
-/** Quaternion that rotates +Z onto the given unit direction (used for horizontal prone capsules). */
+/** Hamilton product a * b of quaternions [x, y, z, w] (applies b first, then a). */
+export function quatMul(a: readonly number[], b: readonly number[]): [number, number, number, number] {
+  return [
+    a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1],
+    a[3] * b[1] - a[0] * b[2] + a[1] * b[3] + a[2] * b[0],
+    a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3],
+    a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2],
+  ];
+}
+
+/**
+ * Quaternion for a pitch about +X applied first, then a roll about +Z, then a yaw about +Y (a body
+ * lying on a slope: pitched along its length, rolled across it, then turned to its facing).
+ */
+export function quatYawPitchRoll(yaw: number, pitch: number, roll: number): [number, number, number, number] {
+  const qYaw = [0, Math.sin(yaw / 2), 0, Math.cos(yaw / 2)];
+  const qRoll = [0, 0, Math.sin(roll / 2), Math.cos(roll / 2)];
+  const qPitch = [Math.sin(pitch / 2), 0, 0, Math.cos(pitch / 2)];
+  return quatMul(qYaw, quatMul(qRoll, qPitch));
+}
+
+/** Quaternion that rotates `from` onto `to` (both unit vectors). */
 export function quatFromTo(from: Vec3, to: Vec3): [number, number, number, number] {
   const d = from[0] * to[0] + from[1] * to[1] + from[2] * to[2];
   if (d < -0.999999) return [0, 1, 0, 0];
