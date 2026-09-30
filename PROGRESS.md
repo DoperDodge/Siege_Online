@@ -18,11 +18,13 @@ known issues, and what's next.
 - **Movement:**
   - Stances: stand, crouch and prone with timed transitions; you can't stand or crouch without headroom.
   - Prone: turn speed and aim arc are limited, and you can't go prone or turn where your body wouldn't fit.
+    The lying body follows the ground (ramps and stairs in any direction) and stops at walls, so the camera
+    and hitboxes never end up inside them.
   - Lean: toggle or hold, in any stance, with camera roll; your head stops at walls.
   - Sprint: forward only, not while aiming, cancels lean, and stands you up.
   - Vaulting/mantling: over, onto, and through open windows; tagged objects only. Works standing still — a
     "Space to mantle" prompt shows whenever you face something you can mantle (your feedback).
-  - Ladders: climb, slide down, dismount at the top, let go.
+  - Ladders: climb, slide down (hold or toggle crouch), dismount at the top, let go. Grab them standing.
   - Stairs and ramps: speed holds on slopes, and 55° is too steep.
   - Fall damage.
 - **Player/pawn separation:** Skopós owns two shells. `Z` opens the other shell's camera; `F` there transfers
@@ -35,11 +37,11 @@ known issues, and what's next.
   - Tools: operator picker, "Go to" menu, HUD, help (F1).
   - Touch controls for tablets.
 - **Tests:**
-  - 25 unit tests, including a determinism test: two independent simulations fed the same inputs end identical.
+  - 65 unit tests, including a determinism test: two independent simulations fed the same inputs end identical.
   - A headless-browser test that plays through every mechanic.
   - CI on every PR.
 
-### How to test (on your PC, needs Node 22+)
+### How to test (on your PC, needs Node 22.12+)
 ```
 npm install
 npm run build
@@ -57,7 +59,7 @@ For development there's also `npm run dev` (hot reload at http://localhost:5173/
 ### Known issues
 - The numbers are placeholders from research until you measure them (research/OPEN_QUESTIONS.md, core mechanics).
 - Simplifications and deferrals are listed in DECISIONS D-023 and D-024 (e.g. rappel moves to Phase 5, melee to
-  Phase 3).
+  Phase 3). Prone, you can't crawl off a drop taller than a step or climb a curb head-first yet (D-023a).
 - Nothing is on Railway yet, so it can't be opened from an iPad until Phase 2 deploys it (or earlier, if you want).
 
 ### Next: Phase 2 — Netcode core

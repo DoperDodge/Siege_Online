@@ -118,6 +118,15 @@ marked `_unverified`. The Movement Lab is the easiest place to compare them agai
    side-on, would settle these.
 6. **Vault arc:** how high you rise when vaulting a 0.9 m obstacle, and how long a vault/mantle takes
    (0.5 s + 0.3 s per meter of height placeholder).
+7. **Prone view limits:** how far can you look down and up while prone (−20° / +35° placeholders), and how
+   fast can you turn (90°/s placeholder)? Do those limits already apply while going prone or getting up?
+8. **Prone lean:** how far does your head move when leaning while prone, and how much does the camera tilt?
+   (Placeholders: 60 % of the standing lean distance and 60 % of its 15° roll.)
+9. **Prone on uneven ground:** can you crawl off a ledge (e.g., off a table or a 1 m drop) while prone, or do
+   you have to stand? Can you crawl up onto a curb or a single step head-first? (We currently stop you at
+   both.) Does your body visibly bend over the top of a staircase?
+10. **Ladders:** can you grab a ladder while crouched or prone, or do you stand up first? (We make you stand
+   first.)
 
 ### [core_mechanics.md](core_mechanics.md) — 16
 
