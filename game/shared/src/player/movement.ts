@@ -144,15 +144,17 @@ function stepWalk(ctx: MoveContext, pawn: Pawn, input: InputCmd, pressed: number
   const fit = prone ? (proneFit(ctx, pawn, s.x, s.y, s.z, s.yaw) ?? { tF: s.tiltF, tB: s.tiltB, side: s.tiltSide }) : null;
   if (fit && (dx !== 0 || dz !== 0)) [dx, dz] = proneSweep(ctx, pawn, fit, dx, dz);
   let mv = moveCollider(ctx, pawn, dx, s.vy * DT, dz);
-  if (
-    fit &&
-    (mv.x !== 0 || mv.z !== 0) &&
-    ((s.grounded && !groundWithin(ctx, pawn, s.x + mv.x, s.y + mv.y, s.z + mv.z, m.step.maxStepHeight)) ||
-      !proneFitFree(ctx, pawn, s.x + mv.x, s.y + mv.y, s.z + mv.z, s.yaw, -PRONE_TOLERANCE))
-  ) {
-    // Stay put if the body would have to bend into something there (a crest under a low ceiling, a slope
-    // beside a wall), or would crawl off a drop taller than a step (DECISIONS D-023: stand up to drop).
-    mv = moveCollider(ctx, pawn, 0, s.vy * DT, 0);
+  if (fit && (mv.x !== 0 || mv.z !== 0)) {
+    const nx = s.x + mv.x;
+    const ny = s.y + mv.y;
+    const nz = s.z + mv.z;
+    // Stay put if the body would crawl off a drop taller than a step (DECISIONS D-023: stand up to drop),
+    // or would have to bend into something there (a crest under a low ceiling, a slope beside a wall).
+    // A body that already overlaps something can still take any move the sweep allowed (it only lets you
+    // move along or away from what you touch), so an overlap is never a trap.
+    const offLedge = s.grounded && !groundWithin(ctx, pawn, nx, ny, nz, m.step.maxStepHeight);
+    const blocked = !offLedge && !proneFitFree(ctx, pawn, nx, ny, nz, s.yaw, -PRONE_TOLERANCE) && proneFitFree(ctx, pawn, s.x, s.y, s.z, s.yaw, -PRONE_TOLERANCE) !== null;
+    if (offLedge || blocked) mv = moveCollider(ctx, pawn, 0, s.vy * DT, 0);
   }
   const c = pawn.collider.translation();
   pawn.collider.setTranslation({ x: c.x + mv.x, y: c.y + mv.y, z: c.z + mv.z });
@@ -161,7 +163,15 @@ function stepWalk(ctx: MoveContext, pawn: Pawn, input: InputCmd, pressed: number
   const n = groundNormal(ctx, pawn);
   s.grounded = ctx.cc.computedGrounded() && (!n || n.y >= Math.cos(m.step.maxSlopeDeg * DEG) - 1e-6);
   if (s.grounded || (s.vy > 0 && mv.y < s.vy * DT - 1e-4)) s.vy = 0;
-  if (prone) {
+  if (prone && !s.grounded && s.airPeakY - s.y > m.step.maxStepHeight && capsuleFree(ctx, pawn, s.x, s.y, s.z, m.stance.crouch.height)) {
+    // Falling while lying down (it shouldn't happen: going prone and crawling both need ground): curl up
+    // into a crouch rather than drop the long body through whatever you fell past.
+    s.stance = s.stanceFrom = Stance.Crouch;
+    s.stanceT = 1;
+    s.lean = 0;
+    s.tiltF = s.tiltB = s.tiltSide = 0;
+    setFeet(ctx, pawn, s.x, s.y, s.z, m.stance.crouch.height);
+  } else if (prone) {
     const f = proneFit(ctx, pawn, s.x, s.y, s.z, s.yaw);
     if (f) setTilt(s, f);
   } else {
@@ -206,7 +216,11 @@ function updateStance(ctx: MoveContext, pawn: Pawn, input: InputCmd) {
 function canEnterStance(ctx: MoveContext, pawn: Pawn, target: Stance): boolean {
   const m = ctx.data.movement;
   const s = pawn.state;
-  if (target === Stance.Prone) return s.grounded && proneFitFree(ctx, pawn, s.x, s.y, s.z, s.yaw, SKIN / 2) !== null;
+  if (target === Stance.Prone) {
+    // Ground right under the feet, not just under the rim of the wider standing capsule: lying down on an
+    // edge would let the smaller prone capsule slide off.
+    return s.grounded && groundWithin(ctx, pawn, s.x, s.y, s.z, 0.1) && proneFitFree(ctx, pawn, s.x, s.y, s.z, s.yaw, SKIN / 2) !== null;
+  }
   const targetHeight = stanceDims(m, target).height;
   if (targetHeight <= currentHeight(m, s)) return true;
   return capsuleFree(ctx, pawn, s.x, s.y, s.z, targetHeight);
@@ -221,16 +235,16 @@ function updateLean(ctx: MoveContext, pawn: Pawn, input: InputCmd) {
   if (w > 0 && w < 1) target = 0; // no leaning while getting down or up
   let lean = approach(s.lean, target, DT / m.lean.seconds);
   if (w > 0 && lean !== s.lean) {
-    // Lying down, leaning shifts the whole upper body sideways: sweep it so the arms stop at walls too.
-    const m0 = m.lean.offset * m.lean.proneOffsetScale;
-    const shift = (lean - s.lean) * m0;
-    const [rx, rz] = rightXZ(s.yaw);
+    // Lying down, leaning shifts the whole upper body (head included) sideways along the body: sweep that
+    // box from the current lean to the new one so the arms and head stop at walls too.
     const fit = { tF: s.tiltF, tB: s.tiltB, side: s.tiltSide };
-    const [upper] = proneBoxes(ctx, s.x, s.y, s.z, s.yaw, fit, s.lean, 0);
-    const hit = ctx.world.castShape(upper.pos, upper.rot, { x: rx * shift, y: 0, z: rz * shift }, upper.shape, 0, 1, false, undefined, QUERY_STATIC, pawn.collider);
-    if (hit) lean = s.lean + (lean - s.lean) * clamp(hit.time_of_impact - SKIN / Math.abs(shift), 0, 1);
+    const [from] = proneBoxes(ctx, s.x, s.y, s.z, s.yaw, fit, s.lean, 0);
+    const [to] = proneBoxes(ctx, s.x, s.y, s.z, s.yaw, fit, lean, 0);
+    const v = { x: to.pos.x - from.pos.x, y: to.pos.y - from.pos.y, z: to.pos.z - from.pos.z };
+    const hit = ctx.world.castShape(from.pos, from.rot, v, from.shape, 0, 1, false, undefined, QUERY_STATIC, pawn.collider);
+    if (hit) lean = s.lean + (lean - s.lean) * clamp(hit.time_of_impact - SKIN / Math.hypot(v.x, v.y, v.z), 0, 1);
   }
-  if (lean !== 0) {
+  if (lean !== 0 && w === 0) {
     // The head can't pass through walls: sweep a head-sized sphere from the unleaned eye to the leaned eye.
     const from = eyePose(m, ctx.data.hitboxes, s, 0).pos;
     const to = eyePose(m, ctx.data.hitboxes, s, lean).pos;

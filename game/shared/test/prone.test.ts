@@ -129,3 +129,48 @@ describe("prone body: ground", () => {
     expect(lab.pawn.state.grounded).toBe(true);
   });
 });
+
+describe("prone body: final review", () => {
+  it("leaning away from a post and crawling into it keeps the lean and keeps the arm out of the post", async () => {
+    const lab = await labWith();
+    teleport(lab.sim, lab.ctrl, 1.35, 0, -11.5, 0, Stance.Prone); // lean_post_a is ahead-right (x 1.8..2.2)
+    run(lab.sim, lab.ctrl, { stance: Stance.Prone, lean: -1 }, 0.3);
+    expect(runChecked(lab, { stance: Stance.Prone, lean: -1, strafe: 1 }, 2)).toEqual([]);
+    expect(lab.pawn.state.lean).toBe(-1);
+  });
+
+  it("the same at the prone tunnel's mouth, where you couldn't stand up to get out", async () => {
+    const lab = await labWith();
+    teleport(lab.sim, lab.ctrl, 22, 0, -4.5, 0, Stance.Prone);
+    while (lab.pawn.state.z > -5.85) run(lab.sim, lab.ctrl, { forward: 1, stance: Stance.Prone }, 1 / 64);
+    run(lab.sim, lab.ctrl, { stance: Stance.Prone, lean: -1 }, 0.3);
+    expect(runChecked(lab, { stance: Stance.Prone, lean: -1, strafe: 1 }, 2)).toEqual([]);
+    const z = lab.pawn.state.z;
+    run(lab.sim, lab.ctrl, { stance: Stance.Prone, forward: -1 }, 1);
+    expect(lab.pawn.state.z).toBeGreaterThan(z + 0.3); // and you can crawl back out
+  });
+
+  it("lying down on a ledge's edge is refused instead of sliding off into the ledge", async () => {
+    for (const yaw of [180, 0]) {
+      const lab = await labWith();
+      // platform_3m: z 1.4..4.4, top at 3 m. Shuffle to its -Z edge, then try to go prone.
+      teleport(lab.sim, lab.ctrl, 14, 3, 2.5, yaw);
+      const dir = yaw === 180 ? -1 : 1;
+      for (let i = 0; i < 600 && lab.pawn.state.z > 1.2; i++) run(lab.sim, lab.ctrl, { forward: dir, buttons: 16, yawDeg: yaw, stance: Stance.Crouch }, 1 / 64);
+      run(lab.sim, lab.ctrl, { yawDeg: yaw, stance: Stance.Crouch }, 0.5);
+      expect(runChecked(lab, { yawDeg: yaw, stance: Stance.Prone }, 3, true)).toEqual([]);
+      expect(lab.pawn.state.y).toBeGreaterThan(2.9); // still up on the platform
+    }
+  });
+
+  it("a body that somehow overlaps a wall can still crawl away from it", async () => {
+    const lab = await labWith();
+    // Put the lying body's head end into wall_n (face at z = -31.75) directly, bypassing every check.
+    lab.sim.teleport(lab.ctrl.possessedPawnId, -1, 0, -31.3, 0, Stance.Prone);
+    run(lab.sim, lab.ctrl, { stance: Stance.Prone }, 0.1);
+    expect(bodyOverlaps(lab.sim, lab.pawn)).not.toEqual([]);
+    run(lab.sim, lab.ctrl, { stance: Stance.Prone, forward: -1 }, 1.5);
+    expect(lab.pawn.state.z).toBeGreaterThan(-30.6);
+    expect(bodyOverlaps(lab.sim, lab.pawn)).toEqual([]);
+  });
+});

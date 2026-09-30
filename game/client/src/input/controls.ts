@@ -70,7 +70,9 @@ export class Controls {
 
   /** Forget toggled stance/lean/ADS (respawn, teleport, or when the simulation forces a stance). */
   resetStance(stance: Stance = Stance.Stand) {
-    this.stanceIntent = stance;
+    // Only a toggle remembers a stance: with hold binds, the resting intent is always standing.
+    const toggled = (stance === Stance.Crouch && this.settings.crouchMode === "toggle") || (stance === Stance.Prone && this.settings.proneMode === "toggle");
+    this.stanceIntent = toggled ? stance : Stance.Stand;
     this.leanIntent = 0;
     this.adsToggled = false;
   }

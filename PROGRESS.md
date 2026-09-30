@@ -37,7 +37,7 @@ known issues, and what's next.
   - Tools: operator picker, "Go to" menu, HUD, help (F1).
   - Touch controls for tablets.
 - **Tests:**
-  - 65 unit tests, including a determinism test: two independent simulations fed the same inputs end identical.
+  - 71 unit tests, including a determinism test: two independent simulations fed the same inputs end identical.
   - A headless-browser test that plays through every mechanic.
   - CI on every PR.
 
