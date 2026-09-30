@@ -5,7 +5,7 @@ known issues, and what's next.
 
 ---
 
-## Phase 1 — Skeleton + movement · ✅ built, ⏳ waiting for your feel test (2026-09-29)
+## Phase 1 — Skeleton + movement · ✅ complete (Ulo tested it on 2026-09-30: "all looking good")
 
 **Done when (PLAN §17):** it feels like Siege movement to you, offline.
 
