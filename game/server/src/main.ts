@@ -2,8 +2,9 @@
 // Railway service needs (PLAN §3). Phase 2 adds the WebSocket match rooms on the same port.
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
-import { extname, join, posix } from "node:path";
+import path, { extname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveStaticPath } from "./paths.js";
 
 const PORT = Number(process.env.PORT ?? 8080);
 const CLIENT_DIR = process.env.CLIENT_DIR ?? fileURLToPath(new URL("../../client/dist/", import.meta.url));
@@ -34,22 +35,19 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
     return send(res, 400, "bad request");
   }
   if (pathname === "/health") return send(res, 200, "ok");
-  if (pathname.includes("\0")) return send(res, 400, "bad request");
 
-  // Resolve with POSIX rules (URLs always use "/"), then refuse anything that climbs out of CLIENT_DIR.
-  let rel = posix.normalize(pathname).replace(/^\/+/, "");
-  if (rel === "" || rel.endsWith("/")) rel += "index.html";
-  if (rel === ".." || rel.startsWith("../")) return send(res, 403, "forbidden");
+  const target = resolveStaticPath(pathname, CLIENT_DIR, path);
+  if ("status" in target) return send(res, target.status, target.status === 400 ? "bad request" : "forbidden");
 
   let body: Buffer;
   try {
-    body = await readFile(join(CLIENT_DIR, ...rel.split("/")));
+    body = await readFile(target.file);
   } catch {
     return send(res, 404, "not found");
   }
-  const hashed = rel.startsWith("assets/"); // Vite fingerprints these, so they can be cached forever
+  const hashed = target.rel.startsWith("assets/"); // Vite fingerprints these, so they can be cached forever
   res.writeHead(200, {
-    "content-type": MIME[extname(rel)] ?? "application/octet-stream",
+    "content-type": MIME[extname(target.rel)] ?? "application/octet-stream",
     "cache-control": hashed ? "public, max-age=31536000, immutable" : "no-cache",
   });
   res.end(body);

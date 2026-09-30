@@ -4,7 +4,7 @@
   "type": "module",
   "description": "Project REDMOND \u2014 browser tactical shooter (see PLAN.md).",
   "engines": {
-    "node": ">=22.12"
+    "node": "^22.12.0 || ^24.0.0 || >=26.0.0"
   },
   "workspaces": [
     "game/shared",

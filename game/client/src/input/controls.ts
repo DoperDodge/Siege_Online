@@ -11,11 +11,14 @@ export type UiAction = "respawn" | "hitboxes" | "thirdPerson" | "help" | "settin
 
 const UI_KEYS: Record<string, UiAction> = { F1: "help", F3: "hitboxes", F4: "thirdPerson", Escape: "settings" };
 
+/** Keys that change the body's pose; ignored while stanceLocked() (see there). */
+const STANCE_ACTIONS = new Set<Action>(["crouch", "prone", "leanLeft", "leanRight", "ads"]);
+
 /** View limits the simulation will enforce next tick, applied every frame so the camera never jitters. */
 export interface ViewLimits {
   pitchMin: number;
   pitchMax: number;
-  /** Max yaw change from the last sampled yaw (prone turn rate), or null for free turning. */
+  /** Max yaw change per tick from the body's yaw (prone turn rate), or null for free turning. */
   maxYawStep: number | null;
 }
 
@@ -25,6 +28,12 @@ export class Controls {
   limits: ViewLimits = { pitchMin: -89 * DEG, pitchMax: 89 * DEG, maxYawStep: null };
   /** When this returns true (a menu is open), game keys are ignored. */
   isBlocked: () => boolean = () => false;
+  /**
+   * When this returns true (Skopós is on her other shell's camera or mid-swap), stance, lean and aim keys
+   * are ignored: the simulation doesn't use them there, and they would silently apply to the body you
+   * return to.
+   */
+  stanceLocked: () => boolean = () => false;
   /** Touch joystick, -1..1 each. */
   touchMove = { x: 0, y: 0 };
   private held = new Set<Action>();
@@ -34,6 +43,8 @@ export class Controls {
   private sprintLatched = false;
   private interactPulse = false;
   private abilityPulse = false;
+  private vaultPulse = false;
+  private wasOnLadder = false;
   private lastLeanHold: -1 | 0 | 1 = 0;
   private sampledYaw = 0;
   private sampledPitch = 0;
@@ -119,15 +130,21 @@ export class Controls {
       .catch(() => {});
   }
 
-  /** Mouse or touch look, in counts/pixels. */
+  /**
+   * Mouse or touch look, in counts/pixels. The prone turn rate is not applied here: each of the frame's
+   * ticks turns toward this yaw by one step (sample), then applyLimits drops what they couldn't reach, so
+   * the turn rate doesn't depend on the frame rate.
+   */
   look(dx: number, dy: number, scale = 1) {
     const sens = this.settings.sensitivity * (this.adsActive ? this.settings.adsSensitivityScale : 1) * scale * DEG;
-    this.yaw -= dx * sens;
-    this.pitch -= dy * sens * (this.settings.invertY ? -1 : 1);
-    this.applyLimits();
+    this.yaw = wrapAngle(this.yaw - dx * sens);
+    this.pitch = clamp(this.pitch - dy * sens * (this.settings.invertY ? -1 : 1), this.limits.pitchMin, this.limits.pitchMax);
   }
 
-  /** Clamp the view to what the simulation will accept next tick (pitch arc, prone turn rate). */
+  /**
+   * Clamp the view to what the simulation will accept next tick (pitch arc, prone turn rate). Call once per
+   * frame, after that frame's ticks and before rendering.
+   */
   applyLimits() {
     const l = this.limits;
     this.pitch = clamp(this.pitch, l.pitchMin, l.pitchMax);
@@ -139,6 +156,7 @@ export class Controls {
   }
 
   press(action: Action) {
+    if (STANCE_ACTIONS.has(action) && this.stanceLocked()) return;
     const s = this.settings;
     this.held.add(action);
     switch (action) {
@@ -163,6 +181,10 @@ export class Controls {
         // Pressing sprint drops a toggled aim; standing up and un-leaning follow the simulation's
         // sprint rules (see afterTick), so data stays the only authority.
         this.adsToggled = false;
+        break;
+      case "vault":
+        // Also sent for one tick after a tap shorter than a frame ("Space to mantle" while standing still).
+        this.vaultPulse = true;
         break;
       case "interact":
         this.interactPulse = true;
@@ -205,11 +227,12 @@ export class Controls {
 
     let buttons = 0;
     if (this.held.has("sprint") || this.sprintLatched) buttons |= Btn.Sprint;
-    if (this.held.has("vault")) buttons |= Btn.Vault;
+    if (this.held.has("vault") || this.vaultPulse) buttons |= Btn.Vault;
     if (this.interactPulse) buttons |= Btn.Interact;
     if (this.adsActive) buttons |= Btn.Ads;
     if (this.held.has("slowWalk")) buttons |= Btn.SlowWalk;
     if (this.abilityPulse) buttons |= Btn.Ability;
+    this.vaultPulse = false;
     this.interactPulse = false;
     this.abilityPulse = false;
 
@@ -224,7 +247,10 @@ export class Controls {
       const r = this.held.has("leanRight");
       lean = l && r ? this.lastLeanHold : l ? -1 : r ? 1 : 0;
     }
-    const cmd = quantizeInput({ seq, forward, strafe, yaw: this.yaw, pitch: this.pitch, buttons, stance, lean });
+    // Prone: turn toward the view by at most one step from where the body is (re-anchored in syncView).
+    const step = this.limits.maxYawStep;
+    const yaw = step === null ? this.yaw : wrapAngle(this.sampledYaw + clamp(wrapAngle(this.yaw - this.sampledYaw), -step, step));
+    const cmd = quantizeInput({ seq, forward, strafe, yaw, pitch: this.pitch, buttons, stance, lean });
     this.sampledYaw = cmd.yaw;
     this.sampledPitch = cmd.pitch;
     return cmd;
@@ -237,24 +263,29 @@ export class Controls {
   }
 
   /**
-   * After a tick, apply any clamp the simulation made to the view we sent (prone turn limits, pitch
-   * limits). Mouse movement since the sample is kept.
+   * After a tick, apply any clamp the simulation made to the view we sent (pitch limits, a dead body's
+   * frozen view). Mouse movement since the sample is kept. A prone turn is not corrected here: the next
+   * step is measured from the body's real yaw, so a turn refused at a wall can't run further ahead.
    */
   syncView(simYaw: number, simPitch: number) {
     const dyaw = wrapAngle(simYaw - this.sampledYaw);
-    if (Math.abs(dyaw) > 1e-4) this.yaw = wrapAngle(this.yaw + dyaw);
+    if (this.limits.maxYawStep === null && Math.abs(dyaw) > 1e-4) this.yaw = wrapAngle(this.yaw + dyaw);
     const dpitch = simPitch - this.sampledPitch;
     if (Math.abs(dpitch) > 1e-4) this.pitch += dpitch;
+    this.sampledYaw = simYaw;
+    this.sampledPitch = simPitch;
   }
 
   /**
    * Keep toggles in line with what the simulation did this tick: sprinting stands you up and cancels a
-   * lean (when data says so), and grabbing a ladder stands you up.
+   * lean (when data says so), and grabbing a ladder stands you up. On the ladder the crouch toggle is left
+   * alone, so it starts and stops a slide down.
    */
   afterTick(state: { sprinting: boolean; onLadder: boolean }, rules: { forcesStand: boolean; sprintCancelsLean: boolean }) {
     if (state.sprinting && rules.forcesStand) this.stanceIntent = Stance.Stand;
     if (state.sprinting && rules.sprintCancelsLean) this.leanIntent = 0;
-    if (state.onLadder) this.stanceIntent = Stance.Stand;
+    if (state.onLadder && !this.wasOnLadder) this.resetStance();
+    this.wasOnLadder = state.onLadder;
   }
 
   /** Stance the player is asking for (for the HUD). */

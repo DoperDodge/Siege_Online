@@ -36,7 +36,8 @@ export function isTouchDevice(): boolean {
 /** Hold/toggle setting for an action, or undefined when the action has no such setting. */
 export type ModeOf = (action: Action) => HoldMode | undefined;
 
-export function mountTouchControls(root: HTMLElement, controls: Controls, modeOf: ModeOf): HTMLElement {
+/** `canvas` is the game view: a mouse click on the look area locks the pointer to it instead. */
+export function mountTouchControls(root: HTMLElement, controls: Controls, modeOf: ModeOf, canvas: HTMLCanvasElement): HTMLElement {
   const layer = document.createElement("div");
   layer.className = "touch-layer";
   layer.innerHTML = `
@@ -79,10 +80,12 @@ export function mountTouchControls(root: HTMLElement, controls: Controls, modeOf
   stick.addEventListener("pointerup", stickEnd);
   stick.addEventListener("pointercancel", stickEnd);
 
-  // Right: drag to look.
+  // Right: drag to look. It covers the game view, so on a touchscreen laptop a mouse click here must
+  // still lock the pointer like a click on the canvas.
   const look = layer.querySelector<HTMLElement>(".touch-look")!;
   const lastPos = new Map<number, { x: number; y: number }>();
   look.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse") return controls.lockPointer(canvas);
     look.setPointerCapture(e.pointerId);
     lastPos.set(e.pointerId, { x: e.clientX, y: e.clientY });
   });
@@ -95,6 +98,7 @@ export function mountTouchControls(root: HTMLElement, controls: Controls, modeOf
   const lookEnd = (e: PointerEvent) => lastPos.delete(e.pointerId);
   look.addEventListener("pointerup", lookEnd);
   look.addEventListener("pointercancel", lookEnd);
+  look.addEventListener("contextmenu", (e) => e.preventDefault()); // right-click, like on the canvas
 
   // Buttons.
   const pad = layer.querySelector<HTMLElement>(".touch-buttons")!;

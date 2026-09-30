@@ -9,6 +9,7 @@ import {
   lerp,
   loadGameData,
   PawnMode,
+  proneWeight,
   Sim,
   Stance,
   wrapAngle,
@@ -73,6 +74,7 @@ const controls = new Controls(settings, onUi);
 controls.setView(possessed().state.yaw, 0);
 controls.attach(renderer.domElement);
 controls.isBlocked = () => !$(".pause").classList.contains("hidden") || !$(".help").classList.contains("hidden");
+controls.stanceLocked = () => ctrl.shellCam || ctrl.swapPhase !== 0;
 
 const MODE_KEY: Partial<Record<Action, "crouchMode" | "proneMode" | "leanMode" | "adsMode">> = {
   crouch: "crouchMode",
@@ -81,17 +83,22 @@ const MODE_KEY: Partial<Record<Action, "crouchMode" | "proneMode" | "leanMode" |
   leanRight: "leanMode",
   ads: "adsMode",
 };
-let touch = isTouchDevice();
+// Touch-only devices never lock the pointer, so they skip click-to-play and the Resume button. A
+// touchscreen laptop keeps the mouse flow and gets touch controls the first time it is actually touched;
+// after that the pointer last used decides (the touch layer passes mouse clicks on to pointer lock).
+const touchOnly = isTouchDevice();
+let usingTouch = touchOnly;
 let touchLayer: HTMLElement | null = null;
 const mountTouch = () => {
-  touch = true;
-  touchLayer ??= mountTouchControls(app, controls, (a) => (MODE_KEY[a] ? settings[MODE_KEY[a]!] : undefined));
+  touchLayer ??= mountTouchControls(app, controls, (a) => (MODE_KEY[a] ? settings[MODE_KEY[a]!] : undefined), renderer.domElement);
 };
-if (touch) mountTouch();
-// A touchscreen laptop keeps mouse controls, but gets touch controls the first time it is actually touched.
-addEventListener("pointerdown", (e) => {
-  if (e.pointerType === "touch" && !touchLayer) mountTouch();
-});
+if (touchOnly) mountTouch();
+const notePointer = (e: PointerEvent) => {
+  usingTouch = touchOnly || e.pointerType === "touch";
+  if (usingTouch) mountTouch();
+};
+addEventListener("pointerdown", notePointer, { capture: true });
+addEventListener("pointermove", notePointer, { capture: true });
 
 addEventListener("resize", () => {
   renderer.setSize(view.clientWidth, view.clientHeight);
@@ -136,6 +143,12 @@ function goTo(i: number) {
   snapshotAll();
 }
 
+/** Leave the pause menu from a button: mouse clicks lock the pointer again, taps just close it. */
+function resume(e: Event) {
+  if (touchOnly || (e as PointerEvent).pointerType === "touch") togglePause(false);
+  else controls.lockPointer(renderer.domElement);
+}
+
 function togglePause(force?: boolean) {
   const pause = $(".pause");
   const show = force ?? pause.classList.contains("hidden");
@@ -148,7 +161,7 @@ function togglePause(force?: boolean) {
 }
 
 document.addEventListener("pointerlockchange", () => {
-  if (!document.pointerLockElement && !touch && !autotest) togglePause(true);
+  if (!document.pointerLockElement && !autotest) togglePause(true); // a lost lock means the mouse was in use
   else if (document.pointerLockElement) togglePause(false);
 });
 $(".gear").addEventListener("click", () => togglePause());
@@ -160,6 +173,7 @@ function renderPause() {
     <label>${label}<select data-k="${key}">
       <option value="toggle" ${settings[key] === "toggle" ? "selected" : ""}>Toggle</option>
       <option value="hold" ${settings[key] === "hold" ? "selected" : ""}>Hold</option></select></label>`;
+  const swap = op.ability.params; // timings required for 2-pawn operators (schema)
   const opts = (side: string) =>
     [...data.operators.values()]
       .filter((o) => o.side === side)
@@ -167,10 +181,10 @@ function renderPause() {
       .join("");
   pause.innerHTML = `
     <h2>Movement Lab</h2>
-    ${touch ? "" : `<button class="primary resume">Resume (click)</button>`}
+    ${touchOnly ? "" : `<button class="primary resume">Resume (click)</button>`}
     <section><h3>Operator</h3>
       <select class="op-select"><optgroup label="Attackers">${opts("attacker")}</optgroup><optgroup label="Defenders">${opts("defender")}</optgroup></select>
-      ${op.pawns > 1 ? `<p class="note">${op.name} has two shells: press <kbd>${keyLabel(settings.keys.ability)}</kbd> to look through the other shell's camera, then <kbd>${keyLabel(settings.keys.interact)}</kbd> to transfer (1.3 s + 1.3 s).</p>` : ""}
+      ${op.pawns > 1 ? `<p class="note">${op.name} has two shells: press <kbd>${keyLabel(settings.keys.ability)}</kbd> to look through the other shell's camera, then <kbd>${keyLabel(settings.keys.interact)}</kbd> to transfer (${swap.transferSeconds} s + ${swap.activationSeconds} s).</p>` : ""}
     </section>
     <section><h3>Go to</h3><div class="goto">${GOTO.map((g, i) => `<button data-goto="${i}">${g[0]}</button>`).join("")}</div></section>
     <section><h3>Controls</h3>
@@ -182,17 +196,16 @@ function renderPause() {
       ${modeSel("crouchMode", "Crouch")} ${modeSel("proneMode", "Prone")} ${modeSel("leanMode", "Lean")} ${modeSel("adsMode", "Aim (ADS)")}
     </section>
     <p class="note">Press <kbd>F1</kbd> for the key list and what to try.</p>`;
-  pause.querySelector(".resume")?.addEventListener("click", () => controls.lockPointer(renderer.domElement));
+  pause.querySelector(".resume")?.addEventListener("click", resume);
   pause.querySelector<HTMLSelectElement>(".op-select")!.addEventListener("change", (e) => {
     const url = new URL(location.href);
     url.searchParams.set("op", (e.target as HTMLSelectElement).value);
     location.href = url.toString();
   });
   pause.querySelectorAll<HTMLButtonElement>("[data-goto]").forEach((b) =>
-    b.addEventListener("click", () => {
+    b.addEventListener("click", (e) => {
       goTo(Number(b.dataset.goto));
-      if (!touch) controls.lockPointer(renderer.domElement);
-      else togglePause(false);
+      resume(e);
     }),
   );
   pause.querySelectorAll<HTMLInputElement>("[data-num]").forEach((inp) =>
@@ -267,6 +280,7 @@ snapshotAll();
 let seq = 0;
 let acc = 0;
 let viewedId = sim.viewedPawnId(ctrl.id);
+let possessedId = ctrl.possessedPawnId;
 let prompt: ReturnType<Sim["prompt"]> = null;
 let last = performance.now();
 let flashUntil = 0;
@@ -292,7 +306,13 @@ function tick() {
     { sprinting: p.state.sprinting, onLadder: p.state.mode === PawnMode.Ladder },
     { forcesStand: mv.sprint.forcesStand, sprintCancelsLean: mv.lean.sprintCancelsLean },
   );
-  const proneView = v.state.stance === Stance.Prone && v.state.mode === PawnMode.Walk;
+  // Toggles belong to the body you control. On the other shell's camera the simulation ignores stance
+  // input, so hold them at what the hand-over tick must send: your body's own stance when you go back,
+  // standing when the new shell wakes up (D-025).
+  if (ctrl.shellCam || ctrl.swapPhase) controls.resetStance(ctrl.swapPhase ? Stance.Stand : p.state.stance);
+  else if (p.id !== possessedId) controls.resetStance(p.state.stance);
+  possessedId = p.id;
+  const proneView = v.state.mode === PawnMode.Walk && proneWeight(v.state) > 0;
   controls.limits = proneView
     ? { pitchMin: mv.stance.pronePitchMinDeg * DEG, pitchMax: mv.stance.pronePitchMaxDeg * DEG, maxYawStep: mv.stance.proneTurnRateDeg * DEG * DT }
     : { pitchMin: mv.look.pitchMinDeg * DEG, pitchMax: mv.look.pitchMaxDeg * DEG, maxYawStep: null };
@@ -325,6 +345,7 @@ function frame(now: number) {
     acc -= DT;
     tick();
   }
+  controls.applyLimits();
   const alpha = acc / DT;
 
   const me = possessed();
@@ -385,7 +406,7 @@ function updateHud(p: Pawn) {
   $(".lean-r").style.opacity = String(Math.max(0, s.lean));
   const msg = $(".center-msg");
   const dead = s.mode === PawnMode.Dead;
-  const needClick = !touch && !autotest && !document.pointerLockElement && $(".pause").classList.contains("hidden");
+  const needClick = !usingTouch && !autotest && !document.pointerLockElement && $(".pause").classList.contains("hidden");
   msg.classList.toggle("hidden", !dead && !needClick);
   msg.textContent = dead ? `You died from the fall — press ${keyLabel(settings.keys.respawn)} to respawn` : "Click to play · F1 for controls";
   if (touchLayer) touchLayer.querySelector(".touch-btn")!.classList.toggle("on", controls.sprintIsLatched);
@@ -399,7 +420,7 @@ function updateHud(p: Pawn) {
   $(".shellcam").classList.toggle("hidden", !onCam);
   if (onCam) {
     const params = op.ability.params;
-    const dur = ctrl.swapPhase === 1 ? (params.transferSeconds ?? 1.3) : (params.activationSeconds ?? 1.3);
+    const dur = ctrl.swapPhase === 1 ? params.transferSeconds : params.activationSeconds;
     $(".shellcam-title").textContent =
       ctrl.swapPhase === 1 ? "TRANSFERRING…" : ctrl.swapPhase === 2 ? "ACTIVATING SHELL…" : `SHELL CAMERA · ${keyLabel(k.ability)} to go back`;
     $(".swap-bar").classList.toggle("hidden", ctrl.swapPhase === 0);

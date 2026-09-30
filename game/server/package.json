@@ -5,7 +5,7 @@
   "scripts": {
     "build": "esbuild src/main.ts --bundle --platform=node --format=esm --outfile=dist/main.js",
     "start": "node dist/main.js",
-    "typecheck": "tsc --noEmit -p ."
+    "typecheck": "tsc --noEmit -p . && tsc --noEmit -p test"
   },
   "dependencies": {
     "@redmond/shared": "*"
