@@ -1,10 +1,14 @@
-// Movement Lab (PLAN §7, Phase 1): an offline test yard for every movement mechanic. The same shared
-// simulation the server will run steps here at 64 Hz; rendering interpolates between ticks.
+// Movement Lab (PLAN §7, Phase 1): a test yard for every movement mechanic. Offline, the shared
+// simulation steps here at 64 Hz. Online (Phase 2, `?online` or `?room=CODE`), the server runs it and
+// this page predicts your own movement and interpolates everyone else's (PLAN §5).
 import * as THREE from "three";
 import {
   Btn,
   DEG,
   DT,
+  encodeDebugShot,
+  encodeLabTool,
+  encodePickOperator,
   eyePose,
   lerp,
   loadGameData,
@@ -12,23 +16,28 @@ import {
   proneWeight,
   Sim,
   Stance,
+  TICK_HZ,
   wrapAngle,
   type InputCmd,
   type Pawn,
   type PawnState,
+  type PlayerController,
+  type ShotResult,
 } from "@redmond/shared";
 import { Controls, type Action, type UiAction } from "../input/controls.js";
 import { horizontalFov, keyLabel, loadSettings, saveSettings, type HoldMode, type Settings } from "../input/settings.js";
 import { isTouchDevice, mountTouchControls } from "../input/touch.js";
+import { OnlineConnection } from "../net/online.js";
 import { createLabScene, createRenderer, PawnView, updateLabels } from "../render/labScene.js";
 
 // ------------------------------------------------------------------ setup
 
 const params = new URLSearchParams(location.search);
 const autotest = params.has("autotest");
+const online = params.has("online") || params.has("room");
 const data = loadGameData();
-const operatorId = data.operators.has(params.get("op") ?? "") ? params.get("op")! : "sledge";
-const op = data.operators.get(operatorId)!;
+let operatorId = data.operators.has(params.get("op") ?? "") ? params.get("op")! : "sledge";
+let op = data.operators.get(operatorId)!;
 
 const app = document.getElementById("app")!;
 app.innerHTML = `
@@ -38,7 +47,7 @@ app.innerHTML = `
     <div class="op-name"></div>
     <div class="hp"><div class="hp-fill"></div><span class="hp-text"></span></div>
   </div>
-  <div class="hud hud-tr"><span class="fps"></span></div>
+  <div class="hud hud-tr"><span class="fps"></span><div class="net"></div></div>
   <div class="hud hud-bottom">
     <div class="stances"><span data-s="0">STAND</span><span data-s="1">CROUCH</span><span data-s="2">PRONE</span></div>
     <div class="stance-bar"><div></div></div>
@@ -51,12 +60,34 @@ app.innerHTML = `
   <div class="center-msg hidden"></div>
   <button class="gear" title="Settings">⚙</button>
   <div class="panel pause hidden"></div>
-  <div class="panel help hidden"></div>`;
+  <div class="panel help hidden"></div>
+  <div class="panel lobby hidden"></div>`;
 const $ = <T extends HTMLElement>(sel: string) => app.querySelector<T>(sel)!;
 
-const sim = await Sim.create("movement_lab", data);
-const ctrl = sim.addPlayer("you", operatorId);
+// Online state, declared before the lobby runs (its callbacks write some of it).
+/** Extra round trip to simulate (pause menu, or `?lag=100`). */
+let addedRttMs = Math.max(0, Math.min(400, Number(params.get("lag")) || 0));
+/** Why the connection ended, once it has. */
+let disconnected: string | null = null;
+let rosterChanged = false;
+let lastShot: (ShotResult & { targetName: string | null }) | null = null;
+let showShot: (shot: ShotResult) => void = () => {};
+/** Online tests can script the input (window.__lab.input). */
+let scripted: Partial<InputCmd> | null = null;
+let flashUntil = 0;
+
+// Online: the lobby connects (create or join a room) and the session builds the simulation from the
+// server's Welcome; our controller arrives with the roster. Offline: a local simulation and player.
+const net = online ? await lobby() : null;
+const sim = net ? net.session.sim! : await Sim.create("movement_lab", data);
+let ctrl: PlayerController = net ? await firstBody(net) : sim.addPlayer("you", operatorId);
 const possessed = () => sim.pawns.get(ctrl.possessedPawnId)!;
+if (net) {
+  // The server starts everyone as the default operator; ask for the one in the link, if different.
+  if (operatorId !== ctrl.operatorId) net.send(encodePickOperator(operatorId));
+  operatorId = ctrl.operatorId;
+  op = data.operators.get(operatorId)!;
+}
 
 const view = $("#view");
 const renderer = createRenderer(view);
@@ -66,7 +97,6 @@ const camera = new THREE.PerspectiveCamera(settings.fovVertical, view.clientWidt
 camera.rotation.order = "YXZ";
 
 const pawnViews = new Map<number, PawnView>();
-for (const pawn of sim.pawns.values()) pawnViews.set(pawn.id, new PawnView(scene, 0x3b82f6));
 
 let showHitboxes = false;
 let thirdPerson = false;
@@ -115,9 +145,11 @@ function onUi(a: UiAction) {
   else if (a === "help") $(".help").classList.toggle("hidden");
   else if (a === "settings") togglePause();
   else if (a === "respawn") respawn();
+  else if (a === "fire" && net) fire();
 }
 
 function respawn() {
+  if (net) return net.send(encodeLabTool({ kind: "respawn" })); // the server sends the new body
   sim.respawn(ctrl.possessedPawnId);
   controls.setView(possessed().state.yaw, 0);
   controls.resetStance();
@@ -137,10 +169,22 @@ const GOTO: [string, number, number, number, number][] = [
 
 function goTo(i: number) {
   const [, x, y, z, yaw] = GOTO[i];
-  sim.teleport(ctrl.possessedPawnId, x, y, z, yaw);
+  if (net) net.send(encodeLabTool({ kind: "teleport", x, y, z, yawDeg: yaw }));
+  else sim.teleport(ctrl.possessedPawnId, x, y, z, yaw);
   controls.setView(yaw * DEG, 0);
   controls.resetStance();
   snapshotAll();
+}
+
+function pickOperator(id: string) {
+  const url = new URL(location.href);
+  url.searchParams.set("op", id);
+  if (!net) {
+    location.href = url.toString();
+    return;
+  }
+  history.replaceState(null, "", url); // a reload keeps the pick
+  net.send(encodePickOperator(id)); // the new body arrives with the roster
 }
 
 /** Leave the pause menu from a button: mouse clicks lock the pointer again, taps just close it. */
@@ -179,9 +223,16 @@ function renderPause() {
       .filter((o) => o.side === side)
       .map((o) => `<option value="${o.id}" ${o.id === operatorId ? "selected" : ""}>${o.name} — ${o.healthRating} health / ${o.speedRating} speed</option>`)
       .join("");
+  const room = net
+    ? `<section><h3>Room ${net.session.roomCode} · ${net.session.roster.length} player${net.session.roster.length === 1 ? "" : "s"}</h3>
+      <div class="goto"><button class="invite">Copy invite link</button><button class="leave">Leave room</button></div>
+      <label>Simulated extra latency <select class="lag">${[0, 50, 100, 150, 200].map((ms) => `<option value="${ms}" ${ms === addedRttMs ? "selected" : ""}>${ms ? `+${ms} ms round trip` : "Off"}</option>`).join("")}</select></label>
+      <p class="note">Left click fires a test shot: the server rewinds everyone else to what you saw (lag compensation) and draws the result.</p></section>`
+    : "";
   pause.innerHTML = `
-    <h2>Movement Lab</h2>
+    <h2>Movement Lab${net ? " · Online" : ""}</h2>
     ${touchOnly ? "" : `<button class="primary resume">Resume (click)</button>`}
+    ${room}
     <section><h3>Operator</h3>
       <select class="op-select"><optgroup label="Attackers">${opts("attacker")}</optgroup><optgroup label="Defenders">${opts("defender")}</optgroup></select>
       ${op.pawns > 1 ? `<p class="note">${op.name} has two shells: press <kbd>${keyLabel(settings.keys.ability)}</kbd> to look through the other shell's camera, then <kbd>${keyLabel(settings.keys.interact)}</kbd> to transfer (${swap.transferSeconds} s + ${swap.activationSeconds} s).</p>` : ""}
@@ -197,11 +248,15 @@ function renderPause() {
     </section>
     <p class="note">Press <kbd>F1</kbd> for the key list and what to try.</p>`;
   pause.querySelector(".resume")?.addEventListener("click", resume);
-  pause.querySelector<HTMLSelectElement>(".op-select")!.addEventListener("change", (e) => {
-    const url = new URL(location.href);
-    url.searchParams.set("op", (e.target as HTMLSelectElement).value);
-    location.href = url.toString();
+  pause.querySelector<HTMLSelectElement>(".op-select")!.addEventListener("change", (e) => pickOperator((e.target as HTMLSelectElement).value));
+  pause.querySelector(".invite")?.addEventListener("click", (e) => {
+    void navigator.clipboard?.writeText(inviteLink()).then(() => ((e.target as HTMLElement).textContent = "Copied!"));
   });
+  pause.querySelector(".leave")?.addEventListener("click", () => {
+    net?.close();
+    location.href = "/";
+  });
+  pause.querySelector<HTMLSelectElement>(".lag")?.addEventListener("change", (e) => (addedRttMs = Number((e.target as HTMLSelectElement).value)));
   pause.querySelectorAll<HTMLButtonElement>("[data-goto]").forEach((b) =>
     b.addEventListener("click", (e) => {
       goTo(Number(b.dataset.goto));
@@ -253,6 +308,7 @@ function renderHelp() {
       ${row("Right mouse", "Aim down sights (slower walk)")}
       ${row(`<kbd>${keyLabel(k.ability)}</kbd>`, "Ability — Skopós: view your other shell's camera (press again to go back)")}
       ${row(`<kbd>${keyLabel(k.respawn)}</kbd>`, "Respawn")}
+      ${net ? row("Left mouse", "Test shot (online): shows what the server's lag compensation hit") : ""}
       ${row("<kbd>F3</kbd> / <kbd>F4</kbd>", "Hitboxes / third-person view")}
       ${row("<kbd>Esc</kbd>", "Pause: settings, operator, go-to menu")}
     </table>
@@ -283,12 +339,16 @@ let viewedId = sim.viewedPawnId(ctrl.id);
 let possessedId = ctrl.possessedPawnId;
 let prompt: ReturnType<Sim["prompt"]> = null;
 let last = performance.now();
-let flashUntil = 0;
 
 function tick() {
   snapshotAll();
-  const input = autotest ? autoInput(++seq) : controls.sample(++seq);
-  sim.step(new Map([[ctrl.id, input]]));
+  if (net) {
+    const input = scripted ? { ...controls.sample(++seq), ...scripted } : controls.sample(++seq);
+    net.session.tick(input); // predicts locally and sends the input
+  } else {
+    const input = autotest ? autoInput(++seq) : controls.sample(++seq);
+    sim.step(new Map([[ctrl.id, input]]));
+  }
   const p = possessed();
   // The view follows the body you're looking through (Skopós' other shell while on its camera).
   const nowViewed = sim.viewedPawnId(ctrl.id);
@@ -318,17 +378,19 @@ function tick() {
     : { pitchMin: mv.look.pitchMinDeg * DEG, pitchMax: mv.look.pitchMaxDeg * DEG, maxYawStep: null };
   if (p.state.lastFallDamage > 0) flash(`-${p.state.lastFallDamage} HP (fall)`, "bad");
   observe(p);
+  if (net) notePredicted();
 }
 
 function interpolated(p: Pawn, alpha: number): PawnState {
   const a = prevStates.get(p.id) ?? p.state;
   const b = p.state;
   const sameStance = a.stance === b.stance && a.stanceFrom === b.stanceFrom;
+  const o = smoothing.get(p.id);
   return {
     ...b,
-    x: lerp(a.x, b.x, alpha),
-    y: lerp(a.y, b.y, alpha),
-    z: lerp(a.z, b.z, alpha),
+    x: lerp(a.x, b.x, alpha) + (o?.[0] ?? 0),
+    y: lerp(a.y, b.y, alpha) + (o?.[1] ?? 0),
+    z: lerp(a.z, b.z, alpha) + (o?.[2] ?? 0),
     lean: lerp(a.lean, b.lean, alpha),
     stanceT: sameStance ? lerp(a.stanceT, b.stanceT, alpha) : b.stanceT,
     yaw: a.yaw + wrapAngle(b.yaw - a.yaw) * alpha,
@@ -339,25 +401,46 @@ let frames = 0;
 let fpsFrames = 0;
 let fpsAt = performance.now();
 function frame(now: number) {
-  acc += Math.min(0.25, (now - last) / 1000);
+  const elapsed = Math.min(0.25, (now - last) / 1000);
+  acc += elapsed;
   last = now;
-  while (acc >= DT) {
-    acc -= DT;
+  if (net && !followServer(elapsed)) {
+    // Between bodies (joining, respawning, a new operator): wait for the server's exact state.
+    acc = 0;
+    renderer.render(scene, camera);
+    $(".center-msg").textContent = disconnected ?? "Waiting for the server…";
+    $(".center-msg").classList.remove("hidden");
+    requestAnimationFrame(frame);
+    return;
+  }
+  // Online, the tick period stretches or shrinks a few percent so our inputs reach the server just
+  // before it needs them (clock sync, PLAN §5).
+  const period = net ? DT * net.session.tickScale() : DT;
+  while (acc >= period) {
+    acc -= period;
     tick();
   }
   controls.applyLimits();
-  const alpha = acc / DT;
+  const alpha = acc / period;
 
   const me = possessed();
   const viewed = sim.pawns.get(viewedId) ?? me;
+  const renderTick = net ? net.session.frame() : 0;
+  syncPawnViews();
   for (const pawn of sim.pawns.values()) {
     const v = pawnViews.get(pawn.id)!;
-    const rs = interpolated(pawn, alpha);
-    v.update(data, rs);
+    // Other players are drawn a little in the past, between two server snapshots; our own bodies are
+    // drawn from our prediction.
+    const rs = pawn.proxy ? net!.session.remoteAt(pawn.id, renderTick) : interpolated(pawn, alpha);
+    v.body.visible = rs !== null;
+    v.wire.visible = rs !== null && showHitboxes;
+    if (!rs) continue;
+    v.update(sim.data, rs);
     const eyes = pawn.id === viewed.id;
     v.body.visible = !eyes || thirdPerson;
     v.wire.visible = showHitboxes && (!eyes || thirdPerson);
   }
+  updateShots(now);
 
   const rs = interpolated(viewed, alpha);
   const eye = eyePose(data.movement, data.hitboxes, { ...rs, yaw: controls.yaw });
@@ -375,6 +458,7 @@ function frame(now: number) {
   fpsFrames++;
   if (now - fpsAt > 500) {
     $(".fps").textContent = `${Math.round((fpsFrames * 1000) / (now - fpsAt))} fps · tick ${sim.tick}`;
+    if (net) updateNetStats(now - fpsAt);
     fpsFrames = 0;
     fpsAt = now;
   }
@@ -407,8 +491,15 @@ function updateHud(p: Pawn) {
   const msg = $(".center-msg");
   const dead = s.mode === PawnMode.Dead;
   const needClick = !usingTouch && !autotest && !document.pointerLockElement && $(".pause").classList.contains("hidden");
-  msg.classList.toggle("hidden", !dead && !needClick);
-  msg.textContent = dead ? `You died from the fall — press ${keyLabel(settings.keys.respawn)} to respawn` : "Click to play · F1 for controls";
+  const waiting = net !== null && !net.session.ready;
+  msg.classList.toggle("hidden", !dead && !needClick && !waiting && !disconnected);
+  msg.textContent = disconnected
+    ? disconnected
+    : waiting
+      ? "Waiting for the server…"
+      : dead
+        ? `You died from the fall — press ${keyLabel(settings.keys.respawn)} to respawn`
+        : "Click to play · F1 for controls";
   if (touchLayer) touchLayer.querySelector(".touch-btn")!.classList.toggle("on", controls.sprintIsLatched);
 
   const k = settings.keys;
@@ -458,7 +549,7 @@ const gl = renderer.getContext();
 const dbg = gl.getExtension("WEBGL_debug_renderer_info");
 const report: LabReport = {
   ready: true,
-  done: !autotest,
+  done: !autotest || online,
   frames: 0,
   webgl: String(gl.getParameter(dbg ? dbg.UNMASKED_RENDERER_WEBGL : gl.RENDERER)),
   walkSpeed: 0,
@@ -477,6 +568,36 @@ Object.defineProperty(window, "__lab", {
     report,
     get frames() {
       return frames;
+    },
+    /** Online state for the two-browser test (tools/e2e/online-lab.mjs). */
+    get net() {
+      if (!net) return null;
+      const s = net.session;
+      return {
+        room: s.roomCode,
+        ready: s.ready,
+        you: s.you,
+        players: s.roster.map((e) => e.name),
+        corrections: s.stats.corrections,
+        resyncs: s.stats.resyncs,
+        rttMs: s.rttMs,
+        remotes: s.remoteIds().map((id) => ({ id, state: s.remoteAt(id) })),
+        own: possessed() ? { ...possessed().state } : null,
+        lastShot,
+        disconnected,
+      };
+    },
+    goTo,
+    pickOperator,
+    teleport: (x: number, y: number, z: number, yawDeg: number) => {
+      if (net) net.send(encodeLabTool({ kind: "teleport", x, y, z, yawDeg }));
+      else sim.teleport(ctrl.possessedPawnId, x, y, z, yawDeg);
+      controls.setView(yawDeg * DEG, 0);
+    },
+    fire: () => fire(),
+    /** Online tests: replace parts of the sampled input (e.g. { forward: 1 }); null hands back control. */
+    set input(v: Partial<InputCmd> | null) {
+      scripted = v;
     },
     set view(v: { hitboxes?: boolean; thirdPerson?: boolean }) {
       if (v.hitboxes !== undefined) showHitboxes = v.hitboxes;
@@ -542,6 +663,266 @@ function observe(p: Pawn) {
   if (s.mode === PawnMode.Ladder) report.laddered = true;
   if (!report.stancesSeen.includes(s.stance)) report.stancesSeen.push(s.stance);
   report.maxLean = Math.max(report.maxLean, Math.abs(s.lean));
+}
+
+// ------------------------------------------------------------------ online (Phase 2)
+
+/** Name, then create a room or join one by code. Resolves once the room's level is loaded. */
+function lobby(): Promise<OnlineConnection> {
+  const panel = $(".lobby");
+  panel.classList.remove("hidden");
+  panel.innerHTML = `
+    <h2>Movement Lab · Online</h2>
+    <p class="note">Create a room and send the invite link to a friend, or join theirs with its code. Everyone in a room sees and bumps into each other; all the lab tools still work.</p>
+    <label>Your name <input class="name" maxlength="24" placeholder="Player" autocomplete="nickname"></label>
+    <button class="primary create">Create a room</button>
+    <h3>Join a room</h3>
+    <div class="join-row"><input class="code" maxlength="5" placeholder="CODE" autocapitalize="characters" spellcheck="false"><button class="join">Join</button></div>
+    <p class="error"></p>
+    <p class="note"><a href="/labs/movement_lab.html">Offline lab</a> · <a href="/">Home</a></p>`;
+  const nameInput = panel.querySelector<HTMLInputElement>(".name")!;
+  const codeInput = panel.querySelector<HTMLInputElement>(".code")!;
+  const error = panel.querySelector<HTMLElement>(".error")!;
+  try {
+    nameInput.value = localStorage.getItem("redmond.name") ?? "";
+  } catch {
+    // storage blocked: no remembered name
+  }
+  const linkCode = (params.get("room") ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 5);
+  codeInput.value = linkCode;
+
+  return new Promise((resolve) => {
+    let busy = false;
+    const go = (room: string | null) => {
+      if (busy) return;
+      busy = true;
+      const name = nameInput.value.trim() || "Player";
+      try {
+        localStorage.setItem("redmond.name", name);
+      } catch {
+        // not remembered; fine
+      }
+      error.textContent = "Connecting…";
+      let joined = false;
+      const conn = new OnlineConnection({
+        name,
+        room,
+        addedRttMs: () => addedRttMs,
+        session: {
+          onWelcome: () => {
+            joined = true;
+            void conn.session.loaded().then(() => {
+              panel.classList.add("hidden");
+              const url = new URL(location.href);
+              url.searchParams.delete("online");
+              url.searchParams.set("room", conn.session.roomCode);
+              history.replaceState(null, "", url); // a reload rejoins, and the link is the invite
+              resolve(conn);
+            });
+          },
+          onError: (_code, message) => {
+            if (joined) return flash(message, "bad");
+            error.textContent = message;
+            busy = false;
+            conn.close();
+          },
+          onRoster: () => (rosterChanged = true),
+          onShot: (shot) => showShot(shot),
+        },
+        onClose: (reason) => {
+          if (joined) disconnected = reason;
+          else if (busy) {
+            error.textContent = reason;
+            busy = false;
+          }
+        },
+      });
+    };
+    panel.querySelector<HTMLButtonElement>(".create")!.onclick = () => go(null);
+    const join = () => {
+      const code = codeInput.value.trim().toUpperCase();
+      if (code) go(code);
+      else error.textContent = "Enter the room code first.";
+    };
+    panel.querySelector<HTMLButtonElement>(".join")!.onclick = join;
+    codeInput.onkeydown = (e) => {
+      if (e.key === "Enter") join();
+    };
+    if (autotest) go(linkCode || null); // tests skip the form
+    else (linkCode ? codeInput : nameInput).focus();
+  });
+}
+
+/** Our first body comes with the roster; we predict from the server's exact state once that arrives. */
+async function firstBody(c: OnlineConnection): Promise<PlayerController> {
+  while (!c.session.ready) {
+    if (disconnected) {
+      $(".center-msg").textContent = disconnected;
+      $(".center-msg").classList.remove("hidden");
+      throw new Error(disconnected);
+    }
+    await new Promise((r) => setTimeout(r, 20));
+  }
+  return c.session.ctrl!;
+}
+
+function inviteLink(): string {
+  return `${location.origin}${location.pathname}?room=${net!.session.roomCode}`;
+}
+
+/** Own bodies' positions after our latest tick: a jump away from these means a server correction. */
+const predicted = new Map<number, [number, number, number]>();
+function notePredicted() {
+  predicted.clear();
+  for (const id of ctrl.pawnIds) {
+    const p = sim.pawns.get(id);
+    if (p) predicted.set(id, [p.state.x, p.state.y, p.state.z]);
+  }
+}
+
+/** Visual-only offsets that hide small correction snaps by fading them out (the simulation snaps at once). */
+const smoothing = new Map<number, [number, number, number]>();
+let seenCorrections = 0;
+/** Further than this is a teleport or respawn: jump straight there. */
+const SNAP_DISTANCE = 2;
+const SMOOTH_SECONDS = 0.1;
+
+/**
+ * Once per frame online: take on a new body when the server has sent one, and turn any correction
+ * since the last frame into a fading visual offset. False while we have no body to predict.
+ */
+function followServer(elapsed: number): boolean {
+  const s = net!.session;
+  if (!s.ready || !s.ctrl) return false;
+  if (rosterChanged) {
+    rosterChanged = false;
+    // Other players' views are rebuilt with their (new) name tags.
+    for (const [id, v] of pawnViews)
+      if (sim.pawns.get(id)?.proxy !== false) {
+        v.dispose();
+        pawnViews.delete(id);
+      }
+    if (!$(".pause").classList.contains("hidden")) renderPause();
+  }
+  if (s.ctrl !== ctrl) {
+    // A new body (respawn, operator pick).
+    ctrl = s.ctrl;
+    operatorId = ctrl.operatorId;
+    op = data.operators.get(operatorId)!;
+    const p = possessed();
+    controls.setView(p.state.yaw, 0);
+    controls.resetStance(p.state.stance);
+    viewedId = sim.viewedPawnId(ctrl.id);
+    possessedId = ctrl.possessedPawnId;
+    smoothing.clear();
+    snapshotAll();
+    notePredicted();
+    seenCorrections = s.stats.corrections;
+    if (!$(".pause").classList.contains("hidden")) renderPause();
+  }
+  if (s.stats.corrections !== seenCorrections) {
+    seenCorrections = s.stats.corrections;
+    for (const id of ctrl.pawnIds) {
+      const p = sim.pawns.get(id);
+      const before = predicted.get(id);
+      if (!p || !before) continue;
+      const d: [number, number, number] = [before[0] - p.state.x, before[1] - p.state.y, before[2] - p.state.z];
+      if (Math.hypot(...d) > SNAP_DISTANCE) {
+        smoothing.delete(id);
+        prevStates.set(id, { ...p.state });
+        continue;
+      }
+      const o = smoothing.get(id) ?? [0, 0, 0];
+      smoothing.set(id, [o[0] + d[0], o[1] + d[1], o[2] + d[2]]);
+      // Shift the previous tick too, so the blend between ticks doesn't jump either.
+      const prev = prevStates.get(id);
+      if (prev) prevStates.set(id, { ...prev, x: prev.x - d[0], y: prev.y - d[1], z: prev.z - d[2] });
+    }
+    notePredicted();
+  }
+  const k = Math.exp(-elapsed / SMOOTH_SECONDS);
+  for (const [id, o] of smoothing) {
+    o[0] *= k;
+    o[1] *= k;
+    o[2] *= k;
+    if (Math.hypot(...o) < 1e-3) smoothing.delete(id);
+  }
+  return true;
+}
+
+function nameOfPawn(id: number): string {
+  return net?.session.roster.find((e) => e.pawnIds.includes(id))?.name ?? "";
+}
+
+/** One view per body in the simulation: blue for ours, orange with a name tag for everyone else. */
+function syncPawnViews() {
+  for (const [id, v] of pawnViews)
+    if (!sim.pawns.has(id)) {
+      v.dispose();
+      pawnViews.delete(id);
+    }
+  for (const pawn of sim.pawns.values())
+    if (!pawnViews.has(pawn.id)) pawnViews.set(pawn.id, pawn.proxy ? new PawnView(scene, 0xf97316, nameOfPawn(pawn.id) || undefined) : new PawnView(scene, 0x3b82f6));
+}
+
+/** A test shot (no weapons until Phase 3): the server judges it against what we were seeing. */
+function fire() {
+  if (net?.session.ready) net.send(encodeDebugShot(net.session.shotViewTick()));
+}
+
+const shotMarks: { line: THREE.Line; ghost: PawnView | null; until: number }[] = [];
+showShot = (shot: ShotResult) => {
+  const end = shot.hit?.distance ?? shot.wallDistance ?? 60;
+  const [ox, oy, oz] = shot.origin;
+  const [dx, dy, dz] = shot.dir;
+  const line = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(ox, oy - 0.05, oz), new THREE.Vector3(ox + dx * end, oy + dy * end, oz + dz * end)]),
+    new THREE.LineBasicMaterial({ color: shot.hit ? 0xff3b3b : 0xffffff, depthTest: false, transparent: true }),
+  );
+  line.renderOrder = 11;
+  scene.add(line);
+  let ghost: PawnView | null = null;
+  let targetName: string | null = null;
+  if (shot.hit) {
+    // Where the server judged the target to be (rewound to what we saw): a green wireframe.
+    const was = net!.session.remoteAt(shot.hit.pawnId, shot.rewoundTick);
+    if (was) {
+      ghost = new PawnView(scene, 0x22c55e, undefined, 0x22c55e);
+      ghost.update(sim.data, was);
+      ghost.body.visible = false;
+    }
+    targetName = nameOfPawn(shot.hit.pawnId) || "player";
+    const rewoundMs = ((shot.serverTick - shot.rewoundTick) * 1000) / TICK_HZ;
+    flash(`Hit ${targetName} · ${shot.hit.part} · ${shot.hit.distance.toFixed(1)} m · server rewound ${rewoundMs.toFixed(0)} ms`, "info");
+  } else flash(shot.wallDistance !== null ? `Miss · wall at ${shot.wallDistance.toFixed(1)} m` : "Miss", "info");
+  shotMarks.push({ line, ghost, until: performance.now() + 2500 });
+  lastShot = { ...shot, targetName };
+};
+
+function updateShots(now: number) {
+  for (let i = shotMarks.length - 1; i >= 0; i--) {
+    const m = shotMarks[i];
+    if (now < m.until) continue;
+    scene.remove(m.line);
+    m.line.geometry.dispose();
+    (m.line.material as THREE.Material).dispose();
+    m.ghost?.dispose();
+    shotMarks.splice(i, 1);
+  }
+}
+
+let bytesSeen = { in: 0, out: 0 };
+function updateNetStats(ms: number) {
+  const s = net!.session;
+  const kbps = (bytes: number) => ((bytes * 8) / ms).toFixed(0); // bits per ms = kbit/s
+  $(".net").textContent = [
+    `room ${s.roomCode} · ${s.roster.length} here`,
+    `ping ${Math.round(s.rttMs)} ms${addedRttMs ? ` (${addedRttMs} simulated)` : ""}`,
+    `others drawn ${Math.round(s.interpDelayMs)} ms (${((s.interpDelayMs / 1000) * TICK_HZ).toFixed(1)} ticks) behind`,
+    `corrections ${s.stats.corrections}`,
+    `↓${kbps(s.stats.bytesIn - bytesSeen.in)} ↑${kbps(s.stats.bytesOut - bytesSeen.out)} kbps`,
+  ].join(" · ");
+  bytesSeen = { in: s.stats.bytesIn, out: s.stats.bytesOut };
 }
 
 requestAnimationFrame(frame);

@@ -1,0 +1,158 @@
+// End-to-end check of the online Movement Lab (PLAN §17 Phase 2): the production server and two headless
+// browsers with 100 ms of simulated round-trip latency each. Requires `npm run build` first.
+// Checks: create and join by code, each player sees the other move, a test shot at a moving player hits
+// thanks to lag compensation, leaving updates the roster, and a server restart reaches the clients.
+// Screenshots go to builds/e2e/ (gitignored).
+import { spawn } from "node:child_process";
+import { mkdirSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { chromium } from "playwright";
+
+const PORT = 18900 + Math.floor(Math.random() * 400);
+const BASE = `http://127.0.0.1:${PORT}`;
+const OUT = fileURLToPath(new URL("../../builds/e2e/", import.meta.url));
+const SERVER = fileURLToPath(new URL("../../game/server/dist/main.js", import.meta.url));
+const shot = (name) => join(OUT, name);
+mkdirSync(OUT, { recursive: true });
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const LAG = 100; // ms of extra round trip on each client
+
+const server = spawn(process.execPath, [SERVER], { env: { ...process.env, PORT: String(PORT) }, stdio: ["ignore", "ignore", "inherit"] });
+const result = { checks: {} };
+let ok = false;
+let browser;
+
+try {
+  for (let i = 0; i < 100; i++) {
+    try {
+      if ((await fetch(`${BASE}/health`)).ok) break;
+    } catch {}
+    await sleep(100);
+  }
+  browser = await chromium.launch({
+    executablePath: process.env.CHROME_PATH || undefined,
+    args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"],
+  });
+  const errors = [];
+  // Separate contexts: two different "computers" (no shared storage).
+  const open = async (url) => {
+    // Small windows: two pages share one software-rendering CPU here; a real GPU draws far faster.
+    const ctx = await browser.newContext({ viewport: { width: 480, height: 270 } });
+    const page = await ctx.newPage();
+    page.on("pageerror", (e) => errors.push(String(e)));
+    page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
+    await page.goto(url);
+    await page.waitForFunction(() => window.__lab?.net?.ready, null, { timeout: 30000 });
+    return page;
+  };
+  const net = (page) => page.evaluate(() => window.__lab.net);
+
+  // A creates a room; B joins it with the code.
+  const a = await open(`${BASE}/labs/movement_lab.html?online&autotest=1&lag=${LAG}`);
+  const room = (await net(a)).room;
+  const b = await open(`${BASE}/labs/movement_lab.html?room=${room}&autotest=1&lag=${LAG}`);
+  await a.waitForFunction(() => window.__lab.net.players.length === 2 && window.__lab.net.remotes.length === 1, null, { timeout: 10000 });
+  await b.waitForFunction(() => window.__lab.net.remotes.length === 1, null, { timeout: 10000 });
+  result.room = room;
+  result.checks.roomCodeFormat = /^[A-HJ-NP-Z2-9]{5}$/.test(room);
+  result.checks.bothInRoster = (await net(b)).players.length === 2;
+  result.checks.urlIsInvite = (await b.evaluate(() => location.search)).includes(`room=${room}`);
+
+  // A stands 3 m left of the line of fire, 8 m in front of B, who faces A.
+  await a.evaluate(() => window.__lab.teleport(-3, 0, 12, 0));
+  await b.evaluate(() => {
+    window.__lab.teleport(0, 0, 4, 180);
+    window.__lab.input = { pitch: -0.052 }; // ~3° down: the ray crosses A's torso at 8 m
+  });
+  await sleep(1500);
+  const aStart = (await net(a)).own;
+  const bSeesStart = (await net(b)).remotes[0].state;
+  result.positions = { aStart: { x: aStart.x, z: aStart.z }, bSeesA: { x: bSeesStart.x, z: bSeesStart.z } };
+  result.checks.remoteMatchesOwn = Math.hypot(aStart.x - bSeesStart.x, aStart.z - bSeesStart.z) < 0.05;
+
+  // A strafes right across B's line of fire. B fires at the moment A, as B sees A, crosses the line.
+  await a.evaluate(() => (window.__lab.input = { strafe: 1 }));
+  const fired = await b.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const t0 = performance.now();
+        const check = () => {
+          const seen = window.__lab.net.remotes[0]?.state;
+          if (seen && seen.x >= -0.08) {
+            window.__lab.fire();
+            resolve({ seenX: seen.x });
+          } else if (performance.now() - t0 > 8000) resolve(null);
+          else requestAnimationFrame(check);
+        };
+        check();
+      }),
+  );
+  const aAtFire = (await net(a)).own; // A's own (predicted) position, read just after B fired
+  await b.waitForFunction(() => window.__lab.net.lastShot !== null, null, { timeout: 5000 });
+  const shotResult = (await net(b)).lastShot;
+  await b.screenshot({ path: shot("online-shot.png") });
+  await sleep(1200);
+  await a.evaluate(() => (window.__lab.input = null));
+  await sleep(800); // A comes to a stop
+  const aEnd = (await net(a)).own;
+  await sleep(600);
+  const bSeesEnd = (await net(b)).remotes[0].state;
+  result.hud = { a: await a.locator(".hud-tr").textContent(), b: await b.locator(".hud-tr").textContent() };
+  result.positions.aEnd = { x: aEnd.x, z: aEnd.z };
+  result.positions.bSeesAEnd = { x: bSeesEnd.x, z: bSeesEnd.z };
+  await b.screenshot({ path: shot("online-b-sees-a.png") });
+  await a.screenshot({ path: shot("online-a.png") });
+
+  const rewoundMs = shotResult ? ((shotResult.serverTick - shotResult.rewoundTick) * 1000) / 64 : null;
+  result.shot = { fired, aXAtFire: aAtFire.x, hit: shotResult?.hit, rewoundMs, targetName: shotResult?.targetName };
+  result.checks.shotFired = fired !== null;
+  result.checks.movingTargetHit = shotResult?.hit !== null && shotResult?.hit !== undefined;
+  // Lag compensation did the work: by the time the shot reached the server, A had moved on well past
+  // the torso's radius (0.19 m), and the server rewound about one-way latency + interpolation delay.
+  result.checks.targetHadMovedOn = aAtFire.x - fired.seenX > 0.19;
+  // (At the 200 ms cap here: software rendering runs these pages at ~15 fps, and snapshots handled once a
+  // frame look jittery, so the interpolation delay grows toward its 150 ms maximum.)
+  result.checks.rewindInRange = rewoundMs !== null && rewoundMs > 60 && rewoundMs <= 200 + 1e-6;
+  result.checks.bSawAMove = bSeesEnd.x - bSeesStart.x > 2 && Math.abs(bSeesEnd.x - aEnd.x) < 0.05;
+
+  // No contact anywhere: corrections only for the join and the teleport.
+  const aNet = await net(a);
+  const bNet = await net(b);
+  result.corrections = { a: aNet.corrections, b: bNet.corrections, rttA: aNet.rttMs, rttB: bNet.rttMs };
+  result.checks.fewCorrections = aNet.corrections <= 4 && bNet.corrections <= 4;
+  result.checks.noResyncs = aNet.resyncs === 0 && bNet.resyncs === 0;
+  result.checks.rttIncludesSimulatedLag = aNet.rttMs > LAG * 0.9 && aNet.rttMs < LAG + 80;
+
+  const stats = await (await fetch(`${BASE}/stats`)).json();
+  result.stats = stats;
+  result.checks.statsEndpoint = stats.rooms === 1 && stats.players === 2;
+
+  // B leaves: A's roster and view update.
+  await b.close();
+  await a.waitForFunction(() => window.__lab.net.players.length === 1 && window.__lab.net.remotes.length === 0, null, { timeout: 5000 }).catch(() => {});
+  const afterLeave = await net(a);
+  result.checks.leaveUpdatesRoster = afterLeave.players.length === 1 && afterLeave.remotes.length === 0;
+
+  // Server restart (Railway sends SIGTERM): the client is told why.
+  server.kill("SIGTERM");
+  await a.waitForFunction(() => window.__lab.net.disconnected !== null, null, { timeout: 5000 }).catch(() => {});
+  const gone = await net(a);
+  result.disconnected = gone.disconnected;
+  result.checks.restartReachesClient = /restarting/i.test(gone.disconnected ?? "");
+  await a.screenshot({ path: shot("online-restart.png") });
+
+  result.errors = errors;
+  // The page logs a failed WebSocket reconnect as an error only if it retried; none expected.
+  result.checks.noPageErrors = errors.length === 0;
+  ok = Object.values(result.checks).every(Boolean);
+} catch (e) {
+  result.error = String(e?.stack ?? e);
+} finally {
+  await browser?.close();
+  server.kill();
+  console.log(JSON.stringify(result, null, 2));
+  console.log(ok ? "[e2e] online lab: PASS" : "[e2e] online lab: FAIL");
+  console.log(`[e2e] screenshots in ${OUT}`);
+  process.exit(ok ? 0 : 1);
+}

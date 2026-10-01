@@ -68,3 +68,12 @@ html, body { overflow: hidden; overscroll-behavior: none; touch-action: none; us
   .touch-stick { width: 120px; height: 120px; }
   .hud-bottom { bottom: 190px; }
 }
+
+/* Online (Phase 2) */
+.hud-tr .net { margin-top: 4px; max-width: min(560px, 44vw); font: 11px var(--mono); color: var(--muted); text-align: right; }
+.lobby input { flex: 1; padding: 7px 9px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel-solid); color: var(--text); font: inherit; }
+.lobby .primary { margin-top: 6px; }
+.join-row { display: flex; gap: 8px; }
+.join-row .code { text-transform: uppercase; letter-spacing: 0.2em; font: 600 16px var(--mono); }
+.lobby .error { min-height: 1.2em; color: #f87171; font-size: 13px; }
+.lobby a { color: var(--accent); }

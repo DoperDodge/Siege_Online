@@ -177,6 +177,8 @@ export interface ShotResult {
   dir: [number, number, number];
   /** Render tick the server rewound to (after the cap). */
   rewoundTick: number;
+  /** The server's tick when it judged the shot (how far it rewound = serverTick − rewoundTick). */
+  serverTick: number;
   hit: { pawnId: number; part: string; distance: number } | null;
   /** Where the ray hit the level, if nearer than any player. */
   wallDistance: number | null;
@@ -185,7 +187,7 @@ export interface ShotResult {
 export function encodeShotResult(s: ShotResult): Uint8Array {
   const w = new ByteWriter().u8(Msg.ShotResult);
   for (const v of [...s.origin, ...s.dir]) w.f32(v);
-  w.f64(s.rewoundTick).u8((s.hit ? 1 : 0) | (s.wallDistance !== null ? 2 : 0));
+  w.f64(s.rewoundTick).u32(s.serverTick).u8((s.hit ? 1 : 0) | (s.wallDistance !== null ? 2 : 0));
   if (s.hit) w.varu(s.hit.pawnId).str(s.hit.part).f32(s.hit.distance);
   if (s.wallDistance !== null) w.f32(s.wallDistance);
   return w.finish();
@@ -193,10 +195,11 @@ export function encodeShotResult(s: ShotResult): Uint8Array {
 export function decodeShotResult(r: ByteReader): ShotResult {
   const v = Array.from({ length: 6 }, () => r.finite());
   const rewoundTick = r.f64();
+  const serverTick = r.u32();
   const f = r.u8();
   const hit = f & 1 ? { pawnId: r.varu(), part: r.str(16), distance: r.finite() } : null;
   const wallDistance = f & 2 ? r.finite() : null;
-  return { origin: [v[0], v[1], v[2]], dir: [v[3], v[4], v[5]], rewoundTick, hit, wallDistance };
+  return { origin: [v[0], v[1], v[2]], dir: [v[3], v[4], v[5]], rewoundTick, serverTick, hit, wallDistance };
 }
 
 /** Movement Lab tools in lab rooms: respawn, or teleport ("Go to"). */

@@ -15,5 +15,6 @@ export default defineConfig({
       },
     },
   },
-  server: { port: 5173 },
+  // `npm run dev` serves the client here; the game server (npm start, port 8080) handles the rooms.
+  server: { port: 5173, proxy: { "/ws": { target: "ws://localhost:8080", ws: true } } },
 });

@@ -141,23 +141,52 @@ export class PawnView {
   readonly wire = new THREE.Group();
   private readonly bodyParts: CapsuleParts[] = [];
   private readonly wireParts: CapsuleParts[] = [];
+  private readonly tag: THREE.Sprite | null;
+  private readonly materials: THREE.Material[];
 
-  constructor(scene: THREE.Scene, color: number) {
+  /** `name` puts a name tag over the head (other players online); `wireColor` colours the hitbox view. */
+  constructor(
+    private readonly scene: THREE.Scene,
+    color: number,
+    name?: string,
+    wireColor = 0xff3b3b,
+  ) {
     const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.6 });
     const headMat = new THREE.MeshStandardMaterial({ color: 0x2b2f36, roughness: 0.5 });
-    const wireMat = new THREE.MeshBasicMaterial({ color: 0xff3b3b, wireframe: true, depthTest: false, transparent: true, opacity: 0.75 });
+    const wireMat = new THREE.MeshBasicMaterial({ color: wireColor, wireframe: true, depthTest: false, transparent: true, opacity: 0.75 });
+    this.materials = [mat, headMat, wireMat];
     for (let i = 0; i < 8; i++) {
       this.bodyParts.push(new CapsuleParts(this.body, i === 0 ? headMat : mat, true));
       this.wireParts.push(new CapsuleParts(this.wire, wireMat, false));
+    }
+    this.tag = name ? labelSprite(name, 0, 0, 0) : null;
+    if (this.tag) {
+      this.tag.scale.multiplyScalar(0.7);
+      this.body.add(this.tag);
     }
     scene.add(this.body, this.wire);
   }
 
   update(data: GameData, state: PawnState) {
-    poseHitboxes(data.movement, data.hitboxes, state).forEach((hb, i) => {
+    const parts = poseHitboxes(data.movement, data.hitboxes, state);
+    parts.forEach((hb, i) => {
       this.bodyParts[i].place(hb, 1);
       this.wireParts[i].place(hb, 1.02);
     });
+    if (this.tag) {
+      const head = parts[0]; // the head capsule comes first
+      this.tag.position.set(head.b[0], Math.max(head.a[1], head.b[1]) + head.radius + 0.3, head.b[2]);
+    }
+  }
+
+  /** Remove from the scene and free the GPU resources it owns. */
+  dispose() {
+    this.scene.remove(this.body, this.wire);
+    for (const m of this.materials) m.dispose();
+    if (this.tag) {
+      this.tag.material.map?.dispose();
+      this.tag.material.dispose();
+    }
   }
 }
 

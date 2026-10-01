@@ -15,8 +15,11 @@ import { quantizeRemote, SNAPSHOT_EVERY, SnapshotEncoder, type RemoteQ } from ".
 
 /** Inputs the server tries to keep queued per client (absorbs jitter); clients pace themselves to it. */
 export const TARGET_QUEUE = 2;
-/** More queued inputs than this and the oldest are dropped. */
-export const MAX_QUEUE = 16;
+/**
+ * More queued inputs than this and the oldest are dropped. Half a second: a browser that stalls (a slow
+ * frame, a GC pause) sends up to 16 ticks of input at once, on top of what is already queued.
+ */
+export const MAX_QUEUE = 32;
 /**
  * Input credit: every tick earns one, every applied input spends one, and up to MAX_CREDIT bank up while
  * a client's inputs aren't arriving (a TCP stall). Afterwards the backlog is applied at up to two inputs
@@ -201,6 +204,7 @@ export class Room {
         origin,
         dir,
         rewoundTick: Math.min(now, Math.max(viewTick, now - MAX_REWIND_TICKS)),
+        serverTick: now,
         hit: hit && { pawnId: hit.pawnId, part: hit.part, distance: hit.distance },
         wallDistance: wall && !hit ? wall.timeOfImpact : null,
       }),
