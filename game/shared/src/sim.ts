@@ -4,11 +4,11 @@ import { DT } from "./core/constants.js";
 import { rotateXZ, DEG } from "./core/math.js";
 import { loadGameData, type GameData } from "./data/load.js";
 import { buildLevel, type BuiltLevel } from "./level/builder.js";
-import { initRapier, PLAYER_GROUPS, type CharacterController, type Rapier, type World } from "./physics/rapier.js";
-import { capsuleFree, movementPrompt, stepPawn, type MoveContext, type MovementPrompt } from "./player/movement.js";
+import { initRapier, PLAYER_GROUPS, QUERY_SOLID, QUERY_STATIC as QUERY_STATIC_FILTER, refreshBroadPhase, type CharacterController, type Rapier, type World } from "./physics/rapier.js";
+import { capsuleFree, movementPrompt, poseCollider, stepPawn, type MoveContext, type MovementPrompt } from "./player/movement.js";
 import { initialPawnState, type Pawn, type PlayerController } from "./player/pawn.js";
 import { capsuleDims, stanceDims } from "./player/stance.js";
-import { Btn, PawnMode, Stance, type InputCmd } from "./player/types.js";
+import { Btn, PawnMode, Stance, type InputCmd, type PawnState } from "./player/types.js";
 
 /** Contextual hint for the HUD: "Space to mantle", "F to climb", "F to transfer" (Skopós camera). */
 export type Prompt = MovementPrompt | "transfer";
@@ -36,6 +36,11 @@ export class Sim {
     if (!def) throw new Error(`Unknown level "${levelId}"`);
     const m = data.movement;
     const world = new R.World({ x: 0, y: m.gravity, z: 0 });
+    // Pawns are kinematic colliders moved by our own code; world.step() only refreshes query structures
+    // (refreshBroadPhase) and there are no rigid bodies to integrate. The timestep must not be 0 all the
+    // same: with a zero timestep, after a collider has been removed, Rapier 0.21's tree intermittently
+    // loses static colliders (the floor missing from every query on ~9% of ticks; DECISIONS D-037).
+    world.timestep = DT;
     const level = buildLevel(R, world, def);
     const cc = world.createCharacterController(0.02);
     cc.enableAutostep(m.step.maxStepHeight, 0.2, false);
@@ -52,14 +57,20 @@ export class Sim {
     return sim;
   }
 
-  /** Create a controller and its pawn(s) at a level spawn. Skopós gets two shells side by side. */
-  addPlayer(name: string, operatorId: string, spawnIndex = 0): PlayerController {
+  /**
+   * Create a controller and its pawn(s) at a level spawn. Skopós gets two shells side by side. `ids` lets a
+   * client mirror the server's controller and pawn ids for the player it predicts.
+   */
+  addPlayer(name: string, operatorId: string, spawnIndex = 0, ids?: { controller: number; pawns: number[] }): PlayerController {
     const op = this.data.operators.get(operatorId);
     if (!op) throw new Error(`Unknown operator "${operatorId}"`);
+    if (ids && ids.pawns.length !== op.pawns) throw new Error(`${op.name} has ${op.pawns} pawn(s), got ${ids.pawns.length} ids`);
+    for (const id of ids?.pawns ?? []) if (this.pawns.has(id)) throw new Error(`pawn id ${id} is already in use`);
+    if (ids && this.controllers.has(ids.controller)) throw new Error(`controller id ${ids.controller} is already in use`);
     const spawn = this.level.def.spawns[spawnIndex % this.level.def.spawns.length];
     const yaw = spawn.yawDeg * DEG;
     const controller: PlayerController = {
-      id: this.nextId++,
+      id: ids ? this.claimId(ids.controller) : this.nextId++,
       name,
       operatorId,
       pawnIds: [],
@@ -73,21 +84,38 @@ export class Sim {
     // Check every shell's spot before creating any, so a failed join leaves nothing behind.
     const m = this.data.movement;
     const shellOffset = op.ability.params.idleShellOffset ?? 0; // required for 2-pawn operators (schema)
-    if (op.pawns > 1 && shellOffset < 2 * m.stance.collisionRadius) {
-      throw new Error(`${op.name}: ability.params.idleShellOffset (${shellOffset}) must be at least two body radii (${2 * m.stance.collisionRadius})`);
+    const minOffset = 2 * m.stance.collisionRadius + 0.02; // two bodies plus the controller's contact gap
+    if (op.pawns > 1 && shellOffset < minOffset) {
+      throw new Error(`${op.name}: ability.params.idleShellOffset (${shellOffset}) must be at least two body radii (${minOffset})`);
     }
-    const spots: [number, number][] = [];
-    for (let i = 0; i < op.pawns; i++) {
-      const [ox, oz] = rotateXZ(i * shellOffset, 0, yaw);
-      const px = spawn.pos[0] + ox;
-      const pz = spawn.pos[2] + oz;
-      if (i > 0 && !capsuleFree(this.ctx, null, px, spawn.pos[1] + 0.02, pz, m.stance.stand.height)) {
-        throw new Error(`${op.name}'s second shell would spawn inside level geometry at spawn "${spawn.id}"`);
+    const shellSpots = (bx: number, bz: number): [number, number][] =>
+      Array.from({ length: op.pawns }, (_, i) => {
+        const [ox, oz] = rotateXZ(i * shellOffset, 0, yaw);
+        return [bx + ox, bz + oz];
+      });
+    // capsuleFree tests a slightly shrunken body (right for walls); between players, keep a full body gap.
+    const clearOfPlayers = ([px, pz]: [number, number]) =>
+      [...this.pawns.values()].every((p) => p.state.mode === PawnMode.Dead || Math.hypot(p.state.x - px, p.state.z - pz) >= minOffset);
+    const fits = (spots: [number, number][], filter: number) =>
+      spots.every(([px, pz]) => capsuleFree(this.ctx, null, px, spawn.pos[1] + 0.02, pz, m.stance.stand.height, filter) && (filter !== QUERY_SOLID || clearOfPlayers([px, pz])));
+    const home = shellSpots(spawn.pos[0], spawn.pos[2]);
+    if (!fits(home.slice(1), QUERY_STATIC_FILTER)) {
+      throw new Error(`${op.name}'s second shell would spawn inside level geometry at spawn "${spawn.id}"`);
+    }
+    // Other players already on the spawn: take the nearest free spot around it (rings 0.8 m apart).
+    let spots = home;
+    search: for (let ring = 0; ring <= 6; ring++) {
+      for (let k = 0; k < (ring === 0 ? 1 : 8); k++) {
+        const a = (k / 8) * 2 * Math.PI;
+        const cand = shellSpots(spawn.pos[0] + Math.cos(a) * ring * 0.8, spawn.pos[2] + Math.sin(a) * ring * 0.8);
+        if (fits(cand, QUERY_SOLID)) {
+          spots = cand;
+          break search;
+        }
       }
-      spots.push([px, pz]);
     }
     for (const [i, [px, pz]] of spots.entries()) {
-      const pawn = this.spawnPawn(operatorId, px, spawn.pos[1], pz, yaw, controller.id);
+      const pawn = this.spawnPawn(operatorId, px, spawn.pos[1], pz, yaw, controller.id, ids?.pawns[i]);
       if (i > 0) pawn.state.stance = pawn.state.stanceFrom = Stance.Crouch; // idle shells crouch behind their shield
       controller.pawnIds.push(pawn.id);
     }
@@ -96,7 +124,13 @@ export class Sim {
     return controller;
   }
 
-  spawnPawn(operatorId: string, x: number, y: number, z: number, yaw: number, ownerId: number | null = null): Pawn {
+  private claimId(id: number): number {
+    if (!Number.isInteger(id) || id < 1) throw new Error(`bad id ${id}`);
+    this.nextId = Math.max(this.nextId, id + 1);
+    return id;
+  }
+
+  spawnPawn(operatorId: string, x: number, y: number, z: number, yaw: number, ownerId: number | null = null, id?: number): Pawn {
     const m = this.data.movement;
     const op = this.data.operators.get(operatorId);
     const maxHp = m.healthByRating[String(op?.healthRating ?? 2) as "1" | "2" | "3"];
@@ -104,9 +138,57 @@ export class Sim {
     const collider = this.world.createCollider(
       this.R.ColliderDesc.capsule(hh, r).setTranslation(x, y + hh + r + 0.02, z).setCollisionGroups(PLAYER_GROUPS),
     );
-    const pawn: Pawn = { id: this.nextId++, operatorId, ownerId, collider, state: initialPawnState(x, y + 0.02, z, Math.fround(yaw), maxHp) };
+    const pawnId = id !== undefined ? this.claimId(id) : this.nextId++;
+    // Float32-exact like every other state, and the collider placed from that state the same way a client
+    // places it from the correction it gets for this body, so both start bit-identical.
+    const t = collider.translation();
+    const pawn: Pawn = { id: pawnId, operatorId, ownerId, collider, state: initialPawnState(t.x, Math.fround(y + 0.02), t.z, Math.fround(yaw), maxHp) };
+    poseCollider(this.ctx, pawn);
     this.pawns.set(pawn.id, pawn);
+    refreshBroadPhase(this.world); // a new collider is invisible to queries until the next refresh
     return pawn;
+  }
+
+  /**
+   * A stand-in for a pawn simulated somewhere else (another player, as seen by a client): it blocks
+   * movement like any pawn, but step() never moves it; setPawnState() places it.
+   */
+  addProxy(id: number, operatorId: string, state: PawnState): Pawn {
+    if (this.pawns.has(id)) throw new Error(`pawn id ${id} is already in use`);
+    const collider = this.world.createCollider(this.R.ColliderDesc.capsule(0.5, 0.3).setCollisionGroups(PLAYER_GROUPS));
+    const pawn: Pawn = { id: this.claimId(id), operatorId, ownerId: null, collider, state: { ...state }, proxy: true };
+    this.pawns.set(id, pawn);
+    poseCollider(this.ctx, pawn);
+    refreshBroadPhase(this.world);
+    return pawn;
+  }
+
+  /**
+   * Overwrite a pawn's state exactly and move its collider to match (reconciliation restoring the
+   * server's state, or a proxy following snapshots). The state itself is copied untouched.
+   */
+  setPawnState(id: number, state: PawnState): void {
+    const pawn = this.pawns.get(id);
+    if (!pawn) throw new Error(`no pawn ${id}`);
+    pawn.state = { ...state };
+    poseCollider(this.ctx, pawn);
+    refreshBroadPhase(this.world);
+  }
+
+  removePawn(id: number): void {
+    const pawn = this.pawns.get(id);
+    if (!pawn) return;
+    this.world.removeCollider(pawn.collider, false);
+    this.pawns.delete(id);
+    refreshBroadPhase(this.world);
+  }
+
+  /** Remove a controller and every pawn it owns (a player leaving). */
+  removePlayer(controllerId: number): void {
+    const c = this.controllers.get(controllerId);
+    if (!c) return;
+    for (const id of c.pawnIds) this.removePawn(id);
+    this.controllers.delete(controllerId);
   }
 
   /** A controller's other, still-alive pawn (Skopós' idle shell), or null. */
@@ -149,6 +231,8 @@ export class Sim {
     pawn.collider.setHalfHeight(hh);
     pawn.collider.setTranslation({ x: spawn.pos[0], y: spawn.pos[1] + hh + r + 0.02, z: spawn.pos[2] });
     pawn.state = initialPawnState(spawn.pos[0], spawn.pos[1] + 0.02, spawn.pos[2], Math.fround(spawn.yawDeg * DEG), pawn.state.maxHp);
+    poseCollider(this.ctx, pawn); // also makes a dead body solid again
+    refreshBroadPhase(this.world);
   }
 
   /** Move a pawn to feet position (x, y, z) in a settled stance (lab "go to" menu, tests, admin tools). */
@@ -184,6 +268,8 @@ export class Sim {
       airPeakY: Math.fround(y + 0.02),
     });
     if (pawn.state.hp === 0) pawn.state.hp = pawn.state.maxHp;
+    poseCollider(this.ctx, pawn); // also makes a dead body solid again
+    refreshBroadPhase(this.world);
   }
 
   /**
@@ -191,12 +277,16 @@ export class Sim {
    * idle Skopós shells stay crouched. While Skopós looks through her other shell's camera, her mouse
    * turns that shell's view and the body she left stands still.
    */
-  step(inputs: ReadonlyMap<number, InputCmd>): void {
+  step(inputs: ReadonlyMap<number, InputCmd>, only?: ReadonlySet<number>, advanceTick = only === undefined): void {
+    // `only`: step just these controllers and their pawns; everyone else stays put. The server uses it
+    // to hold a player still while their next input hasn't arrived, and for an extra catch-up step
+    // (a second queued input after a network stall, which doesn't advance the tick counter).
     const drive = new Map<number, InputCmd>();
     // Pawns driven without real buttons this tick (the body left behind on the shell camera, the shell
     // being looked through): like the no-input case below, their held-button memory is kept.
     const idleDriven = new Set<number>();
     for (const c of this.controllers.values()) {
+      if (only && !only.has(c.id)) continue;
       const input = inputs.get(c.id);
       const heldBefore = c.prevButtons;
       const viewedBefore = this.viewedPawnId(c.id);
@@ -223,10 +313,13 @@ export class Sim {
       }
     }
     for (const pawn of this.pawns.values()) {
+      if (pawn.proxy) continue; // simulated elsewhere
+      if (only && (pawn.ownerId === null || !only.has(pawn.ownerId))) continue;
       const input = drive.get(pawn.id);
       if (input) {
         const held = pawn.state.prevButtons;
         stepPawn(this.ctx, pawn, input);
+        refreshBroadPhase(this.world); // the next pawn must see this one where it now is
         if (idleDriven.has(pawn.id)) pawn.state.prevButtons = held;
         continue;
       }
@@ -236,9 +329,10 @@ export class Sim {
       // memory so keys still held when input resumes don't count as fresh presses.
       const held = pawn.state.prevButtons;
       stepPawn(this.ctx, pawn, idleInput(pawn, idleShell ? Stance.Crouch : pawn.state.stance));
+      refreshBroadPhase(this.world);
       pawn.state.prevButtons = held;
     }
-    this.tick++;
+    if (advanceTick) this.tick++;
   }
 
   /**
@@ -257,7 +351,7 @@ export class Sim {
     const params = this.data.operators.get(c.operatorId)!.ability.params; // validated by the schema
     const transfer = params.transferSeconds;
     const activation = params.activationSeconds;
-    c.swapCooldown = Math.max(0, c.swapCooldown - DT);
+    c.swapCooldown = Math.fround(Math.max(0, c.swapCooldown - DT)); // float32-exact, like pawn state
 
     if (c.swapPhase === 1) {
       c.swapT += DT;
@@ -275,7 +369,7 @@ export class Sim {
         c.swapPhase = 0;
         c.swapT = 0;
         c.shellCam = false;
-        c.swapCooldown = params.swapCooldownSeconds;
+        c.swapCooldown = Math.fround(params.swapCooldownSeconds);
       }
       return;
     }

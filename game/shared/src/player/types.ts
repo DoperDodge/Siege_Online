@@ -21,6 +21,8 @@ export const Btn = {
   SlowWalk: 1 << 4,
   /** Unique-ability key (Skopós: open / close the idle shell's camera). */
   Ability: 1 << 5,
+  /** Fire. Phase 2: a test shot that only reports what lag compensation hit; weapons from Phase 3. */
+  Fire: 1 << 6,
 } as const;
 
 /**

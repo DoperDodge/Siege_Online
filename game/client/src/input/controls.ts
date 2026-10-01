@@ -7,7 +7,7 @@ import type { Keybinds, Settings } from "./settings.js";
 export type Action = keyof Keybinds | "ads" | "hitboxes" | "thirdPerson" | "help" | "settings";
 
 /** One-shot actions the lab handles itself (not sent to the simulation). */
-export type UiAction = "respawn" | "hitboxes" | "thirdPerson" | "help" | "settings";
+export type UiAction = "respawn" | "hitboxes" | "thirdPerson" | "help" | "settings" | "fire";
 
 const UI_KEYS: Record<string, UiAction> = { F1: "help", F3: "hitboxes", F4: "thirdPerson", Escape: "settings" };
 
@@ -113,6 +113,7 @@ export class Controls {
         return;
       }
       if (e.button === 2) this.press("ads");
+      else if (e.button === 0) this.onUi("fire"); // Phase 2: the online lab's debug shot
     });
     addEventListener("mouseup", (e) => {
       if (e.button === 2) this.release("ads");

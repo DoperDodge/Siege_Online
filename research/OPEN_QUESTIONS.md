@@ -128,6 +128,13 @@ marked `_unverified`. The Movement Lab is the easiest place to compare them agai
 10. **Ladders:** can you grab a ladder while crouched or prone, or do you stand up first? (We make you stand
    first.)
 
+### Placeholders added while building Phase 2 (not in the original research)
+
+1. **Standing on players:** can you stand on another player's head or back in Siege (e.g. on a crouched
+   teammate)? We currently slide you off at 1.5 m/s.
+2. **Player collision:** do players block each other completely, or can you push through (teammates or
+   enemies)? Do downed or dead bodies block? (We: everyone alive blocks; dead bodies don't.)
+
 ### [core_mechanics.md](core_mechanics.md) — 16
 
 Most of these can be answered in a Custom Game (Local), usually in minutes, with a stopwatch or a 60 fps recording and known map distances.
