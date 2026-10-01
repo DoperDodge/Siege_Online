@@ -15,3 +15,5 @@ export * from "./net/pawnState.js";
 export * from "./net/lagComp.js";
 export * from "./net/snapshot.js";
 export * from "./net/protocol.js";
+export * from "./net/room.js";
+export * from "./net/clientSession.js";

@@ -4,8 +4,10 @@
 //   u8   MSG_SNAPSHOT
 //   u32  tick                 server tick this snapshot describes
 //   u16  ackSeq               low 16 bits of the last input seq applied for this client
+//   u8   queueDepth           inputs waiting in the server's queue for this client (clock sync)
 //   u8   local                bit0 correction follows; bit1 the server idled you (no input) since the last
-//                             snapshot; bit2 a baseline checksum follows the removals
+//                             snapshot; bit2 a baseline checksum follows the removals; bit3 baselines were
+//                             reset (after a resync request): every record is against zero
 //   [correction]  u8 n (1 or 2 pawns); n × (varu pawnId, exact PawnState); ControllerState; u8 epoch
 //   varu nRecords;  nRecords × RemoteRecord (delta vs the last record sent on this connection for that pawn)
 //   varu nRemoved;  nRemoved × varu pawnId (the client forgets the pawn and its baseline)
@@ -199,10 +201,19 @@ export interface Correction {
   epoch: number;
 }
 
-export interface Snapshot {
+/** The per-client header of a snapshot. */
+export interface SnapshotHead {
   tick: number;
   ackSeq: number;
+  /** The server had no input for this client on some tick since the last snapshot. */
   idled: boolean;
+  /** Inputs waiting in the server's queue for this client; the client paces its ticks to keep it small. */
+  queueDepth: number;
+}
+
+export interface Snapshot extends SnapshotHead {
+  /** Baselines were reset before this snapshot (the answer to a resync request). */
+  baselineReset: boolean;
   correction: Correction | null;
   records: [number, RemoteQ][];
   removed: number[];
@@ -214,17 +225,22 @@ export class SnapshotEncoder {
   private readonly sent = new Map<number, RemoteQ>();
   private count = 0;
 
+  private resetPending = false;
+
   /** Forget the baselines (a client that lost track asked for a resync): the next snapshot is complete. */
   reset(): void {
     this.sent.clear();
+    this.resetPending = true;
   }
 
   /** Build the next snapshot. Only call it for a snapshot that will actually be sent (baselines advance). */
-  encode(tick: number, ackSeq: number, idled: boolean, correction: Correction | null, remotes: ReadonlyMap<number, RemoteQ>): Uint8Array {
+  encode(head: SnapshotHead, correction: Correction | null, remotes: ReadonlyMap<number, RemoteQ>): Uint8Array {
     if (remotes.size > MAX_RECORDS) throw new Error(`too many pawns for one snapshot (${remotes.size})`);
     const withChecksum = ++this.count % CHECKSUM_EVERY === 0;
     const w = new ByteWriter(256);
-    w.u8(MSG_SNAPSHOT).u32(tick).u16(ackSeq & 0xffff).u8((correction ? 1 : 0) | (idled ? 2 : 0) | (withChecksum ? 4 : 0));
+    w.u8(MSG_SNAPSHOT).u32(head.tick).u16(head.ackSeq & 0xffff).u8(Math.min(255, head.queueDepth));
+    w.u8((correction ? 1 : 0) | (head.idled ? 2 : 0) | (withChecksum ? 4 : 0) | (this.resetPending ? 8 : 0));
+    this.resetPending = false;
     if (correction) {
       w.u8(correction.pawns.length);
       for (const [id, s] of correction.pawns) {
@@ -262,8 +278,10 @@ export class SnapshotDecoder {
     if (r.u8() !== MSG_SNAPSHOT) throw new ProtocolError("not a snapshot");
     const tick = r.u32();
     const ackSeq = r.u16();
+    const queueDepth = r.u8();
     const local = r.u8();
-    if (local > 7) throw new ProtocolError("bad snapshot flags");
+    if (local > 15) throw new ProtocolError("bad snapshot flags");
+    if (local & 8) this.have.clear();
     let correction: Correction | null = null;
     if (local & 1) {
       const n = r.u8();
@@ -290,7 +308,7 @@ export class SnapshotDecoder {
     }
     const checksum = local & 4 ? r.u32() : null;
     if (r.remaining !== 0) throw new ProtocolError("trailing bytes");
-    return { tick, ackSeq, idled: (local & 2) !== 0, correction, records, removed, checksum };
+    return { tick, ackSeq, queueDepth, idled: (local & 2) !== 0, baselineReset: (local & 8) !== 0, correction, records, removed, checksum };
   }
 
   /** False when a snapshot's checksum shows this client's baselines drifted (ask for a resync). */

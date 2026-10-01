@@ -15,9 +15,10 @@
     "dev": "npm run dev -w @redmond/client",
     "build": "npm run build -w @redmond/client && npm run build -w @redmond/server",
     "start": "npm start -w @redmond/server",
-    "typecheck": "npm run typecheck --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present && tsc --noEmit -p tools/netsim",
     "test": "vitest run",
     "test:e2e": "node tools/e2e/movement-lab.mjs",
+    "netsim": "esbuild tools/netsim/run.ts --bundle --platform=node --format=esm --outfile=builds/netsim/run.mjs --log-level=warning && node builds/netsim/run.mjs",
     "check": "npm run typecheck && npm test && npm run build && npm run test:e2e",
     "e2e:setup": "playwright install chromium"
   },

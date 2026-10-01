@@ -121,15 +121,17 @@ export interface RosterEntry {
   pawnIds: number[];
 }
 
-export function encodeRoster(entries: RosterEntry[]): Uint8Array {
-  const w = new ByteWriter().u8(Msg.Roster).varu(entries.length);
+/** The room's players; `you` is the receiving client's own controller id (it changes on respawn). */
+export function encodeRoster(entries: RosterEntry[], you: number): Uint8Array {
+  const w = new ByteWriter().u8(Msg.Roster).varu(you).varu(entries.length);
   for (const e of entries) {
     w.varu(e.controllerId).str(e.name).str(e.operatorId).u8(e.pawnIds.length);
     for (const id of e.pawnIds) w.varu(id);
   }
   return w.finish();
 }
-export function decodeRoster(r: ByteReader): RosterEntry[] {
+export function decodeRoster(r: ByteReader): { you: number; entries: RosterEntry[] } {
+  const you = r.varu();
   const n = r.varu();
   if (n > 32) throw new ProtocolError("roster too long");
   const out: RosterEntry[] = [];
@@ -142,7 +144,7 @@ export function decodeRoster(r: ByteReader): RosterEntry[] {
     const pawnIds = Array.from({ length: k }, () => r.varu());
     out.push({ controllerId, name, operatorId, pawnIds });
   }
-  return out;
+  return { you, entries: out };
 }
 
 // ---------------------------------------------------------------- clock

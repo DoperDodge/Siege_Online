@@ -271,12 +271,15 @@ export class Sim {
    * idle Skopós shells stay crouched. While Skopós looks through her other shell's camera, her mouse
    * turns that shell's view and the body she left stands still.
    */
-  step(inputs: ReadonlyMap<number, InputCmd>): void {
+  step(inputs: ReadonlyMap<number, InputCmd>, only?: ReadonlySet<number>): void {
+    // `only`: an extra catch-up step for just these controllers (the server applying a second queued input
+    // after a network stall); everyone else, and the tick counter, stay put.
     const drive = new Map<number, InputCmd>();
     // Pawns driven without real buttons this tick (the body left behind on the shell camera, the shell
     // being looked through): like the no-input case below, their held-button memory is kept.
     const idleDriven = new Set<number>();
     for (const c of this.controllers.values()) {
+      if (only && !only.has(c.id)) continue;
       const input = inputs.get(c.id);
       const heldBefore = c.prevButtons;
       const viewedBefore = this.viewedPawnId(c.id);
@@ -304,6 +307,7 @@ export class Sim {
     }
     for (const pawn of this.pawns.values()) {
       if (pawn.proxy) continue; // simulated elsewhere
+      if (only && (pawn.ownerId === null || !only.has(pawn.ownerId))) continue;
       const input = drive.get(pawn.id);
       if (input) {
         const held = pawn.state.prevButtons;
@@ -321,7 +325,7 @@ export class Sim {
       refreshBroadPhase(this.world);
       pawn.state.prevButtons = held;
     }
-    this.tick++;
+    if (!only) this.tick++;
   }
 
   /**

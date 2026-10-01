@@ -85,7 +85,7 @@ describe("lobby, clock, error and debug messages round-trip", () => {
       { controllerId: 1, name: "Ulo", operatorId: "skopos", pawnIds: [2, 3] },
       { controllerId: 4, name: "Bot ✓", operatorId: "sledge", pawnIds: [5] },
     ];
-    expect(decodeRoster(body(encodeRoster(roster), Msg.Roster))).toEqual(roster);
+    expect(decodeRoster(body(encodeRoster(roster, 4), Msg.Roster))).toEqual({ you: 4, entries: roster });
   });
 
   it("ping, pong, error, debug shot, shot result, lab tools", () => {
