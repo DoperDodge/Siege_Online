@@ -15,7 +15,7 @@ Built in milestones; each one keeps the tests, both e2e scripts and the netsim g
 |---|---|
 | M1 Weapon, gunplay, combat and lab-rules data | ✅ 40 weapon files + rule files, validated, CSV-agreement tests |
 | M0 Hit-registration measurement harness | ⏳ next |
-| M2 Damage maths and loadout resolution | ⏳ |
+| M2 Damage maths and loadout resolution | ✅ pure functions + tests; nothing in the game uses them yet |
 | M3 Weapon state in the simulation (fire, ammo, reload, swap, modes), protocol v2 | ⏳ |
 | M4 Loadout pick online, data hash check | ⏳ |
 | M5 ADS, recoil, spread | ⏳ |
@@ -40,7 +40,15 @@ Built in milestones; each one keeps the tests, both e2e scripts and the netsim g
   numbers, more than one shot per tick, and more), cross-file checks catch loadouts naming a missing weapon,
   and a test compares every number and UNVERIFIED mark with the CSV and the class rules
   (weapons_notes.md §4). The Ballistic Shield and GONNE-6 are in the data but can't be picked until Phase 8
-  (D-054). 135 unit tests.
+  (D-054).
+- **Loadouts and damage maths (M2):** a loadout pick (operator, two weapons with sight, barrel, grip and laser,
+  gadgets) is checked against the data (who can carry what, per-operator attachments, the shield and GONNE-6
+  not pickable yet) and an invalid one quietly becomes the default loadout. It resolves into the numbers the
+  simulation will use, all in 64 Hz ticks: ADS time with sight and laser bonuses, reload times with the angled
+  grip, refill points (estimated from similar guns where nobody measured them), swap time, move speed, recoil
+  with barrels and grips, extended-barrel damage. Damage: falloff by distance, head/neck/limb zones, buckshot
+  pellets ×1.5 to the head, Skopós's idle-shell headshot rule, and limb penetration (none / simple / full).
+  156 unit tests.
 
 ---
 
