@@ -64,8 +64,12 @@ app.innerHTML = `
 const $ = <T extends HTMLElement>(sel: string) => app.querySelector<T>(sel)!;
 
 // Online state, declared before the lobby runs (its callbacks write some of it).
-/** Extra round trip to simulate (pause menu, or `?lag=100`). */
-let addedRttMs = Math.max(0, Math.min(400, Number(params.get("lag")) || 0));
+/** Simulated network conditions (pause menu, or `?lag=100&jitter=20&loss=1`; PLAN §16.9). */
+const conditions = {
+  rttMs: Math.max(0, Math.min(400, Number(params.get("lag")) || 0)),
+  jitterMs: Math.max(0, Math.min(100, Number(params.get("jitter")) || 0)),
+  lossPct: Math.max(0, Math.min(10, Number(params.get("loss")) || 0)),
+};
 /** Why the connection ended, once it has. */
 let disconnected: string | null = null;
 let rosterChanged = false;
@@ -73,8 +77,11 @@ let lastShot: (ShotResult & { targetName: string | null }) | null = null;
 let showShot: (shot: ShotResult) => void = () => {};
 /** Online tests can script the input (window.__lab.input). */
 let scripted: Partial<InputCmd> | null = null;
-/** A click waiting to go out as the fire button on the next input. */
+/** A click waiting to go out as the fire button on the next input, and the render tick of the frame clicked on. */
 let firePulse = false;
+let fireViewTick = 0;
+/** Render tick of the frame on screen (remote players are drawn at it). */
+let shownRenderTick = 0;
 let flashUntil = 0;
 
 // Online: the lobby connects (create or join a room) and the session builds the simulation from the
@@ -227,7 +234,9 @@ function renderPause() {
   const room = net
     ? `<section><h3>Room ${net.session.roomCode} · ${net.session.roster.length} player${net.session.roster.length === 1 ? "" : "s"}</h3>
       <div class="goto"><button class="invite">Copy invite link</button><button class="leave">Leave room</button></div>
-      <label>Simulated extra latency <select class="lag">${[0, 50, 100, 150, 200].map((ms) => `<option value="${ms}" ${ms === addedRttMs ? "selected" : ""}>${ms ? `+${ms} ms round trip` : "Off"}</option>`).join("")}</select></label>
+      <label>Simulated extra latency <select data-net="rttMs">${[0, 50, 100, 150, 200].map((ms) => `<option value="${ms}" ${ms === conditions.rttMs ? "selected" : ""}>${ms ? `+${ms} ms round trip` : "Off"}</option>`).join("")}</select></label>
+      <label>Simulated jitter <select data-net="jitterMs">${[0, 10, 20, 40].map((ms) => `<option value="${ms}" ${ms === conditions.jitterMs ? "selected" : ""}>${ms ? `up to ${ms} ms each way` : "Off"}</option>`).join("")}</select></label>
+      <label>Simulated loss <select data-net="lossPct">${[0, 0.5, 1, 2, 5].map((p) => `<option value="${p}" ${p === conditions.lossPct ? "selected" : ""}>${p ? `${p} % (a 200 ms stall each)` : "Off"}</option>`).join("")}</select></label>
       <p class="note">Left click fires a test shot: the server rewinds everyone else to what you saw (lag compensation) and draws the result.</p></section>`
     : "";
   pause.innerHTML = `
@@ -257,7 +266,9 @@ function renderPause() {
     net?.close();
     location.href = "/";
   });
-  pause.querySelector<HTMLSelectElement>(".lag")?.addEventListener("change", (e) => (addedRttMs = Number((e.target as HTMLSelectElement).value)));
+  pause.querySelectorAll<HTMLSelectElement>("[data-net]").forEach((sel) =>
+    sel.addEventListener("change", () => (conditions[sel.dataset.net as keyof typeof conditions] = Number(sel.value))),
+  );
   pause.querySelectorAll<HTMLButtonElement>("[data-goto]").forEach((b) =>
     b.addEventListener("click", (e) => {
       goTo(Number(b.dataset.goto));
@@ -345,9 +356,10 @@ function tick() {
   snapshotAll();
   if (net) {
     const input = scripted ? { ...controls.sample(++seq), ...scripted } : controls.sample(++seq);
+    // Predicts locally and sends the input; a shot claims the frame that was on screen when you clicked.
     if (firePulse) input.buttons |= Btn.Fire;
+    net.session.tick(input, firePulse ? fireViewTick : undefined);
     firePulse = false;
-    net.session.tick(input); // predicts locally and sends the input
   } else {
     const input = autotest ? autoInput(++seq) : controls.sample(++seq);
     sim.step(new Map([[ctrl.id, input]]));
@@ -430,6 +442,7 @@ function frame(now: number) {
   const me = possessed();
   const viewed = sim.pawns.get(viewedId) ?? me;
   const renderTick = net ? net.session.frame() : 0;
+  shownRenderTick = renderTick;
   syncPawnViews();
   for (const pawn of sim.pawns.values()) {
     const v = pawnViews.get(pawn.id)!;
@@ -713,7 +726,7 @@ function lobby(): Promise<OnlineConnection> {
       const conn = new OnlineConnection({
         name,
         room,
-        addedRttMs: () => addedRttMs,
+        conditions: () => conditions,
         session: {
           onWelcome: () => {
             // The level loads after Welcome; the connection may have failed meanwhile (a server restart,
@@ -892,7 +905,9 @@ function syncPawnViews() {
  * judges it with that input's view and against what we were drawing when we sent it.
  */
 function fire() {
-  if (net?.session.ready) firePulse = true;
+  if (!net?.session.ready || firePulse) return;
+  firePulse = true;
+  fireViewTick = shownRenderTick;
 }
 
 const shotMarks: { line: THREE.Line; ghost: PawnView | null; until: number }[] = [];
@@ -942,7 +957,7 @@ function updateNetStats(ms: number) {
   const kbps = (bytes: number) => ((bytes * 8) / ms).toFixed(0); // bits per ms = kbit/s
   $(".net").textContent = [
     `room ${s.roomCode} · ${s.roster.length} here`,
-    `ping ${Math.round(s.rttMs)} ms${addedRttMs ? ` (${addedRttMs} simulated)` : ""}`,
+    `ping ${Math.round(s.rttMs)} ms${conditions.rttMs || conditions.jitterMs || conditions.lossPct ? ` (simulated +${conditions.rttMs} ms${conditions.jitterMs ? `, ±${conditions.jitterMs}` : ""}${conditions.lossPct ? `, ${conditions.lossPct} % loss` : ""})` : ""}`,
     `others drawn ${Math.round(s.interpDelayMs)} ms (${((s.interpDelayMs / 1000) * TICK_HZ).toFixed(1)} ticks) behind`,
     `corrections ${s.stats.corrections}`,
     `↓${kbps(s.stats.bytesIn - bytesSeen.in)} ↑${kbps(s.stats.bytesOut - bytesSeen.out)} kbps`,

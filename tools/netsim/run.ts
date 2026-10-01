@@ -1,5 +1,6 @@
 // CLI: npm run netsim -- [--clients 10] [--seconds 30] [--one-way 50] [--jitter 10] [--seed 1]
-import { runNetsim, type NetsimOptions } from "./netsim.js";
+//      npm run netsim -- --hitreg [--seconds 30] [--one-way 50] [--jitter 10] [--cap 16] [--seed 1]
+import { runHitreg, runNetsim, type NetsimOptions } from "./netsim.js";
 
 const args = process.argv.slice(2);
 const opt = (name: string) => {
@@ -10,6 +11,17 @@ const o: Partial<NetsimOptions> = {};
 for (const [flag, key] of [["clients", "clients"], ["seconds", "seconds"], ["one-way", "oneWayMs"], ["jitter", "jitterMs"], ["stall-ms", "stallMs"], ["stalls", "stallsPerSecond"], ["drift", "driftPct"], ["seed", "seed"]] as const) {
   const v = opt(flag);
   if (v !== undefined) (o as Record<string, number>)[key] = v;
+}
+if (args.includes("--hitreg")) {
+  const r = await runHitreg({
+    ...(opt("seconds") !== undefined && { seconds: opt("seconds") }),
+    ...(opt("one-way") !== undefined && { oneWayMs: opt("one-way") }),
+    ...(opt("jitter") !== undefined && { jitterMs: opt("jitter") }),
+    ...(opt("cap") !== undefined && { maxRewindTicks: opt("cap") }),
+    ...(opt("seed") !== undefined && { seed: opt("seed") }),
+  });
+  console.log(JSON.stringify(r, null, 2));
+  process.exit(r.judged === r.shots && r.uncappedAgree >= 0.99 * (r.judged - r.capped) ? 0 : 1);
 }
 if (args.includes("--spread")) (o.spread = true), (o.crowd = false);
 const r = await runNetsim(o);

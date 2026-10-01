@@ -1,6 +1,7 @@
-// The browser end of a match connection (PLAN §5): a WebSocket to the server's /ws, an optional extra
-// delay for testing (PLAN §17 Phase 2: "two PCs with 100 ms simulated latency"), and the shared
-// ClientSession that predicts our own movement and interpolates everyone else.
+// The browser end of a match connection (PLAN §5): a WebSocket to the server's /ws, a network condition
+// simulator for testing (PLAN §16.9: latency, jitter and loss; PLAN §17 Phase 2: "two PCs with 100 ms
+// simulated latency"), and the shared ClientSession that predicts our own movement and interpolates
+// everyone else.
 import { ClientSession, encodeCreateRoom, encodeHello, encodeJoinRoom, type ClientSessionOptions } from "@redmond/shared";
 
 /** The game server's WebSocket address: same host as the page (`?server=host:port` overrides it). */
@@ -45,12 +46,25 @@ const CLOSE_REASONS: Record<number, string> = {
   1012: "The server is restarting. Reconnect in a moment.",
 };
 
+/** Simulated network conditions, read for every message so they can change mid-game. */
+export interface NetConditions {
+  /** Extra round trip, ms (half each way). */
+  rttMs: number;
+  /** Extra random delay per message, 0..jitterMs each way (order is kept, as in TCP). */
+  jitterMs: number;
+  /**
+   * Percent of messages "lost". Over TCP a lost packet is resent after a timeout and everything behind it
+   * waits (head-of-line blocking), so a loss shows up as a LOSS_STALL_MS stall of that direction.
+   */
+  lossPct: number;
+}
+const LOSS_STALL_MS = 200;
+
 export interface OnlineOptions {
   name: string;
   /** Join this room code, or create a new room when null. */
   room: string | null;
-  /** Extra round-trip time to simulate, in ms (read for every message, so it can change mid-game). */
-  addedRttMs: () => number;
+  conditions: () => NetConditions;
   session: Omit<ClientSessionOptions, "send" | "now">;
   onClose(reason: string): void;
 }
@@ -64,9 +78,12 @@ export class OnlineConnection {
   closed = false;
 
   constructor(private readonly o: OnlineOptions) {
-    const half = () => o.addedRttMs() / 2;
-    this.up = new DelayLine(half);
-    this.down = new DelayLine(half);
+    const delay = () => {
+      const c = o.conditions();
+      return c.rttMs / 2 + Math.random() * c.jitterMs + (Math.random() * 100 < c.lossPct ? LOSS_STALL_MS : 0);
+    };
+    this.up = new DelayLine(delay);
+    this.down = new DelayLine(delay);
     this.session = new ClientSession({ ...o.session, send: (b) => this.send(b), now: () => performance.now() });
     this.ws = new WebSocket(serverUrl());
     this.ws.binaryType = "arraybuffer";

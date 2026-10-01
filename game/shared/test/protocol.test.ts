@@ -90,7 +90,7 @@ describe("lobby, clock, error and debug messages round-trip", () => {
     expect(decodePing(body(encodePing(1234.5678), Msg.Ping))).toEqual({ clientTime: 1234.5678 });
     expect(decodePong(body(encodePong({ clientTime: 99.25, serverTick: 777 }), Msg.Pong))).toEqual({ clientTime: 99.25, serverTick: 777 });
     expect(decodeError(body(encodeError(ErrorCode.NoSuchRoom, "No room ABCDE"), Msg.Error))).toEqual({ code: ErrorCode.NoSuchRoom, message: "No room ABCDE" });
-    const shot = { origin: [1, 2, 3] as [number, number, number], dir: [0, 0, -1] as [number, number, number], rewoundTick: 990.5, serverTick: 1000, hit: { pawnId: 7, part: "head", distance: 12.5 }, wallDistance: 30 };
+    const shot = { seq: 65000, viewTick: 988.25, origin: [1, 2, 3] as [number, number, number], dir: [0, 0, -1] as [number, number, number], rewoundTick: 990.5, serverTick: 1000, hit: { pawnId: 7, part: "head", distance: 12.5 }, wallDistance: 30 };
     expect(decodeShotResult(body(encodeShotResult(shot), Msg.ShotResult))).toEqual(shot);
     expect(decodeShotResult(body(encodeShotResult({ ...shot, hit: null, wallDistance: null }), Msg.ShotResult))).toEqual({ ...shot, hit: null, wallDistance: null });
     expect(decodeLabTool(body(encodeLabTool({ kind: "respawn" }), Msg.LabTool))).toEqual({ kind: "respawn" });

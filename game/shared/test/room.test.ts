@@ -144,7 +144,7 @@ describe("room and client session", () => {
     expect(a.shots).toHaveLength(2);
     expect(a.shots[1].hit).toBeNull();
     // A client claiming it draws others far in the past is held to the interpolation ceiling (150 ms ≈
-    // 9.6 ticks behind its newest snapshot), well inside the 200 ms (12.8-tick) rewind cap.
+    // 9.6 ticks behind its newest snapshot), well inside the 250 ms (16-tick) rewind cap.
     a.holdUp = true;
     h.ticks(10);
     const now = h.room.sim.tick;
