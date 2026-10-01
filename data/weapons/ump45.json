@@ -1,0 +1,50 @@
+{
+  "_doc": "UMP45 (Pulse). research/weapons.csv row ump45; class rules research/weapons_notes.md §4. Damage 42 since Y10S4.2. Extended barrel 47 / min 37 and ammo-refill 1.26 / 2.38 s community-measured.",
+  "_season": "Y11S3.1",
+  "_unverified": [
+    "damage.extendedBarrel",
+    "destruction",
+    "fire.modes",
+    "reload.refillEmptyS",
+    "reload.refillTacticalS"
+  ],
+  "id": "ump45",
+  "name": "UMP45",
+  "class": "smg",
+  "fire": {
+    "kind": "hitscan",
+    "rpm": 600,
+    "modes": ["auto", "burst3", "semi"],
+    "pellets": 1
+  },
+  "damage": {
+    "base": 42,
+    "falloff": [[18, 42], [28, 25]],
+    "penetration": "simple",
+    "head": "kill",
+    "extendedBarrel": { "base": 47, "falloff": [[18, 47], [28, 37]] }
+  },
+  "ammo": {
+    "magazine": 25,
+    "plusOne": true,
+    "maxAmmo": 176
+  },
+  "reload": {
+    "kind": "magazine",
+    "tacticalS": 2.4,
+    "emptyS": 2.9,
+    "refillTacticalS": 1.26,
+    "refillEmptyS": 2.38
+  },
+  "adsS": 0.46,
+  "destruction": null,
+  "attachments": {
+    "sights": ["iron", "nonmag"],
+    "barrels": ["muzzle_brake", "compensator", "flash_hider", "suppressor", "extended_barrel"],
+    "grips": ["vertical", "angled", "horizontal"],
+    "underbarrel": ["laser"]
+  },
+  "recoil": {
+    "template": "smg"
+  }
+}

@@ -5,6 +5,45 @@ known issues, and what's next.
 
 ---
 
+## Phase 3 — Gunplay · 🚧 in progress (branch `claude/phase-3-gunplay`, draft PR #4)
+
+**Done when (PLAN §17):** headshots and hit registration feel right at 100 ms.
+
+Built in milestones; each one keeps the tests, both e2e scripts and the netsim green, and the game playable.
+
+| Milestone | Status |
+|---|---|
+| M1 Weapon, gunplay, combat and lab-rules data | ✅ 40 weapon files + rule files, validated, CSV-agreement tests |
+| M0 Hit-registration measurement harness | ⏳ next |
+| M2 Damage maths and loadout resolution | ⏳ |
+| M3 Weapon state in the simulation (fire, ammo, reload, swap, modes), protocol v2 | ⏳ |
+| M4 Loadout pick online, data hash check | ⏳ |
+| M5 ADS, recoil, spread | ⏳ |
+| M6 Hit registration, damage, death | ⏳ |
+| M7 DBNO and revive | ⏳ |
+| M8 Melee | ⏳ |
+| M9 Client presentation (viewmodel, HUD, hit markers) | ⏳ |
+| M10 Range Lab (dummies) | ⏳ |
+| M11 End-to-end tests, netsim gates, docs | ⏳ |
+
+### What's done
+- **Weapon data (M1, D-039):** `data/weapons/<id>.json` for all 40 roster weapons, generated once from
+  `research/weapons.csv`. Damage and falloff, fire rate and modes, magazine and +1, total ammo, reload times
+  (with the community-measured ammo-refill points), ADS time, attachments (including the per-operator ones:
+  Dokkaebi's Mk 14 telescopic sight and muzzle brake, Brava's CAMRS grips, the 5.7 USG muzzle brake),
+  extended-barrel damage, and the two official recoil facts (Mk 14 first-shot ×3.5, Reaper MK2 stages).
+  `data/gunplay.json` holds class, sight, attachment and handling rules; `data/combat.json` damage zones,
+  penetration, DBNO, revive and melee; `data/rules/lab.json` friendly-fire settings for lab rooms. Every
+  invented value is in its file's `_unverified` list and in research/OPEN_QUESTIONS.md ("Placeholders added
+  while building Phase 3", 32 questions). Nothing reads the data yet.
+- **Checks:** schemas reject impossible weapons (damage rising with range, a barrel offered without its
+  numbers, more than one shot per tick, and more), cross-file checks catch loadouts naming a missing weapon,
+  and a test compares every number and UNVERIFIED mark with the CSV and the class rules
+  (weapons_notes.md §4). The Ballistic Shield and GONNE-6 are in the data but can't be picked until Phase 8
+  (D-054). 135 unit tests.
+
+---
+
 ## Phase 2 — Netcode core · ✅ merged and live on Railway (2026-10-01); waiting for your two-PC test
 
 **Done when (PLAN §17):** two PCs play smoothly at 100 ms simulated latency. Before sign-off PLAN §3 also

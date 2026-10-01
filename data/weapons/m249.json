@@ -1,0 +1,49 @@
+{
+  "_doc": "M249 (Striker). research/weapons.csv row m249; class rules research/weapons_notes.md §4. Open-bolt belt LMG (100+0). Whether it has a Muzzle Brake is weapons_notes.md Q6. Ammo-refill 4.67 / 6.60 s community-measured.",
+  "_season": "Y11S3.1",
+  "_unverified": [
+    "attachments.barrels",
+    "destruction",
+    "reload.refillEmptyS",
+    "reload.refillTacticalS",
+    "reload.tacticalS"
+  ],
+  "id": "m249",
+  "name": "M249",
+  "class": "lmg",
+  "fire": {
+    "kind": "hitscan",
+    "rpm": 650,
+    "modes": ["auto"],
+    "pellets": 1
+  },
+  "damage": {
+    "base": 48,
+    "falloff": [[30, 48], [40, 32]],
+    "penetration": "simple",
+    "head": "kill"
+  },
+  "ammo": {
+    "magazine": 100,
+    "plusOne": false,
+    "maxAmmo": 301
+  },
+  "reload": {
+    "kind": "magazine",
+    "tacticalS": 7.6,
+    "emptyS": 7.6,
+    "refillTacticalS": 4.67,
+    "refillEmptyS": 6.6
+  },
+  "adsS": 0.56,
+  "destruction": null,
+  "attachments": {
+    "sights": ["iron", "nonmag", "magnified"],
+    "barrels": ["compensator", "flash_hider"],
+    "grips": ["vertical", "angled", "horizontal"],
+    "underbarrel": ["laser"]
+  },
+  "recoil": {
+    "template": "lmg"
+  }
+}

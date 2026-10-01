@@ -1,0 +1,50 @@
+{
+  "_doc": "M4 (Striker). research/weapons.csv row m4; class rules research/weapons_notes.md §4. Extended barrel 49 / min 39 and ammo-refill 1.31 / 2.70 s community-measured.",
+  "_season": "Y11S3.1",
+  "_unverified": [
+    "damage.extendedBarrel",
+    "destruction",
+    "fire.modes",
+    "reload.refillEmptyS",
+    "reload.refillTacticalS"
+  ],
+  "id": "m4",
+  "name": "M4",
+  "class": "assault_rifle",
+  "fire": {
+    "kind": "hitscan",
+    "rpm": 750,
+    "modes": ["auto", "burst3", "semi"],
+    "pellets": 1
+  },
+  "damage": {
+    "base": 44,
+    "falloff": [[25, 44], [35, 26]],
+    "penetration": "simple",
+    "head": "kill",
+    "extendedBarrel": { "base": 49, "falloff": [[25, 49], [35, 39]] }
+  },
+  "ammo": {
+    "magazine": 30,
+    "plusOne": true,
+    "maxAmmo": 181
+  },
+  "reload": {
+    "kind": "magazine",
+    "tacticalS": 2.6,
+    "emptyS": 3.4,
+    "refillTacticalS": 1.31,
+    "refillEmptyS": 2.7
+  },
+  "adsS": 0.52,
+  "destruction": null,
+  "attachments": {
+    "sights": ["iron", "nonmag", "magnified"],
+    "barrels": ["muzzle_brake", "compensator", "flash_hider", "suppressor", "extended_barrel"],
+    "grips": ["vertical", "angled", "horizontal"],
+    "underbarrel": ["laser"]
+  },
+  "recoil": {
+    "template": "assault_rifle"
+  }
+}

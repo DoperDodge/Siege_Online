@@ -1,0 +1,44 @@
+{
+  "_doc": "PARA-308 (Brava). research/weapons.csv row para_308; class rules research/weapons_notes.md §4. Extended barrel 52 / min 42 and ammo-refill 1.52 / 2.50 s are community-measured (row notes).",
+  "_season": "Y11S3.1",
+  "_unverified": ["damage.extendedBarrel", "destruction", "reload.refillEmptyS", "reload.refillTacticalS"],
+  "id": "para_308",
+  "name": "PARA-308",
+  "class": "assault_rifle",
+  "fire": {
+    "kind": "hitscan",
+    "rpm": 650,
+    "modes": ["auto", "semi"],
+    "pellets": 1
+  },
+  "damage": {
+    "base": 47,
+    "falloff": [[25, 47], [35, 28]],
+    "penetration": "simple",
+    "head": "kill",
+    "extendedBarrel": { "base": 52, "falloff": [[25, 52], [35, 42]] }
+  },
+  "ammo": {
+    "magazine": 30,
+    "plusOne": true,
+    "maxAmmo": 181
+  },
+  "reload": {
+    "kind": "magazine",
+    "tacticalS": 2.6,
+    "emptyS": 3.3,
+    "refillTacticalS": 1.52,
+    "refillEmptyS": 2.5
+  },
+  "adsS": 0.52,
+  "destruction": null,
+  "attachments": {
+    "sights": ["iron", "nonmag", "magnified"],
+    "barrels": ["muzzle_brake", "compensator", "flash_hider", "suppressor", "extended_barrel"],
+    "grips": ["vertical", "angled", "horizontal"],
+    "underbarrel": ["laser"]
+  },
+  "recoil": {
+    "template": "assault_rifle"
+  }
+}

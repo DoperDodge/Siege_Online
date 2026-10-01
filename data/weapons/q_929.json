@@ -1,0 +1,41 @@
+{
+  "_doc": "Q-929 (Lesion). research/weapons.csv row q_929; class rules research/weapons_notes.md §4.",
+  "_season": "Y11S3.1",
+  "_unverified": ["damage.falloff", "destruction"],
+  "id": "q_929",
+  "name": "Q-929",
+  "class": "handgun",
+  "fire": {
+    "kind": "hitscan",
+    "rpm": 494,
+    "modes": ["semi"],
+    "pellets": 1
+  },
+  "damage": {
+    "base": 60,
+    "falloff": [[12, 60], [14, 36]],
+    "penetration": "simple",
+    "head": "kill"
+  },
+  "ammo": {
+    "magazine": 10,
+    "plusOne": true,
+    "maxAmmo": 101
+  },
+  "reload": {
+    "kind": "magazine",
+    "tacticalS": 1.8,
+    "emptyS": 2.1
+  },
+  "adsS": 0.24,
+  "destruction": null,
+  "attachments": {
+    "sights": ["iron"],
+    "barrels": ["suppressor", "muzzle_brake"],
+    "grips": [],
+    "underbarrel": ["laser"]
+  },
+  "recoil": {
+    "template": "handgun"
+  }
+}

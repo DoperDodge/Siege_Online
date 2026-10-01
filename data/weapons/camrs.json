@@ -1,0 +1,47 @@
+{
+  "_doc": "CAMRS (Brava). research/weapons.csv row camrs; class rules research/weapons_notes.md §4. Grips only on Brava's copy (weapons_notes.md §6; Q6 asks whether that still holds). Ammo-refill 1.36 / 2.58 s community-measured.",
+  "_season": "Y11S3.1",
+  "_unverified": ["attachments.grips", "destruction", "reload.refillEmptyS", "reload.refillTacticalS"],
+  "id": "camrs",
+  "name": "CAMRS",
+  "class": "marksman_rifle",
+  "fire": {
+    "kind": "hitscan",
+    "rpm": 444,
+    "modes": ["semi"],
+    "pellets": 1
+  },
+  "damage": {
+    "base": 69,
+    "falloff": [[30, 69], [40, 49]],
+    "penetration": "full",
+    "head": "kill"
+  },
+  "ammo": {
+    "magazine": 20,
+    "plusOne": true,
+    "maxAmmo": 141
+  },
+  "reload": {
+    "kind": "magazine",
+    "tacticalS": 2.6,
+    "emptyS": 3.4,
+    "refillTacticalS": 1.36,
+    "refillEmptyS": 2.58
+  },
+  "adsS": 0.52,
+  "destruction": "high",
+  "attachments": {
+    "sights": ["iron", "nonmag", "magnified", "telescopic"],
+    "barrels": ["muzzle_brake", "suppressor"],
+    "grips": [
+      { "id": "vertical", "operators": ["brava"] },
+      { "id": "angled", "operators": ["brava"] },
+      { "id": "horizontal", "operators": ["brava"] }
+    ],
+    "underbarrel": ["laser"]
+  },
+  "recoil": {
+    "template": "marksman_rifle"
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "_doc": "M1014 (Thermite, Pulse). research/weapons.csv row m1014; class rules research/weapons_notes.md §4. Tube-fed: reload_tactical_s is per shell and reload_empty_s is empty-to-full (weapons_notes.md §1). Damage 30 since Y11S3.1.",
+  "_season": "Y11S3.1",
+  "_unverified": ["damage.falloff", "destruction"],
+  "id": "m1014",
+  "name": "M1014",
+  "class": "shotgun",
+  "fire": {
+    "kind": "hitscan",
+    "rpm": 218,
+    "modes": ["semi"],
+    "pellets": 8
+  },
+  "damage": {
+    "base": 30,
+    "falloff": [[5, 30], [6, 22], [10, 22], [13, 13]],
+    "penetration": "none",
+    "head": "pellet"
+  },
+  "ammo": {
+    "magazine": 8,
+    "plusOne": false,
+    "maxAmmo": 49
+  },
+  "reload": {
+    "kind": "per_shell",
+    "perShellS": 0.6,
+    "emptyFullS": 5.79
+  },
+  "adsS": 0.34,
+  "destruction": "full_close_range",
+  "attachments": {
+    "sights": ["iron", "nonmag"],
+    "barrels": [],
+    "grips": [],
+    "underbarrel": ["laser"]
+  },
+  "recoil": {
+    "template": "shotgun"
+  }
+}

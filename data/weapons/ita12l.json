@@ -1,0 +1,41 @@
+{
+  "_doc": "ITA12L (Mira). research/weapons.csv row ita12l; class rules research/weapons_notes.md §4. Tube-fed (per-shell reload). Pellet damage 40 is a placeholder (weapons_notes.md Q1).",
+  "_season": "Y11S3.1",
+  "_unverified": ["damage.base", "damage.falloff", "destruction"],
+  "id": "ita12l",
+  "name": "ITA12L",
+  "class": "shotgun",
+  "fire": {
+    "kind": "hitscan",
+    "rpm": 88,
+    "modes": ["semi"],
+    "pellets": 8
+  },
+  "damage": {
+    "base": 40,
+    "falloff": [[5, 40], [6, 30], [10, 30], [13, 18]],
+    "penetration": "none",
+    "head": "pellet"
+  },
+  "ammo": {
+    "magazine": 8,
+    "plusOne": false,
+    "maxAmmo": 57
+  },
+  "reload": {
+    "kind": "per_shell",
+    "perShellS": 0.8,
+    "emptyFullS": 7.97
+  },
+  "adsS": 0.34,
+  "destruction": "full_close_range",
+  "attachments": {
+    "sights": ["iron", "nonmag"],
+    "barrels": [],
+    "grips": [],
+    "underbarrel": ["laser"]
+  },
+  "recoil": {
+    "template": "shotgun"
+  }
+}

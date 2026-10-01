@@ -1,0 +1,41 @@
+{
+  "_doc": "Super Shorty (Brava, Sentry). research/weapons.csv row super_shorty; class rules research/weapons_notes.md §4. Tube-fed secondary shotgun (per-shell reload); mainly for utility holes.",
+  "_season": "Y11S3.1",
+  "_unverified": ["damage.falloff", "destruction"],
+  "id": "super_shorty",
+  "name": "Super Shorty",
+  "class": "shotgun",
+  "fire": {
+    "kind": "hitscan",
+    "rpm": 102,
+    "modes": ["semi"],
+    "pellets": 8
+  },
+  "damage": {
+    "base": 35,
+    "falloff": [[5, 35], [6, 26], [10, 26], [13, 15]],
+    "penetration": "none",
+    "head": "pellet"
+  },
+  "ammo": {
+    "magazine": 3,
+    "plusOne": false,
+    "maxAmmo": 46
+  },
+  "reload": {
+    "kind": "per_shell",
+    "perShellS": 0.7,
+    "emptyFullS": 3
+  },
+  "adsS": 0.34,
+  "destruction": "full_close_range",
+  "attachments": {
+    "sights": ["iron", "nonmag"],
+    "barrels": [],
+    "grips": [],
+    "underbarrel": ["laser"]
+  },
+  "recoil": {
+    "template": "shotgun"
+  }
+}

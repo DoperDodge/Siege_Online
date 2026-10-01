@@ -1,0 +1,10 @@
+{
+  "_doc": "Room rules for lab rooms (Movement Lab online, Range Lab). Field names follow research/core_mechanics.md §11's recommendation. Siege's Action Phase has team damage on and Prep Phase off (§11). Reverse friendly fire is implemented but off here, so two-browser tests don't trip it; `lastAliveDies` is off because a lab has no rounds. `dummyRespawnS` is our lab setting, not a Siege value.",
+  "_season": "Y11S3",
+  "_unverified": ["reverseFriendlyFire.thresholdHp"],
+  "id": "lab",
+  "friendlyFire": { "actionPhase": true, "prepPhase": false, "scale": 1.0 },
+  "reverseFriendlyFire": { "enabled": false, "thresholdHp": 100 },
+  "lastAliveDies": false,
+  "dummyRespawnS": 3
+}

@@ -1,0 +1,53 @@
+{
+  "_doc": "PCX-33 (Skopós). research/weapons.csv row pcx_33; class rules research/weapons_notes.md §4. Skopós: each shell keeps its own ammo (weapons_notes.md §4.6). Extended barrel 40 / min 32 and ammo-refill 1.03 / 2.56 s community-measured.",
+  "_season": "Y11S3.1",
+  "_unverified": [
+    "ammo.maxAmmo",
+    "damage.extendedBarrel",
+    "damage.penetration",
+    "destruction",
+    "reload.emptyS",
+    "reload.refillEmptyS",
+    "reload.refillTacticalS",
+    "reload.tacticalS"
+  ],
+  "id": "pcx_33",
+  "name": "PCX-33",
+  "class": "assault_rifle",
+  "fire": {
+    "kind": "hitscan",
+    "rpm": 745,
+    "modes": ["auto"],
+    "pellets": 1
+  },
+  "damage": {
+    "base": 36,
+    "falloff": [[25, 36], [35, 21]],
+    "penetration": "simple",
+    "head": "kill",
+    "extendedBarrel": { "base": 40, "falloff": [[25, 40], [35, 32]] }
+  },
+  "ammo": {
+    "magazine": 31,
+    "plusOne": true,
+    "maxAmmo": 155
+  },
+  "reload": {
+    "kind": "magazine",
+    "tacticalS": 3.3,
+    "emptyS": 3.3,
+    "refillTacticalS": 1.03,
+    "refillEmptyS": 2.56
+  },
+  "adsS": 0.52,
+  "destruction": null,
+  "attachments": {
+    "sights": ["iron", "nonmag"],
+    "barrels": ["muzzle_brake", "compensator", "flash_hider", "suppressor", "extended_barrel"],
+    "grips": ["vertical", "angled", "horizontal"],
+    "underbarrel": ["laser"]
+  },
+  "recoil": {
+    "template": "assault_rifle"
+  }
+}

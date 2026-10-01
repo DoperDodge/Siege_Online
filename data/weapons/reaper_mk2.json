@@ -1,0 +1,53 @@
+{
+  "_doc": "Reaper MK2 (Sledge, Pulse). research/weapons.csv row reaper_mk2; class rules research/weapons_notes.md §4. Recoil stages start at bullets 0/3/10/25 (official Y11S2.3). Tactical reload has no clean value (Fandom's 0.34 s is a typo): 2.0 s is a placeholder from the other machine pistols' tactical/empty ratio. Sight list is a placeholder (official 'comes with a sight', Fandom lists none). Ammo-refill 1.12 / 2.69 s community-measured.",
+  "_season": "Y11S3.1",
+  "_unverified": [
+    "ammo.maxAmmo",
+    "attachments.sights",
+    "damage.falloff",
+    "damage.penetration",
+    "destruction",
+    "reload.refillEmptyS",
+    "reload.refillTacticalS",
+    "reload.tacticalS"
+  ],
+  "id": "reaper_mk2",
+  "name": "Reaper MK2",
+  "class": "machine_pistol",
+  "fire": {
+    "kind": "hitscan",
+    "rpm": 765,
+    "modes": ["auto"],
+    "pellets": 1
+  },
+  "damage": {
+    "base": 31,
+    "falloff": [[18, 31], [28, 18]],
+    "penetration": "none",
+    "head": "kill"
+  },
+  "ammo": {
+    "magazine": 33,
+    "plusOne": true,
+    "maxAmmo": 130
+  },
+  "reload": {
+    "kind": "magazine",
+    "tacticalS": 2,
+    "emptyS": 2.85,
+    "refillTacticalS": 1.12,
+    "refillEmptyS": 2.69
+  },
+  "adsS": 0.38,
+  "destruction": null,
+  "attachments": {
+    "sights": ["iron"],
+    "barrels": ["muzzle_brake", "compensator", "flash_hider", "suppressor"],
+    "grips": [],
+    "underbarrel": ["laser"]
+  },
+  "recoil": {
+    "template": "machine_pistol",
+    "stageStarts": [0, 3, 10, 25]
+  }
+}
