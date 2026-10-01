@@ -3,7 +3,6 @@
 import { randomInt } from "node:crypto";
 import {
   ByteReader,
-  decodeDebugShot,
   decodeHello,
   decodeInput,
   decodeJoinRoom,
@@ -32,9 +31,15 @@ export const LOBBY_TIMEOUT_MS = 120_000;
  */
 export const RATE_PER_SECOND = 200;
 export const RATE_BURST = 400;
-/** Messages that respawn a body or cast rays cost the server far more than an input: a tighter limit. */
+/** Messages that respawn or move a body cost the server far more than an input: a tighter limit. */
 export const HEAVY_PER_SECOND = 5;
 export const HEAVY_BURST = 10;
+/** Per client address: open connections, rooms created, and wrong room codes (against code guessing). */
+export const MAX_CONNECTIONS_PER_IP = 16;
+export const CREATES_PER_MINUTE = 6;
+export const CREATE_BURST = 3;
+export const BAD_JOINS_PER_MINUTE = 10;
+export const BAD_JOIN_BURST = 10;
 
 /** WebSocket close codes (RFC 6455 §7.4). */
 export const Close = { Normal: 1000, Protocol: 1002, Policy: 1008, Internal: 1011, Restarting: 1012 } as const;
@@ -117,7 +122,7 @@ export function cleanName(raw: string): string {
   return [...name].slice(0, MAX_NAME).join("") || "Player";
 }
 
-class Bucket {
+export class Bucket {
   private tokens: number;
   private last: number;
   constructor(
@@ -129,11 +134,63 @@ class Bucket {
     this.last = now;
   }
   take(now: number): boolean {
-    this.tokens = Math.min(this.burst, this.tokens + ((now - this.last) / 1000) * this.rate);
-    this.last = now;
+    this.refill(now);
     if (this.tokens < 1) return false;
     this.tokens--;
     return true;
+  }
+  /** Back to its full burst (nothing to remember about this client any more). */
+  full(now: number): boolean {
+    this.refill(now);
+    return this.tokens >= this.burst;
+  }
+  private refill(now: number) {
+    this.tokens = Math.min(this.burst, this.tokens + ((now - this.last) / 1000) * this.rate);
+    this.last = now;
+  }
+}
+
+/** Limits per client address, shared by all its connections (one script can't take every room). */
+export class IpGate {
+  private readonly ips = new Map<string, { connections: number; creates: Bucket; badJoins: Bucket }>();
+
+  constructor(private readonly now: () => number) {}
+
+  private entry(ip: string) {
+    let e = this.ips.get(ip);
+    if (!e) {
+      const t = this.now();
+      e = { connections: 0, creates: new Bucket(CREATES_PER_MINUTE / 60, CREATE_BURST, t), badJoins: new Bucket(BAD_JOINS_PER_MINUTE / 60, BAD_JOIN_BURST, t) };
+      this.ips.set(ip, e);
+    }
+    return e;
+  }
+
+  /** A new connection from `ip`, or false if it already has too many. */
+  open(ip: string): boolean {
+    const e = this.entry(ip);
+    if (e.connections >= MAX_CONNECTIONS_PER_IP) return false;
+    e.connections++;
+    return true;
+  }
+  close(ip: string) {
+    const e = this.ips.get(ip);
+    if (e) e.connections = Math.max(0, e.connections - 1);
+  }
+  canCreate(ip: string): boolean {
+    return this.entry(ip).creates.take(this.now());
+  }
+  /** Counts a wrong room code; false once this address has guessed too many. */
+  badJoin(ip: string): boolean {
+    return this.entry(ip).badJoins.take(this.now());
+  }
+  /** Forget addresses with no connections whose limits have fully recovered. */
+  sweep() {
+    const t = this.now();
+    for (const [ip, e] of this.ips) if (e.connections === 0 && e.creates.full(t) && e.badJoins.full(t)) this.ips.delete(ip);
+  }
+  get size(): number {
+    return this.ips.size;
   }
 }
 
@@ -156,6 +213,9 @@ export class Connection {
     private readonly t: Transport,
     private readonly rooms: RoomManager,
     private readonly now: () => number,
+    /** The client's address and the limits shared by its connections. */
+    private readonly ip = "local",
+    private readonly gate = new IpGate(now),
   ) {
     this.openedAt = now();
     this.rate = new Bucket(RATE_PER_SECOND, RATE_BURST, this.openedAt);
@@ -234,6 +294,10 @@ export class Connection {
   }
 
   private create() {
+    if (!this.gate.canCreate(this.ip)) {
+      this.t.send(encodeError(ErrorCode.RateLimited, "You've created several rooms in a row. Wait a minute, or join one with its code."));
+      return;
+    }
     this.state = "joining";
     this.rooms.create().then(
       (room) => {
@@ -254,8 +318,12 @@ export class Connection {
 
   private join(code: string) {
     const room = this.rooms.get(code);
-    if (!room) return this.t.send(encodeError(ErrorCode.NoSuchRoom, `No room with code ${code.replace(/[^A-Z0-9]/g, "").slice(0, 8)}`));
-    this.enter(room);
+    if (room) return this.enter(room);
+    if (!this.gate.badJoin(this.ip)) {
+      this.t.send(encodeError(ErrorCode.RateLimited, "Too many wrong room codes. Wait a minute and try again."));
+      return this.close(Close.Policy, "too many wrong room codes");
+    }
+    this.t.send(encodeError(ErrorCode.NoSuchRoom, `No room with code ${code.replace(/[^A-Z0-9]/g, "").slice(0, 8)}`));
   }
 
   private enter(room: Room) {
@@ -277,17 +345,15 @@ export class Connection {
         return room.onInput(id, decodeInput(r));
       case Msg.Ping:
         return room.onPing(id, decodePing(r).clientTime);
+      case Msg.Resync:
+        return room.onResync(id); // cheap (the next snapshot is sent in full), and must not be lost
     }
     if (!this.heavy.take(this.now())) return; // drop, don't disconnect: a key held down can repeat
     switch (type) {
-      case Msg.Resync:
-        return room.onResync(id);
       case Msg.PickOperator:
         return room.pickOperator(id, decodePickOperator(r).operatorId);
       case Msg.LabTool:
         return room.onLabTool(id, decodeLabTool(r));
-      case Msg.DebugShot:
-        return room.onDebugShot(id, decodeDebugShot(r).viewTick);
       default:
         return this.close(Close.Protocol, "unexpected message");
     }

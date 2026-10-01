@@ -7,7 +7,7 @@ import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 import { TICK_HZ } from "@redmond/shared";
 import { WebSocketServer } from "ws";
-import { Close, Connection, RoomManager } from "./lobby.js";
+import { Close, Connection, IpGate, RoomManager } from "./lobby.js";
 import { resolveStaticPath } from "./paths.js";
 
 const PORT = Number(process.env.PORT ?? 8080);
@@ -71,26 +71,47 @@ const server = createServer((req, res) => {
 // ---------------------------------------------------------------- match rooms
 
 const MAX_CONNECTIONS = Number(process.env.MAX_CONNECTIONS ?? 500);
+// Behind Railway's edge proxy every socket comes from the proxy; the client's own address is in the
+// header the proxy sets (X-Real-IP, set in .railway/railway.ts). Locally, the socket address is the client.
+const CLIENT_IP_HEADER = process.env.CLIENT_IP_HEADER?.toLowerCase();
 const nowMs = () => performance.now();
 const rooms = new RoomManager(nowMs);
+const gate = new IpGate(nowMs);
 const connections = new Set<Connection>();
 let shuttingDown = false;
+
+function clientIp(req: IncomingMessage): string {
+  const header = CLIENT_IP_HEADER ? req.headers[CLIENT_IP_HEADER] : undefined;
+  const value = Array.isArray(header) ? header[0] : header;
+  return (value?.split(",")[0].trim() || req.socket.remoteAddress || "unknown").slice(0, 64);
+}
 
 // Inputs are 24 bytes; nothing a client sends legitimately comes close to 4 KB. Compression would cost
 // CPU on every snapshot for little gain on already-compact binary.
 const wss = new WebSocketServer({ noServer: true, maxPayload: 4096, perMessageDeflate: false });
 
 server.on("upgrade", (req, socket, head) => {
+  // Node hands the raw socket over without an error listener: a client resetting the connection while we
+  // answer would otherwise crash the whole server.
+  socket.on("error", () => {});
   let pathname = "";
   try {
     pathname = new URL(req.url ?? "/", "http://localhost").pathname;
   } catch {
     // answered below
   }
-  if (pathname !== "/ws" || shuttingDown || connections.size >= MAX_CONNECTIONS) {
-    socket.end(`HTTP/1.1 ${pathname !== "/ws" ? "404 Not Found" : "503 Service Unavailable"}\r\nconnection: close\r\n\r\n`);
+  const ip = clientIp(req);
+  const refuse = pathname !== "/ws" ? "404 Not Found" : shuttingDown || connections.size >= MAX_CONNECTIONS ? "503 Service Unavailable" : !gate.open(ip) ? "429 Too Many Requests" : null;
+  if (refuse) {
+    socket.end(`HTTP/1.1 ${refuse}\r\nconnection: close\r\n\r\n`);
     return;
   }
+  let released = false;
+  const release = () => {
+    if (!released) gate.close(ip);
+    released = true;
+  };
+  socket.once("close", release); // the handshake can fail before a WebSocket exists
   wss.handleUpgrade(req, socket, head, (ws) => {
     let alive = true;
     const conn = new Connection(
@@ -103,6 +124,8 @@ server.on("upgrade", (req, socket, head) => {
       },
       rooms,
       nowMs,
+      ip,
+      gate,
     );
     connections.add(conn);
     ws.on("message", (data, isBinary) => {
@@ -153,6 +176,7 @@ function loop() {
 
 setInterval(() => {
   for (const c of connections) c.sweep();
+  gate.sweep();
 }, 1000).unref();
 
 function stats() {

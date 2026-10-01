@@ -22,12 +22,11 @@ import {
   type ShotResult,
 } from "./protocol.js";
 import { predictionHash, TARGET_QUEUE } from "./room.js";
-import { interpolateRemote, remoteState, SNAPSHOT_EVERY, SnapshotDecoder, type Snapshot } from "./snapshot.js";
+import { interpolateRemote, MAX_INTERP_MS, remoteState, SNAPSHOT_EVERY, SnapshotDecoder, type Snapshot } from "./snapshot.js";
 
 const SNAPSHOT_MS = (1000 * SNAPSHOT_EVERY) / TICK_HZ;
-/** Interpolation delay bounds (ms): at least two snapshot intervals, at most 150 ms. */
+/** Interpolation delay bounds (ms): at least two snapshot intervals, at most MAX_INTERP_MS. */
 const MIN_INTERP_MS = 2 * SNAPSHOT_MS;
-const MAX_INTERP_MS = 150;
 /** Keep a second of remote history (render time never goes further back than the interpolation delay). */
 const REMOTE_HISTORY_TICKS = TICK_HZ;
 
@@ -72,6 +71,7 @@ export class ClientSession {
   private jitterMs = 0;
   private queueEwma = TARGET_QUEUE;
   private awaitingReset = false;
+  private resyncSentAt = 0;
   private backlog: Uint8Array[] = [];
   private creating: Promise<void> | null = null;
   private markLoaded: () => void = () => {};
@@ -93,10 +93,13 @@ export class ClientSession {
     return this.ctrl !== null && this.corrected;
   }
 
-  /** Feed one message from the server. Messages arriving while the level loads are replayed after it. */
+  /**
+   * Feed one message from the server. Messages arriving while the level loads are replayed after it,
+   * except errors (a wrong room code is answered before any Welcome).
+   */
   handle(bytes: Uint8Array): void {
     this.stats.bytesIn += bytes.length;
-    if (bytes[0] !== Msg.Welcome && (!this.sim || this.creating)) {
+    if (bytes[0] !== Msg.Welcome && bytes[0] !== Msg.Error && (!this.sim || this.creating)) {
       this.backlog.push(bytes);
       return;
     }
@@ -192,7 +195,8 @@ export class ClientSession {
     const ack = unwrap16(snap.ackSeq, this.seq);
     this.pending = this.pending.filter((p) => p.seq > ack);
     const ctrl = this.ctrl;
-    if (snap.correction && ctrl) {
+    // A correction is for the body in our roster; one for another body (its roster not here yet) waits.
+    if (snap.correction && ctrl && snap.correction.pawns.every(([id]) => ctrl.pawnIds.includes(id))) {
       for (const [id, state] of snap.correction.pawns) if (sim.pawns.has(id)) sim.setPawnState(id, state);
       Object.assign(ctrl, snap.correction.ctrl);
       this.epoch = snap.correction.epoch;
@@ -206,11 +210,21 @@ export class ClientSession {
     // the newest known position (what our own prediction collides with).
     if (snap.baselineReset) this.awaitingReset = false;
     if (!this.awaitingReset) {
+      const own = new Set(ctrl?.pawnIds ?? []);
       for (const id of snap.removed) {
         sim.removePawn(id);
         this.remotes.delete(id);
       }
-      const own = new Set(ctrl?.pawnIds ?? []);
+      if (snap.baselineReset) {
+        // Everyone the server still has is in this snapshot; removals we skipped while waiting for it
+        // are gone for good, so drop anyone it doesn't list.
+        for (const id of [...this.remotes.keys()])
+          if (!this.decoder.have.has(id) && !own.has(id)) {
+            this.remotes.delete(id);
+            if (sim.pawns.get(id)?.proxy) sim.removePawn(id);
+          }
+        for (const p of [...sim.pawns.values()]) if (p.proxy && !this.decoder.have.has(p.id)) sim.removePawn(p.id);
+      }
       for (const [id, q] of this.decoder.have) {
         if (own.has(id)) continue;
         const state = remoteState(q);
@@ -225,8 +239,12 @@ export class ClientSession {
         // Our baselines drifted from the server's: ask for a full resend and ignore deltas until it comes.
         this.stats.resyncs++;
         this.awaitingReset = true;
+        this.resyncSentAt = now;
         this.send(encodeResync());
       }
+    } else if (now - this.resyncSentAt > 1000) {
+      this.resyncSentAt = now; // the request may have been lost to a rate limit: ask again
+      this.send(encodeResync());
     }
   }
 
@@ -312,11 +330,6 @@ export class ClientSession {
     const viewBack = Math.max(0, this.lastSnapTick - this.renderTick());
     this.send(encodeInput({ cmd: q, predictedHash: predictionHash(sim, ctrl), epoch: this.epoch, snapTick: this.lastSnapTick, viewBackQ8: viewBack * 256 }));
     return q;
-  }
-
-  /** The render tick the server should rewind to for a shot fired now (sent along with a debug shot). */
-  shotViewTick(): number {
-    return this.renderTick();
   }
 
   ping(): void {

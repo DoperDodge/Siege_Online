@@ -6,7 +6,6 @@ import {
   Btn,
   DEG,
   DT,
-  encodeDebugShot,
   encodeLabTool,
   encodePickOperator,
   eyePose,
@@ -74,6 +73,8 @@ let lastShot: (ShotResult & { targetName: string | null }) | null = null;
 let showShot: (shot: ShotResult) => void = () => {};
 /** Online tests can script the input (window.__lab.input). */
 let scripted: Partial<InputCmd> | null = null;
+/** A click waiting to go out as the fire button on the next input. */
+let firePulse = false;
 let flashUntil = 0;
 
 // Online: the lobby connects (create or join a room) and the session builds the simulation from the
@@ -344,6 +345,8 @@ function tick() {
   snapshotAll();
   if (net) {
     const input = scripted ? { ...controls.sample(++seq), ...scripted } : controls.sample(++seq);
+    if (firePulse) input.buttons |= Btn.Fire;
+    firePulse = false;
     net.session.tick(input); // predicts locally and sends the input
   } else {
     const input = autotest ? autoInput(++seq) : controls.sample(++seq);
@@ -352,7 +355,8 @@ function tick() {
   const p = possessed();
   // The view follows the body you're looking through (Skopós' other shell while on its camera).
   const nowViewed = sim.viewedPawnId(ctrl.id);
-  const v = sim.pawns.get(nowViewed)!;
+  const v = sim.pawns.get(nowViewed);
+  if (!p || !v) return; // online, between bodies (the server's new one hasn't arrived yet)
   if (nowViewed !== viewedId) {
     viewedId = nowViewed;
     controls.setView(v.state.yaw, v.state.pitch);
@@ -583,6 +587,8 @@ Object.defineProperty(window, "__lab", {
         rttMs: s.rttMs,
         remotes: s.remoteIds().map((id) => ({ id, state: s.remoteAt(id) })),
         own: possessed() ? { ...possessed().state } : null,
+        pawnId: ctrl.possessedPawnId,
+        frames,
         lastShot,
         disconnected,
       };
@@ -793,7 +799,7 @@ const SMOOTH_SECONDS = 0.1;
  */
 function followServer(elapsed: number): boolean {
   const s = net!.session;
-  if (!s.ready || !s.ctrl) return false;
+  if (disconnected || !s.ready || !s.ctrl || !sim.pawns.has(s.ctrl.possessedPawnId)) return false;
   if (rosterChanged) {
     rosterChanged = false;
     // Other players' views are rebuilt with their (new) name tags.
@@ -865,9 +871,12 @@ function syncPawnViews() {
     if (!pawnViews.has(pawn.id)) pawnViews.set(pawn.id, pawn.proxy ? new PawnView(scene, 0xf97316, nameOfPawn(pawn.id) || undefined) : new PawnView(scene, 0x3b82f6));
 }
 
-/** A test shot (no weapons until Phase 3): the server judges it against what we were seeing. */
+/**
+ * A test shot (no weapons until Phase 3): the fire button goes out with the next input, so the server
+ * judges it with that input's view and against what we were drawing when we sent it.
+ */
 function fire() {
-  if (net?.session.ready) net.send(encodeDebugShot(net.session.shotViewTick()));
+  if (net?.session.ready) firePulse = true;
 }
 
 const shotMarks: { line: THREE.Line; ghost: PawnView | null; until: number }[] = [];

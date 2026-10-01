@@ -10,8 +10,9 @@ import { Sim } from "../sim.js";
 import { ByteWriter, fnv1a } from "./bytes.js";
 import { HitboxHistory } from "./lagComp.js";
 import { controllerState, writeControllerState, writePawnState } from "./pawnState.js";
+import { Btn } from "../player/types.js";
 import { encodeError, encodePong, encodeRoster, encodeShotResult, encodeWelcome, ErrorCode, unwrap16, type InputMsg, type LabTool, type RosterEntry } from "./protocol.js";
-import { quantizeRemote, SNAPSHOT_EVERY, SnapshotEncoder, type RemoteQ } from "./snapshot.js";
+import { MAX_INTERP_MS, quantizeRemote, SNAPSHOT_EVERY, SnapshotEncoder, type RemoteQ } from "./snapshot.js";
 
 /** Inputs the server tries to keep queued per client (absorbs jitter); clients pace themselves to it. */
 export const TARGET_QUEUE = 2;
@@ -29,6 +30,16 @@ export const MAX_QUEUE = 32;
 export const MAX_CREDIT = 16;
 /** Longest rewind for lag compensation (PLAN §5: ~200 ms). */
 export const MAX_REWIND_TICKS = 0.2 * TICK_HZ;
+/** How far behind its newest snapshot a client can claim to be drawing others (its interpolation ceiling). */
+const MAX_VIEW_BACK_TICKS = (MAX_INTERP_MS / 1000) * TICK_HZ + 0.5;
+/**
+ * A player whose inputs stop arriving is held still for up to this many ticks (a short stall costs no
+ * correction), then simulated without input (gravity, a vault in progress) so nobody can hang in the air
+ * or on a ledge by withholding inputs.
+ */
+export const MAX_HOLD_TICKS = 16;
+/** Fewest ticks between two test shots from one player. */
+const SHOT_INTERVAL_TICKS = 8;
 /** Don't queue more bytes than this on a slow connection; skip its snapshots until it drains. */
 const MAX_BUFFERED = 16 * 1024;
 export const MAX_ROOM_PLAYERS = 10;
@@ -57,11 +68,24 @@ interface Member {
   /** The input applied this tick, whose predicted hash is checked after stepping. */
   applied: InputMsg | null;
   idled: boolean;
+  /** Ticks in a row without an input. */
+  heldTicks: number;
   needCorrection: boolean;
   epoch: number;
+  /**
+   * The current body is new (join, respawn, operator pick) and its first correction hasn't gone out yet:
+   * inputs are still for the old body and are dropped.
+   */
+  newBody: boolean;
+  /**
+   * After that correction (its epoch): inputs are dropped until the first one made with it arrives.
+   * Inputs arrive in order, so everything before that one was sent for the old body.
+   */
+  confirmEpoch: number | null;
   encoder: SnapshotEncoder;
-  /** View angles of the last applied input (the debug shot fires along these). */
-  lastView: { yaw: number; pitch: number };
+  /** Buttons of the last applied input (to see the fire button go down), and when this member last fired. */
+  lastButtons: number;
+  lastShotTick: number;
 }
 
 /** Hash of everything a client predicts for itself: each owned pawn's exact state plus its controller. */
@@ -93,7 +117,7 @@ export class Room {
   }
 
   static async create(code: string, levelId: string, opts: { lab?: boolean } = {}): Promise<Room> {
-    return new Room(code, await Sim.create(levelId), levelId, opts.lab ?? true);
+    return new Room(code, await Sim.create(levelId), levelId, opts.lab ?? false);
   }
 
   get size(): number {
@@ -116,12 +140,16 @@ export class Room {
       lastSeq: 0,
       applied: null,
       idled: false,
+      heldTicks: 0,
       needCorrection: false,
       credit: 0,
       corrections: 0,
       epoch: 0,
+      newBody: true,
+      confirmEpoch: null,
       encoder: new SnapshotEncoder(),
-      lastView: { yaw: 0, pitch: 0 },
+      lastButtons: 0,
+      lastShotTick: -Infinity,
     };
     this.members.set(m.id, m);
     this.spawn(m, operatorId);
@@ -151,6 +179,8 @@ export class Room {
     m.ctrl = this.sim.addPlayer(m.name, operatorId);
     m.queue = [];
     m.needCorrection = true;
+    m.newBody = true;
+    m.lastButtons = 0;
   }
 
   onInput(memberId: number, msg: InputMsg): void {
@@ -159,6 +189,12 @@ export class Room {
     const seq = unwrap16(msg.cmd.seq, m.lastQueuedSeq);
     if (seq <= m.lastQueuedSeq) return; // duplicate or out of date
     m.lastQueuedSeq = seq;
+    // Inputs for a body that has been replaced: the client discards them too.
+    if (m.newBody) return;
+    if (m.confirmEpoch !== null) {
+      if (((msg.epoch - m.confirmEpoch) & 0xff) >= 128) return; // made before the new body's correction
+      m.confirmEpoch = null;
+    }
     m.queue.push({ ...msg, cmd: { ...msg.cmd, seq } });
   }
 
@@ -174,30 +210,41 @@ export class Room {
   onLabTool(memberId: number, tool: LabTool): void {
     const m = this.members.get(memberId);
     if (!m || !m.ctrl || !this.lab) return;
-    if (tool.kind === "respawn") this.spawn(m, m.ctrl.operatorId);
-    else if (Math.abs(tool.x) <= MAX_COORD && Math.abs(tool.y) <= MAX_COORD && Math.abs(tool.z) <= MAX_COORD) {
+    if (tool.kind === "respawn") {
+      this.spawn(m, m.ctrl.operatorId);
+      this.broadcastRoster(); // new pawn ids: everyone (the respawned client too) needs them
+    } else if (Math.abs(tool.x) <= MAX_COORD && Math.abs(tool.y) <= MAX_COORD && Math.abs(tool.z) <= MAX_COORD) {
+      // Same body: inputs already queued or in flight still apply after the jump, exactly as the client
+      // replays them on top of the correction.
       this.sim.teleport(m.ctrl.possessedPawnId, tool.x, tool.y, tool.z, tool.yawDeg);
-      m.queue = [];
       m.needCorrection = true;
     }
   }
 
   /**
-   * A test shot along the member's current view, judged against everyone else as they were at render time
-   * `viewTick` (lag compensation, capped at MAX_REWIND_TICKS). The level stops the ray where it's hit.
+   * The fire button went down in an applied input: a test shot along that input's view from the body's
+   * eye, judged against everyone else as they were when that input was made. The view time comes from
+   * the input itself (its newest snapshot tick minus how far behind it the client was drawing), bounded
+   * by the client's interpolation ceiling and capped at MAX_REWIND_TICKS (lag compensation, PLAN §5).
+   * The level stops the ray where it's hit.
    */
-  onDebugShot(memberId: number, viewTick: number): void {
-    const m = this.members.get(memberId);
-    if (!m || !m.ctrl) return;
+  private fire(m: Member, applied: InputMsg) {
+    const pressed = applied.cmd.buttons & ~m.lastButtons;
+    m.lastButtons = applied.cmd.buttons;
+    if (!(pressed & Btn.Fire) || !m.ctrl) return;
+    const now = this.sim.tick;
+    if (now - m.lastShotTick < SHOT_INTERVAL_TICKS) return;
+    m.lastShotTick = now;
     const pawn = this.sim.pawns.get(m.ctrl.possessedPawnId);
     if (!pawn) return;
+    const snapTick = Math.min(now, unwrap16(applied.snapTick, now));
+    const viewTick = snapTick - Math.min(MAX_VIEW_BACK_TICKS, applied.viewBackQ8 / 256);
     const origin = eyePose(this.sim.data.movement, this.sim.data.hitboxes, pawn.state).pos;
-    const { yaw, pitch } = m.lastView;
+    const { yaw, pitch } = applied.cmd;
     const dir: Vec3 = [-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch)];
     const ray = new this.sim.R.Ray({ x: origin[0], y: origin[1], z: origin[2] }, { x: dir[0], y: dir[1], z: dir[2] });
     const wall = this.sim.world.castRay(ray, 200, true, undefined, QUERY_STATIC);
     const maxDist = wall ? wall.timeOfImpact : 200;
-    const now = this.sim.tick;
     const hit = this.history.raycast(origin, dir, maxDist, viewTick, now, MAX_REWIND_TICKS, new Set(m.ctrl.pawnIds));
     m.client.send(
       encodeShotResult({
@@ -231,13 +278,14 @@ export class Room {
     if (!next) return null;
     m.credit--;
     m.lastSeq = next.cmd.seq;
-    m.lastView = { yaw: next.cmd.yaw, pitch: next.cmd.pitch };
+    m.heldTicks = 0;
     return next;
   }
 
-  /** Only judge predictions made after the client applied our latest correction. */
-  private check(m: Member, applied: InputMsg) {
+  /** After stepping an input: judge the prediction made with it (only if made after our latest correction), then any shot. */
+  private afterInput(m: Member, applied: InputMsg) {
     if (m.ctrl && applied.epoch === (m.epoch & 0xff) && predictionHash(this.sim, m.ctrl) !== applied.predictedHash) m.needCorrection = true;
+    this.fire(m, applied);
   }
 
   /**
@@ -262,6 +310,9 @@ export class Room {
       if (!next) {
         m.idled = true;
         this.stats.idledTicks++;
+        // Held still for a short stall; after that the body carries on without input (the client's next
+        // prediction then misses and it gets a correction).
+        if (++m.heldTicks > MAX_HOLD_TICKS) active.add(m.ctrl.id);
         continue;
       }
       inputs.set(m.ctrl.id, next.cmd);
@@ -269,13 +320,13 @@ export class Room {
       m.applied = next;
     }
     this.sim.step(inputs, active, true);
-    for (const m of this.members.values()) if (m.applied) this.check(m, m.applied);
+    for (const m of this.members.values()) if (m.applied) this.afterInput(m, m.applied);
     // Catch up after a stall: one extra input for a client that has a backlog and banked credit.
     for (const m of this.members.values()) {
       if (!m.ctrl || m.queue.length <= TARGET_QUEUE || m.credit < 1) continue;
       const extra = this.take(m)!;
       this.sim.step(new Map([[m.ctrl.id, extra.cmd]]), new Set([m.ctrl.id]));
-      this.check(m, extra);
+      this.afterInput(m, extra);
     }
     this.history.record();
     this.stats.ticks++;
@@ -295,6 +346,10 @@ export class Room {
       let correction = null;
       if (m.needCorrection && m.ctrl) {
         m.epoch++;
+        if (m.newBody) {
+          m.newBody = false;
+          m.confirmEpoch = m.epoch & 0xff;
+        }
         m.corrections++;
         this.stats.corrections++;
         correction = { pawns: m.ctrl.pawnIds.map((id) => [id, this.sim.pawns.get(id)!.state] as [number, PawnState]), ctrl: controllerState(m.ctrl), epoch: m.epoch };

@@ -71,8 +71,9 @@ try {
   result.positions = { aStart: { x: aStart.x, z: aStart.z }, bSeesA: { x: bSeesStart.x, z: bSeesStart.z } };
   result.checks.remoteMatchesOwn = Math.hypot(aStart.x - bSeesStart.x, aStart.z - bSeesStart.z) < 0.05;
 
-  // A strafes right across B's line of fire. B fires at the moment A, as B sees A, crosses the line.
-  await a.evaluate(() => (window.__lab.input = { strafe: 1 }));
+  // A slow-walks right across B's line of fire (slow enough that one 15 fps frame can't carry A past the
+  // torso). B fires at the moment A, as B sees A, crosses the line.
+  await a.evaluate(() => (window.__lab.input = { strafe: 1, buttons: 16 /* Btn.SlowWalk */ }));
   const fired = await b.evaluate(
     () =>
       new Promise((resolve) => {
@@ -123,6 +124,19 @@ try {
   result.checks.fewCorrections = aNet.corrections <= 4 && bNet.corrections <= 4;
   result.checks.noResyncs = aNet.resyncs === 0 && bNet.resyncs === 0;
   result.checks.rttIncludesSimulatedLag = aNet.rttMs > LAG * 0.9 && aNet.rttMs < LAG + 80;
+
+  // Respawn online (the K key): a new body arrives, the page keeps running, and B sees the new body.
+  const beforeRespawn = await net(a);
+  await a.keyboard.press("KeyK");
+  await a.waitForFunction((old) => window.__lab.net.ready && window.__lab.net.pawnId !== old, beforeRespawn.pawnId, { timeout: 5000 }).catch(() => {});
+  const afterRespawn = await net(a);
+  await sleep(1500);
+  const settled = await net(a);
+  const bAfterRespawn = await net(b);
+  result.respawn = { oldPawn: beforeRespawn.pawnId, newPawn: afterRespawn.pawnId, correctionsAfter: settled.corrections - afterRespawn.corrections };
+  result.checks.respawnNewBody = afterRespawn.pawnId !== beforeRespawn.pawnId && afterRespawn.ready;
+  result.checks.respawnKeepsRunning = settled.frames > afterRespawn.frames + 5 && settled.corrections - afterRespawn.corrections <= 1;
+  result.checks.respawnSeenByOthers = bAfterRespawn.remotes.some((r) => r.id === afterRespawn.pawnId) && !bAfterRespawn.remotes.some((r) => r.id === beforeRespawn.pawnId);
 
   const stats = await (await fetch(`${BASE}/stats`)).json();
   result.stats = stats;

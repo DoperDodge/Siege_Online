@@ -36,6 +36,7 @@ export default defineRailway(() => {
       RAILPACK_NODE_VERSION: "24", // wins over package.json engines (which would resolve to Node 26.x); no .nvmrc/.node-version
       RAILPACK_NODE_NPM_INSTALL: "npm ci", // Railpack defaults to `npm install`
       RAILPACK_PRUNE_DEPS: "true", // drop devDependencies from the runtime image after the build (183 MB → ~46 MB)
+      CLIENT_IP_HEADER: "x-real-ip", // Railway's edge puts the player's address here (per-address limits, D-034)
     },
   });
 

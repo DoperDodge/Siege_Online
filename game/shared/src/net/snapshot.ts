@@ -32,6 +32,8 @@ export const MSG_SNAPSHOT = 0x10;
 export const SNAPSHOT_EVERY = 2;
 /** Every this many snapshots carry a baseline checksum. */
 export const CHECKSUM_EVERY = 64;
+/** Clients draw other players at most this far in the past (ms); the server bounds claimed view times by it. */
+export const MAX_INTERP_MS = 150;
 const POS_SCALE = 512;
 const YAW_UNITS = 65536;
 const PITCH_SCALE = 16384 / Math.PI;

@@ -1,11 +1,23 @@
-import { ByteReader, decodeError, decodeRoster, decodeWelcome, encodeCreateRoom, encodeHello, encodeJoinRoom, ErrorCode, Msg, PROTOCOL_VERSION, ByteWriter } from "@redmond/shared";
+import { ByteReader, ByteWriter, decodeError, decodeRoster, decodeWelcome, encodeCreateRoom, encodeHello, encodeJoinRoom, encodePing, ErrorCode, Msg, PROTOCOL_VERSION } from "@redmond/shared";
 import { describe, expect, it } from "vitest";
-import { cleanName, Close, Connection, EMPTY_ROOM_TTL_MS, LOBBY_TIMEOUT_MS, RATE_BURST, RoomManager } from "../src/lobby.js";
+import {
+  BAD_JOIN_BURST,
+  cleanName,
+  Close,
+  Connection,
+  CREATE_BURST,
+  EMPTY_ROOM_TTL_MS,
+  IpGate,
+  LOBBY_TIMEOUT_MS,
+  MAX_CONNECTIONS_PER_IP,
+  RATE_BURST,
+  RoomManager,
+} from "../src/lobby.js";
 
-function fakeClient(rooms: RoomManager, clock: { t: number }) {
+function fakeClient(rooms: RoomManager, clock: { t: number }, ip = "local", gate?: IpGate) {
   const sent: Uint8Array[] = [];
   const closed: { code: number; reason: string }[] = [];
-  const conn = new Connection({ send: (b) => sent.push(b), close: (code, reason) => closed.push({ code, reason }), buffered: () => 0 }, rooms, () => clock.t);
+  const conn = new Connection({ send: (b) => sent.push(b), close: (code, reason) => closed.push({ code, reason }), buffered: () => 0 }, rooms, () => clock.t, ip, gate);
   const of = (type: number) => sent.filter((b) => b[0] === type).map((b) => new ByteReader(b.subarray(1)));
   return { conn, sent, closed, of };
 }
@@ -91,8 +103,10 @@ describe("lobby", () => {
 
     const flood = fakeClient(rooms, clock);
     flood.conn.onMessage(encodeHello("x"));
-    for (let i = 0; i < RATE_BURST + 5; i++) flood.conn.onMessage(encodeJoinRoom("ZZZZZ"));
-    expect(flood.closed[0].code).toBe(Close.Policy);
+    flood.conn.onMessage(encodeCreateRoom());
+    await until(() => flood.of(Msg.Welcome).length === 1);
+    for (let i = 0; i < RATE_BURST + 5; i++) flood.conn.onMessage(encodePing(i));
+    expect(flood.closed[0]).toEqual({ code: Close.Policy, reason: "too many messages" });
 
     const idle = fakeClient(rooms, clock);
     clock.t += LOBBY_TIMEOUT_MS + 1;
@@ -105,9 +119,57 @@ describe("lobby", () => {
     gone.conn.onMessage(encodeCreateRoom());
     gone.conn.onClose();
     await settle();
-    await until(() => rooms.count === 1);
+    await until(() => rooms.count === 2); // the flood test's room and this one
     expect(rooms.players).toBe(0);
     expect(gone.of(Msg.Welcome)).toHaveLength(0);
+  });
+
+  it("limits each client address: connections, rooms created, and wrong room codes", async () => {
+    const clock = { t: 0 };
+    const rooms = new RoomManager(() => clock.t);
+    const gate = new IpGate(() => clock.t);
+
+    for (let i = 0; i < MAX_CONNECTIONS_PER_IP; i++) expect(gate.open("1.2.3.4")).toBe(true);
+    expect(gate.open("1.2.3.4")).toBe(false);
+    expect(gate.open("5.6.7.8")).toBe(true); // others are unaffected
+    gate.close("1.2.3.4");
+    expect(gate.open("1.2.3.4")).toBe(true);
+
+    // Rooms: a burst, then roughly one every 10 s. Each connection here is a separate tab on one address.
+    const tabs = Array.from({ length: CREATE_BURST + 1 }, () => fakeClient(rooms, clock, "9.9.9.9", gate));
+    for (const tab of tabs) {
+      tab.conn.onMessage(encodeHello("x"));
+      tab.conn.onMessage(encodeCreateRoom());
+    }
+    await until(() => tabs.slice(0, CREATE_BURST).every((t) => t.of(Msg.Welcome).length === 1));
+    const limited = tabs[CREATE_BURST];
+    expect(decodeError(limited.of(Msg.Error)[0]).code).toBe(ErrorCode.RateLimited);
+    clock.t += 10_000;
+    limited.conn.onMessage(encodeCreateRoom()); // still in the lobby, and allowed again
+    await until(() => limited.of(Msg.Welcome).length === 1);
+
+    // Guessing codes: a few wrong ones are fine, then the connection is closed.
+    const guesser = fakeClient(rooms, clock, "6.6.6.6", gate);
+    guesser.conn.onMessage(encodeHello("x"));
+    for (let i = 0; i < BAD_JOIN_BURST; i++) guesser.conn.onMessage(encodeJoinRoom("ZZZZ" + i));
+    expect(guesser.closed).toEqual([]);
+    guesser.conn.onMessage(encodeJoinRoom("ZZZZZ"));
+    expect(decodeError(guesser.of(Msg.Error).at(-1)!).code).toBe(ErrorCode.RateLimited);
+    expect(guesser.closed[0].code).toBe(Close.Policy);
+    // A new connection from the same address is still limited.
+    const again = fakeClient(rooms, clock, "6.6.6.6", gate);
+    again.conn.onMessage(encodeHello("x"));
+    again.conn.onMessage(encodeJoinRoom("ZZZZZ"));
+    expect(again.closed[0].code).toBe(Close.Policy);
+
+    // Idle addresses are forgotten once their limits have recovered.
+    for (const c of [...tabs, guesser, again]) c.conn.onClose();
+    gate.close("1.2.3.4");
+    for (let i = 0; i < MAX_CONNECTIONS_PER_IP; i++) gate.close("1.2.3.4");
+    gate.close("5.6.7.8");
+    clock.t += 10 * 60_000;
+    gate.sweep();
+    expect(gate.size).toBe(0);
   });
 
   it("cleans display names", () => {

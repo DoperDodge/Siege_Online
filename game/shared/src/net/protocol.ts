@@ -16,7 +16,7 @@ export const Msg = {
   PickOperator: 0x05,
   Ping: 0x06,
   Resync: 0x07,
-  DebugShot: 0x08,
+  // 0x08 unused (test shots ride on inputs: Btn.Fire)
   LabTool: 0x09,
   // server → client
   Snapshot: MSG_SNAPSHOT,
@@ -158,20 +158,13 @@ export const decodePong = (r: ByteReader) => ({ clientTime: r.f64(), serverTick:
 
 // ---------------------------------------------------------------- errors
 
-export const ErrorCode = { BadVersion: 1, NoSuchRoom: 2, RoomFull: 3, BadRequest: 4, ServerRestarting: 5, ServerFull: 6 } as const;
+export const ErrorCode = { BadVersion: 1, NoSuchRoom: 2, RoomFull: 3, BadRequest: 4, ServerRestarting: 5, ServerFull: 6, RateLimited: 7 } as const;
 export const encodeError = (code: number, message: string) => new ByteWriter().u8(Msg.Error).u8(code).str(message).finish();
 export const decodeError = (r: ByteReader) => ({ code: r.u8(), message: r.str(512) });
 
 // ---------------------------------------------------------------- lab and debug tools
 
-/** A test shot (no weapons until Phase 3): the server fires along your current view, rewound to `viewTick`. */
-export const encodeDebugShot = (viewTick: number) => new ByteWriter(9).u8(Msg.DebugShot).f64(viewTick).finish();
-export const decodeDebugShot = (r: ByteReader) => {
-  const viewTick = r.f64();
-  if (!Number.isFinite(viewTick)) throw new ProtocolError("bad view tick");
-  return { viewTick };
-};
-
+/** What the server made of a shot (Phase 2: a test shot fired with Btn.Fire; weapons from Phase 3). */
 export interface ShotResult {
   origin: [number, number, number];
   dir: [number, number, number];

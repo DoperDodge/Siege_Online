@@ -13,7 +13,8 @@ asks for a real Railway deploy (latency from your location, WebSocket stability)
 ### What's done
 - **Game server** (`game/server`): match rooms over a WebSocket at `/ws`, on the same port as the page.
   - Create a room, or join one with its 5-character code (no look-alike characters).
-  - Limits: 10 players a room, rate limits per connection, and bad messages disconnect.
+  - Limits: 10 players a room, rate limits per connection and per address (against one script taking every
+    room or guessing codes), and bad messages disconnect.
   - When Railway restarts the server, players are told it's restarting.
   - `/stats` shows rooms, players and tick time. Decisions D-034 and D-036.
 - **Server authority with client prediction** (D-029, D-030):
@@ -22,9 +23,10 @@ asks for a real Railway deploy (latency from your location, WebSocket stability)
     disagrees.
   - Other players are drawn smoothly between server snapshots, a little in the past (D-032).
   - Your clock adjusts itself so your inputs reach the server just in time.
-  - If your inputs are late, the server holds your body still instead of guessing.
-- **Lag compensation framework** (D-031): for a shot, the server rewinds everyone else to what the shooter was
-  seeing, up to 200 ms. Phase 2 has a test shot (left click); weapons use it from Phase 3.
+  - If your inputs are late, the server holds your body still (up to 250 ms) instead of guessing.
+- **Lag compensation framework** (D-031): a shot rides on your input, and the server rewinds everyone else to
+  what you were seeing when you fired, up to 200 ms. Phase 2 has a test shot (left click); weapons use it from
+  Phase 3.
 - **Players block each other** (D-033). Small corrections when you bump into someone fade out over 0.1 s.
 - **Online Movement Lab** (D-035):
   - Home page → *Movement Lab online*: create a room; the address bar is the invite link.
@@ -39,10 +41,13 @@ asks for a real Railway deploy (latency from your location, WebSocket stability)
   - Corrections: about one per player in 30 s when spread out (the spawn), and about 1.5 per second when
     constantly bumping into each other.
 - **Tests:**
-  - 111 unit tests, including the protocol, snapshots, lag compensation, player collision, the lobby, and the
-    netsim as a regression test.
+  - 120 unit tests, including the protocol, snapshots, lag compensation, player collision, the lobby and its
+    limits, room behaviour (respawn, operator picks, stalls, shots, resyncs), and the netsim as a regression test.
   - Two headless-browser tests. The new one runs two browsers at +100 ms: they join by code, see each other
-    move, one hits the other mid-stride with a test shot, then one leaves and the server restarts.
+    move, one hits the other mid-stride with a test shot, one respawns, then one leaves and the server restarts.
+- **Review:** one reviewer read all the Phase 2 changes and found 12 problems, including one that let anyone
+  crash the server and one that froze the online lab on respawn. All 12 were checked and fixed, each with a test
+  that fails without the fix.
 
 ### How to test (needs Node 22.12+)
 ```
@@ -69,7 +74,6 @@ Things to judge, at +100 ms:
 - Below ~30 fps, other players are drawn up to 150 ms in the past instead of ~65 ms (D-032).
 - Bumping into another player causes small corrections (smoothed). Standing on someone's head slides you off;
   whether Siege lets you stand there is an open question (research/OPEN_QUESTIONS.md, Phase 2 placeholders).
-- After a teleport or respawn there is sometimes one extra correction (inputs already in flight).
 - Rarely, a 0.1 mm disagreement at wall corners causes a correction (absorbed, invisible).
 - **Not deployed yet.** `.railway/railway.ts` holds the settings (D-036). I need your OK, and the region
   closest to you and your friends, before I create anything in your Railway account.

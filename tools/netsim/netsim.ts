@@ -1,7 +1,7 @@
 // Headless multi-client harness (PLAN §17 Phase 2, §19): one Room and N ClientSessions over a simulated
 // network with latency, jitter, TCP-style stalls and client clock drift, all in virtual time so a
 // 30-second match runs in about a second and is repeatable from its seed.
-import { Btn, ByteReader, ClientSession, decodeDebugShot, decodeInput, decodeLabTool, decodePickOperator, decodePing, DT, Msg, Room, Stance, type InputCmd } from "@redmond/shared";
+import { Btn, ByteReader, ClientSession, decodeInput, decodeLabTool, decodePickOperator, decodePing, DT, Msg, Room, Stance, type InputCmd } from "@redmond/shared";
 import { performance } from "node:perf_hooks";
 
 export interface NetsimOptions {
@@ -150,7 +150,7 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
   const o: NetsimOptions = { ...DEFAULTS, ...partial };
   const rng = new Rng(o.seed);
   const clock = new Clock();
-  const room = await Room.create("SIM00", "movement_lab");
+  const room = await Room.create("SIM00", "movement_lab", { lab: true });
   const tickMs = DT * 1000;
   const serverTimes: number[] = [];
 
@@ -174,7 +174,6 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
     if (b[0] === Msg.Input) room.onInput(memberId, decodeInput(r));
     else if (b[0] === Msg.Resync) room.onResync(memberId);
     else if (b[0] === Msg.Ping) room.onPing(memberId, decodePing(r).clientTime);
-    else if (b[0] === Msg.DebugShot) room.onDebugShot(memberId, decodeDebugShot(r).viewTick);
     else if (b[0] === Msg.LabTool) room.onLabTool(memberId, decodeLabTool(r));
     else if (b[0] === Msg.PickOperator) room.pickOperator(memberId, decodePickOperator(r).operatorId);
   }

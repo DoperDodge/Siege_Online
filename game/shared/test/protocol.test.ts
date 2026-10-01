@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   Btn,
   ByteReader,
-  decodeDebugShot,
   decodeError,
   decodeHello,
   decodeInput,
@@ -15,7 +14,6 @@ import {
   decodeRoster,
   decodeShotResult,
   decodeWelcome,
-  encodeDebugShot,
   encodeError,
   encodeHello,
   encodeInput,
@@ -92,7 +90,6 @@ describe("lobby, clock, error and debug messages round-trip", () => {
     expect(decodePing(body(encodePing(1234.5678), Msg.Ping))).toEqual({ clientTime: 1234.5678 });
     expect(decodePong(body(encodePong({ clientTime: 99.25, serverTick: 777 }), Msg.Pong))).toEqual({ clientTime: 99.25, serverTick: 777 });
     expect(decodeError(body(encodeError(ErrorCode.NoSuchRoom, "No room ABCDE"), Msg.Error))).toEqual({ code: ErrorCode.NoSuchRoom, message: "No room ABCDE" });
-    expect(decodeDebugShot(body(encodeDebugShot(1000.375), Msg.DebugShot))).toEqual({ viewTick: 1000.375 });
     const shot = { origin: [1, 2, 3] as [number, number, number], dir: [0, 0, -1] as [number, number, number], rewoundTick: 990.5, serverTick: 1000, hit: { pawnId: 7, part: "head", distance: 12.5 }, wallDistance: 30 };
     expect(decodeShotResult(body(encodeShotResult(shot), Msg.ShotResult))).toEqual(shot);
     expect(decodeShotResult(body(encodeShotResult({ ...shot, hit: null, wallDistance: null }), Msg.ShotResult))).toEqual({ ...shot, hit: null, wallDistance: null });
@@ -102,7 +99,7 @@ describe("lobby, clock, error and debug messages round-trip", () => {
   });
 
   it("every decoder only ever throws ProtocolError on garbage", () => {
-    const decoders = [decodeInput, decodeHello, decodeJoinRoom, decodePickOperator, decodeWelcome, decodeRoster, decodePing, decodePong, decodeError, decodeDebugShot, decodeShotResult, decodeLabTool];
+    const decoders = [decodeInput, decodeHello, decodeJoinRoom, decodePickOperator, decodeWelcome, decodeRoster, decodePing, decodePong, decodeError, decodeShotResult, decodeLabTool];
     let seed = 11;
     const rnd = () => (seed = (seed * 1103515245 + 12345) >>> 0) / 2 ** 32;
     for (let i = 0; i < 3000; i++) {
