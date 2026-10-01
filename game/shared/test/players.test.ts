@@ -69,6 +69,16 @@ describe("players block each other", () => {
     expect(dist(pawn, b)).toBeGreaterThan(CONTACT);
   });
 
+  it("riding up against someone lying down, then stopping, settles back on the floor", async () => {
+    const { sim, ctrl, pawn, other, b } = await twoPlayers();
+    sim.teleport(b.id, 0, 0, 12, 0, Stance.Prone);
+    stepBoth(sim, ctrl, {}, other, { stance: Stance.Prone }, 0.5);
+    teleport(sim, ctrl, 0.1, 0, 14, 0);
+    stepBoth(sim, ctrl, { forward: 1 }, other, { stance: Stance.Prone }, 0.6);
+    stepBoth(sim, ctrl, {}, other, { stance: Stance.Prone }, 4);
+    expect(pawn.state.y).toBeLessThan(0.03);
+  });
+
   it("dead bodies don't block", async () => {
     const { sim, ctrl, pawn, other, b } = await twoPlayers();
     sim.teleport(b.id, -14.5, 6.5, -8, 0);

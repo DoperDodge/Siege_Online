@@ -79,12 +79,15 @@ export class OnlineConnection {
       const bytes = new Uint8Array(e.data);
       this.down.push(() => this.receive(bytes));
     };
-    this.ws.onclose = (e) => {
-      clearInterval(this.pinger);
-      if (this.closed) return;
-      this.closed = true;
-      o.onClose(CLOSE_REASONS[e.code] ?? (e.reason || "Disconnected from the server."));
-    };
+    // The close goes through the same delay as messages, so an error sent just before it (a rate
+    // limit, a restart) is still read first.
+    this.ws.onclose = (e) =>
+      this.down.push(() => {
+        clearInterval(this.pinger);
+        if (this.closed) return;
+        this.closed = true;
+        o.onClose(CLOSE_REASONS[e.code] ?? (e.reason || "Disconnected from the server."));
+      });
     // Round-trip time for the stats overlay (the session smooths it).
     this.pinger = setInterval(() => {
       if (this.session.sim) this.session.ping();

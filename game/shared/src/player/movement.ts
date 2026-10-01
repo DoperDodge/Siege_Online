@@ -40,7 +40,9 @@ export function stepPawn(ctx: MoveContext, pawn: Pawn, input: InputCmd): void {
     stepWalk(ctx, pawn, input, pressed);
   }
   roundState(s);
-  setSolidity(pawn);
+  // The collider is placed from the state, exactly as a client places it from a correction (which carries
+  // only the state): otherwise the two could differ by a float32 step and part ways a tick later.
+  poseCollider(ctx, pawn);
 }
 
 /** Dead bodies stop blocking other players (collision groups apply at once, no refresh needed). */
@@ -202,12 +204,20 @@ const PERCH_PROBE = 0.35;
 function moveCollider(ctx: MoveContext, pawn: Pawn, dx: number, dy: number, dz: number): { x: number; y: number; z: number; perched: boolean } {
   if (pawn.state.grounded) {
     // Follow the ground plane so horizontal speed holds on ramps and stairs (the controller would
-    // otherwise project the step onto the slope and lose ~40% of it on a 40° incline). On walkable level
-    // geometry that replaces the downward gravity push: the controller's ground snap keeps contact, and a
-    // push into the floor can leave the body inside the controller's contact offset, where its next step
-    // stalls against the floor for a whole tick (a visible hitch on ~1.5% of ticks).
-    const n = groundNormal(ctx, pawn);
-    if (n && n.y >= Math.cos(ctx.data.movement.step.maxSlopeDeg * DEG)) dy = -(n.x * dx + n.z * dz) / n.y;
+    // otherwise project the step onto the slope and lose ~40% of it on a 40° incline).
+    const g = groundUnder(ctx, pawn);
+    if (g && g.normal.y >= Math.cos(ctx.data.movement.step.maxSlopeDeg * DEG)) {
+      const n = g.normal;
+      const follow = -(n.x * dx + n.z * dz) / n.y;
+      // Resting on that ground (the gap under the feet is what the controller keeps between it and a
+      // capsule on this slope): follow it without the downward gravity push. That push could leave the
+      // body inside the controller's contact offset, where the next step stalls against the floor for a
+      // whole tick (a visible hitch on ~1.5% of ticks). Anything else (balanced on an edge with the floor
+      // further down, leaning on another player) keeps the push, so the controller slides the body off.
+      const r = pawn.collider.radius();
+      const restGap = (r + ctx.cc.offset() + REST_TOLERANCE) / n.y - r;
+      dy = g.gap <= restGap ? follow : dy + follow;
+    }
   }
   const t = pawn.collider.translation();
   const r = pawn.collider.radius();
@@ -646,6 +656,16 @@ function readFeet(ctx: MoveContext, pawn: Pawn, height: number) {
 /** Surface normal of the ground directly under the feet, if any is within reach. */
 function groundNormal(ctx: MoveContext, pawn: Pawn): { x: number; y: number; z: number } | null {
   return groundNormalAt(ctx, pawn, pawn.state.x, pawn.state.y, pawn.state.z);
+}
+
+/** How far a resting body may sit above the controller's usual ground gap and still count as resting. */
+const REST_TOLERANCE = 0.03;
+
+/** The level right under the feet centre: its normal, and how far below the feet it is. */
+function groundUnder(ctx: MoveContext, pawn: Pawn): { normal: { x: number; y: number; z: number }; gap: number } | null {
+  const s = pawn.state;
+  const hit = ctx.world.castRayAndGetNormal(new ctx.R.Ray({ x: s.x, y: s.y + 0.1, z: s.z }, { x: 0, y: -1, z: 0 }), 0.45, true, undefined, QUERY_STATIC, pawn.collider);
+  return hit ? { normal: hit.normal, gap: hit.timeOfImpact - 0.1 } : null;
 }
 
 function groundNormalAt(ctx: MoveContext, pawn: Pawn, x: number, y: number, z: number): { x: number; y: number; z: number } | null {

@@ -716,8 +716,17 @@ function lobby(): Promise<OnlineConnection> {
         addedRttMs: () => addedRttMs,
         session: {
           onWelcome: () => {
+            // The level loads after Welcome; the connection may have failed meanwhile (a server restart,
+            // a dropped network). Then this room is gone and the lobby stays up with the reason.
+            if (conn.closed) return;
             joined = true;
             void conn.session.loaded().then(() => {
+              if (conn.closed) {
+                joined = false;
+                busy = false;
+                error.textContent ||= "Lost connection to the server.";
+                return;
+              }
               panel.classList.add("hidden");
               const url = new URL(location.href);
               url.searchParams.delete("online");
@@ -797,8 +806,15 @@ const SMOOTH_SECONDS = 0.1;
  * Once per frame online: take on a new body when the server has sent one, and turn any correction
  * since the last frame into a fading visual offset. False while we have no body to predict.
  */
+/** No snapshot for this long (they come 32 times a second) means the connection is dead even if TCP hasn't noticed. */
+const SILENT_MS = 5000;
+
 function followServer(elapsed: number): boolean {
   const s = net!.session;
+  if (!disconnected && s.lastSnapshotAt && performance.now() - s.lastSnapshotAt > SILENT_MS) {
+    disconnected = "Lost connection to the server.";
+    net!.close();
+  }
   if (disconnected || !s.ready || !s.ctrl || !sim.pawns.has(s.ctrl.possessedPawnId)) return false;
   if (rosterChanged) {
     rosterChanged = false;

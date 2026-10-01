@@ -37,8 +37,10 @@ export class Sim {
     const m = data.movement;
     const world = new R.World({ x: 0, y: m.gravity, z: 0 });
     // Pawns are kinematic colliders moved by our own code; world.step() only refreshes query structures
-    // (refreshBroadPhase), so give it nothing to integrate.
-    world.timestep = 0;
+    // (refreshBroadPhase) and there are no rigid bodies to integrate. The timestep must not be 0 all the
+    // same: with a zero timestep, after a collider has been removed, Rapier 0.21's tree intermittently
+    // loses static colliders (the floor missing from every query on ~9% of ticks; DECISIONS D-037).
+    world.timestep = DT;
     const level = buildLevel(R, world, def);
     const cc = world.createCharacterController(0.02);
     cc.enableAutostep(m.step.maxStepHeight, 0.2, false);
@@ -137,7 +139,11 @@ export class Sim {
       this.R.ColliderDesc.capsule(hh, r).setTranslation(x, y + hh + r + 0.02, z).setCollisionGroups(PLAYER_GROUPS),
     );
     const pawnId = id !== undefined ? this.claimId(id) : this.nextId++;
-    const pawn: Pawn = { id: pawnId, operatorId, ownerId, collider, state: initialPawnState(x, y + 0.02, z, Math.fround(yaw), maxHp) };
+    // Float32-exact like every other state, and the collider placed from that state the same way a client
+    // places it from the correction it gets for this body, so both start bit-identical.
+    const t = collider.translation();
+    const pawn: Pawn = { id: pawnId, operatorId, ownerId, collider, state: initialPawnState(t.x, Math.fround(y + 0.02), t.z, Math.fround(yaw), maxHp) };
+    poseCollider(this.ctx, pawn);
     this.pawns.set(pawn.id, pawn);
     refreshBroadPhase(this.world); // a new collider is invisible to queries until the next refresh
     return pawn;

@@ -36,7 +36,8 @@ export const QUERY_PLAYERS = groups(G_PLAYER, G_PLAYER);
 /**
  * Rebuild the broad phase so queries see colliders moved, resized, added or removed since the last call.
  * Rapier answers every query through a bounding-box tree that only world.step() updates; the world has
- * no rigid bodies and a zero timestep, so this does nothing else (Phase 2 investigation, D-029).
+ * no rigid bodies, so this does nothing else (Phase 2 investigation, D-029; the timestep is DT, not 0,
+ * see Sim.create and D-037).
  */
 export function refreshBroadPhase(world: World): void {
   world.step();

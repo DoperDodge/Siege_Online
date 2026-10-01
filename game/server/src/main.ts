@@ -103,6 +103,9 @@ server.on("upgrade", (req, socket, head) => {
   const ip = clientIp(req);
   const refuse = pathname !== "/ws" ? "404 Not Found" : shuttingDown || connections.size >= MAX_CONNECTIONS ? "503 Service Unavailable" : !gate.open(ip) ? "429 Too Many Requests" : null;
   if (refuse) {
+    // Close our side once the answer is out: Node keeps an upgrade request's socket open with no
+    // timeouts, so a client that never closes its side would otherwise hold it forever.
+    socket.once("finish", () => socket.destroy());
     socket.end(`HTTP/1.1 ${refuse}\r\nconnection: close\r\n\r\n`);
     return;
   }

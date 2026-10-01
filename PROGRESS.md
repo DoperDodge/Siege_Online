@@ -41,13 +41,15 @@ asks for a real Railway deploy (latency from your location, WebSocket stability)
   - Corrections: about one per player in 30 s when spread out (the spawn), and about 1.5 per second when
     constantly bumping into each other.
 - **Tests:**
-  - 120 unit tests, including the protocol, snapshots, lag compensation, player collision, the lobby and its
+  - 127 unit tests, including the protocol, snapshots, lag compensation, player collision, the lobby and its
     limits, room behaviour (respawn, operator picks, stalls, shots, resyncs), and the netsim as a regression test.
   - Two headless-browser tests. The new one runs two browsers at +100 ms: they join by code, see each other
     move, one hits the other mid-stride with a test shot, one respawns, then one leaves and the server restarts.
 - **Review:** one reviewer read all the Phase 2 changes and found 12 problems, including one that let anyone
-  crash the server and one that froze the online lab on respawn. All 12 were checked and fixed, each with a test
-  that fails without the fix.
+  crash the server and one that froze the online lab on respawn. All 12 were fixed. A second round (verifiers on
+  each fix, fresh reviewers on the fix commits, a skeptic on every new claim) found 13 more gaps, all fixed. The
+  biggest was a physics-library quirk that briefly hid the floor after a player left or respawned (D-037). Each
+  fix has a test that fails without it where one could be written.
 
 ### How to test (needs Node 22.12+)
 ```

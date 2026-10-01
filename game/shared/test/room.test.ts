@@ -149,12 +149,92 @@ describe("room and client session", () => {
     h.ticks(10);
     const now = h.room.sim.tick;
     a.toServer.length = 0;
-    const cmd = { seq: (h.room.memberInfo(a.id)!.lastSeq + 1) & 0xffff, forward: 0, strafe: 0, yaw: Math.PI, pitch: -0.05, buttons: Btn.Fire, stance: Stance.Stand, lean: 0 as const };
+    const cmd = { seq: (h.room.memberInfo(a.id)!.lastSeq + 10) & 0xffff, forward: 0, strafe: 0, yaw: Math.PI, pitch: -0.05, buttons: Btn.Fire, stance: Stance.Stand, lean: 0 as const };
     h.room.onInput(a.id, { cmd, predictedHash: 0, epoch: a.session.epoch, snapTick: now & 0xffff, viewBackQ8: 0xffff });
     h.room.step();
     for (const b of a.toClient.splice(0)) a.session.handle(b);
     expect(a.shots).toHaveLength(3);
     expect(a.shots[2].serverTick - a.shots[2].rewoundTick).toBeLessThan(11.5);
+  });
+
+  it("trickling one input every 16 ticks doesn't slow a body down either", async () => {
+    const h = await harness(["sledge"]);
+    const [a] = h.clients;
+    a.toServer.push(encodeLabTool({ kind: "teleport", x: 3, y: 4, z: 14, yawDeg: 0 }));
+    h.tick();
+    const pawn = () => h.room.sim.pawns.get(a.session.ctrl!.possessedPawnId)!.state;
+    a.holdUp = true;
+    for (let t = 0; t < 160; t++) {
+      h.tick();
+      if (t % 16 === 15) {
+        // let only the newest input through
+        const inputs = a.toServer.filter((m) => m[0] === Msg.Input);
+        a.toServer.length = 0;
+        a.toServer.push(inputs.at(-1)!);
+        h.toServer(a);
+      }
+    }
+    expect(pawn().y).toBeLessThan(0.1); // landed: a 4 m fall takes about a second
+  });
+
+  it("a body that is only waiting for its client (joining, respawning) costs exactly one correction", async () => {
+    const h = await harness(["sledge"]);
+    const [a] = h.clients;
+    const before = h.room.memberInfo(a.id)!.corrections;
+    a.toServer.push(encodeLabTool({ kind: "respawn" }));
+    // The client takes a while to send its first input for the new body (a slow round trip).
+    a.holdUp = true;
+    h.ticks(40);
+    a.toServer.length = 0;
+    a.holdUp = false;
+    h.ticks(64, [{ forward: 1 }]);
+    expect(h.room.memberInfo(a.id)!.corrections - before).toBe(1);
+    // And straight away, standing still (the spawn state must be exactly what the correction carries).
+    for (const op of ["fuze", "skopos", "mute"]) {
+      const start = h.room.memberInfo(a.id)!.corrections;
+      a.toServer.push(encodePickOperator(op));
+      h.ticks(64);
+      expect(h.room.memberInfo(a.id)!.corrections - start, op).toBe(1);
+    }
+  });
+
+  it("test shots fired during a catch-up after a stall all count", async () => {
+    const h = await harness(["sledge", "mute"]);
+    const [a] = h.clients;
+    h.ticks(16);
+    a.holdUp = true;
+    // Click every 10 client ticks through a 30-tick stall, then let the backlog through at once.
+    for (let t = 0; t < 30; t++) h.tick([{ yaw: Math.PI, buttons: t % 10 === 0 ? Btn.Fire : 0 }]);
+    a.holdUp = false;
+    h.ticks(40);
+    expect(a.shots).toHaveLength(3);
+  });
+
+  it("claiming an older snapshot on the input that fires is held to the lag the connection has shown", async () => {
+    const h = await harness(["sledge", "mute"]);
+    const [a] = h.clients;
+    h.ticks(64); // inputs establish this client's lag (zero here)
+    a.holdUp = true;
+    h.ticks(10);
+    a.toServer.length = 0;
+    const now = h.room.sim.tick;
+    const cmd = { seq: (h.room.memberInfo(a.id)!.lastSeq + 10) & 0xffff, forward: 0, strafe: 0, yaw: Math.PI, pitch: 0, buttons: Btn.Fire, stance: Stance.Stand, lean: 0 as const };
+    h.room.onInput(a.id, { cmd, predictedHash: 0, epoch: a.session.epoch, snapTick: (now - 12) & 0xffff, viewBackQ8: 0 });
+    h.room.step();
+    for (const b of a.toClient.splice(0)) a.session.handle(b);
+    expect(a.shots).toHaveLength(1);
+    expect(a.shots[0].serverTick - a.shots[0].rewoundTick).toBeLessThanOrEqual(4 + 2); // least lag (≤ 2) + slack
+  });
+
+  it("Skopós can't shoot while looking through a shell's camera", async () => {
+    const h = await harness(["skopos"]);
+    const [a] = h.clients;
+    h.tick([{ buttons: Btn.Ability }]);
+    h.ticks(4);
+    expect(a.session.ctrl!.shellCam).toBe(true);
+    h.tick([{ buttons: Btn.Fire }]);
+    h.ticks(2);
+    expect(a.shots).toHaveLength(0);
   });
 
   it("lobby errors reach the page before any level is loaded", () => {

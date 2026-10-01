@@ -33,13 +33,23 @@ export const MAX_REWIND_TICKS = 0.2 * TICK_HZ;
 /** How far behind its newest snapshot a client can claim to be drawing others (its interpolation ceiling). */
 const MAX_VIEW_BACK_TICKS = (MAX_INTERP_MS / 1000) * TICK_HZ + 0.5;
 /**
- * A player whose inputs stop arriving is held still for up to this many ticks (a short stall costs no
- * correction), then simulated without input (gravity, a vault in progress) so nobody can hang in the air
- * or on a ledge by withholding inputs.
+ * A player whose inputs stop arriving is held still (a short stall costs no correction) for up to this
+ * many ticks, then simulated without input (gravity, a vault in progress), so nobody can hang in the air
+ * or on a ledge by withholding inputs. The hold is a budget: each tick without input spends one, each
+ * applied input earns back HOLD_REFUND, so withholding most inputs (a trickle) runs it out too.
  */
 export const MAX_HOLD_TICKS = 16;
-/** Fewest ticks between two test shots from one player. */
+const HOLD_REFUND = 0.25;
+/** Fewest client ticks (input sequence numbers) between two test shots from one player. */
 const SHOT_INTERVAL_TICKS = 8;
+/**
+ * A shot's claimed view may lag the server by at most this much more than the least lag this client has
+ * shown recently (its real round trip): claiming an older snapshot only on the input that fires would
+ * otherwise rewind targets further than the connection explains.
+ */
+const LAG_SLACK_TICKS = 4;
+/** Inputs remembered for that least lag (two seconds). */
+const LAG_WINDOW = 128;
 /** Don't queue more bytes than this on a slow connection; skip its snapshots until it drains. */
 const MAX_BUFFERED = 16 * 1024;
 export const MAX_ROOM_PLAYERS = 10;
@@ -53,12 +63,17 @@ export interface RoomClient {
   buffered(): number;
 }
 
+/** A queued input, with the server tick it arrived at (shots are judged against that time). */
+interface QueuedInput extends InputMsg {
+  receivedTick: number;
+}
+
 interface Member {
   id: number;
   name: string;
   client: RoomClient;
   ctrl: PlayerController | null;
-  queue: InputMsg[];
+  queue: QueuedInput[];
   credit: number;
   /** Corrections sent to this client (prediction mismatches, respawns). */
   corrections: number;
@@ -66,10 +81,13 @@ interface Member {
   lastQueuedSeq: number;
   lastSeq: number;
   /** The input applied this tick, whose predicted hash is checked after stepping. */
-  applied: InputMsg | null;
+  applied: QueuedInput | null;
   idled: boolean;
-  /** Ticks in a row without an input. */
-  heldTicks: number;
+  /** Hold budget spent (ticks held still, minus HOLD_REFUND per applied input). */
+  held: number;
+  /** Arrival tick minus claimed snapshot tick, for the last LAG_WINDOW inputs (a ring). */
+  lags: number[];
+  lagAt: number;
   needCorrection: boolean;
   epoch: number;
   /**
@@ -83,9 +101,9 @@ interface Member {
    */
   confirmEpoch: number | null;
   encoder: SnapshotEncoder;
-  /** Buttons of the last applied input (to see the fire button go down), and when this member last fired. */
+  /** Buttons of the last applied input (to see the fire button go down), and the input that last fired. */
   lastButtons: number;
-  lastShotTick: number;
+  lastShotSeq: number;
 }
 
 /** Hash of everything a client predicts for itself: each owned pawn's exact state plus its controller. */
@@ -140,7 +158,9 @@ export class Room {
       lastSeq: 0,
       applied: null,
       idled: false,
-      heldTicks: 0,
+      held: 0,
+      lags: [],
+      lagAt: 0,
       needCorrection: false,
       credit: 0,
       corrections: 0,
@@ -149,7 +169,7 @@ export class Room {
       confirmEpoch: null,
       encoder: new SnapshotEncoder(),
       lastButtons: 0,
-      lastShotTick: -Infinity,
+      lastShotSeq: -Infinity,
     };
     this.members.set(m.id, m);
     this.spawn(m, operatorId);
@@ -181,6 +201,8 @@ export class Room {
     m.needCorrection = true;
     m.newBody = true;
     m.lastButtons = 0;
+    m.credit = 0;
+    m.held = 0;
   }
 
   onInput(memberId: number, msg: InputMsg): void {
@@ -195,7 +217,10 @@ export class Room {
       if (((msg.epoch - m.confirmEpoch) & 0xff) >= 128) return; // made before the new body's correction
       m.confirmEpoch = null;
     }
-    m.queue.push({ ...msg, cmd: { ...msg.cmd, seq } });
+    const now = this.sim.tick;
+    m.lags[m.lagAt] = Math.max(0, now - unwrap16(msg.snapTick, now));
+    m.lagAt = (m.lagAt + 1) % LAG_WINDOW;
+    m.queue.push({ ...msg, cmd: { ...msg.cmd, seq }, receivedTick: now });
   }
 
   /** Answer a ping at once (the client measures round-trip time from it). */
@@ -225,19 +250,22 @@ export class Room {
    * The fire button went down in an applied input: a test shot along that input's view from the body's
    * eye, judged against everyone else as they were when that input was made. The view time comes from
    * the input itself (its newest snapshot tick minus how far behind it the client was drawing), bounded
-   * by the client's interpolation ceiling and capped at MAX_REWIND_TICKS (lag compensation, PLAN §5).
-   * The level stops the ray where it's hit.
+   * by the client's interpolation ceiling and by the lag its connection has shown, and the rewind is
+   * capped at MAX_REWIND_TICKS counted from when the input arrived (time it then waits in our queue is
+   * ours, not the shooter's latency). The level stops the ray where it's hit.
    */
-  private fire(m: Member, applied: InputMsg) {
+  private fire(m: Member, applied: QueuedInput) {
     const pressed = applied.cmd.buttons & ~m.lastButtons;
     m.lastButtons = applied.cmd.buttons;
     if (!(pressed & Btn.Fire) || !m.ctrl) return;
-    const now = this.sim.tick;
-    if (now - m.lastShotTick < SHOT_INTERVAL_TICKS) return;
-    m.lastShotTick = now;
+    if (m.ctrl.shellCam || m.ctrl.swapPhase !== 0) return; // Skopós looking through a shell's camera can't shoot
+    if (applied.cmd.seq - m.lastShotSeq < SHOT_INTERVAL_TICKS) return;
+    m.lastShotSeq = applied.cmd.seq;
     const pawn = this.sim.pawns.get(m.ctrl.possessedPawnId);
     if (!pawn) return;
-    const snapTick = Math.min(now, unwrap16(applied.snapTick, now));
+    const now = applied.receivedTick;
+    const leastLag = Math.min(...m.lags);
+    const snapTick = Math.max(Math.min(now, unwrap16(applied.snapTick, now)), now - leastLag - LAG_SLACK_TICKS);
     const viewTick = snapTick - Math.min(MAX_VIEW_BACK_TICKS, applied.viewBackQ8 / 256);
     const origin = eyePose(this.sim.data.movement, this.sim.data.hitboxes, pawn.state).pos;
     const { yaw, pitch } = applied.cmd;
@@ -273,17 +301,17 @@ export class Room {
     for (const m of this.members.values()) m.client.send(encodeRoster(entries, m.ctrl?.id ?? 0));
   }
 
-  private take(m: Member): InputMsg | null {
+  private take(m: Member): QueuedInput | null {
     const next = m.queue.shift();
     if (!next) return null;
     m.credit--;
+    m.held = Math.max(0, m.held - HOLD_REFUND);
     m.lastSeq = next.cmd.seq;
-    m.heldTicks = 0;
     return next;
   }
 
   /** After stepping an input: judge the prediction made with it (only if made after our latest correction), then any shot. */
-  private afterInput(m: Member, applied: InputMsg) {
+  private afterInput(m: Member, applied: QueuedInput) {
     if (m.ctrl && applied.epoch === (m.epoch & 0xff) && predictionHash(this.sim, m.ctrl) !== applied.predictedHash) m.needCorrection = true;
     this.fire(m, applied);
   }
@@ -292,7 +320,8 @@ export class Room {
    * Advance one tick: apply queued inputs, step, check predictions, send snapshots. A player whose next
    * input hasn't arrived is held still (not stepped at all) rather than moved with a guessed input: the
    * client only ever predicts the inputs it sent, so any guess would be a misprediction. The banked
-   * credit then lets the late inputs catch up.
+   * credit then lets the late inputs catch up. Once the hold budget is spent the body is stepped without
+   * input instead; that spends credit too, so catching up never puts a body ahead of room time.
    */
   step(): void {
     const inputs = new Map<number, InputCmd>();
@@ -300,7 +329,10 @@ export class Room {
     for (const m of this.members.values()) {
       m.applied = null;
       if (!m.ctrl) continue;
-      m.credit = Math.min(MAX_CREDIT, m.credit + 1);
+      // A new body waiting for its client to take it over (loading the level, a respawn in flight) is
+      // neither held against the budget nor stepped without input: that would only cost a second correction.
+      const settled = !m.newBody && m.confirmEpoch === null;
+      if (settled) m.credit = Math.min(MAX_CREDIT, m.credit + 1);
       if (m.queue.length > MAX_QUEUE) {
         const drop = m.queue.length - MAX_QUEUE;
         m.queue.splice(0, drop);
@@ -312,7 +344,11 @@ export class Room {
         this.stats.idledTicks++;
         // Held still for a short stall; after that the body carries on without input (the client's next
         // prediction then misses and it gets a correction).
-        if (++m.heldTicks > MAX_HOLD_TICKS) active.add(m.ctrl.id);
+        if (settled && ++m.held > MAX_HOLD_TICKS) {
+          m.held = MAX_HOLD_TICKS;
+          m.credit = Math.max(0, m.credit - 1);
+          active.add(m.ctrl.id);
+        }
         continue;
       }
       inputs.set(m.ctrl.id, next.cmd);

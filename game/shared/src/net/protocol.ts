@@ -170,7 +170,7 @@ export interface ShotResult {
   dir: [number, number, number];
   /** Render tick the server rewound to (after the cap). */
   rewoundTick: number;
-  /** The server's tick when it judged the shot (how far it rewound = serverTick − rewoundTick). */
+  /** The server tick the shot arrived at (how far it rewound = serverTick − rewoundTick; at most 200 ms). */
   serverTick: number;
   hit: { pawnId: number; part: string; distance: number } | null;
   /** Where the ray hit the level, if nearer than any player. */

@@ -68,6 +68,10 @@ export class ClientSession {
   private lastSnapTick = 0;
   private lastSnapAt = 0;
   private lastArrival = 0;
+  /** When the last snapshot arrived (ms, from `now`): the page can tell a silent connection from a live one. */
+  get lastSnapshotAt(): number {
+    return this.lastArrival;
+  }
   private jitterMs = 0;
   private queueEwma = TARGET_QUEUE;
   private awaitingReset = false;
