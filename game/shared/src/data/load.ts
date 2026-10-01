@@ -17,7 +17,7 @@ import pulse from "../../../../data/operators/pulse.json";
 import mute from "../../../../data/operators/mute.json";
 import gunplayJson from "../../../../data/gunplay.json";
 import combatJson from "../../../../data/combat.json";
-import labRulesJson from "../../../../data/rules/lab.json";
+import labModeJson from "../../../../data/modes/lab.json";
 import { weaponFiles } from "./weaponFiles.js";
 import { fnv1a, utf8Encode } from "../net/bytes.js";
 import {
@@ -29,7 +29,7 @@ import {
   movementSchema,
   offerId,
   operatorSchema,
-  roomRulesSchema,
+  modeSchema,
   weaponSchema,
   type CombatData,
   type GunplayData,
@@ -37,7 +37,7 @@ import {
   type LevelDef,
   type MovementData,
   type OperatorData,
-  type RoomRules,
+  type ModeData,
   type WeaponData,
 } from "./schemas.js";
 
@@ -49,7 +49,8 @@ export interface GameData {
   weapons: Map<string, WeaponData>;
   gunplay: GunplayData;
   combat: CombatData;
-  roomRules: Map<string, RoomRules>;
+  /** Mode presets (data/modes/); Phase 3 has only "lab". */
+  modes: Map<string, ModeData>;
   /**
    * fnv1a of every simulation data file as bundled. The client sends it in Hello; a server built from other
    * data refuses the connection, so a stale tab never predicts with old numbers (DECISIONS D-042).
@@ -66,7 +67,7 @@ export const rawData = {
   weapons: weaponFiles,
   gunplay: gunplayJson as Record<string, unknown>,
   combat: combatJson as Record<string, unknown>,
-  roomRules: [labRulesJson] as Record<string, unknown>[],
+  modes: [labModeJson] as Record<string, unknown>[],
 };
 
 let cached: GameData | null = null;
@@ -97,10 +98,10 @@ export function loadGameData(): GameData {
     if (weapons.has(w.id)) throw new Error(`Invalid data: two weapon files have the id "${w.id}"`);
     weapons.set(w.id, w);
   }
-  const roomRules = new Map<string, RoomRules>();
-  for (const raw of rawData.roomRules) {
-    const r = parse(`data/rules/${String(raw.id)}.json`, roomRulesSchema, raw);
-    roomRules.set(r.id, r);
+  const modes = new Map<string, ModeData>();
+  for (const raw of rawData.modes) {
+    const m = parse(`data/modes/${String(raw.id)}.json`, modeSchema, raw);
+    modes.set(m.id, m);
   }
   const data: GameData = {
     movement: parse("data/movement.json", movementSchema, rawData.movement),
@@ -110,7 +111,7 @@ export function loadGameData(): GameData {
     weapons,
     gunplay: parse("data/gunplay.json", gunplaySchema, rawData.gunplay),
     combat: parse("data/combat.json", combatSchema, rawData.combat),
-    roomRules,
+    modes,
     dataHash: fnv1a(utf8Encode(JSON.stringify(rawData))),
   };
   const problems = crossFileProblems(data);

@@ -338,6 +338,7 @@ const recoilStage = z.strictObject({
   sideJitterDeg: z.number().nonnegative(),
 });
 const fraction = z.number().min(0).max(1);
+const bonusMath = z.enum(["divide", "subtract"]);
 const range2 = z.tuple([z.number().int().nonnegative(), z.number().int().nonnegative()]).refine(([a, b]) => a <= b, "min must not exceed max");
 
 export const gunplaySchema = z
@@ -372,8 +373,10 @@ export const gunplaySchema = z
       laser: z.strictObject({ adsBonus: z.number().nonnegative(), visibleDot: z.boolean() }),
     }),
     rules: z.strictObject({
-      /** How "+X % speed" bonuses apply: "divide" is time / (1 + Σ bonuses); "subtract" is time × (1 − Σ bonuses). */
-      bonusMath: z.enum(["divide", "subtract"]),
+      /** How "+X %" bonuses apply, per kind: "divide" is value / (1 + Σ bonuses); "subtract" is value × (1 − Σ bonuses). */
+      bonusMath: z.strictObject({ ads: bonusMath, reload: bonusMath, recoilControl: bonusMath }),
+      /** No weapon or grip makes you faster than this multiple of your operator's speed (weapons_notes.md §4.5). */
+      maxMoveSpeedMult: z.number().positive(),
       swapS: secs,
       adsExitS: secs,
       adsFromSprintMult: z.number().min(1),
@@ -399,7 +402,8 @@ export const gunplaySchema = z
         recenter: z.strictObject({ fraction, delayS: z.number().nonnegative(), degPerS: z.number().positive() }),
       }),
     ),
-    spread: keyed(WEAPON_CLASSES, z.strictObject({ hipDeg: z.number().nonnegative(), adsDeg: z.number().nonnegative() })),
+    /** Cone half-angles; `movePerMpsDeg` widens it per m/s of horizontal speed. Server-only (DECISIONS D-041). */
+    spread: keyed(WEAPON_CLASSES, z.strictObject({ hipDeg: z.number().nonnegative(), adsDeg: z.number().nonnegative(), movePerMpsDeg: z.number().nonnegative() })),
   })
   .superRefine((g, ctx) => {
     for (const [id, t] of Object.entries(g.recoilTemplates)) {
@@ -455,8 +459,8 @@ export const combatSchema = z.strictObject({
 });
 export type CombatData = z.infer<typeof combatSchema>;
 
-/** Per-room rules (data/rules/<id>.json). Field names follow research/core_mechanics.md §11. */
-export const roomRulesSchema = z.strictObject({
+/** A mode preset (data/modes/<id>.json, PLAN §4). Damage-rule names follow research/core_mechanics.md §11. */
+export const modeSchema = z.strictObject({
   ...meta,
   id: z.string(),
   friendlyFire: z.strictObject({ actionPhase: z.boolean(), prepPhase: z.boolean(), scale: z.number().nonnegative() }),
@@ -464,7 +468,7 @@ export const roomRulesSchema = z.strictObject({
   lastAliveDies: z.boolean(),
   dummyRespawnS: z.number().nonnegative(),
 });
-export type RoomRules = z.infer<typeof roomRulesSchema>;
+export type ModeData = z.infer<typeof modeSchema>;
 
 export const SURFACES = [
   "SOFT_WALL",

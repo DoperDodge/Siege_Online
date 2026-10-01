@@ -1,5 +1,5 @@
 {
-  "_doc": "Weapon class, sight, attachment and handling rules (Phase 3). Per-weapon numbers live only in data/weapons/<id>.json. Sources: research/weapons_notes.md §4.1–4.9, research/core_mechanics.md §2.2 and §14. Times in seconds, angles in degrees. `classes.*.falloff` ([meters, fraction of base damage] points; buckshot per Y8S3, weapons_notes.md §4.3) and `classes.*.maxAmmo` ([min, max] total rounds; the +1 chambered round may add one) are only used to validate the weapon files. Every recoil and spread magnitude is a placeholder: Ubisoft publishes the field names (first-shot multiplier, Camera Up Speed, vertical/horizontal, stages by bullet index) but no values.",
+  "_doc": "Weapon class, sight, attachment and handling rules (Phase 3). Per-weapon numbers live only in data/weapons/<id>.json. Sources: research/weapons_notes.md §4.1–4.9, research/core_mechanics.md §2.2 and §14. Times in seconds, angles in degrees. `classes.*.falloff` ([meters, fraction of base damage] points; buckshot per Y8S3, weapons_notes.md §4.3) and `classes.*.maxAmmo` ([min, max] total rounds; the +1 chambered round may add one) are only used to validate the weapon files. Every recoil and spread magnitude is a placeholder: Ubisoft publishes the field names (first-shot multiplier, Camera Up Speed, vertical/horizontal, stages by bullet index) but no values. `rules.bonusMath`: how a \"+X %\" bonus changes a time or a recoil amount, per kind; \"divide\" is ÷ (1 + Σ bonuses) (fits the community's laser ADS = ADS ÷ 1.1), \"subtract\" is × (1 − Σ bonuses) (fits Fandom's SMG-12 angled-grip reload, 3.0 → 2.4 s). `spread.*.movePerMpsDeg` widens the cone per m/s of movement (official for buckshot, Y8S3; size is a placeholder).",
   "_season": "Y11S3",
   "_unverified": [
     "classes.hand_cannon.adsCurve",
@@ -13,6 +13,7 @@
     "sights.magnified.zoom",
     "sights.telescopic.zoom",
     "rules.bonusMath",
+    "rules.maxMoveSpeedMult",
     "rules.swapS",
     "rules.adsExitS",
     "rules.adsFromSprintMult",
@@ -56,7 +57,8 @@
     "laser": { "adsBonus": 0.1, "visibleDot": true }
   },
   "rules": {
-    "bonusMath": "divide",
+    "bonusMath": { "ads": "divide", "reload": "subtract", "recoilControl": "subtract" },
+    "maxMoveSpeedMult": 1.05,
     "swapS": 0.6,
     "adsExitS": 0.25,
     "adsFromSprintMult": 1.1,
@@ -126,14 +128,14 @@
     }
   },
   "spread": {
-    "assault_rifle": { "hipDeg": 3.0, "adsDeg": 0 },
-    "marksman_rifle": { "hipDeg": 3.5, "adsDeg": 0 },
-    "lmg": { "hipDeg": 3.5, "adsDeg": 0 },
-    "smg": { "hipDeg": 2.5, "adsDeg": 0 },
-    "machine_pistol": { "hipDeg": 2.5, "adsDeg": 0 },
-    "shotgun": { "hipDeg": 5.0, "adsDeg": 2.5 },
-    "slug_shotgun": { "hipDeg": 3.0, "adsDeg": 0 },
-    "handgun": { "hipDeg": 2.0, "adsDeg": 0 },
-    "hand_cannon": { "hipDeg": 2.0, "adsDeg": 0 }
+    "assault_rifle": { "hipDeg": 3.0, "adsDeg": 0, "movePerMpsDeg": 0 },
+    "marksman_rifle": { "hipDeg": 3.5, "adsDeg": 0, "movePerMpsDeg": 0 },
+    "lmg": { "hipDeg": 3.5, "adsDeg": 0, "movePerMpsDeg": 0 },
+    "smg": { "hipDeg": 2.5, "adsDeg": 0, "movePerMpsDeg": 0 },
+    "machine_pistol": { "hipDeg": 2.5, "adsDeg": 0, "movePerMpsDeg": 0 },
+    "shotgun": { "hipDeg": 5.0, "adsDeg": 2.5, "movePerMpsDeg": 0.5 },
+    "slug_shotgun": { "hipDeg": 3.0, "adsDeg": 0, "movePerMpsDeg": 0 },
+    "handgun": { "hipDeg": 2.0, "adsDeg": 0, "movePerMpsDeg": 0 },
+    "hand_cannon": { "hipDeg": 2.0, "adsDeg": 0, "movePerMpsDeg": 0 }
   }
 }

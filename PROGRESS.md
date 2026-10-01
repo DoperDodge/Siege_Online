@@ -33,9 +33,9 @@ Built in milestones; each one keeps the tests, both e2e scripts and the netsim g
   Dokkaebi's Mk 14 telescopic sight and muzzle brake, Brava's CAMRS grips, the 5.7 USG muzzle brake),
   extended-barrel damage, and the two official recoil facts (Mk 14 first-shot ×3.5, Reaper MK2 stages).
   `data/gunplay.json` holds class, sight, attachment and handling rules; `data/combat.json` damage zones,
-  penetration, DBNO, revive and melee; `data/rules/lab.json` friendly-fire settings for lab rooms. Every
+  penetration, DBNO, revive and melee; `data/modes/lab.json` the lab mode preset (friendly-fire settings). Every
   invented value is in its file's `_unverified` list and in research/OPEN_QUESTIONS.md ("Placeholders added
-  while building Phase 3", 32 questions). Nothing reads the data yet.
+  while building Phase 3", 33 questions). Nothing reads the data yet.
 - **Checks:** schemas reject impossible weapons (damage rising with range, a barrel offered without its
   numbers, more than one shot per tick, and more), cross-file checks catch loadouts naming a missing weapon,
   and a test compares every number and UNVERIFIED mark with the CSV and the class rules

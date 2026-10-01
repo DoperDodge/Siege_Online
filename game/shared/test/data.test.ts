@@ -29,7 +29,7 @@ describe("data files", () => {
     expect(data.operators.size).toBe(12);
     expect(data.levels.has("movement_lab")).toBe(true);
     expect(data.weapons.size).toBe(40);
-    expect(data.roomRules.has("lab")).toBe(true);
+    expect(data.modes.has("lab")).toBe(true);
     expect(crossFileProblems(data)).toEqual([]);
   });
 
@@ -41,7 +41,7 @@ describe("data files", () => {
       ["combat", rawData.combat],
       ...rawData.operators.map((o): [string, Record<string, unknown>] => [`operators/${String(o.id)}`, o]),
       ...rawData.weapons.map((w): [string, Record<string, unknown>] => [`weapons/${String(w.id)}`, w]),
-      ...rawData.roomRules.map((r): [string, Record<string, unknown>] => [`rules/${String(r.id)}`, r]),
+      ...rawData.modes.map((r): [string, Record<string, unknown>] => [`modes/${String(r.id)}`, r]),
     ];
     for (const [name, raw] of files) {
       expect(missingUnverifiedPaths(raw, (raw._unverified as string[] | undefined) ?? []), name).toEqual([]);
