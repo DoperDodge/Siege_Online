@@ -5,7 +5,7 @@ known issues, and what's next.
 
 ---
 
-## Phase 2 — Netcode core · 🔶 code done; next: your two-PC test and the Railway deploy (needs your OK)
+## Phase 2 — Netcode core · ✅ merged and live on Railway (2026-10-01); waiting for your two-PC test
 
 **Done when (PLAN §17):** two PCs play smoothly at 100 ms simulated latency. Before sign-off PLAN §3 also
 asks for a real Railway deploy (latency from your location, WebSocket stability).
@@ -63,7 +63,8 @@ npm start
 2. **Two PCs on the same network:** on the second PC open `http://<first PC's IP>:8080` and join with the
    code. Windows asks whether Node may use the network the first time; allow private networks. (`ipconfig`
    shows the IP, usually 192.168.x.x.)
-3. **Over the internet:** after the Railway deploy (below), just share the link.
+3. **Over the internet:** open your Railway link (the `@redmond/server` service's domain) on both PCs, or
+   send it to a friend. Railway redeploys automatically whenever `main` changes.
 
 Things to judge, at +100 ms:
 - Does your own movement feel as responsive as offline?
@@ -77,8 +78,10 @@ Things to judge, at +100 ms:
 - Bumping into another player causes small corrections (smoothed). Standing on someone's head slides you off;
   whether Siege lets you stand there is an open question (research/OPEN_QUESTIONS.md, Phase 2 placeholders).
 - Rarely, a 0.1 mm disagreement at wall corners causes a correction (absorbed, invisible).
-- **Not deployed yet.** `.railway/railway.ts` holds the settings (D-036). I need your OK, and the region
-  closest to you and your friends, before I create anything in your Railway account.
+- **Deployed** on Railway as one service (settings in `.railway/railway.ts`, D-036). Two test clients on the live
+  server: join by code, no corrections while walking, no resyncs, server tick 0.5 ms. The server currently runs
+  in **Singapore**: about 230–250 ms round trip from a US test machine. For US players, switch the region to US
+  West or US East (Settings → Deploy → Regions, keep 1 instance).
 
 ### Next: Phase 3 — Gunplay
 The weapon data system, recoil, ADS, attachments, hit registration on the rewind framework (with lean and stance
