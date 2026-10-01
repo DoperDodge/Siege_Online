@@ -5,6 +5,82 @@ known issues, and what's next.
 
 ---
 
+## Phase 2 — Netcode core · 🔶 code done; next: your two-PC test and the Railway deploy (needs your OK)
+
+**Done when (PLAN §17):** two PCs play smoothly at 100 ms simulated latency. Before sign-off PLAN §3 also
+asks for a real Railway deploy (latency from your location, WebSocket stability).
+
+### What's done
+- **Game server** (`game/server`): match rooms over a WebSocket at `/ws`, on the same port as the page.
+  - Create a room, or join one with its 5-character code (no look-alike characters).
+  - Limits: 10 players a room, rate limits per connection, and bad messages disconnect.
+  - When Railway restarts the server, players are told it's restarting.
+  - `/stats` shows rooms, players and tick time. Decisions D-034 and D-036.
+- **Server authority with client prediction** (D-029, D-030):
+  - The server runs the same shared simulation at 64 Hz.
+  - Your page predicts your own movement, so it responds instantly, and only gets corrected when the server
+    disagrees.
+  - Other players are drawn smoothly between server snapshots, a little in the past (D-032).
+  - Your clock adjusts itself so your inputs reach the server just in time.
+  - If your inputs are late, the server holds your body still instead of guessing.
+- **Lag compensation framework** (D-031): for a shot, the server rewinds everyone else to what the shooter was
+  seeing, up to 200 ms. Phase 2 has a test shot (left click); weapons use it from Phase 3.
+- **Players block each other** (D-033). Small corrections when you bump into someone fade out over 0.1 s.
+- **Online Movement Lab** (D-035):
+  - Home page → *Movement Lab online*: create a room; the address bar is the invite link.
+  - Other players are orange with name tags.
+  - Pause menu: simulated extra latency, invite link, leave.
+  - Net stats line under the fps: ping, interpolation delay, corrections, kbps.
+- **netsim harness** (`npm run netsim`, PLAN §19): 10 headless clients over a simulated network (100 ms round
+  trip, jitter, TCP stalls, clock drift). Results for 30 s:
+  - Desyncs: none. Dropped inputs: none.
+  - Bandwidth per player: about 14–17 kbps down and 13 kbps up.
+  - Server tick: 0.7 ms on average, 2.3 ms at p99. The budget is 5 ms.
+  - Corrections: about one per player in 30 s when spread out (the spawn), and about 1.5 per second when
+    constantly bumping into each other.
+- **Tests:**
+  - 111 unit tests, including the protocol, snapshots, lag compensation, player collision, the lobby, and the
+    netsim as a regression test.
+  - Two headless-browser tests. The new one runs two browsers at +100 ms: they join by code, see each other
+    move, one hits the other mid-stride with a test shot, then one leaves and the server restarts.
+
+### How to test (needs Node 22.12+)
+```
+npm install
+npm run build
+npm start
+```
+1. **One PC, two windows:** open http://localhost:8080 → **Movement Lab online** → *Create a room*. Press
+   `Esc` → *Copy invite link* and open it in a second browser window (or a private window, to use another
+   name). In both pause menus set **Simulated extra latency → +100 ms round trip**.
+2. **Two PCs on the same network:** on the second PC open `http://<first PC's IP>:8080` and join with the
+   code. Windows asks whether Node may use the network the first time; allow private networks. (`ipconfig`
+   shows the IP, usually 192.168.x.x.)
+3. **Over the internet:** after the Railway deploy (below), just share the link.
+
+Things to judge, at +100 ms:
+- Does your own movement feel as responsive as offline?
+- Does the other player move smoothly (no stutter or teleporting)?
+- Bump into each other: is it acceptable?
+- Left-click at the other player while they strafe. The red line is your shot. The green outline is where the
+  server judged them to be. Does that match where you saw them?
+
+### Known issues
+- Below ~30 fps, other players are drawn up to 150 ms in the past instead of ~65 ms (D-032).
+- Bumping into another player causes small corrections (smoothed). Standing on someone's head slides you off;
+  whether Siege lets you stand there is an open question (research/OPEN_QUESTIONS.md, Phase 2 placeholders).
+- After a teleport or respawn there is sometimes one extra correction (inputs already in flight).
+- Rarely, a 0.1 mm disagreement at wall corners causes a correction (absorbed, invisible).
+- **Not deployed yet.** `.railway/railway.ts` holds the settings (D-036). I need your OK, and the region
+  closest to you and your friends, before I create anything in your Railway account.
+
+### Next: Phase 3 — Gunplay
+The weapon data system, recoil, ADS, attachments, hit registration on the rewind framework (with lean and stance
+hitboxes), DBNO and revive, plus melee (deferred from Phase 1, D-024). **Done when:** headshots and hit
+registration feel right at 100 ms.
+
+---
+
 ## Phase 1 — Skeleton + movement · ✅ complete (Ulo tested it on 2026-09-30: "all looking good")
 
 **Done when (PLAN §17):** it feels like Siege movement to you, offline.
@@ -60,7 +136,7 @@ For development there's also `npm run dev` (hot reload at http://localhost:5173/
 - The numbers are placeholders from research until you measure them (research/OPEN_QUESTIONS.md, core mechanics).
 - Simplifications and deferrals are listed in DECISIONS D-023 and D-024 (e.g. rappel moves to Phase 5, melee to
   Phase 3). Prone, you can't crawl off a drop taller than a step or climb a curb head-first yet (D-023a).
-- Nothing is on Railway yet, so it can't be opened from an iPad until Phase 2 deploys it (or earlier, if you want).
+- Nothing is on Railway yet, so it can't be opened from an iPad until Phase 2 deploys it.
 
 ### Next: Phase 2 — Netcode core
 WebSocket match rooms on the Node server, room codes, client prediction + server reconciliation (the shared

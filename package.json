@@ -2,7 +2,7 @@
   "name": "redmond",
   "private": true,
   "type": "module",
-  "description": "Project REDMOND \u2014 browser tactical shooter (see PLAN.md).",
+  "description": "Project REDMOND — browser tactical shooter (see PLAN.md).",
   "engines": {
     "node": "^22.12.0 || ^24.0.0 || >=26.0.0"
   },
@@ -15,7 +15,7 @@
     "dev": "npm run dev -w @redmond/client",
     "build": "npm run build -w @redmond/client && npm run build -w @redmond/server",
     "start": "npm start -w @redmond/server",
-    "typecheck": "npm run typecheck --workspaces --if-present && tsc --noEmit -p tools/netsim",
+    "typecheck": "npm run typecheck --workspaces --if-present && tsc --noEmit -p tools/netsim && tsc --noEmit -p .railway",
     "test": "vitest run",
     "test:e2e": "node tools/e2e/movement-lab.mjs && node tools/e2e/online-lab.mjs",
     "netsim": "esbuild tools/netsim/run.ts --bundle --platform=node --format=esm --outfile=builds/netsim/run.mjs --log-level=warning && node builds/netsim/run.mjs",
@@ -25,6 +25,7 @@
   "devDependencies": {
     "@types/node": "^22",
     "playwright": "1.56.1",
+    "railway": "3.12.0",
     "typescript": "7.0.2",
     "vitest": "5.0.2"
   }
