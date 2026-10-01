@@ -5,7 +5,60 @@ known issues, and what's next.
 
 ---
 
-## Phase 2 — Netcode core · 🔶 code done; next: your two-PC test and the Railway deploy (needs your OK)
+## Phase 3 — Gunplay · 🚧 in progress (branch `claude/phase-3-gunplay`, draft PR #4)
+
+**Done when (PLAN §17):** headshots and hit registration feel right at 100 ms.
+
+Built in milestones; each one keeps the tests, both e2e scripts and the netsim green, and the game playable.
+
+| Milestone | Status |
+|---|---|
+| M1 Weapon, gunplay, combat and lab-rules data | ✅ 40 weapon files + rule files, validated, CSV-agreement tests |
+| M0 Hit-registration measurement harness | ✅ server agrees with every shot as drawn (netsim); rewind cap 250 ms (D-045, your call) |
+| M2 Damage maths and loadout resolution | ✅ pure functions + tests; nothing in the game uses them yet |
+| M3 Weapon state in the simulation (fire, ammo, reload, swap, modes), protocol v2 | ⏳ |
+| M4 Loadout pick online, data hash check | ⏳ |
+| M5 ADS, recoil, spread | ⏳ |
+| M6 Hit registration, damage, death | ⏳ |
+| M7 DBNO and revive | ⏳ |
+| M8 Melee | ⏳ |
+| M9 Client presentation (viewmodel, HUD, hit markers) | ⏳ |
+| M10 Range Lab (dummies) | ⏳ |
+| M11 End-to-end tests, netsim gates, docs | ⏳ |
+
+### What's done
+- **Weapon data (M1, D-039):** `data/weapons/<id>.json` for all 40 roster weapons, generated once from
+  `research/weapons.csv`. Damage and falloff, fire rate and modes, magazine and +1, total ammo, reload times
+  (with the community-measured ammo-refill points), ADS time, attachments (including the per-operator ones:
+  Dokkaebi's Mk 14 telescopic sight and muzzle brake, Brava's CAMRS grips, the 5.7 USG muzzle brake),
+  extended-barrel damage, and the two official recoil facts (Mk 14 first-shot ×3.5, Reaper MK2 stages).
+  `data/gunplay.json` holds class, sight, attachment and handling rules; `data/combat.json` damage zones,
+  penetration, DBNO, revive and melee; `data/modes/lab.json` the lab mode preset (friendly-fire settings). Every
+  invented value is in its file's `_unverified` list and in research/OPEN_QUESTIONS.md ("Placeholders added
+  while building Phase 3", 33 questions). Nothing reads the data yet.
+- **Checks:** schemas reject impossible weapons (damage rising with range, a barrel offered without its
+  numbers, more than one shot per tick, and more), cross-file checks catch loadouts naming a missing weapon,
+  and a test compares every number and UNVERIFIED mark with the CSV and the class rules
+  (weapons_notes.md §4). The Ballistic Shield and GONNE-6 are in the data but can't be picked until Phase 8
+  (D-054).
+- **Loadouts and damage maths (M2):** a loadout pick (operator, two weapons with sight, barrel, grip and laser,
+  gadgets) is checked against the data (who can carry what, per-operator attachments, the shield and GONNE-6
+  not pickable yet) and an invalid one quietly becomes the default loadout. It resolves into the numbers the
+  simulation will use, all in 64 Hz ticks: ADS time with sight and laser bonuses, reload times with the angled
+  grip, refill points (estimated from similar guns where nobody measured them), swap time, move speed, recoil
+  with barrels and grips, extended-barrel damage. Damage: falloff by distance, head/neck/limb zones, buckshot
+  pellets ×1.5 to the head, Skopós's idle-shell headshot rule, and limb penetration (none / simple / full).
+- **Hit-registration harness (M0, D-045):** a shot now claims the frame that was on screen when you clicked,
+  and the server rewinds using only the snapshots that client actually received. `npm run netsim -- --hitreg`
+  runs a still shooter aiming at the heads it draws while four targets strafe, sprint, spam lean and crouch,
+  crawl and vault, at 100 ms round trip: the server agrees with every shot (also with 10 ms jitter); with
+  rewinding switched off, only 9 % hit the head. 11 % of shots needed more than 200 ms of rewind, so the cap
+  is now 250 ms. The online lab's pause menu also simulates jitter and packet loss now (or
+  `?lag=100&jitter=20&loss=1`, PLAN §16.9). 161 unit tests.
+
+---
+
+## Phase 2 — Netcode core · ✅ merged and live on Railway (2026-10-01); waiting for your two-PC test
 
 **Done when (PLAN §17):** two PCs play smoothly at 100 ms simulated latency. Before sign-off PLAN §3 also
 asks for a real Railway deploy (latency from your location, WebSocket stability).
@@ -63,7 +116,8 @@ npm start
 2. **Two PCs on the same network:** on the second PC open `http://<first PC's IP>:8080` and join with the
    code. Windows asks whether Node may use the network the first time; allow private networks. (`ipconfig`
    shows the IP, usually 192.168.x.x.)
-3. **Over the internet:** after the Railway deploy (below), just share the link.
+3. **Over the internet:** open your Railway link (the `@redmond/server` service's domain) on both PCs, or
+   send it to a friend. Railway redeploys automatically whenever `main` changes.
 
 Things to judge, at +100 ms:
 - Does your own movement feel as responsive as offline?
@@ -77,8 +131,10 @@ Things to judge, at +100 ms:
 - Bumping into another player causes small corrections (smoothed). Standing on someone's head slides you off;
   whether Siege lets you stand there is an open question (research/OPEN_QUESTIONS.md, Phase 2 placeholders).
 - Rarely, a 0.1 mm disagreement at wall corners causes a correction (absorbed, invisible).
-- **Not deployed yet.** `.railway/railway.ts` holds the settings (D-036). I need your OK, and the region
-  closest to you and your friends, before I create anything in your Railway account.
+- **Deployed** on Railway as one service (settings in `.railway/railway.ts`, D-036). Two test clients on the live
+  server: join by code, no corrections while walking, no resyncs, server tick 0.5 ms. The server currently runs
+  in **Singapore**: about 230–250 ms round trip from a US test machine. For US players, switch the region to US
+  West or US East (Settings → Deploy → Regions, keep 1 instance).
 
 ### Next: Phase 3 — Gunplay
 The weapon data system, recoil, ADS, attachments, hit registration on the rewind framework (with lean and stance

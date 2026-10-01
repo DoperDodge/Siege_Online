@@ -1,0 +1,43 @@
+{
+  "_doc": "6P41 (Fuze). research/weapons.csv row 6p41; class rules research/weapons_notes.md §4. Open-bolt belt LMG: 100+0, the extra round is in reserve (weapons_notes.md §4.6). Fandom gives one 8.5 s reload; ammo-refill 4.29 / 7.33 s community-measured.",
+  "_season": "Y11S3.1",
+  "_unverified": ["destruction", "reload.refillEmptyS", "reload.refillTacticalS", "reload.tacticalS"],
+  "id": "6p41",
+  "name": "6P41",
+  "class": "lmg",
+  "fire": {
+    "kind": "hitscan",
+    "rpm": 680,
+    "modes": ["auto"],
+    "pellets": 1
+  },
+  "damage": {
+    "base": 46,
+    "falloff": [[30, 46], [40, 30]],
+    "penetration": "simple",
+    "head": "kill"
+  },
+  "ammo": {
+    "magazine": 100,
+    "plusOne": false,
+    "maxAmmo": 301
+  },
+  "reload": {
+    "kind": "magazine",
+    "tacticalS": 8.5,
+    "emptyS": 8.5,
+    "refillTacticalS": 4.29,
+    "refillEmptyS": 7.33
+  },
+  "adsS": 0.56,
+  "destruction": null,
+  "attachments": {
+    "sights": ["iron", "nonmag", "magnified"],
+    "barrels": ["muzzle_brake", "compensator", "flash_hider", "suppressor"],
+    "grips": ["vertical", "angled", "horizontal"],
+    "underbarrel": ["laser"]
+  },
+  "recoil": {
+    "template": "lmg"
+  }
+}

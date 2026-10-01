@@ -1,0 +1,43 @@
+{
+  "_doc": "AK-12 (Fuze). research/weapons.csv row ak_12; class rules research/weapons_notes.md §4. Ammo-refill 1.49 / 2.47 s community-measured.",
+  "_season": "Y11S3.1",
+  "_unverified": ["destruction", "fire.modes", "reload.refillEmptyS", "reload.refillTacticalS"],
+  "id": "ak_12",
+  "name": "AK-12",
+  "class": "assault_rifle",
+  "fire": {
+    "kind": "hitscan",
+    "rpm": 850,
+    "modes": ["auto", "burst3", "semi"],
+    "pellets": 1
+  },
+  "damage": {
+    "base": 40,
+    "falloff": [[25, 40], [35, 24]],
+    "penetration": "simple",
+    "head": "kill"
+  },
+  "ammo": {
+    "magazine": 30,
+    "plusOne": true,
+    "maxAmmo": 181
+  },
+  "reload": {
+    "kind": "magazine",
+    "tacticalS": 2.6,
+    "emptyS": 3.4,
+    "refillTacticalS": 1.49,
+    "refillEmptyS": 2.47
+  },
+  "adsS": 0.52,
+  "destruction": null,
+  "attachments": {
+    "sights": ["iron", "nonmag", "magnified"],
+    "barrels": ["muzzle_brake", "compensator", "flash_hider", "suppressor"],
+    "grips": ["vertical", "angled", "horizontal"],
+    "underbarrel": ["laser"]
+  },
+  "recoil": {
+    "template": "assault_rifle"
+  }
+}

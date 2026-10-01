@@ -112,9 +112,9 @@ try {
   // Lag compensation did the work: by the time the shot reached the server, A had moved on well past
   // the torso's radius (0.19 m), and the server rewound about one-way latency + interpolation delay.
   result.checks.targetHadMovedOn = aAtFire.x - fired.seenX > 0.19;
-  // (At the 200 ms cap here: software rendering runs these pages at ~15 fps, and snapshots handled once a
+  // (Near the 250 ms cap here: software rendering runs these pages at ~15 fps, and snapshots handled once a
   // frame look jittery, so the interpolation delay grows toward its 150 ms maximum.)
-  result.checks.rewindInRange = rewoundMs !== null && rewoundMs > 60 && rewoundMs <= 200 + 1e-6;
+  result.checks.rewindInRange = rewoundMs !== null && rewoundMs > 60 && rewoundMs <= 250 + 1e-6;
   result.checks.bSawAMove = bSeesEnd.x - bSeesStart.x > 2 && Math.abs(bSeesEnd.x - aEnd.x) < 0.05;
 
   // No contact anywhere: corrections only for the join and the teleport.

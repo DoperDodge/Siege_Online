@@ -1,0 +1,43 @@
+{
+  "_doc": "556xi (Thermite). research/weapons.csv row 556xi; class rules research/weapons_notes.md §4. Ammo-refill 1.30 / 2.74 s community-measured.",
+  "_season": "Y11S3.1",
+  "_unverified": ["destruction", "reload.refillEmptyS", "reload.refillTacticalS"],
+  "id": "556xi",
+  "name": "556xi",
+  "class": "assault_rifle",
+  "fire": {
+    "kind": "hitscan",
+    "rpm": 690,
+    "modes": ["auto", "semi"],
+    "pellets": 1
+  },
+  "damage": {
+    "base": 47,
+    "falloff": [[25, 47], [35, 28]],
+    "penetration": "simple",
+    "head": "kill"
+  },
+  "ammo": {
+    "magazine": 30,
+    "plusOne": true,
+    "maxAmmo": 181
+  },
+  "reload": {
+    "kind": "magazine",
+    "tacticalS": 2.6,
+    "emptyS": 3.7,
+    "refillTacticalS": 1.3,
+    "refillEmptyS": 2.74
+  },
+  "adsS": 0.52,
+  "destruction": null,
+  "attachments": {
+    "sights": ["iron", "nonmag", "magnified"],
+    "barrels": ["muzzle_brake", "compensator", "flash_hider", "suppressor"],
+    "grips": ["vertical", "angled", "horizontal"],
+    "underbarrel": ["laser"]
+  },
+  "recoil": {
+    "template": "assault_rifle"
+  }
+}

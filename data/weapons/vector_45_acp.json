@@ -1,0 +1,50 @@
+{
+  "_doc": "Vector .45 ACP (Mira). research/weapons.csv row vector_45_acp; class rules research/weapons_notes.md §4. Extended barrel 25 / min 20 and ammo-refill 0.99 / 2.31 s community-measured.",
+  "_season": "Y11S3.1",
+  "_unverified": [
+    "damage.extendedBarrel",
+    "destruction",
+    "fire.modes",
+    "reload.refillEmptyS",
+    "reload.refillTacticalS"
+  ],
+  "id": "vector_45_acp",
+  "name": "Vector .45 ACP",
+  "class": "smg",
+  "fire": {
+    "kind": "hitscan",
+    "rpm": 1200,
+    "modes": ["auto", "burst2", "semi"],
+    "pellets": 1
+  },
+  "damage": {
+    "base": 23,
+    "falloff": [[18, 23], [28, 13]],
+    "penetration": "simple",
+    "head": "kill",
+    "extendedBarrel": { "base": 25, "falloff": [[18, 25], [28, 20]] }
+  },
+  "ammo": {
+    "magazine": 25,
+    "plusOne": true,
+    "maxAmmo": 176
+  },
+  "reload": {
+    "kind": "magazine",
+    "tacticalS": 2,
+    "emptyS": 2.8,
+    "refillTacticalS": 0.99,
+    "refillEmptyS": 2.31
+  },
+  "adsS": 0.46,
+  "destruction": null,
+  "attachments": {
+    "sights": ["iron", "nonmag"],
+    "barrels": ["muzzle_brake", "compensator", "flash_hider", "suppressor", "extended_barrel"],
+    "grips": ["vertical", "angled", "horizontal"],
+    "underbarrel": ["laser"]
+  },
+  "recoil": {
+    "template": "smg"
+  }
+}

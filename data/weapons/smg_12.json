@@ -1,0 +1,42 @@
+{
+  "_doc": "SMG-12 (Dokkaebi). research/weapons.csv row smg_12; class rules research/weapons_notes.md §4. Y11S3 official: damage 16, magazine 22, max ammo 111. Integral suppressor, no barrel slot.",
+  "_season": "Y11S3.1",
+  "_unverified": ["damage.falloff", "destruction"],
+  "id": "smg_12",
+  "name": "SMG-12",
+  "class": "machine_pistol",
+  "fire": {
+    "kind": "hitscan",
+    "rpm": 1270,
+    "modes": ["auto"],
+    "pellets": 1
+  },
+  "damage": {
+    "base": 16,
+    "falloff": [[18, 16], [28, 9]],
+    "penetration": "none",
+    "head": "kill"
+  },
+  "ammo": {
+    "magazine": 22,
+    "plusOne": true,
+    "maxAmmo": 111
+  },
+  "reload": {
+    "kind": "magazine",
+    "tacticalS": 2,
+    "emptyS": 3
+  },
+  "adsS": 0.38,
+  "destruction": "low",
+  "integralSuppressor": true,
+  "attachments": {
+    "sights": ["iron", "nonmag"],
+    "barrels": [],
+    "grips": ["vertical", "angled", "horizontal"],
+    "underbarrel": ["laser"]
+  },
+  "recoil": {
+    "template": "machine_pistol"
+  }
+}

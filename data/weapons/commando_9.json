@@ -1,0 +1,42 @@
+{
+  "_doc": "Commando 9 (Sentry). research/weapons.csv row commando_9; class rules research/weapons_notes.md §4. No magnified sight on defender automatics since Y10S3. Extended barrel 40 / min 32 community-measured.",
+  "_season": "Y11S3.1",
+  "_unverified": ["damage.extendedBarrel", "destruction", "fire.modes"],
+  "id": "commando_9",
+  "name": "Commando 9",
+  "class": "assault_rifle",
+  "fire": {
+    "kind": "hitscan",
+    "rpm": 780,
+    "modes": ["auto", "burst3", "semi"],
+    "pellets": 1
+  },
+  "damage": {
+    "base": 36,
+    "falloff": [[25, 36], [35, 21]],
+    "penetration": "simple",
+    "head": "kill",
+    "extendedBarrel": { "base": 40, "falloff": [[25, 40], [35, 32]] }
+  },
+  "ammo": {
+    "magazine": 25,
+    "plusOne": true,
+    "maxAmmo": 176
+  },
+  "reload": {
+    "kind": "magazine",
+    "tacticalS": 2,
+    "emptyS": 2.5
+  },
+  "adsS": 0.52,
+  "destruction": null,
+  "attachments": {
+    "sights": ["iron", "nonmag"],
+    "barrels": ["muzzle_brake", "compensator", "flash_hider", "suppressor", "extended_barrel"],
+    "grips": ["vertical", "angled", "horizontal"],
+    "underbarrel": ["laser"]
+  },
+  "recoil": {
+    "template": "assault_rifle"
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "_doc": "C75 Auto (Dokkaebi, Sentry). research/weapons.csv row c75_auto; class rules research/weapons_notes.md §4. Iron sights only. Machine-pistol falloff community-measured.",
+  "_season": "Y11S3.1",
+  "_unverified": ["damage.falloff", "destruction"],
+  "id": "c75_auto",
+  "name": "C75 Auto",
+  "class": "machine_pistol",
+  "fire": {
+    "kind": "hitscan",
+    "rpm": 1000,
+    "modes": ["auto", "semi"],
+    "pellets": 1
+  },
+  "damage": {
+    "base": 35,
+    "falloff": [[18, 35], [28, 21]],
+    "penetration": "none",
+    "head": "kill"
+  },
+  "ammo": {
+    "magazine": 26,
+    "plusOne": true,
+    "maxAmmo": 131
+  },
+  "reload": {
+    "kind": "magazine",
+    "tacticalS": 1.9,
+    "emptyS": 2.7
+  },
+  "adsS": 0.38,
+  "destruction": null,
+  "attachments": {
+    "sights": ["iron"],
+    "barrels": ["suppressor"],
+    "grips": [],
+    "underbarrel": ["laser"]
+  },
+  "recoil": {
+    "template": "machine_pistol"
+  }
+}

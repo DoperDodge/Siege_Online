@@ -1,5 +1,5 @@
 {
-  "_doc": "Skopós — loadout and ratings from the official Ubisoft operator page (research/operators/skopos.md). Shell swap: the ability key opens the idle shell's camera, interact confirms; timings from the Y11S1 Designer's Notes.",
+  "_doc": "Skopós — loadout and ratings from the official Ubisoft operator page (research/operators/skopos.md). Shell swap: the ability key opens the idle shell's camera, interact confirms; timings from the Y11S1 Designer's Notes. Combat: no DBNO (Fandom, skopos.md §3.3) and the bigger Aruni-style melee hole (Y11S1 DN).",
   "_season": "Y11S3",
   "id": "skopos",
   "name": "Skopós",
@@ -29,7 +29,12 @@
     }
   },
   "pawns": 2,
+  "combat": {
+    "canDbno": false,
+    "meleeHole": "large"
+  },
   "_unverified": [
-    "ability.params.idleShellOffset"
+    "ability.params.idleShellOffset",
+    "combat.canDbno"
   ]
 }

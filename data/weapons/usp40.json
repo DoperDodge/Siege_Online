@@ -1,0 +1,41 @@
+{
+  "_doc": "USP40 (Brava, Mira). research/weapons.csv row usp40; class rules research/weapons_notes.md §4. Handgun falloff community-measured (weapons_notes.md §4.3).",
+  "_season": "Y11S3.1",
+  "_unverified": ["damage.falloff", "destruction"],
+  "id": "usp40",
+  "name": "USP40",
+  "class": "handgun",
+  "fire": {
+    "kind": "hitscan",
+    "rpm": 494,
+    "modes": ["semi"],
+    "pellets": 1
+  },
+  "damage": {
+    "base": 48,
+    "falloff": [[12, 48], [14, 28]],
+    "penetration": "simple",
+    "head": "kill"
+  },
+  "ammo": {
+    "magazine": 12,
+    "plusOne": true,
+    "maxAmmo": 97
+  },
+  "reload": {
+    "kind": "magazine",
+    "tacticalS": 1.8,
+    "emptyS": 2.1
+  },
+  "adsS": 0.24,
+  "destruction": null,
+  "attachments": {
+    "sights": ["iron"],
+    "barrels": ["suppressor", "muzzle_brake"],
+    "grips": [],
+    "underbarrel": ["laser"]
+  },
+  "recoil": {
+    "template": "handgun"
+  }
+}

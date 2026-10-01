@@ -1,7 +1,7 @@
 # OPEN_QUESTIONS.md — things research could not verify
 
 Verified against: Y11S3 (Operation Split Fire) — compiled 2026-09-29
-Total: **259 questions from 25 files** (collected from each file's "Open questions" section; the file link shows where the context is).
+Total: **259 questions from 25 files** (collected from each file's "Open questions" section; the file link shows where the context is). Placeholders invented while building each phase are listed after the Oregon files.
 
 **How to answer:** reply in chat, or edit this file and write your answer under the question (e.g.
 `> Ulo: 6 reinforcements`). Most of these take seconds in a **Custom Game → Local**, with the timer off.
@@ -134,6 +134,86 @@ marked `_unverified`. The Movement Lab is the easiest place to compare them agai
    teammate)? We currently slide you off at 1.5 m/s.
 2. **Player collision:** do players block each other completely, or can you push through (teammates or
    enemies)? Do downed or dead bodies block? (We: everyone alive blocks; dead bodies don't.)
+
+### Placeholders added while building Phase 3 (not in the original research)
+
+These make gunplay work. Each value is in `data/gunplay.json`, `data/combat.json`, `data/modes/lab.json` or a
+`data/weapons/<id>.json` file and is listed in that file's `_unverified`. The weapon questions above
+(weapons_notes.md 1–13), core_mechanics.md Q8, Q9, Q11, Q13 and Q15, and Phase 2 question 2 (do downed bodies block?) are not repeated here. Most can be checked
+in the Shooting Range or a Custom Game with a stopwatch or a 60 fps recording.
+
+**Weapons and handling**
+1. **ADS:** which sight is the class ADS time (e.g. 0.52 s for rifles) measured with? Do the sight and laser
+   bonuses add (time ÷ 1.2) or multiply (÷ 1.21)? How long does leaving ADS take (0.25 s placeholder)? How much
+   slower is ADS straight out of a sprint (×1.1 placeholder, from the shield pistol's 0.50 vs 0.55 s;
+   Blackbeard's 2016 figures, 0.7 vs 0.8 s, give ×1.14)? Can you
+   ADS during a reload? What drop height cancels ADS?
+2. **ADS accuracy curves:** we use fast = 1−(1−t)², medium = t, slow = t² (placeholders); the GONNE-6's curve
+   isn't stated at all.
+3. **Grips:** we read the angled grip's "+20 % reload speed" as time × 0.8 (Fandom's SMG-12 example: 3.0 → 2.4 s
+   empty, but 2.0 → 1.5 s tactical) and the vertical grip's "+20 % vertical control" as vertical recoil × 0.8.
+   Are those right?
+4. **Barrels:** Fandom vs community figures: muzzle brake −45/−50 % first shot, compensator −35/−40 %
+   horizontal, flash hider −15/−20 % vertical. We use Fandom's.
+5. **Reload details:** when does the magazine come out (we use halfway to the ammo-counter refill)? Are a
+   pulled magazine's rounds returned to reserve? Does firing the chambered round cancel the reload? Can you
+   fire between the counter refill and the end of the animation? Does pressing reload while sprinting stop
+   the sprint? (Weapons without a community refill point use the class's typical ratio.)
+6. **Empty trigger:** does pulling the trigger on an empty gun start a reload, and what feedback is there?
+7. **Fire cadence:** are early semi-auto clicks dropped or buffered? Do bursts fire at the auto rate, stop
+   when you let go, and have a delay between them? Does switching fire mode take time?
+8. **Tube shotguns:** in an empty reload, does the extra time (M590A1: 5.5 s − 7 × 0.6 s = 1.3 s) come first?
+   Can you interrupt to fire after the first shell?
+9. **Damage curve:** is damage between falloff points rounded down? What shape does buckshot damage take
+   between 5–6 m and 10–13 m (we use straight lines)?
+10. **Movement penalties:** do the LMG's −10 % and the horizontal grip's +5 % apply to sprinting and ADS
+   walking too, and with the secondary out? The horizontal grip "never exceeds the operator's cap": what is
+   that cap (we use +5 %, i.e. the grip is the only bonus)?
+11. **Ladders and vaults:** can you fire, reload or ADS on a ladder or during a vault? (We block all three.)
+12. **Spread:** hip-fire spread per class; is ADS pinpoint for bullets; does spread grow while firing, or while
+   moving for guns other than shotguns (Y8S3 says moving widens buckshot spread; how much)? Is the buckshot
+   pattern fixed or random?
+13. **Recoil:** every magnitude (first-shot kick, per-shot climb and side jitter, Camera Up Speed, recenter,
+   how long until a spray resets), and hip vs ADS recoil. What is the Mk 14's official "first-shot multiplier
+   3.5" relative to?
+14. **Shot origin:** do bullets leave the camera or the muzzle?
+15. **Weapon swap:** one 0.6 s action (placeholder; core_mechanics.md Q13) or separate holster and draw?
+
+**Damage**
+16. **Buckshot headshots:** ×1.5 per pellet (Y8S3 notes) or ×1.0 (2016 notes, core_mechanics.md Q15)? Does the
+   neck count as head for pellets?
+17. **Slug limb penetration:** full (weapons.csv, destruction.md) or simple (core_mechanics.md §9.3)?
+18. **Pelvis:** does it count as torso (×1.0, our placeholder) or leg (×0.75)?
+19. **Penetration:** does the 70 % for each extra body stack per body? Does a simple-penetration bullet that
+   grazes a limb continue on to a second player?
+20. **Shotgun blasts:** is a blast's damage applied pellet by pellet (so going down and overkill are judged
+   per pellet) or added up per blast and target?
+21. **Skopós:** the idle-shell headshot rule (×2.0 placeholder, fitted to "a 5.7 USG headshot doesn't destroy
+   it"), and whether her shells really can't be downed (Fandom only).
+22. **Reverse friendly fire:** how much team damage turns it on (100 HP placeholder)? Do headshots reflect?
+   Can reflected damage down or kill you?
+
+**DBNO, revive and melee**
+23. **Bleeding out:** is the 20 HP downed pool drained by both bleeding and damage? What counts as "moving" for
+   the fast bleed (0.05 m/s placeholder)?
+24. **Going down:** how long is the collapse? Does a downed player have the prone hitbox? What happens if you
+   go down in a tight spot, mid-vault or on a ladder?
+25. **Invulnerability after going down** (0.3 s placeholder): does it also block headshots and melee?
+26. **Revive:** how close and how directly facing must you be (1.0 m, 60° placeholders)? Are the reviver and
+   the downed player locked in place? Does damage to the reviver cancel it? What stance does the revived
+   player get up in?
+27. **Melee:** when does the hit land (0.2 s placeholder), how wide is it (20°)? Allowed while prone, from a
+   sprint, or while aiming? Does it slow you? Does it hurt teammates?
+
+**HUD and controls (used from Phase 3's client milestone)**
+28. Crosshair options, and does the crosshair widen while moving or firing?
+29. Does a 1x sight zoom at all? How do the ~2.5x and ~3.5x sights relate to field of view?
+30. Siege's per-magnification ADS sensitivity settings and their defaults.
+31. Hit-marker variants (headshot, kill, down). How long does the threat indicator stay up, and how close must
+   a missed shot pass to trigger it?
+32. Does the kill feed show downs? How long do entries stay? What does the downed bleed bar and the revive
+   gauge look like?
+33. Siege's default PC keys for reload, weapon swap, fire mode and melee. Which weapons show tracers?
 
 ### [core_mechanics.md](core_mechanics.md) — 16
 

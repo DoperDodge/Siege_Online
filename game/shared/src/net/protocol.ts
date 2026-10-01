@@ -5,7 +5,7 @@ import { ByteReader, ByteWriter, ProtocolError } from "./bytes.js";
 import { MSG_SNAPSHOT } from "./snapshot.js";
 
 /** Bump when the wire format changes; client and server must match. */
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
 export const Msg = {
   // client → server
@@ -166,11 +166,15 @@ export const decodeError = (r: ByteReader) => ({ code: r.u8(), message: r.str(51
 
 /** What the server made of a shot (Phase 2: a test shot fired with Btn.Fire; weapons from Phase 3). */
 export interface ShotResult {
+  /** Low 16 bits of the input that fired. */
+  seq: number;
   origin: [number, number, number];
   dir: [number, number, number];
-  /** Render tick the server rewound to (after the cap). */
+  /** Render tick the shooter claimed to be drawing (after the server's sanity bounds). */
+  viewTick: number;
+  /** Render tick the server rewound to (after the room's cap: `rewoundTick > viewTick` means it was capped). */
   rewoundTick: number;
-  /** The server tick the shot arrived at (how far it rewound = serverTick − rewoundTick; at most 200 ms). */
+  /** The server tick the shot arrived at (how far it rewound = serverTick − rewoundTick). */
   serverTick: number;
   hit: { pawnId: number; part: string; distance: number } | null;
   /** Where the ray hit the level, if nearer than any player. */
@@ -178,21 +182,23 @@ export interface ShotResult {
 }
 
 export function encodeShotResult(s: ShotResult): Uint8Array {
-  const w = new ByteWriter().u8(Msg.ShotResult);
+  const w = new ByteWriter().u8(Msg.ShotResult).u16(s.seq);
   for (const v of [...s.origin, ...s.dir]) w.f32(v);
-  w.f64(s.rewoundTick).u32(s.serverTick).u8((s.hit ? 1 : 0) | (s.wallDistance !== null ? 2 : 0));
+  w.f64(s.viewTick).f64(s.rewoundTick).u32(s.serverTick).u8((s.hit ? 1 : 0) | (s.wallDistance !== null ? 2 : 0));
   if (s.hit) w.varu(s.hit.pawnId).str(s.hit.part).f32(s.hit.distance);
   if (s.wallDistance !== null) w.f32(s.wallDistance);
   return w.finish();
 }
 export function decodeShotResult(r: ByteReader): ShotResult {
+  const seq = r.u16();
   const v = Array.from({ length: 6 }, () => r.finite());
+  const viewTick = r.f64();
   const rewoundTick = r.f64();
   const serverTick = r.u32();
   const f = r.u8();
   const hit = f & 1 ? { pawnId: r.varu(), part: r.str(16), distance: r.finite() } : null;
   const wallDistance = f & 2 ? r.finite() : null;
-  return { origin: [v[0], v[1], v[2]], dir: [v[3], v[4], v[5]], rewoundTick, serverTick, hit, wallDistance };
+  return { seq, origin: [v[0], v[1], v[2]], dir: [v[3], v[4], v[5]], viewTick, rewoundTick, serverTick, hit, wallDistance };
 }
 
 /** Movement Lab tools in lab rooms: respawn, or teleport ("Go to"). */

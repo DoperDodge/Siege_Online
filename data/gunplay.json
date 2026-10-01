@@ -1,0 +1,141 @@
+{
+  "_doc": "Weapon class, sight, attachment and handling rules (Phase 3). Per-weapon numbers live only in data/weapons/<id>.json. Sources: research/weapons_notes.md §4.1–4.9, research/core_mechanics.md §2.2 and §14. Times in seconds, angles in degrees. `classes.*.falloff` ([meters, fraction of base damage] points; buckshot per Y8S3, weapons_notes.md §4.3) and `classes.*.maxAmmo` ([min, max] total rounds; the +1 chambered round may add one) are only used to validate the weapon files. Every recoil and spread magnitude is a placeholder: Ubisoft publishes the field names (first-shot multiplier, Camera Up Speed, vertical/horizontal, stages by bullet index) but no values. `rules.bonusMath`: how a \"+X %\" bonus changes a time or a recoil amount, per kind; \"divide\" is ÷ (1 + Σ bonuses) (fits the community's laser ADS = ADS ÷ 1.1), \"subtract\" is × (1 − Σ bonuses) (fits Fandom's SMG-12 angled-grip reload, 3.0 → 2.4 s). `spread.*.movePerMpsDeg` widens the cone per m/s of movement (official for buckshot, Y8S3; size is a placeholder).",
+  "_season": "Y11S3",
+  "_unverified": [
+    "classes.hand_cannon.adsCurve",
+    "classes.machine_pistol.falloff",
+    "classes.handgun.falloff",
+    "curves",
+    "attachments.muzzle_brake",
+    "attachments.compensator",
+    "attachments.flash_hider",
+    "attachments.vertical.verticalControlBonus",
+    "sights.magnified.zoom",
+    "sights.telescopic.zoom",
+    "rules.bonusMath",
+    "rules.maxMoveSpeedMult",
+    "rules.swapS",
+    "rules.adsExitS",
+    "rules.adsFromSprintMult",
+    "rules.reload",
+    "rules.fire",
+    "rules.moveMultScope",
+    "recoilTemplates",
+    "spread"
+  ],
+  "classes": {
+    "assault_rifle": { "adsS": 0.52, "adsCurve": "slow", "falloff": [[25, 1], [35, 0.6]], "moveSpeedMult": 1.0, "maxAmmo": [175, 200] },
+    "marksman_rifle": { "adsS": 0.52, "adsCurve": "medium", "falloff": [[30, 1], [40, 0.7]], "moveSpeedMult": 1.0, "maxAmmo": [100, 140] },
+    "lmg": { "adsS": 0.56, "adsCurve": "slow", "falloff": [[30, 1], [40, 0.65]], "moveSpeedMult": 0.9, "maxAmmo": [240, 300] },
+    "smg": { "adsS": 0.46, "adsCurve": "slow", "falloff": [[18, 1], [28, 0.6]], "moveSpeedMult": 1.0, "maxAmmo": [170, 200] },
+    "machine_pistol": { "adsS": 0.38, "adsCurve": "slow", "falloff": [[18, 1], [28, 0.6]], "moveSpeedMult": 1.0, "maxAmmo": [112, 140] },
+    "shotgun": { "adsS": 0.34, "adsCurve": "fast", "falloff": [[5, 1], [6, 0.75], [10, 0.75], [13, 0.45]], "moveSpeedMult": 1.0, "maxAmmo": [49, 60], "maxAmmoPrimaryOnly": true },
+    "slug_shotgun": { "adsS": 0.52, "adsCurve": "slow", "falloff": [[15, 1], [25, 0.6]], "moveSpeedMult": 1.0, "maxAmmo": [60, 120] },
+    "handgun": { "adsS": 0.24, "adsCurve": "fast", "falloff": [[12, 1], [14, 0.6]], "moveSpeedMult": 1.0, "maxAmmo": [70, 115] },
+    "hand_cannon": { "adsS": 0.24, "adsCurve": "fast", "falloff": null, "moveSpeedMult": 1.0, "maxAmmo": null }
+  },
+  "curves": {
+    "fast": { "kind": "easeOut", "power": 2 },
+    "medium": { "kind": "easeIn", "power": 1 },
+    "slow": { "kind": "easeIn", "power": 2 }
+  },
+  "sights": {
+    "iron": { "zoom": 1, "adsBonus": 0.1 },
+    "nonmag": { "zoom": 1, "adsBonus": 0.05 },
+    "magnified": { "zoom": 2.5, "adsBonus": 0 },
+    "telescopic": { "zoom": 3.5, "adsBonus": 0 }
+  },
+  "attachments": {
+    "suppressor": { "damageMult": 1.0, "noFlash": true, "noTracer": true, "noThreat": true },
+    "extended_barrel": {},
+    "muzzle_brake": { "firstShotMult": 0.55, "recenterTimeMult": 0.55 },
+    "compensator": { "sideMult": 0.65 },
+    "flash_hider": { "upMult": 0.85, "firstShotUpMult": 0.87 },
+    "vertical": { "verticalControlBonus": 0.2 },
+    "angled": { "reloadSpeedBonus": 0.2 },
+    "horizontal": { "moveSpeedMult": 1.05 },
+    "laser": { "adsBonus": 0.1, "visibleDot": true }
+  },
+  "rules": {
+    "bonusMath": { "ads": "divide", "reload": "subtract", "recoilControl": "subtract" },
+    "maxMoveSpeedMult": 1.05,
+    "swapS": 0.6,
+    "adsExitS": 0.25,
+    "adsFromSprintMult": 1.1,
+    "reload": { "magOutFractionOfRefill": 0.5, "fireCancels": true, "pulledRoundsReturn": true, "sprintInterrupts": true },
+    "fire": { "burstRpm": "weapon", "burstReleaseCancels": true, "semiBuffer": false, "autoReloadOnEmpty": true, "modeSwitchS": 0 },
+    "moveMultScope": ["walk", "crouch", "sprint"]
+  },
+  "recoilTemplates": {
+    "assault_rifle": {
+      "firstShotMult": 1.0, "cameraUpDegPerS": 40, "resetS": 0.3,
+      "stages": [
+        { "fromShot": 0, "upDeg": 0.4, "upJitterDeg": 0.05, "sideDeg": 0, "sideJitterDeg": 0.12 },
+        { "fromShot": 8, "upDeg": 0.3, "upJitterDeg": 0.05, "sideDeg": 0.05, "sideJitterDeg": 0.2 }
+      ],
+      "recenter": { "fraction": 0, "delayS": 0.15, "degPerS": 10 }
+    },
+    "marksman_rifle": {
+      "firstShotMult": 1.0, "cameraUpDegPerS": 60, "resetS": 0.4,
+      "stages": [{ "fromShot": 0, "upDeg": 1.2, "upJitterDeg": 0.15, "sideDeg": 0, "sideJitterDeg": 0.2 }],
+      "recenter": { "fraction": 0.6, "delayS": 0.1, "degPerS": 8 }
+    },
+    "lmg": {
+      "firstShotMult": 1.2, "cameraUpDegPerS": 35, "resetS": 0.3,
+      "stages": [
+        { "fromShot": 0, "upDeg": 0.35, "upJitterDeg": 0.05, "sideDeg": 0, "sideJitterDeg": 0.1 },
+        { "fromShot": 12, "upDeg": 0.2, "upJitterDeg": 0.05, "sideDeg": 0.03, "sideJitterDeg": 0.15 }
+      ],
+      "recenter": { "fraction": 0, "delayS": 0.15, "degPerS": 10 }
+    },
+    "smg": {
+      "firstShotMult": 1.0, "cameraUpDegPerS": 45, "resetS": 0.25,
+      "stages": [
+        { "fromShot": 0, "upDeg": 0.3, "upJitterDeg": 0.05, "sideDeg": 0, "sideJitterDeg": 0.12 },
+        { "fromShot": 10, "upDeg": 0.22, "upJitterDeg": 0.05, "sideDeg": 0.04, "sideJitterDeg": 0.2 }
+      ],
+      "recenter": { "fraction": 0, "delayS": 0.15, "degPerS": 10 }
+    },
+    "machine_pistol": {
+      "firstShotMult": 1.0, "cameraUpDegPerS": 50, "resetS": 0.25,
+      "stages": [
+        { "fromShot": 0, "upDeg": 0.35, "upJitterDeg": 0.05, "sideDeg": 0, "sideJitterDeg": 0.15 },
+        { "fromShot": 3, "upDeg": 0.3, "upJitterDeg": 0.05, "sideDeg": 0.03, "sideJitterDeg": 0.2 },
+        { "fromShot": 8, "upDeg": 0.25, "upJitterDeg": 0.06, "sideDeg": 0.05, "sideJitterDeg": 0.25 },
+        { "fromShot": 16, "upDeg": 0.2, "upJitterDeg": 0.06, "sideDeg": 0.05, "sideJitterDeg": 0.3 }
+      ],
+      "recenter": { "fraction": 0, "delayS": 0.15, "degPerS": 10 }
+    },
+    "shotgun": {
+      "firstShotMult": 1.0, "cameraUpDegPerS": 80, "resetS": 0.5,
+      "stages": [{ "fromShot": 0, "upDeg": 2.0, "upJitterDeg": 0.3, "sideDeg": 0, "sideJitterDeg": 0.3 }],
+      "recenter": { "fraction": 0.7, "delayS": 0.1, "degPerS": 12 }
+    },
+    "slug_shotgun": {
+      "firstShotMult": 1.0, "cameraUpDegPerS": 80, "resetS": 0.5,
+      "stages": [{ "fromShot": 0, "upDeg": 2.5, "upJitterDeg": 0.3, "sideDeg": 0, "sideJitterDeg": 0.3 }],
+      "recenter": { "fraction": 0.6, "delayS": 0.1, "degPerS": 12 }
+    },
+    "handgun": {
+      "firstShotMult": 1.0, "cameraUpDegPerS": 60, "resetS": 0.35,
+      "stages": [{ "fromShot": 0, "upDeg": 1.0, "upJitterDeg": 0.1, "sideDeg": 0, "sideJitterDeg": 0.15 }],
+      "recenter": { "fraction": 0.6, "delayS": 0.1, "degPerS": 10 }
+    },
+    "hand_cannon": {
+      "firstShotMult": 1.0, "cameraUpDegPerS": 80, "resetS": 0.5,
+      "stages": [{ "fromShot": 0, "upDeg": 2.0, "upJitterDeg": 0.2, "sideDeg": 0, "sideJitterDeg": 0.2 }],
+      "recenter": { "fraction": 0.6, "delayS": 0.1, "degPerS": 12 }
+    }
+  },
+  "spread": {
+    "assault_rifle": { "hipDeg": 3.0, "adsDeg": 0, "movePerMpsDeg": 0 },
+    "marksman_rifle": { "hipDeg": 3.5, "adsDeg": 0, "movePerMpsDeg": 0 },
+    "lmg": { "hipDeg": 3.5, "adsDeg": 0, "movePerMpsDeg": 0 },
+    "smg": { "hipDeg": 2.5, "adsDeg": 0, "movePerMpsDeg": 0 },
+    "machine_pistol": { "hipDeg": 2.5, "adsDeg": 0, "movePerMpsDeg": 0 },
+    "shotgun": { "hipDeg": 5.0, "adsDeg": 2.5, "movePerMpsDeg": 0.5 },
+    "slug_shotgun": { "hipDeg": 3.0, "adsDeg": 0, "movePerMpsDeg": 0 },
+    "handgun": { "hipDeg": 2.0, "adsDeg": 0, "movePerMpsDeg": 0 },
+    "hand_cannon": { "hipDeg": 2.0, "adsDeg": 0, "movePerMpsDeg": 0 }
+  }
+}

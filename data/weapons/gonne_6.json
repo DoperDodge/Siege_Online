@@ -1,0 +1,33 @@
+{
+  "_doc": "GONNE-6 (Dokkaebi). research/weapons.csv row gonne_6; class rules research/weapons_notes.md §4. Explosive projectile (Phase 4/8). Explosion damage and radius are weapons_notes.md Q12; not pickable until then (DECISIONS D-054).",
+  "_season": "Y11S3.1",
+  "_unverified": ["damage", "destruction"],
+  "id": "gonne_6",
+  "name": "GONNE-6",
+  "class": "hand_cannon",
+  "fire": {
+    "kind": "explosive_projectile",
+    "modes": ["semi"],
+    "pellets": 1
+  },
+  "damage": null,
+  "ammo": {
+    "magazine": 1,
+    "plusOne": false,
+    "maxAmmo": 1
+  },
+  "reload": {
+    "kind": "none"
+  },
+  "adsS": 0.24,
+  "destruction": "explosive",
+  "attachments": {
+    "sights": ["iron"],
+    "barrels": [],
+    "grips": [],
+    "underbarrel": []
+  },
+  "recoil": {
+    "template": "hand_cannon"
+  }
+}

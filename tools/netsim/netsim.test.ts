@@ -1,7 +1,7 @@
 // The netsim harness as a regression test (PLAN §17 Phase 2 / §19): 10 clients at 100 ms round trip with
 // jitter, stalls and clock drift. Short runs here; `npm run netsim` runs longer ones.
 import { describe, expect, it } from "vitest";
-import { runNetsim } from "./netsim.js";
+import { runHitreg, runNetsim } from "./netsim.js";
 
 describe("netsim: 10 clients, 100 ms round trip, jitter, stalls, drift", () => {
   it("spread out (no contact): no desyncs, nothing dropped, only the expected corrections", async () => {
@@ -28,5 +28,29 @@ describe("netsim: 10 clients, 100 ms round trip, jitter, stalls, drift", () => {
       expect(c.corrections / 10, c.name).toBeLessThan(5); // per second; bumping into people mispredicts
     }
     expect(r.serverTickMs.mean).toBeLessThan(5); // PLAN §18 budget
+  }, 60000);
+});
+
+describe("netsim hitreg: a still shooter at 100 ms round trip aims at heads as it draws them (Phase 3 M0)", () => {
+  // Four targets cycle strafing, sprinting, lean and crouch spam, crawling prone and vaulting.
+  it("no jitter: the server judges every shot exactly as the shooter's own ray on what it drew", async () => {
+    const r = await runHitreg({ seconds: 15, jitterMs: 0 });
+    expect(r.shots).toBeGreaterThan(30);
+    expect(r.judged).toBe(r.shots);
+    expect(r.agree, r.disagreements.join("\n")).toBe(r.shots);
+    expect(r.headHits / r.shots).toBeGreaterThan(0.85);
+  }, 60000);
+
+  it("10 ms jitter: at least 99 % of uncapped shots agree, and the 250 ms cap isn't reached", async () => {
+    const r = await runHitreg({ seconds: 15, jitterMs: 10, seed: 4 });
+    expect(r.judged).toBe(r.shots);
+    expect(r.uncappedAgree / (r.judged - r.capped), r.disagreements.join("\n")).toBeGreaterThanOrEqual(0.99);
+    expect(r.over250).toBe(0);
+    expect(r.rewindMs.max).toBeLessThanOrEqual(250);
+  }, 60000);
+
+  it("control: with rewinding off the same shots mostly miss the head", async () => {
+    const r = await runHitreg({ seconds: 15, jitterMs: 10, seed: 4, maxRewindTicks: 0 });
+    expect(r.headHits / r.shots).toBeLessThan(0.5);
   }, 60000);
 });

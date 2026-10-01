@@ -1,7 +1,26 @@
 // Headless multi-client harness (PLAN §17 Phase 2, §19): one Room and N ClientSessions over a simulated
 // network with latency, jitter, TCP-style stalls and client clock drift, all in virtual time so a
 // 30-second match runs in about a second and is repeatable from its seed.
-import { Btn, ByteReader, ClientSession, decodeInput, decodeLabTool, decodePickOperator, decodePing, DT, Msg, Room, Stance, type InputCmd } from "@redmond/shared";
+import {
+  Btn,
+  ByteReader,
+  ClientSession,
+  decodeInput,
+  decodeLabTool,
+  decodePickOperator,
+  decodePing,
+  DT,
+  eyePose,
+  Msg,
+  PawnMode,
+  poseHitboxes,
+  QUERY_STATIC,
+  rayCapsule,
+  Room,
+  Stance,
+  type InputCmd,
+  type ShotResult,
+} from "@redmond/shared";
 import { performance } from "node:perf_hooks";
 
 export interface NetsimOptions {
@@ -249,4 +268,234 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
     desyncs,
     starvedRemoteFrames: clients.reduce((n, c) => n + c.session.starvedFrames, 0),
   };
+}
+
+// ---------------------------------------------------------------- hit registration (Phase 3, M0)
+
+export interface HitregOptions {
+  seconds: number;
+  oneWayMs: number;
+  jitterMs: number;
+  /** Lag-compensation cap for the room (ticks); 0 turns rewinding off (the control run). */
+  maxRewindTicks: number;
+  seed: number;
+  /** Ticks between shots. */
+  shotEvery: number;
+}
+
+export const HITREG_DEFAULTS: HitregOptions = { seconds: 30, oneWayMs: 50, jitterMs: 10, maxRewindTicks: 16, seed: 1, shotEvery: 20 };
+
+export interface HitregReport {
+  options: HitregOptions;
+  shots: number;
+  /** Shots the server judged (every shot fired should be). */
+  judged: number;
+  /** The server hit the same pawn and part the shooter's own ray hit on what it drew (both misses count). */
+  agree: number;
+  /** Shots whose rewind the room's cap shortened, and how many of the others agree. */
+  capped: number;
+  uncappedAgree: number;
+  /** Server-judged headshots (the shooter always aims at a drawn head). */
+  headHits: number;
+  /** Rewind (server tick − rewound tick) in ms. */
+  rewindMs: { mean: number; p95: number; max: number };
+  /** Share of shots whose claimed view would be past a 200 ms and a 250 ms cap. */
+  over200: number;
+  over250: number;
+  corrections: number;
+  disagreements: string[];
+}
+
+type Mode = "strafe" | "sprint" | "lean" | "crouch" | "prone" | "vault";
+
+/** Where each target lives, and the movements it cycles through (6 s each). Facing the shooter or across its view. */
+const TARGETS: { home: [number, number, number]; modes: Mode[] }[] = [
+  { home: [12, 0, 21], modes: ["strafe", "lean", "crouch"] },
+  { home: [9, 0, 25], modes: ["sprint", "prone", "strafe"] },
+  { home: [13, 0, 28], modes: ["crouch", "strafe", "lean"] },
+  { home: [-6, 0, 9.5], modes: ["vault", "vault", "sprint"] },
+];
+const SHOOTER: [number, number, number] = [24, 0, 24];
+const MODE_TICKS = 384;
+
+function targetInput(mode: Mode, t: number): Omit<InputCmd, "seq"> {
+  const base = { forward: 0, strafe: 0, yaw: -Math.PI / 2, pitch: 0, buttons: 0, stance: Stance.Stand, lean: 0 as -1 | 0 | 1 };
+  const flip = (period: number) => (Math.floor(t / period) % 2 === 0 ? 1 : -1);
+  switch (mode) {
+    case "strafe": // across the shooter's view, back and forth
+      return { ...base, strafe: flip(40) };
+    case "sprint": // north and south at full sprint
+      return { ...base, forward: 1, yaw: flip(48) > 0 ? 0 : Math.PI, buttons: Btn.Sprint };
+    case "lean":
+      return { ...base, lean: flip(10) as -1 | 1, strafe: flip(64) * 0.5 };
+    case "crouch":
+      return { ...base, stance: flip(24) > 0 ? Stance.Crouch : Stance.Stand, strafe: flip(56) };
+    case "prone": // crawl back and forth, facing north
+      return { ...base, yaw: 0, stance: Stance.Prone, forward: t % 192 < 40 ? 0 : flip(70) };
+    case "vault": // over the 0.5 m and 0.9 m obstacles at x = −6 and back
+      return { ...base, yaw: flip(96) > 0 ? 0 : Math.PI, forward: 1, buttons: Btn.Vault };
+  }
+}
+
+export async function runHitreg(partial: Partial<HitregOptions> = {}): Promise<HitregReport> {
+  const o: HitregOptions = { ...HITREG_DEFAULTS, ...partial };
+  const rng = new Rng(o.seed);
+  const clock = new Clock();
+  const room = await Room.create("HIT00", "movement_lab", { lab: true, maxRewindTicks: o.maxRewindTicks });
+  const tickMs = DT * 1000;
+  const linkOpts: NetsimOptions = { ...DEFAULTS, oneWayMs: o.oneWayMs, jitterMs: o.jitterMs, stallsPerSecond: 0 };
+
+  interface Expect {
+    viewTick: number;
+    hit: { pawnId: number; part: string } | null;
+  }
+  const expected = new Map<number, Expect>();
+  const report: HitregReport = {
+    options: o,
+    shots: 0,
+    judged: 0,
+    agree: 0,
+    capped: 0,
+    uncappedAgree: 0,
+    headHits: 0,
+    rewindMs: { mean: 0, p95: 0, max: 0 },
+    over200: 0,
+    over250: 0,
+    corrections: 0,
+    disagreements: [],
+  };
+  const rewinds: number[] = [];
+  const claimed: number[] = [];
+
+  const onShot = (s: ShotResult) => {
+    const e = expected.get(s.seq);
+    if (!e) return;
+    expected.delete(s.seq);
+    report.judged++;
+    const capped = s.rewoundTick > s.viewTick + 1e-9;
+    if (capped) report.capped++;
+    rewinds.push(((s.serverTick - s.rewoundTick) * 1000) / 64);
+    claimed.push(((s.serverTick - s.viewTick) * 1000) / 64);
+    if (s.hit?.part === "head") report.headHits++;
+    const same = (s.hit?.pawnId ?? 0) === (e.hit?.pawnId ?? 0) && (s.hit?.part ?? "") === (e.hit?.part ?? "") && Math.abs(s.viewTick - e.viewTick) < 1e-9;
+    if (same) {
+      report.agree++;
+      if (!capped) report.uncappedAgree++;
+    } else if (report.disagreements.length < 20) {
+      report.disagreements.push(
+        `seq ${s.seq}: server ${s.hit ? `${s.hit.pawnId}/${s.hit.part}` : "miss"} at ${s.viewTick.toFixed(3)}${capped ? ` (capped to ${s.rewoundTick.toFixed(3)})` : ""}, client ${e.hit ? `${e.hit.pawnId}/${e.hit.part}` : "miss"} at ${e.viewTick.toFixed(3)}`,
+      );
+    }
+  };
+
+  const clients = await Promise.all(
+    [SHOOTER, ...TARGETS.map((t) => t.home)].map(async (_, i) => {
+      let session!: ClientSession;
+      let memberId = 0;
+      const down = new Link(clock, rng, linkOpts, (b) => session.handle(b));
+      const up = new Link(clock, rng, linkOpts, (b) => serverReceive(memberId, b));
+      session = new ClientSession({ send: (b) => up.send(b), now: () => clock.now, onShot: i === 0 ? onShot : undefined });
+      memberId = room.join(i === 0 ? "shooter" : `target${i}`, { send: (b) => down.send(b), buffered: () => 0 }, i === 0 ? "sledge" : ["mute", "pulse", "sentry", "sledge"][i - 1])!;
+      return { session, memberId, nextTickAt: 0, ticks: 0, drift: 1 + ((rng.next() * 2 - 1) * 0.5) / 100 };
+    }),
+  );
+  function serverReceive(memberId: number, b: Uint8Array) {
+    const r = new ByteReader(b.subarray(1));
+    if (b[0] === Msg.Input) room.onInput(memberId, decodeInput(r));
+    else if (b[0] === Msg.Resync) room.onResync(memberId);
+    else if (b[0] === Msg.Ping) room.onPing(memberId, decodePing(r).clientTime);
+    else if (b[0] === Msg.LabTool) room.onLabTool(memberId, decodeLabTool(r));
+  }
+  clock.runUntil(o.oneWayMs * 3 + o.jitterMs);
+  await Promise.all(clients.map((c) => c.session.loaded()));
+  const home = (i: number) => {
+    const [x, y, z] = i === 0 ? SHOOTER : TARGETS[i - 1].home;
+    room.onLabTool(clients[i].memberId, { kind: "teleport", x, y, z, yawDeg: i === 0 ? 90 : -90 });
+  };
+  clients.forEach((_, i) => home(i));
+
+  const shooter = clients[0];
+  const sim = () => shooter.session.sim!;
+  const m = () => sim().data.movement;
+  const hb = () => sim().data.hitboxes;
+  let aim = { yaw: Math.PI / 2, pitch: 0 };
+  let nextTarget = 0;
+  const warmup = 2000; // let positions, clocks and interpolation settle
+  const startAt = clock.now;
+  const endAt = startAt + o.seconds * 1000;
+  let serverNext = clock.now;
+
+  /** The shooter's own verdict: its ray against what it drew at `viewTick`, stopped by the level. */
+  const ownRay = (viewTick: number, yaw: number, pitch: number): Expect["hit"] => {
+    const s = sim();
+    const me = s.pawns.get(shooter.session.ctrl!.possessedPawnId)!;
+    const origin = eyePose(m(), hb(), me.state).pos;
+    const dir: [number, number, number] = [-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch)];
+    const wall = s.world.castRay(new s.R.Ray({ x: origin[0], y: origin[1], z: origin[2] }, { x: dir[0], y: dir[1], z: dir[2] }), 200, true, undefined, QUERY_STATIC);
+    let best: { pawnId: number; part: string; t: number } | null = null;
+    for (const id of shooter.session.remoteIds()) {
+      const st = shooter.session.remoteAt(id, viewTick);
+      if (!st || st.mode === PawnMode.Dead) continue;
+      for (const h of poseHitboxes(m(), hb(), st)) {
+        const t = rayCapsule(origin, dir, h.a, h.b, h.radius);
+        if (t !== null && t <= (wall ? wall.timeOfImpact : 200) && (!best || t < best.t)) best = { pawnId: id, part: h.part, t };
+      }
+    }
+    return best && { pawnId: best.pawnId, part: best.part };
+  };
+
+  while (clock.now < endAt) {
+    const nextClient = Math.min(...clients.map((c) => c.nextTickAt));
+    const t = Math.min(serverNext, nextClient);
+    clock.runUntil(t);
+    if (t === serverNext) {
+      room.step();
+      serverNext += tickMs;
+    }
+    for (let i = 0; i < clients.length; i++) {
+      const c = clients[i];
+      if (c.nextTickAt > t) continue;
+      c.nextTickAt = t + tickMs * c.drift * c.session.tickScale();
+      if (c.ticks % 64 === 0) c.session.ping();
+      if (!c.session.ready) continue;
+      const tick = c.ticks++;
+      if (i > 0) {
+        const modes = TARGETS[i - 1].modes;
+        if (tick > 0 && tick % MODE_TICKS === 0) home(i); // back to its spot for the next movement
+        c.session.tick(targetInput(modes[Math.floor(tick / MODE_TICKS) % modes.length], tick % MODE_TICKS));
+        c.session.frame();
+        continue;
+      }
+      // The shooter: looks at the frame it draws, and on a shot tick aims at a drawn head and fires.
+      const renderTick = c.session.frame();
+      let fire = false;
+      if (clock.now - startAt > warmup && tick % o.shotEvery === 0) {
+        const ids = c.session.remoteIds();
+        const id = ids[nextTarget++ % ids.length];
+        const st = id !== undefined ? c.session.remoteAt(id, renderTick) : null;
+        const head = st && st.mode !== PawnMode.Dead ? poseHitboxes(m(), hb(), st).find((h) => h.part === "head") : undefined;
+        if (head) {
+          const me = sim().pawns.get(c.session.ctrl!.possessedPawnId)!.state;
+          const eye = eyePose(m(), hb(), me).pos;
+          const tgt = [(head.a[0] + head.b[0]) / 2, (head.a[1] + head.b[1]) / 2, (head.a[2] + head.b[2]) / 2];
+          const d = [tgt[0] - eye[0], tgt[1] - eye[1], tgt[2] - eye[2]];
+          aim = { yaw: Math.atan2(-d[0], -d[2]), pitch: Math.atan2(d[1], Math.hypot(d[0], d[2])) };
+          fire = true;
+        }
+      }
+      const q = c.session.tick({ forward: 0, strafe: 0, yaw: aim.yaw, pitch: aim.pitch, buttons: fire ? Btn.Fire : 0, stance: Stance.Stand, lean: 0 }, renderTick);
+      if (fire && q) {
+        report.shots++;
+        const viewTick = c.session.lastViewTick;
+        expected.set(q.seq & 0xffff, { viewTick, hit: ownRay(viewTick, q.yaw, q.pitch) });
+      }
+    }
+  }
+  clock.runUntil(clock.now + 500);
+  const sorted = [...rewinds].sort((a, b) => a - b);
+  report.rewindMs = { mean: sorted.reduce((a, b) => a + b, 0) / Math.max(1, sorted.length), p95: sorted[Math.floor(sorted.length * 0.95)] ?? 0, max: sorted.at(-1) ?? 0 };
+  report.over200 = claimed.filter((v) => v > 200 + 1e-6).length / Math.max(1, claimed.length);
+  report.over250 = claimed.filter((v) => v > 250 + 1e-6).length / Math.max(1, claimed.length);
+  report.corrections = room.memberInfo(shooter.memberId)?.corrections ?? 0;
+  return report;
 }

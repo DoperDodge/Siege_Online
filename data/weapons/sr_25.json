@@ -1,0 +1,41 @@
+{
+  "_doc": "SR-25 (Striker). research/weapons.csv row sr_25; class rules research/weapons_notes.md §4. Added to Striker in Y10S3. No community ammo-refill point.",
+  "_season": "Y11S3.1",
+  "_unverified": ["destruction"],
+  "id": "sr_25",
+  "name": "SR-25",
+  "class": "marksman_rifle",
+  "fire": {
+    "kind": "hitscan",
+    "rpm": 445,
+    "modes": ["semi"],
+    "pellets": 1
+  },
+  "damage": {
+    "base": 61,
+    "falloff": [[30, 61], [40, 43]],
+    "penetration": "full",
+    "head": "kill"
+  },
+  "ammo": {
+    "magazine": 20,
+    "plusOne": true,
+    "maxAmmo": 141
+  },
+  "reload": {
+    "kind": "magazine",
+    "tacticalS": 2.9,
+    "emptyS": 3.5
+  },
+  "adsS": 0.52,
+  "destruction": "high",
+  "attachments": {
+    "sights": ["iron", "nonmag", "magnified", "telescopic"],
+    "barrels": ["muzzle_brake", "suppressor"],
+    "grips": ["vertical", "angled", "horizontal"],
+    "underbarrel": ["laser"]
+  },
+  "recoil": {
+    "template": "marksman_rifle"
+  }
+}

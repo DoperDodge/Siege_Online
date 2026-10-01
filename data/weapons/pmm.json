@@ -1,0 +1,41 @@
+{
+  "_doc": "PMM (Fuze). research/weapons.csv row pmm; class rules research/weapons_notes.md §4. Damage 61 (community) vs 63 (Fandom) is weapons_notes.md Q2.",
+  "_season": "Y11S3.1",
+  "_unverified": ["damage.base", "damage.falloff", "destruction"],
+  "id": "pmm",
+  "name": "PMM",
+  "class": "handgun",
+  "fire": {
+    "kind": "hitscan",
+    "rpm": 496,
+    "modes": ["semi"],
+    "pellets": 1
+  },
+  "damage": {
+    "base": 61,
+    "falloff": [[12, 61], [14, 36]],
+    "penetration": "simple",
+    "head": "kill"
+  },
+  "ammo": {
+    "magazine": 8,
+    "plusOne": true,
+    "maxAmmo": 81
+  },
+  "reload": {
+    "kind": "magazine",
+    "tacticalS": 1.4,
+    "emptyS": 1.9
+  },
+  "adsS": 0.24,
+  "destruction": null,
+  "attachments": {
+    "sights": ["iron"],
+    "barrels": ["suppressor", "muzzle_brake"],
+    "grips": [],
+    "underbarrel": ["laser"]
+  },
+  "recoil": {
+    "template": "handgun"
+  }
+}

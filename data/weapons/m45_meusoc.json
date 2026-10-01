@@ -1,0 +1,41 @@
+{
+  "_doc": "M45 MEUSOC (Thermite, Pulse). research/weapons.csv row m45_meusoc; class rules research/weapons_notes.md §4.",
+  "_season": "Y11S3.1",
+  "_unverified": ["damage.falloff", "destruction"],
+  "id": "m45_meusoc",
+  "name": "M45 MEUSOC",
+  "class": "handgun",
+  "fire": {
+    "kind": "hitscan",
+    "rpm": 494,
+    "modes": ["semi"],
+    "pellets": 1
+  },
+  "damage": {
+    "base": 58,
+    "falloff": [[12, 58], [14, 34]],
+    "penetration": "simple",
+    "head": "kill"
+  },
+  "ammo": {
+    "magazine": 7,
+    "plusOne": true,
+    "maxAmmo": 78
+  },
+  "reload": {
+    "kind": "magazine",
+    "tacticalS": 1.6,
+    "emptyS": 1.9
+  },
+  "adsS": 0.24,
+  "destruction": null,
+  "attachments": {
+    "sights": ["iron"],
+    "barrels": ["suppressor", "muzzle_brake"],
+    "grips": [],
+    "underbarrel": ["laser"]
+  },
+  "recoil": {
+    "template": "handgun"
+  }
+}

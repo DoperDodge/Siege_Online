@@ -1,0 +1,44 @@
+{
+  "_doc": "SIX12 SD (Lesion). research/weapons.csv row six12_sd; class rules research/weapons_notes.md §4. Double-action revolver: whole-cylinder reload, integral suppressor, no barrel slot (weapons_notes.md §4.4, §4.7). Ammo-refill 1.25 / 2.02 s community-measured.",
+  "_season": "Y11S3.1",
+  "_unverified": ["damage.base", "damage.falloff", "destruction", "reload.refillEmptyS", "reload.refillTacticalS"],
+  "id": "six12_sd",
+  "name": "SIX12 SD",
+  "class": "shotgun",
+  "fire": {
+    "kind": "hitscan",
+    "rpm": 218,
+    "modes": ["semi"],
+    "pellets": 8
+  },
+  "damage": {
+    "base": 46,
+    "falloff": [[5, 46], [6, 34], [10, 34], [13, 20]],
+    "penetration": "none",
+    "head": "pellet"
+  },
+  "ammo": {
+    "magazine": 6,
+    "plusOne": false,
+    "maxAmmo": 55
+  },
+  "reload": {
+    "kind": "magazine",
+    "tacticalS": 2.6,
+    "emptyS": 2.6,
+    "refillTacticalS": 1.25,
+    "refillEmptyS": 2.02
+  },
+  "adsS": 0.34,
+  "destruction": "full_close_range",
+  "integralSuppressor": true,
+  "attachments": {
+    "sights": ["iron", "nonmag"],
+    "barrels": [],
+    "grips": [],
+    "underbarrel": ["laser"]
+  },
+  "recoil": {
+    "template": "shotgun"
+  }
+}

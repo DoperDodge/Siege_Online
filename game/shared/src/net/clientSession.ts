@@ -323,16 +323,27 @@ export class ClientSession {
     return 1 + Math.max(-0.05, Math.min(0.05, 0.02 * (this.queueEwma - TARGET_QUEUE)));
   }
 
-  /** One client tick: predict our own movement locally and send the input. Returns the quantized input. */
-  tick(cmd: Omit<InputCmd, "seq">): InputCmd | null {
+  /**
+   * The render tick the last input claimed the player was drawing, exactly as the server reads it back
+   * (snapshot tick minus the viewBack it was sent, in 1/256 ticks).
+   */
+  lastViewTick = 0;
+
+  /**
+   * One client tick: predict our own movement locally and send the input. Returns the quantized input.
+   * `viewTick` is the render tick of the frame the player was looking at when they clicked (lag
+   * compensation rewinds to it); by default, what is being drawn now.
+   */
+  tick(cmd: Omit<InputCmd, "seq">, viewTick = this.renderTick()): InputCmd | null {
     const sim = this.sim;
     const ctrl = this.ctrl;
     if (!sim || !ctrl || !this.corrected) return null;
     const q = quantizeInput({ ...cmd, seq: ++this.seq });
     sim.step(new Map([[ctrl.id, q]]));
     this.pending.push({ seq: this.seq, cmd: q });
-    const viewBack = Math.max(0, this.lastSnapTick - this.renderTick());
-    this.send(encodeInput({ cmd: q, predictedHash: predictionHash(sim, ctrl), epoch: this.epoch, snapTick: this.lastSnapTick, viewBackQ8: viewBack * 256 }));
+    const viewBackQ8 = Math.max(0, Math.min(0xffff, Math.round((this.lastSnapTick - viewTick) * 256)));
+    this.lastViewTick = this.lastSnapTick - viewBackQ8 / 256;
+    this.send(encodeInput({ cmd: q, predictedHash: predictionHash(sim, ctrl), epoch: this.epoch, snapTick: this.lastSnapTick, viewBackQ8 }));
     return q;
   }
 

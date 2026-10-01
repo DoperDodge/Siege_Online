@@ -8,7 +8,7 @@ import type { InputCmd, PawnState } from "../player/types.js";
 import { QUERY_STATIC } from "../physics/rapier.js";
 import { Sim } from "../sim.js";
 import { ByteWriter, fnv1a } from "./bytes.js";
-import { HitboxHistory } from "./lagComp.js";
+import { HitboxHistory, SentRing } from "./lagComp.js";
 import { controllerState, writeControllerState, writePawnState } from "./pawnState.js";
 import { Btn } from "../player/types.js";
 import { encodeError, encodePong, encodeRoster, encodeShotResult, encodeWelcome, ErrorCode, unwrap16, type InputMsg, type LabTool, type RosterEntry } from "./protocol.js";
@@ -28,8 +28,12 @@ export const MAX_QUEUE = 32;
  * time never has credit for the second one (PLAN §5: inputs per tick are capped against speed hacks).
  */
 export const MAX_CREDIT = 16;
-/** Longest rewind for lag compensation (PLAN §5: ~200 ms). */
-export const MAX_REWIND_TICKS = 0.2 * TICK_HZ;
+/**
+ * Default longest rewind for lag compensation (PLAN §5 says ~200 ms; DECISIONS D-045): 250 ms, because the
+ * rewind is round trip + interpolation delay, which at 100 ms round trip is already 160–250 ms. A room
+ * option, so tests and later match modes can set their own.
+ */
+export const DEFAULT_MAX_REWIND_TICKS = 0.25 * TICK_HZ;
 /** How far behind its newest snapshot a client can claim to be drawing others (its interpolation ceiling). */
 const MAX_VIEW_BACK_TICKS = (MAX_INTERP_MS / 1000) * TICK_HZ + 0.5;
 /**
@@ -101,6 +105,8 @@ interface Member {
    */
   confirmEpoch: number | null;
   encoder: SnapshotEncoder;
+  /** Snapshot ticks actually sent to this client (skipped ones aren't), for rewinding to what it drew. */
+  sent: SentRing;
   /** Buttons of the last applied input (to see the fire button go down), and the input that last fired. */
   lastButtons: number;
   lastShotSeq: number;
@@ -122,7 +128,7 @@ export class Room {
   private readonly members = new Map<number, Member>();
   private nextMemberId = 1;
   /** Performance counters for the /stats endpoint and the netsim. */
-  readonly stats = { ticks: 0, corrections: 0, droppedInputs: 0, idledTicks: 0, skippedSnapshots: 0 };
+  readonly stats = { ticks: 0, corrections: 0, droppedInputs: 0, idledTicks: 0, skippedSnapshots: 0, shots: 0, cappedShots: 0 };
 
   private constructor(
     readonly code: string,
@@ -130,12 +136,14 @@ export class Room {
     readonly levelId: string,
     /** Movement Lab rooms allow respawn / teleport tools. */
     readonly lab: boolean,
+    /** Longest lag-compensation rewind, in ticks, counted from when a shot's input arrived. */
+    readonly maxRewindTicks: number,
   ) {
     this.history = new HitboxHistory(sim, 32);
   }
 
-  static async create(code: string, levelId: string, opts: { lab?: boolean } = {}): Promise<Room> {
-    return new Room(code, await Sim.create(levelId), levelId, opts.lab ?? false);
+  static async create(code: string, levelId: string, opts: { lab?: boolean; maxRewindTicks?: number } = {}): Promise<Room> {
+    return new Room(code, await Sim.create(levelId), levelId, opts.lab ?? false, opts.maxRewindTicks ?? DEFAULT_MAX_REWIND_TICKS);
   }
 
   get size(): number {
@@ -168,6 +176,7 @@ export class Room {
       newBody: true,
       confirmEpoch: null,
       encoder: new SnapshotEncoder(),
+      sent: new SentRing(),
       lastButtons: 0,
       lastShotSeq: -Infinity,
     };
@@ -251,7 +260,7 @@ export class Room {
    * eye, judged against everyone else as they were when that input was made. The view time comes from
    * the input itself (its newest snapshot tick minus how far behind it the client was drawing), bounded
    * by the client's interpolation ceiling and by the lag its connection has shown, and the rewind is
-   * capped at MAX_REWIND_TICKS counted from when the input arrived (time it then waits in our queue is
+   * capped at maxRewindTicks counted from when the input arrived (time it then waits in our queue is
    * ours, not the shooter's latency). The level stops the ray where it's hit.
    */
   private fire(m: Member, applied: QueuedInput) {
@@ -273,12 +282,17 @@ export class Room {
     const ray = new this.sim.R.Ray({ x: origin[0], y: origin[1], z: origin[2] }, { x: dir[0], y: dir[1], z: dir[2] });
     const wall = this.sim.world.castRay(ray, 200, true, undefined, QUERY_STATIC);
     const maxDist = wall ? wall.timeOfImpact : 200;
-    const hit = this.history.raycast(origin, dir, maxDist, viewTick, now, MAX_REWIND_TICKS, new Set(m.ctrl.pawnIds));
+    const hit = this.history.raycast(origin, dir, maxDist, viewTick, now, this.maxRewindTicks, new Set(m.ctrl.pawnIds), m.sent);
+    const rewoundTick = HitboxHistory.rewound(viewTick, now, this.maxRewindTicks);
+    this.stats.shots++;
+    if (rewoundTick > viewTick) this.stats.cappedShots++;
     m.client.send(
       encodeShotResult({
+        seq: applied.cmd.seq & 0xffff,
         origin,
         dir,
-        rewoundTick: Math.min(now, Math.max(viewTick, now - MAX_REWIND_TICKS)),
+        viewTick,
+        rewoundTick,
         serverTick: now,
         hit: hit && { pawnId: hit.pawnId, part: hit.part, distance: hit.distance },
         wallDistance: wall && !hit ? wall.timeOfImpact : null,
@@ -392,6 +406,7 @@ export class Room {
         m.needCorrection = false;
       }
       m.client.send(m.encoder.encode({ tick: this.sim.tick, ackSeq: m.lastSeq, idled: m.idled, queueDepth: m.queue.length }, correction, remotes));
+      m.sent.add(this.sim.tick);
       m.idled = false;
     }
   }

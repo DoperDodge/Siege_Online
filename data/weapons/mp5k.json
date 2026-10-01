@@ -1,0 +1,50 @@
+{
+  "_doc": "MP5K (Mute). research/weapons.csv row mp5k; class rules research/weapons_notes.md §4. No grip slot (the Y9S1 notes' own example). Extended barrel 33 / min 26 and ammo-refill 1.02 / 2.30 s community-measured.",
+  "_season": "Y11S3.1",
+  "_unverified": [
+    "damage.extendedBarrel",
+    "destruction",
+    "fire.modes",
+    "reload.refillEmptyS",
+    "reload.refillTacticalS"
+  ],
+  "id": "mp5k",
+  "name": "MP5K",
+  "class": "smg",
+  "fire": {
+    "kind": "hitscan",
+    "rpm": 800,
+    "modes": ["auto", "burst3", "semi"],
+    "pellets": 1
+  },
+  "damage": {
+    "base": 30,
+    "falloff": [[18, 30], [28, 18]],
+    "penetration": "simple",
+    "head": "kill",
+    "extendedBarrel": { "base": 33, "falloff": [[18, 33], [28, 26]] }
+  },
+  "ammo": {
+    "magazine": 30,
+    "plusOne": true,
+    "maxAmmo": 181
+  },
+  "reload": {
+    "kind": "magazine",
+    "tacticalS": 2,
+    "emptyS": 2.8,
+    "refillTacticalS": 1.02,
+    "refillEmptyS": 2.3
+  },
+  "adsS": 0.46,
+  "destruction": null,
+  "attachments": {
+    "sights": ["iron", "nonmag"],
+    "barrels": ["muzzle_brake", "compensator", "flash_hider", "suppressor", "extended_barrel"],
+    "grips": [],
+    "underbarrel": ["laser"]
+  },
+  "recoil": {
+    "template": "smg"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "_doc": "L85A2 (Sledge). research/weapons.csv row l85a2; class rules research/weapons_notes.md §4. Ammo-refill 1.43 / 2.65 s community-measured.",
+  "_season": "Y11S3.1",
+  "_unverified": ["destruction", "reload.refillEmptyS", "reload.refillTacticalS"],
+  "id": "l85a2",
+  "name": "L85A2",
+  "class": "assault_rifle",
+  "fire": {
+    "kind": "hitscan",
+    "rpm": 670,
+    "modes": ["auto", "semi"],
+    "pellets": 1
+  },
+  "damage": {
+    "base": 47,
+    "falloff": [[25, 47], [35, 28]],
+    "penetration": "simple",
+    "head": "kill"
+  },
+  "ammo": {
+    "magazine": 30,
+    "plusOne": true,
+    "maxAmmo": 181
+  },
+  "reload": {
+    "kind": "magazine",
+    "tacticalS": 2.7,
+    "emptyS": 3.3,
+    "refillTacticalS": 1.43,
+    "refillEmptyS": 2.65
+  },
+  "adsS": 0.52,
+  "destruction": null,
+  "attachments": {
+    "sights": ["iron", "nonmag", "magnified"],
+    "barrels": ["muzzle_brake", "compensator", "flash_hider", "suppressor"],
+    "grips": ["vertical", "angled", "horizontal"],
+    "underbarrel": ["laser"]
+  },
+  "recoil": {
+    "template": "assault_rifle"
+  }
+}
