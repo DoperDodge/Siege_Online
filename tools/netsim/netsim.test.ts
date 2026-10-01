@@ -10,7 +10,10 @@ describe("netsim: 10 clients, 100 ms round trip, jitter, stalls, drift", () => {
     expect(r.room.droppedInputs).toBe(0);
     for (const c of r.perClient) {
       expect(c.resyncs, c.name).toBe(0);
-      expect(c.corrections, c.name).toBeLessThanOrEqual(8); // join, teleport, and one per network stall
+      // The join (and the teleport, usually in the same snapshot). Stalls cost none: the server holds a
+      // player still until their late inputs arrive, then catches up. A little slack for the known
+      // ~1e-4 m divergence at wall corners.
+      expect(c.corrections, c.name).toBeLessThanOrEqual(3);
       expect(c.downKbps, c.name).toBeLessThan(40); // payload; well under 64 kbps with headers
       expect(c.rttMs, c.name).toBeGreaterThan(95);
     }

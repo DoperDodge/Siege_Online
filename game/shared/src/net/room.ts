@@ -29,6 +29,8 @@ export const MAX_REWIND_TICKS = 0.2 * TICK_HZ;
 /** Don't queue more bytes than this on a slow connection; skip its snapshots until it drains. */
 const MAX_BUFFERED = 16 * 1024;
 export const MAX_ROOM_PLAYERS = 10;
+/** Lab teleports beyond this distance from the origin (metres) are ignored: no level is that big. */
+const MAX_COORD = 1000;
 
 /** One connection's view of the transport. */
 export interface RoomClient {
@@ -170,7 +172,7 @@ export class Room {
     const m = this.members.get(memberId);
     if (!m || !m.ctrl || !this.lab) return;
     if (tool.kind === "respawn") this.spawn(m, m.ctrl.operatorId);
-    else {
+    else if (Math.abs(tool.x) <= MAX_COORD && Math.abs(tool.y) <= MAX_COORD && Math.abs(tool.z) <= MAX_COORD) {
       this.sim.teleport(m.ctrl.possessedPawnId, tool.x, tool.y, tool.z, tool.yawDeg);
       m.queue = [];
       m.needCorrection = true;
@@ -234,9 +236,15 @@ export class Room {
     if (m.ctrl && applied.epoch === (m.epoch & 0xff) && predictionHash(this.sim, m.ctrl) !== applied.predictedHash) m.needCorrection = true;
   }
 
-  /** Advance one tick: apply queued inputs, step, check predictions, send snapshots. */
+  /**
+   * Advance one tick: apply queued inputs, step, check predictions, send snapshots. A player whose next
+   * input hasn't arrived is held still (not stepped at all) rather than moved with a guessed input: the
+   * client only ever predicts the inputs it sent, so any guess would be a misprediction. The banked
+   * credit then lets the late inputs catch up.
+   */
   step(): void {
     const inputs = new Map<number, InputCmd>();
+    const active = new Set<number>();
     for (const m of this.members.values()) {
       m.applied = null;
       if (!m.ctrl) continue;
@@ -253,9 +261,10 @@ export class Room {
         continue;
       }
       inputs.set(m.ctrl.id, next.cmd);
+      active.add(m.ctrl.id);
       m.applied = next;
     }
-    this.sim.step(inputs);
+    this.sim.step(inputs, active, true);
     for (const m of this.members.values()) if (m.applied) this.check(m, m.applied);
     // Catch up after a stall: one extra input for a client that has a backlog and banked credit.
     for (const m of this.members.values()) {

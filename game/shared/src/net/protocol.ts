@@ -158,7 +158,7 @@ export const decodePong = (r: ByteReader) => ({ clientTime: r.f64(), serverTick:
 
 // ---------------------------------------------------------------- errors
 
-export const ErrorCode = { BadVersion: 1, NoSuchRoom: 2, RoomFull: 3, BadRequest: 4, ServerRestarting: 5 } as const;
+export const ErrorCode = { BadVersion: 1, NoSuchRoom: 2, RoomFull: 3, BadRequest: 4, ServerRestarting: 5, ServerFull: 6 } as const;
 export const encodeError = (code: number, message: string) => new ByteWriter().u8(Msg.Error).u8(code).str(message).finish();
 export const decodeError = (r: ByteReader) => ({ code: r.u8(), message: r.str(512) });
 

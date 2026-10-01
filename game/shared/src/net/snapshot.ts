@@ -5,7 +5,7 @@
 //   u32  tick                 server tick this snapshot describes
 //   u16  ackSeq               low 16 bits of the last input seq applied for this client
 //   u8   queueDepth           inputs waiting in the server's queue for this client (clock sync)
-//   u8   local                bit0 correction follows; bit1 the server idled you (no input) since the last
+//   u8   local                bit0 correction follows; bit1 the server held you still (no input yet) since the last
 //                             snapshot; bit2 a baseline checksum follows the removals; bit3 baselines were
 //                             reset (after a resync request): every record is against zero
 //   [correction]  u8 n (1 or 2 pawns); n × (varu pawnId, exact PawnState); ControllerState; u8 epoch
