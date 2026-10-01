@@ -202,9 +202,12 @@ const PERCH_PROBE = 0.35;
 function moveCollider(ctx: MoveContext, pawn: Pawn, dx: number, dy: number, dz: number): { x: number; y: number; z: number; perched: boolean } {
   if (pawn.state.grounded) {
     // Follow the ground plane so horizontal speed holds on ramps and stairs (the controller would
-    // otherwise project the step onto the slope and lose ~40% of it on a 40° incline).
+    // otherwise project the step onto the slope and lose ~40% of it on a 40° incline). On walkable level
+    // geometry that replaces the downward gravity push: the controller's ground snap keeps contact, and a
+    // push into the floor can leave the body inside the controller's contact offset, where its next step
+    // stalls against the floor for a whole tick (a visible hitch on ~1.5% of ticks).
     const n = groundNormal(ctx, pawn);
-    if (n && n.y >= Math.cos(ctx.data.movement.step.maxSlopeDeg * DEG)) dy += -(n.x * dx + n.z * dz) / n.y;
+    if (n && n.y >= Math.cos(ctx.data.movement.step.maxSlopeDeg * DEG)) dy = -(n.x * dx + n.z * dz) / n.y;
   }
   const t = pawn.collider.translation();
   const r = pawn.collider.radius();
@@ -256,7 +259,29 @@ function moveCollider(ctx: MoveContext, pawn: Pawn, dx: number, dy: number, dz: 
     perched = true;
   }
   ctx.cc.computeColliderMovement(pawn.collider, { x: dx + px, y: dy, z: dz + pz }, undefined, QUERY_SOLID, notIgnored);
-  const mv = ctx.cc.computedMovement();
+  let mv = ctx.cc.computedMovement();
+  // Rapier's controller can let a step through a player it rests exactly against (its sweep starts at
+  // the contact offset and sometimes reports no hit). A player the step would end up inside is handled
+  // like one we already overlap: the motion toward them is dropped and the step is redone.
+  const entered: Collider[] = [];
+  const end = { x: t.x + mv.x, y: t.y + mv.y, z: t.z + mv.z };
+  ctx.world.intersectionsWithShape(end, IDENTITY, new ctx.R.Capsule(hh, r), (c) => (ignored.has(c.handle) || entered.push(c), true), undefined, QUERY_PLAYERS, pawn.collider);
+  if (entered.length) {
+    entered.sort((a, b) => a.handle - b.handle);
+    let ex = dx + px;
+    let ez = dz + pz;
+    for (const c of entered) {
+      ignored.add(c.handle);
+      const [ax, az] = away(c.translation());
+      const toward = ex * ax + ez * az;
+      if (toward < 0) {
+        ex -= ax * toward;
+        ez -= az * toward;
+      }
+    }
+    ctx.cc.computeColliderMovement(pawn.collider, { x: ex, y: dy, z: ez }, undefined, QUERY_SOLID, (c) => !ignored.has(c.handle));
+    mv = ctx.cc.computedMovement();
+  }
   return { x: mv.x, y: mv.y, z: mv.z, perched };
 }
 

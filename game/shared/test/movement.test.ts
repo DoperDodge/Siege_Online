@@ -40,6 +40,31 @@ describe("speeds per rating (data/movement.json)", () => {
   });
 });
 
+describe("steady movement", () => {
+  // Rapier's controller stalls a step that starts inside its contact offset from the floor; pushing the
+  // body down into the floor every tick used to cause that on ~1.5% of ticks (a visible hitch).
+  it("never stalls for a tick while walking or sprinting on flat ground and ramps", async () => {
+    const { sim, ctrl } = await labWith();
+    const cases: [number, number, number, number][] = [
+      [0, 12, 90, 0],
+      [0, 12, 90, Btn.Sprint],
+      [-20, 18, 0, 0], // up the 15° ramp
+      [3, 14, 37, 0],
+    ];
+    for (const [x, z, yawDeg, buttons] of cases) {
+      const pawn = teleport(sim, ctrl, x, 0, z, yawDeg);
+      run(sim, ctrl, { forward: 1, yawDeg, buttons }, 0.3); // up to speed
+      let short = 0;
+      for (let i = 0; i < 128; i++) {
+        const [px, pz] = [pawn.state.x, pawn.state.z];
+        sim.step(new Map([[ctrl.id, input({ forward: 1, yawDeg, buttons })]]));
+        if (Math.hypot(pawn.state.x - px, pawn.state.z - pz) < (0.5 * hspeed(pawn)) / 64) short++;
+      }
+      expect(short, `case ${x},${z}`).toBe(0);
+    }
+  });
+});
+
 describe("sprint rules", () => {
   it("sprint needs forward input, is blocked by ADS, cancels lean, and stands you up from a crouch", async () => {
     const { sim, ctrl, pawn } = await labWith();
