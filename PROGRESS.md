@@ -18,7 +18,7 @@ Built in milestones; each one keeps the tests, both e2e scripts and the netsim g
 | M2 Damage maths and loadout resolution | ✅ pure functions + tests; nothing in the game uses them yet |
 | M3 Weapon state in the simulation (fire, ammo, reload, swap, modes) | ✅ predicted exactly online; ammo HUD; Fire/R/1/2/wheel/B |
 | M4 Loadout pick online, data hash check | ✅ pause-menu loadouts (offline and online), stale tabs told to refresh |
-| M5 ADS, recoil, spread | ⏳ |
+| M5 ADS, recoil, spread | ✅ recoil predicted exactly online; server-only spread; zoom and spread crosshair |
 | M6 Hit registration, damage, death | ⏳ |
 | M7 DBNO and revive | ⏳ |
 | M8 Melee | ⏳ |
@@ -72,9 +72,17 @@ Built in milestones; each one keeps the tests, both e2e scripts and the netsim g
   Online, the server spawns the new body and everyone sees what you carry; the team switch lives there too.
   The loadout is part of the link, e.g. `?op=brava&primary=para_308.magnified..angled`. A browser tab left
   open across an update is now told to refresh (the game data is checked when you connect).
+- **Aiming, recoil and spread (M5, D-041):** hold the right mouse to aim: the sights come up over the
+  weapon's ADS time (faster with a laser or a better sight, 10 % slower straight out of a sprint), and a
+  magnified sight zooms in. Long drops (over 1 m, placeholder) take the sights down. Spraying kicks the view up
+  and sideways in stages by bullet (the Reaper MK2's official stages at bullets 3, 10 and 25), never past
+  the pitch limit, and lying against a wall the sideways kick can't swing your body into it. Hip-fire spreads
+  bullets inside a cone that four ticks around the dot show; aiming down sights closes it (to nothing for
+  bullets, to a tighter cone for buckshot) and moving widens buckshot. Online, recoil is predicted exactly (no
+  corrections) and only the server knows where each pellet goes. All numbers are placeholders.
 - **Movement fix (D-057):** sprinting diagonally into a wall could, rarely, drop you 0.29 m into the floor in
   one tick. Fixed, with a regression test.
-- 185 unit tests.
+- 201 unit tests.
 
 ---
 

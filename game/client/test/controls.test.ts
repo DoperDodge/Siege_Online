@@ -1,6 +1,6 @@
 // Controls without a browser: toggle/hold resolution around forced stance changes (second review).
 import { describe, expect, it } from "vitest";
-import { Stance } from "@redmond/shared";
+import { DEG, Stance } from "@redmond/shared";
 import { Controls } from "../src/input/controls.js";
 import { DEFAULT_SETTINGS, type Settings } from "../src/input/settings.js";
 
@@ -25,4 +25,25 @@ describe("Controls.resetStance", () => {
     c.resetStance(Stance.Prone); // prone is on hold here: rest at standing
     expect(c.sample(2).stance).toBe(Stance.Stand);
   });
+});
+
+describe("Controls.syncView (recoil, D-041)", () => {
+  for (const prone of [false, true]) {
+    it(`${prone ? "prone" : "standing"}: a kick carried into the view stays in the next input, mouse movement too`, () => {
+      const c = make({});
+      c.limits = prone ? { pitchMin: -0.3, pitchMax: 0.3, maxYawStep: 0.004 } : { pitchMin: -1.5, pitchMax: 1.5, maxYawStep: null };
+      c.setView(1, 0);
+      const first = c.sample(1);
+      // The sim kicked the view up 0.01 and right 0.002 this tick (yaw falls turning right).
+      c.syncView(first.yaw - 0.002, first.pitch + 0.01, { yaw: -0.002, pitch: 0.01 });
+      const m = 2 * DEFAULT_SETTINGS.sensitivity * DEG; // two counts of mouse, right and up
+      c.look(2, -2);
+      const next = c.sample(2);
+      expect(next.yaw).toBeCloseTo(first.yaw - 0.002 - m, 3);
+      expect(next.pitch).toBeCloseTo(first.pitch + 0.01 + m, 3);
+      // With nothing more from the sim, the view stays put (no drift back toward the old aim).
+      c.syncView(next.yaw, next.pitch);
+      expect(c.sample(3).yaw).toBeCloseTo(next.yaw, 4);
+    });
+  }
 });

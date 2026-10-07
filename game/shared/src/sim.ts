@@ -168,6 +168,9 @@ export class Sim {
     // places it from the correction it gets for this body, so both start bit-identical.
     const t = collider.translation();
     const pawn: Pawn = { id: pawnId, operatorId, ownerId, collider, loadout, team, state: initialPawnState(t.x, Math.fround(y + 0.02), t.z, Math.fround(yaw), maxHp, loadout) };
+    // Recoil randomness: any non-zero start works for xorshift; a server reseeds it from its room seed and
+    // the client gets the value with the body's first correction.
+    pawn.state.rng = Math.imul(pawnId, 0x9e3779b1) >>> 0 || 1;
     poseCollider(this.ctx, pawn);
     this.pawns.set(pawn.id, pawn);
     refreshBroadPhase(this.world); // a new collider is invisible to queries until the next refresh
@@ -255,7 +258,7 @@ export class Sim {
     pawn.collider.setRadius(r);
     pawn.collider.setHalfHeight(hh);
     pawn.collider.setTranslation({ x: spawn.pos[0], y: spawn.pos[1] + hh + r + 0.02, z: spawn.pos[2] });
-    pawn.state = initialPawnState(spawn.pos[0], spawn.pos[1] + 0.02, spawn.pos[2], Math.fround(spawn.yawDeg * DEG), pawn.state.maxHp, pawn.loadout);
+    pawn.state = { ...initialPawnState(spawn.pos[0], spawn.pos[1] + 0.02, spawn.pos[2], Math.fround(spawn.yawDeg * DEG), pawn.state.maxHp, pawn.loadout), rng: pawn.state.rng };
     poseCollider(this.ctx, pawn); // also makes a dead body solid again
     refreshBroadPhase(this.world);
   }

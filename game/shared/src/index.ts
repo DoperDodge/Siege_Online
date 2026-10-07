@@ -13,6 +13,7 @@ export * from "./weapons/ticks.js";
 export * from "./weapons/damage.js";
 export * from "./weapons/loadout.js";
 export * from "./weapons/step.js";
+export * from "./weapons/spread.js";
 export * from "./combat/damage.js";
 export * from "./sim.js";
 export * from "./net/bytes.js";

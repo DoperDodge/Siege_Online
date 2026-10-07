@@ -11,6 +11,7 @@ import { HitboxHistory, SentRing } from "./lagComp.js";
 import { controllerState, writeControllerState, writePawnState } from "./pawnState.js";
 import type { SimEvent } from "../weapons/step.js";
 import { defaultLoadoutPick, resolveLoadout, type LoadoutPick } from "../weapons/loadout.js";
+import { hash4, pelletDirections } from "../weapons/spread.js";
 import { sideTeam } from "../sim.js";
 import { encodeError, encodePong, encodeRoster, encodeShotResult, encodeWelcome, ErrorCode, unwrap16, type InputMsg, type LabTool, type RosterEntry } from "./protocol.js";
 import { MAX_INTERP_MS, quantizeRemote, SNAPSHOT_EVERY, SnapshotEncoder, type RemoteQ } from "./snapshot.js";
@@ -137,12 +138,16 @@ export class Room {
     readonly lab: boolean,
     /** Longest lag-compensation rewind, in ticks, counted from when a shot's input arrived. */
     readonly maxRewindTicks: number,
+    /** Secret per room: spread and recoil randomness come from it (DECISIONS D-041). */
+    private readonly seed: number,
   ) {
     this.history = new HitboxHistory(sim, 32);
   }
 
-  static async create(code: string, levelId: string, opts: { lab?: boolean; maxRewindTicks?: number } = {}): Promise<Room> {
-    return new Room(code, await Sim.create(levelId), levelId, opts.lab ?? false, opts.maxRewindTicks ?? DEFAULT_MAX_REWIND_TICKS);
+  /** `seed`: the server passes a cryptographic one; tests pass a fixed one. */
+  static async create(code: string, levelId: string, opts: { lab?: boolean; maxRewindTicks?: number; seed?: number } = {}): Promise<Room> {
+    const seed = opts.seed ?? Math.floor(Math.random() * 2 ** 32);
+    return new Room(code, await Sim.create(levelId), levelId, opts.lab ?? false, opts.maxRewindTicks ?? DEFAULT_MAX_REWIND_TICKS, seed >>> 0);
   }
 
   get size(): number {
@@ -218,6 +223,7 @@ export class Room {
   private spawn(m: Member) {
     if (m.ctrl) this.sim.removePlayer(m.ctrl.id);
     m.ctrl = this.sim.addPlayer(m.name, m.pick.operator, 0, undefined, m.pick, m.team);
+    for (const id of m.ctrl.pawnIds) this.sim.pawns.get(id)!.state.rng = hash4(this.seed, id, 0x5eed, 1) || 1;
     m.queue = [];
     m.needCorrection = true;
     m.newBody = true;
@@ -283,8 +289,9 @@ export class Room {
     const snapTick = Math.max(Math.min(now, unwrap16(applied.snapTick, now)), now - leastLag - LAG_SLACK_TICKS);
     const viewTick = snapTick - Math.min(MAX_VIEW_BACK_TICKS, applied.viewBackQ8 / 256);
     const origin = shot.origin;
-    const { yaw, pitch } = shot;
-    const dir: Vec3 = [-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch)];
+    // Spread: the cone the body had when it fired (ADS progress, speed); pellets from the room seed.
+    // Phase 3 M5 reports the first pellet; hit registration of every pellet comes with M6.
+    const dir: Vec3 = pelletDirections(this.seed, m.ctrl.id, shot.seq, shot.pellets, shot.yaw, shot.pitch, shot.cone)[0];
     const ray = new this.sim.R.Ray({ x: origin[0], y: origin[1], z: origin[2] }, { x: dir[0], y: dir[1], z: dir[2] });
     const wall = this.sim.world.castRay(ray, 200, true, undefined, QUERY_STATIC);
     const maxDist = wall ? wall.timeOfImpact : 200;

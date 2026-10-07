@@ -79,7 +79,7 @@ export class RoomManager {
     while (this.rooms.has(code) || this.pending.has(code));
     this.pending.add(code);
     try {
-      const room = await Room.create(code, this.levelId, { lab: true });
+      const room = await Room.create(code, this.levelId, { lab: true, seed: randomInt(2 ** 32) }); // a secret seed: spread and recoil
       this.rooms.set(code, { room, emptySince: this.now() });
       return room;
     } finally {

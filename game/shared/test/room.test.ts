@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   Btn,
   ByteReader,
+  DEG,
   ClientSession,
   decodeInput,
   decodeLabTool,
@@ -21,6 +22,7 @@ import {
   Msg,
   Room,
   Stance,
+  viewDir,
   type InputCmd,
   type ShotResult,
 } from "../src/index.js";
@@ -131,9 +133,11 @@ describe("room and client session", () => {
     const [a, b] = h.clients;
     a.toServer.push(encodeLabTool({ kind: "teleport", x: 0, y: 0, z: 4, yawDeg: 180 }));
     b.toServer.push(encodeLabTool({ kind: "teleport", x: 0, y: 0, z: 12, yawDeg: 0 }));
-    h.ticks(40, [{ yaw: Math.PI, pitch: -0.05 }]);
-    h.tick([{ yaw: Math.PI, pitch: -0.05, buttons: Btn.Fire }]);
-    h.ticks(2, [{ yaw: Math.PI, pitch: -0.05 }]);
+    // Aiming down sights (a rifle's ADS spread is 0): the shot goes exactly where the crosshair is.
+    const aim = { yaw: Math.PI, pitch: -0.05, buttons: Btn.Ads };
+    h.ticks(40, [aim]);
+    h.tick([{ ...aim, buttons: Btn.Ads | Btn.Fire }]);
+    h.ticks(2, [aim]);
     expect(a.shots).toHaveLength(1);
     expect(a.shots[0].hit?.pawnId).toBe(b.session.ctrl!.possessedPawnId);
     expect(a.shots[0].dir[2]).toBeGreaterThan(0.99); // along the input's view (+Z), not some older one
@@ -260,6 +264,29 @@ describe("room and client session", () => {
       expect([own(c).loaded0, own(c).reserve0, own(c).loaded1, own(c).reserve1]).toEqual([server.loaded0, server.reserve0, server.loaded1, server.reserve1]);
     }
     expect(a.shots.length + b.shots.length).toBeGreaterThan(20);
+  });
+
+  it("recoil the client carries into its view is predicted exactly; hip-fire pellets land inside the shot's cone", async () => {
+    const h = await harness(["sledge"]);
+    const [a] = h.clients;
+    const start = h.room.memberInfo(a.id)!.corrections;
+    const angle = (d: number[], v: number[]) => Math.acos(Math.min(1, d[0] * v[0] + d[1] * v[1] + d[2] * v[2]));
+    const off: number[] = [];
+    // Spray from the hip, each input carrying the view the last tick's kick left (what the lab does).
+    for (let i = 0; i < 300; i++) {
+      const view = { yaw: own(a).yaw, pitch: own(a).pitch };
+      const before = a.shots.length;
+      h.tick([{ ...view, buttons: i % 60 < 30 ? Btn.Fire : i % 60 === 45 ? Btn.Reload : 0 }]);
+      for (const shot of a.shots.slice(before)) off.push(angle(shot.dir, viewDir(view.yaw, view.pitch)));
+    }
+    expect(h.room.memberInfo(a.id)!.corrections - start).toBe(0);
+    expect(own(a).pitch).toBeGreaterThan(2 * DEG); // the view really climbed
+    const hip = h.room.sim.data.gunplay.spread.assault_rifle.hipDeg * DEG;
+    expect(off.length).toBeGreaterThan(20);
+    for (const o of off) expect(o).toBeLessThan(hip + 1e-3); // (inputs are quantized to ~1e-4 rad)
+    const mean = off.reduce((x, y) => x + y, 0) / off.length;
+    expect(mean / hip).toBeGreaterThan(0.4); // spread over the cone, not on the crosshair
+    expect(mean / hip).toBeLessThan(0.9);
   });
 
   it("a forged input stream can't beat the fire rate or create ammo: the server's sim decides every shot", async () => {

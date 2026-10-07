@@ -9,6 +9,7 @@
 import type { Vec3 } from "../core/math.js";
 import type { GameData } from "../data/load.js";
 import { eyePose } from "../player/hitboxes.js";
+import { turnView, type MoveContext } from "../player/movement.js";
 import type { Pawn } from "../player/pawn.js";
 import { Btn, PawnMode, ReloadKind, WeaponAct, WFlag, type InputCmd, type PawnState } from "../player/types.js";
 import type { ResolvedWeapon } from "./loadout.js";
@@ -34,14 +35,15 @@ export type SimEvent =
       origin: Vec3;
       /** Where in the tick the shot fell, 0..1 (audio and tracer timing). */
       frac: number;
+      /** Spread cone half-angle when it fired (radians); the server draws the pellets in it. */
+      cone: number;
     }
   | { kind: "dry"; pawnId: number; seq: number; slot: number }
-  | { kind: "reload"; pawnId: number; slot: number; reloadKind: ReloadKind };
+  | { kind: "reload"; pawnId: number; slot: number; reloadKind: ReloadKind }
+  /** Recoil moved this body's view this tick: the client adds it to its own view (D-041). */
+  | { kind: "kick"; pawnId: number; dYaw: number; dPitch: number };
 
-export interface WeaponContext {
-  data: GameData;
-  events: SimEvent[];
-}
+export type WeaponContext = MoveContext & { data: GameData; events: SimEvent[] };
 
 export const loadedOf = (s: PawnState, slot = s.slot) => (slot === 0 ? s.loaded0 : s.loaded1);
 export const reserveOf = (s: PawnState, slot = s.slot) => (slot === 0 ? s.reserve0 : s.reserve1);
@@ -62,6 +64,87 @@ export const fireModeOf = (w: ResolvedWeapon, s: PawnState, slot = s.slot) => w.
 /** Holding fire (or melee, or reviving later) stops a sprint (research/core_mechanics.md §14). */
 export function blocksSprint(s: PawnState, input: InputCmd): boolean {
   return (input.buttons & Btn.Fire) !== 0 || s.meleeTicks > 0 || s.reviveTarget !== 0;
+}
+
+/**
+ * Aiming down sights this tick: the ADS button, on your feet, not mid-swap, melee or revive, and not in a
+ * long drop (Siege X forces you out of ADS; the height is a placeholder). Decides ADS walk speed too.
+ */
+export function wantsAim(ctx: { data: GameData }, s: PawnState, input: InputCmd): boolean {
+  if (!(input.buttons & Btn.Ads) || s.mode !== PawnMode.Walk || s.wAct === WeaponAct.Equip || s.meleeTicks > 0 || s.reviveTarget !== 0) return false;
+  return s.grounded || s.airPeakY - s.y <= ctx.data.gunplay.rules.adsDropCancelM;
+}
+
+/** ADS progress 0..1 through the weapon's accuracy curve (fast / medium / slow, data/gunplay.json). */
+export function adsAccuracy(w: ResolvedWeapon, adsQ: number): number {
+  const t = adsQ / 65535;
+  const c = w.ads.curve;
+  return c.kind === "easeIn" ? t ** c.power : 1 - (1 - t) ** c.power;
+}
+
+/**
+ * Spread cone half-angle (radians) for the weapon in hand: hip-fire spread blending to the ADS spread along
+ * the ADS curve, widened by horizontal speed (buckshot, Y8S3). A pure function of state, so the client can
+ * draw it as a crosshair; the server alone samples pellets from it (DECISIONS D-041).
+ */
+export function spreadCone(w: ResolvedWeapon, s: PawnState): number {
+  return w.spread.hip + (w.spread.ads - w.spread.hip) * adsAccuracy(w, s.adsQ) + w.spread.perMps * Math.hypot(s.vx, s.vz);
+}
+
+/** xorshift32 on the body's recoil random state; returns a number in [-1, 1). */
+function rand11(s: PawnState): number {
+  let x = s.rng >>> 0 || 0x9e3779b9;
+  x ^= x << 13;
+  x >>>= 0;
+  x ^= x >>> 17;
+  x ^= x << 5;
+  s.rng = x >>> 0;
+  return s.rng / 2147483648 - 1;
+}
+
+/** One shot's kick, added to what the view still has to climb (Ubisoft's model: stages by bullet index). */
+function kick(w: ResolvedWeapon, s: PawnState) {
+  const r = w.recoil;
+  let stage = r.stages[0];
+  for (const st of r.stages) if (st.fromShot <= s.shotIdx) stage = st;
+  const first = s.shotIdx === 0 ? r.firstShotMult : 1;
+  const r1 = rand11(s);
+  const r2 = rand11(s);
+  s.recoilPendP = Math.fround(s.recoilPendP + (stage.up + stage.upJitter * r1) * r.upMult * first * (s.shotIdx === 0 ? r.firstShotUpMult : 1));
+  s.recoilPendY = Math.fround(s.recoilPendY + (stage.side + stage.sideJitter * r2) * r.sideMult * first);
+}
+
+/**
+ * Move the view by the pending kick at the weapon's "Camera Up Speed", then recenter part of it once the
+ * shooting stops. Positive side kick turns the view right. Emits the view change as a kick event.
+ */
+function releaseRecoil(ctx: WeaponContext, pawn: Pawn, w: ResolvedWeapon) {
+  const s = pawn.state;
+  const r = w.recoil;
+  const clampTo = (v: number, m: number) => Math.max(-m, Math.min(m, v));
+  let dYaw = 0;
+  let dPitch = 0;
+  if (s.recoilPendP !== 0 || s.recoilPendY !== 0) {
+    const p = clampTo(s.recoilPendP, r.cameraUpPerTick);
+    const y = clampTo(s.recoilPendY, r.cameraUpPerTick);
+    s.recoilPendP = Math.fround(s.recoilPendP - p);
+    s.recoilPendY = Math.fround(s.recoilPendY - y);
+    const [ay, ap] = turnView(ctx, pawn, -y, p); // a pitch clamp or a prone wall drops the excess
+    s.recoilRecP = Math.fround(s.recoilRecP + ap * r.recenter.fraction);
+    s.recoilRecY = Math.fround(s.recoilRecY + ay * r.recenter.fraction);
+    dYaw += ay;
+    dPitch += ap;
+  }
+  if ((s.recoilRecP !== 0 || s.recoilRecY !== 0) && s.sinceShot >= r.recenter.delayTicks) {
+    const p = clampTo(s.recoilRecP, r.recenter.perTick);
+    const y = clampTo(s.recoilRecY, r.recenter.perTick);
+    s.recoilRecP = Math.fround(s.recoilRecP - p);
+    s.recoilRecY = Math.fround(s.recoilRecY - y);
+    const [ay, ap] = turnView(ctx, pawn, -y, -p);
+    dYaw += ay;
+    dPitch += ap;
+  }
+  if (dYaw !== 0 || dPitch !== 0) ctx.events.push({ kind: "kick", pawnId: pawn.id, dYaw, dPitch });
 }
 
 function endReload(s: PawnState) {
@@ -180,7 +263,19 @@ export function stepWeapon(ctx: WeaponContext, pawn: Pawn, input: InputCmd, pres
   }
   if (s.wAct === WeaponAct.Reload) advanceReload(ctx, s, w);
 
-  // 5. Trigger. Shots need a body on its feet, out of the sprint exit, with the weapon up (or reloading
+  // 5. ADS: rising over the weapon's ADS ticks (slower straight out of a sprint), falling over the exit time.
+  if (wantsAim(ctx, s, input)) {
+    if (s.adsQ === 0) {
+      if (s.sprinting || s.sinceSprint < exitToFire - 1e-6) s.wflags |= WFlag.AdsFromSprint;
+      else s.wflags &= ~WFlag.AdsFromSprint;
+    }
+    s.adsQ = Math.min(65535, s.adsQ + Math.ceil(65536 / (s.wflags & WFlag.AdsFromSprint ? w.ads.fromSprintTicks : w.ads.ticks)));
+  } else {
+    s.adsQ = Math.max(0, s.adsQ - Math.ceil(65536 / w.ads.exitTicks));
+    if (s.adsQ === 0) s.wflags &= ~WFlag.AdsFromSprint;
+  }
+
+  // 6. Trigger. Shots need a body on its feet, out of the sprint exit, with the weapon up (or reloading
   // with a round in it: firing cancels the reload).
   const mode = fireModeOf(w, s);
   const held = (input.buttons & Btn.Fire) !== 0;
@@ -229,12 +324,17 @@ export function stepWeapon(ctx: WeaponContext, pawn: Pawn, input: InputCmd, pres
         pitch: s.pitch,
         origin: eyePose(ctx.data.movement, ctx.data.hitboxes, s).pos,
         frac: s.cycle / w.fire.rpm,
+        cone: spreadCone(w, s),
       });
       s.cycle += CADENCE_UNITS;
+      kick(w, s); // after the shot left: every bullet goes where the crosshair was when the input was sampled
       s.shotIdx = Math.min(0xffff, s.shotIdx + 1);
       s.sinceShot = 0;
       if (s.burstLeft > 0) s.burstLeft--;
     }
   }
   s.cycle = Math.max(0, s.cycle - w.fire.rpm);
+
+  // 7. Recoil reaches the view.
+  releaseRecoil(ctx, pawn, w);
 }

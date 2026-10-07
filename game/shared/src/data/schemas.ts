@@ -383,6 +383,8 @@ export const gunplaySchema = z
       swapS: secs,
       adsExitS: secs,
       adsFromSprintMult: z.number().min(1),
+      /** Falling further than this below where you left the ground forces you out of ADS (Siege X, core_mechanics.md §2.3). */
+      adsDropCancelM: z.number().positive(),
       reload: z.strictObject({ magOutFractionOfRefill: fraction, fireCancels: z.boolean(), pulledRoundsReturn: z.boolean(), sprintInterrupts: z.boolean() }),
       fire: z.strictObject({
         /** "weapon": bursts fire at the weapon's own rpm. */

@@ -147,7 +147,7 @@ in the Shooting Range or a Custom Game with a stopwatch or a 60 fps recording.
    bonuses add (time ÷ 1.2) or multiply (÷ 1.21)? How long does leaving ADS take (0.25 s placeholder)? How much
    slower is ADS straight out of a sprint (×1.1 placeholder, from the shield pistol's 0.50 vs 0.55 s;
    Blackbeard's 2016 figures, 0.7 vs 0.8 s, give ×1.14)? Can you
-   ADS during a reload? What drop height cancels ADS?
+   ADS during a reload? What drop height cancels ADS (1 m placeholder)?
 2. **ADS accuracy curves:** we use fast = 1−(1−t)², medium = t, slow = t² (placeholders); the GONNE-6's curve
    isn't stated at all.
 3. **Grips:** we read the angled grip's "+20 % reload speed" as time × 0.8 (Fandom's SMG-12 example: 3.0 → 2.4 s

@@ -19,6 +19,7 @@
     "rules.swapS",
     "rules.adsExitS",
     "rules.adsFromSprintMult",
+    "rules.adsDropCancelM",
     "rules.reload",
     "rules.fire",
     "rules.moveMultScope",
@@ -64,6 +65,7 @@
     "swapS": 0.6,
     "adsExitS": 0.25,
     "adsFromSprintMult": 1.1,
+    "adsDropCancelM": 1.0,
     "reload": { "magOutFractionOfRefill": 0.5, "fireCancels": true, "pulledRoundsReturn": true, "sprintInterrupts": true },
     "fire": { "burstRpm": "weapon", "burstReleaseCancels": true, "semiBuffer": false, "autoReloadOnEmpty": true, "modeSwitchS": 0 },
     "moveMultScope": ["walk", "crouch", "sprint"]

@@ -9,7 +9,7 @@ import { eyePose, proneBendLift, proneBodyExtents } from "./hitboxes.js";
 import type { Pawn } from "./pawn.js";
 import { capsuleDims, currentHeight, proneWeight, stanceDims, transitionSeconds } from "./stance.js";
 import { Btn, PawnMode, STANCE_KEYS, Stance, type InputCmd, type PawnState } from "./types.js";
-import { blocksSprint, parkWeapon, stepWeapon, type SimEvent } from "../weapons/step.js";
+import { blocksSprint, parkWeapon, stepWeapon, wantsAim, type SimEvent } from "../weapons/step.js";
 
 export interface MoveContext {
   R: Rapier;
@@ -62,16 +62,49 @@ function setSolidity(pawn: Pawn) {
 
 // ---------------------------------------------------------------- look
 
+/** The pitch arc the body allows now: narrower while lying down (and getting down or up). */
+function pitchLimits(ctx: MoveContext, s: PawnState): [number, number] {
+  const m = ctx.data.movement;
+  return s.mode === PawnMode.Walk && proneWeight(s) > 0
+    ? [m.stance.pronePitchMinDeg * DEG, m.stance.pronePitchMaxDeg * DEG]
+    : [m.look.pitchMinDeg * DEG, m.look.pitchMaxDeg * DEG];
+}
+
+/**
+ * Turn the view by (dYaw, dPitch) from inside the simulation (recoil, weapons/step.ts), within the same
+ * rules as a turn from input: the pitch arc, and while prone only if the body can turn without clipping a
+ * wall (otherwise the yaw change is dropped). Returns what was actually applied.
+ */
+export function turnView(ctx: MoveContext, pawn: Pawn, dYaw: number, dPitch: number): [number, number] {
+  const s = pawn.state;
+  const [lo, hi] = pitchLimits(ctx, s);
+  const pitchBefore = s.pitch;
+  s.pitch = clamp(s.pitch + dPitch, lo, hi);
+  let applied = 0;
+  if (dYaw !== 0) {
+    const next = wrapAngle(s.yaw + dYaw);
+    if (s.mode === PawnMode.Walk && proneWeight(s) > 0) {
+      const fit = proneFitFree(ctx, pawn, s.x, s.y, s.z, next, 0);
+      if (fit) {
+        applied = wrapAngle(next - s.yaw);
+        s.yaw = next;
+        setTilt(s, fit);
+      }
+    } else {
+      applied = wrapAngle(next - s.yaw);
+      s.yaw = next;
+    }
+  }
+  return [applied, s.pitch - pitchBefore];
+}
+
 function updateLook(ctx: MoveContext, pawn: Pawn, input: InputCmd) {
   const m = ctx.data.movement;
   const s = pawn.state;
-  let pitchMin = m.look.pitchMinDeg * DEG;
-  let pitchMax = m.look.pitchMaxDeg * DEG;
+  const [pitchMin, pitchMax] = pitchLimits(ctx, s);
   if (s.mode === PawnMode.Walk && proneWeight(s) > 0) {
     // Lying down (and getting down or up) limits turn speed and aim arc (PLAN §7); turning is also
     // blocked if the body would clip a wall.
-    pitchMin = m.stance.pronePitchMinDeg * DEG;
-    pitchMax = m.stance.pronePitchMaxDeg * DEG;
     const maxTurn = m.stance.proneTurnRateDeg * DEG * DT;
     const delta = clamp(wrapAngle(input.yaw - s.yaw), -maxTurn, maxTurn);
     if (delta !== 0) {
@@ -114,7 +147,7 @@ function stepWalk(ctx: MoveContext, pawn: Pawn, input: InputCmd, pressed: number
     st === Stance.Prone ? m.speed.proneSpeed : st === Stance.Crouch ? walk * m.speed.crouchWalkFactor * mult("crouch") : walk * mult("walk");
   let speed = s.stanceT < 1 ? Math.min(stanceSpeed(s.stanceFrom), stanceSpeed(s.stance)) : stanceSpeed(s.stance);
   const ads = (input.buttons & Btn.Ads) !== 0;
-  if (ads && s.stance !== Stance.Prone) speed = Math.min(speed, m.speed.adsWalkSpeed * mult("adsWalk"));
+  if (wantsAim(ctx, s, input) && s.stance !== Stance.Prone) speed = Math.min(speed, m.speed.adsWalkSpeed * mult("adsWalk"));
   if (input.buttons & Btn.SlowWalk) speed *= m.speed.slowWalkFactor;
 
   const sprinting =

@@ -330,7 +330,15 @@ export class Controls {
    * frozen view). Mouse movement since the sample is kept. A prone turn is not corrected here: the next
    * step is measured from the body's real yaw, so a turn refused at a wall can't run further ahead.
    */
-  syncView(simYaw: number, simPitch: number) {
+  syncView(simYaw: number, simPitch: number, kick: { yaw: number; pitch: number } = { yaw: 0, pitch: 0 }) {
+    // Recoil turned the body's view this tick: carry it into ours exactly (also while prone, where the
+    // clamp check below is skipped), so the next input already includes it (DECISIONS D-041).
+    if (kick.yaw !== 0 || kick.pitch !== 0) {
+      this.yaw = wrapAngle(this.yaw + kick.yaw);
+      this.pitch += kick.pitch;
+      this.sampledYaw = wrapAngle(this.sampledYaw + kick.yaw);
+      this.sampledPitch += kick.pitch;
+    }
     const dyaw = wrapAngle(simYaw - this.sampledYaw);
     if (this.limits.maxYawStep === null && Math.abs(dyaw) > 1e-4) this.yaw = wrapAngle(this.yaw + dyaw);
     const dpitch = simPitch - this.sampledPitch;

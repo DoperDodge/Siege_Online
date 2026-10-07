@@ -505,7 +505,8 @@ export async function runHitreg(partial: Partial<HitregOptions> = {}): Promise<H
         }
       }
       localShot = null;
-      c.session.tick({ forward: 0, strafe: 0, yaw: aim.yaw, pitch: aim.pitch, buttons: fire ? Btn.Fire : 0, stance: Stance.Stand, lean: 0 }, renderTick);
+      // Aiming down sights the whole time: a rifle's ADS spread is 0, so the shot goes exactly where it aims.
+      c.session.tick({ forward: 0, strafe: 0, yaw: aim.yaw, pitch: aim.pitch, buttons: Btn.Ads | (fire ? Btn.Fire : 0), stance: Stance.Stand, lean: 0 }, renderTick);
       const shot = localShot as SimEvent | null;
       if (shot?.kind === "shot") {
         report.shots++;

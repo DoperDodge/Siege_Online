@@ -26,6 +26,7 @@ import {
   proneWeight,
   reserveOf,
   Sim,
+  spreadCone,
   Stance,
   TICK_HZ,
   wrapAngle,
@@ -61,6 +62,7 @@ const app = document.getElementById("app")!;
 app.innerHTML = `
   <div id="view"></div>
   <div class="crosshair"></div>
+  <div class="spread hidden"><i></i><i></i><i></i><i></i></div>
   <div class="hud hud-tl">
     <div class="op-name"></div>
     <div class="hp"><div class="hp-fill"></div><span class="hp-text"></span></div>
@@ -102,6 +104,8 @@ let scripted: Partial<InputCmd> | null = null;
 let shownRenderTick = 0;
 let clickViewTick: number | null = null;
 let muzzleUntil = 0;
+/** Recoil the viewed body's view took this tick (added to the mouse view so the next input includes it). */
+const tickKick = { yaw: 0, pitch: 0 };
 let flashUntil = 0;
 
 // Online: the lobby connects (create or join a room) and the session builds the simulation from the
@@ -499,8 +503,11 @@ let last = performance.now();
 
 function tick() {
   snapshotAll();
+  tickKick.yaw = tickKick.pitch = 0;
   if (net) {
-    const input = scripted ? { ...controls.sample(++seq), ...scripted } : controls.sample(++seq);
+    const sampled = controls.sample(++seq);
+    // Test scripts add buttons to what the controls sample (a click still fires while a script holds ADS).
+    const input = scripted ? { ...sampled, ...scripted, buttons: sampled.buttons | (scripted.buttons ?? 0) } : sampled;
     // Predicts locally and sends the input; a shot claims the frame that was on screen when you clicked.
     net.session.tick(input, clickViewTick ?? undefined);
     clickViewTick = null;
@@ -518,7 +525,7 @@ function tick() {
     viewedId = nowViewed;
     controls.setView(v.state.yaw, v.state.pitch);
   } else {
-    controls.syncView(v.state.yaw, v.state.pitch);
+    controls.syncView(v.state.yaw, v.state.pitch, tickKick);
   }
   prompt = sim.prompt(ctrl.id);
   // Keep toggles and view limits in step with what the simulation decided this tick.
@@ -555,6 +562,7 @@ function interpolated(p: Pawn, alpha: number): PawnState {
     lean: lerp(a.lean, b.lean, alpha),
     stanceT: sameStance ? lerp(a.stanceT, b.stanceT, alpha) : b.stanceT,
     yaw: a.yaw + wrapAngle(b.yaw - a.yaw) * alpha,
+    adsQ: a.slot === b.slot ? lerp(a.adsQ, b.adsQ, alpha) : b.adsQ,
   };
 }
 
@@ -605,6 +613,7 @@ function frame(now: number) {
   updateShots(now);
 
   const rs = interpolated(viewed, alpha);
+  aim(viewed, rs);
   const eye = eyePose(data.movement, data.hitboxes, { ...rs, yaw: controls.yaw });
   if (thirdPerson) {
     const back = new THREE.Vector3(0, 0, 1).applyEuler(new THREE.Euler(controls.pitch, controls.yaw, 0, "YXZ"));
@@ -626,6 +635,27 @@ function frame(now: number) {
   }
   updateHud(me);
   requestAnimationFrame(frame);
+}
+
+/**
+ * Aiming, drawn from the body you look through: a magnified sight narrows the field of view as ADS comes
+ * in (the tangent of the half-angle divides by the magnification), and four ticks around the dot mark the
+ * spread cone the server draws pellets from (D-041), so they close in as you aim and open as you move.
+ */
+function aim(p: Pawn, rs: PawnState) {
+  const w = p.loadout?.weapons[rs.slot];
+  const t = w ? rs.adsQ / 65535 : 0;
+  const zoom = w ? lerp(1, w.ads.zoom, t) : 1;
+  const fov = (2 * Math.atan(Math.tan((settings.fovVertical * DEG) / 2) / zoom)) / DEG;
+  if (Math.abs(camera.fov - fov) > 1e-4) {
+    camera.fov = fov;
+    camera.updateProjectionMatrix();
+  }
+  const ticks = $(".spread");
+  const onCam = ctrl.shellCam || ctrl.swapPhase !== 0;
+  const r = w ? (Math.tan(spreadCone(w, rs)) / Math.tan((fov * DEG) / 2)) * (view.clientHeight / 2) : 0;
+  ticks.classList.toggle("hidden", r < 2 || rs.mode === PawnMode.Dead || onCam || thirdPerson);
+  ticks.style.setProperty("--r", `${r.toFixed(1)}px`);
 }
 
 // ------------------------------------------------------------------ HUD
@@ -1083,6 +1113,10 @@ function onWeaponEvents(events: readonly SimEvent[]) {
   for (const e of events) {
     if (e.kind === "shot" && e.pawnId === ctrl.possessedPawnId) muzzleUntil = performance.now() + 50;
     else if (e.kind === "dry" && e.pawnId === ctrl.possessedPawnId) flash("Empty", "info");
+    else if (e.kind === "kick" && e.pawnId === sim.viewedPawnId(ctrl.id)) {
+      tickKick.yaw += e.dYaw;
+      tickKick.pitch += e.dPitch;
+    }
   }
 }
 

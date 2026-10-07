@@ -63,7 +63,8 @@ try {
   await a.evaluate(() => window.__lab.teleport(-3, 0, 12, 0));
   await b.evaluate(() => {
     window.__lab.teleport(0, 0, 4, 180);
-    window.__lab.input = { pitch: -0.052 }; // ~3° down: the ray crosses A's torso at 8 m
+    // ~3° down: the ray crosses A's torso at 8 m. Aiming down sights, so the rifle's shot has no spread.
+    window.__lab.input = { pitch: -0.052, buttons: 8 /* Btn.Ads */ };
   });
   await sleep(1500);
   const aStart = (await net(a)).own;
