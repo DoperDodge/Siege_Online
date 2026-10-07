@@ -12,7 +12,9 @@ import { eyePose } from "../player/hitboxes.js";
 import { turnView, type MoveContext } from "../player/movement.js";
 import type { Pawn } from "../player/pawn.js";
 import { Btn, PawnMode, ReloadKind, WeaponAct, WFlag, type InputCmd, type PawnState } from "../player/types.js";
+import { STANCE_NAMES } from "../data/schemas.js";
 import type { ResolvedWeapon } from "./loadout.js";
+import { ticks } from "./ticks.js";
 
 /** One minute in ticks: a shot adds this to the cadence debt, every tick pays off `rpm` of it. */
 export const CADENCE_UNITS = 60 * 64;
@@ -42,6 +44,8 @@ export type SimEvent =
   | { kind: "reload"; pawnId: number; slot: number; reloadKind: ReloadKind }
   /** Recoil moved this body's view this tick: the client adds it to its own view (D-041). */
   | { kind: "kick"; pawnId: number; dYaw: number; dPitch: number }
+  /** The knife lands (Phase 3 M8): the server judges what it hits, at the view time of the input that swung. */
+  | { kind: "meleeImpact"; pawnId: number; seq: number; yaw: number; pitch: number; origin: Vec3 }
   /** A body died inside the simulation: a lethal fall, or bleeding out while down. */
   | { kind: "death"; pawnId: number; cause: "fall" | "bleed" }
   /** Reviving (DECISIONS D-049): started, and finished (`completed`) or cancelled. */
@@ -235,7 +239,16 @@ export function stepWeapon(ctx: WeaponContext, pawn: Pawn, input: InputCmd, pres
   const walking = s.mode === PawnMode.Walk;
   let w = lo.weapons[s.slot];
 
-  // 1. Timers.
+  // 1. Timers. The knife (DECISIONS D-050): `meleeTicks` is 1 on the tick of the press and counts up; it lands
+  // impactSeconds later and the swing ends cycleSeconds after the press (placeholders).
+  const melee = ctx.data.combat.melee;
+  if (s.meleeTicks > 0) {
+    s.meleeTicks = Math.min(255, s.meleeTicks + 1);
+    if (s.meleeTicks - 1 === ticks(melee.impactSeconds)) {
+      ctx.events.push({ kind: "meleeImpact", pawnId: pawn.id, seq: input.seq, yaw: s.yaw, pitch: s.pitch, origin: eyePose(ctx.data.movement, ctx.data.hitboxes, s).pos });
+    }
+    if (s.meleeTicks - 1 >= ticks(melee.cycleSeconds)) s.meleeTicks = 0;
+  }
   if (s.wAct !== WeaponAct.Ready) s.actTicks = Math.min(0xffff, s.actTicks + 1);
   s.sinceShot = Math.min(0xffff, s.sinceShot + 1);
   if (s.sinceShot >= w.recoil.resetTicks) s.shotIdx = 0;
@@ -259,7 +272,14 @@ export function stepWeapon(ctx: WeaponContext, pawn: Pawn, input: InputCmd, pres
     s.modes = (s.modes & ~(15 << (s.slot * 4))) | (next << (s.slot * 4));
     s.burstLeft = 0;
   }
-  if (pressed & Btn.Reload && s.wAct === WeaponAct.Ready && walking && !s.sprinting) startReload(ctx, pawn, w);
+  if (pressed & Btn.Reload && s.wAct === WeaponAct.Ready && walking && !s.sprinting && s.meleeTicks === 0) startReload(ctx, pawn, w);
+  // The knife: from any allowed stance, even mid-sprint (it ends the sprint) or mid-reload (it cancels it).
+  if (pressed & Btn.Melee && s.meleeTicks === 0 && walking && s.wAct !== WeaponAct.Equip && s.reviveTarget === 0 && melee.allowInStances.includes(STANCE_NAMES[s.stance])) {
+    if (s.wAct === WeaponAct.Reload) endReload(s);
+    s.meleeTicks = 1;
+    s.burstLeft = 0;
+    s.wflags &= ~WFlag.FireQueued;
+  }
 
   // 4. The current action.
   if (s.wAct === WeaponAct.Equip && s.actTicks >= lo.swapTicks) {

@@ -21,7 +21,7 @@ Built in milestones; each one keeps the tests, both e2e scripts and the netsim g
 | M5 ADS, recoil, spread | ✅ recoil predicted exactly online; server-only spread; zoom and spread crosshair |
 | M6 Hit registration, damage, death | ✅ every pellet judged on the server; kills, hit markers, kill feed; no new mispredictions |
 | M7 DBNO and revive | ✅ down, crawl and bleed; hold F for 4 s to revive; predicted with no mispredictions |
-| M8 Melee | ⏳ |
+| M8 Melee | ✅ V swings the knife: kills standing or downed, judged with lag compensation |
 | M9 Client presentation (viewmodel, HUD, hit markers) | ⏳ |
 | M10 Range Lab (dummies) | ⏳ |
 | M11 End-to-end tests, netsim gates, docs | ⏳ |
@@ -99,9 +99,13 @@ Built in milestones; each one keeps the tests, both e2e scripts and the netsim g
   up with 20 HP (a gauge shows their progress; you stop bleeding meanwhile). Whoever downed you gets the kill
   if you die. **Down me** in the pause menu tries it alone. Online it is all predicted: the browser test
   downs and revives a player with every correction coming from the server and none from a misprediction.
+- **The knife (M8, D-050):** **V** (or the Knife button on touch) swings; it lands 0.2 s later and kills anyone
+  standing or down within reach in front of you, judged by the server against what you saw (at 100 ms round
+  trip a test knifes a sprinting target where the attacker saw it, and misses it with rewinding off). It ends a
+  sprint, cancels a reload and holds fire. Placeholder swipe on screen until M9.
 - **Movement fix (D-057):** sprinting diagonally into a wall could, rarely, drop you 0.29 m into the floor in
   one tick. Fixed, with a regression test.
-- 235 unit tests.
+- 243 unit tests.
 
 ---
 

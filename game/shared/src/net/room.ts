@@ -3,6 +3,7 @@
 import { DT, TICK_HZ } from "../core/constants.js";
 import { applyDamage, Cause, isIdleShell, type Damage } from "../combat/apply.js";
 import { shotOnBodies, tracePellets, type ShotOnBody } from "../combat/hitreg.js";
+import { judgeMelee } from "../combat/melee.js";
 import type { ModeData } from "../data/schemas.js";
 import { spawnAmmo, type Pawn, type PlayerController } from "../player/pawn.js";
 import { PawnMode, type InputCmd, type PawnState } from "../player/types.js";
@@ -106,6 +107,8 @@ interface Member {
   lastSeq: number;
   /** The input applied this tick, whose predicted hash is checked after stepping. */
   applied: QueuedInput | null;
+  /** The last input applied (a knife landing on a tick without input is judged with its view time). */
+  lastApplied: QueuedInput | null;
   idled: boolean;
   /** Hold budget spent (ticks held still, minus HOLD_REFUND per applied input). */
   held: number;
@@ -132,6 +135,8 @@ interface Member {
 /** A shot judged against the world as its shooter saw it, waiting to be applied with the rest of the tick's. */
 interface JudgedShot {
   m: Member;
+  /** A bullet (shots) or the knife. */
+  cause: Cause;
   ctrlId: number;
   team: number;
   seq: number;
@@ -222,6 +227,7 @@ export class Room {
       lastQueuedSeq: 0,
       lastSeq: 0,
       applied: null,
+      lastApplied: null,
       idled: false,
       held: 0,
       lags: [],
@@ -356,15 +362,23 @@ export class Room {
    * arrived (time it then waits in our queue is ours, not the shooter's latency). The level stops pellets
    * where they hit it. Nothing is applied yet: the tick's shots are applied together, in order, at its end.
    */
-  private judgeShot(m: Member, applied: QueuedInput, shot: Extract<SimEvent, { kind: "shot" }>) {
-    const shooter = this.sim.pawns.get(shot.pawnId);
-    const w = shooter?.loadout?.weapons[shot.slot];
-    if (!m.ctrl || !shooter || !w?.damage) return;
+  /**
+   * The render time an input says its client was drawing, bounded as described at judgeShot, and the time
+   * the room rewinds to for it (capped).
+   */
+  private viewTimeFor(m: Member, applied: QueuedInput): { now: number; viewTick: number; rewoundTick: number } {
     const now = applied.receivedTick;
     const leastLag = Math.min(...m.lags);
     const snapTick = Math.max(Math.min(now, unwrap16(applied.snapTick, now)), now - leastLag - LAG_SLACK_TICKS);
     const viewTick = snapTick - Math.min(MAX_VIEW_BACK_TICKS, applied.viewBackQ8 / 256);
-    const rewoundTick = HitboxHistory.rewound(viewTick, now, this.maxRewindTicks);
+    return { now, viewTick, rewoundTick: HitboxHistory.rewound(viewTick, now, this.maxRewindTicks) };
+  }
+
+  private judgeShot(m: Member, applied: QueuedInput, shot: Extract<SimEvent, { kind: "shot" }>) {
+    const shooter = this.sim.pawns.get(shot.pawnId);
+    const w = shooter?.loadout?.weapons[shot.slot];
+    if (!m.ctrl || !shooter || !w?.damage) return;
+    const { now, viewTick, rewoundTick } = this.viewTimeFor(m, applied);
     const origin = shot.origin;
     const dirs = pelletDirections(this.seed, m.ctrl.id, shot.seq, shot.pellets, shot.yaw, shot.pitch, shot.cone);
     // Your own bodies and the dead don't stop bullets.
@@ -377,7 +391,7 @@ export class Room {
     });
     this.stats.shots++;
     if (rewoundTick > viewTick) this.stats.cappedShots++;
-    this.judged.push({ m, ctrlId: m.ctrl.id, team: shooter.team, seq: shot.seq, weaponId: w.id, receivedTick: now, rewoundTick, origin, bodies });
+    this.judged.push({ m, cause: Cause.Bullet, ctrlId: m.ctrl.id, team: shooter.team, seq: shot.seq, weaponId: w.id, receivedTick: now, rewoundTick, origin, bodies });
     // Everyone sees and hears it (the shooter's own client draws its flash itself, but not where pellets went).
     const ends = paths.map((p): [number, number, number] => [origin[0] + p.dir[0] * p.end, origin[1] + p.dir[1] * p.end, origin[2] + p.dir[2] * p.end]);
     for (const other of this.members.values()) other.events.push({ kind: "shotFx", pawnId: shooter.id, slot: shot.slot, suppressed: w.suppressed, ends });
@@ -399,6 +413,22 @@ export class Room {
   }
 
   /**
+   * The knife landing (DECISIONS D-050): judged like a shot, against everyone as the attacker saw them when
+   * the input that swung (or, on a tick without one, the last input) was made; applied with the tick's shots.
+   */
+  private judgeMeleeImpact(m: Member, applied: QueuedInput, hit: Extract<SimEvent, { kind: "meleeImpact" }>) {
+    const attacker = this.sim.pawns.get(hit.pawnId);
+    if (!m.ctrl || !attacker) return;
+    const { now, rewoundTick } = this.viewTimeFor(m, applied);
+    const ignore = new Set(m.ctrl.pawnIds);
+    for (const p of this.sim.pawns.values()) if (p.state.mode === PawnMode.Dead) ignore.add(p.id);
+    const target = judgeMelee(this.sim, hit.origin, attacker.state, hit.yaw, this.history.at(rewoundTick, m.sent), ignore);
+    if (!target) return;
+    const body: ShotOnBody = { pawnId: target.pawnId, kill: false, amount: 0, headshot: false, zone: target.zone, pellets: 1, distance: target.reach };
+    this.judged.push({ m, cause: Cause.Melee, ctrlId: m.ctrl.id, team: attacker.team, seq: hit.seq, weaponId: "knife", receivedTick: now, rewoundTick, origin: hit.origin, bodies: [body] });
+  }
+
+  /**
    * Apply the tick's judged shots (DECISIONS D-044): all of them were judged first, so two players who shoot
    * each other in the same tick both land; then they apply in a fixed order (rewound time, arrival, shooter,
    * input) to the bodies as they are now. A shot on a body already dead does nothing.
@@ -412,7 +442,7 @@ export class Room {
         if (!victim || victim.state.mode === PawnMode.Dead) continue;
         const friendly = victim.team === shot.team;
         if (friendly && !this.rules.friendlyFire.actionPhase) continue; // team damage off: no damage, no marker
-        const by = { cause: Cause.Bullet, attacker: shot, headshot: body.headshot };
+        const by = { cause: shot.cause, attacker: shot, headshot: body.headshot };
         if (friendly && shot.m.reflect) {
           // Reverse friendly fire: the shooter takes it instead.
           const own = shot.m.ctrl && this.sim.pawns.get(shot.m.ctrl.possessedPawnId);
@@ -548,6 +578,7 @@ export class Room {
   private take(m: Member): QueuedInput | null {
     const next = m.queue.shift();
     if (!next) return null;
+    m.lastApplied = next;
     m.credit--;
     m.held = Math.max(0, m.held - HOLD_REFUND);
     m.lastSeq = next.cmd.seq;
@@ -567,11 +598,19 @@ export class Room {
   /** Judge the shots of the step just taken; `applied` is each member's input in that step. */
   private judgeEvents(applied: ReadonlyMap<number, { m: Member; input: QueuedInput }>) {
     for (const e of this.sim.events) {
-      if (e.kind !== "shot") continue;
+      if (e.kind !== "shot" && e.kind !== "meleeImpact") continue;
       const owner = this.sim.pawns.get(e.pawnId)?.ownerId;
-      const a = owner !== undefined && owner !== null ? applied.get(owner) : undefined;
-      // Shots only come from real inputs (weapons/step.ts), so the input is always there.
-      if (a) this.judgeShot(a.m, a.input, e);
+      if (owner === undefined || owner === null) continue;
+      const a = applied.get(owner);
+      // Shots only come from real inputs (weapons/step.ts), so the input is always there; a knife can land
+      // on a tick without one (it was swung earlier), judged with the last input's view time.
+      if (e.kind === "shot") {
+        if (a) this.judgeShot(a.m, a.input, e);
+      } else {
+        const m = a?.m ?? this.memberOf(owner);
+        const input = a?.input ?? m?.lastApplied;
+        if (m && input) this.judgeMeleeImpact(m, input, e);
+      }
     }
   }
 

@@ -10,6 +10,7 @@ import {
   decodePing,
   DT,
   encodeLabTool,
+  loadGameData,
   Msg,
   PawnMode,
   Room,
@@ -20,20 +21,27 @@ import {
 
 type Cmd = Partial<Omit<InputCmd, "seq">>;
 
-async function harness(operators: string[], opts: { seed?: number } = {}) {
-  const room = await Room.create("TEST1", "movement_lab", { lab: true, seed: opts.seed ?? 7 });
-  const clock = { t: 0 };
+/** `oneWayTicks`: messages take this many ticks each way (3 ≈ a 100 ms round trip). */
+async function harness(operators: string[], opts: { seed?: number; oneWayTicks?: number; maxRewindTicks?: number } = {}) {
+  const room = await Room.create("TEST1", "movement_lab", { lab: true, seed: opts.seed ?? 7, maxRewindTicks: opts.maxRewindTicks });
+  const clock = { t: 0, tick: 0 };
+  const delay = opts.oneWayTicks ?? 0;
   const clients = operators.map((op, i) => {
-    const toClient: Uint8Array[] = [];
-    const toServer: Uint8Array[] = [];
+    const toClient: { at: number; b: Uint8Array }[] = [];
+    const toServer: { at: number; b: Uint8Array }[] = [];
     const events: GameEvent[] = [];
-    const session = new ClientSession({ send: (b) => toServer.push(b), now: () => clock.t, onEvents: (_t, evs) => events.push(...evs) });
-    const id = room.join(`p${i}`, { send: (b) => toClient.push(b), buffered: () => 0 }, op)!;
-    return { session, id, toClient, toServer, events };
+    const session = new ClientSession({ send: (b) => toServer.push({ at: clock.tick + delay, b }), now: () => clock.t, onEvents: (_t, evs) => events.push(...evs) });
+    const id = room.join(`p${i}`, { send: (b) => toClient.push({ at: clock.tick + delay, b }), buffered: () => 0 }, op)!;
+    const lab = (t: Parameters<typeof encodeLabTool>[0]) => toServer.push({ at: clock.tick + delay, b: encodeLabTool(t) });
+    return { session, id, toClient, toServer, events, lab };
   });
+  const due = (q: { at: number; b: Uint8Array }[]) => {
+    const n = q.findIndex((m) => m.at > clock.tick);
+    return q.splice(0, n < 0 ? q.length : n).map((m) => m.b);
+  };
   const flush = () => {
     for (const c of clients) {
-      for (const b of c.toServer.splice(0)) {
+      for (const b of due(c.toServer)) {
         const r = new ByteReader(b.subarray(1));
         if (b[0] === Msg.Input) room.onInput(c.id, decodeInput(r));
         else if (b[0] === Msg.Ping) room.onPing(c.id, decodePing(r).clientTime);
@@ -42,12 +50,13 @@ async function harness(operators: string[], opts: { seed?: number } = {}) {
     }
   };
   const deliver = () => {
-    for (const c of clients) for (const b of c.toClient.splice(0)) c.session.handle(b);
+    for (const c of clients) for (const b of due(c.toClient)) c.session.handle(b);
   };
-  deliver();
+  for (let i = 0; i <= delay; i++, clock.tick++) deliver();
   await Promise.all(clients.map((c) => c.session.loaded()));
   const tick = (cmds: Cmd[] = []) => {
     clock.t += DT * 1000;
+    clock.tick++;
     clients.forEach((c, i) => c.session.ready && c.session.tick({ forward: 0, strafe: 0, yaw: 0, pitch: 0, buttons: 0, stance: Stance.Stand, lean: 0, ...cmds[i] }));
     flush();
     room.step();
@@ -56,18 +65,19 @@ async function harness(operators: string[], opts: { seed?: number } = {}) {
   const ticks = (n: number, cmds: Cmd[] = []) => {
     for (let i = 0; i < n; i++) tick(cmds);
   };
-  ticks(8);
+  ticks(8 + 3 * delay);
   const pawnOf = (c: (typeof clients)[number]) => room.sim.pawns.get(c.session.ctrl!.possessedPawnId)!;
   const info = (c: (typeof clients)[number]) => room.memberInfo(c.id)!;
   /** Two players 8 m apart on the open floor, facing each other. */
   const faceOff = () => {
-    clients[0].toServer.push(encodeLabTool({ kind: "teleport", x: 0, y: 0, z: 4, yawDeg: 180 }));
-    clients[1].toServer.push(encodeLabTool({ kind: "teleport", x: 0, y: 0, z: 12, yawDeg: 0 }));
+    clients[0].lab({ kind: "teleport", x: 0, y: 0, z: 4, yawDeg: 180 });
+    clients[1].lab({ kind: "teleport", x: 0, y: 0, z: 12, yawDeg: 0 });
   };
   return { room, clients, tick, ticks, pawnOf, info, faceOff };
 }
 
 const kinds = (evs: GameEvent[], kind: GameEvent["kind"]) => evs.filter((e) => e.kind === kind);
+const melee = loadGameData().combat.melee;
 // Aiming down sights (a rifle's ADS spread is 0): a torso shot at 8 m, or one at the head.
 const A_TORSO = { yaw: Math.PI, pitch: -0.05, buttons: Btn.Ads };
 const A_HEAD = { yaw: Math.PI, pitch: 0, buttons: Btn.Ads };
@@ -106,7 +116,7 @@ describe("damage and death through the room", () => {
     const [a] = h.clients;
     const before = { ...h.info(a) };
     for (let i = 0; i < 10; i++) {
-      a.toServer.push(encodeLabTool({ kind: "damage", pawnId: h.pawnOf(a).id, amount: 1, kill: false }));
+      a.lab({ kind: "damage", pawnId: h.pawnOf(a).id, amount: 1, kill: false });
       h.ticks(6, [{ forward: i % 2, strafe: 1 }]);
     }
     expect(h.pawnOf(a).state.hp).toBe(100);
@@ -194,7 +204,7 @@ describe("damage and death through the room", () => {
     // Put the idle shell 8 m in front of A, the active one off to the side.
     h.room.sim.teleport(idle, 0, 0, 12, 0);
     h.room.sim.teleport(active, 6, 0, 12, 0);
-    a.toServer.push(encodeLabTool({ kind: "teleport", x: 0, y: 0, z: 4, yawDeg: 180 }));
+    a.lab({ kind: "teleport", x: 0, y: 0, z: 4, yawDeg: 180 });
     h.ticks(40, [A_TORSO]);
     for (let i = 0; i < 6 && h.room.sim.pawns.get(idle)!.state.mode !== PawnMode.Dead; i++) {
       h.tick([{ ...A_TORSO, buttons: Btn.Ads | Btn.Fire }]);
@@ -205,7 +215,7 @@ describe("damage and death through the room", () => {
     expect(kinds(a.events, "shellDestroyed")[0]).toMatchObject({ pawnId: idle, ownerCtrl: ctrl.id, killerCtrl: a.session.ctrl!.id });
     expect(h.room.sim.otherPawn(ctrl.id)).toBeNull(); // nothing left to swap to
     // A headshot on the shell she's in eliminates her.
-    a.toServer.push(encodeLabTool({ kind: "teleport", x: 6, y: 0, z: 4, yawDeg: 180 }));
+    a.lab({ kind: "teleport", x: 6, y: 0, z: 4, yawDeg: 180 });
     h.ticks(40, [A_HEAD]);
     h.tick([{ ...A_HEAD, buttons: Btn.Ads | Btn.Fire }]);
     h.ticks(2, [A_HEAD]);
@@ -215,10 +225,10 @@ describe("damage and death through the room", () => {
   it("the lab damage tool only hurts your own bodies", async () => {
     const h = await harness(["sledge", "mute"]);
     const [a, b] = h.clients;
-    a.toServer.push(encodeLabTool({ kind: "damage", pawnId: h.pawnOf(b).id, amount: 50, kill: false }));
+    a.lab({ kind: "damage", pawnId: h.pawnOf(b).id, amount: 50, kill: false });
     h.ticks(2);
     expect(h.pawnOf(b).state.hp).toBe(110);
-    a.toServer.push(encodeLabTool({ kind: "damage", pawnId: h.pawnOf(a).id, amount: 0, kill: true }));
+    a.lab({ kind: "damage", pawnId: h.pawnOf(a).id, amount: 0, kill: true });
     h.ticks(2);
     expect(h.pawnOf(a).state.mode).toBe(PawnMode.Dead);
     expect(kinds(b.events, "kill")[0]).toMatchObject({ victimPawn: h.pawnOf(a).id, killerCtrl: 0, cause: 4 });
@@ -244,7 +254,7 @@ describe("down but not out through the room (Phase 3 M7)", () => {
    * overshoot 0 by more than 20 and kill outright (the overkill placeholder), one from 40 HP downs.
    */
   const weaken = (h: Awaited<ReturnType<typeof harness>>, c: (typeof h.clients)[number], hp: number, aim: Cmd = A_TORSO) => {
-    c.toServer.push(encodeLabTool({ kind: "damage", pawnId: h.pawnOf(c).id, amount: h.pawnOf(c).state.hp - hp, kill: false }));
+    c.lab({ kind: "damage", pawnId: h.pawnOf(c).id, amount: h.pawnOf(c).state.hp - hp, kill: false });
     h.ticks(4, [aim]);
     expect(h.pawnOf(c).state.hp).toBe(hp);
   };
@@ -284,7 +294,7 @@ describe("down but not out through the room (Phase 3 M7)", () => {
     h.ticks(80, [{}]); // lies down
     // C kneels in 0.8 m to B's side, facing B, and holds Interact.
     const bs = h.pawnOf(b).state;
-    c.toServer.push(encodeLabTool({ kind: "teleport", x: bs.x + 0.8, y: 0, z: bs.z, yawDeg: 90 }));
+    c.lab({ kind: "teleport", x: bs.x + 0.8, y: 0, z: bs.z, yawDeg: 90 });
     h.ticks(20, [{}, {}, { yaw: Math.PI / 2 }]);
     const before = { b: { ...h.info(b) }, c: { ...h.info(c) } };
     const hold = { yaw: Math.PI / 2, buttons: Btn.Interact };
@@ -301,7 +311,7 @@ describe("down but not out through the room (Phase 3 M7)", () => {
     const h = await harness(["sledge", "mute", "thermite"]);
     const [a, b, c] = h.clients;
     h.faceOff();
-    c.toServer.push(encodeLabTool({ kind: "teleport", x: 2, y: 0, z: 4, yawDeg: 180 }));
+    c.lab({ kind: "teleport", x: 2, y: 0, z: 4, yawDeg: 180 });
     h.ticks(40, [A_TORSO]);
     weaken(h, b, 40);
     shoot(h, A_TORSO);
@@ -335,5 +345,66 @@ describe("down but not out through the room (Phase 3 M7)", () => {
     for (let i = 0; i < 64 * 31 && h.pawnOf(b).state.mode !== PawnMode.Dead; i++) h.tick([{}, { forward: 1, strafe: i % 128 < 64 ? 1 : -1 }]);
     expect(h.pawnOf(b).state.mode).toBe(PawnMode.Dead);
     expect(kinds(a.events, "kill").at(-1)).toMatchObject({ victimPawn: h.pawnOf(b).id, killerCtrl: a.session.ctrl!.id, cause: 6 });
+  });
+});
+
+describe("the knife through the room (Phase 3 M8)", () => {
+  it("kills a standing player and finishes a downed one; the hit marker and the kill feed say knife", async () => {
+    const h = await harness(["sledge", "mute", "pulse"]);
+    const [a, b, c] = h.clients;
+    a.lab({ kind: "teleport", x: 0, y: 0, z: 12, yawDeg: 0 });
+    b.lab({ kind: "teleport", x: 0, y: 0, z: 10.9, yawDeg: 180 });
+    h.ticks(30);
+    h.tick([{ buttons: Btn.Melee }]);
+    h.ticks(20);
+    expect(h.pawnOf(b).state.mode).toBe(PawnMode.Dead);
+    expect(kinds(a.events, "hitConfirm").at(-1)).toMatchObject({ victimPawn: h.pawnOf(b).id, killed: true });
+    expect(kinds(c.events, "kill").at(-1)).toMatchObject({ victimPawn: h.pawnOf(b).id, killerCtrl: a.session.ctrl!.id, weapon: "knife", cause: 1 });
+    // C goes down where B lay, and the next swing finishes it.
+    c.lab({ kind: "teleport", x: 0, y: 0, z: 10.9, yawDeg: 90 });
+    h.ticks(10);
+    c.lab({ kind: "damage", pawnId: h.pawnOf(c).id, amount: h.pawnOf(c).state.hp, kill: false });
+    h.ticks(90);
+    expect(h.pawnOf(c).state.mode).toBe(PawnMode.Downed);
+    h.tick([{ buttons: Btn.Melee }]);
+    h.ticks(20);
+    expect(h.pawnOf(c).state.mode).toBe(PawnMode.Dead);
+  });
+
+  it("two knives in the same tick both land", async () => {
+    const h = await harness(["sledge", "mute"]);
+    const [a, b] = h.clients;
+    a.lab({ kind: "teleport", x: 0, y: 0, z: 12, yawDeg: 0 });
+    b.lab({ kind: "teleport", x: 0, y: 0, z: 10.9, yawDeg: 180 });
+    h.ticks(30, [{}, { yaw: Math.PI }]);
+    h.tick([{ buttons: Btn.Melee }, { yaw: Math.PI, buttons: Btn.Melee }]);
+    h.ticks(20, [{}, { yaw: Math.PI }]);
+    expect([h.pawnOf(a).state.mode, h.pawnOf(b).state.mode]).toEqual([PawnMode.Dead, PawnMode.Dead]);
+  });
+
+  it("at 100 ms round trip a sprinting target is knifed where the attacker saw it; without rewinding, missed", async () => {
+    const outcome = async (maxRewindTicks: number) => {
+      const h = await harness(["sledge", "mute"], { oneWayTicks: 3, maxRewindTicks });
+      const [a, b] = h.clients;
+      a.lab({ kind: "teleport", x: 0, y: 0, z: 12, yawDeg: 0 });
+      b.lab({ kind: "teleport", x: -7, y: 0, z: 10.9, yawDeg: -90 }); // facing +X, across A's view
+      h.ticks(40);
+      const run = { forward: 1, buttons: Btn.Sprint, yaw: -Math.PI / 2 };
+      // Swing so the knife lands (0.2 s later) as B, the way A draws B, crosses in front.
+      let swung = false;
+      let lagM = 0;
+      for (let i = 0; i < 160 && !swung; i++) {
+        const drawn = a.session.remoteAt(h.pawnOf(b).id, a.session.renderTick());
+        swung = drawn !== null && drawn.x >= -4.75 * melee.impactSeconds;
+        if (swung) lagM = h.pawnOf(b).state.x - drawn!.x;
+        h.tick([{ buttons: swung ? Btn.Melee : 0 }, run]);
+      }
+      h.ticks(30, [{}, run]);
+      return { killed: h.pawnOf(b).state.mode === PawnMode.Dead, lagM };
+    };
+    const rewound = await outcome(16);
+    expect(rewound.lagM).toBeGreaterThan(0.5); // B really was well ahead of where A saw it
+    expect(rewound.killed).toBe(true);
+    expect((await outcome(0)).killed).toBe(false);
   });
 });

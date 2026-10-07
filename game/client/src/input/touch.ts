@@ -20,12 +20,13 @@ const BUTTONS: TouchButton[] = [
   { label: "Prone", action: "prone", kind: "mode" },
   { label: "Lean L", action: "leanLeft", kind: "mode" },
   { label: "Lean R", action: "leanRight", kind: "mode" },
-  { label: "Use", action: "interact", kind: "tap" },
+  { label: "Use", action: "interact", kind: "hold" }, // held: a revive takes 4 s
   { label: "ADS", action: "ads", kind: "mode" },
   { label: "Cam", action: "ability", kind: "tap" },
   { label: "Fire", action: "fire", kind: "hold" },
   { label: "Reload", action: "reload", kind: "tap" },
   { label: "Swap", action: "swap", kind: "tap" },
+  { label: "Knife", action: "melee", kind: "tap" },
 ];
 
 /**

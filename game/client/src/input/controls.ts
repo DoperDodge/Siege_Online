@@ -53,6 +53,7 @@ export class Controls {
   private firePulse = false;
   private reloadPulse = false;
   private fireModePulse = false;
+  private meleePulse = false;
   /** The weapon slot asked for with 1 / 2 / the wheel, until the simulation is holding it. */
   private wantSlot: 0 | 1 | null = null;
   private sentSwap = false;
@@ -233,6 +234,9 @@ export class Controls {
       case "fireMode":
         this.fireModePulse = true;
         break;
+      case "melee":
+        this.meleePulse = true;
+        break;
       case "primary":
         this.wantSlot = 0;
         break;
@@ -285,6 +289,7 @@ export class Controls {
     if (this.held.has("fire") || this.firePulse) buttons |= Btn.Fire;
     if (this.reloadPulse) buttons |= Btn.Reload;
     if (this.fireModePulse) buttons |= Btn.FireMode;
+    if (this.meleePulse) buttons |= Btn.Melee;
     // Weapon slot: one swap press, sent only while the slot differs and no swap is already under way
     // (a press then would be ignored); released for a tick in between so the next press is a new one.
     const ws = this.weaponState();
@@ -299,6 +304,7 @@ export class Controls {
     this.firePulse = false;
     this.reloadPulse = false;
     this.fireModePulse = false;
+    this.meleePulse = false;
 
     const s = this.settings;
     let stance = this.stanceIntent;

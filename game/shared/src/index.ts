@@ -18,6 +18,7 @@ export * from "./weapons/spread.js";
 export * from "./combat/damage.js";
 export * from "./combat/hitreg.js";
 export * from "./combat/apply.js";
+export * from "./combat/melee.js";
 export * from "./sim.js";
 export * from "./net/bytes.js";
 export * from "./net/pawnState.js";

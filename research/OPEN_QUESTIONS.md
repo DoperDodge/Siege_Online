@@ -203,8 +203,9 @@ in the Shooting Range or a Custom Game with a stopwatch or a 60 fps recording.
 26. **Revive:** how close and how directly facing must you be (1.0 m, 60° placeholders)? Are the reviver and
    the downed player locked in place? Does damage to the reviver cancel it? What stance does the revived
    player get up in?
-27. **Melee:** when does the hit land (0.2 s placeholder), how wide is it (20°)? Allowed while prone, from a
-   sprint, or while aiming? Does it slow you? Does it hurt teammates?
+27. **Melee:** when does the hit land (0.2 s placeholder), how wide is it (20°)? How far does it reach (1.5 m
+   across the floor, 1.8 m up or down placeholders)? Allowed while prone, from a sprint, or while aiming? Does it
+   slow you? Does it hurt teammates (ours does, like friendly fire)?
 
 **HUD and controls (used from Phase 3's client milestone)**
 28. Crosshair options, and does the crosshair widen while moving or firing?

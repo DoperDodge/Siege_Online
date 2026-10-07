@@ -23,6 +23,7 @@
     "revive.targetLocked",
     "revive.cancelOnReviverHit",
     "melee.reach",
+    "melee.verticalReach",
     "melee.coneHalfAngleDeg",
     "melee.impactSeconds",
     "melee.cycleSeconds",
@@ -58,6 +59,7 @@
   },
   "melee": {
     "reach": 1.5,
+    "verticalReach": 1.8,
     "coneHalfAngleDeg": 20,
     "impactSeconds": 0.2,
     "cycleSeconds": 0.6,

@@ -450,7 +450,10 @@ export const combatSchema = z.strictObject({
     cancelOnReviverHit: z.boolean(),
   }),
   melee: z.strictObject({
+    /** Measured across the floor from the attacker's body, so a body lying below is in reach too. */
     reach: z.number().positive(),
+    /** How far above or below the attacker's eye the part hit may be. */
+    verticalReach: z.number().positive(),
     coneHalfAngleDeg: z.number().positive().max(90),
     impactSeconds: z.number().nonnegative(),
     cycleSeconds: secs,

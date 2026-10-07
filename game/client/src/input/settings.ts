@@ -23,6 +23,8 @@ export interface Keybinds {
   primary: string;
   secondary: string;
   fireMode: string;
+  /** The knife (Phase 3 M8). */
+  melee: string;
 }
 
 export interface Settings {
@@ -71,6 +73,7 @@ export const DEFAULT_SETTINGS: Settings = {
     primary: "Digit1",
     secondary: "Digit2",
     fireMode: "KeyB",
+    melee: "KeyV",
   },
 };
 

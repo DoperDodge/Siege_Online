@@ -39,12 +39,16 @@ export function applyDamage(sim: Sim, pawn: Pawn, d: Damage, rules?: Pick<ModeDa
   const s = pawn.state;
   const combat = sim.data.combat;
   const cause = d.cause ?? Cause.Bullet;
-  const melee = cause === Cause.Melee;
   if (s.mode === PawnMode.Dead) return { outcome: "ignored", removed: 0 };
+  if (cause === Cause.Melee) {
+    // The knife: lethal on bodies standing or down (core_mechanics.md §10.1, §12), or a set amount.
+    const v = isDowned(s) ? combat.melee.vsDowned : combat.melee.vsStanding;
+    d = v === "kill" ? { ...d, kill: true } : { ...d, amount: v };
+  }
   if (isDowned(s)) {
     if (s.invulnTicks > 0) return { outcome: "ignored", removed: 0 };
     // (The pool bleeds in fractions; what it loses is reported in whole points.)
-    if (d.kill || (melee && combat.melee.vsDowned === "kill")) return kill(sim, pawn, Math.ceil(s.downHp));
+    if (d.kill) return kill(sim, pawn, Math.ceil(s.downHp));
     if (d.amount <= 0) return { outcome: "ignored", removed: 0 };
     if (s.downHp > d.amount) {
       s.downHp = Math.fround(s.downHp - d.amount);
@@ -52,7 +56,7 @@ export function applyDamage(sim: Sim, pawn: Pawn, d: Damage, rules?: Pick<ModeDa
     }
     return kill(sim, pawn, Math.ceil(s.downHp));
   }
-  if (d.kill || (melee && combat.melee.vsStanding === "kill")) return kill(sim, pawn, s.hp);
+  if (d.kill) return kill(sim, pawn, s.hp);
   if (d.amount <= 0) return { outcome: "ignored", removed: 0 };
   if (s.hp > d.amount) {
     s.hp -= d.amount;

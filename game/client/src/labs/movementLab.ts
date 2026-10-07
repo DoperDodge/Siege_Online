@@ -78,6 +78,7 @@ app.innerHTML = `
   <div class="hud hud-tr"><span class="fps"></span><div class="net"></div><div class="killfeed"></div></div>
   <div class="hud hud-br"><div class="weapon-name"></div><div class="ammo"><span class="ammo-loaded"></span><span class="ammo-reserve"></span></div><div class="weapon-state"></div></div>
   <div class="muzzle"></div>
+  <div class="slash"></div>
   <div class="hud hud-bottom">
     <div class="stances"><span data-s="0">STAND</span><span data-s="1">CROUCH</span><span data-s="2">PRONE</span></div>
     <div class="stance-bar"><div></div></div>
@@ -114,6 +115,7 @@ let scripted: Partial<InputCmd> | null = null;
 let shownRenderTick = 0;
 let clickViewTick: number | null = null;
 let muzzleUntil = 0;
+let slashUntil = 0;
 /** How your current body died, for the respawn message (null while alive, or for a fall). */
 let deathText: string | null = null;
 /** Recoil the viewed body's view took this tick (added to the mouse view so the next input includes it). */
@@ -490,6 +492,8 @@ function renderHelp() {
       ${row(`<kbd>${keyLabel(k.reload)}</kbd>`, "Reload")}
       ${row(`<kbd>${keyLabel(k.primary)}</kbd> / <kbd>${keyLabel(k.secondary)}</kbd> / wheel`, "Primary / secondary weapon")}
       ${row(`<kbd>${keyLabel(k.fireMode)}</kbd>`, "Fire mode (auto / burst / single, where the weapon has them)")}
+      ${row(`<kbd>${keyLabel(k.melee)}</kbd>`, "Knife: kills anyone in reach in front of you, standing or down (0.6 s a swing)")}
+      ${row(`Hold <kbd>${keyLabel(k.interact)}</kbd>`, "Revive a downed teammate (4 s, facing them)")}
       ${row("<kbd>F3</kbd> / <kbd>F4</kbd>", "Hitboxes / third-person view")}
       ${row("<kbd>Esc</kbd>", "Pause: settings, operator, go-to menu")}
     </table>
@@ -758,6 +762,7 @@ function updateHud(p: Pawn) {
   }
   $(".flash").classList.toggle("show", performance.now() < flashUntil);
   $(".muzzle").classList.toggle("show", performance.now() < muzzleUntil);
+  $(".slash").classList.toggle("show", performance.now() < slashUntil);
 
   // Weapon: name, rounds in it / in reserve, fire mode, and what it's doing.
   const w = p.loadout?.weapons[s.slot];
@@ -1167,6 +1172,7 @@ function fire() {
 function onWeaponEvents(events: readonly SimEvent[]) {
   for (const e of events) {
     if (e.kind === "shot" && e.pawnId === ctrl.possessedPawnId) muzzleUntil = performance.now() + 50;
+    else if (e.kind === "meleeImpact" && e.pawnId === ctrl.possessedPawnId) slashUntil = performance.now() + 180; // placeholder swipe
     else if (e.kind === "dry" && e.pawnId === ctrl.possessedPawnId) flash("Empty", "info");
     else if (e.kind === "kick" && e.pawnId === sim.viewedPawnId(ctrl.id)) {
       tickKick.yaw += e.dYaw;
@@ -1264,7 +1270,7 @@ function onGameEvents(tick: number, events: GameEvent[]) {
       const victimCtrl = e.kind === "kill" ? e.victimCtrl : e.ownerCtrl;
       const victim = nameOfCtrl(victimCtrl);
       const killer = e.killerCtrl ? nameOfCtrl(e.killerCtrl) : null;
-      const how = e.weapon ? ` [${weaponName(e.weapon)}${e.headshot ? ", headshot" : ""}]` : "";
+      const how = e.weapon ? ` [${e.weapon === "knife" ? "knife" : weaponName(e.weapon)}${e.headshot ? ", headshot" : ""}]` : "";
       const text =
         e.kind === "shellDestroyed"
           ? `${killer ?? "?"}${how} destroyed ${victim}'s idle shell`
