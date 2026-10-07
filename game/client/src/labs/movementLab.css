@@ -59,11 +59,14 @@ html, body { overflow: hidden; overscroll-behavior: none; touch-action: none; us
 .ammo.low .ammo-loaded { color: var(--bad); }
 .ammo-reserve { font-size: 16px; color: var(--muted); }
 .weapon-state { font: 12px var(--mono); color: var(--muted); }
-.muzzle { position: fixed; left: calc(50% + 70px); top: calc(50% + 60px); width: 70px; height: 70px; margin: -35px 0 0 -35px; border-radius: 50%; background: radial-gradient(circle, rgba(255, 244, 200, 0.95), rgba(255, 170, 60, 0.6) 35%, rgba(255, 120, 0, 0) 70%); opacity: 0; pointer-events: none; }
-.muzzle.show { opacity: 1; }
-/* Placeholder knife swipe (M9 brings the real viewmodel). */
-.slash { position: fixed; left: 50%; top: 50%; width: 240px; height: 120px; margin: -60px 0 0 -120px; border-top: 6px solid rgba(255, 255, 255, 0.85); border-radius: 50% 50% 0 0; transform: rotate(-18deg); opacity: 0; pointer-events: none; filter: blur(1px); }
-.slash.show { opacity: 1; }
+/* Down the sights: a red dot or a cross (1× sights), or a scope ring with a cross (magnified). */
+.reticle { position: fixed; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; }
+.reticle[data-kind="dot"]::before { content: ""; position: absolute; width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px; border-radius: 50%; background: #ff3030; box-shadow: 0 0 4px #ff3030; }
+.reticle[data-kind="cross"]::before { content: ""; position: absolute; width: 26px; height: 1px; margin: 0 0 0 -13px; background: #111; }
+.reticle[data-kind="cross"]::after { content: ""; position: absolute; width: 1px; height: 26px; margin: -13px 0 0 0; background: #111; }
+.scope { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(circle at center, transparent 0, transparent min(34vh, 34vw), rgba(0, 0, 0, 0.92) calc(min(34vh, 34vw) + 2px)); }
+.scope::before { content: ""; position: absolute; left: 50%; top: 50%; width: min(68vh, 68vw); height: 1px; transform: translate(-50%, -50%); background: rgba(0, 0, 0, 0.8); }
+.scope::after { content: ""; position: absolute; left: 50%; top: 50%; width: 1px; height: min(68vh, 68vw); transform: translate(-50%, -50%); background: rgba(0, 0, 0, 0.8); }
 
 .lean-ind { position: fixed; top: 50%; transform: translateY(-50%); font-size: 28px; color: var(--accent); opacity: 0; pointer-events: none; text-shadow: 0 1px 3px #000; }
 .lean-l { left: calc(50% - 90px); }

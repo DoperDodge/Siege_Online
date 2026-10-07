@@ -2,6 +2,7 @@ export * from "./core/constants.js";
 export * from "./core/math.js";
 export * from "./data/schemas.js";
 export * from "./data/load.js";
+export * from "./data/presentation.js";
 export * from "./physics/rapier.js";
 export * from "./level/builder.js";
 export * from "./player/types.js";

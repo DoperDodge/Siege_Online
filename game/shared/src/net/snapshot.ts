@@ -19,7 +19,7 @@
 //   bit3 pitch             : varu zigzag(Δ), pitch · 16384/π
 //   bit4 flags             : u16 stance | stanceFrom<<2 | mode<<4 (3 bits) | sprinting<<7 | grounded<<8
 //   bit6 lean (i8 ·127)   bit7 stanceT (u8 ·255)   bit8 tilts (3 × i8 ·128)   bit9 tuck (u8 ·255)
-//   bit10 aux              : u8, bit0 = aiming, bit4 = being revived (bits 1–3 and 5–7 free for weapon state)
+//   bit10 aux              : u8, bit0 = aiming, bit1 = secondary weapon in hand, bit4 = being revived (2–3, 5–7 free)
 // TCP delivers every snapshot in order, so deltas are against the last one *sent*, never lost ones.
 import { lerp, wrapAngle } from "../core/math.js";
 import { initialPawnState } from "../player/pawn.js";
@@ -39,6 +39,7 @@ const YAW_UNITS = 65536;
 const PITCH_SCALE = 16384 / Math.PI;
 const TAU = 2 * Math.PI;
 const MAX_RECORDS = 64;
+const AUX_SECONDARY = 2;
 const AUX_REVIVED = 16;
 /** `revivedBy` of a remote body someone is reviving (the reviver's id isn't sent). */
 export const REVIVER_UNKNOWN = 0xffffffff;
@@ -80,7 +81,7 @@ export function quantizeRemote(s: PawnState): RemoteQ {
     tiltSide: i8(s.tiltSide, 128),
     tuck: round(s.tuck * 255),
     flags: s.stance | (s.stanceFrom << 2) | (s.mode << 4) | (s.sprinting ? 128 : 0) | (s.grounded ? 256 : 0),
-    aux: (s.prevButtons & Btn.Ads ? 1 : 0) | (s.revivedBy !== 0 ? AUX_REVIVED : 0),
+    aux: (s.prevButtons & Btn.Ads ? 1 : 0) | (s.slot === 1 ? AUX_SECONDARY : 0) | (s.revivedBy !== 0 ? AUX_REVIVED : 0),
   };
 }
 
@@ -100,6 +101,7 @@ export function remoteState(q: RemoteQ, maxHp = 100): PawnState {
   s.sprinting = (q.flags & 128) !== 0;
   s.grounded = (q.flags & 256) !== 0;
   s.prevButtons = q.aux & 1 ? Btn.Ads : 0;
+  s.slot = q.aux & AUX_SECONDARY ? 1 : 0; // (others see which weapon is out)
   // Someone is reviving this body (who, a remote client doesn't need: it can't start a second revive).
   s.revivedBy = q.aux & AUX_REVIVED ? REVIVER_UNKNOWN : 0;
   return s;

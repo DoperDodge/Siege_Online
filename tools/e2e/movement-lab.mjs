@@ -74,6 +74,8 @@ try {
   // The scripted run takes ~15 s of simulated time; software rendering may run it slower.
   await page.waitForFunction(() => window.__lab.report.done, null, { timeout: 120000, polling: 250 });
   const report = await page.evaluate(() => ({ ...window.__lab.report, frames: window.__lab.frames }));
+  // Frame rate as drawn here (software rendering, 1280×720): a CPU number, not a GPU one (PLAN §18).
+  result.fps = Number(/(\d+) fps/.exec((await page.locator(".fps").textContent()) ?? "")?.[1] ?? NaN);
   await page.screenshot({ path: shot("lab-tower-lean.png") });
   await page.evaluate(() => (window.__lab.view = { thirdPerson: true, hitboxes: true }));
   await sleep(400);

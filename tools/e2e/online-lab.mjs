@@ -101,13 +101,15 @@ try {
   await sleep(600);
   const bSeesEnd = (await net(b)).remotes[0].state;
   result.hud = { a: await a.locator(".hud-tr").textContent(), b: await b.locator(".hud-tr").textContent() };
+  const fps = (t) => Number(/(\d+) fps/.exec(t ?? "")?.[1] ?? NaN);
+  result.fps = { a: fps(result.hud.a), b: fps(result.hud.b) }; // two software-rendered pages sharing a CPU
   result.positions.aEnd = { x: aEnd.x, z: aEnd.z };
   result.positions.bSeesAEnd = { x: bSeesEnd.x, z: bSeesEnd.z };
   await b.screenshot({ path: shot("online-b-sees-a.png") });
   await a.screenshot({ path: shot("online-a.png") });
 
   const rewoundMs = shotResult ? ((shotResult.serverTick - shotResult.rewoundTick) * 1000) / 64 : null;
-  result.shot = { fired, aXAtFire: aAtFire.x, hit: shotResult?.hit, rewoundMs, targetName: shotResult?.targetName };
+  result.shot = { fired, aXAtFire: aAtFire.x, hit: shotResult?.hit, rewoundMs, targetName: shotResult?.targetName, origin: shotResult?.origin, dir: shotResult?.dir, wall: shotResult?.wallDistance, claimedMs: shotResult ? ((shotResult.serverTick - shotResult.viewTick) * 1000) / 64 : null };
   result.checks.shotFired = fired !== null;
   result.checks.movingTargetHit = shotResult?.hit !== null && shotResult?.hit !== undefined;
   // Lag compensation did the work: by the time the shot reached the server, A had moved on well past

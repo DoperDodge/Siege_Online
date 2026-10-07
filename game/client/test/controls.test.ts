@@ -61,3 +61,52 @@ describe("Interact (DECISIONS D-049)", () => {
     expect(c.sample(8).buttons & Btn.Interact).toBe(0);
   });
 });
+
+describe("weapon buttons (DECISIONS D-055)", () => {
+  it("Fire is held; a click shorter than a tick still fires once", () => {
+    const c = make({});
+    c.press("fire");
+    for (let i = 1; i <= 3; i++) expect(c.sample(i).buttons & Btn.Fire).toBe(Btn.Fire);
+    c.release("fire");
+    expect(c.sample(4).buttons & Btn.Fire).toBe(0);
+    c.press("fire");
+    c.release("fire"); // between two ticks
+    expect(c.sample(5).buttons & Btn.Fire).toBe(Btn.Fire);
+    expect(c.sample(6).buttons & Btn.Fire).toBe(0);
+  });
+
+  it("reload, fire mode and the knife go out for exactly one tick, however long the key is held", () => {
+    for (const [action, btn] of [
+      ["reload", Btn.Reload],
+      ["fireMode", Btn.FireMode],
+      ["melee", Btn.Melee],
+    ] as const) {
+      const c = make({});
+      c.press(action);
+      expect(c.sample(1).buttons & btn).toBe(btn);
+      expect(c.sample(2).buttons & btn).toBe(0); // still held: no repeat
+      c.release(action);
+      c.press(action);
+      c.release(action);
+      expect(c.sample(3).buttons & btn).toBe(btn); // a tap between ticks
+      expect(c.sample(4).buttons & btn).toBe(0);
+    }
+  });
+
+  it("a weapon key sends one swap while the other weapon is wanted, never while a swap is under way", () => {
+    const c = make({});
+    let state = { slot: 0, equipping: false };
+    c.weaponState = () => state;
+    c.press("primary"); // already in hand
+    expect(c.sample(1).buttons & Btn.Swap).toBe(0);
+    c.press("secondary");
+    expect(c.sample(2).buttons & Btn.Swap).toBe(Btn.Swap);
+    state = { slot: 0, equipping: true }; // the swap has started
+    expect(c.sample(3).buttons & Btn.Swap).toBe(0);
+    state = { slot: 1, equipping: true };
+    expect(c.sample(4).buttons & Btn.Swap).toBe(0); // arrived: nothing more to send
+    state = { slot: 1, equipping: false };
+    c.press("swap"); // the wheel: the other one
+    expect(c.sample(5).buttons & Btn.Swap).toBe(Btn.Swap);
+  });
+});

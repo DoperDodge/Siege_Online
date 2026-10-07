@@ -2,7 +2,7 @@
 // simulation only ever sees the desired stance/lean (PLAN §7). Camera orientation uses the latest mouse
 // position every frame; the simulation samples it once per tick.
 import { Btn, clamp, DEG, quantizeInput, Stance, wrapAngle, type InputCmd } from "@redmond/shared";
-import type { Keybinds, Settings } from "./settings.js";
+import { adsSensitivity, type Keybinds, type Settings } from "./settings.js";
 
 export type Action = keyof Keybinds | "ads" | "fire" | "swap" | "hitboxes" | "thirdPerson" | "help" | "settings";
 
@@ -38,7 +38,7 @@ export class Controls {
    * The predicted weapon state (slot in hand, and whether a swap is still bringing it up), so 1 / 2 / the
    * wheel turn into a single swap press only when the slot would change (C16 in the Phase 3 plan).
    */
-  weaponState: () => { slot: number; equipping: boolean } | null = () => null;
+  weaponState: () => { slot: number; equipping: boolean; zoom?: number } | null = () => null;
   /** Touch joystick, -1..1 each. */
   touchMove = { x: 0, y: 0 };
   private held = new Set<Action>();
@@ -165,7 +165,7 @@ export class Controls {
    * the turn rate doesn't depend on the frame rate.
    */
   look(dx: number, dy: number, scale = 1) {
-    const sens = this.settings.sensitivity * (this.adsActive ? this.settings.adsSensitivityScale : 1) * scale * DEG;
+    const sens = this.settings.sensitivity * (this.adsActive ? adsSensitivity(this.settings, this.weaponState()?.zoom ?? 1) : 1) * scale * DEG;
     this.yaw = wrapAngle(this.yaw - dx * sens);
     this.pitch = clamp(this.pitch - dy * sens * (this.settings.invertY ? -1 : 1), this.limits.pitchMin, this.limits.pitchMax);
   }

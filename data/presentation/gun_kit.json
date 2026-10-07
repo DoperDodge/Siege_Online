@@ -1,0 +1,44 @@
+{
+  "_doc": "Placeholder gun shapes for the first- and third-person views (Phase 3 M9; PLAN §10 presentation): every weapon class and attachment is a few boxes and cylinders until the art pass (Phase 10). Metres, in the gun's own frame: +x right, +y up, -z toward the muzzle; the origin is the hand on the grip. Presentation only: the simulation never reads this file and it is not part of the data hash. `viewmodel` places the gun in front of the camera (hip, sprint and ADS poses) and sets the viewmodel's own field of view.",
+  "classes": {
+    "assault_rifle": { "receiver": [0.055, 0.085, 0.4], "receiverZ": -0.06, "barrel": { "length": 0.26, "radius": 0.011 }, "stock": [0.045, 0.075, 0.22], "mag": [0.026, 0.15, 0.07], "magZ": -0.13, "magTilt": 0.18, "color": "#2f3338" },
+    "marksman_rifle": { "receiver": [0.055, 0.085, 0.46], "receiverZ": -0.08, "barrel": { "length": 0.34, "radius": 0.012 }, "stock": [0.045, 0.08, 0.24], "mag": [0.026, 0.11, 0.07], "magZ": -0.14, "magTilt": 0.05, "color": "#3a3529" },
+    "lmg": { "receiver": [0.07, 0.1, 0.48], "receiverZ": -0.06, "barrel": { "length": 0.32, "radius": 0.014 }, "stock": [0.05, 0.085, 0.24], "mag": [0.09, 0.11, 0.11], "magZ": -0.08, "magTilt": 0, "color": "#2b2f2a" },
+    "smg": { "receiver": [0.05, 0.075, 0.3], "receiverZ": -0.03, "barrel": { "length": 0.12, "radius": 0.01 }, "stock": [0.035, 0.06, 0.16], "mag": [0.024, 0.16, 0.05], "magZ": -0.1, "magTilt": 0.12, "color": "#33363b" },
+    "machine_pistol": { "receiver": [0.04, 0.06, 0.2], "receiverZ": 0.0, "barrel": { "length": 0.05, "radius": 0.009 }, "stock": null, "mag": [0.024, 0.12, 0.035], "magZ": 0.01, "magTilt": 0.0, "color": "#2c2e33" },
+    "shotgun": { "receiver": [0.055, 0.08, 0.34], "receiverZ": -0.03, "barrel": { "length": 0.4, "radius": 0.014 }, "stock": [0.045, 0.08, 0.24], "mag": [0.028, 0.028, 0.32], "magZ": -0.32, "magTilt": 0, "color": "#3b3226" },
+    "slug_shotgun": { "receiver": [0.055, 0.08, 0.34], "receiverZ": -0.03, "barrel": { "length": 0.38, "radius": 0.015 }, "stock": [0.045, 0.08, 0.24], "mag": [0.028, 0.028, 0.3], "magZ": -0.3, "magTilt": 0, "color": "#3b3226" },
+    "handgun": { "receiver": [0.032, 0.045, 0.19], "receiverZ": -0.02, "barrel": { "length": 0.015, "radius": 0.008 }, "stock": null, "mag": [0.026, 0.1, 0.04], "magZ": 0.02, "magTilt": 0.25, "color": "#2a2c30" },
+    "hand_cannon": { "receiver": [0.04, 0.055, 0.24], "receiverZ": -0.03, "barrel": { "length": 0.06, "radius": 0.012 }, "stock": null, "mag": [0.03, 0.11, 0.045], "magZ": 0.02, "magTilt": 0.25, "color": "#4a4c50" },
+    "shield": { "receiver": [0.032, 0.045, 0.19], "receiverZ": -0.02, "barrel": { "length": 0.015, "radius": 0.008 }, "stock": null, "mag": [0.026, 0.1, 0.04], "magZ": 0.02, "magTilt": 0.25, "color": "#2a2c30" }
+  },
+  "sights": {
+    "iron": { "kind": "posts", "height": 0.022 },
+    "nonmag": { "kind": "box", "size": [0.036, 0.042, 0.06], "reticle": "dot" },
+    "magnified": { "kind": "tube", "radius": 0.021, "length": 0.15, "reticle": "cross" },
+    "telescopic": { "kind": "tube", "radius": 0.025, "length": 0.21, "reticle": "cross" }
+  },
+  "barrels": {
+    "suppressor": { "radius": 0.021, "length": 0.17 },
+    "extended_barrel": { "radius": 0.011, "length": 0.09 },
+    "muzzle_brake": { "radius": 0.018, "length": 0.05 },
+    "compensator": { "radius": 0.016, "length": 0.045 },
+    "flash_hider": { "radius": 0.015, "length": 0.055 }
+  },
+  "grips": {
+    "vertical": [0.024, 0.075, 0.026],
+    "angled": [0.024, 0.04, 0.07],
+    "horizontal": [0.02, 0.02, 0.06]
+  },
+  "underbarrel": { "laser": [0.022, 0.024, 0.05] },
+  "colors": { "attachment": "#1d2024", "laser": "#ff2a2a", "knife": "#c9ccd1" },
+  "viewmodel": {
+    "fovDeg": 54,
+    "hip": [0.15, -0.16, -0.36],
+    "sprint": { "offset": [0.05, -0.12, 0.06], "yawDeg": 35, "pitchDeg": -18 },
+    "downFor": { "equip": 0.25, "reload": 0.08 },
+    "adsDistance": 0.24,
+    "kickBack": 0.035,
+    "kickPitchDeg": 4
+  }
+}

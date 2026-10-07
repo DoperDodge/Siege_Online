@@ -1,7 +1,8 @@
 // Three.js scene for labs: greybox level colored by surface class (PLAN §9.1), labels, pawn bodies
 // built from hitbox capsules, and an F3 hitbox visualizer.
 import * as THREE from "three";
-import { poseHitboxes, type BuiltLevel, type GameData, type Hitbox, type PawnState, type Renderable } from "@redmond/shared";
+import { eyePose, isDowned, PawnMode, poseHitboxes, type BuiltLevel, type GameData, type Hitbox, type PawnState, type Renderable } from "@redmond/shared";
+import { buildGun, gunKey, type GunLook, type GunModel } from "./gunKit.js";
 
 export const SURFACE_COLORS: Record<Renderable["surface"], number> = {
   SOFT_WALL: 0xe6c34a,
@@ -28,6 +29,27 @@ export function createRenderer(container: HTMLElement): THREE.WebGLRenderer {
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   container.appendChild(renderer.domElement);
   return renderer;
+}
+
+/**
+ * Draw everything in `scene` once, hidden things included, so every shader it needs is compiled and checked
+ * now. A shader's first draw blocks until it is ready (hundreds of ms on software rendering; compile() alone
+ * doesn't finish the job there), and in the middle of a fight that frame would also hold back your input.
+ * Lights keep their state: showing one would change the light count every shader is built for.
+ */
+export function warmShaders(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera) {
+  const saved: [THREE.Object3D, boolean, boolean][] = [];
+  scene.traverse((o) => {
+    if ((o as THREE.Light).isLight) return;
+    saved.push([o, o.visible, o.frustumCulled]);
+    o.visible = true;
+    o.frustumCulled = false;
+  });
+  renderer.render(scene, camera);
+  for (const [o, visible, culled] of saved) {
+    o.visible = visible;
+    o.frustumCulled = culled;
+  }
 }
 
 export function createLabScene(level: BuiltLevel): THREE.Scene {
@@ -143,6 +165,9 @@ export class PawnView {
   private readonly wireParts: CapsuleParts[] = [];
   private readonly tag: THREE.Sprite | null;
   private readonly materials: THREE.Material[];
+  private gun: GunModel | null = null;
+  private gunLook = "";
+  private gunVisible = false;
 
   /** `name` puts a name tag over the head (other players online); `wireColor` colours the hitbox view. */
   constructor(
@@ -177,10 +202,50 @@ export class PawnView {
       const head = parts[0]; // the head capsule comes first
       this.tag.position.set(head.b[0], Math.max(head.a[1], head.b[1]) + head.radius + 0.3, head.b[2]);
     }
+    // The gun it holds: in front of the chest along the view (placeholder until the art pass); none while
+    // down or dead.
+    this.gunVisible = this.gun !== null && state.mode !== PawnMode.Dead && !isDowned(state);
+    if (this.gun) {
+      this.gun.group.visible = this.gunVisible;
+      const eye = eyePose(data.movement, data.hitboxes, state).pos;
+      const rot = new THREE.Euler(state.pitch, state.yaw, 0, "YXZ");
+      this.gun.group.position.set(...eye).add(new THREE.Vector3(0.16, -0.22, -0.2).applyEuler(rot));
+      this.gun.group.rotation.copy(rot);
+    }
+  }
+
+  /** The gun this body holds (from the roster's loadout), or none. */
+  setWeapon(look: GunLook | null) {
+    const key = look ? gunKey(look) : "";
+    if (key === this.gunLook) return;
+    this.gun?.dispose();
+    this.gun = look ? buildGun(look) : null;
+    this.gunLook = key;
+    if (this.gun) this.body.add(this.gun.group);
+  }
+
+  /** Where this body's laser leaves from, in the world (null without a visible laser). */
+  laserOrigin(): THREE.Vector3 | null {
+    if (!this.gun?.laser || !this.gunVisible || !this.body.visible) return null;
+    this.gun.group.updateMatrixWorld();
+    return this.gun.laser.clone().applyMatrix4(this.gun.group.matrixWorld);
+  }
+
+  /**
+   * First person: our own body draws nothing (no colour, no depth) but still casts its shadow
+   * (core_mechanics.md §15: you see your own shadow), and its gun is the viewmodel instead.
+   */
+  setFirstPerson(on: boolean) {
+    for (const m of this.materials.slice(0, 2)) {
+      m.colorWrite = !on;
+      m.depthWrite = !on;
+    }
+    if (this.gun) this.gun.group.visible = this.gunVisible && !on;
   }
 
   /** Remove from the scene and free the GPU resources it owns. */
   dispose() {
+    this.gun?.dispose();
     this.scene.remove(this.body, this.wire);
     for (const m of this.materials) m.dispose();
     if (this.tag) {

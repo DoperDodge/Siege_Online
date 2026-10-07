@@ -22,7 +22,7 @@ Built in milestones; each one keeps the tests, both e2e scripts and the netsim g
 | M6 Hit registration, damage, death | ✅ every pellet judged on the server; kills, hit markers, kill feed; no new mispredictions |
 | M7 DBNO and revive | ✅ down, crawl and bleed; hold F for 4 s to revive; predicted with no mispredictions |
 | M8 Melee | ✅ V swings the knife: kills standing or downed, judged with lag compensation |
-| M9 Client presentation (viewmodel, HUD, hit markers) | ⏳ |
+| M9 Client presentation (viewmodel, HUD, hit markers) | ✅ a gun in your hands, sights, flashes, tracers and bullet marks; ADS sensitivity per zoom |
 | M10 Range Lab (dummies) | ⏳ |
 | M11 End-to-end tests, netsim gates, docs | ⏳ |
 
@@ -102,10 +102,25 @@ Built in milestones; each one keeps the tests, both e2e scripts and the netsim g
 - **The knife (M8, D-050):** **V** (or the Knife button on touch) swings; it lands 0.2 s later and kills anyone
   standing or down within reach in front of you, judged by the server against what you saw (at 100 ms round
   trip a test knifes a sprinting target where the attacker saw it, and misses it with rewinding off). It ends a
-  sprint, cancels a reload and holds fire. Placeholder swipe on screen until M9.
+  sprint, cancels a reload and holds fire.
+- **What you see (M9, D-055, D-059):** a placeholder gun in your hands, built from boxes for each weapon type
+  with the sight, barrel, grip and laser you picked; it bobs as you walk, lowers when you sprint, comes up on
+  a swap, dips for a reload (the magazine comes out) and kicks when you fire, and the knife swipes across. Down
+  the sights you look through the sight: a red dot or a cross on the non-magnifying sights, a scope view on
+  2.5× and 3.5×, with the zoom from M5. Muzzle flashes light the room, tracers and bullet marks show where shots
+  went (nothing from others with a suppressor), lasers put a red dot on the walls, and you see your own
+  shadow. The pause menu sets ADS sensitivity separately for 1×, 2.5× and 3.5× sights (your old single setting
+  carries over). The HUD pieces are now separate modules the Range Lab will reuse.
+- **A first-shot stall, found and fixed:** the first shot used to compile its effects' shaders mid-frame,
+  which froze software-rendered pages for ~300 ms and delayed that shot's input past the 250 ms rewind cap,
+  so the browser test's moving-target shot missed. Every effect shader is now drawn once at load, and the
+  effects are pooled (they never allocate during a fight).
+- **Frame rate (software rendering, so CPU-bound; real GPUs are measured on your PC, PLAN §18):** the Movement
+  Lab at 1280×720 draws 13.5 fps against 15.7 before M9 (the gun pass costs about 1 fps, the flash light
+  0.5); the two online test pages at 480×270 sharing one CPU draw 13 fps each.
 - **Movement fix (D-057):** sprinting diagonally into a wall could, rarely, drop you 0.29 m into the floor in
   one tick. Fixed, with a regression test.
-- 243 unit tests.
+- 268 unit tests (29 of them for the page: settings, controls, HUD maths, guns and effects).
 
 ---
 

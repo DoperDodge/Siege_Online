@@ -85,6 +85,18 @@ describe("snapshot codec", () => {
     expect(() => new SnapshotDecoder().decode(new SnapshotEncoder().encode({ tick: 2, ackSeq: 0, idled: false, queueDepth: 2 }, null, new Map([[5, bad]])))).toThrow(ProtocolError);
   });
 
+  it("others see which weapon is in hand and whether it's aimed (Phase 3 M9: the gun drawn on a body)", () => {
+    for (const [slot, ads] of [
+      [0, false],
+      [1, false],
+      [1, true],
+    ] as const) {
+      const s = { ...initialPawnState(1, 0, 2, 0, 100), slot, prevButtons: ads ? Btn.Ads : 0 };
+      const back = remoteState(quantizeRemote(s));
+      expect([back.slot, (back.prevButtons & Btn.Ads) !== 0]).toEqual([slot, ads]);
+    }
+  });
+
   it("carries an exact correction for the receiving player (both Skopós shells)", async () => {
     const { sim, ctrls } = await crowd(3);
     for (let t = 0; t < 90; t++) play(sim, ctrls, t);
