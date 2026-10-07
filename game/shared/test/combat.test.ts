@@ -237,3 +237,103 @@ describe("damage and death through the room", () => {
     expect(await run()).toBe(one);
   });
 });
+
+describe("down but not out through the room (Phase 3 M7)", () => {
+  /**
+   * Bring a player's own body down to `hp` with the lab tool: three 47-damage rifle shots on 110 HP would
+   * overshoot 0 by more than 20 and kill outright (the overkill placeholder), one from 40 HP downs.
+   */
+  const weaken = (h: Awaited<ReturnType<typeof harness>>, c: (typeof h.clients)[number], hp: number, aim: Cmd = A_TORSO) => {
+    c.toServer.push(encodeLabTool({ kind: "damage", pawnId: h.pawnOf(c).id, amount: h.pawnOf(c).state.hp - hp, kill: false }));
+    h.ticks(4, [aim]);
+    expect(h.pawnOf(c).state.hp).toBe(hp);
+  };
+  /** Fire one aimed shot from client 0 (sights already up), then let it land. */
+  const shoot = (h: Awaited<ReturnType<typeof harness>>, aim: Cmd, others: Cmd[] = []) => {
+    h.tick([{ ...aim, buttons: Btn.Ads | Btn.Fire }, ...others]);
+    h.ticks(12, [aim, ...others]);
+  };
+
+  it("going down costs the victim one forced correction and then none while crawling; everyone hears of it", async () => {
+    const h = await harness(["sledge", "mute", "pulse"]);
+    const [a, b, c] = h.clients;
+    h.faceOff();
+    h.ticks(40, [A_TORSO]);
+    weaken(h, b, 40);
+    shoot(h, A_TORSO);
+    expect(h.pawnOf(b).state.mode).toBe(PawnMode.Downed);
+    const down = kinds(c.events, "down")[0] as Extract<GameEvent, { kind: "down" }>;
+    expect(down).toMatchObject({ victimPawn: h.pawnOf(b).id, downerCtrl: a.session.ctrl!.id, weapon: "l85a2" });
+    expect(kinds(a.events, "hitConfirm").some((e) => (e as Extract<GameEvent, { kind: "hitConfirm" }>).downed)).toBe(true);
+    const before = { ...h.info(b) };
+    // Crawl about for 5 s: predicted exactly, bleed and all.
+    for (let i = 0; i < 320; i++) h.tick([A_TORSO, { forward: i % 100 < 60 ? 1 : 0, strafe: i % 50 < 25 ? 1 : -1, yaw: (i / 40) % 6 }]);
+    expect(h.info(b).corrections - before.corrections).toBe(0);
+    expect(b.session.sim!.pawns.get(b.session.ctrl!.possessedPawnId)!.state.downHp).toBe(h.pawnOf(b).state.downHp);
+    expect(h.pawnOf(b).state.downHp).toBeLessThan(20);
+  });
+
+  it("a revive: the downed player's client gets two corrections (start, end), the reviver's none", async () => {
+    // Sledge and Thermite are teammates; Pulse shoots Sledge down.
+    const h = await harness(["pulse", "sledge", "thermite"]);
+    const [a, b, c] = h.clients;
+    h.faceOff();
+    h.ticks(40, [A_TORSO]);
+    for (let i = 0; i < 6 && h.pawnOf(b).state.mode === PawnMode.Walk; i++) shoot(h, A_TORSO);
+    expect(h.pawnOf(b).state.mode).toBe(PawnMode.Downed);
+    h.ticks(80, [{}]); // lies down
+    // C kneels in 0.8 m to B's side, facing B, and holds Interact.
+    const bs = h.pawnOf(b).state;
+    c.toServer.push(encodeLabTool({ kind: "teleport", x: bs.x + 0.8, y: 0, z: bs.z, yawDeg: 90 }));
+    h.ticks(20, [{}, {}, { yaw: Math.PI / 2 }]);
+    const before = { b: { ...h.info(b) }, c: { ...h.info(c) } };
+    const hold = { yaw: Math.PI / 2, buttons: Btn.Interact };
+    for (let i = 0; i < 280 && h.pawnOf(b).state.mode === PawnMode.Downed; i++) h.tick([{}, {}, hold]);
+    h.ticks(10, [{}, {}, hold]);
+    expect(h.pawnOf(b).state).toMatchObject({ mode: PawnMode.Walk, hp: 20 });
+    expect(h.info(b).corrections - before.b.corrections).toBeLessThanOrEqual(2);
+    expect(h.info(b).corrections - h.info(b).forcedCorrections - (before.b.corrections - before.b.forcedCorrections)).toBe(0);
+    expect(h.info(c).corrections - before.c.corrections).toBe(0);
+    expect(kinds(a.events, "reviveEnd").at(-1)).toMatchObject({ targetPawn: h.pawnOf(b).id, reviverPawn: h.pawnOf(c).id, completed: true });
+  });
+
+  it("the player who downed someone gets the kill; whoever finishes them gets the assist", async () => {
+    const h = await harness(["sledge", "mute", "thermite"]);
+    const [a, b, c] = h.clients;
+    h.faceOff();
+    c.toServer.push(encodeLabTool({ kind: "teleport", x: 2, y: 0, z: 4, yawDeg: 180 }));
+    h.ticks(40, [A_TORSO]);
+    weaken(h, b, 40);
+    shoot(h, A_TORSO);
+    expect(h.pawnOf(b).state.mode).toBe(PawnMode.Downed);
+    h.ticks(80, [A_TORSO]);
+    // C finishes B lying on the floor (aim down at the body from 2 m to the side, 8 m away).
+    const bs = h.pawnOf(b).state;
+    const cs = h.pawnOf(c).state;
+    const eyeY = cs.y + 1.6;
+    const yaw = Math.atan2(-(bs.x - cs.x), -(bs.z - cs.z));
+    const pitch = Math.atan2(bs.y + 0.2 - eyeY, Math.hypot(bs.x - cs.x, bs.z - cs.z));
+    const aimC = { yaw, pitch, buttons: Btn.Ads };
+    h.ticks(40, [A_TORSO, {}, aimC]);
+    for (let i = 0; i < 6 && h.pawnOf(b).state.mode !== PawnMode.Dead; i++) {
+      h.tick([A_TORSO, {}, { ...aimC, buttons: Btn.Ads | Btn.Fire }]);
+      h.ticks(12, [A_TORSO, {}, aimC]);
+    }
+    expect(h.pawnOf(b).state.mode).toBe(PawnMode.Dead);
+    expect(kinds(b.events, "kill").at(-1)).toMatchObject({ victimPawn: h.pawnOf(b).id, killerCtrl: a.session.ctrl!.id, assistCtrl: c.session.ctrl!.id });
+  });
+
+  it("bleeding out is credited to whoever downed you", async () => {
+    const h = await harness(["sledge", "mute"]);
+    const [a, b] = h.clients;
+    h.faceOff();
+    h.ticks(40, [A_TORSO]);
+    weaken(h, b, 40);
+    shoot(h, A_TORSO);
+    expect(h.pawnOf(b).state.mode).toBe(PawnMode.Downed);
+    // Crawl until it's over (fast bleed: 30 s).
+    for (let i = 0; i < 64 * 31 && h.pawnOf(b).state.mode !== PawnMode.Dead; i++) h.tick([{}, { forward: 1, strafe: i % 128 < 64 ? 1 : -1 }]);
+    expect(h.pawnOf(b).state.mode).toBe(PawnMode.Dead);
+    expect(kinds(a.events, "kill").at(-1)).toMatchObject({ victimPawn: h.pawnOf(b).id, killerCtrl: a.session.ctrl!.id, cause: 6 });
+  });
+});

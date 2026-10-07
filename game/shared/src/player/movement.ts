@@ -10,6 +10,7 @@ import type { Pawn } from "./pawn.js";
 import { capsuleDims, currentHeight, proneWeight, stanceDims, transitionSeconds } from "./stance.js";
 import { Btn, PawnMode, STANCE_KEYS, Stance, type InputCmd, type PawnState } from "./types.js";
 import { blocksSprint, parkWeapon, stepWeapon, wantsAim, type SimEvent } from "../weapons/step.js";
+import { bleedTick, isDowned } from "./downed.js";
 
 export interface MoveContext {
   R: Rapier;
@@ -43,11 +44,17 @@ export function stepPawn(ctx: MoveContext, pawn: Pawn, input: InputCmd, weapons 
     stepLadder(ctx, pawn, input, pressed);
   } else if (s.mode === PawnMode.Vault) {
     stepScriptedMove(ctx, pawn);
+  } else if (s.mode === PawnMode.Downed) {
+    stepDowned(ctx, pawn, input);
   } else {
     stepWalk(ctx, pawn, input, pressed);
   }
-  if (weapons) stepWeapon(ctx, pawn, input, pressed);
-  else parkWeapon(s);
+  const down = isDowned(s);
+  if (weapons && !down) stepWeapon(ctx, pawn, input, pressed);
+  else {
+    parkWeapon(s);
+    if (down) s.adsQ = 0; // no weapons while down
+  }
   roundState(s);
   // The collider is placed from the state, exactly as a client places it from a correction (which carries
   // only the state): otherwise the two could differ by a float32 step and part ways a tick later.
@@ -62,10 +69,13 @@ function setSolidity(pawn: Pawn) {
 
 // ---------------------------------------------------------------- look
 
+/** Lying down (or getting down or up), on your feet or down but not out: turning and looking are limited. */
+const lying = (s: PawnState) => (s.mode === PawnMode.Walk || s.mode === PawnMode.Downed) && proneWeight(s) > 0;
+
 /** The pitch arc the body allows now: narrower while lying down (and getting down or up). */
 function pitchLimits(ctx: MoveContext, s: PawnState): [number, number] {
   const m = ctx.data.movement;
-  return s.mode === PawnMode.Walk && proneWeight(s) > 0
+  return lying(s)
     ? [m.stance.pronePitchMinDeg * DEG, m.stance.pronePitchMaxDeg * DEG]
     : [m.look.pitchMinDeg * DEG, m.look.pitchMaxDeg * DEG];
 }
@@ -83,7 +93,7 @@ export function turnView(ctx: MoveContext, pawn: Pawn, dYaw: number, dPitch: num
   let applied = 0;
   if (dYaw !== 0) {
     const next = wrapAngle(s.yaw + dYaw);
-    if (s.mode === PawnMode.Walk && proneWeight(s) > 0) {
+    if (lying(s)) {
       const fit = proneFitFree(ctx, pawn, s.x, s.y, s.z, next, 0);
       if (fit) {
         applied = wrapAngle(next - s.yaw);
@@ -102,7 +112,7 @@ function updateLook(ctx: MoveContext, pawn: Pawn, input: InputCmd) {
   const m = ctx.data.movement;
   const s = pawn.state;
   const [pitchMin, pitchMax] = pitchLimits(ctx, s);
-  if (s.mode === PawnMode.Walk && proneWeight(s) > 0) {
+  if (lying(s)) {
     // Lying down (and getting down or up) limits turn speed and aim arc (PLAN §7); turning is also
     // blocked if the body would clip a wall.
     const maxTurn = m.stance.proneTurnRateDeg * DEG * DT;
@@ -149,6 +159,8 @@ function stepWalk(ctx: MoveContext, pawn: Pawn, input: InputCmd, pressed: number
   const ads = (input.buttons & Btn.Ads) !== 0;
   if (wantsAim(ctx, s, input) && s.stance !== Stance.Prone) speed = Math.min(speed, m.speed.adsWalkSpeed * mult("adsWalk"));
   if (input.buttons & Btn.SlowWalk) speed *= m.speed.slowWalkFactor;
+  // Down but not out: a slow crawl, and none at all while a teammate revives you (placeholders).
+  if (s.mode === PawnMode.Downed) speed = s.revivedBy !== 0 && ctx.data.combat.revive.targetLocked ? 0 : ctx.data.combat.dbno.crawlSpeed;
 
   const sprinting =
     (input.buttons & Btn.Sprint) !== 0 &&
@@ -451,17 +463,48 @@ function trackFall(ctx: MoveContext, pawn: Pawn, wasGrounded: boolean) {
     const drop = s.airPeakY - s.y;
     if (drop > f.safeHeight) {
       const frac = (drop - f.safeHeight) / (f.lethalHeight - f.safeHeight);
-      const dmg = frac >= 1 ? s.hp : Math.round(frac * s.maxHp);
-      s.hp = Math.max(0, s.hp - dmg);
-      s.lastFallDamage = dmg;
-      // Lethal falls kill outright, no DBNO (research/core_mechanics.md §8).
-      if (s.hp === 0) s.mode = PawnMode.Dead;
+      if (s.mode === PawnMode.Downed) {
+        // Already down: the fall comes out of what's left (a long one finishes you).
+        const dmg = frac >= 1 ? s.downHp : Math.round(frac * s.maxHp);
+        s.downHp = Math.fround(Math.max(0, s.downHp - dmg));
+        s.lastFallDamage = dmg;
+        if (s.downHp === 0) {
+          s.mode = PawnMode.Dead;
+          ctx.events.push({ kind: "death", pawnId: pawn.id, cause: "fall" });
+        }
+      } else {
+        const dmg = frac >= 1 ? s.hp : Math.round(frac * s.maxHp);
+        s.hp = Math.max(0, s.hp - dmg);
+        s.lastFallDamage = dmg;
+        // Lethal falls kill outright, no DBNO (research/core_mechanics.md §8).
+        if (s.hp === 0) {
+          s.mode = PawnMode.Dead;
+          ctx.events.push({ kind: "death", pawnId: pawn.id, cause: "fall" });
+        }
+      }
     }
     s.airPeakY = s.y;
     return;
   }
   // Only trust the ground height while standing on it, not while the capsule rolls off an edge.
   s.airPeakY = groundNormal(ctx, pawn) ? s.y : Math.max(s.airPeakY, s.y);
+}
+
+// ---------------------------------------------------------------- down but not out (DECISIONS D-048)
+
+/**
+ * A downed body: lies down where there's room (else stays crouched), crawls slowly, can't lean, use
+ * ladders or vault, and bleeds out unless a teammate is reviving it. Looking around keeps the prone limits.
+ */
+function stepDowned(ctx: MoveContext, pawn: Pawn, input: InputCmd) {
+  const s = pawn.state;
+  const stance = s.stance === Stance.Prone || canEnterStance(ctx, pawn, Stance.Prone) ? Stance.Prone : Stance.Crouch;
+  stepWalk(ctx, pawn, { ...input, buttons: 0, lean: 0, stance }, 0);
+  if (s.mode !== PawnMode.Downed) return; // a fall finished it
+  if (s.invulnTicks > 0) s.invulnTicks--;
+  if (s.revivedBy === 0 && bleedTick(ctx.data.combat, s, Math.hypot(s.vx, s.vz) > ctx.data.combat.dbno.movingSpeed)) {
+    ctx.events.push({ kind: "death", pawnId: pawn.id, cause: "bleed" });
+  }
 }
 
 // ---------------------------------------------------------------- vault
@@ -594,7 +637,7 @@ function stepScriptedMove(ctx: MoveContext, pawn: Pawn) {
   s.tuck = Math.fround(Math.sin(Math.PI * u));
   setFeet(ctx, pawn, x, y, z, currentHeight(ctx.data.movement, s));
   if (u >= 1) {
-    s.mode = PawnMode.Walk;
+    s.mode = s.downHp > 0 ? PawnMode.Downed : PawnMode.Walk; // went down mid-vault: down once it lands
     s.tuck = 0;
     s.grounded = false;
     s.airPeakY = s.y;

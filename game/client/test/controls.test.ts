@@ -1,6 +1,6 @@
 // Controls without a browser: toggle/hold resolution around forced stance changes (second review).
 import { describe, expect, it } from "vitest";
-import { DEG, Stance } from "@redmond/shared";
+import { Btn, DEG, Stance } from "@redmond/shared";
 import { Controls } from "../src/input/controls.js";
 import { DEFAULT_SETTINGS, type Settings } from "../src/input/settings.js";
 
@@ -46,4 +46,18 @@ describe("Controls.syncView (recoil, D-041)", () => {
       expect(c.sample(3).yaw).toBeCloseTo(next.yaw, 4);
     });
   }
+});
+
+describe("Interact (DECISIONS D-049)", () => {
+  it("is sent while held (a revive takes 4 s), and a tap shorter than a tick still goes out once", () => {
+    const c = make({});
+    c.press("interact");
+    for (let i = 1; i <= 5; i++) expect(c.sample(i).buttons & Btn.Interact).toBe(Btn.Interact);
+    c.release("interact");
+    expect(c.sample(6).buttons & Btn.Interact).toBe(0);
+    c.press("interact");
+    c.release("interact"); // between two ticks
+    expect(c.sample(7).buttons & Btn.Interact).toBe(Btn.Interact);
+    expect(c.sample(8).buttons & Btn.Interact).toBe(0);
+  });
 });

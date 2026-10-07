@@ -10,6 +10,8 @@ export enum PawnMode {
   Vault = 1,
   Ladder = 2,
   Dead = 3,
+  /** Down but not out (DECISIONS D-048): lying down, crawling, bleeding out until revived or finished. */
+  Downed = 4,
 }
 
 /** Held-button bitfield carried by every input command. */

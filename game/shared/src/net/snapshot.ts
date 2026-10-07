@@ -17,9 +17,9 @@
 //   bit0 x, bit1 z, bit5 y : varu zigzag(Δ), 1/512 m
 //   bit2 yaw               : varu zigzag(wrapped Δ) of a u16 angle (full turn = 65536)
 //   bit3 pitch             : varu zigzag(Δ), pitch · 16384/π
-//   bit4 flags             : u8 stance | stanceFrom<<2 | mode<<4 | sprinting<<6 | grounded<<7
+//   bit4 flags             : u16 stance | stanceFrom<<2 | mode<<4 (3 bits) | sprinting<<7 | grounded<<8
 //   bit6 lean (i8 ·127)   bit7 stanceT (u8 ·255)   bit8 tilts (3 × i8 ·128)   bit9 tuck (u8 ·255)
-//   bit10 aux              : u8, bit0 = aiming (Phase 3 adds weapon state in bits 1–7)
+//   bit10 aux              : u8, bit0 = aiming, bit4 = being revived (bits 1–3 and 5–7 free for weapon state)
 // TCP delivers every snapshot in order, so deltas are against the last one *sent*, never lost ones.
 import { lerp, wrapAngle } from "../core/math.js";
 import { initialPawnState } from "../player/pawn.js";
@@ -39,6 +39,9 @@ const YAW_UNITS = 65536;
 const PITCH_SCALE = 16384 / Math.PI;
 const TAU = 2 * Math.PI;
 const MAX_RECORDS = 64;
+const AUX_REVIVED = 16;
+/** `revivedBy` of a remote body someone is reviving (the reviver's id isn't sent). */
+export const REVIVER_UNKNOWN = 0xffffffff;
 
 /** What remote clients get of a pawn: enough to draw it and pose its hitboxes, quantized. */
 export interface RemoteQ {
@@ -76,8 +79,8 @@ export function quantizeRemote(s: PawnState): RemoteQ {
     tiltB: i8(s.tiltB, 128),
     tiltSide: i8(s.tiltSide, 128),
     tuck: round(s.tuck * 255),
-    flags: s.stance | (s.stanceFrom << 2) | (s.mode << 4) | (s.sprinting ? 64 : 0) | (s.grounded ? 128 : 0),
-    aux: s.prevButtons & Btn.Ads ? 1 : 0,
+    flags: s.stance | (s.stanceFrom << 2) | (s.mode << 4) | (s.sprinting ? 128 : 0) | (s.grounded ? 256 : 0),
+    aux: (s.prevButtons & Btn.Ads ? 1 : 0) | (s.revivedBy !== 0 ? AUX_REVIVED : 0),
   };
 }
 
@@ -93,10 +96,12 @@ export function remoteState(q: RemoteQ, maxHp = 100): PawnState {
   s.tuck = q.tuck / 255;
   s.stance = q.flags & 3;
   s.stanceFrom = (q.flags >> 2) & 3;
-  s.mode = (q.flags >> 4) & 3;
-  s.sprinting = (q.flags & 64) !== 0;
-  s.grounded = (q.flags & 128) !== 0;
+  s.mode = (q.flags >> 4) & 7;
+  s.sprinting = (q.flags & 128) !== 0;
+  s.grounded = (q.flags & 256) !== 0;
   s.prevButtons = q.aux & 1 ? Btn.Ads : 0;
+  // Someone is reviving this body (who, a remote client doesn't need: it can't start a second revive).
+  s.revivedBy = q.aux & AUX_REVIVED ? REVIVER_UNKNOWN : 0;
   return s;
 }
 
@@ -150,7 +155,7 @@ function writeRecord(w: ByteWriter, id: number, q: RemoteQ, base: RemoteQ): bool
   if (m & 2) w.varu(zz(q.z - base.z));
   if (m & 4) w.varu(zz(wrap16(q.yaw - base.yaw)));
   if (m & 8) w.varu(zz(q.pitch - base.pitch));
-  if (m & 16) w.u8(q.flags);
+  if (m & 16) w.u16(q.flags);
   if (m & 32) w.varu(zz(q.y - base.y));
   if (m & 64) w.i8(q.lean);
   if (m & 128) w.u8(q.stanceT);
@@ -170,8 +175,8 @@ function readRecord(r: ByteReader, baseOf: (id: number) => RemoteQ): [number, Re
   if (m & 4) q.yaw = (q.yaw + unzz(r.varu())) & 0xffff;
   if (m & 8) q.pitch += unzz(r.varu());
   if (m & 16) {
-    q.flags = r.u8();
-    if ((q.flags & 3) > Stance.Prone || ((q.flags >> 2) & 3) > Stance.Prone || ((q.flags >> 4) & 3) > PawnMode.Dead) throw new ProtocolError("bad flags");
+    q.flags = r.u16();
+    if ((q.flags & 3) > Stance.Prone || ((q.flags >> 2) & 3) > Stance.Prone || ((q.flags >> 4) & 7) > PawnMode.Downed || q.flags >= 512) throw new ProtocolError("bad flags");
   }
   if (m & 32) q.y += unzz(r.varu());
   if (m & 64) q.lean = r.i8();
@@ -191,7 +196,7 @@ export function baselineHash(table: ReadonlyMap<number, RemoteQ>): number {
   const w = new ByteWriter(64);
   for (const id of [...table.keys()].sort((a, b) => a - b)) {
     const q = table.get(id)!;
-    w.varu(id).i32(q.x).i32(q.y).i32(q.z).u16(q.yaw).i32(q.pitch).i8(q.lean).u8(q.stanceT).i8(q.tiltF).i8(q.tiltB).i8(q.tiltSide).u8(q.tuck).u8(q.flags).u8(q.aux);
+    w.varu(id).i32(q.x).i32(q.y).i32(q.z).u16(q.yaw).i32(q.pitch).i8(q.lean).u8(q.stanceT).i8(q.tiltF).i8(q.tiltB).i8(q.tiltSide).u8(q.tuck).u16(q.flags).u8(q.aux);
   }
   return fnv1a(w.finish());
 }

@@ -48,7 +48,7 @@ export function readPawnState(r: ByteReader): PawnState {
   const stance = r.u8();
   const stanceFrom = r.u8();
   const mode = r.u8();
-  if (stance > 2 || stanceFrom > 2 || mode > 3) throw new ProtocolError("bad pawn state enum");
+  if (stance > 2 || stanceFrom > 2 || mode > 4) throw new ProtocolError("bad pawn state enum");
   const prevButtons = r.u16();
   const ladder = r.i8();
   for (const k of PAWN_U8_FIELDS) f[k] = r.u8();

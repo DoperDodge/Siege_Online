@@ -187,10 +187,11 @@ function bot(rng: Rng, crowd: boolean, home: { x: number; z: number } | null = n
 /** Spread-out spots along the open south side of the lab, 6 m apart. */
 const spreadSpot = (i: number) => ({ x: -27 + (i % 10) * 6, z: 26 - Math.floor(i / 10) * 4 });
 
-/** The body this member drives is dead on the server. */
+/** The body this member drives is dead (or down: the harness doesn't wait for a revive) on the server. */
 function isDead(room: Room, memberId: number): boolean {
   const ctrl = room.sim.controllers.get(room.memberInfo(memberId)?.controllerId ?? 0);
-  return ctrl !== undefined && room.sim.pawns.get(ctrl.possessedPawnId)?.state.mode === PawnMode.Dead;
+  const mode = ctrl !== undefined ? room.sim.pawns.get(ctrl.possessedPawnId)?.state.mode : undefined;
+  return mode === PawnMode.Dead || mode === PawnMode.Downed;
 }
 
 export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<NetsimReport> {
@@ -582,8 +583,8 @@ export async function runHitreg(partial: Partial<HitregOptions> = {}): Promise<H
       got.length === want.length &&
       want.every((w, k) => {
         const g = got[k];
-        // HitConfirm reports the health removed: all of it on a kill, or a lethal amount.
-        return g.victimPawn === w.pawnId && g.zone === w.zone && (w.kill ? g.killed : g.killed ? g.damage <= w.amount : g.damage === w.amount);
+        // HitConfirm reports the health removed: all that was left on a kill or a down, else the amount.
+        return g.victimPawn === w.pawnId && g.zone === w.zone && (w.kill ? g.killed : g.killed || g.downed ? g.damage <= w.amount : g.damage === w.amount);
       });
     if (same) report.damageAgree++;
     else if (report.disagreements.length < 20) report.disagreements.push(`seq ${seq} damage: server ${JSON.stringify(got.map((g) => [g.victimPawn, g.zone, g.damage, g.killed]))}, client ${JSON.stringify(want)}`);

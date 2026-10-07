@@ -41,7 +41,12 @@ export type SimEvent =
   | { kind: "dry"; pawnId: number; seq: number; slot: number }
   | { kind: "reload"; pawnId: number; slot: number; reloadKind: ReloadKind }
   /** Recoil moved this body's view this tick: the client adds it to its own view (D-041). */
-  | { kind: "kick"; pawnId: number; dYaw: number; dPitch: number };
+  | { kind: "kick"; pawnId: number; dYaw: number; dPitch: number }
+  /** A body died inside the simulation: a lethal fall, or bleeding out while down. */
+  | { kind: "death"; pawnId: number; cause: "fall" | "bleed" }
+  /** Reviving (DECISIONS D-049): started, and finished (`completed`) or cancelled. */
+  | { kind: "reviveStart"; reviverPawn: number; targetPawn: number }
+  | { kind: "reviveEnd"; reviverPawn: number; targetPawn: number; completed: boolean };
 
 export type WeaponContext = MoveContext & { data: GameData; events: SimEvent[] };
 

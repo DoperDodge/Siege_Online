@@ -103,7 +103,7 @@ export class RoomManager {
 
   /** Totals over every room (for /stats). */
   stats() {
-    const t = { ticks: 0, corrections: 0, droppedInputs: 0, idledTicks: 0, skippedSnapshots: 0 };
+    const t = { ticks: 0, corrections: 0, forcedCorrections: 0, mismatchCorrections: 0, droppedInputs: 0, idledTicks: 0, skippedSnapshots: 0, shots: 0, hits: 0, kills: 0 };
     for (const { room } of this.rooms.values()) for (const k of Object.keys(t) as (keyof typeof t)[]) t[k] += room.stats[k];
     return t;
   }

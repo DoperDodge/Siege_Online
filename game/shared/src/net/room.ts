@@ -1,7 +1,7 @@
 // A match room: the authoritative simulation plus everyone connected to it (PLAN §5). Transport-free, so
 // the Node server, the netsim harness and (later) offline Practice in a Web Worker all run this same code.
 import { DT, TICK_HZ } from "../core/constants.js";
-import { applyDamage, isIdleShell, type Damage } from "../combat/apply.js";
+import { applyDamage, Cause, isIdleShell, type Damage } from "../combat/apply.js";
 import { shotOnBodies, tracePellets, type ShotOnBody } from "../combat/hitreg.js";
 import type { ModeData } from "../data/schemas.js";
 import { spawnAmmo, type Pawn, type PlayerController } from "../player/pawn.js";
@@ -14,7 +14,7 @@ import type { SimEvent } from "../weapons/step.js";
 import { defaultLoadoutPick, resolveLoadout, type LoadoutPick } from "../weapons/loadout.js";
 import { hash4, pelletDirections } from "../weapons/spread.js";
 import { sideTeam } from "../sim.js";
-import { Cause, encodeEvents, type GameEvent } from "./events.js";
+import { encodeEvents, type GameEvent } from "./events.js";
 import { encodeError, encodePong, encodeRoster, encodeShotResult, encodeWelcome, ErrorCode, unwrap16, type InputMsg, type LabTool, type RosterEntry } from "./protocol.js";
 import { MAX_INTERP_MS, quantizeRemote, SNAPSHOT_EVERY, SnapshotEncoder, type RemoteQ } from "./snapshot.js";
 
@@ -176,6 +176,8 @@ export class Room {
   readonly rules: ModeData;
   /** Shots judged this tick, applied together at its end (DECISIONS D-044). */
   private judged: JudgedShot[] = [];
+  /** Who downed each body that is down now: they get the kill when it dies (research/core_mechanics.md §10.2). */
+  private readonly downedBy = new Map<number, { ctrl: number; weapon: string }>();
 
   private constructor(
     readonly code: string,
@@ -426,11 +428,12 @@ export class Room {
           victimPawn: victim.id,
           zone: body.zone,
           headshot: body.headshot,
+          downed: r.outcome === "downed",
           killed: r.outcome === "killed",
           friendly,
           damage: r.removed,
           pellets: body.pellets,
-          hpAfter: this.lab ? victim.state.hp : null,
+          hpAfter: this.lab ? (r.outcome === "hurt" && victim.state.mode === PawnMode.Downed ? Math.ceil(victim.state.downHp) : victim.state.hp) : null,
         });
         if (friendly) {
           shot.m.teamDamage += r.removed;
@@ -446,24 +449,76 @@ export class Room {
    * an elimination).
    */
   private hurt(victim: Pawn, d: Damage, by: { cause: Cause; attacker: JudgedShot | null; headshot: boolean }) {
-    const r = applyDamage(this.sim, victim, d);
+    const r = applyDamage(this.sim, victim, { ...d, cause: by.cause }, this.rules);
     if (r.outcome === "ignored") return r;
     const owner = victim.ownerId !== null ? this.memberOf(victim.ownerId) : null;
     if (owner) {
       this.force(owner);
       owner.events.push({ kind: "damageTaken", pawnId: victim.id, amount: r.removed, cause: by.cause, attackerCtrl: by.attacker?.ctrlId ?? 0, from: by.attacker?.origin ?? null });
     }
-    if (r.outcome === "killed") this.announceDeath(victim, by.attacker?.ctrlId ?? 0, by.attacker?.weaponId ?? "", by.cause, by.headshot, by.attacker !== null && victim.team === by.attacker.team);
+    const ctrl = by.attacker?.ctrlId ?? 0;
+    const weapon = by.attacker?.weaponId ?? "";
+    const friendly = by.attacker !== null && victim.team === by.attacker.team;
+    if (r.outcome === "downed") {
+      this.downedBy.set(victim.id, { ctrl, weapon });
+      const e: GameEvent = { kind: "down", victimPawn: victim.id, victimCtrl: victim.ownerId ?? 0, downerCtrl: ctrl, weapon, cause: by.cause, friendly };
+      for (const m of this.members.values()) m.events.push(e);
+    }
+    if (r.outcome === "killed") this.announceDeath(victim, ctrl, weapon, by.cause, by.headshot, friendly);
     return r;
   }
 
-  private announceDeath(victim: Pawn, killerCtrl: number, weapon: string, cause: Cause, headshot: boolean, friendly: boolean) {
+  /**
+   * Everyone hears about a death. A body that was down credits whoever downed it, and whoever finished it
+   * (if someone else) gets the assist (core_mechanics.md §10.2).
+   */
+  private announceDeath(victim: Pawn, finisherCtrl: number, weapon: string, cause: Cause, headshot: boolean, friendly: boolean) {
     this.stats.kills++;
     const ownerCtrl = victim.ownerId ?? 0;
+    const downer = this.downedBy.get(victim.id);
+    this.downedBy.delete(victim.id);
+    const killerCtrl = downer ? downer.ctrl : finisherCtrl;
+    const assistCtrl = downer && finisherCtrl !== downer.ctrl ? finisherCtrl : 0;
     const e: GameEvent = isIdleShell(this.sim, victim)
       ? { kind: "shellDestroyed", pawnId: victim.id, ownerCtrl, killerCtrl, weapon, headshot }
-      : { kind: "kill", victimPawn: victim.id, victimCtrl: ownerCtrl, killerCtrl, weapon, cause, headshot, friendly };
+      : { kind: "kill", victimPawn: victim.id, victimCtrl: ownerCtrl, killerCtrl, assistCtrl, weapon: weapon || downer?.weapon || "", cause, headshot, friendly };
     for (const m of this.members.values()) m.events.push(e);
+  }
+
+  /**
+   * What the simulation did on its own that clients need to hear about, before predictions are checked:
+   * deaths (a lethal fall, bleeding out) and revives. A revive changes the downed body from someone else's
+   * input, so its owner gets a correction (D-043); the reviver predicted it.
+   */
+  private simEvents() {
+    for (const e of this.sim.events) {
+      if (e.kind === "death") {
+        const p = this.sim.pawns.get(e.pawnId);
+        if (p) this.announceDeath(p, 0, "", e.cause === "bleed" ? Cause.Bleed : Cause.Fall, false, false);
+      } else if (e.kind === "reviveStart" || e.kind === "reviveEnd") {
+        const target = this.sim.pawns.get(e.targetPawn);
+        const owner = target && target.ownerId !== null ? this.memberOf(target.ownerId) : null;
+        if (owner && !owner.ctrl?.pawnIds.includes(e.reviverPawn)) this.force(owner);
+        if (e.kind === "reviveEnd" && e.completed) this.downedBy.delete(e.targetPawn);
+        for (const m of this.members.values()) m.events.push({ ...e });
+      }
+    }
+  }
+
+  /**
+   * Server only: a body marked as being revived whose reviver no longer is (it left, went down, stopped
+   * being stepped mid-revive by a lab tool) bleeds again; its owner gets a correction.
+   */
+  private checkReviveLinks() {
+    for (const p of this.sim.pawns.values()) {
+      const r = p.state.revivedBy;
+      if (r === 0) continue;
+      const reviver = this.sim.pawns.get(r);
+      if (reviver && reviver.state.reviveTarget === p.id && reviver.state.mode === PawnMode.Walk && p.state.mode === PawnMode.Downed) continue;
+      p.state.revivedBy = 0;
+      const owner = p.ownerId !== null ? this.memberOf(p.ownerId) : null;
+      if (owner) this.force(owner);
+    }
   }
 
   private memberOf(controllerId: number): Member | null {
@@ -504,14 +559,13 @@ export class Room {
    * and not while one is already on its way: a body the server just changed can't have been predicted).
    */
   private afterInput(m: Member, applied: QueuedInput) {
-    if (m.ctrl && !m.needCorrection && applied.epoch === (m.epoch & 0xff) && predictionHash(this.sim, m.ctrl) !== applied.predictedHash) m.needCorrection = true;
+    if (!m.ctrl || m.needCorrection || applied.epoch !== (m.epoch & 0xff)) return;
+    if (predictionHash(this.sim, m.ctrl) !== applied.predictedHash) m.needCorrection = true;
+    else m.forced = false; // (stepped without input, but it still came out as predicted)
   }
 
-  /**
-   * Judge the shots of the step just taken (`applied` is each member's input in that step), and report the
-   * bodies the step itself killed (falls): `alive` is who was alive before it.
-   */
-  private judgeEvents(applied: ReadonlyMap<number, { m: Member; input: QueuedInput }>, alive: ReadonlySet<number>) {
+  /** Judge the shots of the step just taken; `applied` is each member's input in that step. */
+  private judgeEvents(applied: ReadonlyMap<number, { m: Member; input: QueuedInput }>) {
     for (const e of this.sim.events) {
       if (e.kind !== "shot") continue;
       const owner = this.sim.pawns.get(e.pawnId)?.ownerId;
@@ -519,16 +573,6 @@ export class Room {
       // Shots only come from real inputs (weapons/step.ts), so the input is always there.
       if (a) this.judgeShot(a.m, a.input, e);
     }
-    for (const id of alive) {
-      const p = this.sim.pawns.get(id);
-      if (p?.state.mode === PawnMode.Dead) this.announceDeath(p, 0, "", Cause.Fall, false, false);
-    }
-  }
-
-  private aliveIds(): Set<number> {
-    const out = new Set<number>();
-    for (const p of this.sim.pawns.values()) if (p.state.mode !== PawnMode.Dead) out.add(p.id);
-    return out;
   }
 
   /**
@@ -563,6 +607,7 @@ export class Room {
           m.held = MAX_HOLD_TICKS;
           m.credit = Math.max(0, m.credit - 1);
           active.add(m.ctrl.id);
+          m.forced = true; // the client can't predict a tick it never sent (its correction comes with its next input)
         }
         continue;
       }
@@ -570,25 +615,26 @@ export class Room {
       active.add(m.ctrl.id);
       m.applied = next;
     }
-    let alive = this.aliveIds();
     this.sim.step(inputs, active, true);
+    this.simEvents();
     const applied = new Map<number, { m: Member; input: QueuedInput }>();
     for (const m of this.members.values()) {
       if (!m.applied || !m.ctrl) continue;
       this.afterInput(m, m.applied);
       applied.set(m.ctrl.id, { m, input: m.applied });
     }
-    this.judgeEvents(applied, alive);
+    this.judgeEvents(applied);
     // Catch up after a stall: one extra input for a client that has a backlog and banked credit.
     for (const m of this.members.values()) {
       if (!m.ctrl || m.queue.length <= TARGET_QUEUE || m.credit < 1) continue;
       const extra = this.take(m)!;
-      alive = this.aliveIds();
       this.sim.step(new Map([[m.ctrl.id, extra.cmd]]), new Set([m.ctrl.id]));
+      this.simEvents();
       this.afterInput(m, extra);
-      this.judgeEvents(new Map([[m.ctrl.id, { m, input: extra }]]), alive);
+      this.judgeEvents(new Map([[m.ctrl.id, { m, input: extra }]]));
     }
     this.resolveShots();
+    this.checkReviveLinks();
     this.history.record();
     this.stats.ticks++;
     if (this.sim.tick % SNAPSHOT_EVERY === 0) this.sendSnapshots();

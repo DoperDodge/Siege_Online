@@ -20,7 +20,7 @@ Built in milestones; each one keeps the tests, both e2e scripts and the netsim g
 | M4 Loadout pick online, data hash check | ✅ pause-menu loadouts (offline and online), stale tabs told to refresh |
 | M5 ADS, recoil, spread | ✅ recoil predicted exactly online; server-only spread; zoom and spread crosshair |
 | M6 Hit registration, damage, death | ✅ every pellet judged on the server; kills, hit markers, kill feed; no new mispredictions |
-| M7 DBNO and revive | ⏳ |
+| M7 DBNO and revive | ✅ down, crawl and bleed; hold F for 4 s to revive; predicted with no mispredictions |
 | M8 Melee | ⏳ |
 | M9 Client presentation (viewmodel, HUD, hit markers) | ⏳ |
 | M10 Range Lab (dummies) | ⏳ |
@@ -92,9 +92,16 @@ Built in milestones; each one keeps the tests, both e2e scripts and the netsim g
   a hit costs the victim one correction from the server and never a misprediction: the netsim's spread-out
   bots shoot and kill each other with 0 mispredictions, and its hit-registration run confirms every shot's
   damage exactly as the shooter's own view predicts it (kills included).
+- **Down but not out (M7, D-048, D-049):** at 0 HP you go down instead of dying (not on a headshot, the knife,
+  a fall, a second down or a shot more than 20 past 0, and never as Skopós). Down, the view darkens and blurs,
+  you lie down (crouched where there's no room), crawl slowly and bleed out of a 20 HP pool in 60 s, or 30 s
+  while crawling; the HUD shows the pool. A teammate holds **F** beside you, facing you, for 4 s to pick you
+  up with 20 HP (a gauge shows their progress; you stop bleeding meanwhile). Whoever downed you gets the kill
+  if you die. **Down me** in the pause menu tries it alone. Online it is all predicted: the browser test
+  downs and revives a player with every correction coming from the server and none from a misprediction.
 - **Movement fix (D-057):** sprinting diagonally into a wall could, rarely, drop you 0.29 m into the floor in
   one tick. Fixed, with a regression test.
-- 216 unit tests.
+- 235 unit tests.
 
 ---
 

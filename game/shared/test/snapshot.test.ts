@@ -5,11 +5,14 @@ import {
   CHECKSUM_EVERY,
   controllerState,
   hashPawnState,
+  initialPawnState,
   interpolateRemote,
   poseHitboxes,
+  PawnMode,
   ProtocolError,
   quantizeRemote,
   remoteState,
+  REVIVER_UNKNOWN,
   Sim,
   SnapshotDecoder,
   SnapshotEncoder,
@@ -67,6 +70,19 @@ describe("snapshot codec", () => {
     const still = new Map([...dec.have]);
     const snap = dec.decode(enc.encode({ tick: sim.tick + 2, ackSeq: 0, idled: false, queueDepth: 2 }, null, still));
     expect(snap.records).toHaveLength(0);
+  });
+
+  it("a downed body's mode and its being-revived mark make the trip; a mode past Downed is refused", () => {
+    const s = remoteState(quantizeRemote(initialPawnState(1, 0, 2, 0, 100)));
+    Object.assign(s, { mode: PawnMode.Downed, stance: Stance.Prone, stanceFrom: Stance.Crouch, stanceT: 1, revivedBy: 7, sprinting: true, grounded: true });
+    const enc = new SnapshotEncoder();
+    const dec = new SnapshotDecoder();
+    dec.decode(enc.encode({ tick: 2, ackSeq: 0, idled: false, queueDepth: 2 }, null, new Map([[5, quantizeRemote(s)]])));
+    const back = remoteState(dec.have.get(5)!);
+    expect([back.mode, back.stance, back.stanceFrom, back.sprinting, back.grounded]).toEqual([PawnMode.Downed, Stance.Prone, Stance.Crouch, true, true]);
+    expect(back.revivedBy).toBe(REVIVER_UNKNOWN); // someone is reviving it (who isn't sent)
+    const bad = { ...quantizeRemote(s), flags: (quantizeRemote(s).flags & ~(7 << 4)) | (5 << 4) };
+    expect(() => new SnapshotDecoder().decode(new SnapshotEncoder().encode({ tick: 2, ackSeq: 0, idled: false, queueDepth: 2 }, null, new Map([[5, bad]])))).toThrow(ProtocolError);
   });
 
   it("carries an exact correction for the receiving player (both Skopós shells)", async () => {

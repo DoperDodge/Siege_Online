@@ -121,11 +121,16 @@ describe("lobby, clock, error and debug messages round-trip", () => {
   it("events: every kind round-trips; unknown kinds, too many events and trailing bytes are refused", () => {
     const events: GameEvent[] = [
       { kind: "shotFx", pawnId: 12, slot: 1, suppressed: true, ends: [[1.5, 2.25, -30.03125], [-200, 0.5, 199.96875]] },
-      { kind: "hitConfirm", seq: 65535, victimPawn: 7, zone: "neck", headshot: true, killed: true, friendly: false, damage: 110, pellets: 1, hpAfter: 0 },
-      { kind: "hitConfirm", seq: 3, victimPawn: 900, zone: "leg", headshot: false, killed: false, friendly: true, damage: 21, pellets: 6, hpAfter: null },
+      { kind: "hitConfirm", seq: 65535, victimPawn: 7, zone: "neck", headshot: true, downed: false, killed: true, friendly: false, damage: 110, pellets: 1, hpAfter: 0 },
+      { kind: "hitConfirm", seq: 3, victimPawn: 900, zone: "leg", headshot: false, downed: true, killed: false, friendly: true, damage: 21, pellets: 6, hpAfter: null },
       { kind: "damageTaken", pawnId: 7, amount: 33, cause: 0, attackerCtrl: 4, from: [0.5, 1.625, -4] },
       { kind: "damageTaken", pawnId: 7, amount: 110, cause: 2, attackerCtrl: 0, from: null },
-      { kind: "kill", victimPawn: 7, victimCtrl: 3, killerCtrl: 4, weapon: "l85a2", cause: 0, headshot: true, friendly: false },
+      { kind: "kill", victimPawn: 7, victimCtrl: 3, killerCtrl: 4, assistCtrl: 9, weapon: "l85a2", cause: 0, headshot: true, friendly: false },
+      { kind: "kill", victimPawn: 8, victimCtrl: 5, killerCtrl: 0, assistCtrl: 0, weapon: "", cause: 6, headshot: false, friendly: false },
+      { kind: "down", victimPawn: 7, victimCtrl: 3, downerCtrl: 4, weapon: "mp5k", cause: 0, friendly: true },
+      { kind: "reviveStart", reviverPawn: 11, targetPawn: 7 },
+      { kind: "reviveEnd", reviverPawn: 11, targetPawn: 7, completed: true },
+      { kind: "reviveEnd", reviverPawn: 11, targetPawn: 7, completed: false },
       { kind: "shellDestroyed", pawnId: 9, ownerCtrl: 5, killerCtrl: 4, weapon: "mp5k", headshot: false },
     ];
     expect(decodeEvents(body(encodeEvents(123456, events), Msg.Events))).toEqual({ tick: 123456, events });

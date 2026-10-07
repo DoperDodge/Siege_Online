@@ -13,6 +13,7 @@ import {
   encodePickLoadout,
   eyePose,
   GRIPS,
+  isDowned,
   isGun,
   isPickable,
   offerId,
@@ -86,6 +87,8 @@ app.innerHTML = `
   <div class="flash"></div>
   <div class="prompt hidden"></div>
   <div class="shellcam hidden"><div class="shellcam-title"></div><div class="swap-bar"><div></div></div></div>
+  <div class="down-ui hidden"><div class="down-title"></div><div class="down-bar"><div></div></div></div>
+  <div class="revive-ui hidden"><div class="revive-title"></div><div class="revive-bar"><div></div></div></div>
   <div class="center-msg hidden"></div>
   <button class="gear" title="Settings">⚙</button>
   <div class="panel pause hidden"></div>
@@ -147,7 +150,10 @@ const controls = new Controls(settings, onUi);
 controls.setView(possessed().state.yaw, 0);
 controls.attach(renderer.domElement);
 controls.isBlocked = () => !$(".pause").classList.contains("hidden") || !$(".help").classList.contains("hidden");
-controls.stanceLocked = () => ctrl.shellCam || ctrl.swapPhase !== 0;
+controls.stanceLocked = () => {
+  const p = sim.pawns.get(ctrl.possessedPawnId);
+  return ctrl.shellCam || ctrl.swapPhase !== 0 || (p !== undefined && isDowned(p.state)); // down: the body decides
+};
 controls.weaponState = () => {
   const p = sim.pawns.get(ctrl.possessedPawnId);
   return p && (!net || net.session.ready) ? { slot: p.state.slot, equipping: p.state.wAct === WeaponAct.Equip } : null;
@@ -392,7 +398,8 @@ function renderPause() {
     </section>
     ${loadoutSection()}
     <section><h3>Go to</h3><div class="goto">${GOTO.map((g, i) => `<button data-goto="${i}">${g[0]}</button>`).join("")}</div></section>
-    <section><h3>Lab tools</h3><div class="goto"><button class="refill">Refill ammo</button><button class="hurt-me">Take 30 damage</button></div></section>
+    <section><h3>Lab tools</h3><div class="goto"><button class="refill">Refill ammo</button><button class="hurt-me">Take 30 damage</button><button class="down-me">Down me</button></div>
+      <p class="note">Down but not out: you crawl and bleed out in 60 s (30 s while crawling); a teammate holds ${keyLabel(settings.keys.interact)} for 4 s to revive you with 20 HP. A second down kills.</p></section>
     <section><h3>Controls</h3>
       <label>Sensitivity <input type="range" min="0.01" max="0.4" step="0.005" value="${settings.sensitivity}" data-num="sensitivity"><output>${settings.sensitivity.toFixed(3)}</output></label>
       <label>ADS sensitivity × <input type="range" min="0.2" max="1.5" step="0.05" value="${settings.adsSensitivityScale}" data-num="adsSensitivityScale"><output>${settings.adsSensitivityScale.toFixed(2)}</output></label>
@@ -405,6 +412,7 @@ function renderPause() {
   pause.querySelector(".resume")?.addEventListener("click", resume);
   pause.querySelector(".refill")!.addEventListener("click", labRefill);
   pause.querySelector(".hurt-me")!.addEventListener("click", () => labHurt(30));
+  pause.querySelector(".down-me")!.addEventListener("click", () => labHurt(possessed().state.hp || 1));
   pause.querySelector<HTMLSelectElement>(".op-select")!.addEventListener("change", (e) => pickOperator((e.target as HTMLSelectElement).value));
   pause.querySelector<HTMLSelectElement>(".team-select")?.addEventListener("change", (e) => net?.send(encodeLabTool({ kind: "team", team: Number((e.target as HTMLSelectElement).value) })));
   pause.querySelectorAll<HTMLSelectElement>(".loadout select").forEach((el) =>
@@ -550,7 +558,7 @@ function tick() {
   // input, so hold them at what the hand-over tick must send: your body's own stance when you go back,
   // standing when the new shell wakes up (D-025).
   if (ctrl.shellCam || ctrl.swapPhase) controls.resetStance(ctrl.swapPhase ? Stance.Stand : p.state.stance);
-  else if (p.id !== possessedId) controls.resetStance(p.state.stance);
+  else if (p.id !== possessedId || isDowned(p.state)) controls.resetStance(p.state.stance); // down: the body decides
   possessedId = p.id;
   const proneView = v.state.mode === PawnMode.Walk && proneWeight(v.state) > 0;
   controls.limits = proneView
@@ -678,8 +686,25 @@ const MODE_NAMES = ["", "VAULT", "LADDER", "DEAD"];
 function updateHud(p: Pawn) {
   const s = p.state;
   $(".op-name").textContent = `${op.name} · ${op.side} · ${op.healthRating} health / ${op.speedRating} speed${op.pawns > 1 ? ` · shell ${ctrl.pawnIds.indexOf(p.id) + 1}/2` : ""}`;
-  $(".hp-fill").style.width = `${(100 * s.hp) / s.maxHp}%`;
-  $(".hp-text").textContent = `${s.hp} / ${s.maxHp}`;
+  const down = isDowned(s);
+  $(".hp-fill").style.width = down ? `${(100 * s.downHp) / data.combat.dbno.hp}%` : `${(100 * s.hp) / s.maxHp}%`;
+  $(".hp-text").textContent = down ? `DOWN · ${Math.ceil(s.downHp)} / ${data.combat.dbno.hp}` : `${s.hp} / ${s.maxHp}`;
+  $(".hp").classList.toggle("down", down);
+  app.classList.toggle("downed", down);
+  $(".down-ui").classList.toggle("hidden", !down);
+  if (down) {
+    $(".down-title").textContent = s.revivedBy
+      ? "BEING REVIVED — hold still"
+      : `DOWN — crawl to cover; a teammate can revive you (hold ${keyLabel(settings.keys.interact)})${Math.hypot(s.vx, s.vz) > data.combat.dbno.movingSpeed ? " · bleeding faster while you crawl" : ""}`;
+    $(".down-bar div").style.width = `${(100 * s.downHp) / data.combat.dbno.hp}%`;
+  }
+  const reviving = s.reviveTarget !== 0;
+  $(".revive-ui").classList.toggle("hidden", !reviving);
+  if (reviving) {
+    const total = Math.max(1, Math.round(data.combat.revive.seconds * TICK_HZ));
+    $(".revive-title").textContent = `REVIVING ${nameOfPawn(s.reviveTarget) || "teammate"}… ${((total - s.reviveTicks) / TICK_HZ).toFixed(1)} s`;
+    $(".revive-bar div").style.width = `${Math.min(100, (100 * s.reviveTicks) / total)}%`;
+  }
   app.querySelectorAll<HTMLElement>(".stances span").forEach((el) => el.classList.toggle("on", Number(el.dataset.s) === s.stance));
   $(".stance-bar div").style.width = `${s.stanceT * 100}%`;
   const speed = Math.hypot(s.vx, s.vz);
@@ -710,7 +735,15 @@ function updateHud(p: Pawn) {
 
   const k = settings.keys;
   const promptText =
-    prompt === "mantle" ? `${keyLabel(k.vault)} to mantle` : prompt === "ladder" ? `${keyLabel(k.interact)} to climb` : prompt === "transfer" ? `${keyLabel(k.interact)} to transfer` : "";
+    prompt === "mantle"
+      ? `${keyLabel(k.vault)} to mantle`
+      : prompt === "ladder"
+        ? `${keyLabel(k.interact)} to climb`
+        : prompt === "transfer"
+          ? `${keyLabel(k.interact)} to transfer`
+          : prompt === "revive"
+            ? `Hold ${keyLabel(k.interact)} to revive`
+            : "";
   $(".prompt").textContent = promptText;
   $(".prompt").classList.toggle("hidden", !promptText || dead);
   const onCam = ctrl.shellCam || ctrl.swapPhase !== 0;
@@ -812,6 +845,7 @@ Object.defineProperty(window, "__lab", {
         frames,
         lastShot,
         events: [...recentEvents],
+        mispredictions: s.mispredictions,
         hp: possessed()?.state.hp ?? 0,
         dead: possessed()?.state.mode === PawnMode.Dead,
         disconnected,
@@ -826,6 +860,8 @@ Object.defineProperty(window, "__lab", {
       controls.setView(yawDeg * DEG, 0);
     },
     fire: () => fire(),
+    /** Lab tool: hurt your own body (the whole of its health downs it). */
+    hurt: (amount: number) => labHurt(amount),
     /** Online tests: replace parts of the sampled input (e.g. { forward: 1 }); null hands back control. */
     set input(v: Partial<InputCmd> | null) {
       scripted = v;
@@ -969,6 +1005,7 @@ function lobby(): Promise<OnlineConnection> {
           onRoster: () => (rosterChanged = true),
           onShot: (shot) => showShot(shot),
           onEvents: (tick, events) => onGameEvents(tick, events),
+          trackMispredictions: autotest, // the e2e scripts report what a misprediction got wrong
           onLocalEvents: (events) => onWeaponEvents(events),
         },
         onClose: (reason) => {
@@ -1204,8 +1241,8 @@ function onGameEvents(tick: number, events: GameEvent[]) {
       el.classList.toggle("kill", e.killed);
       el.classList.toggle("friendly", e.friendly);
       hitUntil = performance.now() + (e.killed ? 450 : 220);
-      const what = e.killed ? (e.headshot ? "HEADSHOT" : "KILL") : `${e.damage}${e.pellets > 1 ? ` (${e.pellets} pellets)` : ""} · ${e.zone}`;
-      $(".hit-text").textContent = `${what}${e.friendly ? " · teammate" : ""}${e.hpAfter !== null && !e.killed ? ` · ${e.hpAfter} HP left` : ""}`;
+      const what = e.killed ? (e.headshot ? "HEADSHOT" : "KILL") : e.downed ? "DOWN" : `${e.damage}${e.pellets > 1 ? ` (${e.pellets} pellets)` : ""} · ${e.zone}`;
+      $(".hit-text").textContent = `${what}${e.friendly ? " · teammate" : ""}${e.hpAfter !== null && !e.killed && !e.downed ? ` · ${e.hpAfter} HP left` : ""}`;
     } else if (e.kind === "damageTaken") {
       hurtUntil = performance.now() + 700;
       const dir = $(".hurt-dir");
@@ -1216,6 +1253,13 @@ function onGameEvents(tick: number, events: GameEvent[]) {
         dir.style.setProperty("--a", `${(-(toward - controls.yaw) * 180) / Math.PI}deg`);
         dir.classList.add("on");
       } else dir.classList.remove("on");
+    } else if (e.kind === "down") {
+      const by = e.downerCtrl ? `${nameOfCtrl(e.downerCtrl)}${e.weapon ? ` [${weaponName(e.weapon)}]` : ""}` : null;
+      feed.push({ text: by ? `${by} downed ${nameOfCtrl(e.victimCtrl)}` : `${nameOfCtrl(e.victimCtrl)} is down`, mine: e.victimCtrl === me || e.downerCtrl === me, until: performance.now() + 6000 });
+      if (feed.length > 5) feed.shift();
+    } else if (e.kind === "reviveEnd" && e.completed) {
+      feed.push({ text: `${nameOfPawn(e.reviverPawn) || "someone"} revived ${nameOfPawn(e.targetPawn) || "someone"}`, mine: ctrl.pawnIds.includes(e.targetPawn) || ctrl.pawnIds.includes(e.reviverPawn), until: performance.now() + 6000 });
+      if (feed.length > 5) feed.shift();
     } else if (e.kind === "kill" || e.kind === "shellDestroyed") {
       const victimCtrl = e.kind === "kill" ? e.victimCtrl : e.ownerCtrl;
       const victim = nameOfCtrl(victimCtrl);
@@ -1225,11 +1269,11 @@ function onGameEvents(tick: number, events: GameEvent[]) {
         e.kind === "shellDestroyed"
           ? `${killer ?? "?"}${how} destroyed ${victim}'s idle shell`
           : killer
-            ? `${killer}${how} ${e.friendly ? "team-killed" : "eliminated"} ${victim}`
-            : `${victim} died${e.cause === 2 ? " (fall)" : ""}`;
+            ? `${killer}${how} ${e.friendly ? "team-killed" : "eliminated"} ${victim}${e.assistCtrl ? ` (finished by ${nameOfCtrl(e.assistCtrl)})` : ""}${e.cause === 6 ? " (bled out)" : ""}`
+            : `${victim} died${e.cause === 2 ? " (fall)" : e.cause === 6 ? " (bled out)" : ""}`;
       feed.push({ text, mine: victimCtrl === me || e.killerCtrl === me, until: performance.now() + 6000 });
       if (feed.length > 5) feed.shift();
-      if (e.kind === "kill" && victimCtrl === me) deathText = killer ? `Killed by ${killer}${how}` : e.cause === 2 ? null : "You died";
+      if (e.kind === "kill" && victimCtrl === me) deathText = e.cause === 6 ? `You bled out${killer ? ` (downed by ${killer})` : ""}` : killer ? `Killed by ${killer}${how}` : e.cause === 2 ? null : "You died";
     }
   }
 }

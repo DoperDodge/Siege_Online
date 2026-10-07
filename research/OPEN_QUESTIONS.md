@@ -228,7 +228,7 @@ Most of these can be answered in a Custom Game (Local), usually in minutes, with
 6. **Rappel**: how long must you hold to start a rappel? Can you enter a window or rappel-breach while **inverted**? Does window glass break on swing-in automatically? Rough climb, descend and horizontal-sprint speeds? *(UNVERIFIED)*
 7. **Ladders**: is Oregon's Big Tower access a real climbable ladder or steep "ladder stairs"? Can you shoot or ADS on a ladder? *(UNVERIFIED)*
 8. **Fall damage**: from which heights do you take damage or die (e.g., dropping from Oregon's roof or a 2F window)? Does a lethal fall ever DBNO? *(UNVERIFIED)*
-9. **DBNO**: how long do you last when downed and still, and when crawling (post-Y10S4 rework)? Crawl speed? Does the overkill rule (more than 20 past remaining HP = death) still apply? Do fire/gas deaths DBNO? *(UNVERIFIED)*
+9. **DBNO**: how long do you last when downed and still, and when crawling (post-Y10S4 rework)? Crawl speed? Does the overkill rule (more than 20 past remaining HP = death) still apply? (With it, a rifle doing 47 a shot kills a 110 HP player outright on the third body shot instead of downing them.) Do fire/gas deaths DBNO? *(UNVERIFIED)*
 10. **Friendly fire**: how much reduced is team damage for players under Clearance Level 10? Is FF on in Team Deathmatch, 3v3 Arcade and bot playlists? *(UNVERIFIED)*
 11. **Melee**: recovery time between knife swings, and is a knife hit always a kill on a full-HP heavy operator? *(UNVERIFIED)*
 12. **Audio**: rough distance at which you hear a sprinting / walking / crouching enemy on the same floor and through a floor. Is crouch-walk actually quieter than walk in Siege X? *(UNVERIFIED)*

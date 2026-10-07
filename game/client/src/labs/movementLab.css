@@ -27,6 +27,14 @@ html, body { overflow: hidden; overscroll-behavior: none; touch-action: none; us
 .hurt.show { opacity: 1; }
 .hurt-dir { position: fixed; left: 50%; top: 50%; width: 180px; height: 180px; margin: -90px 0 0 -90px; border-radius: 50%; border: 4px solid transparent; border-top-color: rgba(255, 60, 60, 0.9); transform: rotate(var(--a, 0deg)); pointer-events: none; opacity: 0; transition: opacity 0.3s; }
 .hurt-dir.on.show { opacity: 1; }
+/* Down but not out: darkened, blurred vision (core_mechanics.md §10.2), the bleed bar and the revive gauge. */
+.downed #view { filter: grayscale(0.7) brightness(0.55) blur(1.5px); }
+.hp.down .hp-fill { background: linear-gradient(90deg, #b91c1c, #ef4444); }
+.down-ui, .revive-ui { position: fixed; left: 50%; top: 58%; transform: translateX(-50%); width: min(420px, calc(100vw - 32px)); padding: 8px 12px; border-radius: 8px; background: rgba(0, 0, 0, 0.6); text-align: center; font: 600 13px system-ui, sans-serif; pointer-events: none; }
+.revive-ui { top: 62%; }
+.down-bar, .revive-bar { margin-top: 6px; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.15); overflow: hidden; }
+.down-bar div { height: 100%; background: #ef4444; }
+.revive-bar div { height: 100%; background: #22c55e; }
 .killfeed { margin-top: 8px; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; font: 600 12px system-ui, sans-serif; color: #fff; }
 .killfeed div { padding: 3px 8px; border-radius: 4px; background: rgba(0, 0, 0, 0.55); }
 .killfeed div.mine { background: rgba(160, 30, 30, 0.7); }

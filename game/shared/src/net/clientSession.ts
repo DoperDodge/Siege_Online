@@ -45,6 +45,11 @@ export interface ClientSessionOptions {
   /** What our own fresh prediction did this tick (shots, reloads): instant feedback, never replayed. */
   onLocalEvents?(events: readonly SimEvent[]): void;
   onError?(code: number, message: string): void;
+  /**
+   * Debugging aid (tests): remember what we predicted for each input, and when a correction disagrees
+   * with it, record which fields differed (`mispredictions`).
+   */
+  trackMispredictions?: boolean;
 }
 
 interface Sample {
@@ -66,6 +71,9 @@ export class ClientSession {
   /** Current remote interpolation delay. */
   interpDelayMs = 100;
   readonly stats = { snapshots: 0, corrections: 0, resyncs: 0, bytesIn: 0, bytesOut: 0, replayedTicks: 0 };
+  /** With `trackMispredictions`: corrections that disagreed with our prediction, and how (most recent last). */
+  readonly mispredictions: { seq: number; diffs: string[] }[] = [];
+  private readonly predicted = new Map<number, PawnState[]>();
 
   private readonly decoder = new SnapshotDecoder();
   private pending: { seq: number; cmd: InputCmd }[] = [];
@@ -218,12 +226,16 @@ export class ClientSession {
     const ctrl = this.ctrl;
     // A correction is for the body in our roster; one for another body (its roster not here yet) waits.
     if (snap.correction && ctrl && snap.correction.pawns.every(([id]) => ctrl.pawnIds.includes(id))) {
+      if (this.opts.trackMispredictions) this.compareWithPrediction(ack, snap.correction.pawns);
       for (const [id, state] of snap.correction.pawns) if (sim.pawns.has(id)) sim.setPawnState(id, state);
       Object.assign(ctrl, snap.correction.ctrl);
       this.epoch = snap.correction.epoch;
       this.corrected = true;
       this.stats.corrections++;
-      for (const p of this.pending) sim.step(new Map([[ctrl.id, p.cmd]]));
+      for (const p of this.pending) {
+        sim.step(new Map([[ctrl.id, p.cmd]]));
+        this.remember(p.seq);
+      }
       this.stats.replayedTicks += this.pending.length;
     }
 
@@ -362,6 +374,7 @@ export class ClientSession {
     sim.step(new Map([[ctrl.id, q]]));
     if (sim.events.length) this.opts.onLocalEvents?.(sim.events);
     this.pending.push({ seq: this.seq, cmd: q });
+    this.remember(this.seq);
     const viewBackQ8 = Math.max(0, Math.min(0xffff, Math.round((this.lastSnapTick - viewTick) * 256)));
     this.lastViewTick = this.lastSnapTick - viewBackQ8 / 256;
     this.send(encodeInput({ cmd: q, predictedHash: predictionHash(sim, ctrl), epoch: this.epoch, snapTick: this.lastSnapTick, viewBackQ8 }));
@@ -370,6 +383,26 @@ export class ClientSession {
 
   ping(): void {
     this.send(encodePing(this.opts.now()));
+  }
+
+  private remember(seq: number) {
+    if (!this.opts.trackMispredictions) return;
+    const ctrl = this.ctrl!;
+    this.predicted.set(seq, ctrl.pawnIds.map((id) => ({ ...this.sim!.pawns.get(id)!.state })));
+    this.predicted.delete(seq - 256);
+  }
+
+  private compareWithPrediction(ack: number, pawns: [number, PawnState][]) {
+    const mine = this.predicted.get(ack);
+    if (!mine || mine.length !== pawns.length) return; // a new body, or nothing predicted for it
+    const diffs: string[] = [];
+    pawns.forEach(([, server], i) => {
+      for (const k of Object.keys(server) as (keyof PawnState)[]) if (server[k] !== mine[i][k]) diffs.push(`${i}.${k}: ${String(mine[i][k])} → ${String(server[k])}`);
+    });
+    if (diffs.length) {
+      this.mispredictions.push({ seq: ack, diffs });
+      if (this.mispredictions.length > 20) this.mispredictions.shift();
+    }
   }
 
   /** Sequence number of the last input sent. */

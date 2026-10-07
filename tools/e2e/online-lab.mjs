@@ -122,7 +122,9 @@ try {
   const aNet = await net(a);
   const bNet = await net(b);
   result.corrections = { a: aNet.corrections, b: bNet.corrections, rttA: aNet.rttMs, rttB: bNet.rttMs };
-  result.checks.fewCorrections = aNet.corrections <= 4 && bNet.corrections <= 4;
+  // (Every correction so far is the server's doing: joins, teleports, the hit; mispredictions are checked
+  // against the server's own count at the end.)
+  result.checks.fewCorrections = aNet.corrections <= 5 && bNet.corrections <= 4;
   result.checks.noResyncs = aNet.resyncs === 0 && bNet.resyncs === 0;
   result.checks.rttIncludesSimulatedLag = aNet.rttMs > LAG * 0.9 && aNet.rttMs < LAG + 80;
 
@@ -167,6 +169,25 @@ try {
   result.checks.respawnKeepsRunning = settled.frames > afterRespawn.frames + 5 && settled.corrections - afterRespawn.corrections <= 1;
   result.checks.respawnSeenByOthers = bAfterRespawn.remotes.some((r) => r.id === afterRespawn.pawnId) && !bAfterRespawn.remotes.some((r) => r.id === beforeRespawn.pawnId);
 
+  // Down but not out (Phase 3 M7): A takes its whole health (lab tool) and goes down; B, a teammate, kneels
+  // beside A facing it and holds Interact; after 4 s A is up again with 20 HP.
+  await a.evaluate(() => window.__lab.teleport(0, 0, 12, 0));
+  await sleep(500);
+  await a.evaluate(() => window.__lab.hurt(window.__lab.net.hp));
+  await a.waitForFunction(() => window.__lab.net.own?.mode === 4, null, { timeout: 5000 }).catch(() => {});
+  const aDown = await net(a);
+  await sleep(1500); // lies down
+  await b.evaluate(() => {
+    window.__lab.teleport(0.8, 0, 12, 90);
+    window.__lab.input = { buttons: 4 /* Btn.Interact, held */ };
+  });
+  await a.waitForFunction(() => window.__lab.net.own?.mode === 0, null, { timeout: 9000 }).catch(() => {});
+  const aUp = await net(a);
+  await b.evaluate(() => (window.__lab.input = null));
+  await a.screenshot({ path: shot("online-revived.png") });
+  result.revive = { downMode: aDown.own?.mode, downHp: aDown.own?.downHp, upMode: aUp.own?.mode, upHp: aUp.own?.hp, events: aUp.events.filter((e) => e.kind.startsWith("revive") || e.kind === "down").map((e) => e.kind) };
+  result.checks.downThenRevived = aDown.own?.mode === 4 && aUp.own?.mode === 0 && aUp.own?.hp === 20 && aUp.events.some((e) => e.kind === "reviveEnd" && e.completed);
+
   // A loadout pick (Phase 3 M4): B takes Brava with the PARA-308, a magnified sight and an angled grip. A new
   // body arrives carrying it, at the cost of exactly one correction, and A's roster shows it.
   const beforePick = await net(b);
@@ -188,6 +209,10 @@ try {
   const stats = await (await fetch(`${BASE}/stats`)).json();
   result.stats = stats;
   result.checks.statsEndpoint = stats.rooms === 1 && stats.players === 2;
+  // No contact anywhere in this test: every correction was the server's doing (joins, teleports, damage,
+  // respawn, revive), none a misprediction (DECISIONS D-043).
+  result.checks.noMispredictions = stats.totals.mismatchCorrections === 0;
+  result.mispredictions = { a: (await net(a)).mispredictions, b: (await net(b)).mispredictions };
 
   // B leaves: A's roster and view update.
   await b.close();

@@ -9,6 +9,7 @@ export * from "./player/pawn.js";
 export * from "./player/stance.js";
 export * from "./player/hitboxes.js";
 export * from "./player/movement.js";
+export * from "./player/downed.js";
 export * from "./weapons/ticks.js";
 export * from "./weapons/damage.js";
 export * from "./weapons/loadout.js";

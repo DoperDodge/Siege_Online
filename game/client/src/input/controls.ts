@@ -277,7 +277,8 @@ export class Controls {
     let buttons = 0;
     if (this.held.has("sprint") || this.sprintLatched) buttons |= Btn.Sprint;
     if (this.held.has("vault") || this.vaultPulse) buttons |= Btn.Vault;
-    if (this.interactPulse) buttons |= Btn.Interact;
+    // Interact is held (reviving takes 4 s, DECISIONS D-049); a tap shorter than a tick still goes out once.
+    if (this.held.has("interact") || this.interactPulse) buttons |= Btn.Interact;
     if (this.adsActive) buttons |= Btn.Ads;
     if (this.held.has("slowWalk")) buttons |= Btn.SlowWalk;
     if (this.abilityPulse) buttons |= Btn.Ability;
