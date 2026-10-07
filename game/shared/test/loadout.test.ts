@@ -37,7 +37,7 @@ describe("loadout picks (DECISIONS D-042)", () => {
   it("fills an empty sight with iron and an empty grip slot with the horizontal grip", () => {
     const { loadout } = resolveLoadout(data, pick("brava", wp("para_308")));
     expect(loadout.pick.primary).toMatchObject({ sight: "iron", grip: "horizontal" });
-    expect(loadout.weapons[0].moveSpeedMult).toBeCloseTo(1.05, 6);
+    expect(loadout.weapons[0].moveSpeedMult).toBe(1); // full speed: the horizontal grip
     // No grip slot: stays empty.
     expect(resolveLoadout(data, pick("mute", wp("mp5k"))).loadout.pick.primary.grip).toBeNull();
   });
@@ -113,10 +113,14 @@ describe("resolved weapon numbers", () => {
     expect(xk.damage).toMatchObject({ base: 54, falloff: [[25, 54], [35, 43]] });
   });
 
-  it("applies movement multipliers: LMG 0.9, horizontal grip 1.05 (core_mechanics.md §2.2)", () => {
-    const lmg = (grip: WeaponPick["grip"]) => resolveLoadout(data, pick("fuze", wp("6p41", { grip }))).loadout.weapons[0].moveSpeedMult;
-    expect(lmg("horizontal")).toBeCloseTo(0.945, 6);
-    expect(lmg("vertical")).toBeCloseTo(0.9, 6);
+  it("applies movement multipliers: LMG −10 %, horizontal grip +5 % up to full speed (core_mechanics.md §2.2)", () => {
+    const speed = (op: string, slot: 0 | 1, p: WeaponPick) =>
+      resolveLoadout(data, slot === 0 ? pick(op, p) : pick(op, defaultLoadoutPick(data, op).primary, p)).loadout.weapons[slot].moveSpeedMult;
+    expect(speed("fuze", 0, wp("6p41", { grip: "horizontal" }))).toBeCloseTo(0.9, 6);
+    expect(speed("fuze", 0, wp("6p41", { grip: "vertical" }))).toBeCloseTo(0.9 / 1.05, 6);
+    expect(speed("brava", 0, wp("para_308", { grip: "vertical" }))).toBeCloseTo(1 / 1.05, 6);
+    expect(speed("brava", 1, wp("usp40"))).toBe(1); // a handgun is full speed
+    expect(speed("mute", 0, wp("mp5k"))).toBeCloseTo(1 / 1.05, 6); // no grip slot, so no grip bonus
   });
 
   it("applies recoil attachments and the official recoil facts", () => {

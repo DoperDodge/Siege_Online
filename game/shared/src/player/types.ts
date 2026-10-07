@@ -21,8 +21,48 @@ export const Btn = {
   SlowWalk: 1 << 4,
   /** Unique-ability key (Skopós: open / close the idle shell's camera). */
   Ability: 1 << 5,
-  /** Fire. Phase 2: a test shot that only reports what lag compensation hit; weapons from Phase 3. */
+  /** Fire, held (DECISIONS D-055): automatic weapons fire while it is down, others on the press. */
   Fire: 1 << 6,
+  /** One-tick presses (C15 in the Phase 3 plan). */
+  Reload: 1 << 7,
+  /** Switch between primary and secondary (the client turns 1 / 2 / the wheel into this press). */
+  Swap: 1 << 8,
+  FireMode: 1 << 9,
+  Melee: 1 << 10,
+  /** Reserved: ping (Phase 7) and gadget (Phase 8), so the numbers never change. */
+  Ping: 1 << 11,
+  Gadget: 1 << 12,
+} as const;
+
+/** What the weapon in hand is doing (PawnState.wAct). */
+export enum WeaponAct {
+  Ready = 0,
+  /** Bringing the other weapon up after a swap. */
+  Equip = 1,
+  Reload = 2,
+}
+
+/** Which reload is running (PawnState.reloadKind). */
+export enum ReloadKind {
+  None = 0,
+  /** Magazine weapon with rounds left (keeps the chambered round). */
+  Tactical = 1,
+  /** Magazine weapon from empty, or a tube shotgun from empty (its overhead first). */
+  Empty = 2,
+  /** Tube shotgun with shells left: one shell at a time. */
+  Shell = 3,
+}
+
+/** PawnState.wflags bits. */
+export const WFlag = {
+  /** The old magazine is out (reload past its magazine-out point). */
+  MagOut: 1 << 0,
+  /** The ammo counter has refilled (reload past its refill point). */
+  Refilled: 1 << 1,
+  /** A semi or burst press during the sprint exit, fired as soon as the gate opens. */
+  FireQueued: 1 << 2,
+  /** ADS started from a sprint (slower, Phase 3 M5). */
+  AdsFromSprint: 1 << 3,
 } as const;
 
 /**
@@ -95,6 +135,43 @@ export interface PawnState {
   hp: number;
   maxHp: number;
   lastFallDamage: number;
+  // weapons (Phase 3; all predicted and hashed, DECISIONS D-040)
+  /** 0 primary, 1 secondary. */
+  slot: number;
+  /** WeaponAct, and ticks into it. */
+  wAct: WeaponAct;
+  actTicks: number;
+  reloadKind: ReloadKind;
+  wflags: number;
+  /** Rounds in each weapon, the chambered one included, and in reserve. */
+  loaded0: number;
+  loaded1: number;
+  reserve0: number;
+  reserve1: number;
+  /** Fire-mode index per slot: low nibble primary, high nibble secondary. */
+  modes: number;
+  /** Fire-rate debt in 1/(60·64) minute units: a shot adds 3840, every tick pays off the weapon's rpm. */
+  cycle: number;
+  burstLeft: number;
+  /** ADS progress 0..65535 (M5). */
+  adsQ: number;
+  /** Bullet index in the current spray (recoil stages), and ticks since the last shot (saturating). */
+  shotIdx: number;
+  sinceShot: number;
+  /** Recoil random state, seeded by the server (M5). */
+  rng: number;
+  recoilPendP: number;
+  recoilPendY: number;
+  recoilRecP: number;
+  recoilRecY: number;
+  // down-but-not-out, revive, melee (M7, M8)
+  downHp: number;
+  downs: number;
+  invulnTicks: number;
+  meleeTicks: number;
+  reviveTicks: number;
+  reviveTarget: number;
+  revivedBy: number;
 }
 
 export const NEUTRAL_INPUT: Readonly<Omit<InputCmd, "seq" | "yaw" | "pitch">> = {

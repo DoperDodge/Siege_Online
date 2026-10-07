@@ -2,7 +2,6 @@
 // the Node server, the netsim harness and (later) offline Practice in a Web Worker all run this same code.
 import { DT, TICK_HZ } from "../core/constants.js";
 import type { Vec3 } from "../core/math.js";
-import { eyePose } from "../player/hitboxes.js";
 import type { PlayerController } from "../player/pawn.js";
 import type { InputCmd, PawnState } from "../player/types.js";
 import { QUERY_STATIC } from "../physics/rapier.js";
@@ -10,7 +9,7 @@ import { Sim } from "../sim.js";
 import { ByteWriter, fnv1a } from "./bytes.js";
 import { HitboxHistory, SentRing } from "./lagComp.js";
 import { controllerState, writeControllerState, writePawnState } from "./pawnState.js";
-import { Btn } from "../player/types.js";
+import type { SimEvent } from "../weapons/step.js";
 import { encodeError, encodePong, encodeRoster, encodeShotResult, encodeWelcome, ErrorCode, unwrap16, type InputMsg, type LabTool, type RosterEntry } from "./protocol.js";
 import { MAX_INTERP_MS, quantizeRemote, SNAPSHOT_EVERY, SnapshotEncoder, type RemoteQ } from "./snapshot.js";
 
@@ -44,8 +43,6 @@ const MAX_VIEW_BACK_TICKS = (MAX_INTERP_MS / 1000) * TICK_HZ + 0.5;
  */
 export const MAX_HOLD_TICKS = 16;
 const HOLD_REFUND = 0.25;
-/** Fewest client ticks (input sequence numbers) between two test shots from one player. */
-const SHOT_INTERVAL_TICKS = 8;
 /**
  * A shot's claimed view may lag the server by at most this much more than the least lag this client has
  * shown recently (its real round trip): claiming an older snapshot only on the input that fires would
@@ -107,9 +104,6 @@ interface Member {
   encoder: SnapshotEncoder;
   /** Snapshot ticks actually sent to this client (skipped ones aren't), for rewinding to what it drew. */
   sent: SentRing;
-  /** Buttons of the last applied input (to see the fire button go down), and the input that last fired. */
-  lastButtons: number;
-  lastShotSeq: number;
 }
 
 /** Hash of everything a client predicts for itself: each owned pawn's exact state plus its controller. */
@@ -177,8 +171,6 @@ export class Room {
       confirmEpoch: null,
       encoder: new SnapshotEncoder(),
       sent: new SentRing(),
-      lastButtons: 0,
-      lastShotSeq: -Infinity,
     };
     this.members.set(m.id, m);
     this.spawn(m, operatorId);
@@ -209,7 +201,6 @@ export class Room {
     m.queue = [];
     m.needCorrection = true;
     m.newBody = true;
-    m.lastButtons = 0;
     m.credit = 0;
     m.held = 0;
   }
@@ -256,28 +247,22 @@ export class Room {
   }
 
   /**
-   * The fire button went down in an applied input: a test shot along that input's view from the body's
-   * eye, judged against everyone else as they were when that input was made. The view time comes from
-   * the input itself (its newest snapshot tick minus how far behind it the client was drawing), bounded
-   * by the client's interpolation ceiling and by the lag its connection has shown, and the rewind is
-   * capped at maxRewindTicks counted from when the input arrived (time it then waits in our queue is
-   * ours, not the shooter's latency). The level stops the ray where it's hit.
+   * A shot the simulation fired while applying `applied` (the sim decides when shots happen: fire rate,
+   * ammo, sprint exit; weapons/step.ts). It leaves along the body's view from where its eye was, and is
+   * judged against everyone else as they were when that input was made. The view time comes from the
+   * input itself (its newest snapshot tick minus how far behind it the client was drawing), bounded by the
+   * client's interpolation ceiling and by the lag its connection has shown, and the rewind is capped at
+   * maxRewindTicks counted from when the input arrived (time it then waits in our queue is ours, not the
+   * shooter's latency). The level stops the ray where it's hit.
    */
-  private fire(m: Member, applied: QueuedInput) {
-    const pressed = applied.cmd.buttons & ~m.lastButtons;
-    m.lastButtons = applied.cmd.buttons;
-    if (!(pressed & Btn.Fire) || !m.ctrl) return;
-    if (m.ctrl.shellCam || m.ctrl.swapPhase !== 0) return; // Skopós looking through a shell's camera can't shoot
-    if (applied.cmd.seq - m.lastShotSeq < SHOT_INTERVAL_TICKS) return;
-    m.lastShotSeq = applied.cmd.seq;
-    const pawn = this.sim.pawns.get(m.ctrl.possessedPawnId);
-    if (!pawn) return;
+  private judgeShot(m: Member, applied: QueuedInput, shot: Extract<SimEvent, { kind: "shot" }>) {
+    if (!m.ctrl) return;
     const now = applied.receivedTick;
     const leastLag = Math.min(...m.lags);
     const snapTick = Math.max(Math.min(now, unwrap16(applied.snapTick, now)), now - leastLag - LAG_SLACK_TICKS);
     const viewTick = snapTick - Math.min(MAX_VIEW_BACK_TICKS, applied.viewBackQ8 / 256);
-    const origin = eyePose(this.sim.data.movement, this.sim.data.hitboxes, pawn.state).pos;
-    const { yaw, pitch } = applied.cmd;
+    const origin = shot.origin;
+    const { yaw, pitch } = shot;
     const dir: Vec3 = [-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch)];
     const ray = new this.sim.R.Ray({ x: origin[0], y: origin[1], z: origin[2] }, { x: dir[0], y: dir[1], z: dir[2] });
     const wall = this.sim.world.castRay(ray, 200, true, undefined, QUERY_STATIC);
@@ -288,7 +273,7 @@ export class Room {
     if (rewoundTick > viewTick) this.stats.cappedShots++;
     m.client.send(
       encodeShotResult({
-        seq: applied.cmd.seq & 0xffff,
+        seq: shot.seq & 0xffff,
         origin,
         dir,
         viewTick,
@@ -324,10 +309,20 @@ export class Room {
     return next;
   }
 
-  /** After stepping an input: judge the prediction made with it (only if made after our latest correction), then any shot. */
+  /** After stepping an input: judge the prediction made with it (only if made after our latest correction). */
   private afterInput(m: Member, applied: QueuedInput) {
     if (m.ctrl && applied.epoch === (m.epoch & 0xff) && predictionHash(this.sim, m.ctrl) !== applied.predictedHash) m.needCorrection = true;
-    this.fire(m, applied);
+  }
+
+  /** Judge the shots of the step just taken; `applied` is each member's input in that step. */
+  private judgeEvents(applied: ReadonlyMap<number, { m: Member; input: QueuedInput }>) {
+    for (const e of this.sim.events) {
+      if (e.kind !== "shot") continue;
+      const owner = this.sim.pawns.get(e.pawnId)?.ownerId;
+      const a = owner !== undefined && owner !== null ? applied.get(owner) : undefined;
+      // Shots only come from real inputs (weapons/step.ts), so the input is always there.
+      if (a) this.judgeShot(a.m, a.input, e);
+    }
   }
 
   /**
@@ -370,13 +365,20 @@ export class Room {
       m.applied = next;
     }
     this.sim.step(inputs, active, true);
-    for (const m of this.members.values()) if (m.applied) this.afterInput(m, m.applied);
+    const applied = new Map<number, { m: Member; input: QueuedInput }>();
+    for (const m of this.members.values()) {
+      if (!m.applied || !m.ctrl) continue;
+      this.afterInput(m, m.applied);
+      applied.set(m.ctrl.id, { m, input: m.applied });
+    }
+    this.judgeEvents(applied);
     // Catch up after a stall: one extra input for a client that has a backlog and banked credit.
     for (const m of this.members.values()) {
       if (!m.ctrl || m.queue.length <= TARGET_QUEUE || m.credit < 1) continue;
       const extra = this.take(m)!;
       this.sim.step(new Map([[m.ctrl.id, extra.cmd]]), new Set([m.ctrl.id]));
       this.afterInput(m, extra);
+      this.judgeEvents(new Map([[m.ctrl.id, { m, input: extra }]]));
     }
     this.history.record();
     this.stats.ticks++;

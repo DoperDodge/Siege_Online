@@ -97,6 +97,7 @@ export interface ResolvedWeapon {
   ammo: { magazine: number; plusOne: boolean; maxAmmo: number };
   reload: ResolvedReload;
   ads: { ticks: number; fromSprintTicks: number; exitTicks: number; curve: { kind: "easeIn" | "easeOut"; power: number }; zoom: number };
+  /** Scales the operator's speeds (data/movement.json, which are full speed): 1 at full speed, less when slower. */
   moveSpeedMult: number;
   suppressed: boolean;
   laser: boolean;
@@ -322,7 +323,9 @@ export function resolveWeapon(data: GameData, p: WeaponPick): ResolvedWeapon {
       curve: { ...g.curves[cls.adsCurve] },
       zoom: sight.zoom,
     },
-    moveSpeedMult: f32(Math.min(g.rules.maxMoveSpeedMult, cls.moveSpeedMult * (p.grip === "horizontal" ? g.attachments.horizontal.moveSpeedMult : 1))),
+    // movement.json's speeds are full speed, reached at the cap (a handgun, or a primary with the
+    // horizontal grip); everything else is that much slower (data/gunplay.json _doc).
+    moveSpeedMult: f32(Math.min(g.rules.maxMoveSpeedMult, cls.moveSpeedMult * (p.grip === "horizontal" ? g.attachments.horizontal.moveSpeedMult : 1)) / g.rules.maxMoveSpeedMult),
     suppressed: p.barrel === "suppressor" || w.integralSuppressor,
     laser,
     recoil: resolveRecoil(g, w, p),

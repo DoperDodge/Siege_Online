@@ -9,6 +9,8 @@ import { capsuleFree, movementPrompt, poseCollider, stepPawn, type MoveContext, 
 import { initialPawnState, type Pawn, type PlayerController } from "./player/pawn.js";
 import { capsuleDims, stanceDims } from "./player/stance.js";
 import { Btn, PawnMode, Stance, type InputCmd, type PawnState } from "./player/types.js";
+import { defaultLoadoutPick, resolveLoadout, type LoadoutPick, type ResolvedLoadout } from "./weapons/loadout.js";
+import type { SimEvent } from "./weapons/step.js";
 
 /** Contextual hint for the HUD: "Space to mantle", "F to climb", "F to transfer" (Skopós camera). */
 export type Prompt = MovementPrompt | "transfer";
@@ -27,7 +29,15 @@ export class Sim {
     readonly data: GameData,
     readonly level: BuiltLevel,
   ) {
-    this.ctx = { R, world, cc, data, level };
+    this.ctx = { R, world, cc, data, level, events: [] };
+  }
+
+  /**
+   * What happened during the last step() call (shots, reloads): cleared when the next one starts, so the
+   * server reads it after every step (catch-up steps too) and a client only after a fresh prediction.
+   */
+  get events(): readonly SimEvent[] {
+    return this.ctx.events;
   }
 
   static async create(levelId: string, data: GameData = loadGameData()): Promise<Sim> {
@@ -59,11 +69,14 @@ export class Sim {
 
   /**
    * Create a controller and its pawn(s) at a level spawn. Skopós gets two shells side by side. `ids` lets a
-   * client mirror the server's controller and pawn ids for the player it predicts.
+   * client mirror the server's controller and pawn ids for the player it predicts. `pick` is the loadout
+   * (an invalid one becomes the operator's default, DECISIONS D-042); every shell carries the same one,
+   * each with its own ammo.
    */
-  addPlayer(name: string, operatorId: string, spawnIndex = 0, ids?: { controller: number; pawns: number[] }): PlayerController {
+  addPlayer(name: string, operatorId: string, spawnIndex = 0, ids?: { controller: number; pawns: number[] }, pick?: LoadoutPick): PlayerController {
     const op = this.data.operators.get(operatorId);
     if (!op) throw new Error(`Unknown operator "${operatorId}"`);
+    const loadout = resolveLoadout(this.data, pick && pick.operator === operatorId ? pick : defaultLoadoutPick(this.data, operatorId)).loadout;
     if (ids && ids.pawns.length !== op.pawns) throw new Error(`${op.name} has ${op.pawns} pawn(s), got ${ids.pawns.length} ids`);
     for (const id of ids?.pawns ?? []) if (this.pawns.has(id)) throw new Error(`pawn id ${id} is already in use`);
     if (ids && this.controllers.has(ids.controller)) throw new Error(`controller id ${ids.controller} is already in use`);
@@ -115,7 +128,7 @@ export class Sim {
       }
     }
     for (const [i, [px, pz]] of spots.entries()) {
-      const pawn = this.spawnPawn(operatorId, px, spawn.pos[1], pz, yaw, controller.id, ids?.pawns[i]);
+      const pawn = this.spawnPawn(operatorId, px, spawn.pos[1], pz, yaw, controller.id, ids?.pawns[i], loadout);
       if (i > 0) pawn.state.stance = pawn.state.stanceFrom = Stance.Crouch; // idle shells crouch behind their shield
       controller.pawnIds.push(pawn.id);
     }
@@ -130,7 +143,7 @@ export class Sim {
     return id;
   }
 
-  spawnPawn(operatorId: string, x: number, y: number, z: number, yaw: number, ownerId: number | null = null, id?: number): Pawn {
+  spawnPawn(operatorId: string, x: number, y: number, z: number, yaw: number, ownerId: number | null = null, id?: number, loadout: ResolvedLoadout | null = null): Pawn {
     const m = this.data.movement;
     const op = this.data.operators.get(operatorId);
     const maxHp = m.healthByRating[String(op?.healthRating ?? 2) as "1" | "2" | "3"];
@@ -142,7 +155,7 @@ export class Sim {
     // Float32-exact like every other state, and the collider placed from that state the same way a client
     // places it from the correction it gets for this body, so both start bit-identical.
     const t = collider.translation();
-    const pawn: Pawn = { id: pawnId, operatorId, ownerId, collider, state: initialPawnState(t.x, Math.fround(y + 0.02), t.z, Math.fround(yaw), maxHp) };
+    const pawn: Pawn = { id: pawnId, operatorId, ownerId, collider, loadout, state: initialPawnState(t.x, Math.fround(y + 0.02), t.z, Math.fround(yaw), maxHp, loadout) };
     poseCollider(this.ctx, pawn);
     this.pawns.set(pawn.id, pawn);
     refreshBroadPhase(this.world); // a new collider is invisible to queries until the next refresh
@@ -156,7 +169,7 @@ export class Sim {
   addProxy(id: number, operatorId: string, state: PawnState): Pawn {
     if (this.pawns.has(id)) throw new Error(`pawn id ${id} is already in use`);
     const collider = this.world.createCollider(this.R.ColliderDesc.capsule(0.5, 0.3).setCollisionGroups(PLAYER_GROUPS));
-    const pawn: Pawn = { id: this.claimId(id), operatorId, ownerId: null, collider, state: { ...state }, proxy: true };
+    const pawn: Pawn = { id: this.claimId(id), operatorId, ownerId: null, collider, loadout: null, state: { ...state }, proxy: true };
     this.pawns.set(id, pawn);
     poseCollider(this.ctx, pawn);
     refreshBroadPhase(this.world);
@@ -230,7 +243,7 @@ export class Sim {
     pawn.collider.setRadius(r);
     pawn.collider.setHalfHeight(hh);
     pawn.collider.setTranslation({ x: spawn.pos[0], y: spawn.pos[1] + hh + r + 0.02, z: spawn.pos[2] });
-    pawn.state = initialPawnState(spawn.pos[0], spawn.pos[1] + 0.02, spawn.pos[2], Math.fround(spawn.yawDeg * DEG), pawn.state.maxHp);
+    pawn.state = initialPawnState(spawn.pos[0], spawn.pos[1] + 0.02, spawn.pos[2], Math.fround(spawn.yawDeg * DEG), pawn.state.maxHp, pawn.loadout);
     poseCollider(this.ctx, pawn); // also makes a dead body solid again
     refreshBroadPhase(this.world);
   }
@@ -281,6 +294,7 @@ export class Sim {
     // `only`: step just these controllers and their pawns; everyone else stays put. The server uses it
     // to hold a player still while their next input hasn't arrived, and for an extra catch-up step
     // (a second queued input after a network stall, which doesn't advance the tick counter).
+    this.ctx.events.length = 0;
     const drive = new Map<number, InputCmd>();
     // Pawns driven without real buttons this tick (the body left behind on the shell camera, the shell
     // being looked through): like the no-input case below, their held-button memory is kept.
@@ -318,7 +332,9 @@ export class Sim {
       const input = drive.get(pawn.id);
       if (input) {
         const held = pawn.state.prevButtons;
-        stepPawn(this.ctx, pawn, input);
+        // A body driven without its player's buttons (left behind on the camera, or being looked
+        // through) has its weapon parked: nothing it was doing carries on unseen.
+        stepPawn(this.ctx, pawn, input, !idleDriven.has(pawn.id));
         refreshBroadPhase(this.world); // the next pawn must see this one where it now is
         if (idleDriven.has(pawn.id)) pawn.state.prevButtons = held;
         continue;
@@ -326,9 +342,10 @@ export class Sim {
       const owner = pawn.ownerId !== null ? this.controllers.get(pawn.ownerId) : undefined;
       const idleShell = owner !== undefined && owner.pawnIds.length > 1 && owner.possessedPawnId !== pawn.id;
       // No input this tick (idle shell, or a dropped packet): stand still, and keep the held-button
-      // memory so keys still held when input resumes don't count as fresh presses.
+      // memory so keys still held when input resumes don't count as fresh presses. The body the player
+      // is in keeps its weapon running (a reload goes on through a lag spike); an idle shell's is parked.
       const held = pawn.state.prevButtons;
-      stepPawn(this.ctx, pawn, idleInput(pawn, idleShell ? Stance.Crouch : pawn.state.stance));
+      stepPawn(this.ctx, pawn, idleInput(pawn, idleShell ? Stance.Crouch : pawn.state.stance), !idleShell);
       refreshBroadPhase(this.world);
       pawn.state.prevButtons = held;
     }

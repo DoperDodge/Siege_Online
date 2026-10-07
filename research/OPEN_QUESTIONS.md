@@ -167,8 +167,9 @@ in the Shooting Range or a Custom Game with a stopwatch or a 60 fps recording.
 9. **Damage curve:** is damage between falloff points rounded down? What shape does buckshot damage take
    between 5–6 m and 10–13 m (we use straight lines)?
 10. **Movement penalties:** do the LMG's −10 % and the horizontal grip's +5 % apply to sprinting and ADS
-   walking too, and with the secondary out? The horizontal grip "never exceeds the operator's cap": what is
-   that cap (we use +5 %, i.e. the grip is the only bonus)?
+   walking too, and with the secondary out? We assume the measured speeds are full speed (a handgun, or a
+   primary with the horizontal grip, which "lets a primary move at handgun speed"), so a primary with another
+   grip is 5 % slower and an LMG 10 % slower. Are handguns really 5 % faster than a primary without the grip?
 11. **Ladders and vaults:** can you fire, reload or ADS on a ladder or during a vault? (We block all three.)
 12. **Spread:** hip-fire spread per class; is ADS pinpoint for bullets; does spread grow while firing, or while
    moving for guns other than shotguns (Y8S3 says moving widens buckshot spread; how much)? Is the buckshot

@@ -1,5 +1,5 @@
 {
-  "_doc": "Weapon class, sight, attachment and handling rules (Phase 3). Per-weapon numbers live only in data/weapons/<id>.json. Sources: research/weapons_notes.md §4.1–4.9, research/core_mechanics.md §2.2 and §14. Times in seconds, angles in degrees. `classes.*.falloff` ([meters, fraction of base damage] points; buckshot per Y8S3, weapons_notes.md §4.3) and `classes.*.maxAmmo` ([min, max] total rounds; the +1 chambered round may add one) are only used to validate the weapon files. Every recoil and spread magnitude is a placeholder: Ubisoft publishes the field names (first-shot multiplier, Camera Up Speed, vertical/horizontal, stages by bullet index) but no values. `rules.bonusMath`: how a \"+X %\" bonus changes a time or a recoil amount, per kind; \"divide\" is ÷ (1 + Σ bonuses) (fits the community's laser ADS = ADS ÷ 1.1), \"subtract\" is × (1 − Σ bonuses) (fits Fandom's SMG-12 angled-grip reload, 3.0 → 2.4 s). `spread.*.movePerMpsDeg` widens the cone per m/s of movement (official for buckshot, Y8S3; size is a placeholder).",
+  "_doc": "Weapon class, sight, attachment and handling rules (Phase 3). Per-weapon numbers live only in data/weapons/<id>.json. Sources: research/weapons_notes.md §4.1–4.9, research/core_mechanics.md §2.2 and §14. Times in seconds, angles in degrees. `classes.*.falloff` ([meters, fraction of base damage] points; buckshot per Y8S3, weapons_notes.md §4.3) and `classes.*.maxAmmo` ([min, max] total rounds; the +1 chambered round may add one) are only used to validate the weapon files. Every recoil and spread magnitude is a placeholder: Ubisoft publishes the field names (first-shot multiplier, Camera Up Speed, vertical/horizontal, stages by bullet index) but no values. `rules.bonusMath`: how a \"+X %\" bonus changes a time or a recoil amount, per kind; \"divide\" is ÷ (1 + Σ bonuses) (fits the community's laser ADS = ADS ÷ 1.1), \"subtract\" is × (1 − Σ bonuses) (fits Fandom's SMG-12 angled-grip reload, 3.0 → 2.4 s). `spread.*.movePerMpsDeg` widens the cone per m/s of movement (official for buckshot, Y8S3; size is a placeholder). Move speed: data/movement.json's speeds are an operator's full speed, reached at `rules.maxMoveSpeedMult` (a handgun, or a primary with the horizontal grip, which \"lets a primary move at handgun speed\", Y9S1; the community speeds were measured after Y9S1, when that grip is the default). A weapon moves at class × grip ÷ that, so another grip is 5 % slower and an LMG 10 % slower. Handguns being 5 % faster than a bare primary is a community claim (core_mechanics.md §2.2).",
   "_season": "Y11S3",
   "_unverified": [
     "classes.hand_cannon.adsCurve",
@@ -14,6 +14,8 @@
     "sights.telescopic.zoom",
     "rules.bonusMath",
     "rules.maxMoveSpeedMult",
+    "classes.handgun.moveSpeedMult",
+    "classes.hand_cannon.moveSpeedMult",
     "rules.swapS",
     "rules.adsExitS",
     "rules.adsFromSprintMult",
@@ -31,8 +33,8 @@
     "machine_pistol": { "adsS": 0.38, "adsCurve": "slow", "falloff": [[18, 1], [28, 0.6]], "moveSpeedMult": 1.0, "maxAmmo": [112, 140] },
     "shotgun": { "adsS": 0.34, "adsCurve": "fast", "falloff": [[5, 1], [6, 0.75], [10, 0.75], [13, 0.45]], "moveSpeedMult": 1.0, "maxAmmo": [49, 60], "maxAmmoPrimaryOnly": true },
     "slug_shotgun": { "adsS": 0.52, "adsCurve": "slow", "falloff": [[15, 1], [25, 0.6]], "moveSpeedMult": 1.0, "maxAmmo": [60, 120] },
-    "handgun": { "adsS": 0.24, "adsCurve": "fast", "falloff": [[12, 1], [14, 0.6]], "moveSpeedMult": 1.0, "maxAmmo": [70, 115] },
-    "hand_cannon": { "adsS": 0.24, "adsCurve": "fast", "falloff": null, "moveSpeedMult": 1.0, "maxAmmo": null }
+    "handgun": { "adsS": 0.24, "adsCurve": "fast", "falloff": [[12, 1], [14, 0.6]], "moveSpeedMult": 1.05, "maxAmmo": [70, 115] },
+    "hand_cannon": { "adsS": 0.24, "adsCurve": "fast", "falloff": null, "moveSpeedMult": 1.05, "maxAmmo": null }
   },
   "curves": {
     "fast": { "kind": "easeOut", "power": 2 },

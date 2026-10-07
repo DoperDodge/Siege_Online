@@ -20,6 +20,7 @@ import {
   Stance,
   type InputCmd,
   type ShotResult,
+  type SimEvent,
 } from "@redmond/shared";
 import { performance } from "node:perf_hooks";
 
@@ -133,11 +134,16 @@ class Link {
   }
 }
 
-/** A scripted player: changes what it's doing every second or so, and heads for the middle when crowding. */
-function bot(rng: Rng, crowd: boolean) {
+/**
+ * A scripted player: changes what it's doing every second or so (moving, sprinting, crouching, leaning,
+ * firing, reloading, swapping weapons, switching fire modes), and heads for the middle when crowding.
+ */
+function bot(rng: Rng, crowd: boolean, home: { x: number; z: number } | null = null) {
   let until = 0;
   let cmd: Omit<InputCmd, "seq"> = { forward: 1, strafe: 0, yaw: 0, pitch: 0, buttons: 0, stance: Stance.Stand, lean: 0 };
   let turn = 0;
+  /** One-tick presses at the start of a segment. */
+  let pulse = 0;
   return (tick: number, pos: { x: number; z: number } | null): Omit<InputCmd, "seq"> => {
     if (tick >= until) {
       until = tick + 32 + Math.floor(rng.next() * 96);
@@ -147,10 +153,11 @@ function bot(rng: Rng, crowd: boolean) {
         strafe: rng.next() < 0.3 ? (rng.next() < 0.5 ? -1 : 1) : 0,
         yaw: cmd.yaw,
         pitch: (rng.next() - 0.5) * 0.8,
-        buttons: (rng.next() < 0.35 ? Btn.Sprint : 0) | (rng.next() < 0.1 ? Btn.Ads : 0),
+        buttons: (rng.next() < 0.35 ? Btn.Sprint : 0) | (rng.next() < 0.1 ? Btn.Ads : 0) | (rng.next() < 0.3 ? Btn.Fire : 0),
         stance: rng.next() < 0.12 ? Stance.Crouch : rng.next() < 0.05 ? Stance.Prone : Stance.Stand,
         lean: rng.next() < 0.15 ? (rng.next() < 0.5 ? -1 : 1) : 0,
       };
+      pulse = (rng.next() < 0.15 ? Btn.Reload : 0) | (rng.next() < 0.1 ? Btn.Swap : 0) | (rng.next() < 0.05 ? Btn.FireMode : 0);
       turn = (rng.next() - 0.5) * 0.08;
     }
     let yaw = cmd.yaw + turn;
@@ -161,9 +168,18 @@ function bot(rng: Rng, crowd: boolean) {
       if (Math.hypot(pos.x, pos.z - 10) > 4) yaw += Math.sign(d) * Math.min(Math.abs(d), 0.06);
     }
     cmd = { ...cmd, yaw: Math.atan2(Math.sin(yaw), Math.cos(yaw)) };
-    return cmd;
+    let out = pulse ? { ...cmd, buttons: cmd.buttons | pulse } : cmd;
+    // Spread out: never more than 1.5 m from its own spot, so no two bodies ever touch.
+    if (home && pos && Math.hypot(pos.x - home.x, pos.z - home.z) > 1.5) {
+      out = { ...out, forward: 1, strafe: 0, yaw: Math.atan2(-(home.x - pos.x), -(home.z - pos.z)) };
+    }
+    pulse = 0;
+    return out;
   };
 }
+
+/** Spread-out spots along the open south side of the lab, 6 m apart. */
+const spreadSpot = (i: number) => ({ x: -27 + (i % 10) * 6, z: 26 - Math.floor(i / 10) * 4 });
 
 export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<NetsimReport> {
   const o: NetsimOptions = { ...DEFAULTS, ...partial };
@@ -184,7 +200,8 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
       const deliverToServer = (b: Uint8Array) => serverReceive(memberId, b);
       memberId = room.join(name, { send: (b) => down.send(b), buffered: () => 0 }, o.operators?.[i % o.operators.length] ?? (i === 3 ? "skopos" : "sledge"))!;
       const drift = 1 + ((rng.next() * 2 - 1) * o.driftPct) / 100;
-      return { name, session, down, up, memberId, drift, brain: bot(new Rng(o.seed * 1000 + i), o.crowd), nextTickAt: 0, ticks: 0 };
+      const home = o.spread ? spreadSpot(i) : null;
+      return { name, session, down, up, memberId, drift, brain: bot(new Rng(o.seed * 1000 + i), o.crowd, home), nextTickAt: 0, ticks: 0 };
     }),
   );
 
@@ -201,8 +218,7 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
   clock.runUntil(o.oneWayMs * 3 + o.jitterMs);
   await Promise.all(clients.map((c) => c.session.loaded()));
   if (o.spread) {
-    // Along the open south side of the lab, 6 m apart.
-    clients.forEach((c, i) => room.onLabTool(c.memberId, { kind: "teleport", x: -27 + (i % 10) * 6, y: 0, z: 26 - Math.floor(i / 10) * 4, yawDeg: 90 * i }));
+    clients.forEach((c, i) => room.onLabTool(c.memberId, { kind: "teleport", ...spreadSpot(i), y: 0, yawDeg: 90 * i }));
   }
 
   const endAt = clock.now + o.seconds * 1000;
@@ -366,6 +382,8 @@ export async function runHitreg(partial: Partial<HitregOptions> = {}): Promise<H
   };
   const rewinds: number[] = [];
   const claimed: number[] = [];
+  /** The shot our own prediction fired this tick (the sim decides: ammo, reloads, fire rate). */
+  let localShot: SimEvent | null = null;
 
   const onShot = (s: ShotResult) => {
     const e = expected.get(s.seq);
@@ -394,7 +412,12 @@ export async function runHitreg(partial: Partial<HitregOptions> = {}): Promise<H
       let memberId = 0;
       const down = new Link(clock, rng, linkOpts, (b) => session.handle(b));
       const up = new Link(clock, rng, linkOpts, (b) => serverReceive(memberId, b));
-      session = new ClientSession({ send: (b) => up.send(b), now: () => clock.now, onShot: i === 0 ? onShot : undefined });
+      session = new ClientSession({
+        send: (b) => up.send(b),
+        now: () => clock.now,
+        onShot: i === 0 ? onShot : undefined,
+        onLocalEvents: i === 0 ? (evs) => (localShot = evs.find((e) => e.kind === "shot") ?? localShot) : undefined,
+      });
       memberId = room.join(i === 0 ? "shooter" : `target${i}`, { send: (b) => down.send(b), buffered: () => 0 }, i === 0 ? "sledge" : ["mute", "pulse", "sentry", "sledge"][i - 1])!;
       return { session, memberId, nextTickAt: 0, ticks: 0, drift: 1 + ((rng.next() * 2 - 1) * 0.5) / 100 };
     }),
@@ -426,10 +449,8 @@ export async function runHitreg(partial: Partial<HitregOptions> = {}): Promise<H
   let serverNext = clock.now;
 
   /** The shooter's own verdict: its ray against what it drew at `viewTick`, stopped by the level. */
-  const ownRay = (viewTick: number, yaw: number, pitch: number): Expect["hit"] => {
+  const ownRay = (viewTick: number, origin: [number, number, number], yaw: number, pitch: number): Expect["hit"] => {
     const s = sim();
-    const me = s.pawns.get(shooter.session.ctrl!.possessedPawnId)!;
-    const origin = eyePose(m(), hb(), me.state).pos;
     const dir: [number, number, number] = [-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch)];
     const wall = s.world.castRay(new s.R.Ray({ x: origin[0], y: origin[1], z: origin[2] }, { x: dir[0], y: dir[1], z: dir[2] }), 200, true, undefined, QUERY_STATIC);
     let best: { pawnId: number; part: string; t: number } | null = null;
@@ -483,11 +504,13 @@ export async function runHitreg(partial: Partial<HitregOptions> = {}): Promise<H
           fire = true;
         }
       }
-      const q = c.session.tick({ forward: 0, strafe: 0, yaw: aim.yaw, pitch: aim.pitch, buttons: fire ? Btn.Fire : 0, stance: Stance.Stand, lean: 0 }, renderTick);
-      if (fire && q) {
+      localShot = null;
+      c.session.tick({ forward: 0, strafe: 0, yaw: aim.yaw, pitch: aim.pitch, buttons: fire ? Btn.Fire : 0, stance: Stance.Stand, lean: 0 }, renderTick);
+      const shot = localShot as SimEvent | null;
+      if (shot?.kind === "shot") {
         report.shots++;
         const viewTick = c.session.lastViewTick;
-        expected.set(q.seq & 0xffff, { viewTick, hit: ownRay(viewTick, q.yaw, q.pitch) });
+        expected.set(shot.seq & 0xffff, { viewTick, hit: ownRay(viewTick, shot.origin, shot.yaw, shot.pitch) });
       }
     }
   }

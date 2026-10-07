@@ -23,6 +23,9 @@ const BUTTONS: TouchButton[] = [
   { label: "Use", action: "interact", kind: "tap" },
   { label: "ADS", action: "ads", kind: "mode" },
   { label: "Cam", action: "ability", kind: "tap" },
+  { label: "Fire", action: "fire", kind: "hold" },
+  { label: "Reload", action: "reload", kind: "tap" },
+  { label: "Swap", action: "swap", kind: "tap" },
 ];
 
 /**

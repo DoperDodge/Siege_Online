@@ -9,10 +9,13 @@ import {
   encodeLabTool,
   encodePickOperator,
   eyePose,
+  fireModeOf,
   lerp,
+  loadedOf,
   loadGameData,
   PawnMode,
   proneWeight,
+  reserveOf,
   Sim,
   Stance,
   TICK_HZ,
@@ -22,6 +25,8 @@ import {
   type PawnState,
   type PlayerController,
   type ShotResult,
+  type SimEvent,
+  WeaponAct,
 } from "@redmond/shared";
 import { Controls, type Action, type UiAction } from "../input/controls.js";
 import { horizontalFov, keyLabel, loadSettings, saveSettings, type HoldMode, type Settings } from "../input/settings.js";
@@ -47,6 +52,8 @@ app.innerHTML = `
     <div class="hp"><div class="hp-fill"></div><span class="hp-text"></span></div>
   </div>
   <div class="hud hud-tr"><span class="fps"></span><div class="net"></div></div>
+  <div class="hud hud-br"><div class="weapon-name"></div><div class="ammo"><span class="ammo-loaded"></span><span class="ammo-reserve"></span></div><div class="weapon-state"></div></div>
+  <div class="muzzle"></div>
   <div class="hud hud-bottom">
     <div class="stances"><span data-s="0">STAND</span><span data-s="1">CROUCH</span><span data-s="2">PRONE</span></div>
     <div class="stance-bar"><div></div></div>
@@ -77,11 +84,10 @@ let lastShot: (ShotResult & { targetName: string | null }) | null = null;
 let showShot: (shot: ShotResult) => void = () => {};
 /** Online tests can script the input (window.__lab.input). */
 let scripted: Partial<InputCmd> | null = null;
-/** A click waiting to go out as the fire button on the next input, and the render tick of the frame clicked on. */
-let firePulse = false;
-let fireViewTick = 0;
-/** Render tick of the frame on screen (remote players are drawn at it). */
+/** Render tick of the frame on screen (remote players are drawn at it), and of the one last clicked on. */
 let shownRenderTick = 0;
+let clickViewTick: number | null = null;
+let muzzleUntil = 0;
 let flashUntil = 0;
 
 // Online: the lobby connects (create or join a room) and the session builds the simulation from the
@@ -113,6 +119,10 @@ controls.setView(possessed().state.yaw, 0);
 controls.attach(renderer.domElement);
 controls.isBlocked = () => !$(".pause").classList.contains("hidden") || !$(".help").classList.contains("hidden");
 controls.stanceLocked = () => ctrl.shellCam || ctrl.swapPhase !== 0;
+controls.weaponState = () => {
+  const p = sim.pawns.get(ctrl.possessedPawnId);
+  return p && (!net || net.session.ready) ? { slot: p.state.slot, equipping: p.state.wAct === WeaponAct.Equip } : null;
+};
 
 const MODE_KEY: Partial<Record<Action, "crouchMode" | "proneMode" | "leanMode" | "adsMode">> = {
   crouch: "crouchMode",
@@ -129,6 +139,7 @@ let usingTouch = touchOnly;
 let touchLayer: HTMLElement | null = null;
 const mountTouch = () => {
   touchLayer ??= mountTouchControls(app, controls, (a) => (MODE_KEY[a] ? settings[MODE_KEY[a]!] : undefined), renderer.domElement);
+  app.classList.add("touch"); // the weapon panel moves clear of the touch buttons
 };
 if (touchOnly) mountTouch();
 const notePointer = (e: PointerEvent) => {
@@ -153,7 +164,7 @@ function onUi(a: UiAction) {
   else if (a === "help") $(".help").classList.toggle("hidden");
   else if (a === "settings") togglePause();
   else if (a === "respawn") respawn();
-  else if (a === "fire" && net) fire();
+  else if (a === "fire") noteClick();
 }
 
 function respawn() {
@@ -320,7 +331,10 @@ function renderHelp() {
       ${row("Right mouse", "Aim down sights (slower walk)")}
       ${row(`<kbd>${keyLabel(k.ability)}</kbd>`, "Ability — Skopós: view your other shell's camera (press again to go back)")}
       ${row(`<kbd>${keyLabel(k.respawn)}</kbd>`, "Respawn")}
-      ${net ? row("Left mouse", "Test shot (online): shows what the server's lag compensation hit") : ""}
+      ${row("Left mouse", net ? "Fire (hold for automatic weapons). Online, each shot shows what the server's lag compensation hit." : "Fire (hold for automatic weapons)")}
+      ${row(`<kbd>${keyLabel(k.reload)}</kbd>`, "Reload")}
+      ${row(`<kbd>${keyLabel(k.primary)}</kbd> / <kbd>${keyLabel(k.secondary)}</kbd> / wheel`, "Primary / secondary weapon")}
+      ${row(`<kbd>${keyLabel(k.fireMode)}</kbd>`, "Fire mode (auto / burst / single, where the weapon has them)")}
       ${row("<kbd>F3</kbd> / <kbd>F4</kbd>", "Hitboxes / third-person view")}
       ${row("<kbd>Esc</kbd>", "Pause: settings, operator, go-to menu")}
     </table>
@@ -357,12 +371,12 @@ function tick() {
   if (net) {
     const input = scripted ? { ...controls.sample(++seq), ...scripted } : controls.sample(++seq);
     // Predicts locally and sends the input; a shot claims the frame that was on screen when you clicked.
-    if (firePulse) input.buttons |= Btn.Fire;
-    net.session.tick(input, firePulse ? fireViewTick : undefined);
-    firePulse = false;
+    net.session.tick(input, clickViewTick ?? undefined);
+    clickViewTick = null;
   } else {
     const input = autotest ? autoInput(++seq) : controls.sample(++seq);
     sim.step(new Map([[ctrl.id, input]]));
+    onWeaponEvents(sim.events);
   }
   const p = possessed();
   // The view follows the body you're looking through (Skopós' other shell while on its camera).
@@ -535,6 +549,21 @@ function updateHud(p: Pawn) {
     $(".swap-bar div").style.width = `${Math.min(100, (100 * ctrl.swapT) / dur)}%`;
   }
   $(".flash").classList.toggle("show", performance.now() < flashUntil);
+  $(".muzzle").classList.toggle("show", performance.now() < muzzleUntil);
+
+  // Weapon: name, rounds in it / in reserve, fire mode, and what it's doing.
+  const w = p.loadout?.weapons[s.slot];
+  $(".hud-br").classList.toggle("hidden", !w || dead || onCam);
+  if (w) {
+    const mode = fireModeOf(w, s).toUpperCase().replace("BURST", "BURST ");
+    $(".weapon-name").textContent = `${w.name}${w.suppressed ? " · suppressed" : ""}`;
+    $(".ammo-loaded").textContent = String(loadedOf(s));
+    $(".ammo-reserve").textContent = ` / ${reserveOf(s)}`;
+    $(".ammo").classList.toggle("low", loadedOf(s) <= Math.max(1, Math.floor(w.ammo.magazine / 5)));
+    $(".weapon-state").textContent = [w.fire.modes.length > 1 ? `${mode} (${keyLabel(k.fireMode)})` : mode, s.wAct === WeaponAct.Reload ? "RELOADING" : s.wAct === WeaponAct.Equip ? "SWITCHING" : ""]
+      .filter(Boolean)
+      .join("  ·  ");
+  }
 }
 
 function flash(text: string, kind: "bad" | "info") {
@@ -600,6 +629,9 @@ Object.defineProperty(window, "__lab", {
         rttMs: s.rttMs,
         remotes: s.remoteIds().map((id) => ({ id, state: s.remoteAt(id) })),
         own: possessed() ? { ...possessed().state } : null,
+        weapon: possessed()?.loadout
+          ? { id: possessed().loadout!.weapons[possessed().state.slot].id, slot: possessed().state.slot, loaded: loadedOf(possessed().state), reserve: reserveOf(possessed().state) }
+          : null,
         pawnId: ctrl.possessedPawnId,
         frames,
         lastShot,
@@ -756,6 +788,7 @@ function lobby(): Promise<OnlineConnection> {
           },
           onRoster: () => (rosterChanged = true),
           onShot: (shot) => showShot(shot),
+          onLocalEvents: (events) => onWeaponEvents(events),
         },
         onClose: (reason) => {
           if (joined) disconnected = reason;
@@ -900,14 +933,24 @@ function syncPawnViews() {
     if (!pawnViews.has(pawn.id)) pawnViews.set(pawn.id, pawn.proxy ? new PawnView(scene, 0xf97316, nameOfPawn(pawn.id) || undefined) : new PawnView(scene, 0x3b82f6));
 }
 
-/**
- * A test shot (no weapons until Phase 3): the fire button goes out with the next input, so the server
- * judges it with that input's view and against what we were drawing when we sent it.
- */
+/** Remember which frame was on screen at a click: the next input claims it (lag compensation rewinds to it). */
+function noteClick() {
+  if (net?.session.ready) clickViewTick = shownRenderTick;
+}
+
+/** One click (the e2e scripts' trigger): Fire goes out for at least one tick. */
 function fire() {
-  if (!net?.session.ready || firePulse) return;
-  firePulse = true;
-  fireViewTick = shownRenderTick;
+  noteClick();
+  controls.press("fire");
+  controls.release("fire");
+}
+
+/** What our own (predicted) weapon just did: a placeholder muzzle flash now; Phase 3's client milestone adds the rest. */
+function onWeaponEvents(events: readonly SimEvent[]) {
+  for (const e of events) {
+    if (e.kind === "shot" && e.pawnId === ctrl.possessedPawnId) muzzleUntil = performance.now() + 50;
+    else if (e.kind === "dry" && e.pawnId === ctrl.possessedPawnId) flash("Empty", "info");
+  }
 }
 
 const shotMarks: { line: THREE.Line; ghost: PawnView | null; until: number }[] = [];

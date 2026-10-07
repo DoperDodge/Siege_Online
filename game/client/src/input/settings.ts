@@ -18,6 +18,11 @@ export interface Keybinds {
   slowWalk: string;
   ability: string;
   respawn: string;
+  reload: string;
+  /** Switch to the primary / the secondary weapon (the mouse wheel switches too). */
+  primary: string;
+  secondary: string;
+  fireMode: string;
 }
 
 export interface Settings {
@@ -61,6 +66,11 @@ export const DEFAULT_SETTINGS: Settings = {
     slowWalk: "AltLeft",
     ability: "KeyZ",
     respawn: "KeyK",
+    // Our choice of defaults (Siege's own PC keys are an open question, OPEN_QUESTIONS Phase 3).
+    reload: "KeyR",
+    primary: "Digit1",
+    secondary: "Digit2",
+    fireMode: "KeyB",
   },
 };
 

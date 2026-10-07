@@ -5,7 +5,7 @@ import { ByteReader, ByteWriter, ProtocolError } from "./bytes.js";
 import { MSG_SNAPSHOT } from "./snapshot.js";
 
 /** Bump when the wire format changes; client and server must match. */
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 export const Msg = {
   // client → server

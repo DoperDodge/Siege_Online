@@ -16,7 +16,7 @@ Built in milestones; each one keeps the tests, both e2e scripts and the netsim g
 | M1 Weapon, gunplay, combat and lab-rules data | ✅ 40 weapon files + rule files, validated, CSV-agreement tests |
 | M0 Hit-registration measurement harness | ✅ server agrees with every shot as drawn (netsim); rewind cap 250 ms (D-045, your call) |
 | M2 Damage maths and loadout resolution | ✅ pure functions + tests; nothing in the game uses them yet |
-| M3 Weapon state in the simulation (fire, ammo, reload, swap, modes), protocol v2 | ⏳ |
+| M3 Weapon state in the simulation (fire, ammo, reload, swap, modes) | ✅ predicted exactly online; ammo HUD; Fire/R/1/2/wheel/B |
 | M4 Loadout pick online, data hash check | ⏳ |
 | M5 ADS, recoil, spread | ⏳ |
 | M6 Hit registration, damage, death | ⏳ |
@@ -54,7 +54,19 @@ Built in milestones; each one keeps the tests, both e2e scripts and the netsim g
   crawl and vault, at 100 ms round trip: the server agrees with every shot (also with 10 ms jitter); with
   rewinding switched off, only 9 % hit the head. 11 % of shots needed more than 200 ms of rewind, so the cap
   is now 250 ms. The online lab's pause menu also simulates jitter and packet loss now (or
-  `?lag=100&jitter=20&loss=1`, PLAN §16.9). 161 unit tests.
+  `?lag=100&jitter=20&loss=1`, PLAN §16.9).
+- **Weapons in the simulation (M3, D-040, D-055):** every operator now carries their real primary and
+  secondary (default loadout for now; picking one comes next). Hold the left mouse to fire (automatic weapons
+  keep firing at their real rate; semi-auto ones fire per click), **R** reloads (tactical gives 31, empty 30
+  on a 30-round rifle; interrupting after the magazine is out leaves just the chambered round), **1 / 2 / the
+  wheel** switch weapons (0.6 s placeholder), **B** cycles fire modes where the gun has them. Sprinting
+  cancels a reload, and a shot from a sprint waits out the 0.25 s sprint exit. Skopós's two shells each keep
+  their own ammo. The HUD shows weapon, rounds and fire mode, with a placeholder muzzle flash. Online, all of
+  it is predicted: the netsim's bots fire, reload and swap at 100 ms with jitter and stalls and get exactly one
+  correction each (the join). Damage still waits for M6: a shot only reports what it would hit.
+- **Movement fix (D-057):** sprinting diagonally into a wall could, rarely, drop you 0.29 m into the floor in
+  one tick. Fixed, with a regression test.
+- 181 unit tests.
 
 ---
 

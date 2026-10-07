@@ -9,6 +9,7 @@ import { eyePose, proneBendLift, proneBodyExtents } from "./hitboxes.js";
 import type { Pawn } from "./pawn.js";
 import { capsuleDims, currentHeight, proneWeight, stanceDims, transitionSeconds } from "./stance.js";
 import { Btn, PawnMode, STANCE_KEYS, Stance, type InputCmd, type PawnState } from "./types.js";
+import { blocksSprint, parkWeapon, stepWeapon, type SimEvent } from "../weapons/step.js";
 
 export interface MoveContext {
   R: Rapier;
@@ -16,6 +17,8 @@ export interface MoveContext {
   cc: CharacterController;
   data: GameData;
   level: BuiltLevel;
+  /** What happened this step (shots, reloads); Sim clears it at the start of every step. */
+  events: SimEvent[];
 }
 
 const IDENTITY = { x: 0, y: 0, z: 0, w: 1 };
@@ -23,7 +26,11 @@ const SKIN = 0.02;
 /** How far a prone body may sink into geometry after a move before the move is refused (float noise). */
 const PRONE_TOLERANCE = 0.005;
 
-export function stepPawn(ctx: MoveContext, pawn: Pawn, input: InputCmd): void {
+/**
+ * One tick of a body: look, move, then the weapon in hand. `weapons` is false for a body nobody is driving
+ * (Skopós's shell she isn't in): its weapon is parked instead of stepped.
+ */
+export function stepPawn(ctx: MoveContext, pawn: Pawn, input: InputCmd, weapons = true): void {
   const s = pawn.state;
   const pressed = input.buttons & ~s.prevButtons;
   s.prevButtons = input.buttons;
@@ -39,6 +46,8 @@ export function stepPawn(ctx: MoveContext, pawn: Pawn, input: InputCmd): void {
   } else {
     stepWalk(ctx, pawn, input, pressed);
   }
+  if (weapons) stepWeapon(ctx, pawn, input, pressed);
+  else parkWeapon(s);
   roundState(s);
   // The collider is placed from the state, exactly as a client places it from a correction (which carries
   // only the state): otherwise the two could differ by a float32 step and part ways a tick later.
@@ -93,24 +102,30 @@ function stepWalk(ctx: MoveContext, pawn: Pawn, input: InputCmd, pressed: number
   if ((pressed & Btn.Interact || input.buttons & Btn.Vault) && tryAttachLadder(ctx, pawn)) return;
   if (input.buttons & Btn.Vault && s.grounded && s.stance !== Stance.Prone && s.stanceT >= 1 && tryVault(ctx, pawn)) return;
 
-  // Speed for this tick.
+  // Speed for this tick. The weapon in hand scales it (LMGs slower, the horizontal grip faster; which
+  // speeds it scales is data, gunplay.rules.moveMultScope).
   const op = ctx.data.operators.get(pawn.operatorId);
   const rating = String(op?.speedRating ?? 2) as "1" | "2" | "3";
+  const weaponMult = pawn.loadout ? pawn.loadout.weapons[s.slot].moveSpeedMult : 1;
+  const scope = ctx.data.gunplay.rules.moveMultScope;
+  const mult = (k: (typeof scope)[number]) => (scope.includes(k) ? weaponMult : 1);
   const walk = m.speed.walkByRating[rating];
-  const stanceSpeed = (st: Stance) => (st === Stance.Prone ? m.speed.proneSpeed : st === Stance.Crouch ? walk * m.speed.crouchWalkFactor : walk);
+  const stanceSpeed = (st: Stance) =>
+    st === Stance.Prone ? m.speed.proneSpeed : st === Stance.Crouch ? walk * m.speed.crouchWalkFactor * mult("crouch") : walk * mult("walk");
   let speed = s.stanceT < 1 ? Math.min(stanceSpeed(s.stanceFrom), stanceSpeed(s.stance)) : stanceSpeed(s.stance);
   const ads = (input.buttons & Btn.Ads) !== 0;
-  if (ads && s.stance !== Stance.Prone) speed = Math.min(speed, m.speed.adsWalkSpeed);
+  if (ads && s.stance !== Stance.Prone) speed = Math.min(speed, m.speed.adsWalkSpeed * mult("adsWalk"));
   if (input.buttons & Btn.SlowWalk) speed *= m.speed.slowWalkFactor;
 
   const sprinting =
     (input.buttons & Btn.Sprint) !== 0 &&
     input.forward > m.sprint.forwardThreshold &&
     !ads &&
+    !blocksSprint(s, input) &&
     s.stance === Stance.Stand &&
     s.stanceT >= 1 &&
     s.grounded;
-  if (sprinting) speed = m.speed.sprintByRating[rating];
+  if (sprinting) speed = m.speed.sprintByRating[rating] * mult("sprint");
   s.sinceSprint = sprinting ? 0 : s.sinceSprint + DT;
   s.sprinting = sprinting;
 
@@ -268,8 +283,22 @@ function moveCollider(ctx: MoveContext, pawn: Pawn, dx: number, dy: number, dz: 
     pz += az * cap;
     perched = true;
   }
-  ctx.cc.computeColliderMovement(pawn.collider, { x: dx + px, y: dy, z: dz + pz }, undefined, QUERY_SOLID, notIgnored);
-  let mv = ctx.cc.computedMovement();
+  // Rapier's snap-to-ground can drop a body into the floor when it starts inside the controller's contact
+  // offset of both a wall and the floor (sprinting diagonally into a wall: 0.29 m in one tick, found by the
+  // netsim). A step that ends inside level geometry it started clear of is redone without the snap.
+  const startClear = !insideStatic(ctx, pawn, t);
+  const compute = (desired: { x: number; y: number; z: number }, filter?: (c: Collider) => boolean) => {
+    ctx.cc.computeColliderMovement(pawn.collider, desired, undefined, QUERY_SOLID, filter);
+    let out = ctx.cc.computedMovement();
+    if (out.y < desired.y - 1e-6 && startClear && insideStatic(ctx, pawn, { x: t.x + out.x, y: t.y + out.y, z: t.z + out.z })) {
+      ctx.cc.disableSnapToGround();
+      ctx.cc.computeColliderMovement(pawn.collider, desired, undefined, QUERY_SOLID, filter);
+      ctx.cc.enableSnapToGround(ctx.data.movement.step.snapToGround);
+      out = ctx.cc.computedMovement();
+    }
+    return out;
+  };
+  let mv = compute({ x: dx + px, y: dy, z: dz + pz }, notIgnored);
   // Rapier's controller can let a step through a player it rests exactly against (its sweep starts at
   // the contact offset and sometimes reports no hit). A player the step would end up inside is handled
   // like one we already overlap: the motion toward them is dropped and the step is redone.
@@ -289,10 +318,16 @@ function moveCollider(ctx: MoveContext, pawn: Pawn, dx: number, dy: number, dz: 
         ez -= az * toward;
       }
     }
-    ctx.cc.computeColliderMovement(pawn.collider, { x: ex, y: dy, z: ez }, undefined, QUERY_SOLID, (c) => !ignored.has(c.handle));
-    mv = ctx.cc.computedMovement();
+    mv = compute({ x: ex, y: dy, z: ez }, (c) => !ignored.has(c.handle));
   }
   return { x: mv.x, y: mv.y, z: mv.z, perched };
+}
+
+/** The collider, shrunk by the contact skin, overlaps level geometry with its centre at `c`. */
+function insideStatic(ctx: MoveContext, pawn: Pawn, c: { x: number; y: number; z: number }): boolean {
+  const r = pawn.collider.radius() - SKIN;
+  const hh = Math.max(0, pawn.collider.halfHeight() - SKIN);
+  return ctx.world.intersectionWithShape(c, IDENTITY, new ctx.R.Capsule(hh, r), undefined, QUERY_STATIC, pawn.collider) !== null;
 }
 
 function updateStance(ctx: MoveContext, pawn: Pawn, input: InputCmd) {
@@ -305,7 +340,11 @@ function updateStance(ctx: MoveContext, pawn: Pawn, input: InputCmd) {
   }
   let desired = input.stance;
   const wantsSprint =
-    (input.buttons & Btn.Sprint) !== 0 && input.forward > m.sprint.forwardThreshold && (input.buttons & Btn.Ads) === 0 && s.grounded;
+    (input.buttons & Btn.Sprint) !== 0 &&
+    input.forward > m.sprint.forwardThreshold &&
+    (input.buttons & Btn.Ads) === 0 &&
+    !blocksSprint(s, input) &&
+    s.grounded;
   // Sprinting forward overrides a crouch request (you stand up and run).
   if (wantsSprint && m.sprint.forcesStand && desired === Stance.Crouch) desired = Stance.Stand;
   if (desired === s.stance || !canEnterStance(ctx, pawn, desired)) return;
@@ -920,4 +959,9 @@ function roundState(s: PawnState) {
   s.moveT = Math.fround(s.moveT);
   s.tuck = Math.fround(s.tuck);
   s.airPeakY = Math.fround(s.airPeakY);
+  s.recoilPendP = Math.fround(s.recoilPendP);
+  s.recoilPendY = Math.fround(s.recoilPendY);
+  s.recoilRecP = Math.fround(s.recoilRecP);
+  s.recoilRecY = Math.fround(s.recoilRecY);
+  s.downHp = Math.fround(s.downHp);
 }

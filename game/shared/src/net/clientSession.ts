@@ -5,6 +5,7 @@ import { TICK_HZ } from "../core/constants.js";
 import type { PlayerController } from "../player/pawn.js";
 import { quantizeInput, type InputCmd, type PawnState } from "../player/types.js";
 import { Sim } from "../sim.js";
+import type { SimEvent } from "../weapons/step.js";
 import { ByteReader, ProtocolError } from "./bytes.js";
 import {
   decodeError,
@@ -37,6 +38,8 @@ export interface ClientSessionOptions {
   onWelcome?(roomCode: string): void;
   onRoster?(entries: RosterEntry[], you: number): void;
   onShot?(shot: ShotResult): void;
+  /** What our own fresh prediction did this tick (shots, reloads): instant feedback, never replayed. */
+  onLocalEvents?(events: readonly SimEvent[]): void;
   onError?(code: number, message: string): void;
 }
 
@@ -340,6 +343,7 @@ export class ClientSession {
     if (!sim || !ctrl || !this.corrected) return null;
     const q = quantizeInput({ ...cmd, seq: ++this.seq });
     sim.step(new Map([[ctrl.id, q]]));
+    if (sim.events.length) this.opts.onLocalEvents?.(sim.events);
     this.pending.push({ seq: this.seq, cmd: q });
     const viewBackQ8 = Math.max(0, Math.min(0xffff, Math.round((this.lastSnapTick - viewTick) * 256)));
     this.lastViewTick = this.lastSnapTick - viewBackQ8 / 256;

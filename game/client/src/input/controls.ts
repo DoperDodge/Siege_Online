@@ -4,7 +4,7 @@
 import { Btn, clamp, DEG, quantizeInput, Stance, wrapAngle, type InputCmd } from "@redmond/shared";
 import type { Keybinds, Settings } from "./settings.js";
 
-export type Action = keyof Keybinds | "ads" | "hitboxes" | "thirdPerson" | "help" | "settings";
+export type Action = keyof Keybinds | "ads" | "fire" | "swap" | "hitboxes" | "thirdPerson" | "help" | "settings";
 
 /** One-shot actions the lab handles itself (not sent to the simulation). */
 export type UiAction = "respawn" | "hitboxes" | "thirdPerson" | "help" | "settings" | "fire";
@@ -34,6 +34,11 @@ export class Controls {
    * return to.
    */
   stanceLocked: () => boolean = () => false;
+  /**
+   * The predicted weapon state (slot in hand, and whether a swap is still bringing it up), so 1 / 2 / the
+   * wheel turn into a single swap press only when the slot would change (C16 in the Phase 3 plan).
+   */
+  weaponState: () => { slot: number; equipping: boolean } | null = () => null;
   /** Touch joystick, -1..1 each. */
   touchMove = { x: 0, y: 0 };
   private held = new Set<Action>();
@@ -44,6 +49,13 @@ export class Controls {
   private interactPulse = false;
   private abilityPulse = false;
   private vaultPulse = false;
+  /** A click shorter than a tick still fires: Fire is sent for at least one tick (D-055). */
+  private firePulse = false;
+  private reloadPulse = false;
+  private fireModePulse = false;
+  /** The weapon slot asked for with 1 / 2 / the wheel, until the simulation is holding it. */
+  private wantSlot: 0 | 1 | null = null;
+  private sentSwap = false;
   private wasOnLadder = false;
   private lastLeanHold: -1 | 0 | 1 = 0;
   private sampledYaw = 0;
@@ -113,11 +125,24 @@ export class Controls {
         return;
       }
       if (e.button === 2) this.press("ads");
-      else if (e.button === 0) this.onUi("fire"); // Phase 2: the online lab's debug shot
+      else if (e.button === 0) {
+        this.press("fire");
+        this.onUi("fire"); // the lab notes which frame was on screen (lag compensation rewinds to it)
+      }
     });
     addEventListener("mouseup", (e) => {
       if (e.button === 2) this.release("ads");
+      else if (e.button === 0) this.release("fire");
     });
+    canvas.addEventListener(
+      "wheel",
+      (e) => {
+        if (document.pointerLockElement !== canvas || this.isBlocked() || e.deltaY === 0) return;
+        this.press("swap");
+        this.release("swap");
+      },
+      { passive: true },
+    );
     canvas.addEventListener("contextmenu", (e) => e.preventDefault());
     addEventListener("mousemove", (e) => {
       if (document.pointerLockElement === canvas) this.look(e.movementX, e.movementY);
@@ -199,6 +224,27 @@ export class Controls {
       case "respawn":
         this.onUi(action);
         break;
+      case "fire":
+        this.firePulse = true;
+        break;
+      case "reload":
+        this.reloadPulse = true;
+        break;
+      case "fireMode":
+        this.fireModePulse = true;
+        break;
+      case "primary":
+        this.wantSlot = 0;
+        break;
+      case "secondary":
+        this.wantSlot = 1;
+        break;
+      case "swap": {
+        // The other weapon (mouse wheel, touch button).
+        const ws = this.weaponState();
+        if (ws) this.wantSlot = ws.slot === 0 ? 1 : 0;
+        break;
+      }
     }
   }
 
@@ -235,9 +281,23 @@ export class Controls {
     if (this.adsActive) buttons |= Btn.Ads;
     if (this.held.has("slowWalk")) buttons |= Btn.SlowWalk;
     if (this.abilityPulse) buttons |= Btn.Ability;
+    if (this.held.has("fire") || this.firePulse) buttons |= Btn.Fire;
+    if (this.reloadPulse) buttons |= Btn.Reload;
+    if (this.fireModePulse) buttons |= Btn.FireMode;
+    // Weapon slot: one swap press, sent only while the slot differs and no swap is already under way
+    // (a press then would be ignored); released for a tick in between so the next press is a new one.
+    const ws = this.weaponState();
+    if (this.wantSlot !== null && ws && ws.slot === this.wantSlot) this.wantSlot = null;
+    if (this.wantSlot !== null && ws && !ws.equipping && !this.sentSwap) {
+      buttons |= Btn.Swap;
+      this.sentSwap = true;
+    } else this.sentSwap = false;
     this.vaultPulse = false;
     this.interactPulse = false;
     this.abilityPulse = false;
+    this.firePulse = false;
+    this.reloadPulse = false;
+    this.fireModePulse = false;
 
     const s = this.settings;
     let stance = this.stanceIntent;

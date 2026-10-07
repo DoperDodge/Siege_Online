@@ -375,7 +375,10 @@ export const gunplaySchema = z
     rules: z.strictObject({
       /** How "+X %" bonuses apply, per kind: "divide" is value / (1 + Σ bonuses); "subtract" is value × (1 − Σ bonuses). */
       bonusMath: z.strictObject({ ads: bonusMath, reload: bonusMath, recoilControl: bonusMath }),
-      /** No weapon or grip makes you faster than this multiple of your operator's speed (weapons_notes.md §4.5). */
+      /**
+       * Full speed as a multiple of a bare primary's (weapons_notes.md §4.5: the horizontal grip "never exceeds
+       * the operator's cap"). data/movement.json's speeds are reached at it; slower setups scale down.
+       */
       maxMoveSpeedMult: z.number().positive(),
       swapS: secs,
       adsExitS: secs,
