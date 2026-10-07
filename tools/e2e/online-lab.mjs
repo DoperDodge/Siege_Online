@@ -138,6 +138,24 @@ try {
   result.checks.respawnKeepsRunning = settled.frames > afterRespawn.frames + 5 && settled.corrections - afterRespawn.corrections <= 1;
   result.checks.respawnSeenByOthers = bAfterRespawn.remotes.some((r) => r.id === afterRespawn.pawnId) && !bAfterRespawn.remotes.some((r) => r.id === beforeRespawn.pawnId);
 
+  // A loadout pick (Phase 3 M4): B takes Brava with the PARA-308, a magnified sight and an angled grip. A new
+  // body arrives carrying it, at the cost of exactly one correction, and A's roster shows it.
+  const beforePick = await net(b);
+  await b.evaluate(() =>
+    window.__lab.pickLoadout({
+      operator: "brava",
+      primary: { weapon: "para_308", sight: "magnified", barrel: null, grip: "angled", underbarrel: null },
+      secondary: { weapon: "usp40", sight: null, barrel: "suppressor", grip: null, underbarrel: null },
+      gadgets: ["claymore"],
+    }),
+  );
+  await b.waitForFunction(() => window.__lab.net.ready && window.__lab.net.weapon?.id === "para_308", null, { timeout: 5000 }).catch(() => {});
+  await sleep(1000);
+  const afterPick = await net(b);
+  result.pick = { weapon: afterPick.weapon, corrections: afterPick.corrections - beforePick.corrections };
+  result.checks.loadoutPicked = afterPick.weapon?.id === "para_308" && afterPick.weapon.loaded === 31 && afterPick.corrections - beforePick.corrections === 1;
+  result.checks.othersSeeLoadout = (await a.evaluate(() => window.__lab.net.roster?.find((e) => e.operatorId === "brava")?.loadout.primary.sight)) === "magnified";
+
   const stats = await (await fetch(`${BASE}/stats`)).json();
   result.stats = stats;
   result.checks.statsEndpoint = stats.rooms === 1 && stats.players === 2;

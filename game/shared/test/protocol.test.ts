@@ -4,11 +4,13 @@ import {
   Btn,
   ByteReader,
   decodeError,
-  decodeHello,
+  decodeHelloRest,
+  decodeHelloVersion,
   decodeInput,
   decodeJoinRoom,
   decodeLabTool,
-  decodePickOperator,
+  decodePickLoadout,
+  defaultLoadoutPick,
   decodePing,
   decodePong,
   decodeRoster,
@@ -19,7 +21,8 @@ import {
   encodeInput,
   encodeJoinRoom,
   encodeLabTool,
-  encodePickOperator,
+  encodePickLoadout,
+  loadGameData,
   encodePing,
   encodePong,
   encodeRoster,
@@ -73,15 +76,25 @@ describe("input messages", () => {
 
 describe("lobby, clock, error and debug messages round-trip", () => {
   it("hello, join, pick, welcome, roster", () => {
-    expect(decodeHello(body(encodeHello("  Ulo  "), Msg.Hello))).toEqual({ version: PROTOCOL_VERSION, name: "Ulo" });
-    expect(decodeHello(body(encodeHello("x".repeat(100)), Msg.Hello)).name).toHaveLength(24);
+    const hello = body(encodeHello("  Ulo  ", 0xdeadbeef), Msg.Hello);
+    expect(decodeHelloVersion(hello)).toBe(PROTOCOL_VERSION);
+    expect(decodeHelloRest(hello)).toEqual({ name: "Ulo", dataHash: 0xdeadbeef });
+    const long = body(encodeHello("x".repeat(100), loadGameData().dataHash), Msg.Hello);
+    decodeHelloVersion(long);
+    expect(decodeHelloRest(long)).toEqual({ name: "x".repeat(24), dataHash: loadGameData().dataHash });
     expect(decodeJoinRoom(body(encodeJoinRoom("abc23"), Msg.JoinRoom))).toEqual({ code: "ABC23" });
-    expect(decodePickOperator(body(encodePickOperator("skopos"), Msg.PickOperator))).toEqual({ operatorId: "skopos" });
+    const pick = {
+      operator: "brava",
+      primary: { weapon: "para_308", sight: "magnified" as const, barrel: "extended_barrel" as const, grip: "angled" as const, underbarrel: "laser" as const },
+      secondary: { weapon: "usp40", sight: null, barrel: "suppressor" as const, grip: null, underbarrel: null },
+      gadgets: ["claymore"],
+    };
+    expect(decodePickLoadout(body(encodePickLoadout(pick), Msg.PickLoadout))).toEqual(pick);
     const w = { roomCode: "QX7PA", tick: 123456, levelId: "movement_lab", controllerId: 9 };
     expect(decodeWelcome(body(encodeWelcome(w), Msg.Welcome))).toEqual({ version: PROTOCOL_VERSION, ...w });
     const roster = [
-      { controllerId: 1, name: "Ulo", operatorId: "skopos", pawnIds: [2, 3] },
-      { controllerId: 4, name: "Bot ✓", operatorId: "sledge", pawnIds: [5] },
+      { controllerId: 1, name: "Ulo", operatorId: "skopos", pawnIds: [2, 3], team: 1, kind: 0, loadout: defaultLoadoutPick(loadGameData(), "skopos") },
+      { controllerId: 4, name: "Bot ✓", operatorId: "brava", pawnIds: [5], team: 0, kind: 1, loadout: pick },
     ];
     expect(decodeRoster(body(encodeRoster(roster, 4), Msg.Roster))).toEqual({ you: 4, entries: roster });
   });
@@ -96,10 +109,11 @@ describe("lobby, clock, error and debug messages round-trip", () => {
     expect(decodeLabTool(body(encodeLabTool({ kind: "respawn" }), Msg.LabTool))).toEqual({ kind: "respawn" });
     const tp = { kind: "teleport" as const, x: -16, y: 0, z: -5.5, yawDeg: 90 };
     expect(decodeLabTool(body(encodeLabTool(tp), Msg.LabTool))).toEqual(tp);
+    expect(decodeLabTool(body(encodeLabTool({ kind: "team", team: 1 }), Msg.LabTool))).toEqual({ kind: "team", team: 1 });
   });
 
   it("every decoder only ever throws ProtocolError on garbage", () => {
-    const decoders = [decodeInput, decodeHello, decodeJoinRoom, decodePickOperator, decodeWelcome, decodeRoster, decodePing, decodePong, decodeError, decodeShotResult, decodeLabTool];
+    const decoders = [decodeInput, decodeHelloRest, decodeJoinRoom, decodePickLoadout, decodeWelcome, decodeRoster, decodePing, decodePong, decodeError, decodeShotResult, decodeLabTool];
     let seed = 11;
     const rnd = () => (seed = (seed * 1103515245 + 12345) >>> 0) / 2 ** 32;
     for (let i = 0; i < 3000; i++) {

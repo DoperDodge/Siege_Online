@@ -7,7 +7,7 @@ import {
   ClientSession,
   decodeInput,
   decodeLabTool,
-  decodePickOperator,
+  decodePickLoadout,
   decodePing,
   DT,
   eyePose,
@@ -211,7 +211,7 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
     else if (b[0] === Msg.Resync) room.onResync(memberId);
     else if (b[0] === Msg.Ping) room.onPing(memberId, decodePing(r).clientTime);
     else if (b[0] === Msg.LabTool) room.onLabTool(memberId, decodeLabTool(r));
-    else if (b[0] === Msg.PickOperator) room.pickOperator(memberId, decodePickOperator(r).operatorId);
+    else if (b[0] === Msg.PickLoadout) room.pickLoadout(memberId, decodePickLoadout(r));
   }
 
   // Deliver the join messages, then load every client's level.

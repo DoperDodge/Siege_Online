@@ -6,6 +6,7 @@ import type { PlayerController } from "../player/pawn.js";
 import { quantizeInput, type InputCmd, type PawnState } from "../player/types.js";
 import { Sim } from "../sim.js";
 import type { SimEvent } from "../weapons/step.js";
+import { resolveLoadout, type ResolvedLoadout } from "../weapons/loadout.js";
 import { ByteReader, ProtocolError } from "./bytes.js";
 import {
   decodeError,
@@ -67,7 +68,8 @@ export class ClientSession {
   private pending: { seq: number; cmd: InputCmd }[] = [];
   private seq = 0;
   private readonly remotes = new Map<number, Sample[]>();
-  private readonly operatorOf = new Map<number, string>();
+  /** Each remote pawn's operator, loadout and team, from the roster (for its proxy). */
+  private readonly rosterOf = new Map<number, { operatorId: string; loadout: ResolvedLoadout; team: number }>();
   private lastSnapTick = 0;
   private lastSnapAt = 0;
   private lastArrival = 0;
@@ -162,8 +164,11 @@ export class ClientSession {
   private applyRoster(entries: RosterEntry[], you: number) {
     const sim = this.sim!;
     this.roster = entries;
-    this.operatorOf.clear();
-    for (const e of entries) for (const id of e.pawnIds) this.operatorOf.set(id, e.operatorId);
+    this.rosterOf.clear();
+    for (const e of entries) {
+      const loadout = resolveLoadout(sim.data, e.loadout).loadout;
+      for (const id of e.pawnIds) this.rosterOf.set(id, { operatorId: e.operatorId, loadout, team: e.team });
+    }
     const mine = entries.find((e) => e.controllerId === you);
     const current = this.ctrl;
     if (!mine || !current || current.id !== you || current.pawnIds.join() !== mine.pawnIds.join()) {
@@ -177,7 +182,8 @@ export class ClientSession {
       this.you = you;
       this.corrected = false;
       this.pending = [];
-      if (mine) sim.addPlayer(mine.name, mine.operatorId, 0, { controller: mine.controllerId, pawns: mine.pawnIds });
+      // The same loadout and team as the server's body, so prediction starts from the same numbers.
+      if (mine) sim.addPlayer(mine.name, mine.operatorId, 0, { controller: mine.controllerId, pawns: mine.pawnIds }, mine.loadout, mine.team);
     }
     this.opts.onRoster?.(entries, you);
   }
@@ -240,7 +246,10 @@ export class ClientSession {
         buf.push({ tick: snap.tick, state });
         while (buf.length > 2 && buf[0].tick < snap.tick - REMOTE_HISTORY_TICKS) buf.shift();
         if (sim.pawns.get(id)?.proxy) sim.setPawnState(id, state);
-        else if (!sim.pawns.has(id)) sim.addProxy(id, this.operatorOf.get(id) ?? "sledge", state);
+        else if (!sim.pawns.has(id)) {
+          const r = this.rosterOf.get(id);
+          sim.addProxy(id, r?.operatorId ?? "sledge", state, r?.loadout ?? null, r?.team ?? 0);
+        }
       }
       if (!this.decoder.verify(snap)) {
         // Our baselines drifted from the server's: ask for a full resend and ignore deltas until it comes.

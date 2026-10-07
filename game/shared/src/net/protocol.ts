@@ -1,11 +1,13 @@
 // Every message except snapshots (net/snapshot.ts). Binary, little-endian, first byte = type (PLAN §5).
 // Clients never tell the server what happened ("I hit X"): only inputs, view angles and view times.
 import { quantizeInput, Stance, type InputCmd } from "../player/types.js";
+import { BARRELS, GRIPS, SIGHTS, UNDERBARRELS } from "../data/schemas.js";
+import type { LoadoutPick, WeaponPick } from "../weapons/loadout.js";
 import { ByteReader, ByteWriter, ProtocolError } from "./bytes.js";
 import { MSG_SNAPSHOT } from "./snapshot.js";
 
 /** Bump when the wire format changes; client and server must match. */
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 export const Msg = {
   // client → server
@@ -13,7 +15,8 @@ export const Msg = {
   Hello: 0x02,
   CreateRoom: 0x03,
   JoinRoom: 0x04,
-  PickOperator: 0x05,
+  /** Operator plus weapons and attachments (DECISIONS D-042); always a new body. */
+  PickLoadout: 0x05,
   Ping: 0x06,
   Resync: 0x07,
   // 0x08 unused (test shots ride on inputs: Btn.Fire)
@@ -91,20 +94,62 @@ export function unwrap16(low: number, last: number): number {
 
 // ---------------------------------------------------------------- lobby
 
-export function encodeHello(name: string): Uint8Array {
-  return new ByteWriter().u8(Msg.Hello).u16(PROTOCOL_VERSION).str(name.slice(0, MAX_NAME)).finish();
+/**
+ * Hello: the protocol version first (so a server can answer an old client "refresh the page" before
+ * parsing anything else), the player's name, and a hash of the simulation data the page was built with:
+ * a tab left open across a deploy would otherwise predict with old weapon numbers (DECISIONS D-039).
+ */
+export function encodeHello(name: string, dataHash: number): Uint8Array {
+  return new ByteWriter().u8(Msg.Hello).u16(PROTOCOL_VERSION).str(name.slice(0, MAX_NAME)).u32(dataHash >>> 0).finish();
 }
-export function decodeHello(r: ByteReader): { version: number; name: string } {
-  const version = r.u16();
+/** Reads only the version: check it before reading the rest with decodeHelloRest. */
+export const decodeHelloVersion = (r: ByteReader) => r.u16();
+export function decodeHelloRest(r: ByteReader): { name: string; dataHash: number } {
   const name = r.str(MAX_NAME * 4).trim();
-  return { version, name };
+  return { name, dataHash: r.u32() };
 }
 
 export const encodeCreateRoom = () => Uint8Array.of(Msg.CreateRoom);
 export const encodeJoinRoom = (code: string) => new ByteWriter().u8(Msg.JoinRoom).str(code.toUpperCase().slice(0, 16)).finish();
 export const decodeJoinRoom = (r: ByteReader) => ({ code: r.str(16).toUpperCase() });
-export const encodePickOperator = (operatorId: string) => new ByteWriter().u8(Msg.PickOperator).str(operatorId).finish();
-export const decodePickOperator = (r: ByteReader) => ({ operatorId: r.str(32) });
+// Attachments travel as an index into the fixed lists in data/schemas.ts, plus one (0 = none).
+const attIndex = <T extends string>(list: readonly T[], v: T | null) => (v === null ? 0 : list.indexOf(v) + 1);
+function attFrom<T extends string>(list: readonly T[], i: number): T | null {
+  if (i > list.length) throw new ProtocolError("bad attachment");
+  return i === 0 ? null : list[i - 1];
+}
+const MAX_GADGETS = 4;
+
+export function writeLoadoutPick(w: ByteWriter, p: LoadoutPick): void {
+  w.str(p.operator);
+  for (const wp of [p.primary, p.secondary]) {
+    w.str(wp.weapon).u8(attIndex(SIGHTS, wp.sight)).u8(attIndex(BARRELS, wp.barrel)).u8(attIndex(GRIPS, wp.grip)).u8(attIndex(UNDERBARRELS, wp.underbarrel));
+  }
+  w.u8(Math.min(MAX_GADGETS, p.gadgets.length));
+  for (const g of p.gadgets.slice(0, MAX_GADGETS)) w.str(g);
+}
+export function readLoadoutPick(r: ByteReader): LoadoutPick {
+  const operator = r.str(32);
+  const weapon = (): WeaponPick => ({
+    weapon: r.str(32),
+    sight: attFrom(SIGHTS, r.u8()),
+    barrel: attFrom(BARRELS, r.u8()),
+    grip: attFrom(GRIPS, r.u8()),
+    underbarrel: attFrom(UNDERBARRELS, r.u8()),
+  });
+  const primary = weapon();
+  const secondary = weapon();
+  const n = r.u8();
+  if (n > MAX_GADGETS) throw new ProtocolError("too many gadgets");
+  const gadgets = Array.from({ length: n }, () => r.str(32));
+  return { operator, primary, secondary, gadgets };
+}
+export const encodePickLoadout = (p: LoadoutPick) => {
+  const w = new ByteWriter().u8(Msg.PickLoadout);
+  writeLoadoutPick(w, p);
+  return w.finish();
+};
+export const decodePickLoadout = (r: ByteReader) => readLoadoutPick(r);
 export const encodeResync = () => Uint8Array.of(Msg.Resync);
 
 export function encodeWelcome(w: { roomCode: string; tick: number; levelId: string; controllerId: number }): Uint8Array {
@@ -119,6 +164,12 @@ export interface RosterEntry {
   name: string;
   operatorId: string;
   pawnIds: number[];
+  /** 0 attackers, 1 defenders (from the operator's side unless a lab tool moved them). */
+  team: number;
+  /** 0 a player; 1 a range-lab dummy (Phase 3 M10). */
+  kind: number;
+  /** The loadout the body carries, as the server resolved it (an invalid pick became the default). */
+  loadout: LoadoutPick;
 }
 
 /** The room's players; `you` is the receiving client's own controller id (it changes on respawn). */
@@ -127,6 +178,8 @@ export function encodeRoster(entries: RosterEntry[], you: number): Uint8Array {
   for (const e of entries) {
     w.varu(e.controllerId).str(e.name).str(e.operatorId).u8(e.pawnIds.length);
     for (const id of e.pawnIds) w.varu(id);
+    w.u8(e.team).u8(e.kind);
+    writeLoadoutPick(w, e.loadout);
   }
   return w.finish();
 }
@@ -142,7 +195,10 @@ export function decodeRoster(r: ByteReader): { you: number; entries: RosterEntry
     const k = r.u8();
     if (k > 2) throw new ProtocolError("too many pawns");
     const pawnIds = Array.from({ length: k }, () => r.varu());
-    out.push({ controllerId, name, operatorId, pawnIds });
+    const team = r.u8();
+    const kind = r.u8();
+    if (team > 1 || kind > 1) throw new ProtocolError("bad roster entry");
+    out.push({ controllerId, name, operatorId, pawnIds, team, kind, loadout: readLoadoutPick(r) });
   }
   return { you, entries: out };
 }
@@ -202,16 +258,23 @@ export function decodeShotResult(r: ByteReader): ShotResult {
 }
 
 /** Movement Lab tools in lab rooms: respawn, or teleport ("Go to"). */
-export type LabTool = { kind: "respawn" } | { kind: "teleport"; x: number; y: number; z: number; yawDeg: number };
+/** Lab tools (lab rooms only): respawn, teleport ("Go to"), or switch team (respawns you on it). */
+export type LabTool = { kind: "respawn" } | { kind: "teleport"; x: number; y: number; z: number; yawDeg: number } | { kind: "team"; team: number };
 
 export function encodeLabTool(t: LabTool): Uint8Array {
-  const w = new ByteWriter().u8(Msg.LabTool).u8(t.kind === "respawn" ? 0 : 1);
+  const w = new ByteWriter().u8(Msg.LabTool).u8(t.kind === "respawn" ? 0 : t.kind === "teleport" ? 1 : 3);
   if (t.kind === "teleport") w.f32(t.x).f32(t.y).f32(t.z).f32(t.yawDeg);
+  if (t.kind === "team") w.u8(t.team);
   return w.finish();
 }
 export function decodeLabTool(r: ByteReader): LabTool {
   const k = r.u8();
   if (k === 0) return { kind: "respawn" };
   if (k === 1) return { kind: "teleport", x: r.finite(), y: r.finite(), z: r.finite(), yawDeg: r.finite() };
+  if (k === 3) {
+    const team = r.u8();
+    if (team > 1) throw new ProtocolError("bad team");
+    return { kind: "team", team };
+  }
   throw new ProtocolError("bad lab tool");
 }

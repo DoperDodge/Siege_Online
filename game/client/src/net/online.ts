@@ -2,7 +2,7 @@
 // simulator for testing (PLAN §16.9: latency, jitter and loss; PLAN §17 Phase 2: "two PCs with 100 ms
 // simulated latency"), and the shared ClientSession that predicts our own movement and interpolates
 // everyone else.
-import { ClientSession, encodeCreateRoom, encodeHello, encodeJoinRoom, type ClientSessionOptions } from "@redmond/shared";
+import { ClientSession, encodeCreateRoom, encodeHello, encodeJoinRoom, loadGameData, type ClientSessionOptions } from "@redmond/shared";
 
 /** The game server's WebSocket address: same host as the page (`?server=host:port` overrides it). */
 export function serverUrl(): string {
@@ -88,7 +88,7 @@ export class OnlineConnection {
     this.ws = new WebSocket(serverUrl());
     this.ws.binaryType = "arraybuffer";
     this.ws.onopen = () => {
-      this.send(encodeHello(o.name));
+      this.send(encodeHello(o.name, loadGameData().dataHash));
       this.send(o.room ? encodeJoinRoom(o.room) : encodeCreateRoom());
     };
     this.ws.onmessage = (e) => {

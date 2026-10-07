@@ -10,6 +10,8 @@ import { ByteWriter, fnv1a } from "./bytes.js";
 import { HitboxHistory, SentRing } from "./lagComp.js";
 import { controllerState, writeControllerState, writePawnState } from "./pawnState.js";
 import type { SimEvent } from "../weapons/step.js";
+import { defaultLoadoutPick, resolveLoadout, type LoadoutPick } from "../weapons/loadout.js";
+import { sideTeam } from "../sim.js";
 import { encodeError, encodePong, encodeRoster, encodeShotResult, encodeWelcome, ErrorCode, unwrap16, type InputMsg, type LabTool, type RosterEntry } from "./protocol.js";
 import { MAX_INTERP_MS, quantizeRemote, SNAPSHOT_EVERY, SnapshotEncoder, type RemoteQ } from "./snapshot.js";
 
@@ -74,6 +76,9 @@ interface Member {
   name: string;
   client: RoomClient;
   ctrl: PlayerController | null;
+  /** What the member carries (normalized: an invalid pick became the default) and their team. */
+  pick: LoadoutPick;
+  team: number;
   queue: QueuedInput[];
   credit: number;
   /** Corrections sent to this client (prediction mismatches, respawns). */
@@ -150,11 +155,14 @@ export class Room {
       client.send(encodeError(ErrorCode.RoomFull, `Room ${this.code} is full`));
       return null;
     }
+    if (!this.sim.data.operators.has(operatorId)) operatorId = "sledge";
     const m: Member = {
       id: this.nextMemberId++,
       name: name || "Player",
       client,
       ctrl: null,
+      pick: defaultLoadoutPick(this.sim.data, operatorId),
+      team: sideTeam(this.sim.data.operators.get(operatorId)!.side),
       queue: [],
       lastQueuedSeq: 0,
       lastSeq: 0,
@@ -173,7 +181,7 @@ export class Room {
       sent: new SentRing(),
     };
     this.members.set(m.id, m);
-    this.spawn(m, operatorId);
+    this.spawn(m);
     client.send(encodeWelcome({ roomCode: this.code, tick: this.sim.tick, levelId: this.levelId, controllerId: m.ctrl!.id }));
     this.broadcastRoster();
     return m.id;
@@ -187,17 +195,29 @@ export class Room {
     this.broadcastRoster();
   }
 
-  /** (Re)create a member's body with an operator; its client gets an exact correction to start predicting. */
-  pickOperator(memberId: number, operatorId: string): void {
+  /**
+   * A new body with this loadout (DECISIONS D-042): an invalid pick quietly becomes the operator's default,
+   * and the roster tells everyone what the body really carries. The team follows the operator's side.
+   * Its client gets an exact correction to start predicting.
+   */
+  pickLoadout(memberId: number, pick: LoadoutPick): void {
     const m = this.members.get(memberId);
-    if (!m || !this.sim.data.operators.has(operatorId)) return;
-    this.spawn(m, operatorId);
+    const op = this.sim.data.operators.get(pick.operator);
+    if (!m || !op) return;
+    m.pick = resolveLoadout(this.sim.data, pick).loadout.pick;
+    m.team = sideTeam(op.side);
+    this.spawn(m);
     this.broadcastRoster();
   }
 
-  private spawn(m: Member, operatorId: string) {
+  /** An operator with their default loadout. */
+  pickOperator(memberId: number, operatorId: string): void {
+    if (this.sim.data.operators.has(operatorId)) this.pickLoadout(memberId, defaultLoadoutPick(this.sim.data, operatorId));
+  }
+
+  private spawn(m: Member) {
     if (m.ctrl) this.sim.removePlayer(m.ctrl.id);
-    m.ctrl = this.sim.addPlayer(m.name, operatorId);
+    m.ctrl = this.sim.addPlayer(m.name, m.pick.operator, 0, undefined, m.pick, m.team);
     m.queue = [];
     m.needCorrection = true;
     m.newBody = true;
@@ -235,8 +255,9 @@ export class Room {
   onLabTool(memberId: number, tool: LabTool): void {
     const m = this.members.get(memberId);
     if (!m || !m.ctrl || !this.lab) return;
-    if (tool.kind === "respawn") {
-      this.spawn(m, m.ctrl.operatorId);
+    if (tool.kind === "respawn" || tool.kind === "team") {
+      if (tool.kind === "team") m.team = tool.team;
+      this.spawn(m);
       this.broadcastRoster(); // new pawn ids: everyone (the respawned client too) needs them
     } else if (Math.abs(tool.x) <= MAX_COORD && Math.abs(tool.y) <= MAX_COORD && Math.abs(tool.z) <= MAX_COORD) {
       // Same body: inputs already queued or in flight still apply after the jump, exactly as the client
@@ -292,7 +313,9 @@ export class Room {
   }
 
   roster(): RosterEntry[] {
-    return [...this.members.values()].filter((m) => m.ctrl).map((m) => ({ controllerId: m.ctrl!.id, name: m.name, operatorId: m.ctrl!.operatorId, pawnIds: [...m.ctrl!.pawnIds] }));
+    return [...this.members.values()]
+      .filter((m) => m.ctrl)
+      .map((m) => ({ controllerId: m.ctrl!.id, name: m.name, operatorId: m.ctrl!.operatorId, pawnIds: [...m.ctrl!.pawnIds], team: m.team, kind: 0, loadout: m.pick }));
   }
 
   private broadcastRoster() {

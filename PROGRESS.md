@@ -17,7 +17,7 @@ Built in milestones; each one keeps the tests, both e2e scripts and the netsim g
 | M0 Hit-registration measurement harness | ✅ server agrees with every shot as drawn (netsim); rewind cap 250 ms (D-045, your call) |
 | M2 Damage maths and loadout resolution | ✅ pure functions + tests; nothing in the game uses them yet |
 | M3 Weapon state in the simulation (fire, ammo, reload, swap, modes) | ✅ predicted exactly online; ammo HUD; Fire/R/1/2/wheel/B |
-| M4 Loadout pick online, data hash check | ⏳ |
+| M4 Loadout pick online, data hash check | ✅ pause-menu loadouts (offline and online), stale tabs told to refresh |
 | M5 ADS, recoil, spread | ⏳ |
 | M6 Hit registration, damage, death | ⏳ |
 | M7 DBNO and revive | ⏳ |
@@ -64,9 +64,17 @@ Built in milestones; each one keeps the tests, both e2e scripts and the netsim g
   their own ammo. The HUD shows weapon, rounds and fire mode, with a placeholder muzzle flash. Online, all of
   it is predicted: the netsim's bots fire, reload and swap at 100 ms with jitter and stalls and get exactly one
   correction each (the join). Damage still waits for M6: a shot only reports what it would hit.
+- **Loadouts (M4, D-042):** the pause menu has a Loadout section: each weapon your operator carries, with
+  the sights, barrels, grips and laser it can take (per operator too: only Dokkaebi's Mk 14 gets the telescopic
+  sight, only Thermite's and Pulse's 5.7 USG the muzzle brake). Under each weapon are the numbers the game
+  uses (damage, fire rate, magazine, ADS and reload times with your attachments, speed), with a **?** on any
+  that is still a placeholder. The Ballistic Shield and the GONNE-6 are listed but greyed out until Phase 8.
+  Online, the server spawns the new body and everyone sees what you carry; the team switch lives there too.
+  The loadout is part of the link, e.g. `?op=brava&primary=para_308.magnified..angled`. A browser tab left
+  open across an update is now told to refresh (the game data is checked when you connect).
 - **Movement fix (D-057):** sprinting diagonally into a wall could, rarely, drop you 0.29 m into the floor in
   one tick. Fixed, with a regression test.
-- 181 unit tests.
+- 185 unit tests.
 
 ---
 

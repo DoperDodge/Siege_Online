@@ -73,9 +73,10 @@ export class Sim {
    * (an invalid one becomes the operator's default, DECISIONS D-042); every shell carries the same one,
    * each with its own ammo.
    */
-  addPlayer(name: string, operatorId: string, spawnIndex = 0, ids?: { controller: number; pawns: number[] }, pick?: LoadoutPick): PlayerController {
+  addPlayer(name: string, operatorId: string, spawnIndex = 0, ids?: { controller: number; pawns: number[] }, pick?: LoadoutPick, team?: number): PlayerController {
     const op = this.data.operators.get(operatorId);
     if (!op) throw new Error(`Unknown operator "${operatorId}"`);
+    const side = team ?? sideTeam(op.side);
     const loadout = resolveLoadout(this.data, pick && pick.operator === operatorId ? pick : defaultLoadoutPick(this.data, operatorId)).loadout;
     if (ids && ids.pawns.length !== op.pawns) throw new Error(`${op.name} has ${op.pawns} pawn(s), got ${ids.pawns.length} ids`);
     for (const id of ids?.pawns ?? []) if (this.pawns.has(id)) throw new Error(`pawn id ${id} is already in use`);
@@ -93,6 +94,7 @@ export class Sim {
       swapT: 0,
       swapCooldown: 0,
       prevButtons: 0,
+      team: side,
     };
     // Check every shell's spot before creating any, so a failed join leaves nothing behind.
     const m = this.data.movement;
@@ -128,7 +130,7 @@ export class Sim {
       }
     }
     for (const [i, [px, pz]] of spots.entries()) {
-      const pawn = this.spawnPawn(operatorId, px, spawn.pos[1], pz, yaw, controller.id, ids?.pawns[i], loadout);
+      const pawn = this.spawnPawn(operatorId, px, spawn.pos[1], pz, yaw, controller.id, ids?.pawns[i], loadout, side);
       if (i > 0) pawn.state.stance = pawn.state.stanceFrom = Stance.Crouch; // idle shells crouch behind their shield
       controller.pawnIds.push(pawn.id);
     }
@@ -143,7 +145,17 @@ export class Sim {
     return id;
   }
 
-  spawnPawn(operatorId: string, x: number, y: number, z: number, yaw: number, ownerId: number | null = null, id?: number, loadout: ResolvedLoadout | null = null): Pawn {
+  spawnPawn(
+    operatorId: string,
+    x: number,
+    y: number,
+    z: number,
+    yaw: number,
+    ownerId: number | null = null,
+    id?: number,
+    loadout: ResolvedLoadout | null = null,
+    team = 0,
+  ): Pawn {
     const m = this.data.movement;
     const op = this.data.operators.get(operatorId);
     const maxHp = m.healthByRating[String(op?.healthRating ?? 2) as "1" | "2" | "3"];
@@ -155,7 +167,7 @@ export class Sim {
     // Float32-exact like every other state, and the collider placed from that state the same way a client
     // places it from the correction it gets for this body, so both start bit-identical.
     const t = collider.translation();
-    const pawn: Pawn = { id: pawnId, operatorId, ownerId, collider, loadout, state: initialPawnState(t.x, Math.fround(y + 0.02), t.z, Math.fround(yaw), maxHp, loadout) };
+    const pawn: Pawn = { id: pawnId, operatorId, ownerId, collider, loadout, team, state: initialPawnState(t.x, Math.fround(y + 0.02), t.z, Math.fround(yaw), maxHp, loadout) };
     poseCollider(this.ctx, pawn);
     this.pawns.set(pawn.id, pawn);
     refreshBroadPhase(this.world); // a new collider is invisible to queries until the next refresh
@@ -166,10 +178,10 @@ export class Sim {
    * A stand-in for a pawn simulated somewhere else (another player, as seen by a client): it blocks
    * movement like any pawn, but step() never moves it; setPawnState() places it.
    */
-  addProxy(id: number, operatorId: string, state: PawnState): Pawn {
+  addProxy(id: number, operatorId: string, state: PawnState, loadout: ResolvedLoadout | null = null, team = 0): Pawn {
     if (this.pawns.has(id)) throw new Error(`pawn id ${id} is already in use`);
     const collider = this.world.createCollider(this.R.ColliderDesc.capsule(0.5, 0.3).setCollisionGroups(PLAYER_GROUPS));
-    const pawn: Pawn = { id: this.claimId(id), operatorId, ownerId: null, collider, loadout: null, state: { ...state }, proxy: true };
+    const pawn: Pawn = { id: this.claimId(id), operatorId, ownerId: null, collider, loadout, team, state: { ...state }, proxy: true };
     this.pawns.set(id, pawn);
     poseCollider(this.ctx, pawn);
     refreshBroadPhase(this.world);
@@ -405,6 +417,9 @@ export class Sim {
     }
   }
 }
+
+/** Teams until match modes assign them (Phase 6): attackers 0, defenders 1. */
+export const sideTeam = (side: "attacker" | "defender") => (side === "attacker" ? 0 : 1);
 
 function idleInput(pawn: Pawn, stance: Stance = pawn.state.stance): InputCmd {
   const s = pawn.state;

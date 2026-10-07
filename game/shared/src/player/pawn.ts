@@ -16,6 +16,8 @@ export interface Pawn {
   proxy?: boolean;
   /** Weapons, fixed for this body's life (DECISIONS D-042); not part of the predicted state. */
   loadout: ResolvedLoadout | null;
+  /** 0 attackers, 1 defenders; fixed for this body's life. */
+  team: number;
 }
 
 export interface PlayerController {
@@ -32,6 +34,8 @@ export interface PlayerController {
   swapT: number;
   swapCooldown: number;
   prevButtons: number;
+  /** 0 attackers, 1 defenders (static: changing team means a new body). */
+  team: number;
 }
 
 /** Rounds a weapon spawns with: a full magazine (and the chambered +1), the rest in reserve. */

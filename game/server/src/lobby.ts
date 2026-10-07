@@ -3,14 +3,16 @@
 import { randomInt } from "node:crypto";
 import {
   ByteReader,
-  decodeHello,
+  decodeHelloRest,
+  decodeHelloVersion,
   decodeInput,
   decodeJoinRoom,
   decodeLabTool,
-  decodePickOperator,
+  decodePickLoadout,
   decodePing,
   encodeError,
   ErrorCode,
+  loadGameData,
   MAX_NAME,
   Msg,
   PROTOCOL_VERSION,
@@ -284,10 +286,16 @@ export class Connection {
   }
 
   private hello(r: ByteReader) {
-    const { version, name } = decodeHello(r);
-    if (version !== PROTOCOL_VERSION) {
+    // The version first: an older page's Hello may not even parse past it, and it must still be told why.
+    if (decodeHelloVersion(r) !== PROTOCOL_VERSION) {
       this.t.send(encodeError(ErrorCode.BadVersion, "The game has been updated. Refresh the page."));
       return this.close(Close.Normal, "protocol version mismatch");
+    }
+    const { name, dataHash } = decodeHelloRest(r);
+    // Same protocol but different game data (weapon numbers, maps): it would predict wrongly all game.
+    if (dataHash !== loadGameData().dataHash) {
+      this.t.send(encodeError(ErrorCode.BadVersion, "The game data has been updated. Refresh the page."));
+      return this.close(Close.Normal, "data hash mismatch");
     }
     this.name = cleanName(name);
     this.state = "lobby";
@@ -350,8 +358,8 @@ export class Connection {
     }
     if (!this.heavy.take(this.now())) return; // drop, don't disconnect: a key held down can repeat
     switch (type) {
-      case Msg.PickOperator:
-        return room.pickOperator(id, decodePickOperator(r).operatorId);
+      case Msg.PickLoadout:
+        return room.pickLoadout(id, decodePickLoadout(r));
       case Msg.LabTool:
         return room.onLabTool(id, decodeLabTool(r));
       default:

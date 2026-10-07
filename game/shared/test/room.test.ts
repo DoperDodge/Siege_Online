@@ -8,12 +8,14 @@ import {
   ClientSession,
   decodeInput,
   decodeLabTool,
-  decodePickOperator,
+  decodePickLoadout,
+  defaultLoadoutPick,
   decodePing,
   DT,
   encodeError,
   encodeLabTool,
-  encodePickOperator,
+  encodePickLoadout,
+  loadGameData,
   ErrorCode,
   MAX_HOLD_TICKS,
   Msg,
@@ -43,7 +45,7 @@ async function harness(operators: string[]) {
       else if (b[0] === Msg.Resync) room.onResync(c.id);
       else if (b[0] === Msg.Ping) room.onPing(c.id, decodePing(r).clientTime);
       else if (b[0] === Msg.LabTool) room.onLabTool(c.id, decodeLabTool(r));
-      else if (b[0] === Msg.PickOperator) room.pickOperator(c.id, decodePickOperator(r).operatorId);
+      else if (b[0] === Msg.PickLoadout) room.pickLoadout(c.id, decodePickLoadout(r));
     }
   };
   const toClients = () => {
@@ -97,7 +99,7 @@ describe("room and client session", () => {
     // Sprinting, with ~6 ticks of inputs still on their way when the pick reaches the server.
     a.holdUp = true;
     h.ticks(6, [{ forward: 1, buttons: Btn.Sprint }]);
-    a.toServer.unshift(encodePickOperator("fuze"));
+    a.toServer.unshift(encodePickLoadout(defaultLoadoutPick(loadGameData(), "fuze")));
     h.toServer(a);
     const fresh = h.room.sim.pawns.get(h.room.roster()[0].pawnIds[0])!.state;
     const spawn = { x: fresh.x, z: fresh.z };
@@ -197,7 +199,7 @@ describe("room and client session", () => {
     // And straight away, standing still (the spawn state must be exactly what the correction carries).
     for (const op of ["fuze", "skopos", "mute"]) {
       const start = h.room.memberInfo(a.id)!.corrections;
-      a.toServer.push(encodePickOperator(op));
+      a.toServer.push(encodePickLoadout(defaultLoadoutPick(loadGameData(), op)));
       h.ticks(64);
       expect(h.room.memberInfo(a.id)!.corrections - start, op).toBe(1);
     }
@@ -280,6 +282,59 @@ describe("room and client session", () => {
     const server = h.room.sim.pawns.get(a.session.ctrl!.possessedPawnId)!.state;
     expect(server.loaded0).toBe(0);
     expect(server.wAct).toBe(2); // reloading
+  });
+
+  it("a loadout pick: the roster carries it, the client predicts with it (one correction), its timings hold", async () => {
+    const h = await harness(["sledge", "mute"]);
+    const [a, b] = h.clients;
+    const start = h.room.memberInfo(a.id)!.corrections;
+    const pick = {
+      operator: "brava",
+      primary: { weapon: "para_308", sight: "magnified" as const, barrel: null, grip: "angled" as const, underbarrel: null },
+      secondary: { weapon: "usp40", sight: null, barrel: "suppressor" as const, grip: null, underbarrel: null },
+      gadgets: ["claymore"],
+    };
+    a.toServer.push(encodePickLoadout(pick));
+    h.ticks(16);
+    const mine = b.session.roster.find((e) => e.controllerId === a.session.ctrl!.id)!;
+    expect(mine.loadout.primary).toEqual(pick.primary);
+    expect(mine.loadout.secondary).toEqual({ ...pick.secondary, sight: "iron" });
+    expect(mine.team).toBe(0); // Brava attacks
+    expect(a.session.sim!.pawns.get(a.session.ctrl!.possessedPawnId)!.loadout!.weapons[0].reload).toMatchObject({ tacticalTicks: 133 });
+    expect(h.room.memberInfo(a.id)!.corrections - start).toBe(1);
+    // Fire a little, then a tactical reload with the angled grip: 2.6 s × 0.8 = 133 ticks, all predicted.
+    h.ticks(6, [{ buttons: Btn.Fire }]);
+    h.ticks(10);
+    h.tick([{ buttons: Btn.Reload }]);
+    h.ticks(132);
+    expect(own(a).wAct).toBe(2); // still reloading on the 132nd tick
+    h.tick();
+    expect(own(a).wAct).toBe(0);
+    expect(own(a).loaded0).toBe(31);
+    expect(h.room.memberInfo(a.id)!.corrections - start).toBe(1);
+  });
+
+  it("an invalid pick gets the operator's default, and the roster says so", async () => {
+    const h = await harness(["sledge"]);
+    const [a] = h.clients;
+    // Sledge doesn't carry the PARA-308.
+    a.toServer.push(encodePickLoadout({ ...defaultLoadoutPick(loadGameData(), "sledge"), primary: { weapon: "para_308", sight: null, barrel: null, grip: null, underbarrel: null } }));
+    h.ticks(16);
+    const mine = a.session.roster.find((e) => e.controllerId === a.session.ctrl!.id)!;
+    expect(mine.loadout).toEqual(defaultLoadoutPick(loadGameData(), "sledge"));
+    expect(a.session.ready).toBe(true);
+  });
+
+  it("the team tool respawns you on the other team", async () => {
+    const h = await harness(["sledge"]);
+    const [a] = h.clients;
+    const old = a.session.ctrl!.possessedPawnId;
+    a.toServer.push(encodeLabTool({ kind: "team", team: 1 }));
+    h.ticks(16);
+    expect(a.session.roster[0].team).toBe(1);
+    expect(a.session.ctrl!.team).toBe(1);
+    expect(a.session.ctrl!.possessedPawnId).not.toBe(old);
+    expect(h.room.sim.pawns.get(a.session.ctrl!.possessedPawnId)!.team).toBe(1);
   });
 
   it("Skopós can't shoot while looking through a shell's camera", async () => {
