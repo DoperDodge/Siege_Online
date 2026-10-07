@@ -7,7 +7,7 @@ import { ByteReader, ByteWriter, ProtocolError } from "./bytes.js";
 import { MSG_SNAPSHOT } from "./snapshot.js";
 
 /** Bump when the wire format changes; client and server must match. */
-export const PROTOCOL_VERSION = 4;
+export const PROTOCOL_VERSION = 5;
 
 export const Msg = {
   // client → server
@@ -28,6 +28,8 @@ export const Msg = {
   Pong: 0x13,
   Error: 0x14,
   ShotResult: 0x15,
+  /** What happened this tick: shots, hits, damage, kills (net/events.ts). */
+  Events: 0x16,
 } as const;
 
 export const MAX_NAME = 24;
@@ -257,24 +259,42 @@ export function decodeShotResult(r: ByteReader): ShotResult {
   return { seq, origin: [v[0], v[1], v[2]], dir: [v[3], v[4], v[5]], viewTick, rewoundTick, serverTick, hit, wallDistance };
 }
 
-/** Movement Lab tools in lab rooms: respawn, or teleport ("Go to"). */
-/** Lab tools (lab rooms only): respawn, teleport ("Go to"), or switch team (respawns you on it). */
-export type LabTool = { kind: "respawn" } | { kind: "teleport"; x: number; y: number; z: number; yawDeg: number } | { kind: "team"; team: number };
+/**
+ * Lab tools (lab rooms only): respawn, teleport ("Go to"), switch team (respawns you on it), hurt one of
+ * your own bodies (to try damage, death and the indicators alone), or refill your ammo.
+ */
+export type LabTool =
+  | { kind: "respawn" }
+  | { kind: "teleport"; x: number; y: number; z: number; yawDeg: number }
+  | { kind: "team"; team: number }
+  | { kind: "damage"; pawnId: number; amount: number; kill: boolean }
+  | { kind: "refill" };
+
+const LAB_KIND = { respawn: 0, teleport: 1, team: 3, damage: 4, refill: 5 } as const;
 
 export function encodeLabTool(t: LabTool): Uint8Array {
-  const w = new ByteWriter().u8(Msg.LabTool).u8(t.kind === "respawn" ? 0 : t.kind === "teleport" ? 1 : 3);
+  const w = new ByteWriter().u8(Msg.LabTool).u8(LAB_KIND[t.kind]);
   if (t.kind === "teleport") w.f32(t.x).f32(t.y).f32(t.z).f32(t.yawDeg);
   if (t.kind === "team") w.u8(t.team);
+  if (t.kind === "damage") w.varu(t.pawnId).u16(Math.max(0, Math.min(0xffff, Math.round(t.amount)))).u8(t.kill ? 1 : 0);
   return w.finish();
 }
 export function decodeLabTool(r: ByteReader): LabTool {
   const k = r.u8();
-  if (k === 0) return { kind: "respawn" };
-  if (k === 1) return { kind: "teleport", x: r.finite(), y: r.finite(), z: r.finite(), yawDeg: r.finite() };
-  if (k === 3) {
+  if (k === LAB_KIND.respawn) return { kind: "respawn" };
+  if (k === LAB_KIND.teleport) return { kind: "teleport", x: r.finite(), y: r.finite(), z: r.finite(), yawDeg: r.finite() };
+  if (k === LAB_KIND.team) {
     const team = r.u8();
     if (team > 1) throw new ProtocolError("bad team");
     return { kind: "team", team };
   }
+  if (k === LAB_KIND.damage) {
+    const pawnId = r.varu();
+    const amount = r.u16();
+    const kill = r.u8();
+    if (kill > 1) throw new ProtocolError("bad damage tool");
+    return { kind: "damage", pawnId, amount, kill: kill === 1 };
+  }
+  if (k === LAB_KIND.refill) return { kind: "refill" };
   throw new ProtocolError("bad lab tool");
 }

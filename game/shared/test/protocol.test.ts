@@ -4,6 +4,7 @@ import {
   Btn,
   ByteReader,
   decodeError,
+  decodeEvents,
   decodeHelloRest,
   decodeHelloVersion,
   decodeInput,
@@ -17,6 +18,7 @@ import {
   decodeShotResult,
   decodeWelcome,
   encodeError,
+  encodeEvents,
   encodeHello,
   encodeInput,
   encodeJoinRoom,
@@ -35,6 +37,7 @@ import {
   quantizeInput,
   Stance,
   unwrap16,
+  type GameEvent,
   type InputCmd,
 } from "../src/index.js";
 
@@ -110,10 +113,31 @@ describe("lobby, clock, error and debug messages round-trip", () => {
     const tp = { kind: "teleport" as const, x: -16, y: 0, z: -5.5, yawDeg: 90 };
     expect(decodeLabTool(body(encodeLabTool(tp), Msg.LabTool))).toEqual(tp);
     expect(decodeLabTool(body(encodeLabTool({ kind: "team", team: 1 }), Msg.LabTool))).toEqual({ kind: "team", team: 1 });
+    const hurt = { kind: "damage" as const, pawnId: 300, amount: 45, kill: false };
+    expect(decodeLabTool(body(encodeLabTool(hurt), Msg.LabTool))).toEqual(hurt);
+    expect(decodeLabTool(body(encodeLabTool({ kind: "refill" }), Msg.LabTool))).toEqual({ kind: "refill" });
+  });
+
+  it("events: every kind round-trips; unknown kinds, too many events and trailing bytes are refused", () => {
+    const events: GameEvent[] = [
+      { kind: "shotFx", pawnId: 12, slot: 1, suppressed: true, ends: [[1.5, 2.25, -30.03125], [-200, 0.5, 199.96875]] },
+      { kind: "hitConfirm", seq: 65535, victimPawn: 7, zone: "neck", headshot: true, killed: true, friendly: false, damage: 110, pellets: 1, hpAfter: 0 },
+      { kind: "hitConfirm", seq: 3, victimPawn: 900, zone: "leg", headshot: false, killed: false, friendly: true, damage: 21, pellets: 6, hpAfter: null },
+      { kind: "damageTaken", pawnId: 7, amount: 33, cause: 0, attackerCtrl: 4, from: [0.5, 1.625, -4] },
+      { kind: "damageTaken", pawnId: 7, amount: 110, cause: 2, attackerCtrl: 0, from: null },
+      { kind: "kill", victimPawn: 7, victimCtrl: 3, killerCtrl: 4, weapon: "l85a2", cause: 0, headshot: true, friendly: false },
+      { kind: "shellDestroyed", pawnId: 9, ownerCtrl: 5, killerCtrl: 4, weapon: "mp5k", headshot: false },
+    ];
+    expect(decodeEvents(body(encodeEvents(123456, events), Msg.Events))).toEqual({ tick: 123456, events });
+    const ok = encodeEvents(5, [events[3]]);
+    const bad = (bytes: number[]) => () => decodeEvents(new ByteReader(Uint8Array.from(bytes)));
+    expect(bad([5, 0, 0, 0, 1, 99])).toThrow(ProtocolError); // unknown kind
+    expect(bad([5, 0, 0, 0, 0xff, 0x7f])).toThrow(ProtocolError); // n far too big
+    expect(() => decodeEvents(new ByteReader(Uint8Array.from([...ok.subarray(1), 0])))).toThrow(ProtocolError); // trailing byte
   });
 
   it("every decoder only ever throws ProtocolError on garbage", () => {
-    const decoders = [decodeInput, decodeHelloRest, decodeJoinRoom, decodePickLoadout, decodeWelcome, decodeRoster, decodePing, decodePong, decodeError, decodeShotResult, decodeLabTool];
+    const decoders = [decodeInput, decodeHelloRest, decodeJoinRoom, decodePickLoadout, decodeWelcome, decodeRoster, decodePing, decodePong, decodeError, decodeShotResult, decodeLabTool, decodeEvents];
     let seed = 11;
     const rnd = () => (seed = (seed * 1103515245 + 12345) >>> 0) / 2 ** 32;
     for (let i = 0; i < 3000; i++) {

@@ -126,6 +126,34 @@ try {
   result.checks.noResyncs = aNet.resyncs === 0 && bNet.resyncs === 0;
   result.checks.rttIncludesSimulatedLag = aNet.rttMs > LAG * 0.9 && aNet.rttMs < LAG + 80;
 
+  // Damage (Phase 3 M6): the moving-target shot took the server's damage off A, B's hit marker says how
+  // much, and A was told. Then a headshot kills A, and both feeds say so.
+  const bHit = bNet.events.find((e) => e.kind === "hitConfirm");
+  const aTook = aNet.events.find((e) => e.kind === "damageTaken");
+  result.damage = { hit: bHit, took: aTook, aHp: aNet.hp };
+  result.checks.bodyShotDamage = !!bHit && !bHit.killed && bHit.zone !== "head" && aNet.hp === 110 - bHit.damage && aTook?.amount === bHit.damage;
+  await a.evaluate(() => window.__lab.teleport(0, 0, 12, 0));
+  await b.evaluate(() => {
+    window.__lab.teleport(0, 0, 4, 180);
+    window.__lab.input = { pitch: 0, buttons: 8 /* Btn.Ads */ }; // eye level: A's head
+  });
+  await sleep(1500);
+  await b.evaluate(() => window.__lab.fire());
+  await a.waitForFunction(() => window.__lab.net.dead, null, { timeout: 5000 }).catch(() => {});
+  await sleep(300);
+  const aDead = await net(a);
+  const bAfterKill = await net(b);
+  await b.screenshot({ path: shot("online-kill.png") });
+  await a.screenshot({ path: shot("online-killed.png") });
+  const kill = (n) => n.events.find((e) => e.kind === "kill");
+  result.kill = { a: kill(aDead), b: kill(bAfterKill), aMessage: await a.locator(".center-msg").textContent() };
+  result.checks.headshotKills = aDead.dead && kill(bAfterKill)?.headshot === true && kill(aDead)?.victimPawn === aDead.pawnId;
+  // (Both players are Sledge here, so it's a team kill: friendly fire is on in lab rooms, D-051.)
+  const fed = /eliminated|team-killed/;
+  result.checks.killFeedOnBoth = fed.test(await a.locator(".killfeed").textContent()) && fed.test(await b.locator(".killfeed").textContent());
+  result.checks.deathMessageNamesKiller = /Killed by/.test(result.kill.aMessage ?? "");
+  await b.evaluate(() => (window.__lab.input = null));
+
   // Respawn online (the K key): a new body arrives, the page keeps running, and B sees the new body.
   const beforeRespawn = await net(a);
   await a.keyboard.press("KeyK");

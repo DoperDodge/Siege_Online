@@ -1,7 +1,7 @@
 // Turns a level definition (data/maps/<id>/layout.json) into Rapier colliders plus a render list.
 // Server and client both call this, so what you see is exactly what you collide with.
 import { DEG, forwardXZ, quatYawPitch, rotateXZ, type Vec3 } from "../core/math.js";
-import { STATIC_GROUPS, type Collider, type Rapier, type World } from "../physics/rapier.js";
+import { HELPER_GROUPS, STATIC_GROUPS, type Collider, type Rapier, type World } from "../physics/rapier.js";
 import type { LevelDef, Surface } from "../data/schemas.js";
 
 export interface Renderable {
@@ -56,7 +56,7 @@ export function buildLevel(R: Rapier, world: World, def: LevelDef): BuiltLevel {
       const desc = R.ColliderDesc.cuboid(size[0] / 2, size[1] / 2, size[2] / 2)
         .setTranslation(center[0], center[1], center[2])
         .setRotation({ x: quat[0], y: quat[1], z: quat[2], w: quat[3] })
-        .setCollisionGroups(STATIC_GROUPS);
+        .setCollisionGroups(opts.visible ? STATIC_GROUPS : HELPER_GROUPS); // invisible = a movement helper
       const c: Collider = world.createCollider(desc);
       solids.set(c.handle, info);
     }

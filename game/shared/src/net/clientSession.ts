@@ -8,6 +8,7 @@ import { Sim } from "../sim.js";
 import type { SimEvent } from "../weapons/step.js";
 import { resolveLoadout, type ResolvedLoadout } from "../weapons/loadout.js";
 import { ByteReader, ProtocolError } from "./bytes.js";
+import { decodeEvents, type GameEvent } from "./events.js";
 import {
   decodeError,
   decodePong,
@@ -39,6 +40,8 @@ export interface ClientSessionOptions {
   onWelcome?(roomCode: string): void;
   onRoster?(entries: RosterEntry[], you: number): void;
   onShot?(shot: ShotResult): void;
+  /** What the server judged this tick: shots others fired, our hits, damage we took, kills (net/events.ts). */
+  onEvents?(tick: number, events: GameEvent[]): void;
   /** What our own fresh prediction did this tick (shots, reloads): instant feedback, never replayed. */
   onLocalEvents?(events: readonly SimEvent[]): void;
   onError?(code: number, message: string): void;
@@ -146,6 +149,11 @@ export class ClientSession {
       case Msg.ShotResult:
         this.opts.onShot?.(decodeShotResult(r));
         return;
+      case Msg.Events: {
+        const { tick, events } = decodeEvents(r);
+        this.opts.onEvents?.(tick, events);
+        return;
+      }
       case Msg.Error: {
         const e = decodeError(r);
         this.opts.onError?.(e.code, e.message);

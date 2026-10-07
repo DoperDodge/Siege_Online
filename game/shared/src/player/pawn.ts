@@ -18,6 +18,11 @@ export interface Pawn {
   loadout: ResolvedLoadout | null;
   /** 0 attackers, 1 defenders; fixed for this body's life. */
   team: number;
+  /**
+   * Counts the times this body came back (Sim.respawn, a teleport that revives it). Lag compensation skips
+   * what it remembers of an earlier life (a body that kept its id), so nobody shoots a ghost.
+   */
+  life: number;
 }
 
 export interface PlayerController {

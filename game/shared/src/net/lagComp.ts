@@ -20,7 +20,8 @@ export interface RewindHit {
 
 interface Frame {
   tick: number;
-  pawns: Map<number, { q: RemoteQ; maxHp: number }>;
+  /** Every live pawn as clients received it, with the life it was in (Pawn.life). */
+  pawns: Map<number, { q: RemoteQ; maxHp: number; life: number }>;
 }
 
 /** Which snapshot ticks one client was sent (a client blends only the snapshots it actually received). */
@@ -44,8 +45,11 @@ export class SentRing implements SentTicks {
 
 export class HitboxHistory {
   private readonly frames: (Frame | undefined)[];
-  /** Hitboxes already built for a (frame, frame, blend) this tick: all pellets of a shot, all shots of a tick. */
-  private readonly memo = new Map<string, Map<number, Hitbox[]>>();
+  /**
+   * Hitboxes already built for a (frame, frame, blend) this tick: all pellets of a shot, all shots of a tick.
+   * Each entry remembers the lives it was built from, so a body that respawned or left since isn't reused.
+   */
+  private readonly memo = new Map<string, { lives: Map<number, number>; boxes: Map<number, Hitbox[]> }>();
 
   /** `capacity` snapshots of history (32 snapshots = 1 s at 64 Hz with a snapshot every 2nd tick). */
   constructor(
@@ -60,10 +64,10 @@ export class HitboxHistory {
     this.memo.clear();
     const tick = this.sim.tick;
     if (tick % SNAPSHOT_EVERY !== 0) return;
-    const pawns = new Map<number, { q: RemoteQ; maxHp: number }>();
+    const pawns = new Map<number, { q: RemoteQ; maxHp: number; life: number }>();
     for (const p of this.sim.pawns.values()) {
       if (p.state.mode === PawnMode.Dead) continue;
-      pawns.set(p.id, { q: quantizeRemote(p.state), maxHp: p.state.maxHp });
+      pawns.set(p.id, { q: quantizeRemote(p.state), maxHp: p.state.maxHp, life: p.life });
     }
     this.frames[(tick / SNAPSHOT_EVERY) % this.capacity] = { tick, pawns };
   }
@@ -89,7 +93,8 @@ export class HitboxHistory {
   /**
    * Every pawn's hitboxes as a client drew them at render time `tick` (fractional): the two snapshots
    * around it, blended with interpolateRemote. With `sent`, only snapshots that client was sent count (it
-   * blends across one it was never sent). A pawn in only one of the two is drawn from that one.
+   * blends across one it was never sent). A pawn in only one of the two is drawn from that one. Pawns that
+   * have left since, or came back as a new life (a respawned body keeping its id), are skipped.
    */
   at(tick: number, sent?: SentTicks): Map<number, Hitbox[]> {
     let a: Frame | undefined;
@@ -108,20 +113,27 @@ export class HitboxHistory {
     const u = a && b ? (tick - a.tick) / (b.tick - a.tick) : 0;
     const key = `${a?.tick}:${b?.tick}:${u}`;
     const cached = this.memo.get(key);
-    if (cached) return cached;
+    if (cached && [...cached.lives].every(([id, life]) => this.sim.pawns.get(id)?.life === life)) return cached.boxes;
     const out = new Map<number, Hitbox[]>();
     const m = this.sim.data.movement;
     const hb = this.sim.data.hitboxes;
     const ids = new Set([...(a?.pawns.keys() ?? []), ...(b?.pawns.keys() ?? [])]);
+    const lives = new Map<number, number>();
     for (const id of ids) {
-      const pa = a?.pawns.get(id);
-      const pb = b?.pawns.get(id);
+      const life = this.sim.pawns.get(id)?.life;
+      if (life === undefined) continue; // left (ids are never reused)
+      lives.set(id, life);
+      const fa = a?.pawns.get(id);
+      const fb = b?.pawns.get(id);
+      const pa = fa?.life === life ? fa : undefined;
+      const pb = fb?.life === life ? fb : undefined;
+      if (!pa && !pb) continue;
       const sa = pa && remoteState(pa.q, pa.maxHp);
       const sb = pb && remoteState(pb.q, pb.maxHp);
       const s = sa && sb ? interpolateRemote(sa, sb, u) : (sa ?? sb)!;
       out.set(id, poseHitboxes(m, hb, s));
     }
-    this.memo.set(key, out);
+    this.memo.set(key, { lives, boxes: out });
     return out;
   }
 

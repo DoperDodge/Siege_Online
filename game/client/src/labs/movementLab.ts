@@ -3,6 +3,7 @@
 // this page predicts your own movement and interpolates everyone else's (PLAN §5).
 import * as THREE from "three";
 import {
+  applyDamage,
   Btn,
   DEG,
   DT,
@@ -26,6 +27,7 @@ import {
   proneWeight,
   reserveOf,
   Sim,
+  spawnAmmo,
   spreadCone,
   Stance,
   TICK_HZ,
@@ -38,6 +40,7 @@ import {
   type LoadoutPick,
   type Offer,
   type ResolvedWeapon,
+  type GameEvent,
   type ShotResult,
   type SimEvent,
   type WeaponPick,
@@ -63,11 +66,15 @@ app.innerHTML = `
   <div id="view"></div>
   <div class="crosshair"></div>
   <div class="spread hidden"><i></i><i></i><i></i><i></i></div>
+  <div class="hitmarker"><i></i><i></i><i></i><i></i></div>
+  <div class="hit-text"></div>
+  <div class="hurt"></div>
+  <div class="hurt-dir"></div>
   <div class="hud hud-tl">
     <div class="op-name"></div>
     <div class="hp"><div class="hp-fill"></div><span class="hp-text"></span></div>
   </div>
-  <div class="hud hud-tr"><span class="fps"></span><div class="net"></div></div>
+  <div class="hud hud-tr"><span class="fps"></span><div class="net"></div><div class="killfeed"></div></div>
   <div class="hud hud-br"><div class="weapon-name"></div><div class="ammo"><span class="ammo-loaded"></span><span class="ammo-reserve"></span></div><div class="weapon-state"></div></div>
   <div class="muzzle"></div>
   <div class="hud hud-bottom">
@@ -104,6 +111,8 @@ let scripted: Partial<InputCmd> | null = null;
 let shownRenderTick = 0;
 let clickViewTick: number | null = null;
 let muzzleUntil = 0;
+/** How your current body died, for the respawn message (null while alive, or for a fall). */
+let deathText: string | null = null;
 /** Recoil the viewed body's view took this tick (added to the mouse view so the next input includes it). */
 const tickKick = { yaw: 0, pitch: 0 };
 let flashUntil = 0;
@@ -370,7 +379,7 @@ function renderPause() {
       <label>Simulated extra latency <select data-net="rttMs">${[0, 50, 100, 150, 200].map((ms) => `<option value="${ms}" ${ms === conditions.rttMs ? "selected" : ""}>${ms ? `+${ms} ms round trip` : "Off"}</option>`).join("")}</select></label>
       <label>Simulated jitter <select data-net="jitterMs">${[0, 10, 20, 40].map((ms) => `<option value="${ms}" ${ms === conditions.jitterMs ? "selected" : ""}>${ms ? `up to ${ms} ms each way` : "Off"}</option>`).join("")}</select></label>
       <label>Simulated loss <select data-net="lossPct">${[0, 0.5, 1, 2, 5].map((p) => `<option value="${p}" ${p === conditions.lossPct ? "selected" : ""}>${p ? `${p} % (a 200 ms stall each)` : "Off"}</option>`).join("")}</select></label>
-      <p class="note">Left click fires a test shot: the server rewinds everyone else to what you saw (lag compensation) and draws the result.</p></section>`
+      <p class="note">Shots do real damage now: the server rewinds everyone else to what you saw (lag compensation), and the white line shows where your first pellet went and what it hit first. Headshots kill; friendly fire is on.</p></section>`
     : "";
   pause.innerHTML = `
     <h2>Movement Lab${net ? " · Online" : ""}</h2>
@@ -383,6 +392,7 @@ function renderPause() {
     </section>
     ${loadoutSection()}
     <section><h3>Go to</h3><div class="goto">${GOTO.map((g, i) => `<button data-goto="${i}">${g[0]}</button>`).join("")}</div></section>
+    <section><h3>Lab tools</h3><div class="goto"><button class="refill">Refill ammo</button><button class="hurt-me">Take 30 damage</button></div></section>
     <section><h3>Controls</h3>
       <label>Sensitivity <input type="range" min="0.01" max="0.4" step="0.005" value="${settings.sensitivity}" data-num="sensitivity"><output>${settings.sensitivity.toFixed(3)}</output></label>
       <label>ADS sensitivity × <input type="range" min="0.2" max="1.5" step="0.05" value="${settings.adsSensitivityScale}" data-num="adsSensitivityScale"><output>${settings.adsSensitivityScale.toFixed(2)}</output></label>
@@ -393,6 +403,8 @@ function renderPause() {
     </section>
     <p class="note">Press <kbd>F1</kbd> for the key list and what to try.</p>`;
   pause.querySelector(".resume")?.addEventListener("click", resume);
+  pause.querySelector(".refill")!.addEventListener("click", labRefill);
+  pause.querySelector(".hurt-me")!.addEventListener("click", () => labHurt(30));
   pause.querySelector<HTMLSelectElement>(".op-select")!.addEventListener("change", (e) => pickOperator((e.target as HTMLSelectElement).value));
   pause.querySelector<HTMLSelectElement>(".team-select")?.addEventListener("change", (e) => net?.send(encodeLabTool({ kind: "team", team: Number((e.target as HTMLSelectElement).value) })));
   pause.querySelectorAll<HTMLSelectElement>(".loadout select").forEach((el) =>
@@ -611,6 +623,7 @@ function frame(now: number) {
     v.wire.visible = showHitboxes && (!eyes || thirdPerson);
   }
   updateShots(now);
+  updateShotFx(now);
 
   const rs = interpolated(viewed, alpha);
   aim(viewed, rs);
@@ -682,6 +695,7 @@ function updateHud(p: Pawn) {
   $(".lean-r").style.opacity = String(Math.max(0, s.lean));
   const msg = $(".center-msg");
   const dead = s.mode === PawnMode.Dead;
+  if (!dead) deathText = null;
   const needClick = !usingTouch && !autotest && !document.pointerLockElement && $(".pause").classList.contains("hidden");
   const waiting = net !== null && !net.session.ready;
   msg.classList.toggle("hidden", !dead && !needClick && !waiting && !disconnected);
@@ -690,7 +704,7 @@ function updateHud(p: Pawn) {
     : waiting
       ? "Waiting for the server…"
       : dead
-        ? `You died from the fall — press ${keyLabel(settings.keys.respawn)} to respawn`
+        ? `${deathText ?? "You died from the fall"} — press ${keyLabel(settings.keys.respawn)} to respawn`
         : "Click to play · F1 for controls";
   if (touchLayer) touchLayer.querySelector(".touch-btn")!.classList.toggle("on", controls.sprintIsLatched);
 
@@ -797,6 +811,9 @@ Object.defineProperty(window, "__lab", {
         pawnId: ctrl.possessedPawnId,
         frames,
         lastShot,
+        events: [...recentEvents],
+        hp: possessed()?.state.hp ?? 0,
+        dead: possessed()?.state.mode === PawnMode.Dead,
         disconnected,
       };
     },
@@ -951,6 +968,7 @@ function lobby(): Promise<OnlineConnection> {
           },
           onRoster: () => (rosterChanged = true),
           onShot: (shot) => showShot(shot),
+          onEvents: (tick, events) => onGameEvents(tick, events),
           onLocalEvents: (events) => onWeaponEvents(events),
         },
         onClose: (reason) => {
@@ -1158,6 +1176,137 @@ function updateShots(now: number) {
     (m.line.material as THREE.Material).dispose();
     m.ghost?.dispose();
     shotMarks.splice(i, 1);
+  }
+}
+
+// ------------------------------------------------------------------ what the server judged (Phase 3 M6)
+
+const weaponName = (id: string) => data.weapons.get(id)?.name ?? id;
+const nameOfCtrl = (id: number) => net?.session.roster.find((e) => e.controllerId === id)?.name ?? "someone";
+/** Recent server events for the e2e scripts. */
+const recentEvents: GameEvent[] = [];
+let hitUntil = 0;
+let hurtUntil = 0;
+const feed: { text: string; mine: boolean; until: number }[] = [];
+/** Shots to draw once the frame on screen reaches their server tick (others are drawn in the past). */
+const pendingFx: { tick: number; e: Extract<GameEvent, { kind: "shotFx" }> }[] = [];
+const tracers: { obj: THREE.Object3D; until: number }[] = [];
+
+function onGameEvents(tick: number, events: GameEvent[]) {
+  const me = net!.session.you;
+  for (const e of events) {
+    recentEvents.push(e);
+    if (recentEvents.length > 50) recentEvents.shift();
+    if (e.kind === "shotFx") pendingFx.push({ tick, e });
+    else if (e.kind === "hitConfirm") {
+      // Server-confirmed only (D-044): a cross on the crosshair, red on a kill, and the damage it did.
+      const el = $(".hitmarker");
+      el.classList.toggle("kill", e.killed);
+      el.classList.toggle("friendly", e.friendly);
+      hitUntil = performance.now() + (e.killed ? 450 : 220);
+      const what = e.killed ? (e.headshot ? "HEADSHOT" : "KILL") : `${e.damage}${e.pellets > 1 ? ` (${e.pellets} pellets)` : ""} · ${e.zone}`;
+      $(".hit-text").textContent = `${what}${e.friendly ? " · teammate" : ""}${e.hpAfter !== null && !e.killed ? ` · ${e.hpAfter} HP left` : ""}`;
+    } else if (e.kind === "damageTaken") {
+      hurtUntil = performance.now() + 700;
+      const dir = $(".hurt-dir");
+      if (e.from) {
+        // Which way the damage came from, relative to where you're looking.
+        const own = sim.pawns.get(e.pawnId)?.state ?? possessed().state;
+        const toward = Math.atan2(-(e.from[0] - own.x), -(e.from[2] - own.z)); // yaw that faces the attacker
+        dir.style.setProperty("--a", `${(-(toward - controls.yaw) * 180) / Math.PI}deg`);
+        dir.classList.add("on");
+      } else dir.classList.remove("on");
+    } else if (e.kind === "kill" || e.kind === "shellDestroyed") {
+      const victimCtrl = e.kind === "kill" ? e.victimCtrl : e.ownerCtrl;
+      const victim = nameOfCtrl(victimCtrl);
+      const killer = e.killerCtrl ? nameOfCtrl(e.killerCtrl) : null;
+      const how = e.weapon ? ` [${weaponName(e.weapon)}${e.headshot ? ", headshot" : ""}]` : "";
+      const text =
+        e.kind === "shellDestroyed"
+          ? `${killer ?? "?"}${how} destroyed ${victim}'s idle shell`
+          : killer
+            ? `${killer}${how} ${e.friendly ? "team-killed" : "eliminated"} ${victim}`
+            : `${victim} died${e.cause === 2 ? " (fall)" : ""}`;
+      feed.push({ text, mine: victimCtrl === me || e.killerCtrl === me, until: performance.now() + 6000 });
+      if (feed.length > 5) feed.shift();
+      if (e.kind === "kill" && victimCtrl === me) deathText = killer ? `Killed by ${killer}${how}` : e.cause === 2 ? null : "You died";
+    }
+  }
+}
+
+/** Tracers and muzzle flashes for shots whose time has come on screen; fade the old ones. */
+function updateShotFx(now: number) {
+  for (let i = pendingFx.length - 1; i >= 0; i--) {
+    const { tick, e } = pendingFx[i];
+    const own = ctrl.pawnIds.includes(e.pawnId);
+    // Our own shots happened in the present (we predicted them); everyone else's at the time drawn.
+    if (!own && tick > shownRenderTick + 0.5 && tick - shownRenderTick < 64) continue;
+    pendingFx.splice(i, 1);
+    if (e.suppressed && !own) continue; // no flash, no tracer
+    const from = own ? camera.position.clone().add(new THREE.Vector3(0.12, -0.12, 0).applyQuaternion(camera.quaternion)) : remoteMuzzle(e.pawnId);
+    if (!from) continue;
+    for (const end of e.ends) {
+      const line = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([from, new THREE.Vector3(...end)]),
+        new THREE.LineBasicMaterial({ color: 0xffe08a, transparent: true, opacity: own ? 0.35 : 0.8, depthTest: true }),
+      );
+      scene.add(line);
+      tracers.push({ obj: line, until: now + (own ? 60 : 90) });
+    }
+    if (!own) {
+      const flashMesh = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffd27a }));
+      flashMesh.position.copy(from);
+      scene.add(flashMesh);
+      tracers.push({ obj: flashMesh, until: now + 50 });
+    }
+  }
+  for (let i = tracers.length - 1; i >= 0; i--) {
+    if (now < tracers[i].until) continue;
+    const o = tracers[i].obj as THREE.Mesh;
+    scene.remove(o);
+    o.geometry.dispose();
+    (o.material as THREE.Material).dispose();
+    tracers.splice(i, 1);
+  }
+  $(".hitmarker").classList.toggle("show", now < hitUntil);
+  $(".hit-text").classList.toggle("show", now < hitUntil + 500);
+  $(".hurt").classList.toggle("show", now < hurtUntil);
+  $(".hurt-dir").classList.toggle("show", now < hurtUntil + 300);
+  while (feed.length && feed[0].until < now) feed.shift();
+  const html = feed.map((f) => `<div class="${f.mine ? "mine" : ""}">${escapeHtml(f.text)}</div>`).join("");
+  if ($(".killfeed").innerHTML !== html) $(".killfeed").innerHTML = html;
+}
+
+/** A remote player's gun position as drawn now (eye height, a little forward). */
+function remoteMuzzle(pawnId: number): THREE.Vector3 | null {
+  const st = net?.session.remoteAt(pawnId, shownRenderTick);
+  if (!st) return null;
+  const eye = eyePose(data.movement, data.hitboxes, st).pos;
+  return new THREE.Vector3(eye[0] - Math.sin(st.yaw) * 0.4, eye[1] - 0.1, eye[2] - Math.cos(st.yaw) * 0.4);
+}
+
+function escapeHtml(t: string): string {
+  return t.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+}
+
+/** Lab tools: refill your weapons, or hurt yourself to try damage and death alone. */
+function labRefill() {
+  if (net) return net.send(encodeLabTool({ kind: "refill" }));
+  for (const id of ctrl.pawnIds) {
+    const p = sim.pawns.get(id);
+    if (!p?.loadout) continue;
+    const [a, b] = p.loadout.weapons.map(spawnAmmo);
+    Object.assign(p.state, { loaded0: a.loaded, reserve0: a.reserve, loaded1: b.loaded, reserve1: b.reserve });
+  }
+}
+function labHurt(amount: number) {
+  const p = possessed();
+  if (net) return net.send(encodeLabTool({ kind: "damage", pawnId: p.id, amount, kill: false }));
+  const r = applyDamage(sim, p, { amount, kill: false });
+  if (r.outcome !== "ignored") {
+    hurtUntil = performance.now() + 700;
+    $(".hurt-dir").classList.remove("on");
+    if (r.outcome === "killed") deathText = "You died";
   }
 }
 

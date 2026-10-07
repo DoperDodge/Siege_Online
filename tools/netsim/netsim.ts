@@ -3,6 +3,7 @@
 // 30-second match runs in about a second and is repeatable from its seed.
 import {
   Btn,
+  bulletDamage,
   ByteReader,
   ClientSession,
   decodeInput,
@@ -13,11 +14,14 @@ import {
   eyePose,
   Msg,
   PawnMode,
+  penetrationChain,
   poseHitboxes,
-  QUERY_STATIC,
+  QUERY_BULLET,
   rayCapsule,
   Room,
   Stance,
+  type BodyEntry,
+  type GameEvent,
   type InputCmd,
   type ShotResult,
   type SimEvent,
@@ -60,7 +64,9 @@ export interface NetsimReport {
   options: NetsimOptions;
   perClient: {
     name: string;
+    /** All corrections, and those the server caused (damage, respawns, teleports; DECISIONS D-043). */
     corrections: number;
+    forced: number;
     snapshots: number;
     resyncs: number;
     downKbps: number;
@@ -181,11 +187,22 @@ function bot(rng: Rng, crowd: boolean, home: { x: number; z: number } | null = n
 /** Spread-out spots along the open south side of the lab, 6 m apart. */
 const spreadSpot = (i: number) => ({ x: -27 + (i % 10) * 6, z: 26 - Math.floor(i / 10) * 4 });
 
+/** The body this member drives is dead on the server. */
+function isDead(room: Room, memberId: number): boolean {
+  const ctrl = room.sim.controllers.get(room.memberInfo(memberId)?.controllerId ?? 0);
+  return ctrl !== undefined && room.sim.pawns.get(ctrl.possessedPawnId)?.state.mode === PawnMode.Dead;
+}
+
 export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<NetsimReport> {
   const o: NetsimOptions = { ...DEFAULTS, ...partial };
   const rng = new Rng(o.seed);
   const clock = new Clock();
   const room = await Room.create("SIM00", "movement_lab", { lab: true });
+  /** Corrections that were real mispredictions (not damage or respawns). */
+  const mismatches = (memberId: number) => {
+    const i = room.memberInfo(memberId);
+    return i ? i.corrections - i.forcedCorrections : 0;
+  };
   const tickMs = DT * 1000;
   const serverTimes: number[] = [];
 
@@ -217,9 +234,8 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
   // Deliver the join messages, then load every client's level.
   clock.runUntil(o.oneWayMs * 3 + o.jitterMs);
   await Promise.all(clients.map((c) => c.session.loaded()));
-  if (o.spread) {
-    clients.forEach((c, i) => room.onLabTool(c.memberId, { kind: "teleport", ...spreadSpot(i), y: 0, yawDeg: 90 * i }));
-  }
+  const place = (i: number) => room.onLabTool(clients[i].memberId, { kind: "teleport", ...spreadSpot(i), y: 0, yawDeg: 90 * i });
+  if (o.spread) clients.forEach((_, i) => place(i));
 
   const endAt = clock.now + o.seconds * 1000;
   let serverNext = clock.now;
@@ -235,12 +251,18 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
     const nextClient = Math.min(...clients.map((c) => c.nextTickAt));
     const t = Math.min(serverNext, nextClient);
     clock.runUntil(t);
-    if (!correctionsAtQuiet && t >= quietFrom) correctionsAtQuiet = clients.map((c) => room.memberInfo(c.memberId)?.corrections ?? 0);
+    if (!correctionsAtQuiet && t >= quietFrom) correctionsAtQuiet = clients.map((c) => mismatches(c.memberId));
     if (t === serverNext) {
       const t0 = performance.now();
       room.step();
       serverTimes.push(performance.now() - t0);
       serverNext += tickMs;
+      // Bots shoot each other now (Phase 3 M6): the dead come straight back, as with the lab's respawn.
+      clients.forEach((c, i) => {
+        if (!isDead(room, c.memberId)) return;
+        room.onLabTool(c.memberId, { kind: "respawn" });
+        if (o.spread) place(i);
+      });
     }
     for (const c of clients) {
       if (c.nextTickAt > t) continue;
@@ -258,7 +280,7 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
   }
   const desyncs: string[] = [];
   clients.forEach((c, i) => {
-    const late = (room.memberInfo(c.memberId)?.corrections ?? 0) - (correctionsAtQuiet?.[i] ?? 0);
+    const late = mismatches(c.memberId) - (correctionsAtQuiet?.[i] ?? 0);
     if (late > 0) desyncs.push(`${c.name}: ${late} correction(s) while standing still`);
   });
   const sorted = [...serverTimes].sort((a, b) => a - b);
@@ -268,6 +290,7 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
     perClient: clients.map((c) => ({
       name: c.name,
       corrections: room.memberInfo(c.memberId)?.corrections ?? 0,
+      forced: room.memberInfo(c.memberId)?.forcedCorrections ?? 0,
       snapshots: c.session.stats.snapshots,
       resyncs: c.session.stats.resyncs,
       downKbps: (c.down.bytes * 8) / secs / 1000,
@@ -313,6 +336,12 @@ export interface HitregReport {
   uncappedAgree: number;
   /** Server-judged headshots (the shooter always aims at a drawn head). */
   headHits: number;
+  /**
+   * Shots whose damage the server confirmed exactly as the shooter's own view predicts it: the same bodies,
+   * zones (penetration rules included) and damage, or a kill.
+   */
+  damageAgree: number;
+  kills: number;
   /** Rewind (server tick − rewound tick) in ms. */
   rewindMs: { mean: number; p95: number; max: number };
   /** Share of shots whose claimed view would be past a 200 ms and a 250 ms cap. */
@@ -364,8 +393,16 @@ export async function runHitreg(partial: Partial<HitregOptions> = {}): Promise<H
   interface Expect {
     viewTick: number;
     hit: { pawnId: number; part: string } | null;
+    /** What each body hit should take (penetration rules applied to the shooter's own ray). */
+    damage: { pawnId: number; zone: string; kill: boolean; amount: number }[];
   }
+  /** The server's hit confirmations, by input seq. */
+  const confirms = new Map<number, Extract<GameEvent, { kind: "hitConfirm" }>[]>();
+  const onEvents = (_tick: number, events: GameEvent[]) => {
+    for (const e of events) if (e.kind === "hitConfirm") confirms.set(e.seq, [...(confirms.get(e.seq) ?? []), e]);
+  };
   const expected = new Map<number, Expect>();
+  const expectedDamage = new Map<number, Expect["damage"]>();
   const report: HitregReport = {
     options: o,
     shots: 0,
@@ -374,6 +411,8 @@ export async function runHitreg(partial: Partial<HitregOptions> = {}): Promise<H
     capped: 0,
     uncappedAgree: 0,
     headHits: 0,
+    damageAgree: 0,
+    kills: 0,
     rewindMs: { mean: 0, p95: 0, max: 0 },
     over200: 0,
     over250: 0,
@@ -416,6 +455,7 @@ export async function runHitreg(partial: Partial<HitregOptions> = {}): Promise<H
         send: (b) => up.send(b),
         now: () => clock.now,
         onShot: i === 0 ? onShot : undefined,
+        onEvents: i === 0 ? onEvents : undefined,
         onLocalEvents: i === 0 ? (evs) => (localShot = evs.find((e) => e.kind === "shot") ?? localShot) : undefined,
       });
       memberId = room.join(i === 0 ? "shooter" : `target${i}`, { send: (b) => down.send(b), buffered: () => 0 }, i === 0 ? "sledge" : ["mute", "pulse", "sentry", "sledge"][i - 1])!;
@@ -448,21 +488,32 @@ export async function runHitreg(partial: Partial<HitregOptions> = {}): Promise<H
   const endAt = startAt + o.seconds * 1000;
   let serverNext = clock.now;
 
-  /** The shooter's own verdict: its ray against what it drew at `viewTick`, stopped by the level. */
-  const ownRay = (viewTick: number, origin: [number, number, number], yaw: number, pitch: number): Expect["hit"] => {
+  /**
+   * The shooter's own verdict: its ray against what it drew at `viewTick`, stopped by the level; the first
+   * part it enters, and the damage each body should take by the weapon's rules.
+   */
+  const ownRay = (viewTick: number, origin: [number, number, number], yaw: number, pitch: number, slot: number): Omit<Expect, "viewTick"> => {
     const s = sim();
     const dir: [number, number, number] = [-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch)];
-    const wall = s.world.castRay(new s.R.Ray({ x: origin[0], y: origin[1], z: origin[2] }, { x: dir[0], y: dir[1], z: dir[2] }), 200, true, undefined, QUERY_STATIC);
-    let best: { pawnId: number; part: string; t: number } | null = null;
+    const wall = s.world.castRay(new s.R.Ray({ x: origin[0], y: origin[1], z: origin[2] }, { x: dir[0], y: dir[1], z: dir[2] }), 200, true, undefined, QUERY_BULLET);
+    const bodies: BodyEntry[] = [];
     for (const id of shooter.session.remoteIds()) {
       const st = shooter.session.remoteAt(id, viewTick);
       if (!st || st.mode === PawnMode.Dead) continue;
+      const parts: BodyEntry["parts"] = [];
       for (const h of poseHitboxes(m(), hb(), st)) {
         const t = rayCapsule(origin, dir, h.a, h.b, h.radius);
-        if (t !== null && t <= (wall ? wall.timeOfImpact : 200) && (!best || t < best.t)) best = { pawnId: id, part: h.part, t };
+        if (t !== null && t <= (wall ? wall.timeOfImpact : 200)) parts.push({ part: h.part, t });
       }
+      if (parts.length) bodies.push({ id, parts: parts.sort((a, b) => a.t - b.t) });
     }
-    return best && { pawnId: best.pawnId, part: best.part };
+    bodies.sort((a, b) => a.parts[0].t - b.parts[0].t || a.id - b.id);
+    const w = s.pawns.get(shooter.session.ctrl!.possessedPawnId)!.loadout!.weapons[slot];
+    const damage = penetrationChain(s.data.combat, w.damage!.penetration, bodies).map((h) => {
+      const o = bulletDamage(s.data.combat, w.damage!, h.t, h.zone, { mult: h.mult });
+      return { pawnId: h.id, zone: h.zone, kill: o.kill, amount: o.kill ? 0 : o.amount };
+    });
+    return { hit: bodies[0] ? { pawnId: bodies[0].id, part: bodies[0].parts[0].part } : null, damage };
   };
 
   while (clock.now < endAt) {
@@ -472,6 +523,13 @@ export async function runHitreg(partial: Partial<HitregOptions> = {}): Promise<H
     if (t === serverNext) {
       room.step();
       serverNext += tickMs;
+      // Headshots kill now (Phase 3 M6): a dead target comes straight back at its spot.
+      for (let i = 1; i < clients.length; i++) {
+        if (!isDead(room, clients[i].memberId)) continue;
+        report.kills++;
+        room.onLabTool(clients[i].memberId, { kind: "respawn" });
+        home(i);
+      }
     }
     for (let i = 0; i < clients.length; i++) {
       const c = clients[i];
@@ -511,11 +569,25 @@ export async function runHitreg(partial: Partial<HitregOptions> = {}): Promise<H
       if (shot?.kind === "shot") {
         report.shots++;
         const viewTick = c.session.lastViewTick;
-        expected.set(shot.seq & 0xffff, { viewTick, hit: ownRay(viewTick, shot.origin, shot.yaw, shot.pitch) });
+        const e = { viewTick, ...ownRay(viewTick, shot.origin, shot.yaw, shot.pitch, shot.slot) };
+        expected.set(shot.seq & 0xffff, e);
+        expectedDamage.set(shot.seq & 0xffff, e.damage);
       }
     }
   }
   clock.runUntil(clock.now + 500);
+  for (const [seq, want] of expectedDamage) {
+    const got = confirms.get(seq) ?? [];
+    const same =
+      got.length === want.length &&
+      want.every((w, k) => {
+        const g = got[k];
+        // HitConfirm reports the health removed: all of it on a kill, or a lethal amount.
+        return g.victimPawn === w.pawnId && g.zone === w.zone && (w.kill ? g.killed : g.killed ? g.damage <= w.amount : g.damage === w.amount);
+      });
+    if (same) report.damageAgree++;
+    else if (report.disagreements.length < 20) report.disagreements.push(`seq ${seq} damage: server ${JSON.stringify(got.map((g) => [g.victimPawn, g.zone, g.damage, g.killed]))}, client ${JSON.stringify(want)}`);
+  }
   const sorted = [...rewinds].sort((a, b) => a - b);
   report.rewindMs = { mean: sorted.reduce((a, b) => a + b, 0) / Math.max(1, sorted.length), p95: sorted[Math.floor(sorted.length * 0.95)] ?? 0, max: sorted.at(-1) ?? 0 };
   report.over200 = claimed.filter((v) => v > 200 + 1e-6).length / Math.max(1, claimed.length);

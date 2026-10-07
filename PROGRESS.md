@@ -19,7 +19,7 @@ Built in milestones; each one keeps the tests, both e2e scripts and the netsim g
 | M3 Weapon state in the simulation (fire, ammo, reload, swap, modes) | ✅ predicted exactly online; ammo HUD; Fire/R/1/2/wheel/B |
 | M4 Loadout pick online, data hash check | ✅ pause-menu loadouts (offline and online), stale tabs told to refresh |
 | M5 ADS, recoil, spread | ✅ recoil predicted exactly online; server-only spread; zoom and spread crosshair |
-| M6 Hit registration, damage, death | ⏳ |
+| M6 Hit registration, damage, death | ✅ every pellet judged on the server; kills, hit markers, kill feed; no new mispredictions |
 | M7 DBNO and revive | ⏳ |
 | M8 Melee | ⏳ |
 | M9 Client presentation (viewmodel, HUD, hit markers) | ⏳ |
@@ -80,9 +80,21 @@ Built in milestones; each one keeps the tests, both e2e scripts and the netsim g
   bullets inside a cone that four ticks around the dot show; aiming down sights closes it (to nothing for
   bullets, to a tighter cone for buckshot) and moving widens buckshot. Online, recoil is predicted exactly (no
   corrections) and only the server knows where each pellet goes. All numbers are placeholders.
+- **Damage and death (M6, D-043, D-044, D-046, D-051):** shots now hurt. The server judges every pellet
+  against everyone as the shooter saw them, then applies the tick's damage in a fixed order: bullet and slug
+  headshots kill, buckshot does ×1.5 per pellet to the head, limbs take less, and rifles' penetration follows
+  the weapon. Two players who shoot each other in the same tick both die; the dead can't fire; friendly fire
+  is on in lab rooms. You get a hit marker (red on a kill) with the damage and the zone, a red edge and an arc
+  pointing where damage came from, and a kill feed top right; dying shows who killed you and with what.
+  Other players' shots show a muzzle flash and tracers when they happen on your screen. Skopós's idle shell
+  can be destroyed without eliminating her (she just can't swap any more). Bullets go through the invisible
+  ramp over the stairs but stop at walls. The pause menu has **Refill ammo** and **Take 30 damage**. Online,
+  a hit costs the victim one correction from the server and never a misprediction: the netsim's spread-out
+  bots shoot and kill each other with 0 mispredictions, and its hit-registration run confirms every shot's
+  damage exactly as the shooter's own view predicts it (kills included).
 - **Movement fix (D-057):** sprinting diagonally into a wall could, rarely, drop you 0.29 m into the floor in
   one tick. Fixed, with a regression test.
-- 201 unit tests.
+- 216 unit tests.
 
 ---
 

@@ -167,7 +167,7 @@ export class Sim {
     // Float32-exact like every other state, and the collider placed from that state the same way a client
     // places it from the correction it gets for this body, so both start bit-identical.
     const t = collider.translation();
-    const pawn: Pawn = { id: pawnId, operatorId, ownerId, collider, loadout, team, state: initialPawnState(t.x, Math.fround(y + 0.02), t.z, Math.fround(yaw), maxHp, loadout) };
+    const pawn: Pawn = { id: pawnId, operatorId, ownerId, collider, loadout, team, life: 0, state: initialPawnState(t.x, Math.fround(y + 0.02), t.z, Math.fround(yaw), maxHp, loadout) };
     // Recoil randomness: any non-zero start works for xorshift; a server reseeds it from its room seed and
     // the client gets the value with the body's first correction.
     pawn.state.rng = Math.imul(pawnId, 0x9e3779b1) >>> 0 || 1;
@@ -184,7 +184,7 @@ export class Sim {
   addProxy(id: number, operatorId: string, state: PawnState, loadout: ResolvedLoadout | null = null, team = 0): Pawn {
     if (this.pawns.has(id)) throw new Error(`pawn id ${id} is already in use`);
     const collider = this.world.createCollider(this.R.ColliderDesc.capsule(0.5, 0.3).setCollisionGroups(PLAYER_GROUPS));
-    const pawn: Pawn = { id: this.claimId(id), operatorId, ownerId: null, collider, loadout, team, state: { ...state }, proxy: true };
+    const pawn: Pawn = { id: this.claimId(id), operatorId, ownerId: null, collider, loadout, team, life: 0, state: { ...state }, proxy: true };
     this.pawns.set(id, pawn);
     poseCollider(this.ctx, pawn);
     refreshBroadPhase(this.world);
@@ -259,7 +259,16 @@ export class Sim {
     pawn.collider.setHalfHeight(hh);
     pawn.collider.setTranslation({ x: spawn.pos[0], y: spawn.pos[1] + hh + r + 0.02, z: spawn.pos[2] });
     pawn.state = { ...initialPawnState(spawn.pos[0], spawn.pos[1] + 0.02, spawn.pos[2], Math.fround(spawn.yawDeg * DEG), pawn.state.maxHp, pawn.loadout), rng: pawn.state.rng };
+    pawn.life++;
     poseCollider(this.ctx, pawn); // also makes a dead body solid again
+    refreshBroadPhase(this.world);
+  }
+
+  /** After changing a pawn's state from outside a step (damage on the server): place its collider to match. */
+  refreshPawn(pawnId: number): void {
+    const pawn = this.pawns.get(pawnId);
+    if (!pawn) return;
+    poseCollider(this.ctx, pawn); // a dead body stops blocking at once
     refreshBroadPhase(this.world);
   }
 
@@ -295,7 +304,10 @@ export class Sim {
       ladder: -1,
       airPeakY: Math.fround(y + 0.02),
     });
-    if (pawn.state.hp === 0) pawn.state.hp = pawn.state.maxHp;
+    if (pawn.state.hp === 0) {
+      pawn.state.hp = pawn.state.maxHp; // a dead body comes back: a new life
+      pawn.life++;
+    }
     poseCollider(this.ctx, pawn); // also makes a dead body solid again
     refreshBroadPhase(this.world);
   }

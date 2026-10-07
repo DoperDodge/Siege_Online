@@ -10,10 +10,10 @@ describe("netsim: 10 clients, 100 ms round trip, jitter, stalls, drift", () => {
     expect(r.room.droppedInputs).toBe(0);
     for (const c of r.perClient) {
       expect(c.resyncs, c.name).toBe(0);
-      // The join (and the teleport, usually in the same snapshot). Stalls cost none: the server holds a
-      // player still until their late inputs arrive, then catches up. A little slack for the known
-      // ~1e-4 m divergence at wall corners.
-      expect(c.corrections, c.name).toBeLessThanOrEqual(3);
+      // Mispredictions: none expected (stalls cost none: the server holds a player still until their late
+      // inputs arrive, then catches up). A little slack for the known ~1e-4 m divergence at wall corners.
+      // The join, teleports, hits and respawns are the server's doing and counted apart (D-043).
+      expect(c.corrections - c.forced, c.name).toBeLessThanOrEqual(2);
       expect(c.downKbps, c.name).toBeLessThan(40); // payload; well under 64 kbps with headers
       expect(c.rttMs, c.name).toBeGreaterThan(95);
     }
@@ -25,7 +25,7 @@ describe("netsim: 10 clients, 100 ms round trip, jitter, stalls, drift", () => {
     expect(r.room.droppedInputs).toBe(0);
     for (const c of r.perClient) {
       expect(c.resyncs, c.name).toBe(0);
-      expect(c.corrections / 10, c.name).toBeLessThan(5); // per second; bumping into people mispredicts
+      expect((c.corrections - c.forced) / 10, c.name).toBeLessThan(5); // per second; bumping into people mispredicts
     }
     expect(r.serverTickMs.mean).toBeLessThan(5); // PLAN §18 budget
   }, 60000);
@@ -39,6 +39,9 @@ describe("netsim hitreg: a still shooter at 100 ms round trip aims at heads as i
     expect(r.judged).toBe(r.shots);
     expect(r.agree, r.disagreements.join("\n")).toBe(r.shots);
     expect(r.headHits / r.shots).toBeGreaterThan(0.85);
+    // Phase 3 M6: the damage the server applies is what the shooter's view says, kills included.
+    expect(r.damageAgree, r.disagreements.join("\n")).toBe(r.shots);
+    expect(r.kills).toBeGreaterThan(r.shots * 0.8);
   }, 60000);
 
   it("10 ms jitter: at least 99 % of uncapped shots agree, and the 250 ms cap isn't reached", async () => {

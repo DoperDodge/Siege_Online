@@ -188,7 +188,7 @@ in the Shooting Range or a Custom Game with a stopwatch or a 60 fps recording.
 19. **Penetration:** does the 70 % for each extra body stack per body? Does a simple-penetration bullet that
    grazes a limb continue on to a second player?
 20. **Shotgun blasts:** is a blast's damage applied pellet by pellet (so going down and overkill are judged
-   per pellet) or added up per blast and target?
+   per pellet) or added up per blast and target? (We add it up per blast and target, each pellet rounded down.)
 21. **Skopós:** the idle-shell headshot rule (×2.0 placeholder, fitted to "a 5.7 USG headshot doesn't destroy
    it"), and whether her shells really can't be downed (Fandom only).
 22. **Reverse friendly fire:** how much team damage turns it on (100 HP placeholder)? Do headshots reflect?
