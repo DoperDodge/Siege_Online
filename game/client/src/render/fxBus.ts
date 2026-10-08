@@ -1,12 +1,12 @@
-// Effects in the world (Phase 3 M9): muzzle flashes and their light, tracers, bullet marks, and a sound
-// hook. Fed by our own fresh predictions (the session never reports replayed ticks, so a correction never
+// Effects in the world (Phase 3 M9): muzzle flashes and their light, tracers, bullet marks, debris from
+// broken panels (Phase 4), and a sound hook. Fed by our own fresh predictions (the session never reports replayed ticks, so a correction never
 // repeats an effect) and by the server's events, which are drawn when the frame on screen reaches the tick
 // they happened at. A suppressor hides the flash and the tracer (weapons_notes.md §4.4). Placeholders.
 // Every effect object is made up front and reused, so the pools never grow and their shaders can be
 // compiled at load (renderer.compile also prepares hidden objects): a shader first compiled at a shot
 // stalls that frame, and with it the shot's input.
 import * as THREE from "three";
-import { raycastLevel, type GameEvent, type Sim, type SimEvent, type Vec3 } from "@redmond/shared";
+import { cellWorld, L_CORE, L_STEEL, raycastLevel, type GameEvent, type IndexedOp, type PanelChange, type Sim, type SimEvent, type Vec3 } from "@redmond/shared";
 
 /** Where sounds will go (Phase 11 adds audio); a no-op until then. */
 export interface AudioSink {
@@ -25,6 +25,10 @@ const LIGHTS = 1;
  */
 const MAX_PENDING = 256;
 const STALE_TICKS = 64;
+/** Chunks of broken panel in the air at once, a few per op, each falling for DEBRIS_MS. */
+const DEBRIS = 96;
+const DEBRIS_PER_LAYER = 3;
+const DEBRIS_MS = 900;
 
 /** Objects reused oldest first, each shown until its time is up. */
 class Pool<T extends THREE.Object3D> {
@@ -58,6 +62,11 @@ export class FxBus {
   // Lights only ever change intensity: adding or hiding one would recompile every lit material.
   private readonly lights: { light: THREE.PointLight; until: number }[] = [];
   private nextLight = 0;
+  private readonly debris: Pool<THREE.Mesh>;
+  /** Each chunk's velocity (m/s), by its place in the pool. */
+  private readonly debrisVel: THREE.Vector3[];
+  private readonly debrisMat = { skin: new THREE.MeshBasicMaterial({ color: 0xd9d4c7 }), wood: new THREE.MeshBasicMaterial({ color: 0x8b6a43 }), steel: new THREE.MeshBasicMaterial({ color: 0x56606b }) };
+  private lastFrameAt = 0;
   private readonly ownTracer = new THREE.LineBasicMaterial({ color: 0xffe08a, transparent: true, opacity: 0.35 });
   private readonly otherTracer = new THREE.LineBasicMaterial({ color: 0xffe08a, transparent: true, opacity: 0.8 });
 
@@ -98,6 +107,40 @@ export class FxBus {
       scene.add(light);
       this.lights.push({ light, until: 0 });
     }
+    const chunk = new THREE.BoxGeometry(0.035, 0.035, 0.02);
+    const mats = Object.values(this.debrisMat);
+    this.debris = new Pool(
+      Array.from({ length: DEBRIS }, (_, i) => {
+        const m = new THREE.Mesh(chunk, mats[i % mats.length]); // every material in the scene from the start (warmShaders)
+        scene.add(m);
+        return m;
+      }),
+    );
+    this.debrisVel = this.debris.items.map(() => new THREE.Vector3());
+  }
+
+  /** Panel ops just applied (from the server): a few chunks from the cells each one knocked out. */
+  panels(ops: readonly IndexedOp[], changes: readonly PanelChange[], now: number) {
+    ops.forEach(({ panel }, k) => {
+      const e = this.sim.level.panels.list[panel];
+      if (!e) return;
+      changes[k].removed.forEach((cells, layer) => {
+        for (let j = 0; j < Math.min(DEBRIS_PER_LAYER, cells.length); j++) {
+          const cell = cells[Math.floor((j * cells.length) / DEBRIS_PER_LAYER)];
+          const u = cell % e.panel.w;
+          const v = (cell - u) / e.panel.w;
+          const side = layer === L_STEEL ? (e.panel.steelSides >> e.panel.sectionOf(u)) & 1 : 0;
+          const m = this.debris.take(now, DEBRIS_MS);
+          m.material = layer === L_STEEL ? this.debrisMat.steel : layer === L_CORE && !e.panel.coreMetal ? this.debrisMat.wood : this.debrisMat.skin;
+          m.position.set(...cellWorld(e.panel, e.frame, layer, u, v, side));
+          // Out of either face and a little up, spread by the cell's place (no randomness needed).
+          const h = (Math.imul(cell + 1, 0x9e3779b1) >>> 0) / 4294967296;
+          const out = (h < 0.5 ? -1 : 1) * (0.6 + h);
+          const n = e.frame.n;
+          this.debrisVel[this.debris.items.indexOf(m)].set(n[0] * out + (h - 0.5), 0.8 + h, n[2] * out + (0.5 - h) * 0.6);
+        }
+      });
+    });
   }
 
   /** Our own predicted weapon events, the tick they happen (fresh predictions only). */
@@ -148,6 +191,17 @@ export class FxBus {
     }
     this.tracers.update(now);
     this.flashes.update(now);
+    this.debris.update(now);
+    const dt = Math.min(0.05, Math.max(0, now - this.lastFrameAt) / 1000);
+    this.lastFrameAt = now;
+    this.debris.items.forEach((m, i) => {
+      if (!m.visible) return;
+      const vel = this.debrisVel[i];
+      vel.y -= 9.81 * dt;
+      m.position.addScaledVector(vel, dt);
+      m.rotation.x += 7 * dt;
+      m.rotation.z += 5 * dt;
+    });
     for (const l of this.lights) l.light.intensity = now < l.until ? 6 : 0;
   }
 
@@ -162,6 +216,8 @@ export class FxBus {
       flashesShown: this.flashes.shown,
       lights: this.lights.length,
       lightsOn: this.lights.filter((l) => l.light.intensity > 0).length,
+      debris: this.debris.items.length,
+      debrisShown: this.debris.shown,
       pending: this.pending.length,
     };
   }
@@ -182,7 +238,10 @@ export class FxBus {
     pos.needsUpdate = true;
   }
 
-  /** A bullet mark where the pellet ended, if it ended on the level (players don't keep marks). */
+  /**
+   * A bullet mark where the pellet ended, if it ended on the level (players don't keep marks). A panel shows
+   * its real hole instead, except steel, which keeps marks.
+   */
   private mark(from: THREE.Vector3, end: Vec3) {
     const to = new THREE.Vector3(...end);
     const dir = to.clone().sub(from);
@@ -191,7 +250,7 @@ export class FxBus {
     dir.divideScalar(len);
     const start = to.clone().addScaledVector(dir, -0.08);
     const hit = raycastLevel(this.sim, [start.x, start.y, start.z], [dir.x, dir.y, dir.z], 0.16);
-    if (!hit) return;
+    if (!hit || (hit.panel && hit.panel.crossing.layer !== L_STEEL)) return;
     const d = this.decals[this.nextDecal];
     this.nextDecal = (this.nextDecal + 1) % MAX_DECALS;
     const n = new THREE.Vector3(...hit.normal);

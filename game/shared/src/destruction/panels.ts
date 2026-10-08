@@ -9,13 +9,22 @@ import { Panel, type PanelChange, type PanelOp, type PanelSpec } from "./panel.j
 import { panelCrossings, type LayerCrossing, type PanelFrame } from "./world.js";
 
 export interface PanelEntry {
-  readonly panel: Panel;
+  /** Replaced by a fresh one when a client is told to start this panel over (PanelSet.reset). */
+  panel: Panel;
   readonly frame: PanelFrame;
   readonly info: SolidInfo;
   colliders: Collider[];
   /** The box's world bounds (a quick reject for rays). */
   readonly min: Vec3;
   readonly max: Vec3;
+  /** The panel's hash as of a version (hashing a whole panel on every op would be slow). */
+  hashed: { panel: Panel; version: number; value: number } | null;
+}
+
+/** An op for one panel (by its index in the level). */
+export interface IndexedOp {
+  panel: number;
+  op: PanelOp;
 }
 
 export interface PanelHit {
@@ -46,6 +55,7 @@ export class PanelSet {
       colliders: [],
       min: [0, 1, 2].map((k) => frame.center[k] - ext[k]) as Vec3,
       max: [0, 1, 2].map((k) => frame.center[k] + ext[k]) as Vec3,
+      hashed: null,
     };
     this.list.push(entry);
     this.byId.set(spec.id, entry);
@@ -59,6 +69,14 @@ export class PanelSet {
     const change = e.panel.apply(op);
     if (change.movementChanged) this.rebuild(e);
     return change;
+  }
+
+  /** Panel `index` as the level built it, boxes and all (a client told to start it over). */
+  reset(index: number): PanelEntry {
+    const e = this.list[index];
+    e.panel = new Panel(e.panel.spec);
+    this.rebuild(e);
+    return e;
   }
 
   /** After a panel's cells were replaced wholesale (a joining player's state): rebuild its boxes. */
@@ -99,7 +117,11 @@ export class PanelSet {
   /** fnv1a over every changed panel's state: two machines that applied the same ops agree on it. */
   hash(): number {
     const w = new ByteWriter(16 + 8 * this.list.length);
-    for (const e of this.list) if (e.panel.modified) w.varu(e.panel.spec.index).u32(e.panel.hash());
+    for (const e of this.list) {
+      if (!e.panel.modified) continue;
+      if (!e.hashed || e.hashed.panel !== e.panel || e.hashed.version !== e.panel.version) e.hashed = { panel: e.panel, version: e.panel.version, value: e.panel.hash() };
+      w.varu(e.panel.spec.index).u32(e.hashed.value);
+    }
     return fnv1a(w.finish());
   }
 

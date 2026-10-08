@@ -7,14 +7,10 @@ import {
   ByteReader,
   Cause,
   ClientSession,
-  decodeInput,
-  decodeLabTool,
-  decodePickLoadout,
-  decodePing,
   DT,
   eyePose,
+  handleRoomMessage,
   loadedOf,
-  Msg,
   PawnMode,
   pelletPath,
   poseHitboxes,
@@ -52,6 +48,11 @@ export interface NetsimOptions {
    * a second later.
    */
   combat: boolean;
+  /**
+   * With `combat`: the two lines face each other through the Movement Lab's sample walls (Phase 4 M5), so
+   * every burst holes the soft ones, and the run checks every client ends with the server's panels.
+   */
+  walls?: boolean;
   /** One client holds Fire the whole run, and its uplink stalls `ms` once, at `atS` seconds. */
   sprayStall?: { client: number; atS: number; ms: number };
   operators?: string[];
@@ -100,6 +101,11 @@ export interface NetsimReport {
    * most are cut short: the reviver is shot, or the downed body finished), kills (with the knife), bleed-outs.
    */
   combat: { downs: number; reviveStarts: number; revives: number; kills: number; knifeKills: number; bleedOuts: number };
+  /**
+   * Destruction: ops the server applied and sent, clients whose panels differ from the server's at the end,
+   * hash disagreements clients noticed along the way, and panel states the server had to send again.
+   */
+  panels: { ops: number; differ: string[]; mismatches: number; resyncs: number };
 }
 
 class Rng {
@@ -270,6 +276,8 @@ function fight(session: ClientSession, own: PawnState, tick: number, cmd: Omit<I
 
 /** Combat runs: two lines of five, 8 m apart, facing each other (team 0 on the south line). */
 const combatSpot = (i: number) => ({ x: -6 + Math.floor(i / 2) * 3, z: i % 2 ? 12 : 4, yawDeg: i % 2 ? 0 : 180 });
+/** Combat across walls: the lines 2.5 m either side of the sample walls at z 17 (soft x −5.5…−3.5, reinforceable −2.5…−0.5, hard 0.5…2.5). */
+const wallSpot = (i: number) => ({ x: [-5, -4, -2, -1, 1.5][Math.floor(i / 2) % 5], z: i % 2 ? 14.5 : 19.5, yawDeg: i % 2 ? 180 : 0 });
 
 export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<NetsimReport> {
   const o: NetsimOptions = { ...DEFAULTS, ...partial };
@@ -320,24 +328,19 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
       memberId = room.join(name, { send: (b) => down.send(b), buffered: () => 0 }, op)!;
       const drift = 1 + ((rng.next() * 2 - 1) * o.driftPct) / 100;
       // In a fight the first two (one a side) charge; everyone else keeps to their spot in the line.
-      const home = o.combat ? (i < 2 ? null : combatSpot(i)) : o.spread ? spreadSpot(i) : null;
+      const home = o.combat ? (o.walls ? wallSpot(i) : i < 2 ? null : combatSpot(i)) : o.spread ? spreadSpot(i) : null;
       return { name, session, down, up, memberId, drift, brain: bot(new Rng(o.seed * 1000 + i), o.crowd && !o.combat, home), nextTickAt: 0, ticks: 0, deadSince: null as number | null };
     }),
   );
 
   function serverReceive(memberId: number, b: Uint8Array) {
-    const r = new ByteReader(b.subarray(1));
-    if (b[0] === Msg.Input) room.onInput(memberId, decodeInput(r));
-    else if (b[0] === Msg.Resync) room.onResync(memberId);
-    else if (b[0] === Msg.Ping) room.onPing(memberId, decodePing(r).clientTime);
-    else if (b[0] === Msg.LabTool) room.onLabTool(memberId, decodeLabTool(r));
-    else if (b[0] === Msg.PickLoadout) room.pickLoadout(memberId, decodePickLoadout(r));
+    if (!handleRoomMessage(room, memberId, b[0], new ByteReader(b.subarray(1)))) throw new Error(`netsim: unexpected message ${b[0]}`);
   }
 
   // Deliver the join messages, then load every client's level.
   clock.runUntil(o.oneWayMs * 3 + o.jitterMs);
   await Promise.all(clients.map((c) => c.session.loaded()));
-  const place = (i: number) => room.onLabTool(clients[i].memberId, { kind: "teleport", y: 0, ...(o.combat ? combatSpot(i) : { ...spreadSpot(i), yawDeg: 90 * i }) });
+  const place = (i: number) => room.onLabTool(clients[i].memberId, { kind: "teleport", y: 0, ...(o.combat ? (o.walls ? wallSpot(i) : combatSpot(i)) : { ...spreadSpot(i), yawDeg: 90 * i }) });
   if (o.spread || o.combat) clients.forEach((_, i) => place(i));
 
   const endAt = clock.now + o.seconds * 1000;
@@ -385,7 +388,7 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
         // The last second is hands-off (neutral input) so every body comes to rest before the desync check.
         const own = c.session.sim?.pawns.get(c.session.ctrl!.possessedPawnId)?.state ?? null;
         let cmd = c.brain(c.ticks++, own);
-        if (o.combat && own) cmd = fight(c.session, own, c.ticks, cmd, clients.indexOf(c) < 2);
+        if (o.combat && own) cmd = fight(c.session, own, c.ticks, cmd, !o.walls && clients.indexOf(c) < 2);
         if (o.sprayStall?.client === clients.indexOf(c)) cmd = { ...cmd, buttons: cmd.buttons | Btn.Fire };
         c.session.tick(clock.now < inputsStopAt ? cmd : { ...cmd, forward: 0, strafe: 0, buttons: 0, lean: 0, stance: Stance.Stand });
       }
@@ -437,6 +440,12 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
     sprayStallShots: o.sprayStall ? stallShots : null,
     starvedRemoteFrames: clients.reduce((n, c) => n + c.session.starvedFrames, 0),
     combat,
+    panels: {
+      ops: room.stats.panelOps,
+      differ: clients.filter((c) => c.session.sim!.level.panels.hash() !== room.sim.level.panels.hash()).map((c) => c.name),
+      mismatches: clients.reduce((n, c) => n + c.session.stats.panelMismatches, 0),
+      resyncs: room.stats.panelResyncs,
+    },
   };
 }
 
@@ -616,11 +625,7 @@ export async function runHitreg(partial: Partial<HitregOptions> = {}): Promise<H
     }),
   );
   function serverReceive(memberId: number, b: Uint8Array) {
-    const r = new ByteReader(b.subarray(1));
-    if (b[0] === Msg.Input) room.onInput(memberId, decodeInput(r));
-    else if (b[0] === Msg.Resync) room.onResync(memberId);
-    else if (b[0] === Msg.Ping) room.onPing(memberId, decodePing(r).clientTime);
-    else if (b[0] === Msg.LabTool) room.onLabTool(memberId, decodeLabTool(r));
+    if (!handleRoomMessage(room, memberId, b[0], new ByteReader(b.subarray(1)))) throw new Error(`netsim: unexpected message ${b[0]}`);
   }
   clock.runUntil(o.oneWayMs * 3 + o.jitterMs);
   await Promise.all(clients.map((c) => c.session.loaded()));

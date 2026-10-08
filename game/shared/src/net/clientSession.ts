@@ -7,8 +7,11 @@ import { quantizeInput, type InputCmd, type PawnState } from "../player/types.js
 import { Sim } from "../sim.js";
 import type { SimEvent } from "../weapons/step.js";
 import { resolveLoadout, type ResolvedLoadout } from "../weapons/loadout.js";
+import type { PanelChange } from "../destruction/panel.js";
+import type { IndexedOp } from "../destruction/panels.js";
 import { ByteReader, ProtocolError } from "./bytes.js";
 import { decodeEvents, type GameEvent } from "./events.js";
+import { applyPanelState, decodePanelOps } from "./panels.js";
 import {
   decodeError,
   decodePong,
@@ -16,6 +19,7 @@ import {
   decodeShotResult,
   decodeWelcome,
   encodeInput,
+  encodePanelResync,
   encodePing,
   encodeResync,
   Msg,
@@ -44,6 +48,8 @@ export interface ClientSessionOptions {
   onEvents?(tick: number, events: GameEvent[]): void;
   /** What our own fresh prediction did this tick (shots, reloads): instant feedback, never replayed. */
   onLocalEvents?(events: readonly SimEvent[]): void;
+  /** Panel ops the server applied, now applied here too, and what each changed (debris, sounds). */
+  onPanels?(tick: number, ops: readonly IndexedOp[], changes: readonly PanelChange[]): void;
   onError?(code: number, message: string): void;
   /**
    * A message held while the level loaded threw when it was replayed after (one arriving live throws from
@@ -75,7 +81,7 @@ export class ClientSession {
   rttMs = 0;
   /** Current remote interpolation delay. */
   interpDelayMs = 100;
-  readonly stats = { snapshots: 0, corrections: 0, resyncs: 0, bytesIn: 0, bytesOut: 0, replayedTicks: 0 };
+  readonly stats = { snapshots: 0, corrections: 0, resyncs: 0, bytesIn: 0, bytesOut: 0, replayedTicks: 0, panelOps: 0, panelStates: 0, panelMismatches: 0 };
   /** With `trackMispredictions`: corrections that disagreed with our prediction, and how (most recent last). */
   readonly mispredictions: { seq: number; diffs: string[] }[] = [];
   private readonly predicted = new Map<number, PawnState[]>();
@@ -97,6 +103,7 @@ export class ClientSession {
   private queueEwma = TARGET_QUEUE;
   private awaitingReset = false;
   private resyncSentAt = 0;
+  private panelResyncAt = -Infinity;
   private backlog: Uint8Array[] = [];
   private creating: Promise<void> | null = null;
   private markLoaded: () => void = () => {};
@@ -173,6 +180,22 @@ export class ClientSession {
         this.opts.onEvents?.(tick, events);
         return;
       }
+      case Msg.PanelOps: {
+        // Applied as they arrive: the next prediction already moves with the new walls.
+        const panels = this.sim!.level.panels;
+        const m = decodePanelOps(r, panels.list.length);
+        const changes = m.ops.map(({ panel, op }) => panels.apply(panel, op));
+        this.stats.panelOps += m.ops.length;
+        this.opts.onPanels?.(m.tick, m.ops, changes);
+        if (panels.hash() !== m.hash) this.panelsDisagree();
+        return;
+      }
+      case Msg.PanelState: {
+        const panels = this.sim!.level.panels;
+        this.stats.panelStates++;
+        if (applyPanelState(r, panels) !== panels.hash()) this.panelsDisagree();
+        return;
+      }
       case Msg.Error: {
         const e = decodeError(r);
         this.opts.onError?.(e.code, e.message);
@@ -181,6 +204,15 @@ export class ClientSession {
       default:
         throw new ProtocolError(`unknown message ${bytes[0]}`);
     }
+  }
+
+  /** Our panels don't match the server's: ask for its state (at most once a second). */
+  private panelsDisagree() {
+    this.stats.panelMismatches++;
+    const now = this.opts.now();
+    if (now - this.panelResyncAt < 1000) return;
+    this.panelResyncAt = now;
+    this.send(encodePanelResync());
   }
 
   /** Resolves once the level from Welcome is loaded and any queued messages are applied. */

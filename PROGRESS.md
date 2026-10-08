@@ -17,7 +17,7 @@ Built in milestones; each keeps the tests, the browser tests and the netsim gree
 | M2 Panel model: a cell grid per surface (skins, studs, steel), holes, falling pieces | ✅ pure model + 13 tests (D-062) |
 | M3 Panels in the simulation (movement through holes) and on screen | ✅ intact panels collide exactly as before; breaches let bodies through; rays see holes; drawn from cells (D-064) |
 | M4 Bullets and the knife through panels (wallbangs, holes, rewound holes) | ✅ on the server: wallbangs at 70 %, holes, studs, steel, two-wall limit, knife holes, panels as the shooter had them (D-065) |
-| M5 Destruction over the network, and for players who join late | ⏳ |
+| M5 Destruction over the network, and for players who join late | ✅ ops to everyone each tick with a hash check; full state on joining; netsim and browser test agree (D-066) |
 | M6 Reinforcement, barricades and hatches | ⏳ |
 | M7 Destruction Lab (explosive tools, every surface, Oregon wall samples) | ⏳ |
 | M8 Browser and netsim tests, docs | ⏳ |
@@ -55,6 +55,12 @@ Built in milestones; each keeps the tests, the browser tests and the netsim gree
   barricades and glass wear down per bullet (a DMR opens a hatch in 9 shots spread over it; ten knife hits
   do it too). The knife punches a 25 cm hole through both skins of a wall. Shots are judged against the walls
   as the shooter's screen had them. Players see the holes from M5 (until then only the server has them).
+- **Holes for everyone (M5, D-066):** each tick's holes go to every player (a few bytes each) with a checksum
+  of all the walls; a player whose walls ever disagree gets them again, and one who joins mid-game gets them
+  all at once. Broken pieces throw a few chunks of debris. Tested in the netsim (ten bots fighting across the
+  sample walls: every client ends with the server's walls, 33–38 kbps each) and in a browser test
+  (`tools/e2e/online-walls.mjs`: a wallbang hit at +100 ms, a sprayed and knifed wall, a watcher and a late
+  joiner with exactly the server's walls).
 
 ---
 

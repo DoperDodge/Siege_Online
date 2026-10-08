@@ -8,6 +8,7 @@ import { judgeMelee } from "../combat/melee.js";
 import { PanelHistory } from "../destruction/history.js";
 import { meleeOnPanels } from "../destruction/hits.js";
 import type { PanelOp } from "../destruction/panel.js";
+import type { IndexedOp } from "../destruction/panels.js";
 import type { DummyDef, ModeData } from "../data/schemas.js";
 import { DUMMY_STANCE, dummyInput } from "../lab/dummies.js";
 import { spawnAmmo, type Pawn, type PlayerController } from "../player/pawn.js";
@@ -23,6 +24,7 @@ import { QUERY_BULLET } from "../physics/rapier.js";
 import { sideTeam } from "../sim.js";
 import { encodeEvents, type GameEvent } from "./events.js";
 import { encodeError, encodePong, encodeRoster, encodeShotResult, encodeWelcome, ErrorCode, unwrap16, type InputMsg, type LabTool, type RosterEntry, type ShotResult } from "./protocol.js";
+import { encodePanelOps, encodePanelState, wireOp } from "./panels.js";
 import { MAX_INTERP_MS, quantizeRemote, SNAPSHOT_EVERY, SnapshotEncoder, type RemoteQ } from "./snapshot.js";
 
 /** Inputs the server tries to keep queued per client (absorbs jitter); clients pace themselves to it. */
@@ -141,6 +143,8 @@ interface Member {
   encoder: SnapshotEncoder;
   /** Snapshot ticks actually sent to this client (skipped ones aren't), for rewinding to what it drew. */
   sent: SentRing;
+  /** When we last sent it every changed panel's state because it asked (it may ask once a second). */
+  panelStateAt: number;
 }
 
 /** A shot judged against the world as its shooter saw it, waiting to be applied with the rest of the tick's. */
@@ -157,7 +161,7 @@ interface JudgedShot {
   origin: [number, number, number];
   bodies: ShotOnBody[];
   /** What it did to panels (holes, wear), in order: applied with its damage. */
-  panelOps: { panel: number; op: PanelOp }[];
+  panelOps: IndexedOp[];
 }
 
 /** A Range Lab target: a body with no client, stepped from its script (lab/dummies.ts). */
@@ -183,6 +187,10 @@ export class Room {
   readonly history: HitboxHistory;
   /** Recent panel changes: shots are judged against the panels as their shooter had them (destruction/history.ts). */
   readonly panelHistory = new PanelHistory();
+  /** Panel ops from between ticks (lab tools), applied with the next tick's. */
+  private queuedOps: IndexedOp[] = [];
+  /** Panel ops applied this tick, sent to everyone at its end (before its snapshot). */
+  private tickOps: IndexedOp[] = [];
   private readonly members = new Map<number, Member>();
   private nextMemberId = 1;
   /** Range Lab dummies (lab rooms on a level that has some). */
@@ -203,6 +211,8 @@ export class Room {
     kills: 0,
     /** Panel ops applied (holes, wear, reinforcements). */
     panelOps: 0,
+    /** Panel states sent because a client's panels disagreed. */
+    panelResyncs: 0,
   };
   /** Damage rules (friendly fire): the lab mode preset until match modes arrive (Phase 6). */
   readonly rules: ModeData;
@@ -306,10 +316,12 @@ export class Room {
       confirmEpoch: null,
       encoder: new SnapshotEncoder(),
       sent: new SentRing(),
+      panelStateAt: -Infinity,
     };
     this.members.set(m.id, m);
     this.spawn(m);
     client.send(encodeWelcome({ roomCode: this.code, tick: this.sim.tick, levelId: this.levelId, controllerId: m.ctrl!.id }));
+    client.send(encodePanelState(this.sim.level.panels)); // the walls as they are now; every later op follows
     this.broadcastRoster();
     return m.id;
   }
@@ -384,6 +396,20 @@ export class Room {
 
   onResync(memberId: number): void {
     this.members.get(memberId)?.encoder.reset();
+  }
+
+  /** A client's panels disagree with ours: send it every changed panel's state (at most once a second). */
+  onPanelResync(memberId: number): void {
+    const m = this.members.get(memberId);
+    if (!m || this.sim.tick - m.panelStateAt < TICK_HZ) return;
+    m.panelStateAt = this.sim.tick;
+    this.stats.panelResyncs++;
+    m.client.send(encodePanelState(this.sim.level.panels));
+  }
+
+  /** A panel op from outside a tick (a lab tool, a test): applied and sent with the next tick's. */
+  queuePanelOp(panel: number, op: PanelOp): void {
+    if (this.sim.level.panels.list[panel]) this.queuedOps.push({ panel, op });
   }
 
   onLabTool(memberId: number, tool: LabTool): void {
@@ -534,15 +560,26 @@ export class Room {
   }
 
   /**
-   * Change a panel (a hole, wear, steel): applied to the room's level at once and remembered, so later shots
-   * are judged against the panels as each shooter had them.
+   * Change a panel (a hole, wear, steel) at the end of this tick: applied to the room's level in its wire
+   * form (exactly what clients will apply), remembered so later shots are judged against the panels as each
+   * shooter had them, and sent to everyone with the tick's other ops.
    */
-  applyPanelOp(index: number, op: PanelOp): void {
+  private applyPanelOp(index: number, op: PanelOp): void {
     const e = this.sim.level.panels.list[index];
     if (!e) return;
-    const change = this.sim.level.panels.apply(index, op);
+    const wire = wireOp(op);
+    const change = this.sim.level.panels.apply(index, wire);
     this.panelHistory.record(this.sim.tick, index, e.panel.w * e.panel.h, change);
+    this.tickOps.push({ panel: index, op: wire });
     this.stats.panelOps++;
+  }
+
+  /** The tick's panel ops to everyone, with the panels' hash after them, ahead of the tick's snapshot. */
+  private flushPanelOps() {
+    if (this.tickOps.length === 0) return;
+    const msg = encodePanelOps({ tick: this.sim.tick, ops: this.tickOps, hash: this.sim.level.panels.hash() });
+    this.tickOps = [];
+    for (const m of this.members.values()) m.client.send(msg);
   }
 
   /**
@@ -551,6 +588,7 @@ export class Room {
    * input) to the bodies as they are now. A shot on a body already dead does nothing.
    */
   private resolveShots() {
+    for (const { panel, op } of this.queuedOps.splice(0)) this.applyPanelOp(panel, op);
     const shots = this.judged.sort((a, b) => a.rewoundTick - b.rewoundTick || a.receivedTick - b.receivedTick || a.ctrlId - b.ctrlId || a.seq - b.seq);
     this.judged = [];
     for (const shot of shots) {
@@ -811,6 +849,7 @@ export class Room {
       this.judgeEvents(new Map([[m.ctrl.id, { m, input: extra }]]));
     }
     this.resolveShots();
+    this.flushPanelOps();
     this.checkReviveLinks();
     this.reviveDummies();
     this.history.record();

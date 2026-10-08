@@ -36,8 +36,10 @@ import {
   Stance,
   TICK_HZ,
   wrapAngle,
+  type IndexedOp,
   type InputCmd,
   type Pawn,
+  type PanelChange,
   type PawnState,
   type PlayerController,
   type GunData,
@@ -207,6 +209,8 @@ export async function startLab(o: LabOptions): Promise<void> {
   let showShot: (shot: ShotResult) => void = () => {};
   /** The server's events, once the page is running (a room joined mid-fight replays some while the level loads). */
   let gameEvents: (tick: number, events: GameEvent[]) => void = () => {};
+  /** Panel ops the session just applied (debris), once the page is running. */
+  let panelEvents: (ops: readonly IndexedOp[], changes: readonly PanelChange[]) => void = () => {};
   /** Online tests can script the input (window.__lab.input). */
   let scripted: Partial<InputCmd> | null = null;
   /** Render tick of the frame on screen (remote players are drawn at it), and of the one last clicked on. */
@@ -1027,6 +1031,18 @@ export async function startLab(o: LabOptions): Promise<void> {
       get renderTick() {
         return shownRenderTick;
       },
+      /** The destructible panels as this page has them (browser tests compare players' panels). */
+      get panels() {
+        const p = sim.level.panels;
+        const st = net?.session.stats;
+        return {
+          hash: p.hash(),
+          changed: p.list.filter((e) => e.panel.modified).map((e) => e.panel.spec.id),
+          ops: st?.panelOps ?? 0,
+          states: st?.panelStates ?? 0,
+          mismatches: st?.panelMismatches ?? 0,
+        };
+      },
       /** The render tick an input of yours claimed (lag compensation), by its 16-bit seq. */
       claimed: (seq16: number) => claims.get(seq16)?.viewTick ?? null,
       /** Another body's hitboxes as this page draws it at render tick `tick`. */
@@ -1154,6 +1170,7 @@ export async function startLab(o: LabOptions): Promise<void> {
             onRoster: () => (rosterChanged = true),
             onShot: (shot) => showShot(shot),
             onEvents: (tick, events) => gameEvents(tick, events),
+            onPanels: (_tick, ops, changes) => panelEvents(ops, changes),
             trackMispredictions: autotest, // the e2e scripts report what a misprediction got wrong
             onLocalEvents: (events) => onWeaponEvents(events),
           },
@@ -1213,6 +1230,7 @@ export async function startLab(o: LabOptions): Promise<void> {
           onRoster: () => (rosterChanged = true),
           onShot: (shot) => showShot(shot),
           onEvents: (tick, events) => gameEvents(tick, events),
+          onPanels: (_tick, ops, changes) => panelEvents(ops, changes),
           trackMispredictions: autotest,
           onLocalEvents: (events) => onWeaponEvents(events),
         },
@@ -1531,5 +1549,6 @@ export async function startLab(o: LabOptions): Promise<void> {
   }
 
   gameEvents = onGameEvents;
+  panelEvents = (ops, changes) => fx.panels(ops, changes, performance.now());
   requestAnimationFrame(frame);
 }

@@ -19,6 +19,9 @@ export function handleRoomMessage(room: Room, memberId: number, type: number, r:
     case Msg.Resync:
       room.onResync(memberId); // cheap (the next snapshot is sent in full), and must not be lost
       return true;
+    case Msg.PanelResync:
+      room.onPanelResync(memberId); // at most once a second per player (the room limits it)
+      return true;
     case Msg.PickLoadout:
       room.pickLoadout(memberId, decodePickLoadout(r));
       return true;

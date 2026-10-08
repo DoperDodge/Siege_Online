@@ -7,7 +7,7 @@ import type { CombatData } from "../data/schemas.js";
 import type { HitboxHistory, SentTicks } from "../net/lagComp.js";
 import type { BodyPart } from "../player/hitboxes.js";
 import { bulletThroughPanels, type PanelHitRule, type PanelPassage, type PanelView } from "../destruction/hits.js";
-import type { PanelOp } from "../destruction/panel.js";
+import type { IndexedOp } from "../destruction/panels.js";
 import { raycastLevel } from "../level/raycast.js";
 import { QUERY_BULLET } from "../physics/rapier.js";
 import type { Sim } from "../sim.js";
@@ -33,7 +33,7 @@ export interface PelletPath {
   /** Where it ended: in the last body it damaged unless it went through, else at the level or the range limit. */
   end: number;
   /** What it did to panels before it ended (holes, wear), in order along it. */
-  ops: { panel: number; op: PanelOp }[];
+  ops: IndexedOp[];
   /** Panels it went into before it ended. */
   panels: number;
 }

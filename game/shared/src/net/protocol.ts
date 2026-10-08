@@ -5,10 +5,11 @@ import type { BodyPart } from "../player/hitboxes.js";
 import { BARRELS, GRIPS, SIGHTS, UNDERBARRELS } from "../data/schemas.js";
 import type { LoadoutPick, WeaponPick } from "../weapons/loadout.js";
 import { ByteReader, ByteWriter, ProtocolError } from "./bytes.js";
+import { MSG_PANEL_OPS, MSG_PANEL_RESYNC, MSG_PANEL_STATE } from "./panels.js";
 import { MSG_SNAPSHOT } from "./snapshot.js";
 
 /** Bump when the wire format changes; client and server must match. */
-export const PROTOCOL_VERSION = 7;
+export const PROTOCOL_VERSION = 8;
 
 export const Msg = {
   // client → server
@@ -22,6 +23,8 @@ export const Msg = {
   Resync: 0x07,
   // 0x08 unused (test shots ride on inputs: Btn.Fire)
   LabTool: 0x09,
+  /** Our panels disagree with the server's hash: send their state again (net/panels.ts). */
+  PanelResync: MSG_PANEL_RESYNC,
   // server → client
   Snapshot: MSG_SNAPSHOT,
   Welcome: 0x11,
@@ -31,6 +34,10 @@ export const Msg = {
   ShotResult: 0x15,
   /** What happened this tick: shots, hits, damage, kills (net/events.ts). */
   Events: 0x16,
+  /** The panel ops applied this tick, in order, and the panels' hash after them (net/panels.ts). */
+  PanelOps: MSG_PANEL_OPS,
+  /** Every changed panel's state (on joining, and when a client asks). */
+  PanelState: MSG_PANEL_STATE,
 } as const;
 
 export const MAX_NAME = 24;
@@ -162,6 +169,7 @@ export const encodePickLoadout = (p: LoadoutPick) => {
 };
 export const decodePickLoadout = (r: ByteReader) => readLoadoutPick(r);
 export const encodeResync = () => Uint8Array.of(Msg.Resync);
+export const encodePanelResync = () => Uint8Array.of(Msg.PanelResync);
 
 export function encodeWelcome(w: { roomCode: string; tick: number; levelId: string; controllerId: number }): Uint8Array {
   return new ByteWriter().u8(Msg.Welcome).u16(PROTOCOL_VERSION).str(w.roomCode).u32(w.tick).str(w.levelId).varu(w.controllerId).finish();
