@@ -16,10 +16,9 @@ import {
   loadedOf,
   Msg,
   PawnMode,
-  penetrationChain,
+  pelletPath,
   poseHitboxes,
   rayCapsule,
-  raycastLevel,
   Room,
   Stance,
   type BodyEntry,
@@ -643,31 +642,34 @@ export async function runHitreg(partial: Partial<HitregOptions> = {}): Promise<H
   let serverNext = clock.now;
 
   /**
-   * The shooter's own verdict: its ray against what it drew at `viewTick`, stopped by the level; the first
-   * part it enters, and the damage each body should take by the weapon's rules.
+   * The shooter's own verdict: its ray against what it drew at `viewTick` and the panels as it has them, by
+   * the same pellet rules as the server (pelletPath); the first part it enters, and the damage each body
+   * should take by the weapon's rules.
    */
   const ownRay = (viewTick: number, origin: [number, number, number], yaw: number, pitch: number, slot: number): Omit<Expect, "viewTick"> => {
     const s = sim();
     const dir: [number, number, number] = [-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch)];
-    const wall = raycastLevel(s, origin, dir, 200);
-    const bodies: BodyEntry[] = [];
-    for (const id of shooter.session.remoteIds()) {
-      const st = shooter.session.remoteAt(id, viewTick);
-      if (!st || st.mode === PawnMode.Dead) continue;
-      const parts: BodyEntry["parts"] = [];
-      for (const h of poseHitboxes(m(), hb(), st)) {
-        const t = rayCapsule(origin, dir, h.a, h.b, h.radius);
-        if (t !== null && t <= (wall ? wall.t : 200)) parts.push({ part: h.part, t });
+    const drawn = (maxDistance: number): BodyEntry[] => {
+      const bodies: BodyEntry[] = [];
+      for (const id of shooter.session.remoteIds()) {
+        const st = shooter.session.remoteAt(id, viewTick);
+        if (!st || st.mode === PawnMode.Dead) continue;
+        const parts: BodyEntry["parts"] = [];
+        for (const h of poseHitboxes(m(), hb(), st)) {
+          const t = rayCapsule(origin, dir, h.a, h.b, h.radius);
+          if (t !== null && t <= maxDistance) parts.push({ part: h.part, t });
+        }
+        if (parts.length) bodies.push({ id, parts: parts.sort((a, b) => a.t - b.t) });
       }
-      if (parts.length) bodies.push({ id, parts: parts.sort((a, b) => a.t - b.t) });
-    }
-    bodies.sort((a, b) => a.parts[0].t - b.parts[0].t || a.id - b.id);
+      return bodies.sort((a, b) => a.parts[0].t - b.parts[0].t || a.id - b.id);
+    };
     const w = s.pawns.get(shooter.session.ctrl!.possessedPawnId)!.loadout!.weapons[slot];
-    const damage = penetrationChain(s.data.combat, w.damage!.penetration, bodies).map((h) => {
+    const path = pelletPath(s, origin, dir, drawn, w.damage!.penetration, { rule: w.destruction });
+    const damage = path.hits.map((h) => {
       const o = bulletDamage(s.data.combat, w.damage!, h.t, h.zone, { mult: h.mult });
       return { pawnId: h.id, zone: h.zone, kill: o.kill, amount: o.kill ? 0 : o.amount };
     });
-    return { hit: bodies[0] ? { pawnId: bodies[0].id, part: bodies[0].parts[0].part } : null, damage };
+    return { hit: path.first ? { pawnId: path.first.pawnId, part: path.first.part } : null, damage };
   };
 
   while (clock.now < endAt) {

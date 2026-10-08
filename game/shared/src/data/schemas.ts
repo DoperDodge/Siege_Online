@@ -652,7 +652,8 @@ export const destructionSchema = z.strictObject({
     classTiers: z.record(z.string(), z.enum(DESTRUCTION_TIERS)),
     classAdjust: z.record(z.string(), tierRuleSchema.partial()),
   }),
-  wallbang: z.strictObject({ damageMult: z.number().min(0).max(1), maxSurfaces: z.number().int().positive() }),
+  /** Through panels: damage kept per panel, panels a bullet can go into, and whether wooden studs it can't cut stop it. */
+  wallbang: z.strictObject({ damageMult: z.number().min(0).max(1), maxSurfaces: z.number().int().positive(), uncutStudsStop: z.boolean() }),
   melee: z.strictObject({ holeDiameterM: metres, bothSkins: z.boolean(), studs: z.boolean(), hatchDamage: z.number().nonnegative(), barricadeDamage: z.number().nonnegative() }),
   explosives: z.record(z.string(), explosiveSchema),
   reinforcement: z.strictObject({

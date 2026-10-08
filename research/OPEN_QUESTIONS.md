@@ -246,6 +246,9 @@ under a reinforcement, what blocks reinforcing) are not repeated here.
 7. **Barricades:** how long does prying one off take (1 s)? How damaged must one be before you can crouch
    through it (we let you through only once it breaks)? How tall is a door barricade's bottom gap (15 cm), and
    how tall is a plank (12 cm)?
+8. **Studs and bullets:** a bullet that can't destroy a wooden stud (anything below the Full tier): does the
+   stud stop it, or does it pass through and leave the stud standing? We stop it (`wallbang.uncutStudsStop`),
+   as bullets pass only what they can break.
 
 ### [core_mechanics.md](core_mechanics.md) — 16
 

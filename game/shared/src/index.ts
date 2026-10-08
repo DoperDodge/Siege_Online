@@ -36,3 +36,5 @@ export * from "./destruction/grid.js";
 export * from "./destruction/panel.js";
 export * from "./destruction/world.js";
 export * from "./destruction/panels.js";
+export * from "./destruction/history.js";
+export * from "./destruction/hits.js";

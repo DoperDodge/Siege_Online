@@ -143,8 +143,9 @@ export function panelCrossings(p: Panel, frame: PanelFrame, origin: Vec3, dir: V
     const u = Math.floor(fu);
     const v = Math.floor(fv);
     if (layer === L_STEEL) {
+      // Sections ever reinforced: steel cut away since may still be there for a shot judged in the past.
       const s = p.sectionOf(u);
-      if (!(p.reinforced & (1 << s)) || ((p.steelSides >> s) & 1) !== side) return;
+      if (!(p.everReinforced & (1 << s)) || ((p.steelSides >> s) & 1) !== side) return;
     }
     // Where it enters the layer: through the face toward it, or through the box's edge if it came in there.
     const faceT = ((d[2] > 0 ? lo : hi) - o[2]) / d[2];
@@ -152,7 +153,7 @@ export function panelCrossings(p: Panel, frame: PanelFrame, origin: Vec3, dir: V
     out.push({ t, face: viaEdge ? t0 : Math.min(faceT, t), axis: viaEdge ? entry : 2, layer, side, u, v, u4: Math.floor(fu * 4), v4: Math.floor(fv * 4), solid: l[v * p.w + u] === 1 });
   };
   for (const layer of [L_FRONT, L_CORE, L_BACK]) if (p.layers[layer]) cross(layer, 0);
-  if (p.layers[L_STEEL] && p.reinforced) {
+  if (p.layers[L_STEEL] && p.everReinforced) {
     cross(L_STEEL, 0);
     cross(L_STEEL, 1);
   }

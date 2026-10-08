@@ -5,6 +5,9 @@ import type { Vec3 } from "../core/math.js";
 import { applyDamage, Cause, isIdleShell, type Damage } from "../combat/apply.js";
 import { shotOnBodies, tracePellets, type ShotOnBody } from "../combat/hitreg.js";
 import { judgeMelee } from "../combat/melee.js";
+import { PanelHistory } from "../destruction/history.js";
+import { meleeOnPanels } from "../destruction/hits.js";
+import type { PanelOp } from "../destruction/panel.js";
 import type { DummyDef, ModeData } from "../data/schemas.js";
 import { DUMMY_STANCE, dummyInput } from "../lab/dummies.js";
 import { spawnAmmo, type Pawn, type PlayerController } from "../player/pawn.js";
@@ -15,7 +18,8 @@ import { HitboxHistory, SentRing } from "./lagComp.js";
 import { controllerState, writeControllerState, writePawnState } from "./pawnState.js";
 import type { SimEvent } from "../weapons/step.js";
 import { defaultLoadoutPick, resolveLoadout, type LoadoutPick } from "../weapons/loadout.js";
-import { hash4, pelletDirections } from "../weapons/spread.js";
+import { hash4, pelletDirections, viewDir } from "../weapons/spread.js";
+import { QUERY_BULLET } from "../physics/rapier.js";
 import { sideTeam } from "../sim.js";
 import { encodeEvents, type GameEvent } from "./events.js";
 import { encodeError, encodePong, encodeRoster, encodeShotResult, encodeWelcome, ErrorCode, unwrap16, type InputMsg, type LabTool, type RosterEntry, type ShotResult } from "./protocol.js";
@@ -152,6 +156,8 @@ interface JudgedShot {
   rewoundTick: number;
   origin: [number, number, number];
   bodies: ShotOnBody[];
+  /** What it did to panels (holes, wear), in order: applied with its damage. */
+  panelOps: { panel: number; op: PanelOp }[];
 }
 
 /** A Range Lab target: a body with no client, stepped from its script (lab/dummies.ts). */
@@ -175,6 +181,8 @@ export function predictionHash(sim: Sim, ctrl: PlayerController): number {
 
 export class Room {
   readonly history: HitboxHistory;
+  /** Recent panel changes: shots are judged against the panels as their shooter had them (destruction/history.ts). */
+  readonly panelHistory = new PanelHistory();
   private readonly members = new Map<number, Member>();
   private nextMemberId = 1;
   /** Range Lab dummies (lab rooms on a level that has some). */
@@ -193,6 +201,8 @@ export class Room {
     cappedShots: 0,
     hits: 0,
     kills: 0,
+    /** Panel ops applied (holes, wear, reinforcements). */
+    panelOps: 0,
   };
   /** Damage rules (friendly fire): the lab mode preset until match modes arrive (Phase 6). */
   readonly rules: ModeData;
@@ -421,32 +431,37 @@ export class Room {
    * The render time an input says its client was drawing, bounded as described at judgeShot, and the time
    * the room rewinds to for it (capped).
    */
-  private viewTimeFor(m: Member, applied: QueuedInput): { now: number; viewTick: number; rewoundTick: number } {
+  private viewTimeFor(m: Member, applied: QueuedInput): { now: number; viewTick: number; rewoundTick: number; panelTick: number } {
     const now = applied.receivedTick;
     const leastLag = Math.min(...m.lags);
     const snapTick = Math.max(Math.min(now, unwrap16(applied.snapTick, now)), now - leastLag - LAG_SLACK_TICKS);
     const viewTick = snapTick - Math.min(MAX_VIEW_BACK_TICKS, applied.viewBackQ8 / 256);
-    return { now, viewTick, rewoundTick: HitboxHistory.rewound(viewTick, now, this.maxRewindTicks) };
+    // Panels as the client had them: every change up to the newest tick it had heard of (they arrive ahead
+    // of that tick's snapshot), within the same cap.
+    const panelTick = Math.max(snapTick, now - this.maxRewindTicks);
+    return { now, viewTick, rewoundTick: HitboxHistory.rewound(viewTick, now, this.maxRewindTicks), panelTick };
   }
 
   private judgeShot(m: Member, applied: QueuedInput, shot: Extract<SimEvent, { kind: "shot" }>) {
     const shooter = this.sim.pawns.get(shot.pawnId);
     const w = shooter?.loadout?.weapons[shot.slot];
     if (!m.ctrl || !shooter || !w?.damage) return;
-    const { now, viewTick, rewoundTick } = this.viewTimeFor(m, applied);
+    const { now, viewTick, rewoundTick, panelTick } = this.viewTimeFor(m, applied);
     const origin = shot.origin;
     const dirs = pelletDirections(this.seed, m.ctrl.id, shot.seq, shot.pellets, shot.yaw, shot.pitch, shot.cone);
     // Your own bodies and the dead don't stop bullets.
     const ignore = new Set(m.ctrl.pawnIds);
     for (const p of this.sim.pawns.values()) if (p.state.mode === PawnMode.Dead) ignore.add(p.id);
-    const paths = tracePellets(this.sim, this.history, origin, dirs, rewoundTick, w.damage.penetration, ignore, m.sent);
+    const through = { rule: w.destruction, view: { tick: panelTick, history: this.panelHistory } };
+    const paths = tracePellets(this.sim, this.history, origin, dirs, rewoundTick, w.damage.penetration, ignore, m.sent, through);
     const bodies = shotOnBodies(this.sim.data.combat, w.damage, paths, (id) => {
       const v = this.sim.pawns.get(id)!;
       return { scale: v.team === shooter.team ? this.rules.friendlyFire.scale : 1, idleShell: isIdleShell(this.sim, v) };
     });
     this.stats.shots++;
     if (rewoundTick > viewTick) this.stats.cappedShots++;
-    this.judged.push({ m, cause: Cause.Bullet, ctrlId: m.ctrl.id, team: shooter.team, seq: shot.seq, weaponId: w.id, receivedTick: now, rewoundTick, origin, bodies });
+    const panelOps = paths.flatMap((p) => p.ops);
+    this.judged.push({ m, cause: Cause.Bullet, ctrlId: m.ctrl.id, team: shooter.team, seq: shot.seq, weaponId: w.id, receivedTick: now, rewoundTick, origin, bodies, panelOps });
     // Everyone sees and hears it (the shooter's own client draws its flash itself, but not where pellets went).
     const ends = paths.map((p): [number, number, number] => [origin[0] + p.dir[0] * p.end, origin[1] + p.dir[1] * p.end, origin[2] + p.dir[2] * p.end]);
     for (const other of this.members.values()) other.events.push({ kind: "shotFx", pawnId: shooter.id, slot: shot.slot, suppressed: w.suppressed, ends });
@@ -495,17 +510,39 @@ export class Room {
   /**
    * The knife landing (DECISIONS D-050): judged like a shot, against everyone as the attacker saw them when
    * the input that swung (or, on a tick without one, the last input) was made; applied with the tick's shots.
+   * With no body in reach it lands on the first panel in reach along the view instead (destruction/hits.ts).
    */
   private judgeMeleeImpact(m: Member, applied: QueuedInput, hit: Extract<SimEvent, { kind: "meleeImpact" }>) {
     const attacker = this.sim.pawns.get(hit.pawnId);
     if (!m.ctrl || !attacker) return;
-    const { now, rewoundTick } = this.viewTimeFor(m, applied);
+    const { now, rewoundTick, panelTick } = this.viewTimeFor(m, applied);
     const ignore = new Set(m.ctrl.pawnIds);
     for (const p of this.sim.pawns.values()) if (p.state.mode === PawnMode.Dead) ignore.add(p.id);
     const target = judgeMelee(this.sim, hit.origin, attacker.state, hit.yaw, this.history.at(rewoundTick, m.sent), ignore);
-    if (!target) return;
-    const body: ShotOnBody = { pawnId: target.pawnId, kill: false, amount: 0, headshot: false, zone: target.zone, pellets: 1, distance: target.reach };
-    this.judged.push({ m, cause: Cause.Melee, ctrlId: m.ctrl.id, team: attacker.team, seq: hit.seq, weaponId: "knife", receivedTick: now, rewoundTick, origin: hit.origin, bodies: [body] });
+    const base = { m, cause: Cause.Melee, ctrlId: m.ctrl.id, team: attacker.team, seq: hit.seq, weaponId: "knife", receivedTick: now, rewoundTick, origin: hit.origin };
+    if (target) {
+      const body: ShotOnBody = { pawnId: target.pawnId, kill: false, amount: 0, headshot: false, zone: target.zone, pellets: 1, distance: target.reach };
+      this.judged.push({ ...base, bodies: [body], panelOps: [] });
+      return;
+    }
+    const dir = viewDir(hit.yaw, hit.pitch);
+    const reach = this.sim.data.combat.melee.reach;
+    const ray = new this.sim.R.Ray({ x: hit.origin[0], y: hit.origin[1], z: hit.origin[2] }, { x: dir[0], y: dir[1], z: dir[2] });
+    const plain = this.sim.world.castRay(ray, reach, true, undefined, QUERY_BULLET)?.timeOfImpact ?? reach;
+    const onPanel = meleeOnPanels(this.sim.level.panels, this.sim.data.destruction, hit.origin, dir, reach, plain, { tick: panelTick, history: this.panelHistory });
+    if (onPanel) this.judged.push({ ...base, bodies: [], panelOps: onPanel.ops.map(({ panel, op }) => ({ panel, op })) });
+  }
+
+  /**
+   * Change a panel (a hole, wear, steel): applied to the room's level at once and remembered, so later shots
+   * are judged against the panels as each shooter had them.
+   */
+  applyPanelOp(index: number, op: PanelOp): void {
+    const e = this.sim.level.panels.list[index];
+    if (!e) return;
+    const change = this.sim.level.panels.apply(index, op);
+    this.panelHistory.record(this.sim.tick, index, e.panel.w * e.panel.h, change);
+    this.stats.panelOps++;
   }
 
   /**
@@ -517,6 +554,7 @@ export class Room {
     const shots = this.judged.sort((a, b) => a.rewoundTick - b.rewoundTick || a.receivedTick - b.receivedTick || a.ctrlId - b.ctrlId || a.seq - b.seq);
     this.judged = [];
     for (const shot of shots) {
+      for (const { panel, op } of shot.panelOps) this.applyPanelOp(panel, op);
       for (const body of shot.bodies) {
         const victim = this.sim.pawns.get(body.pawnId);
         if (!victim || victim.state.mode === PawnMode.Dead) continue;

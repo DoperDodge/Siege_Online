@@ -13,10 +13,10 @@ Built in milestones; each keeps the tests, the browser tests and the netsim gree
 
 | Milestone | Status |
 |---|---|
-| M1 Destruction data (constructions, bullet tiers, tools, reinforcement, barricades, hatches) | ✅ data/destruction.json, validated; 7 new open questions |
+| M1 Destruction data (constructions, bullet tiers, tools, reinforcement, barricades, hatches) | ✅ data/destruction.json, validated; 8 new open questions |
 | M2 Panel model: a cell grid per surface (skins, studs, steel), holes, falling pieces | ✅ pure model + 13 tests (D-062) |
 | M3 Panels in the simulation (movement through holes) and on screen | ✅ intact panels collide exactly as before; breaches let bodies through; rays see holes; drawn from cells (D-064) |
-| M4 Bullets and the knife through panels (wallbangs, holes, rewound holes) | ⏳ |
+| M4 Bullets and the knife through panels (wallbangs, holes, rewound holes) | ✅ on the server: wallbangs at 70 %, holes, studs, steel, two-wall limit, knife holes, panels as the shooter had them (D-065) |
 | M5 Destruction over the network, and for players who join late | ⏳ |
 | M6 Reinforcement, barricades and hatches | ⏳ |
 | M7 Destruction Lab (explosive tools, every surface, Oregon wall samples) | ⏳ |
@@ -34,7 +34,7 @@ Built in milestones; each keeps the tests, the browser tests and the netsim gree
   and Hard Breach Charges) cut their shapes; only the last two cut steel. Reinforcing takes 4.5 s from a team
   pool of 10 (lab rooms let both sides reinforce and barricade); a reinforced hatch has a 1,000,000 HP pool.
   Everything not verified is listed in research/OPEN_QUESTIONS.md ("Placeholders added while building Phase
-  4", 7 questions). The movement lab's floor hatch sample is now thick enough to be a real panel.
+  4", 8 questions). The movement lab's floor hatch sample is now thick enough to be a real panel.
 - **The panel model (M2, D-062):** each destructible surface is a grid of 5 cm cells in layers (two skins, a core
   of studs, joists or beams, and steel once reinforced). A bullet removes the cells within its hole's radius
   (always the one it hit), the knife a 25 cm disc, a breach a rectangle; whatever nothing holds then falls (a
@@ -49,6 +49,12 @@ Built in milestones; each keeps the tests, the browser tests and the netsim gree
   reach, laser dots and bullet marks see every hole. Panels are drawn from their cells (skins in the surface's
   colour, wooden or metal studs, steel plates on the side they went up from) and redrawn when they change.
   Nothing in the game damages them yet: bullets and the knife start making holes in M4.
+- **Wallbangs and holes (M4, D-065):** on the server, a bullet now goes through what it can break, making a hole
+  in every layer it passes, and stops at steel, metal supports and studs its gun can't cut (buckshot cuts them
+  within 5 m). A body behind a wall takes 70 % per wall; a bullet goes through at most two walls. Hatches,
+  barricades and glass wear down per bullet (a DMR opens a hatch in 9 shots spread over it; ten knife hits
+  do it too). The knife punches a 25 cm hole through both skins of a wall. Shots are judged against the walls
+  as the shooter's screen had them. Players see the holes from M5 (until then only the server has them).
 
 ---
 

@@ -26,7 +26,7 @@
     { "id": "cq_back", "center": [-20, 1.25, 30], "size": [12, 2.5, 0.2], "surface": "HARD_WALL" },
 
     { "id": "revive_pad", "center": [12, 0.01, 27], "size": [3, 0.02, 3], "surface": "PROP", "label": "Revive pad (hold F)" },
-    { "id": "wallbang_wall", "center": [-8, 1.25, 12.5], "size": [3, 2.5, 0.2], "surface": "SOFT_WALL", "label": "Wallbangs: Phase 4" }
+    { "id": "wallbang_wall", "center": [-8, 1.25, 12.5], "size": [3, 2.5, 0.2], "surface": "SOFT_WALL", "label": "Soft wall (wallbangs)" }
   ],
   "markers": [
     { "id": "m05", "pos": [-3.5, 0.05, 15], "label": "5 m" },

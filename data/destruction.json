@@ -1,5 +1,5 @@
 {
-  "_doc": "Destruction rules (Phase 4; PLAN §8, research/destruction.md). Every destructible surface is a panel: a grid of square cells about `cellM` wide (an engine setting, PLAN §8.2, not a Siege value), in layers through its thickness: a front and a back skin and a core (wooden studs in walls, metal joists in floors, beams in hatches), plus a steel layer once reinforced. `constructions` describe a panel's build; `surfaces` give the construction a level solid of that surface gets unless it names another (HARD_WALL, HARD_FLOOR, PROP and INGREDIENT stay solid until later phases). Bullets: a weapon's destruction tier (Siege's label in Detailed Weapon Stats) comes from its weapon file, or `classTiers` where the file has none; the tier's rules (adjusted per class by `classAdjust`) make holes of `holeDiameterM` in every layer a pellet passes, remove studs only if `studs` (buckshot only within `studsWithinM`), and cost a whole breakable panel (hatch, barricade, glass) `hatchDamage` or `barricadeDamage` points per pellet. Through each panel a bullet's damage is multiplied by `wallbang.damageMult`, and it passes at most `wallbang.maxSurfaces` panels. `explosives` are the shapes the Destruction Lab's tools cut (their gadgets, throws and damage come in Phase 8): `hard` cuts steel, `studs` cuts wooden studs. Distances in metres, times in seconds.",
+  "_doc": "Destruction rules (Phase 4; PLAN §8, research/destruction.md). Every destructible surface is a panel: a grid of square cells about `cellM` wide (an engine setting, PLAN §8.2, not a Siege value), in layers through its thickness: a front and a back skin and a core (wooden studs in walls, metal joists in floors, beams in hatches), plus a steel layer once reinforced. `constructions` describe a panel's build; `surfaces` give the construction a level solid of that surface gets unless it names another (HARD_WALL, HARD_FLOOR, PROP and INGREDIENT stay solid until later phases). Bullets: a weapon's destruction tier (Siege's label in Detailed Weapon Stats) comes from its weapon file, or `classTiers` where the file has none; the tier's rules (adjusted per class by `classAdjust`) make holes of `holeDiameterM` in every layer a pellet passes, remove studs only if `studs` (buckshot only within `studsWithinM`), and cost a whole breakable panel (hatch, barricade, glass) `hatchDamage` or `barricadeDamage` points per pellet. Through each panel a bullet's damage is multiplied by `wallbang.damageMult`, and it passes at most `wallbang.maxSurfaces` panels; a bullet passes what it can break and stops at steel, metal supports and (with `wallbang.uncutStudsStop`) wooden studs it can't cut. `explosives` are the shapes the Destruction Lab's tools cut (their gadgets, throws and damage come in Phase 8): `hard` cuts steel, `studs` cuts wooden studs. Distances in metres, times in seconds.",
   "_season": "Y11S3.1",
   "_unverified": [
     "constructions.soft_wall.skinM",
@@ -23,6 +23,7 @@
     "bullets.classAdjust",
     "wallbang.damageMult",
     "wallbang.maxSurfaces",
+    "wallbang.uncutStudsStop",
     "melee.holeDiameterM",
     "melee.bothSkins",
     "melee.hatchDamage",
@@ -89,7 +90,7 @@
       "slug_shotgun": { "holeDiameterM": 0.1, "studs": true, "hatchDamage": 40, "barricadeDamage": 1 }
     }
   },
-  "wallbang": { "damageMult": 0.7, "maxSurfaces": 2 },
+  "wallbang": { "damageMult": 0.7, "maxSurfaces": 2, "uncutStudsStop": true },
   "melee": { "holeDiameterM": 0.25, "bothSkins": true, "studs": false, "hatchDamage": 10, "barricadeDamage": 1 },
   "explosives": {
     "breach_charge": { "name": "Breach Charge", "shape": "rect", "wM": 1.0, "hM": 1.8, "studs": true, "hard": false, "hatchDamage": 100, "reinforcedHatchDamage": 0 },
