@@ -104,7 +104,10 @@ function kill(sim: Sim, pawn: Pawn, removed: number): { outcome: DamageOutcome; 
 /** A reviver who goes down or dies lets go of the body it was picking up. */
 function dropRevive(sim: Sim, pawn: Pawn) {
   const t = pawn.state.reviveTarget ? sim.pawns.get(pawn.state.reviveTarget) : undefined;
-  if (t && t.state.revivedBy === pawn.id) t.state.revivedBy = 0;
+  if (t && t.state.revivedBy === pawn.id) {
+    t.state.revivedBy = 0;
+    sim.onReviveCut?.(t);
+  }
   pawn.state.reviveTarget = 0;
   pawn.state.reviveTicks = 0;
 }

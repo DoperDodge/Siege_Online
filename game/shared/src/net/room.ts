@@ -41,8 +41,13 @@ export const MAX_CREDIT = 16;
  * option, so tests and later match modes can set their own.
  */
 export const DEFAULT_MAX_REWIND_TICKS = 0.25 * TICK_HZ;
-/** How far behind its newest snapshot a client can claim to be drawing others (its interpolation ceiling). */
-const MAX_VIEW_BACK_TICKS = (MAX_INTERP_MS / 1000) * TICK_HZ + 0.5;
+/**
+ * How far behind its newest snapshot a client can claim to be drawing others: its interpolation ceiling,
+ * plus the age of the frame a click claims (newer snapshots can arrive before that input is sent; 4 ticks
+ * covers a 16 fps frame). The rewind cap still bounds the total.
+ */
+const FRAME_SLACK_TICKS = 4;
+const MAX_VIEW_BACK_TICKS = (MAX_INTERP_MS / 1000) * TICK_HZ + 0.5 + FRAME_SLACK_TICKS;
 /**
  * A player whose inputs stop arriving is held still (a short stall costs no correction) for up to this
  * many ticks, then simulated without input (gravity, a vault in progress), so nobody can hang in the air
@@ -209,6 +214,12 @@ export class Room {
   ) {
     this.history = new HitboxHistory(sim, 32);
     this.rules = sim.data.modes.get("lab")!;
+    // A revive cut by what another body did (left, respawned, jumped, went down or died): the other side's
+    // owner couldn't predict it.
+    sim.onReviveCut = (p) => {
+      const owner = p.ownerId !== null ? this.memberOf(p.ownerId) : null;
+      if (owner) this.force(owner);
+    };
     if (lab) for (const def of sim.level.def.dummies) this.addDummy(def);
   }
 
@@ -391,6 +402,7 @@ export class Room {
       // Same body: inputs already queued or in flight still apply after the jump, exactly as the client
       // replays them on top of the correction.
       this.sim.teleport(m.ctrl.possessedPawnId, tool.x, tool.y, tool.z, tool.yawDeg);
+      this.downedBy.delete(m.ctrl.possessedPawnId); // a downed body jumps back up: whoever downed it no longer counts
       this.force(m);
     }
   }
@@ -575,8 +587,9 @@ export class Room {
     const ownerCtrl = victim.ownerId ?? 0;
     const downer = this.downedBy.get(victim.id);
     this.downedBy.delete(victim.id);
-    const killerCtrl = downer ? downer.ctrl : finisherCtrl;
-    const assistCtrl = downer && finisherCtrl !== downer.ctrl ? finisherCtrl : 0;
+    // Downed by nobody (a lab tool, reflected damage): the kill is the finisher's.
+    const killerCtrl = downer?.ctrl || finisherCtrl;
+    const assistCtrl = downer?.ctrl && finisherCtrl !== downer.ctrl ? finisherCtrl : 0;
     const e: GameEvent = isIdleShell(this.sim, victim)
       ? { kind: "shellDestroyed", pawnId: victim.id, ownerCtrl, killerCtrl, weapon, headshot }
       : { kind: "kill", victimPawn: victim.id, victimCtrl: ownerCtrl, killerCtrl, assistCtrl, weapon: weapon || downer?.weapon || "", cause, headshot, friendly };
@@ -658,7 +671,10 @@ export class Room {
     if (!next) return null;
     m.lastApplied = next;
     m.credit--;
-    m.held = Math.max(0, m.held - HOLD_REFUND);
+    // Down, nothing is earned back: however the inputs are trickled, holding a body still can delay its
+    // bleed-out by at most the hold budget (D-048).
+    const body = m.ctrl ? this.sim.pawns.get(m.ctrl.possessedPawnId) : undefined;
+    if (body?.state.mode !== PawnMode.Downed) m.held = Math.max(0, m.held - HOLD_REFUND);
     m.lastSeq = next.cmd.seq;
     return next;
   }

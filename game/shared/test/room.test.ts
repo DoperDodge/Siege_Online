@@ -154,8 +154,8 @@ describe("room and client session", () => {
     expect(a.shots).toHaveLength(before + 1);
     expect(a.shots.at(-1)!.hit).toBeNull();
     h.ticks(8); // past the rifle's fire interval
-    // A client claiming it draws others far in the past is held to the interpolation ceiling (150 ms ≈
-    // 9.6 ticks behind its newest snapshot), well inside the 250 ms (16-tick) rewind cap.
+    // A client claiming it draws others far in the past is held to the interpolation ceiling plus a frame's
+    // age (150 ms ≈ 9.6 ticks, + 4, behind its newest snapshot), inside the 250 ms (16-tick) rewind cap.
     a.holdUp = true;
     h.ticks(10);
     const now = h.room.sim.tick;
@@ -165,7 +165,8 @@ describe("room and client session", () => {
     h.room.step();
     for (const b of a.toClient.splice(0)) a.session.handle(b);
     expect(a.shots).toHaveLength(before + 2);
-    expect(a.shots.at(-1)!.serverTick - a.shots.at(-1)!.rewoundTick).toBeLessThan(11.5);
+    expect(a.shots.at(-1)!.serverTick - a.shots.at(-1)!.rewoundTick).toBeGreaterThan(13.5);
+    expect(a.shots.at(-1)!.serverTick - a.shots.at(-1)!.rewoundTick).toBeLessThan(14.6);
   });
 
   it("trickling one input every 16 ticks doesn't slow a body down either", async () => {

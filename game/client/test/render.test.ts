@@ -126,6 +126,18 @@ describe("effects bus", () => {
     expect(fx.counts).toMatchObject({ tracersShown: 0, flashesShown: 0, lightsOn: 0, decalsShown: 2 });
     expect(audio.heard).toEqual(["shot"]); // the suppressed one: no sound hook until audio arrives (Phase 11)
   });
+
+  it("a hidden tab (no frames) keeps only the newest shots, and draws none over a second old when it comes back", async () => {
+    const { sim, wall } = await level();
+    const audio = ear();
+    const fx = new FxBus(new THREE.Scene(), sim, audio);
+    const at = () => new THREE.Vector3(0, 1.2, 4);
+    for (let t = 0; t < 1000; t++) fx.server(t, [{ kind: "shotFx", pawnId: 5, slot: 0, suppressed: false, ends: [wall] }]);
+    expect(fx.counts.pending).toBe(256);
+    fx.update(0, 1000 + 64 + 1, [1], at, at); // back: the frame on screen is well past all of them
+    expect(fx.counts).toMatchObject({ pending: 0, tracersShown: 0, flashesShown: 0, decalsShown: 0 });
+    expect(audio.heard).toEqual([]);
+  });
 });
 
 describe("no repeated effects when a correction replays our inputs", () => {

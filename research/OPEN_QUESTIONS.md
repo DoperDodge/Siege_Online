@@ -217,6 +217,12 @@ in the Shooting Range or a Custom Game with a stopwatch or a 60 fps recording.
    gauge look like?
 33. Siege's default PC keys for reload, weapon swap, fire mode and melee. Which weapons show tracers?
 
+**Added in the Phase 3 review**
+34. **Extended barrel:** the ten weapons that take one use community-measured damage (base × 1.12, rounded
+   down) with the falloff floor raised to ~80 % of it (weapons_notes.md §4.3). Fandom says "falloff reduced
+   by 15–20 %" and the community attachment list "+10 % damage". Which is right today, and does the floor
+   rise?
+
 ### [core_mechanics.md](core_mechanics.md) — 16
 
 Most of these can be answered in a Custom Game (Local), usually in minutes, with a stopwatch or a 60 fps recording and known map distances.

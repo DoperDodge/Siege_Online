@@ -220,15 +220,33 @@ export class Sim {
    */
   cutReviveLinks(pawn: Pawn): void {
     for (const p of this.pawns.values()) {
-      if (p.state.revivedBy === pawn.id) p.state.revivedBy = 0;
+      if (p === pawn) continue;
+      let cut = false;
+      if (p.state.revivedBy === pawn.id) {
+        p.state.revivedBy = 0;
+        cut = true;
+      }
       if (p.state.reviveTarget === pawn.id) {
         p.state.reviveTarget = 0;
         p.state.reviveTicks = 0;
+        cut = true;
       }
+      if (cut) this.onReviveCut?.(p);
     }
     pawn.state.reviveTarget = 0;
     pawn.state.reviveTicks = 0;
     pawn.state.revivedBy = 0;
+  }
+
+  /**
+   * Server: told of each body whose revive was cut by something another body did (it left, respawned,
+   * jumped, went down or died). That body's owner couldn't predict it, so the room corrects them.
+   */
+  onReviveCut: ((pawn: Pawn) => void) | null = null;
+
+  /** A body its player's buttons don't reach this tick (no input, or driven idle on the shell camera) lets go of a revive. */
+  private letGoOfRevive(pawn: Pawn) {
+    if (pawn.state.reviveTarget !== 0) this.endRevive(pawn, this.pawns.get(pawn.state.reviveTarget), false);
   }
 
   /** Remove a controller and every pawn it owns (a player leaving). */
@@ -427,7 +445,8 @@ export class Sim {
     });
     this.cutReviveLinks(pawn);
     if (pawn.state.hp === 0) {
-      pawn.state.hp = pawn.state.maxHp; // a dead body comes back: a new life
+      pawn.state.hp = pawn.state.maxHp; // a dead or downed body comes back: a new life
+      pawn.state.downs = 0;
       pawn.life++;
     }
     poseCollider(this.ctx, pawn); // also makes a dead body solid again
@@ -482,7 +501,8 @@ export class Sim {
       if (input) {
         const held = pawn.state.prevButtons;
         let cmd = input;
-        if (!idleDriven.has(pawn.id) && this.updateRevive(pawn, input)) {
+        if (idleDriven.has(pawn.id)) this.letGoOfRevive(pawn);
+        else if (this.updateRevive(pawn, input)) {
           // Reviving holds you in place (placeholder), and the held key never reaches a ladder.
           cmd = { ...input, forward: 0, strafe: 0, buttons: input.buttons & ~Btn.Interact };
         }
@@ -500,6 +520,7 @@ export class Sim {
       // memory so keys still held when input resumes don't count as fresh presses. The body the player
       // is in keeps its weapon running (a reload goes on through a lag spike); an idle shell's is parked.
       const held = pawn.state.prevButtons;
+      this.letGoOfRevive(pawn);
       stepPawn(this.ctx, pawn, idleInput(pawn, idleShell ? Stance.Crouch : pawn.state.stance), !idleShell);
       refreshBroadPhase(this.world);
       pawn.state.prevButtons = held;

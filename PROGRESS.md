@@ -15,7 +15,7 @@ Built in milestones; each one keeps the tests, both e2e scripts and the netsim g
 |---|---|
 | M1 Weapon, gunplay, combat and lab-rules data | ✅ 40 weapon files + rule files, validated, CSV-agreement tests |
 | M0 Hit-registration measurement harness | ✅ server agrees with every shot as drawn (netsim); rewind cap 250 ms (D-045, your call) |
-| M2 Damage maths and loadout resolution | ✅ pure functions + tests; nothing in the game uses them yet |
+| M2 Damage maths and loadout resolution | ✅ pure functions + tests (the simulation uses them from M3, the server's damage from M6) |
 | M3 Weapon state in the simulation (fire, ammo, reload, swap, modes) | ✅ predicted exactly online; ammo HUD; Fire/R/1/2/wheel/B |
 | M4 Loadout pick online, data hash check | ✅ pause-menu loadouts (offline and online), stale tabs told to refresh |
 | M5 ADS, recoil, spread | ✅ recoil predicted exactly online; server-only spread; zoom and spread crosshair |
@@ -35,7 +35,7 @@ Built in milestones; each one keeps the tests, both e2e scripts and the netsim g
   `data/gunplay.json` holds class, sight, attachment and handling rules; `data/combat.json` damage zones,
   penetration, DBNO, revive and melee; `data/modes/lab.json` the lab mode preset (friendly-fire settings). Every
   invented value is in its file's `_unverified` list and in research/OPEN_QUESTIONS.md ("Placeholders added
-  while building Phase 3", 33 questions). Nothing reads the data yet.
+  while building Phase 3", 34 questions).
 - **Checks:** schemas reject impossible weapons (damage rising with range, a barrel offered without its
   numbers, more than one shot per tick, and more), cross-file checks catch loadouts naming a missing weapon,
   and a test compares every number and UNVERIFIED mark with the CSV and the class rules
@@ -56,14 +56,14 @@ Built in milestones; each one keeps the tests, both e2e scripts and the netsim g
   is now 250 ms. The online lab's pause menu also simulates jitter and packet loss now (or
   `?lag=100&jitter=20&loss=1`, PLAN §16.9).
 - **Weapons in the simulation (M3, D-040, D-055):** every operator now carries their real primary and
-  secondary (default loadout for now; picking one comes next). Hold the left mouse to fire (automatic weapons
+  secondary (picking another loadout came with M4). Hold the left mouse to fire (automatic weapons
   keep firing at their real rate; semi-auto ones fire per click), **R** reloads (tactical gives 31, empty 30
   on a 30-round rifle; interrupting after the magazine is out leaves just the chambered round), **1 / 2 / the
   wheel** switch weapons (0.6 s placeholder), **B** cycles fire modes where the gun has them. Sprinting
   cancels a reload, and a shot from a sprint waits out the 0.25 s sprint exit. Skopós's two shells each keep
   their own ammo. The HUD shows weapon, rounds and fire mode, with a placeholder muzzle flash. Online, all of
   it is predicted: the netsim's bots fire, reload and swap at 100 ms with jitter and stalls and get exactly one
-  correction each (the join). Damage still waits for M6: a shot only reports what it would hit.
+  correction each (the join).
 - **Loadouts (M4, D-042):** the pause menu has a Loadout section: each weapon your operator carries, with
   the sights, barrels, grips and laser it can take (per operator too: only Dokkaebi's Mk 14 gets the telescopic
   sight, only Thermite's and Pulse's 5.7 USG the muzzle brake). Under each weapon are the numbers the game
@@ -154,13 +154,19 @@ Built in milestones; each one keeps the tests, both e2e scripts and the netsim g
     further back than that, and the target where the server rewound it is exactly where the shooter's page
     draws that moment (0.00 cm apart); the damage arc points at the attacker (−90° expected, −90° shown); A
     downs B, both kill feeds say so and B sees the down screen; A revives B with 20 HP; no mispredictions.
+- **Review (D-061):** three reviewers read all of Phase 3 and found 20 problems; 19 are fixed, each with a
+  test where one can be written. The worst two were on the page: changing your loadout with the pause menu
+  open froze it, and joining a room while someone was shooting could hang on "Connecting…". In the game: a
+  reviver who stalled (or Skopós opening her camera) froze the revive and stopped the downed body bleeding; a
+  downed player trickling inputs could slow their bleed-out; a weapon key pressed while down fired after the
+  revive. One is left for later (below).
 - **Low graphics:** add `lowgfx` to the address (`range_lab.html?lowgfx`, or `?online&lowgfx`) to turn off
   shadows and anti-aliasing on a slow device; it doubles the frame rate of the software-rendered test pages.
 - **Two page bugs the new browser test found:** a page that took seconds to start (the second page joining a
   busy room) got a first frame stamped from before its start, which stopped its clock for as long as the
   start-up took (no input reached the server, then its own 5 s silence check disconnected it). Time no longer
   runs backwards, and the silence check doesn't count time the page itself was too busy to read messages.
-- 278 unit tests (31 of them for the page: settings, controls, HUD maths, guns and effects, the offline room).
+- 286 unit tests (33 of them for the page: settings, controls, HUD maths, guns and effects, the offline room).
 
 ### How to test (needs Node 22.12+)
 ```
@@ -194,12 +200,13 @@ Things to judge, at +100 ms:
 - **Every wall stops bullets** in Phase 3, soft walls included (the *Behind the wall* dummy can't be shot yet):
   wallbangs come with destruction in Phase 4 (D-046).
 - All numbers beyond the official ones are placeholders, each listed in research/OPEN_QUESTIONS.md (Phase 3
-  placeholders, 33 questions); the guns and bodies are placeholder boxes and capsules.
+  placeholders, 34 questions); the guns and bodies are placeholder boxes and capsules.
 - The rewind cap is 250 ms (D-045, your call): beyond about 150 ms of ping, or below about 30 fps (when other
   players are drawn up to 150 ms in the past, D-032), some shots at moving targets are judged against a later
   moment than the one you saw.
 - A body standing still pressed against others can get a correction now and then (sub-millimetre, faded out;
   D-033 addendum).
+- A reviver who lets go and holds **F** again within about a round trip gets one small correction (D-061).
 - The dummies don't shoot back; the Ballistic Shield and GONNE-6 can't be picked until Phase 8 (D-054), nor
   Skopós's idle-shell barrier (D-058).
 - Frame rate is measured with software rendering only (5–15 fps for two test pages sharing a CPU); real GPUs are

@@ -119,7 +119,7 @@ export function rangeFeatures(lab: LabApi): void {
   lab.addHelp("<kbd>F2</kbd>", "Shot overlay: every pellet as the server drew it, the target where the server had it (green) and where you saw it (blue)");
 
   lab.onShot((shot) => {
-    last = { shot, weapon: lab.weapon(), hits: [] };
+    last = { shot, weapon: lab.weaponAt(shot.seq) ?? lab.weapon(), hits: [] };
     drawPanel();
     if (overlayOn) drawOverlay(shot, performance.now());
   });

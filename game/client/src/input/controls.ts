@@ -293,7 +293,8 @@ export class Controls {
     // Weapon slot: one swap press, sent only while the slot differs and no swap is already under way
     // (a press then would be ignored); released for a tick in between so the next press is a new one.
     const ws = this.weaponState();
-    if (this.wantSlot !== null && ws && ws.slot === this.wantSlot) this.wantSlot = null;
+    // No weapon to switch (down, dead, between bodies): a request made now is dropped, not kept for later.
+    if (!ws || ws.slot === this.wantSlot) this.wantSlot = null;
     if (this.wantSlot !== null && ws && !ws.equipping && !this.sentSwap) {
       buttons |= Btn.Swap;
       this.sentSwap = true;

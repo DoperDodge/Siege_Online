@@ -46,6 +46,11 @@ export interface ClientSessionOptions {
   onLocalEvents?(events: readonly SimEvent[]): void;
   onError?(code: number, message: string): void;
   /**
+   * A message held while the level loaded threw when it was replayed after (one arriving live throws from
+   * handle() instead). Without this, the replay's error is rethrown.
+   */
+  onBadMessage?(error: unknown): void;
+  /**
    * Debugging aid (tests): remember what we predicted for each input, and when a correction disagrees
    * with it, record which fields differed (`mispredictions`).
    */
@@ -135,8 +140,14 @@ export class ClientSession {
           this.opts.onWelcome?.(w.roomCode);
           const queued = this.backlog;
           this.backlog = [];
-          for (const b of queued) this.handle(b);
-          this.markLoaded();
+          try {
+            for (const b of queued) this.handle(b);
+          } catch (e) {
+            if (!this.opts.onBadMessage) throw e;
+            this.opts.onBadMessage(e);
+          } finally {
+            this.markLoaded(); // a throw while replaying must not leave the page waiting forever
+          }
         });
         return;
       }

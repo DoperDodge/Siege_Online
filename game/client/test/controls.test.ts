@@ -109,4 +109,15 @@ describe("weapon buttons (DECISIONS D-055)", () => {
     c.press("swap"); // the wheel: the other one
     expect(c.sample(5).buttons & Btn.Swap).toBe(Btn.Swap);
   });
+
+  it("a weapon key pressed with no weapon to switch (down, dead, between bodies) is dropped, not sent after the revive", () => {
+    const c = make({});
+    let state: { slot: number; equipping: boolean } | null = null; // down
+    c.weaponState = () => state;
+    c.press("secondary");
+    const sent = [1, 2, 3, 4].map((n) => c.sample(n).buttons & Btn.Swap);
+    expect(sent).toEqual([0, 0, 0, 0]);
+    state = { slot: 0, equipping: false }; // revived, primary in hand
+    expect([5, 6, 7].map((n) => c.sample(n).buttons & Btn.Swap)).toEqual([0, 0, 0]);
+  });
 });

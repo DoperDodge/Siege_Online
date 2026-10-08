@@ -122,6 +122,8 @@ export interface LabApi extends LabHandle {
   readonly net: OnlineConnection | null;
   /** The weapon in your hands. */
   weapon(): ResolvedWeapon | null;
+  /** The weapon in your hands when an input of yours was sent (the one its shot fired), by its 16-bit seq. */
+  weaponAt(seq16: number): ResolvedWeapon | null;
   /** The render tick an input of yours claimed to be looking at (lag compensation), by its 16-bit seq. */
   claimedViewTick(seq16: number): number | null;
   /** The server's readout of each of your shots (lab rooms). */
@@ -202,6 +204,8 @@ export async function startLab(o: LabOptions): Promise<void> {
   let rosterChanged = false;
   let lastShot: (ShotResult & { targetName: string | null }) | null = null;
   let showShot: (shot: ShotResult) => void = () => {};
+  /** The server's events, once the page is running (a room joined mid-fight replays some while the level loads). */
+  let gameEvents: (tick: number, events: GameEvent[]) => void = () => {};
   /** Online tests can script the input (window.__lab.input). */
   let scripted: Partial<InputCmd> | null = null;
   /** Render tick of the frame on screen (remote players are drawn at it), and of the one last clicked on. */
@@ -212,8 +216,8 @@ export async function startLab(o: LabOptions): Promise<void> {
    * arrive a tick before the correction that lays the body down. No text: a fall (which says so itself).
    */
   let death: { pawnId: number; life: number; text: string | null } | null = null;
-  /** The render tick each recent input claimed (lag compensation), by its 16-bit seq. */
-  const claims = new Map<number, number>();
+  /** What each recent input claimed to be looking at (lag compensation) and the weapon in hand then, by its 16-bit seq. */
+  const claims = new Map<number, { viewTick: number; weapon: ResolvedWeapon | null }>();
   /** Page additions' hooks (LabOptions.extend). */
   const hooks = {
     shot: [] as ((shot: ShotResult) => void)[],
@@ -234,6 +238,10 @@ export async function startLab(o: LabOptions): Promise<void> {
   const sim = net ? net.session.sim! : await Sim.create(o.levelId, data);
   let ctrl: PlayerController = net ? await firstBody(net) : sim.addPlayer("you", operatorId, 0, undefined, pickFromUrl(operatorId));
   const possessed = () => sim.pawns.get(ctrl.possessedPawnId)!;
+  const heldWeapon = (): ResolvedWeapon | null => {
+    const p = sim.pawns.get(ctrl.possessedPawnId);
+    return p?.loadout?.weapons[p.state.slot] ?? null;
+  };
   if (net) {
     // The server starts everyone as the default operator; ask for the loadout in the link, if different.
     const wanted = pickFromUrl(operatorId);
@@ -280,7 +288,9 @@ export async function startLab(o: LabOptions): Promise<void> {
   };
   controls.weaponState = () => {
     const p = sim.pawns.get(ctrl.possessedPawnId);
-    return p && (!net || net.session.ready) ? { slot: p.state.slot, equipping: p.state.wAct === WeaponAct.Equip, zoom: p.loadout?.weapons[p.state.slot].ads.zoom ?? 1 } : null;
+    // Down or dead there's no weapon to switch (a request then would fire on its own after a revive).
+    const armed = p !== undefined && !isDowned(p.state) && p.state.mode !== PawnMode.Dead;
+    return armed && (!net || net.session.ready) ? { slot: p.state.slot, equipping: p.state.wAct === WeaponAct.Equip, zoom: p.loadout?.weapons[p.state.slot].ads.zoom ?? 1 } : null;
   };
 
   const MODE_KEY: Partial<Record<Action, "crouchMode" | "proneMode" | "leanMode" | "adsMode">> = {
@@ -386,7 +396,7 @@ export async function startLab(o: LabOptions): Promise<void> {
 
   function loadoutSection(): string {
     const pick = currentPick();
-    const lo = possessed().loadout;
+    const lo = sim.pawns.get(ctrl.possessedPawnId)?.loadout;
     return `<section class="loadout"><h3>Loadout</h3>${SLOTS.map((slot, i) => weaponRow(slot, pick, lo?.weapons[i] ?? null)).join("")}
       <p class="note">Changing anything gives you a new body${net ? " (the server spawns it)" : ""}. <span class="unv">?</span> marks a value that is still a placeholder (research/OPEN_QUESTIONS.md).</p></section>`;
   }
@@ -646,11 +656,9 @@ export async function startLab(o: LabOptions): Promise<void> {
     scene,
     camera,
     net,
-    weapon: () => {
-      const p = sim.pawns.get(ctrl.possessedPawnId);
-      return p?.loadout?.weapons[p.state.slot] ?? null;
-    },
-    claimedViewTick: (seq16) => claims.get(seq16) ?? null,
+    weapon: heldWeapon,
+    weaponAt: (seq16) => claims.get(seq16)?.weapon ?? null,
+    claimedViewTick: (seq16) => claims.get(seq16)?.viewTick ?? null,
     onShot: (fn) => hooks.shot.push(fn),
     onEvents: (fn) => hooks.events.push(fn),
     onFrame: (fn) => hooks.frame.push(fn),
@@ -691,7 +699,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       const input = scripted ? { ...sampled, ...scripted, buttons: sampled.buttons | (scripted.buttons ?? 0) } : sampled;
       // Predicts locally and sends the input; a shot claims the frame that was on screen when you clicked.
       const sent = net.session.tick(input, clickViewTick ?? undefined);
-      if (sent) claims.set(sent.seq & 0xffff, net.session.lastViewTick);
+      if (sent) claims.set(sent.seq & 0xffff, { viewTick: net.session.lastViewTick, weapon: heldWeapon() });
       if (claims.size > 512) claims.delete(claims.keys().next().value!);
       clickViewTick = null;
     } else {
@@ -1016,7 +1024,7 @@ export async function startLab(o: LabOptions): Promise<void> {
         return shownRenderTick;
       },
       /** The render tick an input of yours claimed (lag compensation), by its 16-bit seq. */
-      claimed: (seq16: number) => claims.get(seq16) ?? null,
+      claimed: (seq16: number) => claims.get(seq16)?.viewTick ?? null,
       /** Another body's hitboxes as this page draws it at render tick `tick`. */
       boxesAt: (pawnId: number, tick: number) => {
         const st = net?.session.remoteAt(pawnId, tick);
@@ -1121,7 +1129,8 @@ export async function startLab(o: LabOptions): Promise<void> {
                 if (conn.closed) {
                   joined = false;
                   busy = false;
-                  error.textContent ||= "Lost connection to the server.";
+                  error.textContent ||= disconnected ?? "Lost connection to the server.";
+                  disconnected = null; // the lobby stays up: a room joined next starts connected
                   return;
                 }
                 panel.classList.add("hidden");
@@ -1140,7 +1149,7 @@ export async function startLab(o: LabOptions): Promise<void> {
             },
             onRoster: () => (rosterChanged = true),
             onShot: (shot) => showShot(shot),
-            onEvents: (tick, events) => onGameEvents(tick, events),
+            onEvents: (tick, events) => gameEvents(tick, events),
             trackMispredictions: autotest, // the e2e scripts report what a misprediction got wrong
             onLocalEvents: (events) => onWeaponEvents(events),
           },
@@ -1199,7 +1208,7 @@ export async function startLab(o: LabOptions): Promise<void> {
           onError: (_code, message) => flash(message, "bad"),
           onRoster: () => (rosterChanged = true),
           onShot: (shot) => showShot(shot),
-          onEvents: (tick, events) => onGameEvents(tick, events),
+          onEvents: (tick, events) => gameEvents(tick, events),
           trackMispredictions: autotest,
           onLocalEvents: (events) => onWeaponEvents(events),
         },
@@ -1254,18 +1263,9 @@ export async function startLab(o: LabOptions): Promise<void> {
       net!.close();
     }
     if (disconnected || !s.ready || !s.ctrl || !sim.pawns.has(s.ctrl.possessedPawnId)) return false;
-    if (rosterChanged) {
-      rosterChanged = false;
-      // Other players' views are rebuilt with their (new) name tags.
-      for (const [id, v] of pawnViews)
-        if (sim.pawns.get(id)?.proxy !== false) {
-          v.dispose();
-          pawnViews.delete(id);
-        }
-      if (!$(".pause").classList.contains("hidden")) renderPause();
-    }
-    if (s.ctrl !== ctrl) {
-      // A new body (respawn, operator pick).
+    // A new body first (respawn, operator or loadout pick): what is drawn next (the pause menu) reads it.
+    const newBody = s.ctrl !== ctrl;
+    if (newBody) {
       ctrl = s.ctrl;
       operatorId = ctrl.operatorId;
       op = data.operators.get(operatorId)!;
@@ -1278,8 +1278,19 @@ export async function startLab(o: LabOptions): Promise<void> {
       snapshotAll();
       notePredicted();
       seenCorrections = s.stats.corrections;
-      if (!$(".pause").classList.contains("hidden")) renderPause();
     }
+    const newRoster = rosterChanged;
+    if (newRoster) {
+      rosterChanged = false;
+      // Other players' views are rebuilt with their (new) name tags.
+      for (const [id, v] of pawnViews)
+        if (sim.pawns.get(id)?.proxy !== false) {
+          v.dispose();
+          pawnViews.delete(id);
+          drawnView.delete(id);
+        }
+    }
+    if ((newBody || newRoster) && !$(".pause").classList.contains("hidden")) renderPause();
     if (s.stats.corrections !== seenCorrections) {
       seenCorrections = s.stats.corrections;
       for (const id of ctrl.pawnIds) {
@@ -1320,6 +1331,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       if (!sim.pawns.has(id)) {
         v.dispose();
         pawnViews.delete(id);
+        drawnView.delete(id);
       }
     for (const pawn of sim.pawns.values())
       if (!pawnViews.has(pawn.id)) pawnViews.set(pawn.id, pawn.proxy ? new PawnView(scene, 0xf97316, nameOfPawn(pawn.id) || undefined) : new PawnView(scene, 0x3b82f6));
@@ -1343,7 +1355,10 @@ export async function startLab(o: LabOptions): Promise<void> {
     for (const e of events) {
       if (e.kind === "shot" && e.pawnId === ctrl.possessedPawnId) viewmodel.shot(performance.now(), possessed().loadout?.weapons[e.slot].suppressed ?? false);
       else if (e.kind === "dry" && e.pawnId === ctrl.possessedPawnId) flash("Empty", "info");
-      else if (e.kind === "kick" && e.pawnId === sim.viewedPawnId(ctrl.id)) {
+      else if (e.kind === "death" && e.cause === "bleed" && !net && ctrl.pawnIds.includes(e.pawnId)) {
+        // Offline nobody sends a kill to word it (online the server's does).
+        death = { pawnId: e.pawnId, life: sim.pawns.get(e.pawnId)?.life ?? 0, text: "You bled out" };
+      } else if (e.kind === "kick" && e.pawnId === sim.viewedPawnId(ctrl.id)) {
         tickKick.yaw += e.dYaw;
         tickKick.pitch += e.dPitch;
       }
@@ -1459,7 +1474,14 @@ export async function startLab(o: LabOptions): Promise<void> {
       dot.visible = true;
       seen.add(id);
     }
-    for (const [id, dot] of laserDots) if (!seen.has(id)) dot.visible = false;
+    for (const [id, dot] of laserDots) {
+      if (seen.has(id)) continue;
+      if (pawnViews.has(id)) dot.visible = false;
+      else {
+        scene.remove(dot); // that body is gone (a respawn, a new loadout)
+        laserDots.delete(id);
+      }
+    }
   }
 
   /** A remote player's gun position as drawn now (eye height, a little forward). */
@@ -1504,5 +1526,6 @@ export async function startLab(o: LabOptions): Promise<void> {
     bytesSeen = { in: s.stats.bytesIn, out: s.stats.bytesOut };
   }
 
+  gameEvents = onGameEvents;
   requestAnimationFrame(frame);
 }

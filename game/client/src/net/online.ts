@@ -89,7 +89,7 @@ export class OnlineConnection {
     };
     this.up = new DelayLine(delay);
     this.down = new DelayLine(delay);
-    this.session = new ClientSession({ ...o.session, send: (b) => this.send(b), now: () => performance.now() });
+    this.session = new ClientSession({ ...o.session, onBadMessage: (e) => this.badMessage(e), send: (b) => this.send(b), now: () => performance.now() });
     this.ws = o.socket?.() ?? new WebSocket(serverUrl());
     this.ws.binaryType = "arraybuffer";
     this.ws.onopen = () => {
@@ -133,9 +133,13 @@ export class OnlineConnection {
     try {
       this.session.handle(bytes);
     } catch (e) {
-      console.error("[redmond] bad message from the server:", e);
-      this.close();
-      this.o.onClose("The server sent something this page can't read. Refresh the page.");
+      this.badMessage(e);
     }
+  }
+
+  private badMessage(e: unknown) {
+    console.error("[redmond] bad message from the server:", e);
+    this.close();
+    this.o.onClose("The server sent something this page can't read. Refresh the page.");
   }
 }

@@ -263,6 +263,41 @@ describe("reviving (DECISIONS D-049)", () => {
     expect(c.state.reviveTarget).toBe(0);
   });
 
+  it("a reviver its player's buttons don't reach lets go: a tick without input, or Skopós opening her shell camera", async () => {
+    // No input (the server steps a stalled body without input once its hold budget is spent).
+    const s = await scene();
+    s.step([{ buttons: Btn.Interact }], 10);
+    expect(s.b.state.revivedBy).toBe(s.a.id);
+    const onlyB = () => new Map([[s.ctrls[1].id, input({ yaw: s.b.state.yaw, stance: s.b.state.stance })]]);
+    s.sim.step(onlyB());
+    expect([s.a.state.reviveTarget, s.a.state.reviveTicks, s.b.state.revivedBy]).toEqual([0, 0, 0]);
+    const pool = s.b.state.downHp;
+    s.sim.step(onlyB());
+    expect(s.b.state.downHp).toBeLessThan(pool); // bleeding again
+    // Skopós: on her other shell's camera her keys drive the camera, not the body that was reviving.
+    const k = await world([{ op: "skopos", at: [0.8, 0, 12], yawDeg: 90 }, { at: [0, 0, 12] }]);
+    const [sa, sb] = [k.pawn(k.ctrls[0]), k.pawn(k.ctrls[1])];
+    down(k.sim, sb);
+    k.step([], 80);
+    k.step([{ buttons: Btn.Interact }], 10);
+    expect(sb.state.revivedBy).toBe(sa.id);
+    k.step([{ buttons: Btn.Ability }]); // the camera opens
+    expect(k.ctrls[0].shellCam).toBe(true);
+    expect([sa.state.reviveTarget, sa.state.reviveTicks, sb.state.revivedBy]).toEqual([0, 0, 0]);
+    k.step([{ buttons: 0 }], 2);
+    k.step([{ buttons: Btn.Ability }]); // back in the body: the revive starts over, it doesn't carry on
+    k.step([{ buttons: Btn.Interact }]);
+    expect(sa.state.reviveTicks).toBe(1);
+  });
+
+  it("a downed body jumped back up by a teleport starts a new life: its next lethal hit downs it again", async () => {
+    const s = await scene();
+    const life = s.b.life;
+    s.sim.teleport(s.b.id, 5, 0, 5, 0);
+    expect([s.b.state.mode, s.b.state.downs, s.b.state.hp, s.b.life]).toEqual([PawnMode.Walk, 0, s.b.state.maxHp, life + 1]);
+    expect(down(s.sim, s.b).outcome).toBe("downed");
+  });
+
   it("turning away or a teleport ends a revive on both sides", async () => {
     const s = await scene();
     s.step([{ buttons: Btn.Interact }], 10);

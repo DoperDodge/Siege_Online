@@ -92,6 +92,8 @@ export interface NetsimReport {
   desyncs: string[];
   /** Bodies corrected during the final second while pressed against another (expected, D-033 addendum). */
   contactLate: string[];
+  /** With `sprayStall`: the shots the sprayer fired (by its own prediction) while its uplink was stalled. */
+  sprayStallShots: number | null;
   /** Render frames where a remote pawn had no snapshot to interpolate toward (buffer ran dry). */
   starvedRemoteFrames: number;
   /**
@@ -282,6 +284,9 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
   };
   const tickMs = DT * 1000;
   const serverTimes: number[] = [];
+  /** The sprayer's own shots (as it predicted them) while its uplink was stalled. */
+  let stallShots = 0;
+  let stallWindow: [number, number] | null = null;
   const combat = { downs: 0, reviveStarts: 0, revives: 0, kills: 0, knifeKills: 0, bleedOuts: 0 };
   const tally = (events: GameEvent[]) => {
     for (const e of events) {
@@ -303,7 +308,14 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
       let session!: ClientSession;
       const down = new Link(clock, rng, o, (b) => session.handle(b));
       const up = new Link(clock, rng, o, (b) => deliverToServer(b));
-      session = new ClientSession({ send: (b) => up.send(b), now: () => clock.now, onEvents: i === 0 ? (_t, evs) => tally(evs) : undefined });
+      session = new ClientSession({
+        send: (b) => up.send(b),
+        now: () => clock.now,
+        onEvents: i === 0 ? (_t, evs) => tally(evs) : undefined,
+        onLocalEvents: (evs) => {
+          if (o.sprayStall?.client === i && stallWindow && clock.now >= stallWindow[0] && clock.now < stallWindow[1]) stallShots += evs.filter((e) => e.kind === "shot").length;
+        },
+      });
       const deliverToServer = (b: Uint8Array) => serverReceive(memberId, b);
       const op = o.operators?.[i % o.operators.length] ?? (o.combat ? (i % 2 ? "mute" : "sledge") : i === 3 ? "skopos" : "sledge");
       memberId = room.join(name, { send: (b) => down.send(b), buffered: () => 0 }, op)!;
@@ -331,7 +343,11 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
 
   const endAt = clock.now + o.seconds * 1000;
   let serverNext = clock.now;
-  if (o.sprayStall) clock.at(clock.now + o.sprayStall.atS * 1000, () => clients[o.sprayStall!.client].up.stallFor(o.sprayStall!.ms));
+  if (o.sprayStall) {
+    const at = clock.now + o.sprayStall.atS * 1000;
+    stallWindow = [at, at + o.sprayStall.ms];
+    clock.at(at, () => clients[o.sprayStall!.client].up.stallFor(o.sprayStall!.ms));
+  }
   // The last two seconds are hands-off (neutral input every tick): bodies come to rest, and during the
   // final second no client may need a correction. A correction there means client and server disagree
   // about a body standing still: a real desync, not a collision misprediction.
@@ -419,6 +435,7 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
     },
     desyncs,
     contactLate,
+    sprayStallShots: o.sprayStall ? stallShots : null,
     starvedRemoteFrames: clients.reduce((n, c) => n + c.session.starvedFrames, 0),
     combat,
   };

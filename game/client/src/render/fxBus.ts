@@ -19,6 +19,12 @@ const TRACERS = 32;
 const FLASHES = 8;
 /** Muzzle-flash light: one, the latest shot's (each light costs every lit pixel, even while off). */
 const LIGHTS = 1;
+/**
+ * Others' shots wait for the frame on screen to reach them. A hidden tab draws no frames while they keep
+ * arriving: the queue keeps only the newest, and a shot over a second behind the frame is dropped undrawn.
+ */
+const MAX_PENDING = 256;
+const STALE_TICKS = 64;
 
 /** Objects reused oldest first, each shown until its time is up. */
 class Pool<T extends THREE.Object3D> {
@@ -111,8 +117,10 @@ export class FxBus {
   /** The server's events: shots are queued until the frame on screen reaches them. */
   server(tick: number, events: readonly GameEvent[]) {
     for (const e of events) {
-      if (e.kind === "shotFx") this.pending.push({ tick, e });
-      else if (e.kind === "hitConfirm") this.audio.play(e.killed ? "kill" : "hit");
+      if (e.kind === "shotFx") {
+        this.pending.push({ tick, e });
+        if (this.pending.length > MAX_PENDING) this.pending.shift();
+      } else if (e.kind === "hitConfirm") this.audio.play(e.killed ? "kill" : "hit");
     }
   }
 
@@ -126,6 +134,7 @@ export class FxBus {
       const own = ownPawns.includes(e.pawnId);
       if (!own && tick > renderTick + 0.5 && tick - renderTick < 64) continue; // not on screen yet
       this.pending.splice(i, 1);
+      if (renderTick - tick > STALE_TICKS) continue;
       const from = own ? ownMuzzle() : muzzleOf(e.pawnId);
       if (!from) continue;
       for (const end of e.ends) this.mark(from, end);

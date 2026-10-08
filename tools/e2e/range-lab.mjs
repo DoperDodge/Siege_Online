@@ -147,7 +147,9 @@ try {
   result.lean = { hit: leanHead.shot?.hit, origin: leanHead.shot?.origin };
   result.checks.leanHeadshot = leanHead.hits[0]?.headshot === true && Math.abs((leanHead.shot?.origin?.[0] ?? -1.8) + 1.8) > 0.1;
 
-  // A 2.5× sight: the view narrows to tan(35°) / 2.5 once aimed (vertical FOV 70° by default).
+  // A 2.5× sight: the view narrows to tan(35°) / 2.5 once aimed (vertical FOV 70° by default). It's picked
+  // with the pause menu open, as a player does: the page keeps drawing when the new body arrives.
+  await page.evaluate(() => document.querySelector(".gear").click()); // the settings button: opens or closes the pause menu
   await page.evaluate(() =>
     window.__lab.pickLoadout({
       operator: "sledge",
@@ -157,6 +159,12 @@ try {
     }),
   );
   await page.waitForFunction(() => window.__lab.net.ready && window.__lab.net.roster.some((e) => e.kind === 0 && e.loadout.primary.sight === "magnified"), null, { timeout: 5000 }).catch(() => {});
+  const framesAt = await page.evaluate(() => window.__lab.frames);
+  await sleep(1000);
+  const menu = await page.evaluate(() => ({ frames: window.__lab.frames, open: !document.querySelector(".pause").classList.contains("hidden"), body: window.__lab.net.weapon?.id }));
+  result.pauseMenuPick = { framesBefore: framesAt, ...menu };
+  result.checks.pickWithMenuOpenKeepsDrawing = menu.open && menu.frames > framesAt && menu.body === "l85a2";
+  await page.evaluate(() => document.querySelector(".gear").click()); // the settings button: opens or closes the pause menu
   await input({ buttons: 8 });
   await sleep(1500);
   const fov = await page.evaluate(() => window.__lab.fov);

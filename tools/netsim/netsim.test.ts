@@ -20,13 +20,14 @@ describe("netsim: 10 clients, 100 ms round trip, jitter, stalls, drift", () => {
   }, 60000);
 
   it("a 300 ms stall while holding Fire (spraying, reloading, swapping) costs no misprediction", async () => {
-    const r = await runNetsim({ seconds: 10, spread: true, crowd: false, seed: 5, jitterMs: 10, sprayStall: { client: 0, atS: 4, ms: 300 } });
+    // The stall comes inside the first magazine (31 rounds at 670 rpm last 2.8 s), and the sprayer fires through it.
+    const r = await runNetsim({ seconds: 10, spread: true, crowd: false, seed: 5, jitterMs: 10, sprayStall: { client: 0, atS: 1, ms: 300 } });
     expect(r.desyncs).toEqual([]);
     expect(r.room.droppedInputs).toBe(0);
-    expect(r.room.shots).toBeGreaterThan(30);
+    expect(r.sprayStallShots).toBeGreaterThanOrEqual(3);
     const sprayer = r.perClient[0];
     expect(sprayer.resyncs).toBe(0);
-    expect(sprayer.corrections - sprayer.forced, "mispredictions").toBeLessThanOrEqual(2); // as in the run above
+    expect(sprayer.corrections - sprayer.forced, "mispredictions").toBe(0);
   }, 60000);
 
   it("a fight (Phase 3 M11): two teams spray, down, revive and knife each other; no desyncs, inside the budgets", async () => {

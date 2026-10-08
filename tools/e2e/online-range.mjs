@@ -1,10 +1,10 @@
 // End-to-end check of the Range Lab online (PLAN §17 Phase 3 "done when": hit registration feels right at
 // 100 ms): the production server and two headless browsers with 100 ms of simulated round trip each.
-// Checks: a headshot on a still dummy kills; on the strafing dummy, a click claims the frame on screen, the
-// server never rewinds past the claim, and where it rewound the target is exactly where the shooter's page
-// draws it at that tick (and within the cap, a head as drawn is a head hit); the damage arc points at the
-// attacker; A downs B, both kill feeds say so, B sees the down screen, and A revives B; no mispredictions
-// anywhere. Requires `npm run build` first.
+// Checks: B joins while A is firing (events replayed after B's level loads); a headshot on a still dummy
+// kills; on the strafing dummy, a click claims the frame on screen, the server never rewinds past the claim,
+// and where it rewound the target is exactly where the shooter's page draws it at that tick (and within the
+// cap, a head as drawn is a head hit); the damage arc points at the attacker; A downs B, both kill feeds say
+// so, B sees the down screen, and A revives B; no mispredictions anywhere. Requires `npm run build` first.
 import { spawn } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -84,10 +84,26 @@ try {
   const center = (box) => [0, 1, 2].map((k) => (box.a[k] + box.b[k]) / 2);
   const gapCm = (p, q) => (p && q ? +(Math.hypot(...center(p).map((v, k) => v - center(q)[k])) * 100).toFixed(2) : null);
 
-  // A creates a Range Lab room online; B joins it with the code.
+  // A creates a Range Lab room online; B joins it with the code while A sprays at the floor (events arrive
+  // while B's level loads and are replayed after it: the join must still finish).
   const a = await open(`${BASE}/labs/range_lab.html?online&autotest=1&lowgfx&lag=${LAG}`);
   const room = (await net(a)).room;
+  const aShotBefore = (await net(a)).lastShot?.seq ?? -1;
+  await input(a, { pitch: -1.2, buttons: Btn.Ads | Btn.Fire });
+  let joining = true;
+  const keepFiring = (async () => {
+    while (joining) {
+      const alive = await a.evaluate(() => window.__lab.refill()).then(() => true, () => false);
+      if (!alive) break;
+      await sleep(1000);
+    }
+  })();
   const b = await open(`${BASE}/labs/range_lab.html?room=${room}&autotest=1&lowgfx&lag=${LAG}`);
+  joining = false;
+  await keepFiring;
+  await input(a, null);
+  await a.evaluate(() => window.__lab.refill());
+  result.checks.joinedMidFight = ((await net(a)).lastShot?.seq ?? -1) !== aShotBefore && (await net(b)).ready;
   await a.waitForFunction(() => window.__lab.net.players.length === 2, null, { timeout: 10000 });
   const roster = (await net(b)).roster;
   result.room = room;
@@ -153,7 +169,8 @@ try {
   // the netsim's --hitreg run checks uncapped moving-target headshots at a full frame rate.)
   const uncapped = shots.filter((s) => !s.capped);
   result.uncappedShots = uncapped.length;
-  result.checks.uncappedHeadsAsDrawn = uncapped.every((s) => s.hit?.pawnId === strafer && s.hit?.part === "head" && s.gapAtClaimCm < 0.5);
+  if (uncapped.length) result.checks.uncappedHeadsAsDrawn = uncapped.every((s) => s.hit?.pawnId === strafer && s.hit?.part === "head" && s.gapAtClaimCm < 0.5);
+  else result.notExercised = ["uncappedHeadsAsDrawn: every strafer shot claimed a frame past the 250 ms cap at this frame rate (netsim --hitreg covers it)"];
   await input(b, null);
 
   // The damage arc: A (at the firing line) shoots B in the torso from B's left; B's arc points left.

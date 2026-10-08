@@ -31,7 +31,8 @@ export class LocalSocket implements SocketLike {
       } else if (m.kind === "data") this.onmessage?.(new MessageEvent("message", { data: m.bytes }));
       else this.ended(m.code, m.reason);
     };
-    this.worker.onerror = (e) => this.ended(1011, `The offline room stopped: ${e.message}`);
+    // Not 1011: the page words that code as a server error, and this message says more.
+    this.worker.onerror = (e) => this.ended(4000, `The offline room stopped: ${e.message}`);
   }
 
   send(bytes: Uint8Array<ArrayBuffer>): void {
