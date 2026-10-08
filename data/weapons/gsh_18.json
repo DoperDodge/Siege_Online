@@ -1,0 +1,41 @@
+{
+  "_doc": "GSh-18 (Fuze). research/weapons.csv row gsh_18; class rules research/weapons_notes.md §4. Laser since Y7S3.",
+  "_season": "Y11S3.1",
+  "_unverified": ["damage.falloff", "destruction"],
+  "id": "gsh_18",
+  "name": "GSh-18",
+  "class": "handgun",
+  "fire": {
+    "kind": "hitscan",
+    "rpm": 495,
+    "modes": ["semi"],
+    "pellets": 1
+  },
+  "damage": {
+    "base": 44,
+    "falloff": [[12, 44], [14, 26]],
+    "penetration": "simple",
+    "head": "kill"
+  },
+  "ammo": {
+    "magazine": 18,
+    "plusOne": true,
+    "maxAmmo": 109
+  },
+  "reload": {
+    "kind": "magazine",
+    "tacticalS": 2.1,
+    "emptyS": 2.3
+  },
+  "adsS": 0.24,
+  "destruction": null,
+  "attachments": {
+    "sights": ["iron"],
+    "barrels": ["suppressor", "muzzle_brake"],
+    "grips": [],
+    "underbarrel": ["laser"]
+  },
+  "recoil": {
+    "template": "handgun"
+  }
+}

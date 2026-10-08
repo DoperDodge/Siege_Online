@@ -1,0 +1,15 @@
+{
+  "_doc": "Ballistic Shield (Fuze). research/weapons.csv row ballistic_shield; rules research/weapons_notes.md §5. Used with the secondary; not pickable until Phase 8 (DECISIONS D-054). Bash damage 0 (Y9S4) supersedes fuze.md's 65 (Y9S1).",
+  "_season": "Y11S3.1",
+  "_unverified": ["shield.moveSpeedMult", "shield.suppression.falloffS", "shield.bashDamage"],
+  "id": "ballistic_shield",
+  "name": "Ballistic Shield",
+  "class": "shield",
+  "shield": {
+    "pistolAdsS": { "walk": 0.5, "sprint": 0.55 },
+    "hipFire": false,
+    "moveSpeedMult": 0.9,
+    "suppression": { "hitsToTrigger": 5, "hitsToMax": 20, "falloffS": 7 },
+    "bashDamage": 0
+  }
+}

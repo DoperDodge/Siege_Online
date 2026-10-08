@@ -9,6 +9,8 @@ import { eyePose, proneBendLift, proneBodyExtents } from "./hitboxes.js";
 import type { Pawn } from "./pawn.js";
 import { capsuleDims, currentHeight, proneWeight, stanceDims, transitionSeconds } from "./stance.js";
 import { Btn, PawnMode, STANCE_KEYS, Stance, type InputCmd, type PawnState } from "./types.js";
+import { blocksSprint, parkWeapon, stepWeapon, wantsAim, type SimEvent } from "../weapons/step.js";
+import { bleedTick, isDowned } from "./downed.js";
 
 export interface MoveContext {
   R: Rapier;
@@ -16,6 +18,8 @@ export interface MoveContext {
   cc: CharacterController;
   data: GameData;
   level: BuiltLevel;
+  /** What happened this step (shots, reloads); Sim clears it at the start of every step. */
+  events: SimEvent[];
 }
 
 const IDENTITY = { x: 0, y: 0, z: 0, w: 1 };
@@ -23,7 +27,11 @@ const SKIN = 0.02;
 /** How far a prone body may sink into geometry after a move before the move is refused (float noise). */
 const PRONE_TOLERANCE = 0.005;
 
-export function stepPawn(ctx: MoveContext, pawn: Pawn, input: InputCmd): void {
+/**
+ * One tick of a body: look, move, then the weapon in hand. `weapons` is false for a body nobody is driving
+ * (Skopós's shell she isn't in): its weapon is parked instead of stepped.
+ */
+export function stepPawn(ctx: MoveContext, pawn: Pawn, input: InputCmd, weapons = true): void {
   const s = pawn.state;
   const pressed = input.buttons & ~s.prevButtons;
   s.prevButtons = input.buttons;
@@ -36,8 +44,16 @@ export function stepPawn(ctx: MoveContext, pawn: Pawn, input: InputCmd): void {
     stepLadder(ctx, pawn, input, pressed);
   } else if (s.mode === PawnMode.Vault) {
     stepScriptedMove(ctx, pawn);
+  } else if (s.mode === PawnMode.Downed) {
+    stepDowned(ctx, pawn, input);
   } else {
     stepWalk(ctx, pawn, input, pressed);
+  }
+  const down = isDowned(s);
+  if (weapons && !down) stepWeapon(ctx, pawn, input, pressed);
+  else {
+    parkWeapon(s);
+    if (down) s.adsQ = 0; // no weapons while down
   }
   roundState(s);
   // The collider is placed from the state, exactly as a client places it from a correction (which carries
@@ -53,16 +69,52 @@ function setSolidity(pawn: Pawn) {
 
 // ---------------------------------------------------------------- look
 
+/** Lying down (or getting down or up), on your feet or down but not out: turning and looking are limited. */
+const lying = (s: PawnState) => (s.mode === PawnMode.Walk || s.mode === PawnMode.Downed) && proneWeight(s) > 0;
+
+/** The pitch arc the body allows now: narrower while lying down (and getting down or up). */
+function pitchLimits(ctx: MoveContext, s: PawnState): [number, number] {
+  const m = ctx.data.movement;
+  return lying(s)
+    ? [m.stance.pronePitchMinDeg * DEG, m.stance.pronePitchMaxDeg * DEG]
+    : [m.look.pitchMinDeg * DEG, m.look.pitchMaxDeg * DEG];
+}
+
+/**
+ * Turn the view by (dYaw, dPitch) from inside the simulation (recoil, weapons/step.ts), within the same
+ * rules as a turn from input: the pitch arc, and while prone only if the body can turn without clipping a
+ * wall (otherwise the yaw change is dropped). Returns what was actually applied.
+ */
+export function turnView(ctx: MoveContext, pawn: Pawn, dYaw: number, dPitch: number): [number, number] {
+  const s = pawn.state;
+  const [lo, hi] = pitchLimits(ctx, s);
+  const pitchBefore = s.pitch;
+  s.pitch = clamp(s.pitch + dPitch, lo, hi);
+  let applied = 0;
+  if (dYaw !== 0) {
+    const next = wrapAngle(s.yaw + dYaw);
+    if (lying(s)) {
+      const fit = proneFitFree(ctx, pawn, s.x, s.y, s.z, next, 0);
+      if (fit) {
+        applied = wrapAngle(next - s.yaw);
+        s.yaw = next;
+        setTilt(s, fit);
+      }
+    } else {
+      applied = wrapAngle(next - s.yaw);
+      s.yaw = next;
+    }
+  }
+  return [applied, s.pitch - pitchBefore];
+}
+
 function updateLook(ctx: MoveContext, pawn: Pawn, input: InputCmd) {
   const m = ctx.data.movement;
   const s = pawn.state;
-  let pitchMin = m.look.pitchMinDeg * DEG;
-  let pitchMax = m.look.pitchMaxDeg * DEG;
-  if (s.mode === PawnMode.Walk && proneWeight(s) > 0) {
+  const [pitchMin, pitchMax] = pitchLimits(ctx, s);
+  if (lying(s)) {
     // Lying down (and getting down or up) limits turn speed and aim arc (PLAN §7); turning is also
     // blocked if the body would clip a wall.
-    pitchMin = m.stance.pronePitchMinDeg * DEG;
-    pitchMax = m.stance.pronePitchMaxDeg * DEG;
     const maxTurn = m.stance.proneTurnRateDeg * DEG * DT;
     const delta = clamp(wrapAngle(input.yaw - s.yaw), -maxTurn, maxTurn);
     if (delta !== 0) {
@@ -93,24 +145,32 @@ function stepWalk(ctx: MoveContext, pawn: Pawn, input: InputCmd, pressed: number
   if ((pressed & Btn.Interact || input.buttons & Btn.Vault) && tryAttachLadder(ctx, pawn)) return;
   if (input.buttons & Btn.Vault && s.grounded && s.stance !== Stance.Prone && s.stanceT >= 1 && tryVault(ctx, pawn)) return;
 
-  // Speed for this tick.
+  // Speed for this tick. The weapon in hand scales it (LMGs slower, the horizontal grip faster; which
+  // speeds it scales is data, gunplay.rules.moveMultScope).
   const op = ctx.data.operators.get(pawn.operatorId);
   const rating = String(op?.speedRating ?? 2) as "1" | "2" | "3";
+  const weaponMult = pawn.loadout ? pawn.loadout.weapons[s.slot].moveSpeedMult : 1;
+  const scope = ctx.data.gunplay.rules.moveMultScope;
+  const mult = (k: (typeof scope)[number]) => (scope.includes(k) ? weaponMult : 1);
   const walk = m.speed.walkByRating[rating];
-  const stanceSpeed = (st: Stance) => (st === Stance.Prone ? m.speed.proneSpeed : st === Stance.Crouch ? walk * m.speed.crouchWalkFactor : walk);
+  const stanceSpeed = (st: Stance) =>
+    st === Stance.Prone ? m.speed.proneSpeed : st === Stance.Crouch ? walk * m.speed.crouchWalkFactor * mult("crouch") : walk * mult("walk");
   let speed = s.stanceT < 1 ? Math.min(stanceSpeed(s.stanceFrom), stanceSpeed(s.stance)) : stanceSpeed(s.stance);
   const ads = (input.buttons & Btn.Ads) !== 0;
-  if (ads && s.stance !== Stance.Prone) speed = Math.min(speed, m.speed.adsWalkSpeed);
+  if (wantsAim(ctx, s, input) && s.stance !== Stance.Prone) speed = Math.min(speed, m.speed.adsWalkSpeed * mult("adsWalk"));
   if (input.buttons & Btn.SlowWalk) speed *= m.speed.slowWalkFactor;
+  // Down but not out: a slow crawl, and none at all while a teammate revives you (placeholders).
+  if (s.mode === PawnMode.Downed) speed = s.revivedBy !== 0 && ctx.data.combat.revive.targetLocked ? 0 : ctx.data.combat.dbno.crawlSpeed;
 
   const sprinting =
     (input.buttons & Btn.Sprint) !== 0 &&
     input.forward > m.sprint.forwardThreshold &&
     !ads &&
+    !blocksSprint(s, input) &&
     s.stance === Stance.Stand &&
     s.stanceT >= 1 &&
     s.grounded;
-  if (sprinting) speed = m.speed.sprintByRating[rating];
+  if (sprinting) speed = m.speed.sprintByRating[rating] * mult("sprint");
   s.sinceSprint = sprinting ? 0 : s.sinceSprint + DT;
   s.sprinting = sprinting;
 
@@ -268,8 +328,22 @@ function moveCollider(ctx: MoveContext, pawn: Pawn, dx: number, dy: number, dz: 
     pz += az * cap;
     perched = true;
   }
-  ctx.cc.computeColliderMovement(pawn.collider, { x: dx + px, y: dy, z: dz + pz }, undefined, QUERY_SOLID, notIgnored);
-  let mv = ctx.cc.computedMovement();
+  // Rapier's snap-to-ground can drop a body into the floor when it starts inside the controller's contact
+  // offset of both a wall and the floor (sprinting diagonally into a wall: 0.29 m in one tick, found by the
+  // netsim). A step that ends inside level geometry it started clear of is redone without the snap.
+  const startClear = !insideStatic(ctx, pawn, t);
+  const compute = (desired: { x: number; y: number; z: number }, filter?: (c: Collider) => boolean) => {
+    ctx.cc.computeColliderMovement(pawn.collider, desired, undefined, QUERY_SOLID, filter);
+    let out = ctx.cc.computedMovement();
+    if (out.y < desired.y - 1e-6 && startClear && insideStatic(ctx, pawn, { x: t.x + out.x, y: t.y + out.y, z: t.z + out.z })) {
+      ctx.cc.disableSnapToGround();
+      ctx.cc.computeColliderMovement(pawn.collider, desired, undefined, QUERY_SOLID, filter);
+      ctx.cc.enableSnapToGround(ctx.data.movement.step.snapToGround);
+      out = ctx.cc.computedMovement();
+    }
+    return out;
+  };
+  let mv = compute({ x: dx + px, y: dy, z: dz + pz }, notIgnored);
   // Rapier's controller can let a step through a player it rests exactly against (its sweep starts at
   // the contact offset and sometimes reports no hit). A player the step would end up inside is handled
   // like one we already overlap: the motion toward them is dropped and the step is redone.
@@ -289,10 +363,16 @@ function moveCollider(ctx: MoveContext, pawn: Pawn, dx: number, dy: number, dz: 
         ez -= az * toward;
       }
     }
-    ctx.cc.computeColliderMovement(pawn.collider, { x: ex, y: dy, z: ez }, undefined, QUERY_SOLID, (c) => !ignored.has(c.handle));
-    mv = ctx.cc.computedMovement();
+    mv = compute({ x: ex, y: dy, z: ez }, (c) => !ignored.has(c.handle));
   }
   return { x: mv.x, y: mv.y, z: mv.z, perched };
+}
+
+/** The collider, shrunk by the contact skin, overlaps level geometry with its centre at `c`. */
+function insideStatic(ctx: MoveContext, pawn: Pawn, c: { x: number; y: number; z: number }): boolean {
+  const r = pawn.collider.radius() - SKIN;
+  const hh = Math.max(0, pawn.collider.halfHeight() - SKIN);
+  return ctx.world.intersectionWithShape(c, IDENTITY, new ctx.R.Capsule(hh, r), undefined, QUERY_STATIC, pawn.collider) !== null;
 }
 
 function updateStance(ctx: MoveContext, pawn: Pawn, input: InputCmd) {
@@ -305,7 +385,11 @@ function updateStance(ctx: MoveContext, pawn: Pawn, input: InputCmd) {
   }
   let desired = input.stance;
   const wantsSprint =
-    (input.buttons & Btn.Sprint) !== 0 && input.forward > m.sprint.forwardThreshold && (input.buttons & Btn.Ads) === 0 && s.grounded;
+    (input.buttons & Btn.Sprint) !== 0 &&
+    input.forward > m.sprint.forwardThreshold &&
+    (input.buttons & Btn.Ads) === 0 &&
+    !blocksSprint(s, input) &&
+    s.grounded;
   // Sprinting forward overrides a crouch request (you stand up and run).
   if (wantsSprint && m.sprint.forcesStand && desired === Stance.Crouch) desired = Stance.Stand;
   if (desired === s.stance || !canEnterStance(ctx, pawn, desired)) return;
@@ -379,17 +463,48 @@ function trackFall(ctx: MoveContext, pawn: Pawn, wasGrounded: boolean) {
     const drop = s.airPeakY - s.y;
     if (drop > f.safeHeight) {
       const frac = (drop - f.safeHeight) / (f.lethalHeight - f.safeHeight);
-      const dmg = frac >= 1 ? s.hp : Math.round(frac * s.maxHp);
-      s.hp = Math.max(0, s.hp - dmg);
-      s.lastFallDamage = dmg;
-      // Lethal falls kill outright, no DBNO (research/core_mechanics.md §8).
-      if (s.hp === 0) s.mode = PawnMode.Dead;
+      if (s.mode === PawnMode.Downed) {
+        // Already down: the fall comes out of what's left (a long one finishes you).
+        const dmg = frac >= 1 ? s.downHp : Math.round(frac * s.maxHp);
+        s.downHp = Math.fround(Math.max(0, s.downHp - dmg));
+        s.lastFallDamage = dmg;
+        if (s.downHp === 0) {
+          s.mode = PawnMode.Dead;
+          ctx.events.push({ kind: "death", pawnId: pawn.id, cause: "fall" });
+        }
+      } else {
+        const dmg = frac >= 1 ? s.hp : Math.round(frac * s.maxHp);
+        s.hp = Math.max(0, s.hp - dmg);
+        s.lastFallDamage = dmg;
+        // Lethal falls kill outright, no DBNO (research/core_mechanics.md §8).
+        if (s.hp === 0) {
+          s.mode = PawnMode.Dead;
+          ctx.events.push({ kind: "death", pawnId: pawn.id, cause: "fall" });
+        }
+      }
     }
     s.airPeakY = s.y;
     return;
   }
   // Only trust the ground height while standing on it, not while the capsule rolls off an edge.
   s.airPeakY = groundNormal(ctx, pawn) ? s.y : Math.max(s.airPeakY, s.y);
+}
+
+// ---------------------------------------------------------------- down but not out (DECISIONS D-048)
+
+/**
+ * A downed body: lies down where there's room (else stays crouched), crawls slowly, can't lean, use
+ * ladders or vault, and bleeds out unless a teammate is reviving it. Looking around keeps the prone limits.
+ */
+function stepDowned(ctx: MoveContext, pawn: Pawn, input: InputCmd) {
+  const s = pawn.state;
+  const stance = s.stance === Stance.Prone || canEnterStance(ctx, pawn, Stance.Prone) ? Stance.Prone : Stance.Crouch;
+  stepWalk(ctx, pawn, { ...input, buttons: 0, lean: 0, stance }, 0);
+  if (s.mode !== PawnMode.Downed) return; // a fall finished it
+  if (s.invulnTicks > 0) s.invulnTicks--;
+  if (s.revivedBy === 0 && bleedTick(ctx.data.combat, s, Math.hypot(s.vx, s.vz) > ctx.data.combat.dbno.movingSpeed)) {
+    ctx.events.push({ kind: "death", pawnId: pawn.id, cause: "bleed" });
+  }
 }
 
 // ---------------------------------------------------------------- vault
@@ -522,7 +637,7 @@ function stepScriptedMove(ctx: MoveContext, pawn: Pawn) {
   s.tuck = Math.fround(Math.sin(Math.PI * u));
   setFeet(ctx, pawn, x, y, z, currentHeight(ctx.data.movement, s));
   if (u >= 1) {
-    s.mode = PawnMode.Walk;
+    s.mode = s.downHp > 0 ? PawnMode.Downed : PawnMode.Walk; // went down mid-vault: down once it lands
     s.tuck = 0;
     s.grounded = false;
     s.airPeakY = s.y;
@@ -920,4 +1035,9 @@ function roundState(s: PawnState) {
   s.moveT = Math.fround(s.moveT);
   s.tuck = Math.fround(s.tuck);
   s.airPeakY = Math.fround(s.airPeakY);
+  s.recoilPendP = Math.fround(s.recoilPendP);
+  s.recoilPendY = Math.fround(s.recoilPendY);
+  s.recoilRecP = Math.fround(s.recoilRecP);
+  s.recoilRecY = Math.fround(s.recoilRecY);
+  s.downHp = Math.fround(s.downHp);
 }

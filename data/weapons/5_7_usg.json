@@ -1,0 +1,41 @@
+{
+  "_doc": "5.7 USG (Thermite, Striker, Pulse). research/weapons.csv row 5_7_usg; class rules research/weapons_notes.md §4. Muzzle Brake: Thermite and Pulse; Striker's copy is weapons_notes.md Q6, so Striker is left out until verified.",
+  "_season": "Y11S3.1",
+  "_unverified": ["ammo.maxAmmo", "attachments.barrels", "damage.falloff", "destruction"],
+  "id": "5_7_usg",
+  "name": "5.7 USG",
+  "class": "handgun",
+  "fire": {
+    "kind": "hitscan",
+    "rpm": 494,
+    "modes": ["semi"],
+    "pellets": 1
+  },
+  "damage": {
+    "base": 42,
+    "falloff": [[12, 42], [14, 25]],
+    "penetration": "simple",
+    "head": "kill"
+  },
+  "ammo": {
+    "magazine": 20,
+    "plusOne": true,
+    "maxAmmo": 121
+  },
+  "reload": {
+    "kind": "magazine",
+    "tacticalS": 1.9,
+    "emptyS": 2.4
+  },
+  "adsS": 0.24,
+  "destruction": null,
+  "attachments": {
+    "sights": ["iron"],
+    "barrels": ["suppressor", { "id": "muzzle_brake", "operators": ["thermite", "pulse"] }],
+    "grips": [],
+    "underbarrel": ["laser"]
+  },
+  "recoil": {
+    "template": "handgun"
+  }
+}

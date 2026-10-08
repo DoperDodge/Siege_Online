@@ -1,0 +1,51 @@
+{
+  "_doc": "XK23 (Dokkaebi). research/weapons.csv row xk23; class rules research/weapons_notes.md §4. Y11S2 official: 49 dmg, 675 rpm, 35 × 5 = 175, extended barrel 54. Extended-barrel minimum 43 and ammo-refill 0.91 / 2.74 s community-measured.",
+  "_season": "Y11S3.1",
+  "_unverified": [
+    "damage.extendedBarrel",
+    "damage.penetration",
+    "reload.emptyS",
+    "reload.refillEmptyS",
+    "reload.refillTacticalS",
+    "reload.tacticalS"
+  ],
+  "id": "xk23",
+  "name": "XK23",
+  "class": "assault_rifle",
+  "fire": {
+    "kind": "hitscan",
+    "rpm": 675,
+    "modes": ["auto"],
+    "pellets": 1
+  },
+  "damage": {
+    "base": 49,
+    "falloff": [[25, 49], [35, 29]],
+    "penetration": "simple",
+    "head": "kill",
+    "extendedBarrel": { "base": 54, "falloff": [[25, 54], [35, 43]] }
+  },
+  "ammo": {
+    "magazine": 35,
+    "plusOne": true,
+    "maxAmmo": 175
+  },
+  "reload": {
+    "kind": "magazine",
+    "tacticalS": 3.35,
+    "emptyS": 3.5,
+    "refillTacticalS": 0.91,
+    "refillEmptyS": 2.74
+  },
+  "adsS": 0.52,
+  "destruction": "medium",
+  "attachments": {
+    "sights": ["iron", "nonmag", "magnified"],
+    "barrels": ["muzzle_brake", "compensator", "flash_hider", "suppressor", "extended_barrel"],
+    "grips": ["vertical", "angled", "horizontal"],
+    "underbarrel": ["laser"]
+  },
+  "recoil": {
+    "template": "assault_rifle"
+  }
+}

@@ -1,4 +1,4 @@
-import { ByteReader, ByteWriter, decodeError, decodeRoster, decodeWelcome, encodeCreateRoom, encodeHello, encodeJoinRoom, encodePing, ErrorCode, Msg, PROTOCOL_VERSION } from "@redmond/shared";
+import { ByteReader, ByteWriter, decodeError, decodeRoster, decodeWelcome, defaultLoadoutPick, encodeCreateRoom, encodeHello as hello, encodeJoinRoom, encodePickLoadout, encodePing, ErrorCode, loadGameData, Msg, PROTOCOL_VERSION } from "@redmond/shared";
 import { describe, expect, it } from "vitest";
 import {
   BAD_JOIN_BURST,
@@ -7,12 +7,16 @@ import {
   Connection,
   CREATE_BURST,
   EMPTY_ROOM_TTL_MS,
+  HEAVY_BURST,
   IpGate,
   LOBBY_TIMEOUT_MS,
   MAX_CONNECTIONS_PER_IP,
   RATE_BURST,
   RoomManager,
 } from "../src/lobby.js";
+
+/** A Hello from a page built with the same game data as the server. */
+const encodeHello = (name: string) => hello(name, loadGameData().dataHash);
 
 function fakeClient(rooms: RoomManager, clock: { t: number }, ip = "local", gate?: IpGate) {
   const sent: Uint8Array[] = [];
@@ -60,6 +64,24 @@ describe("lobby", () => {
     expect(rooms.count).toBe(0);
   });
 
+  it("creates a room on the level the page asks for (the Range Lab, with its dummies), and only levels it knows", async () => {
+    const clock = { t: 0 };
+    const rooms = new RoomManager(() => clock.t);
+    const a = fakeClient(rooms, clock);
+    a.conn.onMessage(encodeHello("Range"));
+    a.conn.onMessage(encodeCreateRoom("range_lab"));
+    await until(() => a.of(Msg.Welcome).length === 1);
+    expect(decodeWelcome(a.of(Msg.Welcome)[0]).levelId).toBe("range_lab");
+    const roster = decodeRoster(a.of(Msg.Roster).at(-1)!);
+    expect(roster.entries.filter((e) => e.kind === 1).length).toBe(loadGameData().levels.get("range_lab")!.dummies.length);
+    expect(rooms.players).toBe(1); // dummies aren't players
+    const bad = fakeClient(rooms, clock);
+    bad.conn.onMessage(encodeHello("Sneaky"));
+    bad.conn.onMessage(new ByteWriter().u8(Msg.CreateRoom).str("../../etc").finish());
+    expect(bad.closed).toEqual([{ code: Close.Protocol, reason: "bad message" }]);
+    expect(rooms.count).toBe(1);
+  });
+
   it("refuses an unknown code but stays in the lobby", async () => {
     const clock = { t: 0 };
     const rooms = new RoomManager(() => clock.t);
@@ -74,7 +96,7 @@ describe("lobby", () => {
 
   it("reports a full server instead of creating more rooms than allowed", async () => {
     const clock = { t: 0 };
-    const rooms = new RoomManager(() => clock.t, "movement_lab", 1);
+    const rooms = new RoomManager(() => clock.t, 1);
     const a = fakeClient(rooms, clock);
     const b = fakeClient(rooms, clock);
     for (const c of [a, b]) c.conn.onMessage(encodeHello("x"));
@@ -96,6 +118,17 @@ describe("lobby", () => {
     old.conn.onMessage(new ByteWriter().u8(Msg.Hello).u16(PROTOCOL_VERSION + 1).str("x").finish());
     expect(decodeError(old.of(Msg.Error)[0]).code).toBe(ErrorCode.BadVersion);
     expect(old.closed).toHaveLength(1);
+
+    // Same protocol, but a page built from other game data (a tab left open across a deploy).
+    const stale = fakeClient(rooms, clock);
+    stale.conn.onMessage(hello("x", (loadGameData().dataHash + 1) >>> 0));
+    expect(decodeError(stale.of(Msg.Error)[0])).toMatchObject({ code: ErrorCode.BadVersion, message: expect.stringMatching(/refresh/i) });
+    expect(stale.closed).toHaveLength(1);
+
+    // An older page's Hello (no data hash at all) still gets told to refresh, from the version alone.
+    const older = fakeClient(rooms, clock);
+    older.conn.onMessage(new ByteWriter().u8(Msg.Hello).u16(PROTOCOL_VERSION - 1).str("x").finish());
+    expect(decodeError(older.of(Msg.Error)[0]).code).toBe(ErrorCode.BadVersion);
 
     const truncated = fakeClient(rooms, clock);
     truncated.conn.onMessage(Uint8Array.of(Msg.Hello, 1)); // version cut short
@@ -170,6 +203,24 @@ describe("lobby", () => {
     clock.t += 10 * 60_000;
     gate.sweep();
     expect(gate.size).toBe(0);
+  });
+
+  it("loadout picks are rate-limited: a burst is taken, the rest dropped (not disconnected)", async () => {
+    const clock = { t: 0 };
+    const rooms = new RoomManager(() => clock.t);
+    const a = fakeClient(rooms, clock);
+    a.conn.onMessage(encodeHello("a"));
+    a.conn.onMessage(encodeCreateRoom());
+    await until(() => a.of(Msg.Welcome).length === 1);
+    const rosters = () => a.of(Msg.Roster).length;
+    const before = rosters();
+    const pick = encodePickLoadout(defaultLoadoutPick(loadGameData(), "brava"));
+    for (let i = 0; i < HEAVY_BURST + 5; i++) a.conn.onMessage(pick);
+    expect(rosters() - before).toBe(HEAVY_BURST); // each accepted pick is a new body (and a roster)
+    expect(a.closed).toEqual([]);
+    clock.t += 1000; // five more a second
+    a.conn.onMessage(pick);
+    expect(rosters() - before).toBe(HEAVY_BURST + 1);
   });
 
   it("cleans display names", () => {

@@ -1,17 +1,21 @@
 // A simulation instance: one physics world + level + pawns + controllers. The Node server runs one per
 // match room; the browser runs one for prediction and for offline Practice / Bot Training (PLAN §5).
 import { DT } from "./core/constants.js";
-import { rotateXZ, DEG } from "./core/math.js";
+import { clamp, forwardXZ, rotateXZ, DEG } from "./core/math.js";
 import { loadGameData, type GameData } from "./data/load.js";
 import { buildLevel, type BuiltLevel } from "./level/builder.js";
 import { initRapier, PLAYER_GROUPS, QUERY_SOLID, QUERY_STATIC as QUERY_STATIC_FILTER, refreshBroadPhase, type CharacterController, type Rapier, type World } from "./physics/rapier.js";
 import { capsuleFree, movementPrompt, poseCollider, stepPawn, type MoveContext, type MovementPrompt } from "./player/movement.js";
 import { initialPawnState, type Pawn, type PlayerController } from "./player/pawn.js";
+import { poseHitboxes } from "./player/hitboxes.js";
 import { capsuleDims, stanceDims } from "./player/stance.js";
 import { Btn, PawnMode, Stance, type InputCmd, type PawnState } from "./player/types.js";
+import { defaultLoadoutPick, resolveLoadout, type LoadoutPick, type ResolvedLoadout } from "./weapons/loadout.js";
+import type { SimEvent } from "./weapons/step.js";
+import { ticks } from "./weapons/ticks.js";
 
 /** Contextual hint for the HUD: "Space to mantle", "F to climb", "F to transfer" (Skopós camera). */
-export type Prompt = MovementPrompt | "transfer";
+export type Prompt = MovementPrompt | "transfer" | "revive";
 
 export class Sim {
   readonly pawns = new Map<number, Pawn>();
@@ -27,7 +31,15 @@ export class Sim {
     readonly data: GameData,
     readonly level: BuiltLevel,
   ) {
-    this.ctx = { R, world, cc, data, level };
+    this.ctx = { R, world, cc, data, level, events: [] };
+  }
+
+  /**
+   * What happened during the last step() call (shots, reloads): cleared when the next one starts, so the
+   * server reads it after every step (catch-up steps too) and a client only after a fresh prediction.
+   */
+  get events(): readonly SimEvent[] {
+    return this.ctx.events;
   }
 
   static async create(levelId: string, data: GameData = loadGameData()): Promise<Sim> {
@@ -59,11 +71,15 @@ export class Sim {
 
   /**
    * Create a controller and its pawn(s) at a level spawn. Skopós gets two shells side by side. `ids` lets a
-   * client mirror the server's controller and pawn ids for the player it predicts.
+   * client mirror the server's controller and pawn ids for the player it predicts. `pick` is the loadout
+   * (an invalid one becomes the operator's default, DECISIONS D-042); every shell carries the same one,
+   * each with its own ammo.
    */
-  addPlayer(name: string, operatorId: string, spawnIndex = 0, ids?: { controller: number; pawns: number[] }): PlayerController {
+  addPlayer(name: string, operatorId: string, spawnIndex = 0, ids?: { controller: number; pawns: number[] }, pick?: LoadoutPick, team?: number): PlayerController {
     const op = this.data.operators.get(operatorId);
     if (!op) throw new Error(`Unknown operator "${operatorId}"`);
+    const side = team ?? sideTeam(op.side);
+    const loadout = resolveLoadout(this.data, pick && pick.operator === operatorId ? pick : defaultLoadoutPick(this.data, operatorId)).loadout;
     if (ids && ids.pawns.length !== op.pawns) throw new Error(`${op.name} has ${op.pawns} pawn(s), got ${ids.pawns.length} ids`);
     for (const id of ids?.pawns ?? []) if (this.pawns.has(id)) throw new Error(`pawn id ${id} is already in use`);
     if (ids && this.controllers.has(ids.controller)) throw new Error(`controller id ${ids.controller} is already in use`);
@@ -80,6 +96,7 @@ export class Sim {
       swapT: 0,
       swapCooldown: 0,
       prevButtons: 0,
+      team: side,
     };
     // Check every shell's spot before creating any, so a failed join leaves nothing behind.
     const m = this.data.movement;
@@ -115,7 +132,7 @@ export class Sim {
       }
     }
     for (const [i, [px, pz]] of spots.entries()) {
-      const pawn = this.spawnPawn(operatorId, px, spawn.pos[1], pz, yaw, controller.id, ids?.pawns[i]);
+      const pawn = this.spawnPawn(operatorId, px, spawn.pos[1], pz, yaw, controller.id, ids?.pawns[i], loadout, side);
       if (i > 0) pawn.state.stance = pawn.state.stanceFrom = Stance.Crouch; // idle shells crouch behind their shield
       controller.pawnIds.push(pawn.id);
     }
@@ -130,7 +147,17 @@ export class Sim {
     return id;
   }
 
-  spawnPawn(operatorId: string, x: number, y: number, z: number, yaw: number, ownerId: number | null = null, id?: number): Pawn {
+  spawnPawn(
+    operatorId: string,
+    x: number,
+    y: number,
+    z: number,
+    yaw: number,
+    ownerId: number | null = null,
+    id?: number,
+    loadout: ResolvedLoadout | null = null,
+    team = 0,
+  ): Pawn {
     const m = this.data.movement;
     const op = this.data.operators.get(operatorId);
     const maxHp = m.healthByRating[String(op?.healthRating ?? 2) as "1" | "2" | "3"];
@@ -142,7 +169,10 @@ export class Sim {
     // Float32-exact like every other state, and the collider placed from that state the same way a client
     // places it from the correction it gets for this body, so both start bit-identical.
     const t = collider.translation();
-    const pawn: Pawn = { id: pawnId, operatorId, ownerId, collider, state: initialPawnState(t.x, Math.fround(y + 0.02), t.z, Math.fround(yaw), maxHp) };
+    const pawn: Pawn = { id: pawnId, operatorId, ownerId, collider, loadout, team, life: 0, state: initialPawnState(t.x, Math.fround(y + 0.02), t.z, Math.fround(yaw), maxHp, loadout) };
+    // Recoil randomness: any non-zero start works for xorshift; a server reseeds it from its room seed and
+    // the client gets the value with the body's first correction.
+    pawn.state.rng = Math.imul(pawnId, 0x9e3779b1) >>> 0 || 1;
     poseCollider(this.ctx, pawn);
     this.pawns.set(pawn.id, pawn);
     refreshBroadPhase(this.world); // a new collider is invisible to queries until the next refresh
@@ -153,10 +183,10 @@ export class Sim {
    * A stand-in for a pawn simulated somewhere else (another player, as seen by a client): it blocks
    * movement like any pawn, but step() never moves it; setPawnState() places it.
    */
-  addProxy(id: number, operatorId: string, state: PawnState): Pawn {
+  addProxy(id: number, operatorId: string, state: PawnState, loadout: ResolvedLoadout | null = null, team = 0): Pawn {
     if (this.pawns.has(id)) throw new Error(`pawn id ${id} is already in use`);
     const collider = this.world.createCollider(this.R.ColliderDesc.capsule(0.5, 0.3).setCollisionGroups(PLAYER_GROUPS));
-    const pawn: Pawn = { id: this.claimId(id), operatorId, ownerId: null, collider, state: { ...state }, proxy: true };
+    const pawn: Pawn = { id: this.claimId(id), operatorId, ownerId: null, collider, loadout, team, life: 0, state: { ...state }, proxy: true };
     this.pawns.set(id, pawn);
     poseCollider(this.ctx, pawn);
     refreshBroadPhase(this.world);
@@ -178,9 +208,45 @@ export class Sim {
   removePawn(id: number): void {
     const pawn = this.pawns.get(id);
     if (!pawn) return;
+    this.cutReviveLinks(pawn);
     this.world.removeCollider(pawn.collider, false);
     this.pawns.delete(id);
     refreshBroadPhase(this.world);
+  }
+
+  /**
+   * A body leaves, respawns or jumps (a lab tool): any revive it was part of ends, on both sides. Both
+   * bodies' own records go (the reviver's progress, the downed body's "being revived").
+   */
+  cutReviveLinks(pawn: Pawn): void {
+    for (const p of this.pawns.values()) {
+      if (p === pawn) continue;
+      let cut = false;
+      if (p.state.revivedBy === pawn.id) {
+        p.state.revivedBy = 0;
+        cut = true;
+      }
+      if (p.state.reviveTarget === pawn.id) {
+        p.state.reviveTarget = 0;
+        p.state.reviveTicks = 0;
+        cut = true;
+      }
+      if (cut) this.onReviveCut?.(p);
+    }
+    pawn.state.reviveTarget = 0;
+    pawn.state.reviveTicks = 0;
+    pawn.state.revivedBy = 0;
+  }
+
+  /**
+   * Server: told of each body whose revive was cut by something another body did (it left, respawned,
+   * jumped, went down or died). That body's owner couldn't predict it, so the room corrects them.
+   */
+  onReviveCut: ((pawn: Pawn) => void) | null = null;
+
+  /** A body its player's buttons don't reach this tick (no input, or driven idle on the shell camera) lets go of a revive. */
+  private letGoOfRevive(pawn: Pawn) {
+    if (pawn.state.reviveTarget !== 0) this.endRevive(pawn, this.pawns.get(pawn.state.reviveTarget), false);
   }
 
   /** Remove a controller and every pawn it owns (a player leaving). */
@@ -210,6 +276,96 @@ export class Sim {
     return c.possessedPawnId;
   }
 
+  /**
+   * Reviving (Phase 3 M7; DECISIONS D-049): holding Interact beside a downed teammate, facing them, picks
+   * them up after revive.seconds with revive.revivedHp. The progress lives on the reviver; the downed body
+   * stops bleeding (and crawling) while it lasts. Letting go, losing reach or either body changing state
+   * cancels it. Returns true while a revive is under way.
+   */
+  private updateRevive(pawn: Pawn, input: InputCmd): boolean {
+    const s = pawn.state;
+    const held = (input.buttons & Btn.Interact) !== 0;
+    if (s.reviveTarget !== 0) {
+      const t = this.pawns.get(s.reviveTarget);
+      if (!held || !t || t.state.mode !== PawnMode.Downed || s.mode !== PawnMode.Walk || this.reviveDistance(pawn, t) === null) {
+        this.endRevive(pawn, t, false);
+        return false;
+      }
+      s.reviveTicks = Math.min(0xffff, s.reviveTicks + 1);
+      t.state.revivedBy = pawn.id;
+      if (s.reviveTicks < ticks(this.data.combat.revive.seconds)) return true;
+      this.endRevive(pawn, t, true);
+      return false;
+    }
+    if (!held || s.mode !== PawnMode.Walk || !s.grounded || s.meleeTicks > 0) return false;
+    const t = this.reviveCandidate(pawn);
+    if (!t) return false;
+    s.reviveTarget = t.id;
+    s.reviveTicks = 1;
+    t.state.revivedBy = pawn.id;
+    this.ctx.events.push({ kind: "reviveStart", reviverPawn: pawn.id, targetPawn: t.id });
+    return true;
+  }
+
+  private endRevive(reviver: Pawn, target: Pawn | undefined, completed: boolean) {
+    reviver.state.reviveTarget = 0;
+    reviver.state.reviveTicks = 0;
+    if (target && target.state.revivedBy === reviver.id) {
+      target.state.revivedBy = 0;
+      if (completed) {
+        // Up again with a little health, still lying down; going down a second time is death.
+        target.state.mode = PawnMode.Walk;
+        target.state.hp = this.data.combat.revive.revivedHp;
+        target.state.downHp = 0;
+        target.state.invulnTicks = 0;
+      }
+    }
+    this.ctx.events.push({ kind: "reviveEnd", reviverPawn: reviver.id, targetPawn: target?.id ?? 0, completed });
+  }
+
+  /** The downed teammate a reviver would pick up now: the nearest in reach (lowest id on a tie), or null. */
+  reviveCandidate(reviver: Pawn): Pawn | null {
+    let best: Pawn | null = null;
+    let bestD = Infinity;
+    for (const t of this.pawns.values()) {
+      if (t === reviver || t.team !== reviver.team || t.state.mode !== PawnMode.Downed) continue;
+      if (t.state.revivedBy !== 0 && t.state.revivedBy !== reviver.id) continue; // someone else is on it
+      const d = this.reviveDistance(reviver, t);
+      if (d !== null && (d < bestD || (d === bestD && best !== null && t.id < best.id))) {
+        best = t;
+        bestD = d;
+      }
+    }
+    return best;
+  }
+
+  /**
+   * Horizontal distance from the reviver to the downed body's torso, if within reach, height and the
+   * facing cone (data/combat.json `revive`, placeholders); otherwise null.
+   */
+  private reviveDistance(reviver: Pawn, target: Pawn): number | null {
+    const rv = this.data.combat.revive;
+    const r = reviver.state;
+    if (Math.abs(target.state.y - r.y) > rv.maxHeightDiff) return null;
+    const torso = poseHitboxes(this.data.movement, this.data.hitboxes, target.state).find((h) => h.part === "torso");
+    if (!torso) return null;
+    const ax = torso.a[0];
+    const az = torso.a[2];
+    const dx = torso.b[0] - ax;
+    const dz = torso.b[2] - az;
+    const l2 = dx * dx + dz * dz;
+    const u = l2 > 1e-12 ? clamp(((r.x - ax) * dx + (r.z - az) * dz) / l2, 0, 1) : 0;
+    const px = ax + dx * u - r.x;
+    const pz = az + dz * u - r.z;
+    const dist = Math.hypot(px, pz);
+    if (dist > rv.reach) return null;
+    if (dist > 1e-3) {
+      const [fx, fz] = forwardXZ(r.yaw);
+      if ((px * fx + pz * fz) / dist < Math.cos(rv.facingDeg * DEG)) return null; // not facing them
+    }
+    return dist;
+  }
+
   /** Which contextual prompt the player should see right now. */
   prompt(controllerId: number): Prompt {
     const c = this.controllers.get(controllerId);
@@ -217,21 +373,37 @@ export class Sim {
     if (c.swapPhase) return null;
     if (c.shellCam) return "transfer";
     const pawn = this.pawns.get(c.possessedPawnId);
-    return pawn ? movementPrompt(this.ctx, pawn) : null;
+    if (!pawn) return null;
+    if (pawn.state.reviveTarget !== 0) return null; // the revive gauge shows instead
+    if (pawn.state.mode === PawnMode.Walk && this.reviveCandidate(pawn)) return "revive"; // before ladders (D-049)
+    return movementPrompt(this.ctx, pawn);
   }
 
-  /** Put a pawn back at a spawn with full health (lab / respawn tooling). */
-  respawn(pawnId: number, spawnIndex = 0): void {
+  /**
+   * Put a pawn back at a spawn (or at `at`: a Range Lab dummy's own spot) with full health, ammo and nothing
+   * half done; the same id in a new life (lab / respawn tooling).
+   */
+  respawn(pawnId: number, spawnIndex = 0, at?: { pos: readonly [number, number, number]; yawDeg: number }): void {
     const pawn = this.pawns.get(pawnId);
     if (!pawn) return;
-    const spawn = this.level.def.spawns[spawnIndex % this.level.def.spawns.length];
+    this.cutReviveLinks(pawn);
+    const spawn = at ?? this.level.def.spawns[spawnIndex % this.level.def.spawns.length];
     const m = this.data.movement;
     const { r, hh } = capsuleDims(m.stance.stand.height, m.stance.collisionRadius);
     pawn.collider.setRadius(r);
     pawn.collider.setHalfHeight(hh);
     pawn.collider.setTranslation({ x: spawn.pos[0], y: spawn.pos[1] + hh + r + 0.02, z: spawn.pos[2] });
-    pawn.state = initialPawnState(spawn.pos[0], spawn.pos[1] + 0.02, spawn.pos[2], Math.fround(spawn.yawDeg * DEG), pawn.state.maxHp);
+    pawn.state = { ...initialPawnState(spawn.pos[0], spawn.pos[1] + 0.02, spawn.pos[2], Math.fround(spawn.yawDeg * DEG), pawn.state.maxHp, pawn.loadout), rng: pawn.state.rng };
+    pawn.life++;
     poseCollider(this.ctx, pawn); // also makes a dead body solid again
+    refreshBroadPhase(this.world);
+  }
+
+  /** After changing a pawn's state from outside a step (damage on the server): place its collider to match. */
+  refreshPawn(pawnId: number): void {
+    const pawn = this.pawns.get(pawnId);
+    if (!pawn) return;
+    poseCollider(this.ctx, pawn); // a dead body stops blocking at once
     refreshBroadPhase(this.world);
   }
 
@@ -266,8 +438,17 @@ export class Sim {
       mode: PawnMode.Walk,
       ladder: -1,
       airPeakY: Math.fround(y + 0.02),
+      // Back on your feet: no longer down, and nothing half done carries over.
+      downHp: 0,
+      invulnTicks: 0,
+      meleeTicks: 0,
     });
-    if (pawn.state.hp === 0) pawn.state.hp = pawn.state.maxHp;
+    this.cutReviveLinks(pawn);
+    if (pawn.state.hp === 0) {
+      pawn.state.hp = pawn.state.maxHp; // a dead or downed body comes back: a new life
+      pawn.state.downs = 0;
+      pawn.life++;
+    }
     poseCollider(this.ctx, pawn); // also makes a dead body solid again
     refreshBroadPhase(this.world);
   }
@@ -281,6 +462,7 @@ export class Sim {
     // `only`: step just these controllers and their pawns; everyone else stays put. The server uses it
     // to hold a player still while their next input hasn't arrived, and for an extra catch-up step
     // (a second queued input after a network stall, which doesn't advance the tick counter).
+    this.ctx.events.length = 0;
     const drive = new Map<number, InputCmd>();
     // Pawns driven without real buttons this tick (the body left behind on the shell camera, the shell
     // being looked through): like the no-input case below, their held-button memory is kept.
@@ -318,17 +500,28 @@ export class Sim {
       const input = drive.get(pawn.id);
       if (input) {
         const held = pawn.state.prevButtons;
-        stepPawn(this.ctx, pawn, input);
+        let cmd = input;
+        if (idleDriven.has(pawn.id)) this.letGoOfRevive(pawn);
+        else if (this.updateRevive(pawn, input)) {
+          // Reviving holds you in place (placeholder), and the held key never reaches a ladder.
+          cmd = { ...input, forward: 0, strafe: 0, buttons: input.buttons & ~Btn.Interact };
+        }
+        // A body driven without its player's buttons (left behind on the camera, or being looked
+        // through) has its weapon parked: nothing it was doing carries on unseen.
+        stepPawn(this.ctx, pawn, cmd, !idleDriven.has(pawn.id));
         refreshBroadPhase(this.world); // the next pawn must see this one where it now is
         if (idleDriven.has(pawn.id)) pawn.state.prevButtons = held;
+        else if (cmd !== input) pawn.state.prevButtons |= input.buttons & Btn.Interact; // still held: not a fresh press later
         continue;
       }
       const owner = pawn.ownerId !== null ? this.controllers.get(pawn.ownerId) : undefined;
       const idleShell = owner !== undefined && owner.pawnIds.length > 1 && owner.possessedPawnId !== pawn.id;
       // No input this tick (idle shell, or a dropped packet): stand still, and keep the held-button
-      // memory so keys still held when input resumes don't count as fresh presses.
+      // memory so keys still held when input resumes don't count as fresh presses. The body the player
+      // is in keeps its weapon running (a reload goes on through a lag spike); an idle shell's is parked.
       const held = pawn.state.prevButtons;
-      stepPawn(this.ctx, pawn, idleInput(pawn, idleShell ? Stance.Crouch : pawn.state.stance));
+      this.letGoOfRevive(pawn);
+      stepPawn(this.ctx, pawn, idleInput(pawn, idleShell ? Stance.Crouch : pawn.state.stance), !idleShell);
       refreshBroadPhase(this.world);
       pawn.state.prevButtons = held;
     }
@@ -389,7 +582,10 @@ export class Sim {
   }
 }
 
-function idleInput(pawn: Pawn, stance: Stance = pawn.state.stance): InputCmd {
+/** Teams until match modes assign them (Phase 6): attackers 0, defenders 1. */
+export const sideTeam = (side: "attacker" | "defender") => (side === "attacker" ? 0 : 1);
+
+export function idleInput(pawn: Pawn, stance: Stance = pawn.state.stance): InputCmd {
   const s = pawn.state;
   return { seq: 0, forward: 0, strafe: 0, yaw: s.yaw, pitch: s.pitch, buttons: 0, stance, lean: 0 };
 }

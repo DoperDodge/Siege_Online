@@ -5,20 +5,24 @@ import { describe, expect, it } from "vitest";
 import {
   Btn,
   ByteReader,
+  DEG,
   ClientSession,
   decodeInput,
   decodeLabTool,
-  decodePickOperator,
+  decodePickLoadout,
+  defaultLoadoutPick,
   decodePing,
   DT,
   encodeError,
   encodeLabTool,
-  encodePickOperator,
+  encodePickLoadout,
+  loadGameData,
   ErrorCode,
   MAX_HOLD_TICKS,
   Msg,
   Room,
   Stance,
+  viewDir,
   type InputCmd,
   type ShotResult,
 } from "../src/index.js";
@@ -43,7 +47,7 @@ async function harness(operators: string[]) {
       else if (b[0] === Msg.Resync) room.onResync(c.id);
       else if (b[0] === Msg.Ping) room.onPing(c.id, decodePing(r).clientTime);
       else if (b[0] === Msg.LabTool) room.onLabTool(c.id, decodeLabTool(r));
-      else if (b[0] === Msg.PickOperator) room.pickOperator(c.id, decodePickOperator(r).operatorId);
+      else if (b[0] === Msg.PickLoadout) room.pickLoadout(c.id, decodePickLoadout(r));
     }
   };
   const toClients = () => {
@@ -97,7 +101,7 @@ describe("room and client session", () => {
     // Sprinting, with ~6 ticks of inputs still on their way when the pick reaches the server.
     a.holdUp = true;
     h.ticks(6, [{ forward: 1, buttons: Btn.Sprint }]);
-    a.toServer.unshift(encodePickOperator("fuze"));
+    a.toServer.unshift(encodePickLoadout(defaultLoadoutPick(loadGameData(), "fuze")));
     h.toServer(a);
     const fresh = h.room.sim.pawns.get(h.room.roster()[0].pawnIds[0])!.state;
     const spawn = { x: fresh.x, z: fresh.z };
@@ -124,27 +128,34 @@ describe("room and client session", () => {
     expect(pawn().y).toBeLessThan(y0 - 2.5); // fell (and landed)
   });
 
-  it("a test shot rides on the input: it's judged with that input's view, and claimed view times are bounded", async () => {
+  it("a shot rides on the input that fired it: judged with that input's view, and claimed view times are bounded", async () => {
     const h = await harness(["sledge", "mute"]);
     const [a, b] = h.clients;
     a.toServer.push(encodeLabTool({ kind: "teleport", x: 0, y: 0, z: 4, yawDeg: 180 }));
     b.toServer.push(encodeLabTool({ kind: "teleport", x: 0, y: 0, z: 12, yawDeg: 0 }));
-    h.ticks(40, [{ yaw: Math.PI, pitch: -0.05 }]);
-    h.tick([{ yaw: Math.PI, pitch: -0.05, buttons: Btn.Fire }]);
-    h.ticks(2, [{ yaw: Math.PI, pitch: -0.05 }]);
+    // Aiming down sights (a rifle's ADS spread is 0): the shot goes exactly where the crosshair is.
+    const aim = { yaw: Math.PI, pitch: -0.05, buttons: Btn.Ads };
+    h.ticks(40, [aim]);
+    h.tick([{ ...aim, buttons: Btn.Ads | Btn.Fire }]);
+    h.ticks(2, [aim]);
     expect(a.shots).toHaveLength(1);
     expect(a.shots[0].hit?.pawnId).toBe(b.session.ctrl!.possessedPawnId);
     expect(a.shots[0].dir[2]).toBeGreaterThan(0.99); // along the input's view (+Z), not some older one
-    // Holding the button doesn't fire again; looking away and firing misses.
-    h.ticks(10, [{ yaw: Math.PI, pitch: -0.05, buttons: Btn.Fire }]);
-    expect(a.shots).toHaveLength(1);
-    h.ticks(2, [{ yaw: 0 }]);
+    // Sledge's L85A2 is automatic: once the last shot's cadence has passed, holding the trigger for N ticks
+    // fires ⌈N · 670 / 3840⌉ shots (one per 5.7 ticks), every one judged; then looking away and firing misses.
+    h.ticks(8, [{ yaw: Math.PI, pitch: -0.05 }]);
+    h.ticks(12, [{ yaw: Math.PI, pitch: -0.05, buttons: Btn.Fire }]);
+    h.ticks(2, [{ yaw: Math.PI, pitch: -0.05 }]);
+    expect(a.shots).toHaveLength(1 + Math.ceil((12 * 670) / 3840));
+    h.ticks(6, [{ yaw: 0 }]); // turn away (and past the fire interval: a click inside it is dropped)
+    const before = a.shots.length;
     h.tick([{ yaw: 0, buttons: Btn.Fire }]);
     h.tick();
-    expect(a.shots).toHaveLength(2);
-    expect(a.shots[1].hit).toBeNull();
-    // A client claiming it draws others far in the past is held to the interpolation ceiling (150 ms ≈
-    // 9.6 ticks behind its newest snapshot), well inside the 200 ms (12.8-tick) rewind cap.
+    expect(a.shots).toHaveLength(before + 1);
+    expect(a.shots.at(-1)!.hit).toBeNull();
+    h.ticks(8); // past the rifle's fire interval
+    // A client claiming it draws others far in the past is held to the interpolation ceiling plus a frame's
+    // age (150 ms ≈ 9.6 ticks, + 4, behind its newest snapshot), inside the 250 ms (16-tick) rewind cap.
     a.holdUp = true;
     h.ticks(10);
     const now = h.room.sim.tick;
@@ -153,8 +164,9 @@ describe("room and client session", () => {
     h.room.onInput(a.id, { cmd, predictedHash: 0, epoch: a.session.epoch, snapTick: now & 0xffff, viewBackQ8: 0xffff });
     h.room.step();
     for (const b of a.toClient.splice(0)) a.session.handle(b);
-    expect(a.shots).toHaveLength(3);
-    expect(a.shots[2].serverTick - a.shots[2].rewoundTick).toBeLessThan(11.5);
+    expect(a.shots).toHaveLength(before + 2);
+    expect(a.shots.at(-1)!.serverTick - a.shots.at(-1)!.rewoundTick).toBeGreaterThan(13.5);
+    expect(a.shots.at(-1)!.serverTick - a.shots.at(-1)!.rewoundTick).toBeLessThan(14.6);
   });
 
   it("trickling one input every 16 ticks doesn't slow a body down either", async () => {
@@ -192,7 +204,7 @@ describe("room and client session", () => {
     // And straight away, standing still (the spawn state must be exactly what the correction carries).
     for (const op of ["fuze", "skopos", "mute"]) {
       const start = h.room.memberInfo(a.id)!.corrections;
-      a.toServer.push(encodePickOperator(op));
+      a.toServer.push(encodePickLoadout(defaultLoadoutPick(loadGameData(), op)));
       h.ticks(64);
       expect(h.room.memberInfo(a.id)!.corrections - start, op).toBe(1);
     }
@@ -224,6 +236,133 @@ describe("room and client session", () => {
     for (const b of a.toClient.splice(0)) a.session.handle(b);
     expect(a.shots).toHaveLength(1);
     expect(a.shots[0].serverTick - a.shots[0].rewoundTick).toBeLessThanOrEqual(4 + 2); // least lag (≤ 2) + slack
+  });
+
+  it("spraying, reloading, swapping and switching fire modes are predicted exactly: no corrections", async () => {
+    const h = await harness(["sledge", "skopos"]);
+    const [a, b] = h.clients;
+    const start = [a, b].map((c) => h.room.memberInfo(c.id)!.corrections);
+    let seed = 3;
+    const rnd = () => (seed = (seed * 1103515245 + 12345) >>> 0) / 2 ** 32;
+    let cmds: Cmd[] = [];
+    for (let i = 0; i < 640; i++) {
+      if (i % 10 === 0) {
+        cmds = [0, 1].map(() => {
+          const r = rnd();
+          return {
+            buttons: r < 0.5 ? Btn.Fire : r < 0.6 ? Btn.Reload : r < 0.65 ? Btn.Swap : r < 0.7 ? Btn.FireMode : r < 0.8 ? Btn.Sprint : 0,
+            forward: r >= 0.7 && r < 0.8 ? 1 : 0,
+            yaw: rnd() * 6,
+          };
+        });
+      }
+      h.tick(cmds);
+    }
+    expect([a, b].map((c) => h.room.memberInfo(c.id)!.corrections - start[[a, b].indexOf(c)])).toEqual([0, 0]);
+    // Client and server agree on the ammo too.
+    for (const c of [a, b]) {
+      const server = h.room.sim.pawns.get(c.session.ctrl!.possessedPawnId)!.state;
+      expect([own(c).loaded0, own(c).reserve0, own(c).loaded1, own(c).reserve1]).toEqual([server.loaded0, server.reserve0, server.loaded1, server.reserve1]);
+    }
+    expect(a.shots.length + b.shots.length).toBeGreaterThan(20);
+  });
+
+  it("recoil the client carries into its view is predicted exactly; hip-fire pellets land inside the shot's cone", async () => {
+    const h = await harness(["sledge"]);
+    const [a] = h.clients;
+    const start = h.room.memberInfo(a.id)!.corrections;
+    const angle = (d: number[], v: number[]) => Math.acos(Math.min(1, d[0] * v[0] + d[1] * v[1] + d[2] * v[2]));
+    const off: number[] = [];
+    // Spray from the hip, each input carrying the view the last tick's kick left (what the lab does).
+    for (let i = 0; i < 300; i++) {
+      const view = { yaw: own(a).yaw, pitch: own(a).pitch };
+      const before = a.shots.length;
+      h.tick([{ ...view, buttons: i % 60 < 30 ? Btn.Fire : i % 60 === 45 ? Btn.Reload : 0 }]);
+      for (const shot of a.shots.slice(before)) off.push(angle(shot.dir, viewDir(view.yaw, view.pitch)));
+    }
+    expect(h.room.memberInfo(a.id)!.corrections - start).toBe(0);
+    expect(own(a).pitch).toBeGreaterThan(2 * DEG); // the view really climbed
+    const hip = h.room.sim.data.gunplay.spread.assault_rifle.hipDeg * DEG;
+    expect(off.length).toBeGreaterThan(20);
+    for (const o of off) expect(o).toBeLessThan(hip + 1e-3); // (inputs are quantized to ~1e-4 rad)
+    const mean = off.reduce((x, y) => x + y, 0) / off.length;
+    expect(mean / hip).toBeGreaterThan(0.4); // spread over the cone, not on the crosshair
+    expect(mean / hip).toBeLessThan(0.9);
+  });
+
+  it("a forged input stream can't beat the fire rate or create ammo: the server's sim decides every shot", async () => {
+    const h = await harness(["lesion"]); // SIX12 SD: 218 rpm (one shot per 17.6 ticks), 6-round cylinder
+    const [a] = h.clients;
+    a.holdUp = true; // we write the inputs ourselves
+    a.toServer.length = 0;
+    let seq = h.room.memberInfo(a.id)!.lastSeq;
+    for (let i = 0; i < 150; i++) {
+      // Clicking every other tick: 75 clicks.
+      const cmd = { seq: ++seq & 0xffff, forward: 0, strafe: 0, yaw: 0, pitch: 0, buttons: i % 2 === 0 ? Btn.Fire : 0, stance: Stance.Stand, lean: 0 as const };
+      h.room.onInput(a.id, { cmd, predictedHash: 0, epoch: a.session.epoch, snapTick: h.room.sim.tick & 0xffff, viewBackQ8: 0 });
+      h.room.step();
+      for (const m of a.toClient.splice(0)) a.session.handle(m);
+    }
+    // Six shots (the cylinder), each at least ⌊3840 / 218⌋ = 17 ticks after the last; then it's empty and
+    // the next click starts a reload instead of firing.
+    expect(a.shots.length).toBe(6);
+    for (let i = 1; i < a.shots.length; i++) expect(a.shots[i].serverTick - a.shots[i - 1].serverTick).toBeGreaterThanOrEqual(17);
+    const server = h.room.sim.pawns.get(a.session.ctrl!.possessedPawnId)!.state;
+    expect(server.loaded0).toBe(0);
+    expect(server.wAct).toBe(2); // reloading
+  });
+
+  it("a loadout pick: the roster carries it, the client predicts with it (one correction), its timings hold", async () => {
+    const h = await harness(["sledge", "mute"]);
+    const [a, b] = h.clients;
+    const start = h.room.memberInfo(a.id)!.corrections;
+    const pick = {
+      operator: "brava",
+      primary: { weapon: "para_308", sight: "magnified" as const, barrel: null, grip: "angled" as const, underbarrel: null },
+      secondary: { weapon: "usp40", sight: null, barrel: "suppressor" as const, grip: null, underbarrel: null },
+      gadgets: ["claymore"],
+    };
+    a.toServer.push(encodePickLoadout(pick));
+    h.ticks(16);
+    const mine = b.session.roster.find((e) => e.controllerId === a.session.ctrl!.id)!;
+    expect(mine.loadout.primary).toEqual(pick.primary);
+    expect(mine.loadout.secondary).toEqual({ ...pick.secondary, sight: "iron" });
+    expect(mine.team).toBe(0); // Brava attacks
+    expect(a.session.sim!.pawns.get(a.session.ctrl!.possessedPawnId)!.loadout!.weapons[0].reload).toMatchObject({ tacticalTicks: 133 });
+    expect(h.room.memberInfo(a.id)!.corrections - start).toBe(1);
+    // Fire a little, then a tactical reload with the angled grip: 2.6 s × 0.8 = 133 ticks, all predicted.
+    h.ticks(6, [{ buttons: Btn.Fire }]);
+    h.ticks(10);
+    h.tick([{ buttons: Btn.Reload }]);
+    h.ticks(132);
+    expect(own(a).wAct).toBe(2); // still reloading on the 132nd tick
+    h.tick();
+    expect(own(a).wAct).toBe(0);
+    expect(own(a).loaded0).toBe(31);
+    expect(h.room.memberInfo(a.id)!.corrections - start).toBe(1);
+  });
+
+  it("an invalid pick gets the operator's default, and the roster says so", async () => {
+    const h = await harness(["sledge"]);
+    const [a] = h.clients;
+    // Sledge doesn't carry the PARA-308.
+    a.toServer.push(encodePickLoadout({ ...defaultLoadoutPick(loadGameData(), "sledge"), primary: { weapon: "para_308", sight: null, barrel: null, grip: null, underbarrel: null } }));
+    h.ticks(16);
+    const mine = a.session.roster.find((e) => e.controllerId === a.session.ctrl!.id)!;
+    expect(mine.loadout).toEqual(defaultLoadoutPick(loadGameData(), "sledge"));
+    expect(a.session.ready).toBe(true);
+  });
+
+  it("the team tool respawns you on the other team", async () => {
+    const h = await harness(["sledge"]);
+    const [a] = h.clients;
+    const old = a.session.ctrl!.possessedPawnId;
+    a.toServer.push(encodeLabTool({ kind: "team", team: 1 }));
+    h.ticks(16);
+    expect(a.session.roster[0].team).toBe(1);
+    expect(a.session.ctrl!.team).toBe(1);
+    expect(a.session.ctrl!.possessedPawnId).not.toBe(old);
+    expect(h.room.sim.pawns.get(a.session.ctrl!.possessedPawnId)!.team).toBe(1);
   });
 
   it("Skopós can't shoot while looking through a shell's camera", async () => {

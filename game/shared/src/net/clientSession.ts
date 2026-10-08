@@ -5,7 +5,10 @@ import { TICK_HZ } from "../core/constants.js";
 import type { PlayerController } from "../player/pawn.js";
 import { quantizeInput, type InputCmd, type PawnState } from "../player/types.js";
 import { Sim } from "../sim.js";
+import type { SimEvent } from "../weapons/step.js";
+import { resolveLoadout, type ResolvedLoadout } from "../weapons/loadout.js";
 import { ByteReader, ProtocolError } from "./bytes.js";
+import { decodeEvents, type GameEvent } from "./events.js";
 import {
   decodeError,
   decodePong,
@@ -37,7 +40,21 @@ export interface ClientSessionOptions {
   onWelcome?(roomCode: string): void;
   onRoster?(entries: RosterEntry[], you: number): void;
   onShot?(shot: ShotResult): void;
+  /** What the server judged this tick: shots others fired, our hits, damage we took, kills (net/events.ts). */
+  onEvents?(tick: number, events: GameEvent[]): void;
+  /** What our own fresh prediction did this tick (shots, reloads): instant feedback, never replayed. */
+  onLocalEvents?(events: readonly SimEvent[]): void;
   onError?(code: number, message: string): void;
+  /**
+   * A message held while the level loaded threw when it was replayed after (one arriving live throws from
+   * handle() instead). Without this, the replay's error is rethrown.
+   */
+  onBadMessage?(error: unknown): void;
+  /**
+   * Debugging aid (tests): remember what we predicted for each input, and when a correction disagrees
+   * with it, record which fields differed (`mispredictions`).
+   */
+  trackMispredictions?: boolean;
 }
 
 interface Sample {
@@ -59,12 +76,16 @@ export class ClientSession {
   /** Current remote interpolation delay. */
   interpDelayMs = 100;
   readonly stats = { snapshots: 0, corrections: 0, resyncs: 0, bytesIn: 0, bytesOut: 0, replayedTicks: 0 };
+  /** With `trackMispredictions`: corrections that disagreed with our prediction, and how (most recent last). */
+  readonly mispredictions: { seq: number; diffs: string[] }[] = [];
+  private readonly predicted = new Map<number, PawnState[]>();
 
   private readonly decoder = new SnapshotDecoder();
   private pending: { seq: number; cmd: InputCmd }[] = [];
   private seq = 0;
   private readonly remotes = new Map<number, Sample[]>();
-  private readonly operatorOf = new Map<number, string>();
+  /** Each remote pawn's operator, loadout and team, from the roster (for its proxy). */
+  private readonly rosterOf = new Map<number, { operatorId: string; loadout: ResolvedLoadout; team: number }>();
   private lastSnapTick = 0;
   private lastSnapAt = 0;
   private lastArrival = 0;
@@ -119,8 +140,14 @@ export class ClientSession {
           this.opts.onWelcome?.(w.roomCode);
           const queued = this.backlog;
           this.backlog = [];
-          for (const b of queued) this.handle(b);
-          this.markLoaded();
+          try {
+            for (const b of queued) this.handle(b);
+          } catch (e) {
+            if (!this.opts.onBadMessage) throw e;
+            this.opts.onBadMessage(e);
+          } finally {
+            this.markLoaded(); // a throw while replaying must not leave the page waiting forever
+          }
         });
         return;
       }
@@ -141,6 +168,11 @@ export class ClientSession {
       case Msg.ShotResult:
         this.opts.onShot?.(decodeShotResult(r));
         return;
+      case Msg.Events: {
+        const { tick, events } = decodeEvents(r);
+        this.opts.onEvents?.(tick, events);
+        return;
+      }
       case Msg.Error: {
         const e = decodeError(r);
         this.opts.onError?.(e.code, e.message);
@@ -159,8 +191,11 @@ export class ClientSession {
   private applyRoster(entries: RosterEntry[], you: number) {
     const sim = this.sim!;
     this.roster = entries;
-    this.operatorOf.clear();
-    for (const e of entries) for (const id of e.pawnIds) this.operatorOf.set(id, e.operatorId);
+    this.rosterOf.clear();
+    for (const e of entries) {
+      const loadout = resolveLoadout(sim.data, e.loadout).loadout;
+      for (const id of e.pawnIds) this.rosterOf.set(id, { operatorId: e.operatorId, loadout, team: e.team });
+    }
     const mine = entries.find((e) => e.controllerId === you);
     const current = this.ctrl;
     if (!mine || !current || current.id !== you || current.pawnIds.join() !== mine.pawnIds.join()) {
@@ -174,7 +209,8 @@ export class ClientSession {
       this.you = you;
       this.corrected = false;
       this.pending = [];
-      if (mine) sim.addPlayer(mine.name, mine.operatorId, 0, { controller: mine.controllerId, pawns: mine.pawnIds });
+      // The same loadout and team as the server's body, so prediction starts from the same numbers.
+      if (mine) sim.addPlayer(mine.name, mine.operatorId, 0, { controller: mine.controllerId, pawns: mine.pawnIds }, mine.loadout, mine.team);
     }
     this.opts.onRoster?.(entries, you);
   }
@@ -201,12 +237,16 @@ export class ClientSession {
     const ctrl = this.ctrl;
     // A correction is for the body in our roster; one for another body (its roster not here yet) waits.
     if (snap.correction && ctrl && snap.correction.pawns.every(([id]) => ctrl.pawnIds.includes(id))) {
+      if (this.opts.trackMispredictions) this.compareWithPrediction(ack, snap.correction.pawns);
       for (const [id, state] of snap.correction.pawns) if (sim.pawns.has(id)) sim.setPawnState(id, state);
       Object.assign(ctrl, snap.correction.ctrl);
       this.epoch = snap.correction.epoch;
       this.corrected = true;
       this.stats.corrections++;
-      for (const p of this.pending) sim.step(new Map([[ctrl.id, p.cmd]]));
+      for (const p of this.pending) {
+        sim.step(new Map([[ctrl.id, p.cmd]]));
+        this.remember(p.seq);
+      }
       this.stats.replayedTicks += this.pending.length;
     }
 
@@ -237,7 +277,10 @@ export class ClientSession {
         buf.push({ tick: snap.tick, state });
         while (buf.length > 2 && buf[0].tick < snap.tick - REMOTE_HISTORY_TICKS) buf.shift();
         if (sim.pawns.get(id)?.proxy) sim.setPawnState(id, state);
-        else if (!sim.pawns.has(id)) sim.addProxy(id, this.operatorOf.get(id) ?? "sledge", state);
+        else if (!sim.pawns.has(id)) {
+          const r = this.rosterOf.get(id);
+          sim.addProxy(id, r?.operatorId ?? "sledge", state, r?.loadout ?? null, r?.team ?? 0);
+        }
       }
       if (!this.decoder.verify(snap)) {
         // Our baselines drifted from the server's: ask for a full resend and ignore deltas until it comes.
@@ -323,21 +366,54 @@ export class ClientSession {
     return 1 + Math.max(-0.05, Math.min(0.05, 0.02 * (this.queueEwma - TARGET_QUEUE)));
   }
 
-  /** One client tick: predict our own movement locally and send the input. Returns the quantized input. */
-  tick(cmd: Omit<InputCmd, "seq">): InputCmd | null {
+  /**
+   * The render tick the last input claimed the player was drawing, exactly as the server reads it back
+   * (snapshot tick minus the viewBack it was sent, in 1/256 ticks).
+   */
+  lastViewTick = 0;
+
+  /**
+   * One client tick: predict our own movement locally and send the input. Returns the quantized input.
+   * `viewTick` is the render tick of the frame the player was looking at when they clicked (lag
+   * compensation rewinds to it); by default, what is being drawn now.
+   */
+  tick(cmd: Omit<InputCmd, "seq">, viewTick = this.renderTick()): InputCmd | null {
     const sim = this.sim;
     const ctrl = this.ctrl;
     if (!sim || !ctrl || !this.corrected) return null;
     const q = quantizeInput({ ...cmd, seq: ++this.seq });
     sim.step(new Map([[ctrl.id, q]]));
+    if (sim.events.length) this.opts.onLocalEvents?.(sim.events);
     this.pending.push({ seq: this.seq, cmd: q });
-    const viewBack = Math.max(0, this.lastSnapTick - this.renderTick());
-    this.send(encodeInput({ cmd: q, predictedHash: predictionHash(sim, ctrl), epoch: this.epoch, snapTick: this.lastSnapTick, viewBackQ8: viewBack * 256 }));
+    this.remember(this.seq);
+    const viewBackQ8 = Math.max(0, Math.min(0xffff, Math.round((this.lastSnapTick - viewTick) * 256)));
+    this.lastViewTick = this.lastSnapTick - viewBackQ8 / 256;
+    this.send(encodeInput({ cmd: q, predictedHash: predictionHash(sim, ctrl), epoch: this.epoch, snapTick: this.lastSnapTick, viewBackQ8 }));
     return q;
   }
 
   ping(): void {
     this.send(encodePing(this.opts.now()));
+  }
+
+  private remember(seq: number) {
+    if (!this.opts.trackMispredictions) return;
+    const ctrl = this.ctrl!;
+    this.predicted.set(seq, ctrl.pawnIds.map((id) => ({ ...this.sim!.pawns.get(id)!.state })));
+    this.predicted.delete(seq - 256);
+  }
+
+  private compareWithPrediction(ack: number, pawns: [number, PawnState][]) {
+    const mine = this.predicted.get(ack);
+    if (!mine || mine.length !== pawns.length) return; // a new body, or nothing predicted for it
+    const diffs: string[] = [];
+    pawns.forEach(([, server], i) => {
+      for (const k of Object.keys(server) as (keyof PawnState)[]) if (server[k] !== mine[i][k]) diffs.push(`${i}.${k}: ${String(mine[i][k])} → ${String(server[k])}`);
+    });
+    if (diffs.length) {
+      this.mispredictions.push({ seq: ack, diffs });
+      if (this.mispredictions.length > 20) this.mispredictions.shift();
+    }
   }
 
   /** Sequence number of the last input sent. */

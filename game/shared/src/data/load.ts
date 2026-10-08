@@ -3,6 +3,7 @@
 import movementJson from "../../../../data/movement.json";
 import hitboxJson from "../../../../data/hitboxes.json";
 import movementLabJson from "../../../../data/maps/movement_lab/layout.json";
+import rangeLabJson from "../../../../data/maps/range_lab/layout.json";
 import brava from "../../../../data/operators/brava.json";
 import fuze from "../../../../data/operators/fuze.json";
 import thermite from "../../../../data/operators/thermite.json";
@@ -15,15 +16,30 @@ import mira from "../../../../data/operators/mira.json";
 import lesion from "../../../../data/operators/lesion.json";
 import pulse from "../../../../data/operators/pulse.json";
 import mute from "../../../../data/operators/mute.json";
+import gunplayJson from "../../../../data/gunplay.json";
+import combatJson from "../../../../data/combat.json";
+import labModeJson from "../../../../data/modes/lab.json";
+import { weaponFiles } from "./weaponFiles.js";
+import { fnv1a, utf8Encode } from "../net/bytes.js";
 import {
+  combatSchema,
+  gunplaySchema,
   hitboxSchema,
+  isGun,
   levelSchema,
   movementSchema,
+  offerId,
   operatorSchema,
+  modeSchema,
+  weaponSchema,
+  type CombatData,
+  type GunplayData,
   type HitboxData,
   type LevelDef,
   type MovementData,
   type OperatorData,
+  type ModeData,
+  type WeaponData,
 } from "./schemas.js";
 
 export interface GameData {
@@ -31,6 +47,16 @@ export interface GameData {
   hitboxes: HitboxData;
   operators: Map<string, OperatorData>;
   levels: Map<string, LevelDef>;
+  weapons: Map<string, WeaponData>;
+  gunplay: GunplayData;
+  combat: CombatData;
+  /** Mode presets (data/modes/); Phase 3 has only "lab". */
+  modes: Map<string, ModeData>;
+  /**
+   * fnv1a of every simulation data file as bundled. The client sends it in Hello; a server built from other
+   * data refuses the connection, so a stale tab never predicts with old numbers (DECISIONS D-042).
+   */
+  dataHash: number;
 }
 
 /** Raw JSON as imported, exposed for data-integrity tests. */
@@ -38,7 +64,11 @@ export const rawData = {
   movement: movementJson as Record<string, unknown>,
   hitboxes: hitboxJson as Record<string, unknown>,
   operators: [brava, fuze, thermite, striker, dokkaebi, sledge, sentry, skopos, mira, lesion, pulse, mute] as Record<string, unknown>[],
-  levels: [movementLabJson] as Record<string, unknown>[],
+  levels: [movementLabJson, rangeLabJson] as Record<string, unknown>[],
+  weapons: weaponFiles,
+  gunplay: gunplayJson as Record<string, unknown>,
+  combat: combatJson as Record<string, unknown>,
+  modes: [labModeJson] as Record<string, unknown>[],
 };
 
 let cached: GameData | null = null;
@@ -63,11 +93,73 @@ export function loadGameData(): GameData {
     const lvl = parse(`data/maps/${String(raw.id)}/layout.json`, levelSchema, raw);
     levels.set(lvl.id, lvl);
   }
-  cached = {
+  const weapons = new Map<string, WeaponData>();
+  for (const raw of rawData.weapons) {
+    const w = parse(`data/weapons/${String(raw.id)}.json`, weaponSchema, raw);
+    if (weapons.has(w.id)) throw new Error(`Invalid data: two weapon files have the id "${w.id}"`);
+    weapons.set(w.id, w);
+  }
+  const modes = new Map<string, ModeData>();
+  for (const raw of rawData.modes) {
+    const m = parse(`data/modes/${String(raw.id)}.json`, modeSchema, raw);
+    modes.set(m.id, m);
+  }
+  const data: GameData = {
     movement: parse("data/movement.json", movementSchema, rawData.movement),
     hitboxes: parse("data/hitboxes.json", hitboxSchema, rawData.hitboxes),
     operators,
     levels,
+    weapons,
+    gunplay: parse("data/gunplay.json", gunplaySchema, rawData.gunplay),
+    combat: parse("data/combat.json", combatSchema, rawData.combat),
+    modes,
+    dataHash: fnv1a(utf8Encode(JSON.stringify(rawData))),
   };
+  const problems = crossFileProblems(data);
+  if (problems.length) throw new Error(`Invalid data:\n${problems.join("\n")}`);
+  cached = data;
   return cached;
+}
+
+/** Checks that span files: loadouts name real weapons, restrictions name real carriers, templates exist. */
+export function crossFileProblems(data: Pick<GameData, "operators" | "weapons" | "gunplay"> & Partial<Pick<GameData, "levels">>): string[] {
+  const out: string[] = [];
+  for (const lvl of data.levels?.values() ?? []) {
+    for (const d of lvl.dummies) if (!data.operators.has(d.operator)) out.push(`data/maps/${lvl.id}/layout.json: dummy "${d.id}" is operator "${d.operator}", who has no data/operators file`);
+    const ids = lvl.dummies.map((d) => d.id);
+    if (new Set(ids).size !== ids.length) out.push(`data/maps/${lvl.id}/layout.json: two dummies share an id`);
+  }
+  const carriers = new Map<string, Set<string>>();
+  for (const op of data.operators.values()) {
+    for (const [slot, ids] of [["primaries", op.loadout.primaries], ["secondaries", op.loadout.secondaries]] as const) {
+      for (const id of ids) {
+        const w = data.weapons.get(id);
+        if (!w) {
+          out.push(`data/operators/${op.id}.json: loadout.${slot} names "${id}", which has no data/weapons file`);
+          continue;
+        }
+        if (w.class === "shield" && slot !== "primaries") out.push(`data/operators/${op.id}.json: the shield "${id}" can only be a primary`);
+        if (!carriers.has(id)) carriers.set(id, new Set());
+        carriers.get(id)!.add(op.id);
+      }
+    }
+  }
+  for (const w of data.weapons.values()) {
+    if (!isGun(w)) continue;
+    const file = `data/weapons/${w.id}.json`;
+    for (const [slot, offers] of Object.entries(w.attachments)) {
+      for (const o of offers) {
+        if (typeof o === "string") continue;
+        for (const opId of o.operators) {
+          if (!carriers.get(w.id)?.has(opId)) out.push(`${file}: attachments.${slot} "${offerId(o)}" names "${opId}", who doesn't carry this weapon`);
+        }
+      }
+    }
+    const template = data.gunplay.recoilTemplates[w.recoil.template];
+    if (!template) out.push(`${file}: recoil.template "${w.recoil.template}" isn't in data/gunplay.json recoilTemplates`);
+    else if (w.recoil.stageStarts && w.recoil.stageStarts.length !== template.stages.length) {
+      out.push(`${file}: recoil.stageStarts has ${w.recoil.stageStarts.length} entries; template "${w.recoil.template}" has ${template.stages.length} stages`);
+    }
+  }
+  return out;
 }

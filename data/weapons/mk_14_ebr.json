@@ -1,0 +1,42 @@
+{
+  "_doc": "Mk 14 EBR (Dokkaebi). research/weapons.csv row mk_14_ebr; class rules research/weapons_notes.md §4. Y11S3: damage 56, M&K first-shot multiplier 3.5 (official; how it maps onto our recoil model is open). Telescopic sight and Muzzle Brake are Dokkaebi-only (weapons_notes.md §6, Q6).",
+  "_season": "Y11S3.1",
+  "_unverified": ["ammo.maxAmmo", "attachments.barrels", "attachments.sights", "destruction", "recoil.firstShotMult"],
+  "id": "mk_14_ebr",
+  "name": "Mk 14 EBR",
+  "class": "marksman_rifle",
+  "fire": {
+    "kind": "hitscan",
+    "rpm": 444,
+    "modes": ["semi"],
+    "pellets": 1
+  },
+  "damage": {
+    "base": 56,
+    "falloff": [[30, 56], [40, 39]],
+    "penetration": "full",
+    "head": "kill"
+  },
+  "ammo": {
+    "magazine": 20,
+    "plusOne": true,
+    "maxAmmo": 121
+  },
+  "reload": {
+    "kind": "magazine",
+    "tacticalS": 3.1,
+    "emptyS": 3.4
+  },
+  "adsS": 0.52,
+  "destruction": "high",
+  "attachments": {
+    "sights": ["iron", "nonmag", "magnified", { "id": "telescopic", "operators": ["dokkaebi"] }],
+    "barrels": [{ "id": "muzzle_brake", "operators": ["dokkaebi"] }, "suppressor"],
+    "grips": ["vertical", "angled", "horizontal"],
+    "underbarrel": ["laser"]
+  },
+  "recoil": {
+    "template": "marksman_rifle",
+    "firstShotMult": 3.5
+  }
+}

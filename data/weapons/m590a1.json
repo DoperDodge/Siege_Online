@@ -1,0 +1,41 @@
+{
+  "_doc": "M590A1 (Sledge, Mute). research/weapons.csv row m590a1; class rules research/weapons_notes.md §4. Tube-fed (per-shell reload). Buckshot falloff 48 / 36 / 21 (Y8S3, based on this gun).",
+  "_season": "Y11S3.1",
+  "_unverified": ["damage.falloff", "destruction"],
+  "id": "m590a1",
+  "name": "M590A1",
+  "class": "shotgun",
+  "fire": {
+    "kind": "hitscan",
+    "rpm": 87,
+    "modes": ["semi"],
+    "pellets": 8
+  },
+  "damage": {
+    "base": 48,
+    "falloff": [[5, 48], [6, 36], [10, 36], [13, 21]],
+    "penetration": "none",
+    "head": "pellet"
+  },
+  "ammo": {
+    "magazine": 7,
+    "plusOne": false,
+    "maxAmmo": 50
+  },
+  "reload": {
+    "kind": "per_shell",
+    "perShellS": 0.6,
+    "emptyFullS": 5.5
+  },
+  "adsS": 0.34,
+  "destruction": "full_close_range",
+  "attachments": {
+    "sights": ["iron", "nonmag"],
+    "barrels": [],
+    "grips": [],
+    "underbarrel": ["laser"]
+  },
+  "recoil": {
+    "template": "shotgun"
+  }
+}

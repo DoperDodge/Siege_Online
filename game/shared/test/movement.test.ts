@@ -40,6 +40,58 @@ describe("speeds per rating (data/movement.json)", () => {
   });
 });
 
+describe("walls and the floor", () => {
+  // Found by the netsim: sprinting diagonally into a wall from exact contact, Rapier's snap-to-ground
+  // dropped the body 0.29 m into the floor in one tick.
+  it("sprinting diagonally into a wall from exact contact doesn't sink into the floor", async () => {
+    const { sim, ctrl, pawn } = await labWith("sledge");
+    sim.setPawnState(pawn.id, {
+      ...pawn.state,
+      x: 31.429658889770508,
+      y: 0.01992819271981716,
+      z: 5.38571310043335,
+      vx: 3.807122230529785,
+      vy: 0,
+      vz: -2.8404788970947266,
+      yaw: -1.7151966094970703,
+      grounded: true,
+      sprinting: true,
+      sinceSprint: 0,
+      airPeakY: 0.01992819271981716,
+    });
+    sim.step(new Map([[ctrl.id, input({ forward: 1, strafe: -1, yaw: -1.716568112373352, pitch: 0.2965461015701294, buttons: Btn.Sprint })]]));
+    expect(pawn.state.y).toBeGreaterThan(0.01);
+  });
+
+  it("never dips below the floor sprinting or walking diagonally along any wall", async () => {
+    const { sim, ctrl, pawn } = await labWith("sledge");
+    // Facing each outer wall in turn, then running along it at a few angles.
+    const walls: [number, number, number][] = [
+      [31, 20, -90], // east wall at x = 32: face east (yaw −90°)
+      [-31, 20, 90], // west
+      [20, -31, 0], // north (−Z)
+      [20, 31, 180], // south
+    ];
+    let lowest = Infinity;
+    for (const [x, z, face] of walls) {
+      for (const along of [-1, 1]) {
+        for (const buttons of [Btn.Sprint, 0]) {
+          teleport(sim, ctrl, x, 0, z, face);
+          run(sim, ctrl, { forward: 1, yawDeg: face, buttons }, 0.4); // into the wall: exact contact
+          for (const off of [10, 25, 40, 60]) {
+            const yawDeg = face + along * off;
+            for (let i = 0; i < 24; i++) {
+              sim.step(new Map([[ctrl.id, input({ forward: 1, strafe: -along, yawDeg, buttons })]]));
+              lowest = Math.min(lowest, pawn.state.y);
+            }
+          }
+        }
+      }
+    }
+    expect(lowest).toBeGreaterThan(-0.005);
+  });
+});
+
 describe("steady movement", () => {
   // Rapier's controller stalls a step that starts inside its contact offset from the floor; pushing the
   // body down into the floor every tick used to cause that on ~1.5% of ticks (a visible hitch).

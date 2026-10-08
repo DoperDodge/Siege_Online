@@ -1,8 +1,9 @@
 // Player/pawn separation (PLAN §11.2, Phase 1): a PlayerController is the human or bot; a Pawn is a
 // body in the world. Most operators own one pawn. Skopós owns two shells and possesses one at a time;
 // the idle one stays in the world (it can be seen, shot, and later acts as a camera).
-import { PawnMode, Stance, type PawnState } from "./types.js";
+import { PawnMode, ReloadKind, Stance, WeaponAct, type PawnState } from "./types.js";
 import type { Collider } from "../physics/rapier.js";
+import type { ResolvedLoadout, ResolvedWeapon } from "../weapons/loadout.js";
 
 export interface Pawn {
   id: number;
@@ -13,6 +14,15 @@ export interface Pawn {
   state: PawnState;
   /** Simulated elsewhere (another player on a client): never stepped here, only placed (Sim.addProxy). */
   proxy?: boolean;
+  /** Weapons, fixed for this body's life (DECISIONS D-042); not part of the predicted state. */
+  loadout: ResolvedLoadout | null;
+  /** 0 attackers, 1 defenders; fixed for this body's life. */
+  team: number;
+  /**
+   * Counts the times this body came back (Sim.respawn, a teleport that revives it). Lag compensation skips
+   * what it remembers of an earlier life (a body that kept its id), so nobody shoots a ghost.
+   */
+  life: number;
 }
 
 export interface PlayerController {
@@ -29,9 +39,19 @@ export interface PlayerController {
   swapT: number;
   swapCooldown: number;
   prevButtons: number;
+  /** 0 attackers, 1 defenders (static: changing team means a new body). */
+  team: number;
 }
 
-export function initialPawnState(x: number, y: number, z: number, yaw: number, maxHp: number): PawnState {
+/** Rounds a weapon spawns with: a full magazine (and the chambered +1), the rest in reserve. */
+export function spawnAmmo(w: ResolvedWeapon): { loaded: number; reserve: number } {
+  const loaded = Math.min(w.ammo.maxAmmo, w.ammo.magazine + (w.ammo.plusOne ? 1 : 0));
+  return { loaded, reserve: w.ammo.maxAmmo - loaded };
+}
+
+export function initialPawnState(x: number, y: number, z: number, yaw: number, maxHp: number, loadout: ResolvedLoadout | null = null): PawnState {
+  const a = loadout ? spawnAmmo(loadout.weapons[0]) : { loaded: 0, reserve: 0 };
+  const b = loadout ? spawnAmmo(loadout.weapons[1]) : { loaded: 0, reserve: 0 };
   return {
     x,
     y,
@@ -68,5 +88,32 @@ export function initialPawnState(x: number, y: number, z: number, yaw: number, m
     hp: maxHp,
     maxHp,
     lastFallDamage: 0,
+    slot: 0,
+    wAct: WeaponAct.Ready,
+    actTicks: 0,
+    reloadKind: ReloadKind.None,
+    wflags: 0,
+    loaded0: a.loaded,
+    loaded1: b.loaded,
+    reserve0: a.reserve,
+    reserve1: b.reserve,
+    modes: 0,
+    cycle: 0,
+    burstLeft: 0,
+    adsQ: 0,
+    shotIdx: 0,
+    sinceShot: 0xffff,
+    rng: 0,
+    recoilPendP: 0,
+    recoilPendY: 0,
+    recoilRecP: 0,
+    recoilRecY: 0,
+    downHp: 0,
+    downs: 0,
+    invulnTicks: 0,
+    meleeTicks: 0,
+    reviveTicks: 0,
+    reviveTarget: 0,
+    revivedBy: 0,
   };
 }

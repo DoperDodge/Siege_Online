@@ -1,0 +1,41 @@
+{
+  "_doc": "P229 (Skopós). research/weapons.csv row p229; class rules research/weapons_notes.md §4. Skopós: each shell keeps its own ammo; whether 97 is per shell is open.",
+  "_season": "Y11S3.1",
+  "_unverified": ["ammo.maxAmmo", "damage.falloff", "destruction"],
+  "id": "p229",
+  "name": "P229",
+  "class": "handgun",
+  "fire": {
+    "kind": "hitscan",
+    "rpm": 494,
+    "modes": ["semi"],
+    "pellets": 1
+  },
+  "damage": {
+    "base": 51,
+    "falloff": [[12, 51], [14, 30]],
+    "penetration": "simple",
+    "head": "kill"
+  },
+  "ammo": {
+    "magazine": 12,
+    "plusOne": true,
+    "maxAmmo": 97
+  },
+  "reload": {
+    "kind": "magazine",
+    "tacticalS": 1.8,
+    "emptyS": 2.1
+  },
+  "adsS": 0.24,
+  "destruction": null,
+  "attachments": {
+    "sights": ["iron"],
+    "barrels": ["suppressor", "muzzle_brake"],
+    "grips": [],
+    "underbarrel": ["laser"]
+  },
+  "recoil": {
+    "template": "handgun"
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "_doc": "M870 (Sentry). research/weapons.csv row m870; class rules research/weapons_notes.md §4. Tube-fed (per-shell reload). Pellet damage 42 vs Fandom 60 is weapons_notes.md Q1.",
+  "_season": "Y11S3.1",
+  "_unverified": ["damage.base", "damage.falloff", "destruction"],
+  "id": "m870",
+  "name": "M870",
+  "class": "shotgun",
+  "fire": {
+    "kind": "hitscan",
+    "rpm": 102,
+    "modes": ["semi"],
+    "pellets": 8
+  },
+  "damage": {
+    "base": 42,
+    "falloff": [[5, 42], [6, 31], [10, 31], [13, 18]],
+    "penetration": "none",
+    "head": "pellet"
+  },
+  "ammo": {
+    "magazine": 7,
+    "plusOne": false,
+    "maxAmmo": 50
+  },
+  "reload": {
+    "kind": "per_shell",
+    "perShellS": 0.6,
+    "emptyFullS": 5.23
+  },
+  "adsS": 0.34,
+  "destruction": "full_close_range",
+  "attachments": {
+    "sights": ["iron", "nonmag"],
+    "barrels": [],
+    "grips": [],
+    "underbarrel": ["laser"]
+  },
+  "recoil": {
+    "template": "shotgun"
+  }
+}

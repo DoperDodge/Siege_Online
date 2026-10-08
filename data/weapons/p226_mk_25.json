@@ -1,0 +1,41 @@
+{
+  "_doc": "P226 Mk 25 (Sledge, Mute). research/weapons.csv row p226_mk_25; class rules research/weapons_notes.md §4.",
+  "_season": "Y11S3.1",
+  "_unverified": ["damage.falloff", "destruction"],
+  "id": "p226_mk_25",
+  "name": "P226 Mk 25",
+  "class": "handgun",
+  "fire": {
+    "kind": "hitscan",
+    "rpm": 494,
+    "modes": ["semi"],
+    "pellets": 1
+  },
+  "damage": {
+    "base": 50,
+    "falloff": [[12, 50], [14, 30]],
+    "penetration": "simple",
+    "head": "kill"
+  },
+  "ammo": {
+    "magazine": 15,
+    "plusOne": true,
+    "maxAmmo": 97
+  },
+  "reload": {
+    "kind": "magazine",
+    "tacticalS": 1.8,
+    "emptyS": 2.1
+  },
+  "adsS": 0.24,
+  "destruction": null,
+  "attachments": {
+    "sights": ["iron"],
+    "barrels": ["suppressor", "muzzle_brake"],
+    "grips": [],
+    "underbarrel": ["laser"]
+  },
+  "recoil": {
+    "template": "handgun"
+  }
+}

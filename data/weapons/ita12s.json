@@ -1,0 +1,41 @@
+{
+  "_doc": "ITA12S (Thermite, Striker, Mira). research/weapons.csv row ita12s; class rules research/weapons_notes.md §4. Tube-fed secondary shotgun (per-shell reload). Pellet damage and ammo are weapons_notes.md Q1/Q3.",
+  "_season": "Y11S3.1",
+  "_unverified": ["ammo.maxAmmo", "damage.base", "damage.falloff", "destruction"],
+  "id": "ita12s",
+  "name": "ITA12S",
+  "class": "shotgun",
+  "fire": {
+    "kind": "hitscan",
+    "rpm": 83,
+    "modes": ["semi"],
+    "pellets": 8
+  },
+  "damage": {
+    "base": 29,
+    "falloff": [[5, 29], [6, 21], [10, 21], [13, 13]],
+    "penetration": "none",
+    "head": "pellet"
+  },
+  "ammo": {
+    "magazine": 5,
+    "plusOne": false,
+    "maxAmmo": 36
+  },
+  "reload": {
+    "kind": "per_shell",
+    "perShellS": 0.8,
+    "emptyFullS": 5.61
+  },
+  "adsS": 0.34,
+  "destruction": "full_close_range",
+  "attachments": {
+    "sights": ["iron", "nonmag"],
+    "barrels": [],
+    "grips": [],
+    "underbarrel": ["laser"]
+  },
+  "recoil": {
+    "template": "shotgun"
+  }
+}

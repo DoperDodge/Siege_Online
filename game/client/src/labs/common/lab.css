@@ -3,6 +3,41 @@ html, body { overflow: hidden; overscroll-behavior: none; touch-action: none; us
 #view canvas { display: block; width: 100%; height: 100%; }
 
 .crosshair { position: fixed; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6); pointer-events: none; }
+/* Spread ticks: --r is the cone's radius on screen (set every frame). */
+.spread { position: fixed; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; --r: 12px; }
+.spread i { position: absolute; background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5); }
+.spread i:nth-child(1) { width: 2px; height: 8px; left: -1px; top: calc(-1 * var(--r) - 8px); }
+.spread i:nth-child(2) { width: 2px; height: 8px; left: -1px; top: var(--r); }
+.spread i:nth-child(3) { width: 8px; height: 2px; top: -1px; left: calc(-1 * var(--r) - 8px); }
+.spread i:nth-child(4) { width: 8px; height: 2px; top: -1px; left: var(--r); }
+/* Hit marker (server-confirmed): four diagonal strokes around the crosshair; red on a kill. */
+.hitmarker { position: fixed; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; opacity: 0; }
+.hitmarker.show { opacity: 1; }
+.hitmarker i { position: absolute; width: 10px; height: 2px; margin: -1px 0 0 -5px; background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5); }
+.hitmarker i:nth-child(1) { transform: rotate(45deg) translateX(-11px); }
+.hitmarker i:nth-child(2) { transform: rotate(135deg) translateX(-11px); }
+.hitmarker i:nth-child(3) { transform: rotate(225deg) translateX(-11px); }
+.hitmarker i:nth-child(4) { transform: rotate(315deg) translateX(-11px); }
+.hitmarker.kill i { background: #ff4d4d; width: 14px; margin-left: -7px; }
+.hitmarker.friendly i { background: #60a5fa; }
+.hit-text { position: fixed; left: 50%; top: calc(50% + 26px); transform: translateX(-50%); font: 600 12px var(--mono); color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9); pointer-events: none; opacity: 0; transition: opacity 0.2s; white-space: nowrap; }
+.hit-text.show { opacity: 1; }
+/* Taking damage: a red edge, and an arc pointing at where it came from. */
+.hurt { position: fixed; inset: 0; pointer-events: none; box-shadow: inset 0 0 120px rgba(220, 20, 20, 0.55); opacity: 0; transition: opacity 0.25s; }
+.hurt.show { opacity: 1; }
+.hurt-dir { position: fixed; left: 50%; top: 50%; width: 180px; height: 180px; margin: -90px 0 0 -90px; border-radius: 50%; border: 4px solid transparent; border-top-color: rgba(255, 60, 60, 0.9); transform: rotate(var(--a, 0deg)); pointer-events: none; opacity: 0; transition: opacity 0.3s; }
+.hurt-dir.on.show { opacity: 1; }
+/* Down but not out: darkened, blurred vision (core_mechanics.md §10.2), the bleed bar and the revive gauge. */
+.downed #view { filter: grayscale(0.7) brightness(0.55) blur(1.5px); }
+.hp.down .hp-fill { background: linear-gradient(90deg, #b91c1c, #ef4444); }
+.down-ui, .revive-ui { position: fixed; left: 50%; top: 58%; transform: translateX(-50%); width: min(420px, calc(100vw - 32px)); padding: 8px 12px; border-radius: 8px; background: rgba(0, 0, 0, 0.6); text-align: center; font: 600 13px system-ui, sans-serif; pointer-events: none; }
+.revive-ui { top: 62%; }
+.down-bar, .revive-bar { margin-top: 6px; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.15); overflow: hidden; }
+.down-bar div { height: 100%; background: #ef4444; }
+.revive-bar div { height: 100%; background: #22c55e; }
+.killfeed { margin-top: 8px; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; font: 600 12px system-ui, sans-serif; color: #fff; }
+.killfeed div { padding: 3px 8px; border-radius: 4px; background: rgba(0, 0, 0, 0.55); }
+.killfeed div.mine { background: rgba(160, 30, 30, 0.7); }
 
 .hud { position: fixed; pointer-events: none; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8); }
 .hud-tl { top: 12px; left: 16px; width: min(360px, calc(100vw - 32px)); }
@@ -18,6 +53,20 @@ html, body { overflow: hidden; overscroll-behavior: none; touch-action: none; us
 .stance-bar { height: 3px; margin: 6px auto 8px; width: 220px; background: rgba(0, 0, 0, 0.4); border-radius: 2px; overflow: hidden; }
 .stance-bar div { height: 100%; background: var(--accent); }
 .readout { font: 13px var(--mono); }
+.hud-br { right: 16px; bottom: 24px; text-align: right; }
+.weapon-name { font-weight: 600; }
+.ammo { font: 700 28px var(--mono); line-height: 1.1; }
+.ammo.low .ammo-loaded { color: var(--bad); }
+.ammo-reserve { font-size: 16px; color: var(--muted); }
+.weapon-state { font: 12px var(--mono); color: var(--muted); }
+/* Down the sights: a red dot or a cross (1× sights), or a scope ring with a cross (magnified). */
+.reticle { position: fixed; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; }
+.reticle[data-kind="dot"]::before { content: ""; position: absolute; width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px; border-radius: 50%; background: #ff3030; box-shadow: 0 0 4px #ff3030; }
+.reticle[data-kind="cross"]::before { content: ""; position: absolute; width: 26px; height: 1px; margin: 0 0 0 -13px; background: #111; }
+.reticle[data-kind="cross"]::after { content: ""; position: absolute; width: 1px; height: 26px; margin: -13px 0 0 0; background: #111; }
+.scope { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(circle at center, transparent 0, transparent min(34vh, 34vw), rgba(0, 0, 0, 0.92) calc(min(34vh, 34vw) + 2px)); }
+.scope::before { content: ""; position: absolute; left: 50%; top: 50%; width: min(68vh, 68vw); height: 1px; transform: translate(-50%, -50%); background: rgba(0, 0, 0, 0.8); }
+.scope::after { content: ""; position: absolute; left: 50%; top: 50%; width: 1px; height: min(68vh, 68vw); transform: translate(-50%, -50%); background: rgba(0, 0, 0, 0.8); }
 
 .lean-ind { position: fixed; top: 50%; transform: translateY(-50%); font-size: 28px; color: var(--accent); opacity: 0; pointer-events: none; text-shadow: 0 1px 3px #000; }
 .lean-l { left: calc(50% - 90px); }
@@ -63,10 +112,21 @@ html, body { overflow: hidden; overscroll-behavior: none; touch-action: none; us
 .touch-buttons { position: absolute; right: 20px; bottom: 20px; display: grid; grid-template-columns: repeat(4, 64px); gap: 8px; pointer-events: auto; }
 .touch-btn { height: 52px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.3); background: rgba(0, 0, 0, 0.45); font: 600 12px system-ui, sans-serif; touch-action: none; }
 .touch-btn.down, .touch-btn.on { background: var(--accent); color: #111; }
+.touch .hud-br { top: 92px; bottom: auto; }
+
+.loadout-row { margin: 8px 0 12px; }
+.loadout-row > label select { max-width: 60%; }
+.atts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.atts select { flex: 1 1 140px; min-width: 0; }
+.loadout .stats { margin: 6px 0 0; font: 12px var(--mono); }
+.unv { display: inline-block; margin-left: 2px; padding: 0 4px; border-radius: 3px; font: 700 10px var(--mono); background: rgba(242, 163, 58, 0.25); color: var(--accent); vertical-align: 1px; }
+
 @media (max-width: 700px) {
   .touch-buttons { grid-template-columns: repeat(4, 54px); gap: 6px; }
   .touch-stick { width: 120px; height: 120px; }
   .hud-bottom { bottom: 190px; }
+  .hud-br { top: 92px; bottom: auto; }
+  .ammo { font-size: 20px; }
 }
 
 /* Online (Phase 2) */
@@ -77,3 +137,11 @@ html, body { overflow: hidden; overscroll-behavior: none; touch-action: none; us
 .join-row .code { text-transform: uppercase; letter-spacing: 0.2em; font: 600 16px var(--mono); }
 .lobby .error { min-height: 1.2em; color: #f87171; font-size: 13px; }
 .lobby a { color: var(--accent); }
+
+/* Range Lab: the last shot's readout, and damage numbers floating over whoever was hit. */
+.shot-panel { left: 12px; top: 42%; max-width: min(360px, 60vw); font: 12px/1.45 var(--mono); }
+.shot-panel b { color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em; }
+.dmg-numbers { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+.dmg-numbers div { position: absolute; left: 0; top: 0; font: 700 16px var(--mono); color: #fff; text-shadow: 0 1px 3px #000, 0 0 2px #000; white-space: nowrap; }
+.dmg-numbers .head { color: #ffd23f; }
+.dmg-numbers .kill { color: #ff4d4d; font-size: 18px; }

@@ -1,0 +1,42 @@
+{
+  "_doc": "SMG-11 (Mute). research/weapons.csv row smg_11; class rules research/weapons_notes.md §4. Extended barrel 35 / min 28 community-measured.",
+  "_season": "Y11S3.1",
+  "_unverified": ["damage.extendedBarrel", "damage.falloff", "destruction"],
+  "id": "smg_11",
+  "name": "SMG-11",
+  "class": "machine_pistol",
+  "fire": {
+    "kind": "hitscan",
+    "rpm": 1270,
+    "modes": ["auto"],
+    "pellets": 1
+  },
+  "damage": {
+    "base": 32,
+    "falloff": [[18, 32], [28, 19]],
+    "penetration": "none",
+    "head": "kill",
+    "extendedBarrel": { "base": 35, "falloff": [[18, 35], [28, 28]] }
+  },
+  "ammo": {
+    "magazine": 16,
+    "plusOne": true,
+    "maxAmmo": 113
+  },
+  "reload": {
+    "kind": "magazine",
+    "tacticalS": 2,
+    "emptyS": 2.9
+  },
+  "adsS": 0.38,
+  "destruction": null,
+  "attachments": {
+    "sights": ["iron", "nonmag"],
+    "barrels": ["muzzle_brake", "compensator", "flash_hider", "suppressor", "extended_barrel"],
+    "grips": ["vertical", "angled", "horizontal"],
+    "underbarrel": ["laser"]
+  },
+  "recoil": {
+    "template": "machine_pistol"
+  }
+}

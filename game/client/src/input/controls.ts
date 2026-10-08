@@ -2,9 +2,9 @@
 // simulation only ever sees the desired stance/lean (PLAN §7). Camera orientation uses the latest mouse
 // position every frame; the simulation samples it once per tick.
 import { Btn, clamp, DEG, quantizeInput, Stance, wrapAngle, type InputCmd } from "@redmond/shared";
-import type { Keybinds, Settings } from "./settings.js";
+import { adsSensitivity, type Keybinds, type Settings } from "./settings.js";
 
-export type Action = keyof Keybinds | "ads" | "hitboxes" | "thirdPerson" | "help" | "settings";
+export type Action = keyof Keybinds | "ads" | "fire" | "swap" | "hitboxes" | "thirdPerson" | "help" | "settings";
 
 /** One-shot actions the lab handles itself (not sent to the simulation). */
 export type UiAction = "respawn" | "hitboxes" | "thirdPerson" | "help" | "settings" | "fire";
@@ -34,6 +34,11 @@ export class Controls {
    * return to.
    */
   stanceLocked: () => boolean = () => false;
+  /**
+   * The predicted weapon state (slot in hand, and whether a swap is still bringing it up), so 1 / 2 / the
+   * wheel turn into a single swap press only when the slot would change (C16 in the Phase 3 plan).
+   */
+  weaponState: () => { slot: number; equipping: boolean; zoom?: number } | null = () => null;
   /** Touch joystick, -1..1 each. */
   touchMove = { x: 0, y: 0 };
   private held = new Set<Action>();
@@ -44,6 +49,14 @@ export class Controls {
   private interactPulse = false;
   private abilityPulse = false;
   private vaultPulse = false;
+  /** A click shorter than a tick still fires: Fire is sent for at least one tick (D-055). */
+  private firePulse = false;
+  private reloadPulse = false;
+  private fireModePulse = false;
+  private meleePulse = false;
+  /** The weapon slot asked for with 1 / 2 / the wheel, until the simulation is holding it. */
+  private wantSlot: 0 | 1 | null = null;
+  private sentSwap = false;
   private wasOnLadder = false;
   private lastLeanHold: -1 | 0 | 1 = 0;
   private sampledYaw = 0;
@@ -113,11 +126,24 @@ export class Controls {
         return;
       }
       if (e.button === 2) this.press("ads");
-      else if (e.button === 0) this.onUi("fire"); // Phase 2: the online lab's debug shot
+      else if (e.button === 0) {
+        this.press("fire");
+        this.onUi("fire"); // the lab notes which frame was on screen (lag compensation rewinds to it)
+      }
     });
     addEventListener("mouseup", (e) => {
       if (e.button === 2) this.release("ads");
+      else if (e.button === 0) this.release("fire");
     });
+    canvas.addEventListener(
+      "wheel",
+      (e) => {
+        if (document.pointerLockElement !== canvas || this.isBlocked() || e.deltaY === 0) return;
+        this.press("swap");
+        this.release("swap");
+      },
+      { passive: true },
+    );
     canvas.addEventListener("contextmenu", (e) => e.preventDefault());
     addEventListener("mousemove", (e) => {
       if (document.pointerLockElement === canvas) this.look(e.movementX, e.movementY);
@@ -139,7 +165,7 @@ export class Controls {
    * the turn rate doesn't depend on the frame rate.
    */
   look(dx: number, dy: number, scale = 1) {
-    const sens = this.settings.sensitivity * (this.adsActive ? this.settings.adsSensitivityScale : 1) * scale * DEG;
+    const sens = this.settings.sensitivity * (this.adsActive ? adsSensitivity(this.settings, this.weaponState()?.zoom ?? 1) : 1) * scale * DEG;
     this.yaw = wrapAngle(this.yaw - dx * sens);
     this.pitch = clamp(this.pitch - dy * sens * (this.settings.invertY ? -1 : 1), this.limits.pitchMin, this.limits.pitchMax);
   }
@@ -199,6 +225,30 @@ export class Controls {
       case "respawn":
         this.onUi(action);
         break;
+      case "fire":
+        this.firePulse = true;
+        break;
+      case "reload":
+        this.reloadPulse = true;
+        break;
+      case "fireMode":
+        this.fireModePulse = true;
+        break;
+      case "melee":
+        this.meleePulse = true;
+        break;
+      case "primary":
+        this.wantSlot = 0;
+        break;
+      case "secondary":
+        this.wantSlot = 1;
+        break;
+      case "swap": {
+        // The other weapon (mouse wheel, touch button).
+        const ws = this.weaponState();
+        if (ws) this.wantSlot = ws.slot === 0 ? 1 : 0;
+        break;
+      }
     }
   }
 
@@ -231,13 +281,31 @@ export class Controls {
     let buttons = 0;
     if (this.held.has("sprint") || this.sprintLatched) buttons |= Btn.Sprint;
     if (this.held.has("vault") || this.vaultPulse) buttons |= Btn.Vault;
-    if (this.interactPulse) buttons |= Btn.Interact;
+    // Interact is held (reviving takes 4 s, DECISIONS D-049); a tap shorter than a tick still goes out once.
+    if (this.held.has("interact") || this.interactPulse) buttons |= Btn.Interact;
     if (this.adsActive) buttons |= Btn.Ads;
     if (this.held.has("slowWalk")) buttons |= Btn.SlowWalk;
     if (this.abilityPulse) buttons |= Btn.Ability;
+    if (this.held.has("fire") || this.firePulse) buttons |= Btn.Fire;
+    if (this.reloadPulse) buttons |= Btn.Reload;
+    if (this.fireModePulse) buttons |= Btn.FireMode;
+    if (this.meleePulse) buttons |= Btn.Melee;
+    // Weapon slot: one swap press, sent only while the slot differs and no swap is already under way
+    // (a press then would be ignored); released for a tick in between so the next press is a new one.
+    const ws = this.weaponState();
+    // No weapon to switch (down, dead, between bodies): a request made now is dropped, not kept for later.
+    if (!ws || ws.slot === this.wantSlot) this.wantSlot = null;
+    if (this.wantSlot !== null && ws && !ws.equipping && !this.sentSwap) {
+      buttons |= Btn.Swap;
+      this.sentSwap = true;
+    } else this.sentSwap = false;
     this.vaultPulse = false;
     this.interactPulse = false;
     this.abilityPulse = false;
+    this.firePulse = false;
+    this.reloadPulse = false;
+    this.fireModePulse = false;
+    this.meleePulse = false;
 
     const s = this.settings;
     let stance = this.stanceIntent;
@@ -270,7 +338,15 @@ export class Controls {
    * frozen view). Mouse movement since the sample is kept. A prone turn is not corrected here: the next
    * step is measured from the body's real yaw, so a turn refused at a wall can't run further ahead.
    */
-  syncView(simYaw: number, simPitch: number) {
+  syncView(simYaw: number, simPitch: number, kick: { yaw: number; pitch: number } = { yaw: 0, pitch: 0 }) {
+    // Recoil turned the body's view this tick: carry it into ours exactly (also while prone, where the
+    // clamp check below is skipped), so the next input already includes it (DECISIONS D-041).
+    if (kick.yaw !== 0 || kick.pitch !== 0) {
+      this.yaw = wrapAngle(this.yaw + kick.yaw);
+      this.pitch += kick.pitch;
+      this.sampledYaw = wrapAngle(this.sampledYaw + kick.yaw);
+      this.sampledPitch += kick.pitch;
+    }
     const dyaw = wrapAngle(simYaw - this.sampledYaw);
     if (this.limits.maxYawStep === null && Math.abs(dyaw) > 1e-4) this.yaw = wrapAngle(this.yaw + dyaw);
     const dpitch = simPitch - this.sampledPitch;

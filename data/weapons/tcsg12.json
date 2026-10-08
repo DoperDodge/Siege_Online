@@ -1,0 +1,41 @@
+{
+  "_doc": "TCSG12 (Sentry). research/weapons.csv row tcsg12; class rules research/weapons_notes.md §4. Damage 75 since Y9S4.2. Slug headshot rule is weapons_notes.md Q13; slug penetration full (CSV) vs simple (core_mechanics.md §9.3).",
+  "_season": "Y11S3.1",
+  "_unverified": ["ammo.maxAmmo", "damage.head", "damage.penetration", "destruction"],
+  "id": "tcsg12",
+  "name": "TCSG12",
+  "class": "slug_shotgun",
+  "fire": {
+    "kind": "hitscan",
+    "rpm": 496,
+    "modes": ["semi"],
+    "pellets": 1
+  },
+  "damage": {
+    "base": 75,
+    "falloff": [[15, 75], [25, 45]],
+    "penetration": "full",
+    "head": "kill"
+  },
+  "ammo": {
+    "magazine": 10,
+    "plusOne": true,
+    "maxAmmo": 121
+  },
+  "reload": {
+    "kind": "magazine",
+    "tacticalS": 2.5,
+    "emptyS": 3.2
+  },
+  "adsS": 0.52,
+  "destruction": "high",
+  "attachments": {
+    "sights": ["iron", "nonmag", "magnified"],
+    "barrels": ["suppressor"],
+    "grips": ["vertical", "angled", "horizontal"],
+    "underbarrel": ["laser"]
+  },
+  "recoil": {
+    "template": "slug_shotgun"
+  }
+}

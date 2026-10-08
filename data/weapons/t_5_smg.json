@@ -1,0 +1,50 @@
+{
+  "_doc": "T-5 SMG (Lesion). research/weapons.csv row t_5_smg; class rules research/weapons_notes.md §4. Extended barrel 31 / min 25 and ammo-refill 0.99 / 2.33 s community-measured.",
+  "_season": "Y11S3.1",
+  "_unverified": [
+    "damage.extendedBarrel",
+    "destruction",
+    "fire.modes",
+    "reload.refillEmptyS",
+    "reload.refillTacticalS"
+  ],
+  "id": "t_5_smg",
+  "name": "T-5 SMG",
+  "class": "smg",
+  "fire": {
+    "kind": "hitscan",
+    "rpm": 900,
+    "modes": ["auto", "burst3", "semi"],
+    "pellets": 1
+  },
+  "damage": {
+    "base": 28,
+    "falloff": [[18, 28], [28, 16]],
+    "penetration": "simple",
+    "head": "kill",
+    "extendedBarrel": { "base": 31, "falloff": [[18, 31], [28, 25]] }
+  },
+  "ammo": {
+    "magazine": 30,
+    "plusOne": true,
+    "maxAmmo": 181
+  },
+  "reload": {
+    "kind": "magazine",
+    "tacticalS": 2.4,
+    "emptyS": 3,
+    "refillTacticalS": 0.99,
+    "refillEmptyS": 2.33
+  },
+  "adsS": 0.46,
+  "destruction": null,
+  "attachments": {
+    "sights": ["iron", "nonmag"],
+    "barrels": ["muzzle_brake", "compensator", "flash_hider", "suppressor", "extended_barrel"],
+    "grips": ["vertical", "angled", "horizontal"],
+    "underbarrel": ["laser"]
+  },
+  "recoil": {
+    "template": "smg"
+  }
+}
