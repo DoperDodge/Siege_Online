@@ -13,7 +13,7 @@
     { "id": "sample_soft", "center": [-4.5, 1.25, 17], "size": [2, 2.5, 0.2], "surface": "SOFT_WALL", "label": "Soft wall" },
     { "id": "sample_reinforceable", "center": [-1.5, 1.25, 17], "size": [2, 2.5, 0.2], "surface": "REINFORCEABLE", "label": "Reinforceable" },
     { "id": "sample_hard", "center": [1.5, 1.25, 17], "size": [2, 2.5, 0.2], "surface": "HARD_WALL", "label": "Hard wall" },
-    { "id": "sample_hatch", "center": [4.5, 0.01, 17], "size": [1.6, 0.02, 1.6], "surface": "HATCH", "label": "Hatch" },
+    { "id": "sample_hatch", "center": [4.5, -0.045, 17], "size": [1.6, 0.1, 1.6], "surface": "HATCH", "label": "Hatch" },
 
     { "id": "curb", "center": [-6, 0.15, 9], "size": [2, 0.3, 0.6], "surface": "PROP", "label": "0.3 m curb (auto-step)" },
     { "id": "vault_050", "center": [-6, 0.25, 6], "size": [2, 0.5, 0.4], "surface": "PROP", "vaultable": true, "label": "Vault over 0.5 m" },

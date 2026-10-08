@@ -39,6 +39,7 @@ describe("data files", () => {
       ["hitboxes", rawData.hitboxes],
       ["gunplay", rawData.gunplay],
       ["combat", rawData.combat],
+      ["destruction", rawData.destruction],
       ...rawData.operators.map((o): [string, Record<string, unknown>] => [`operators/${String(o.id)}`, o]),
       ...rawData.weapons.map((w): [string, Record<string, unknown>] => [`weapons/${String(w.id)}`, w]),
       ...rawData.modes.map((r): [string, Record<string, unknown>] => [`modes/${String(r.id)}`, r]),

@@ -11,7 +11,9 @@ import {
   SIGHTS,
   UNDERBARRELS,
   type FireMode,
+  type DestructionTier,
   type GunData,
+  type TierRule,
   type GunplayData,
   type Offer,
   type OperatorData,
@@ -104,7 +106,12 @@ export interface ResolvedWeapon {
   recoil: ResolvedRecoil;
   /** Cone half-angles in radians. Server-only (DECISIONS D-041). */
   spread: { hip: number; ads: number; perMps: number };
-  destruction: GunData["destruction"];
+  /** What its bullets do to panels (data/destruction.json: the weapon's tier, or its class's). */
+  destruction: ResolvedDestruction;
+}
+
+export interface ResolvedDestruction extends TierRule {
+  tier: DestructionTier;
 }
 
 export interface ResolvedLoadout {
@@ -330,6 +337,13 @@ export function resolveWeapon(data: GameData, p: WeaponPick): ResolvedWeapon {
     laser,
     recoil: resolveRecoil(g, w, p),
     spread: { hip: rad(spread.hipDeg), ads: rad(spread.adsDeg), perMps: rad(spread.movePerMpsDeg) },
-    destruction: w.destruction,
+    destruction: resolveDestruction(data, w),
   };
+}
+
+/** The weapon file's destruction tier, or its class's default; the tier's rules with the class's adjustments. */
+function resolveDestruction(data: GameData, w: GunData): ResolvedDestruction {
+  const b = data.destruction.bullets;
+  const tier = w.destruction ?? b.classTiers[w.class];
+  return { tier, ...b.tiers[tier]!, ...b.classAdjust[w.class] };
 }

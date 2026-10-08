@@ -5,7 +5,40 @@ known issues, and what's next.
 
 ---
 
-## Phase 3 — Gunplay · ✅ built (branch `claude/phase-3-gunplay`, PR #4); waiting for your test at 100 ms
+## Phase 4 — Destruction v1 · 🚧 in progress (branch `claude/phase-4-destruction`)
+
+**Done when (PLAN §17):** wallbangs, punch holes and reinforcing are all synced across clients.
+
+Built in milestones; each keeps the tests, the browser tests and the netsim green, and the game playable.
+
+| Milestone | Status |
+|---|---|
+| M1 Destruction data (constructions, bullet tiers, tools, reinforcement, barricades, hatches) | ✅ data/destruction.json, validated; 7 new open questions |
+| M2 Panel model: a cell grid per surface (skins, studs, steel), holes, falling pieces | ⏳ |
+| M3 Panels in the simulation (movement through holes) and on screen | ⏳ |
+| M4 Bullets and the knife through panels (wallbangs, holes, rewound holes) | ⏳ |
+| M5 Destruction over the network, and for players who join late | ⏳ |
+| M6 Reinforcement, barricades and hatches | ⏳ |
+| M7 Destruction Lab (explosive tools, every surface, Oregon wall samples) | ⏳ |
+| M8 Browser and netsim tests, docs | ⏳ |
+
+### What's done
+- **Destruction data (M1):** `data/destruction.json` holds the rules. Every destructible surface is a panel
+  built from a *construction*: two skins and a core (wooden studs in walls, metal joists in floors, beams in
+  hatches) on a grid of 5 cm cells, plus door and window barricades and glass. Bullets follow each weapon's
+  destruction tier (from its weapon file, or its class where the file has none; the XK23's "medium" is the
+  official one): hole size, whether it cuts studs (buckshot only within 5 m), and how much it wears down a
+  hatch or barricade (a DMR opens a hatch in 9 shots, a slug in 3, two buckshot blasts; a barricade takes 3
+  knife hits or about 20 rifle bullets). Wallbangs lose 30 % per wall, through at most 2. The knife punches a
+  25 cm hole. The Destruction Lab's explosives (Breach Charge, Impact and Frag Grenades, Nitro Cell, Exothermic
+  and Hard Breach Charges) cut their shapes; only the last two cut steel. Reinforcing takes 4.5 s from a team
+  pool of 10 (lab rooms let both sides reinforce and barricade); a reinforced hatch has a 1,000,000 HP pool.
+  Everything not verified is listed in research/OPEN_QUESTIONS.md ("Placeholders added while building Phase
+  4", 7 questions). The movement lab's floor hatch sample is now thick enough to be a real panel.
+
+---
+
+## Phase 3 — Gunplay · ✅ complete (merged, PR #4; Ulo tested it at +100 ms on 2026-10-08: headshots land)
 
 **Done when (PLAN §17):** headshots and hit registration feel right at 100 ms.
 

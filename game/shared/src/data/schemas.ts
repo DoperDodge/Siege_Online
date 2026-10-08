@@ -199,6 +199,9 @@ export const offerId = <T extends string>(o: Offer<T>): T => (typeof o === "stri
 /** [meters, damage] points: flat before the first and after the last, linear in between. */
 const falloff = z.array(z.tuple([z.number().nonnegative(), z.number().int().nonnegative()])).min(1);
 const secs = z.number().positive();
+/** Siege's weapon destruction tiers (Detailed Weapon Stats), plus buckshot's close-range-only "full". */
+export const DESTRUCTION_TIERS = ["low", "medium", "high", "full", "full_close_range", "explosive"] as const;
+export type DestructionTier = (typeof DESTRUCTION_TIERS)[number];
 
 const gunSchema = z
   .strictObject({
@@ -238,8 +241,8 @@ const gunSchema = z
       z.strictObject({ kind: z.literal("none") }),
     ]),
     adsS: secs,
-    /** Caliber-based destruction tier (weapons_notes.md §4.8); nothing reads it until Phase 4. */
-    destruction: z.enum(["low", "medium", "high", "full", "full_close_range", "explosive"]).nullable(),
+    /** Caliber-based destruction tier (weapons_notes.md §4.8); null: the class's (data/destruction.json). */
+    destruction: z.enum(DESTRUCTION_TIERS).nullable(),
     integralSuppressor: z.boolean().default(false),
     /** Only if a suppressor turns out to lower this weapon's damage (weapons_notes.md Q7). */
     suppressedDamage: z.number().int().nonnegative().optional(),
@@ -475,8 +478,13 @@ export const modeSchema = z.strictObject({
   reverseFriendlyFire: z.strictObject({ enabled: z.boolean(), thresholdHp: z.number().positive() }),
   lastAliveDies: z.boolean(),
   dummyRespawnS: z.number().nonnegative(),
+  /** The defenders' shared reinforcement pool (research/destruction.md §6). */
+  reinforcements: z.number().int().nonnegative(),
+  /** Lab rooms: both sides may reinforce and barricade (Siege: defenders only). */
+  defenderToolsForAll: z.boolean(),
 });
 export type ModeData = z.infer<typeof modeSchema>;
+
 
 export const SURFACES = [
   "SOFT_WALL",
@@ -531,6 +539,19 @@ export const levelSchema = z.strictObject({
       surface: z.enum(SURFACES),
       vaultable: z.boolean().default(false),
       label: z.string().optional(),
+      /**
+       * A destructible surface is a panel (Phase 4, data/destruction.json): its construction (the surface's
+       * default unless named), how many reinforcement sections it has, and whether it starts reinforced
+       * (REINFORCED_WALL always does) or, for a barricade, empty (a frame waiting for one).
+       */
+      panel: z
+        .strictObject({
+          construction: z.string().optional(),
+          sections: z.number().int().min(1).max(3).optional(),
+          reinforced: z.boolean().optional(),
+          empty: z.boolean().optional(),
+        })
+        .optional(),
     }),
   ),
   stairs: z
@@ -579,6 +600,72 @@ export const levelSchema = z.strictObject({
   dummies: z.array(dummySchema).default([]),
 });
 export type LevelDef = z.infer<typeof levelSchema>;
+
+// ---------------------------------------------------------------- destruction (Phase 4)
+
+const metres = z.number().positive();
+const panelPassable = z.enum(["breach", "never", "whenBroken"]);
+const coreSchema = z.union([
+  z.strictObject({ kind: z.literal("none") }),
+  z.strictObject({ kind: z.enum(["studs", "joists", "beams"]), material: z.enum(["wood", "metal"]), spacingM: metres, widthM: metres }),
+]);
+export const constructionSchema = z.union([
+  z.strictObject({ kind: z.enum(["wall", "floor"]), skinM: metres, core: coreSchema, reinforceable: z.boolean(), passable: panelPassable }),
+  z.strictObject({ kind: z.literal("hatch"), skinM: metres, core: coreSchema, reinforceable: z.boolean(), passable: panelPassable, hp: z.number().positive() }),
+  z.strictObject({ kind: z.literal("barricade"), plankM: metres, bottomGapM: z.number().nonnegative(), passable: panelPassable }),
+  z.strictObject({ kind: z.literal("glass"), passable: panelPassable }),
+]);
+export type Construction = z.infer<typeof constructionSchema>;
+const tierRuleSchema = z.strictObject({
+  holeDiameterM: metres,
+  studs: z.boolean(),
+  /** Studs only this close (buckshot: "destroys wooden beams at close range"). */
+  studsWithinM: metres.optional(),
+  hatchDamage: z.number().nonnegative(),
+  barricadeDamage: z.number().nonnegative(),
+});
+export type TierRule = z.infer<typeof tierRuleSchema>;
+const explosiveCommon = {
+  name: z.string(),
+  studs: z.boolean(),
+  hard: z.boolean(),
+  hatchDamage: z.number().nonnegative(),
+  reinforcedHatchDamage: z.number().nonnegative(),
+};
+export const explosiveSchema = z.union([
+  z.strictObject({ ...explosiveCommon, shape: z.literal("rect"), wM: metres, hM: metres }),
+  z.strictObject({ ...explosiveCommon, shape: z.literal("disc"), diameterM: metres }),
+]);
+export type ExplosiveData = z.infer<typeof explosiveSchema>;
+export const destructionSchema = z.strictObject({
+  ...meta,
+  cellM: metres,
+  constructions: z.record(z.string(), constructionSchema),
+  /** The construction a level solid of each destructible surface gets unless it names another. */
+  surfaces: z.partialRecord(z.enum(SURFACES), z.string()),
+  bullets: z.strictObject({
+    tiers: z.partialRecord(z.enum(DESTRUCTION_TIERS), tierRuleSchema),
+    /** The tier of a weapon whose file names none. */
+    classTiers: z.record(z.string(), z.enum(DESTRUCTION_TIERS)),
+    classAdjust: z.record(z.string(), tierRuleSchema.partial()),
+  }),
+  wallbang: z.strictObject({ damageMult: z.number().min(0).max(1), maxSurfaces: z.number().int().positive() }),
+  melee: z.strictObject({ holeDiameterM: metres, bothSkins: z.boolean(), studs: z.boolean(), hatchDamage: z.number().nonnegative(), barricadeDamage: z.number().nonnegative() }),
+  explosives: z.record(z.string(), explosiveSchema),
+  reinforcement: z.strictObject({
+    deploySeconds: secs,
+    reach: metres,
+    facingDeg: z.number().positive().max(180),
+    steelHeightM: metres,
+    hatchFromTopOnly: z.boolean(),
+    canReinforceDamaged: z.boolean(),
+    canReReinforce: z.boolean(),
+    locksReinforcer: z.boolean(),
+    reinforcedHatchHp: z.number().positive(),
+  }),
+  barricade: z.strictObject({ hp: z.number().positive(), deploySeconds: secs, removeSeconds: secs, passableBelowHp: z.number().nonnegative() }),
+});
+export type DestructionData = z.infer<typeof destructionSchema>;
 
 /** Returns the `_unverified` paths that don't exist in the object (typos in the marker list). */
 export function missingUnverifiedPaths(obj: Record<string, unknown>, paths: string[]): string[] {
