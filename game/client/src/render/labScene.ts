@@ -87,6 +87,8 @@ export function createLabScene(level: BuiltLevel): THREE.Scene {
 
   for (const r of level.renderables) {
     if (!r.visible) continue;
+    if (r.label) labels.push(labelSprite(r.label, r.center[0], r.center[1] + r.size[1] / 2 + 0.4, r.center[2]));
+    if (r.kind === "panel") continue; // drawn from its cells (PanelView)
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(r.size[0], r.size[1], r.size[2]), material(r));
     mesh.position.set(r.center[0], r.center[1], r.center[2]);
     mesh.quaternion.set(r.quat[0], r.quat[1], r.quat[2], r.quat[3]);
@@ -97,7 +99,6 @@ export function createLabScene(level: BuiltLevel): THREE.Scene {
     mesh.castShadow = r.id !== "floor";
     mesh.receiveShadow = true;
     scene.add(mesh);
-    if (r.label) labels.push(labelSprite(r.label, r.center[0], r.center[1] + r.size[1] / 2 + 0.4, r.center[2]));
   }
   scene.add(...labels);
   return scene;

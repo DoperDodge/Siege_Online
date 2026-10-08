@@ -31,6 +31,8 @@ export interface PanelSpec {
   /** Steel covers this much of a wall's height from the bottom (data: reinforcement.steelHeightM). */
   steelHeightM: number;
   reinforced: boolean;
+  /** The side a starting reinforcement went up from: 0 the −n face, 1 the +n face (a hatch's top). */
+  reinforcedSide: number;
   /** A barricade frame with no barricade in it yet. */
   empty: boolean;
   /** Hit points of a breakable panel (hatch, barricade, glass); 0 for the rest. */
@@ -47,7 +49,8 @@ export type PanelOp =
   | { kind: "cut"; layer: number; shape: CutShape; hard: boolean }
   /** Wear a breakable panel down (a reinforced hatch only takes `hard` damage, to its pool). */
   | { kind: "damage"; amount: number; hard: boolean }
-  | { kind: "reinforce"; section: number }
+  /** Steel over one section, put up from `side` (0: the −n face, 1: the +n face). */
+  | { kind: "reinforce"; section: number; side: number }
   /** Put a barricade up in its frame, or pry it off. */
   | { kind: "barricade"; up: boolean };
 
@@ -87,8 +90,12 @@ export class Panel {
   /** Sections with steel now, and sections ever reinforced (a destroyed reinforcement can't come back). */
   reinforced = 0;
   everReinforced = 0;
+  /** Per section: 1 if its steel went up from the +n side (research/destruction.md §6.1: a reinforcement has a side). */
+  steelSides = 0;
   /** Changed since it was built: joining players are sent its state. */
   modified = false;
+  /** Counts changes (renderers redraw a panel whose version moved); not part of the state. */
+  version = 0;
   private moveMask: Uint8Array = new Uint8Array(0);
   private readonly flood: Uint8Array;
   private readonly stack: Int32Array;
@@ -123,8 +130,9 @@ export class Panel {
         for (let v = 0; v < this.h; v++) coreLayer.fill(1, v * this.w + u0, v * this.w + u1);
       }
     }
-    if (spec.reinforced) for (let s = 0; s < spec.sections; s++) this.apply({ kind: "reinforce", section: s });
+    if (spec.reinforced) for (let s = 0; s < this.sectionCount; s++) this.apply({ kind: "reinforce", section: s, side: spec.reinforcedSide });
     this.modified = false;
+    this.version = 0;
     this.moveMask = this.computeMoveMask();
   }
 
@@ -132,10 +140,21 @@ export class Panel {
     return this.spec.construction.kind;
   }
 
+  /** Reinforcement sections across the width: a hatch takes one reinforcement. */
+  get sectionCount(): number {
+    return this.kind === "hatch" ? 1 : this.spec.sections;
+  }
+
   /** The u-range of reinforcement section `s`, in cells. */
   sectionRange(s: number): [number, number] {
-    const n = this.kind === "hatch" ? 1 : this.spec.sections;
+    const n = this.sectionCount;
     return [Math.floor((s * this.w) / n), Math.floor(((s + 1) * this.w) / n)];
+  }
+
+  /** The section column `u` is in. */
+  sectionOf(u: number): number {
+    for (let s = 0; s < this.sectionCount - 1; s++) if (u < this.sectionRange(s)[1]) return s;
+    return this.sectionCount - 1;
   }
 
   /** Is there material at cell (u, v) of `layer`? */
@@ -164,9 +183,8 @@ export class Panel {
       }
     } else if (op.kind === "reinforce") {
       const steel = this.layers[L_STEEL];
-      const n = this.kind === "hatch" ? 1 : this.spec.sections;
       const bit = 1 << op.section;
-      if (!steel || op.section < 0 || op.section >= n || this.everReinforced & bit || this.broken) return change;
+      if (!steel || op.section < 0 || op.section >= this.sectionCount || this.everReinforced & bit || this.broken) return change;
       const [u0, u1] = this.sectionRange(op.section);
       for (let v = 0; v < this.steelRows; v++)
         for (let u = u0; u < u1; u++) {
@@ -175,6 +193,7 @@ export class Panel {
         }
       this.reinforced |= bit;
       this.everReinforced |= bit;
+      this.steelSides = op.side ? this.steelSides | bit : this.steelSides & ~bit;
       if (this.kind === "hatch") this.steelHp = this.spec.reinforcedHatchHp;
     } else if (op.kind === "barricade") {
       // Up in an empty frame or over a broken one; off only while one stands there.
@@ -189,7 +208,10 @@ export class Panel {
       change.broke = !op.up;
     }
     const changed = change.broke || change.removed.some((r) => r.length) || change.added.some((a) => a.length) || op.kind === "damage";
-    if (changed) this.modified = true;
+    if (changed) {
+      this.modified = true;
+      this.version++;
+    }
     const move = this.computeMoveMask();
     for (let i = 0; i < move.length; i++)
       if (move[i] !== this.moveMask[i]) {
@@ -203,15 +225,17 @@ export class Panel {
   /**
    * Where a body collides with the panel: rectangles in metres on the face, [u0, u1) × [v0, v1) from the
    * panel's −u, −v corner. A floor with joists, an intact hatch or barricade, or glass is its whole face.
+   * The far edges are the panel's exact size, so an intact panel collides exactly like the box it was.
    */
   movementRects(): { u0: number; v0: number; u1: number; v1: number }[] {
     const cw = Math.ceil(this.w / MOVE_CELLS);
     const ch = Math.ceil(this.h / MOVE_CELLS);
+    const at = (cells: number, n: number, size: number, metres: number) => (cells >= n ? metres : cells * size);
     return greedyRects(this.moveMask, cw, ch).map((r: CellRect) => ({
-      u0: r.u0 * MOVE_CELLS * this.cellU,
-      v0: r.v0 * MOVE_CELLS * this.cellV,
-      u1: Math.min(this.w, r.u1 * MOVE_CELLS) * this.cellU,
-      v1: Math.min(this.h, r.v1 * MOVE_CELLS) * this.cellV,
+      u0: at(r.u0 * MOVE_CELLS, this.w, this.cellU, this.spec.widthM),
+      v0: at(r.v0 * MOVE_CELLS, this.h, this.cellV, this.spec.heightM),
+      u1: at(r.u1 * MOVE_CELLS, this.w, this.cellU, this.spec.widthM),
+      v1: at(r.v1 * MOVE_CELLS, this.h, this.cellV, this.spec.heightM),
     }));
   }
 
@@ -225,7 +249,7 @@ export class Panel {
   /** Everything that can change, run-length coded (joining players, resyncs). */
   encodeState(out: ByteWriter): void {
     out.u8((this.broken ? 1 : 0) | (this.empty ? 2 : 0));
-    out.u8(this.reinforced).u8(this.everReinforced);
+    out.u8(this.reinforced).u8(this.everReinforced).u8(this.steelSides);
     out.f64(this.hp).f64(this.steelHp);
     for (const l of this.layers) {
       if (!l) continue;
@@ -252,6 +276,7 @@ export class Panel {
     this.empty = (flags & 2) !== 0;
     this.reinforced = r.u8();
     this.everReinforced = r.u8();
+    this.steelSides = r.u8();
     this.hp = r.f64();
     this.steelHp = r.f64();
     for (const l of this.layers) {
@@ -270,6 +295,7 @@ export class Panel {
       if (i !== l.length) throw new ProtocolError("panel state: runs don't cover the panel");
     }
     this.modified = true;
+    this.version++;
     this.moveMask = this.computeMoveMask();
   }
 
@@ -331,8 +357,7 @@ export class Panel {
     }
     const steel = this.layers[L_STEEL];
     if (steel && this.reinforced) {
-      const n = this.kind === "hatch" ? 1 : this.spec.sections;
-      for (let s = 0; s < n; s++) {
+      for (let s = 0; s < this.sectionCount; s++) {
         if (!(this.reinforced & (1 << s))) continue;
         const [u0, u1] = this.sectionRange(s);
         const sw = u1 - u0;

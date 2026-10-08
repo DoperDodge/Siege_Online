@@ -15,7 +15,7 @@ Built in milestones; each keeps the tests, the browser tests and the netsim gree
 |---|---|
 | M1 Destruction data (constructions, bullet tiers, tools, reinforcement, barricades, hatches) | ✅ data/destruction.json, validated; 7 new open questions |
 | M2 Panel model: a cell grid per surface (skins, studs, steel), holes, falling pieces | ✅ pure model + 13 tests (D-062) |
-| M3 Panels in the simulation (movement through holes) and on screen | ⏳ |
+| M3 Panels in the simulation (movement through holes) and on screen | ✅ intact panels collide exactly as before; breaches let bodies through; rays see holes; drawn from cells (D-064) |
 | M4 Bullets and the knife through panels (wallbangs, holes, rewound holes) | ⏳ |
 | M5 Destruction over the network, and for players who join late | ⏳ |
 | M6 Reinforcement, barricades and hatches | ⏳ |
@@ -43,6 +43,12 @@ Built in milestones; each keeps the tests, the browser tests and the netsim gree
   hatch takes only hard damage. Bodies collide with 10 cm cells, so bullet holes never open a gap, only a real
   breach does; floors never open. A panel's state is run-length coded (about 1–2 KB for a wall shot to pieces)
   and hashed, for players who join later and to check clients agree.
+- **Panels in the game (M3, D-064):** the labs' destructible surfaces are now panels. Bodies collide with a
+  panel's solid 10 cm cells (an intact wall is exactly the box it was), so an opening a body fits through lets
+  it walk through; a soft floor never opens; a broken hatch drops whoever stands on it. Bullets, the knife's
+  reach, laser dots and bullet marks see every hole. Panels are drawn from their cells (skins in the surface's
+  colour, wooden or metal studs, steel plates on the side they went up from) and redrawn when they change.
+  Nothing in the game damages them yet: bullets and the knife start making holes in M4.
 
 ---
 

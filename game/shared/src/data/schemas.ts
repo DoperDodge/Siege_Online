@@ -542,13 +542,16 @@ export const levelSchema = z.strictObject({
       /**
        * A destructible surface is a panel (Phase 4, data/destruction.json): its construction (the surface's
        * default unless named), how many reinforcement sections it has, and whether it starts reinforced
-       * (REINFORCED_WALL always does) or, for a barricade, empty (a frame waiting for one).
+       * (REINFORCED_WALL always does) and from which side, or, for a barricade, empty (a frame waiting for
+       * one). The sides are the two ends of the thickness axis: local z for a wall wider along x than z,
+       * local x for one wider along z, up for a floor or hatch ("plus", the default, is a hatch's top).
        */
       panel: z
         .strictObject({
           construction: z.string().optional(),
           sections: z.number().int().min(1).max(3).optional(),
           reinforced: z.boolean().optional(),
+          reinforcedFrom: z.enum(["minus", "plus"]).optional(),
           empty: z.boolean().optional(),
         })
         .optional(),

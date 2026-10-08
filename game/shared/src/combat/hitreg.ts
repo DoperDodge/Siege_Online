@@ -6,20 +6,17 @@ import type { Vec3 } from "../core/math.js";
 import type { CombatData } from "../data/schemas.js";
 import type { HitboxHistory, SentTicks } from "../net/lagComp.js";
 import type { BodyPart } from "../player/hitboxes.js";
-import { QUERY_BULLET } from "../physics/rapier.js";
+import { raycastLevel } from "../level/raycast.js";
 import type { Sim } from "../sim.js";
 import type { ResolvedDamage } from "../weapons/loadout.js";
 import { bulletDamage, penetrationChain, type BodyHit, type BulletOptions, type Zone } from "./damage.js";
 
 /**
- * Distance along a ray to the first level geometry that stops bullets, or null. That is all of it in
- * Phase 3 except movement helpers (the invisible ramp over a staircase); Phase 4's destruction lets bullets
- * through soft walls.
+ * Distance along a ray to the first level geometry that stops bullets, or null: everything but movement
+ * helpers (the invisible ramp over a staircase) and the holes in destructible panels (level/raycast.ts).
  */
 export function traceStatic(sim: Sim, origin: Vec3, dir: Vec3, maxDist: number): number | null {
-  const ray = new sim.R.Ray({ x: origin[0], y: origin[1], z: origin[2] }, { x: dir[0], y: dir[1], z: dir[2] });
-  const hit = sim.world.castRay(ray, maxDist, true, undefined, QUERY_BULLET);
-  return hit ? hit.timeOfImpact : null;
+  return raycastLevel(sim, origin, dir, maxDist)?.t ?? null;
 }
 
 export interface PelletPath {

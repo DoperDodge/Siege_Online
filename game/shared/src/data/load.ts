@@ -229,7 +229,9 @@ function destructionProblems(d: DestructionData, weapons: Map<string, WeaponData
       const [w, h, t] = flat ? [s.size[0], s.size[2], s.size[1]] : [Math.max(s.size[0], s.size[2]), s.size[1], Math.min(s.size[0], s.size[2])];
       if (w < d.cellM || h < d.cellM) out.push(`${at} is smaller than one ${d.cellM} m cell`);
       if ("skinM" in c && t <= 2 * c.skinM) out.push(`${at} is ${t} m thick, no thicker than its two ${c.skinM} m skins`);
-      if (s.panel?.reinforced && !("reinforceable" in c && c.reinforceable)) out.push(`${at} starts reinforced but "${id}" can't be reinforced`);
+      const reinforced = s.panel?.reinforced ?? s.surface === "REINFORCED_WALL";
+      if (reinforced && !("reinforceable" in c && c.reinforceable)) out.push(`${at} starts reinforced but "${id}" can't be reinforced`);
+      if (s.panel?.reinforcedFrom && !reinforced) out.push(`${at}: panel.reinforcedFrom on a panel that doesn't start reinforced`);
       if (s.panel?.empty !== undefined && c.kind !== "barricade") out.push(`${at}: only a barricade can start empty`);
     }
   }

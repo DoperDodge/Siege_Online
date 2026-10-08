@@ -19,8 +19,8 @@ import {
   isPickable,
   offerId,
   resolveLoadout,
-  QUERY_BULLET,
   QUERY_STATIC,
+  raycastLevel,
   SIGHTS,
   UNDERBARRELS,
   lerp,
@@ -57,6 +57,7 @@ import { isTouchDevice, mountTouchControls } from "../../input/touch.js";
 import { LocalSocket } from "../../net/local.js";
 import { OnlineConnection } from "../../net/online.js";
 import { createLabScene, createRenderer, PawnView, updateLabels, warmShaders } from "../../render/labScene.js";
+import { PanelView } from "../../render/panelView.js";
 import { FxBus } from "../../render/fxBus.js";
 import { Viewmodel } from "../../render/viewmodel.js";
 import { AmmoHud } from "../../ui/ammo.js";
@@ -254,6 +255,8 @@ export async function startLab(o: LabOptions): Promise<void> {
   const view = $("#view");
   const renderer = createRenderer(view, params.has("lowgfx"));
   const scene = createLabScene(sim.level);
+  /** Destructible panels, drawn from their cells and redrawn as they change. */
+  const panelView = new PanelView(scene, sim.level.panels);
   let settings: Settings = loadSettings();
   const camera = new THREE.PerspectiveCamera(settings.fovVertical, view.clientWidth / view.clientHeight, 0.05, 300);
   camera.rotation.order = "YXZ";
@@ -824,6 +827,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       camera.rotation.set(controls.pitch, controls.yaw, eye.roll);
     }
     updateLabels(camera);
+    panelView.update();
     for (const fn of hooks.frame) fn(now, renderTick);
     renderer.render(scene, camera);
     const inHand = viewed.id === possessed()?.id && !thirdPerson && !ctrl.shellCam && ctrl.swapPhase === 0 ? (viewed.loadout?.weapons[rs.slot] ?? null) : null;
@@ -1461,7 +1465,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       const own = id === viewedId && !thirdPerson;
       const [yaw, pitch] = own ? [controls.yaw, controls.pitch] : view;
       const dir = new THREE.Vector3(-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch));
-      const hit = sim.world.castRay(new sim.R.Ray(from, dir), 60, true, undefined, QUERY_BULLET);
+      const hit = raycastLevel(sim, [from.x, from.y, from.z], [dir.x, dir.y, dir.z], 60);
       if (!hit) continue;
       let dot = laserDots.get(id);
       if (!dot) {
@@ -1470,7 +1474,7 @@ export async function startLab(o: LabOptions): Promise<void> {
         scene.add(dot);
         laserDots.set(id, dot);
       }
-      dot.position.copy(from).addScaledVector(dir, hit.timeOfImpact - 0.01);
+      dot.position.copy(from).addScaledVector(dir, hit.t - 0.01);
       dot.visible = true;
       seen.add(id);
     }

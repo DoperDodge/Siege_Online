@@ -6,7 +6,7 @@
 // compiled at load (renderer.compile also prepares hidden objects): a shader first compiled at a shot
 // stalls that frame, and with it the shot's input.
 import * as THREE from "three";
-import { QUERY_BULLET, type GameEvent, type Sim, type SimEvent, type Vec3 } from "@redmond/shared";
+import { raycastLevel, type GameEvent, type Sim, type SimEvent, type Vec3 } from "@redmond/shared";
 
 /** Where sounds will go (Phase 11 adds audio); a no-op until then. */
 export interface AudioSink {
@@ -190,12 +190,12 @@ export class FxBus {
     if (len < 0.1) return;
     dir.divideScalar(len);
     const start = to.clone().addScaledVector(dir, -0.08);
-    const hit = this.sim.world.castRayAndGetNormal(new this.sim.R.Ray(start, dir), 0.16, true, undefined, QUERY_BULLET);
+    const hit = raycastLevel(this.sim, [start.x, start.y, start.z], [dir.x, dir.y, dir.z], 0.16);
     if (!hit) return;
     const d = this.decals[this.nextDecal];
     this.nextDecal = (this.nextDecal + 1) % MAX_DECALS;
-    const n = new THREE.Vector3(hit.normal.x, hit.normal.y, hit.normal.z);
-    d.position.copy(start).addScaledVector(dir, hit.timeOfImpact).addScaledVector(n, 0.002);
+    const n = new THREE.Vector3(...hit.normal);
+    d.position.copy(start).addScaledVector(dir, hit.t).addScaledVector(n, 0.002);
     d.lookAt(d.position.clone().add(n));
     d.visible = true;
   }

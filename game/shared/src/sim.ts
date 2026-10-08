@@ -53,7 +53,7 @@ export class Sim {
     // same: with a zero timestep, after a collider has been removed, Rapier 0.21's tree intermittently
     // loses static colliders (the floor missing from every query on ~9% of ticks; DECISIONS D-037).
     world.timestep = DT;
-    const level = buildLevel(R, world, def);
+    const level = buildLevel(R, world, def, data.destruction);
     const cc = world.createCharacterController(0.02);
     cc.enableAutostep(m.step.maxStepHeight, 0.2, false);
     cc.enableSnapToGround(m.step.snapToGround);

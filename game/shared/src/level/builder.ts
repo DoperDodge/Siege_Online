@@ -2,17 +2,21 @@
 // Server and client both call this, so what you see is exactly what you collide with.
 import { DEG, forwardXZ, quatYawPitch, rotateXZ, type Vec3 } from "../core/math.js";
 import { HELPER_GROUPS, STATIC_GROUPS, type Collider, type Rapier, type World } from "../physics/rapier.js";
-import type { LevelDef, Surface } from "../data/schemas.js";
+import type { DestructionData, LevelDef, Surface } from "../data/schemas.js";
+import { PanelSet } from "../destruction/panels.js";
+import { constructionOf, panelSpec } from "../destruction/world.js";
 
 export interface Renderable {
   id: string;
-  kind: "solid" | "stair_step" | "ramp" | "ladder_rail" | "ladder_rung";
+  /** A "panel" is drawn from its cells (level.panels.list[panel]); its box here is only where it stands. */
+  kind: "solid" | "stair_step" | "ramp" | "ladder_rail" | "ladder_rung" | "panel";
   center: Vec3;
   size: Vec3;
   quat: [number, number, number, number];
   surface: Surface | "LADDER";
   visible: boolean;
   label?: string;
+  panel?: number;
 }
 
 export interface SolidInfo {
@@ -36,13 +40,17 @@ export interface BuiltLevel {
   def: LevelDef;
   renderables: Renderable[];
   ladders: LadderRuntime[];
-  /** Keyed by collider handle. */
+  /** Keyed by collider handle (panels' movement boxes too). */
   solids: Map<number, SolidInfo>;
+  /** Destructible surfaces (Phase 4): solids whose surface data/destruction.json builds as a panel. */
+  panels: PanelSet;
 }
 
-export function buildLevel(R: Rapier, world: World, def: LevelDef): BuiltLevel {
+/** `destruction`: build destructible surfaces as panels (without it every solid is plain geometry). */
+export function buildLevel(R: Rapier, world: World, def: LevelDef, destruction?: DestructionData): BuiltLevel {
   const renderables: Renderable[] = [];
   const solids = new Map<number, SolidInfo>();
+  const panels = new PanelSet(R, world, solids);
 
   const addBox = (
     info: SolidInfo,
@@ -65,11 +73,16 @@ export function buildLevel(R: Rapier, world: World, def: LevelDef): BuiltLevel {
 
   for (const s of def.solids) {
     const quat = quatYawPitch(s.yawDeg * DEG, 0);
-    addBox({ id: s.id, surface: s.surface, vaultable: s.vaultable }, "solid", s.center, s.size, quat, {
-      collides: true,
-      visible: true,
-      label: s.label,
-    });
+    const info: SolidInfo = { id: s.id, surface: s.surface, vaultable: s.vaultable };
+    const construction = destruction ? constructionOf(destruction, s) : null;
+    if (destruction && construction) {
+      // Its boxes are made in the same place in the level order a plain solid's would be.
+      const { spec, frame } = panelSpec(destruction, s, panels.list.length, construction);
+      panels.add(spec, frame, info);
+      renderables.push({ id: s.id, kind: "panel", center: s.center, size: s.size, quat, surface: s.surface, visible: true, label: s.label, panel: spec.index });
+      continue;
+    }
+    addBox(info, "solid", s.center, s.size, quat, { collides: true, visible: true, label: s.label });
   }
 
   // A ramp is a thin slab whose top surface starts on the ground at `start` and rises along yaw.
@@ -143,5 +156,5 @@ export function buildLevel(R: Rapier, world: World, def: LevelDef): BuiltLevel {
   }
 
   world.step(); // build the broad-phase so queries work immediately
-  return { def, renderables, ladders, solids };
+  return { def, renderables, ladders, solids, panels };
 }

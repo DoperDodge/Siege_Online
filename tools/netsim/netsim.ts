@@ -18,8 +18,8 @@ import {
   PawnMode,
   penetrationChain,
   poseHitboxes,
-  QUERY_BULLET,
   rayCapsule,
+  raycastLevel,
   Room,
   Stance,
   type BodyEntry,
@@ -649,7 +649,7 @@ export async function runHitreg(partial: Partial<HitregOptions> = {}): Promise<H
   const ownRay = (viewTick: number, origin: [number, number, number], yaw: number, pitch: number, slot: number): Omit<Expect, "viewTick"> => {
     const s = sim();
     const dir: [number, number, number] = [-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch)];
-    const wall = s.world.castRay(new s.R.Ray({ x: origin[0], y: origin[1], z: origin[2] }, { x: dir[0], y: dir[1], z: dir[2] }), 200, true, undefined, QUERY_BULLET);
+    const wall = raycastLevel(s, origin, dir, 200);
     const bodies: BodyEntry[] = [];
     for (const id of shooter.session.remoteIds()) {
       const st = shooter.session.remoteAt(id, viewTick);
@@ -657,7 +657,7 @@ export async function runHitreg(partial: Partial<HitregOptions> = {}): Promise<H
       const parts: BodyEntry["parts"] = [];
       for (const h of poseHitboxes(m(), hb(), st)) {
         const t = rayCapsule(origin, dir, h.a, h.b, h.radius);
-        if (t !== null && t <= (wall ? wall.timeOfImpact : 200)) parts.push({ part: h.part, t });
+        if (t !== null && t <= (wall ? wall.t : 200)) parts.push({ part: h.part, t });
       }
       if (parts.length) bodies.push({ id, parts: parts.sort((a, b) => a.t - b.t) });
     }

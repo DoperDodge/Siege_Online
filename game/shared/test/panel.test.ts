@@ -21,6 +21,7 @@ function panel(constructionId: string, widthM: number, heightM: number, thicknes
     sections: 2,
     steelHeightM: d.reinforcement.steelHeightM,
     reinforced: false,
+    reinforcedSide: 0,
     empty: false,
     hp,
     reinforcedHatchHp: d.reinforcement.reinforcedHatchHp,
@@ -98,7 +99,7 @@ describe("a soft wall", () => {
 describe("reinforcement", () => {
   it("covers one section up to the steel height; bullets and soft cuts do nothing to it; a destroyed one can't come back", () => {
     const p = panel("reinforceable_wall", 3, 3, 0.2, { sections: 2 });
-    const added = p.apply({ kind: "reinforce", section: 0 }).added[L_STEEL];
+    const added = p.apply({ kind: "reinforce", section: 0, side: 0 }).added[L_STEEL];
     const rows = Math.round(d.reinforcement.steelHeightM / d.cellM);
     expect(added.length).toBe(30 * rows);
     expect([p.solid(L_STEEL, 29, 0), p.solid(L_STEEL, 30, 0), p.solid(L_STEEL, 0, rows - 1), p.solid(L_STEEL, 0, rows)]).toEqual([true, false, true, false]);
@@ -115,15 +116,15 @@ describe("reinforcement", () => {
     // Cut the rest away: section 0 is no longer reinforced, and can't be again.
     p.apply(rect(L_STEEL, 0, 0, 30, 20, true));
     expect(p.reinforced & 1).toBe(0);
-    expect(p.apply({ kind: "reinforce", section: 0 }).added[L_STEEL]).toEqual([]);
-    expect(p.apply({ kind: "reinforce", section: 1 }).added[L_STEEL].length).toBe(30 * rows);
+    expect(p.apply({ kind: "reinforce", section: 0, side: 0 }).added[L_STEEL]).toEqual([]);
+    expect(p.apply({ kind: "reinforce", section: 1, side: 0 }).added[L_STEEL].length).toBe(30 * rows);
   });
 
   it("a damaged wall can be reinforced: the steel closes the hole to bodies", () => {
     const p = panel("reinforceable_wall", 2, 2.5, 0.2, { sections: 1 });
     for (const layer of [L_FRONT, L_CORE, L_BACK]) p.apply(rect(layer, 10, 0, 30, 36));
     expect(covered(p, 1, 0.5)).toBe(false);
-    expect(p.apply({ kind: "reinforce", section: 0 }).movementChanged).toBe(true);
+    expect(p.apply({ kind: "reinforce", section: 0, side: 0 }).movementChanged).toBe(true);
     expect(covered(p, 1, 0.5)).toBe(true);
   });
 });
@@ -137,7 +138,7 @@ describe("breakable panels", () => {
     const broke = p.apply({ kind: "damage", amount: 40, hard: false });
     expect([broke.broke, broke.movementChanged, p.broken]).toEqual([true, true, true]);
     expect(p.movementRects()).toEqual([]);
-    expect(p.apply({ kind: "reinforce", section: 0 }).added[L_STEEL]).toEqual([]);
+    expect(p.apply({ kind: "reinforce", section: 0, side: 0 }).added[L_STEEL]).toEqual([]);
   });
 
   it("a reinforced hatch takes only hard damage, to its 1,000,000 pool", () => {
@@ -184,6 +185,31 @@ describe("floors", () => {
   });
 });
 
+describe("sections and sides", () => {
+  it("an intact wall is one movement box the exact size of the panel", () => {
+    expect(panel("soft_wall", 2.3, 2.45, 0.2).movementRects()).toEqual([{ u0: 0, v0: 0, u1: 2.3, v1: 2.45 }]);
+  });
+
+  it("columns map to the sections sectionRange gives, and steel remembers the side it went up from", () => {
+    const p = panel("reinforceable_wall", 2.05, 2.5, 0.2, { sections: 3 });
+    for (let u = 0; u < p.w; u++) {
+      const s = p.sectionOf(u);
+      const [u0, u1] = p.sectionRange(s);
+      expect(u >= u0 && u < u1, `column ${u}`).toBe(true);
+    }
+    p.apply({ kind: "reinforce", section: 2, side: 1 });
+    p.apply({ kind: "reinforce", section: 0, side: 0 });
+    expect(p.steelSides).toBe(0b100);
+    const w = new ByteWriter(4096);
+    p.encodeState(w);
+    const q = panel("reinforceable_wall", 2.05, 2.5, 0.2, { sections: 3 });
+    q.decodeState(new ByteReader(w.finish()));
+    expect([q.steelSides, q.reinforced, q.hash()]).toEqual([0b100, 0b101, p.hash()]);
+    const hatch = panel("hatch", 1, 1, 0.1, { reinforced: true, reinforcedSide: 1 });
+    expect([hatch.steelSides, hatch.reinforced, hatch.version]).toEqual([1, 1, 0]);
+  });
+});
+
 describe("state", () => {
   it("round-trips exactly, and two panels given the same ops hash the same", () => {
     const ops: PanelOp[] = [];
@@ -191,7 +217,7 @@ describe("state", () => {
     const rnd = (n: number) => ((seed = (seed * 1103515245 + 12345) >>> 0) % n);
     for (let i = 0; i < 80; i++) {
       const layer = [L_FRONT, L_CORE, L_BACK, L_STEEL][rnd(4)];
-      if (i === 10) ops.push({ kind: "reinforce", section: 1 });
+      if (i === 10) ops.push({ kind: "reinforce", section: 1, side: 0 });
       ops.push(rnd(3) ? { kind: "cut", layer, shape: { kind: "disc", u4: rnd(160), v4: rnd(200), r4: rnd(12) }, hard: rnd(2) === 0 } : rect(layer, rnd(40), rnd(50), rnd(40) + 1, rnd(50) + 1, rnd(2) === 0));
     }
     const a = panel("reinforceable_wall", 2, 2.5, 0.2);
