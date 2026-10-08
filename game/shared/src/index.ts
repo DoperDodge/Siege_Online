@@ -31,3 +31,5 @@ export * from "./net/events.js";
 export * from "./net/room.js";
 export * from "./net/host.js";
 export * from "./net/clientSession.js";
+export * from "./destruction/grid.js";
+export * from "./destruction/panel.js";

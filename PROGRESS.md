@@ -14,7 +14,7 @@ Built in milestones; each keeps the tests, the browser tests and the netsim gree
 | Milestone | Status |
 |---|---|
 | M1 Destruction data (constructions, bullet tiers, tools, reinforcement, barricades, hatches) | ✅ data/destruction.json, validated; 7 new open questions |
-| M2 Panel model: a cell grid per surface (skins, studs, steel), holes, falling pieces | ⏳ |
+| M2 Panel model: a cell grid per surface (skins, studs, steel), holes, falling pieces | ✅ pure model + 13 tests (D-062) |
 | M3 Panels in the simulation (movement through holes) and on screen | ⏳ |
 | M4 Bullets and the knife through panels (wallbangs, holes, rewound holes) | ⏳ |
 | M5 Destruction over the network, and for players who join late | ⏳ |
@@ -35,6 +35,14 @@ Built in milestones; each keeps the tests, the browser tests and the netsim gree
   pool of 10 (lab rooms let both sides reinforce and barricade); a reinforced hatch has a 1,000,000 HP pool.
   Everything not verified is listed in research/OPEN_QUESTIONS.md ("Placeholders added while building Phase
   4", 7 questions). The movement lab's floor hatch sample is now thick enough to be a real panel.
+- **The panel model (M2, D-062):** each destructible surface is a grid of 5 cm cells in layers (two skins, a core
+  of studs, joists or beams, and steel once reinforced). A bullet removes the cells within its hole's radius
+  (always the one it hit), the knife a 25 cm disc, a breach a rectangle; whatever nothing holds then falls (a
+  piece of skin cut free of the frame and the studs, a stud cut at both ends, a reinforcement cut along a full
+  line at the top and the bottom). Hatches, barricades and glass break whole once worn down; a reinforced
+  hatch takes only hard damage. Bodies collide with 10 cm cells, so bullet holes never open a gap, only a real
+  breach does; floors never open. A panel's state is run-length coded (about 1–2 KB for a wall shot to pieces)
+  and hashed, for players who join later and to check clients agree.
 
 ---
 
