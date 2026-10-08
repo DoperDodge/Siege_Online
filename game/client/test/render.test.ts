@@ -210,7 +210,7 @@ describe("no repeated effects when a correction replays our inputs", () => {
     const fx = new FxBus(scene, sim);
     const objects = scene.children.length;
     const ops: IndexedOp[] = [{ panel: 0, op: { kind: "cut", layer: L_FRONT, shape: { kind: "rect", u0: 5, v0: 5, u1: 25, v1: 25 }, hard: false } }];
-    for (let k = 0; k < 50; k++) fx.panels(ops, [sim.level.panels.apply(0, { ...ops[0].op, shape: { kind: "rect", u0: k % 30, v0: 0, u1: (k % 30) + 2, v1: 40 } })], 1000);
+    for (let k = 0; k < 50; k++) fx.panels(ops, [sim.level.panels.apply(0, { kind: "cut", layer: L_FRONT, shape: { kind: "rect", u0: k % 30, v0: 0, u1: (k % 30) + 2, v1: 40 }, hard: false })], 1000);
     fx.update(1000, 0, [], () => new THREE.Vector3(), () => null);
     const shown = fx.counts.debrisShown;
     expect(shown).toBeGreaterThan(0);
