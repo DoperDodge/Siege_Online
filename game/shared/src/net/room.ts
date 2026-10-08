@@ -1,10 +1,12 @@
 // A match room: the authoritative simulation plus everyone connected to it (PLAN §5). Transport-free, so
 // the Node server, the netsim harness and (later) offline Practice in a Web Worker all run this same code.
 import { DT, TICK_HZ } from "../core/constants.js";
+import type { Vec3 } from "../core/math.js";
 import { applyDamage, Cause, isIdleShell, type Damage } from "../combat/apply.js";
 import { shotOnBodies, tracePellets, type ShotOnBody } from "../combat/hitreg.js";
 import { judgeMelee } from "../combat/melee.js";
-import type { ModeData } from "../data/schemas.js";
+import type { DummyDef, ModeData } from "../data/schemas.js";
+import { DUMMY_STANCE, dummyInput } from "../lab/dummies.js";
 import { spawnAmmo, type Pawn, type PlayerController } from "../player/pawn.js";
 import { PawnMode, type InputCmd, type PawnState } from "../player/types.js";
 import { Sim } from "../sim.js";
@@ -16,7 +18,7 @@ import { defaultLoadoutPick, resolveLoadout, type LoadoutPick } from "../weapons
 import { hash4, pelletDirections } from "../weapons/spread.js";
 import { sideTeam } from "../sim.js";
 import { encodeEvents, type GameEvent } from "./events.js";
-import { encodeError, encodePong, encodeRoster, encodeShotResult, encodeWelcome, ErrorCode, unwrap16, type InputMsg, type LabTool, type RosterEntry } from "./protocol.js";
+import { encodeError, encodePong, encodeRoster, encodeShotResult, encodeWelcome, ErrorCode, unwrap16, type InputMsg, type LabTool, type RosterEntry, type ShotResult } from "./protocol.js";
 import { MAX_INTERP_MS, quantizeRemote, SNAPSHOT_EVERY, SnapshotEncoder, type RemoteQ } from "./snapshot.js";
 
 /** Inputs the server tries to keep queued per client (absorbs jitter); clients pace themselves to it. */
@@ -147,6 +149,14 @@ interface JudgedShot {
   bodies: ShotOnBody[];
 }
 
+/** A Range Lab target: a body with no client, stepped from its script (lab/dummies.ts). */
+interface Dummy {
+  def: DummyDef;
+  ctrl: PlayerController;
+  /** The tick it died (it comes back the mode's dummyRespawnS later), or null. */
+  diedAt: number | null;
+}
+
 /** Hash of everything a client predicts for itself: each owned pawn's exact state plus its controller. */
 export function predictionHash(sim: Sim, ctrl: PlayerController): number {
   const w = new ByteWriter(256);
@@ -162,6 +172,8 @@ export class Room {
   readonly history: HitboxHistory;
   private readonly members = new Map<number, Member>();
   private nextMemberId = 1;
+  /** Range Lab dummies (lab rooms on a level that has some). */
+  private readonly dummies: Dummy[] = [];
   /** Performance counters for the /stats endpoint and the netsim. */
   readonly stats = {
     ticks: 0,
@@ -197,6 +209,34 @@ export class Room {
   ) {
     this.history = new HitboxHistory(sim, 32);
     this.rules = sim.data.modes.get("lab")!;
+    if (lab) for (const def of sim.level.def.dummies) this.addDummy(def);
+  }
+
+  /** A dummy's body: spawned like a player's (same ids for the same order), then put on its spot. */
+  private addDummy(def: DummyDef) {
+    const ctrl = this.sim.addPlayer(def.name ?? def.id, def.operator, 0, undefined, undefined, def.team);
+    for (const id of ctrl.pawnIds) this.sim.pawns.get(id)!.state.rng = hash4(this.seed, id, 0x5eed, 1) || 1;
+    const d: Dummy = { def, ctrl, diedAt: null };
+    this.dummies.push(d);
+    this.placeDummy(d);
+  }
+
+  /** On its spot, settled in its stance (and down, if it starts that way). */
+  private placeDummy(d: Dummy) {
+    const pawn = this.sim.pawns.get(d.ctrl.possessedPawnId)!;
+    const [x, y, z] = d.def.pos;
+    this.sim.teleport(pawn.id, x, y, z, d.def.yawDeg, DUMMY_STANCE[d.def.stance]);
+    if (d.def.startDowned) applyDamage(this.sim, pawn, { amount: pawn.state.hp, kill: false }, this.rules);
+    this.sim.refreshPawn(pawn.id);
+    d.diedAt = null;
+  }
+
+  /** Back to life on its spot: the same pawn id, in a new life (HitboxHistory never rewinds into the old one). */
+  private respawnDummy(d: Dummy) {
+    const id = d.ctrl.possessedPawnId;
+    this.downedBy.delete(id);
+    this.sim.respawn(id, 0, d.def);
+    this.placeDummy(d);
   }
 
   /** `seed`: the server passes a cryptographic one; tests pass a fixed one. */
@@ -333,9 +373,12 @@ export class Room {
       this.spawn(m);
       this.broadcastRoster(); // new pawn ids: everyone (the respawned client too) needs them
     } else if (tool.kind === "damage") {
-      // Only your own bodies (try damage, death and the indicators alone); dummies join in M10.
-      const pawn = m.ctrl.pawnIds.includes(tool.pawnId) ? this.sim.pawns.get(tool.pawnId) : undefined;
+      // Only your own bodies (try damage, death and the indicators alone) and the dummies.
+      const mine = m.ctrl.pawnIds.includes(tool.pawnId) || this.dummies.some((d) => d.ctrl.pawnIds.includes(tool.pawnId));
+      const pawn = mine ? this.sim.pawns.get(tool.pawnId) : undefined;
       if (pawn) this.hurt(pawn, { amount: tool.amount, kill: tool.kill }, { cause: Cause.Lab, attacker: null, headshot: false });
+    } else if (tool.kind === "resetDummies") {
+      for (const d of this.dummies) this.respawnDummy(d);
     } else if (tool.kind === "refill") {
       for (const id of m.ctrl.pawnIds) {
         const p = this.sim.pawns.get(id);
@@ -396,20 +439,45 @@ export class Room {
     const ends = paths.map((p): [number, number, number] => [origin[0] + p.dir[0] * p.end, origin[1] + p.dir[1] * p.end, origin[2] + p.dir[2] * p.end]);
     for (const other of this.members.values()) other.events.push({ kind: "shotFx", pawnId: shooter.id, slot: shot.slot, suppressed: w.suppressed, ends });
     if (!this.lab) return;
-    // Lab rooms: the shooter's readout of the first pellet (what it entered first, how far it rewound).
+    // Lab rooms: the shooter's readout (what the first pellet entered first, how far the server rewound,
+    // where every pellet went, and where it had the body the first pellet hit or nearly hit).
     const p0 = paths[0];
     m.client.send(
       encodeShotResult({
         seq: shot.seq & 0xffff,
         origin,
         dir: p0.dir,
+        dirs: paths.map((p) => p.dir),
+        ends: paths.map((p) => p.end),
         viewTick,
         rewoundTick,
         serverTick: now,
         hit: p0.first && { pawnId: p0.first.pawnId, part: p0.first.part, distance: p0.first.t },
         wallDistance: p0.wall !== null && !p0.first ? p0.wall : null,
+        target: this.shotTarget(origin, p0.dir, p0.first?.pawnId ?? null, p0.wall ?? Infinity, rewoundTick, ignore, m.sent),
       }),
     );
+  }
+
+  /** The body a pellet entered, or else the one whose torso it passed closest to (within 2 m, before the wall), as rewound. */
+  private shotTarget(origin: Vec3, dir: Vec3, hitId: number | null, wall: number, tick: number, ignore: ReadonlySet<number>, sent: SentRing): ShotResult["target"] {
+    const posed = this.history.at(tick, sent);
+    let best = hitId;
+    if (best === null) {
+      let bestGap = 2;
+      for (const [id, boxes] of posed) {
+        const torso = boxes.find((b) => b.part === "torso");
+        if (ignore.has(id) || !torso) continue;
+        const c = torso.a.map((v, i) => (v + torso.b[i]) / 2);
+        const rel = c.map((v, i) => v - origin[i]);
+        const along = rel[0] * dir[0] + rel[1] * dir[1] + rel[2] * dir[2];
+        if (along <= 0 || along > wall) continue;
+        const gap = Math.hypot(rel[0] - dir[0] * along, rel[1] - dir[1] * along, rel[2] - dir[2] * along);
+        if (gap < bestGap) [best, bestGap] = [id, gap];
+      }
+    }
+    const boxes = best === null ? undefined : posed.get(best);
+    return best === null || !boxes ? null : { pawnId: best, boxes: boxes.map((b) => ({ part: b.part, a: [...b.a], b: [...b.b], radius: b.radius })) };
   }
 
   /**
@@ -565,9 +633,19 @@ export class Room {
   }
 
   roster(): RosterEntry[] {
-    return [...this.members.values()]
+    const players = [...this.members.values()]
       .filter((m) => m.ctrl)
       .map((m) => ({ controllerId: m.ctrl!.id, name: m.name, operatorId: m.ctrl!.operatorId, pawnIds: [...m.ctrl!.pawnIds], team: m.team, kind: 0, loadout: m.pick }));
+    const dummies = this.dummies.map((d) => ({
+      controllerId: d.ctrl.id,
+      name: d.ctrl.name,
+      operatorId: d.ctrl.operatorId,
+      pawnIds: [...d.ctrl.pawnIds],
+      team: d.def.team,
+      kind: 1,
+      loadout: defaultLoadoutPick(this.sim.data, d.def.operator),
+    }));
+    return [...players, ...dummies];
   }
 
   private broadcastRoster() {
@@ -654,6 +732,12 @@ export class Room {
       active.add(m.ctrl.id);
       m.applied = next;
     }
+    for (const d of this.dummies) {
+      const pawn = this.sim.pawns.get(d.ctrl.possessedPawnId);
+      if (!pawn || pawn.state.mode === PawnMode.Dead) continue;
+      inputs.set(d.ctrl.id, dummyInput(this.sim.tick, pawn.state, d.def));
+      active.add(d.ctrl.id);
+    }
     this.sim.step(inputs, active, true);
     this.simEvents();
     const applied = new Map<number, { m: Member; input: QueuedInput }>();
@@ -674,10 +758,22 @@ export class Room {
     }
     this.resolveShots();
     this.checkReviveLinks();
+    this.reviveDummies();
     this.history.record();
     this.stats.ticks++;
     if (this.sim.tick % SNAPSHOT_EVERY === 0) this.sendSnapshots();
     this.flushEvents();
+  }
+
+  /** Dead dummies come back dummyRespawnS after they died. */
+  private reviveDummies() {
+    const wait = Math.round(this.rules.dummyRespawnS * TICK_HZ);
+    for (const d of this.dummies) {
+      const pawn = this.sim.pawns.get(d.ctrl.possessedPawnId);
+      if (!pawn || pawn.state.mode !== PawnMode.Dead) continue;
+      d.diedAt ??= this.sim.tick;
+      if (this.sim.tick - d.diedAt >= wait) this.respawnDummy(d);
+    }
   }
 
   private flushEvents() {

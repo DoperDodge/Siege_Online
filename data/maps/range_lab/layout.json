@@ -1,0 +1,64 @@
+{
+  "_doc": "Range Lab (Phase 3 M10, DECISIONS D-052): a shooting range with scripted dummies to try weapons on. Same format as movement_lab: metres, Y up, yawDeg 0 faces -Z. The firing line is at z = 20 and lane distances are measured from it along -Z (so the 13 m post is at z = 7). The lane's dummies alternate 1.5 m either side of the centre line so the near ones never hide the far ones. Posts at 13, 18 and 28 m mark damage falloff breakpoints (research/weapons_notes.md §4.3). Dummies are lab targets, not Siege facts; they respawn after data/modes/lab.json dummyRespawnS.",
+  "id": "range_lab",
+  "name": "Range Lab",
+  "spawns": [{ "id": "firing_line", "pos": [0, 0, 22], "yawDeg": 0 }],
+  "solids": [
+    { "id": "floor", "center": [0, -0.25, -2], "size": [60, 0.5, 68], "surface": "HARD_FLOOR" },
+    { "id": "wall_n", "center": [0, 2, -36], "size": [60, 4, 0.5], "surface": "HARD_WALL" },
+    { "id": "wall_s", "center": [0, 2, 32], "size": [60, 4, 0.5], "surface": "HARD_WALL" },
+    { "id": "wall_e", "center": [30, 2, -2], "size": [0.5, 4, 68], "surface": "HARD_WALL" },
+    { "id": "wall_w", "center": [-30, 2, -2], "size": [0.5, 4, 68], "surface": "HARD_WALL" },
+
+    { "id": "firing_line", "center": [0, 0.01, 20], "size": [8, 0.02, 0.12], "surface": "PROP", "label": "Firing line" },
+    { "id": "post_13", "center": [3.5, 1, 7], "size": [0.12, 2, 0.12], "surface": "PROP", "label": "13 m" },
+    { "id": "post_18", "center": [3.5, 1, 2], "size": [0.12, 2, 0.12], "surface": "PROP", "label": "18 m" },
+    { "id": "post_28", "center": [3.5, 1, -8], "size": [0.12, 2, 0.12], "surface": "PROP", "label": "28 m" },
+
+    { "id": "strafe_track", "center": [10, 0.01, 5], "size": [7, 0.02, 0.5], "surface": "PROP", "label": "Strafe track" },
+    { "id": "peek_post", "center": [18, 1.25, 8], "size": [1.2, 2.5, 0.6], "surface": "HARD_WALL", "label": "Peek post" },
+
+    { "id": "cq_front_l", "center": [-23.25, 1.25, 25], "size": [5.5, 2.5, 0.2], "surface": "HARD_WALL", "label": "Close quarters" },
+    { "id": "cq_front_r", "center": [-16.75, 1.25, 25], "size": [5.5, 2.5, 0.2], "surface": "HARD_WALL" },
+    { "id": "cq_lintel", "center": [-20, 2.35, 25], "size": [1, 0.3, 0.2], "surface": "HARD_WALL" },
+    { "id": "cq_side_w", "center": [-26, 1.25, 27.5], "size": [0.2, 2.5, 5], "surface": "HARD_WALL" },
+    { "id": "cq_side_e", "center": [-14, 1.25, 27.5], "size": [0.2, 2.5, 5], "surface": "HARD_WALL" },
+    { "id": "cq_back", "center": [-20, 1.25, 30], "size": [12, 2.5, 0.2], "surface": "HARD_WALL" },
+
+    { "id": "revive_pad", "center": [12, 0.01, 27], "size": [3, 0.02, 3], "surface": "PROP", "label": "Revive pad (hold F)" },
+    { "id": "wallbang_wall", "center": [-8, 1.25, 12.5], "size": [3, 2.5, 0.2], "surface": "SOFT_WALL", "label": "Wallbangs: Phase 4" }
+  ],
+  "markers": [
+    { "id": "m05", "pos": [-3.5, 0.05, 15], "label": "5 m" },
+    { "id": "m10", "pos": [-3.5, 0.05, 10], "label": "10 m" },
+    { "id": "m15", "pos": [-3.5, 0.05, 5], "label": "15 m" },
+    { "id": "m20", "pos": [-3.5, 0.05, 0], "label": "20 m" },
+    { "id": "m25", "pos": [-3.5, 0.05, -5], "label": "25 m" },
+    { "id": "m30", "pos": [-3.5, 0.05, -10], "label": "30 m" },
+    { "id": "m35", "pos": [-3.5, 0.05, -15], "label": "35 m" },
+    { "id": "m40", "pos": [-3.5, 0.05, -20], "label": "40 m" },
+    { "id": "m45", "pos": [-3.5, 0.05, -25], "label": "45 m" },
+    { "id": "m50", "pos": [-3.5, 0.05, -30], "label": "50 m" },
+    { "id": "row", "pos": [-17, 2.4, 10], "label": "Stance and lean" }
+  ],
+  "dummies": [
+    { "id": "lane_05", "name": "Lane 5 m", "pos": [-1.5, 0, 15], "yawDeg": 180, "operator": "mute", "team": 1, "script": "static" },
+    { "id": "lane_10", "name": "Lane 10 m", "pos": [1.5, 0, 10], "yawDeg": 180, "operator": "mute", "team": 1, "script": "static" },
+    { "id": "lane_15", "name": "Lane 15 m", "pos": [-1.5, 0, 5], "yawDeg": 180, "operator": "mute", "team": 1, "script": "static" },
+    { "id": "lane_20", "name": "Lane 20 m", "pos": [1.5, 0, 0], "yawDeg": 180, "operator": "mute", "team": 1, "script": "static" },
+    { "id": "lane_25", "name": "Lane 25 m", "pos": [-1.5, 0, -5], "yawDeg": 180, "operator": "mute", "team": 1, "script": "static" },
+    { "id": "lane_30", "name": "Lane 30 m", "pos": [1.5, 0, -10], "yawDeg": 180, "operator": "mute", "team": 1, "script": "static" },
+    { "id": "lane_40", "name": "Lane 40 m", "pos": [-1.5, 0, -20], "yawDeg": 180, "operator": "mute", "team": 1, "script": "static" },
+    { "id": "lane_50", "name": "Lane 50 m", "pos": [1.5, 0, -30], "yawDeg": 180, "operator": "mute", "team": 1, "script": "static" },
+    { "id": "row_stand", "name": "Standing", "pos": [-22, 0, 10], "yawDeg": 180, "operator": "mute", "team": 1, "script": "static" },
+    { "id": "row_crouch", "name": "Crouched", "pos": [-19.5, 0, 10], "yawDeg": 180, "operator": "mute", "team": 1, "script": "static", "stance": "crouch" },
+    { "id": "row_prone", "name": "Prone", "pos": [-17, 0, 10], "yawDeg": 180, "operator": "mute", "team": 1, "script": "static", "stance": "prone" },
+    { "id": "row_lean_l", "name": "Leaning left", "pos": [-14.5, 0, 10], "yawDeg": 180, "operator": "mute", "team": 1, "script": "static", "lean": -1 },
+    { "id": "row_lean_r", "name": "Leaning right", "pos": [-12, 0, 10], "yawDeg": 180, "operator": "mute", "team": 1, "script": "static", "lean": 1 },
+    { "id": "strafe", "name": "Strafing", "pos": [10, 0, 5], "yawDeg": 180, "operator": "mute", "team": 1, "script": "strafe", "span": 6, "periodS": 4 },
+    { "id": "peek", "name": "Peeking", "pos": [18, 0, 7], "yawDeg": 180, "operator": "mute", "team": 1, "script": "peek", "periodS": 4 },
+    { "id": "doorway", "name": "Doorway", "pos": [-20, 0, 27.5], "yawDeg": 0, "operator": "mute", "team": 1, "script": "static" },
+    { "id": "revive", "name": "Downed teammate", "pos": [12, 0, 27], "yawDeg": 90, "operator": "sledge", "team": 0, "script": "static", "startDowned": true },
+    { "id": "behind_wall", "name": "Behind the wall", "pos": [-8, 0, 11.6], "yawDeg": 180, "operator": "mute", "team": 1, "script": "static" }
+  ]
+}

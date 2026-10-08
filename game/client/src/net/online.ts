@@ -3,6 +3,7 @@
 // simulated latency"), and the shared ClientSession that predicts our own movement and interpolates
 // everyone else.
 import { ClientSession, encodeCreateRoom, encodeHello, encodeJoinRoom, loadGameData, type ClientSessionOptions } from "@redmond/shared";
+import type { SocketLike } from "./local.js";
 
 /** The game server's WebSocket address: same host as the page (`?server=host:port` overrides it). */
 export function serverUrl(): string {
@@ -64,14 +65,18 @@ export interface OnlineOptions {
   name: string;
   /** Join this room code, or create a new room when null. */
   room: string | null;
+  /** The level a room created here loads (a joined room has its own). */
+  levelId: string;
   conditions: () => NetConditions;
   session: Omit<ClientSessionOptions, "send" | "now">;
   onClose(reason: string): void;
+  /** Where the "server" is: the game server's WebSocket by default, or a room in the page (net/local.ts). */
+  socket?: () => SocketLike;
 }
 
 export class OnlineConnection {
   readonly session: ClientSession;
-  private readonly ws: WebSocket;
+  private readonly ws: SocketLike;
   private readonly up: DelayLine;
   private readonly down: DelayLine;
   private readonly pinger: ReturnType<typeof setInterval>;
@@ -85,11 +90,11 @@ export class OnlineConnection {
     this.up = new DelayLine(delay);
     this.down = new DelayLine(delay);
     this.session = new ClientSession({ ...o.session, send: (b) => this.send(b), now: () => performance.now() });
-    this.ws = new WebSocket(serverUrl());
+    this.ws = o.socket?.() ?? new WebSocket(serverUrl());
     this.ws.binaryType = "arraybuffer";
     this.ws.onopen = () => {
       this.send(encodeHello(o.name, loadGameData().dataHash));
-      this.send(o.room ? encodeJoinRoom(o.room) : encodeCreateRoom());
+      this.send(o.room ? encodeJoinRoom(o.room) : encodeCreateRoom(o.levelId));
     };
     this.ws.onmessage = (e) => {
       if (!(e.data instanceof ArrayBuffer)) return;
@@ -113,7 +118,7 @@ export class OnlineConnection {
 
   send(bytes: Uint8Array) {
     this.up.push(() => {
-      if (this.ws.readyState === WebSocket.OPEN) this.ws.send(bytes as Uint8Array<ArrayBuffer>); // our encoders never use shared memory
+      if (this.ws.readyState === 1 /* OPEN */) this.ws.send(bytes as Uint8Array<ArrayBuffer>); // our encoders never use shared memory
     });
   }
 

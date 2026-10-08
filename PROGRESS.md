@@ -23,7 +23,7 @@ Built in milestones; each one keeps the tests, both e2e scripts and the netsim g
 | M7 DBNO and revive | ✅ down, crawl and bleed; hold F for 4 s to revive; predicted with no mispredictions |
 | M8 Melee | ✅ V swings the knife: kills standing or downed, judged with lag compensation |
 | M9 Client presentation (viewmodel, HUD, hit markers) | ✅ a gun in your hands, sights, flashes, tracers and bullet marks; ADS sensitivity per zoom |
-| M10 Range Lab (dummies) | ⏳ |
+| M10 Range Lab (dummies) | ✅ targets out to 50 m, offline in its own room or online; F2 overlay, damage against the data |
 | M11 End-to-end tests, netsim gates, docs | ⏳ |
 
 ### What's done
@@ -111,6 +111,21 @@ Built in milestones; each one keeps the tests, both e2e scripts and the netsim g
   went (nothing from others with a suppressor), lasers put a red dot on the walls, and you see your own
   shadow. The pause menu sets ADS sensitivity separately for 1×, 2.5× and 3.5× sights (your old single setting
   carries over). The HUD pieces are now separate modules the Range Lab will reuse.
+- **The Range Lab (M10, D-052):** Home page → *Range Lab*. A shooting range with 18 targets: a dummy every 5
+  to 10 m down a 50 m lane (posts at 13, 18 and 28 m, where falloff starts and ends for many guns), a row
+  standing, crouched, prone and leaning, one strafing back and forth, one leaning out from behind a post, one
+  through a doorway, a downed teammate on a revive pad, and one behind a soft wall (bullets stop there until
+  Phase 4). Dummies come back 3 s after they die; *Reset dummies* (pause menu) brings them all back. A panel on
+  the left reads out your last shot: who and where you hit, at what range, the damage the server dealt and what
+  the weapon data says for that range and body part (at 40 m a rifle's 28 is the data's 28). Damage numbers
+  float over whoever you hit. **F2** shows what the server judged: every pellet as it drew them, the target
+  where the server had it (green) and where you saw it (blue). Offline the page runs a room of its own (no
+  server; the latency settings still work); `?online` plays it with friends on the server.
+- **Shared lab code:** both labs are now one page (`labs/common/lab.ts`) with their own level, go-to spots, help
+  and extras. Dead bodies are drawn lying on the floor under them (they were left standing, or in mid-air).
+- **Sights you can see through:** aiming down iron sights now looks through a rear notch at the front post (the
+  first version's solid rear sight covered the middle of the screen), a red dot through an open frame, and a
+  scope through an open tube.
 - **A first-shot stall, found and fixed:** the first shot used to compile its effects' shaders mid-frame,
   which froze software-rendered pages for ~300 ms and delayed that shot's input past the 250 ms rewind cap,
   so the browser test's moving-target shot missed. Every effect shader is now drawn once at load, and the
@@ -120,7 +135,7 @@ Built in milestones; each one keeps the tests, both e2e scripts and the netsim g
   0.5); the two online test pages at 480×270 sharing one CPU draw 13 fps each.
 - **Movement fix (D-057):** sprinting diagonally into a wall could, rarely, drop you 0.29 m into the floor in
   one tick. Fixed, with a regression test.
-- 268 unit tests (29 of them for the page: settings, controls, HUD maths, guns and effects).
+- 276 unit tests (31 of them for the page: settings, controls, HUD maths, guns and effects, the offline room).
 
 ---
 

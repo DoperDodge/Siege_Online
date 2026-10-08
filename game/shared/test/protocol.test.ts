@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   Btn,
   ByteReader,
+  decodeCreateRoom,
   decodeError,
   decodeEvents,
   decodeHelloRest,
@@ -17,6 +18,7 @@ import {
   decodeRoster,
   decodeShotResult,
   decodeWelcome,
+  encodeCreateRoom,
   encodeError,
   encodeEvents,
   encodeHello,
@@ -106,9 +108,18 @@ describe("lobby, clock, error and debug messages round-trip", () => {
     expect(decodePing(body(encodePing(1234.5678), Msg.Ping))).toEqual({ clientTime: 1234.5678 });
     expect(decodePong(body(encodePong({ clientTime: 99.25, serverTick: 777 }), Msg.Pong))).toEqual({ clientTime: 99.25, serverTick: 777 });
     expect(decodeError(body(encodeError(ErrorCode.NoSuchRoom, "No room ABCDE"), Msg.Error))).toEqual({ code: ErrorCode.NoSuchRoom, message: "No room ABCDE" });
-    const shot = { seq: 65000, viewTick: 988.25, origin: [1, 2, 3] as [number, number, number], dir: [0, 0, -1] as [number, number, number], rewoundTick: 990.5, serverTick: 1000, hit: { pawnId: 7, part: "head", distance: 12.5 }, wallDistance: 30 };
+    type V3 = [number, number, number];
+    const dirs: V3[] = [
+      [0, 0, -1],
+      [0.5, 0, -0.75],
+    ];
+    const target = { pawnId: 7, boxes: [{ part: "head" as const, a: [1, 1.5, -10] as V3, b: [1, 1.5, -10] as V3, radius: 0.125 }, { part: "leg_r" as const, a: [1.25, 0.5, -10] as V3, b: [1.25, 0, -10] as V3, radius: 0.0625 }] };
+    const shot = { seq: 65000, viewTick: 988.25, origin: [1, 2, 3] as V3, dir: dirs[0], dirs, ends: [12.5, 30], rewoundTick: 990.5, serverTick: 1000, hit: { pawnId: 7, part: "head", distance: 12.5 }, wallDistance: 30, target };
     expect(decodeShotResult(body(encodeShotResult(shot), Msg.ShotResult))).toEqual(shot);
-    expect(decodeShotResult(body(encodeShotResult({ ...shot, hit: null, wallDistance: null }), Msg.ShotResult))).toEqual({ ...shot, hit: null, wallDistance: null });
+    expect(decodeShotResult(body(encodeShotResult({ ...shot, hit: null, wallDistance: null, target: null }), Msg.ShotResult))).toEqual({ ...shot, hit: null, wallDistance: null, target: null });
+    expect(decodeCreateRoom(body(encodeCreateRoom("range_lab"), Msg.CreateRoom))).toEqual({ levelId: "range_lab" });
+    expect(() => decodeCreateRoom(body(encodeCreateRoom("oregon_secret"), Msg.CreateRoom))).toThrow(ProtocolError);
+    expect(decodeLabTool(body(encodeLabTool({ kind: "resetDummies" }), Msg.LabTool))).toEqual({ kind: "resetDummies" });
     expect(decodeLabTool(body(encodeLabTool({ kind: "respawn" }), Msg.LabTool))).toEqual({ kind: "respawn" });
     const tp = { kind: "teleport" as const, x: -16, y: 0, z: -5.5, yawDeg: 90 };
     expect(decodeLabTool(body(encodeLabTool(tp), Msg.LabTool))).toEqual(tp);

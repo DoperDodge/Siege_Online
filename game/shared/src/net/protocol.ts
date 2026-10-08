@@ -1,13 +1,14 @@
 // Every message except snapshots (net/snapshot.ts). Binary, little-endian, first byte = type (PLAN §5).
 // Clients never tell the server what happened ("I hit X"): only inputs, view angles and view times.
 import { quantizeInput, Stance, type InputCmd } from "../player/types.js";
+import type { BodyPart } from "../player/hitboxes.js";
 import { BARRELS, GRIPS, SIGHTS, UNDERBARRELS } from "../data/schemas.js";
 import type { LoadoutPick, WeaponPick } from "../weapons/loadout.js";
 import { ByteReader, ByteWriter, ProtocolError } from "./bytes.js";
 import { MSG_SNAPSHOT } from "./snapshot.js";
 
 /** Bump when the wire format changes; client and server must match. */
-export const PROTOCOL_VERSION = 6;
+export const PROTOCOL_VERSION = 7;
 
 export const Msg = {
   // client → server
@@ -111,7 +112,15 @@ export function decodeHelloRest(r: ByteReader): { name: string; dataHash: number
   return { name, dataHash: r.u32() };
 }
 
-export const encodeCreateRoom = () => Uint8Array.of(Msg.CreateRoom);
+/** Levels a client may ask a new room to load (the lab pages'). */
+export const ROOM_LEVELS = ["movement_lab", "range_lab"] as const;
+export const encodeCreateRoom = (levelId: string = "movement_lab") => new ByteWriter().u8(Msg.CreateRoom).str(levelId).finish();
+/** Throws ProtocolError for a level that isn't in ROOM_LEVELS. */
+export function decodeCreateRoom(r: ByteReader): { levelId: string } {
+  const levelId = r.str(64);
+  if (!(ROOM_LEVELS as readonly string[]).includes(levelId)) throw new ProtocolError("unknown level");
+  return { levelId };
+}
 export const encodeJoinRoom = (code: string) => new ByteWriter().u8(Msg.JoinRoom).str(code.toUpperCase().slice(0, 16)).finish();
 export const decodeJoinRoom = (r: ByteReader) => ({ code: r.str(16).toUpperCase() });
 // Attachments travel as an index into the fixed lists in data/schemas.ts, plus one (0 = none).
@@ -222,12 +231,31 @@ export const decodeError = (r: ByteReader) => ({ code: r.u8(), message: r.str(51
 
 // ---------------------------------------------------------------- lab and debug tools
 
-/** What the server made of a shot (Phase 2: a test shot fired with Btn.Fire; weapons from Phase 3). */
+/** A hitbox as the server posed it for a shot (the lab's agreement overlay draws these). */
+export interface ShotBox {
+  part: BodyPart;
+  a: [number, number, number];
+  b: [number, number, number];
+  radius: number;
+}
+
+const BOX_PARTS: readonly BodyPart[] = ["head", "neck", "torso", "pelvis", "arm_l", "arm_r", "leg_l", "leg_r"];
+const MAX_SHOT_PELLETS = 16;
+
+/**
+ * What the server made of a shot (lab rooms; Phase 2's test shot, weapons from Phase 3): where every pellet
+ * went, what the first one entered, how far the server rewound, and where it had the body the first pellet
+ * hit or passed closest to (its rewound hitboxes, for the Range Lab's F2 overlay).
+ */
 export interface ShotResult {
   /** Low 16 bits of the input that fired. */
   seq: number;
   origin: [number, number, number];
+  /** The first pellet's direction (`dirs[0]`). */
   dir: [number, number, number];
+  /** Every pellet's direction, as the server drew them from the spread cone (D-041), and how far it went (to a wall, through bodies, or its range). */
+  dirs: [number, number, number][];
+  ends: number[];
   /** Render tick the shooter claimed to be drawing (after the server's sanity bounds). */
   viewTick: number;
   /** Render tick the server rewound to (after the room's cap: `rewoundTick > viewTick` means it was capped). */
@@ -237,40 +265,79 @@ export interface ShotResult {
   hit: { pawnId: number; part: string; distance: number } | null;
   /** Where the ray hit the level, if nearer than any player. */
   wallDistance: number | null;
+  /** The body the first pellet hit, or else passed closest to (within 2 m), as the server rewound it. */
+  target: { pawnId: number; boxes: ShotBox[] } | null;
 }
 
 export function encodeShotResult(s: ShotResult): Uint8Array {
   const w = new ByteWriter().u8(Msg.ShotResult).u16(s.seq);
-  for (const v of [...s.origin, ...s.dir]) w.f32(v);
-  w.f64(s.viewTick).f64(s.rewoundTick).u32(s.serverTick).u8((s.hit ? 1 : 0) | (s.wallDistance !== null ? 2 : 0));
+  for (const v of s.origin) w.f32(v);
+  const dirs = s.dirs.slice(0, MAX_SHOT_PELLETS);
+  w.u8(dirs.length);
+  for (const [i, d] of dirs.entries()) {
+    for (const v of d) w.f32(v);
+    w.f32(s.ends[i] ?? 0);
+  }
+  w.f64(s.viewTick).f64(s.rewoundTick).u32(s.serverTick).u8((s.hit ? 1 : 0) | (s.wallDistance !== null ? 2 : 0) | (s.target ? 4 : 0));
   if (s.hit) w.varu(s.hit.pawnId).str(s.hit.part).f32(s.hit.distance);
   if (s.wallDistance !== null) w.f32(s.wallDistance);
+  if (s.target) {
+    w.varu(s.target.pawnId).u8(s.target.boxes.length);
+    for (const b of s.target.boxes) {
+      w.u8(BOX_PARTS.indexOf(b.part));
+      for (const v of [...b.a, ...b.b, b.radius]) w.f32(v);
+    }
+  }
   return w.finish();
 }
 export function decodeShotResult(r: ByteReader): ShotResult {
   const seq = r.u16();
-  const v = Array.from({ length: 6 }, () => r.finite());
+  const v3 = (): [number, number, number] => [r.finite(), r.finite(), r.finite()];
+  const origin = v3();
+  const n = r.u8();
+  if (n < 1 || n > MAX_SHOT_PELLETS) throw new ProtocolError("bad pellet count");
+  const dirs: [number, number, number][] = [];
+  const ends: number[] = [];
+  for (let i = 0; i < n; i++) {
+    dirs.push(v3());
+    ends.push(r.finite());
+  }
   const viewTick = r.f64();
   const rewoundTick = r.f64();
   const serverTick = r.u32();
   const f = r.u8();
   const hit = f & 1 ? { pawnId: r.varu(), part: r.str(16), distance: r.finite() } : null;
   const wallDistance = f & 2 ? r.finite() : null;
-  return { seq, origin: [v[0], v[1], v[2]], dir: [v[3], v[4], v[5]], viewTick, rewoundTick, serverTick, hit, wallDistance };
+  let target: ShotResult["target"] = null;
+  if (f & 4) {
+    const pawnId = r.varu();
+    const k = r.u8();
+    if (k > BOX_PARTS.length) throw new ProtocolError("too many boxes");
+    const boxes = Array.from({ length: k }, (): ShotBox => {
+      const part = BOX_PARTS[r.u8()];
+      if (!part) throw new ProtocolError("bad body part");
+      return { part, a: v3(), b: v3(), radius: r.finite() };
+    });
+    target = { pawnId, boxes };
+  }
+  return { seq, origin, dir: dirs[0], dirs, ends, viewTick, rewoundTick, serverTick, hit, wallDistance, target };
 }
 
 /**
  * Lab tools (lab rooms only): respawn, teleport ("Go to"), switch team (respawns you on it), hurt one of
- * your own bodies (to try damage, death and the indicators alone), or refill your ammo.
+ * your own bodies or a Range Lab dummy (to try damage, death and the indicators alone), refill your ammo,
+ * or reset the dummies.
  */
 export type LabTool =
   | { kind: "respawn" }
   | { kind: "teleport"; x: number; y: number; z: number; yawDeg: number }
   | { kind: "team"; team: number }
   | { kind: "damage"; pawnId: number; amount: number; kill: boolean }
-  | { kind: "refill" };
+  | { kind: "refill" }
+  /** Every Range Lab dummy back to its spot, alive (or down, for the one that starts down). */
+  | { kind: "resetDummies" };
 
-const LAB_KIND = { respawn: 0, teleport: 1, team: 3, damage: 4, refill: 5 } as const;
+const LAB_KIND = { respawn: 0, teleport: 1, team: 3, damage: 4, refill: 5, resetDummies: 6 } as const;
 
 export function encodeLabTool(t: LabTool): Uint8Array {
   const w = new ByteWriter().u8(Msg.LabTool).u8(LAB_KIND[t.kind]);
@@ -296,5 +363,6 @@ export function decodeLabTool(r: ByteReader): LabTool {
     return { kind: "damage", pawnId, amount, kill: kill === 1 };
   }
   if (k === LAB_KIND.refill) return { kind: "refill" };
+  if (k === LAB_KIND.resetDummies) return { kind: "resetDummies" };
   throw new ProtocolError("bad lab tool");
 }

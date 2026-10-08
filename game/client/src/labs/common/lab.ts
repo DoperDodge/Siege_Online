@@ -20,6 +20,7 @@ import {
   offerId,
   resolveLoadout,
   QUERY_BULLET,
+  QUERY_STATIC,
   SIGHTS,
   UNDERBARRELS,
   lerp,
@@ -42,6 +43,7 @@ import {
   type LoadoutPick,
   type Offer,
   type ResolvedWeapon,
+  type GameData,
   type GameEvent,
   type ShotResult,
   type SimEvent,
@@ -51,6 +53,7 @@ import {
 import { Controls, type Action, type UiAction } from "../../input/controls.js";
 import { horizontalFov, keyLabel, loadSettings, saveSettings, type HoldMode, type Settings } from "../../input/settings.js";
 import { isTouchDevice, mountTouchControls } from "../../input/touch.js";
+import { LocalSocket } from "../../net/local.js";
 import { OnlineConnection } from "../../net/online.js";
 import { createLabScene, createRenderer, PawnView, updateLabels, warmShaders } from "../../render/labScene.js";
 import { FxBus } from "../../render/fxBus.js";
@@ -98,6 +101,41 @@ export interface LabOptions {
   /** The help panel's "Try this" list (HTML), and a note under it. */
   help: { tryThis: string[]; note: string };
   autotest?: AutotestScript;
+  /**
+   * Offline: the simulation steps in this page ("sim", the Movement Lab), or the page gets a room of its own
+   * in a Web Worker ("local", the Range Lab: hits, downs and dummies are the server's side, DECISIONS D-052).
+   */
+  offline?: "sim" | "local";
+  /** What this page adds (the Range Lab's shot overlay, damage numbers and last-shot panel). */
+  extend?(lab: LabApi): void;
+}
+
+/** What a page's additions can reach in the running lab (LabOptions.extend). */
+export interface LabApi extends LabHandle {
+  readonly data: GameData;
+  /** The HUD's root element. */
+  readonly app: HTMLElement;
+  readonly scene: THREE.Scene;
+  readonly camera: THREE.PerspectiveCamera;
+  /** The room connection (the server's, or the page's own offline room); null with the bare simulation. */
+  readonly net: OnlineConnection | null;
+  /** The weapon in your hands. */
+  weapon(): ResolvedWeapon | null;
+  /** The render tick an input of yours claimed to be looking at (lag compensation), by its 16-bit seq. */
+  claimedViewTick(seq16: number): number | null;
+  /** The server's readout of each of your shots (lab rooms). */
+  onShot(fn: (shot: ShotResult) => void): void;
+  /** Each tick's server events. */
+  onEvents(fn: (tick: number, events: GameEvent[]) => void): void;
+  /** Every frame, with everything posed and before drawing; `renderTick` is the moment others are drawn at. */
+  onFrame(fn: (now: number, renderTick: number) => void): void;
+  /** A key the lab itself leaves free (e.g. F2). */
+  onKey(code: string, fn: () => void): void;
+  /** A button under Lab tools in the pause menu, and a row in the help panel. */
+  addLabTool(label: string, run: () => void): void;
+  addHelp(keys: string, what: string): void;
+  /** A short message in the middle of the screen. */
+  flash(text: string, kind: "bad" | "info"): void;
 }
 
 export async function startLab(o: LabOptions): Promise<void> {
@@ -168,15 +206,30 @@ export async function startLab(o: LabOptions): Promise<void> {
   /** Render tick of the frame on screen (remote players are drawn at it), and of the one last clicked on. */
   let shownRenderTick = 0;
   let clickViewTick: number | null = null;
-  /** How your current body died, for the respawn message (null while alive, or for a fall). */
-  let deathText: string | null = null;
+  /**
+   * How a body of yours died, for the respawn message: kept with that body and life, because the kill can
+   * arrive a tick before the correction that lays the body down. No text: a fall (which says so itself).
+   */
+  let death: { pawnId: number; life: number; text: string | null } | null = null;
+  /** The render tick each recent input claimed (lag compensation), by its 16-bit seq. */
+  const claims = new Map<number, number>();
+  /** Page additions' hooks (LabOptions.extend). */
+  const hooks = {
+    shot: [] as ((shot: ShotResult) => void)[],
+    events: [] as ((tick: number, events: GameEvent[]) => void)[],
+    frame: [] as ((now: number, renderTick: number) => void)[],
+    keys: new Map<string, () => void>(),
+    tools: [] as { label: string; run: () => void }[],
+    help: [] as [string, string][],
+  };
   /** Recoil the viewed body's view took this tick (added to the mouse view so the next input includes it). */
   const tickKick = { yaw: 0, pitch: 0 };
   let flashUntil = 0;
 
   // Online: the lobby connects (create or join a room) and the session builds the simulation from the
   // server's Welcome; our controller arrives with the roster. Offline: a local simulation and player.
-  const net = online ? await lobby() : null;
+  const local = !online && o.offline === "local";
+  const net = online ? await lobby() : local ? await localRoom() : null;
   const sim = net ? net.session.sim! : await Sim.create(o.levelId, data);
   let ctrl: PlayerController = net ? await firstBody(net) : sim.addPlayer("you", operatorId, 0, undefined, pickFromUrl(operatorId));
   const possessed = () => sim.pawns.get(ctrl.possessedPawnId)!;
@@ -441,16 +494,20 @@ export async function startLab(o: LabOptions): Promise<void> {
         .filter((o) => o.side === side)
         .map((o) => `<option value="${o.id}" ${o.id === operatorId ? "selected" : ""}>${o.name} — ${o.healthRating} health / ${o.speedRating} speed</option>`)
         .join("");
-    const room = net
-      ? `<section><h3>Room ${net.session.roomCode} · ${net.session.roster.length} player${net.session.roster.length === 1 ? "" : "s"}</h3>
-        <div class="goto"><button class="invite">Copy invite link</button><button class="leave">Leave room</button></div>
+    const conditionSelects = `
         <label>Simulated extra latency <select data-net="rttMs">${[0, 50, 100, 150, 200].map((ms) => `<option value="${ms}" ${ms === conditions.rttMs ? "selected" : ""}>${ms ? `+${ms} ms round trip` : "Off"}</option>`).join("")}</select></label>
         <label>Simulated jitter <select data-net="jitterMs">${[0, 10, 20, 40].map((ms) => `<option value="${ms}" ${ms === conditions.jitterMs ? "selected" : ""}>${ms ? `up to ${ms} ms each way` : "Off"}</option>`).join("")}</select></label>
-        <label>Simulated loss <select data-net="lossPct">${[0, 0.5, 1, 2, 5].map((p) => `<option value="${p}" ${p === conditions.lossPct ? "selected" : ""}>${p ? `${p} % (a 200 ms stall each)` : "Off"}</option>`).join("")}</select></label>
+        <label>Simulated loss <select data-net="lossPct">${[0, 0.5, 1, 2, 5].map((p) => `<option value="${p}" ${p === conditions.lossPct ? "selected" : ""}>${p ? `${p} % (a 200 ms stall each)` : "Off"}</option>`).join("")}</select></label>`;
+    const room = local
+      ? `<section><h3>Offline room</h3>${conditionSelects}
+        <p class="note">This page runs a room of its own (no server): hits, downs and the dummies work exactly as online, and the latency settings above try lag compensation alone. <a href="${o.page}?online">Play online</a> to bring friends.</p></section>`
+      : net
+        ? `<section><h3>Room ${net.session.roomCode} · ${net.session.roster.filter((e) => e.kind === 0).length} player${net.session.roster.filter((e) => e.kind === 0).length === 1 ? "" : "s"}</h3>
+        <div class="goto"><button class="invite">Copy invite link</button><button class="leave">Leave room</button></div>${conditionSelects}
         <p class="note">Shots do real damage now: the server rewinds everyone else to what you saw (lag compensation), and the white line shows where your first pellet went and what it hit first. Headshots kill; friendly fire is on.</p></section>`
-      : "";
+        : "";
     pause.innerHTML = `
-      <h2>${o.title}${net ? " · Online" : ""}</h2>
+      <h2>${o.title}${net && !local ? " · Online" : ""}</h2>
       ${touchOnly ? "" : `<button class="primary resume">Resume (click)</button>`}
       ${room}
       <section><h3>Operator</h3>
@@ -460,7 +517,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       </section>
       ${loadoutSection()}
       <section><h3>Go to</h3><div class="goto">${GOTO.map((g, i) => `<button data-goto="${i}">${g[0]}</button>`).join("")}</div></section>
-      <section><h3>Lab tools</h3><div class="goto"><button class="refill">Refill ammo</button><button class="hurt-me">Take 30 damage</button><button class="down-me">Down me</button></div>
+      <section><h3>Lab tools</h3><div class="goto"><button class="refill">Refill ammo</button><button class="hurt-me">Take 30 damage</button><button class="down-me">Down me</button>${hooks.tools.map((t, i) => `<button data-tool="${i}">${t.label}</button>`).join("")}</div>
         <p class="note">Down but not out: you crawl and bleed out in 60 s (30 s while crawling); a teammate holds ${keyLabel(settings.keys.interact)} for 4 s to revive you with 20 HP. A second down kills.</p></section>
       <section><h3>Controls</h3>
         <label>Sensitivity <input type="range" min="0.01" max="0.4" step="0.005" value="${settings.sensitivity}" data-num="sensitivity"><output>${settings.sensitivity.toFixed(3)}</output></label>
@@ -478,6 +535,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       <p class="note">Press <kbd>F1</kbd> for the key list and what to try.</p>`;
     pause.querySelector(".resume")?.addEventListener("click", resume);
     pause.querySelector(".refill")!.addEventListener("click", labRefill);
+    pause.querySelectorAll<HTMLButtonElement>("[data-tool]").forEach((b) => b.addEventListener("click", () => hooks.tools[Number(b.dataset.tool)].run()));
     pause.querySelector(".hurt-me")!.addEventListener("click", () => labHurt(30));
     pause.querySelector(".down-me")!.addEventListener("click", () => labHurt(possessed().state.hp || 1));
     pause.querySelector<HTMLSelectElement>(".op-select")!.addEventListener("change", (e) => pickOperator((e.target as HTMLSelectElement).value));
@@ -566,6 +624,7 @@ export async function startLab(o: LabOptions): Promise<void> {
         ${row(`<kbd>${keyLabel(k.fireMode)}</kbd>`, "Fire mode (auto / burst / single, where the weapon has them)")}
         ${row(`<kbd>${keyLabel(k.melee)}</kbd>`, "Knife: kills anyone in reach in front of you, standing or down (0.6 s a swing)")}
         ${row(`Hold <kbd>${keyLabel(k.interact)}</kbd>`, "Revive a downed teammate (4 s, facing them)")}
+        ${hooks.help.map(([keys, what]) => row(keys, what)).join("")}
         ${row("<kbd>F3</kbd> / <kbd>F4</kbd>", "Hitboxes / third-person view")}
         ${row("<kbd>Esc</kbd>", "Pause: settings, operator, go-to menu")}
       </table>
@@ -575,6 +634,36 @@ export async function startLab(o: LabOptions): Promise<void> {
       </ul>
       <p class="note">${o.help.note}</p>`;
   }
+  // The page's own additions (the Range Lab's overlay and panels), then the help panel that lists their keys.
+  o.extend?.({
+    sim,
+    get ctrl() {
+      return ctrl;
+    },
+    data,
+    app,
+    scene,
+    camera,
+    net,
+    weapon: () => {
+      const p = sim.pawns.get(ctrl.possessedPawnId);
+      return p?.loadout?.weapons[p.state.slot] ?? null;
+    },
+    claimedViewTick: (seq16) => claims.get(seq16) ?? null,
+    onShot: (fn) => hooks.shot.push(fn),
+    onEvents: (fn) => hooks.events.push(fn),
+    onFrame: (fn) => hooks.frame.push(fn),
+    onKey: (code, fn) => hooks.keys.set(code, fn),
+    addLabTool: (label, run) => hooks.tools.push({ label, run }),
+    addHelp: (keys, what) => hooks.help.push([keys, what]),
+    flash,
+  });
+  addEventListener("keydown", (e) => {
+    const fn = hooks.keys.get(e.code);
+    if (!fn || e.repeat || !$(".pause").classList.contains("hidden")) return;
+    e.preventDefault();
+    fn();
+  });
   renderHelp();
 
   // ------------------------------------------------------------------ simulation loop
@@ -600,7 +689,9 @@ export async function startLab(o: LabOptions): Promise<void> {
       // Test scripts add buttons to what the controls sample (a click still fires while a script holds ADS).
       const input = scripted ? { ...sampled, ...scripted, buttons: sampled.buttons | (scripted.buttons ?? 0) } : sampled;
       // Predicts locally and sends the input; a shot claims the frame that was on screen when you clicked.
-      net.session.tick(input, clickViewTick ?? undefined);
+      const sent = net.session.tick(input, clickViewTick ?? undefined);
+      if (sent) claims.set(sent.seq & 0xffff, net.session.lastViewTick);
+      if (claims.size > 512) claims.delete(claims.keys().next().value!);
       clickViewTick = null;
     } else {
       const input = script ? autoInput(++seq) : controls.sample(++seq);
@@ -698,7 +789,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       if (!rs) continue;
       const w = pawn.loadout?.weapons[rs.slot];
       v.setWeapon(w ? { class: w.class, pick: w.pick } : null);
-      v.update(sim.data, rs);
+      v.update(sim.data, rs.mode === PawnMode.Dead ? corpse(rs) : rs);
       drawnView.set(pawn.id, [rs.yaw, rs.pitch]);
       const eyes = pawn.id === viewed.id;
       // Your own body only casts its shadow in first person; your gun is the viewmodel.
@@ -722,6 +813,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       camera.rotation.set(controls.pitch, controls.yaw, eye.roll);
     }
     updateLabels(camera);
+    for (const fn of hooks.frame) fn(now, renderTick);
     renderer.render(scene, camera);
     const inHand = viewed.id === possessed()?.id && !thirdPerson && !ctrl.shellCam && ctrl.swapPhase === 0 ? (viewed.loadout?.weapons[rs.slot] ?? null) : null;
     viewmodel.update(now, elapsed, inHand, rs, viewed.loadout?.swapTicks ?? 1);
@@ -745,6 +837,17 @@ export async function startLab(o: LabOptions): Promise<void> {
     }
     updateHud(me);
     requestAnimationFrame(frame);
+  }
+
+  /**
+   * A dead body is drawn lying on whatever is under it: it may have died in mid-air, on a ladder or
+   * mid-vault (DECISIONS D-058). Drawing only: the simulation keeps it where it died, and the dead block
+   * nothing and stop no bullets.
+   */
+  function corpse(s: PawnState): PawnState {
+    const hit = sim.world.castRay(new sim.R.Ray({ x: s.x, y: s.y + 0.5, z: s.z }, { x: 0, y: -1, z: 0 }), 100, true, undefined, QUERY_STATIC);
+    const y = hit ? s.y + 0.5 - hit.timeOfImpact : s.y;
+    return { ...s, y, stance: Stance.Prone, stanceFrom: Stance.Prone, stanceT: 1, lean: 0, tiltF: 0, tiltB: 0, tiltSide: 0, tuck: 0 };
   }
 
   /** Aiming, drawn from the body you look through: a magnified sight narrows the field of view as ADS comes in. Returns the field of view. */
@@ -781,7 +884,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     $(".lean-r").style.opacity = String(Math.max(0, s.lean));
     const msg = $(".center-msg");
     const dead = s.mode === PawnMode.Dead;
-    if (!dead) deathText = null;
+    const deathText = dead && death?.pawnId === p.id && death.life === p.life ? death.text : null;
     const needClick = !usingTouch && !autotest && !document.pointerLockElement && $(".pause").classList.contains("hidden");
     const waiting = net !== null && !net.session.ready;
     msg.classList.toggle("hidden", !dead && !needClick && !waiting && !disconnected);
@@ -861,7 +964,7 @@ export async function startLab(o: LabOptions): Promise<void> {
           room: s.roomCode,
           ready: s.ready,
           you: s.you,
-          players: s.roster.map((e) => e.name),
+          players: s.roster.filter((e) => e.kind === 0).map((e) => e.name),
           roster: s.roster,
           corrections: s.stats.corrections,
           resyncs: s.stats.resyncs,
@@ -975,6 +1078,7 @@ export async function startLab(o: LabOptions): Promise<void> {
         const conn = new OnlineConnection({
           name,
           room,
+          levelId: o.levelId,
           conditions: () => conditions,
           session: {
             onWelcome: () => {
@@ -1044,6 +1148,39 @@ export async function startLab(o: LabOptions): Promise<void> {
       await new Promise((r) => setTimeout(r, 20));
     }
     return c.session.ctrl!;
+  }
+
+  /** Offline with a room of its own (the Range Lab): a Web Worker runs it, and we talk to it like the server. */
+  function localRoom(): Promise<OnlineConnection> {
+    return new Promise((resolve) => {
+      let joined = false;
+      const conn: OnlineConnection = new OnlineConnection({
+        name: "You",
+        room: null,
+        levelId: o.levelId,
+        conditions: () => conditions,
+        socket: () => new LocalSocket(),
+        session: {
+          onWelcome: () => {
+            joined = true;
+            void conn.session.loaded().then(() => resolve(conn));
+          },
+          onError: (_code, message) => flash(message, "bad"),
+          onRoster: () => (rosterChanged = true),
+          onShot: (shot) => showShot(shot),
+          onEvents: (tick, events) => onGameEvents(tick, events),
+          trackMispredictions: autotest,
+          onLocalEvents: (events) => onWeaponEvents(events),
+        },
+        onClose: (reason) => {
+          disconnected = reason;
+          if (!joined) {
+            $(".center-msg").textContent = reason;
+            $(".center-msg").classList.remove("hidden");
+          }
+        },
+      });
+    });
   }
 
   function inviteLink(): string {
@@ -1204,6 +1341,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     } else flash(shot.wallDistance !== null ? `Miss · wall at ${shot.wallDistance.toFixed(1)} m` : "Miss", "info");
     shotMarks.push({ line, ghost, until: performance.now() + 2500 });
     lastShot = { ...shot, targetName };
+    for (const fn of hooks.shot) fn(shot);
   };
 
   function updateShots(now: number) {
@@ -1229,6 +1367,7 @@ export async function startLab(o: LabOptions): Promise<void> {
   function onGameEvents(tick: number, events: GameEvent[]) {
     const me = net!.session.you;
     fx.server(tick, events);
+    for (const fn of hooks.events) fn(tick, events);
     for (const e of events) {
       recentEvents.push(e);
       if (recentEvents.length > 50) recentEvents.shift();
@@ -1241,7 +1380,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       } else {
         const line = feedLine(e, feedNames, { ctrl: me, pawns: ctrl.pawnIds });
         if (line) killFeed.push(line, now);
-        if (e.kind === "kill" && e.victimCtrl === me) deathText = deathLine(e, feedNames);
+        if (e.kind === "kill" && e.victimCtrl === me) death = { pawnId: e.victimPawn, life: sim.pawns.get(e.victimPawn)?.life ?? 0, text: deathLine(e, feedNames) };
       }
     }
   }
@@ -1311,7 +1450,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     const r = applyDamage(sim, p, { amount, kill: false });
     if (r.outcome !== "ignored") {
       damageHud.hurt(performance.now(), null);
-      if (r.outcome === "killed") deathText = "You died";
+      if (r.outcome === "killed") death = { pawnId: p.id, life: p.life, text: "You died" };
     }
   }
 
@@ -1320,7 +1459,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     const s = net!.session;
     const kbps = (bytes: number) => ((bytes * 8) / ms).toFixed(0); // bits per ms = kbit/s
     $(".net").textContent = [
-      `room ${s.roomCode} · ${s.roster.length} here`,
+      `room ${s.roomCode} · ${s.roster.filter((e) => e.kind === 0).length} here`,
       `ping ${Math.round(s.rttMs)} ms${conditions.rttMs || conditions.jitterMs || conditions.lossPct ? ` (simulated +${conditions.rttMs} ms${conditions.jitterMs ? `, ±${conditions.jitterMs}` : ""}${conditions.lossPct ? `, ${conditions.lossPct} % loss` : ""})` : ""}`,
       `others drawn ${Math.round(s.interpDelayMs)} ms (${((s.interpDelayMs / 1000) * TICK_HZ).toFixed(1)} ticks) behind`,
       `corrections ${s.stats.corrections}`,

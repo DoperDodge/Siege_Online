@@ -262,7 +262,7 @@ const WIRE_SPH = new THREE.SphereGeometry(1, 8, 6);
 const UP = new THREE.Vector3(0, 1, 0);
 
 /** An exact capsule from a unit cylinder plus two unit spheres, re-scaled every frame. */
-class CapsuleParts {
+export class CapsuleParts {
   private readonly cyl: THREE.Mesh;
   private readonly capA: THREE.Mesh;
   private readonly capB: THREE.Mesh;

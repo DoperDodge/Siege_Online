@@ -137,3 +137,11 @@ html, body { overflow: hidden; overscroll-behavior: none; touch-action: none; us
 .join-row .code { text-transform: uppercase; letter-spacing: 0.2em; font: 600 16px var(--mono); }
 .lobby .error { min-height: 1.2em; color: #f87171; font-size: 13px; }
 .lobby a { color: var(--accent); }
+
+/* Range Lab: the last shot's readout, and damage numbers floating over whoever was hit. */
+.shot-panel { left: 12px; top: 42%; max-width: min(360px, 60vw); font: 12px/1.45 var(--mono); }
+.shot-panel b { color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em; }
+.dmg-numbers { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+.dmg-numbers div { position: absolute; left: 0; top: 0; font: 700 16px var(--mono); color: #fff; text-shadow: 0 1px 3px #000, 0 0 2px #000; white-space: nowrap; }
+.dmg-numbers .head { color: #ffd23f; }
+.dmg-numbers .kill { color: #ff4d4d; font-size: 18px; }

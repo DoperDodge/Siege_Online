@@ -3,6 +3,7 @@
 import movementJson from "../../../../data/movement.json";
 import hitboxJson from "../../../../data/hitboxes.json";
 import movementLabJson from "../../../../data/maps/movement_lab/layout.json";
+import rangeLabJson from "../../../../data/maps/range_lab/layout.json";
 import brava from "../../../../data/operators/brava.json";
 import fuze from "../../../../data/operators/fuze.json";
 import thermite from "../../../../data/operators/thermite.json";
@@ -63,7 +64,7 @@ export const rawData = {
   movement: movementJson as Record<string, unknown>,
   hitboxes: hitboxJson as Record<string, unknown>,
   operators: [brava, fuze, thermite, striker, dokkaebi, sledge, sentry, skopos, mira, lesion, pulse, mute] as Record<string, unknown>[],
-  levels: [movementLabJson] as Record<string, unknown>[],
+  levels: [movementLabJson, rangeLabJson] as Record<string, unknown>[],
   weapons: weaponFiles,
   gunplay: gunplayJson as Record<string, unknown>,
   combat: combatJson as Record<string, unknown>,
@@ -121,8 +122,13 @@ export function loadGameData(): GameData {
 }
 
 /** Checks that span files: loadouts name real weapons, restrictions name real carriers, templates exist. */
-export function crossFileProblems(data: Pick<GameData, "operators" | "weapons" | "gunplay">): string[] {
+export function crossFileProblems(data: Pick<GameData, "operators" | "weapons" | "gunplay"> & Partial<Pick<GameData, "levels">>): string[] {
   const out: string[] = [];
+  for (const lvl of data.levels?.values() ?? []) {
+    for (const d of lvl.dummies) if (!data.operators.has(d.operator)) out.push(`data/maps/${lvl.id}/layout.json: dummy "${d.id}" is operator "${d.operator}", who has no data/operators file`);
+    const ids = lvl.dummies.map((d) => d.id);
+    if (new Set(ids).size !== ids.length) out.push(`data/maps/${lvl.id}/layout.json: two dummies share an id`);
+  }
   const carriers = new Map<string, Set<string>>();
   for (const op of data.operators.values()) {
     for (const [slot, ids] of [["primaries", op.loadout.primaries], ["secondaries", op.loadout.secondaries]] as const) {

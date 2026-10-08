@@ -86,17 +86,33 @@ export function buildGun(look: GunLook, kit: GunKit = loadPresentationData().gun
   const sight = kit.sights[sightKey] ?? kit.sights.iron;
   let sightY: number;
   let reticle: GunModel["reticle"] = "posts";
+  // Every sight is open along its line (the eye looks through it at the target).
   if (sight.kind === "posts") {
-    box([0.012, sight.height, 0.008], fitted, 0, top + sight.height / 2, rz + rl * 0.38);
-    box([0.006, sight.height, 0.006], fitted, 0, top + sight.height / 2, front + 0.02);
-    sightY = top + sight.height * 0.85;
+    // A rear notch (two posts with a gap) and a front post whose tip is the aim point.
+    const h = sight.height;
+    sightY = top + h * 0.85;
+    for (const side of [-1, 1]) box([0.005, h, 0.008], fitted, side * 0.0085, top + h / 2, rz + rl * 0.38);
+    box([0.004, h * 0.85, 0.006], fitted, 0, top + (h * 0.85) / 2, front + 0.02);
   } else if (sight.kind === "box") {
-    box(sight.size, fitted, 0, top + sight.size[1] / 2, rz);
-    sightY = top + sight.size[1] * 0.6;
+    // A red dot / holo: a frame around a window (the reticle is drawn on screen).
+    const [w, h, l] = sight.size;
+    const bar = Math.min(w, h) * 0.15;
+    sightY = top + h * 0.55;
+    box([w, bar, l], fitted, 0, top + bar / 2, rz); // base
+    box([w, bar, l], fitted, 0, top + h - bar / 2, rz); // hood
+    for (const side of [-1, 1]) box([bar, h, l], fitted, side * (w / 2 - bar / 2), top + h / 2, rz);
     reticle = sight.reticle;
   } else {
-    tube(sight.radius, sight.length, fitted, 0, top + sight.radius + 0.012, rz);
+    // A scope: an open tube (at full magnification the scope view replaces the gun).
+    const g = new THREE.CylinderGeometry(sight.radius, sight.radius, sight.length, 16, 1, true);
+    geoms.push(g);
+    const glassless = new THREE.MeshStandardMaterial({ color: kit.colors.attachment, roughness: 0.55, metalness: 0.35, side: THREE.DoubleSide });
+    mats.push(glassless);
+    const mesh = new THREE.Mesh(g, glassless);
+    mesh.quaternion.setFromUnitVectors(UP, FORWARD);
     sightY = top + sight.radius + 0.012;
+    mesh.position.set(0, sightY, rz);
+    group.add(mesh);
     reticle = sight.reticle;
   }
   const grip = look.pick.grip ? kit.grips[look.pick.grip as keyof GunKit["grips"]] : undefined;

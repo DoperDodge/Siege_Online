@@ -3,15 +3,14 @@
 import { randomInt } from "node:crypto";
 import {
   ByteReader,
+  decodeCreateRoom,
   decodeHelloRest,
   decodeHelloVersion,
-  decodeInput,
   decodeJoinRoom,
-  decodeLabTool,
-  decodePickLoadout,
-  decodePing,
   encodeError,
   ErrorCode,
+  handleRoomMessage,
+  isHeavyRoomMessage,
   loadGameData,
   MAX_NAME,
   Msg,
@@ -53,7 +52,6 @@ export class RoomManager {
 
   constructor(
     private readonly now: () => number,
-    private readonly levelId = "movement_lab",
     private readonly maxRooms = MAX_ROOMS,
   ) {}
 
@@ -71,15 +69,15 @@ export class RoomManager {
     return this.rooms.get(code)?.room ?? null;
   }
 
-  /** A new room with a fresh code, or null when the server already has as many rooms as it allows. */
-  async create(): Promise<Room | null> {
+  /** A new room on `levelId` (one of ROOM_LEVELS), or null when the server already has as many rooms as it allows. */
+  async create(levelId = "movement_lab"): Promise<Room | null> {
     if (this.rooms.size + this.pending.size >= this.maxRooms) return null;
     let code: string;
     do code = Array.from({ length: ROOM_CODE_LENGTH }, () => ROOM_CODE_ALPHABET[randomInt(ROOM_CODE_ALPHABET.length)]).join("");
     while (this.rooms.has(code) || this.pending.has(code));
     this.pending.add(code);
     try {
-      const room = await Room.create(code, this.levelId, { lab: true, seed: randomInt(2 ** 32) }); // a secret seed: spread and recoil
+      const room = await Room.create(code, levelId, { lab: true, seed: randomInt(2 ** 32) }); // a secret seed: spread and recoil
       this.rooms.set(code, { room, emptySince: this.now() });
       return room;
     } finally {
@@ -275,7 +273,7 @@ export class Connection {
       case "hello":
         return type === Msg.Hello ? this.hello(r) : this.close(Close.Protocol, "expected hello");
       case "lobby":
-        if (type === Msg.CreateRoom) return this.create();
+        if (type === Msg.CreateRoom) return this.create(decodeCreateRoom(r).levelId);
         if (type === Msg.JoinRoom) return this.join(decodeJoinRoom(r).code);
         return this.close(Close.Protocol, "expected create or join");
       case "joining":
@@ -301,13 +299,13 @@ export class Connection {
     this.state = "lobby";
   }
 
-  private create() {
+  private create(levelId: string) {
     if (!this.gate.canCreate(this.ip)) {
       this.t.send(encodeError(ErrorCode.RateLimited, "You've created several rooms in a row. Wait a minute, or join one with its code."));
       return;
     }
     this.state = "joining";
-    this.rooms.create().then(
+    this.rooms.create(levelId).then(
       (room) => {
         if (this.state !== "joining") return; // the client left while the level loaded
         if (!room) {
@@ -346,24 +344,7 @@ export class Connection {
   }
 
   private inRoom(type: number, r: ByteReader) {
-    const room = this.room!;
-    const id = this.memberId;
-    switch (type) {
-      case Msg.Input:
-        return room.onInput(id, decodeInput(r));
-      case Msg.Ping:
-        return room.onPing(id, decodePing(r).clientTime);
-      case Msg.Resync:
-        return room.onResync(id); // cheap (the next snapshot is sent in full), and must not be lost
-    }
-    if (!this.heavy.take(this.now())) return; // drop, don't disconnect: a key held down can repeat
-    switch (type) {
-      case Msg.PickLoadout:
-        return room.pickLoadout(id, decodePickLoadout(r));
-      case Msg.LabTool:
-        return room.onLabTool(id, decodeLabTool(r));
-      default:
-        return this.close(Close.Protocol, "unexpected message");
-    }
+    if (isHeavyRoomMessage(type) && !this.heavy.take(this.now())) return; // drop, don't disconnect: a key held down can repeat
+    if (!handleRoomMessage(this.room!, this.memberId, type, r)) this.close(Close.Protocol, "unexpected message");
   }
 }

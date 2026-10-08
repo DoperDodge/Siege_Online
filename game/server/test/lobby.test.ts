@@ -64,6 +64,24 @@ describe("lobby", () => {
     expect(rooms.count).toBe(0);
   });
 
+  it("creates a room on the level the page asks for (the Range Lab, with its dummies), and only levels it knows", async () => {
+    const clock = { t: 0 };
+    const rooms = new RoomManager(() => clock.t);
+    const a = fakeClient(rooms, clock);
+    a.conn.onMessage(encodeHello("Range"));
+    a.conn.onMessage(encodeCreateRoom("range_lab"));
+    await until(() => a.of(Msg.Welcome).length === 1);
+    expect(decodeWelcome(a.of(Msg.Welcome)[0]).levelId).toBe("range_lab");
+    const roster = decodeRoster(a.of(Msg.Roster).at(-1)!);
+    expect(roster.entries.filter((e) => e.kind === 1).length).toBe(loadGameData().levels.get("range_lab")!.dummies.length);
+    expect(rooms.players).toBe(1); // dummies aren't players
+    const bad = fakeClient(rooms, clock);
+    bad.conn.onMessage(encodeHello("Sneaky"));
+    bad.conn.onMessage(new ByteWriter().u8(Msg.CreateRoom).str("../../etc").finish());
+    expect(bad.closed).toEqual([{ code: Close.Protocol, reason: "bad message" }]);
+    expect(rooms.count).toBe(1);
+  });
+
   it("refuses an unknown code but stays in the lobby", async () => {
     const clock = { t: 0 };
     const rooms = new RoomManager(() => clock.t);
@@ -78,7 +96,7 @@ describe("lobby", () => {
 
   it("reports a full server instead of creating more rooms than allowed", async () => {
     const clock = { t: 0 };
-    const rooms = new RoomManager(() => clock.t, "movement_lab", 1);
+    const rooms = new RoomManager(() => clock.t, 1);
     const a = fakeClient(rooms, clock);
     const b = fakeClient(rooms, clock);
     for (const c of [a, b]) c.conn.onMessage(encodeHello("x"));

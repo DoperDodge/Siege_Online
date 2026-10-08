@@ -361,12 +361,15 @@ export class Sim {
     return movementPrompt(this.ctx, pawn);
   }
 
-  /** Put a pawn back at a spawn with full health (lab / respawn tooling). */
-  respawn(pawnId: number, spawnIndex = 0): void {
+  /**
+   * Put a pawn back at a spawn (or at `at`: a Range Lab dummy's own spot) with full health, ammo and nothing
+   * half done; the same id in a new life (lab / respawn tooling).
+   */
+  respawn(pawnId: number, spawnIndex = 0, at?: { pos: readonly [number, number, number]; yawDeg: number }): void {
     const pawn = this.pawns.get(pawnId);
     if (!pawn) return;
     this.cutReviveLinks(pawn);
-    const spawn = this.level.def.spawns[spawnIndex % this.level.def.spawns.length];
+    const spawn = at ?? this.level.def.spawns[spawnIndex % this.level.def.spawns.length];
     const m = this.data.movement;
     const { r, hh } = capsuleDims(m.stance.stand.height, m.stance.collisionRadius);
     pawn.collider.setRadius(r);

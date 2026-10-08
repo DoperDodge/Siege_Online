@@ -494,6 +494,29 @@ export const SURFACES = [
 export type Surface = (typeof SURFACES)[number];
 
 const vec3 = z.tuple([z.number(), z.number(), z.number()]);
+/**
+ * A scripted target: `static` stands (or crouches, lies down, leans) where it is; `strafe` walks back and
+ * forth across its facing over `span` metres; `peek` leans out and back in, one side then the other, every
+ * `periodS` seconds. `startDowned` puts it down but not out at each spawn (to practise reviving).
+ */
+export const dummySchema = z.strictObject({
+  id: z.string(),
+  /** Roster name (the id if left out). */
+  name: z.string().optional(),
+  pos: vec3,
+  yawDeg: z.number(),
+  operator: z.string(),
+  /** 0 attackers, 1 defenders. */
+  team: z.union([z.literal(0), z.literal(1)]),
+  script: z.enum(["static", "strafe", "peek"]),
+  stance: z.enum(["stand", "crouch", "prone"]).default("stand"),
+  lean: z.union([z.literal(-1), z.literal(0), z.literal(1)]).default(0),
+  span: z.number().positive().default(4),
+  periodS: z.number().positive().default(4),
+  startDowned: z.boolean().default(false),
+});
+export type DummyDef = z.infer<typeof dummySchema>;
+
 export const levelSchema = z.strictObject({
   _doc: z.string().optional(),
   id: z.string(),
@@ -550,6 +573,10 @@ export const levelSchema = z.strictObject({
       }),
     )
     .default([]),
+  /** Labels with no geometry (distance markings on a range floor): drawn only, never collide. */
+  markers: z.array(z.strictObject({ id: z.string(), pos: vec3, label: z.string() })).default([]),
+  /** Range Lab targets (Phase 3 M10, DECISIONS D-052): scripted bodies the room steps (lab/dummies.ts). */
+  dummies: z.array(dummySchema).default([]),
 });
 export type LevelDef = z.infer<typeof levelSchema>;
 
