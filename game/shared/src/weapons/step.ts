@@ -50,7 +50,9 @@ export type SimEvent =
   | { kind: "death"; pawnId: number; cause: "fall" | "bleed" }
   /** Reviving (DECISIONS D-049): started, and finished (`completed`) or cancelled. */
   | { kind: "reviveStart"; reviverPawn: number; targetPawn: number }
-  | { kind: "reviveEnd"; reviverPawn: number; targetPawn: number; completed: boolean };
+  | { kind: "reviveEnd"; reviverPawn: number; targetPawn: number; completed: boolean }
+  /** A reinforcement or barricade hold completed (Phase 4 M6): the server puts it up (or takes it down). */
+  | { kind: "deploy"; pawnId: number; action: number; panel: number; section: number; side: number };
 
 export type WeaponContext = MoveContext & { data: GameData; events: SimEvent[] };
 

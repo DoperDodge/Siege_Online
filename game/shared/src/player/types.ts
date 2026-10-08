@@ -174,6 +174,12 @@ export interface PawnState {
   reviveTicks: number;
   reviveTarget: number;
   revivedBy: number;
+  // reinforcing and barricades (Phase 4 M6; destruction/deploy.ts): what the body is putting up or taking
+  // down (DeployKind, 0 = nothing), on which panel and section, and for how many ticks it has held Interact
+  deployKind: number;
+  deployPanel: number;
+  deploySection: number;
+  deployTicks: number;
 }
 
 export const NEUTRAL_INPUT: Readonly<Omit<InputCmd, "seq" | "yaw" | "pitch">> = {

@@ -115,5 +115,9 @@ export function initialPawnState(x: number, y: number, z: number, yaw: number, m
     reviveTicks: 0,
     reviveTarget: 0,
     revivedBy: 0,
+    deployKind: 0,
+    deployPanel: 0,
+    deploySection: 0,
+    deployTicks: 0,
   };
 }

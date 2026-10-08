@@ -95,28 +95,36 @@ export function bulletThroughPanels(panels: PanelSet, d: DestructionData, rule: 
 }
 
 /**
- * The knife (data/destruction.json `melee`) against the first panel material within `reach` along the view,
- * nearer than `maxT` (plain level geometry): a round hole in the skin it hits, and in the far skin too with
- * melee.bothSkins; a stud, metal or steel stops the blade. Wear on a hatch or barricade. Null if it reaches
- * no panel.
+ * The knife (data/destruction.json `melee`) against the first panel material it reaches: the blade is as
+ * wide as its hole, so the swing touches the panel through a small hole (rays at the centre, then half a
+ * hole to each side, up and down). A round hole in the skin it hits, and in the far skin too with
+ * melee.bothSkins; a stud, metal or steel stops the blade. Wear on a hatch or barricade. Within `reach`
+ * along the view, nearer than `maxT` (plain level geometry). Null if it reaches no panel material.
  */
 export function meleeOnPanels(panels: PanelSet, d: DestructionData, origin: Vec3, dir: Vec3, reach: number, maxT: number, view?: PanelView): PanelPassage | null {
   const rule = d.melee;
-  let hit: { entry: PanelEntry; crossing: LayerCrossing } | null = null;
-  for (const h of panels.crossings(origin, dir, Math.min(reach, maxT))) {
-    if (solidAs(h.entry, h.crossing, view)) {
-      hit = h;
+  const half = rule.holeDiameterM / 2;
+  // Across the swing: horizontal right of the view, and up completing it (any perpendicular pair when looking straight up or down).
+  const flat = Math.hypot(dir[0], dir[2]);
+  const right: Vec3 = flat > 1e-6 ? [-dir[2] / flat, 0, dir[0] / flat] : [1, 0, 0];
+  const up: Vec3 = [right[1] * dir[2] - right[2] * dir[1], right[2] * dir[0] - right[0] * dir[2], right[0] * dir[1] - right[1] * dir[0]];
+  let hit: { entry: PanelEntry; crossing: LayerCrossing; from: Vec3 } | null = null;
+  for (const [a, b] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    const from: Vec3 = [0, 1, 2].map((k) => origin[k] + (right[k] * a + up[k] * b) * half) as Vec3;
+    const h = panels.crossings(from, dir, Math.min(reach, maxT)).find((h) => solidAs(h.entry, h.crossing, view));
+    if (h) {
+      hit = { ...h, from };
       break;
     }
   }
   if (!hit) return null;
-  const { entry } = hit;
+  const { entry, from } = hit;
   const index = entry.panel.spec.index;
   const out: PanelPassage = { stop: hit.crossing.face, enters: [hit.crossing.face], ops: [] };
   const w = wear(entry, rule);
   if (w > 0) out.ops.push({ t: hit.crossing.face, panel: index, op: { kind: "damage", amount: w, hard: false } });
   let skins = 0;
-  for (const c of panelCrossings(entry.panel, entry.frame, origin, dir, Infinity)) {
+  for (const c of panelCrossings(entry.panel, entry.frame, from, dir, Infinity)) {
     if (c.t < hit.crossing.t || !solidAs(entry, c, view)) continue;
     if (c.layer === L_STEEL || (c.layer === L_CORE && !(rule.studs && !entry.panel.coreMetal))) break;
     if (entry.panel.kind !== "glass") out.ops.push({ t: c.t, panel: index, op: disc(c, rule.holeDiameterM, d.cellM) });

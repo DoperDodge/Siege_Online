@@ -887,7 +887,7 @@ export async function startLab(o: LabOptions): Promise<void> {
   function updateHud(p: Pawn) {
     const s = p.state;
     $(".op-name").textContent = `${op.name} · ${op.side} · ${op.healthRating} health / ${op.speedRating} speed${op.pawns > 1 ? ` · shell ${ctrl.pawnIds.indexOf(p.id) + 1}/2` : ""}`;
-    downedHud.update(s, data.combat, keyLabel(settings.keys.interact), nameOfPawn);
+    downedHud.update(s, data.combat, keyLabel(settings.keys.interact), nameOfPawn, data.destruction);
     app.querySelectorAll<HTMLElement>(".stances span").forEach((el) => el.classList.toggle("on", Number(el.dataset.s) === s.stance));
     $(".stance-bar div").style.width = `${s.stanceT * 100}%`;
     const speed = Math.hypot(s.vx, s.vz);
@@ -926,7 +926,13 @@ export async function startLab(o: LabOptions): Promise<void> {
             ? `${keyLabel(k.interact)} to transfer`
             : prompt === "revive"
               ? `Hold ${keyLabel(k.interact)} to revive`
-              : "";
+              : prompt === "reinforce"
+                ? `Hold ${keyLabel(k.interact)} to reinforce (${sim.deployRules.pools[possessed()?.team ?? 1]} left)`
+                : prompt === "barricade"
+                  ? `Hold ${keyLabel(k.interact)} to barricade`
+                  : prompt === "unbarricade"
+                    ? `Hold ${keyLabel(k.interact)} to remove the barricade`
+                    : "";
     $(".prompt").textContent = promptText;
     $(".prompt").classList.toggle("hidden", !promptText || dead);
     const onCam = ctrl.shellCam || ctrl.swapPhase !== 0;

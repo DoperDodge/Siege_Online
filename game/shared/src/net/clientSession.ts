@@ -177,6 +177,8 @@ export class ClientSession {
         return;
       case Msg.Events: {
         const { tick, events } = decodeEvents(r);
+        // Who may reinforce and barricade, and the pools left: our predictions follow the room's rules.
+        for (const e of events) if (e.kind === "deployRules") this.sim!.deployRules = { anyone: e.anyone, pools: [e.pools[0], e.pools[1]] };
         this.opts.onEvents?.(tick, events);
         return;
       }

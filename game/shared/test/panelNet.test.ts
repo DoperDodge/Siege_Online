@@ -2,28 +2,8 @@
 // with the server's panels (a hole made by one player's shots, a player who joins later, a client that fell
 // out of step), and a body walks through a breach the server opened with its prediction holding.
 import { describe, expect, it } from "vitest";
-import {
-  Btn,
-  ByteReader,
-  ClientSession,
-  decodePanelOps,
-  DT,
-  encodeLabTool,
-  encodePanelOps,
-  L_BACK,
-  L_CORE,
-  L_FRONT,
-  Msg,
-  PROTOCOL_VERSION,
-  Room,
-  Stance,
-  wireOp,
-  handleRoomMessage,
-  type GameEvent,
-  type IndexedOp,
-  type InputCmd,
-  type PanelOp,
-} from "../src/index.js";
+import { Btn, ByteReader, decodePanelOps, encodeLabTool, encodePanelOps, L_BACK, L_CORE, L_FRONT, Msg, PROTOCOL_VERSION, wireOp, type IndexedOp, type PanelOp } from "../src/index.js";
+import { roomWith } from "./roomHarness.js";
 
 describe("panel ops on the wire", () => {
   it("every kind of op round-trips exactly, with the tick and hash; cuts are whole 16-bit numbers", () => {
@@ -49,36 +29,6 @@ describe("panel ops on the wire", () => {
     expect(PROTOCOL_VERSION).toBe(8);
   });
 });
-
-/** A room and in-process clients at zero latency (the ClientSession code the page runs). */
-async function roomWith(levelId: string, ops: string[]) {
-  const room = await Room.create("WALLS", levelId, { lab: true, seed: 11 });
-  const clock = { t: 0 };
-  type Client = { session: ClientSession; id: number; toServer: Uint8Array[]; events: GameEvent[]; cmd: Partial<Omit<InputCmd, "seq">> };
-  const clients: Client[] = [];
-  const add = async (op: string) => {
-    const toServer: Uint8Array[] = [];
-    const events: GameEvent[] = [];
-    const session = new ClientSession({ send: (b) => toServer.push(b), now: () => clock.t, onEvents: (_t, evs) => events.push(...evs), trackMispredictions: true });
-    const id = room.join(`p${clients.length}`, { send: (b) => session.handle(b), buffered: () => 0 }, op)!;
-    await session.loaded();
-    const c: Client = { session, id, toServer, events, cmd: {} };
-    clients.push(c);
-    return c;
-  };
-  for (const op of ops) await add(op);
-  const tick = () => {
-    clock.t += DT * 1000;
-    for (const c of clients) if (c.session.ready) c.session.tick({ forward: 0, strafe: 0, yaw: 0, pitch: 0, buttons: 0, stance: Stance.Stand, lean: 0, ...c.cmd });
-    for (const c of clients)
-      for (const b of c.toServer.splice(0)) {
-        const r = new ByteReader(b.subarray(1));
-        if (!handleRoomMessage(room, c.id, b[0], r)) throw new Error(`unexpected message ${b[0]}`);
-      }
-    room.step();
-  };
-  return { room, clients, add, tick };
-}
 
 describe("everyone ends with the server's panels", () => {
   it("one player's shots hole a wall: the other player and one who joins later have the same panels", async () => {

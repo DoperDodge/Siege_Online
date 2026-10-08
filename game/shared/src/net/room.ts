@@ -5,9 +5,10 @@ import type { Vec3 } from "../core/math.js";
 import { applyDamage, Cause, isIdleShell, type Damage } from "../combat/apply.js";
 import { shotOnBodies, tracePellets, type ShotOnBody } from "../combat/hitreg.js";
 import { judgeMelee } from "../combat/melee.js";
+import { DeployKind } from "../destruction/deploy.js";
 import { PanelHistory } from "../destruction/history.js";
 import { meleeOnPanels } from "../destruction/hits.js";
-import type { PanelOp } from "../destruction/panel.js";
+import { L_STEEL, type PanelChange, type PanelOp } from "../destruction/panel.js";
 import type { IndexedOp } from "../destruction/panels.js";
 import type { DummyDef, ModeData } from "../data/schemas.js";
 import { DUMMY_STANCE, dummyInput } from "../lab/dummies.js";
@@ -234,6 +235,8 @@ export class Room {
   ) {
     this.history = new HitboxHistory(sim, 32);
     this.rules = sim.data.modes.get("lab")!;
+    // Reinforcing and barricades (Phase 4 M6): each team's pool; lab rooms let attackers do it too.
+    sim.deployRules = { anyone: this.rules.defenderToolsForAll, pools: [this.rules.reinforcements, this.rules.reinforcements] };
     // A revive cut by what another body did (left, respawned, jumped, went down or died): the other side's
     // owner couldn't predict it.
     sim.onReviveCut = (p) => {
@@ -322,6 +325,7 @@ export class Room {
     this.spawn(m);
     client.send(encodeWelcome({ roomCode: this.code, tick: this.sim.tick, levelId: this.levelId, controllerId: m.ctrl!.id }));
     client.send(encodePanelState(this.sim.level.panels)); // the walls as they are now; every later op follows
+    m.events.push(this.deployRulesEvent());
     this.broadcastRoster();
     return m.id;
   }
@@ -564,14 +568,38 @@ export class Room {
    * form (exactly what clients will apply), remembered so later shots are judged against the panels as each
    * shooter had them, and sent to everyone with the tick's other ops.
    */
-  private applyPanelOp(index: number, op: PanelOp): void {
+  private applyPanelOp(index: number, op: PanelOp): PanelChange | null {
     const e = this.sim.level.panels.list[index];
-    if (!e) return;
+    if (!e) return null;
     const wire = wireOp(op);
     const change = this.sim.level.panels.apply(index, wire);
     this.panelHistory.record(this.sim.tick, index, e.panel.w * e.panel.h, change);
     this.tickOps.push({ panel: index, op: wire });
     this.stats.panelOps++;
+    return change;
+  }
+
+  /**
+   * A reinforcement or barricade hold completed in the simulation (it checked who, where and what): put the
+   * steel up from that side, using one of the team's reinforcements, or the barricade up or off.
+   */
+  private completeDeploy(e: Extract<SimEvent, { kind: "deploy" }>) {
+    const pawn = this.sim.pawns.get(e.pawnId);
+    if (!pawn) return;
+    if (e.action !== DeployKind.Reinforce) {
+      this.applyPanelOp(e.panel, { kind: "barricade", up: e.action === DeployKind.BarricadeUp });
+      return;
+    }
+    const pools = this.sim.deployRules.pools;
+    if (pools[pawn.team] <= 0) return;
+    if (!this.applyPanelOp(e.panel, { kind: "reinforce", section: e.section, side: e.side })?.added[L_STEEL].length) return;
+    pools[pawn.team]--;
+    for (const m of this.members.values()) m.events.push(this.deployRulesEvent());
+  }
+
+  private deployRulesEvent(): GameEvent {
+    const r = this.sim.deployRules;
+    return { kind: "deployRules", anyone: r.anyone, pools: [r.pools[0], r.pools[1]] };
   }
 
   /** The tick's panel ops to everyone, with the panels' hash after them, ahead of the tick's snapshot. */
@@ -682,6 +710,8 @@ export class Room {
       if (e.kind === "death") {
         const p = this.sim.pawns.get(e.pawnId);
         if (p) this.announceDeath(p, 0, "", e.cause === "bleed" ? Cause.Bleed : Cause.Fall, false, false);
+      } else if (e.kind === "deploy") {
+        this.completeDeploy(e);
       } else if (e.kind === "reviveStart" || e.kind === "reviveEnd") {
         const target = this.sim.pawns.get(e.targetPawn);
         const owner = target && target.ownerId !== null ? this.memberOf(target.ownerId) : null;

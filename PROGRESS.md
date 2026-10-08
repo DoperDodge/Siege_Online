@@ -18,7 +18,7 @@ Built in milestones; each keeps the tests, the browser tests and the netsim gree
 | M3 Panels in the simulation (movement through holes) and on screen | ✅ intact panels collide exactly as before; breaches let bodies through; rays see holes; drawn from cells (D-064) |
 | M4 Bullets and the knife through panels (wallbangs, holes, rewound holes) | ✅ on the server: wallbangs at 70 %, holes, studs, steel, two-wall limit, knife holes, panels as the shooter had them (D-065) |
 | M5 Destruction over the network, and for players who join late | ✅ ops to everyone each tick with a hash check; full state on joining; netsim and browser test agree (D-066) |
-| M6 Reinforcement, barricades and hatches | ⏳ |
+| M6 Reinforcement, barricades and hatches | ✅ hold F to reinforce (4.5 s, team pool, from your side, hatches from above), barricade (2 s) or pry one off (1 s); Destruction Lab level (D-067) |
 | M7 Destruction Lab (explosive tools, every surface, Oregon wall samples) | ⏳ |
 | M8 Browser and netsim tests, docs | ⏳ |
 
@@ -61,6 +61,12 @@ Built in milestones; each keeps the tests, the browser tests and the netsim gree
   sample walls: every client ends with the server's walls, 33–38 kbps each) and in a browser test
   (`tools/e2e/online-walls.mjs`: a wallbang hit at +100 ms, a sprayed and knifed wall, a watcher and a late
   joiner with exactly the server's walls).
+- **Reinforcing, barricades and hatches (M6, D-067):** hold F at a wall section for 4.5 s to put steel up on
+  your side (one of the team's 10 reinforcements; a hatch only from above); hold F for 2 s to barricade an
+  empty door or window, or 1 s to pry a barricade off. You stand still meanwhile, and the bar shows the time
+  left. Defenders only, except in lab rooms. Three knife hits break a barricade; a broken hatch drops whoever
+  stands on it. The new Destruction Lab level has every kind of wall, door, window, hatch and floor (its
+  page comes in M7).
 
 ---
 
