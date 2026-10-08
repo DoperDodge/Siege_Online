@@ -39,7 +39,9 @@ export function rangeFeatures(lab: LabApi): void {
       const part = shot.hit.part as BodyPart;
       lines.push(`${escapeHtml(nameOf(shot.hit.pawnId))} · ${zoneOf(part)} · ${shot.hit.distance.toFixed(1)} m`);
       const dealt = hits.reduce((n, h) => n + h.damage, 0);
-      const what = hits.some((h) => h.killed) ? `${dealt} · kill` : hits.some((h) => h.downed) ? `${dealt} · down` : `${dealt}`;
+      // A kill or a down takes only what the body had left.
+      const ended = hits.some((h) => h.killed) ? " · kill" : hits.some((h) => h.downed) ? " · down" : "";
+      const what = `${dealt}${ended && hits.some((h) => h.hpAfter === 0) ? " (all it had left)" : ""}${ended}`;
       if (weapon) lines.push(`Dealt ${hits.length ? what : "…"} — the data says ${expectedDamage(lab, weapon, shot.hit.distance, part)} at this range`);
     } else lines.push(shot.wallDistance !== null ? `Miss · the level at ${shot.wallDistance.toFixed(1)} m` : "Miss");
     if (shot.dirs.length > 1) lines.push(`${shot.dirs.length} pellets${hits.length ? `, ${hits.reduce((n, h) => n + h.pellets, 0)} hit` : ""}`);

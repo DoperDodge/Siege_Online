@@ -27,6 +27,7 @@ import {
   loadedOf,
   loadGameData,
   PawnMode,
+  poseHitboxes,
   proneWeight,
   reserveOf,
   Sim,
@@ -243,7 +244,7 @@ export async function startLab(o: LabOptions): Promise<void> {
   }
 
   const view = $("#view");
-  const renderer = createRenderer(view);
+  const renderer = createRenderer(view, params.has("lowgfx"));
   const scene = createLabScene(sim.level);
   let settings: Settings = loadSettings();
   const camera = new THREE.PerspectiveCamera(settings.fovVertical, view.clientWidth / view.clientHeight, 0.05, 300);
@@ -752,7 +753,9 @@ export async function startLab(o: LabOptions): Promise<void> {
   let fpsFrames = 0;
   let fpsAt = performance.now();
   function frame(now: number) {
-    const elapsed = Math.min(0.25, (now - last) / 1000);
+    // The frame's timestamp can predate the code that ran just before it (a page busy for seconds
+    // starting up gets a first frame stamped from before): never step time backwards.
+    const elapsed = Math.max(0, Math.min(0.25, (now - last) / 1000));
     acc += elapsed;
     last = now;
     if (net && !followServer(elapsed)) {
@@ -995,6 +998,34 @@ export async function startLab(o: LabOptions): Promise<void> {
       fire: () => fire(),
       /** Lab tool: hurt your own body (the whole of its health downs it). */
       hurt: (amount: number) => labHurt(amount),
+      /** Lab tool: refill your ammo. */
+      refill: () => labRefill(),
+      /** Lab tool (rooms): hurt a body by id, yours or a Range Lab dummy. */
+      damage: (pawnId: number, amount: number) => net?.send(encodeLabTool({ kind: "damage", pawnId, amount, kill: false })),
+      /** The view (yaw, pitch) from your eye now to a body part of another body as the frame on screen draws it. */
+      aimAt: (pawnId: number, part: string) => {
+        const st = net?.session.remoteAt(pawnId, shownRenderTick);
+        const box = st && poseHitboxes(data.movement, data.hitboxes, st).find((h) => h.part === part);
+        if (!box) return null;
+        const eye = eyePose(data.movement, data.hitboxes, possessed().state).pos;
+        const d = [0, 1, 2].map((i) => (box.a[i] + box.b[i]) / 2 - eye[i]);
+        return { yaw: Math.atan2(-d[0], -d[2]), pitch: Math.atan2(d[1], Math.hypot(d[0], d[2])) };
+      },
+      /** The render tick of the frame on screen (other players are drawn at it; a click now claims it). */
+      get renderTick() {
+        return shownRenderTick;
+      },
+      /** The render tick an input of yours claimed (lag compensation), by its 16-bit seq. */
+      claimed: (seq16: number) => claims.get(seq16) ?? null,
+      /** Another body's hitboxes as this page draws it at render tick `tick`. */
+      boxesAt: (pawnId: number, tick: number) => {
+        const st = net?.session.remoteAt(pawnId, tick);
+        return st ? poseHitboxes(data.movement, data.hitboxes, st) : null;
+      },
+      /** The camera's vertical field of view now (degrees; narrower down a magnified sight). */
+      get fov() {
+        return camera.fov;
+      },
       /** Online tests: replace parts of the sampled input (e.g. { forward: 1 }); null hands back control. */
       set input(v: Partial<InputCmd> | null) {
         scripted = v;
@@ -1210,10 +1241,15 @@ export async function startLab(o: LabOptions): Promise<void> {
    */
   /** No snapshot for this long (they come 32 times a second) means the connection is dead even if TCP hasn't noticed. */
   const SILENT_MS = 5000;
+  /** When followServer last ran: a page that was busy itself (loading the level, a stalled tab) hasn't read what arrived yet. */
+  let followedAt = 0;
 
   function followServer(elapsed: number): boolean {
     const s = net!.session;
-    if (!disconnected && s.lastSnapshotAt && performance.now() - s.lastSnapshotAt > SILENT_MS) {
+    const now = performance.now();
+    const awake = now - followedAt < 1000;
+    followedAt = now;
+    if (!disconnected && awake && s.lastSnapshotAt && now - s.lastSnapshotAt > SILENT_MS) {
       disconnected = "Lost connection to the server.";
       net!.close();
     }

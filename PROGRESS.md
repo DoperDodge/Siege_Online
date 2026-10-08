@@ -5,7 +5,7 @@ known issues, and what's next.
 
 ---
 
-## Phase 3 — Gunplay · 🚧 in progress (branch `claude/phase-3-gunplay`, draft PR #4)
+## Phase 3 — Gunplay · ✅ built (branch `claude/phase-3-gunplay`, PR #4); waiting for your test at 100 ms
 
 **Done when (PLAN §17):** headshots and hit registration feel right at 100 ms.
 
@@ -24,7 +24,7 @@ Built in milestones; each one keeps the tests, both e2e scripts and the netsim g
 | M8 Melee | ✅ V swings the knife: kills standing or downed, judged with lag compensation |
 | M9 Client presentation (viewmodel, HUD, hit markers) | ✅ a gun in your hands, sights, flashes, tracers and bullet marks; ADS sensitivity per zoom |
 | M10 Range Lab (dummies) | ✅ targets out to 50 m, offline in its own room or online; F2 overlay, damage against the data |
-| M11 End-to-end tests, netsim gates, docs | ⏳ |
+| M11 End-to-end tests, netsim gates, docs | ✅ a fight in the netsim, two Range Lab browser tests, hit-reg gates (D-060) |
 
 ### What's done
 - **Weapon data (M1, D-039):** `data/weapons/<id>.json` for all 40 roster weapons, generated once from
@@ -135,7 +135,80 @@ Built in milestones; each one keeps the tests, both e2e scripts and the netsim g
   0.5); the two online test pages at 480×270 sharing one CPU draw 13 fps each.
 - **Movement fix (D-057):** sprinting diagonally into a wall could, rarely, drop you 0.29 m into the floor in
   one tick. Fixed, with a regression test.
-- 276 unit tests (31 of them for the page: settings, controls, HUD maths, guns and effects, the offline room).
+- **Checks for "done when" (M11, D-060):**
+  - **A fight in the netsim** (`npm run netsim -- --combat`): two teams of five, 8 m apart at 100 ms round trip,
+    spray at each other in bursts, knife up close, revive downed teammates and respawn a second after dying. In
+    30 s: 24 downs, 3 revives started, 72 kills (31 with the knife), no desyncs (the two bots who end it
+    pressed together get a few sub-millimetre corrections at rest, D-033 addendum), 33–38 kbps down per
+    player, server tick 3 ms at p99 (budget 5). It runs in the unit tests for 20 s.
+  - **Hit registration** (`--hitreg`, also in the unit tests) now also requires that every head the shooter hits
+    on screen is a headshot on the server: 69 of 69, with and without 10 ms of jitter.
+  - **A stall while spraying:** a 300 ms network stall while holding Fire costs no misprediction.
+  - **Browser test of the Range Lab offline** (`tools/e2e/range-lab.mjs`): its own room with every dummy; a
+    headshot kills; torso damage at 10 m and at 40 m (falloff) is exactly the data's 47 and 28; a leg takes
+    less; a downed dummy can be finished; a tactical reload gives 31 (30 + 1 in the chamber) and an empty one 30;
+    fire modes and weapon swaps work; a headshot while leaning leaves from the leaned eye; a 2.5× sight narrows
+    the view to 31.3°.
+  - **Browser test of the Range Lab online** (`tools/e2e/online-range.mjs`, two pages at +100 ms): a still
+    dummy's head kills; on the strafing dummy, a click claims the frame on screen, the server never rewinds
+    further back than that, and the target where the server rewound it is exactly where the shooter's page
+    draws that moment (0.00 cm apart); the damage arc points at the attacker (−90° expected, −90° shown); A
+    downs B, both kill feeds say so and B sees the down screen; A revives B with 20 HP; no mispredictions.
+- **Low graphics:** add `lowgfx` to the address (`range_lab.html?lowgfx`, or `?online&lowgfx`) to turn off
+  shadows and anti-aliasing on a slow device; it doubles the frame rate of the software-rendered test pages.
+- **Two page bugs the new browser test found:** a page that took seconds to start (the second page joining a
+  busy room) got a first frame stamped from before its start, which stopped its clock for as long as the
+  start-up took (no input reached the server, then its own 5 s silence check disconnected it). Time no longer
+  runs backwards, and the silence check doesn't count time the page itself was too busy to read messages.
+- 278 unit tests (31 of them for the page: settings, controls, HUD maths, guns and effects, the offline room).
+
+### How to test (needs Node 22.12+)
+```
+npm install
+npm run build
+npm start
+```
+1. **Offline:** open http://localhost:8080 → **Range Lab**. Shoot the dummies down the lane and check the
+   panel on the left (the damage dealt against what the data says at that range). **F2** shows where the
+   server had the target (green) against where you saw it (blue). `Esc` → *Loadout* swaps guns and
+   attachments; the *Downed teammate* on the revive pad takes a hold of **F**; **V** is the knife.
+2. **Online at 100 ms:** **Range Lab online** (or **Movement Lab online**) → *Create a room*; `Esc` → *Copy
+   invite link* and open it in a second window (or on a second PC, as in Phase 2). In both pause menus set
+   **Simulated extra latency → +100 ms round trip**. Shoot the strafing dummy and each other, down and revive
+   each other, try the knife. On a slow device (a tablet), add `&lowgfx` to the address.
+3. **Over the internet:** your Railway link redeploys from `main` once this phase is merged. While the server
+   is in Singapore, a US round trip (230–250 ms) plus the drawing delay is past the 250 ms rewind cap, so
+   moving targets will be hard to hit; switch the region to US West or US East first (Settings → Deploy →
+   Regions, keep 1 instance).
+
+The automated checks: `npm run typecheck`, `npm test`, `npm run build`, `npm run test:e2e` (all four browser
+tests), and `npm run netsim -- --hitreg` / `-- --combat` / `-- --spread`.
+
+Things to judge, at +100 ms:
+- Headshots on the strafing dummy and on another player: do they land where your screen says they should?
+- Does the F2 overlay's green box sit where you saw the target (blue) when you clicked?
+- Recoil, aiming down sights (the sight pictures and zoom) and the HUD: do they feel like Siege?
+- Going down, crawling, bleeding out and reviving; the knife.
+
+### Known issues
+- **Every wall stops bullets** in Phase 3, soft walls included (the *Behind the wall* dummy can't be shot yet):
+  wallbangs come with destruction in Phase 4 (D-046).
+- All numbers beyond the official ones are placeholders, each listed in research/OPEN_QUESTIONS.md (Phase 3
+  placeholders, 33 questions); the guns and bodies are placeholder boxes and capsules.
+- The rewind cap is 250 ms (D-045, your call): beyond about 150 ms of ping, or below about 30 fps (when other
+  players are drawn up to 150 ms in the past, D-032), some shots at moving targets are judged against a later
+  moment than the one you saw.
+- A body standing still pressed against others can get a correction now and then (sub-millimetre, faded out;
+  D-033 addendum).
+- The dummies don't shoot back; the Ballistic Shield and GONNE-6 can't be picked until Phase 8 (D-054), nor
+  Skopós's idle-shell barrier (D-058).
+- Frame rate is measured with software rendering only (5–15 fps for two test pages sharing a CPU); real GPUs are
+  measured on your PC (PLAN §18).
+
+### Next: Phase 4 — Destruction v1
+Soft walls, floors, barricades, reinforcement, hatches, bullet penetration, networked destruction with late
+join, and a destruction_lab page. **Done when:** wallbangs, punch holes and reinforcing are all synced across
+clients.
 
 ---
 

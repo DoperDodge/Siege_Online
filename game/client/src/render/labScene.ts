@@ -19,11 +19,12 @@ export const SURFACE_COLORS: Record<Renderable["surface"], number> = {
   LADDER: 0xe08a2e,
 };
 
-export function createRenderer(container: HTMLElement): THREE.WebGLRenderer {
-  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+/** `low`: no shadows and no anti-aliasing (`?lowgfx`: slow devices, and the browser tests' software rendering). */
+export function createRenderer(container: HTMLElement, low = false): THREE.WebGLRenderer {
+  const renderer = new THREE.WebGLRenderer({ antialias: !low, powerPreference: "high-performance" });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.setSize(container.clientWidth, container.clientHeight);
-  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.enabled = !low;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;

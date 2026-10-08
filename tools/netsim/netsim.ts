@@ -5,6 +5,7 @@ import {
   Btn,
   bulletDamage,
   ByteReader,
+  Cause,
   ClientSession,
   decodeInput,
   decodeLabTool,
@@ -12,6 +13,7 @@ import {
   decodePing,
   DT,
   eyePose,
+  loadedOf,
   Msg,
   PawnMode,
   penetrationChain,
@@ -23,6 +25,7 @@ import {
   type BodyEntry,
   type GameEvent,
   type InputCmd,
+  type PawnState,
   type ShotResult,
   type SimEvent,
 } from "@redmond/shared";
@@ -44,6 +47,14 @@ export interface NetsimOptions {
   crowd: boolean;
   /** Teleport bots 6 m apart first (no contact: every correction then means a determinism bug). */
   spread: boolean;
+  /**
+   * Fights like a match (Phase 3 M11): two teams of five; a downed body stays down for a teammate to revive
+   * (bots walk over and hold Interact) or an enemy to finish; bots knife enemies in reach; the dead come back
+   * a second later.
+   */
+  combat: boolean;
+  /** One client holds Fire the whole run, and its uplink stalls `ms` once, at `atS` seconds. */
+  sprayStall?: { client: number; atS: number; ms: number };
   operators?: string[];
 }
 
@@ -58,6 +69,7 @@ export const DEFAULTS: NetsimOptions = {
   seed: 1,
   crowd: true,
   spread: false,
+  combat: false,
 };
 
 export interface NetsimReport {
@@ -78,8 +90,15 @@ export interface NetsimReport {
   serverTickMs: { mean: number; p99: number; max: number };
   /** Every client's predicted state equals the server's once all inputs are applied. */
   desyncs: string[];
+  /** Bodies corrected during the final second while pressed against another (expected, D-033 addendum). */
+  contactLate: string[];
   /** Render frames where a remote pawn had no snapshot to interpolate toward (buffer ran dry). */
   starvedRemoteFrames: number;
+  /**
+   * What the fights produced, as the first client heard it: downs, revives started and completed (in the open
+   * most are cut short: the reviver is shot, or the downed body finished), kills (with the knife), bleed-outs.
+   */
+  combat: { downs: number; reviveStarts: number; revives: number; kills: number; knifeKills: number; bleedOuts: number };
 }
 
 class Rng {
@@ -127,6 +146,10 @@ class Link {
     private readonly o: NetsimOptions,
     private readonly deliver: (b: Uint8Array) => void,
   ) {}
+  /** Nothing gets through for `ms` from now (a forced TCP retransmit stall). */
+  stallFor(ms: number) {
+    this.stalledUntil = Math.max(this.stalledUntil, this.clock.now + ms);
+  }
   send(b: Uint8Array) {
     this.bytes += b.length;
     const now = this.clock.now;
@@ -187,18 +210,71 @@ function bot(rng: Rng, crowd: boolean, home: { x: number; z: number } | null = n
 /** Spread-out spots along the open south side of the lab, 6 m apart. */
 const spreadSpot = (i: number) => ({ x: -27 + (i % 10) * 6, z: 26 - Math.floor(i / 10) * 4 });
 
+/** The mode of the body this member drives, on the server. */
+function modeOf(room: Room, memberId: number): PawnMode | undefined {
+  const ctrl = room.sim.controllers.get(room.memberInfo(memberId)?.controllerId ?? 0);
+  return ctrl !== undefined ? room.sim.pawns.get(ctrl.possessedPawnId)?.state.mode : undefined;
+}
+
 /** The body this member drives is dead (or down: the harness doesn't wait for a revive) on the server. */
 function isDead(room: Room, memberId: number): boolean {
-  const ctrl = room.sim.controllers.get(room.memberInfo(memberId)?.controllerId ?? 0);
-  const mode = ctrl !== undefined ? room.sim.pawns.get(ctrl.possessedPawnId)?.state.mode : undefined;
+  const mode = modeOf(room, memberId);
   return mode === PawnMode.Dead || mode === PawnMode.Downed;
 }
+
+/**
+ * In a fight (combat runs), from what this client sees: if it's the nearest teammate on its feet to a downed
+ * one within 12 m, walk over and hold Interact beside them, facing them (one reviver each: a crowd standing
+ * pressed together is a known source of tiny corrections, D-033); else aim at the nearest enemy within 25 m
+ * (standing or down) and fire, or knife them at arm's length; reload an empty gun. Otherwise the bot does
+ * what it was doing.
+ */
+function fight(session: ClientSession, own: PawnState, tick: number, cmd: Omit<InputCmd, "seq">, charger: boolean): Omit<InputCmd, "seq"> {
+  const me = session.roster.find((e) => e.controllerId === session.ctrl?.id);
+  if (!me || own.mode !== PawnMode.Walk) return cmd;
+  let mate: { st: PawnState; d: number } | null = null;
+  let enemy: { st: PawnState; d: number } | null = null;
+  const standingMates: PawnState[] = [];
+  for (const e of session.roster) {
+    if (e.controllerId === me.controllerId) continue;
+    for (const id of e.pawnIds) {
+      const st = session.remoteAt(id);
+      if (!st || st.mode === PawnMode.Dead) continue;
+      const d = Math.hypot(st.x - own.x, st.z - own.z);
+      if (e.team === me.team && st.mode === PawnMode.Walk) standingMates.push(st);
+      if (e.team === me.team && st.mode === PawnMode.Downed && d < 12 && (!mate || d < mate.d)) mate = { st, d };
+      if (e.team !== me.team && d < 25 && (!enemy || d < enemy.d)) enemy = { st, d };
+    }
+  }
+  if (mate && standingMates.some((t) => Math.hypot(t.x - mate!.st.x, t.z - mate!.st.z) < mate!.d)) mate = null; // someone nearer goes
+  const face = (st: PawnState) => Math.atan2(-(st.x - own.x), -(st.z - own.z));
+  if (mate) {
+    const still = { strafe: 0, stance: Stance.Stand, lean: 0 as const };
+    return { ...cmd, ...still, yaw: face(mate.st), forward: mate.d > 0.8 ? 1 : 0, buttons: mate.d > 0.8 ? 0 : Btn.Interact };
+  }
+  if (loadedOf(own) === 0) return { ...cmd, buttons: tick % 32 === 0 ? Btn.Reload : 0 };
+  if (!enemy) return cmd;
+  // Their torso: low when they're down or prone, a bit lower crouched.
+  const st = enemy.st;
+  const torsoY = st.y + (st.mode === PawnMode.Downed || st.stance === Stance.Prone ? 0.3 : st.stance === Stance.Crouch ? 0.8 : 1.2);
+  const pitch = Math.atan2(torsoY - (own.y + 1.6), Math.max(0.3, enemy.d));
+  if (enemy.d < 1.2) return { ...cmd, yaw: face(st), pitch, forward: 0, buttons: tick % 16 === 0 ? Btn.Melee : 0 };
+  // A charger runs at them with the knife out; everyone else holds their spot and shoots.
+  if (charger) return { ...cmd, yaw: face(st), pitch, forward: 1, strafe: 0, stance: Stance.Stand, buttons: Btn.Sprint };
+  // Not an aimbot: the aim wanders a few degrees, in one-second bursts with a second's pause between (a revive,
+  // 4 s, sometimes gets done under fire).
+  const wobble = { yaw: 0.06 * Math.sin(tick * 0.37), pitch: 0.04 * Math.sin(tick * 0.23 + 1) };
+  return { ...cmd, yaw: face(st) + wobble.yaw, pitch: pitch + wobble.pitch, buttons: (cmd.buttons & ~(Btn.Sprint | Btn.Fire)) | ((tick >> 6) % 2 === 0 ? Btn.Fire : 0) };
+}
+
+/** Combat runs: two lines of five, 8 m apart, facing each other (team 0 on the south line). */
+const combatSpot = (i: number) => ({ x: -6 + Math.floor(i / 2) * 3, z: i % 2 ? 12 : 4, yawDeg: i % 2 ? 0 : 180 });
 
 export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<NetsimReport> {
   const o: NetsimOptions = { ...DEFAULTS, ...partial };
   const rng = new Rng(o.seed);
   const clock = new Clock();
-  const room = await Room.create("SIM00", "movement_lab", { lab: true });
+  const room = await Room.create("SIM00", "movement_lab", { lab: true, seed: o.seed });
   /** Corrections that were real mispredictions (not damage or respawns). */
   const mismatches = (memberId: number) => {
     const i = room.memberInfo(memberId);
@@ -206,6 +282,19 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
   };
   const tickMs = DT * 1000;
   const serverTimes: number[] = [];
+  const combat = { downs: 0, reviveStarts: 0, revives: 0, kills: 0, knifeKills: 0, bleedOuts: 0 };
+  const tally = (events: GameEvent[]) => {
+    for (const e of events) {
+      if (e.kind === "down") combat.downs++;
+      else if (e.kind === "reviveStart") combat.reviveStarts++;
+      else if (e.kind === "reviveEnd" && e.completed) combat.revives++;
+      else if (e.kind === "kill") {
+        combat.kills++;
+        if (e.weapon === "knife") combat.knifeKills++;
+        if (e.cause === Cause.Bleed) combat.bleedOuts++;
+      }
+    }
+  };
 
   const clients = await Promise.all(
     Array.from({ length: o.clients }, async (_, i) => {
@@ -214,12 +303,14 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
       let session!: ClientSession;
       const down = new Link(clock, rng, o, (b) => session.handle(b));
       const up = new Link(clock, rng, o, (b) => deliverToServer(b));
-      session = new ClientSession({ send: (b) => up.send(b), now: () => clock.now });
+      session = new ClientSession({ send: (b) => up.send(b), now: () => clock.now, onEvents: i === 0 ? (_t, evs) => tally(evs) : undefined });
       const deliverToServer = (b: Uint8Array) => serverReceive(memberId, b);
-      memberId = room.join(name, { send: (b) => down.send(b), buffered: () => 0 }, o.operators?.[i % o.operators.length] ?? (i === 3 ? "skopos" : "sledge"))!;
+      const op = o.operators?.[i % o.operators.length] ?? (o.combat ? (i % 2 ? "mute" : "sledge") : i === 3 ? "skopos" : "sledge");
+      memberId = room.join(name, { send: (b) => down.send(b), buffered: () => 0 }, op)!;
       const drift = 1 + ((rng.next() * 2 - 1) * o.driftPct) / 100;
-      const home = o.spread ? spreadSpot(i) : null;
-      return { name, session, down, up, memberId, drift, brain: bot(new Rng(o.seed * 1000 + i), o.crowd, home), nextTickAt: 0, ticks: 0 };
+      // In a fight the first two (one a side) charge; everyone else keeps to their spot in the line.
+      const home = o.combat ? (i < 2 ? null : combatSpot(i)) : o.spread ? spreadSpot(i) : null;
+      return { name, session, down, up, memberId, drift, brain: bot(new Rng(o.seed * 1000 + i), o.crowd && !o.combat, home), nextTickAt: 0, ticks: 0, deadSince: null as number | null };
     }),
   );
 
@@ -235,11 +326,12 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
   // Deliver the join messages, then load every client's level.
   clock.runUntil(o.oneWayMs * 3 + o.jitterMs);
   await Promise.all(clients.map((c) => c.session.loaded()));
-  const place = (i: number) => room.onLabTool(clients[i].memberId, { kind: "teleport", ...spreadSpot(i), y: 0, yawDeg: 90 * i });
-  if (o.spread) clients.forEach((_, i) => place(i));
+  const place = (i: number) => room.onLabTool(clients[i].memberId, { kind: "teleport", y: 0, ...(o.combat ? combatSpot(i) : { ...spreadSpot(i), yawDeg: 90 * i }) });
+  if (o.spread || o.combat) clients.forEach((_, i) => place(i));
 
   const endAt = clock.now + o.seconds * 1000;
   let serverNext = clock.now;
+  if (o.sprayStall) clock.at(clock.now + o.sprayStall.atS * 1000, () => clients[o.sprayStall!.client].up.stallFor(o.sprayStall!.ms));
   // The last two seconds are hands-off (neutral input every tick): bodies come to rest, and during the
   // final second no client may need a correction. A correction there means client and server disagree
   // about a body standing still: a real desync, not a collision misprediction.
@@ -258,11 +350,17 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
       room.step();
       serverTimes.push(performance.now() - t0);
       serverNext += tickMs;
-      // Bots shoot each other now (Phase 3 M6): the dead come straight back, as with the lab's respawn.
+      // Bots shoot each other now (Phase 3 M6): the dead come straight back, as with the lab's respawn. In a
+      // fight, the downed wait for a revive or a finisher, and the dead come back a second later.
       clients.forEach((c, i) => {
-        if (!isDead(room, c.memberId)) return;
+        if (o.combat) {
+          if (modeOf(room, c.memberId) !== PawnMode.Dead) return void (c.deadSince = null);
+          c.deadSince ??= clock.now;
+          if (clock.now - c.deadSince < 1000) return;
+          c.deadSince = null;
+        } else if (!isDead(room, c.memberId)) return;
         room.onLabTool(c.memberId, { kind: "respawn" });
-        if (o.spread) place(i);
+        if (o.spread || o.combat) place(i);
       });
     }
     for (const c of clients) {
@@ -271,7 +369,9 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
       if (c.session.ready) {
         // The last second is hands-off (neutral input) so every body comes to rest before the desync check.
         const own = c.session.sim?.pawns.get(c.session.ctrl!.possessedPawnId)?.state ?? null;
-        const cmd = c.brain(c.ticks++, own);
+        let cmd = c.brain(c.ticks++, own);
+        if (o.combat && own) cmd = fight(c.session, own, c.ticks, cmd, clients.indexOf(c) < 2);
+        if (o.sprayStall?.client === clients.indexOf(c)) cmd = { ...cmd, buttons: cmd.buttons | Btn.Fire };
         c.session.tick(clock.now < inputsStopAt ? cmd : { ...cmd, forward: 0, strafe: 0, buttons: 0, lean: 0, stance: Stance.Stand });
       }
       if (c.ticks % 64 === 0) c.session.ping();
@@ -280,9 +380,21 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
     }
   }
   const desyncs: string[] = [];
+  const contactLate: string[] = [];
+  // Two bodies left pressed together can keep needing sub-millimetre corrections at rest (DECISIONS D-033
+  // addendum): those are reported apart; any other body corrected at rest is a desync.
+  const touching = (memberId: number) => {
+    const ctrl = room.sim.controllers.get(room.memberInfo(memberId)?.controllerId ?? 0);
+    const me = ctrl && room.sim.pawns.get(ctrl.possessedPawnId)?.state;
+    if (!me) return false;
+    const reach = 2 * room.sim.data.movement.stance.collisionRadius + 0.05;
+    return [...room.sim.pawns.values()].some((p) => p.id !== ctrl.possessedPawnId && p.state.mode !== PawnMode.Dead && Math.hypot(p.state.x - me.x, p.state.z - me.z) < reach);
+  };
   clients.forEach((c, i) => {
     const late = mismatches(c.memberId) - (correctionsAtQuiet?.[i] ?? 0);
-    if (late > 0) desyncs.push(`${c.name}: ${late} correction(s) while standing still`);
+    if (late <= 0) return;
+    if (touching(c.memberId)) contactLate.push(`${c.name}: ${late} correction(s) at rest, pressed against another body`);
+    else desyncs.push(`${c.name}: ${late} correction(s) while standing still`);
   });
   const sorted = [...serverTimes].sort((a, b) => a - b);
   const secs = o.seconds;
@@ -306,7 +418,9 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
       max: sorted[sorted.length - 1],
     },
     desyncs,
+    contactLate,
     starvedRemoteFrames: clients.reduce((n, c) => n + c.session.starvedFrames, 0),
+    combat,
   };
 }
 
@@ -337,6 +451,15 @@ export interface HitregReport {
   uncappedAgree: number;
   /** Server-judged headshots (the shooter always aims at a drawn head). */
   headHits: number;
+  /**
+   * Shots whose own ray hit a head on the shooter's screen (an arm or the level can be in the way), and how
+   * many of those the server judged a headshot too: "if you hit the head on screen, it counts".
+   */
+  headSeen: number;
+  headAgree: number;
+  /** The same, without the shots the rewind cap shortened. */
+  headSeenUncapped: number;
+  headAgreeUncapped: number;
   /**
    * Shots whose damage the server confirmed exactly as the shooter's own view predicts it: the same bodies,
    * zones (penetration rules included) and damage, or a kill.
@@ -387,7 +510,7 @@ export async function runHitreg(partial: Partial<HitregOptions> = {}): Promise<H
   const o: HitregOptions = { ...HITREG_DEFAULTS, ...partial };
   const rng = new Rng(o.seed);
   const clock = new Clock();
-  const room = await Room.create("HIT00", "movement_lab", { lab: true, maxRewindTicks: o.maxRewindTicks });
+  const room = await Room.create("HIT00", "movement_lab", { lab: true, maxRewindTicks: o.maxRewindTicks, seed: o.seed });
   const tickMs = DT * 1000;
   const linkOpts: NetsimOptions = { ...DEFAULTS, oneWayMs: o.oneWayMs, jitterMs: o.jitterMs, stallsPerSecond: 0 };
 
@@ -412,6 +535,10 @@ export async function runHitreg(partial: Partial<HitregOptions> = {}): Promise<H
     capped: 0,
     uncappedAgree: 0,
     headHits: 0,
+    headSeen: 0,
+    headAgree: 0,
+    headSeenUncapped: 0,
+    headAgreeUncapped: 0,
     damageAgree: 0,
     kills: 0,
     rewindMs: { mean: 0, p95: 0, max: 0 },
@@ -435,6 +562,15 @@ export async function runHitreg(partial: Partial<HitregOptions> = {}): Promise<H
     rewinds.push(((s.serverTick - s.rewoundTick) * 1000) / 64);
     claimed.push(((s.serverTick - s.viewTick) * 1000) / 64);
     if (s.hit?.part === "head") report.headHits++;
+    if (e.hit?.part === "head") {
+      const both = s.hit?.part === "head" && s.hit.pawnId === e.hit.pawnId;
+      report.headSeen++;
+      if (both) report.headAgree++;
+      if (!capped) {
+        report.headSeenUncapped++;
+        if (both) report.headAgreeUncapped++;
+      }
+    }
     const same = (s.hit?.pawnId ?? 0) === (e.hit?.pawnId ?? 0) && (s.hit?.part ?? "") === (e.hit?.part ?? "") && Math.abs(s.viewTick - e.viewTick) < 1e-9;
     if (same) {
       report.agree++;

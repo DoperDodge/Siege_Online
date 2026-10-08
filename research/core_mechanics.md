@@ -207,7 +207,7 @@ Siege X limb values (Y10S2–Y10S4.0 only, **not live**; kept for history): hand
 ### 9.2 Headshot exceptions
 | Case | Rule | Status |
 |---|---|---|
-| Buckshot shotguns (pellets) | **No instant-kill headshot.** Pellet head multiplier was cut to ×1.0 (from ×1.5) in Y1S4. | OFFICIAL (Red Crow notes via WIKI); last confirmed 2016, current state UNVERIFIED-lite |
+| Buckshot shotguns (pellets) | **No instant-kill headshot.** Pellet head multiplier was cut to ×1.0 (from ×1.5) in Y1S4. **Conflict:** the Y8S3 Designer's Notes (2023, weapons_notes.md) give ×1.5 per pellet again; the game uses ×1.5 (DECISIONS D-047; OPEN_QUESTIONS.md, Phase 3 placeholders, Q16). | OFFICIAL (Red Crow notes via WIKI); last confirmed 2016, superseded by Y8S3 (UNVERIFIED which is live) |
 | Slug shotguns (BOSG.12.2, TCSG12, ACS12…) | Headshots enabled (treated like bullets) | WIKI |
 | Caveira's Luison | Always DBNO, even on a headshot (context) | WIKI |
 | Headshots on DBNO / Rook-plated targets | Still lethal | OFFICIAL (Rook page) |
@@ -352,7 +352,7 @@ prone_mps:               0.70                                       # PLACEHOLDE
 ads_walk_mps_all:        1.90                                       # rule OFFICIAL, value PLACEHOLDER
 mods: {horizontal_grip: 1.05, lmg: 0.90, shield: 0.90}              # grip/LMG OFFICIAL; shield WIKI
 zone_mult: {head: "kill", neck: "kill", torso: 1.0, arm: 0.75, hand: 0.75, leg: 0.75}  # OFFICIAL/WIKI
-buckshot_head_mult:      1.0                                        # OFFICIAL 2016
+buckshot_head_mult:      1.0                                        # OFFICIAL 2016; Y8S3 (2023) says 1.5, which the game uses (D-047)
 multi_body_penetration:  0.70                                       # OFFICIAL 2019
 dbno_hp:                 20                                         # WIKI
 dbno_overkill_rule:      "lethal hit > remaining_hp + 20 => death"  # UNVERIFIED

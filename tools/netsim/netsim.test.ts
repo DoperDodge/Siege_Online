@@ -19,6 +19,32 @@ describe("netsim: 10 clients, 100 ms round trip, jitter, stalls, drift", () => {
     }
   }, 60000);
 
+  it("a 300 ms stall while holding Fire (spraying, reloading, swapping) costs no misprediction", async () => {
+    const r = await runNetsim({ seconds: 10, spread: true, crowd: false, seed: 5, jitterMs: 10, sprayStall: { client: 0, atS: 4, ms: 300 } });
+    expect(r.desyncs).toEqual([]);
+    expect(r.room.droppedInputs).toBe(0);
+    expect(r.room.shots).toBeGreaterThan(30);
+    const sprayer = r.perClient[0];
+    expect(sprayer.resyncs).toBe(0);
+    expect(sprayer.corrections - sprayer.forced, "mispredictions").toBeLessThanOrEqual(2); // as in the run above
+  }, 60000);
+
+  it("a fight (Phase 3 M11): two teams spray, down, revive and knife each other; no desyncs, inside the budgets", async () => {
+    const r = await runNetsim({ seconds: 20, combat: true, seed: 4 });
+    expect(r.desyncs).toEqual([]);
+    expect(r.room.droppedInputs).toBe(0);
+    expect(r.combat.downs).toBeGreaterThanOrEqual(5);
+    expect(r.combat.reviveStarts).toBeGreaterThanOrEqual(1); // (in the open, most are cut short)
+    expect(r.combat.knifeKills).toBeGreaterThanOrEqual(1);
+    expect(r.combat.kills).toBeGreaterThan(r.combat.knifeKills);
+    for (const c of r.perClient) {
+      expect(c.resyncs, c.name).toBe(0);
+      expect(c.downKbps, c.name).toBeLessThan(64); // PLAN §18
+      expect((c.corrections - c.forced) / 20, c.name).toBeLessThan(5); // per second, as crowded: bumping mispredicts
+    }
+    expect(r.serverTickMs.mean).toBeLessThan(5);
+  }, 90000);
+
   it("crowded (constant contact): still no desyncs, resyncs or dropped inputs", async () => {
     const r = await runNetsim({ seconds: 10, seed: 3 });
     expect(r.desyncs).toEqual([]);
@@ -39,6 +65,9 @@ describe("netsim hitreg: a still shooter at 100 ms round trip aims at heads as i
     expect(r.judged).toBe(r.shots);
     expect(r.agree, r.disagreements.join("\n")).toBe(r.shots);
     expect(r.headHits / r.shots).toBeGreaterThan(0.85);
+    // Every head the shooter hit on screen is a headshot on the server.
+    expect(r.headSeen).toBeGreaterThan(20);
+    expect(r.headAgree).toBe(r.headSeen);
     // Phase 3 M6: the damage the server applies is what the shooter's view says, kills included.
     expect(r.damageAgree, r.disagreements.join("\n")).toBe(r.shots);
     expect(r.kills).toBeGreaterThan(r.shots * 0.8);
@@ -48,6 +77,7 @@ describe("netsim hitreg: a still shooter at 100 ms round trip aims at heads as i
     const r = await runHitreg({ seconds: 15, jitterMs: 10, seed: 4 });
     expect(r.judged).toBe(r.shots);
     expect(r.uncappedAgree / (r.judged - r.capped), r.disagreements.join("\n")).toBeGreaterThanOrEqual(0.99);
+    expect(r.headAgreeUncapped / r.headSeenUncapped).toBeGreaterThanOrEqual(0.99);
     expect(r.over250).toBe(0);
     expect(r.rewindMs.max).toBeLessThanOrEqual(250);
   }, 60000);
