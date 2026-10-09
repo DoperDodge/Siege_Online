@@ -36,7 +36,7 @@ else here blocks Phase 1.
 ### [oregon/layout_notes.md](oregon/layout_notes.md) — 10
 
 (For Ulo — a Custom Game walk-through answers most of these.)
-1. **Scale:** stand at a doorway and estimate its width, or tell us how many reinforcements the Kitchen↔Meeting soft wall takes (we expect 2). This calibrates the 0.15 m/u estimate.
+1. **Scale:** stand at a doorway and estimate its width. This calibrates the 0.15 m/u estimate. (Reinforcement counts can't: section widths differ wall to wall.)
 2. **Storey heights:** roughly how tall are B, 1F, 2F? Is Meeting Hall a tall single-storey room (pitched ceiling), with the Attic only along its east side?
 3. **Exterior openings — door or window?**
    - 1F: Small Tower west, Small Tower south, Shower Corridor south, Security Corridor SW-south, Kitchen Corridor west, Tower north, Tower east, Garage north/south/east, Classroom west.
@@ -48,9 +48,9 @@ else here blocks Phase 1.
 7. Is the **3F Cat Walk** a ring around an open drop to 2F, or is its middle solid?
 8. Does **2F Middle ↔ Game Room** have a door (barricadable), or is it an open archway?
 9. Where do the **basement drone tunnels** lead? One enters from the south exterior near White/Freezer Stairs; one runs along Supply's SE strip.
-10. Any **callout names** that differ from the table? What do you and your squad call these rooms, and what does the in-game HUD show?
+10. Any **callout names** that differ from the table? What do you and your squad call these rooms, and what does the in-game HUD show? *(Partly answered 2026-10-09: "big window" is the Dorms west window; a guide's 2F labels match ours.)*
 
-### [oregon/surfaces.md](oregon/surfaces.md) — 9
+### [oregon/surfaces.md](oregon/surfaces.md) — 11
 
 1. **Default HARD rule:** is every wall not in §2 really indestructible? Please spot-check in a Custom Game:
    - (a) Kitchen north exterior wall;
@@ -58,12 +58,10 @@ else here blocks Phase 1.
    - (c) Meeting Hall east exterior wall (and does it have windows?);
    - (d) the Kitchen–Security wall between the two soft sections (x 164–184);
    - (e) Boiler–Corridor walls in the basement.
-2. **Section counts:** how many reinforcements do these take:
-   - Kitchen↔Meeting (expected 2);
-   - Kitchen↔Dining (expected 1);
-   - Laundry↔Freezer (expected 2);
-   - Kids'↔Dorms (expected 2);
-   - Garage south wall (expected 2)?
+2. **Section counts:** answered by Ulo (2026-10-09): Kids'↔Dorms Main Hall **3**, Kids'↔Low Attic 2, Game Room↔Walk-in 2. Still open, most likely to differ from r6calls first:
+   - Laundry↔Freezer and Kitchen↔Security west (both as long as Kids'↔Dorms): 2 or 3?
+   - the ≈24–25 u walls: Electric↔Boiler, Supply Closet↔Laundry, Small Tower↔Dining, Garage south, Low Attic↔Trophy: 2 or 3?
+   - Kitchen↔Meeting (expected 2); Kitchen↔Dining (expected 1).
 3. **Garage south:** is it a roll-up/garage-door-style destructible panel, or a normal soft wall?
 4. **1F floor over the basement:** confirm it is indestructible (no vertical into Laundry/Supply except via the 3 hatches). One low-quality guide claims soft floors above Laundry.
 5. **Soft floors:** is the **Trophy** floor (south half) destructible? The **2F White Stairs landing**? Only Ubisoft's 2020 blueprint marks them.
@@ -71,6 +69,8 @@ else here blocks Phase 1.
 7. **Exterior openings:** for each EXT_OPENING in `layout_notes.md` §6 — door or window, and can defenders barricade it?
 8. **3F catwalk:** is the middle an open drop to 2F, and can the catwalk floor be shot or blown through?
 9. Are any **doorways NOT barricadable**? For example, the Split doors, the Stage door, or 2F Middle↔Game Room (we tagged that one OPEN).
+10. **Game Room south wall:** is there a window (r6calls 2026 draws one), or is the wall solid (Ubisoft's 2020 blueprint)?
+11. **Attic hatch:** is the whole hatch inside the Attic? (r6calls' rectangle straddles the Attic west wall; Ubisoft's blueprint draws it only on the Attic side.)
 
 ### [oregon/map_features.md](oregon/map_features.md) — 12
 
@@ -90,7 +90,7 @@ else here blocks Phase 1.
 ### [oregon/common_setups.md](oregon/common_setups.md) — 10
 
 (Ulo: answer in any format. "yes/no + a screenshot" is ideal. File names are in `SCREENSHOT_CHECKLIST.md`.)
-- **SQ1:** For each site, which walls and hatches does your team usually reinforce? Is my priority list in each YAML close? The main doubts are B (Laundry–Freezer wall + Supply–Bunker wall + the Lobby and Meeting hatches?) and 2F (Kids'–Attic wall + Game Room–Walk-In?).
+- **SQ1:** For each site, which walls and hatches does your team usually reinforce? Is my priority list in each YAML close? The main doubts are B (Laundry–Freezer wall + Supply–Bunker wall + the Lobby and Meeting hatches?) and 2F (Kids'–Attic wall + Game Room–Walk-In?). Costs, per Ulo (2026-10-09): Kids'–Attic 2 reinforcements, Game Room–Walk-In 2, Kids'–Dorms 3.
 - **SQ2:** Are all the yellow "breakable" walls listed here actually **reinforceable**? Are the **exterior** walls of Oregon hard? The blueprint only marks the Garage south exterior wall as breakable.
 - **SQ3:** Where exactly is each **bomb object** (7 rooms; Kitchen is shared by two sites)? The r6calls markers suggest: Laundry SW part, Supply centre, Dining north-centre, Kitchen centre-east, Meeting NW part, Kids' east part, Dorm Main Hall SW part. Screenshot each bomb from 2 angles. Also, what are the in-game A/B letters?
 - **SQ4:** Standard Mira window spots on live Oregon (which wall, facing where) for Laundry/Supply and Kids'/Dorms.

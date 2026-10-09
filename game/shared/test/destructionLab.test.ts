@@ -29,7 +29,7 @@ describe("the Destruction Lab level", () => {
     // The Oregon samples keep the researched lengths and section counts (research/oregon/surfaces.md §2).
     const oregon = (id: string) => sim.level.panels.byId.get(id)!.panel;
     expect([oregon("oregon_1f_05").spec.widthM, oregon("oregon_1f_05").sectionCount]).toEqual([1.7, 1]);
-    expect([oregon("oregon_2f_01").spec.widthM, oregon("oregon_2f_01").sectionCount]).toEqual([4.1, 2]);
+    expect([oregon("oregon_2f_01").spec.widthM, oregon("oregon_2f_01").sectionCount]).toEqual([4.1, 3]); // Ulo: 3 reinforcements
     expect([oregon("oregon_1f_17").spec.widthM, oregon("oregon_1f_17").sectionCount]).toEqual([3.7, 2]);
     const three = sim.level.panels.byId.get("reinforce_3")!.panel;
     expect(three.sectionCount).toBe(3);

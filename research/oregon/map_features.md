@@ -267,7 +267,7 @@ Only the first four rows have direct evidence. The rest are geometry-based candi
 
 | Entry | Floor → room | Evidence |
 |---|---|---|
-| Dorms "large central window" (the Big Window). **Repositioned in Y5S1** | 2F Dorm Main Hall / Kids' side, west façade (from R3/R5) | `[OFF]`/news: "The dorms have been revamped and the large central window has been repositioned" |
+| Dorms "large central window" (the Big Window). **Repositioned in Y5S1** | 2F Dorm Main Hall west façade, x 136–140, y 208–221 (Ulo, 2026-10-09: players call it "big window"; the 3-reinforcement Kids'↔Dorms wall starts beside it) | `[OFF]`/news: "The dorms have been revamped and the large central window has been repositioned" (not found again on the two Void Edge pages re-fetched 2026-10-09); https://www.player.one/rainbow-six-siege-all-major-changes-oregon-rework-133091: "the large window in Dorms is repositioned" |
 | New **exterior 2F window in the expanded Attic** | 2F Attic | `[OFF]` "a redesigned floorplan near the master bedroom and a new exterior second-floor window" |
 | Main Entrance (barricaded door) | 1F Lobby, south, from Street | `[FD]` Patch 5.4.2 ("Main Entrance Barricade") |
 | ~~Dining Hall exterior door~~ | **Removed in Y5S1** (replaced by a Small Tower ↔ Dining door ≈ (488, 437)) | `[OFF]` |
