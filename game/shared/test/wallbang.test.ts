@@ -105,6 +105,38 @@ describe("a bullet through soft walls", () => {
     expect([last.panel, (last.op as Extract<PanelOp, { kind: "cut" }>).layer]).toEqual([index("w3"), L_BACK]);
   });
 
+  it("one that comes in through a wall's end and runs along it meets the wall: the first stud, or the skin it runs in", async () => {
+    const { sim, through } = await yard();
+    const along = (deg: number): Vec3 => [Math.cos((deg * Math.PI) / 180), 0, Math.sin((deg * Math.PI) / 180)];
+    for (const dir of [along(0), along(0.06), along(0.5)]) {
+      // Between the skins: the cavity up to the first stud, 40 cm in (a rifle can't cut it).
+      expect(through(tier("medium"), [-2, 1.2, -5.03], dir, 5).stop).toBeCloseTo(0.9, 3);
+      expect(sim.level.panels.firstSolid([-2, 1.2, -5.03], dir, 5)!.crossing.face).toBeCloseTo(0.9, 3);
+      // In a skin: where it comes in.
+      const skin = through(tier("medium"), [-2, 1.2, -5.095], dir, 5);
+      expect(skin.enters[0]).toBeCloseTo(0.5, 3);
+      expect(cutLayers(skin.ops)).toEqual([L_FRONT]); // one hole: it goes through the skin there, not along it
+    }
+  });
+
+  it("two walls whose boxes overlap at a corner are two walls, each entered once", async () => {
+    const def = levelSchema.parse({
+      id: "corner",
+      name: "Corner",
+      spawns: [{ id: "s", pos: [0, 0, 5], yawDeg: 0 }],
+      solids: [
+        { id: "floor", center: [0, -0.25, 0], size: [20, 0.5, 20], surface: "HARD_FLOOR" },
+        { id: "a", center: [0, 1.5, 0], size: [3, 3, 0.2], surface: "SOFT_WALL", panel: { construction: "soft_wall_no_studs" } },
+        { id: "b", center: [1.4, 1.5, 0], size: [0.2, 3, 3], surface: "SOFT_WALL", panel: { construction: "soft_wall_no_studs" } },
+      ],
+    });
+    const sim = await Sim.create("corner", { ...data, levels: new Map(data.levels).set("corner", def) });
+    // Diagonally through the corner, where the two boxes overlap: their skins come a, a, b, a, b, b.
+    const p = bulletThroughPanels(sim.level.panels, d, tier("medium"), [0.9, 1.5, -0.49], [Math.SQRT1_2, 0, Math.SQRT1_2], 50);
+    expect(p.enters).toHaveLength(2);
+    expect(p.stop).toBeNull();
+  });
+
   it("metal studs stop every bullet; between them it passes", async () => {
     const { through } = await yard();
     expect(through(tier("explosive"), [10.125, 1.2, 0], NORTH, 6).stop).toBeCloseTo(4.92, 9);

@@ -90,13 +90,13 @@ export function layerSlab(p: Panel, frame: PanelFrame, layer: number, side = 0):
 
 const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 
-/** A ray's crossing of one layer of a panel: where, and which cell (and quarter cell). */
+/** A ray's passage through one cell of one layer of a panel: where, and which cell (and quarter cell). */
 export interface LayerCrossing {
-  /** Metres along the ray to the layer's middle (where its cell is read). */
+  /** Metres along the ray to the middle of its stretch in the cell (where the cell is read). */
   t: number;
-  /** Metres along the ray to where it enters the layer (marks, line-of-sight distances). */
+  /** Metres along the ray to where it enters the cell (marks, line-of-sight distances). */
   face: number;
-  /** The face it entered through: 2 the panel's front or back, 0 or 1 a side or top edge (u, v). */
+  /** The face it entered through: 2 the layer's front or back, 0 or 1 a side or top edge (u, v) of the panel or the cell. */
   axis: number;
   layer: number;
   /** Steel: the side its section went up from (0 −n, 1 +n). */
@@ -110,8 +110,9 @@ export interface LayerCrossing {
 }
 
 /**
- * Every layer the ray crosses inside the panel's box within (0, maxT], nearest first. A ray running along
- * the face (inside the box, parallel to it) crosses no layer. Steel is crossed on its section's side only.
+ * Every cell of every layer the ray passes through inside the panel's box within (0, maxT], nearest first. A
+ * ray through a layer at an angle passes a cell or two; one that came in through an edge and runs along the
+ * face passes many (it meets the wall's end, not nothing). Steel is crossed on its section's side only.
  */
 export function panelCrossings(p: Panel, frame: PanelFrame, origin: Vec3, dir: Vec3, maxT: number): LayerCrossing[] {
   const rel: Vec3 = [origin[0] - frame.center[0], origin[1] - frame.center[1], origin[2] - frame.center[2]];
@@ -133,31 +134,68 @@ export function panelCrossings(p: Panel, frame: PanelFrame, origin: Vec3, dir: V
     t1 = Math.min(t1, b);
     if (t0 > t1) return [];
   }
-  if (Math.abs(d[2]) < 1e-9) return [];
   const out: LayerCrossing[] = [];
-  const cross = (layer: number, side: number) => {
+  // Cell coordinates along the ray: (A + du t, B + dv t).
+  const A = (o[0] + half[0]) / p.cellU;
+  const B = (o[1] + half[1]) / p.cellV;
+  const du = d[0] / p.cellU;
+  const dv = d[1] / p.cellV;
+  const walk = (layer: number, side: number) => {
     const l = p.layers[layer]!;
     const [lo, hi] = layerSlab(p, frame, layer, side);
-    const t = ((lo + hi) / 2 - o[2]) / d[2];
-    if (t < t0 - 1e-9 || t > t1 + 1e-9 || t <= 0) return;
-    const fu = Math.min(Math.max((o[0] + d[0] * t + half[0]) / p.cellU, 0), p.w - 1e-6);
-    const fv = Math.min(Math.max((o[1] + d[1] * t + half[1]) / p.cellV, 0), p.h - 1e-6);
-    const u = Math.floor(fu);
-    const v = Math.floor(fv);
-    if (layer === L_STEEL) {
-      // Sections ever reinforced: steel cut away since may still be there for a shot judged in the past.
-      const s = p.sectionOf(u);
-      if (!(p.everReinforced & (1 << s)) || ((p.steelSides >> s) & 1) !== side) return;
+    // The ray's stretch inside the layer, within the box.
+    let s0 = t0;
+    let s1 = t1;
+    let axis = entry;
+    if (Math.abs(d[2]) < 1e-12) {
+      if (o[2] < lo || o[2] > hi) return;
+    } else {
+      let a = (lo - o[2]) / d[2];
+      let b = (hi - o[2]) / d[2];
+      if (a > b) [a, b] = [b, a];
+      if (a > s0) (s0 = a), (axis = 2);
+      s1 = Math.min(s1, b);
     }
-    // Where it enters the layer: through the face toward it, or through the box's edge if it came in there.
-    const faceT = ((d[2] > 0 ? lo : hi) - o[2]) / d[2];
-    const viaEdge = faceT < t0;
-    out.push({ t, face: viaEdge ? t0 : Math.min(faceT, t), axis: viaEdge ? entry : 2, layer, side, u, v, u4: Math.floor(fu * 4), v4: Math.floor(fv * 4), solid: l[v * p.w + u] === 1 });
+    if (s1 - s0 <= 1e-9 || s1 <= 0) return;
+    // Cell by cell (a grid walk), starting in the cell it goes into.
+    const ts = Math.min(s0 + 1e-7, (s0 + s1) / 2);
+    let u = Math.min(Math.max(Math.floor(A + du * ts), 0), p.w - 1);
+    let v = Math.min(Math.max(Math.floor(B + dv * ts), 0), p.h - 1);
+    let tu = du > 0 ? (u + 1 - A) / du : du < 0 ? (u - A) / du : Infinity;
+    let tv = dv > 0 ? (v + 1 - B) / dv : dv < 0 ? (v - B) / dv : Infinity;
+    const su = Math.abs(1 / du);
+    const sv = Math.abs(1 / dv);
+    let enter = s0;
+    for (let guard = p.w + p.h + 2; guard > 0; guard--) {
+      const leave = Math.min(tu, tv, s1);
+      // Steel only on sections ever reinforced (cut away since, it may still be there for a shot judged in
+      // the past), from this side.
+      const s = layer === L_STEEL ? p.sectionOf(u) : 0;
+      if (leave > enter && (layer !== L_STEEL || (p.everReinforced & (1 << s) && ((p.steelSides >> s) & 1) === side))) {
+        const t = (enter + leave) / 2;
+        const fu = Math.min(Math.max(A + du * t, u), u + 1 - 1e-6);
+        const fv = Math.min(Math.max(B + dv * t, v), v + 1 - 1e-6);
+        out.push({ t, face: enter, axis, layer, side, u, v, u4: Math.floor(fu * 4), v4: Math.floor(fv * 4), solid: l[v * p.w + u] === 1 });
+      }
+      if (leave >= s1) return;
+      if (tu <= tv) {
+        u += du > 0 ? 1 : -1;
+        enter = tu;
+        tu += su;
+        axis = 0;
+      } else {
+        v += dv > 0 ? 1 : -1;
+        enter = tv;
+        tv += sv;
+        axis = 1;
+      }
+      if (u < 0 || u >= p.w || v < 0 || v >= p.h) return;
+    }
   };
-  for (const layer of [L_FRONT, L_CORE, L_BACK]) if (p.layers[layer]) cross(layer, 0);
+  for (const layer of [L_FRONT, L_CORE, L_BACK]) if (p.layers[layer]) walk(layer, 0);
   if (p.layers[L_STEEL] && p.everReinforced) {
-    cross(L_STEEL, 0);
-    cross(L_STEEL, 1);
+    walk(L_STEEL, 0);
+    walk(L_STEEL, 1);
   }
   return out.sort((a, b) => a.t - b.t);
 }

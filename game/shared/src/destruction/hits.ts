@@ -55,6 +55,22 @@ function disc(c: LayerCrossing, diameterM: number, cellM: number, hard = false):
 
 const cutsStuds = (rule: PanelHitRule, t: number) => rule.studs && (rule.studsWithinM === undefined || t <= rule.studsWithinM);
 
+/**
+ * Where a ray meets material: a layer's cells come in the order the ray passes them, and it meets material
+ * where one has some and the cell before it in that layer (of that panel) didn't. A ray running along a
+ * layer meets it once, where it comes in, not at every cell after.
+ */
+class MaterialMet {
+  private readonly last = new Map<number, boolean>();
+  /** `c` (of panel `index`) is solid as `solid` says: is this where the ray meets that layer's material? */
+  meets(index: number, c: LayerCrossing, solid: boolean): boolean {
+    const key = index * 8 + c.layer * 2 + c.side;
+    const before = this.last.get(key) ?? false;
+    this.last.set(key, solid);
+    return solid && !before;
+  }
+}
+
 /** Hit points a hit takes off a breakable panel (glass breaks at any). */
 function wear(e: PanelEntry, rule: PanelHitRule): number {
   const kind = e.panel.kind;
@@ -67,13 +83,15 @@ function wear(e: PanelEntry, rule: PanelHitRule): number {
  */
 export function bulletThroughPanels(panels: PanelSet, d: DestructionData, rule: PanelHitRule, origin: Vec3, dir: Vec3, maxT: number, view?: PanelView): PanelPassage {
   const out: PanelPassage = { stop: null, enters: [], ops: [] };
-  let current: PanelEntry | null = null;
+  const met = new MaterialMet();
+  // Panels it went into (two whose boxes overlap, at a corner, have their crossings interleaved).
+  const entered = new Set<number>();
   let last = false;
   for (const { entry, crossing: c } of panels.crossings(origin, dir, maxT)) {
-    if (!solidAs(entry, c, view)) continue;
     const index = entry.panel.spec.index;
-    if (entry !== current) {
-      current = entry;
+    if (!met.meets(index, c, solidAs(entry, c, view))) continue;
+    if (!entered.has(index)) {
+      entered.add(index);
       // One wall too many: this one stops it, where it hits.
       if (out.enters.length >= d.wallbang.maxSurfaces) last = true;
       else out.enters.push(c.face);
@@ -124,8 +142,9 @@ export function meleeOnPanels(panels: PanelSet, d: DestructionData, origin: Vec3
   const w = wear(entry, rule);
   if (w > 0) out.ops.push({ t: hit.crossing.face, panel: index, op: { kind: "damage", amount: w, hard: false } });
   let skins = 0;
+  const met = new MaterialMet();
   for (const c of panelCrossings(entry.panel, entry.frame, from, dir, Infinity)) {
-    if (c.t < hit.crossing.t || !solidAs(entry, c, view)) continue;
+    if (!met.meets(index, c, c.t >= hit.crossing.t && solidAs(entry, c, view))) continue;
     if (c.layer === L_STEEL || (c.layer === L_CORE && !(rule.studs && !entry.panel.coreMetal))) break;
     if (entry.panel.kind !== "glass") out.ops.push({ t: c.t, panel: index, op: disc(c, rule.holeDiameterM, d.cellM) });
     if (c.layer !== L_CORE && ++skins >= (rule.bothSkins ? 2 : 1)) break;
