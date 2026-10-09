@@ -19,7 +19,7 @@ Built in milestones; each keeps the tests, the browser tests and the netsim gree
 | M4 Bullets and the knife through panels (wallbangs, holes, rewound holes) | ✅ on the server: wallbangs at 70 %, holes, studs, steel, two-wall limit, knife holes, panels as the shooter had them (D-065) |
 | M5 Destruction over the network, and for players who join late | ✅ ops to everyone each tick with a hash check; full state on joining; netsim and browser test agree (D-066) |
 | M6 Reinforcement, barricades and hatches | ✅ hold F to reinforce (4.5 s, team pool, from your side, hatches from above), barricade (2 s) or pry one off (1 s); Destruction Lab level (D-067) |
-| M7 Destruction Lab (explosive tools, every surface, Oregon wall samples) | ⏳ |
+| M7 Destruction Lab (explosive tools, every surface, Oregon wall samples) | ✅ page offline and online; T/G explosives (shapes only), Reset walls; five Oregon walls; browser test (D-068) |
 | M8 Browser and netsim tests, docs | ⏳ |
 
 ### What's done
@@ -67,6 +67,14 @@ Built in milestones; each keeps the tests, the browser tests and the netsim gree
   left. Defenders only, except in lab rooms. Three knife hits break a barricade; a broken hatch drops whoever
   stands on it. The new Destruction Lab level has every kind of wall, door, window, hatch and floor (its
   page comes in M7).
+- **The Destruction Lab (M7, D-068):** `/labs/destruction_lab.html` (offline, or `?online` to share a room):
+  soft walls with wooden studs, without and with metal studs; reinforceable walls of two and three sections
+  and one already reinforced; a barricaded door, an empty door and a window; a platform with a hatch and a
+  soft floor; and five of Oregon's soft walls at their researched sizes. T picks an explosive and G sets it
+  off where you look (Breach Charge, Impact and Frag Grenades, Nitro Cell, Exothermic and Hard Breach
+  Charges: only their cuts for now). Reset walls in the pause menu puts everything back. A browser test
+  (`tools/e2e/destruction-lab.mjs`) checks the reinforce prompt and gauge, steel on your side, a Breach
+  Charge, Reset walls, and two players online with identical steel and knife holes.
 
 ---
 

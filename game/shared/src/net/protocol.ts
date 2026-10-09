@@ -120,7 +120,7 @@ export function decodeHelloRest(r: ByteReader): { name: string; dataHash: number
 }
 
 /** Levels a client may ask a new room to load (the lab pages'). */
-export const ROOM_LEVELS = ["movement_lab", "range_lab"] as const;
+export const ROOM_LEVELS = ["movement_lab", "range_lab", "destruction_lab"] as const;
 export const encodeCreateRoom = (levelId: string = "movement_lab") => new ByteWriter().u8(Msg.CreateRoom).str(levelId).finish();
 /** Throws ProtocolError for a level that isn't in ROOM_LEVELS. */
 export function decodeCreateRoom(r: ByteReader): { levelId: string } {
@@ -334,7 +334,8 @@ export function decodeShotResult(r: ByteReader): ShotResult {
 /**
  * Lab tools (lab rooms only): respawn, teleport ("Go to"), switch team (respawns you on it), hurt one of
  * your own bodies or a Range Lab dummy (to try damage, death and the indicators alone), refill your ammo,
- * or reset the dummies.
+ * reset the dummies, set off an explosive's cut where you look (data/destruction.json `explosives`, by id,
+ * along the view sent), or put every panel back as the level built it with the reinforcement pools full.
  */
 export type LabTool =
   | { kind: "respawn" }
@@ -343,15 +344,18 @@ export type LabTool =
   | { kind: "damage"; pawnId: number; amount: number; kill: boolean }
   | { kind: "refill" }
   /** Every Range Lab dummy back to its spot, alive (or down, for the one that starts down). */
-  | { kind: "resetDummies" };
+  | { kind: "resetDummies" }
+  | { kind: "explosive"; id: string; yaw: number; pitch: number }
+  | { kind: "resetPanels" };
 
-const LAB_KIND = { respawn: 0, teleport: 1, team: 3, damage: 4, refill: 5, resetDummies: 6 } as const;
+const LAB_KIND = { respawn: 0, teleport: 1, team: 3, damage: 4, refill: 5, resetDummies: 6, explosive: 7, resetPanels: 8 } as const;
 
 export function encodeLabTool(t: LabTool): Uint8Array {
   const w = new ByteWriter().u8(Msg.LabTool).u8(LAB_KIND[t.kind]);
   if (t.kind === "teleport") w.f32(t.x).f32(t.y).f32(t.z).f32(t.yawDeg);
   if (t.kind === "team") w.u8(t.team);
   if (t.kind === "damage") w.varu(t.pawnId).u16(Math.max(0, Math.min(0xffff, Math.round(t.amount)))).u8(t.kill ? 1 : 0);
+  if (t.kind === "explosive") w.str(t.id.slice(0, 32)).f32(t.yaw).f32(t.pitch);
   return w.finish();
 }
 export function decodeLabTool(r: ByteReader): LabTool {
@@ -372,5 +376,7 @@ export function decodeLabTool(r: ByteReader): LabTool {
   }
   if (k === LAB_KIND.refill) return { kind: "refill" };
   if (k === LAB_KIND.resetDummies) return { kind: "resetDummies" };
+  if (k === LAB_KIND.explosive) return { kind: "explosive", id: r.str(32), yaw: r.finite(), pitch: r.finite() };
+  if (k === LAB_KIND.resetPanels) return { kind: "resetPanels" };
   throw new ProtocolError("bad lab tool");
 }

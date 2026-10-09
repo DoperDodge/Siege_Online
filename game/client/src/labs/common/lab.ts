@@ -1037,6 +1037,12 @@ export async function startLab(o: LabOptions): Promise<void> {
       get renderTick() {
         return shownRenderTick;
       },
+      /** One panel as this page has it, by level id (browser tests). */
+      panel: (id: string) => {
+        const p = sim.level.panels.byId.get(id)?.panel;
+        if (!p) return null;
+        return { reinforced: p.reinforced, steelSides: p.steelSides, broken: p.broken, empty: p.empty, modified: p.modified, holes: p.layers.map((l) => (l ? l.reduce((n, c) => n + (c ? 0 : 1), 0) : null)) };
+      },
       /** The destructible panels as this page has them (browser tests compare players' panels). */
       get panels() {
         const p = sim.level.panels;

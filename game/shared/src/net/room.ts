@@ -7,12 +7,14 @@ import { shotOnBodies, tracePellets, type ShotOnBody } from "../combat/hitreg.js
 import { judgeMelee } from "../combat/melee.js";
 import { DeployKind } from "../destruction/deploy.js";
 import { PanelHistory } from "../destruction/history.js";
+import { explosiveOps, explosiveReach } from "../destruction/explosives.js";
 import { meleeOnPanels } from "../destruction/hits.js";
 import { L_STEEL, type PanelChange, type PanelOp } from "../destruction/panel.js";
 import type { IndexedOp } from "../destruction/panels.js";
 import type { DummyDef, ModeData } from "../data/schemas.js";
 import { DUMMY_STANCE, dummyInput } from "../lab/dummies.js";
 import { spawnAmmo, type Pawn, type PlayerController } from "../player/pawn.js";
+import { eyePose } from "../player/hitboxes.js";
 import { PawnMode, type InputCmd, type PawnState } from "../player/types.js";
 import { Sim } from "../sim.js";
 import { ByteWriter, fnv1a } from "./bytes.js";
@@ -187,7 +189,7 @@ export function predictionHash(sim: Sim, ctrl: PlayerController): number {
 export class Room {
   readonly history: HitboxHistory;
   /** Recent panel changes: shots are judged against the panels as their shooter had them (destruction/history.ts). */
-  readonly panelHistory = new PanelHistory();
+  panelHistory = new PanelHistory();
   /** Panel ops from between ticks (lab tools), applied with the next tick's. */
   private queuedOps: IndexedOp[] = [];
   /** Panel ops applied this tick, sent to everyone at its end (before its snapshot). */
@@ -411,6 +413,24 @@ export class Room {
     m.client.send(encodePanelState(this.sim.level.panels));
   }
 
+  /**
+   * Lab tool: every panel as the level built it and the reinforcement pools full again. Everyone is sent the
+   * panels' state (with nothing changed, it puts theirs back too) and the pools. History before now is
+   * dropped: a shot judged across the reset sees the panels as they are.
+   */
+  private resetPanels() {
+    const panels = this.sim.level.panels;
+    for (const e of panels.list) if (e.panel.modified) panels.reset(e.panel.spec.index);
+    this.queuedOps = [];
+    this.panelHistory = new PanelHistory();
+    this.sim.deployRules.pools = [this.rules.reinforcements, this.rules.reinforcements];
+    const state = encodePanelState(panels);
+    for (const m of this.members.values()) {
+      m.client.send(state);
+      m.events.push(this.deployRulesEvent());
+    }
+  }
+
   /** A panel op from outside a tick (a lab tool, a test): applied and sent with the next tick's. */
   queuePanelOp(panel: number, op: PanelOp): void {
     if (this.sim.level.panels.list[panel]) this.queuedOps.push({ panel, op });
@@ -438,6 +458,19 @@ export class Room {
         Object.assign(p.state, { loaded0: a.loaded, reserve0: a.reserve, loaded1: b.loaded, reserve1: b.reserve });
       }
       this.force(m);
+    } else if (tool.kind === "explosive") {
+      // Its cut where your body looks along the view you sent, applied with the next tick's ops.
+      const ex = this.sim.data.destruction.explosives[tool.id];
+      const body = this.sim.pawns.get(m.ctrl.possessedPawnId);
+      if (!ex || !body || body.state.mode === PawnMode.Dead) return;
+      const eye = eyePose(this.sim.data.movement, this.sim.data.hitboxes, body.state).pos;
+      const dir = viewDir(tool.yaw, tool.pitch);
+      const reach = explosiveReach(ex);
+      const ray = new this.sim.R.Ray({ x: eye[0], y: eye[1], z: eye[2] }, { x: dir[0], y: dir[1], z: dir[2] });
+      const plain = this.sim.world.castRay(ray, reach, true, undefined, QUERY_BULLET)?.timeOfImpact ?? reach;
+      for (const o of explosiveOps(this.sim.level.panels, this.sim.data.destruction, ex, eye, dir, plain)) this.queuePanelOp(o.panel, o.op);
+    } else if (tool.kind === "resetPanels") {
+      this.resetPanels();
     } else if (Math.abs(tool.x) <= MAX_COORD && Math.abs(tool.y) <= MAX_COORD && Math.abs(tool.z) <= MAX_COORD) {
       // Same body: inputs already queued or in flight still apply after the jump, exactly as the client
       // replays them on top of the correction.

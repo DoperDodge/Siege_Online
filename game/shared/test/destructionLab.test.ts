@@ -20,7 +20,17 @@ describe("the Destruction Lab level", () => {
       window_barricade: "barricade_window",
       hatch: "hatch",
       soft_floor: "soft_floor",
+      oregon_1f_05: "reinforceable_wall",
+      oregon_2f_01: "reinforceable_wall",
+      oregon_b_01: "reinforceable_wall",
+      oregon_1f_14: "reinforceable_wall",
+      oregon_1f_17: "reinforceable_wall",
     });
+    // The Oregon samples keep the researched lengths and section counts (research/oregon/surfaces.md §2).
+    const oregon = (id: string) => sim.level.panels.byId.get(id)!.panel;
+    expect([oregon("oregon_1f_05").spec.widthM, oregon("oregon_1f_05").sectionCount]).toEqual([1.7, 1]);
+    expect([oregon("oregon_2f_01").spec.widthM, oregon("oregon_2f_01").sectionCount]).toEqual([4.1, 2]);
+    expect([oregon("oregon_1f_17").spec.widthM, oregon("oregon_1f_17").sectionCount]).toEqual([3.7, 2]);
     const three = sim.level.panels.byId.get("reinforce_3")!.panel;
     expect(three.sectionCount).toBe(3);
     // The reinforced wall's steel stops 40 cm short of its 3 m top.
