@@ -1,6 +1,8 @@
-// Destructible panels drawn from their cells (Phase 4 M3): one mesh per layer, built from boxes over the
-// layer's cells (greedy rectangles) and rebuilt whenever the panel changes. Skins wear the surface's greybox
-// colour (PLAN §9.1), the core is wood or metal, and steel is a dark plate on the side it went up from.
+// Destructible panels drawn from their cells (Phase 4 M3, M8): one mesh per layer, built from boxes over the
+// layer's cells (greedy rectangles). Skins wear the surface's greybox colour (PLAN §9.1), the core is wood or
+// metal, and steel is a dark plate on the side it went up from. When a panel changes, only the layers whose
+// drawn cells changed are rebuilt; each box is 8 shared corners, lit flat (no normals to build), so a
+// shot-up wall redraws within PLAN §8.2's main-thread budget.
 import * as THREE from "three";
 import { greedyRects, L_BACK, L_CORE, L_FRONT, L_STEEL, layerSlab, STEEL_PLATE_M, type Panel, type PanelEntry, type PanelSet } from "@redmond/shared";
 import { SURFACE_COLORS } from "./labScene.js";
@@ -9,10 +11,23 @@ const WOOD = 0x8b6a43;
 const METAL = 0x7d848c;
 const STEEL = 0x56606b;
 
+/** What a panel draws, in this order: front skin, core, back skin, the steel plate on the −n side, on the +n side. */
+const SLOTS = 5;
+
+interface Drawn {
+  /** The panel object and version drawn (a reset panel is a new object at version 0). */
+  panel: Panel | null;
+  version: number;
+  /** Per slot: the cells drawn (a copy), and their mesh. */
+  cells: (Uint8Array | null)[];
+  meshes: (THREE.Mesh | null)[];
+  /** Every box of this panel lies inside it (no need to measure each new mesh). */
+  bounds: THREE.Sphere;
+}
+
 export class PanelView {
   private readonly groups: THREE.Group[] = [];
-  /** The panel object and version each group shows (a reset panel is a new object at version 0). */
-  private readonly drawn: { panel: Panel | null; version: number }[] = [];
+  private readonly drawn: Drawn[] = [];
   private readonly materials = new Map<string, THREE.MeshStandardMaterial>();
 
   constructor(
@@ -25,12 +40,16 @@ export class PanelView {
       g.quaternion.set(e.frame.quat[0], e.frame.quat[1], e.frame.quat[2], e.frame.quat[3]);
       scene.add(g);
       this.groups.push(g);
-      this.drawn.push({ panel: null, version: -1 });
+      const radius = Math.hypot(e.frame.w, e.frame.h, e.frame.t + 2 * STEEL_PLATE_M) / 2;
+      this.drawn.push({ panel: null, version: -1, cells: new Array(SLOTS).fill(null), meshes: new Array(SLOTS).fill(null), bounds: new THREE.Sphere(new THREE.Vector3(), radius) });
     }
-    // One hidden mesh per material, so warmShaders readies them all before the first reinforcement or window.
+    // One hidden mesh per material, so warmShaders readies them all before the first reinforcement or window
+    // (built like a panel's, without normals, so it is the same shader).
     const probes = new THREE.Group();
     for (const key of ["skin:SOFT_WALL", "core:wood", "core:metal", "steel", "glass"]) {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.01, 0.01), this.material(key));
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array([0, 0, 0, 0.01, 0, 0, 0, 0.01, 0]), 3));
+      const m = new THREE.Mesh(geo, this.material(key));
       m.visible = false;
       probes.add(m);
     }
@@ -46,7 +65,7 @@ export class PanelView {
       if (d.panel === e.panel && d.version === e.panel.version) continue;
       d.panel = e.panel;
       d.version = e.panel.version;
-      this.build(e, this.groups[i]);
+      this.build(e, d, this.groups[i]);
     }
   }
 
@@ -55,137 +74,153 @@ export class PanelView {
    * angle), and a skin only where no steel plate covers it. Faces hidden 2 cm behind another would otherwise
    * fight it for depth at a distance (a 16-bit depth buffer can't tell them apart past ~10 m).
    */
-  private build(e: PanelEntry, g: THREE.Group) {
-    for (const child of [...g.children]) {
-      (child as THREE.Mesh).geometry.dispose();
-      g.remove(child);
-    }
+  private build(e: PanelEntry, d: Drawn, g: THREE.Group) {
     const p = e.panel;
     const c = p.spec.construction;
     const half = e.frame.t / 2;
-    const n = p.w * p.h;
     const steel = p.layers[L_STEEL];
     // Steel cells by the side their plate is on.
-    const plates = [new Uint8Array(n), new Uint8Array(n)];
-    if (steel)
-      for (let v = 0; v < p.h; v++)
-        for (let u = 0; u < p.w; u++) {
-          const i = v * p.w + u;
-          if (steel[i]) plates[(p.steelSides >> p.sectionOf(u)) & 1][i] = 1;
-        }
-    p.layers.forEach((cells, layer) => {
-      if (!cells) return;
-      if (layer === L_STEEL) {
-        // Each section's plate on its own side, just proud of the face.
-        for (const side of [0, 1]) {
-          const slab: [number, number] = side ? [half - 0.002, half + STEEL_PLATE_M] : [-half - STEEL_PLATE_M, -half + 0.002];
-          this.addLayer(e, g, plates[side], slab, "steel");
-        }
-        return;
+    let plates: [Uint8Array, Uint8Array] | null = null;
+    if (steel) {
+      plates = [new Uint8Array(steel.length), new Uint8Array(steel.length)];
+      for (let s = 0; s < p.sectionCount; s++) {
+        const [u0, u1] = p.sectionRange(s);
+        const plate = plates[(p.steelSides >> s) & 1];
+        for (let v = 0; v < p.h; v++) for (let u = u0, i = v * p.w + u0; u < u1; u++, i++) plate[i] = steel[i];
       }
-      let shown = cells;
-      if (layer === L_CORE) shown = exposed(cells, p.layers[L_FRONT], p.layers[L_BACK], p.w, p.h);
-      else if (steel && (layer === L_FRONT || layer === L_BACK)) {
-        const plate = plates[layer === L_BACK ? 1 : 0];
-        shown = cells.map((x, i) => (plate[i] ? 0 : x));
-      }
-      const key = c.kind === "glass" ? "glass" : layer === L_CORE ? (p.coreMetal ? "core:metal" : "core:wood") : `skin:${c.kind === "barricade" ? "BARRICADE" : e.info.surface}`;
-      this.addLayer(e, g, shown, layerSlab(p, e.frame, layer), key);
-    });
-  }
-
-  /** The layer's cells as boxes in the panel's own axes, spanning `slab` through it. */
-  private addLayer(e: PanelEntry, g: THREE.Group, cells: Uint8Array, slab: [number, number], key: string) {
-    const p = e.panel;
-    const rects = greedyRects(cells, p.w, p.h);
-    if (!rects.length) return;
-    const { axes, w, h } = e.frame;
-    const pos: number[] = [];
-    const nor: number[] = [];
-    const idx: number[] = [];
-    const centre = [0, 0, 0];
-    const size = [0, 0, 0];
-    for (const r of rects) {
-      centre[axes[0]] = ((r.u0 + r.u1) / 2) * p.cellU - w / 2;
-      centre[axes[1]] = ((r.v0 + r.v1) / 2) * p.cellV - h / 2;
-      centre[axes[2]] = (slab[0] + slab[1]) / 2;
-      size[axes[0]] = (r.u1 - r.u0) * p.cellU;
-      size[axes[1]] = (r.v1 - r.v0) * p.cellV;
-      size[axes[2]] = slab[1] - slab[0];
-      appendBox(pos, nor, idx, centre, size);
     }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-    geo.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
-    geo.setIndex(idx);
-    geo.computeBoundingSphere();
-    const mesh = new THREE.Mesh(geo, this.material(key));
-    // Studs sit right behind a 2 cm skin: their shadows only streak the skin (shadow-map precision).
-    mesh.castShadow = key !== "glass" && !key.startsWith("core:");
-    mesh.receiveShadow = true;
-    g.add(mesh);
+    const skin = c.kind === "glass" ? "glass" : `skin:${c.kind === "barricade" ? "BARRICADE" : e.info.surface}`;
+    const wanted: { cells: Uint8Array | null; slab: [number, number]; key: string }[] = [
+      { cells: hidePlate(p.layers[L_FRONT], plates?.[0]), slab: layerSlab(p, e.frame, L_FRONT), key: skin },
+      { cells: p.layers[L_CORE] && exposed(p.layers[L_CORE], p.layers[L_FRONT], p.layers[L_BACK], p.w, p.h), slab: layerSlab(p, e.frame, L_CORE), key: p.coreMetal ? "core:metal" : "core:wood" },
+      { cells: hidePlate(p.layers[L_BACK], plates?.[1]), slab: layerSlab(p, e.frame, L_BACK), key: skin },
+      // Each plate just proud of its face.
+      { cells: plates?.[0] ?? null, slab: [-half - STEEL_PLATE_M, -half + 0.002], key: "steel" },
+      { cells: plates?.[1] ?? null, slab: [half - 0.002, half + STEEL_PLATE_M], key: "steel" },
+    ];
+    let changed = false;
+    wanted.forEach((w, slot) => {
+      const before = d.cells[slot];
+      if (w.cells === null ? before === null : before !== null && sameCells(before, w.cells)) return;
+      changed = true;
+      d.meshes[slot]?.geometry.dispose();
+      d.meshes[slot] = null;
+      d.cells[slot] = w.cells && w.cells.slice();
+      const geo = w.cells && boxes(e, w.cells, w.slab);
+      if (!geo) return;
+      geo.boundingSphere = d.bounds;
+      const mesh = new THREE.Mesh(geo, this.material(w.key));
+      // Studs sit right behind a 2 cm skin: their shadows only streak the skin (shadow-map precision).
+      mesh.castShadow = w.key !== "glass" && !w.key.startsWith("core:");
+      mesh.receiveShadow = true;
+      d.meshes[slot] = mesh;
+    });
+    if (!changed) return;
+    g.clear();
+    for (const m of d.meshes) if (m) g.add(m);
   }
 
   private material(key: string): THREE.MeshStandardMaterial {
     let m = this.materials.get(key);
     if (m) return m;
-    if (key === "glass") m = new THREE.MeshStandardMaterial({ color: SURFACE_COLORS.WINDOW, roughness: 0.1, transparent: true, opacity: 0.35, depthWrite: false });
-    else if (key === "steel") m = new THREE.MeshStandardMaterial({ color: STEEL, roughness: 0.45, metalness: 0.7 });
-    else if (key === "core:metal") m = new THREE.MeshStandardMaterial({ color: METAL, roughness: 0.5, metalness: 0.6 });
-    else if (key === "core:wood") m = new THREE.MeshStandardMaterial({ color: WOOD, roughness: 0.9 });
-    else m = new THREE.MeshStandardMaterial({ color: SURFACE_COLORS[key.slice(5) as keyof typeof SURFACE_COLORS], roughness: 0.85 });
+    // Flat: lit by each face's own direction (the boxes carry no normals).
+    const flat = { flatShading: true };
+    if (key === "glass") m = new THREE.MeshStandardMaterial({ ...flat, color: SURFACE_COLORS.WINDOW, roughness: 0.1, transparent: true, opacity: 0.35, depthWrite: false });
+    else if (key === "steel") m = new THREE.MeshStandardMaterial({ ...flat, color: STEEL, roughness: 0.45, metalness: 0.7 });
+    else if (key === "core:metal") m = new THREE.MeshStandardMaterial({ ...flat, color: METAL, roughness: 0.5, metalness: 0.6 });
+    else if (key === "core:wood") m = new THREE.MeshStandardMaterial({ ...flat, color: WOOD, roughness: 0.9 });
+    else m = new THREE.MeshStandardMaterial({ ...flat, color: SURFACE_COLORS[key.slice(5) as keyof typeof SURFACE_COLORS], roughness: 0.85 });
     this.materials.set(key, m);
     return m;
   }
 }
 
-/** The six faces of an axis-aligned box (4 vertices each, outward normals). */
-const FACES: [number, number, number][] = [
-  [1, 0, 0],
-  [-1, 0, 0],
-  [0, 1, 0],
-  [0, -1, 0],
-  [0, 0, 1],
-  [0, 0, -1],
-];
+/** Two triangles a face, outward: corner c of a box is (x, y, z) = (c & 1, c & 2, c & 4) high or low. */
+const BOX = [1, 3, 7, 1, 7, 5, 0, 4, 6, 0, 6, 2, 2, 6, 7, 2, 7, 3, 0, 1, 5, 0, 5, 4, 4, 5, 7, 4, 7, 6, 0, 2, 3, 0, 3, 1];
 
-function appendBox(pos: number[], nor: number[], idx: number[], c: number[], s: number[]) {
-  for (const n of FACES) {
-    const k = n.findIndex((x) => x !== 0);
-    // Two axes across the face, ordered so the winding faces outward.
-    const a = (k + 1) % 3;
-    const b = (k + 2) % 3;
-    const base = pos.length / 3;
-    for (const [da, db] of [
-      [-1, -1],
-      [1, -1],
-      [1, 1],
-      [-1, 1],
-    ]) {
-      const v = [0, 0, 0];
-      v[k] = c[k] + (n[k] * s[k]) / 2;
-      v[a] = c[a] + (da * s[a]) / 2;
-      v[b] = c[b] + (db * s[b]) / 2;
-      pos.push(v[0], v[1], v[2]);
-      nor.push(n[0], n[1], n[2]);
+/** The cells as boxes in the panel's own axes, spanning `slab` through it; null if there are none. */
+function boxes(e: PanelEntry, cells: Uint8Array, slab: [number, number]): THREE.BufferGeometry | null {
+  const p = e.panel;
+  const rects = greedyRects(cells, p.w, p.h);
+  if (!rects.length) return null;
+  const [au, av, an] = e.frame.axes;
+  const pos = new Float32Array(rects.length * 24);
+  const idx = rects.length * 8 > 0xffff ? new Uint32Array(rects.length * 36) : new Uint16Array(rects.length * 36);
+  const lo = [0, 0, 0];
+  const hi = [0, 0, 0];
+  lo[an] = slab[0];
+  hi[an] = slab[1];
+  for (let k = 0; k < rects.length; k++) {
+    const r = rects[k];
+    lo[au] = r.u0 * p.cellU - e.frame.w / 2;
+    hi[au] = r.u1 * p.cellU - e.frame.w / 2;
+    lo[av] = r.v0 * p.cellV - e.frame.h / 2;
+    hi[av] = r.v1 * p.cellV - e.frame.h / 2;
+    for (let c = 0, o = k * 24; c < 8; c++, o += 3) {
+      pos[o] = c & 1 ? hi[0] : lo[0];
+      pos[o + 1] = c & 2 ? hi[1] : lo[1];
+      pos[o + 2] = c & 4 ? hi[2] : lo[2];
     }
-    if (n[k] > 0) idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
-    else idx.push(base, base + 2, base + 1, base, base + 3, base + 2);
+    for (let j = 0, base = k * 8, o = k * 36; j < 36; j++) idx[o + j] = base + BOX[j];
   }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  geo.setIndex(new THREE.BufferAttribute(idx, 1));
+  return geo;
+}
+
+/** A skin less the cells a steel plate covers (null: no such layer). */
+function hidePlate(skin: Uint8Array | null, plate: Uint8Array | undefined): Uint8Array | null {
+  if (!skin || !plate) return skin;
+  const out = new Uint8Array(skin.length);
+  for (let i = 0; i < skin.length; i++) out[i] = plate[i] ? 0 : skin[i];
+  return out;
+}
+
+function sameCells(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
 }
 
 /** How far around a hole the core is drawn (cells): enough to look in at a steep angle. */
 const CORE_MARGIN = 3;
 
-/** Core cells within CORE_MARGIN cells of a hole in either skin. */
+/** Core cells within CORE_MARGIN cells of a hole in either skin (a square around each, in two passes). */
 function exposed(core: Uint8Array, front: Uint8Array | null, back: Uint8Array | null, w: number, h: number): Uint8Array {
-  const out = new Uint8Array(core.length);
-  for (let v = 0; v < h; v++)
+  // Holes, spread along u, then along v.
+  const rows = new Uint8Array(core.length);
+  const hole = (i: number) => !(front?.[i] && back?.[i]);
+  for (let v = 0; v < h; v++) {
+    let any = false;
+    for (let u = 0; u < w && !any; u++) any = hole(v * w + u);
+    if (!any) continue;
+    let near = -Infinity;
+    // Forward then backward: distance to the nearest hole in the row.
     for (let u = 0; u < w; u++) {
       const i = v * w + u;
-      if ((front && front[i]) && (back && back[i])) continue;
-      for (let y = Math.max(0, v - CORE_MARGIN); y <= Math.min(h - 1, v + CORE_MARGIN); y++)
-        for (let x = Math.max(0, u - CORE_MARGIN); x <= Math.min(w - 1, u + CORE_MARGIN); x++) if (core[y * w + x]) out[y * w + x] = 1;
+      if (hole(i)) near = u;
+      if (u - near <= CORE_MARGIN) rows[i] = 1;
     }
+    near = Infinity;
+    for (let u = w - 1; u >= 0; u--) {
+      const i = v * w + u;
+      if (hole(i)) near = u;
+      if (near - u <= CORE_MARGIN) rows[i] = 1;
+    }
+  }
+  const out = new Uint8Array(core.length);
+  for (let u = 0; u < w; u++) {
+    let near = -Infinity;
+    for (let v = 0; v < h; v++) {
+      if (rows[v * w + u]) near = v;
+      if (v - near <= CORE_MARGIN && core[v * w + u]) out[v * w + u] = 1;
+    }
+    near = Infinity;
+    for (let v = h - 1; v >= 0; v--) {
+      if (rows[v * w + u]) near = v;
+      if (near - v <= CORE_MARGIN && core[v * w + u]) out[v * w + u] = 1;
+    }
+  }
   return out;
 }
