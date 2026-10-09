@@ -13,7 +13,7 @@ Companion files: `surfaces.md` (surface tagging per wall/floor), `version.md`, `
 - **Converting to/from the official Ubisoft blueprint pixels** (1600×900 images, the frame used in `map_features.md`): `px_x ≈ 2.019·u_x + 361.9`, `px_y ≈ 2.014·u_y + 115.7`. Inverse: `u_x ≈ (px_x − 361.9)/2.019`, `u_y ≈ (px_y − 115.7)/2.014`. So **1 blueprint px ≈ 0.496 u ≈ 0.074 m**. Fitted on the 6 hatch centres from both files; residuals ≤ 6 px.
 - **Scale estimate: 1 u ≈ 0.15 m (≈ 6.7 u per metre), ±15%. ESTIMATE.**
   - Basis: the tipped-over yellow school bus south of the west wing measures ≈ 77 u long. A Type-C school bus is ≈ 10.5–12.2 m long; 11.5 m gives 0.149 m/u.
-  - Sanity checks: doorway gaps ≈ 9–11 u (1.35–1.65 m); reinforceable wall sections ≈ 9–13 u (1.3–2.0 m); 1F footprint ≈ 328 × 234 u ≈ 49 × 35 m.
+  - Sanity checks: doorway gaps ≈ 9–11 u (1.35–1.65 m); 1F footprint ≈ 328 × 234 u ≈ 49 × 35 m. (Reinforcement sections can't check the scale: their widths differ wall to wall, `surfaces.md` §7.)
 - The room boxes below were read off gridded renders to about ±2 u. Boxes are axis-aligned bounding boxes; several rooms are L-shaped (noted).
 - **Storey heights: UNVERIFIED.** Use placeholders of 3.2 m floor-to-floor for B→1F→2F and 3.0 m for 2F→3F catwalk until Ulo confirms (see Open questions). The Meeting Hall appears to be single-storey under a pitched roof, with the Attic running along its east side.
 - **Floor codes:** `B` (basement), `1F`, `2F`, `3F` (Big Tower catwalk), `RF` (roof surfaces), `EXT` (ground-level exterior). Fandom and the official zip use European naming ("Ground" = 1F, "1st Floor" = 2F, "2nd Floor" = 3F tower top).
@@ -160,7 +160,7 @@ Basement ceilings are **hard concrete except 3 hatches** (see `surfaces.md`).
 | 2F_ARMORY_CORRIDOR | 283–296 | 190–245 | 2.0 × 8.3 | Default-camera icon at its north end (see the cameras file from the other agent) |
 | 2F_ARMORY_STAIRS | 283–296 | 245–275 | 2.0 × 4.5 | East stairwell top |
 | 2F_ARMORY | 299–333 | 205–254 | 5.1 × 7.4 | Floor hatch H6 at (318–329, 240–251) |
-| 2F_WHITE_STAIRS | 140–205 | 256–276 | 9.8 × 3.0 | Central stairwell top landing |
+| 2F_WHITE_STAIRS | 140–196.5 | 256–276 | 8.5 × 3.0 | Central stairwell top landing (east wall x 196.5–201; south of Game Room, x≈201–218.5, y≥258.5, is a walled exterior pocket, not a room) |
 
 ### 4.4 Big Tower top (3F)
 | room_id | bbox x (u) | bbox y (u) | approx size (m) | notes |
@@ -346,37 +346,39 @@ Coordinates are the opening's span on the wall line.
 | 2F_SMALL_TOWER | 2F_OFFICE | DOOR | x 62–65, y 183–193 |
 | 2F_SMALL_TOWER | RF_DINING (south part) | EXT_OPENING (window? UNVERIFIED) | y 229–232, x 45–56 |
 | 2F_OFFICE | RF_DINING (north part) | EXT_OPENING (UNVERIFIED) | y 177–180, x 84–94 |
-| RF_DINING | 2F_DORMS_MAIN_HALL | EXT_OPENING (window? UNVERIFIED) | x 136–140, y 208–221 |
+| RF_DINING | 2F_DORMS_MAIN_HALL | EXT_OPENING (window? UNVERIFIED) — the **"Big Window"** | x 136–140, y 208–221 |
 | 2F_KIDS_DORMS | EXT north (2-storey drop) | EXT_OPENING (**window**; no roof outside) | y 157–160, x 183–197 |
-| 2F_KIDS_DORMS | 2F_DORMS_MAIN_HALL | DOOR | y 204–207, x 180–192 |
-| 2F_KIDS_DORMS | 2F_DORMS_MAIN_HALL | SOFT(2) | y 204.9–207.5, x 146.5–173.5 |
-| 2F_KIDS_DORMS | 2F_LOW_ATTIC | SOFT(2) | x 208.4–211.1, y 162.3–178.8 |
+| 2F_KIDS_DORMS | 2F_DORMS_MAIN_HALL | DOOR | y 204–207, x 186–195 |
+| 2F_KIDS_DORMS | 2F_DORMS_MAIN_HALL | SOFT(3) (Ulo) | y 204.9–207.5, x 146.5–173.5 |
+| 2F_KIDS_DORMS | 2F_LOW_ATTIC | SOFT(2) (Ulo) | x 208.4–211.1, y 162.3–178.8 |
 | 2F_DORMS_MAIN_HALL | 2F_MIDDLE | OPEN (no wall) | x≈201–209, y 207–225 |
 | 2F_DORMS_MAIN_HALL | 2F_GAME_ROOM | SOFT(1) | x 201.4–203.9, y 242.5–254.1 |
 | 2F_DORMS_MAIN_HALL | 2F_WHITE_STAIRS | DOOR | y 254–257, x 185–196 |
-| 2F_MIDDLE | 2F_GAME_ROOM | OPEN (doorway, no door glyph) | y 224–227, x 215–229 |
-| 2F_MIDDLE | 2F_LOW_ATTIC | DOOR | y 189–191, x 216–226 |
+| 2F_MIDDLE | 2F_GAME_ROOM | OPEN (doorway, no door glyph) | y 224–227, x 213.5–232 |
+| 2F_MIDDLE | 2F_LOW_ATTIC | DOOR | y 189–191, x 214.5–223 |
 | 2F_MIDDLE | 2F_TROPHY | DOOR | x 247–251, y 195–203 |
-| 2F_GAME_ROOM | 2F_WALK_IN | SOFT(2) | y 253.9–256.6, x 223.3–246.2 |
-| 2F_GAME_ROOM | EXT/roof south | EXT_OPENING (window? UNVERIFIED) | y 254–256, x 205–216 |
+| 2F_GAME_ROOM | 2F_WALK_IN | SOFT(2) (Ulo) | y 253.9–256.6, x 223.3–246.2 |
+| 2F_GAME_ROOM | EXT/roof south | EXT_OPENING (window? UNVERIFIED; r6calls 2026 only, Ubisoft's 2020 blueprint draws a solid wall: CONFLICT) | y 254–256, x 205–216 |
 | 2F_WALK_IN | 2F_MASTER_BEDROOM | DOOR | x 248–251, y 262–270 |
 | 2F_TROPHY | 2F_LOW_ATTIC | SOFT(2) | y 187.2–189.9, x 248.7–272.6 |
-| 2F_TROPHY | 2F_MASTER_BEDROOM | DOOR | y 224–227, x 257–270 |
+| 2F_TROPHY | 2F_MASTER_BEDROOM | DOOR | y 224–227, x 261–271 |
 | 2F_TROPHY | 2F_ARMORY_CORRIDOR | DOOR | x 280–283, y 195–203 |
 | 2F_MASTER_BEDROOM | 2F_ARMORY_CORRIDOR | SOFT(2) | x 280.7–283.5, y 226.5–245.6 |
-| 2F_MASTER_BEDROOM | EXT_BALCONY | EXT_OPENING (door? UNVERIFIED) | y 272–274, x 254–264 |
+| 2F_MASTER_BEDROOM | EXT_BALCONY | EXT_OPENING (door? UNVERIFIED) | y 272–274, x 251–260 |
 | 2F_LOW_ATTIC | 2F_ATTIC | OPEN | y≈160 |
 | 2F_ATTIC | 2F_TOWER | SOFT(2) | y 96.9–99.6, x 251.1–272.7 |
-| 2F_ATTIC | RF_MEETING_W | EXT_OPENING (window? UNVERIFIED) | x 245–249, y 146–156 |
-| 2F_ARMORY_CORRIDOR | RF_MEETING_E | EXT_OPENING (window? UNVERIFIED) | y 186–189, x 280–292 |
+| 2F_ATTIC | RF_MEETING_W | EXT_OPENING (window? UNVERIFIED) | x 245–249, y 146–153 |
+| 2F_ARMORY_CORRIDOR | RF_MEETING_E | EXT_OPENING (window? UNVERIFIED) | y 186–189, x 287–294.5 |
 | 2F_ARMORY_CORRIDOR | 2F_ARMORY | DOOR | x 296–299, y 232–241 |
 | 2F_ARMORY_CORRIDOR | 2F_ARMORY | SOFT(2) | x 296.3–298.9, y 209.4–229.9 |
 | 2F_ARMORY_CORRIDOR | 2F_ARMORY_STAIRS | OPEN | — |
 | 2F_ARMORY | EXT east | EXT_OPENING (window, likely) | x 332–335, y 234–243 |
-| 2F_TOWER (W part) | EXT north | EXT_OPENING (window? UNVERIFIED) | y 73–75, x 228–241 |
-| 2F_TOWER (W part) | RF_MEETING_W | EXT_OPENING (UNVERIFIED) | y≈99, x 229–241 |
-| 2F_TOWER (NE part) | RF_MEETING_E | EXT_OPENING (UNVERIFIED) | y≈99, x 281–293 |
+| 2F_TOWER (W part) | EXT north | EXT_OPENING (window? UNVERIFIED) | y 73–75, x 229–238.5 |
+| 2F_TOWER (W part) | RF_MEETING_W | EXT_OPENING (UNVERIFIED) | y≈99, x 226.5–236 |
+| 2F_TOWER (NE part) | RF_MEETING_E | EXT_OPENING (UNVERIFIED) | y≈99, x 283.5–293 |
 | 2F_TOWER (NE part) | EXT north | EXT_OPENING (window? UNVERIFIED) | y≈47, x 282–292 |
+
+The 2F spans above were checked on 2026-10-09 against Ubisoft's 2020 blueprint and the r6calls floor image, which agree within 1 u; nine of them had been transcribed 2.5–7.4 u off and are corrected (Kids'↔Dorms door, Middle↔Game Room, Middle↔Low Attic, Trophy↔Master, Master→Balcony, Attic west, Armory Corridor north and three 2F Tower openings).
 
 ### 6.4 3F
 | Room A | Room B | Type | Where (u) |
@@ -387,7 +389,7 @@ Coordinates are the opening's span on the wall line.
 
 ## 7. Adjacency summary
 Rooms that share a wall with **no** passable or destructible section (HARD only) are listed in `surfaces.md` §3. Key facts for gameplay:
-- **Site 1 (Kids'/Dorms):** linked by a door plus a 2-section soft wall. Kids' is also soft to Low Attic. Dorms is open to Middle and soft (1 section) to Game Room. Hatch H4 drops from Kids' into Kitchen.
+- **Site 1 (Kids'/Dorms):** linked by a door plus a 3-section soft wall (Ulo). Kids' is also soft to Low Attic (2 sections, Ulo). Dorms is open to Middle and soft (1 section) to Game Room. Hatch H4 drops from Kids' into Kitchen.
 - **Site 2 (Dining/Kitchen):** a door plus a 1-section soft wall; the rest of the shared wall is hard. Kitchen is soft to Security (3 sections in 2 walls) and to Meeting (2 sections).
 - **Site 3 (Meeting/Kitchen):** 2-section soft wall and drone holes. Meeting has H1 (to B Electric) and H5 (from 2F Attic) side by side near the Stage.
 - **Site 4 (Laundry/Supply):** linked through Closet (2 sections) and the SE strip (1 section). Laundry is soft to Freezer (2). Supply is soft to Boiler (1) and to Bunker Entrance (2).
@@ -399,7 +401,7 @@ Rooms that share a wall with **no** passable or destructible section (HARD only)
 
 ## Open questions
 (For Ulo — a Custom Game walk-through answers most of these.)
-1. **Scale:** stand at a doorway and estimate its width, or tell us how many reinforcements the Kitchen↔Meeting soft wall takes (we expect 2). This calibrates the 0.15 m/u estimate.
+1. **Scale:** stand at a doorway and estimate its width. This calibrates the 0.15 m/u estimate. (Reinforcement counts can't: section widths differ wall to wall.)
 2. **Storey heights:** roughly how tall are B, 1F, 2F? Is Meeting Hall a tall single-storey room (pitched ceiling), with the Attic only along its east side?
 3. **Exterior openings — door or window?**
    - 1F: Small Tower west, Small Tower south, Shower Corridor south, Security Corridor SW-south, Kitchen Corridor west, Tower north, Tower east, Garage north/south/east, Classroom west.
@@ -411,7 +413,7 @@ Rooms that share a wall with **no** passable or destructible section (HARD only)
 7. Is the **3F Cat Walk** a ring around an open drop to 2F, or is its middle solid?
 8. Does **2F Middle ↔ Game Room** have a door (barricadable), or is it an open archway?
 9. Where do the **basement drone tunnels** lead? One enters from the south exterior near White/Freezer Stairs; one runs along Supply's SE strip.
-10. Any **callout names** that differ from the table? What do you and your squad call these rooms, and what does the in-game HUD show?
+10. Any **callout names** that differ from the table? What do you and your squad call these rooms, and what does the in-game HUD show? (Ulo, 2026-10-09: most players call the Dorms west window "big window"; a site-setup guide Ulo uses labels 2F Kids, Dorm, Middle, Gaming, Walk In, Master, Trophy, Low Attic, Attic, Meeting Roof, Armory Corri, Armory, Armory Stairs and White Stairs, all matching §2.)
 
 ## Sources
 - https://ubistatic-a.ubisoft.com/0106/gamesites/rainbow6/blueprints/r6-maps-oregon-blueprints.zip — official blueprints (B, 1F, 2F, 3F, Roof; legend: breakable walls, breakable floor traps, LOS walls, LOS floor). Used for layout, soft walls, hatches, soft floors.
