@@ -5,9 +5,16 @@ import type { Vec3 } from "../core/math.js";
 import { applyDamage, Cause, isIdleShell, type Damage } from "../combat/apply.js";
 import { shotOnBodies, tracePellets, type ShotOnBody } from "../combat/hitreg.js";
 import { judgeMelee } from "../combat/melee.js";
+import { DeployKind } from "../destruction/deploy.js";
+import { PanelHistory } from "../destruction/history.js";
+import { explosiveOps, explosiveReach } from "../destruction/explosives.js";
+import { meleeOnPanels } from "../destruction/hits.js";
+import { L_STEEL, type PanelChange, type PanelOp } from "../destruction/panel.js";
+import type { IndexedOp } from "../destruction/panels.js";
 import type { DummyDef, ModeData } from "../data/schemas.js";
 import { DUMMY_STANCE, dummyInput } from "../lab/dummies.js";
 import { spawnAmmo, type Pawn, type PlayerController } from "../player/pawn.js";
+import { eyePose } from "../player/hitboxes.js";
 import { PawnMode, type InputCmd, type PawnState } from "../player/types.js";
 import { Sim } from "../sim.js";
 import { ByteWriter, fnv1a } from "./bytes.js";
@@ -15,10 +22,12 @@ import { HitboxHistory, SentRing } from "./lagComp.js";
 import { controllerState, writeControllerState, writePawnState } from "./pawnState.js";
 import type { SimEvent } from "../weapons/step.js";
 import { defaultLoadoutPick, resolveLoadout, type LoadoutPick } from "../weapons/loadout.js";
-import { hash4, pelletDirections } from "../weapons/spread.js";
+import { hash4, pelletDirections, viewDir } from "../weapons/spread.js";
+import { QUERY_BULLET } from "../physics/rapier.js";
 import { sideTeam } from "../sim.js";
 import { encodeEvents, type GameEvent } from "./events.js";
 import { encodeError, encodePong, encodeRoster, encodeShotResult, encodeWelcome, ErrorCode, unwrap16, type InputMsg, type LabTool, type RosterEntry, type ShotResult } from "./protocol.js";
+import { encodePanelOps, encodePanelState, wireOp } from "./panels.js";
 import { MAX_INTERP_MS, quantizeRemote, SNAPSHOT_EVERY, SnapshotEncoder, type RemoteQ } from "./snapshot.js";
 
 /** Inputs the server tries to keep queued per client (absorbs jitter); clients pace themselves to it. */
@@ -137,7 +146,19 @@ interface Member {
   encoder: SnapshotEncoder;
   /** Snapshot ticks actually sent to this client (skipped ones aren't), for rewinding to what it drew. */
   sent: SentRing;
+  /** When we last sent it every changed panel's state because it asked (it may ask once a second). */
+  panelStateAt: number;
+  /**
+   * Panel ops go out with snapshots (D-066): how many of the ops waiting to go this member already has (a
+   * panel state sent since covers them), and ops held back with a snapshot it wasn't sent (null: too many to
+   * send as ops; it gets the panels' whole state with its next snapshot instead).
+   */
+  opsHad: number;
+  opsHeld: IndexedOp[] | null;
 }
+
+/** More ops than this held back for one client: send it the panels' state instead (a message carries at most 4096). */
+const MAX_HELD_OPS = 2048;
 
 /** A shot judged against the world as its shooter saw it, waiting to be applied with the rest of the tick's. */
 interface JudgedShot {
@@ -152,6 +173,8 @@ interface JudgedShot {
   rewoundTick: number;
   origin: [number, number, number];
   bodies: ShotOnBody[];
+  /** What it did to panels (holes, wear), in order: applied with its damage. */
+  panelOps: IndexedOp[];
 }
 
 /** A Range Lab target: a body with no client, stepped from its script (lab/dummies.ts). */
@@ -175,6 +198,12 @@ export function predictionHash(sim: Sim, ctrl: PlayerController): number {
 
 export class Room {
   readonly history: HitboxHistory;
+  /** Recent panel changes: shots are judged against the panels as their shooter had them (destruction/history.ts). */
+  panelHistory = new PanelHistory();
+  /** Panel ops from between ticks (lab tools), applied with the next tick's. */
+  private queuedOps: IndexedOp[] = [];
+  /** Panel ops applied since the last snapshot, sent to everyone just ahead of the next one. */
+  private unsentOps: IndexedOp[] = [];
   private readonly members = new Map<number, Member>();
   private nextMemberId = 1;
   /** Range Lab dummies (lab rooms on a level that has some). */
@@ -193,6 +222,10 @@ export class Room {
     cappedShots: 0,
     hits: 0,
     kills: 0,
+    /** Panel ops applied (holes, wear, reinforcements). */
+    panelOps: 0,
+    /** Panel states sent because a client's panels disagreed. */
+    panelResyncs: 0,
   };
   /** Damage rules (friendly fire): the lab mode preset until match modes arrive (Phase 6). */
   readonly rules: ModeData;
@@ -214,6 +247,8 @@ export class Room {
   ) {
     this.history = new HitboxHistory(sim, 32);
     this.rules = sim.data.modes.get("lab")!;
+    // Reinforcing and barricades (Phase 4 M6): each team's pool; lab rooms let attackers do it too.
+    sim.deployRules = { anyone: this.rules.defenderToolsForAll, pools: [this.rules.reinforcements, this.rules.reinforcements] };
     // A revive cut by what another body did (left, respawned, jumped, went down or died): the other side's
     // owner couldn't predict it.
     sim.onReviveCut = (p) => {
@@ -296,10 +331,15 @@ export class Room {
       confirmEpoch: null,
       encoder: new SnapshotEncoder(),
       sent: new SentRing(),
+      panelStateAt: -Infinity,
+      opsHad: this.unsentOps.length,
+      opsHeld: [],
     };
     this.members.set(m.id, m);
     this.spawn(m);
     client.send(encodeWelcome({ roomCode: this.code, tick: this.sim.tick, levelId: this.levelId, controllerId: m.ctrl!.id }));
+    client.send(encodePanelState(this.sim.level.panels)); // the walls as they are now (ops waiting to go included); every later op follows
+    m.events.push(this.deployRulesEvent());
     this.broadcastRoster();
     return m.id;
   }
@@ -376,6 +416,45 @@ export class Room {
     this.members.get(memberId)?.encoder.reset();
   }
 
+  /** A client's panels disagree with ours: send it every changed panel's state (at most once a second). */
+  onPanelResync(memberId: number): void {
+    const m = this.members.get(memberId);
+    if (!m || this.sim.tick - m.panelStateAt < TICK_HZ) return;
+    m.panelStateAt = this.sim.tick;
+    this.stats.panelResyncs++;
+    this.sendPanelState(m, encodePanelState(this.sim.level.panels));
+  }
+
+  /** Every changed panel's state, which covers every op this member was still to be sent. */
+  private sendPanelState(m: Member, state: Uint8Array) {
+    m.client.send(state);
+    m.opsHad = this.unsentOps.length;
+    m.opsHeld = [];
+  }
+
+  /**
+   * Lab tool: every panel as the level built it and the reinforcement pools full again. Everyone is sent the
+   * panels' state (with nothing changed, it puts theirs back too) and the pools. History before now is
+   * dropped: a shot judged across the reset sees the panels as they are.
+   */
+  private resetPanels() {
+    const panels = this.sim.level.panels;
+    for (const e of panels.list) if (e.panel.modified) panels.reset(e.panel.spec.index);
+    this.queuedOps = [];
+    this.panelHistory = new PanelHistory();
+    this.sim.deployRules.pools = [this.rules.reinforcements, this.rules.reinforcements];
+    const state = encodePanelState(panels);
+    for (const m of this.members.values()) {
+      this.sendPanelState(m, state);
+      m.events.push(this.deployRulesEvent());
+    }
+  }
+
+  /** A panel op from outside a tick (a lab tool, a test): applied and sent with the next tick's. */
+  queuePanelOp(panel: number, op: PanelOp): void {
+    if (this.sim.level.panels.list[panel]) this.queuedOps.push({ panel, op });
+  }
+
   onLabTool(memberId: number, tool: LabTool): void {
     const m = this.members.get(memberId);
     if (!m || !m.ctrl || !this.lab) return;
@@ -398,6 +477,21 @@ export class Room {
         Object.assign(p.state, { loaded0: a.loaded, reserve0: a.reserve, loaded1: b.loaded, reserve1: b.reserve });
       }
       this.force(m);
+    } else if (tool.kind === "explosive") {
+      // Its cut where your body looks along the view you sent, applied with the next tick's ops. The id is the
+      // client's: only the data's own keys name an explosive (not "constructor" or "__proto__").
+      const all = this.sim.data.destruction.explosives;
+      const ex = Object.hasOwn(all, tool.id) ? all[tool.id] : undefined;
+      const body = this.sim.pawns.get(m.ctrl.possessedPawnId);
+      if (!ex || !body || body.state.mode === PawnMode.Dead) return;
+      const eye = eyePose(this.sim.data.movement, this.sim.data.hitboxes, body.state).pos;
+      const dir = viewDir(tool.yaw, tool.pitch);
+      const reach = explosiveReach(ex);
+      const ray = new this.sim.R.Ray({ x: eye[0], y: eye[1], z: eye[2] }, { x: dir[0], y: dir[1], z: dir[2] });
+      const plain = this.sim.world.castRay(ray, reach, true, undefined, QUERY_BULLET)?.timeOfImpact ?? reach;
+      for (const o of explosiveOps(this.sim.level.panels, this.sim.data.destruction, ex, eye, dir, plain)) this.queuePanelOp(o.panel, o.op);
+    } else if (tool.kind === "resetPanels") {
+      this.resetPanels();
     } else if (Math.abs(tool.x) <= MAX_COORD && Math.abs(tool.y) <= MAX_COORD && Math.abs(tool.z) <= MAX_COORD) {
       // Same body: inputs already queued or in flight still apply after the jump, exactly as the client
       // replays them on top of the correction.
@@ -421,32 +515,37 @@ export class Room {
    * The render time an input says its client was drawing, bounded as described at judgeShot, and the time
    * the room rewinds to for it (capped).
    */
-  private viewTimeFor(m: Member, applied: QueuedInput): { now: number; viewTick: number; rewoundTick: number } {
+  private viewTimeFor(m: Member, applied: QueuedInput): { now: number; viewTick: number; rewoundTick: number; panelTick: number } {
     const now = applied.receivedTick;
     const leastLag = Math.min(...m.lags);
     const snapTick = Math.max(Math.min(now, unwrap16(applied.snapTick, now)), now - leastLag - LAG_SLACK_TICKS);
     const viewTick = snapTick - Math.min(MAX_VIEW_BACK_TICKS, applied.viewBackQ8 / 256);
-    return { now, viewTick, rewoundTick: HitboxHistory.rewound(viewTick, now, this.maxRewindTicks) };
+    // Panels as the client had them: every change up to the newest tick it had heard of (they arrive ahead
+    // of that tick's snapshot), within the same cap.
+    const panelTick = Math.max(snapTick, now - this.maxRewindTicks);
+    return { now, viewTick, rewoundTick: HitboxHistory.rewound(viewTick, now, this.maxRewindTicks), panelTick };
   }
 
   private judgeShot(m: Member, applied: QueuedInput, shot: Extract<SimEvent, { kind: "shot" }>) {
     const shooter = this.sim.pawns.get(shot.pawnId);
     const w = shooter?.loadout?.weapons[shot.slot];
     if (!m.ctrl || !shooter || !w?.damage) return;
-    const { now, viewTick, rewoundTick } = this.viewTimeFor(m, applied);
+    const { now, viewTick, rewoundTick, panelTick } = this.viewTimeFor(m, applied);
     const origin = shot.origin;
     const dirs = pelletDirections(this.seed, m.ctrl.id, shot.seq, shot.pellets, shot.yaw, shot.pitch, shot.cone);
     // Your own bodies and the dead don't stop bullets.
     const ignore = new Set(m.ctrl.pawnIds);
     for (const p of this.sim.pawns.values()) if (p.state.mode === PawnMode.Dead) ignore.add(p.id);
-    const paths = tracePellets(this.sim, this.history, origin, dirs, rewoundTick, w.damage.penetration, ignore, m.sent);
+    const through = { rule: w.destruction, view: { tick: panelTick, history: this.panelHistory } };
+    const paths = tracePellets(this.sim, this.history, origin, dirs, rewoundTick, w.damage.penetration, ignore, m.sent, through);
     const bodies = shotOnBodies(this.sim.data.combat, w.damage, paths, (id) => {
       const v = this.sim.pawns.get(id)!;
       return { scale: v.team === shooter.team ? this.rules.friendlyFire.scale : 1, idleShell: isIdleShell(this.sim, v) };
     });
     this.stats.shots++;
     if (rewoundTick > viewTick) this.stats.cappedShots++;
-    this.judged.push({ m, cause: Cause.Bullet, ctrlId: m.ctrl.id, team: shooter.team, seq: shot.seq, weaponId: w.id, receivedTick: now, rewoundTick, origin, bodies });
+    const panelOps = paths.flatMap((p) => p.ops);
+    this.judged.push({ m, cause: Cause.Bullet, ctrlId: m.ctrl.id, team: shooter.team, seq: shot.seq, weaponId: w.id, receivedTick: now, rewoundTick, origin, bodies, panelOps });
     // Everyone sees and hears it (the shooter's own client draws its flash itself, but not where pellets went).
     const ends = paths.map((p): [number, number, number] => [origin[0] + p.dir[0] * p.end, origin[1] + p.dir[1] * p.end, origin[2] + p.dir[2] * p.end]);
     for (const other of this.members.values()) other.events.push({ kind: "shotFx", pawnId: shooter.id, slot: shot.slot, suppressed: w.suppressed, ends });
@@ -495,18 +594,69 @@ export class Room {
   /**
    * The knife landing (DECISIONS D-050): judged like a shot, against everyone as the attacker saw them when
    * the input that swung (or, on a tick without one, the last input) was made; applied with the tick's shots.
+   * With no body in reach it lands on the first panel in reach along the view instead (destruction/hits.ts).
    */
   private judgeMeleeImpact(m: Member, applied: QueuedInput, hit: Extract<SimEvent, { kind: "meleeImpact" }>) {
     const attacker = this.sim.pawns.get(hit.pawnId);
     if (!m.ctrl || !attacker) return;
-    const { now, rewoundTick } = this.viewTimeFor(m, applied);
+    const { now, rewoundTick, panelTick } = this.viewTimeFor(m, applied);
     const ignore = new Set(m.ctrl.pawnIds);
     for (const p of this.sim.pawns.values()) if (p.state.mode === PawnMode.Dead) ignore.add(p.id);
     const target = judgeMelee(this.sim, hit.origin, attacker.state, hit.yaw, this.history.at(rewoundTick, m.sent), ignore);
-    if (!target) return;
-    const body: ShotOnBody = { pawnId: target.pawnId, kill: false, amount: 0, headshot: false, zone: target.zone, pellets: 1, distance: target.reach };
-    this.judged.push({ m, cause: Cause.Melee, ctrlId: m.ctrl.id, team: attacker.team, seq: hit.seq, weaponId: "knife", receivedTick: now, rewoundTick, origin: hit.origin, bodies: [body] });
+    const base = { m, cause: Cause.Melee, ctrlId: m.ctrl.id, team: attacker.team, seq: hit.seq, weaponId: "knife", receivedTick: now, rewoundTick, origin: hit.origin };
+    if (target) {
+      const body: ShotOnBody = { pawnId: target.pawnId, kill: false, amount: 0, headshot: false, zone: target.zone, pellets: 1, distance: target.reach };
+      this.judged.push({ ...base, bodies: [body], panelOps: [] });
+      return;
+    }
+    const dir = viewDir(hit.yaw, hit.pitch);
+    const reach = this.sim.data.combat.melee.reach;
+    const ray = new this.sim.R.Ray({ x: hit.origin[0], y: hit.origin[1], z: hit.origin[2] }, { x: dir[0], y: dir[1], z: dir[2] });
+    const plain = this.sim.world.castRay(ray, reach, true, undefined, QUERY_BULLET)?.timeOfImpact ?? reach;
+    const onPanel = meleeOnPanels(this.sim.level.panels, this.sim.data.destruction, hit.origin, dir, reach, plain, { tick: panelTick, history: this.panelHistory });
+    if (onPanel) this.judged.push({ ...base, bodies: [], panelOps: onPanel.ops.map(({ panel, op }) => ({ panel, op })) });
   }
+
+  /**
+   * Change a panel (a hole, wear, steel) at the end of this tick: applied to the room's level in its wire
+   * form (exactly what clients will apply), remembered so later shots are judged against the panels as each
+   * shooter had them, and sent to everyone with the tick's other ops.
+   */
+  private applyPanelOp(index: number, op: PanelOp): PanelChange | null {
+    const e = this.sim.level.panels.list[index];
+    const wire = wireOp(op);
+    // Never an op a client would refuse to read (it would drop every connection in the room).
+    if (!e || (wire.kind === "damage" && !Number.isFinite(wire.amount))) return null;
+    const change = this.sim.level.panels.apply(index, wire);
+    this.panelHistory.record(this.sim.tick, index, e.panel.w * e.panel.h, change);
+    this.unsentOps.push({ panel: index, op: wire });
+    this.stats.panelOps++;
+    return change;
+  }
+
+  /**
+   * A reinforcement or barricade hold completed in the simulation (it checked who, where and what): put the
+   * steel up from that side, using one of the team's reinforcements, or the barricade up or off.
+   */
+  private completeDeploy(e: Extract<SimEvent, { kind: "deploy" }>) {
+    const pawn = this.sim.pawns.get(e.pawnId);
+    if (!pawn) return;
+    if (e.action !== DeployKind.Reinforce) {
+      this.applyPanelOp(e.panel, { kind: "barricade", up: e.action === DeployKind.BarricadeUp });
+      return;
+    }
+    const pools = this.sim.deployRules.pools;
+    if (pools[pawn.team] <= 0) return;
+    if (!this.applyPanelOp(e.panel, { kind: "reinforce", section: e.section, side: e.side })?.added[L_STEEL].length) return;
+    pools[pawn.team]--;
+    for (const m of this.members.values()) m.events.push(this.deployRulesEvent());
+  }
+
+  private deployRulesEvent(): GameEvent {
+    const r = this.sim.deployRules;
+    return { kind: "deployRules", anyone: r.anyone, pools: [r.pools[0], r.pools[1]] };
+  }
+
 
   /**
    * Apply the tick's judged shots (DECISIONS D-044): all of them were judged first, so two players who shoot
@@ -514,9 +664,11 @@ export class Room {
    * input) to the bodies as they are now. A shot on a body already dead does nothing.
    */
   private resolveShots() {
+    for (const { panel, op } of this.queuedOps.splice(0)) this.applyPanelOp(panel, op);
     const shots = this.judged.sort((a, b) => a.rewoundTick - b.rewoundTick || a.receivedTick - b.receivedTick || a.ctrlId - b.ctrlId || a.seq - b.seq);
     this.judged = [];
     for (const shot of shots) {
+      for (const { panel, op } of shot.panelOps) this.applyPanelOp(panel, op);
       for (const body of shot.bodies) {
         const victim = this.sim.pawns.get(body.pawnId);
         if (!victim || victim.state.mode === PawnMode.Dead) continue;
@@ -606,6 +758,8 @@ export class Room {
       if (e.kind === "death") {
         const p = this.sim.pawns.get(e.pawnId);
         if (p) this.announceDeath(p, 0, "", e.cause === "bleed" ? Cause.Bleed : Cause.Fall, false, false);
+      } else if (e.kind === "deploy") {
+        this.completeDeploy(e);
       } else if (e.kind === "reviveStart" || e.kind === "reviveEnd") {
         const target = this.sim.pawns.get(e.targetPawn);
         const owner = target && target.ownerId !== null ? this.memberOf(target.ownerId) : null;
@@ -805,14 +959,33 @@ export class Room {
     }
   }
 
+  /**
+   * Each member's snapshot, just after the panel ops applied since the last one (with the panels' hash
+   * after them). Ops ride with snapshots (D-066): the newest snapshot tick a client's input names is then
+   * also the newest panel state it had, which its shots are judged against. A member not sent its snapshot
+   * isn't sent the ops either, until it is.
+   */
   private sendSnapshots() {
     const all = new Map<number, RemoteQ>();
     for (const p of this.sim.pawns.values()) all.set(p.id, quantizeRemote(p.state));
+    const tick = this.sim.tick;
+    const hash = this.unsentOps.length ? this.sim.level.panels.hash() : 0;
+    let shared: Uint8Array | null = null;
+    const ops = this.unsentOps;
+    this.unsentOps = [];
     for (const m of this.members.values()) {
+      const fresh = m.opsHad ? ops.slice(m.opsHad) : ops;
+      const mine = m.opsHeld === null ? null : m.opsHeld.length ? m.opsHeld.concat(fresh) : fresh;
+      m.opsHad = 0;
       if (m.client.buffered() > MAX_BUFFERED) {
         this.stats.skippedSnapshots++;
+        m.opsHeld = mine && mine.length <= MAX_HELD_OPS ? mine : null;
         continue; // never encode a snapshot that isn't sent: deltas are against what was sent
       }
+      m.opsHeld = [];
+      if (mine === null) m.client.send(encodePanelState(this.sim.level.panels));
+      else if (mine === ops && ops.length) m.client.send((shared ??= encodePanelOps({ tick, ops, hash })));
+      else if (mine.length) m.client.send(encodePanelOps({ tick, ops: mine, hash: this.sim.level.panels.hash() }));
       const own = new Set(m.ctrl?.pawnIds ?? []);
       const remotes = new Map([...all].filter(([id]) => !own.has(id)));
       let correction = null;

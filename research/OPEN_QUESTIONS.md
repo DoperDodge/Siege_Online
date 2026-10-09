@@ -223,6 +223,33 @@ in the Shooting Range or a Custom Game with a stopwatch or a 60 fps recording.
    by 15–20 %" and the community attachment list "+10 % damage". Which is right today, and does the floor
    rise?
 
+### Placeholders added while building Phase 4 (not in the original research)
+
+Each value is in `data/destruction.json` and listed in its `_unverified`. The destruction.md questions
+below (destruction tiers, wallbang damage, hatch melee and size, barricade deploy time, hole sizes, the gap
+under a reinforcement, what blocks reinforcing) are not repeated here.
+
+1. **Wall build:** how thick are a soft wall's skins (we use 2 cm each), and how far apart and how wide are its
+   wooden studs (40 cm apart, 5 cm wide)? A wall with no studs, a wall with metal supports, and a floor's
+   metal joists (also 40 cm apart): the same spacing? How many beams does a hatch have (we use one every 33 cm)?
+2. **Bullet holes by tier:** roughly how big is one bullet's hole in a soft wall for a Low, Medium and High
+   tier gun and one buckshot pellet (we use 4, 5, 8 and 12 cm across; a slug 10 cm)? Up to what range does
+   buckshot destroy studs (5 m)?
+3. **Shots to open:** how many shots of an assault rifle, an SMG or a pistol open an unreinforced hatch ("a lot
+   of time": we use 50, 100 and 100)? How many to break a barricade with a DMR (we use 9)?
+4. **The knife on a wall:** how big is a normal melee hole (25 cm across), and does one hit go through both
+   skins? How many hits open a hatch (we use 10)?
+5. **Frag Grenade** hole in a soft wall (we use 80 cm across; the other explosives are in the hole-size question
+   below).
+6. **Reinforcing:** how close and how squarely must you face the wall (1.5 m, within 60°)? Can you move while
+   reinforcing? How tall is a reinforcement (2.6 m; taller walls keep a strip above it)?
+7. **Barricades:** how long does prying one off take (1 s)? How damaged must one be before you can crouch
+   through it (we let you through only once it breaks)? How tall is a door barricade's bottom gap (15 cm), and
+   how tall is a plank (12 cm)?
+8. **Studs and bullets:** a bullet that can't destroy a wooden stud (anything below the Full tier): does the
+   stud stop it, or does it pass through and leave the stud standing? We stop it (`wallbang.uncutStudsStop`),
+   as bullets pass only what they can break.
+
 ### [core_mechanics.md](core_mechanics.md) — 16
 
 Most of these can be answered in a Custom Game (Local), usually in minutes, with a stopwatch or a 60 fps recording and known map distances.

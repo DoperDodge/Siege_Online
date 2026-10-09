@@ -20,21 +20,28 @@ export const G_STATIC = 0x0001;
 export const G_PLAYER = 0x0002;
 /** Invisible movement helpers (the ramp over a staircase): bodies walk on them, bullets pass through. */
 export const G_MOVE_HELPER = 0x0004;
+/**
+ * Destructible panels' movement boxes (Phase 4, destruction/panels.ts): bodies collide with them like level
+ * geometry; bullets and sight go through the panels' cells instead (level/raycast.ts), so holes count.
+ */
+export const G_PANEL = 0x0008;
 const groups = (membership: number, filter: number) => ((membership << 16) | filter) >>> 0;
 
 /** Level geometry: collides with players and other statics. */
 export const STATIC_GROUPS = groups(G_STATIC, G_STATIC | G_PLAYER);
 /** Movement helpers: like level geometry for movement, but no bullet query sees them. */
 export const HELPER_GROUPS = groups(G_MOVE_HELPER, G_STATIC | G_PLAYER);
+/** Panel movement boxes: like level geometry for movement, but no bullet query sees them. */
+export const PANEL_GROUPS = groups(G_PANEL, G_STATIC | G_PLAYER);
 /** Player movement bodies: blocked by the level and by each other (Skopós' two shells included). */
-export const PLAYER_GROUPS = groups(G_PLAYER, G_STATIC | G_PLAYER);
+export const PLAYER_GROUPS = groups(G_PLAYER, G_STATIC | G_PLAYER | G_PANEL);
 /** Dead bodies: invisible to every query. Takes effect at once (setEnabled(false) waits for a refresh). */
 export const NONSOLID_PLAYER_GROUPS = groups(G_PLAYER, 0);
-/** Query filter that only sees static geometry (ground, walls, the prone body, lean). */
-export const QUERY_STATIC = groups(G_PLAYER, G_STATIC | G_MOVE_HELPER);
+/** Query filter that only sees static geometry (ground, walls, panels, the prone body, lean). */
+export const QUERY_STATIC = groups(G_PLAYER, G_STATIC | G_MOVE_HELPER | G_PANEL);
 /** Query filter that sees the level and players (walking, vault landings, choosing spawn spots). */
-export const QUERY_SOLID = groups(G_PLAYER, G_STATIC | G_PLAYER | G_MOVE_HELPER);
-/** Query filter for bullets: the level you can see, not movement helpers (DECISIONS D-046). */
+export const QUERY_SOLID = groups(G_PLAYER, G_STATIC | G_PLAYER | G_MOVE_HELPER | G_PANEL);
+/** Query filter for bullets: the level you can see that isn't a panel, not movement helpers (DECISIONS D-046). */
 export const QUERY_BULLET = groups(G_PLAYER, G_STATIC);
 /** Query filter that only sees players. */
 export const QUERY_PLAYERS = groups(G_PLAYER, G_PLAYER);

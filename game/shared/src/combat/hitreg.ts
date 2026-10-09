@@ -6,38 +6,81 @@ import type { Vec3 } from "../core/math.js";
 import type { CombatData } from "../data/schemas.js";
 import type { HitboxHistory, SentTicks } from "../net/lagComp.js";
 import type { BodyPart } from "../player/hitboxes.js";
+import { bulletThroughPanels, type PanelHitRule, type PanelPassage, type PanelView } from "../destruction/hits.js";
+import type { IndexedOp } from "../destruction/panels.js";
+import { raycastLevel } from "../level/raycast.js";
 import { QUERY_BULLET } from "../physics/rapier.js";
 import type { Sim } from "../sim.js";
 import type { ResolvedDamage } from "../weapons/loadout.js";
-import { bulletDamage, penetrationChain, type BodyHit, type BulletOptions, type Zone } from "./damage.js";
+import { bulletDamage, penetrationChain, type BodyEntry, type BodyHit, type BulletOptions, type Zone } from "./damage.js";
 
 /**
- * Distance along a ray to the first level geometry that stops bullets, or null. That is all of it in
- * Phase 3 except movement helpers (the invisible ramp over a staircase); Phase 4's destruction lets bullets
- * through soft walls.
+ * Distance along a ray to the first level geometry that stops bullets, or null: everything but movement
+ * helpers (the invisible ramp over a staircase) and the holes in destructible panels (level/raycast.ts).
  */
 export function traceStatic(sim: Sim, origin: Vec3, dir: Vec3, maxDist: number): number | null {
-  const ray = new sim.R.Ray({ x: origin[0], y: origin[1], z: origin[2] }, { x: dir[0], y: dir[1], z: dir[2] });
-  const hit = sim.world.castRay(ray, maxDist, true, undefined, QUERY_BULLET);
-  return hit ? hit.timeOfImpact : null;
+  return raycastLevel(sim, origin, dir, maxDist)?.t ?? null;
 }
 
 export interface PelletPath {
   dir: Vec3;
   /** Where the level stopped it (metres along the ray), if within range. */
   wall: number | null;
-  /** The bodies it damages, nearest first (penetration rules applied). */
+  /** The bodies it damages, nearest first (penetration rules applied, and damage lost through walls). */
   hits: BodyHit[];
   /** The first hitbox it entered, before penetration rules (the lab's shot readout). */
   first: { pawnId: number; part: BodyPart; t: number } | null;
   /** Where it ended: in the last body it damaged unless it went through, else at the level or the range limit. */
   end: number;
+  /** What it did to panels before it ended (holes, wear), in order along it. */
+  ops: IndexedOp[];
+  /** Panels it went into before it ended. */
+  panels: number;
+}
+
+/** How pellets treat destructible panels: the weapon's tier rule, and the panels as the shooter had them. */
+export interface ThroughPanels {
+  rule: PanelHitRule;
+  view?: PanelView;
 }
 
 /**
- * Every pellet of a shot from `origin`: the level stops it, and the bodies along it at render time `tick`
- * (as the shooter's client drew them, from the snapshots it was `sent`) take hits by the weapon's
- * penetration rule. `ignore`: the shooter's own bodies and anyone already dead.
+ * One pellet from `origin` along unit `dir`: the level stops it, and the bodies `bodiesAlong` finds before a
+ * distance take hits by the weapon's penetration rule. With `through`, it goes through panels by the
+ * weapon's destruction rule (destruction/hits.ts), each panel costing damage (wallbang.damageMult);
+ * without, a panel stops it where it meets material.
+ */
+export function pelletPath(
+  sim: Sim,
+  origin: Vec3,
+  dir: Vec3,
+  bodiesAlong: (maxDistance: number) => BodyEntry[],
+  penetration: ResolvedDamage["penetration"],
+  through?: ThroughPanels,
+): PelletPath {
+  const max = sim.data.combat.maxRangeM;
+  const d = sim.data.destruction;
+  const ray = new sim.R.Ray({ x: origin[0], y: origin[1], z: origin[2] }, { x: dir[0], y: dir[1], z: dir[2] });
+  const plain = sim.world.castRay(ray, max, true, undefined, QUERY_BULLET)?.timeOfImpact ?? null;
+  let passage: PanelPassage;
+  if (through) passage = bulletThroughPanels(sim.level.panels, d, through.rule, origin, dir, plain ?? max, through.view);
+  else passage = { stop: sim.level.panels.firstSolid(origin, dir, plain ?? max)?.crossing.face ?? null, enters: [], ops: [] };
+  const wall = passage.stop ?? plain;
+  const bodies = bodiesAlong(wall ?? max);
+  const hits = penetrationChain(sim.data.combat, penetration, bodies);
+  for (const h of hits) for (const e of passage.enters) if (e < h.t) h.mult *= d.wallbang.damageMult;
+  const stopped = hits.length > 0 && penetration !== "full";
+  const first = bodies[0] ? { pawnId: bodies[0].id, part: bodies[0].parts[0].part, t: bodies[0].parts[0].t } : null;
+  const end = stopped ? hits[hits.length - 1].t : (wall ?? max);
+  // A body that stopped it kept it from the panels behind.
+  const ops = passage.ops.filter((o) => !stopped || o.t <= end).map(({ panel, op }) => ({ panel, op }));
+  return { dir, wall, hits, first, end, ops, panels: passage.enters.filter((e) => !stopped || e <= end).length };
+}
+
+/**
+ * Every pellet of a shot from `origin` (pelletPath), against the bodies at render time `tick` as the
+ * shooter's client drew them, from the snapshots it was `sent`. `ignore`: the shooter's own bodies and
+ * anyone already dead.
  */
 export function tracePellets(
   sim: Sim,
@@ -48,16 +91,9 @@ export function tracePellets(
   penetration: ResolvedDamage["penetration"],
   ignore: ReadonlySet<number>,
   sent?: SentTicks,
+  through?: ThroughPanels,
 ): PelletPath[] {
-  const max = sim.data.combat.maxRangeM;
-  return dirs.map((dir) => {
-    const wall = traceStatic(sim, origin, dir, max);
-    const bodies = history.raycastAll(origin, dir, wall ?? max, tick, ignore, sent);
-    const hits = penetrationChain(sim.data.combat, penetration, bodies);
-    const stopped = hits.length > 0 && penetration !== "full";
-    const first = bodies[0] ? { pawnId: bodies[0].id, part: bodies[0].parts[0].part, t: bodies[0].parts[0].t } : null;
-    return { dir, wall, hits, first, end: stopped ? hits[hits.length - 1].t : (wall ?? max) };
-  });
+  return dirs.map((dir) => pelletPath(sim, origin, dir, (maxDistance) => history.raycastAll(origin, dir, maxDistance, tick, ignore, sent), penetration, through));
 }
 
 /** What one shot does to one body: its pellets added up before the damage applies (a placeholder rule). */

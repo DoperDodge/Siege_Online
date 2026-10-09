@@ -1,8 +1,8 @@
 // Lag compensation (PLAN §5): the server keeps ~1 s of every pawn exactly as clients received it (the
 // quantized snapshot states) and, for a shot, rebuilds the hitboxes the shooter was looking at: the same
 // interpolation between the same two snapshots the client drew, stance and lean included (the rewind is
-// capped per room, DECISIONS D-045). Level geometry is tested as it is now; destruction at the rewound time
-// joins in Phase 4.
+// capped per room, DECISIONS D-045). Plain level geometry is tested as it is now; destructible panels as
+// the shooter's client had them (destruction/history.ts).
 import type { Vec3 } from "../core/math.js";
 import type { BodyEntry } from "../combat/damage.js";
 import type { Hitbox } from "../player/hitboxes.js";

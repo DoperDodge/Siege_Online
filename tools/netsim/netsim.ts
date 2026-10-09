@@ -7,18 +7,13 @@ import {
   ByteReader,
   Cause,
   ClientSession,
-  decodeInput,
-  decodeLabTool,
-  decodePickLoadout,
-  decodePing,
   DT,
   eyePose,
+  handleRoomMessage,
   loadedOf,
-  Msg,
   PawnMode,
-  penetrationChain,
+  pelletPath,
   poseHitboxes,
-  QUERY_BULLET,
   rayCapsule,
   Room,
   Stance,
@@ -53,6 +48,11 @@ export interface NetsimOptions {
    * a second later.
    */
   combat: boolean;
+  /**
+   * With `combat`: the two lines face each other through the Movement Lab's sample walls (Phase 4 M5), so
+   * every burst holes the soft ones, and the run checks every client ends with the server's panels.
+   */
+  walls?: boolean;
   /** One client holds Fire the whole run, and its uplink stalls `ms` once, at `atS` seconds. */
   sprayStall?: { client: number; atS: number; ms: number };
   operators?: string[];
@@ -101,6 +101,11 @@ export interface NetsimReport {
    * most are cut short: the reviver is shot, or the downed body finished), kills (with the knife), bleed-outs.
    */
   combat: { downs: number; reviveStarts: number; revives: number; kills: number; knifeKills: number; bleedOuts: number };
+  /**
+   * Destruction: ops the server applied and sent, clients whose panels differ from the server's at the end,
+   * hash disagreements clients noticed along the way, and panel states the server had to send again.
+   */
+  panels: { ops: number; differ: string[]; mismatches: number; resyncs: number };
 }
 
 class Rng {
@@ -271,6 +276,8 @@ function fight(session: ClientSession, own: PawnState, tick: number, cmd: Omit<I
 
 /** Combat runs: two lines of five, 8 m apart, facing each other (team 0 on the south line). */
 const combatSpot = (i: number) => ({ x: -6 + Math.floor(i / 2) * 3, z: i % 2 ? 12 : 4, yawDeg: i % 2 ? 0 : 180 });
+/** Combat across walls: the lines 2.5 m either side of the sample walls at z 17 (soft x −5.5…−3.5, reinforceable −2.5…−0.5, hard 0.5…2.5). */
+const wallSpot = (i: number) => ({ x: [-5, -4, -2, -1, 1.5][Math.floor(i / 2) % 5], z: i % 2 ? 14.5 : 19.5, yawDeg: i % 2 ? 180 : 0 });
 
 export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<NetsimReport> {
   const o: NetsimOptions = { ...DEFAULTS, ...partial };
@@ -321,24 +328,19 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
       memberId = room.join(name, { send: (b) => down.send(b), buffered: () => 0 }, op)!;
       const drift = 1 + ((rng.next() * 2 - 1) * o.driftPct) / 100;
       // In a fight the first two (one a side) charge; everyone else keeps to their spot in the line.
-      const home = o.combat ? (i < 2 ? null : combatSpot(i)) : o.spread ? spreadSpot(i) : null;
+      const home = o.combat ? (o.walls ? wallSpot(i) : i < 2 ? null : combatSpot(i)) : o.spread ? spreadSpot(i) : null;
       return { name, session, down, up, memberId, drift, brain: bot(new Rng(o.seed * 1000 + i), o.crowd && !o.combat, home), nextTickAt: 0, ticks: 0, deadSince: null as number | null };
     }),
   );
 
   function serverReceive(memberId: number, b: Uint8Array) {
-    const r = new ByteReader(b.subarray(1));
-    if (b[0] === Msg.Input) room.onInput(memberId, decodeInput(r));
-    else if (b[0] === Msg.Resync) room.onResync(memberId);
-    else if (b[0] === Msg.Ping) room.onPing(memberId, decodePing(r).clientTime);
-    else if (b[0] === Msg.LabTool) room.onLabTool(memberId, decodeLabTool(r));
-    else if (b[0] === Msg.PickLoadout) room.pickLoadout(memberId, decodePickLoadout(r));
+    if (!handleRoomMessage(room, memberId, b[0], new ByteReader(b.subarray(1)))) throw new Error(`netsim: unexpected message ${b[0]}`);
   }
 
   // Deliver the join messages, then load every client's level.
   clock.runUntil(o.oneWayMs * 3 + o.jitterMs);
   await Promise.all(clients.map((c) => c.session.loaded()));
-  const place = (i: number) => room.onLabTool(clients[i].memberId, { kind: "teleport", y: 0, ...(o.combat ? combatSpot(i) : { ...spreadSpot(i), yawDeg: 90 * i }) });
+  const place = (i: number) => room.onLabTool(clients[i].memberId, { kind: "teleport", y: 0, ...(o.combat ? (o.walls ? wallSpot(i) : combatSpot(i)) : { ...spreadSpot(i), yawDeg: 90 * i }) });
   if (o.spread || o.combat) clients.forEach((_, i) => place(i));
 
   const endAt = clock.now + o.seconds * 1000;
@@ -386,7 +388,7 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
         // The last second is hands-off (neutral input) so every body comes to rest before the desync check.
         const own = c.session.sim?.pawns.get(c.session.ctrl!.possessedPawnId)?.state ?? null;
         let cmd = c.brain(c.ticks++, own);
-        if (o.combat && own) cmd = fight(c.session, own, c.ticks, cmd, clients.indexOf(c) < 2);
+        if (o.combat && own) cmd = fight(c.session, own, c.ticks, cmd, !o.walls && clients.indexOf(c) < 2);
         if (o.sprayStall?.client === clients.indexOf(c)) cmd = { ...cmd, buttons: cmd.buttons | Btn.Fire };
         c.session.tick(clock.now < inputsStopAt ? cmd : { ...cmd, forward: 0, strafe: 0, buttons: 0, lean: 0, stance: Stance.Stand });
       }
@@ -438,6 +440,12 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
     sprayStallShots: o.sprayStall ? stallShots : null,
     starvedRemoteFrames: clients.reduce((n, c) => n + c.session.starvedFrames, 0),
     combat,
+    panels: {
+      ops: room.stats.panelOps,
+      differ: clients.filter((c) => c.session.sim!.level.panels.hash() !== room.sim.level.panels.hash()).map((c) => c.name),
+      mismatches: clients.reduce((n, c) => n + c.session.stats.panelMismatches, 0),
+      resyncs: room.stats.panelResyncs,
+    },
   };
 }
 
@@ -617,11 +625,7 @@ export async function runHitreg(partial: Partial<HitregOptions> = {}): Promise<H
     }),
   );
   function serverReceive(memberId: number, b: Uint8Array) {
-    const r = new ByteReader(b.subarray(1));
-    if (b[0] === Msg.Input) room.onInput(memberId, decodeInput(r));
-    else if (b[0] === Msg.Resync) room.onResync(memberId);
-    else if (b[0] === Msg.Ping) room.onPing(memberId, decodePing(r).clientTime);
-    else if (b[0] === Msg.LabTool) room.onLabTool(memberId, decodeLabTool(r));
+    if (!handleRoomMessage(room, memberId, b[0], new ByteReader(b.subarray(1)))) throw new Error(`netsim: unexpected message ${b[0]}`);
   }
   clock.runUntil(o.oneWayMs * 3 + o.jitterMs);
   await Promise.all(clients.map((c) => c.session.loaded()));
@@ -643,31 +647,34 @@ export async function runHitreg(partial: Partial<HitregOptions> = {}): Promise<H
   let serverNext = clock.now;
 
   /**
-   * The shooter's own verdict: its ray against what it drew at `viewTick`, stopped by the level; the first
-   * part it enters, and the damage each body should take by the weapon's rules.
+   * The shooter's own verdict: its ray against what it drew at `viewTick` and the panels as it has them, by
+   * the same pellet rules as the server (pelletPath); the first part it enters, and the damage each body
+   * should take by the weapon's rules.
    */
   const ownRay = (viewTick: number, origin: [number, number, number], yaw: number, pitch: number, slot: number): Omit<Expect, "viewTick"> => {
     const s = sim();
     const dir: [number, number, number] = [-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch)];
-    const wall = s.world.castRay(new s.R.Ray({ x: origin[0], y: origin[1], z: origin[2] }, { x: dir[0], y: dir[1], z: dir[2] }), 200, true, undefined, QUERY_BULLET);
-    const bodies: BodyEntry[] = [];
-    for (const id of shooter.session.remoteIds()) {
-      const st = shooter.session.remoteAt(id, viewTick);
-      if (!st || st.mode === PawnMode.Dead) continue;
-      const parts: BodyEntry["parts"] = [];
-      for (const h of poseHitboxes(m(), hb(), st)) {
-        const t = rayCapsule(origin, dir, h.a, h.b, h.radius);
-        if (t !== null && t <= (wall ? wall.timeOfImpact : 200)) parts.push({ part: h.part, t });
+    const drawn = (maxDistance: number): BodyEntry[] => {
+      const bodies: BodyEntry[] = [];
+      for (const id of shooter.session.remoteIds()) {
+        const st = shooter.session.remoteAt(id, viewTick);
+        if (!st || st.mode === PawnMode.Dead) continue;
+        const parts: BodyEntry["parts"] = [];
+        for (const h of poseHitboxes(m(), hb(), st)) {
+          const t = rayCapsule(origin, dir, h.a, h.b, h.radius);
+          if (t !== null && t <= maxDistance) parts.push({ part: h.part, t });
+        }
+        if (parts.length) bodies.push({ id, parts: parts.sort((a, b) => a.t - b.t) });
       }
-      if (parts.length) bodies.push({ id, parts: parts.sort((a, b) => a.t - b.t) });
-    }
-    bodies.sort((a, b) => a.parts[0].t - b.parts[0].t || a.id - b.id);
+      return bodies.sort((a, b) => a.parts[0].t - b.parts[0].t || a.id - b.id);
+    };
     const w = s.pawns.get(shooter.session.ctrl!.possessedPawnId)!.loadout!.weapons[slot];
-    const damage = penetrationChain(s.data.combat, w.damage!.penetration, bodies).map((h) => {
+    const path = pelletPath(s, origin, dir, drawn, w.damage!.penetration, { rule: w.destruction });
+    const damage = path.hits.map((h) => {
       const o = bulletDamage(s.data.combat, w.damage!, h.t, h.zone, { mult: h.mult });
       return { pawnId: h.id, zone: h.zone, kill: o.kill, amount: o.kill ? 0 : o.amount };
     });
-    return { hit: bodies[0] ? { pawnId: bodies[0].id, part: bodies[0].parts[0].part } : null, damage };
+    return { hit: path.first ? { pawnId: path.first.pawnId, part: path.first.part } : null, damage };
   };
 
   while (clock.now < endAt) {

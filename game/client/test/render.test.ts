@@ -13,6 +13,7 @@ import {
   encodeLabTool,
   GRIPS,
   isGun,
+  L_FRONT,
   loadGameData,
   Msg,
   offerId,
@@ -23,6 +24,7 @@ import {
   Stance,
   UNDERBARRELS,
   type GameEvent,
+  type IndexedOp,
   type SimEvent,
   type Vec3,
 } from "@redmond/shared";
@@ -200,5 +202,25 @@ describe("no repeated effects when a correction replays our inputs", () => {
     expect(simulated).toBeGreaterThanOrEqual(2); // predicted, then simulated again in the correction's replay
     expect(local.flat().filter((e) => e.kind === "shot")).toHaveLength(1);
     expect(audio.heard.filter((n) => n === "shot")).toHaveLength(1);
+  });
+
+  it("a broken panel throws a few chunks that fall and are gone within a second; the pool never grows", async () => {
+    const { sim } = await level();
+    const scene = new THREE.Scene();
+    const fx = new FxBus(scene, sim);
+    const objects = scene.children.length;
+    const ops: IndexedOp[] = [{ panel: 0, op: { kind: "cut", layer: L_FRONT, shape: { kind: "rect", u0: 5, v0: 5, u1: 25, v1: 25 }, hard: false } }];
+    for (let k = 0; k < 50; k++) fx.panels(ops, [sim.level.panels.apply(0, { kind: "cut", layer: L_FRONT, shape: { kind: "rect", u0: k % 30, v0: 0, u1: (k % 30) + 2, v1: 40 }, hard: false })], 1000);
+    fx.update(1000, 0, [], () => new THREE.Vector3(), () => null);
+    const shown = fx.counts.debrisShown;
+    expect(shown).toBeGreaterThan(0);
+    expect(fx.counts.debris).toBe(96);
+    expect(scene.children.length).toBe(objects);
+    const chunk = scene.children.find((c) => c.visible && (c as THREE.Mesh).geometry?.type === "BoxGeometry")!;
+    const y0 = chunk.position.y;
+    for (let t = 1016; t < 1600; t += 16) fx.update(t, 0, [], () => new THREE.Vector3(), () => null);
+    expect(chunk.position.y).toBeLessThan(y0);
+    for (let t = 1600; t < 2100; t += 16) fx.update(t, 0, [], () => new THREE.Vector3(), () => null);
+    expect(fx.counts.debrisShown).toBe(0);
   });
 });

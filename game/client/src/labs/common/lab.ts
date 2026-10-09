@@ -19,8 +19,8 @@ import {
   isPickable,
   offerId,
   resolveLoadout,
-  QUERY_BULLET,
   QUERY_STATIC,
+  raycastLevel,
   SIGHTS,
   UNDERBARRELS,
   lerp,
@@ -36,8 +36,10 @@ import {
   Stance,
   TICK_HZ,
   wrapAngle,
+  type IndexedOp,
   type InputCmd,
   type Pawn,
+  type PanelChange,
   type PawnState,
   type PlayerController,
   type GunData,
@@ -57,6 +59,7 @@ import { isTouchDevice, mountTouchControls } from "../../input/touch.js";
 import { LocalSocket } from "../../net/local.js";
 import { OnlineConnection } from "../../net/online.js";
 import { createLabScene, createRenderer, PawnView, updateLabels, warmShaders } from "../../render/labScene.js";
+import { PanelView } from "../../render/panelView.js";
 import { FxBus } from "../../render/fxBus.js";
 import { Viewmodel } from "../../render/viewmodel.js";
 import { AmmoHud } from "../../ui/ammo.js";
@@ -206,6 +209,8 @@ export async function startLab(o: LabOptions): Promise<void> {
   let showShot: (shot: ShotResult) => void = () => {};
   /** The server's events, once the page is running (a room joined mid-fight replays some while the level loads). */
   let gameEvents: (tick: number, events: GameEvent[]) => void = () => {};
+  /** Panel ops the session just applied (debris), once the page is running. */
+  let panelEvents: (ops: readonly IndexedOp[], changes: readonly PanelChange[]) => void = () => {};
   /** Online tests can script the input (window.__lab.input). */
   let scripted: Partial<InputCmd> | null = null;
   /** Render tick of the frame on screen (remote players are drawn at it), and of the one last clicked on. */
@@ -254,6 +259,8 @@ export async function startLab(o: LabOptions): Promise<void> {
   const view = $("#view");
   const renderer = createRenderer(view, params.has("lowgfx"));
   const scene = createLabScene(sim.level);
+  /** Destructible panels, drawn from their cells and redrawn as they change. */
+  const panelView = new PanelView(scene, sim.level.panels);
   let settings: Settings = loadSettings();
   const camera = new THREE.PerspectiveCamera(settings.fovVertical, view.clientWidth / view.clientHeight, 0.05, 300);
   camera.rotation.order = "YXZ";
@@ -824,6 +831,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       camera.rotation.set(controls.pitch, controls.yaw, eye.roll);
     }
     updateLabels(camera);
+    panelView.update();
     for (const fn of hooks.frame) fn(now, renderTick);
     renderer.render(scene, camera);
     const inHand = viewed.id === possessed()?.id && !thirdPerson && !ctrl.shellCam && ctrl.swapPhase === 0 ? (viewed.loadout?.weapons[rs.slot] ?? null) : null;
@@ -879,7 +887,7 @@ export async function startLab(o: LabOptions): Promise<void> {
   function updateHud(p: Pawn) {
     const s = p.state;
     $(".op-name").textContent = `${op.name} · ${op.side} · ${op.healthRating} health / ${op.speedRating} speed${op.pawns > 1 ? ` · shell ${ctrl.pawnIds.indexOf(p.id) + 1}/2` : ""}`;
-    downedHud.update(s, data.combat, keyLabel(settings.keys.interact), nameOfPawn);
+    downedHud.update(s, data.combat, keyLabel(settings.keys.interact), nameOfPawn, data.destruction);
     app.querySelectorAll<HTMLElement>(".stances span").forEach((el) => el.classList.toggle("on", Number(el.dataset.s) === s.stance));
     $(".stance-bar div").style.width = `${s.stanceT * 100}%`;
     const speed = Math.hypot(s.vx, s.vz);
@@ -918,7 +926,13 @@ export async function startLab(o: LabOptions): Promise<void> {
             ? `${keyLabel(k.interact)} to transfer`
             : prompt === "revive"
               ? `Hold ${keyLabel(k.interact)} to revive`
-              : "";
+              : prompt === "reinforce"
+                ? `Hold ${keyLabel(k.interact)} to reinforce (${sim.deployRules.pools[possessed()?.team ?? 1]} left)`
+                : prompt === "barricade"
+                  ? `Hold ${keyLabel(k.interact)} to barricade`
+                  : prompt === "unbarricade"
+                    ? `Hold ${keyLabel(k.interact)} to remove the barricade`
+                    : "";
     $(".prompt").textContent = promptText;
     $(".prompt").classList.toggle("hidden", !promptText || dead);
     const onCam = ctrl.shellCam || ctrl.swapPhase !== 0;
@@ -1022,6 +1036,24 @@ export async function startLab(o: LabOptions): Promise<void> {
       /** The render tick of the frame on screen (other players are drawn at it; a click now claims it). */
       get renderTick() {
         return shownRenderTick;
+      },
+      /** One panel as this page has it, by level id (browser tests). */
+      panel: (id: string) => {
+        const p = sim.level.panels.byId.get(id)?.panel;
+        if (!p) return null;
+        return { reinforced: p.reinforced, steelSides: p.steelSides, broken: p.broken, empty: p.empty, modified: p.modified, holes: p.layers.map((l) => (l ? l.reduce((n, c) => n + (c ? 0 : 1), 0) : null)) };
+      },
+      /** The destructible panels as this page has them (browser tests compare players' panels). */
+      get panels() {
+        const p = sim.level.panels;
+        const st = net?.session.stats;
+        return {
+          hash: p.hash(),
+          changed: p.list.filter((e) => e.panel.modified).map((e) => e.panel.spec.id),
+          ops: st?.panelOps ?? 0,
+          states: st?.panelStates ?? 0,
+          mismatches: st?.panelMismatches ?? 0,
+        };
       },
       /** The render tick an input of yours claimed (lag compensation), by its 16-bit seq. */
       claimed: (seq16: number) => claims.get(seq16)?.viewTick ?? null,
@@ -1150,6 +1182,7 @@ export async function startLab(o: LabOptions): Promise<void> {
             onRoster: () => (rosterChanged = true),
             onShot: (shot) => showShot(shot),
             onEvents: (tick, events) => gameEvents(tick, events),
+            onPanels: (_tick, ops, changes) => panelEvents(ops, changes),
             trackMispredictions: autotest, // the e2e scripts report what a misprediction got wrong
             onLocalEvents: (events) => onWeaponEvents(events),
           },
@@ -1209,6 +1242,7 @@ export async function startLab(o: LabOptions): Promise<void> {
           onRoster: () => (rosterChanged = true),
           onShot: (shot) => showShot(shot),
           onEvents: (tick, events) => gameEvents(tick, events),
+          onPanels: (_tick, ops, changes) => panelEvents(ops, changes),
           trackMispredictions: autotest,
           onLocalEvents: (events) => onWeaponEvents(events),
         },
@@ -1461,7 +1495,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       const own = id === viewedId && !thirdPerson;
       const [yaw, pitch] = own ? [controls.yaw, controls.pitch] : view;
       const dir = new THREE.Vector3(-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch));
-      const hit = sim.world.castRay(new sim.R.Ray(from, dir), 60, true, undefined, QUERY_BULLET);
+      const hit = raycastLevel(sim, [from.x, from.y, from.z], [dir.x, dir.y, dir.z], 60);
       if (!hit) continue;
       let dot = laserDots.get(id);
       if (!dot) {
@@ -1470,7 +1504,7 @@ export async function startLab(o: LabOptions): Promise<void> {
         scene.add(dot);
         laserDots.set(id, dot);
       }
-      dot.position.copy(from).addScaledVector(dir, hit.timeOfImpact - 0.01);
+      dot.position.copy(from).addScaledVector(dir, hit.t - 0.01);
       dot.visible = true;
       seen.add(id);
     }
@@ -1527,5 +1561,6 @@ export async function startLab(o: LabOptions): Promise<void> {
   }
 
   gameEvents = onGameEvents;
+  panelEvents = (ops, changes) => fx.panels(ops, changes, performance.now());
   requestAnimationFrame(frame);
 }

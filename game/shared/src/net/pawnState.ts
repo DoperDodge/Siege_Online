@@ -15,9 +15,11 @@ export const PAWN_F32_FIELDS = [
 /** Integer fields by wire width (after the flags, enums, buttons and ladder written by hand below). */
 export const PAWN_U8_FIELDS = [
   "slot", "wAct", "reloadKind", "wflags", "loaded0", "loaded1", "modes", "burstLeft", "downs", "invulnTicks", "meleeTicks",
+  "deployKind", "deploySection",
 ] as const satisfies readonly (keyof PawnState)[];
 export const PAWN_U16_FIELDS = [
   "hp", "maxHp", "lastFallDamage", "actTicks", "reserve0", "reserve1", "cycle", "adsQ", "shotIdx", "sinceShot", "reviveTicks",
+  "deployPanel", "deployTicks",
 ] as const satisfies readonly (keyof PawnState)[];
 export const PAWN_U32_FIELDS = ["rng", "reviveTarget", "revivedBy"] as const satisfies readonly (keyof PawnState)[];
 
@@ -55,6 +57,7 @@ export function readPawnState(r: ByteReader): PawnState {
   for (const k of PAWN_U16_FIELDS) f[k] = r.u16();
   for (const k of PAWN_U32_FIELDS) f[k] = r.u32();
   if (f.slot > 1 || f.wAct > 2 || f.reloadKind > 3) throw new ProtocolError("bad pawn weapon state");
+  if (f.deployKind > 3 || f.deploySection > 2) throw new ProtocolError("bad pawn deploy state");
   return {
     ...(f as Record<(typeof PAWN_F32_FIELDS)[number] | (typeof PAWN_U8_FIELDS)[number] | (typeof PAWN_U16_FIELDS)[number] | (typeof PAWN_U32_FIELDS)[number], number>),
     grounded: (flags & 1) !== 0,

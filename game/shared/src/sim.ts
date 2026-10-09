@@ -3,24 +3,31 @@
 import { DT } from "./core/constants.js";
 import { clamp, forwardXZ, rotateXZ, DEG } from "./core/math.js";
 import { loadGameData, type GameData } from "./data/load.js";
+import { deployAction, deployTicks, DeployKind, type DeployAction, type DeployRules } from "./destruction/deploy.js";
 import { buildLevel, type BuiltLevel } from "./level/builder.js";
-import { initRapier, PLAYER_GROUPS, QUERY_SOLID, QUERY_STATIC as QUERY_STATIC_FILTER, refreshBroadPhase, type CharacterController, type Rapier, type World } from "./physics/rapier.js";
+import { initRapier, PLAYER_GROUPS, QUERY_BULLET, QUERY_SOLID, QUERY_STATIC as QUERY_STATIC_FILTER, refreshBroadPhase, type CharacterController, type Rapier, type World } from "./physics/rapier.js";
 import { capsuleFree, movementPrompt, poseCollider, stepPawn, type MoveContext, type MovementPrompt } from "./player/movement.js";
 import { initialPawnState, type Pawn, type PlayerController } from "./player/pawn.js";
-import { poseHitboxes } from "./player/hitboxes.js";
+import { eyePose, poseHitboxes } from "./player/hitboxes.js";
 import { capsuleDims, stanceDims } from "./player/stance.js";
 import { Btn, PawnMode, Stance, type InputCmd, type PawnState } from "./player/types.js";
 import { defaultLoadoutPick, resolveLoadout, type LoadoutPick, type ResolvedLoadout } from "./weapons/loadout.js";
 import type { SimEvent } from "./weapons/step.js";
+import { viewDir } from "./weapons/spread.js";
 import { ticks } from "./weapons/ticks.js";
 
-/** Contextual hint for the HUD: "Space to mantle", "F to climb", "F to transfer" (Skopós camera). */
-export type Prompt = MovementPrompt | "transfer" | "revive";
+/** Contextual hint for the HUD: "Space to mantle", "F to climb", "F to transfer" (Skopós camera), "Hold F to reinforce". */
+export type Prompt = MovementPrompt | "transfer" | "revive" | "reinforce" | "barricade" | "unbarricade";
 
 export class Sim {
   readonly pawns = new Map<number, Pawn>();
   readonly controllers = new Map<number, PlayerController>();
   tick = 0;
+  /**
+   * Who may reinforce and barricade, and the reinforcements left per team (Phase 4 M6): set by the room,
+   * and on a client from the room's deployRules event, so holds are predicted the way the server judges them.
+   */
+  deployRules: DeployRules = { anyone: false, pools: [0, 0] };
   private nextId = 1;
   private readonly ctx: MoveContext;
 
@@ -53,7 +60,7 @@ export class Sim {
     // same: with a zero timestep, after a collider has been removed, Rapier 0.21's tree intermittently
     // loses static colliders (the floor missing from every query on ~9% of ticks; DECISIONS D-037).
     world.timestep = DT;
-    const level = buildLevel(R, world, def);
+    const level = buildLevel(R, world, def, data.destruction);
     const cc = world.createCharacterController(0.02);
     cc.enableAutostep(m.step.maxStepHeight, 0.2, false);
     cc.enableSnapToGround(m.step.snapToGround);
@@ -244,9 +251,62 @@ export class Sim {
    */
   onReviveCut: ((pawn: Pawn) => void) | null = null;
 
-  /** A body its player's buttons don't reach this tick (no input, or driven idle on the shell camera) lets go of a revive. */
-  private letGoOfRevive(pawn: Pawn) {
+  /**
+   * A body its player's buttons don't reach this tick lets go of a revive (D-061: a stalled reviver can't
+   * keep one going). A hold on a panel lets go only when the player is elsewhere (driven idle on the shell
+   * camera, `idle`); through a stall it just waits, and goes on if the key is still held when inputs come
+   * back (it takes a fresh press to start, so a hold ended by a stall could never restart while held).
+   */
+  private letGo(pawn: Pawn, idle: boolean) {
     if (pawn.state.reviveTarget !== 0) this.endRevive(pawn, this.pawns.get(pawn.state.reviveTarget), false);
+    if (idle) endDeploy(pawn);
+  }
+
+  /**
+   * What holding Interact would do to a panel right now (destruction/deploy.ts): from the body's eye along
+   * its view, stopped by plain level geometry.
+   */
+  deployActionFor(pawn: Pawn): DeployAction | null {
+    const s = pawn.state;
+    if (s.mode !== PawnMode.Walk || !s.grounded) return null;
+    const eye = eyePose(this.data.movement, this.data.hitboxes, s).pos;
+    const dir = viewDir(s.yaw, s.pitch);
+    const ray = new this.R.Ray({ x: eye[0], y: eye[1], z: eye[2] }, { x: dir[0], y: dir[1], z: dir[2] });
+    const limit = this.data.destruction.reinforcement.reach + 1.5;
+    const plain = this.world.castRay(ray, limit, true, undefined, QUERY_BULLET)?.timeOfImpact ?? limit;
+    return deployAction(this.data.destruction, this.level.panels, eye, dir, [s.x, s.y, s.z], pawn.team, this.deployRules, plain);
+  }
+
+  /**
+   * Reinforcing and barricades (Phase 4 M6): a fresh press of Interact at a panel starts what deployAction
+   * offers; holding it, still offered the same, for its time completes it (a "deploy" event: the server puts
+   * the steel or planks up), and the body holds still meanwhile (reinforcement.locksReinforcer, also for
+   * barricades). Letting go, looking away or anything else cancels it. Returns true while one is under way.
+   */
+  private updateDeploy(pawn: Pawn, input: InputCmd): boolean {
+    const s = pawn.state;
+    const held = (input.buttons & Btn.Interact) !== 0;
+    if (s.deployKind !== DeployKind.None) {
+      const a = held && s.meleeTicks === 0 ? this.deployActionFor(pawn) : null;
+      if (!a || a.kind !== s.deployKind || a.panel !== s.deployPanel || a.section !== s.deploySection) {
+        endDeploy(pawn);
+        return false;
+      }
+      s.deployTicks = Math.min(0xffff, s.deployTicks + 1);
+      if (s.deployTicks < deployTicks(this.data.destruction, s.deployKind)) return true;
+      this.ctx.events.push({ kind: "deploy", pawnId: pawn.id, action: s.deployKind, panel: s.deployPanel, section: s.deploySection, side: a.side });
+      endDeploy(pawn);
+      return true; // still this tick
+    }
+    const pressed = input.buttons & ~s.prevButtons & Btn.Interact;
+    if (!pressed || s.meleeTicks > 0) return false;
+    const a = this.deployActionFor(pawn);
+    if (!a) return false;
+    s.deployKind = a.kind;
+    s.deployPanel = a.panel;
+    s.deploySection = a.section;
+    s.deployTicks = 1;
+    return true;
   }
 
   /** Remove a controller and every pawn it owns (a player leaving). */
@@ -374,8 +434,10 @@ export class Sim {
     if (c.shellCam) return "transfer";
     const pawn = this.pawns.get(c.possessedPawnId);
     if (!pawn) return null;
-    if (pawn.state.reviveTarget !== 0) return null; // the revive gauge shows instead
+    if (pawn.state.reviveTarget !== 0 || pawn.state.deployKind !== DeployKind.None) return null; // its gauge shows instead
     if (pawn.state.mode === PawnMode.Walk && this.reviveCandidate(pawn)) return "revive"; // before ladders (D-049)
+    const deploy = this.deployActionFor(pawn);
+    if (deploy) return deploy.kind === DeployKind.Reinforce ? "reinforce" : deploy.kind === DeployKind.BarricadeUp ? "barricade" : "unbarricade";
     return movementPrompt(this.ctx, pawn);
   }
 
@@ -442,6 +504,10 @@ export class Sim {
       downHp: 0,
       invulnTicks: 0,
       meleeTicks: 0,
+      deployKind: 0,
+      deployPanel: 0,
+      deploySection: 0,
+      deployTicks: 0,
     });
     this.cutReviveLinks(pawn);
     if (pawn.state.hp === 0) {
@@ -501,10 +567,15 @@ export class Sim {
       if (input) {
         const held = pawn.state.prevButtons;
         let cmd = input;
-        if (idleDriven.has(pawn.id)) this.letGoOfRevive(pawn);
-        else if (this.updateRevive(pawn, input)) {
-          // Reviving holds you in place (placeholder), and the held key never reaches a ladder.
-          cmd = { ...input, forward: 0, strafe: 0, buttons: input.buttons & ~Btn.Interact };
+        if (idleDriven.has(pawn.id)) this.letGo(pawn, true);
+        else {
+          const reviving = this.updateRevive(pawn, input);
+          if (reviving || this.updateDeploy(pawn, input)) {
+            // Reviving holds you in place, and so do reinforcing and barricading (reinforcement.locksReinforcer;
+            // both placeholders); the held key never reaches a ladder.
+            const still = reviving || this.data.destruction.reinforcement.locksReinforcer;
+            cmd = { ...input, forward: still ? 0 : input.forward, strafe: still ? 0 : input.strafe, buttons: input.buttons & ~Btn.Interact };
+          }
         }
         // A body driven without its player's buttons (left behind on the camera, or being looked
         // through) has its weapon parked: nothing it was doing carries on unseen.
@@ -520,7 +591,7 @@ export class Sim {
       // memory so keys still held when input resumes don't count as fresh presses. The body the player
       // is in keeps its weapon running (a reload goes on through a lag spike); an idle shell's is parked.
       const held = pawn.state.prevButtons;
-      this.letGoOfRevive(pawn);
+      this.letGo(pawn, idleShell);
       stepPawn(this.ctx, pawn, idleInput(pawn, idleShell ? Stance.Crouch : pawn.state.stance), !idleShell);
       refreshBroadPhase(this.world);
       pawn.state.prevButtons = held;
@@ -580,6 +651,15 @@ export class Sim {
       c.swapT = 0;
     }
   }
+}
+
+/** Nothing half put up carries on. */
+function endDeploy(pawn: Pawn) {
+  const s = pawn.state;
+  s.deployKind = DeployKind.None;
+  s.deployPanel = 0;
+  s.deploySection = 0;
+  s.deployTicks = 0;
 }
 
 /** Teams until match modes assign them (Phase 6): attackers 0, defenders 1. */

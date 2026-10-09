@@ -25,7 +25,7 @@ await startLab({
       "The stance and lean row (standing, crouched, prone, leaning) and the peek post: a head that leans out from cover.",
       "The strafe track: lead a moving target. Press F2 to see where the server had it (green) and where you saw it (blue).",
       "Close quarters: the doorway and the knife (V). The revive pad: a downed teammate to pick up (hold F for 4 s).",
-      "The soft wall stops bullets for now: wallbangs arrive with destruction in Phase 4.",
+      "The soft wall: shoot the dummy behind it through the wall (70 % of the damage gets through) and watch the holes. The Destruction Lab has every kind of wall.",
     ],
     note: "Dummies come back 3 s after they die; Reset dummies in the pause menu brings them all back now. Offline, latency settings in the pause menu try lag compensation alone.",
   },

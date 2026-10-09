@@ -13,6 +13,7 @@ export default defineConfig({
         index: resolve(import.meta.dirname, "index.html"),
         movement_lab: resolve(import.meta.dirname, "labs/movement_lab.html"),
         range_lab: resolve(import.meta.dirname, "labs/range_lab.html"),
+        destruction_lab: resolve(import.meta.dirname, "labs/destruction_lab.html"),
       },
     },
   },
