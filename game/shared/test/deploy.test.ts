@@ -60,6 +60,17 @@ describe("reinforcing a wall (in the simulation)", () => {
     expect(hold(sim, ctrl, { yawDeg: 0, buttons: Btn.Interact }, 10).length).toBe(0);
   });
 
+  it("a stall mid-hold (ticks with no input) pauses it; with F still held when inputs come back, it completes", async () => {
+    const { sim, ctrl, pawn } = await lab();
+    at(sim, pawn, 0.4, 0, -5.0, 0);
+    const n = deployTicks(sim.data.destruction, DeployKind.Reinforce);
+    hold(sim, ctrl, { yawDeg: 0, buttons: Btn.Interact }, 100);
+    for (let i = 0; i < 20; i++) sim.step(new Map()); // the server stepping the body without input (a stalled client)
+    expect([pawn.state.deployKind, pawn.state.deployTicks]).toEqual([DeployKind.Reinforce, 100]);
+    const events = hold(sim, ctrl, { yawDeg: 0, buttons: Btn.Interact }, n - 100);
+    expect(events.filter((e) => e.kind === "deploy")).toHaveLength(1);
+  });
+
   it("letting go, looking away, standing too far, an empty pool or being an attacker: nothing", async () => {
     const { sim, ctrl, pawn } = await lab();
     at(sim, pawn, 0.4, 0, -5.0, 0);

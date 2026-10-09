@@ -251,10 +251,15 @@ export class Sim {
    */
   onReviveCut: ((pawn: Pawn) => void) | null = null;
 
-  /** A body its player's buttons don't reach this tick (no input, or driven idle on the shell camera) lets go of a revive or a hold on a panel. */
-  private letGo(pawn: Pawn) {
+  /**
+   * A body its player's buttons don't reach this tick lets go of a revive (D-061: a stalled reviver can't
+   * keep one going). A hold on a panel lets go only when the player is elsewhere (driven idle on the shell
+   * camera, `idle`); through a stall it just waits, and goes on if the key is still held when inputs come
+   * back (it takes a fresh press to start, so a hold ended by a stall could never restart while held).
+   */
+  private letGo(pawn: Pawn, idle: boolean) {
     if (pawn.state.reviveTarget !== 0) this.endRevive(pawn, this.pawns.get(pawn.state.reviveTarget), false);
-    endDeploy(pawn);
+    if (idle) endDeploy(pawn);
   }
 
   /**
@@ -562,7 +567,7 @@ export class Sim {
       if (input) {
         const held = pawn.state.prevButtons;
         let cmd = input;
-        if (idleDriven.has(pawn.id)) this.letGo(pawn);
+        if (idleDriven.has(pawn.id)) this.letGo(pawn, true);
         else if (this.updateRevive(pawn, input) || this.updateDeploy(pawn, input)) {
           // Reviving, reinforcing or barricading holds you in place (placeholders), and the held key never reaches a ladder.
           cmd = { ...input, forward: 0, strafe: 0, buttons: input.buttons & ~Btn.Interact };
@@ -581,7 +586,7 @@ export class Sim {
       // memory so keys still held when input resumes don't count as fresh presses. The body the player
       // is in keeps its weapon running (a reload goes on through a lag spike); an idle shell's is parked.
       const held = pawn.state.prevButtons;
-      this.letGo(pawn);
+      this.letGo(pawn, idleShell);
       stepPawn(this.ctx, pawn, idleInput(pawn, idleShell ? Stance.Crouch : pawn.state.stance), !idleShell);
       refreshBroadPhase(this.world);
       pawn.state.prevButtons = held;
