@@ -78,6 +78,24 @@ describe("explosives on panels", () => {
 });
 
 describe("in a room", () => {
+  it("an explosive id the data doesn't have (one every object has, like constructor) does nothing", async () => {
+    const { room, clients, tick } = await roomWith("destruction_lab", ["sledge", "mute"]);
+    for (let i = 0; i < 10; i++) tick();
+    const [a, b] = clients;
+    const hatch = room.sim.level.panels.byId.get("hatch")!.panel;
+    room.onLabTool(a.id, { kind: "teleport", x: 10, y: 0, z: 8, yawDeg: 0 }); // under the hatch
+    for (let i = 0; i < 10; i++) tick();
+    const up = Math.PI / 2 - 0.01;
+    for (const id of ["__proto__", "constructor", "toString", "hasOwnProperty"]) room.onLabTool(a.id, { kind: "explosive", id, yaw: 0, pitch: up });
+    for (let i = 0; i < 4; i++) tick(); // a client that can't read an op would throw here
+    expect(room.stats.panelOps).toBe(0);
+    expect(hatch.hp).toBe(hatch.spec.hp);
+    room.onLabTool(a.id, { kind: "explosive", id: "frag_grenade", yaw: 0, pitch: up });
+    for (let i = 0; i < 4; i++) tick();
+    expect(hatch.broken).toBe(true);
+    for (const c of [a, b]) expect(c.session.sim!.level.panels.hash()).toBe(room.sim.level.panels.hash());
+  });
+
   it("the lab tool's cut reaches everyone; Reset walls puts every panel back and refills the pools", async () => {
     const { room, clients, tick } = await roomWith("destruction_lab", ["sledge", "mute"]);
     for (let i = 0; i < 10; i++) tick();

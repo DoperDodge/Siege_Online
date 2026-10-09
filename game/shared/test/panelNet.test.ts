@@ -77,6 +77,41 @@ describe("everyone ends with the server's panels", () => {
   });
 });
 
+describe("ops go out with snapshots", () => {
+  it("one who joins between two isn't sent an op twice; one not sent snapshots gets its ops with the next it is sent", async () => {
+    const { room, clients, add, tick } = await roomWith("destruction_lab", ["sledge"]);
+    for (let i = 0; i < 10; i++) tick();
+    const [a] = clients;
+    const server = room.sim.level.panels;
+    const door = server.byId.get("door_a")!.panel;
+    const wear = () => room.queuePanelOp(door.spec.index, { kind: "damage", amount: 0.5, hard: false }); // twice is a different barricade
+    const agree = (c: (typeof clients)[0]) => {
+      expect(c.session.sim!.level.panels.hash()).toBe(server.hash());
+      expect(c.session.stats.panelMismatches).toBe(0);
+    };
+    // Worn on a tick without a snapshot (an odd one): nobody has it until the next.
+    while (room.sim.tick % 2 !== 0) tick();
+    wear();
+    tick();
+    expect(room.sim.tick % 2).toBe(1);
+    expect(a.session.sim!.level.panels.hash()).not.toBe(server.hash());
+    const late = await add("mute"); // its state has the wear already
+    tick();
+    for (const c of [a, late]) agree(c);
+    expect(late.session.sim!.level.panels.byId.get("door_a")!.panel.hp).toBe(door.hp);
+    // A client that isn't reading is sent no snapshots, and so no ops, until it reads again.
+    a.buffered = 20 * 1024;
+    const before = a.session.stats.panelOps;
+    wear();
+    for (let i = 0; i < 6; i++) tick();
+    expect(a.session.stats.panelOps).toBe(before);
+    a.buffered = 0;
+    for (let i = 0; i < 2; i++) tick();
+    for (const c of [a, late]) agree(c);
+    expect(room.stats.panelResyncs).toBe(0);
+  });
+});
+
 describe("walking through a breach the server opened", () => {
   it("the client moves through it with its prediction holding, and stands where the server has it", async () => {
     const { room, clients, tick } = await roomWith("movement_lab", ["sledge"]);

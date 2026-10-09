@@ -43,8 +43,9 @@ export function deployTicks(d: DestructionData, kind: number): number {
  * What a body of `team` standing at `feet`, looking from `eye` along unit `dir`, would do by holding
  * Interact: the first panel along the view (nearer than `maxT`, where plain level geometry is) if it is
  * within reach and faced squarely enough (reinforcement.reach and facingDeg): reinforce the section looked
- * at (a hatch only from above, never a section reinforced before or a broken hatch, and only with a
- * reinforcement left), put a barricade up in an empty or broken frame, or pry a standing one off.
+ * at (a hatch only from above, never a section reinforced before or a broken hatch, a damaged section only
+ * if the data allows it, and only with a reinforcement left), put a barricade up in an empty or broken
+ * frame, or pry a standing one off.
  */
 export function deployAction(d: DestructionData, panels: PanelSet, eye: Vec3, dir: Vec3, feet: Vec3, team: number, rules: DeployRules, maxT: number): DeployAction | null {
   if (team !== DEFENDERS && !rules.anyone) return null;
@@ -69,7 +70,7 @@ export function deployAction(d: DestructionData, panels: PanelSet, eye: Vec3, di
   if (p.layers[L_STEEL] && (p.kind === "wall" || p.kind === "hatch")) {
     if (p.kind === "hatch" && r.hatchFromTopOnly && side !== 1) return null;
     const section = p.kind === "hatch" ? 0 : p.sectionOf(crossing.u);
-    if (p.broken || p.everReinforced & (1 << section) || rules.pools[team] <= 0) return null;
+    if (p.broken || p.reinforcedBefore(section) || (!r.canReinforceDamaged && p.sectionDamaged(section)) || rules.pools[team] <= 0) return null;
     return { kind: DeployKind.Reinforce, panel: index, section, side };
   }
   if (p.kind === "barricade") return { kind: p.empty || p.broken ? DeployKind.BarricadeUp : DeployKind.BarricadeOff, panel: index, section: 0, side };

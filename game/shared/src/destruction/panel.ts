@@ -39,7 +39,14 @@ export interface PanelSpec {
   hp: number;
   /** A reinforced hatch's pool (data: reinforcement.reinforcedHatchHp). */
   reinforcedHatchHp: number;
+  /** A section whose steel was all destroyed can be reinforced again (data: reinforcement.canReReinforce). */
+  canReReinforce: boolean;
+  /** A barricade worn below this many hit points no longer stops bodies (data: barricade.passableBelowHp). */
+  passableBelowHp: number;
 }
+
+/** Worn down to this counts as nothing left: hit points are fractions (3 − 20 × 0.15 leaves 1e-15, not 0). */
+const HP_EPSILON = 1e-9;
 
 /** A disc around a hit point given in quarter cells (`r4`: radius in quarter cells), or a rectangle of cells. */
 export type CutShape = { kind: "disc"; u4: number; v4: number; r4: number } | { kind: "rect"; u0: number; v0: number; u1: number; v1: number };
@@ -87,7 +94,7 @@ export class Panel {
   steelHp = 0;
   broken = false;
   empty: boolean;
-  /** Sections with steel now, and sections ever reinforced (a destroyed reinforcement can't come back). */
+  /** Sections with steel now, and sections ever reinforced (a destroyed reinforcement can't come back, see reinforcedBefore). */
   reinforced = 0;
   everReinforced = 0;
   /** Per section: 1 if its steel went up from the +n side (research/destruction.md §6.1: a reinforcement has a side). */
@@ -157,6 +164,24 @@ export class Panel {
     return this.sectionCount - 1;
   }
 
+  /**
+   * Section `s` can't take steel: it has some now, or had some once (unless the data lets a destroyed
+   * reinforcement come back: reinforcement.canReReinforce).
+   */
+  reinforcedBefore(s: number): boolean {
+    return ((this.spec.canReReinforce ? this.reinforced : this.everReinforced) & (1 << s)) !== 0;
+  }
+
+  /** Section `s` has a hole in either skin (whether it can still take steel is reinforcement.canReinforceDamaged). */
+  sectionDamaged(s: number): boolean {
+    const [u0, u1] = this.sectionRange(s);
+    for (const l of [this.layers[L_FRONT], this.layers[L_BACK]]) {
+      if (!l) continue;
+      for (let v = 0; v < this.h; v++) for (let u = u0, i = v * this.w + u0; u < u1; u++, i++) if (!l[i]) return true;
+    }
+    return false;
+  }
+
   /** Is there material at cell (u, v) of `layer`? */
   solid(layer: number, u: number, v: number): boolean {
     const l = this.layers[layer];
@@ -176,15 +201,15 @@ export class Panel {
       if (this.reinforced) {
         if (!op.hard) return change;
         this.steelHp -= op.amount;
-        if (this.steelHp <= 0) this.breakAll(change);
+        if (this.steelHp <= HP_EPSILON) this.breakAll(change);
       } else {
         this.hp -= op.amount;
-        if (this.hp <= 0 || c.kind === "glass") this.breakAll(change);
+        if (this.hp <= HP_EPSILON || c.kind === "glass") this.breakAll(change);
       }
     } else if (op.kind === "reinforce") {
       const steel = this.layers[L_STEEL];
       const bit = 1 << op.section;
-      if (!steel || op.section < 0 || op.section >= this.sectionCount || this.everReinforced & bit || this.broken) return change;
+      if (!steel || op.section < 0 || op.section >= this.sectionCount || this.reinforcedBefore(op.section) || this.broken) return change;
       const [u0, u1] = this.sectionRange(op.section);
       for (let v = 0; v < this.steelRows; v++)
         for (let u = u0; u < u1; u++) {
@@ -394,7 +419,7 @@ export class Panel {
     const p = this.spec.construction.passable;
     if (p === "never" && !this.broken) return m.fill(1);
     if (p === "whenBroken") {
-      if (this.broken || this.empty) return m;
+      if (this.broken || this.empty || (this.kind === "barricade" && this.hp < this.spec.passableBelowHp)) return m;
       // The whole face, less a door barricade's gap at the bottom.
       for (let cv = 0; cv < ch; cv++) if ((cv + 1) * MOVE_CELLS > this.gapRows) m.fill(1, cv * cw, cv * cw + cw);
       return m;

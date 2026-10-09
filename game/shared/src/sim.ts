@@ -568,9 +568,14 @@ export class Sim {
         const held = pawn.state.prevButtons;
         let cmd = input;
         if (idleDriven.has(pawn.id)) this.letGo(pawn, true);
-        else if (this.updateRevive(pawn, input) || this.updateDeploy(pawn, input)) {
-          // Reviving, reinforcing or barricading holds you in place (placeholders), and the held key never reaches a ladder.
-          cmd = { ...input, forward: 0, strafe: 0, buttons: input.buttons & ~Btn.Interact };
+        else {
+          const reviving = this.updateRevive(pawn, input);
+          if (reviving || this.updateDeploy(pawn, input)) {
+            // Reviving holds you in place, and so do reinforcing and barricading (reinforcement.locksReinforcer;
+            // both placeholders); the held key never reaches a ladder.
+            const still = reviving || this.data.destruction.reinforcement.locksReinforcer;
+            cmd = { ...input, forward: still ? 0 : input.forward, strafe: still ? 0 : input.strafe, buttons: input.buttons & ~Btn.Interact };
+          }
         }
         // A body driven without its player's buttons (left behind on the camera, or being looked
         // through) has its weapon parked: nothing it was doing carries on unseen.

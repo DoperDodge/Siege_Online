@@ -15,6 +15,7 @@ import { Btn, PawnMode, ReloadKind, WeaponAct, WFlag, type InputCmd, type PawnSt
 import { STANCE_NAMES } from "../data/schemas.js";
 import type { ResolvedWeapon } from "./loadout.js";
 import { ticks } from "./ticks.js";
+import { DeployKind } from "../destruction/deploy.js";
 
 /** One minute in ticks: a shot adds this to the cadence debt, every tick pays off `rpm` of it. */
 export const CADENCE_UNITS = 60 * 64;
@@ -72,17 +73,21 @@ function setAmmo(s: PawnState, slot: number, loaded: number, reserve: number) {
 export const modeIndex = (s: PawnState, slot = s.slot) => (s.modes >> (slot * 4)) & 15;
 export const fireModeOf = (w: ResolvedWeapon, s: PawnState, slot = s.slot) => w.fire.modes[Math.min(modeIndex(s, slot), w.fire.modes.length - 1)];
 
+/** Hands busy with a hold: reviving someone, or putting up steel or a barricade (no fire, aim, knife or sprint). */
+const handsBusy = (s: PawnState) => s.reviveTarget !== 0 || s.deployKind !== DeployKind.None;
+
 /** Holding fire (or melee, or reviving later) stops a sprint (research/core_mechanics.md §14). */
 export function blocksSprint(s: PawnState, input: InputCmd): boolean {
-  return (input.buttons & Btn.Fire) !== 0 || s.meleeTicks > 0 || s.reviveTarget !== 0;
+  return (input.buttons & Btn.Fire) !== 0 || s.meleeTicks > 0 || handsBusy(s);
 }
 
 /**
- * Aiming down sights this tick: the ADS button, on your feet, not mid-swap, melee or revive, and not in a
- * long drop (Siege X forces you out of ADS; the height is a placeholder). Decides ADS walk speed too.
+ * Aiming down sights this tick: the ADS button, on your feet, not mid-swap, melee or a hold (revive,
+ * reinforcement), and not in a long drop (Siege X forces you out of ADS; the height is a placeholder).
+ * Decides ADS walk speed too.
  */
 export function wantsAim(ctx: { data: GameData }, s: PawnState, input: InputCmd): boolean {
-  if (!(input.buttons & Btn.Ads) || s.mode !== PawnMode.Walk || s.wAct === WeaponAct.Equip || s.meleeTicks > 0 || s.reviveTarget !== 0) return false;
+  if (!(input.buttons & Btn.Ads) || s.mode !== PawnMode.Walk || s.wAct === WeaponAct.Equip || s.meleeTicks > 0 || handsBusy(s)) return false;
   return s.grounded || s.airPeakY - s.y <= ctx.data.gunplay.rules.adsDropCancelM;
 }
 
@@ -276,7 +281,7 @@ export function stepWeapon(ctx: WeaponContext, pawn: Pawn, input: InputCmd, pres
   }
   if (pressed & Btn.Reload && s.wAct === WeaponAct.Ready && walking && !s.sprinting && s.meleeTicks === 0) startReload(ctx, pawn, w);
   // The knife: from any allowed stance, even mid-sprint (it ends the sprint) or mid-reload (it cancels it).
-  if (pressed & Btn.Melee && s.meleeTicks === 0 && walking && s.wAct !== WeaponAct.Equip && s.reviveTarget === 0 && melee.allowInStances.includes(STANCE_NAMES[s.stance])) {
+  if (pressed & Btn.Melee && s.meleeTicks === 0 && walking && s.wAct !== WeaponAct.Equip && !handsBusy(s) && melee.allowInStances.includes(STANCE_NAMES[s.stance])) {
     if (s.wAct === WeaponAct.Reload) endReload(s);
     s.meleeTicks = 1;
     s.burstLeft = 0;
@@ -312,7 +317,7 @@ export function stepWeapon(ctx: WeaponContext, pawn: Pawn, input: InputCmd, pres
   const sprintGate = !s.sprinting && s.sinceSprint >= exitToFire - 1e-6;
   const loaded = loadedOf(s);
   const ready = s.wAct === WeaponAct.Ready || (s.wAct === WeaponAct.Reload && loaded > 0 && rules.reload.fireCancels);
-  const gate = walking && sprintGate && ready && s.meleeTicks === 0 && s.reviveTarget === 0 && w.fire.kind === "hitscan";
+  const gate = walking && sprintGate && ready && s.meleeTicks === 0 && !handsBusy(s) && w.fire.kind === "hitscan";
   // A press during the sprint exit fires once it ends, but only on a tick with real input (its view and seq).
   if (press && !sprintGate) s.wflags |= WFlag.FireQueued;
   let queued = false;

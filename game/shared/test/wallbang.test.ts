@@ -33,6 +33,7 @@ import {
   type PanelOp,
   type Vec3,
 } from "../src/index.js";
+import { roomWith } from "./roomHarness.js";
 
 const data = loadGameData();
 const d = data.destruction;
@@ -238,5 +239,37 @@ describe("in a room", () => {
     expect(room.stats.panelOps).toBeGreaterThanOrEqual(2);
     const holes = [L_FRONT, L_BACK].map((l) => wall.layers[l]!.reduce((n, x) => n + (x ? 0 : 1), 0));
     expect(holes.every((n) => n >= 1)).toBe(true);
+  });
+
+  it("a hole the shooter's client has is open for its shots, whichever tick it was made on (ops ride with snapshots)", async () => {
+    for (const parity of [0, 1]) {
+      const { room, clients, tick } = await roomWith("range_lab", ["sledge"]);
+      const [a] = clients;
+      for (let i = 0; i < 20; i++) tick();
+      const target = room.sim.pawns.get(room.roster().find((e) => e.kind === 1 && e.name === "Behind the wall")!.pawnIds[0])!;
+      room.onLabTool(a.id, { kind: "teleport", x: -8, y: 0, z: 15, yawDeg: 0 });
+      a.cmd = { buttons: Btn.Ads };
+      for (let i = 0; i < 60; i++) tick();
+      const me = room.sim.pawns.get(a.session.ctrl!.possessedPawnId)!;
+      const eye = eyePose(data.movement, data.hitboxes, me.state).pos;
+      const torso = poseHitboxes(data.movement, data.hitboxes, target.state).find((h) => h.part === "torso")!;
+      const c = torso.a.map((v, i) => (v + torso.b[i]) / 2);
+      const aim = { yaw: Math.atan2(-(c[0] - eye[0]), -(c[2] - eye[2])), pitch: Math.atan2(c[1] - eye[1], Math.hypot(c[0] - eye[0], c[2] - eye[2])), buttons: Btn.Ads };
+      a.cmd = aim;
+      for (let i = 0; i < 10; i++) tick();
+      while ((room.sim.tick + 1) % 2 !== parity) tick(); // the next tick, which applies the hole, is even or odd
+      const wall = room.sim.level.panels.byId.get("wallbang_wall")!.panel;
+      for (const layer of [L_FRONT, L_CORE, L_BACK]) room.queuePanelOp(wall.spec.index, { kind: "cut", layer, shape: { kind: "rect", u0: 15, v0: 5, u1: 45, v1: 45 }, hard: false });
+      // Fire as soon as the client has the hole.
+      while (!a.session.sim!.level.panels.list[wall.spec.index].panel.modified) tick();
+      a.cmd = { ...aim, buttons: Btn.Ads | Btn.Fire };
+      tick();
+      a.cmd = aim;
+      for (let i = 0; i < 4; i++) tick();
+      const w = me.loadout!.weapons[me.state.slot];
+      const full = bulletDamage(data.combat, w.damage!, Math.hypot(c[0] - eye[0], c[1] - eye[1], c[2] - eye[2]), "torso", { mult: 1 }) as { amount: number };
+      const hits = a.events.filter((e) => e.kind === "hitConfirm").map((e) => (e as Extract<GameEvent, { kind: "hitConfirm" }>).damage);
+      expect(hits, parity ? "a hole made on an odd tick" : "on an even tick").toEqual([full.amount]);
+    }
   });
 });

@@ -8,6 +8,7 @@ import {
   bulletThroughPanels,
   deployTicks,
   DeployKind,
+  L_FRONT,
   L_STEEL,
   PawnMode,
   Sim,
@@ -71,7 +72,44 @@ describe("reinforcing a wall (in the simulation)", () => {
     expect(events.filter((e) => e.kind === "deploy")).toHaveLength(1);
   });
 
+  it("hands are busy meanwhile: fire, aim and the knife do nothing while F is held, and it still completes", async () => {
+    const { sim, ctrl, pawn } = await lab();
+    at(sim, pawn, 0.4, 0, -5.0, 0);
+    hold(sim, ctrl, { yawDeg: 0 }, TICK_HZ); // the weapon up
+    const n = deployTicks(sim.data.destruction, DeployKind.Reinforce);
+    const busy = Btn.Interact | Btn.Fire | Btn.Ads;
+    const during = hold(sim, ctrl, { yawDeg: 0, buttons: busy | Btn.Melee }, 1).concat(hold(sim, ctrl, { yawDeg: 0, buttons: busy }, n - 2));
+    expect(during.filter((e) => e.kind === "shot" || e.kind === "meleeImpact")).toEqual([]);
+    expect([pawn.state.adsQ, pawn.state.meleeTicks, pawn.state.deployKind]).toEqual([0, 0, DeployKind.Reinforce]);
+    expect(hold(sim, ctrl, { yawDeg: 0, buttons: busy }, 1).filter((e) => e.kind === "deploy")).toHaveLength(1);
+    // Free again: the same buttons fire.
+    expect(hold(sim, ctrl, { yawDeg: 0, buttons: Btn.Fire }, 10).filter((e) => e.kind === "shot").length).toBeGreaterThan(0);
+  });
+
+  it("the data decides whether a damaged section takes steel, and whether the reinforcer is held still", async () => {
+    const { sim, ctrl, pawn } = await lab();
+    at(sim, pawn, 0.4, 0, -5.0, 0);
+    const e = sim.level.panels.byId.get("reinforce_2")!;
+    const [u0, u1] = e.panel.sectionRange(sim.deployActionFor(pawn)!.section);
+    sim.level.panels.apply(e.panel.spec.index, { kind: "cut", layer: L_FRONT, shape: { kind: "disc", u4: 2 * (u0 + u1), v4: 2 * e.panel.h, r4: 4 }, hard: false });
+    const r = sim.data.destruction.reinforcement;
+    expect(sim.prompt(ctrl.id)).toBe("reinforce"); // reinforcement.canReinforceDamaged: true
+    try {
+      r.canReinforceDamaged = false;
+      expect(sim.prompt(ctrl.id)).toBeNull();
+      r.canReinforceDamaged = true;
+      r.locksReinforcer = false;
+      const start = { x: pawn.state.x, z: pawn.state.z };
+      hold(sim, ctrl, { yawDeg: 0, buttons: Btn.Interact, strafe: 1 }, 10);
+      expect(Math.hypot(pawn.state.x - start.x, pawn.state.z - start.z)).toBeGreaterThan(0.1);
+    } finally {
+      r.canReinforceDamaged = true;
+      r.locksReinforcer = true;
+    }
+  });
+
   it("letting go, looking away, standing too far, an empty pool or being an attacker: nothing", async () => {
+
     const { sim, ctrl, pawn } = await lab();
     at(sim, pawn, 0.4, 0, -5.0, 0);
     hold(sim, ctrl, { yawDeg: 0, buttons: Btn.Interact }, 2 * TICK_HZ);

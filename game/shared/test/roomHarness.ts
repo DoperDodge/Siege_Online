@@ -6,15 +6,16 @@ import { ByteReader, ClientSession, DT, handleRoomMessage, Room, Stance, type Ga
 export async function roomWith(levelId: string, ops: string[]) {
   const room = await Room.create("WALLS", levelId, { lab: true, seed: 11 });
   const clock = { t: 0 };
-  type Client = { session: ClientSession; id: number; toServer: Uint8Array[]; events: GameEvent[]; cmd: Partial<Omit<InputCmd, "seq">> };
+  /** `buffered`: bytes the room is told are still waiting to reach this client (a client not reading). */
+  type Client = { session: ClientSession; id: number; toServer: Uint8Array[]; events: GameEvent[]; cmd: Partial<Omit<InputCmd, "seq">>; buffered: number };
   const clients: Client[] = [];
   const add = async (op: string) => {
     const toServer: Uint8Array[] = [];
     const events: GameEvent[] = [];
     const session = new ClientSession({ send: (b) => toServer.push(b), now: () => clock.t, onEvents: (_t, evs) => events.push(...evs), trackMispredictions: true });
-    const id = room.join(`p${clients.length}`, { send: (b) => session.handle(b), buffered: () => 0 }, op)!;
+    const c: Client = { session, id: 0, toServer, events, cmd: {}, buffered: 0 };
+    c.id = room.join(`p${clients.length}`, { send: (b) => session.handle(b), buffered: () => c.buffered }, op)!;
     await session.loaded();
-    const c: Client = { session, id, toServer, events, cmd: {} };
     clients.push(c);
     return c;
   };

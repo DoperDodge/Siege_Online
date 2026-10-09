@@ -148,7 +148,17 @@ interface Member {
   sent: SentRing;
   /** When we last sent it every changed panel's state because it asked (it may ask once a second). */
   panelStateAt: number;
+  /**
+   * Panel ops go out with snapshots (D-066): how many of the ops waiting to go this member already has (a
+   * panel state sent since covers them), and ops held back with a snapshot it wasn't sent (null: too many to
+   * send as ops; it gets the panels' whole state with its next snapshot instead).
+   */
+  opsHad: number;
+  opsHeld: IndexedOp[] | null;
 }
+
+/** More ops than this held back for one client: send it the panels' state instead (a message carries at most 4096). */
+const MAX_HELD_OPS = 2048;
 
 /** A shot judged against the world as its shooter saw it, waiting to be applied with the rest of the tick's. */
 interface JudgedShot {
@@ -192,8 +202,8 @@ export class Room {
   panelHistory = new PanelHistory();
   /** Panel ops from between ticks (lab tools), applied with the next tick's. */
   private queuedOps: IndexedOp[] = [];
-  /** Panel ops applied this tick, sent to everyone at its end (before its snapshot). */
-  private tickOps: IndexedOp[] = [];
+  /** Panel ops applied since the last snapshot, sent to everyone just ahead of the next one. */
+  private unsentOps: IndexedOp[] = [];
   private readonly members = new Map<number, Member>();
   private nextMemberId = 1;
   /** Range Lab dummies (lab rooms on a level that has some). */
@@ -322,11 +332,13 @@ export class Room {
       encoder: new SnapshotEncoder(),
       sent: new SentRing(),
       panelStateAt: -Infinity,
+      opsHad: this.unsentOps.length,
+      opsHeld: [],
     };
     this.members.set(m.id, m);
     this.spawn(m);
     client.send(encodeWelcome({ roomCode: this.code, tick: this.sim.tick, levelId: this.levelId, controllerId: m.ctrl!.id }));
-    client.send(encodePanelState(this.sim.level.panels)); // the walls as they are now; every later op follows
+    client.send(encodePanelState(this.sim.level.panels)); // the walls as they are now (ops waiting to go included); every later op follows
     m.events.push(this.deployRulesEvent());
     this.broadcastRoster();
     return m.id;
@@ -410,7 +422,14 @@ export class Room {
     if (!m || this.sim.tick - m.panelStateAt < TICK_HZ) return;
     m.panelStateAt = this.sim.tick;
     this.stats.panelResyncs++;
-    m.client.send(encodePanelState(this.sim.level.panels));
+    this.sendPanelState(m, encodePanelState(this.sim.level.panels));
+  }
+
+  /** Every changed panel's state, which covers every op this member was still to be sent. */
+  private sendPanelState(m: Member, state: Uint8Array) {
+    m.client.send(state);
+    m.opsHad = this.unsentOps.length;
+    m.opsHeld = [];
   }
 
   /**
@@ -426,7 +445,7 @@ export class Room {
     this.sim.deployRules.pools = [this.rules.reinforcements, this.rules.reinforcements];
     const state = encodePanelState(panels);
     for (const m of this.members.values()) {
-      m.client.send(state);
+      this.sendPanelState(m, state);
       m.events.push(this.deployRulesEvent());
     }
   }
@@ -459,8 +478,10 @@ export class Room {
       }
       this.force(m);
     } else if (tool.kind === "explosive") {
-      // Its cut where your body looks along the view you sent, applied with the next tick's ops.
-      const ex = this.sim.data.destruction.explosives[tool.id];
+      // Its cut where your body looks along the view you sent, applied with the next tick's ops. The id is the
+      // client's: only the data's own keys name an explosive (not "constructor" or "__proto__").
+      const all = this.sim.data.destruction.explosives;
+      const ex = Object.hasOwn(all, tool.id) ? all[tool.id] : undefined;
       const body = this.sim.pawns.get(m.ctrl.possessedPawnId);
       if (!ex || !body || body.state.mode === PawnMode.Dead) return;
       const eye = eyePose(this.sim.data.movement, this.sim.data.hitboxes, body.state).pos;
@@ -603,11 +624,12 @@ export class Room {
    */
   private applyPanelOp(index: number, op: PanelOp): PanelChange | null {
     const e = this.sim.level.panels.list[index];
-    if (!e) return null;
     const wire = wireOp(op);
+    // Never an op a client would refuse to read (it would drop every connection in the room).
+    if (!e || (wire.kind === "damage" && !Number.isFinite(wire.amount))) return null;
     const change = this.sim.level.panels.apply(index, wire);
     this.panelHistory.record(this.sim.tick, index, e.panel.w * e.panel.h, change);
-    this.tickOps.push({ panel: index, op: wire });
+    this.unsentOps.push({ panel: index, op: wire });
     this.stats.panelOps++;
     return change;
   }
@@ -635,13 +657,6 @@ export class Room {
     return { kind: "deployRules", anyone: r.anyone, pools: [r.pools[0], r.pools[1]] };
   }
 
-  /** The tick's panel ops to everyone, with the panels' hash after them, ahead of the tick's snapshot. */
-  private flushPanelOps() {
-    if (this.tickOps.length === 0) return;
-    const msg = encodePanelOps({ tick: this.sim.tick, ops: this.tickOps, hash: this.sim.level.panels.hash() });
-    this.tickOps = [];
-    for (const m of this.members.values()) m.client.send(msg);
-  }
 
   /**
    * Apply the tick's judged shots (DECISIONS D-044): all of them were judged first, so two players who shoot
@@ -912,7 +927,6 @@ export class Room {
       this.judgeEvents(new Map([[m.ctrl.id, { m, input: extra }]]));
     }
     this.resolveShots();
-    this.flushPanelOps();
     this.checkReviveLinks();
     this.reviveDummies();
     this.history.record();
@@ -945,14 +959,33 @@ export class Room {
     }
   }
 
+  /**
+   * Each member's snapshot, just after the panel ops applied since the last one (with the panels' hash
+   * after them). Ops ride with snapshots (D-066): the newest snapshot tick a client's input names is then
+   * also the newest panel state it had, which its shots are judged against. A member not sent its snapshot
+   * isn't sent the ops either, until it is.
+   */
   private sendSnapshots() {
     const all = new Map<number, RemoteQ>();
     for (const p of this.sim.pawns.values()) all.set(p.id, quantizeRemote(p.state));
+    const tick = this.sim.tick;
+    const hash = this.unsentOps.length ? this.sim.level.panels.hash() : 0;
+    let shared: Uint8Array | null = null;
+    const ops = this.unsentOps;
+    this.unsentOps = [];
     for (const m of this.members.values()) {
+      const fresh = m.opsHad ? ops.slice(m.opsHad) : ops;
+      const mine = m.opsHeld === null ? null : m.opsHeld.length ? m.opsHeld.concat(fresh) : fresh;
+      m.opsHad = 0;
       if (m.client.buffered() > MAX_BUFFERED) {
         this.stats.skippedSnapshots++;
+        m.opsHeld = mine && mine.length <= MAX_HELD_OPS ? mine : null;
         continue; // never encode a snapshot that isn't sent: deltas are against what was sent
       }
+      m.opsHeld = [];
+      if (mine === null) m.client.send(encodePanelState(this.sim.level.panels));
+      else if (mine === ops && ops.length) m.client.send((shared ??= encodePanelOps({ tick, ops, hash })));
+      else if (mine.length) m.client.send(encodePanelOps({ tick, ops: mine, hash: this.sim.level.panels.hash() }));
       const own = new Set(m.ctrl?.pawnIds ?? []);
       const remotes = new Map([...all].filter(([id]) => !own.has(id)));
       let correction = null;

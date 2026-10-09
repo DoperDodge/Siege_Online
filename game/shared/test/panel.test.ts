@@ -25,6 +25,8 @@ function panel(constructionId: string, widthM: number, heightM: number, thicknes
     empty: false,
     hp,
     reinforcedHatchHp: d.reinforcement.reinforcedHatchHp,
+    canReReinforce: d.reinforcement.canReReinforce,
+    passableBelowHp: d.barricade.passableBelowHp,
     ...extra,
   });
 }
@@ -118,6 +120,12 @@ describe("reinforcement", () => {
     expect(p.reinforced & 1).toBe(0);
     expect(p.apply({ kind: "reinforce", section: 0, side: 0 }).added[L_STEEL]).toEqual([]);
     expect(p.apply({ kind: "reinforce", section: 1, side: 0 }).added[L_STEEL].length).toBe(30 * rows);
+    // Unless the data said it could (reinforcement.canReReinforce: false in Siege): then only while steel is left.
+    const q = panel("reinforceable_wall", 3, 3, 0.2, { sections: 2, canReReinforce: true });
+    q.apply({ kind: "reinforce", section: 0, side: 0 });
+    expect(q.apply({ kind: "reinforce", section: 0, side: 1 }).added[L_STEEL]).toEqual([]);
+    q.apply(rect(L_STEEL, 0, 0, 30, rows, true));
+    expect(q.apply({ kind: "reinforce", section: 0, side: 1 }).added[L_STEEL].length).toBe(30 * rows);
   });
 
   it("a damaged wall can be reinforced: the steel closes the hole to bodies", () => {
@@ -165,6 +173,26 @@ describe("breakable panels", () => {
     expect([p.empty, covered(p, 0.5, 1)]).toEqual([true, false]);
     // An empty frame from the start.
     expect(covered(panel("barricade_window", 1, 1, 0.05, { empty: true }), 0.5, 0.5)).toBe(false);
+  });
+
+  it("each tier's bullets break a barricade in the hits its numbers say (20 for a rifle's: 3 hp at 0.15)", () => {
+    for (const [tier, rule] of Object.entries(d.bullets.tiers)) {
+      if (!rule?.barricadeDamage) continue;
+      const p = panel("barricade_door", 1, 2.1, 0.05);
+      let hits = 0;
+      while (!p.broken && hits < 1000) p.apply({ kind: "damage", amount: rule.barricadeDamage, hard: false }), hits++;
+      expect(hits, tier).toBe(Math.ceil(d.barricade.hp / rule.barricadeDamage - 1e-9));
+    }
+    expect(Math.ceil(d.barricade.hp / d.bullets.tiers.medium!.barricadeDamage - 1e-9)).toBe(20);
+  });
+
+  it("a barricade worn below barricade.passableBelowHp lets bodies through (the data's 0: only once broken)", () => {
+    const p = panel("barricade_door", 1, 2.1, 0.05, { passableBelowHp: 2 });
+    p.apply({ kind: "damage", amount: 1, hard: false });
+    expect([p.hp, covered(p, 0.5, 1)]).toEqual([2, true]);
+    p.apply({ kind: "damage", amount: 0.5, hard: false });
+    expect([p.broken, covered(p, 0.5, 1)]).toEqual([false, false]);
+    expect(d.barricade.passableBelowHp).toBe(0);
   });
 
   it("glass breaks at the first hit", () => {

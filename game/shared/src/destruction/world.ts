@@ -64,6 +64,8 @@ export function panelSpec(d: DestructionData, s: LevelSolid, index: number, cons
     empty: s.panel?.empty ?? false,
     hp,
     reinforcedHatchHp: d.reinforcement.reinforcedHatchHp,
+    canReReinforce: d.reinforcement.canReReinforce,
+    passableBelowHp: d.barricade.passableBelowHp,
   };
   return { spec, frame };
 }

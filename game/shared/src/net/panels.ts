@@ -19,7 +19,9 @@ export interface PanelOpsMsg {
 }
 
 const OP = { cut: 0, damage: 1, reinforce: 2, barricade: 3 } as const;
-const I16 = (v: number) => Math.max(-0x8000, Math.min(0x7fff, Math.round(v)));
+/** Within 16 bits (NaN, which no cut should carry, as 0: what the bytes would say). */
+const I16 = (v: number) => (Number.isNaN(v) ? 0 : Math.max(-0x8000, Math.min(0x7fff, Math.round(v))));
+const U16 = (v: number) => (Number.isNaN(v) ? 0 : Math.max(0, Math.min(0xffff, Math.round(v))));
 
 /**
  * The op exactly as it goes on the wire: whole numbers within 16 bits (a cut never reaches a cell further
@@ -29,7 +31,7 @@ export function wireOp(op: PanelOp): PanelOp {
   if (op.kind !== "cut") return op;
   const s: CutShape =
     op.shape.kind === "disc"
-      ? { kind: "disc", u4: I16(op.shape.u4), v4: I16(op.shape.v4), r4: Math.max(0, Math.min(0xffff, Math.round(op.shape.r4))) }
+      ? { kind: "disc", u4: I16(op.shape.u4), v4: I16(op.shape.v4), r4: U16(op.shape.r4) }
       : { kind: "rect", u0: I16(op.shape.u0), v0: I16(op.shape.v0), u1: I16(op.shape.u1), v1: I16(op.shape.v1) };
   return { kind: "cut", layer: op.layer, shape: s, hard: op.hard };
 }
