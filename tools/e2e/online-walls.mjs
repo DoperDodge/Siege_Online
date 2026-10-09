@@ -85,13 +85,20 @@ try {
   await a.evaluate(() => window.__lab.refill());
   await a.evaluate(() => window.__lab.teleport(-7.2, 0, 13.6, 0));
   await sleep(800);
+  const skinHoles = async (page) => {
+    const p = await page.evaluate(() => window.__lab.panel("wallbang_wall"));
+    return p.holes[0] + p.holes[2];
+  };
+  const beforeKnife = await skinHoles(a);
   await input(a, { buttons: Btn.Melee });
   await sleep(150);
   await input(a, null);
   await sleep(1200);
+  result.knife = { before: beforeKnife, after: await skinHoles(a) };
+  result.checks.knifePunchedAHole = result.knife.after > result.knife.before;
 
   // Everyone agrees with the server (B watched it happen; every page checks its panels against the hash the
-  // server sends with each tick's ops, and would ask again if they differed).
+  // server sends with each batch of ops, and would ask again if they differed).
   await b.waitForFunction((h) => window.__lab.panels.hash === h, (await panels(a)).hash, { timeout: 5000 }).catch(() => {});
   const [pa, pb] = [await panels(a), await panels(b)];
   result.panels = { a: pa, b: pb };

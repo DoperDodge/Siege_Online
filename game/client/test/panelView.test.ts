@@ -16,15 +16,23 @@ describe("panel view", () => {
     const scene = new THREE.Scene();
     const view = new PanelView(scene, sim.level.panels);
     const [soft, reinforceable] = groups(scene);
-    // Two skins (the studs inside can't be seen, and a reinforceable wall that isn't reinforced draws no steel).
-    expect(soft.children.length).toBe(2);
-    expect(reinforceable.children.length).toBe(2);
+    // Two skins and the caps closing the gap between them at the edges (the studs inside can't be seen, and a
+    // reinforceable wall that isn't reinforced draws no steel).
+    expect(soft.children.length).toBe(3);
+    expect(reinforceable.children.length).toBe(3);
     const b = box(soft);
     const s = sim.level.def.solids.find((x) => x.id === "sample_soft")!;
     for (let k = 0; k < 3; k++) {
       expect(b.min.getComponent(k)).toBeCloseTo(s.center[k] - s.size[k] / 2, 6);
       expect(b.max.getComponent(k)).toBeCloseTo(s.center[k] + s.size[k] / 2, 6);
     }
+    // Not hollow: looking along it from its end, or down on its top, between the skins meets the wall.
+    scene.updateMatrixWorld(true);
+    const [lx, , lz] = s.size[0] >= s.size[2] ? [1, 0, 0] : [0, 0, 1];
+    const end = new THREE.Vector3(s.center[0] - lx * (s.size[0] / 2 + 1), s.center[1], s.center[2] - lz * (s.size[2] / 2 + 1));
+    const meets = (from: THREE.Vector3, dir: THREE.Vector3) => new THREE.Raycaster(from, dir).intersectObjects(soft.children)[0]?.distance;
+    expect(meets(end, new THREE.Vector3(lx, 0, lz))).toBeCloseTo(1, 6);
+    expect(meets(new THREE.Vector3(s.center[0], s.center[1] + s.size[1] / 2 + 1, s.center[2]), new THREE.Vector3(0, -1, 0))).toBeCloseTo(1, 6);
     const front = soft.children[0] as THREE.Mesh;
     const before = front.geometry.getAttribute("position").count;
     const otherGeometry = (reinforceable.children[0] as THREE.Mesh).geometry;
@@ -32,7 +40,7 @@ describe("panel view", () => {
     sim.level.panels.apply(0, cut);
     view.update();
     expect((soft.children[0] as THREE.Mesh).geometry.getAttribute("position").count).toBeGreaterThan(before);
-    expect(soft.children.length).toBe(3); // the stud behind the hole shows (cells 10–20 across: the one at 0.40 m)
+    expect(soft.children.length).toBe(4); // the stud behind the hole shows (cells 10–20 across: the one at 0.40 m)
     expect((reinforceable.children[0] as THREE.Mesh).geometry).toBe(otherGeometry);
     // Shot through every layer down to nothing: the skins and studs go, nothing is left to draw.
     for (const layer of [L_FRONT, L_CORE, L_BACK]) sim.level.panels.apply(0, { kind: "cut", layer, shape: { kind: "rect", u0: 0, v0: 0, u1: 40, v1: 50 }, hard: false });
@@ -96,7 +104,7 @@ describe("panel view", () => {
     view.update();
     scene.updateMatrixWorld(true);
     const g = groups(scene)[1];
-    expect(g.children.length).toBe(4); // each skin where no plate covers it, and a plate on each side
+    expect(g.children.length).toBe(5); // each skin where no plate covers it, a plate on each side, and the caps
     const [minus, plus] = g.children.slice(2).map(box);
     const face = e.frame.center[2] + e.frame.t / 2;
     expect(plus.max.z).toBeGreaterThan(face);

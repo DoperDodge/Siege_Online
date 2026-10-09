@@ -5,7 +5,7 @@ known issues, and what's next.
 
 ---
 
-## Phase 4 — Destruction v1 · 🚧 in progress (branch `claude/phase-4-destruction`)
+## Phase 4 — Destruction v1 · ✅ complete (PR #5)
 
 **Done when (PLAN §17):** wallbangs, punch holes and reinforcing are all synced across clients.
 
@@ -17,10 +17,10 @@ Built in milestones; each keeps the tests, the browser tests and the netsim gree
 | M2 Panel model: a cell grid per surface (skins, studs, steel), holes, falling pieces | ✅ pure model + 13 tests (D-062) |
 | M3 Panels in the simulation (movement through holes) and on screen | ✅ intact panels collide exactly as before; breaches let bodies through; rays see holes; drawn from cells (D-064) |
 | M4 Bullets and the knife through panels (wallbangs, holes, rewound holes) | ✅ on the server: wallbangs at 70 %, holes, studs, steel, two-wall limit, knife holes, panels as the shooter had them (D-065) |
-| M5 Destruction over the network, and for players who join late | ✅ ops to everyone each tick with a hash check; full state on joining; netsim and browser test agree (D-066) |
+| M5 Destruction over the network, and for players who join late | ✅ ops to everyone with each snapshot, with a hash check; full state on joining; netsim and browser test agree (D-066) |
 | M6 Reinforcement, barricades and hatches | ✅ hold F to reinforce (4.5 s, team pool, from your side, hatches from above), barricade (2 s) or pry one off (1 s); Destruction Lab level (D-067) |
 | M7 Destruction Lab (explosive tools, every surface, Oregon wall samples) | ✅ page offline and online; T/G explosives (shapes only), Reset walls; five Oregon walls; browser test (D-068) |
-| M8 Browser and netsim tests, docs | ⏳ |
+| M8 Browser and netsim tests, review, docs | ✅ six browser tests, the netsim's fight across walls, a three-reviewer pass and its fixes |
 
 ### What's done
 - **Destruction data (M1):** `data/destruction.json` holds the rules. Every destructible surface is a panel
@@ -34,7 +34,7 @@ Built in milestones; each keeps the tests, the browser tests and the netsim gree
   and Hard Breach Charges) cut their shapes; only the last two cut steel. Reinforcing takes 4.5 s from a team
   pool of 10 (lab rooms let both sides reinforce and barricade); a reinforced hatch has a 1,000,000 HP pool.
   Everything not verified is listed in research/OPEN_QUESTIONS.md ("Placeholders added while building Phase
-  4", 8 questions). The movement lab's floor hatch sample is now thick enough to be a real panel.
+  4", 8 questions). The movement lab's floor hatch sample is now thick enough to be a real panel, and sits on the floor (it was sunk into it, out of reach of bullets, the knife and reinforcing).
 - **The panel model (M2, D-062):** each destructible surface is a grid of 5 cm cells in layers (two skins, a core
   of studs, joists or beams, and steel once reinforced). A bullet removes the cells within its hole's radius
   (always the one it hit), the knife a 25 cm disc, a breach a rectangle; whatever nothing holds then falls (a
@@ -55,12 +55,12 @@ Built in milestones; each keeps the tests, the browser tests and the netsim gree
   barricades and glass wear down per bullet (a DMR opens a hatch in 9 shots spread over it; ten knife hits
   do it too). The knife punches a 25 cm hole through both skins of a wall. Shots are judged against the walls
   as the shooter's screen had them. Players see the holes from M5 (until then only the server has them).
-- **Holes for everyone (M5, D-066):** each tick's holes go to every player (a few bytes each) with a checksum
-  of all the walls; a player whose walls ever disagree gets them again, and one who joins mid-game gets them
-  all at once. Broken pieces throw a few chunks of debris. Tested in the netsim (ten bots fighting across the
-  sample walls: every client ends with the server's walls, 33–38 kbps each) and in a browser test
-  (`tools/e2e/online-walls.mjs`: a wallbang hit at +100 ms, a sprayed and knifed wall, a watcher and a late
-  joiner with exactly the server's walls).
+- **Holes for everyone (M5, D-066):** new holes go to every player with each snapshot (a few bytes each) with
+  a checksum of all the walls; a player whose walls ever disagree gets them again, and one who joins mid-game
+  gets them all at once. Broken pieces throw a few chunks of debris. Tested in the netsim (ten bots fighting
+  across the sample walls: 401 changes in 30 s, every client ends with the server's walls, 27–32 kbps each)
+  and in a browser test (`tools/e2e/online-walls.mjs`: a wallbang hit at +100 ms, a sprayed wall and a
+  knifed hole, a watcher and a late joiner with exactly the server's walls).
 - **Reinforcing, barricades and hatches (M6, D-067):** hold F at a wall section for 4.5 s to put steel up on
   your side (one of the team's 10 reinforcements; a hatch only from above); hold F for 2 s to barricade an
   empty door or window, or 1 s to pry a barricade off. You stand still meanwhile, and the bar shows the time
@@ -75,6 +75,61 @@ Built in milestones; each keeps the tests, the browser tests and the netsim gree
   Charges: only their cuts for now). Reset walls in the pause menu puts everything back. A browser test
   (`tools/e2e/destruction-lab.mjs`) checks the reinforce prompt and gauge, steel on your side, a Breach
   Charge, Reset walls, and two players online with identical steel and knife holes.
+- **Checks and review fixes (M8):** shot-up walls redraw in about 0.6 ms (a 4.5 × 3 m wall with 300 shots'
+  holes). A review found, and these are now fixed: you could shoot, aim and knife while reinforcing (your
+  hands are busy now, as when reviving); a hole made between two snapshots counted as not there for your
+  next shot even though you saw it (holes now travel with the snapshot that covers them); a shot along a
+  wall from its end went through 3 m of it untouched, and two walls overlapping at a corner counted as four;
+  free-standing walls looked hollow from their ends and top (they are drawn closed now); marks on steel hid
+  inside the plate; the Movement Lab hatch was sunk into the floor; a barricade took 21 rifle bullets
+  instead of 20; four data values (reinforcing a damaged wall, reinforcing again, standing still while
+  reinforcing, when a worn barricade lets bodies through) were read by nothing; and a malformed explosive
+  name from a client could drop every player in a lab room.
+
+### How to test (needs Node 22.12+)
+```
+npm install
+npm run build
+npm start
+```
+1. **Offline:** open http://localhost:8080 → **Destruction Lab**. Shoot the soft walls: each bullet leaves a
+   hole in every layer it passes; wooden studs stop most guns (a shotgun cuts them up close), metal studs
+   stop everything, and a body behind a wall takes 70 %. Hold **F** at a reinforceable wall section for
+   4.5 s, then shoot it from the other side. Knife the barricaded door three times; hold **F** at the empty
+   door to barricade it (2 s), or at a standing one to pry it off (1 s). **T** picks an explosive and **G**
+   sets it off. `Esc` → *Go to* → *Platform* to reinforce the hatch from above, or *Under the platform* to
+   shoot it from below; `Esc` → *Reset walls* puts everything back.
+2. **Online at 100 ms:** **Destruction Lab online** → *Create a room*; `Esc` → *Copy invite link* and open it
+   in a second window (or on a second PC). In both pause menus set **Simulated extra latency → +100 ms
+   round trip**. Shoot, knife and reinforce in one window and watch the other; open the link in a third
+   window later: it gets the walls as they are.
+3. **Range Lab:** the *Behind the wall* dummy can now be shot through the soft wall.
+
+The automated checks: `npm run typecheck`, `npm test`, `npm run build`, `npm run test:e2e` (all six browser
+tests), and `npm run netsim -- --combat --walls`.
+
+Things to judge, at +100 ms:
+- Wallbangs: do they hit where your screen says, and do the holes appear where you shot?
+- Reinforcing and barricading: the prompt, the bar, steel on your side; does the other window see it too?
+- Do the walls look right (holes, studs, steel, debris, broken barricades and hatches)?
+
+### Known issues
+- Every number beyond the researched ones is a placeholder, listed in research/OPEN_QUESTIONS.md (Phase 4
+  placeholders, 8 questions), the stud layout among them.
+- Holes another player makes appear about 0.1 s before you see their shot (the server sends a hole at once;
+  the shooter is drawn a little in the past, D-032).
+- Only the destructible surfaces break: everything else (hard walls, the floor) stops bullets.
+- No reinforcement animation or sound yet: the bar and the steel only.
+- The lab's explosives cut their shapes only: no throwing, fuses or damage to players until the gadgets
+  (Phase 8).
+- A bullet that runs along a wall from its end makes one hole where it goes in and carries on through that
+  skin, at 70 %; a shot into a wall's end goes into the gap between the skins up to the first stud.
+- An 8-pellet shotgun blast takes about 2.7 ms to apply (on the server and on every client): fine for now,
+  to watch in full rooms.
+
+### Next: Phase 5 — Oregon greybox
+Oregon's layout.json, the generator and the full greybox with correct surface tagging, sites, spawns and
+cameras. **Done when:** you walk it and sign off on the layout's accuracy.
 
 ---
 

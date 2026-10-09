@@ -1,17 +1,18 @@
-// Destruction on the wire (Phase 4 M5; PLAN §5, §8): the panel ops the server applied in a tick, in order,
-// with the panel set's hash after them (a client that disagrees asks for the panels again), and the state
+// Destruction on the wire (Phase 4 M5; PLAN §5, §8): the panel ops the server applied since a player's last
+// snapshot, in order, sent just ahead of the next one (DECISIONS D-066), with the panel set's hash after them (a client that disagrees asks for the panels again), and the state
 // of every changed panel, run-length coded, for players who join late or fall out of step. Ops are whole
 // cells, so every client that applies them in order ends with the server's exact bytes.
 import { LAYER_COUNT, type CutShape, type PanelOp } from "../destruction/panel.js";
 import type { IndexedOp, PanelSet } from "../destruction/panels.js";
 import { ByteReader, ByteWriter, ProtocolError } from "./bytes.js";
 
-/** Server → client: one tick's panel ops (0x17), and every changed panel's state (0x18). Client → server: send that state again (0x0a). */
+/** Server → client: panel ops (0x17), and every changed panel's state (0x18). Client → server: send that state again (0x0a). */
 export const MSG_PANEL_OPS = 0x17;
 export const MSG_PANEL_STATE = 0x18;
 export const MSG_PANEL_RESYNC = 0x0a;
 
 export interface PanelOpsMsg {
+  /** The tick of the snapshot they go ahead of. */
   tick: number;
   ops: IndexedOp[];
   /** PanelSet.hash() once they are applied. */

@@ -14,7 +14,7 @@ await startLab({
     ["Soft walls", -8, 0, -3, 0],
     ["Reinforceable walls", 6, 0, -3, 0],
     ["Doors and window", -6, 0, 9, 0],
-    ["Platform (hatch, soft floor)", 12, 3, 9.8, 180],
+    ["Platform (hatch, soft floor)", 12, 3, 9.8, 0],
     ["Under the platform", 12, 0, 8, 0],
     ["Oregon walls", -3, 0, -15, 0],
   ],

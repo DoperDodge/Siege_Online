@@ -73,7 +73,7 @@ describe("explosives on panels", () => {
   it("a charge needs the panel within 2 m; a throw reaches 20 m", async () => {
     const { boom } = await lab();
     expect(boom("breach_charge", [-12, 1.0, -2], NORTH)).toEqual([]);
-    expect(boom("impact_grenade", [-12, 1.0, 10], NORTH).length).toBeGreaterThan(0);
+    expect(boom("impact_grenade", [-12, 1.0, 5], NORTH).length).toBeGreaterThan(0); // 11 m, nothing in between
   });
 });
 
@@ -94,6 +94,23 @@ describe("in a room", () => {
     for (let i = 0; i < 4; i++) tick();
     expect(hatch.broken).toBe(true);
     for (const c of [a, b]) expect(c.session.sim!.level.panels.hash()).toBe(room.sim.level.panels.hash());
+  });
+
+  it("a throw stops at plain level geometry: through a hard wall, nothing", async () => {
+    const { room, clients, tick } = await roomWith("destruction_lab", ["sledge"]);
+    for (let i = 0; i < 10; i++) tick();
+    const [a] = clients;
+    const wall = room.sim.level.panels.byId.get("soft_studs")!.panel;
+    room.onLabTool(a.id, { kind: "teleport", x: -12, y: 0, z: 10, yawDeg: 0 }); // the doors' hard wall 4 m ahead, the soft wall beyond
+    for (let i = 0; i < 10; i++) tick();
+    room.onLabTool(a.id, { kind: "explosive", id: "impact_grenade", yaw: 0, pitch: -0.05 });
+    for (let i = 0; i < 4; i++) tick();
+    expect(wall.modified).toBe(false);
+    room.onLabTool(a.id, { kind: "teleport", x: -12, y: 0, z: 5, yawDeg: 0 }); // this side of it
+    for (let i = 0; i < 10; i++) tick();
+    room.onLabTool(a.id, { kind: "explosive", id: "impact_grenade", yaw: 0, pitch: -0.05 });
+    for (let i = 0; i < 4; i++) tick();
+    expect(wall.modified).toBe(true);
   });
 
   it("the lab tool's cut reaches everyone; Reset walls puts every panel back and refills the pools", async () => {

@@ -1,8 +1,9 @@
 // Destructible panels drawn from their cells (Phase 4 M3, M8): one mesh per layer, built from boxes over the
 // layer's cells (greedy rectangles). Skins wear the surface's greybox colour (PLAN §9.1), the core is wood or
-// metal, and steel is a dark plate on the side it went up from. When a panel changes, only the layers whose
-// drawn cells changed are rebuilt; each box is 8 shared corners, lit flat (no normals to build), so a
-// shot-up wall redraws within PLAN §8.2's main-thread budget.
+// metal, and steel is a dark plate on the side it went up from. Caps in the skins' colour close the gap
+// between the skins at the panel's edges (a free-standing wall's ends and top). When a panel changes, only
+// the layers whose drawn cells changed are rebuilt; each box is 8 shared corners, lit flat (no normals to
+// build), so a shot-up wall redraws within PLAN §8.2's main-thread budget.
 import * as THREE from "three";
 import { greedyRects, L_BACK, L_CORE, L_FRONT, L_STEEL, layerSlab, STEEL_PLATE_M, type Panel, type PanelEntry, type PanelSet } from "@redmond/shared";
 import { SURFACE_COLORS } from "./labScene.js";
@@ -11,8 +12,13 @@ const WOOD = 0x8b6a43;
 const METAL = 0x7d848c;
 const STEEL = 0x56606b;
 
-/** What a panel draws, in this order: front skin, core, back skin, the steel plate on the −n side, on the +n side. */
-const SLOTS = 5;
+/**
+ * What a panel draws, in this order: front skin, core, back skin, the steel plate on the −n side, on the +n
+ * side, and the caps at its edges.
+ */
+const SLOTS = 6;
+/** How deep a cap is (it only shows its outer face, and from inside through a hole near the edge). */
+const CAP_M = 0.004;
 
 interface Drawn {
   /** The panel object and version drawn (a reset panel is a new object at version 0). */
@@ -90,13 +96,17 @@ export class PanelView {
       }
     }
     const skin = c.kind === "glass" ? "glass" : `skin:${c.kind === "barricade" ? "BARRICADE" : e.info.surface}`;
-    const wanted: { cells: Uint8Array | null; slab: [number, number]; key: string }[] = [
-      { cells: hidePlate(p.layers[L_FRONT], plates?.[0]), slab: layerSlab(p, e.frame, L_FRONT), key: skin },
-      { cells: p.layers[L_CORE] && exposed(p.layers[L_CORE], p.layers[L_FRONT], p.layers[L_BACK], p.w, p.h), slab: layerSlab(p, e.frame, L_CORE), key: p.coreMetal ? "core:metal" : "core:wood" },
-      { cells: hidePlate(p.layers[L_BACK], plates?.[1]), slab: layerSlab(p, e.frame, L_BACK), key: skin },
+    const front = p.layers[L_FRONT];
+    const back = p.layers[L_BACK];
+    const wanted: { cells: Uint8Array | null; slab: [number, number]; key: string; caps?: true }[] = [
+      { cells: hidePlate(front, plates?.[0]), slab: layerSlab(p, e.frame, L_FRONT), key: skin },
+      { cells: p.layers[L_CORE] && exposed(p.layers[L_CORE], front, back, p.w, p.h), slab: layerSlab(p, e.frame, L_CORE), key: p.coreMetal ? "core:metal" : "core:wood" },
+      { cells: hidePlate(back, plates?.[1]), slab: layerSlab(p, e.frame, L_BACK), key: skin },
       // Each plate just proud of its face.
       { cells: plates?.[0] ?? null, slab: [-half - STEEL_PLATE_M, -half + 0.002], key: "steel" },
       { cells: plates?.[1] ?? null, slab: [half - 0.002, half + STEEL_PLATE_M], key: "steel" },
+      // Between two skins (walls, floors, hatches), across the core's depth.
+      { cells: front && back ? edgeCaps(front, back, p.w, p.h) : null, slab: layerSlab(p, e.frame, L_CORE), key: skin, caps: true },
     ];
     let changed = false;
     wanted.forEach((w, slot) => {
@@ -106,7 +116,7 @@ export class PanelView {
       d.meshes[slot]?.geometry.dispose();
       d.meshes[slot] = null;
       d.cells[slot] = w.cells && w.cells.slice();
-      const geo = w.cells && boxes(e, w.cells, w.slab);
+      const geo = w.cells && (w.caps ? capBoxes(e, w.cells, w.slab) : boxes(e, w.cells, w.slab));
       if (!geo) return;
       geo.boundingSphere = d.bounds;
       const mesh = new THREE.Mesh(geo, this.material(w.key));
@@ -138,24 +148,59 @@ export class PanelView {
 /** Two triangles a face, outward: corner c of a box is (x, y, z) = (c & 1, c & 2, c & 4) high or low. */
 const BOX = [1, 3, 7, 1, 7, 5, 0, 4, 6, 0, 6, 2, 2, 6, 7, 2, 7, 3, 0, 1, 5, 0, 5, 4, 4, 5, 7, 4, 7, 6, 0, 2, 3, 0, 3, 1];
 
+/** A box in the panel's own axes, metres from its centre: [u0, u1, v0, v1] across the face, through `slab`. */
+type FaceBox = [number, number, number, number];
+
 /** The cells as boxes in the panel's own axes, spanning `slab` through it; null if there are none. */
 function boxes(e: PanelEntry, cells: Uint8Array, slab: [number, number]): THREE.BufferGeometry | null {
   const p = e.panel;
-  const rects = greedyRects(cells, p.w, p.h);
-  if (!rects.length) return null;
+  const [x0, y0] = [-e.frame.w / 2, -e.frame.h / 2];
+  return boxGeometry(
+    e,
+    greedyRects(cells, p.w, p.h).map((r) => [x0 + r.u0 * p.cellU, x0 + r.u1 * p.cellU, y0 + r.v0 * p.cellV, y0 + r.v1 * p.cellV]),
+    slab,
+  );
+}
+
+/**
+ * Where both skins reach a panel's edge (edgeCaps), a thin box closing the gap between them, flush with the
+ * edge; one box per run of edge cells.
+ */
+function capBoxes(e: PanelEntry, caps: Uint8Array, slab: [number, number]): THREE.BufferGeometry | null {
+  const p = e.panel;
+  const [hw, hh] = [e.frame.w / 2, e.frame.h / 2];
+  const out: FaceBox[] = [];
+  const runs = (from: number, n: number, box: (a: number, b: number) => FaceBox) => {
+    for (let i = 0; i < n; ) {
+      if (!caps[from + i]) {
+        i++;
+        continue;
+      }
+      let j = i;
+      while (j < n && caps[from + j]) j++;
+      out.push(box(i, j));
+      i = j;
+    }
+  };
+  runs(0, p.w, (a, b) => [-hw + a * p.cellU, -hw + b * p.cellU, -hh, -hh + CAP_M]);
+  runs(p.w, p.w, (a, b) => [-hw + a * p.cellU, -hw + b * p.cellU, hh - CAP_M, hh]);
+  runs(2 * p.w, p.h, (a, b) => [-hw, -hw + CAP_M, -hh + a * p.cellV, -hh + b * p.cellV]);
+  runs(2 * p.w + p.h, p.h, (a, b) => [hw - CAP_M, hw, -hh + a * p.cellV, -hh + b * p.cellV]);
+  return boxGeometry(e, out, slab);
+}
+
+/** The boxes as one geometry; null if there are none. */
+function boxGeometry(e: PanelEntry, list: FaceBox[], slab: [number, number]): THREE.BufferGeometry | null {
+  if (!list.length) return null;
   const [au, av, an] = e.frame.axes;
-  const pos = new Float32Array(rects.length * 24);
-  const idx = rects.length * 8 > 0xffff ? new Uint32Array(rects.length * 36) : new Uint16Array(rects.length * 36);
+  const pos = new Float32Array(list.length * 24);
+  const idx = list.length * 8 > 0xffff ? new Uint32Array(list.length * 36) : new Uint16Array(list.length * 36);
   const lo = [0, 0, 0];
   const hi = [0, 0, 0];
   lo[an] = slab[0];
   hi[an] = slab[1];
-  for (let k = 0; k < rects.length; k++) {
-    const r = rects[k];
-    lo[au] = r.u0 * p.cellU - e.frame.w / 2;
-    hi[au] = r.u1 * p.cellU - e.frame.w / 2;
-    lo[av] = r.v0 * p.cellV - e.frame.h / 2;
-    hi[av] = r.v1 * p.cellV - e.frame.h / 2;
+  for (let k = 0; k < list.length; k++) {
+    [lo[au], hi[au], lo[av], hi[av]] = list[k];
     for (let c = 0, o = k * 24; c < 8; c++, o += 3) {
       pos[o] = c & 1 ? hi[0] : lo[0];
       pos[o + 1] = c & 2 ? hi[1] : lo[1];
@@ -167,6 +212,24 @@ function boxes(e: PanelEntry, cells: Uint8Array, slab: [number, number]): THREE.
   geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
   geo.setIndex(new THREE.BufferAttribute(idx, 1));
   return geo;
+}
+
+/**
+ * Per edge cell (the bottom row, the top row, the −u column, the +u column, in that order): 1 where both skins
+ * are there, so the gap between them is closed (a hole through either skin at the edge opens it).
+ */
+function edgeCaps(front: Uint8Array, back: Uint8Array, w: number, h: number): Uint8Array {
+  const out = new Uint8Array(2 * (w + h));
+  const both = (i: number) => (front[i] && back[i] ? 1 : 0);
+  for (let u = 0; u < w; u++) {
+    out[u] = both(u);
+    out[w + u] = both((h - 1) * w + u);
+  }
+  for (let v = 0; v < h; v++) {
+    out[2 * w + v] = both(v * w);
+    out[2 * w + h + v] = both(v * w + w - 1);
+  }
+  return out;
 }
 
 /** A skin less the cells a steel plate covers (null: no such layer). */

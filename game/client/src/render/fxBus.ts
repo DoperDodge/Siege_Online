@@ -6,7 +6,7 @@
 // compiled at load (renderer.compile also prepares hidden objects): a shader first compiled at a shot
 // stalls that frame, and with it the shot's input.
 import * as THREE from "three";
-import { cellWorld, L_CORE, L_STEEL, raycastLevel, type GameEvent, type IndexedOp, type PanelChange, type Sim, type SimEvent, type Vec3 } from "@redmond/shared";
+import { cellWorld, L_CORE, L_STEEL, raycastLevel, STEEL_PLATE_M, type GameEvent, type IndexedOp, type PanelChange, type Sim, type SimEvent, type Vec3 } from "@redmond/shared";
 
 /** Where sounds will go (Phase 11 adds audio); a no-op until then. */
 export interface AudioSink {
@@ -254,7 +254,14 @@ export class FxBus {
     const d = this.decals[this.nextDecal];
     this.nextDecal = (this.nextDecal + 1) % MAX_DECALS;
     const n = new THREE.Vector3(...hit.normal);
-    d.position.copy(start).addScaledVector(dir, hit.t).addScaledVector(n, 0.002);
+    // Steel is drawn as a plate proud of the face (render/panelView.ts): a mark from the plate's side sits on it.
+    let lift = 0.002;
+    const c = hit.panel?.crossing;
+    if (c && c.axis === 2) {
+      const fn = hit.panel!.entry.frame.n;
+      if ((n.x * fn[0] + n.y * fn[1] + n.z * fn[2]) * (c.side ? 1 : -1) > 0) lift += STEEL_PLATE_M;
+    }
+    d.position.copy(start).addScaledVector(dir, hit.t).addScaledVector(n, lift);
     d.lookAt(d.position.clone().add(n));
     d.visible = true;
   }
