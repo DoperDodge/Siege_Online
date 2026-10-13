@@ -1,7 +1,8 @@
-// Turns a level definition (data/maps/<id>/layout.json) into Rapier colliders plus a render list.
+// Turns a level definition (data/maps/<id>/layout.json, or a compiled map's level.json) into Rapier colliders
+// plus a render list.
 // Server and client both call this, so what you see is exactly what you collide with.
 import { DEG, forwardXZ, quatYawPitch, rotateXZ, type Vec3 } from "../core/math.js";
-import { HELPER_GROUPS, STATIC_GROUPS, type Collider, type Rapier, type World } from "../physics/rapier.js";
+import { HELPER_GROUPS, refreshBroadPhase, STATIC_GROUPS, type Collider, type Rapier, type World } from "../physics/rapier.js";
 import type { DestructionData, LevelDef, Surface } from "../data/schemas.js";
 import { PanelSet } from "../destruction/panels.js";
 import { constructionOf, panelSpec } from "../destruction/world.js";
@@ -74,6 +75,11 @@ export function buildLevel(R: Rapier, world: World, def: LevelDef, destruction?:
   for (const s of def.solids) {
     const quat = quatYawPitch(s.yawDeg * DEG, 0);
     const info: SolidInfo = { id: s.id, surface: s.surface, vaultable: s.vaultable };
+    if (s.bodiesOnly) {
+      // Stops bodies only: never a panel (data/load.ts refuses one with a destructible surface).
+      addBox(info, "solid", s.center, s.size, quat, { collides: true, visible: false, label: s.label });
+      continue;
+    }
     const construction = destruction ? constructionOf(destruction, s) : null;
     if (destruction && construction) {
       // Its boxes are made in the same place in the level order a plain solid's would be.
@@ -155,6 +161,6 @@ export function buildLevel(R: Rapier, world: World, def: LevelDef, destruction?:
     }
   }
 
-  world.step(); // build the broad-phase so queries work immediately
+  refreshBroadPhase(world); // build the broad phase so queries work immediately
   return { def, renderables, ladders, solids, panels };
 }

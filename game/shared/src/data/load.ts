@@ -80,6 +80,11 @@ export const rawData = {
   destruction: destructionJson as Record<string, unknown>,
 };
 
+/** Maps that tools/mapgen compiles (DECISIONS D-070): their LevelDef is level.json, generated from the authoring layout.json. */
+const COMPILED_MAPS = new Set(["oregon"]);
+/** The file a level comes from, for error messages. */
+export const levelFile = (id: string) => `data/maps/${id}/${COMPILED_MAPS.has(id) ? "level" : "layout"}.json`;
+
 let cached: GameData | null = null;
 
 /** Parses and validates all data. Throws a readable error naming the bad file/field. */
@@ -99,7 +104,7 @@ export function loadGameData(): GameData {
   }
   const levels = new Map<string, LevelDef>();
   for (const raw of rawData.levels) {
-    const lvl = parse(`data/maps/${String(raw.id)}/layout.json`, levelSchema, raw);
+    const lvl = parse(levelFile(String(raw.id)), levelSchema, raw);
     levels.set(lvl.id, lvl);
   }
   const weapons = new Map<string, WeaponData>();
@@ -136,9 +141,11 @@ export function crossFileProblems(data: Pick<GameData, "operators" | "weapons" |
   const out: string[] = [];
   if (data.destruction) out.push(...destructionProblems(data.destruction, data.weapons, data.levels));
   for (const lvl of data.levels?.values() ?? []) {
-    for (const d of lvl.dummies) if (!data.operators.has(d.operator)) out.push(`data/maps/${lvl.id}/layout.json: dummy "${d.id}" is operator "${d.operator}", who has no data/operators file`);
+    const file = levelFile(lvl.id);
+    for (const d of lvl.dummies) if (!data.operators.has(d.operator)) out.push(`${file}: dummy "${d.id}" is operator "${d.operator}", who has no data/operators file`);
     const ids = lvl.dummies.map((d) => d.id);
-    if (new Set(ids).size !== ids.length) out.push(`data/maps/${lvl.id}/layout.json: two dummies share an id`);
+    if (new Set(ids).size !== ids.length) out.push(`${file}: two dummies share an id`);
+    out.push(...mapProblems(lvl, file));
   }
   const carriers = new Map<string, Set<string>>();
   for (const op of data.operators.values()) {
@@ -171,6 +178,40 @@ export function crossFileProblems(data: Pick<GameData, "operators" | "weapons" |
     else if (w.recoil.stageStarts && w.recoil.stageStarts.length !== template.stages.length) {
       out.push(`${file}: recoil.stageStarts has ${w.recoil.stageStarts.length} entries; template "${w.recoil.template}" has ${template.stages.length} stages`);
     }
+  }
+  return out;
+}
+
+/** A map's metadata against itself (Phase 5): ids unique and resolving, the kill plane under everything. */
+function mapProblems(lvl: LevelDef, file: string): string[] {
+  const out: string[] = [];
+  const dupes = (what: string, ids: string[]) => {
+    const seen = new Set<string>();
+    for (const id of ids) {
+      if (seen.has(id)) out.push(`${file}: two ${what} share the id "${id}"`);
+      seen.add(id);
+    }
+  };
+  dupes("solids", lvl.solids.map((s) => s.id));
+  dupes("spawns", lvl.spawns.map((s) => s.id));
+  dupes("storeys", lvl.storeys.map((s) => s.id));
+  dupes("rooms", lvl.rooms.map((r) => r.id));
+  dupes("sites", lvl.sites.map((s) => s.id));
+  dupes("cameras", lvl.cameras.map((c) => c.id));
+  dupes("ingredients", lvl.ingredients.map((i) => i.id));
+  dupes("zones", lvl.zones.map((z) => z.id));
+  const storeys = new Set(lvl.storeys.map((s) => s.id));
+  const rooms = new Set(lvl.rooms.map((r) => r.id));
+  for (const r of lvl.rooms) if (!storeys.has(r.storey)) out.push(`${file}: room "${r.id}" is on storey "${r.storey}", which isn't in storeys`);
+  for (const site of lvl.sites) {
+    for (const id of site.rooms) if (!rooms.has(id)) out.push(`${file}: site "${site.id}" names room "${id}", which isn't in rooms`);
+    for (const b of site.bombs) if (!site.rooms.includes(b.room)) out.push(`${file}: bomb "${b.id}" of site "${site.id}" is in "${b.room}", not one of the site's rooms`);
+  }
+  for (const c of lvl.cameras) if (c.room !== undefined && !rooms.has(c.room)) out.push(`${file}: camera "${c.id}" names room "${c.room}", which isn't in rooms`);
+  for (const i of lvl.ingredients) if (i.room !== undefined && !rooms.has(i.room)) out.push(`${file}: ingredient "${i.id}" names room "${i.room}", which isn't in rooms`);
+  if (lvl.bounds) {
+    const bottom = Math.min(...lvl.solids.map((s) => s.center[1] - s.size[1] / 2), ...lvl.spawns.map((s) => s.pos[1]));
+    if (lvl.bounds.killY >= bottom) out.push(`${file}: bounds.killY ${lvl.bounds.killY} isn't below the lowest solid or spawn (${bottom})`);
   }
   return out;
 }
@@ -212,8 +253,12 @@ function destructionProblems(d: DestructionData, weapons: Map<string, WeaponData
   for (const cls of Object.keys(d.bullets.classAdjust)) if (!classes.has(cls)) out.push(`${file}: bullets.classAdjust names "${cls}", which no gun has`);
   for (const lvl of levels?.values() ?? []) {
     for (const s of lvl.solids) {
-      const at = `data/maps/${lvl.id}/layout.json: solid "${s.id}"`;
+      const at = `${levelFile(lvl.id)}: solid "${s.id}"`;
       const id = s.panel?.construction ?? d.surfaces[s.surface];
+      if (s.bodiesOnly) {
+        if (id || s.panel) out.push(`${at} stops bodies only, so it can't be a destructible ${s.surface} or have panel options`);
+        continue;
+      }
       if (!id) {
         if (s.panel) out.push(`${at} has panel options but a ${s.surface} isn't destructible`);
         continue;

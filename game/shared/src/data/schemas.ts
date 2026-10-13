@@ -529,7 +529,22 @@ export const levelSchema = z.strictObject({
   _doc: z.string().optional(),
   id: z.string(),
   name: z.string(),
-  spawns: z.array(z.strictObject({ id: z.string(), pos: vec3, yawDeg: z.number() })).min(1),
+  /**
+   * Spawn 0 is where lab rooms put everyone (and where the kill plane sends you back). `side` and `group`
+   * (Phase 5): match spawns, an attacker insertion group ("A_JUNKYARD") or a defender site ("SITE_2F_KIDS");
+   * a spawn without a side is a lab spawn.
+   */
+  spawns: z
+    .array(
+      z.strictObject({
+        id: z.string(),
+        pos: vec3,
+        yawDeg: z.number(),
+        side: z.enum(["attack", "defense"]).optional(),
+        group: z.string().optional(),
+      }),
+    )
+    .min(1),
   solids: z.array(
     z.strictObject({
       id: z.string(),
@@ -538,6 +553,8 @@ export const levelSchema = z.strictObject({
       yawDeg: z.number().default(0),
       surface: z.enum(SURFACES),
       vaultable: z.boolean().default(false),
+      /** An invisible blocker (Phase 5): it stops bodies, not bullets or sight; never a panel (a railing, the play-area edge). */
+      bodiesOnly: z.boolean().default(false),
       label: z.string().optional(),
       /**
        * A destructible surface is a panel (Phase 4, data/destruction.json): its construction (the surface's
@@ -601,6 +618,61 @@ export const levelSchema = z.strictObject({
   markers: z.array(z.strictObject({ id: z.string(), pos: vec3, label: z.string() })).default([]),
   /** Range Lab targets (Phase 3 M10, DECISIONS D-052): scripted bodies the room steps (lab/dummies.ts). */
   dummies: z.array(dummySchema).default([]),
+  // ---- Map metadata (Phase 5, DECISIONS D-076): compiled maps fill these; labs leave them out. ----
+  /** The play area's box; a body whose feet fall below killY is out of the level (Sim: back to spawn 0 in a lab). */
+  bounds: z.strictObject({ min: vec3, max: vec3, killY: z.number() }).optional(),
+  /** Storeys by height (B, 1F, 2F, 3F): walking level and the underside of what covers it. */
+  storeys: z.array(z.strictObject({ id: z.string(), floorY: z.number(), ceilingY: z.number() })).default([]),
+  /** Rooms with their callouts: floor rectangles [x0, z0, x1, z1] in metres, and a free spot to go to. */
+  rooms: z
+    .array(
+      z.strictObject({
+        id: z.string(),
+        callout: z.string(),
+        storey: z.string(),
+        rects: z.array(z.tuple([z.number(), z.number(), z.number(), z.number()])).min(1),
+        anchor: vec3,
+      }),
+    )
+    .default([]),
+  /** Bomb sites: two rooms each, the bombs' spots, and how far inside the rooms a plant must be. */
+  sites: z
+    .array(
+      z.strictObject({
+        id: z.string(),
+        name: z.string(),
+        rooms: z.array(z.string()).min(1),
+        bombs: z.array(z.strictObject({ id: z.string(), pos: vec3, room: z.string() })),
+        plantMarginM: z.number().nonnegative(),
+      }),
+    )
+    .default([]),
+  /** Default cameras (Phase 7 uses them): mount point and view. */
+  cameras: z.array(z.strictObject({ id: z.string(), pos: vec3, yawDeg: z.number(), pitchDeg: z.number(), room: z.string().optional() })).default([]),
+  /** Destructible ingredients (Phase 8 gives them behaviour): fire extinguishers and gas pipes. */
+  ingredients: z
+    .array(
+      z.strictObject({
+        id: z.string(),
+        kind: z.enum(["fire_extinguisher", "gas_pipe"]),
+        pos: vec3,
+        yawDeg: z.number(),
+        room: z.string().optional(),
+      }),
+    )
+    .default([]),
+  /** Areas for later phases: the building, out-of-bounds and spawn-peek areas, rappel faces, drone holes. */
+  zones: z
+    .array(
+      z.strictObject({
+        id: z.string(),
+        kind: z.enum(["building", "out_of_bounds", "spawn_peek", "rappel", "drone_hole"]),
+        boxes: z.array(z.strictObject({ center: vec3, size: vec3, yawDeg: z.number().default(0) })).min(1),
+        /** Which way the face looks (rappel faces). */
+        normal: vec3.optional(),
+      }),
+    )
+    .default([]),
 });
 export type LevelDef = z.infer<typeof levelSchema>;
 
