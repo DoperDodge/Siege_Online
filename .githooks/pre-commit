@@ -1,0 +1,4 @@
+#!/bin/sh
+# Refuse a commit that would track a third-party image (the repo is public; see tools/mapgen/hygiene.test.ts).
+# Enable once per clone: git config core.hooksPath .githooks
+exec npx vitest run tools/mapgen/hygiene.test.ts --reporter=dot
