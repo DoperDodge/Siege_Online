@@ -96,17 +96,17 @@ try {
   const gfx = await open(`${BASE}/labs/oregon.html?autotest=1&op=sledge`);
   await sleep(500);
   const drawsBefore = await gfx.evaluate(() => window.__lab.shadowDraws);
-  await gfx.evaluate(async () => {
+  // Chrome allows a restore only once the lost event has been handled (three prevents its default), so the
+  // restore runs in a later task than the loss.
+  await gfx.evaluate(() => {
     const canvas = document.querySelector("#view canvas");
-    const lose = canvas.getContext("webgl2").getExtension("WEBGL_lose_context");
-    const once = (type) => new Promise((r) => canvas.addEventListener(type, r, { once: true }));
-    const lost = once("webglcontextlost");
-    lose.loseContext();
-    await lost;
-    const restored = once("webglcontextrestored");
-    lose.restoreContext();
-    await restored;
+    window.__ctx = { events: [], lose: canvas.getContext("webgl2").getExtension("WEBGL_lose_context") };
+    for (const type of ["webglcontextlost", "webglcontextrestored"]) canvas.addEventListener(type, () => window.__ctx.events.push(type));
+    window.__ctx.lose.loseContext();
   });
+  await gfx.waitForFunction(() => window.__ctx.events.length === 1, null, { timeout: 10000, polling: 100 });
+  await gfx.evaluate(() => window.__ctx.lose.restoreContext());
+  await gfx.waitForFunction(() => window.__ctx.events.length === 2, null, { timeout: 10000, polling: 100 });
   let drawsAfter = drawsBefore;
   for (let i = 0; i < 50 && drawsAfter <= drawsBefore; i++) {
     await sleep(100);
