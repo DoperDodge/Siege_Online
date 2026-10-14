@@ -15,7 +15,7 @@ else here blocks Phase 1.
 | 1 | ✅ **Answered: browser** (D-019/D-020). ~~**Browser or desktop?** Switch the stack to a browser game (TypeScript + Three.js + a Node server on Railway, WebSockets), or keep the plan's Windows desktop build (Godot C#, ENet/UDP)? ~~ | Decides the whole tech stack before Phase 1. | DECISIONS.md D-019 |
 | 2 | ✅ **Answered: yes, Lesion** (D-011). ~~**"Legion" = Lesion?** No Siege operator is named Legion. Lesion (Gu mines) was researched in its place.~~ | Needs a yes, or the real name, before Phase 8. | [operators/legion_name_check.md](operators/legion_name_check.md) |
 | 3 | ✅ **Answered: 6, like Siege** (D-015). ~~**1v1 reinforcements:** keep the plan's scaling (1 defender → **2** reinforcements), or use Siege's own 1v1 Arcade value (**6**)?~~ | The plan formula makes 1v1 defense much harder than Siege's. | DECISIONS.md D-015 |
-| 4 | **Repo visibility:** the GitHub repo is **public**. Make it private before you add screenshots? | Your screenshots are Ubisoft game imagery. | [oregon/SCREENSHOT_CHECKLIST.md](oregon/SCREENSHOT_CHECKLIST.md) |
+| 4 | **Repo visibility:** the GitHub repo is **public**. Make it private before you add screenshots? Until then, screenshots in `research/oregon/refs/ulo/` stay on your PC (gitignored, D-079): send them in the chat. | Your screenshots are Ubisoft game imagery. | [oregon/SCREENSHOT_CHECKLIST.md](oregon/SCREENSHOT_CHECKLIST.md) |
 | 5 | **Oregon layout:** since the March 2026 modernization, have you noticed any wall, door, window, or hatch that changed? | We build the 2020 layout plus the 2026 gas pipes and extinguishers, assuming no layout change. | [oregon/version.md](oregon/version.md) |
 | 6 | **Soft vs hard walls and reinforcement counts** per site, plus default camera facings. The 30-minute minimum screenshot set answers most of these at once. | This is what makes the map feel like Oregon; it's also what the bots' setups rely on. | [oregon/SCREENSHOT_CHECKLIST.md](oregon/SCREENSHOT_CHECKLIST.md), [oregon/surfaces.md](oregon/surfaces.md) |
 | 7 | **Movement speeds:** two community datasets disagree for 1/2-speed sprint (4.0/4.5 vs 4.25/4.75 m/s). Crouch, prone and ADS-walk speeds are unknown. | Movement feel is Phase 1's "done when". | [core_mechanics.md](core_mechanics.md) Q1 |
@@ -249,6 +249,51 @@ under a reinforcement, what blocks reinforcing) are not repeated here.
 8. **Studs and bullets:** a bullet that can't destroy a wooden stud (anything below the Full tier): does the
    stud stop it, or does it pass through and leave the stud standing? We stop it (`wallbang.uncutStudsStop`),
    as bullets pass only what they can break.
+
+### Placeholders added while building Phase 5 (not in the original research)
+
+Each value is in `data/maps/oregon/layout.json` or a wall file (`walls_<floor>.json`) and listed in its
+`_unverified`; tools/mapgen/DESIGN.md §10 has the full table (P1–P37). An answer changes one value, and
+`npm run mapgen` rebuilds the map. Built so far (M1): 1F only.
+
+1. **Map scale (P1):** one unit of the floor plans = 0.15 m (±15%). The school bus is 77 u long (11.6 m at
+   0.15; school buses are 10.5–12 m), and the white van in the parking lot is about 33 u (5 m; vans are 5–6 m);
+   the stair treads in the floor images are too blurred to measure. Stand in an ordinary interior doorway: is
+   it about 1.2 m wide, two-thirds of an operator's height? Every distance in the map scales with this one number.
+2. **Storey heights (P3, P4):** floors at B −3.2 m, 1F 0, 2F 3.2 m, 3F (Cat Walk) 6.2 m, Big Tower roof 9.2 m;
+   slabs 0.2 m. How many steps does a staircase take from 1F to 2F?
+3. **Walls (P5, P6):** 3.0 m from floor to ceiling (outside walls 3.2 m, up to the next floor); inside and soft
+   walls 0.2 m thick, outside walls 0.3 m.
+4. **Doors and windows (P7, P8, P11, P12):** doors 2.1 m tall; windows from 0.9 m to 2.1 m, with glass outside
+   the barricade; open passages have a header at 2.1 m.
+5. **Door or window (P9):** each exterior opening uses the research's guess, else a door at ground level and a
+   window above it. On 1F that makes the Tower's north opening (Shooting Range) a door by the rule, the
+   Classroom west and Garage east openings windows (research), and the other nine doors. Which are wrong?
+   map_features §11 calls the Garage east opening a door; layout_notes §6 (the authority on glyphs) a window:
+   we follow layout_notes. map_features §11 also lists Meeting Hall east windows that the r6calls 1F image
+   doesn't draw: are there windows in the Meeting Hall's east wall?
+6. **Barricades (P10):** exterior doors and windows start barricaded, inside doorways start as empty frames.
+   Any inside doorway that starts barricaded, or an outside one that doesn't?
+7. **Drone holes (P13):** a 0.4 × 0.2 m slot at floor level, centred on r6calls' drone-tunnel icon.
+8. **Soft-wall sections (P14):** r6calls' separators, except Ulo's SW-2F-01 (3), SW-2F-02 and SW-2F-04 (2). The
+   long walls most likely to take 3: SW-B-01, SW-1F-06, SW-B-04, SW-B-05, SW-1F-01, SW-1F-17, SW-2F-05.
+9. **Garage south wall (P15, SW-1F-17):** a normal reinforceable soft wall, or a garage door?
+10. **Floor frames (P2):** B and 3F are placed over 1F by assumption (B as drawn; 3F scaled onto the tower
+    walls). It decides where the hatches and stairs land (M2).
+11. **Play area (P25, P26):** x −210 to 535, y −70 to 490 u (about 112 × 84 m), with 4 m invisible walls at the
+    edge; the ground is flat at 1F level; a fall 30 m under the basement puts you back at the lab spawn.
+12. **Spawns (P27, P29):** the lab spawn is just outside the Main Entrance; the attacker spawns are r6calls'
+    insertion points (A Junkyard, B Street, C Construction), facing the building. How spread out are the five
+    spawn spots of each group?
+13. **Where r6calls and the official blueprint disagree (D-078):** we follow the official blueprint: SF-2F-10
+    (Trophy) and SF-2F-11 (White Stairs landing) are soft floors, and five soft-floor areas use Ubisoft's
+    bigger extents. Open: the Game Room's south window and the 2F Small Tower's south opening (r6calls 2026 has
+    them, the 2020 blueprint doesn't).
+
+Later milestones add their placeholders here as they build them: soft-floor tiles (P16), hatches (P17), stairs
+(P19), the ladder (P20), the Cat Walk (P21), rails (P22), the Meeting Hall's height (P23), roofs (P24), defender
+spawns (P28), bombs (P30), cameras (P31), ingredients (P32), rappel faces (P33), zones (P34), props (P35), the two
+openings above (P36), and fall damage from the roofs (P37).
 
 ### [core_mechanics.md](core_mechanics.md) — 16
 

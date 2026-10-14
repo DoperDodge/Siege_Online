@@ -5,6 +5,75 @@ known issues, and what's next.
 
 ---
 
+## Phase 5 — Oregon greybox · 🚧 in progress (M1 of 8 done)
+
+**Done when (PLAN §17):** you walk it and sign off on layout accuracy. Rappel (M8) comes before the Phase 5
+report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIGN.md`.
+
+| Milestone | Status |
+|---|---|
+| M1 Oregon 1F walkable, offline and online (generator, wall extraction, engine prep) | ✅ 1F built from the floor plans; browser test; renderer speed-ups (instancing, stats, shadows) — see below |
+| M2 All storeys stacked: B, 2F, Cat Walk; rooms and callouts; ceilings, soft floors, hatches, drone holes; storey views | ⏳ |
+| M3 Stairs and the ladder (grab it from the top too) | ⏳ |
+| M4 Roofs, the outside and the three attacker spawns; free camera | ⏳ |
+| M5 Sites, defender spawns, cameras, ingredients, zones, cover props | ⏳ |
+| M6 Walk-ready: every check, performance on Oregon, your walk #1 | ⏳ |
+| M7 Your corrections, round by round, to sign-off | ⏳ |
+| M8 Rappel | ⏳ |
+
+### What's done (M1)
+- **Walls from the floor plans (D-071):** `tools/mapgen/extract` reads r6calls' Oregon map (the floor images and
+  their soft-wall, hatch and drone-hole overlays) and checks it against Ubisoft's official blueprint. It finds
+  every wall, door, window, soft wall and drone hole on B, 1F, 2F and the Cat Walk (285 wall pieces, 69
+  openings, all 32 soft walls), and writes only numbers to `data/maps/oregon/extracted.json`. Those became one
+  file per floor (`walls_<floor>.json`): wall lines with their soft sections, doors, windows, passages and drone
+  holes, each tied to the research row it answers to. The 2F image is drawn 2.4% larger than 1F, so each floor
+  has its own frame (D-072).
+- **The generator (D-070):** `npm run mapgen` compiles `data/maps/oregon/layout.json` and its parts into
+  `level.json`, the level the game loads: hard walls, the 17 soft walls of 1F as reinforceable panels with
+  their research section counts, door and window frames (exterior ones barricaded, inside doorways empty, glass
+  on windows; D-074), drone-hole slots, the ground, the play area's edge and the spawns. Hard geometry never
+  overlaps a soft wall (D-075). Only 1F is compiled so far.
+- **Checks:** level.json must equal what the layout compiles to; the compiled walls must enclose everything the
+  plan does; the wall files must still match the extraction; every 1F soft wall, door, exterior opening and
+  passage in the research must be there with the research's type and its door-or-window guess.
+- **Engine:** a faster physics refresh (D-073: room step p99 7.6 → 3.8 ms on an Oregon-sized level, movement
+  identical), map data in the level format (spawn sides, invisible blockers, bounds, storeys, rooms, sites,
+  cameras, zones; D-076), and a kill plane: fall out of the map and you're back at the start.
+- **The Oregon page**, offline and online, with Go to for the main rooms and the three attacker spawns; the
+  destruction tools work there as in the Destruction Lab.
+- **Our 1F plan** is in `research/oregon/compare/1F.svg` (open it in a browser). The overlay page puts it over
+  the official blueprint and the r6calls image on your PC (the images stay out of the repo, D-079).
+- **Renderer (E4):** in progress (instanced static geometry, a stats overlay with FPS and 1% lows, shadows
+  redrawn only when something changes, a 1 m floor grid, soft-wall section seams).
+
+### How to test (needs Node 22.12+)
+1. `npm ci`, then `npm run dev` and, in a second terminal, `npm run build -w @redmond/server && npm start`.
+2. Open http://localhost:5173/labs/oregon.html (offline) or `?online` (a room on your local server; send the
+   invite link to play together). You start outside the Main Entrance.
+3. Walk 1F against the blueprint: every wall, door and window where it should be; the 17 soft walls blue with
+   their ids (SW-1F-01 … 17) and sections; exterior doors and windows barricaded. Note anything wrong with the
+   room and roughly where (Go to names the rooms).
+4. The plan: open `research/oregon/compare/1F.svg`. To see it over the official blueprint:
+   `npm run mapgen:refs` (downloads the blueprint and r6calls' map into a gitignored folder), then
+   `npm run mapgen:compare`, and open `builds/mapgen/compare/index.html`.
+5. Checks: `npm run typecheck`, `npm test`, `npm run build && npm run test:e2e` (adds `oregon.mjs`),
+   `npm run mapgen -- --check`.
+
+### Known issues
+- Only 1F exists: no ceilings yet (you see the sky), no stairs, bare ground outside. Storeys come in M2,
+  stairs in M3, roofs and the outside in M4.
+- Every size is a placeholder until you've walked it: 1 u of the plans = 0.15 m, walls 3 m, doors 2.1 m
+  (research/OPEN_QUESTIONS.md, "Placeholders added while building Phase 5").
+- Go to uses hand-picked room centres until rooms are computed from the walls (M2).
+- The online test on Railway needs Railway to deploy this branch (it deploys the Phase 4 branch today).
+
+### Next: Phase 5 M2 — all storeys
+B, 2F and the Cat Walk through their frames; rooms and callouts; ceilings with stairwell holes; soft floors in
+tiles; hatches; storey views and the plan view.
+
+---
+
 ## Phase 4 — Destruction v1 · ✅ complete (PR #5)
 
 **Done when (PLAN §17):** wallbangs, punch holes and reinforcing are all synced across clients.
