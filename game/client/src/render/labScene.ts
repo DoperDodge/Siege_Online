@@ -30,6 +30,11 @@ export function createRenderer(container: HTMLElement, low = false): THREE.WebGL
   // Only the level casts shadows, and it changes only when a panel does: the shadow map is drawn when the
   // page asks for it (shadowMap.needsUpdate), not every frame (tools/mapgen/DESIGN.md amendment 8).
   renderer.shadowMap.autoUpdate = false;
+  // A lost context takes the shadow map with it, and three only carries the old request over: draw it again.
+  // (three's own listener, added by the constructor, has rebuilt the renderer's state by the time this runs.)
+  renderer.domElement.addEventListener("webglcontextrestored", () => {
+    renderer.shadowMap.needsUpdate = true;
+  });
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   container.appendChild(renderer.domElement);
@@ -50,11 +55,14 @@ export function warmShaders(renderer: THREE.WebGLRenderer, scene: THREE.Scene, c
     o.visible = true;
     o.frustumCulled = false;
   });
+  const shadowsAsked = renderer.shadowMap.needsUpdate;
   renderer.render(scene, camera);
   for (const [o, visible, culled] of saved) {
     o.visible = visible;
     o.frustumCulled = culled;
   }
+  // A shadow map that draw made has the hidden things in it too: ask for it again, with the scene as it is.
+  if (shadowsAsked) renderer.shadowMap.needsUpdate = true;
 }
 
 /** A level's scene, and the parts of it the page works with. */

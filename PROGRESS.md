@@ -34,9 +34,10 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
   their research section counts, door and window frames (exterior ones barricaded, inside doorways empty, glass
   on windows; D-074), drone-hole slots, the ground, the play area's edge and the spawns. Hard geometry never
   overlaps a soft wall (D-075). Only 1F is compiled so far.
-- **Checks:** level.json must equal what the layout compiles to; the compiled walls must enclose everything the
-  plan does; the wall files must still match the extraction; every 1F soft wall, door, exterior opening and
-  passage in the research must be there with the research's type and its door-or-window guess.
+- **Checks:** level.json must equal what the layout compiles to; the compiled walls must close every room the
+  plan draws (no slot between rooms or to the outside); the wall files must still match the extraction, and
+  every extracted item is used or listed as dropped with a reason; every 1F soft wall, door, exterior opening
+  and passage in the research must be there with the research's type and its door-or-window guess.
 - **Engine:** a faster physics refresh (D-073: room step p99 7.6 → 3.8 ms on an Oregon-sized level, movement
   identical), map data in the level format (spawn sides, invisible blockers, bounds, storeys, rooms, sites,
   cameras, zones; D-076), and a kill plane: fall out of the map and you're back at the start.
@@ -44,11 +45,18 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
   destruction tools work there as in the Destruction Lab.
 - **Our 1F plan** is in `research/oregon/compare/1F.svg` (open it in a browser). The overlay page puts it over
   the official blueprint and the r6calls image on your PC (the images stay out of the repo, D-079).
+- **Review fixes:** a review of M1 found 11 problems, all fixed. The Big Tower's east wall had been merged into
+  the facade (walls now group by thickness first). The leak check now finds gaps between rooms and 5 cm slots.
+  Corners next to a door or a soft wall get a post, a wall ending on a soft wall meets its face, and a wall's
+  height changes where it goes from outside to inside. The image check now reads what git stages and catches
+  archives and image bytes anywhere. A downed body the kill plane brings back no longer credits whoever downed
+  it. The physics guard test now runs Rapier's own step. Shadows come back after the graphics card resets. The
+  stats overlay shows the work time a frame.
 - **Drawing a whole map (D-077):** level boxes are drawn in batches (one instanced mesh per material and
   storey), the floors carry a 1 m grid to judge distances by, soft walls show their section seams and a
   "N sections" label, and shadows are redrawn only when a wall changes (players and guns cast none now). A
-  stats overlay in every lab (F8, or `?stats` in the address) shows FPS, frame time, the 1% low and draw
-  calls against the target: 120 FPS on average and 90 at the 1% lows, at 1080p on High.
+  stats overlay in every lab (F8, or `?stats` in the address) shows FPS, frame time, the 1% low, the work
+  time a frame and draw calls against the target: 120 FPS on average and 90 at the 1% lows, at 1080p on High.
 
 ### How to test (needs Node 22.12+)
 1. `npm ci`, then `npm run dev` and, in a second terminal, `npm run build -w @redmond/server && npm start`.
@@ -58,6 +66,9 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
    their ids (SW-1F-01 … 17) and sections; exterior doors and windows barricaded. Note anything wrong with the
    room and roughly where (Go to names the rooms).
 4. Press F8 and read the overlay on your PC: average FPS and the 1% low (target 120 and 90 at 1080p High).
+   The browser draws no faster than your display refreshes, so this needs a 120 Hz or faster display (set to
+   120 Hz or more). On a 60 Hz display FPS stops at 60: read the work time instead (8.3 ms or less a frame
+   leaves room for 120 FPS, on the CPU side).
 5. The plan: open `research/oregon/compare/1F.svg`. To see it over the official blueprint:
    `npm run mapgen:refs` (downloads the blueprint and r6calls' map into a gitignored folder), then
    `npm run mapgen:compare`, and open `builds/mapgen/compare/index.html`.

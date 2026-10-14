@@ -656,7 +656,7 @@ export async function startLab(o: LabOptions): Promise<void> {
         ${row(`Hold <kbd>${keyLabel(k.interact)}</kbd>`, "Revive a downed teammate (4 s, facing them)")}
         ${hooks.help.map(([keys, what]) => row(keys, what)).join("")}
         ${row("<kbd>F3</kbd> / <kbd>F4</kbd>", "Hitboxes / third-person view")}
-        ${row("<kbd>F8</kbd>", "Stats: frame rate, frame time, 1% low, draw calls (<code>?stats</code> in the link shows them from the start)")}
+        ${row("<kbd>F8</kbd>", "Stats: frame rate, frame time, 1% low, work time, draw calls (<code>?stats</code> in the link shows them from the start)")}
         ${row("<kbd>Esc</kbd>", "Pause: settings, operator, go-to menu")}
       </table>
       <h2>Try this</h2>
@@ -780,7 +780,15 @@ export async function startLab(o: LabOptions): Promise<void> {
   let frames = 0;
   let fpsFrames = 0;
   let fpsAt = performance.now();
+  /** Shadow-map redraws so far (they happen on request only: createRenderer). */
+  let shadowDraws = 0;
+  /** Render the world, counting a shadow-map redraw if one was asked for. */
+  function drawWorld() {
+    if (renderer.shadowMap.enabled && renderer.shadowMap.needsUpdate && !renderer.getContext().isContextLost()) shadowDraws++;
+    renderer.render(scene, camera);
+  }
   function frame(now: number) {
+    const workFrom = performance.now();
     renderer.info.reset();
     // The frame's timestamp can predate the code that ran just before it (a page busy for seconds
     // starting up gets a first frame stamped from before): never step time backwards.
@@ -790,8 +798,8 @@ export async function startLab(o: LabOptions): Promise<void> {
     if (net && !followServer(elapsed)) {
       // Between bodies (joining, respawning, a new operator): wait for the server's exact state.
       acc = 0;
-      renderer.render(scene, camera);
-      stats.frame(now, renderer.info.render.calls, renderer.info.render.triangles);
+      drawWorld();
+      stats.frame(now, performance.now() - workFrom, renderer.info.render.calls, renderer.info.render.triangles);
       $(".center-msg").textContent = disconnected ?? "Waiting for the server…";
       $(".center-msg").classList.remove("hidden");
       requestAnimationFrame(frame);
@@ -849,11 +857,11 @@ export async function startLab(o: LabOptions): Promise<void> {
     // A panel that changed changes the level's shadows too.
     if (panelView.update()) renderer.shadowMap.needsUpdate = true;
     for (const fn of hooks.frame) fn(now, renderTick);
-    renderer.render(scene, camera);
+    drawWorld();
     const inHand = viewed.id === possessed()?.id && !thirdPerson && !ctrl.shellCam && ctrl.swapPhase === 0 ? (viewed.loadout?.weapons[rs.slot] ?? null) : null;
     viewmodel.update(now, elapsed, inHand, rs, viewed.loadout?.swapTicks ?? 1);
     viewmodel.render(renderer);
-    stats.frame(now, renderer.info.render.calls, renderer.info.render.triangles);
+    stats.frame(now, performance.now() - workFrom, renderer.info.render.calls, renderer.info.render.triangles);
     const held = viewed.loadout?.weapons[rs.slot];
     const aimed = inHand !== null && viewmodel.aim > 0.9;
     crosshair.update({
@@ -997,6 +1005,10 @@ export async function startLab(o: LabOptions): Promise<void> {
       report,
       get frames() {
         return frames;
+      },
+      /** Shadow-map redraws so far (tools/e2e/oregon.mjs checks a lost and restored context asks for one). */
+      get shadowDraws() {
+        return shadowDraws;
       },
       /** Online state for the two-browser test (tools/e2e/online-lab.mjs). */
       get net() {

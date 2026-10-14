@@ -6,24 +6,31 @@ import { describe, expect, it } from "vitest";
 import { Btn, hashPawnState, L_BACK, L_CORE, L_FRONT, refreshBroadPhase, Sim, Stance, STATIC_GROUPS, type InputCmd, type PanelOp, type World } from "../src/index.js";
 import { input } from "./helpers.js";
 
-/** Make this world's refresh do what world.step() does: the pipeline step, then the handle re-mapping. */
-function useWorldStep(world: World): { remaps: number } {
+/**
+ * Make this world's refresh call Rapier's own world.step() instead, whatever it does in this version: the
+ * baseline the direct pipeline call is held to.
+ */
+function useWorldStep(world: World): { steps: number } {
   const pipeline = world.physicsPipeline;
-  const step = pipeline.step.bind(pipeline);
-  const remap = (world as unknown as { mapNewSoftBodies(): void }).mapNewSoftBodies.bind(world);
-  const count = { remaps: 0 };
-  pipeline.step = (...args: Parameters<typeof pipeline.step>) => {
-    step(...args);
-    remap();
-    count.remaps++;
+  const direct = pipeline.step;
+  const count = { steps: 0 };
+  const viaWorld = () => {
+    pipeline.step = direct; // world.step() runs the real pipeline step, not this
+    try {
+      world.step();
+    } finally {
+      pipeline.step = viaWorld;
+    }
+    count.steps++;
   };
+  pipeline.step = viaWorld;
   return count;
 }
 
 /** Two bodies walk, sprint, vault and crouch into walls and through a cut wall; one leaves and comes back. */
-async function script(stock: boolean): Promise<{ hashes: number[]; travelled: number; remaps: number }> {
+async function script(stock: boolean): Promise<{ hashes: number[]; travelled: number; steps: number }> {
   const sim = await Sim.create("movement_lab");
-  const count = stock ? useWorldStep(sim.world) : { remaps: 0 };
+  const count = stock ? useWorldStep(sim.world) : { steps: 0 };
   const a = sim.addPlayer("a", "sledge");
   let b = sim.addPlayer("b", "thermite");
   const hashes: number[] = [];
@@ -45,7 +52,7 @@ async function script(stock: boolean): Promise<{ hashes: number[]; travelled: nu
     for (const id of [...sim.pawns.keys()].sort((p, q) => p - q)) hashes.push(id, hashPawnState(sim.pawns.get(id)!.state));
   }
   const end = sim.pawns.get(a.possessedPawnId)!.state;
-  return { hashes, travelled: Math.hypot(end.x - x0, end.z - z0), remaps: count.remaps };
+  return { hashes, travelled: Math.hypot(end.x - x0, end.z - z0), steps: count.steps };
 }
 
 describe("broad-phase refresh", () => {
@@ -53,7 +60,7 @@ describe("broad-phase refresh", () => {
     const fast = await script(false);
     const stock = await script(true);
     expect(fast.travelled).toBeGreaterThan(3);
-    expect(stock.remaps).toBeGreaterThan(640);
+    expect(stock.steps).toBeGreaterThan(640);
     expect(fast.hashes.length).toBe(stock.hashes.length);
     expect(fast.hashes).toEqual(stock.hashes);
   });
@@ -73,6 +80,9 @@ describe("broad-phase refresh", () => {
     world.removeCollider(box, false);
     refreshBroadPhase(world);
     expect(down(20)?.timeOfImpact).toBeCloseTo(9, 6);
-    expect(world.colliders.len()).toBe(world.colliders.getAll().length);
+    // Every collider in the engine (the WASM set) has its wrapper, and no wrapper outlives its collider.
+    const raw = (world.colliders as unknown as { raw: { len(): number; forEachColliderHandle(f: (h: number) => void): void } }).raw;
+    expect(world.colliders.len()).toBe(raw.len());
+    raw.forEachColliderHandle((h) => expect(world.colliders.get(h), `collider ${h}`).toBeTruthy());
   });
 });

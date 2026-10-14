@@ -1,8 +1,9 @@
 // End-to-end check of the Oregon greybox (Phase 5 M1: 1F walkable offline and online). Offline (the page's own
 // room in a Web Worker): you start outside the Main Entrance, knife its barricade down and walk into the Lobby,
-// then the pause menu's Go to puts you in the Kitchen. Online, two pages at 100 ms of simulated round trip:
-// A breaks the Main Entrance barricade and B sees exactly the server's panels. Screenshots go to builds/e2e.
-// Requires `npm run build` first.
+// then the pause menu's Go to puts you in the Kitchen. With shadows on, a lost and restored WebGL context
+// draws the shadows again (they are drawn on request only, D-077). Online, two pages at 100 ms of simulated
+// round trip: A breaks the Main Entrance barricade and B sees exactly the server's panels. Screenshots go to
+// builds/e2e. Requires `npm run build` first.
 import { spawn } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -90,6 +91,31 @@ try {
   result.checks.goToKitchen = true;
   await off.screenshot({ path: shot("oregon-kitchen.png") });
   await off.close();
+
+  // ---- shadows on: a lost and restored WebGL context draws the shadow map again
+  const gfx = await open(`${BASE}/labs/oregon.html?autotest=1&op=sledge`);
+  await sleep(500);
+  const drawsBefore = await gfx.evaluate(() => window.__lab.shadowDraws);
+  await gfx.evaluate(async () => {
+    const canvas = document.querySelector("#view canvas");
+    const lose = canvas.getContext("webgl2").getExtension("WEBGL_lose_context");
+    const once = (type) => new Promise((r) => canvas.addEventListener(type, r, { once: true }));
+    const lost = once("webglcontextlost");
+    lose.loseContext();
+    await lost;
+    const restored = once("webglcontextrestored");
+    lose.restoreContext();
+    await restored;
+  });
+  let drawsAfter = drawsBefore;
+  for (let i = 0; i < 50 && drawsAfter <= drawsBefore; i++) {
+    await sleep(100);
+    drawsAfter = await gfx.evaluate(() => window.__lab.shadowDraws);
+  }
+  result.shadowDraws = { before: drawsBefore, after: drawsAfter };
+  result.checks.shadowsDrawnAgainAfterContextRestore = drawsBefore >= 1 && drawsAfter > drawsBefore;
+  await gfx.screenshot({ path: shot("oregon-context-restored.png") });
+  await gfx.close();
 
   // ---- online: what one player breaks, the other sees
   const a = await open(`${BASE}/labs/oregon.html?online&autotest=1&lowgfx&op=sledge&lag=${LAG}`);

@@ -231,8 +231,12 @@ export class Room {
   readonly rules: ModeData;
   /** Shots judged this tick, applied together at its end (DECISIONS D-044). */
   private judged: JudgedShot[] = [];
-  /** Who downed each body that is down now: they get the kill when it dies (research/core_mechanics.md §10.2). */
-  private readonly downedBy = new Map<number, { ctrl: number; weapon: string }>();
+  /**
+   * Who downed each body that is down now, and in which of its lives (Pawn.life): they get the kill when it
+   * dies (research/core_mechanics.md §10.2). A body that came back since (a teleport, the kill plane in the
+   * middle of a step, a respawn) is in a new life, and the entry no longer counts.
+   */
+  private readonly downedBy = new Map<number, { ctrl: number; weapon: string; life: number }>();
 
   private constructor(
     readonly code: string,
@@ -722,7 +726,7 @@ export class Room {
     const weapon = by.attacker?.weaponId ?? "";
     const friendly = by.attacker !== null && victim.team === by.attacker.team;
     if (r.outcome === "downed") {
-      this.downedBy.set(victim.id, { ctrl, weapon });
+      this.downedBy.set(victim.id, { ctrl, weapon, life: victim.life });
       const e: GameEvent = { kind: "down", victimPawn: victim.id, victimCtrl: victim.ownerId ?? 0, downerCtrl: ctrl, weapon, cause: by.cause, friendly };
       for (const m of this.members.values()) m.events.push(e);
     }
@@ -737,9 +741,10 @@ export class Room {
   private announceDeath(victim: Pawn, finisherCtrl: number, weapon: string, cause: Cause, headshot: boolean, friendly: boolean) {
     this.stats.kills++;
     const ownerCtrl = victim.ownerId ?? 0;
-    const downer = this.downedBy.get(victim.id);
+    const entry = this.downedBy.get(victim.id);
     this.downedBy.delete(victim.id);
-    // Downed by nobody (a lab tool, reflected damage): the kill is the finisher's.
+    const downer = entry?.life === victim.life ? entry : undefined;
+    // Downed by nobody (a lab tool, reflected damage) or in an earlier life: the kill is the finisher's.
     const killerCtrl = downer?.ctrl || finisherCtrl;
     const assistCtrl = downer?.ctrl && finisherCtrl !== downer.ctrl ? finisherCtrl : 0;
     const e: GameEvent = isIdleShell(this.sim, victim)
