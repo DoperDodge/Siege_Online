@@ -120,7 +120,7 @@ export function decodeHelloRest(r: ByteReader): { name: string; dataHash: number
 }
 
 /** Levels a client may ask a new room to load (the lab pages'). */
-export const ROOM_LEVELS = ["movement_lab", "range_lab", "destruction_lab"] as const;
+export const ROOM_LEVELS = ["movement_lab", "range_lab", "destruction_lab", "oregon"] as const;
 export const encodeCreateRoom = (levelId: string = "movement_lab") => new ByteWriter().u8(Msg.CreateRoom).str(levelId).finish();
 /** Throws ProtocolError for a level that isn't in ROOM_LEVELS. */
 export function decodeCreateRoom(r: ByteReader): { levelId: string } {

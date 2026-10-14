@@ -1,0 +1,68 @@
+{
+ "_doc": "Oregon authoring layout (tools/mapgen/DESIGN.md §4): units, floor frames, storeys, defaults and everything placed by hand. tools/mapgen compiles it with its parts to level.json (npm run mapgen); nothing here is loaded at runtime. Plan positions are u in the frame each record names (1F = world); heights and sizes are metres. Every placeholder is listed in _unverified (paths here, field names on records) and in research/OPEN_QUESTIONS.md; _sources says where each answer came from.",
+ "_unverified": [
+  "units.mPerU",
+  "frames.B",
+  "frames.3F",
+  "storeys",
+  "defaults.wallM",
+  "defaults.wallHeightM",
+  "defaults.door",
+  "defaults.window",
+  "defaults.open",
+  "defaults.droneHole",
+  "defaults.groundM",
+  "defaults.boundary",
+  "defaults.killDepthM"
+ ],
+ "_sources": {
+  "units.mPerU": "research/oregon/layout_notes.md §1: the school bus is about 77 u long (ESTIMATE, ±15%)",
+  "frames.2F": "tools/mapgen/extract xfloor.py: 22 + 18 stacked 1F/2F wall pairs, rms 0.29 / 0.31 u (extracted.json cross_floor)",
+  "frames.3F": "assumed: the Cat Walk walls stand on the 2F tower walls (scale 1.0767 / 1.078), then the 2F frame",
+  "frames.B": "identity; the alternative scales about the 2F fixed point (hatch H1 favours identity, the stairwells the scale)",
+  "storeys": "research/oregon/layout_notes.md §1 placeholders: storeys 3.2 / 3.2 / 3.0 m",
+  "spawns": "r6calls insertion points (extracted.json points, EXT ip rects); lab spawn 0 is ours (P29)",
+  "walls": "walls_<floor>.json, seeded from extracted.json (r6calls floor rasters), research ids from surfaces.md §2 and layout_notes.md §6",
+  "sections SW-2F-01, SW-2F-02, SW-2F-04": "Ulo 2026-10-09"
+ },
+ "id": "oregon",
+ "name": "Oregon",
+ "emit": ["1F"],
+ "parts": ["walls_B.json", "walls_1F.json", "walls_2F.json", "walls_3F.json", "exterior.json"],
+ "units": { "mPerU": 0.15, "snapM": 0.05 },
+ "frames": {
+  "world": { "ax": 1, "bx": 0, "ay": 1, "by": 0, "status": "reference", "use": "main", "note": "the 1F image's frame" },
+  "1F": { "ax": 1, "bx": 0, "ay": 1, "by": 0, "status": "reference", "use": "main", "note": "the world frame" },
+  "2F": { "ax": 0.9772305, "bx": -0.0195446, "ay": 0.9745639, "by": 2.7385245, "status": "fitted", "use": "main", "note": "x1 = (x2 - 0.02) / 1.0233, y1 = (y2 + 2.81) / 1.0261: the 2F image is drawn about 2.4% larger" },
+  "3F": { "ax": 0.9076164, "bx": 8.4757445, "ay": 0.9040481, "by": 9.3109544, "status": "assumed", "use": "main", "note": "x2 = (x3 + 9.36) / 1.0767, y2 = (y3 + 7.27) / 1.078, then the 2F frame" },
+  "B": { "ax": 1, "bx": 0, "ay": 1, "by": 0, "status": "assumed", "use": "main", "alt": { "ax": 1.024, "bx": 0.24, "ay": 1.024, "by": -2.568 }, "note": "alt: x1 = -10 + 1.024 (xB + 10), y1 = 107 + 1.024 (yB - 107)" }
+ },
+ "storeys": [
+  { "id": "B", "floorY": -3.2, "slabM": 0.2 },
+  { "id": "1F", "floorY": 0, "slabM": 0.2 },
+  { "id": "2F", "floorY": 3.2, "slabM": 0.2 },
+  { "id": "3F", "floorY": 6.2, "slabM": 0.2 }
+ ],
+ "defaults": {
+  "wallM": { "int": 0.2, "ext": 0.3 },
+  "wallHeightM": 3,
+  "door": { "headM": 2.1, "barricadeM": 0.1 },
+  "window": { "sillM": 0.9, "headM": 2.1, "glass": true, "glassM": 0.02, "barricadeM": 0.06 },
+  "open": { "headM": 2.1 },
+  "droneHole": { "wM": 0.4, "hM": 0.2 },
+  "softFloor": { "tileMaxM": 4 },
+  "rail": { "hM": 1 },
+  "stairs": { "riserMaxM": 0.2, "treadM": 0.3, "headroomM": 2 },
+  "boundary": { "hM": 4, "thickM": 0.5 },
+  "groundM": 0.2,
+  "killDepthM": 30,
+  "junctionU": 1
+ },
+ "spawns": [
+  { "id": "lab", "side": "lab", "group": "LAB", "level": "EXT", "frame": "world", "at": [253, 295], "facing": 0, "src": "hand", "note": "just outside the Main Entrance, facing it (P29)", "_unverified": ["at"] },
+  { "id": "A_JUNKYARD", "side": "attack", "group": "A_JUNKYARD", "level": "EXT", "frame": "world", "at": [-140.22, 305.88], "facing": "building", "src": "vector", "_unverified": ["facing"] },
+  { "id": "B_STREET", "side": "attack", "group": "B_STREET", "level": "EXT", "frame": "world", "at": [287.5, 420.61], "facing": "building", "src": "vector", "_unverified": ["facing"] },
+  { "id": "C_CONSTRUCTION", "side": "attack", "group": "C_CONSTRUCTION", "level": "EXT", "frame": "world", "at": [466.37, -3.2], "facing": "building", "src": "vector", "_unverified": ["facing"] }
+ ],
+ "rappel": { "refuse": [] }
+}

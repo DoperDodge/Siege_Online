@@ -1,0 +1,7 @@
+{
+ "_doc": "Oregon outside the building (tools/mapgen/DESIGN.md §5.9): the play area (world u), exterior items and cover props. M1 has the play area only; the exterior blockout arrives in M4 and props in M5. The play area is the r6calls background's extent, pushed out to at least 10 m behind each attacker insertion point (P25).",
+ "playable": [-210, -70, 535, 490],
+ "items": [],
+ "props": [],
+ "_unverified": ["playable"]
+}

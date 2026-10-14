@@ -1,0 +1,95 @@
+{
+ "_doc": "Oregon 2F wall lines, in the 2F image's own frame (u; layout.json frames map it to the world). Seeded from extracted.json by `npm run mapgen:import`, then curated by hand: every hand edit sets src \"hand\" (or \"ulo\") and a note. A line is HARD wherever no span covers it. tools/mapgen/DESIGN.md §4.",
+ "floor": "2F",
+ "frame": "2F",
+ "walls": [
+  {"id": "2F.w019", "axis": "H", "at": 48.31, "span": [243.77, 304.09], "weight": "ext", "kind": "wall", "from": ["2-w019", "2-w020"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
+   {"kind": "WINDOW", "id": "2F.o006", "at": [283.99, 293.16], "research": "layout_notes §6: 2F_TOWER (NE part) | EXT north (EXT_OPENING (window? UNVERIFIED))", "from": ["2-o006"], "note": "kind from the research guess", "_unverified": ["kind"]}
+  ]},
+  {"id": "2F.w041", "axis": "H", "at": 75.82, "span": [217.31, 248], "weight": "ext", "kind": "wall", "from": ["2-w041", "2-w042"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
+   {"kind": "WINDOW", "id": "2F.o014", "at": [228.95, 238.48], "research": "layout_notes §6: 2F_TOWER (W part) | EXT north (EXT_OPENING (window? UNVERIFIED))", "from": ["2-o014"], "note": "kind from the research guess", "_unverified": ["kind"]}
+  ]},
+  {"id": "2F.w032", "axis": "H", "at": 98.33, "span": [217.31, 304.09], "weight": "int", "kind": "wall", "from": ["2-w032", "2-w033", "2-w034a", "2-w034b", "2-w034c", "2-w035", "2-w036"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
+   {"kind": "WINDOW", "id": "2F.o012", "at": [226.84, 236.01], "research": "layout_notes §6: 2F_TOWER (W part) | RF_MEETING_W (EXT_OPENING (UNVERIFIED))", "from": ["2-o012"], "note": "kind from rule P9 (no research guess)", "_unverified": ["kind"]},
+   {"kind": "SOFT", "id": "SW-2F-08", "at": [251.11, 272.7], "sections": 2, "research": "surfaces §2: 2F_ATTIC | 2F_TOWER (Big Tower 2F)", "from": ["2-w034b"], "_unverified": ["sections"]},
+   {"kind": "WINDOW", "id": "2F.o013", "at": [283.28, 292.45], "research": "layout_notes §6: 2F_TOWER (NE part) | RF_MEETING_E (EXT_OPENING (UNVERIFIED))", "from": ["2-o013"], "note": "kind from rule P9 (no research guess)", "_unverified": ["kind"]}
+  ]},
+  {"id": "2F.w013", "axis": "H", "at": 160.14, "span": [136.88, 250.82], "weight": "ext", "kind": "wall", "from": ["2-w013", "2-w014"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
+   {"kind": "WINDOW", "id": "2F.o004", "at": [183.09, 197.2], "research": "layout_notes §6: 2F_KIDS_DORMS | EXT north (2-storey drop) (EXT_OPENING (window; no roof outside))", "from": ["2-o004"], "note": "kind from the research guess", "_unverified": ["kind"]}
+  ]},
+  {"id": "2F.w000", "axis": "H", "at": 178.48, "span": [2.82, 101.95], "weight": "ext", "kind": "wall", "from": ["2-w000", "2-w001"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
+   {"kind": "WINDOW", "id": "2F.o000", "at": [85.72, 93.84], "research": "layout_notes §6: 2F_OFFICE | RF_DINING (north part) (EXT_OPENING (UNVERIFIED))", "from": ["2-o000"], "note": "kind from rule P9 (no research guess)", "_unverified": ["kind"]}
+  ]},
+  {"id": "2F.w022", "axis": "H", "at": 188.58, "span": [208.49, 299.86], "weight": "int", "kind": "wall", "from": ["2-w022", "2-w023a", "2-w023b", "2-w023c", "2-w024", "2-w025"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
+   {"kind": "DOOR", "id": "2F.o007", "at": [214.84, 222.96], "research": "layout_notes §6: 2F_MIDDLE | 2F_LOW_ATTIC (DOOR)", "from": ["2-o007"], "_unverified": []},
+   {"kind": "SOFT", "id": "SW-2F-05", "at": [248.73, 272.61], "sections": 2, "research": "surfaces §2: 2F_LOW_ATTIC | 2F_TROPHY", "from": ["2-w023b"], "_unverified": ["sections"]},
+   {"kind": "WINDOW", "id": "2F.o008", "at": [286.81, 294.22], "research": "layout_notes §6: 2F_ARMORY_CORRIDOR | RF_MEETING_E (EXT_OPENING (window? UNVERIFIED))", "from": ["2-o008"], "note": "kind from the research guess", "_unverified": ["kind"]}
+  ]},
+  {"id": "2F.w038", "axis": "H", "at": 192.42, "span": [19.4, 44.1], "weight": "int", "kind": "wall", "spans": [], "from": ["2-w038"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "2F.w003", "axis": "H", "at": 206.18, "span": [136.88, 210.96], "weight": "int", "kind": "wall", "from": ["2-w003a", "2-w003b", "2-w003c", "2-w004"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
+   {"kind": "SOFT", "id": "SW-2F-01", "at": [146.47, 173.49], "sections": 3, "research": "surfaces §2: 2F_KIDS_DORMS | 2F_DORMS_MAIN_HALL", "from": ["2-w003b"], "_unverified": []},
+   {"kind": "DOOR", "id": "2F.o001", "at": [186.62, 195.44], "research": "layout_notes §6: 2F_KIDS_DORMS | 2F_DORMS_MAIN_HALL (DOOR)", "from": ["2-o001"], "_unverified": []}
+  ]},
+  {"id": "2F.w005", "axis": "H", "at": 207.06, "span": [296.33, 341.49], "weight": "ext", "kind": "wall", "spans": [], "from": ["2-w005"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "2F.w026", "axis": "H", "at": 225.23, "span": [201.44, 283.28], "weight": "int", "kind": "wall", "from": ["2-w026", "2-w027", "2-w028"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
+   {"kind": "OPEN", "id": "2F.o009", "at": [213.78, 232.48], "research": "layout_notes §6: 2F_MIDDLE | 2F_GAME_ROOM (OPEN (doorway, no door glyph))", "from": ["2-o009"], "_unverified": []},
+   {"kind": "DOOR", "id": "2F.o010", "at": [261.06, 270.58], "research": "layout_notes §6: 2F_TROPHY | 2F_MASTER_BEDROOM (DOOR)", "from": ["2-o010"], "_unverified": []}
+  ]},
+  {"id": "2F.w016", "axis": "H", "at": 232.45, "span": [2.82, 101.95], "weight": "ext", "kind": "wall", "from": ["2-w016", "2-w017"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
+   {"kind": "WINDOW", "id": "2F.o005", "at": [48.68, 56.8], "research": "layout_notes §6: 2F_SMALL_TOWER | RF_DINING (south part) (EXT_OPENING (window? UNVERIFIED))", "from": ["2-o005"], "note": "kind from the research guess", "_unverified": ["kind"]}
+  ]},
+  {"id": "2F.w006", "axis": "H", "at": 255.32, "span": [136.88, 248.71], "weight": "int", "kind": "wall", "from": ["2-w006", "2-w007", "2-w008", "2-w009", "2-w010a", "2-w010b", "2-w010c"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
+   {"kind": "DOOR", "id": "2F.o002", "at": [187.32, 195.44], "research": "layout_notes §6: 2F_DORMS_MAIN_HALL | 2F_WHITE_STAIRS (DOOR)", "from": ["2-o002"], "_unverified": []},
+   {"kind": "WINDOW", "id": "2F.o003", "at": [206.02, 214.14], "research": "layout_notes §6: 2F_GAME_ROOM | EXT/roof south (EXT_OPENING (window? UNVERIFIED; r6calls 2026 only, Ubisoft's 2020 blueprint draws a solid wall: CONFLICT))", "from": ["2-o003"], "note": "kind from the research guess", "_unverified": ["kind"]},
+   {"kind": "SOFT", "id": "SW-2F-04", "at": [223.33, 246.21], "sections": 2, "research": "surfaces §2: 2F_GAME_ROOM | 2F_WALK_IN", "from": ["2-w010b"], "_unverified": []}
+  ]},
+  {"id": "2F.w011", "axis": "H", "at": 256.45, "span": [296.33, 341.49], "weight": "ext", "kind": "wall", "spans": [], "from": ["2-w011"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "2F.w029", "axis": "H", "at": 273.73, "span": [219.07, 283.28], "weight": "ext", "kind": "wall", "from": ["2-w029", "2-w030"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
+   {"kind": "DOOR", "id": "2F.o011", "at": [250.82, 260.35], "research": "layout_notes §6: 2F_MASTER_BEDROOM | EXT_BALCONY (EXT_OPENING (door? UNVERIFIED))", "from": ["2-o011"], "note": "kind from the research guess", "_unverified": ["kind"]}
+  ]},
+  {"id": "2F.w012", "axis": "H", "at": 276.9, "span": [137.94, 201.79], "weight": "ext", "kind": "wall", "spans": [], "from": ["2-w012"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "2F.w039", "axis": "H", "at": 281.14, "span": [279.05, 300.57], "weight": "ext", "kind": "wall", "spans": [], "from": ["2-w039"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "2F.w059", "axis": "V", "at": 4.94, "span": [176.36, 233.51], "weight": "ext", "kind": "wall", "spans": [], "from": ["2-w059"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "2F.w076", "axis": "V", "at": 20.64, "span": [191.18, 203.88], "weight": "int", "kind": "wall", "spans": [], "from": ["2-w076"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "2F.w066", "axis": "V", "at": 42.87, "span": [191.18, 234.57], "weight": "int", "kind": "wall", "spans": [], "from": ["2-w066"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "2F.w060", "axis": "V", "at": 64.03, "span": [176.36, 234.57], "weight": "int", "kind": "wall", "from": ["2-w060", "2-w061"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
+   {"kind": "DOOR", "id": "2F.o020", "at": [183.07, 192.59], "research": "layout_notes §6: 2F_SMALL_TOWER | 2F_OFFICE (DOOR)", "from": ["2-o020"], "_unverified": []}
+  ]},
+  {"id": "2F.w058", "axis": "V", "at": 99.84, "span": [177.42, 233.51], "weight": "ext", "kind": "wall", "spans": [], "from": ["2-w058"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "2F.w063", "axis": "V", "at": 139, "span": [158.02, 279.02], "weight": "ext", "kind": "wall", "from": ["2-w063", "2-w064"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
+   {"kind": "WINDOW", "id": "2F.o021", "at": [208.11, 222.58], "research": "layout_notes §6: RF_DINING | 2F_DORMS_MAIN_HALL (EXT_OPENING (window? UNVERIFIED) — the \"Big Window\")", "from": ["2-o021"], "note": "kind from the research guess", "_unverified": ["kind"]}
+  ]},
+  {"id": "2F.w074", "axis": "V", "at": 199.68, "span": [253.97, 279.02], "weight": "ext", "kind": "wall", "spans": [], "from": ["2-w074"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "2F.w067", "axis": "V", "at": 202.68, "span": [223.99, 256.44], "weight": "int", "kind": "wall", "from": ["2-w067a", "2-w067b", "2-w067c"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
+   {"kind": "SOFT", "id": "SW-2F-03", "at": [242.46, 254.08], "sections": 1, "research": "surfaces §2: 2F_DORMS_MAIN_HALL | 2F_GAME_ROOM", "from": ["2-w067b"], "_unverified": ["sections"]}
+  ]},
+  {"id": "2F.w068", "axis": "V", "at": 209.73, "span": [158.02, 207.41], "weight": "int", "kind": "wall", "from": ["2-w068a", "2-w068b", "2-w068c"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
+   {"kind": "SOFT", "id": "SW-2F-02", "at": [162.25, 178.8], "sections": 2, "research": "surfaces §2: 2F_KIDS_DORMS | 2F_LOW_ATTIC", "from": ["2-w068b"], "_unverified": []}
+  ]},
+  {"id": "2F.w073", "axis": "V", "at": 219.43, "span": [74.76, 99.46], "weight": "ext", "kind": "wall", "spans": [], "from": ["2-w073"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "2F.w075", "axis": "V", "at": 221.19, "span": [253.97, 275.85], "weight": "ext", "kind": "wall", "spans": [], "from": ["2-w075"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "2F.w048", "axis": "V", "at": 245.89, "span": [46.19, 77.94], "weight": "ext", "kind": "wall", "spans": [], "from": ["2-w048"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "2F.w051", "axis": "V", "at": 247.48, "span": [187.3, 275.85], "weight": "int", "kind": "wall", "from": ["2-w051", "2-w052", "2-w053"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
+   {"kind": "DOOR", "id": "2F.o017", "at": [194.35, 202.82], "research": "layout_notes §6: 2F_MIDDLE | 2F_TROPHY (DOOR)", "from": ["2-o017"], "_unverified": []},
+   {"kind": "DRONE_HOLE", "id": "2F.dt1", "at": [227.99, 230.65], "from": ["2-dt-rect111-0"], "note": "slot centred on the r6calls drone-tunnel icon", "_unverified": ["at"]},
+   {"kind": "DOOR", "id": "2F.o018", "at": [261.73, 269.5], "research": "layout_notes §6: 2F_WALK_IN | 2F_MASTER_BEDROOM (DOOR)", "from": ["2-o018"], "_unverified": []}
+  ]},
+  {"id": "2F.w049", "axis": "V", "at": 248.71, "span": [96.28, 162.25], "weight": "ext", "kind": "wall", "from": ["2-w049", "2-w050"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
+   {"kind": "DRONE_HOLE", "id": "2F.dt2", "at": [112.29, 114.95], "from": ["2-dt-rect111"], "note": "slot centred on the r6calls drone-tunnel icon", "_unverified": ["at"]},
+   {"kind": "WINDOW", "id": "2F.o016", "at": [146.38, 153.08], "research": "layout_notes §6: 2F_ATTIC | RF_MEETING_W (EXT_OPENING (window? UNVERIFIED))", "from": ["2-o016"], "note": "kind from the research guess", "_unverified": ["kind"]}
+  ]},
+  {"id": "2F.w043", "axis": "V", "at": 274.82, "span": [96.28, 190.83], "weight": "ext", "kind": "wall", "spans": [], "from": ["2-w043"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "2F.w044", "axis": "V", "at": 281.93, "span": [186.59, 283.25], "weight": "int", "kind": "wall", "from": ["2-w044", "2-w045a", "2-w045b", "2-w045c", "2-w046"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
+   {"kind": "DOOR", "id": "2F.o015", "at": [194.35, 203.17], "research": "layout_notes §6: 2F_TROPHY | 2F_ARMORY_CORRIDOR (DOOR)", "from": ["2-o015"], "_unverified": []},
+   {"kind": "SOFT", "id": "SW-2F-06", "at": [226.54, 245.62], "sections": 2, "research": "surfaces §2: 2F_MASTER_BEDROOM | 2F_ARMORY_CORRIDOR", "from": ["2-w045b"], "_unverified": ["sections"]}
+  ]},
+  {"id": "2F.w054", "axis": "V", "at": 297.87, "span": [186.59, 283.25], "weight": "ext", "kind": "wall", "from": ["2-w054", "2-w055a", "2-w055b", "2-w055c", "2-w056", "2-w057"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
+   {"kind": "SOFT", "id": "SW-2F-07", "at": [209.41, 229.94], "sections": 2, "research": "surfaces §2: 2F_ARMORY_CORRIDOR | 2F_ARMORY", "from": ["2-w055b"], "_unverified": ["sections"]},
+   {"kind": "DOOR", "id": "2F.o019", "at": [232.1, 239.86], "research": "layout_notes §6: 2F_ARMORY_CORRIDOR | 2F_ARMORY (DOOR)", "from": ["2-o019"], "_unverified": []}
+  ]},
+  {"id": "2F.w062", "axis": "V", "at": 301.98, "span": [47.25, 99.46], "weight": "ext", "kind": "wall", "spans": [], "from": ["2-w062"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "2F.w070", "axis": "V", "at": 340.43, "span": [204.94, 258.56], "weight": "ext", "kind": "wall", "from": ["2-w070", "2-w071"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
+   {"kind": "WINDOW", "id": "2F.o022", "at": [229.63, 237.75], "research": "layout_notes §6: 2F_ARMORY | EXT east (EXT_OPENING (window, likely))", "from": ["2-o022"], "note": "kind from the research guess", "_unverified": ["kind"]}
+  ]}
+ ]
+}
