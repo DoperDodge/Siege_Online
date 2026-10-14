@@ -1,7 +1,7 @@
 // Wall lines to level solids (DESIGN §5.3–§5.4): hard segments between the spans, one reinforceable panel per
 // soft span, door and window frames with their barricades and glass, open passages with a header, drone-hole
 // slots. Ends meet perpendicular walls by the junction rule, so a hard box never overlaps a panel and every
-// corner is closed (a hard post fills a corner two panels would leave open).
+// corner is closed (a hard post fills an L corner where neither end is hard).
 import type { Frames } from "./frames.js";
 import { PlanGrid } from "./grid.js";
 import type { Layout, SpanDef, WallDef } from "./schema.js";
@@ -30,8 +30,10 @@ interface Line {
   def: WallDef;
   floor: Floor;
   axis: "H" | "V";
-  /** Centreline (z for H, x for V), metres, on the snap grid. */
+  /** Centreline (z for H, x for V), metres, placed so both faces are on the snap grid. */
   at: number;
+  /** The drawn centreline, metres, before snapping. */
+  drawnAt: number;
   s0: number;
   s1: number;
   /** Thickness, metres. */
@@ -99,56 +101,112 @@ export function compileWalls(layout: Layout, fr: Frames, parts: { floor: Floor; 
       for (let i = 1; i < spans.length; i++) {
         if (spans[i].a0 < spans[i - 1].a1 - 1e-9) throw new Error(`walls_${part.floor}.json ${w.id}: spans ${spans[i - 1].def.id} and ${spans[i].def.id} overlap`);
       }
-      return { def: w, floor: part.floor, axis: w.axis, at, s0: (w.axis === "H" ? ax : ay) * k, s1: (w.axis === "H" ? bx : by) * k, t, drawnHalf, spans };
+      return { def: w, floor: part.floor, axis: w.axis, at, drawnAt: (w.axis === "H" ? ay : ax) * k, s0: (w.axis === "H" ? ax : ay) * k, s1: (w.axis === "H" ? bx : by) * k, t, drawnHalf, spans };
     });
 
-    // ---- Junctions: where each end meets a perpendicular wall, and whether a corner is left open.
-    type What = "hard" | "panel" | "opening" | "none";
-    const kindAt = (m: Line, lo: number, hi: number): What => {
-      // What line m is across [lo, hi] (metres along m): "none" past its ends.
-      if (hi < m.s0 || lo > m.s1) return "none";
-      let what: What = "hard";
+    // ---- Junctions: where each end meets a perpendicular wall. A hard end runs on across a wall that is hard
+    // there; any other end stops at the face of what it meets, so nothing hard overlaps a panel or a frame. At an
+    // L corner the two ends are settled together, and where neither is hard a post fills the corner square.
+    type EndKind = "hard" | "panel" | "opening";
+    /** What line m has across [lo, hi] (metres along m), by its drawn extent and spans. */
+    const across = (m: Line, lo: number, hi: number) => {
+      const a = Math.max(lo, m.s0);
+      const b = Math.min(hi, m.s1);
+      if (b - a <= 1e-6) return { reach: "none" as const, hard: false, panel: false, opening: false };
+      let covered = 0;
+      let panel = false;
+      let opening = false;
       for (const s of m.spans) {
-        if (s.a1 <= lo || s.a0 >= hi) continue;
-        if (s.def.kind === "SOFT") what = what === "opening" ? what : "panel";
-        else what = "opening"; // doors, windows, passages and drone holes keep their frame clear
+        const o = Math.min(b, s.a1) - Math.max(a, s.a0);
+        if (o <= 1e-6) continue;
+        covered += o;
+        if (s.def.kind === "SOFT") panel = true;
+        else opening = true; // doors, windows, passages and drone holes keep their frame clear
       }
-      return what;
+      const reach = m.s0 <= lo + 1e-6 && m.s1 >= hi - 1e-6 ? ("full" as const) : ("partial" as const);
+      return { reach, hard: b - a - covered > 1e-6, panel, opening };
     };
-    const endKind = (l: Line, start: boolean): What => {
+    /**
+     * What a line has where one of its ends meets wall m: the span nearest the corner among those drawn to that
+     * end or reaching into m's band (each give or take END_STICK_U), else hard. A door drawn across the corner
+     * square makes the end a frame even when its jamb isn't at the drawn end.
+     */
+    const endKind = (l: Line, start: boolean, m: Line): EndKind => {
       const e = start ? l.s0 : l.s1;
-      const s = start ? l.spans[0] : l.spans[l.spans.length - 1];
-      if (!s || Math.abs((start ? s.a0 : s.a1) - e) > END_STICK_U * k) return "hard";
-      return s.def.kind === "SOFT" ? "panel" : "opening";
+      const stick = END_STICK_U * k;
+      let best: { kind: SpanDef["kind"]; gap: number } | null = null;
+      for (const s of l.spans) {
+        const atEnd = Math.abs((start ? s.a0 : s.a1) - e) <= stick;
+        const gap = Math.max(0, s.a0 - m.at, m.at - s.a1); // from m's centreline to the span
+        if (!atEnd && gap >= m.t / 2 + stick) continue;
+        if (!best || gap < best.gap) best = { kind: s.def.kind, gap };
+      }
+      return !best ? "hard" : best.kind === "SOFT" ? "panel" : "opening";
     };
-    /** Each wall end that met a perpendicular wall: whether it ran on across it, and its half-thickness there. */
-    const ends: { l: Line; m: Line; start: boolean; extended: boolean; half: number; mAt: What }[] = [];
-    const newEnds = lines.map((l) => {
+    /** A soft wall is built at interior thickness, centred on the grid line nearest its line's drawn centre. */
+    const panelAt = (l: Line) => snap(l.drawnAt);
+    /** The centre and half-thickness of a line's part where one of its ends meets m. */
+    const endBand = (l: Line, start: boolean, m: Line): [number, number] => (endKind(l, start, m) === "panel" ? [panelAt(l), d.wallM.int / 2] : [l.at, l.t / 2]);
+    /** The perpendicular wall an end meets: one that is there across this line's band beats a nearer one that stops short. */
+    const partnerOf = (l: Line, start: boolean): Line | null => {
+      const e = start ? l.s0 : l.s1;
+      let best: Line | null = null;
+      let bestD = Infinity;
+      let bestThere = false;
+      for (const m of lines) {
+        if (m === l || m.axis === l.axis) continue;
+        const dist = Math.abs(e - m.at);
+        if (dist > m.drawnHalf + d.junctionU * k) continue;
+        const reach = l.drawnHalf + d.junctionU * k;
+        if (l.at < m.s0 - reach || l.at > m.s1 + reach) continue;
+        const there = across(m, l.at - l.t / 2, l.at + l.t / 2).reach !== "none";
+        if ((there && !bestThere) || (there === bestThere && dist < bestD - 1e-9)) {
+          best = m;
+          bestD = dist;
+          bestThere = there;
+        }
+      }
+      return best;
+    };
+    const partners = lines.map((l) => [partnerOf(l, true), partnerOf(l, false)] as const);
+    /** L corners where neither end is hard: the two ends' bands (centre, half-thickness), taken before ends move. */
+    const posts: { h: Line; v: Line; x: [number, number]; z: [number, number] }[] = [];
+    const newEnds = lines.map((l, i) => {
       const out: [number, number] = [l.s0, l.s1];
       for (const start of [true, false]) {
-        const e = start ? l.s0 : l.s1;
+        const m = partners[i][start ? 0 : 1];
+        if (!m) continue;
         const body = start ? 1 : -1; // which way the line runs from this end
-        let best: Line | null = null;
-        let bestD = Infinity;
-        for (const m of lines) {
-          if (m === l || m.axis === l.axis) continue;
-          const dist = Math.abs(e - m.at);
-          if (dist > m.drawnHalf + d.junctionU * k) continue;
-          const reach = l.drawnHalf + d.junctionU * k;
-          if (l.at < m.s0 - reach || l.at > m.s1 + reach) continue;
-          if (dist < bestD - 1e-9) {
-            best = m;
-            bestD = dist;
+        const lKind = endKind(l, start, m);
+        const mi = lines.indexOf(m);
+        const mStart = partners[mi][0] === l ? true : partners[mi][1] === l ? false : null;
+        let e: number;
+        if (mStart !== null) {
+          // An L corner. A hard end runs on to the other's far face (at that end's own thickness); an end that
+          // isn't hard stops at the other's face, the hard end's near face or the post between two that aren't.
+          const [mc, mh] = endBand(m, mStart, l);
+          const mHard = endKind(m, mStart, l) === "hard";
+          if (lKind === "hard") e = mc - body * mh;
+          else e = mc + body * mh;
+          if (lKind !== "hard" && !mHard && l.axis === "H") posts.push({ h: l, v: m, x: [mc, mh], z: endBand(l, start, m) });
+        } else {
+          // A T: this end meets the other wall's run (or an end that met someone else).
+          const [lc, lh] = endBand(l, start, m);
+          const a = across(m, lc - lh, lc + lh);
+          if (a.reach === "none") {
+            warnings.push(`${l.def.id}: an end is near ${m.def.id}, which doesn't reach it; left as drawn`);
+            continue;
+          }
+          if (lKind === "hard") {
+            if (a.reach === "full" && !a.panel && !a.opening) e = m.at - (body * m.t) / 2; // across a hard wall: close it
+            else if (a.opening || !a.panel) e = m.at + (body * m.t) / 2; // a frame, or a wall that stops in the band
+            else e = panelAt(m) + (body * d.wallM.int) / 2; // up to the panel's face (over the hard part beside it)
+          } else {
+            // A panel or a frame touches nothing hard: the outer face of whatever is there.
+            e = a.hard || a.opening ? m.at + (body * m.t) / 2 : panelAt(m) + (body * d.wallM.int) / 2;
           }
         }
-        if (!best) continue;
-        const mAt = kindAt(best, l.at - l.t / 2, l.at + l.t / 2);
-        const lEnd = endKind(l, start);
-        // A soft wall is built at interior thickness whatever its line's weight: stop at the panel's own face.
-        const mHalf = mAt === "panel" ? d.wallM.int / 2 : best.t / 2;
-        const extended = lEnd === "hard" && (mAt === "hard" || mAt === "none");
-        out[start ? 0 : 1] = extended ? best.at - (body * best.t) / 2 : best.at + body * mHalf;
-        ends.push({ l, m: best, start, extended, half: lEnd === "panel" ? d.wallM.int / 2 : l.t / 2, mAt });
+        out[start ? 0 : 1] = e;
       }
       return out;
     });
@@ -165,7 +223,6 @@ export function compileWalls(layout: Layout, fr: Frames, parts: { floor: Floor; 
         s.a1 = snap(Math.min(s.a1, l.s1));
       }
     });
-
     // ---- Footprint: walls with every opening closed, flooded from the play area's edge.
     const grid = new PlanGrid(playable[0], playable[1], playable[2], playable[3], 0.5);
     for (const l of lines) {
@@ -187,13 +244,28 @@ export function compileWalls(layout: Layout, fr: Frames, parts: { floor: Floor; 
         maxY = Math.max(maxY, y);
       }
     }
-    /** Which sides of a line are outside at `a` (metres along it): [−perp side, +perp side]. */
-    const sides = (l: Line, a: number): [boolean, boolean] => {
-      // Probe past the band as rasterised above (the drawn width, plus padding, plus two cells).
-      const off = Math.max(l.t / 2, l.drawnHalf) + (0.25 + 2 * grid.cellU) * k;
-      const p = (s: number): [number, number] => (l.axis === "H" ? [a / k, (l.at + s * off) / k] : [(l.at + s * off) / k, a / k]);
-      return [grid.outside(...p(-1)), grid.outside(...p(1))];
+    /** Each line's band as rasterised above (u): along [lo, hi], across within `half` of `at`. */
+    const bands = lines.map((m) => ({ m, lo: m.s0 / k - 0.25, hi: m.s1 / k + 0.25, at: m.at / k, half: Math.max(m.t / 2, m.drawnHalf) / k + 0.25 }));
+    /**
+     * What lies past one face of a line at `a` (metres along it): the first cell clear of walls beyond its band
+     * as rasterised above, outside the building (true) or inside it (false). The probe steps over a parallel
+     * wall drawn against this one (up to 1.5 m); null where it meets a perpendicular wall: a junction, where
+     * what lies beyond that wall says nothing about this one.
+     */
+    const sideAt = (l: Line, a: number, side: -1 | 1): boolean | null => {
+      const from = Math.max(l.t / 2, l.drawnHalf) + (0.25 + 2 * grid.cellU) * k;
+      for (let off = from; off <= from + 1.5 + 1e-9; off += grid.cellU * k) {
+        const [x, y] = l.axis === "H" ? [a / k, (l.at + side * off) / k] : [(l.at + side * off) / k, a / k];
+        const crosses = bands.some((b) => b.m.axis !== l.axis && (b.m.axis === "H" ? x >= b.lo && x <= b.hi && Math.abs(y - b.at) <= b.half : y >= b.lo && y <= b.hi && Math.abs(x - b.at) <= b.half));
+        if (crosses) return null;
+        const i = grid.index(x, y);
+        if (i < 0) return true; // off the plan
+        if (grid.cells[i] !== 1) return grid.cells[i] === 2;
+      }
+      return null;
     };
+    /** Which sides of a line are outside at `a`: [−perp side, +perp side]. */
+    const sides = (l: Line, a: number): [boolean, boolean] => [sideAt(l, a, -1) === true, sideAt(l, a, 1) === true];
 
     // ---- Heights (placeholders P3, P5): interior walls stop under the next slab, exterior walls reach the next floor.
     const idx = layout.storeys.indexOf(storey);
@@ -214,40 +286,90 @@ export function compileWalls(layout: Layout, fr: Frames, parts: { floor: Floor; 
       };
     };
 
-    /** Exterior at `a` along a line: one side outside the building (or both, a free-standing wall). */
-    const outsideAt = (l: Line, a: number) => {
-      const [neg, pos] = sides(l, a);
-      return neg !== pos || (neg && pos);
-    };
     /**
-     * A hard stretch cut where it changes between inside and outside, so each piece takes its own height:
-     * sampled every 25 cm, runs shorter than 60 cm (a probe landing in a corner) folded into their neighbour.
+     * Where a line is exterior (a face outside the building, or both: a free-standing wall), as runs [from, to,
+     * out] along it. Sampled every 25 cm; a sample whose probe runs into another wall (a junction) takes its
+     * neighbours' class, and where they differ the run changes on that wall's centreline.
      */
-    const stretches = (l: Line, a0: number, a1: number): [number, number, number][] => {
-      if (l.def.topM !== undefined) return [[a0, a1, l.def.topM]];
-      const n = Math.max(1, Math.round((a1 - a0) / 0.25));
-      const step = (a1 - a0) / n;
-      const runs: { from: number; to: number; out: boolean }[] = [];
+    const classOf = new Map<Line, { from: number; to: number; out: boolean }[]>();
+    const classes = (l: Line) => {
+      const known = classOf.get(l);
+      if (known) return known;
+      const n = Math.max(1, Math.round((l.s1 - l.s0) / 0.25));
+      const step = (l.s1 - l.s0) / n;
+      const cls: (boolean | null)[] = [];
       for (let i = 0; i < n; i++) {
-        const out = outsideAt(l, a0 + (i + 0.5) * step);
-        const last = runs[runs.length - 1];
-        if (last && last.out === out) last.to = i + 1;
-        else runs.push({ from: i, to: i + 1, out });
+        const a = l.s0 + (i + 0.5) * step;
+        const [neg, pos] = [sideAt(l, a, -1), sideAt(l, a, 1)];
+        cls.push(neg === true || pos === true ? true : neg === false && pos === false ? false : null);
       }
+      // A lone sample against both its neighbours is a probe slipping past a wall end, not a change.
+      for (let i = 1; i + 1 < n; i++) if (cls[i] !== null && cls[i - 1] !== null && cls[i - 1] === cls[i + 1] && cls[i] !== cls[i - 1]) cls[i] = cls[i - 1];
+      const runs: { from: number; to: number; out: boolean | null }[] = [];
+      for (let i = 0; i < n; i++) {
+        const last = runs[runs.length - 1];
+        if (last && last.out === cls[i]) last.to = l.s0 + (i + 1) * step;
+        else runs.push({ from: l.s0 + i * step, to: l.s0 + (i + 1) * step, out: cls[i] });
+      }
+      const out: { from: number; to: number; out: boolean }[] = [];
       for (let i = 0; i < runs.length; i++) {
-        if (runs.length === 1 || (runs[i].to - runs[i].from) * step >= 0.6) continue;
-        const into = i > 0 ? runs[i - 1] : runs[i + 1];
-        into.from = Math.min(into.from, runs[i].from);
-        into.to = Math.max(into.to, runs[i].to);
-        runs.splice(i--, 1);
-        for (let j = 1; j < runs.length; j++) {
-          if (runs[j].out === runs[j - 1].out) {
-            runs[j - 1].to = runs[j].to;
-            runs.splice(j--, 1);
+        const r = runs[i];
+        if (r.out !== null) {
+          out.push({ from: r.from, to: r.to, out: r.out });
+          continue;
+        }
+        const before = runs[i - 1]?.out ?? null;
+        const after = runs[i + 1]?.out ?? null;
+        if (before === null || after === null || before === after) {
+          // Nothing known on one side (an end at a corner), or the same on both: that class. No sample known at
+          // all (a short piece between junctions): exterior, so the building's shell is never left low.
+          out.push({ from: r.from, to: r.to, out: before ?? after ?? true });
+          continue;
+        }
+        // The class changes at the wall that blocked the probes: the perpendicular one nearest the run's middle.
+        const mid = (r.from + r.to) / 2;
+        let cut = mid;
+        let bestD = Infinity;
+        for (const m of lines) {
+          if (m.axis === l.axis || m.at < r.from - 0.3 || m.at > r.to + 0.3 || l.at < m.s0 - 1 || l.at > m.s1 + 1) continue;
+          if (Math.abs(m.at - mid) < bestD) {
+            bestD = Math.abs(m.at - mid);
+            cut = Math.min(r.to, Math.max(r.from, m.at));
           }
         }
+        out.push({ from: r.from, to: cut, out: before }, { from: cut, to: r.to, out: after });
       }
-      return runs.map((r) => [r.from === 0 ? a0 : snap(a0 + r.from * step), r.to === n ? a1 : snap(a0 + r.to * step), r.out ? topOut : topIn]);
+      // Merge neighbours of one class and snap the changes to the grid (the ends stay where they are).
+      const merged: { from: number; to: number; out: boolean }[] = [];
+      for (const r of out) {
+        const last = merged[merged.length - 1];
+        if (last && last.out === r.out) last.to = r.to;
+        else if (r.to - r.from > 1e-9) merged.push({ ...r });
+      }
+      for (let i = 1; i < merged.length; i++) merged[i].from = merged[i - 1].to = snap(merged[i].from);
+      classOf.set(l, merged);
+      return merged;
+    };
+    /** Is a line exterior at `a`? */
+    const outsideAt = (l: Line, a: number) => {
+      const runs = classes(l);
+      return (runs.find((r) => a < r.to) ?? runs[runs.length - 1]).out;
+    };
+    /** A hard stretch cut where the line changes between inside and outside, each piece at its own height. */
+    const stretches = (l: Line, a0: number, a1: number): [number, number, number][] => {
+      if (l.def.topM !== undefined) return [[a0, a1, l.def.topM]];
+      const pieces: [number, number, number][] = [];
+      for (const r of classes(l)) {
+        const p0 = Math.max(a0, r.from);
+        const p1 = Math.min(a1, r.to);
+        if (p1 - p0 < 0.025) continue; // a sliver past a change: the piece beside it covers it
+        pieces.push([p0, p1, r.out ? topOut : topIn]);
+      }
+      if (!pieces.length) return [[a0, a1, outsideAt(l, (a0 + a1) / 2) ? topOut : topIn]];
+      pieces[0][0] = a0;
+      pieces[pieces.length - 1][1] = a1;
+      for (let i = 1; i < pieces.length; i++) pieces[i][0] = pieces[i - 1][1];
+      return pieces;
     };
 
     /** The wall top at `a` along a line: its override, else the next floor outside and under the slab inside. */
@@ -297,7 +419,7 @@ export function compileWalls(layout: Layout, fr: Frames, parts: { floor: Floor; 
         const isExterior = neg !== pos;
         const out = pos && !neg ? 1 : -1; // toward the outside (−perp when both or neither are)
         if (s.def.kind === "SOFT") {
-          solids.push(box(l, s.def.id, s.a0, s.a1, 0, h, 0, d.wallM.int, { surface: "REINFORCEABLE", label: s.def.id, panel: { sections: s.def.sections, ...(s.def.construction ? { construction: s.def.construction } : {}) } }));
+          solids.push(box(l, s.def.id, s.a0, s.a1, 0, h, panelAt(l) - l.at, d.wallM.int, { surface: "REINFORCEABLE", label: s.def.id, panel: { sections: s.def.sections, ...(s.def.construction ? { construction: s.def.construction } : {}) } }));
           continue;
         }
         if (s.def.kind === "OPEN") {
@@ -332,28 +454,11 @@ export function compileWalls(layout: Layout, fr: Frames, parts: { floor: Floor; 
       }
     }
 
-    // ---- Corner posts: where two walls meet at a corner and both stopped short of each other (a panel, or a
-    // door or window frame, at each end), nobody covers the corner square; a hard post fills it. Where the
-    // other wall runs on past with a doorway there, the square is that doorway and stays open.
-    const posts = new Set<string>();
-    for (const a of ends) {
-      if (a.extended) continue;
-      const b = ends.find((x) => x.l === a.m && x.m === a.l);
-      if (!b) {
-        // The other wall runs on past this end: it covers the corner itself (or it's its doorway).
-        if (a.mAt === "none") warnings.push(`${a.l.def.id}: an end stops at ${a.m.def.id}, which doesn't reach it`);
-        continue;
-      }
-      if (b.extended) continue; // the other wall's end covers the corner
-      const id = `post:${[a.l.def.id, a.m.def.id].sort().join("|")}`;
-      if (posts.has(id)) continue;
-      posts.add(id);
-      const [h, v] = a.l.axis === "H" ? [a.l, a.m] : [a.m, a.l];
-      const [hEnd, vEnd] = a.l.axis === "H" ? [a, b] : [b, a];
-      const x = v.at;
-      const z = h.at;
+    // ---- Corner posts: an L corner where neither end is hard (a panel, or a door or window frame, at each)
+    // leaves the corner square to nobody; a hard post fills it, exactly where the two ends stopped.
+    for (const { h, v, x: [x, hx], z: [z, hz] } of posts) {
       const hgt = Math.max(topOf(h, x), topOf(v, z));
-      solids.push({ id, center: [x, floorY + hgt / 2, z], size: [2 * vEnd.half, hgt, 2 * hEnd.half], surface: "HARD_WALL" });
+      solids.push({ id: `post:${[h.def.id, v.def.id].sort().join("|")}`, center: [x, floorY + hgt / 2, z], size: [2 * hx, hgt, 2 * hz], surface: "HARD_WALL" });
     }
   }
   return { solids, zones, warnings, exterior, footprint: { minX, minY, maxX, maxY }, grids };

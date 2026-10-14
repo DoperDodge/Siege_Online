@@ -136,7 +136,7 @@
    {"kind": "DOOR", "id": "1F.o016", "at": [214.84, 222.6], "research": "layout_notes §6: 1F_LOBBY (hall) | 1F_GARAGE (DOOR)", "from": ["1-o016"], "_unverified": []}
   ]},
   {"id": "1F.w043", "axis": "V", "at": 292.1, "span": [97.37, 206.37], "weight": "ext", "kind": "wall", "spans": [], "from": ["1-w043"], "src": "raster", "conf": "high", "_unverified": []},
-  {"id": "1F.w042", "axis": "V", "at": 293.51, "span": [95.96, 99.84], "weight": 1.05, "kind": "wall", "spans": [], "from": ["1-w042"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "1F.w042", "axis": "V", "at": 294.93, "span": [95.96, 99.84], "weight": "ext", "kind": "wall", "spans": [], "from": ["1-w042"], "src": "hand", "note": "The corner blob where the Big Tower's east wall (1F.w076) meets 1F.w003 and the facade (1F.w043), drawn 7 u wide: built as the tower wall's last 0.6 m, on its centreline at its thickness, so the junction rule closes the corner flush with the faces either side.", "_unverified": []},
   {"id": "1F.w076", "axis": "V", "at": 294.93, "span": [47.27, 95.96], "weight": "ext", "kind": "wall", "from": ["1-w076", "1-w077"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
    {"kind": "DOOR", "id": "1F.o027", "at": [64.56, 71.61], "research": "layout_notes §6: 1F_TOWER (NE part) | EXT east (exterior stairs) (EXT_OPENING (door? UNVERIFIED))", "from": ["1-o027"], "note": "kind from the research guess", "_unverified": ["kind"]}
   ]},

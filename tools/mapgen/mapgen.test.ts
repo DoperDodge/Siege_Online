@@ -60,6 +60,15 @@ describe("oregon level.json", () => {
     expect(found.rooms).toBeGreaterThanOrEqual(14); // 1F's enclosed areas (open-plan rooms count as one)
   });
 
+  it("the building's shell is closed between the interior and exterior wall tops", () => {
+    const lines = inputs.walls.find((p) => p.floor === "1F")!.walls;
+    const [f1, f2] = ["1F", "2F"].map((id) => inputs.layout.storeys.find((s) => s.id === id)!);
+    const y = (f2.floorY - f2.slabM + f2.floorY) / 2 - f1.floorY; // under the next floor, above the slab's underside
+    const tops = new Set(solids.filter((b) => /#\d/.test(b.id)).map((b) => +(b.center[1] + b.size[1] / 2).toFixed(2))); // wall pieces
+    expect([...tops].sort()).toEqual([f2.floorY - f2.slabM, f2.floorY].map((t) => +(t - f1.floorY).toFixed(2)).sort());
+    expect(enclosureLeaks(solids, [], planGrid(lines, k), [-3, 3, 56, 47], 0.025, k, y).toOutside).toEqual([]);
+  });
+
   it("spawns stand on the ground: spawn 0 for the labs, the three attacker insertion points outside", async () => {
     const sim = await Sim.create("oregon");
     const lvl = sim.level.def;
@@ -125,15 +134,41 @@ describe("oregon level.json", () => {
   it("every extracted wall and opening is used by a wall file, or dropped there with a reason", () => {
     const missing: string[] = [];
     for (const part of inputs.walls) {
-      const used = new Set(part.dropped.map((x) => x.from));
+      // A soft wall's box is also in its line's `from`: it counts only as a SOFT span's source.
+      const dropped = new Set(part.dropped.map((x) => x.from));
+      const byLine = new Set<string>();
+      const bySpan = new Set<string>();
+      const bySoft = new Set<string>();
       for (const w of part.walls) {
-        for (const id of w.from ?? []) used.add(id);
-        for (const s of w.spans) for (const id of s.from ?? []) used.add(id);
+        for (const id of w.from ?? []) byLine.add(id);
+        for (const s of w.spans) for (const id of s.from ?? []) (s.kind === "SOFT" ? bySoft : bySpan).add(id);
       }
       const ex = extracted.floors[part.floor];
-      for (const item of [...ex.walls, ...ex.openings]) if (!used.has(item.id)) missing.push(`${part.floor}: ${item.id}`);
+      for (const item of ex.walls) {
+        const used = item.surface === "SOFT" ? bySoft.has(item.id) : byLine.has(item.id) || bySpan.has(item.id);
+        if (!used && !dropped.has(item.id)) missing.push(`${part.floor}: ${item.id}${item.surface === "SOFT" ? " (soft wall)" : ""}`);
+      }
+      for (const item of ex.openings) if (!bySpan.has(item.id) && !dropped.has(item.id)) missing.push(`${part.floor}: ${item.id}`);
     }
     expect(missing).toEqual([]);
+  });
+
+  it("every soft wall in the research is a SOFT span with its section count, on every floor", () => {
+    const problems: string[] = [];
+    const rows = softWalls(ROOT);
+    expect(rows).toHaveLength(32);
+    for (const row of rows) {
+      const spans = inputs.walls.find((p) => p.floor === row.floor)!.walls.flatMap((w) => w.spans.map((s) => ({ w, s })));
+      const hit = spans.filter(({ s }) => s.id === row.id);
+      if (hit.length !== 1) {
+        problems.push(`${row.id}: ${hit.length} spans with this id on ${row.floor}`);
+        continue;
+      }
+      const { w, s } = hit[0];
+      if (s.kind !== "SOFT" || s.sections !== row.sections) problems.push(`${row.id}: ${s.kind} with ${s.kind === "SOFT" ? s.sections : "no"} sections, research says ${row.sections}`);
+      if (w.axis !== row.axis) problems.push(`${row.id}: on a ${w.axis} line, research says ${row.axis}`);
+    }
+    expect(problems).toEqual([]);
   });
 });
 
@@ -164,6 +199,73 @@ describe("the junction rule on small layouts", () => {
     expect(out.solids.map((x) => x.id)).toContain("post:t.h1|t.v1");
     expect(overlaps).toEqual([]);
     expect(leaks).toEqual({ toOutside: [], between: [], rooms: 1 });
+  });
+
+  it("a soft wall meeting a door frame at an L, both exterior lines drawn only to the other's band edge, is closed by a post", () => {
+    const { out, leaks, overlaps } = build([
+      wall("t.h1", "H", 100, [102.3, 140], [soft("t.s1", [102.3, 120])], "ext"),
+      wall("t.v1", "V", 100, [102.3, 140], [door("t.d1", [102.3, 110])], "ext"),
+      ...farSides(),
+    ]);
+    const post = out.solids.find((x) => x.id === "post:t.h1|t.v1")!;
+    expect(post.size[0]).toBeCloseTo(0.3, 6); // the door frame's full thickness, where the panel stops
+    expect(post.size[2]).toBeCloseTo(0.2, 6); // the panel's thickness, where the frame stops
+    expect(overlaps).toEqual([]);
+    expect(leaks).toEqual({ toOutside: [], between: [], rooms: 1 });
+  });
+
+  it("a thin wall's soft wall stays on its drawn centre beside a door drawn across the corner, leaving no slot", () => {
+    // A 0.25 m line's faces snap to the grid, its centre doesn't: the panel goes on the grid line nearest the drawn centre.
+    const v = wallSchema.parse({ id: "t.v1", axis: "V", at: 100, span: [98.5, 140], weight: 0.25, src: "hand", spans: [soft("t.s1", [99.5, 106.5])] });
+    const { leaks, overlaps } = build([wall("t.h1", "H", 100, [98, 140], [door("t.d1", [99.5, 106.5])], "ext"), v, ...farSides()]);
+    expect(overlaps).toEqual([]);
+    expect(leaks).toEqual({ toOutside: [], between: [], rooms: 1 });
+  });
+
+  /** A T: stem `stem` (H, z 100 u) runs east from bar `bar` (V, x 100 u) between two rooms. */
+  const tee = (bar: WallDef, stem: WallDef) =>
+    build([bar, stem, wall("t.hn", "H", 80, [100, 140]), wall("t.hs", "H", 120, [100, 140]), wall("t.ve", "V", 140, [80, 120])]);
+
+  it("a frame or a soft wall at a stem's end stops at the bar's hard face where the bar's soft wall covers only part of the stem", () => {
+    for (const end of [door("t.d1", [100, 108]), soft("t.s2", [100, 112])]) {
+      const { leaks, overlaps } = tee(wall("t.bar", "V", 100, [80, 120], [soft("t.s1", [100.4, 112])], "ext"), wall("t.stem", "H", 100, [100, 140], [end]));
+      expect(overlaps).toEqual([]);
+      expect(leaks).toEqual({ toOutside: [], between: [], rooms: 2 });
+    }
+  });
+
+  it("a stem meets the panel of a thick numeric-weight bar on the grid, from either side", () => {
+    for (const weight of [0.25, 1.05, 1.25]) {
+      const bar = wallSchema.parse({ id: "t.bar", axis: "V", at: 100, span: [80, 120], weight, src: "hand", spans: [soft("t.s1", [92, 108])] });
+      const { leaks, overlaps } = tee(bar, wall("t.stem", "H", 100, [100, 140]));
+      expect(overlaps, `${weight} m`).toEqual([]);
+      expect(leaks, `${weight} m`).toEqual({ toOutside: [], between: [], rooms: 2 });
+    }
+  });
+
+  it("a facade keeps the exterior height into a concave corner, and changes to interior on the wall that ends the outside", () => {
+    // Two wings: "w" is the east wing's west facade north of the west wing's north facade "h3" (z 130.4 u), and
+    // the wall between the wings south of it. "h3" meets "w" at the inside corner of the outside's notch.
+    const walls = [
+      wall("t.w", "V", 100, [97.7, 162.3], [], "ext"),
+      wall("t.n", "H", 100, [97.7, 142.3], [], "ext"),
+      wall("t.e", "V", 140, [97.7, 162.3], [], "ext"),
+      wall("t.s", "H", 160, [57.7, 142.3], [], "ext"),
+      wall("t.wst", "V", 60, [128.1, 162.3], [], "ext"),
+      wall("t.h3", "H", 130.4, [57.7, 100], [], "ext"),
+    ];
+    const out = compileWalls(inputs.layout, fr, [{ floor: "1F", frame: "1F", walls }], [40, 40, 220, 220]);
+    const [f1, f2] = ["1F", "2F"].map((id) => inputs.layout.storeys.find((s) => s.id === id)!);
+    const [topIn, topOut] = [f2.floorY - f2.slabM - f1.floorY, f2.floorY - f1.floorY];
+    const pieces = (id: string) => out.solids.filter((x) => x.id.startsWith(`${id}#`)).map((x) => [+(x.center[2] - x.size[2] / 2).toFixed(2), +(x.center[2] + x.size[2] / 2).toFixed(2), +x.size[1].toFixed(2)]);
+    expect(out.solids.filter((x) => x.id.startsWith("t.h3#")).every((x) => Math.abs(x.size[1] - topOut) < 1e-6)).toBe(true);
+    const cut = Math.round((130.4 * k) / 0.05) * 0.05; // on h3's centreline (snapped)
+    expect(pieces("t.w")).toEqual([
+      [14.85, +cut.toFixed(2), topOut], // from n's far face
+      [+cut.toFixed(2), 24.15, topIn], // to s's far face
+    ]);
+    const leaks = enclosureLeaks(out.solids, [], planGrid(walls, k), [6, 6, 30, 30], 0.01, k, (topIn + topOut) / 2);
+    expect(leaks.toOutside).toEqual([]);
   });
 
   it("a wall ending on the soft wall of a thick (exterior) line meets the panel's face, leaving no slot", () => {

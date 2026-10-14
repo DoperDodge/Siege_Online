@@ -30,14 +30,16 @@ export function planGrid(lines: WallDef[], k: number): PlanGrid {
 }
 
 /**
- * Leaks in metres: rasterise `boxes` standing at 1.2 m above y = 0 and the declared passages (`passages`, closed
- * for this check) by cell centres over `area` [x0, z0, x1, z1], then compare with the plan.
+ * Leaks in metres: rasterise `boxes` standing at height `y` (1.2 m: chest height above y = 0) and the declared
+ * passages (`passages`, closed for this check) by cell centres over `area` [x0, z0, x1, z1], then compare with
+ * the plan. Between the interior and the exterior wall tops only the building's shell stands: there, read
+ * `toOutside` alone (the rooms are one space above the interior walls).
  */
-export function enclosureLeaks(boxes: Box[], passages: Box[], plan: PlanGrid, area: [number, number, number, number], cell: number, k: number) {
+export function enclosureLeaks(boxes: Box[], passages: Box[], plan: PlanGrid, area: [number, number, number, number], cell: number, k: number, y = 1.2) {
   const g = new PlanGrid(area[0], area[1], area[2], area[3], cell);
   const close = (b: Box) => g.fillCentres(b.center[0] - b.size[0] / 2, b.center[2] - b.size[2] / 2, b.center[0] + b.size[0] / 2, b.center[2] + b.size[2] / 2);
   for (const b of boxes) {
-    if (b.bodiesOnly || b.surface === "HARD_FLOOR" || b.center[1] - b.size[1] / 2 > 1.2 || b.center[1] + b.size[1] / 2 < 1.2) continue;
+    if (b.bodiesOnly || b.surface === "HARD_FLOOR" || b.center[1] - b.size[1] / 2 > y || b.center[1] + b.size[1] / 2 < y) continue;
     close(b);
   }
   for (const b of passages) close(b);
