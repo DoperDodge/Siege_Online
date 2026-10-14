@@ -33,8 +33,9 @@ An independent review judged the design "sound with fixes". All fixes are adopte
    phase, an OPEN_QUESTIONS line, and Ulo is told.
 4. **Image hygiene (M1).** Every image output of the extraction goes to gitignored folders
    (`tools/mapgen/extract/{img,out,work}/`, `research/oregon/refs/web/`, `builds/`). `tools/mapgen/hygiene.test.ts`
-   (CI) and the opt-in `.githooks/pre-commit` reject any tracked image file (SVG included), and any tracked file
-   with image bytes, an image data URI or base64 image data. The only exceptions: our own plan SVGs in
+   (CI) and the opt-in `.githooks/pre-commit` read what git has staged and reject any image file (SVG included),
+   any archive or container that can carry one (zip, 7z, rar, gzip, PDF, binary glTF), and any file with image
+   bytes anywhere in it, an image data URI or base64 image data. The only exceptions: our own plan SVGs in
    `research/oregon/compare/` (no embedded or linked picture), and `research/oregon/refs/ulo/` only after Ulo
    makes the repo private; until then that folder is gitignored except its README.
 5. **Meeting roof (M4).** RF_MEETING_W is pitched (research: "pitched roof … walkable at 2F level", gabled),
@@ -52,9 +53,11 @@ An independent review judged the design "sound with fixes". All fixes are adopte
    (redrawn when panels or the level change; players don't cast into it). M6 adds `tools/e2e/oregon-perf.mjs`
    (scripted fly-through plus a destruction storm: CPU frame time, draw calls, panel redraw p95/max, loose CI
    bound) and benchmarks 4 m tiles at p95/max (cap at 3 m if they miss).
-9. **Leak check and corner posts (M1, M2).** The generator adds a hard corner post where two panels meet at a
-   junction. M2 adds a compiled-level check: rasterise solids and panels at 0.1 m and 1.2 m above each floor and
-   flood-fill; any connection between rooms, or to the outside, that isn't a declared opening or drone hole fails.
+9. **Leak check and corner posts (M1, M2).** The generator adds a hard corner post at an L corner where both
+   walls stop short (each ends in a panel or an opening there). M1's test rasterises the compiled boxes 1.2 m
+   above 1F (2.5 cm cells, openings closed) and flood-fills the plan's rooms (its drawn wall bands): any
+   connection between rooms, or to the outside, that isn't a declared opening or drone hole fails. M2 adds
+   0.1 m and the other storeys.
 10. **Rappel is not dropped.** The Phase 5 end report (PLAN §20) waits for M8 (rappel). If M8 slips, a DECISIONS
     entry moves rappel to a named phase and Ulo is told.
 11. **Our own plans are committed (M1+).** `npm run mapgen:compare` also writes our per-storey plan SVGs (our
@@ -770,8 +773,8 @@ Estimated real counts (Appendix B): about 1,100–1,600 static colliders, 150–
   stay in `builds/` and `refs/web/` (DECISIONS entry). Our own SVGs are build output and aren't committed either.
 - In game: the plan view (E9) shows any storey from above with the storeys over it hidden, for a quick check
   against the blueprint on a second screen.
-- **Repo hygiene test**: `git ls-files` must list no image files outside `game/client/public/` and
-  `research/oregon/refs/ulo/` (Ulo's own screenshots, LFS).
+- **Repo hygiene test**: as amendment 4 has it (it replaced this line): nothing tracked carries an image except
+  our own plan SVGs.
 
 ### 9.2 Structural tests (vitest; `tools/mapgen/*.test.ts`)
 

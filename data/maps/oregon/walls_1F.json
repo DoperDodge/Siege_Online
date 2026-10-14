@@ -15,7 +15,8 @@
    {"kind": "DRONE_HOLE", "id": "1F.dt6", "at": [223.24, 225.9], "from": ["1-dt-rect3171-0"], "note": "slot centred on the r6calls drone-tunnel icon", "_unverified": ["at"]}
   ]},
   {"id": "1F.w005", "axis": "H", "at": 150.64, "span": [45.16, 136.88], "weight": "ext", "kind": "wall", "spans": [], "from": ["1-w005"], "src": "raster", "conf": "high", "_unverified": []},
-  {"id": "1F.w008", "axis": "H", "at": 156.94, "span": [134.41, 216.96], "weight": "ext", "kind": "wall", "from": ["1-w008", "1-w009", "1-w010"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
+  {"id": "1F.w008", "axis": "H", "at": 156.81, "span": [134.41, 200.38], "weight": "ext", "kind": "wall", "spans": [], "from": ["1-w008"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "1F.w009", "axis": "H", "at": 157.87, "span": [197.2, 216.96], "weight": "int", "kind": "wall", "from": ["1-w009", "1-w010"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
    {"kind": "DOOR", "id": "1F.o004", "at": [202.85, 213.08], "research": "layout_notes §6: 1F_KITCHEN | 1F_KITCHEN_CORRIDOR (DOOR)", "from": ["1-o004"], "_unverified": []}
   ]},
   {"id": "1F.w022", "axis": "H", "at": 176.57, "span": [2.82, 49.39], "weight": "ext", "kind": "wall", "spans": [], "from": ["1-w022"], "src": "raster", "conf": "high", "_unverified": []},
@@ -46,13 +47,16 @@
   {"id": "1F.w006", "axis": "H", "at": 232.31, "span": [134.41, 202.14], "weight": "int", "kind": "wall", "from": ["1-w006", "1-w007"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
    {"kind": "DOOR", "id": "1F.o003", "at": [170.74, 179.21], "research": "layout_notes §6: 1F_SECURITY | 1F_SECURITY_CORRIDOR (DOOR)", "from": ["1-o003"], "_unverified": []}
   ]},
-  {"id": "1F.w024", "axis": "H", "at": 251.73, "span": [152.05, 216.61], "weight": "int", "kind": "wall", "from": ["1-w024", "1-w025", "1-w026"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
+  {"id": "1F.w024", "axis": "H", "at": 251.36, "span": [152.05, 192.62], "weight": "int", "kind": "wall", "from": ["1-w024", "1-w025"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
    {"kind": "DOOR", "id": "1F.o010", "at": [180.27, 188.74], "research": "layout_notes §6: 1F_SECURITY_CORRIDOR | 1F_WHITE_STAIRS (DOOR)", "from": ["1-o010"], "_unverified": []}
   ]},
-  {"id": "1F.w012", "axis": "H", "at": 255.25, "span": [2.82, 120.3], "weight": "int", "kind": "wall", "from": ["1-w012", "1-w013", "1-w014", "1-w015", "1-w016"], "src": "raster", "conf": "medium", "_unverified": [], "spans": [
-   {"kind": "DOOR", "id": "1F.o005", "at": [22.58, 30.34], "research": "layout_notes §6: 1F_SMALL_TOWER | EXT south porch (EXT_OPENING (door? UNVERIFIED))", "from": ["1-o005"], "note": "kind from the research guess", "_unverified": ["kind"]},
+  {"id": "1F.w026", "axis": "H", "at": 252.24, "span": [192.62, 216.61], "weight": "ext", "kind": "wall", "spans": [], "from": ["1-w026"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "1F.w014", "axis": "H", "at": 254.89, "span": [45.16, 120.3], "weight": "int", "kind": "wall", "from": ["1-w014", "1-w015", "1-w016"], "src": "raster", "conf": "medium", "_unverified": [], "spans": [
    {"kind": "DOOR", "id": "1F.o006", "at": [50.45, 62.79], "research": "layout_notes §6: 1F_SMALL_TOWER | 1F_SHOWER_CORRIDOR (DOOR)", "from": ["1-o006"], "_unverified": []},
    {"kind": "DOOR", "id": "1F.o007", "at": [75.85, 83.96], "research": "layout_notes §6: 1F_SHOWERS | 1F_SHOWER_CORRIDOR (DOOR)", "from": ["1-o007"], "_unverified": []}
+  ]},
+  {"id": "1F.w012", "axis": "H", "at": 255.77, "span": [2.82, 49.39], "weight": "ext", "kind": "wall", "from": ["1-w012", "1-w013"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
+   {"kind": "DOOR", "id": "1F.o005", "at": [22.58, 30.34], "research": "layout_notes §6: 1F_SMALL_TOWER | EXT south porch (EXT_OPENING (door? UNVERIFIED))", "from": ["1-o005"], "note": "kind from the research guess", "_unverified": ["kind"]}
   ]},
   {"id": "1F.w030", "axis": "H", "at": 264.94, "span": [293.86, 334.08], "weight": "ext", "kind": "wall", "from": ["1-w030a", "1-w030b", "1-w030c"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
    {"kind": "DOOR", "id": "1F.o012", "at": [293.86, 302.68], "research": "layout_notes §6: 1F_GARAGE | EXT south (Parking) (EXT_OPENING (door? UNVERIFIED))", "from": ["1-o012"], "note": "kind from the research guess", "_unverified": ["kind"]},
@@ -86,7 +90,8 @@
   {"id": "1F.w065", "axis": "V", "at": 119.06, "span": [206.37, 256.12], "weight": "int", "kind": "wall", "from": ["1-w065a", "1-w065b", "1-w065c"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
    {"kind": "SOFT", "id": "SW-1F-04", "at": [208.94, 226.39], "sections": 2, "research": "surfaces §2: 1F_SHOWERS | 1F_DINING_HALLWAY", "from": ["1-w065b"], "_unverified": ["sections"]}
   ]},
-  {"id": "1F.w054", "axis": "V", "at": 135.63, "span": [148.52, 274.81], "weight": "int", "kind": "wall", "from": ["1-w054", "1-w055", "1-w056a", "1-w056b", "1-w056c", "1-w057"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
+  {"id": "1F.w054", "axis": "V", "at": 135.47, "span": [148.52, 159.1], "weight": "ext", "kind": "wall", "spans": [], "from": ["1-w054"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "1F.w055", "axis": "V", "at": 135.64, "span": [154.52, 274.81], "weight": "int", "kind": "wall", "from": ["1-w055", "1-w056a", "1-w056b", "1-w056c", "1-w057"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
    {"kind": "DOOR", "id": "1F.o019", "at": [165.1, 173.21], "research": "layout_notes §6: 1F_DINING | 1F_KITCHEN (DOOR)", "from": ["1-o019"], "_unverified": []},
    {"kind": "SOFT", "id": "SW-1F-05", "at": [174.63, 185.74], "sections": 1, "research": "surfaces §2: 1F_DINING | 1F_KITCHEN", "from": ["1-w056b"], "_unverified": ["sections"]},
    {"kind": "DOOR", "id": "1F.o020", "at": [237.42, 253.29], "research": "layout_notes §6: 1F_DINING_HALLWAY | 1F_SECURITY_CORRIDOR (DOOR)", "from": ["1-o020"], "_unverified": []}
@@ -98,10 +103,12 @@
   ]},
   {"id": "1F.w069", "axis": "V", "at": 199.15, "span": [177.09, 180.97], "weight": "int", "kind": "wall", "spans": [], "from": ["1-w069"], "src": "raster", "conf": "high", "_unverified": []},
   {"id": "1F.w081", "axis": "V", "at": 200.9, "span": [206.37, 233.54], "weight": "int", "kind": "wall", "spans": [], "from": ["1-w081"], "src": "raster", "conf": "high", "_unverified": []},
-  {"id": "1F.w048", "axis": "V", "at": 215.69, "span": [119.94, 285.04], "weight": "int", "kind": "wall", "from": ["1-w048a", "1-w048b", "1-w048c", "1-w049", "1-w051", "1-w052"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
+  {"id": "1F.w048", "axis": "V", "at": 215.64, "span": [119.94, 252.59], "weight": "int", "kind": "wall", "from": ["1-w048a", "1-w048b", "1-w048c", "1-w049"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
    {"kind": "DRONE_HOLE", "id": "1F.dt5", "at": [164.13, 166.79], "from": ["1-dt-rect3171-5"], "note": "slot centred on the r6calls drone-tunnel icon", "_unverified": ["at"]},
    {"kind": "SOFT", "id": "SW-1F-08", "at": [179.57, 200.41], "sections": 2, "research": "surfaces §2: 1F_KITCHEN | 1F_MEETING_HALL", "from": ["1-w048b"], "_unverified": ["sections"]},
-   {"kind": "OPEN", "id": "1F.o017", "at": [208.84, 224.37], "research": "layout_notes §6: 1F_SECURITY_CORRIDOR | 1F_LOBBY (hall) (OPEN)", "from": ["1-o017"], "_unverified": []},
+   {"kind": "OPEN", "id": "1F.o017", "at": [208.84, 224.37], "research": "layout_notes §6: 1F_SECURITY_CORRIDOR | 1F_LOBBY (hall) (OPEN)", "from": ["1-o017"], "_unverified": []}
+  ]},
+  {"id": "1F.w051", "axis": "V", "at": 215.9, "span": [250.12, 285.04], "weight": "ext", "kind": "wall", "from": ["1-w051", "1-w052"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
    {"kind": "WINDOW", "id": "1F.o018", "at": [262.82, 270.58], "research": "layout_notes §6: 1F_CLASSROOM | EXT west (recessed yard) (EXT_OPENING (window? UNVERIFIED))", "from": ["1-o018"], "note": "kind from the research guess", "_unverified": ["kind"]}
   ]},
   {"id": "1F.w084", "axis": "V", "at": 229.13, "span": [185.91, 208.84], "weight": "int", "kind": "wall", "from": ["1-w084", "1-w085"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
@@ -124,12 +131,18 @@
   {"id": "1F.w070", "axis": "V", "at": 275.7, "span": [225.78, 260.35], "weight": "int", "kind": "wall", "from": ["1-w070", "1-w071"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
    {"kind": "DOOR", "id": "1F.o025", "at": [229.31, 236.71], "research": "layout_notes §6: 1F_LOBBY | 1F_ARMORY_STAIRS (DOOR)", "from": ["1-o025"], "_unverified": []}
   ]},
-  {"id": "1F.w042", "axis": "V", "at": 292.35, "span": [47.27, 285.04], "weight": "ext", "kind": "wall", "from": ["1-w076", "1-w077", "1-w042", "1-w043", "1-w044", "1-w045", "1-w046"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
-   {"kind": "DOOR", "id": "1F.o027", "at": [64.56, 71.61], "research": "layout_notes §6: 1F_TOWER (NE part) | EXT east (exterior stairs) (EXT_OPENING (door? UNVERIFIED))", "from": ["1-o027"], "note": "kind from the research guess", "_unverified": ["kind"]},
+  {"id": "1F.w046", "axis": "V", "at": 291.04, "span": [265.99, 285.04], "weight": "ext", "kind": "wall", "spans": [], "from": ["1-w046"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "1F.w044", "axis": "V", "at": 291.22, "span": [206.37, 265.99], "weight": "int", "kind": "wall", "from": ["1-w044", "1-w045"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
    {"kind": "DOOR", "id": "1F.o016", "at": [214.84, 222.6], "research": "layout_notes §6: 1F_LOBBY (hall) | 1F_GARAGE (DOOR)", "from": ["1-o016"], "_unverified": []}
+  ]},
+  {"id": "1F.w043", "axis": "V", "at": 292.1, "span": [97.37, 206.37], "weight": "ext", "kind": "wall", "spans": [], "from": ["1-w043"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "1F.w042", "axis": "V", "at": 293.51, "span": [95.96, 99.84], "weight": 1.05, "kind": "wall", "spans": [], "from": ["1-w042"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "1F.w076", "axis": "V", "at": 294.93, "span": [47.27, 95.96], "weight": "ext", "kind": "wall", "from": ["1-w076", "1-w077"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
+   {"kind": "DOOR", "id": "1F.o027", "at": [64.56, 71.61], "research": "layout_notes §6: 1F_TOWER (NE part) | EXT east (exterior stairs) (EXT_OPENING (door? UNVERIFIED))", "from": ["1-o027"], "note": "kind from the research guess", "_unverified": ["kind"]}
   ]},
   {"id": "1F.w072", "axis": "V", "at": 333.03, "span": [201.08, 267.05], "weight": "ext", "kind": "wall", "from": ["1-w072", "1-w073"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
    {"kind": "WINDOW", "id": "1F.o026", "at": [237.42, 244.12], "research": "layout_notes §6: 1F_GARAGE | EXT east (EXT_OPENING (window, likely; different glyph))", "from": ["1-o026"], "note": "kind from the research guess", "_unverified": ["kind"]}
   ]}
- ]
+ ],
+ "dropped": []
 }

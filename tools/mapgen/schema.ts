@@ -88,6 +88,8 @@ export const wallsPartSchema = z.strictObject({
   floor: Floor,
   frame: Frame,
   walls: z.array(wallSchema),
+  /** Extracted items (extracted.json ids) deliberately left out, each with why: the drift test checks the rest are used. */
+  dropped: z.array(z.strictObject({ from: z.string(), note: z.string() })).default([]),
 });
 export type WallsPart = z.infer<typeof wallsPartSchema>;
 

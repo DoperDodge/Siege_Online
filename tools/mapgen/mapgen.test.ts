@@ -7,12 +7,14 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { crossFileProblems, loadGameData, missingUnverifiedPaths, QUERY_STATIC, Sim } from "../../game/shared/src/index.js";
 import { checkLevel } from "./checks.js";
+import { frames } from "./frames.js";
 import { compile, loadInputs } from "./compile.js";
 import { readableJson } from "./format.js";
-import { PlanGrid } from "./grid.js";
+import { enclosureLeaks, planGrid } from "./enclosure.js";
 import type { Extracted } from "./import.js";
 import { connections, softWalls } from "./research.js";
-import type { SpanDef } from "./schema.js";
+import { wallSchema, type SpanDef, type WallDef } from "./schema.js";
+import { compileWalls } from "./walls.js";
 
 const ROOT = join(import.meta.dirname, "..", "..");
 const MAP = join(ROOT, "data", "maps", "oregon");
@@ -48,38 +50,14 @@ describe("oregon level.json", () => {
     expect(checkLevel([soft, intruder] as never).errors.join()).toMatch(/SW-1F-03 \(REINFORCEABLE\) and intruder \(HARD_WALL\) overlap by 0\.100 m/);
   });
 
-  it("the compiled walls close the building wherever the plan does (no gap at a junction)", () => {
-    // Rasterise every box that stands at 1.2 m (panels and barricades included, as the plan closes openings)
-    // and flood from outside: the enclosed area must be the plan's footprint, to within the band widths.
-    const g = new PlanGrid(-40, -15, 85, 75, 0.05);
-    for (const s of solids) {
-      if (s.bodiesOnly || s.surface === "HARD_FLOOR" || s.center[1] - s.size[1] / 2 > 1.2 || s.center[1] + s.size[1] / 2 < 1.2) continue;
-      g.fill(s.center[0] - s.size[0] / 2, s.center[2] - s.size[2] / 2, s.center[0] + s.size[0] / 2 - 1e-6, s.center[2] + s.size[2] / 2 - 1e-6);
-    }
-    g.floodOutside();
-    const plan = new PlanGrid(-40 / k, -15 / k, 85 / k, 75 / k, 0.5);
-    for (const w of inputs.walls.find((p) => p.floor === "1F")!.walls) {
-      const half = (typeof w.weight === "number" ? w.weight / k : w.weight === "int" ? 1.24 : 2.3) + 0.25;
-      if (w.axis === "H") plan.fill(w.span[0] - 0.25, w.at - half, w.span[1] + 0.25, w.at + half);
-      else plan.fill(w.at - half, w.span[0] - 0.25, w.at + half, w.span[1] + 0.25);
-    }
-    plan.floodOutside();
-    // Every spot inside the plan's footprint must be enclosed by the compiled boxes too: a junction that
-    // left a gap would let the flood into that room. (Compiled walls are thinner than the drawn bands, so
-    // the compiled inside is bigger, never smaller.)
-    let inside = 0;
-    const leaks: string[] = [];
-    for (let j = 0; j < plan.h; j++) {
-      for (let i = 0; i < plan.w; i++) {
-        if (plan.cells[j * plan.w + i] !== 0) continue;
-        inside++;
-        const x = (plan.x0 + (i + 0.5) * plan.cellU) * k;
-        const z = (plan.y0 + (j + 0.5) * plan.cellU) * k;
-        if (g.outside(x, z) && leaks.length < 5) leaks.push(`(${x.toFixed(2)}, ${z.toFixed(2)})`);
-      }
-    }
-    expect(leaks).toEqual([]);
-    expect(inside * (0.5 * k) ** 2).toBeGreaterThan(700); // about 810 m² of 1F inside the drawn walls
+  it("the compiled walls keep every room of the plan closed: no gap to the outside or between rooms", () => {
+    const lines = inputs.walls.find((p) => p.floor === "1F")!.walls;
+    const open = new Set(lines.flatMap((w) => w.spans.filter((x) => x.kind === "OPEN").map((x) => x.id)));
+    const passages = solids.filter((b) => b.id.endsWith(".head") && open.has(b.id.slice(0, -5)));
+    expect(passages.length).toBe(open.size);
+    const found = enclosureLeaks(solids, passages, planGrid(lines, k), [-3, 3, 56, 47], 0.025, k);
+    expect(found).toEqual({ toOutside: [], between: [], rooms: expect.any(Number) as number });
+    expect(found.rooms).toBeGreaterThanOrEqual(14); // 1F's enclosed areas (open-plan rooms count as one)
   });
 
   it("spawns stand on the ground: spawn 0 for the labs, the three attacker insertion points outside", async () => {
@@ -125,7 +103,8 @@ describe("oregon level.json", () => {
         const lo = Math.min(...along, ...w.spans.map((s) => s.at[0]));
         const hi = Math.max(...along, ...w.spans.map((s) => s.at[1]));
         if (Math.abs(lo - w.span[0]) > 0.5 || Math.abs(hi - w.span[1]) > 0.5) problems.push(`${w.id}: span ${w.span} drifted from the extraction (${lo}..${hi})`);
-        if (from.length && Math.min(...from.map((b) => Math.abs(b.c - w.at))) > 0.5) problems.push(`${w.id}: centreline ${w.at} drifted from the extraction`);
+        // Every box, not just the nearest: a line that swallowed a wall drawn elsewhere has one far off.
+        if (from.length && Math.max(...from.map((b) => Math.abs(b.c - w.at))) > 0.5) problems.push(`${w.id}: a box is off its centreline ${w.at}`);
         for (const s of w.spans) {
           if (s.src === "hand" || s.src === "ulo" || !s.from) continue;
           const src = boxes.get(s.from[0]) ?? opens.get(s.from[0]);
@@ -141,6 +120,65 @@ describe("oregon level.json", () => {
       }
     }
     expect(problems).toEqual([]);
+  });
+
+  it("every extracted wall and opening is used by a wall file, or dropped there with a reason", () => {
+    const missing: string[] = [];
+    for (const part of inputs.walls) {
+      const used = new Set(part.dropped.map((x) => x.from));
+      for (const w of part.walls) {
+        for (const id of w.from ?? []) used.add(id);
+        for (const s of w.spans) for (const id of s.from ?? []) used.add(id);
+      }
+      const ex = extracted.floors[part.floor];
+      for (const item of [...ex.walls, ...ex.openings]) if (!used.has(item.id)) missing.push(`${part.floor}: ${item.id}`);
+    }
+    expect(missing).toEqual([]);
+  });
+});
+
+describe("the junction rule on small layouts", () => {
+  const fr = frames(inputs.layout);
+  const wall = (id: string, axis: "H" | "V", at: number, span: [number, number], spans: unknown[] = [], weight: "int" | "ext" = "int") =>
+    wallSchema.parse({ id, axis, at, span, weight, src: "hand", spans });
+  const soft = (id: string, at: [number, number]) => ({ kind: "SOFT", id, at, sections: 1 });
+  const door = (id: string, at: [number, number]) => ({ kind: "DOOR", id, at });
+  /** Compile walls in the 1F frame and check the result: no overlaps, every room closed. */
+  const build = (walls: WallDef[]) => {
+    const out = compileWalls(inputs.layout, fr, [{ floor: "1F", frame: "1F", walls }], [40, 40, 220, 220]);
+    const leaks = enclosureLeaks(out.solids, [], planGrid(walls, k), [6, 6, 30, 30], 0.01, k);
+    return { out, leaks, overlaps: checkLevel(out.solids).errors };
+  };
+  /** The far two sides of the room the tests build in the corner at (100, 100). */
+  const farSides = () => [wall("t.h2", "H", 140, [100, 140]), wall("t.v2", "V", 140, [100, 140])];
+
+  it("two soft walls meeting at a corner get a hard post, and the room stays closed", () => {
+    const { out, leaks, overlaps } = build([wall("t.h1", "H", 100, [100, 140], [soft("t.s1", [100, 120])]), wall("t.v1", "V", 100, [100, 140], [soft("t.s2", [100, 120])]), ...farSides()]);
+    expect(out.solids.map((x) => x.id)).toContain("post:t.h1|t.v1");
+    expect(overlaps).toEqual([]);
+    expect(leaks).toEqual({ toOutside: [], between: [], rooms: 1 });
+  });
+
+  it("a soft wall meeting a door frame at a corner gets a post too, beside the door", () => {
+    const { out, leaks, overlaps } = build([wall("t.h1", "H", 100, [100, 140], [soft("t.s1", [100, 120])]), wall("t.v1", "V", 100, [100, 140], [door("t.d1", [100, 108])]), ...farSides()]);
+    expect(out.solids.map((x) => x.id)).toContain("post:t.h1|t.v1");
+    expect(overlaps).toEqual([]);
+    expect(leaks).toEqual({ toOutside: [], between: [], rooms: 1 });
+  });
+
+  it("a wall ending on the soft wall of a thick (exterior) line meets the panel's face, leaving no slot", () => {
+    const { out, leaks, overlaps } = build([
+      wall("t.v1", "V", 100, [80, 160], [soft("t.s1", [104, 136])], "ext"),
+      wall("t.h1", "H", 120, [100, 140]),
+      wall("t.h0", "H", 80, [100, 140]),
+      wall("t.h2", "H", 160, [100, 140]),
+      wall("t.v2", "V", 140, [80, 160]),
+    ]);
+    const tee = out.solids.find((x) => x.id === "t.h1#0")!;
+    const panel = out.solids.find((x) => x.id === "t.s1")!;
+    expect(tee.center[0] - tee.size[0] / 2).toBeCloseTo(panel.center[0] + panel.size[0] / 2, 6);
+    expect(overlaps).toEqual([]);
+    expect(leaks).toEqual({ toOutside: [], between: [], rooms: 2 });
   });
 });
 

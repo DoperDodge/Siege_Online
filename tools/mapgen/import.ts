@@ -51,29 +51,75 @@ function item(axis: "H" | "V", rect: [number, number, number, number], x: Pick<I
   return axis === "H" ? { ...x, axis, b0: y0, b1: y1, a0: x0, a1: x1 } : { ...x, axis, b0: x0, b1: x1, a0: y0, a1: y1 };
 }
 
-/** Collinear boxes and openings that touch along the line form one wall line. */
+/** A band's drawn class: 7 px interior, 11–13 px exterior, anything thicker a pillar or corner filler. */
+const bandClass = (i: Item) => {
+  const t = i.b1 - i.b0;
+  return t <= 3.2 ? "int" : t <= 5.5 ? "ext" : "thick";
+};
+const centreOf = (i: Item) => (i.b0 + i.b1) / 2;
+/** Most a band can sit off another and still be the same wall (u): raster noise, not a thickness step. */
+const SAME_LINE_U = 0.6;
+/** An opening glyph is drawn thinner than an exterior wall's band, so it belongs to the band it sits in. */
+const OPENING_IN_BAND_U = 1.2;
+
+/**
+ * Wall boxes of one drawn class whose centrelines agree, touching along the line or with only openings
+ * between them, form one wall line; each opening then joins the line whose band it sits in. Walls of
+ * different thickness that share one face (an interior wall running on as an exterior one) stay separate
+ * lines that meet end to end, each at its own centre and thickness; a thick corner filler or pillar is a
+ * line of its own, so it can't chain two walls together.
+ */
 function groupLines(items: Item[]): Item[][] {
-  const parent = items.map((_, i) => i);
+  const walls = items.filter((i) => i.wall);
+  const opens = items.filter((i) => i.open);
+  const parent = walls.map((_, i) => i);
   const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])));
-  for (let i = 0; i < items.length; i++) {
-    for (let j = i + 1; j < items.length; j++) {
-      const p = items[i];
-      const q = items[j];
-      if (p.axis !== q.axis) continue;
-      const overlap = Math.min(p.b1, q.b1) - Math.max(p.b0, q.b0);
-      if (overlap < 0.5 * Math.min(p.b1 - p.b0, q.b1 - q.b0)) continue;
-      const gap = Math.max(p.a0, q.a0) - Math.min(p.a1, q.a1);
-      if (gap > 0.6) continue;
+  /** Do openings in this band cover the gap [lo, hi] along the line (to within the touch tolerance)? */
+  const bridged = (p: Item, lo: number, hi: number) => {
+    const spans = opens
+      .filter((o) => o.axis === p.axis && Math.abs(centreOf(o) - centreOf(p)) <= OPENING_IN_BAND_U && o.a1 > lo - 0.6 && o.a0 < hi + 0.6)
+      .map((o) => [o.a0, o.a1] as const)
+      .sort((a, b) => a[0] - b[0]);
+    let at = lo;
+    for (const [a0, a1] of spans) {
+      if (a0 > at + 0.6) return false;
+      at = Math.max(at, a1);
+    }
+    return at >= hi - 0.6;
+  };
+  for (let i = 0; i < walls.length; i++) {
+    for (let j = i + 1; j < walls.length; j++) {
+      const p = walls[i];
+      const q = walls[j];
+      if (p.axis !== q.axis || bandClass(p) !== bandClass(q) || bandClass(p) === "thick") continue;
+      if (Math.abs(centreOf(p) - centreOf(q)) > SAME_LINE_U) continue;
+      const lo = Math.min(p.a1, q.a1);
+      const hi = Math.max(p.a0, q.a0);
+      if (hi - lo > 0.6 && !bridged(p, lo, hi)) continue;
       parent[find(i)] = find(j);
     }
   }
   const groups = new Map<number, Item[]>();
-  items.forEach((it, i) => {
+  walls.forEach((it, i) => {
     const r = find(i);
     if (!groups.has(r)) groups.set(r, []);
     groups.get(r)!.push(it);
   });
-  return [...groups.values()];
+  const lines = [...groups.values()];
+  for (const o of opens) {
+    let best: { line: Item[]; d: number } | null = null;
+    for (const line of lines) {
+      const w = line[0];
+      if (w.axis !== o.axis) continue;
+      const d = Math.abs(centreOf(o) - centreOf(w));
+      if (d > OPENING_IN_BAND_U) continue;
+      const touches = line.some((b) => Math.max(b.a0, o.a0) - Math.min(b.a1, o.a1) <= 0.6);
+      if (touches && (!best || d < best.d)) best = { line, d };
+    }
+    if (best) best.line.push(o);
+    else lines.push([o]); // an opening with no wall around it: reported by the importer
+  }
+  return lines;
 }
 
 export interface ImportResult {
@@ -182,6 +228,7 @@ export function importFloor(floor: Floor, ex: Extracted, research: { connections
   });
 
   // Drone holes: the r6calls icon sits on a wall; put a slot on the line whose band holds its centre.
+  const dropped: WallsPart["dropped"] = [];
   const holes = openings.filter((o) => o.type === "DRONE_HOLE").sort((p, q) => p.rect[0] - q.rect[0] || p.rect[1] - q.rect[1]);
   for (const [n, o] of holes.entries()) {
     const cx = (o.rect[0] + o.rect[2]) / 2;
@@ -195,6 +242,7 @@ export function importFloor(floor: Floor, ex: Extracted, research: { connections
     }
     if (!best) {
       unmatchedSpans.push(`${o.id} (no wall under the icon)`);
+      dropped.push({ from: o.id, note: "drone-hole icon with no wall under it in this floor's image: place it by hand" });
       continue;
     }
     const along = best.w.axis === "H" ? cx : cy;
@@ -220,6 +268,7 @@ export function importFloor(floor: Floor, ex: Extracted, research: { connections
       floor,
       frame: floor,
       walls: out,
+      dropped,
     },
     unmatched: { rows: rows.filter((r) => !usedRows.has(r)), spans: unmatchedSpans },
   };

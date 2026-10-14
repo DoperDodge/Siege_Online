@@ -91,7 +91,8 @@ export function compileWalls(layout: Layout, fr: Frames, parts: { floor: Floor; 
       };
       const t = typeof w.weight === "number" ? w.weight : d.wallM[w.weight];
       const drawnHalf = typeof w.weight === "number" ? w.weight / 2 : DRAWN_HALF_U[w.weight] * k;
-      const at = snap((w.axis === "H" ? ay : ax) * k);
+      // Snap a face, not the centre, so an odd thickness (a 1.05 m pillar) still has both faces on the grid.
+      const at = Math.round((snap((w.axis === "H" ? ay : ax) * k - t / 2) + t / 2) * 1e6) / 1e6;
       const spans = [...w.spans]
         .map((s) => ({ def: s, a0: along(s.at[0]), a1: along(s.at[1]) }))
         .sort((p, q) => p.a0 - q.a0);
@@ -120,9 +121,10 @@ export function compileWalls(layout: Layout, fr: Frames, parts: { floor: Floor; 
       if (!s || Math.abs((start ? s.a0 : s.a1) - e) > END_STICK_U * k) return "hard";
       return s.def.kind === "SOFT" ? "panel" : "opening";
     };
-    const corners: { l: Line; m: Line; e: number; lEnd: What; mAt: What }[] = [];
+    /** Each wall end that met a perpendicular wall: whether it ran on across it, and its half-thickness there. */
+    const ends: { l: Line; m: Line; start: boolean; extended: boolean; half: number; mAt: What }[] = [];
     const newEnds = lines.map((l) => {
-      const ends: [number, number] = [l.s0, l.s1];
+      const out: [number, number] = [l.s0, l.s1];
       for (const start of [true, false]) {
         const e = start ? l.s0 : l.s1;
         const body = start ? 1 : -1; // which way the line runs from this end
@@ -142,13 +144,13 @@ export function compileWalls(layout: Layout, fr: Frames, parts: { floor: Floor; 
         if (!best) continue;
         const mAt = kindAt(best, l.at - l.t / 2, l.at + l.t / 2);
         const lEnd = endKind(l, start);
-        const far = best.at - (body * best.t) / 2;
-        const near = best.at + (body * best.t) / 2;
-        const extend = lEnd === "hard" && (mAt === "hard" || mAt === "none");
-        ends[start ? 0 : 1] = extend ? far : near;
-        if (!extend && mAt !== "opening" && lEnd !== "opening") corners.push({ l, m: best, e: best.at, lEnd, mAt });
+        // A soft wall is built at interior thickness whatever its line's weight: stop at the panel's own face.
+        const mHalf = mAt === "panel" ? d.wallM.int / 2 : best.t / 2;
+        const extended = lEnd === "hard" && (mAt === "hard" || mAt === "none");
+        out[start ? 0 : 1] = extended ? best.at - (body * best.t) / 2 : best.at + body * mHalf;
+        ends.push({ l, m: best, start, extended, half: lEnd === "panel" ? d.wallM.int / 2 : l.t / 2, mAt });
       }
-      return ends;
+      return out;
     });
     lines.forEach((l, i) => {
       const [n0, n1] = newEnds[i];
@@ -212,35 +214,74 @@ export function compileWalls(layout: Layout, fr: Frames, parts: { floor: Floor; 
       };
     };
 
+    /** Exterior at `a` along a line: one side outside the building (or both, a free-standing wall). */
+    const outsideAt = (l: Line, a: number) => {
+      const [neg, pos] = sides(l, a);
+      return neg !== pos || (neg && pos);
+    };
+    /**
+     * A hard stretch cut where it changes between inside and outside, so each piece takes its own height:
+     * sampled every 25 cm, runs shorter than 60 cm (a probe landing in a corner) folded into their neighbour.
+     */
+    const stretches = (l: Line, a0: number, a1: number): [number, number, number][] => {
+      if (l.def.topM !== undefined) return [[a0, a1, l.def.topM]];
+      const n = Math.max(1, Math.round((a1 - a0) / 0.25));
+      const step = (a1 - a0) / n;
+      const runs: { from: number; to: number; out: boolean }[] = [];
+      for (let i = 0; i < n; i++) {
+        const out = outsideAt(l, a0 + (i + 0.5) * step);
+        const last = runs[runs.length - 1];
+        if (last && last.out === out) last.to = i + 1;
+        else runs.push({ from: i, to: i + 1, out });
+      }
+      for (let i = 0; i < runs.length; i++) {
+        if (runs.length === 1 || (runs[i].to - runs[i].from) * step >= 0.6) continue;
+        const into = i > 0 ? runs[i - 1] : runs[i + 1];
+        into.from = Math.min(into.from, runs[i].from);
+        into.to = Math.max(into.to, runs[i].to);
+        runs.splice(i--, 1);
+        for (let j = 1; j < runs.length; j++) {
+          if (runs[j].out === runs[j - 1].out) {
+            runs[j - 1].to = runs[j].to;
+            runs.splice(j--, 1);
+          }
+        }
+      }
+      return runs.map((r) => [r.from === 0 ? a0 : snap(a0 + r.from * step), r.to === n ? a1 : snap(a0 + r.to * step), r.out ? topOut : topIn]);
+    };
+
+    /** The wall top at `a` along a line: its override, else the next floor outside and under the slab inside. */
+    const topOf = (l: Line, a: number) => (l.def.topM !== undefined ? l.def.topM : outsideAt(l, a) ? topOut : topIn);
+
     for (const l of lines) {
-      const top = (a0: number, a1: number) => {
-        if (l.def.topM !== undefined) return l.def.topM;
-        const [neg, pos] = sides(l, (a0 + a1) / 2);
-        return neg !== pos || (neg && pos) ? topOut : topIn;
-      };
+      const top = (a0: number, a1: number) => topOf(l, (a0 + a1) / 2);
       // Hard parts: everything between spans; drone holes are slots cut out of them.
       const placed = new Set<string>();
       let cursor = l.s0;
       let seg = 0;
       const hard = (a0: number, a1: number) => {
         if (a1 - a0 < 0.025) return;
-        const h = top(a0, a1);
         const holes = l.spans.filter((s) => s.def.kind === "DRONE_HOLE" && s.a0 >= a0 - 1e-9 && s.a1 <= a1 + 1e-9);
         for (const s of holes) placed.add(s.def.id);
-        let c = a0;
         const id = `${l.def.id}#${seg++}`;
-        let piece = 0;
+        const pieces: Solid[] = [];
+        const solidRun = (c0: number, c1: number) => {
+          if (c1 - c0 < 0.025) return;
+          for (const [r0, r1, h] of stretches(l, c0, c1)) pieces.push(box(l, "", r0, r1, 0, h, 0, l.t, { surface: "HARD_WALL" }));
+        };
+        let c = a0;
         for (const s of holes) {
           const mid = snap((s.a0 + s.a1) / 2);
           const h0 = mid - d.droneHole.wM / 2;
           const h1 = mid + d.droneHole.wM / 2;
-          if (h0 > c + 0.025) solids.push(box(l, `${id}.${piece++}`, c, h0, 0, h, 0, l.t, { surface: "HARD_WALL" }));
-          solids.push(box(l, `${id}.${piece++}`, h0, h1, d.droneHole.hM, h, 0, l.t, { surface: "HARD_WALL" }));
+          solidRun(c, h0);
+          pieces.push(box(l, "", h0, h1, d.droneHole.hM, top(h0, h1), 0, l.t, { surface: "HARD_WALL" }));
           const slot = box(l, s.def.id, h0, h1, 0, d.droneHole.hM, 0, l.t, { surface: "HARD_WALL" });
           zones.push({ id: s.def.id, kind: "drone_hole", boxes: [{ center: slot.center, size: slot.size }] });
           c = h1;
         }
-        if (a1 - c >= 0.025) solids.push(box(l, holes.length ? `${id}.${piece}` : id, c, a1, 0, h, 0, l.t, { surface: "HARD_WALL" }));
+        solidRun(c, a1);
+        pieces.forEach((p, i) => solids.push({ ...p, id: pieces.length === 1 ? id : `${id}.${i}` }));
       };
       for (const s of l.spans) {
         if (s.def.kind === "DRONE_HOLE") continue;
@@ -291,19 +332,28 @@ export function compileWalls(layout: Layout, fr: Frames, parts: { floor: Floor; 
       }
     }
 
-    // ---- Corner posts: a corner where two panels (or a panel and a wall end) stopped short of each other.
-    const covers = (s: Solid, x: number, y: number, z: number) =>
-      Math.abs(x - s.center[0]) < s.size[0] / 2 - 1e-6 && Math.abs(y - s.center[1]) < s.size[1] / 2 - 1e-6 && Math.abs(z - s.center[2]) < s.size[2] / 2 - 1e-6;
+    // ---- Corner posts: where two walls meet at a corner and both stopped short of each other (a panel, or a
+    // door or window frame, at each end), nobody covers the corner square; a hard post fills it. Where the
+    // other wall runs on past with a doorway there, the square is that doorway and stays open.
     const posts = new Set<string>();
-    for (const c of corners) {
-      const [x, z] = c.l.axis === "H" ? [c.m.at, c.l.at] : [c.l.at, c.m.at];
-      const y = floorY + 1;
-      if (solids.some((s) => covers(s, x, y, z))) continue;
-      const id = `post:${[c.l.def.id, c.m.def.id].sort().join("|")}`;
+    for (const a of ends) {
+      if (a.extended) continue;
+      const b = ends.find((x) => x.l === a.m && x.m === a.l);
+      if (!b) {
+        // The other wall runs on past this end: it covers the corner itself (or it's its doorway).
+        if (a.mAt === "none") warnings.push(`${a.l.def.id}: an end stops at ${a.m.def.id}, which doesn't reach it`);
+        continue;
+      }
+      if (b.extended) continue; // the other wall's end covers the corner
+      const id = `post:${[a.l.def.id, a.m.def.id].sort().join("|")}`;
       if (posts.has(id)) continue;
       posts.add(id);
-      const [sx, sz] = c.l.axis === "H" ? [c.m.t, c.l.t] : [c.l.t, c.m.t];
-      solids.push({ id, center: [x, floorY + topIn / 2, z], size: [sx, topIn, sz], surface: "HARD_WALL" });
+      const [h, v] = a.l.axis === "H" ? [a.l, a.m] : [a.m, a.l];
+      const [hEnd, vEnd] = a.l.axis === "H" ? [a, b] : [b, a];
+      const x = v.at;
+      const z = h.at;
+      const hgt = Math.max(topOf(h, x), topOf(v, z));
+      solids.push({ id, center: [x, floorY + hgt / 2, z], size: [2 * vEnd.half, hgt, 2 * hEnd.half], surface: "HARD_WALL" });
     }
   }
   return { solids, zones, warnings, exterior, footprint: { minX, minY, maxX, maxY }, grids };

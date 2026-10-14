@@ -19,5 +19,6 @@
   {"id": "3F.w014", "axis": "V", "at": 261.24, "span": [56.44, 85.37], "weight": "int", "kind": "wall", "spans": [], "from": ["3-w014"], "src": "raster", "conf": "medium", "_unverified": []},
   {"id": "3F.w015", "axis": "V", "at": 295.46, "span": [56.44, 85.37], "weight": "int", "kind": "wall", "spans": [], "from": ["3-w015"], "src": "raster", "conf": "high", "_unverified": []},
   {"id": "3F.w011", "axis": "V", "at": 315.74, "span": [43.74, 100.19], "weight": "ext", "kind": "wall", "spans": [], "from": ["3-w011"], "src": "raster", "conf": "high", "_unverified": []}
- ]
+ ],
+ "dropped": []
 }
