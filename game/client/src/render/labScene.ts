@@ -1,7 +1,8 @@
-// Three.js scene for labs: greybox level colored by surface class (PLAN §9.1), labels, pawn bodies
-// built from hitbox capsules, and an F3 hitbox visualizer.
+// Three.js scene for labs and maps: greybox level colored by surface class (PLAN §9.1), its static boxes
+// drawn instanced per material and storey (tools/mapgen/DESIGN.md E4), labels, pawn bodies built from
+// hitbox capsules, and an F3 hitbox visualizer.
 import * as THREE from "three";
-import { eyePose, isDowned, PawnMode, poseHitboxes, type BuiltLevel, type GameData, type Hitbox, type PawnState, type Renderable } from "@redmond/shared";
+import { eyePose, isDowned, PawnMode, poseHitboxes, type BuiltLevel, type GameData, type Hitbox, type PanelSpec, type PawnState, type Renderable } from "@redmond/shared";
 import { buildGun, gunKey, type GunLook, type GunModel } from "./gunKit.js";
 
 export const SURFACE_COLORS: Record<Renderable["surface"], number> = {
@@ -26,6 +27,9 @@ export function createRenderer(container: HTMLElement, low = false): THREE.WebGL
   renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.shadowMap.enabled = !low;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  // Only the level casts shadows, and it changes only when a panel does: the shadow map is drawn when the
+  // page asks for it (shadowMap.needsUpdate), not every frame (tools/mapgen/DESIGN.md amendment 8).
+  renderer.shadowMap.autoUpdate = false;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   container.appendChild(renderer.domElement);
@@ -53,23 +57,42 @@ export function warmShaders(renderer: THREE.WebGLRenderer, scene: THREE.Scene, c
   }
 }
 
-export function createLabScene(level: BuiltLevel): THREE.Scene {
+/** A level's scene, and the parts of it the page works with. */
+export interface LabScene {
+  scene: THREE.Scene;
+  /**
+   * The level's static boxes, a group per storey (`storey:<id>`, in the level's order), or one group
+   * (`storey:all`) when the level has no storeys. Hiding one changes the shadows: ask for a new shadow map
+   * (renderer.shadowMap.needsUpdate).
+   */
+  storeys: THREE.Group[];
+  /** This scene's labels (updateLabels hides the ones next to the camera). */
+  labels: THREE.Sprite[];
+  /** Boxes drawn instanced, and the meshes the static boxes take (a draw call each, per pass). */
+  staticBoxes: number;
+  staticMeshes: number;
+}
+
+/** Every instanced box is this one scaled, turned and moved. */
+const UNIT_BOX = new THREE.BoxGeometry(1, 1, 1);
+
+/**
+ * The level as a scene. Every visible renderable but the panels (PanelView draws those) is drawn by one
+ * InstancedMesh per material and storey, the unit box scaled per instance (exact for boxes): a map's
+ * thousand boxes take a few dozen draw calls instead of one each (tools/mapgen/DESIGN.md E4). Nothing
+ * raycasts the scene (shots and the laser ask the shared code's physics), so instancing only has to look
+ * the same. The labs' textured floor stays a mesh of its own: its texture repeat is per mesh.
+ */
+export function createLabScene(level: BuiltLevel): LabScene {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x9fb4c7);
   scene.fog = new THREE.Fog(0x9fb4c7, 60, 140);
 
   scene.add(new THREE.HemisphereLight(0xdfe9f5, 0x3a3f36, 1.1));
   const sun = new THREE.DirectionalLight(0xfff1dc, 2.2);
-  sun.position.set(18, 30, 12);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
-  const sc = sun.shadow.camera;
-  sc.left = sc.bottom = -36;
-  sc.right = sc.top = 36;
-  sc.near = 1;
-  sc.far = 90;
-  sun.shadow.bias = -0.0005;
-  scene.add(sun);
+  fitSun(sun, levelBox(level));
+  scene.add(sun, sun.target);
 
   const materials = new Map<string, THREE.Material>();
   const material = (r: Renderable) => {
@@ -80,35 +103,207 @@ export function createLabScene(level: BuiltLevel): THREE.Scene {
         key === "floor"
           ? new THREE.MeshStandardMaterial({ map: gridTexture(), roughness: 0.95 })
           : new THREE.MeshStandardMaterial({ color: SURFACE_COLORS[r.surface], roughness: 0.85, metalness: r.surface === "LADDER" ? 0.4 : 0 });
+      if (key === "HARD_FLOOR") worldGrid(mat);
       materials.set(key, mat);
     }
     return mat;
   };
 
+  const storeys = (level.def.storeys.length ? level.def.storeys : [{ id: "all" }]).map((s) => {
+    const g = new THREE.Group();
+    g.name = `storey:${s.id}`;
+    scene.add(g);
+    return g;
+  });
+  const labels: THREE.Sprite[] = [];
+  const label = (text: string, r: Renderable) => {
+    const sprite = labelSprite(text, r.center[0], r.center[1] + r.size[1] / 2 + 0.4, r.center[2]);
+    labels.push(sprite);
+    scene.add(sprite);
+  };
+  /** The boxes each instanced mesh draws, by storey and material. */
+  const batches = new Map<string, { storey: number; surface: string; material: THREE.Material; boxes: Renderable[] }>();
+  let staticMeshes = 0;
   for (const r of level.renderables) {
     if (!r.visible) continue;
-    if (r.label) labels.push(labelSprite(r.label, r.center[0], r.center[1] + r.size[1] / 2 + 0.4, r.center[2]));
-    if (r.kind === "panel") continue; // drawn from its cells (PanelView)
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(r.size[0], r.size[1], r.size[2]), material(r));
-    mesh.position.set(r.center[0], r.center[1], r.center[2]);
-    mesh.quaternion.set(r.quat[0], r.quat[1], r.quat[2], r.quat[3]);
-    if (r.id === "floor") {
-      const tex = (mesh.material as THREE.MeshStandardMaterial).map!;
-      tex.repeat.set(r.size[0] / 2, r.size[2] / 2);
+    if (r.kind === "panel") {
+      // Drawn from its cells (PanelView). A reinforceable wall says how many sections it has, so the counts
+      // can be checked by eye without reinforcing (DESIGN amendment 13).
+      const spec = r.panel !== undefined ? level.panels.list[r.panel]?.panel.spec : undefined;
+      const n = spec && showsSections(spec) ? spec.sections : 0;
+      const text = [r.label, n ? `${n} section${n === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ");
+      if (text) label(text, r);
+      continue;
     }
-    mesh.castShadow = r.id !== "floor";
-    mesh.receiveShadow = true;
-    scene.add(mesh);
+    if (r.label) label(r.label, r);
+    const storey = storeyOf(level.def.storeys, r.center[1] - r.size[1] / 2);
+    if (r.id === "floor") {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(r.size[0], r.size[1], r.size[2]), material(r));
+      mesh.position.set(r.center[0], r.center[1], r.center[2]);
+      mesh.quaternion.set(r.quat[0], r.quat[1], r.quat[2], r.quat[3]);
+      (mesh.material as THREE.MeshStandardMaterial).map!.repeat.set(r.size[0] / 2, r.size[2] / 2);
+      mesh.receiveShadow = true; // nothing is under it to cast onto
+      storeys[storey].add(mesh);
+      staticMeshes++;
+      continue;
+    }
+    const key = `${storey}:${r.surface}`;
+    let batch = batches.get(key);
+    if (!batch) batches.set(key, (batch = { storey, surface: r.surface, material: material(r), boxes: [] }));
+    batch.boxes.push(r);
   }
-  scene.add(...labels);
-  return scene;
+
+  const m = new THREE.Matrix4();
+  const at = new THREE.Vector3();
+  const turn = new THREE.Quaternion();
+  const size = new THREE.Vector3();
+  let staticBoxes = 0;
+  for (const b of batches.values()) {
+    const mesh = new THREE.InstancedMesh(UNIT_BOX, b.material, b.boxes.length);
+    b.boxes.forEach((r, i) => mesh.setMatrixAt(i, m.compose(at.set(...r.center), turn.set(...r.quat), size.set(...r.size))));
+    // Culling tests a sphere around all of the mesh's boxes, which the unit box's own sphere is not.
+    mesh.computeBoundingSphere();
+    mesh.castShadow = mesh.receiveShadow = true;
+    mesh.name = b.surface;
+    storeys[b.storey].add(mesh);
+    staticBoxes += b.boxes.length;
+    staticMeshes++;
+  }
+  return { scene, storeys, labels, staticBoxes, staticMeshes };
 }
 
-const labels: THREE.Sprite[] = [];
+/** A wall that takes reinforcement shows its sections: seams on its faces (PanelView) and a count in its label. */
+export function showsSections(spec: PanelSpec): boolean {
+  return spec.construction.kind === "wall" && spec.construction.reinforceable;
+}
+
+/**
+ * The storey a box is drawn with, by its place in `storeys` (listed by height): the last whose floor, less
+ * 0.25 m, is at or below the box's bottom (a storey's own 0.2 m slab hangs just under its floorY), or the
+ * first for anything lower. 0 when the level has no storeys.
+ */
+export function storeyOf(storeys: readonly { floorY: number }[], bottom: number): number {
+  let at = 0;
+  for (let i = 0; i < storeys.length; i++) if (storeys[i].floorY - 0.25 <= bottom) at = i;
+  return at;
+}
 
 /** Hide labels right next to the camera (they're sized in world units and would fill the screen). */
-export function updateLabels(camera: THREE.Camera) {
+export function updateLabels(labels: readonly THREE.Sprite[], camera: THREE.Camera) {
   for (const l of labels) l.visible = l.position.distanceToSquared(camera.position) > 3.5 * 3.5;
+}
+
+/** Towards the sun. Every level keeps this direction; only the shadow camera moves to fit the level. */
+const SUN = new THREE.Vector3(18, 30, 12).normalize();
+/** The shadow bias in metres: what -0.0005 came to over the 89 m depth of the old fixed shadow camera. */
+const SHADOW_BIAS_M = 0.045;
+
+/** Where the level is: its bounds if it has them (a map), else the box around everything drawn (a lab). */
+function levelBox(level: BuiltLevel): THREE.Box3 {
+  const b = level.def.bounds;
+  if (b) return new THREE.Box3(new THREE.Vector3(...b.min), new THREE.Vector3(...b.max));
+  const box = new THREE.Box3();
+  const unit = new THREE.Box3(new THREE.Vector3(-0.5, -0.5, -0.5), new THREE.Vector3(0.5, 0.5, 0.5));
+  const m = new THREE.Matrix4();
+  for (const r of level.renderables) {
+    if (!r.visible) continue;
+    m.compose(new THREE.Vector3(...r.center), new THREE.Quaternion(...r.quat), new THREE.Vector3(...r.size));
+    box.union(unit.clone().applyMatrix4(m));
+  }
+  return box.isEmpty() ? box.setFromCenterAndSize(new THREE.Vector3(), new THREE.Vector3(1, 1, 1)) : box;
+}
+
+/**
+ * The sun's shadow camera, just around `box` as the sun sees it, so the whole level casts and receives
+ * shadows and no texel is spent outside it (DESIGN amendment 8). A level over 80 m across gets a 4096 map,
+ * which keeps its shadows about as sharp as a lab's.
+ */
+function fitSun(sun: THREE.DirectionalLight, box: THREE.Box3) {
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  sun.target.position.copy(center);
+  sun.position.copy(center).addScaledVector(SUN, size.length() / 2 + 10);
+  sun.updateMatrixWorld();
+  sun.target.updateMatrixWorld();
+  // The camera as the shadow pass places it (LightShadow.updateMatrices), to measure the box from it.
+  const cam = sun.shadow.camera;
+  cam.position.copy(sun.position);
+  cam.lookAt(center);
+  cam.updateMatrixWorld();
+  const lo = new THREE.Vector3(Infinity, Infinity, Infinity);
+  const hi = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
+  for (let i = 0; i < 8; i++) {
+    const corner = new THREE.Vector3(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z);
+    corner.applyMatrix4(cam.matrixWorldInverse);
+    lo.min(corner);
+    hi.max(corner);
+  }
+  const margin = 0.5;
+  cam.left = lo.x - margin;
+  cam.right = hi.x + margin;
+  cam.bottom = lo.y - margin;
+  cam.top = hi.y + margin;
+  cam.near = Math.max(0.1, -hi.z - margin); // the camera looks down -z
+  cam.far = -lo.z + margin;
+  cam.updateProjectionMatrix();
+  const map = Math.max(size.x, size.z) > 80 ? 4096 : 2048;
+  sun.shadow.mapSize.set(map, map);
+  // The bias is a fraction of the camera's depth range: keep it the same distance whatever the level's size.
+  sun.shadow.bias = -SHADOW_BIAS_M / (cam.far - cam.near);
+}
+
+/** A floor's grid lines (sRGB): every metre, and stronger every 5 m, a little lighter than HARD_FLOOR. */
+const GRID_MINOR = 0x575d66;
+const GRID_MAJOR = 0x666d78;
+
+/**
+ * A grid on the material's upward faces, a line every metre and a stronger one every 5 m, placed by the
+ * world position (instanced or not), so every big floor is also a ruler (DESIGN amendment 16). A texture
+ * would stretch with each box's scale. Lines stay about a pixel wide and fade out before they crowd together
+ * in the distance.
+ */
+function worldGrid(mat: THREE.Material) {
+  const rgb = (hex: number) => {
+    const c = new THREE.Color(hex); // in the shader's linear working space
+    return `vec3( ${c.r.toFixed(4)}, ${c.g.toFixed(4)}, ${c.b.toFixed(4)} )`;
+  };
+  mat.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nvarying vec3 vGridPos;\nvarying float vGridUp;").replace(
+      "#include <project_vertex>",
+      `#include <project_vertex>
+      vec4 gridPos = vec4( transformed, 1.0 );
+      vec3 gridNormal = objectNormal;
+      #ifdef USE_INSTANCING
+        gridPos = instanceMatrix * gridPos;
+        gridNormal = mat3( instanceMatrix ) * gridNormal; // a box face's normal keeps its direction when scaled
+      #endif
+      vGridPos = ( modelMatrix * gridPos ).xyz;
+      vGridUp = normalize( mat3( modelMatrix ) * gridNormal ).y;`,
+    );
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        "#include <common>",
+        `#include <common>
+        varying vec3 vGridPos;
+        varying float vGridUp;
+        // How much of the pixel lies on a line every spacing metres, px pixels wide; faded out where a cell
+        // gets under about 5 pixels (they would shimmer).
+        float gridLine( vec2 p, float spacing, float px ) {
+          vec2 c = p / spacing;
+          vec2 w = max( fwidth( c ), vec2( 1e-6 ) );
+          vec2 d = abs( fract( c - 0.5 ) - 0.5 ) / w;
+          vec2 on = clamp( 0.5 * px + 0.5 - d, 0.0, 1.0 ) * ( 1.0 - smoothstep( 0.1, 0.3, w ) );
+          return max( on.x, on.y );
+        }`,
+      )
+      .replace(
+        "#include <color_fragment>",
+        `#include <color_fragment>
+        float gridUp = step( 0.9, vGridUp );
+        diffuseColor.rgb = mix( diffuseColor.rgb, ${rgb(GRID_MINOR)}, gridUp * gridLine( vGridPos.xz, 1.0, 1.0 ) );
+        diffuseColor.rgb = mix( diffuseColor.rgb, ${rgb(GRID_MAJOR)}, gridUp * gridLine( vGridPos.xz, 5.0, 1.5 ) );`,
+      );
+  };
 }
 
 function gridTexture(): THREE.CanvasTexture {
@@ -154,15 +349,22 @@ function labelSprite(text: string, x: number, y: number, z: number): THREE.Sprit
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false }));
+  sprite.name = text;
   sprite.scale.set((w / 48) * 0.34, 0.34, 1);
   sprite.position.set(x, y, z);
   return sprite;
 }
 
-/** A pawn drawn as capsules around its hitboxes (placeholder body until the art pass), plus a wireframe. */
+/**
+ * A pawn drawn as capsules around its hitboxes (placeholder body until the art pass), plus a wireframe.
+ * Nothing of it casts a shadow: the shadow map is only redrawn when the level changes (createRenderer), so a
+ * moving body's shadow would stay behind where the map was last drawn.
+ */
 export class PawnView {
   readonly body = new THREE.Group();
   readonly wire = new THREE.Group();
+  /** The body's capsules (the body group also holds the name tag and the gun). */
+  private readonly shape = new THREE.Group();
   private readonly bodyParts: CapsuleParts[] = [];
   private readonly wireParts: CapsuleParts[] = [];
   private readonly tag: THREE.Sprite | null;
@@ -183,9 +385,10 @@ export class PawnView {
     const wireMat = new THREE.MeshBasicMaterial({ color: wireColor, wireframe: true, depthTest: false, transparent: true, opacity: 0.75 });
     this.materials = [mat, headMat, wireMat];
     for (let i = 0; i < 8; i++) {
-      this.bodyParts.push(new CapsuleParts(this.body, i === 0 ? headMat : mat, true));
+      this.bodyParts.push(new CapsuleParts(this.shape, i === 0 ? headMat : mat, true));
       this.wireParts.push(new CapsuleParts(this.wire, wireMat, false));
     }
+    this.body.add(this.shape);
     this.tag = name ? labelSprite(name, 0, 0, 0) : null;
     if (this.tag) {
       this.tag.scale.multiplyScalar(0.7);
@@ -234,14 +437,11 @@ export class PawnView {
   }
 
   /**
-   * First person: our own body draws nothing (no colour, no depth) but still casts its shadow
-   * (core_mechanics.md §15: you see your own shadow), and its gun is the viewmodel instead.
+   * First person: our own body isn't drawn (and casts no shadow, see the class), and its gun is the
+   * viewmodel instead. The body itself stays visible, so its laser still leaves from its gun.
    */
   setFirstPerson(on: boolean) {
-    for (const m of this.materials.slice(0, 2)) {
-      m.colorWrite = !on;
-      m.depthWrite = !on;
-    }
+    this.shape.visible = !on;
     if (this.gun) this.gun.group.visible = this.gunVisible && !on;
   }
 
@@ -274,7 +474,6 @@ export class CapsuleParts {
     this.capA = new THREE.Mesh(solid ? SPH : WIRE_SPH, mat);
     this.capB = new THREE.Mesh(solid ? SPH : WIRE_SPH, mat);
     for (const m of [this.cyl, this.capA, this.capB]) {
-      m.castShadow = solid;
       if (!solid) m.renderOrder = 10;
       parent.add(m);
     }

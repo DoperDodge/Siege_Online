@@ -7,9 +7,10 @@ import { adsSensitivity, type Keybinds, type Settings } from "./settings.js";
 export type Action = keyof Keybinds | "ads" | "fire" | "swap" | "hitboxes" | "thirdPerson" | "help" | "settings";
 
 /** One-shot actions the lab handles itself (not sent to the simulation). */
-export type UiAction = "respawn" | "hitboxes" | "thirdPerson" | "help" | "settings" | "fire";
+export type UiAction = "respawn" | "hitboxes" | "thirdPerson" | "help" | "settings" | "fire" | "stats";
 
-const UI_KEYS: Record<string, UiAction> = { F1: "help", F3: "hitboxes", F4: "thirdPerson", Escape: "settings" };
+/** F2 is left to the pages (the Range Lab's overlay); F5–F7 and F9–F12 are browser shortcuts. */
+const UI_KEYS: Record<string, UiAction> = { F1: "help", F3: "hitboxes", F4: "thirdPerson", F8: "stats", Escape: "settings" };
 
 /** Keys that change the body's pose; ignored while stanceLocked() (see there). */
 const STANCE_ACTIONS = new Set<Action>(["crouch", "prone", "leanLeft", "leanRight", "ads"]);

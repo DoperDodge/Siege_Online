@@ -1,24 +1,29 @@
 // Destructible panels drawn from their cells (Phase 4 M3, M8): one mesh per layer, built from boxes over the
 // layer's cells (greedy rectangles). Skins wear the surface's greybox colour (PLAN §9.1), the core is wood or
 // metal, and steel is a dark plate on the side it went up from. Caps in the skins' colour close the gap
-// between the skins at the panel's edges (a free-standing wall's ends and top). When a panel changes, only
-// the layers whose drawn cells changed are rebuilt; each box is 8 shared corners, lit flat (no normals to
+// between the skins at the panel's edges (a free-standing wall's ends and top). A reinforceable wall shows
+// the boundaries between its sections as thin dark seams on both faces. When a panel changes, only the
+// layers whose drawn cells changed are rebuilt; each box is 8 shared corners, lit flat (no normals to
 // build), so a shot-up wall redraws within PLAN §8.2's main-thread budget.
 import * as THREE from "three";
 import { greedyRects, L_BACK, L_CORE, L_FRONT, L_STEEL, layerSlab, STEEL_PLATE_M, type Panel, type PanelEntry, type PanelSet } from "@redmond/shared";
-import { SURFACE_COLORS } from "./labScene.js";
+import { showsSections, SURFACE_COLORS } from "./labScene.js";
 
 const WOOD = 0x8b6a43;
 const METAL = 0x7d848c;
 const STEEL = 0x56606b;
+const SEAM = 0x1c232c;
 
 /**
  * What a panel draws, in this order: front skin, core, back skin, the steel plate on the −n side, on the +n
- * side, and the caps at its edges.
+ * side, the caps at its edges, and its section seams.
  */
-const SLOTS = 6;
+const SLOTS = 7;
 /** How deep a cap is (it only shows its outer face, and from inside through a hole near the edge). */
 const CAP_M = 0.004;
+/** How wide a section seam is, and how far it stands off the skin or steel it is drawn on. */
+const SEAM_M = 0.03;
+const SEAM_LIFT = 0.001;
 
 interface Drawn {
   /** The panel object and version drawn (a reset panel is a new object at version 0). */
@@ -52,7 +57,7 @@ export class PanelView {
     // One hidden mesh per material, so warmShaders readies them all before the first reinforcement or window
     // (built like a panel's, without normals, so it is the same shader).
     const probes = new THREE.Group();
-    for (const key of ["skin:SOFT_WALL", "core:wood", "core:metal", "steel", "glass"]) {
+    for (const key of ["skin:SOFT_WALL", "core:wood", "core:metal", "steel", "glass", "seam"]) {
       const geo = new THREE.BufferGeometry();
       geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array([0, 0, 0, 0.01, 0, 0, 0, 0.01, 0]), 3));
       const m = new THREE.Mesh(geo, this.material(key));
@@ -63,24 +68,37 @@ export class PanelView {
     this.update();
   }
 
-  /** Redraw every panel that changed since the last call (cheap when nothing did). */
-  update(): void {
+  /**
+   * Redraw every panel that changed since the last call (cheap when nothing did). True if any mesh changed:
+   * the level's shadows changed with it.
+   */
+  update(): boolean {
+    let changed = false;
     for (let i = 0; i < this.panels.list.length; i++) {
       const e = this.panels.list[i];
       const d = this.drawn[i];
       if (d.panel === e.panel && d.version === e.panel.version) continue;
       d.panel = e.panel;
       d.version = e.panel.version;
-      this.build(e, d, this.groups[i]);
+      if (this.build(e, d, this.groups[i])) changed = true;
     }
+    return changed;
+  }
+
+  /** Meshes drawn over all the panels now (the stats overlay). */
+  get meshCount(): number {
+    let n = 0;
+    for (const d of this.drawn) for (const m of d.meshes) if (m) n++;
+    return n;
   }
 
   /**
    * Only what can be seen: the core near a hole in either skin (a few cells around it, for looking in at an
    * angle), and a skin only where no steel plate covers it. Faces hidden 2 cm behind another would otherwise
-   * fight it for depth at a distance (a 16-bit depth buffer can't tell them apart past ~10 m).
+   * fight it for depth at a distance (a 16-bit depth buffer can't tell them apart past ~10 m). True if any of
+   * the panel's meshes changed.
    */
-  private build(e: PanelEntry, d: Drawn, g: THREE.Group) {
+  private build(e: PanelEntry, d: Drawn, g: THREE.Group): boolean {
     const p = e.panel;
     const c = p.spec.construction;
     const half = e.frame.t / 2;
@@ -98,15 +116,23 @@ export class PanelView {
     const skin = c.kind === "glass" ? "glass" : `skin:${c.kind === "barricade" ? "BARRICADE" : e.info.surface}`;
     const front = p.layers[L_FRONT];
     const back = p.layers[L_BACK];
-    const wanted: { cells: Uint8Array | null; slab: [number, number]; key: string; caps?: true }[] = [
-      { cells: hidePlate(front, plates?.[0]), slab: layerSlab(p, e.frame, L_FRONT), key: skin },
-      { cells: p.layers[L_CORE] && exposed(p.layers[L_CORE], front, back, p.w, p.h), slab: layerSlab(p, e.frame, L_CORE), key: p.coreMetal ? "core:metal" : "core:wood" },
-      { cells: hidePlate(back, plates?.[1]), slab: layerSlab(p, e.frame, L_BACK), key: skin },
+    /** Per slot: the cells it draws (null: nothing), its material, and the geometry for those cells. */
+    const wanted: { cells: Uint8Array | null; key: string; geometry: (cells: Uint8Array) => THREE.BufferGeometry | null }[] = [
+      { cells: hidePlate(front, plates?.[0]), key: skin, geometry: (cells) => boxes(e, cells, layerSlab(p, e.frame, L_FRONT)) },
+      {
+        cells: p.layers[L_CORE] && exposed(p.layers[L_CORE], front, back, p.w, p.h),
+        key: p.coreMetal ? "core:metal" : "core:wood",
+        geometry: (cells) => boxes(e, cells, layerSlab(p, e.frame, L_CORE)),
+      },
+      { cells: hidePlate(back, plates?.[1]), key: skin, geometry: (cells) => boxes(e, cells, layerSlab(p, e.frame, L_BACK)) },
       // Each plate just proud of its face.
-      { cells: plates?.[0] ?? null, slab: [-half - STEEL_PLATE_M, -half + 0.002], key: "steel" },
-      { cells: plates?.[1] ?? null, slab: [half - 0.002, half + STEEL_PLATE_M], key: "steel" },
+      { cells: plates?.[0] ?? null, key: "steel", geometry: (cells) => boxes(e, cells, [-half - STEEL_PLATE_M, -half + 0.002]) },
+      { cells: plates?.[1] ?? null, key: "steel", geometry: (cells) => boxes(e, cells, [half - 0.002, half + STEEL_PLATE_M]) },
       // Between two skins (walls, floors, hatches), across the core's depth.
-      { cells: front && back ? edgeCaps(front, back, p.w, p.h) : null, slab: layerSlab(p, e.frame, L_CORE), key: skin, caps: true },
+      { cells: front && back ? edgeCaps(front, back, p.w, p.h) : null, key: skin, geometry: (cells) => capBoxes(e, cells, layerSlab(p, e.frame, L_CORE)) },
+      // Where one reinforcement section meets the next, on both faces, reinforced or not, so the sections can
+      // be counted by eye (tools/mapgen/DESIGN.md amendment 13).
+      { cells: showsSections(p.spec) && p.sectionCount > 1 ? seamCells(p, plates) : null, key: "seam", geometry: (cells) => seamBoxes(e, cells) },
     ];
     let changed = false;
     wanted.forEach((w, slot) => {
@@ -116,18 +142,21 @@ export class PanelView {
       d.meshes[slot]?.geometry.dispose();
       d.meshes[slot] = null;
       d.cells[slot] = w.cells && w.cells.slice();
-      const geo = w.cells && (w.caps ? capBoxes(e, w.cells, w.slab) : boxes(e, w.cells, w.slab));
+      const geo = w.cells && w.geometry(w.cells);
       if (!geo) return;
       geo.boundingSphere = d.bounds;
       const mesh = new THREE.Mesh(geo, this.material(w.key));
-      // Studs sit right behind a 2 cm skin: their shadows only streak the skin (shadow-map precision).
-      mesh.castShadow = w.key !== "glass" && !w.key.startsWith("core:");
+      mesh.name = w.key;
+      // Studs sit right behind a 2 cm skin: their shadows only streak the skin (shadow-map precision). A seam
+      // is too thin to cast anything.
+      mesh.castShadow = w.key !== "glass" && w.key !== "seam" && !w.key.startsWith("core:");
       mesh.receiveShadow = true;
       d.meshes[slot] = mesh;
     });
-    if (!changed) return;
+    if (!changed) return false;
     g.clear();
     for (const m of d.meshes) if (m) g.add(m);
+    return true;
   }
 
   private material(key: string): THREE.MeshStandardMaterial {
@@ -139,6 +168,9 @@ export class PanelView {
     else if (key === "steel") m = new THREE.MeshStandardMaterial({ ...flat, color: STEEL, roughness: 0.45, metalness: 0.7 });
     else if (key === "core:metal") m = new THREE.MeshStandardMaterial({ ...flat, color: METAL, roughness: 0.5, metalness: 0.6 });
     else if (key === "core:wood") m = new THREE.MeshStandardMaterial({ ...flat, color: WOOD, roughness: 0.9 });
+    // A seam lies a millimetre off its face: pulled forward in depth too, so it wins against that face at
+    // any distance (as bullet marks do, fxBus.ts).
+    else if (key === "seam") m = new THREE.MeshStandardMaterial({ ...flat, color: SEAM, roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
     else m = new THREE.MeshStandardMaterial({ ...flat, color: SURFACE_COLORS[key.slice(5) as keyof typeof SURFACE_COLORS], roughness: 0.85 });
     this.materials.set(key, m);
     return m;
@@ -148,8 +180,8 @@ export class PanelView {
 /** Two triangles a face, outward: corner c of a box is (x, y, z) = (c & 1, c & 2, c & 4) high or low. */
 const BOX = [1, 3, 7, 1, 7, 5, 0, 4, 6, 0, 6, 2, 2, 6, 7, 2, 7, 3, 0, 1, 5, 0, 5, 4, 4, 5, 7, 4, 7, 6, 0, 2, 3, 0, 3, 1];
 
-/** A box in the panel's own axes, metres from its centre: [u0, u1, v0, v1] across the face, through `slab`. */
-type FaceBox = [number, number, number, number];
+/** A box in the panel's own axes, metres from its centre: [u0, u1, v0, v1] across the face, [n0, n1] through it. */
+type FaceBox = [number, number, number, number, number, number];
 
 /** The cells as boxes in the panel's own axes, spanning `slab` through it; null if there are none. */
 function boxes(e: PanelEntry, cells: Uint8Array, slab: [number, number]): THREE.BufferGeometry | null {
@@ -157,8 +189,7 @@ function boxes(e: PanelEntry, cells: Uint8Array, slab: [number, number]): THREE.
   const [x0, y0] = [-e.frame.w / 2, -e.frame.h / 2];
   return boxGeometry(
     e,
-    greedyRects(cells, p.w, p.h).map((r) => [x0 + r.u0 * p.cellU, x0 + r.u1 * p.cellU, y0 + r.v0 * p.cellV, y0 + r.v1 * p.cellV]),
-    slab,
+    greedyRects(cells, p.w, p.h).map((r) => [x0 + r.u0 * p.cellU, x0 + r.u1 * p.cellU, y0 + r.v0 * p.cellV, y0 + r.v1 * p.cellV, slab[0], slab[1]]),
   );
 }
 
@@ -170,7 +201,7 @@ function capBoxes(e: PanelEntry, caps: Uint8Array, slab: [number, number]): THRE
   const p = e.panel;
   const [hw, hh] = [e.frame.w / 2, e.frame.h / 2];
   const out: FaceBox[] = [];
-  const runs = (from: number, n: number, box: (a: number, b: number) => FaceBox) => {
+  const runs = (from: number, n: number, box: (a: number, b: number) => [number, number, number, number]) => {
     for (let i = 0; i < n; ) {
       if (!caps[from + i]) {
         i++;
@@ -178,7 +209,7 @@ function capBoxes(e: PanelEntry, caps: Uint8Array, slab: [number, number]): THRE
       }
       let j = i;
       while (j < n && caps[from + j]) j++;
-      out.push(box(i, j));
+      out.push([...box(i, j), slab[0], slab[1]]);
       i = j;
     }
   };
@@ -186,21 +217,70 @@ function capBoxes(e: PanelEntry, caps: Uint8Array, slab: [number, number]): THRE
   runs(p.w, p.w, (a, b) => [-hw + a * p.cellU, -hw + b * p.cellU, hh - CAP_M, hh]);
   runs(2 * p.w, p.h, (a, b) => [-hw, -hw + CAP_M, -hh + a * p.cellV, -hh + b * p.cellV]);
   runs(2 * p.w + p.h, p.h, (a, b) => [hw - CAP_M, hw, -hh + a * p.cellV, -hh + b * p.cellV]);
-  return boxGeometry(e, out, slab);
+  return boxGeometry(e, out);
+}
+
+/**
+ * Where the section seams go: per face (−n, then +n), per boundary between two reinforcement sections, per
+ * row of cells, 1 on the skin, 2 on a steel plate, 0 where the face has a hole on either side of the
+ * boundary (a seam goes with the face it is drawn on).
+ */
+function seamCells(p: Panel, plates: [Uint8Array, Uint8Array] | null): Uint8Array {
+  const joins = p.sectionCount - 1;
+  const out = new Uint8Array(2 * joins * p.h);
+  for (let side = 0; side < 2; side++) {
+    const skin = p.layers[side ? L_BACK : L_FRONT];
+    const plate = plates?.[side];
+    const face = (i: number) => (plate?.[i] ? 2 : skin?.[i] ? 1 : 0);
+    for (let s = 0; s < joins; s++) {
+      const b = p.sectionRange(s)[1];
+      if (b <= 0 || b >= p.w) continue; // a panel narrower than its sections
+      for (let v = 0, o = (side * joins + s) * p.h; v < p.h; v++, o++) {
+        const l = face(v * p.w + b - 1);
+        const r = face(v * p.w + b);
+        out[o] = l && r ? Math.max(l, r) : 0;
+      }
+    }
+  }
+  return out;
+}
+
+/** The seams (seamCells) as thin boxes, one per run of rows, each just proud of the skin or steel under it. */
+function seamBoxes(e: PanelEntry, seams: Uint8Array): THREE.BufferGeometry | null {
+  const p = e.panel;
+  const joins = p.sectionCount - 1;
+  const [hw, hh, half] = [e.frame.w / 2, e.frame.h / 2, e.frame.t / 2];
+  const out: FaceBox[] = [];
+  for (let side = 0; side < 2; side++)
+    for (let s = 0; s < joins; s++) {
+      const u = -hw + p.sectionRange(s)[1] * p.cellU;
+      const o = (side * joins + s) * p.h;
+      for (let v = 0; v < p.h; ) {
+        const on = seams[o + v];
+        let end = v + 1;
+        while (end < p.h && seams[o + end] === on) end++;
+        if (on) {
+          // Sunk into what it lies on as a plate is into its skin, and standing just off its face.
+          const lift = SEAM_LIFT + (on === 2 ? STEEL_PLATE_M : 0);
+          const [n0, n1] = side ? [half - 0.002, half + lift] : [-half - lift, -half + 0.002];
+          out.push([u - SEAM_M / 2, u + SEAM_M / 2, -hh + v * p.cellV, -hh + end * p.cellV, n0, n1]);
+        }
+        v = end;
+      }
+    }
+  return boxGeometry(e, out);
 }
 
 /** The boxes as one geometry; null if there are none. */
-function boxGeometry(e: PanelEntry, list: FaceBox[], slab: [number, number]): THREE.BufferGeometry | null {
+function boxGeometry(e: PanelEntry, list: FaceBox[]): THREE.BufferGeometry | null {
   if (!list.length) return null;
   const [au, av, an] = e.frame.axes;
   const pos = new Float32Array(list.length * 24);
   const idx = list.length * 8 > 0xffff ? new Uint32Array(list.length * 36) : new Uint16Array(list.length * 36);
   const lo = [0, 0, 0];
   const hi = [0, 0, 0];
-  lo[an] = slab[0];
-  hi[an] = slab[1];
   for (let k = 0; k < list.length; k++) {
-    [lo[au], hi[au], lo[av], hi[av]] = list[k];
+    [lo[au], hi[au], lo[av], hi[av], lo[an], hi[an]] = list[k];
     for (let c = 0, o = k * 24; c < 8; c++, o += 3) {
       pos[o] = c & 1 ? hi[0] : lo[0];
       pos[o + 1] = c & 2 ? hi[1] : lo[1];
