@@ -45,13 +45,21 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
   destruction tools work there as in the Destruction Lab.
 - **Our 1F plan** is in `research/oregon/compare/1F.svg` (open it in a browser). The overlay page puts it over
   the official blueprint and the r6calls image on your PC (the images stay out of the repo, D-079).
-- **Review fixes:** a review of M1 found 11 problems, all fixed. The Big Tower's east wall had been merged into
-  the facade (walls now group by thickness first). The leak check now finds gaps between rooms and 5 cm slots.
-  Corners next to a door or a soft wall get a post, a wall ending on a soft wall meets its face, and a wall's
-  height changes where it goes from outside to inside. The image check now reads what git stages and catches
-  archives and image bytes anywhere. A downed body the kill plane brings back no longer credits whoever downed
-  it. The physics guard test now runs Rapier's own step. Shadows come back after the graphics card resets. The
-  stats overlay shows the work time a frame.
+- **Review fixes:** a review of M1 found 11 problems, and a second check of the fixes found that some had gone
+  wrong or fell short. All are fixed now:
+  - Walls: the Big Tower's east wall is no longer merged into the facade, and its corner block sits flush.
+    Corners are settled in pairs: a door or soft wall at a corner gets a post, and a wall ending on a soft wall
+    meets its face. Wall heights change where a wall goes from outside to inside, so the facade stays at full
+    height at every corner.
+  - Checks: tests now catch gaps between rooms, 5 cm slots, and a building shell that isn't closed at the top
+    of the outer walls. They also catch a deleted soft wall on any floor.
+  - The image check reads what git stages, including large-file storage. It catches archives, image bytes and
+    base64 images anywhere, plan SVGs that link a picture, and odd file names.
+  - Kill credit survives the kill plane: a body brought back keeps nobody's old credit, a bleed-out on that
+    very step still credits whoever downed it, and a shot can't land on the new life.
+  - The physics guard test now runs Rapier's own step and checks every collider.
+  - Shadows come back after the graphics card resets.
+  - The stats overlay shows the page's work a frame: its own code plus the messages it handled.
 - **Drawing a whole map (D-077):** level boxes are drawn in batches (one instanced mesh per material and
   storey), the floors carry a 1 m grid to judge distances by, soft walls show their section seams and a
   "N sections" label, and shadows are redrawn only when a wall changes (players and guns cast none now). A
@@ -66,9 +74,10 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
    their ids (SW-1F-01 … 17) and sections; exterior doors and windows barricaded. Note anything wrong with the
    room and roughly where (Go to names the rooms).
 4. Press F8 and read the overlay on your PC: average FPS and the 1% low (target 120 and 90 at 1080p High).
-   The browser draws no faster than your display refreshes, so this needs a 120 Hz or faster display (set to
-   120 Hz or more). On a 60 Hz display FPS stops at 60: read the work time instead (8.3 ms or less a frame
-   leaves room for 120 FPS, on the CPU side).
+   The browser draws no faster than your display refreshes, and a missed refresh counts as a whole extra one,
+   so read the FPS on a display faster than 120 Hz (144 Hz or more). At 120 Hz or less, read the work instead:
+   the page's own work each frame on the main thread, 8.3 ms on average and 11.1 ms for the slowest 1% leaving
+   room for 120 and 90 FPS. It doesn't include the graphics card's time.
 5. The plan: open `research/oregon/compare/1F.svg`. To see it over the official blueprint:
    `npm run mapgen:refs` (downloads the blueprint and r6calls' map into a gitignored folder), then
    `npm run mapgen:compare`, and open `builds/mapgen/compare/index.html`.
@@ -87,7 +96,8 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
 
 ### Next: Phase 5 M2 — all storeys
 B, 2F and the Cat Walk through their frames; rooms and callouts; ceilings with stairwell holes; soft floors in
-tiles; hatches; storey views and the plan view.
+tiles; hatches; storey views and the plan view. The leak checks then cover every storey (2F's outer walls don't
+close at their tops yet: its balconies and rails arrive with it).
 
 ---
 

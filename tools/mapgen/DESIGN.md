@@ -33,9 +33,10 @@ An independent review judged the design "sound with fixes". All fixes are adopte
    phase, an OPEN_QUESTIONS line, and Ulo is told.
 4. **Image hygiene (M1).** Every image output of the extraction goes to gitignored folders
    (`tools/mapgen/extract/{img,out,work}/`, `research/oregon/refs/web/`, `builds/`). `tools/mapgen/hygiene.test.ts`
-   (CI) and the opt-in `.githooks/pre-commit` read what git has staged and reject any image file (SVG included),
-   any archive or container that can carry one (zip, 7z, rar, gzip, PDF, binary glTF), and any file with image
-   bytes anywhere in it, an image data URI or base64 image data. The only exceptions: our own plan SVGs in
+   (CI) and the opt-in `.githooks/pre-commit` read what git has staged (Git LFS files by their stored content)
+   and reject any image file (SVG included); any archive, document, model or video, by name and by its bytes;
+   PNG, JPEG or WEBP bytes anywhere in a file and other image formats by their header; and image data URIs and
+   base64 image data, JSON-escaped or URL-safe, anywhere in a long base64 run. The only exceptions: our own plan SVGs in
    `research/oregon/compare/` (no embedded or linked picture), and `research/oregon/refs/ulo/` only after Ulo
    makes the repo private; until then that folder is gitignored except its README.
 5. **Meeting roof (M4).** RF_MEETING_W is pitched (research: "pitched roof … walkable at 2F level", gabled),
@@ -497,12 +498,20 @@ explicit metres of a pillar), with its spans sorted:
 - **SOFT span**: one REINFORCEABLE panel solid over exactly the span, full wall height, 0.2 m thick, centred on
   the line, `panel.sections` from the record (the panel splits sections equally; research gives the count
   only, surfaces §7).
-- **Junctions**: a wall end within 3 px (about 1 u) of a perpendicular line extends to that line's far face
-  where the line is HARD there, so corners close; it **stops at the near face** where the line is a panel or an
-  opening there. A panel is never extended; it is clipped by perpendicular hard boxes. Result: hard boxes may
-  touch panels but never overlap them (checked to 1 cm; engine rule, raycast takes the nearer of Rapier geometry
-  and panel cells, level/raycast.ts:28–34).
-- **Wall top** = the cover above, sampled along the segment; a segment splits where the cover changes:
+- **Junctions**: a wall end within 3 px (about 1 u) of a perpendicular line meets it; the line that is there
+  across the end's band wins over a nearer one that stops short of it (two lines of different thickness meeting
+  end to end). A **hard end** runs on to the line's far face where the line is HARD across its whole band, so
+  corners close; where the line has a panel there it stops at the panel's face, and at a frame it stops at the
+  line's near face. An end that **isn't hard** (a panel or a frame) touches nothing hard: it stops at the outer
+  face of whatever the line has across its band. At an **L corner** (each end meets the other) the two are
+  settled together: a hard end covers the corner square at the other end's own thickness; where neither end is
+  hard, a hard post fills the square exactly between where they stopped. Panels are centred on the snap grid
+  line nearest their line's centre, so their faces stay on the grid. Result: hard boxes may touch panels but
+  never overlap them (checked to 1 cm; engine rule, raycast takes the nearer of Rapier geometry and panel
+  cells, level/raycast.ts:28–34).
+- **Wall top** = the cover above, sampled along the segment; a segment splits where the cover changes (M1:
+  where a line goes from exterior to interior; sampled every 25 cm on both faces, a probe that meets a
+  perpendicular wall takes its neighbours' class, and the change falls on that wall's centreline):
   - interior walls stop under the cover (the slab bottom, a flat roof's bottom, or a pitched roof's eave);
   - exterior walls (one side outside the footprint) run up to the next floor level (through the slab band) or to
     the roof eave, and the slab is cut back to their inner face, so no HARD_WALL face is coplanar with a
@@ -812,7 +821,9 @@ Estimated real counts (Appendix B): about 1,100–1,600 static colliders, 150–
   into `builds/e2e`, no console errors.
 - Engine benches pointed at `data/maps/oregon` (bench_build, bench_tick, bench_room, bench_draw) and
   `npm run netsim -- --level oregon --combat --walls`: numbers recorded in PROGRESS; CI keeps loose bounds only.
-- GPU numbers come from Ulo's PC through the stats overlay (PLAN §18).
+- Frame-rate numbers come from Ulo's PC through the stats overlay (PLAN §18): FPS and the 1% low on a display
+  faster than 120 Hz, else the page's work a frame (main thread only: the overlay can't see the graphics card's
+  time, so a GPU-bound frame shows only in the FPS).
 
 ### 9.4 Ulo's walk
 
