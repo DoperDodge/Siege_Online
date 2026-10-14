@@ -80,9 +80,14 @@ describe("broad-phase refresh", () => {
     world.removeCollider(box, false);
     refreshBroadPhase(world);
     expect(down(20)?.timeOfImpact).toBeCloseTo(9, 6);
-    // Every collider in the engine (the WASM set) has its wrapper, and no wrapper outlives its collider.
+    // Every collider in the engine (the WASM set) has its wrapper, and no wrapper outlives its collider. (Rapier's
+    // binding swallows an error thrown inside the callback, so the handles are collected and checked after it.)
     const raw = (world.colliders as unknown as { raw: { len(): number; forEachColliderHandle(f: (h: number) => void): void } }).raw;
     expect(world.colliders.len()).toBe(raw.len());
-    raw.forEachColliderHandle((h) => expect(world.colliders.get(h), `collider ${h}`).toBeTruthy());
+    const unwrapped: number[] = [];
+    raw.forEachColliderHandle((h) => {
+      if (!world.colliders.get(h)) unwrapped.push(h);
+    });
+    expect(unwrapped).toEqual([]);
   });
 });

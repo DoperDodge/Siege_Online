@@ -1,7 +1,7 @@
 // Map metadata in level definitions (Phase 5, DECISIONS D-076): optional fields the labs leave out,
 // invisible blockers that stop bodies but not bullets, the cross-file checks, and the kill plane.
 import { describe, expect, it } from "vitest";
-import { crossFileProblems, levelSchema, loadGameData, raycastLevel, Sim, Stance, type GameData, type LevelDef } from "../src/index.js";
+import { applyDamage, crossFileProblems, DT, levelSchema, loadGameData, PawnMode, raycastLevel, Sim, Stance, type GameData, type LevelDef, type SimEvent } from "../src/index.js";
 import { input, run } from "./helpers.js";
 
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
@@ -101,5 +101,33 @@ describe("map metadata", () => {
     expect([pawn.state.x, pawn.state.z]).toEqual([0, 0]);
     expect(pawn.state.stance).toBe(Stance.Stand);
     expect(pawn.state.hp).toBe(pawn.state.maxHp);
+  });
+
+  it("a body that bleeds out on the step the kill plane brings it back reports the life it died in", async () => {
+    /** Down a body falling off the east edge; `bleedSteps`: how many steps of bleeding it has left. */
+    const fall = async (bleedSteps: number | null) => {
+      const sim = await Sim.create("map_test", withLevel(testMap()));
+      const ctrl = sim.addPlayer("faller", "sledge");
+      const pawn = sim.pawns.get(ctrl.possessedPawnId)!;
+      sim.teleport(pawn.id, 11, 0, 3, -90); // just past the edge
+      sim.step(new Map());
+      expect(applyDamage(sim, pawn, { amount: pawn.state.hp, kill: false }).outcome).toBe("downed");
+      const d = sim.data.combat.dbno;
+      if (bleedSteps !== null) pawn.state.downHp = Math.fround((d.hp * DT * (bleedSteps - 0.5)) / d.bleedStillSeconds);
+      const life = pawn.life;
+      let deaths: SimEvent[] = [];
+      let steps = 0;
+      while (pawn.life === life && steps < 64 * 5) {
+        sim.step(new Map());
+        steps++;
+        deaths = sim.events.filter((e) => e.kind === "death"); // this step's
+      }
+      return { steps, deaths, life, pawn };
+    };
+    const { steps } = await fall(null); // how long the fall to the kill plane takes
+    const { deaths, life, pawn } = await fall(steps);
+    // It bled out on the very step the kill plane sent it back: the event names the life it died in.
+    expect(deaths).toEqual([{ kind: "death", pawnId: pawn.id, cause: "bleed", life }]);
+    expect([pawn.life, pawn.state.mode]).toEqual([life + 1, PawnMode.Walk]); // back at spawn, in a new life
   });
 });

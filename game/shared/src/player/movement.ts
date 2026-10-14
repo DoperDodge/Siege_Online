@@ -470,7 +470,7 @@ function trackFall(ctx: MoveContext, pawn: Pawn, wasGrounded: boolean) {
         s.lastFallDamage = dmg;
         if (s.downHp === 0) {
           s.mode = PawnMode.Dead;
-          ctx.events.push({ kind: "death", pawnId: pawn.id, cause: "fall" });
+          ctx.events.push({ kind: "death", pawnId: pawn.id, cause: "fall", life: pawn.life });
         }
       } else {
         const dmg = frac >= 1 ? s.hp : Math.round(frac * s.maxHp);
@@ -479,7 +479,7 @@ function trackFall(ctx: MoveContext, pawn: Pawn, wasGrounded: boolean) {
         // Lethal falls kill outright, no DBNO (research/core_mechanics.md §8).
         if (s.hp === 0) {
           s.mode = PawnMode.Dead;
-          ctx.events.push({ kind: "death", pawnId: pawn.id, cause: "fall" });
+          ctx.events.push({ kind: "death", pawnId: pawn.id, cause: "fall", life: pawn.life });
         }
       }
     }
@@ -503,7 +503,7 @@ function stepDowned(ctx: MoveContext, pawn: Pawn, input: InputCmd) {
   if (s.mode !== PawnMode.Downed) return; // a fall finished it
   if (s.invulnTicks > 0) s.invulnTicks--;
   if (s.revivedBy === 0 && bleedTick(ctx.data.combat, s, Math.hypot(s.vx, s.vz) > ctx.data.combat.dbno.movingSpeed)) {
-    ctx.events.push({ kind: "death", pawnId: pawn.id, cause: "bleed" });
+    ctx.events.push({ kind: "death", pawnId: pawn.id, cause: "bleed", life: pawn.life });
   }
 }
 
