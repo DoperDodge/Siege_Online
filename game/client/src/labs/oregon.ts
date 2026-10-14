@@ -40,7 +40,7 @@ await startLab({
       "Blue walls are the 17 soft walls of 1F, labelled with their research ids (surfaces.md §2) and how many reinforcements they take (the dark seams split the sections); shoot, knife, reinforce or blow them open as in the Destruction Lab.",
       "Drone holes are slots at floor level in six walls. Windows have glass outside the barricade and a sill you can vault once it's open.",
       "The pause menu's Go to has the main rooms and the three attacker spawns (A Junkyard, B Street, C Construction).",
-      "Press F8 (or open the page with ?stats) for the frame-rate overlay: the target is 120 FPS on average and 90 at the 1% lows, at 1080p on High. The browser draws no faster than the display refreshes, so read the FPS on a 120 Hz or faster display; on a 60 Hz one, the work time (8.3 ms or less a frame for 120 FPS) shows the headroom.",
+      "Press F8 (or open the page with ?stats) for the frame-rate overlay: the target is 120 FPS on average and 90 at the 1% lows, at 1080p on High. The browser draws no faster than the display refreshes, so read the FPS on a display faster than 120 Hz (144 Hz or more). On a slower one, read the work instead: the page's own work each frame on the main thread (8.3 ms on average and 11.1 ms for the slowest 1% leave room for 120 and 90 FPS); it can't see the graphics card, so it says nothing about a frame the GPU holds up.",
     ],
     note: "Phase 5 milestone 1: only 1F is built. Storeys, stairs, roofs and the outside come next. Sizes are placeholders until you've walked it: 1 u of the plan = 0.15 m, walls 3 m, doors 2.1 m (research/OPEN_QUESTIONS.md).",
   },

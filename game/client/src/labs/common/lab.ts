@@ -799,7 +799,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       // Between bodies (joining, respawning, a new operator): wait for the server's exact state.
       acc = 0;
       drawWorld();
-      stats.frame(now, performance.now() - workFrom, renderer.info.render.calls, renderer.info.render.triangles);
+      stats.frame(now, performance.now() - workFrom + (net?.takeHandleMs() ?? 0), renderer.info.render.calls, renderer.info.render.triangles);
       $(".center-msg").textContent = disconnected ?? "Waiting for the server…";
       $(".center-msg").classList.remove("hidden");
       requestAnimationFrame(frame);
@@ -861,7 +861,6 @@ export async function startLab(o: LabOptions): Promise<void> {
     const inHand = viewed.id === possessed()?.id && !thirdPerson && !ctrl.shellCam && ctrl.swapPhase === 0 ? (viewed.loadout?.weapons[rs.slot] ?? null) : null;
     viewmodel.update(now, elapsed, inHand, rs, viewed.loadout?.swapTicks ?? 1);
     viewmodel.render(renderer);
-    stats.frame(now, performance.now() - workFrom, renderer.info.render.calls, renderer.info.render.triangles);
     const held = viewed.loadout?.weapons[rs.slot];
     const aimed = inHand !== null && viewmodel.aim > 0.9;
     crosshair.update({
@@ -880,6 +879,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       fpsAt = now;
     }
     updateHud(me);
+    stats.frame(now, performance.now() - workFrom + (net?.takeHandleMs() ?? 0), renderer.info.render.calls, renderer.info.render.triangles);
     requestAnimationFrame(frame);
   }
 

@@ -1,12 +1,14 @@
 // The stats overlay (Phase 5, tools/mapgen/DESIGN.md amendment 8): frame rate, frame time, the 1% low, the
-// main thread's work a frame and what each frame draws, to read on real hardware against the pass bar
-// (PLAN §18). F8 shows and hides it; `?stats` in the link shows it from the start.
+// page's work a frame and what each frame draws, to read on real hardware against the pass bar (PLAN §18). F8
+// shows and hides it; `?stats` in the link shows it from the start.
 
 /**
- * What a page must reach on Ulo's PC. The browser draws no faster than the display refreshes, so the frame
- * rate only reads against it on a 120 Hz or faster display; on a slower one the work time shows the headroom.
+ * What a page must reach on Ulo's PC. The browser draws no faster than the display refreshes (and a refresh
+ * missed counts as a whole extra one), so the frame rate reads against the bar only on a display faster than
+ * 120 Hz; on a slower one the work time shows how much room the page leaves.
  */
-export const PASS_BAR = "target ≥ 120 FPS avg, ≥ 90 FPS 1% low at 1080p High\nFPS can't pass the display's refresh rate: use a ≥ 120 Hz display";
+export const PASS_BAR =
+  "target ≥ 120 FPS avg, ≥ 90 FPS 1% low at 1080p High\nFPS can't pass the display's refresh rate: read it at 144 Hz or more;\nat 120 Hz or less read the work instead (≤ 8.3 ms avg, ≤ 11.1 ms slowest 1%)";
 
 /** The averages cover this long, and the 1% low this long. */
 const AVERAGE_MS = 1000;
@@ -14,21 +16,16 @@ const LOW_MS = 10_000;
 /** A gap this long between frames is a hidden tab (no frames are drawn), not a slow frame. */
 const GAP_MS = 1000;
 
-/**
- * The 1% low: the frame rate of the mean of the slowest 1% of the frame times (rounded, at least one
- * frame). 0 with no frames.
- */
-export function onePercentLowFps(frameMs: readonly number[]): number {
-  if (!frameMs.length) return 0;
-  const slowest = [...frameMs].sort((a, b) => b - a).slice(0, Math.max(1, Math.round(frameMs.length / 100)));
-  return 1000 / (slowest.reduce((sum, ms) => sum + ms, 0) / slowest.length);
+/** The mean of the slowest 1% of `ms` (at least one value); 0 with none. */
+export function slowestOnePercentMs(ms: readonly number[]): number {
+  if (!ms.length) return 0;
+  const slowest = [...ms].sort((a, b) => b - a).slice(0, Math.max(1, Math.round(ms.length / 100)));
+  return slowest.reduce((sum, x) => sum + x, 0) / slowest.length;
 }
 
-/** The p-th percentile (0–100) of `xs`, nearest rank: the smallest value at least p% of them are at or under. 0 with none. */
-export function percentile(xs: readonly number[], p: number): number {
-  if (!xs.length) return 0;
-  const sorted = [...xs].sort((a, b) => a - b);
-  return sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil((p / 100) * sorted.length) - 1))];
+/** The 1% low: the frame rate of the mean of the slowest 1% of the frame times. 0 with no frames. */
+export function onePercentLowFps(frameMs: readonly number[]): number {
+  return frameMs.length ? 1000 / slowestOnePercentMs(frameMs) : 0;
 }
 
 export class StatsOverlay {
@@ -59,10 +56,11 @@ export class StatsOverlay {
   }
 
   /**
-   * Once a frame, after its last draw: when the frame started (its requestAnimationFrame time), how long the
-   * page worked on it (main thread, ms: the time between frames includes waiting for the display), and its
-   * draw calls and triangles over every render call in it. Frames are counted while the overlay is hidden
-   * too, so it has its numbers the moment it shows.
+   * Once a frame, at its end: when the frame started (its requestAnimationFrame time), how long the page worked
+   * on it (ms: the frame's own code and the messages handled since the last frame, on the main thread; not the
+   * graphics card, nor the browser laying out and painting the page), and its draw calls and triangles over
+   * every render call in it. Frames are counted while the overlay is hidden too, so it has its numbers the
+   * moment it shows.
    */
   frame(now: number, workMs: number, calls: number, triangles: number): void {
     const ms = this.last < 0 ? Infinity : now - this.last;
@@ -91,7 +89,7 @@ export class StatsOverlay {
     this.el.textContent = [
       `${((s.frames * 1000) / s.ms).toFixed(0)} FPS · ${(s.ms / s.frames).toFixed(2)} ms a frame, ${s.maxMs.toFixed(1)} ms max (last 1 s)`,
       `1% low ${onePercentLowFps(this.times).toFixed(0)} FPS (last ${span} s)`,
-      `work ${(s.workMs / s.frames).toFixed(2)} ms avg, ${percentile(this.works, 99).toFixed(1)} ms p99 (main thread; 120 FPS = 8.3 ms)`,
+      `work ${(s.workMs / s.frames).toFixed(2)} ms avg, ${slowestOnePercentMs(this.works).toFixed(1)} ms slowest 1% (the page's own, on the main thread)`,
       `${Math.round(s.calls / s.frames)} draw calls · ${tris >= 10_000 ? `${(tris / 1000).toFixed(0)}k` : Math.round(tris)} triangles a frame`,
       ...this.about(),
       PASS_BAR,

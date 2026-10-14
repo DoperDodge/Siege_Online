@@ -9,7 +9,7 @@ import { damageArcDeg } from "../src/ui/damage.js";
 import { reviveSecondsLeft } from "../src/ui/downed.js";
 import { hitText } from "../src/ui/hitMarkers.js";
 import { deathLine, feedLine, type FeedNames } from "../src/ui/killFeed.js";
-import { onePercentLowFps, percentile } from "../src/ui/stats.js";
+import { onePercentLowFps, slowestOnePercentMs } from "../src/ui/stats.js";
 
 const data = loadGameData();
 
@@ -144,15 +144,14 @@ describe("stats overlay", () => {
     expect(onePercentLowFps([])).toBe(0);
   });
 
-  it("work time p99: nearest rank, in any order", () => {
-    // A hundred frames of 1..100 ms: 99% of them take 99 ms or less.
-    const ms = Array.from({ length: 100 }, (_, i) => 100 - i);
-    expect(percentile(ms, 99)).toBe(99);
-    expect(percentile(ms, 50)).toBe(50);
-    expect(percentile(ms, 100)).toBe(100);
-    expect(percentile(ms, 0)).toBe(1);
-    // Under a hundred frames the p99 is the slowest one.
-    expect(percentile([3, 9, 4], 99)).toBe(9);
-    expect(percentile([], 99)).toBe(0);
+  it("work: the mean of the slowest 1%, the same statistic as the 1% low", () => {
+    // A thousand frames of 3 ms work, ten of them 12 ms: the slowest 1% are those ten.
+    const ms = [...Array.from({ length: 990 }, () => 3), ...Array.from({ length: 10 }, () => 12)];
+    expect(slowestOnePercentMs(ms)).toBeCloseTo(12, 9);
+    expect(slowestOnePercentMs([...ms].reverse())).toBeCloseTo(12, 9);
+    expect(onePercentLowFps(ms)).toBeCloseTo(1000 / slowestOnePercentMs(ms), 9);
+    // Under a hundred frames it is the slowest one; none, none.
+    expect(slowestOnePercentMs([3, 9, 4])).toBe(9);
+    expect(slowestOnePercentMs([])).toBe(0);
   });
 });
