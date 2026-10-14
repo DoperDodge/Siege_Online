@@ -12,7 +12,7 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
 
 | Milestone | Status |
 |---|---|
-| M1 Oregon 1F walkable, offline and online (generator, wall extraction, engine prep) | ✅ 1F built from the floor plans; browser test; renderer speed-ups (instancing, stats, shadows) — see below |
+| M1 Oregon 1F walkable, offline and online (generator, wall extraction, engine prep) | ✅ 1F built from the floor plans; batched drawing and a stats overlay (F8); browser test |
 | M2 All storeys stacked: B, 2F, Cat Walk; rooms and callouts; ceilings, soft floors, hatches, drone holes; storey views | ⏳ |
 | M3 Stairs and the ladder (grab it from the top too) | ⏳ |
 | M4 Roofs, the outside and the three attacker spawns; free camera | ⏳ |
@@ -44,8 +44,11 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
   destruction tools work there as in the Destruction Lab.
 - **Our 1F plan** is in `research/oregon/compare/1F.svg` (open it in a browser). The overlay page puts it over
   the official blueprint and the r6calls image on your PC (the images stay out of the repo, D-079).
-- **Renderer (E4):** in progress (instanced static geometry, a stats overlay with FPS and 1% lows, shadows
-  redrawn only when something changes, a 1 m floor grid, soft-wall section seams).
+- **Drawing a whole map (D-077):** level boxes are drawn in batches (one instanced mesh per material and
+  storey), the floors carry a 1 m grid to judge distances by, soft walls show their section seams and a
+  "N sections" label, and shadows are redrawn only when a wall changes (players and guns cast none now). A
+  stats overlay in every lab (F8, or `?stats` in the address) shows FPS, frame time, the 1% low and draw
+  calls against the target: 120 FPS on average and 90 at the 1% lows, at 1080p on High.
 
 ### How to test (needs Node 22.12+)
 1. `npm ci`, then `npm run dev` and, in a second terminal, `npm run build -w @redmond/server && npm start`.
@@ -54,10 +57,11 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
 3. Walk 1F against the blueprint: every wall, door and window where it should be; the 17 soft walls blue with
    their ids (SW-1F-01 … 17) and sections; exterior doors and windows barricaded. Note anything wrong with the
    room and roughly where (Go to names the rooms).
-4. The plan: open `research/oregon/compare/1F.svg`. To see it over the official blueprint:
+4. Press F8 and read the overlay on your PC: average FPS and the 1% low (target 120 and 90 at 1080p High).
+5. The plan: open `research/oregon/compare/1F.svg`. To see it over the official blueprint:
    `npm run mapgen:refs` (downloads the blueprint and r6calls' map into a gitignored folder), then
    `npm run mapgen:compare`, and open `builds/mapgen/compare/index.html`.
-5. Checks: `npm run typecheck`, `npm test`, `npm run build && npm run test:e2e` (adds `oregon.mjs`),
+6. Checks: `npm run typecheck`, `npm test`, `npm run build && npm run test:e2e` (adds `oregon.mjs`),
    `npm run mapgen -- --check`.
 
 ### Known issues
@@ -67,6 +71,8 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
   (research/OPEN_QUESTIONS.md, "Placeholders added while building Phase 5").
 - Go to uses hand-picked room centres until rooms are computed from the walls (M2).
 - The online test on Railway needs Railway to deploy this branch (it deploys the Phase 4 branch today).
+- You no longer see your own shadow (shadows are drawn once for the level, D-077). The Destruction Lab's
+  wall labels name their sections twice ("Reinforceable (2 sections) · 2 sections").
 
 ### Next: Phase 5 M2 — all storeys
 B, 2F and the Cat Walk through their frames; rooms and callouts; ceilings with stairwell holes; soft floors in

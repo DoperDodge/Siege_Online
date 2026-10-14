@@ -37,10 +37,10 @@ await startLab({
   help: {
     tryThis: [
       "Walk the first floor: every wall, door and window should be where the blueprint has it. Exterior doors and windows start barricaded; inside doors are empty frames you can barricade (hold F).",
-      "Blue walls are the 17 soft walls of 1F, labelled with their research ids (surfaces.md §2) and reinforcement sections; shoot, knife, reinforce or blow them open as in the Destruction Lab.",
+      "Blue walls are the 17 soft walls of 1F, labelled with their research ids (surfaces.md §2) and how many reinforcements they take (the dark seams split the sections); shoot, knife, reinforce or blow them open as in the Destruction Lab.",
       "Drone holes are slots at floor level in six walls. Windows have glass outside the barricade and a sill you can vault once it's open.",
       "The pause menu's Go to has the main rooms and the three attacker spawns (A Junkyard, B Street, C Construction).",
-      "Press the stats key (see Controls) to see your frame rate: the target is 120 FPS on average, 90 at the 1% lows.",
+      "Press F8 (or open the page with ?stats) for the frame-rate overlay: the target is 120 FPS on average and 90 at the 1% lows, at 1080p on High.",
     ],
     note: "Phase 5 milestone 1: only 1F is built. Storeys, stairs, roofs and the outside come next. Sizes are placeholders until you've walked it: 1 u of the plan = 0.15 m, walls 3 m, doors 2.1 m (research/OPEN_QUESTIONS.md).",
   },
