@@ -336,7 +336,8 @@ export const layoutSchema = z.strictObject({
   frames: z.record(Frame, affine.extend({
     status: z.enum(["reference", "fitted", "assumed"]), alt: affine.optional(), use: z.enum(["main", "alt"]),
     note: z.string() })),
-  storeys: z.array(z.strictObject({ id: Floor, floorY: num, slabM: num })),
+  storeys: z.array(z.strictObject({ id: Floor, floorY: num, slabM: num,
+    underground: z.boolean().default(false) })),  // B: every wall stops under the slab (earth outside)
   defaults: z.strictObject({
     wallM: z.strictObject({ int: num, ext: num }),
     door: z.strictObject({ headM: num, barricadeM: num }),
@@ -353,11 +354,12 @@ export const layoutSchema = z.strictObject({
   splits: z.array(z.strictObject({ floor: Floor, frame: Frame, axis: z.enum(["H", "V"]), at: num, span: Span,
     note: z.string() })),                         // virtual walls that separate open-plan rooms (rooms only)
   softFloors: z.array(z.strictObject({ id: z.string(), floor: Floor, frame: Frame, rects: z.array(URect),
-    hard: z.boolean().default(false), tileMaxM: num.optional(), _unverified: Uv })),
+    alt: z.array(URect).optional(), use: z.enum(["main", "alt"]).default("main"),   // amendment 7
+    hard: z.boolean().default(false), tileMaxM: num.optional(), research, src, note, _unverified: Uv })),
   hatches: z.array(z.strictObject({ id: z.string(), frame: Frame, rect: URect, top: z.string(),
-    bottom: z.string(), _unverified: Uv })),
+    bottom: z.string(), research, note, _unverified: Uv })),
   wells: z.array(z.strictObject({ id: z.string(), floor: Floor, frame: Frame, rects: z.array(URect),
-    rail: z.boolean(), _unverified: Uv })),     // open drops (the Cat Walk centre)
+    note, _unverified: Uv })),                  // open drops (the Cat Walk centre); a rail is a wall line
   stairs: z.array(z.strictObject({ id: z.string(), names: z.array(z.string()), runs: z.array(stairRun) })),
   ladders: z.array(z.strictObject({ id: z.string(), from: Floor, to: Floor, frame: Frame, at: U2,
     facing: Dir, widthM: num, _unverified: Uv })),
@@ -396,6 +398,9 @@ spawns: z.array(z.strictObject({ id, pos: vec3, yawDeg: num,
   side: z.enum(["attack", "defense"]).optional(),   // absent: a lab spawn (rooms still use spawn 0 today)
   group: z.string().optional() })).min(1),           // "A_JUNKYARD", "SITE_KIDS_DORMS", ...
 solids[]: + bodiesOnly: z.boolean().default(false),  // invisible: stops bodies, not bullets or sight (HELPER group); never a panel
+solids[]: + drawOnly: z.boolean().default(false),    // M2: drawn, no collider (a rail's bar); never a panel
+solids[].panel: + region: z.string().optional(),     // M2: a soft floor's tiles, one surface for bullets (amendment 14)
+plan: z.strictObject({ mPerU: num, frames: z.record(z.string(), affine) }).optional(),  // M2: the HUD's plan u
 bounds: z.strictObject({ min: vec3, max: vec3, killY: num }).optional(),
 storeys: z.array(z.strictObject({ id: z.string(), floorY: num, ceilingY: num })).default([]),
 rooms: z.array(z.strictObject({ id: z.string(), callout: z.string(), storey: z.string(),
@@ -553,6 +558,11 @@ explicit metres of a pillar), with its spans sorted:
   `anchor` (the free floor cell nearest its centroid, used by goTo and labels).
 - Room ids and callouts come from layout_notes §2 (49 ids: B 13, 1F 19, 2F 16, 3F 1) with the r6calls, Mobile
   and PC names (map_features §0.4). Seeds come from the raster regions (data-inventory `room_regions_raster`).
+- **As built (M2, D-085):** the plan is rasterised at 5 cm (metres) from the compiled boxes standing on the
+  storey, not from the wall lines, so it is exactly what the level has; wells are no room; each seed is its
+  §4 box centre (the Cat Walk's moved onto the ring); the callout is r6calls' name, or the official name for
+  the eight bomb-site rooms; room rectangles leave out doorway slivers under 0.3 m; the anchor stands 0.45 m
+  clear of walls. Eleven splits cover the open-plan links (B 3, 1F 5, 2F 3).
 
 ### 5.6 Floors: slabs, stairwell holes, soft floors, hatches
 
@@ -577,6 +587,14 @@ explicit metres of a pillar), with its spans sorted:
   r6calls' 2026 extents.
 - **Hatches**: the research rectangles (world frame), clipped to the room side (H5 only east of the Attic wall,
   surfaces §5 note), slab-thick HATCH panels with `reinforcedFrom` default (top).
+- **As built (M2, D-086):** each storey's floor is one 5 cm raster: the footprint (inside and under its boxes)
+  less what the storey below runs up into the slab, then wells (holes), hatches (the largest rectangle of the
+  square inside the top room), soft floors (their rectangles' floor inside the walls; slivers under 0.3 m stay
+  hard) and hard slab (greedy rectangles). The ground is the first storey above ground's floor over the whole
+  play area, less its hatches. An `underground` storey's walls all stop under the slab, so B needs no cutback.
+  Soft-floor rectangles run to the walls of the rooms the research names: r6calls' outlines are traced around
+  furniture and aren't consistently in one frame, so they serve as a check, not as geometry. Amendment 7 wins
+  over the line above: Ubisoft's five larger extents are built, r6calls' are `alt`. Stairwell holes: M3.
 
 ### 5.7 Stairs and ladders
 
@@ -853,7 +871,7 @@ the fix, the commit). Sign-off is recorded there and in PROGRESS.
 | P13 | Drone hole = 0.4 x 0.2 m slot at floor level on the `dt` rectangle | icon sizes aren't true sizes; far side UNVERIFIED for 3 |
 | P14 | Soft-wall sections from r6calls separators, except Ulo's SW-2F-01 = 3, SW-2F-02 = 2, SW-2F-04 = 2 | SW-B-01, SW-1F-06, SW-B-04, SW-B-05, SW-1F-01, SW-1F-17, SW-2F-05 may be 3 (surfaces §2, §7) |
 | P15 | All 32 soft walls REINFORCEABLE; Garage south (SW-1F-17) a normal soft wall | common_setups SQ2; surfaces Q3 |
-| P16 | Soft floors: r6calls extents; SF-2F-10 Trophy and SF-2F-11 White Stairs landing HARD; tiles ≤ 4 x 4 m | blueprint-only areas (surfaces Q5); tiles are an engine budget |
+| P16 | Soft floors: each to the walls of the rooms the research names, Ubisoft's five larger extents (r6calls' as `alt`); SF-2F-10 Trophy and SF-2F-11 White Stairs landing soft (amendment 7, D-078); tiles ≤ 4 x 4 m in 0.4 m joist spacings | blueprint-only areas (surfaces Q5); tiles are an engine budget |
 | P17 | Hatches: research rectangles in the 1F frame (about 1.6 m square); H5 only east of the Attic wall | surfaces §5 and Q11 |
 | P18 | Everything not in surfaces §2 is HARD (Kitchen NE partition and 2F annex partition included); 1F floor HARD apart from H1–H3; roofs HARD; no skylights | surfaces §1, §4.1, §6 |
 | P19 | Stairs: S1 switchback; S2 straight E–W on 1F, U-turn in B; S3 straight N–S with a landing, B foot at Laundry; S4 switchback; S5 straight flight in the Bunker passage to the B east door; exterior tower stairs up to a 2F-level landing; risers ≤ 0.2 m (16 per 3.2 m), tread 0.3 m, headroom 2.0 m | footprints only (layout_notes §5.1, map_features §5) |
@@ -873,7 +891,7 @@ the fix, the commit). Sign-off is recorded there and in PROGRESS.
 | P33 | Rappel allowed on every exterior wall face and roof edge | map_features §8 [DER] |
 | P34 | Spawn-peek and out-of-bounds zones: map_features §10 candidates; building = union of the rooms | map_features §10 |
 | P35 | Props: traced footprints ±1 u; heights table 0.75, counter 0.9, bed 0.6, bunk bed 1.6, shelf 2.0, sofa 0.8, washer 0.9, car 1.5 m; vaultable if ≤ 1.1 m except bunk beds | bunk beds not vaultable (map_features §7, pre-rework patch) |
-| P36 | Game Room S window and 2F Small Tower S opening exist (r6calls 2026) | Ubisoft 2020 draws walls there |
+| P36 | Game Room S window and 2F Small Tower S opening are built as wall (D-087: the blueprint wins; `hard: false` builds r6calls' openings) | Ubisoft 2020 draws walls there; the patch notes' new 2F window is the Attic's |
 | P37 | Fall damage unchanged (safe 3 m, lethal 6 m): a drop from a 2F roof (6.2 m) is lethal | data/movement.json placeholders; OPEN_QUESTIONS core Q8 |
 
 **Update policy**

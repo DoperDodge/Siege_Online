@@ -254,7 +254,8 @@ under a reinforcement, what blocks reinforcing) are not repeated here.
 
 Each value is in `data/maps/oregon/layout.json` or a wall file (`walls_<floor>.json`) and listed in its
 `_unverified`; tools/mapgen/DESIGN.md §10 has the full table (P1–P37). An answer changes one value, and
-`npm run mapgen` rebuilds the map. Built so far (M1): 1F only.
+`npm run mapgen` rebuilds the map. Built so far (M2): every storey's walls, the 49 rooms, the floors with their
+soft floors and hatches, and the Cat Walk's well; stairs, roofs and the outside come next.
 
 1. **Map scale (P1):** one unit of the floor plans = 0.15 m (±15%). The school bus is 77 u long (11.6 m at
    0.15; school buses are 10.5–12 m), and the white van in the parking lot is about 33 u (5 m; vans are 5–6 m);
@@ -279,21 +280,48 @@ Each value is in `data/maps/oregon/layout.json` or a wall file (`walls_<floor>.j
    long walls most likely to take 3: SW-B-01, SW-1F-06, SW-B-04, SW-B-05, SW-1F-01, SW-1F-17, SW-2F-05.
 9. **Garage south wall (P15, SW-1F-17):** a normal reinforceable soft wall, or a garage door?
 10. **Floor frames (P2):** B and 3F are placed over 1F by assumption (B as drawn; 3F scaled onto the tower
-    walls). It decides where the hatches and stairs land (M2).
+    walls). It decides where the hatches and stairs land. With B as drawn, each basement hatch lands wholly in
+    the room the research names (H1 0.2 m, H2 0.1 m and H3 0 m from a wall of that room); with the alternative
+    (B 2.4% larger about the 2F fixed point), H1 lands only 55% over B Electric. `npm run mapgen` prints both.
 11. **Play area (P25, P26):** x −210 to 535, y −70 to 490 u (about 112 × 84 m), with 4 m invisible walls at the
     edge; the ground is flat at 1F level; a fall 30 m under the basement puts you back at the lab spawn.
 12. **Spawns (P27, P29):** the lab spawn is just outside the Main Entrance; the attacker spawns are r6calls'
     insertion points (A Junkyard, B Street, C Construction), facing the building. How spread out are the five
     spawn spots of each group?
-13. **Where r6calls and the official blueprint disagree (D-078):** we follow the official blueprint: SF-2F-10
-    (Trophy) and SF-2F-11 (White Stairs landing) are soft floors, and five soft-floor areas use Ubisoft's
-    bigger extents. Open: the Game Room's south window and the 2F Small Tower's south opening (r6calls 2026 has
-    them, the 2020 blueprint doesn't).
+13. **Where r6calls and the official blueprint disagree (D-078, D-087):** we follow the official blueprint:
+    SF-2F-10 (Trophy) and SF-2F-11 (White Stairs landing) are soft floors (`hard: true` makes either hard), and
+    five soft-floor areas use Ubisoft's bigger extents: SF-2F-02 to x≈246, SF-2F-03 the whole Master Bedroom,
+    SF-2F-04 the whole Walk-In, SF-2F-05 the corridor's whole width, SF-2F-06 the whole Armory (`use: "alt"`
+    builds r6calls' extent for any of them). The Game Room's south window and the 2F Small Tower's south opening
+    (P36), which r6calls 2026 draws and the 2020 blueprint doesn't, are built as wall: the patch notes' "new
+    exterior second-floor window" is the Attic's, which the blueprint has (the span's `hard: false` builds it).
+14. **Soft floors (P16):** each covers the rooms the research names, to their walls (the Kids' Dorms whole, the
+    Office's north 60%, the Attic's north end…), cut into tiles of at most 4 m in 0.4 m joist spacings; a
+    bullet crossing a seam goes into one surface. Shoot up from 1F: is the soft part of each ceiling the right
+    shape?
+15. **Hatches (P17):** r6calls' hatch squares (about 1.65 m), reinforced from the top: H1 Meeting Hall → B
+    Electric, H2 Security → B Freezer, H3 Lobby → B Laundry Storage, H4 Kids' Dorms → 1F Kitchen, H5 Attic →
+    1F Meeting Hall, H6 Armory → 1F Garage. Do you land where you expect when you break and drop through each?
+16. **The Cat Walk (P21, P22):** the centre is an open well over the 2F Tower, inside a 1.0 m rail you can
+    vault (a blocker for bodies only, with a bar drawn on top), with a gap where the ladder from 2F arrives.
+    The ring around it is soft floor, r6calls' four strips; its west strip is only 0.4 m wide in r6calls'
+    drawing. Is the centre open, is the rail that high, and is the west side walkable?
+17. **2F walls (P5):** until the roofs come (M4), 2F's outside walls stand 3.0 m and its inside walls 2.8 m.
+18. **Room names:** the callouts are r6calls' names (Kids' Dorms, Pillar, Gaming, Low Attic…), and the eight
+    bomb-site rooms take their official names. If the game's HUD calls a room something else, it is one field.
+19. **Found while building M2:**
+    - (a) The Cat Walk's west wall has a window in r6calls' 3F image near its north end (y 49–55) that the
+      research doesn't list (only the north and south openings): it is built. Is it there?
+    - (b) Behind the 1F White Stairs, a sealed strip 0.9 m deep runs between the stairs' south wall and the
+      facade, and the facade's drone hole (r6calls' dt3, which the research says reaches the White Stairs) opens
+      into it. Is the stairs' south wall a wall, or does the drone hole reach the stairs?
+    - (c) The research had the B Laundry open to the Laundry Stairs; Ubisoft's blueprint and r6calls' B image
+      both draw a wall there, with the stairs opening only into the Laundry Storage. We follow the images
+      (layout_notes §6.1 corrected).
 
-Later milestones add their placeholders here as they build them: soft-floor tiles (P16), hatches (P17), stairs
-(P19), the ladder (P20), the Cat Walk (P21), rails (P22), the Meeting Hall's height (P23), roofs (P24), defender
-spawns (P28), bombs (P30), cameras (P31), ingredients (P32), rappel faces (P33), zones (P34), props (P35), the two
-openings above (P36), and fall damage from the roofs (P37).
+Later milestones add their placeholders here as they build them: stairs (P19), the ladder (P20), the Meeting
+Hall's height (P23), roofs (P24), defender spawns (P28), bombs (P30), cameras (P31), ingredients (P32), rappel
+faces (P33), zones (P34), props (P35), and fall damage from the roofs (P37).
 
 ### [core_mechanics.md](core_mechanics.md) — 16
 
