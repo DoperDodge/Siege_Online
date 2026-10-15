@@ -3,12 +3,14 @@
 // and walk into the Lobby, then the pause menu's Go to puts you in the Kitchen (its room, once the level has
 // rooms). There the HUD line says where you are; H hides the storeys above, M shows the plan view (the wheel
 // zooms it) and P switches the palette; with rooms, Go to lists every room under its storey and going to one
-// shows its callout. With shadows on, a lost and restored WebGL context draws the shadows again (they are drawn
-// on request only, D-077), and hiding the storeys above redraws them. Online, two pages at 100 ms of simulated
-// round trip: A breaks the Main Entrance barricade and B sees exactly the server's panels. Screenshots go to
-// builds/e2e. Requires `npm run build` first. The checks follow the level: with or without rooms, any storeys.
+// shows its callout. From the Kitchen, a burst goes up through the Kids' Dorms' soft floor; on H4 in the Kids'
+// Dorms, the knife opens the hatch and you drop into the Kitchen. With shadows on, a lost and restored WebGL
+// context draws the shadows again (they are drawn on request only, D-077), and hiding the storeys above redraws
+// them. Online, two pages at 100 ms of simulated round trip: A breaks the Main Entrance barricade and B sees
+// exactly the server's panels. Screenshots go to builds/e2e. Requires `npm run build` first. The checks follow
+// the level: with or without rooms or floors, any storeys.
 import { spawn } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
@@ -21,7 +23,8 @@ const shot = (name) => join(OUT, name);
 mkdirSync(OUT, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const LAG = 100;
-const Btn = { Melee: 1024 };
+const Btn = { Fire: 64, Melee: 1024 };
+const CROUCH = 1; // Stance.Crouch: the knife reaches a hatch underfoot from a crouch (1.5 m reach, eye at 1.15 m)
 const DOOR = "1F.o011.bar"; // the Main Entrance barricade (data/maps/oregon/level.json)
 const DOOR_Z = 42.45; // its plane; the Lobby is north of it (smaller z)
 /** The neutral palette's grey and the greybox's hard walls (render/storeyView.ts, labScene.ts). */
@@ -35,7 +38,7 @@ const roomAt = (rooms, storey, x, z) =>
   rooms.find((r) => r.storey === storey && r.rects.some(([x0, z0, x1, z1]) => x >= Math.min(x0, x1) && x <= Math.max(x0, x1) && z >= Math.min(z0, z1) && z <= Math.max(z0, z1))) ?? null;
 
 const server = spawn(process.execPath, [SERVER], { env: { ...process.env, PORT: String(PORT) }, stdio: ["ignore", "ignore", "inherit"] });
-const result = { checks: {} };
+const result = { checks: {}, offline: {} };
 let ok = false;
 let browser;
 const errors = [];
@@ -186,6 +189,44 @@ try {
     result.checks.goToRoomShowsItsCallout = true;
     await sleep(800);
     await off.screenshot({ path: shot("oregon-room.png") });
+  }
+
+  // ---- floors (M2): a shot up through a 2F soft floor from 1F, and a drop through a hatch
+  const lvl = JSON.parse(readFileSync(fileURLToPath(new URL("../../data/maps/oregon/level.json", import.meta.url)), "utf8"));
+  const roomRects = (id) => lvl.rooms?.find((r) => r.id === id)?.rects ?? [];
+  const inRoom = (id, x, z, m = 0) => roomRects(id).some(([x0, z0, x1, z1]) => x >= x0 + m && x <= x1 - m && z >= z0 + m && z <= z1 - m);
+  const tiles = lvl.solids.filter((s) => s.panel?.region === "SF-2F-01");
+  const h4 = lvl.solids.find((s) => s.id === "H4");
+  if (tiles.length && h4) {
+    // Under the Kids' Dorms floor, from the Kitchen: a spot between joists (every 0.4 m from a tile's −x edge),
+    // inside the Kitchen with room to stand.
+    const spots = tiles.flatMap((t) => Array.from({ length: Math.floor(t.size[0] / 0.4) }, (_, i) => ({ id: t.id, x: t.center[0] - t.size[0] / 2 + 0.2 + 0.4 * i, z: t.center[2] })));
+    const spot = spots.find((p) => inRoom("1F_KITCHEN", p.x, p.z, 0.6));
+    await off.evaluate(([x, z]) => window.__lab.teleport(x, 0, z, 0), [spot.x, spot.z]);
+    await sleep(600);
+    await input(off, { pitch: 1.45, buttons: Btn.Fire });
+    await off.waitForFunction((id) => window.__lab.panel(id).modified, spot.id, { timeout: 10000, polling: 50 });
+    await input(off, null);
+    await sleep(400);
+    const hit = await panel(off, spot.id);
+    result.offline.softFloorShot = { tile: spot.id, holes: hit.holes };
+    result.checks.shotUpThroughSoftFloor = hit.holes[0] > 0 && hit.holes[2] > 0; // the bottom skin and the top: through
+    await off.screenshot({ path: shot("oregon-soft-floor.png") });
+    // H4: stand on it in the Kids' Dorms, knife it open from a crouch, and drop into the Kitchen.
+    await off.evaluate(([x, y, z]) => window.__lab.teleport(x, y, z, 0), [h4.center[0], h4.center[1] + h4.size[1] / 2, h4.center[2]]);
+    await sleep(600);
+    for (let i = 0; i < 16 && !(await panel(off, "H4")).broken; i++) {
+      await input(off, { pitch: -1.45, stance: CROUCH, buttons: Btn.Melee });
+      await sleep(150);
+      await input(off, { pitch: -1.45, stance: CROUCH });
+      await sleep(850);
+    }
+    await off.waitForFunction(() => window.__lab.net.own.y < 0.2, null, { timeout: 10000, polling: 100 });
+    await input(off, null);
+    await sleep(600);
+    const landed = await own(off);
+    result.offline.hatchDrop = { broken: (await panel(off, "H4")).broken, at: [landed.x, landed.y, landed.z] };
+    result.checks.droppedThroughH4IntoTheKitchen = result.offline.hatchDrop.broken && Math.abs(landed.y) < 0.1 && inRoom("1F_KITCHEN", landed.x, landed.z);
   }
   await off.close();
 
