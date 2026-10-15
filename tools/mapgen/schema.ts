@@ -202,7 +202,6 @@ export const layoutSchema = z.strictObject({
     rail: z.strictObject({ hM: num.positive() }),
     stairs: z.strictObject({ riserMaxM: num.positive(), treadM: num.positive(), headroomM: num.positive() }),
     boundary: z.strictObject({ hM: num.positive(), thickM: num.positive() }),
-    groundM: num.positive(),
     killDepthM: num.positive(),
     /** A wall end this close (u) to a perpendicular wall's band meets it (DESIGN §5.3 junctions). */
     junctionU: num.positive(),
@@ -211,11 +210,42 @@ export const layoutSchema = z.strictObject({
     .array(z.strictObject({ id: z.string(), floor: Floor, callout: z.string(), names: z.record(z.string(), z.string()).optional(), seed: U2, frame: Frame }))
     .default([]),
   splits: z.array(z.strictObject({ floor: Floor, frame: Frame, axis: z.enum(["H", "V"]), at: num, span: Span, note: z.string() })).default([]),
+  /**
+   * Soft floors (surfaces.md §4.2): the rectangles' floor inside the storey's walls, less hatches and wells, as
+   * SOFT_FLOOR tiles of one region. `hard` builds it as slab all the same (one flag from the alternative).
+   */
   softFloors: z
-    .array(z.strictObject({ id: z.string(), floor: Floor, frame: Frame, rects: z.array(URect), hard: z.boolean().default(false), tileMaxM: num.optional(), _unverified: Uv }))
+    .array(
+      z.strictObject({
+        id: z.string(),
+        floor: Floor,
+        frame: Frame,
+        rects: z.array(URect),
+        /** The other source's extent (amendment 7: r6calls where Ubisoft's blueprint draws more); `use: "alt"` builds it. */
+        alt: z.array(URect).optional(),
+        use: z.enum(["main", "alt"]).default("main"),
+        hard: z.boolean().default(false),
+        tileMaxM: num.optional(),
+        research: z.string().optional(),
+        src: Src.optional(),
+        note: z.string().optional(),
+        _unverified: Uv,
+      }),
+    )
     .default([]),
-  hatches: z.array(z.strictObject({ id: z.string(), frame: Frame, rect: URect, top: z.string(), bottom: z.string(), _unverified: Uv })).default([]),
-  wells: z.array(z.strictObject({ id: z.string(), floor: Floor, frame: Frame, rects: z.array(URect), rail: z.boolean(), _unverified: Uv })).default([]),
+  /**
+   * Hatches (surfaces.md §5): the largest rectangle of `rect` inside the `top` room is a HATCH panel in that
+   * room's floor, reinforced from the top. `rect` is in the frame named (r6calls' hatch squares are world).
+   */
+  hatches: z
+    .array(
+      z.strictObject({ id: z.string(), frame: Frame, rect: URect, top: z.string(), bottom: z.string(), research: z.string().optional(), note: z.string().optional(), _unverified: Uv }),
+    )
+    .default([]),
+  /** Openings in a storey's floor that nothing closes (the Cat Walk's centre): no floor, no room; any rail is a wall line. */
+  wells: z
+    .array(z.strictObject({ id: z.string(), floor: Floor, frame: Frame, rects: z.array(URect), note: z.string().optional(), _unverified: Uv }))
+    .default([]),
   stairs: z.array(z.strictObject({ id: z.string(), names: z.array(z.string()), runs: z.array(stairRun) })).default([]),
   ladders: z
     .array(z.strictObject({ id: z.string(), from: Floor, to: Floor, frame: Frame, at: U2, facing: Dir, widthM: num, _unverified: Uv }))

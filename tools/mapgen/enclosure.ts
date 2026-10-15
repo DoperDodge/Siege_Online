@@ -15,6 +15,9 @@ export interface Box {
   bodiesOnly?: boolean;
 }
 
+/** Floors and what lies in them: never a wall at any height these checks look at. */
+const FLOORS = new Set(["HARD_FLOOR", "SOFT_FLOOR", "HATCH"]);
+
 /** Drawn band half-widths (u), as walls.ts reads the raster. */
 const drawnHalf = (w: WallDef, k: number) => (typeof w.weight === "number" ? w.weight / k / 2 : w.weight === "int" ? 1.24 : 2.3);
 
@@ -46,7 +49,7 @@ export function enclosureLeaks(boxes: Box[], passages: Box[], plan: PlanGrid, ar
   const g = new PlanGrid(area[0], area[1], area[2], area[3], cell);
   const close = (b: Box) => g.fillCentres(b.center[0] - b.size[0] / 2, b.center[2] - b.size[2] / 2, b.center[0] + b.size[0] / 2, b.center[2] + b.size[2] / 2);
   for (const b of boxes) {
-    if (b.bodiesOnly || b.surface === "HARD_FLOOR" || b.center[1] - b.size[1] / 2 > y || b.center[1] + b.size[1] / 2 < y) continue;
+    if (b.bodiesOnly || FLOORS.has(b.surface) || b.center[1] - b.size[1] / 2 > y || b.center[1] + b.size[1] / 2 < y) continue;
     close(b);
   }
   for (const b of passages) close(b);

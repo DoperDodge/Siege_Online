@@ -12,12 +12,12 @@ export interface Solid {
   id: string;
   center: [number, number, number];
   size: [number, number, number];
-  surface: "HARD_WALL" | "HARD_FLOOR" | "REINFORCEABLE" | "BARRICADE" | "WINDOW";
+  surface: "HARD_WALL" | "HARD_FLOOR" | "REINFORCEABLE" | "BARRICADE" | "WINDOW" | "SOFT_FLOOR" | "HATCH";
   vaultable?: boolean;
   bodiesOnly?: boolean;
   drawOnly?: boolean;
   label?: string;
-  panel?: { construction?: string; sections?: number; empty?: boolean };
+  panel?: { construction?: string; sections?: number; empty?: boolean; region?: string };
 }
 
 export interface Zone {

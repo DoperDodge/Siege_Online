@@ -52,6 +52,12 @@ function runCompile() {
     `oregon: ${c.solids} solids (${report.panels} panels, ${report.cellsPerLayer} cells per layer), ` +
       `${c.REINFORCEABLE ?? 0} soft walls, ${c.exteriorOpenings} exterior and ${c.interiorOpenings} interior openings, ${c.zones} zones, ${c.spawns} spawns`,
   );
+  for (const [frame, options] of Object.entries(report.frames)) {
+    for (const [use, landings] of Object.entries(options)) {
+      const chosen = use === "main" ? " (in use)" : "";
+      console.log(`  frames.${frame} ${use}${chosen}: ` + landings.map((l) => `${l.hatch} ${Math.round(l.over * 100)}% over ${l.bottom}${l.over === 1 ? `, ${l.clearM} m clear` : ""}`).join("; "));
+    }
+  }
   for (const w of report.warnings) console.log(`  warning: ${w}`);
   for (const e of report.errors) console.error(`  error: ${e}`);
   if (report.errors.length) process.exit(1);

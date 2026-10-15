@@ -156,3 +156,43 @@ export function connections(root: string): ConnectionRow[] {
   }
   return out;
 }
+
+export interface RoomRow {
+  id: string;
+  floor: Floor;
+  /** The callout in each source, as the table has it ("—" or "(unlabeled)" where a source has none). */
+  r6calls: string;
+  r6m: string;
+  pc: string;
+}
+
+/** layout_notes.md §2: the room ids and their names (roofs and exterior areas left out: they aren't rooms). */
+export function roomTable(root: string): RoomRow[] {
+  const text = readFileSync(join(researchDir(root), "layout_notes.md"), "utf8");
+  const out: RoomRow[] = [];
+  for (const t of mdTables(text)) {
+    if (t.header[0] !== "room_id" || t.header[1] !== "Floor") continue;
+    for (const r of t.rows) {
+      if (!(FLOORS as readonly string[]).includes(r[1])) continue;
+      out.push({ id: r[0], floor: r[1] as Floor, r6calls: r[2], r6m: r[3], pc: r[4] });
+    }
+  }
+  return out;
+}
+
+/** surfaces.md §4.2: the soft floors, by id ("SF-2F-01"), with the area they cover and whether a source disputes them. */
+export function softFloorTable(root: string): { id: string; area: string; verified: string }[] {
+  const text = readFileSync(join(researchDir(root), "surfaces.md"), "utf8");
+  const t = mdTables(text).find((x) => x.heading.startsWith("4.2") && x.header[0] === "id");
+  if (!t) throw new Error("surfaces.md §4.2: no soft-floor table");
+  return t.rows.map((r) => ({ id: r[0], area: r[1], verified: r[r.length - 1] }));
+}
+
+/** surfaces.md §5: the hatches, with the room on top (reinforced from there) and the room below. */
+export function hatchTable(root: string): { id: string; top: string; bottom: string }[] {
+  const text = readFileSync(join(researchDir(root), "surfaces.md"), "utf8");
+  const t = mdTables(text).find((x) => x.heading.startsWith("5.") && x.header[0] === "id");
+  if (!t) throw new Error("surfaces.md §5: no hatch table");
+  return t.rows.map((r) => ({ id: r[0], top: r[1], bottom: r[2] }));
+}
+

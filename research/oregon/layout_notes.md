@@ -282,7 +282,7 @@ Coordinates are the opening's span on the wall line.
 | B_FREEZER | B_LAUNDRY | SOFT(2) | x 211.6–214.2, y 201.1–228.1 |
 | B_FREEZER | B_FREEZER_STAIRS | OPEN | y≈232 |
 | B_LAUNDRY | B_LAUNDRY_STORAGE | DOOR | y 232–235, x 243–255 |
-| B_LAUNDRY | B_LAUNDRY_STAIRS | OPEN | y≈232, x 268–282 |
+| B_LAUNDRY | B_LAUNDRY_STAIRS | — (no link: Ubisoft's 2020 blueprint and the r6calls B image both draw a wall at y≈225.6, x 263–287; the stairs open into B_LAUNDRY_STORAGE only. Checked 2026-10-15; earlier this row said OPEN) | y≈226, x 263–287 |
 | B_LAUNDRY_STORAGE | B_LAUNDRY_STAIRS | DOOR | x 266–267, y 267–274 |
 | B_BUNKER_ENTRANCE | EXT_BUNKER | EXT_OPENING (door, likely) | x≈322, y 119–128 |
 

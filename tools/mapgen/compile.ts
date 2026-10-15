@@ -8,6 +8,9 @@ import { frames } from "./frames.js";
 import { round } from "./format.js";
 import type { Floor } from "./research.js";
 import { exteriorPartSchema, layoutSchema, wallsPartSchema, type ExteriorPart, type Layout, type WallsPart } from "./schema.js";
+import { frameDiagnostics, type HatchLanding } from "./diagnostics.js";
+import { compileFloors, type HatchReport } from "./floors.js";
+import { compileRooms } from "./rooms.js";
 import { compileWalls, type Solid, type Zone } from "./walls.js";
 
 export interface Inputs {
@@ -42,7 +45,14 @@ export function loadInputs(root: string, mapId = "oregon"): Inputs {
 export interface Compiled {
   /** The LevelDef as written to level.json (defaults left out). */
   level: Record<string, unknown>;
-  report: CheckReport & { warnings: string[]; counts: Record<string, number>; openings: Record<string, "exterior" | "interior"> };
+  report: CheckReport & {
+    warnings: string[];
+    counts: Record<string, number>;
+    openings: Record<string, "exterior" | "interior">;
+    hatches: HatchReport[];
+    /** Per floor frame with an alternative: where its hatches land under each option. */
+    frames: Record<string, Record<"main" | "alt", HatchLanding[]>>;
+  };
 }
 
 const r4 = (x: number) => round(x, 4);
@@ -72,12 +82,15 @@ export function compile(inputs: Inputs): Compiled {
     .filter((p) => emitted.has(p.floor))
     .sort((p, q) => order.indexOf(p.floor) - order.indexOf(q.floor));
   const wallsOut = compileWalls(layout, fr, parts, exterior.playable);
-  const byKind = (s: Solid) => (s.surface === "REINFORCEABLE" ? 1 : s.surface === "BARRICADE" || s.surface === "WINDOW" || /\.(head|sill)$/.test(s.id) ? 2 : 0);
-  const solids: Solid[] = [...wallsOut.solids].sort((p, q) => byKind(p) - byKind(q) || (p.id < q.id ? -1 : p.id > q.id ? 1 : 0));
+  // ---- Rooms (seeds, splits) and floors (the ground, slabs, soft floors, hatches, wells).
+  const roomsOut = compileRooms(layout, fr, wallsOut.solids);
+  const floorsOut = compileFloors(layout, fr, wallsOut.solids, roomsOut, exterior.playable);
+  const panelKind = new Set(["REINFORCEABLE", "SOFT_FLOOR", "HATCH"]);
+  const byKind = (s: Solid) => (panelKind.has(s.surface) ? 1 : s.surface === "BARRICADE" || s.surface === "WINDOW" || /\.(head|sill)$/.test(s.id) ? 2 : 0);
+  const solids: Solid[] = [...wallsOut.solids, ...floorsOut.solids].sort((p, q) => byKind(p) - byKind(q) || (p.id < q.id ? -1 : p.id > q.id ? 1 : 0));
 
-  // ---- Ground (the 1F floor and everything outside), play-area edge, kill plane (placeholders P25, P26).
+  // ---- Play-area edge and kill plane (placeholders P25, P26).
   const [px0, py0, px1, py1] = exterior.playable.map((u) => u * k);
-  const ground: Solid = { id: "ground", center: [(px0 + px1) / 2, -d.groundM / 2, (py0 + py1) / 2], size: [px1 - px0, d.groundM, py1 - py0], surface: "HARD_FLOOR" };
   const bt = d.boundary.thickM;
   const bh = d.boundary.hM;
   const edge = (id: string, x0: number, z0: number, x1: number, z1: number): Solid => ({
@@ -136,7 +149,7 @@ export function compile(inputs: Inputs): Compiled {
     id: layout.id,
     name: layout.name,
     spawns,
-    solids: [ground, ...solids, ...boundary].map(out),
+    solids: [...solids, ...boundary].map(out),
     bounds: { min: v3([px0, lowest - d.killDepthM, py0]), max: v3([px1, highest + 10, py1]), killY: r4(lowest - d.killDepthM) },
     plan: {
       mPerU: k,
@@ -146,15 +159,29 @@ export function compile(inputs: Inputs): Compiled {
       })),
     },
     storeys,
+    rooms: roomsOut.rooms.map((r) => ({ id: r.id, callout: r.callout, storey: r.storey, rects: r.rects, anchor: v3(r.anchor) })),
     zones: zones.map((z) => ({ id: z.id, kind: z.kind, boxes: z.boxes.map((b) => ({ center: v3(b.center), size: v3(b.size) })) })),
   };
   // The engine's own schema has the last word on shape.
   levelSchema.parse(level);
   const checks = checkLevel(level.solids);
-  const counts: Record<string, number> = { solids: level.solids.length, spawns: spawns.length, zones: zones.length };
+  checks.errors.push(...roomsOut.errors, ...floorsOut.errors);
+  const counts: Record<string, number> = { solids: level.solids.length, spawns: spawns.length, zones: zones.length, rooms: roomsOut.rooms.length };
+  for (const [floor, c] of Object.entries(floorsOut.counts)) {
+    counts[`slabs ${floor}`] = c.slabs;
+    counts[`tiles ${floor}`] = c.tiles;
+    counts[`hatches ${floor}`] = c.hatches;
+  }
   for (const s of level.solids) counts[s.surface] = (counts[s.surface] ?? 0) + 1;
   counts.exteriorOpenings = [...wallsOut.exterior.values()].filter(Boolean).length;
   counts.interiorOpenings = [...wallsOut.exterior.values()].filter((x) => !x).length;
   const openings = Object.fromEntries([...wallsOut.exterior].sort(([p], [q]) => (p < q ? -1 : 1)).map(([id, ext]) => [id, ext ? "exterior" : "interior"] as const));
-  return { level, report: { ...checks, warnings: wallsOut.warnings, counts, openings } };
+  const frameReport = frameDiagnostics(layout, inputs.walls, exterior.playable, floorsOut.hatches);
+  // Amendment 2: a hatch whose opening lands under 0.3 m from a wall of the room below is worth a look.
+  const landWarnings = Object.entries(frameReport).flatMap(([frame, o]) =>
+    o[layout.frames[frame as keyof Layout["frames"]].use]
+      .filter((l) => l.over < 1 || l.clearM < 0.3)
+      .map((l) => (l.over < 1 ? `${l.hatch}: only ${Math.round(l.over * 100)}% over ${l.bottom}` : `${l.hatch} lands ${l.clearM} m from a wall of ${l.bottom} (under 0.3 m)`)),
+  );
+  return { level, report: { ...checks, warnings: [...wallsOut.warnings, ...roomsOut.warnings, ...floorsOut.warnings, ...landWarnings], counts, openings, hatches: floorsOut.hatches, frames: frameReport } };
 }

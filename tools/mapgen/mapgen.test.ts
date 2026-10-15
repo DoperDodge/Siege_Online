@@ -5,14 +5,14 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { crossFileProblems, loadGameData, missingUnverifiedPaths, QUERY_STATIC, Sim } from "../../game/shared/src/index.js";
+import { bulletThroughPanels, crossFileProblems, loadGameData, missingUnverifiedPaths, QUERY_BULLET, QUERY_STATIC, Sim, type Vec3 } from "../../game/shared/src/index.js";
 import { checkLevel } from "./checks.js";
 import { frames } from "./frames.js";
 import { compile, loadInputs } from "./compile.js";
 import { readableJson } from "./format.js";
 import { enclosureLeaks, planGrid } from "./enclosure.js";
 import type { Extracted } from "./import.js";
-import { connections, softWalls } from "./research.js";
+import { connections, hatchTable, roomTable, softFloorTable, softWalls } from "./research.js";
 import { FLOOR_IDS, wallSchema, type SpanDef, type WallDef } from "./schema.js";
 import type { Floor } from "./research.js";
 import { compileWalls } from "./walls.js";
@@ -22,7 +22,7 @@ const MAP = join(ROOT, "data", "maps", "oregon");
 const inputs = loadInputs(ROOT);
 const { level, report } = compile(inputs);
 const extracted = JSON.parse(readFileSync(join(MAP, "extracted.json"), "utf8")) as Extracted;
-type Box = { id: string; center: number[]; size: number[]; surface: string; bodiesOnly?: boolean; drawOnly?: boolean; panel?: { sections?: number; empty?: boolean; construction?: string } };
+type Box = { id: string; center: number[]; size: number[]; surface: string; bodiesOnly?: boolean; drawOnly?: boolean; panel?: { sections?: number; empty?: boolean; construction?: string; region?: string } };
 const solids = level.solids as Box[];
 const k = inputs.layout.units.mPerU;
 const spansOf = (floor: string) => inputs.walls.find((w) => w.floor === floor)!.walls.flatMap((w) => w.spans.map((s) => ({ wall: w, span: s })));
@@ -414,3 +414,131 @@ describe("oregon 1F samples", () => {
     }
   });
 });
+
+describe("oregon rooms and floors", () => {
+  type Room = { id: string; callout: string; storey: string; rects: [number, number, number, number][]; anchor: [number, number, number] };
+  const rooms = level.rooms as Room[];
+  const storey = (id: string) => inputs.layout.storeys.find((s) => s.id === id)!;
+  const inRoom = (r: Room, x: number, z: number) => r.rects.some(([x0, z0, x1, z1]) => x >= x0 - 1e-6 && x <= x1 + 1e-6 && z >= z0 - 1e-6 && z <= z1 + 1e-6);
+  const data = loadGameData();
+  /** A Sim of the compiled level with one body in it. */
+  const walker = async () => {
+    const sim = await Sim.create("oregon");
+    const ctrl = sim.addPlayer("walker", "sledge");
+    return { sim, pawn: sim.pawns.get(ctrl.possessedPawnId)! };
+  };
+  const steps = (sim: Sim, n: number) => {
+    for (let t = 0; t < n; t++) sim.step(new Map());
+  };
+
+  it("has every room of layout_notes §2 on its storey, with a callout, rectangles and an anchor inside them", () => {
+    const research = roomTable(ROOT);
+    expect(research).toHaveLength(49);
+    expect(rooms.map((r) => r.id).sort()).toEqual(research.map((r) => r.id).sort());
+    for (const r of rooms) {
+      expect(r.storey, r.id).toBe(research.find((x) => x.id === r.id)!.floor);
+      expect(r.callout, r.id).not.toBe("");
+      expect(r.anchor[1], r.id).toBe(storey(r.storey).floorY);
+      expect(inRoom(r, r.anchor[0], r.anchor[2]), r.id).toBe(true);
+    }
+    expect(report.errors).toEqual([]);
+  });
+
+  it("a body put at any room's anchor stands there, on that storey's floor", async () => {
+    const { sim, pawn } = await walker();
+    const problems: string[] = [];
+    for (const r of rooms) {
+      sim.teleport(pawn.id, r.anchor[0], r.anchor[1], r.anchor[2], 0);
+      steps(sim, 32);
+      if (!pawn.state.grounded || Math.abs(pawn.state.y - r.anchor[1]) > 0.05) problems.push(`${r.id}: at y ${pawn.state.y.toFixed(2)}, grounded ${pawn.state.grounded}`);
+    }
+    expect(problems).toEqual([]);
+  });
+
+  it("builds every soft floor of surfaces.md §4.2 as slab-thick tiles of one region, each at most tileMaxM", () => {
+    const research = softFloorTable(ROOT);
+    expect(inputs.layout.softFloors.map((f) => f.id).sort()).toEqual(research.map((r) => r.id).sort());
+    const tiles = solids.filter((s) => s.surface === "SOFT_FLOOR");
+    for (const f of inputs.layout.softFloors) {
+      const mine = tiles.filter((t) => t.panel?.region === f.id);
+      if (f.hard) {
+        expect(mine, f.id).toEqual([]);
+        continue;
+      }
+      expect(mine.length, f.id).toBeGreaterThan(0);
+      const s = storey(f.floor);
+      const max = f.tileMaxM ?? inputs.layout.defaults.softFloor.tileMaxM;
+      for (const t of mine) {
+        expect([+(t.center[1] + t.size[1] / 2).toFixed(4), +t.size[1].toFixed(4)], t.id).toEqual([s.floorY, s.slabM]);
+        expect(Math.max(t.size[0], t.size[2]), t.id).toBeLessThanOrEqual(max + 1e-6);
+        expect(Math.min(t.size[0], t.size[2]), t.id).toBeGreaterThanOrEqual(0.3 - 1e-6);
+      }
+    }
+    expect(tiles.every((t) => t.panel?.region !== undefined)).toBe(true);
+  });
+
+  it("a bullet from the room below goes up through every soft floor, into one surface", async () => {
+    const { sim } = await walker();
+    const up: Vec3 = [0, 1, 0];
+    const misses: string[] = [];
+    for (const f of inputs.layout.softFloors.filter((x) => !x.hard)) {
+      const mine = solids.filter((t) => t.panel?.region === f.id).sort((a, b) => b.size[0] * b.size[2] - a.size[0] * a.size[2]);
+      const t = mine[0];
+      // Between the joists (every 0.4 m from the tile's −x edge), along the tile, wherever nothing hard stands under it.
+      let passed = false;
+      for (let i = 0; i < Math.floor(t.size[0] / 0.4) && !passed; i++) {
+        const o: Vec3 = [t.center[0] - t.size[0] / 2 + 0.2 + 0.4 * i, t.center[1] - t.size[1] / 2 - 1.2, t.center[2]];
+        const hard = sim.world.castRay(new sim.R.Ray({ x: o[0], y: o[1], z: o[2] }, { x: 0, y: 1, z: 0 }), 3, true, undefined, QUERY_BULLET);
+        const free = hard ? hard.timeOfImpact : 3;
+        if (free < 1.2 + t.size[1] + 0.05) continue; // a wall top or a slab under the tile here
+        const p = bulletThroughPanels(sim.level.panels, data.destruction, data.destruction.bullets.tiers.medium!, o, up, free);
+        passed = p.stop === null && p.enters.length === 1;
+      }
+      if (!passed) misses.push(f.id);
+    }
+    expect(misses).toEqual([]);
+  });
+
+  it("puts each hatch of surfaces.md §5 in its top room's floor, over its bottom room, at least 1.2 m clear", () => {
+    const research = hatchTable(ROOT);
+    expect(research.map((h) => h.id)).toEqual(["H1", "H2", "H3", "H4", "H5", "H6"]);
+    for (const row of research) {
+      const h = solids.find((s) => s.id === row.id)!;
+      const authored = inputs.layout.hatches.find((x) => x.id === row.id)!;
+      expect([h.surface, authored.top, authored.bottom], row.id).toEqual(["HATCH", row.top, row.bottom]);
+      const [top, bottom] = [rooms.find((r) => r.id === row.top)!, rooms.find((r) => r.id === row.bottom)!];
+      expect(+(h.center[1] + h.size[1] / 2).toFixed(4), row.id).toBe(storey(top.storey).floorY);
+      expect(Math.min(h.size[0], h.size[2]), row.id).toBeGreaterThanOrEqual(1.2);
+      // The square r6calls draws, give or take 0.5 u a side (H5 straddles the Attic's wall: amendment 6).
+      const clip = report.hatches.find((x) => x.id === row.id)!.clipU;
+      expect(Math.max(...clip), row.id).toBeLessThanOrEqual(row.id === "H5" ? 6 : 0.5);
+      // Inside the top room, and the opening over the bottom room's floor (0.5 u in from each side).
+      const m = 0.5 * k;
+      for (let x = h.center[0] - h.size[0] / 2 + m; x <= h.center[0] + h.size[0] / 2 - m + 1e-9; x += 0.1) {
+        for (let z = h.center[2] - h.size[2] / 2 + m; z <= h.center[2] + h.size[2] / 2 - m + 1e-9; z += 0.1) {
+          expect(inRoom(top, x, z), `${row.id} at (${x.toFixed(2)}, ${z.toFixed(2)}) in ${top.id}`).toBe(true);
+          expect(inRoom(bottom, x, z), `${row.id} at (${x.toFixed(2)}, ${z.toFixed(2)}) over ${bottom.id}`).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("a body on a hatch stands until it breaks, then drops into the room the research names", async () => {
+    const { sim, pawn } = await walker();
+    const problems: string[] = [];
+    for (const row of hatchTable(ROOT)) {
+      const h = solids.find((s) => s.id === row.id)!;
+      const bottom = rooms.find((r) => r.id === row.bottom)!;
+      sim.teleport(pawn.id, h.center[0], h.center[1] + h.size[1] / 2, h.center[2], 0);
+      steps(sim, 16);
+      const stood = pawn.state.grounded && Math.abs(pawn.state.y - (h.center[1] + h.size[1] / 2)) < 0.05;
+      const e = sim.level.panels.byId.get(row.id)!;
+      const broke = sim.level.panels.apply(e.panel.spec.index, { kind: "damage", amount: 1000, hard: false }).broke;
+      steps(sim, 128);
+      const landed = pawn.state.grounded && Math.abs(pawn.state.y - storey(bottom.storey).floorY) < 0.05 && inRoom(bottom, pawn.state.x, pawn.state.z);
+      if (!stood || !broke || !landed) problems.push(`${row.id}: stood ${stood}, broke ${broke}, landed in ${row.bottom} ${landed} (at ${pawn.state.x.toFixed(2)}, ${pawn.state.y.toFixed(2)}, ${pawn.state.z.toFixed(2)})`);
+    }
+    expect(problems).toEqual([]);
+  });
+});
+
