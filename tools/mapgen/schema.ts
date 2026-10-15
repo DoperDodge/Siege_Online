@@ -32,6 +32,11 @@ const common = {
   from: z.array(z.string()).optional(),
   src: Src.optional(),
   note: z.string().optional(),
+  /**
+   * Built as hard wall all the same: an opening one source draws and the official blueprint doesn't (DESIGN
+   * amendment 7, P36). The span stays so the research still finds it; set false to build it.
+   */
+  hard: z.boolean().optional(),
   _unverified: Uv,
 };
 const barricade = z.enum(["standing", "empty", "none"]);
@@ -68,9 +73,13 @@ export const wallSchema = z.strictObject({
   span: Span,
   /** Thickness class (defaults.wallM), or metres for an odd band (a pillar). */
   weight: z.union([z.enum(["int", "ext"]), num]),
-  /** The rasters can't tell rails or half walls from walls: `rail` and `half` are set by hand. */
+  /**
+   * The rasters can't tell rails or half walls from walls: `rail` and `half` are set by hand. A rail is a
+   * vaultable blocker for bodies (bullets and sight pass) with a drawn bar on top (DESIGN amendment 12); its
+   * OPEN spans are gaps in it.
+   */
   kind: z.enum(["wall", "rail", "half"]).default("wall"),
-  /** Height above this floor, metres, overriding the cover above (rails, half walls). */
+  /** Height above this floor, metres, overriding the cover above (half walls; a rail's defaults to defaults.rail.hM). */
   topM: num.optional(),
   /** Sorted, not overlapping; every part of the line no span covers is HARD. */
   spans: z.array(spanSchema).default([]),
@@ -172,7 +181,15 @@ export const layoutSchema = z.strictObject({
       note: z.string(),
     }),
   ),
-  storeys: z.array(z.strictObject({ id: Floor, floorY: num, slabM: num.positive() })),
+  storeys: z.array(
+    z.strictObject({
+      id: Floor,
+      floorY: num,
+      slabM: num.positive(),
+      /** Earth outside its walls (a basement): every wall stops under the slab above, which covers it all. */
+      underground: z.boolean().default(false),
+    }),
+  ),
   defaults: z.strictObject({
     wallM: z.strictObject({ int: num.positive(), ext: num.positive() }),
     /** Wall height above its floor where nothing is built over it yet (M1: no slabs above). */

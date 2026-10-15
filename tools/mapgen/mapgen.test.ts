@@ -13,7 +13,8 @@ import { readableJson } from "./format.js";
 import { enclosureLeaks, planGrid } from "./enclosure.js";
 import type { Extracted } from "./import.js";
 import { connections, softWalls } from "./research.js";
-import { wallSchema, type SpanDef, type WallDef } from "./schema.js";
+import { FLOOR_IDS, wallSchema, type SpanDef, type WallDef } from "./schema.js";
+import type { Floor } from "./research.js";
 import { compileWalls } from "./walls.js";
 
 const ROOT = join(import.meta.dirname, "..", "..");
@@ -21,10 +22,11 @@ const MAP = join(ROOT, "data", "maps", "oregon");
 const inputs = loadInputs(ROOT);
 const { level, report } = compile(inputs);
 const extracted = JSON.parse(readFileSync(join(MAP, "extracted.json"), "utf8")) as Extracted;
-type Box = { id: string; center: number[]; size: number[]; surface: string; bodiesOnly?: boolean; panel?: { sections?: number; empty?: boolean; construction?: string } };
+type Box = { id: string; center: number[]; size: number[]; surface: string; bodiesOnly?: boolean; drawOnly?: boolean; panel?: { sections?: number; empty?: boolean; construction?: string } };
 const solids = level.solids as Box[];
 const k = inputs.layout.units.mPerU;
 const spansOf = (floor: string) => inputs.walls.find((w) => w.floor === floor)!.walls.flatMap((w) => w.spans.map((s) => ({ wall: w, span: s })));
+const fr = frames(inputs.layout);
 
 describe("oregon level.json", () => {
   it("is exactly what the layout compiles to, and compiling is deterministic", () => {
@@ -50,23 +52,54 @@ describe("oregon level.json", () => {
     expect(checkLevel([soft, intruder] as never).errors.join()).toMatch(/SW-1F-03 \(REINFORCEABLE\) and intruder \(HARD_WALL\) overlap by 0\.100 m/);
   });
 
-  it("the compiled walls keep every room of the plan closed: no gap to the outside or between rooms", () => {
-    const lines = inputs.walls.find((p) => p.floor === "1F")!.walls;
-    const open = new Set(lines.flatMap((w) => w.spans.filter((x) => x.kind === "OPEN").map((x) => x.id)));
-    const passages = solids.filter((b) => b.id.endsWith(".head") && open.has(b.id.slice(0, -5)));
-    expect(passages.length).toBe(open.size);
-    const found = enclosureLeaks(solids, passages, planGrid(lines, k), [-3, 3, 56, 47], 0.025, k);
-    expect(found).toEqual({ toOutside: [], between: [], rooms: expect.any(Number) as number });
-    expect(found.rooms).toBeGreaterThanOrEqual(14); // 1F's enclosed areas (open-plan rooms count as one)
+  /** A storey's wall lines, its plan in world u, its storey record and the one above. */
+  const storeyOf = (floor: Floor) => {
+    const part = inputs.walls.find((p) => p.floor === floor)!;
+    const lines = part.walls;
+    const i = inputs.layout.storeys.findIndex((s) => s.id === floor);
+    // Rails don't divide rooms: bodies are kept out of a well, sight and bullets aren't.
+    const plan = planGrid(
+      lines.filter((w) => w.kind !== "rail"),
+      k,
+      (x, y) => fr.toWorld(part.frame, x, y),
+    );
+    return { lines, plan, storey: inputs.layout.storeys[i], next: inputs.layout.storeys[i + 1] };
+  };
+  /** The passages a storey declares open: OPEN spans (closed by their header's footprint) and drone holes. */
+  const declared = (floor: Floor) => {
+    const { lines } = storeyOf(floor);
+    const open = new Set(lines.filter((w) => w.kind !== "rail").flatMap((w) => w.spans.filter((x) => x.kind === "OPEN").map((x) => x.id)));
+    const heads = solids.filter((b) => b.id.endsWith(".head") && open.has(b.id.slice(0, -5)));
+    const holes = new Set(lines.flatMap((w) => w.spans.filter((x) => x.kind === "DRONE_HOLE").map((x) => x.id)));
+    const slots = (level.zones as { id: string; boxes: { center: number[]; size: number[] }[] }[])
+      .filter((z) => holes.has(z.id))
+      .flatMap((z) => z.boxes.map((b) => ({ id: z.id, ...b, surface: "HARD_WALL" })));
+    return { heads, open, slots, holes };
+  };
+
+  it.each(FLOOR_IDS)("the compiled walls keep every room of %s's plan closed at 1.2 m and at 0.1 m: no gap to the outside or between rooms", (floor) => {
+    const { plan, storey } = storeyOf(floor);
+    const { heads, open, slots, holes } = declared(floor);
+    expect(heads.length).toBe(open.size);
+    expect(slots.length).toBe(holes.size);
+    const checks: [number, Box[]][] = [
+      [1.2, heads],
+      [0.1, [...heads, ...slots]],
+    ];
+    for (const [above, passages] of checks) {
+      const found = enclosureLeaks(solids, passages, plan, [-3, 3, 56, 47], 0.025, k, storey.floorY + above);
+      expect(found, `${floor} at ${above} m`).toEqual({ toOutside: [], between: [], rooms: expect.any(Number) as number });
+    }
   });
 
-  it("the building's shell is closed between the interior and exterior wall tops", () => {
-    const lines = inputs.walls.find((p) => p.floor === "1F")!.walls;
-    const [f1, f2] = ["1F", "2F"].map((id) => inputs.layout.storeys.find((s) => s.id === id)!);
-    const y = (f2.floorY - f2.slabM + f2.floorY) / 2 - f1.floorY; // under the next floor, above the slab's underside
-    const tops = new Set(solids.filter((b) => /#\d/.test(b.id)).map((b) => +(b.center[1] + b.size[1] / 2).toFixed(2))); // wall pieces
-    expect([...tops].sort()).toEqual([f2.floorY - f2.slabM, f2.floorY].map((t) => +(t - f1.floorY).toFixed(2)).sort());
-    expect(enclosureLeaks(solids, [], planGrid(lines, k), [-3, 3, 56, 47], 0.025, k, y).toOutside).toEqual([]);
+  it.each(FLOOR_IDS)("%s: the building's shell is closed between the interior and exterior wall tops", (floor) => {
+    const { plan, storey, next } = storeyOf(floor);
+    const top = (b: Box) => +(b.center[1] + b.size[1] / 2 - storey.floorY).toFixed(2);
+    const pieces = solids.filter((b) => /#\d/.test(b.id) && !b.bodiesOnly && !b.drawOnly && Math.abs(b.center[1] - b.size[1] / 2 - storey.floorY) < 0.01);
+    const [topIn, topOut] = next ? [next.floorY - next.slabM - storey.floorY, storey.underground ? next.floorY - next.slabM - storey.floorY : next.floorY - storey.floorY] : [inputs.layout.defaults.wallHeightM, inputs.layout.defaults.wallHeightM];
+    expect([...new Set(pieces.map(top))].sort(), floor).toEqual([...new Set([topIn, topOut].map((t) => +t.toFixed(2)))].sort());
+    if (topOut - topIn < 0.05) return; // no band: every wall reaches the same height
+    expect(enclosureLeaks(solids, [], plan, [-3, 3, 56, 47], 0.025, k, storey.floorY + (topIn + topOut) / 2).toOutside, floor).toEqual([]);
   });
 
   it("spawns stand on the ground: spawn 0 for the labs, the three attacker insertion points outside", async () => {
@@ -173,7 +206,6 @@ describe("oregon level.json", () => {
 });
 
 describe("the junction rule on small layouts", () => {
-  const fr = frames(inputs.layout);
   const wall = (id: string, axis: "H" | "V", at: number, span: [number, number], spans: unknown[] = [], weight: "int" | "ext" = "int") =>
     wallSchema.parse({ id, axis, at, span, weight, src: "hand", spans });
   const soft = (id: string, at: [number, number]) => ({ kind: "SOFT", id, at, sections: 1 });
@@ -284,40 +316,57 @@ describe("the junction rule on small layouts", () => {
   });
 });
 
-describe("oregon 1F against the research", () => {
-  const spans = spansOf("1F");
+describe.each(FLOOR_IDS)("oregon %s against the research", (floor) => {
+  const spans = spansOf(floor);
+  const part = inputs.walls.find((p) => p.floor === floor)!;
+  const storey = inputs.layout.storeys.find((s) => s.id === floor)!;
+  /** Compiled boxes standing on this storey's floor. */
+  const onStorey = (b: Box) => Math.abs(b.center[1] - b.size[1] / 2 - storey.floorY) < 0.01;
 
-  it("all 17 soft walls of surfaces.md §2.2 are panels with their reinforcement sections, centred on the research", () => {
-    const rows = softWalls(ROOT).filter((s) => s.floor === "1F");
-    expect(rows).toHaveLength(17);
+  it("every soft wall of surfaces.md §2 on this floor is a panel with its reinforcement sections, centred on the research", () => {
+    const rows = softWalls(ROOT).filter((s) => s.floor === floor);
     for (const row of rows) {
       const span = spans.find((s) => s.span.id === row.id);
       expect(span, row.id).toBeDefined();
       const solid = solids.find((s) => s.id === row.id)!;
       expect([solid.surface, solid.panel?.sections], row.id).toEqual(["REINFORCEABLE", row.sections]);
-      // The research rectangle is r6calls' soft-wall vector; the compiled panel is centred on it.
-      const [cx, cz] = [((row.x[0] + row.x[1]) / 2) * k, ((row.y[0] + row.y[1]) / 2) * k];
+      // The research rectangle is r6calls' soft-wall vector on this floor's image; the compiled panel is centred on it.
+      const [wx, wy] = fr.toWorld(part.frame, (row.x[0] + row.x[1]) / 2, (row.y[0] + row.y[1]) / 2);
+      const [cx, cz] = [wx * k, wy * k];
       const along = row.axis === "H" ? Math.abs(solid.center[0] - cx) : Math.abs(solid.center[2] - cz);
       const across = row.axis === "H" ? Math.abs(solid.center[2] - cz) : Math.abs(solid.center[0] - cx);
       expect(across, row.id).toBeLessThan(0.5 * k + 0.05); // 0.5 u, plus snapping
       expect(along, row.id).toBeLessThan(0.15); // a junction can move an end up to half a wall
     }
-    expect(solids.filter((s) => s.surface === "REINFORCEABLE")).toHaveLength(17);
+    expect(solids.filter((s) => s.surface === "REINFORCEABLE" && onStorey(s)).map((s) => s.id).sort()).toEqual(rows.map((r) => r.id).sort());
+    if (floor === "1F") expect(rows).toHaveLength(17);
   });
 
-  it("every door, exterior opening and passage of layout_notes §6.2 is there, as the research types it", () => {
-    // Rows with no span along a wall are open-plan links (no wall to put an opening in): rooms, in M2.
-    const rows = connections(ROOT).filter((r) => r.floor === "1F" && r.type !== "SOFT" && r.line !== null);
+  it("every door, exterior opening and passage of layout_notes §6 on this floor is there, as the research types it", () => {
+    // Rows with no span along a wall are open-plan links (no wall to put an opening in): rooms join them.
+    const rows = connections(ROOT).filter((r) => r.floor === floor && r.type !== "SOFT" && r.line !== null);
     const wallOpenings = rows.filter((r) => !(r.type === "OPEN" && r.span === null));
     const differences: string[] = [];
+    /** No wall line of this floor runs along the middle of the row's span: a passage between two walls' ends. */
+    const gap = (row: (typeof rows)[number]) => {
+      const [a, b] = row.span!;
+      const [lo, hi] = [a + 0.2 * (b - a), b - 0.2 * (b - a)];
+      return !part.walls.some((w) => w.axis === row.axis && Math.abs(w.at - row.line!) <= 4 && Math.min(hi, w.span[1]) - Math.max(lo, w.span[0]) > 0);
+    };
     for (const row of wallOpenings) {
       const tag = `${row.roomA} | ${row.roomB}`;
       const found = spans.filter((s) => s.span.research === `layout_notes §6: ${tag} (${row.typeText})`);
+      if (found.length === 0 && row.type === "OPEN" && gap(row)) continue; // open by having no wall there
       if (found.length !== 1) {
         differences.push(`${tag} ${row.type}: ${found.length} spans`);
         continue;
       }
       const kind: SpanDef["kind"] = found[0].span.kind;
+      if (found[0].span.hard) {
+        // Built as wall by the official blueprint (amendment 7): it must say why, and be one flag from its kind.
+        if (!found[0].span.note?.includes("P36")) differences.push(`${tag}: built as wall without the P36 note`);
+        continue;
+      }
       if (row.type === "DOOR" && kind !== "DOOR") differences.push(`${tag}: a door in the research, ${kind} here`);
       if (row.type === "OPEN" && kind !== "OPEN") differences.push(`${tag}: open in the research, ${kind} here`);
       if (row.type === "EXT_OPENING") {
@@ -327,21 +376,34 @@ describe("oregon 1F against the research", () => {
       } else if (row.type === "DOOR" && report.openings[found[0].span.id] !== "interior") differences.push(`${tag}: compiled as exterior`);
     }
     expect(differences).toEqual([]);
-    expect(wallOpenings.filter((r) => r.type === "EXT_OPENING")).toHaveLength(12);
-    expect(wallOpenings.filter((r) => r.type === "DOOR")).toHaveLength(18);
+    if (floor === "1F") {
+      expect(wallOpenings.filter((r) => r.type === "EXT_OPENING")).toHaveLength(12);
+      expect(wallOpenings.filter((r) => r.type === "DOOR")).toHaveLength(18);
+    }
   });
 
   it("exterior doors and windows start barricaded, inside doors are empty frames, windows have glass", () => {
-    for (const [id, side] of Object.entries(report.openings)) {
+    const ids = new Set(spans.map((s) => s.span.id));
+    const mine = Object.entries(report.openings).filter(([id]) => ids.has(id));
+    for (const [id, side] of mine) {
       const bar = solids.find((s) => s.id === `${id}.bar`)!;
       expect(bar.surface, id).toBe("BARRICADE");
       expect(bar.panel?.empty === true, id).toBe(side === "interior");
       const glass = solids.find((s) => s.id === `${id}.glass`);
       if (bar.panel?.construction === "barricade_window") expect(glass?.surface, id).toBe("WINDOW");
     }
-    expect(Object.values(report.openings).filter((v) => v === "exterior")).toHaveLength(12);
+    // Every research exterior opening is compiled (or built as wall, P36), and one the research doesn't list
+    // says why it is there.
+    const byId = new Map(spans.map((s) => [s.span.id, s.span]));
+    const research = connections(ROOT).filter((r) => r.floor === floor && r.type === "EXT_OPENING" && r.line !== null);
+    const walledUp = spans.filter((s) => s.span.hard && s.span.research);
+    const exterior = mine.filter(([, v]) => v === "exterior").map(([id]) => byId.get(id)!);
+    expect(exterior.filter((s) => s.research).length, "exterior openings, against layout_notes §6").toBe(research.length - walledUp.length);
+    for (const s of exterior.filter((x) => !x.research)) expect(s.note, `${s.id}: an exterior opening the research doesn't list`).toMatch(/Not in layout_notes/);
   });
+});
 
+describe("oregon 1F samples", () => {
   it("the Destruction Lab's Oregon samples match the compiled soft walls", () => {
     const lab = loadGameData().levels.get("destruction_lab")!;
     for (const [sample, id] of [["oregon_1f_05", "SW-1F-05"], ["oregon_1f_14", "SW-1F-14"], ["oregon_1f_17", "SW-1F-17"]] as const) {

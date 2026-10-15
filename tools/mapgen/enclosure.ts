@@ -1,6 +1,7 @@
 // Is the compiled level closed where the plan is? (DESIGN amendment 9.) The plan's rooms come from the
 // authoring wall lines at their drawn widths with every opening closed; the compiled level is rasterised
-// from its boxes at 1.2 m above the floor, where barricades and glass close doors and windows. A spot inside
+// from its boxes at a height (1.2 m above a storey's floor, where barricades and glass close doors and
+// windows; 0.1 m, under the drone holes' tops). A spot inside
 // the plan's footprint that a flood from outside reaches is a gap to the outside; an open region of the
 // compiled level that holds two of the plan's rooms is a gap between rooms.
 import { PlanGrid } from "./grid.js";
@@ -17,13 +18,19 @@ export interface Box {
 /** Drawn band half-widths (u), as walls.ts reads the raster. */
 const drawnHalf = (w: WallDef, k: number) => (typeof w.weight === "number" ? w.weight / k / 2 : w.weight === "int" ? 1.24 : 2.3);
 
-/** The plan of one storey's wall lines (world u = the 1F frame), flooded from outside. */
-export function planGrid(lines: WallDef[], k: number): PlanGrid {
+/**
+ * The plan of one storey's wall lines, mapped into world u (the 1F frame) by the storey's frame `toWorld`
+ * (identity for lines drawn in the world frame), flooded from outside.
+ */
+export function planGrid(lines: WallDef[], k: number, toWorld: (x: number, y: number) => [number, number] = (x, y) => [x, y]): PlanGrid {
   const plan = new PlanGrid(-40 / k, -15 / k, 85 / k, 75 / k, 0.5);
   for (const w of lines) {
     const h = drawnHalf(w, k) + 0.25;
-    if (w.axis === "H") plan.fill(w.span[0] - 0.25, w.at - h, w.span[1] + 0.25, w.at + h);
-    else plan.fill(w.at - h, w.span[0] - 0.25, w.at + h, w.span[1] + 0.25);
+    // Frames are separable affines: a line's ends and centreline map on their own.
+    const [x0, y0] = toWorld(w.axis === "H" ? w.span[0] : w.at, w.axis === "H" ? w.at : w.span[0]);
+    const [x1, y1] = toWorld(w.axis === "H" ? w.span[1] : w.at, w.axis === "H" ? w.at : w.span[1]);
+    if (w.axis === "H") plan.fill(x0 - 0.25, y0 - h, x1 + 0.25, y0 + h);
+    else plan.fill(x0 - h, y0 - 0.25, x0 + h, y1 + 0.25);
   }
   plan.floodOutside();
   return plan;

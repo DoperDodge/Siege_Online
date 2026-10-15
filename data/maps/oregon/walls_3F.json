@@ -6,18 +6,18 @@
   {"id": "3F.w001", "axis": "H", "at": 44.81, "span": [253.29, 317.85], "weight": "ext", "kind": "wall", "from": ["3-w001", "3-w002"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
    {"kind": "WINDOW", "id": "3F.o000", "at": [258.94, 267.41], "research": "layout_notes §6: 3F_CATWALK | EXT north (EXT_OPENING (window, likely))", "from": ["3-o000"], "note": "kind from the research guess", "_unverified": ["kind"]}
   ]},
-  {"id": "3F.w004", "axis": "H", "at": 57.68, "span": [260, 296.69], "weight": "int", "kind": "wall", "from": ["3-w004", "3-w005"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
-   {"kind": "DOOR", "id": "3F.o001", "at": [280.11, 288.22], "from": ["3-o001"], "_unverified": []}
+  {"id": "3F.w004", "axis": "H", "at": 57.68, "span": [260, 296.69], "weight": "int", "kind": "rail", "from": ["3-w004", "3-w005"], "src": "raster", "conf": "high", "note": "The Cat Walk well's rail (P21): the inner square around the open centre over the 2F Tower, a wall in the raster, set to rail by hand; its gap is the ladder's top (3F.o001).", "_unverified": ["kind"], "spans": [
+   {"kind": "OPEN", "id": "3F.o001", "at": [280.11, 288.22], "research": "layout_notes §5.3: LD_TOWER (the rail's gap at the ladder's top, P21)", "from": ["3-o001"], "note": "A door glyph in the raster where the ladder icon sits (280.99–288.04): the gap in the well's rail where the ladder from 2F arrives.", "_unverified": ["at"]}
   ]},
-  {"id": "3F.w006", "axis": "H", "at": 84.14, "span": [260, 296.69], "weight": "int", "kind": "wall", "spans": [], "from": ["3-w006"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "3F.w006", "axis": "H", "at": 84.14, "span": [260, 296.69], "weight": "int", "kind": "rail", "spans": [], "from": ["3-w006"], "src": "raster", "conf": "high", "note": "The Cat Walk well's rail (P21): the inner square around the open centre over the 2F Tower, a wall in the raster, set to rail by hand.", "_unverified": ["kind"]},
   {"id": "3F.w008", "axis": "H", "at": 98.78, "span": [253.29, 317.85], "weight": "ext", "kind": "wall", "from": ["3-w008", "3-w009"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
    {"kind": "WINDOW", "id": "3F.o002", "at": [293.86, 302.68], "research": "layout_notes §6: 3F_CATWALK | RF_MEETING_E / RF_ATTIC (EXT_OPENING (UNVERIFIED))", "from": ["3-o002"], "note": "kind from rule P9 (no research guess)", "_unverified": ["kind"]}
   ]},
   {"id": "3F.w012", "axis": "V", "at": 255.41, "span": [43.74, 100.19], "weight": "ext", "kind": "wall", "from": ["3-w012", "3-w013"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
-   {"kind": "WINDOW", "id": "3F.o003", "at": [49.04, 55.39], "from": ["3-o003"], "note": "kind from rule P9 (no research guess)", "_unverified": ["kind"]}
+   {"kind": "WINDOW", "id": "3F.o003", "at": [49.04, 55.39], "from": ["3-o003"], "note": "kind from rule P9 (no research guess). Not in layout_notes §6.4, which lists the north and south openings only; the r6calls 3F image draws this one on the west wall, so it stays, UNVERIFIED (research/OPEN_QUESTIONS.md).", "_unverified": ["kind"]}
   ]},
-  {"id": "3F.w014", "axis": "V", "at": 261.24, "span": [56.44, 85.37], "weight": "int", "kind": "wall", "spans": [], "from": ["3-w014"], "src": "raster", "conf": "medium", "_unverified": []},
-  {"id": "3F.w015", "axis": "V", "at": 295.46, "span": [56.44, 85.37], "weight": "int", "kind": "wall", "spans": [], "from": ["3-w015"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "3F.w014", "axis": "V", "at": 261.24, "span": [56.44, 85.37], "weight": "int", "kind": "rail", "spans": [], "from": ["3-w014"], "src": "raster", "conf": "medium", "note": "The Cat Walk well's rail (P21): the inner square around the open centre over the 2F Tower, a wall in the raster, set to rail by hand.", "_unverified": ["kind"]},
+  {"id": "3F.w015", "axis": "V", "at": 295.46, "span": [56.44, 85.37], "weight": "int", "kind": "rail", "spans": [], "from": ["3-w015"], "src": "raster", "conf": "high", "note": "The Cat Walk well's rail (P21): the inner square around the open centre over the 2F Tower, a wall in the raster, set to rail by hand.", "_unverified": ["kind"]},
   {"id": "3F.w011", "axis": "V", "at": 315.74, "span": [43.74, 100.19], "weight": "ext", "kind": "wall", "spans": [], "from": ["3-w011"], "src": "raster", "conf": "high", "_unverified": []}
  ],
  "dropped": []

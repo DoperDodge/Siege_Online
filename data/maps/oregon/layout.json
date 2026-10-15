@@ -27,7 +27,7 @@
  },
  "id": "oregon",
  "name": "Oregon",
- "emit": ["1F"],
+ "emit": ["B", "1F", "2F", "3F"],
  "parts": ["walls_B.json", "walls_1F.json", "walls_2F.json", "walls_3F.json", "exterior.json"],
  "units": { "mPerU": 0.15, "snapM": 0.05 },
  "frames": {
@@ -38,7 +38,7 @@
   "B": { "ax": 1, "bx": 0, "ay": 1, "by": 0, "status": "assumed", "use": "main", "alt": { "ax": 1.024, "bx": 0.24, "ay": 1.024, "by": -2.568 }, "note": "alt: x1 = -10 + 1.024 (xB + 10), y1 = 107 + 1.024 (yB - 107)" }
  },
  "storeys": [
-  { "id": "B", "floorY": -3.2, "slabM": 0.2 },
+  { "id": "B", "floorY": -3.2, "slabM": 0.2, "underground": true },
   { "id": "1F", "floorY": 0, "slabM": 0.2 },
   { "id": "2F", "floorY": 3.2, "slabM": 0.2 },
   { "id": "3F", "floorY": 6.2, "slabM": 0.2 }

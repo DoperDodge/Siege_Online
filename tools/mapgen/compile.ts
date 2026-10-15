@@ -124,6 +124,7 @@ export function compile(inputs: Inputs): Compiled {
     surface: s.surface,
     ...(s.vaultable ? { vaultable: true } : {}),
     ...(s.bodiesOnly ? { bodiesOnly: true } : {}),
+    ...(s.drawOnly ? { drawOnly: true } : {}),
     ...(s.label ? { label: s.label } : {}),
     ...(s.panel ? { panel: s.panel } : {}),
   });

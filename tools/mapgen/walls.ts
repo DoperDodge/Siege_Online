@@ -15,6 +15,7 @@ export interface Solid {
   surface: "HARD_WALL" | "HARD_FLOOR" | "REINFORCEABLE" | "BARRICADE" | "WINDOW";
   vaultable?: boolean;
   bodiesOnly?: boolean;
+  drawOnly?: boolean;
   label?: string;
   panel?: { construction?: string; sections?: number; empty?: boolean };
 }
@@ -83,7 +84,9 @@ export function compileWalls(layout: Layout, fr: Frames, parts: { floor: Floor; 
     const storey = layout.storeys.find((s) => s.id === part.floor);
     if (!storey) throw new Error(`layout.json: no storey "${part.floor}"`);
     const lines: Line[] = part.walls.map((w) => {
-      if (w.kind === "rail") throw new Error(`walls_${part.floor}.json ${w.id}: rails arrive with M2 (DESIGN amendment 12)`);
+      for (const s of w.spans) {
+        if (w.kind === "rail" && s.kind !== "OPEN") throw new Error(`walls_${part.floor}.json ${w.id}: a rail has gaps (OPEN spans) only, not ${s.kind} ${s.id}`);
+      }
       // Frames are separable affines, so an H line stays H: map its centreline and its span separately.
       const [ax, ay] = fr.toWorld(part.frame, w.axis === "H" ? w.span[0] : w.at, w.axis === "H" ? w.at : w.span[0]);
       const [bx, by] = fr.toWorld(part.frame, w.axis === "H" ? w.span[1] : w.at, w.axis === "H" ? w.at : w.span[1]);
@@ -95,7 +98,8 @@ export function compileWalls(layout: Layout, fr: Frames, parts: { floor: Floor; 
       const drawnHalf = typeof w.weight === "number" ? w.weight / 2 : DRAWN_HALF_U[w.weight] * k;
       // Snap a face, not the centre, so an odd thickness (a 1.05 m pillar) still has both faces on the grid.
       const at = Math.round((snap((w.axis === "H" ? ay : ax) * k - t / 2) + t / 2) * 1e6) / 1e6;
-      const spans = [...w.spans]
+      const spans = w.spans
+        .filter((s) => !s.hard) // built as wall (an opening only one source draws)
         .map((s) => ({ def: s, a0: along(s.at[0]), a1: along(s.at[1]) }))
         .sort((p, q) => p.a0 - q.a0);
       for (let i = 1; i < spans.length; i++) {
@@ -267,12 +271,13 @@ export function compileWalls(layout: Layout, fr: Frames, parts: { floor: Floor; 
     /** Which sides of a line are outside at `a`: [−perp side, +perp side]. */
     const sides = (l: Line, a: number): [boolean, boolean] => [sideAt(l, a, -1) === true, sideAt(l, a, 1) === true];
 
-    // ---- Heights (placeholders P3, P5): interior walls stop under the next slab, exterior walls reach the next floor.
+    // ---- Heights (placeholders P3, P5): interior walls stop under the next slab, exterior walls reach the next
+    // floor. Underground, the earth is outside: every wall stops under the slab (the ground covers the storey).
     const idx = layout.storeys.indexOf(storey);
     const next = layout.storeys[idx + 1];
     const floorY = storey.floorY;
     const topIn = next ? next.floorY - next.slabM - floorY : d.wallHeightM;
-    const topOut = next ? next.floorY - floorY : d.wallHeightM;
+    const topOut = next && !storey.underground ? next.floorY - floorY : topIn;
 
     const box = (l: Line, id: string, a0: number, a1: number, y0: number, y1: number, perp: number, thick: number, extra: Partial<Solid> & Pick<Solid, "surface">): Solid => {
       const along = (a0 + a1) / 2;
@@ -376,6 +381,25 @@ export function compileWalls(layout: Layout, fr: Frames, parts: { floor: Floor; 
     const topOf = (l: Line, a: number) => (l.def.topM !== undefined ? l.def.topM : outsideAt(l, a) ? topOut : topIn);
 
     for (const l of lines) {
+      if (l.def.kind === "rail") {
+        // A rail (amendment 12): between its gaps, a vaultable blocker for bodies up to rail height and a bar
+        // drawn on top; bullets and sight pass both.
+        const h = l.def.topM ?? d.rail.hM;
+        const bar = 0.05;
+        let c = l.s0;
+        let n = 0;
+        const run = (a0: number, a1: number) => {
+          if (a1 - a0 < 0.05) return;
+          solids.push(box(l, `${l.def.id}#${n}`, a0, a1, 0, h, 0, l.t, { surface: "HARD_WALL", vaultable: true, bodiesOnly: true }));
+          solids.push(box(l, `${l.def.id}#${n++}.bar`, a0, a1, h - bar, h, 0, bar, { surface: "HARD_WALL", drawOnly: true }));
+        };
+        for (const s of l.spans) {
+          run(c, s.a0);
+          c = s.a1;
+        }
+        run(c, l.s1);
+        continue;
+      }
       const top = (a0: number, a1: number) => topOf(l, (a0 + a1) / 2);
       // Hard parts: everything between spans; drone holes are slots cut out of them.
       const placed = new Set<string>();
