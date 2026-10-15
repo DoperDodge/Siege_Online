@@ -1,7 +1,7 @@
 // Panels drawn from their cells (Phase 4 M3, render/panelView.ts), without a GPU: an intact wall is its two
 // skins, together the exact size of its level solid; the studs show only around a hole; a hole redraws only
 // that panel; steel sits on the side it went up from, over that side's skin; a reinforceable wall shows its
-// section seams on both faces (Phase 5).
+// section seams on both faces (Phase 5); a hidden panel keeps redrawing, and a palette recolours only skins.
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { L_BACK, L_CORE, L_FRONT, Sim, type PanelOp } from "@redmond/shared";
@@ -69,6 +69,30 @@ describe("panel view", () => {
     sim.level.panels.apply(0, { kind: "cut", layer: L_BACK, shape: { kind: "rect", u0: 0, v0: 0, u1: 40, v1: 50 }, hard: false }); // version 1 again
     view.update();
     expect(skins()).toEqual(["front", "core"]);
+  });
+
+  it("a hidden panel keeps redrawing, so it shows as it is; a palette recolours the skins in place, not the studs or seams", async () => {
+    const sim = await Sim.create("movement_lab");
+    const scene = new THREE.Scene();
+    const view = new PanelView(scene, sim.level.panels);
+    const [soft, reinforceable] = groups(scene);
+    // Hidden (a map's storey views hide the storeys above you): only the group's own visibility changes.
+    expect(view.setVisible(0, false)).toBe(true);
+    expect(view.setVisible(0, false)).toBe(false);
+    expect([soft.visible, view.isVisible(0), view.isVisible(1)]).toEqual([false, false, true]);
+    sim.level.panels.apply(0, { kind: "cut", layer: L_FRONT, shape: { kind: "rect", u0: 10, v0: 10, u1: 20, v1: 20 }, hard: false });
+    expect(view.update()).toBe(true);
+    expect(soft.children.length).toBe(4); // the stud behind the hole, drawn while hidden
+    expect(view.setVisible(0, true)).toBe(true);
+    expect(soft.visible).toBe(true);
+    // The same skin materials take the palette's colours; the studs and the section seams keep theirs.
+    const colour = (g: THREE.Group, name: string) => ((g.children.find((m) => m.name === name) as THREE.Mesh).material as THREE.MeshStandardMaterial).color;
+    const skin = colour(reinforceable, "skin:REINFORCEABLE");
+    const [stud, seam] = [colour(soft, "core:wood").getHex(), colour(reinforceable, "seam").getHex()];
+    view.setSkinColors((surface) => (surface === "SOFT_WALL" ? 0x123456 : 0x654321));
+    expect(colour(reinforceable, "skin:REINFORCEABLE")).toBe(skin);
+    expect([colour(soft, "skin:SOFT_WALL").getHex(), skin.getHex()]).toEqual([0x123456, 0x654321]);
+    expect([colour(soft, "core:wood").getHex(), colour(reinforceable, "seam").getHex()]).toEqual([stud, seam]);
   });
 
   it("redrawing a shot-up wall takes well under a frame on the main thread (PLAN §8.2 budget)", async () => {

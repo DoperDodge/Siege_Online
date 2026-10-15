@@ -4,7 +4,8 @@
 // between the skins at the panel's edges (a free-standing wall's ends and top). A reinforceable wall shows
 // the boundaries between its sections as thin dark seams on both faces. When a panel changes, only the
 // layers whose drawn cells changed are rebuilt; each box is 8 shared corners, lit flat (no normals to
-// build), so a shot-up wall redraws within PLAN §8.2's main-thread budget.
+// build), so a shot-up wall redraws within PLAN §8.2's main-thread budget. On a map, the storey views hide
+// the panels of the storeys above you and can recolour the skins (render/storeyView.ts).
 import * as THREE from "three";
 import { greedyRects, L_BACK, L_CORE, L_FRONT, L_STEEL, layerSlab, STEEL_PLATE_M, type Panel, type PanelEntry, type PanelSet } from "@redmond/shared";
 import { showsSections, SURFACE_COLORS } from "./labScene.js";
@@ -40,6 +41,8 @@ export class PanelView {
   private readonly groups: THREE.Group[] = [];
   private readonly drawn: Drawn[] = [];
   private readonly materials = new Map<string, THREE.MeshStandardMaterial>();
+  /** The skins' colour by surface (a map's palette, StoreyView); studs, steel, glass and seams keep their own. */
+  private skinColor = (surface: string): number => SURFACE_COLORS[surface as keyof typeof SURFACE_COLORS];
 
   constructor(
     scene: THREE.Scene,
@@ -90,6 +93,28 @@ export class PanelView {
     let n = 0;
     for (const d of this.drawn) for (const m of d.meshes) if (m) n++;
     return n;
+  }
+
+  /**
+   * Show or hide panel `index` (StoreyView hides the storeys above you). A hidden panel still redraws as it
+   * changes, so it is right the moment it shows again. True if that changed what is drawn.
+   */
+  setVisible(index: number, visible: boolean): boolean {
+    const g = this.groups[index];
+    if (g.visible === visible) return false;
+    g.visible = visible;
+    return true;
+  }
+
+  /** Whether panel `index` is drawn (setVisible). */
+  isVisible(index: number): boolean {
+    return this.groups[index].visible;
+  }
+
+  /** Colour every panel's skins by surface (a palette): only the materials change, nothing is rebuilt. */
+  setSkinColors(color: (surface: string) => number): void {
+    this.skinColor = color;
+    for (const [key, m] of this.materials) if (key.startsWith("skin:")) m.color.setHex(color(key.slice(5)));
   }
 
   /**
@@ -171,7 +196,7 @@ export class PanelView {
     // A seam lies a millimetre off its face: pulled forward in depth too, so it wins against that face at
     // any distance (as bullet marks do, fxBus.ts).
     else if (key === "seam") m = new THREE.MeshStandardMaterial({ ...flat, color: SEAM, roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
-    else m = new THREE.MeshStandardMaterial({ ...flat, color: SURFACE_COLORS[key.slice(5) as keyof typeof SURFACE_COLORS], roughness: 0.85 });
+    else m = new THREE.MeshStandardMaterial({ ...flat, color: this.skinColor(key.slice(5)), roughness: 0.85 });
     this.materials.set(key, m);
     return m;
   }

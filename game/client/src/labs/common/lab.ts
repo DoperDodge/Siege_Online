@@ -2,7 +2,8 @@
 // try things in, with the HUD, pause menu, loadouts and lab tools. Offline, the shared simulation steps
 // here at 64 Hz. Online (Phase 2, `?online` or `?room=CODE`), the server runs it and this page predicts your
 // own movement and interpolates everyone else's (PLAN §5). Each page passes its level and what's special
-// about it (startLab's options).
+// about it (startLab's options). A map (a level with storeys) also gets the storey views, a HUD line with
+// the room and plan position, and Go to by storey and room (tools/mapgen/DESIGN.md E9).
 import * as THREE from "three";
 import {
   applyDamage,
@@ -60,15 +61,18 @@ import { LocalSocket } from "../../net/local.js";
 import { OnlineConnection } from "../../net/online.js";
 import { createLabScene, createRenderer, PawnView, updateLabels, warmShaders } from "../../render/labScene.js";
 import { PanelView } from "../../render/panelView.js";
+import { StoreyView, type Palette } from "../../render/storeyView.js";
 import { FxBus } from "../../render/fxBus.js";
 import { Viewmodel } from "../../render/viewmodel.js";
 import { AmmoHud } from "../../ui/ammo.js";
 import { adsFov, Crosshair, spreadGapPx } from "../../ui/crosshair.js";
 import { damageArcDeg, DamageIndicator } from "../../ui/damage.js";
+import { escapeHtml } from "../../ui/dom.js";
 import { DownedHud } from "../../ui/downed.js";
 import { HitMarkers } from "../../ui/hitMarkers.js";
 import { deathLine, feedLine, KillFeed } from "../../ui/killFeed.js";
 import { StatsOverlay } from "../../ui/stats.js";
+import { goToMenu, WhereHud } from "../../ui/where.js";
 
 /** What scripts and page additions can reach in a running lab. */
 export interface LabHandle {
@@ -101,7 +105,10 @@ export interface LabOptions {
   title: string;
   /** This page's path (the lobby's link back to it offline). */
   page: string;
-  /** The pause menu's "Go to" spots: name, x, y, z, yaw in degrees. */
+  /**
+   * The pause menu's "Go to" spots: name, x, y, z, yaw in degrees. On a level with rooms the menu lists every
+   * room by storey (ui/where.ts goToMenu) and files these under the storey at their height, after its rooms.
+   */
   goTo: [string, number, number, number, number][];
   /** The help panel's "Try this" list (HTML), and a note under it. */
   help: { tryThis: string[]; note: string };
@@ -263,6 +270,14 @@ export async function startLab(o: LabOptions): Promise<void> {
   const scene = labScene.scene;
   /** Destructible panels, drawn from their cells and redrawn as they change. */
   const panelView = new PanelView(scene, sim.level.panels);
+  /**
+   * A map's storey views (tools/mapgen/DESIGN.md E9): the storey you're on and its light, the storeys above it
+   * hidden (H), the plan view (M), the palette (P). None in a lab without storeys.
+   */
+  const storeyView = sim.level.def.storeys.length ? new StoreyView(labScene, panelView, sim.level, possessed().state.y) : null;
+  storeyView?.setViewport(view.clientWidth, view.clientHeight);
+  /** On a map with a plan, the HUD line: the room, the storey and where you are in the plan's units (amendment 17). */
+  const whereHud = sim.level.def.plan ? new WhereHud(app, sim.level.def) : null;
   // The level is all there: its shadows are drawn at the next render, and again only when it changes.
   renderer.shadowMap.needsUpdate = true;
   // The stats overlay counts every draw of a frame (the world, the viewmodel, a shadow pass), so the counts
@@ -341,8 +356,64 @@ export async function startLab(o: LabOptions): Promise<void> {
     camera.aspect = view.clientWidth / view.clientHeight;
     camera.updateProjectionMatrix();
     viewmodel.setAspect(camera.aspect);
+    storeyView?.setViewport(view.clientWidth, view.clientHeight);
     renderPause();
   });
+
+  // ------------------------------------------------------------------ storey views (a map)
+
+  /** The camera the world is drawn from: yours, or the plan view's. */
+  const shownCamera = (): THREE.Camera => (storeyView?.plan ? storeyView.camera : camera);
+
+  /** Switch the storey views (keys, the pause menu, tests); the pause menu, if open, shows the new state. */
+  function setStoreyView(v: { hideAbove?: boolean; plan?: boolean; palette?: Palette }) {
+    if (!storeyView) return;
+    if (v.hideAbove !== undefined) storeyView.setHideAbove(v.hideAbove);
+    if (v.plan !== undefined) {
+      storeyView.setPlan(v.plan);
+      app.classList.toggle("plan-view", v.plan); // no crosshair or sights over the plan
+    }
+    if (v.palette !== undefined) storeyView.setPalette(v.palette);
+    if (!$(".pause").classList.contains("hidden")) renderPause();
+  }
+
+  /** The storey views' switches by name (their keys, and the pause menu's View buttons). */
+  const viewToggles: Record<string, () => void> = {};
+  if (storeyView) {
+    const sv = storeyView;
+    Object.assign(viewToggles, {
+      hideAbove: () => {
+        setStoreyView({ hideAbove: !sv.hideAbove });
+        flash(sv.hideAbove ? "Storeys above yours hidden" : "Every storey shown", "info");
+      },
+      plan: () => {
+        setStoreyView({ plan: !sv.plan });
+        if (sv.plan) flash("Plan view: the wheel zooms, M goes back", "info");
+      },
+      palette: () => {
+        setStoreyView({ palette: sv.palette === "greybox" ? "neutral" : "greybox" });
+        flash(sv.palette === "greybox" ? "Palette: surface classes" : "Palette: neutral", "info");
+      },
+    });
+    hooks.keys.set("KeyH", viewToggles.hideAbove);
+    hooks.keys.set("KeyM", viewToggles.plan);
+    hooks.keys.set("KeyP", viewToggles.palette);
+    hooks.help.push(
+      ["<kbd>H</kbd>", "Hide the storeys above yours (it follows you up and down)"],
+      ["<kbd>M</kbd>", "Plan view: your storey from above, north up, centred on you, with the room names; the wheel zooms. You keep moving and turning as usual (W walks the way the arrow points); M again goes back"],
+      ["<kbd>P</kbd>", "Palette: the surface classes (soft yellow, hard grey, reinforceable blue, hatch green) or one light grey"],
+    );
+    // In the plan view the wheel zooms instead of switching weapons.
+    controls.wheelTaken = () => sv.plan;
+    renderer.domElement.addEventListener(
+      "wheel",
+      (e) => {
+        if (!sv.plan || controls.isBlocked() || e.deltaY === 0) return;
+        sv.zoom(e.deltaMode === WheelEvent.DOM_DELTA_LINE ? e.deltaY * 33 : e.deltaMode === WheelEvent.DOM_DELTA_PAGE ? e.deltaY * view.clientHeight : e.deltaY);
+      },
+      { passive: true },
+    );
+  }
 
   // ------------------------------------------------------------------ UI actions
 
@@ -364,10 +435,16 @@ export async function startLab(o: LabOptions): Promise<void> {
     snapshotAll();
   }
 
-  const GOTO = o.goTo;
+  /** The pause menu's Go to: a map's rooms by storey, and the page's own spots (ui/where.ts goToMenu). */
+  const GOTO = goToMenu(sim.level.def, o.goTo);
+  /** Every entry, in the menu's order (a button's `data-goto` indexes this). */
+  const SPOTS = GOTO.flatMap((g) => g.spots);
 
   function goTo(i: number) {
-    const [, x, y, z, yaw] = GOTO[i];
+    const {
+      pos: [x, y, z],
+      yawDeg: yaw,
+    } = SPOTS[i];
     if (net) net.send(encodeLabTool({ kind: "teleport", x, y, z, yawDeg: yaw }));
     else sim.teleport(ctrl.possessedPawnId, x, y, z, yaw);
     controls.setView(yaw * DEG, 0);
@@ -546,7 +623,15 @@ export async function startLab(o: LabOptions): Promise<void> {
         ${net ? `<label>Team <select class="team-select"><option value="0" ${ctrl.team === 0 ? "selected" : ""}>Attackers</option><option value="1" ${ctrl.team === 1 ? "selected" : ""}>Defenders</option></select></label>` : ""}
       </section>
       ${loadoutSection()}
-      <section><h3>Go to</h3><div class="goto">${GOTO.map((g, i) => `<button data-goto="${i}">${g[0]}</button>`).join("")}</div></section>
+      <section><h3>Go to</h3>${goToHtml()}</section>
+      ${
+        storeyView
+          ? `<section><h3>View</h3><div class="goto">
+        <button data-view="hideAbove">${storeyView.hideAbove ? "Show the storeys above (H)" : "Hide the storeys above (H)"}</button>
+        <button data-view="plan">${storeyView.plan ? "Leave the plan view (M)" : "Plan view (M)"}</button>
+        <button data-view="palette">${storeyView.palette === "greybox" ? "Neutral palette (P)" : "Surface colours (P)"}</button></div></section>`
+          : ""
+      }
       <section><h3>Lab tools</h3><div class="goto"><button class="refill">Refill ammo</button><button class="hurt-me">Take 30 damage</button><button class="down-me">Down me</button>${hooks.tools.map((t, i) => `<button data-tool="${i}">${t.label}</button>`).join("")}</div>
         <p class="note">Down but not out: you crawl and bleed out in 60 s (30 s while crawling); a teammate holds ${keyLabel(settings.keys.interact)} for 4 s to revive you with 20 HP. A second down kills.</p></section>
       <section><h3>Controls</h3>
@@ -596,6 +681,12 @@ export async function startLab(o: LabOptions): Promise<void> {
         resume(e);
       }),
     );
+    pause.querySelectorAll<HTMLButtonElement>("[data-view]").forEach((b) =>
+      b.addEventListener("click", (e) => {
+        viewToggles[b.dataset.view!]();
+        resume(e);
+      }),
+    );
     pause.querySelectorAll<HTMLInputElement>("[data-num]").forEach((inp) =>
       inp.addEventListener("input", () => {
         (settings as unknown as Record<string, number>)[inp.dataset.num!] = Number(inp.value);
@@ -623,6 +714,15 @@ export async function startLab(o: LabOptions): Promise<void> {
         applySettings();
       }),
     );
+  }
+
+  /** Go to's buttons: one list, or on a map a heading per storey over its rooms and spots. */
+  function goToHtml(): string {
+    let i = 0;
+    return GOTO.map((g) => {
+      const buttons = g.spots.map((s) => `<button data-goto="${i++}"${s.room ? ` data-room="${escapeHtml(s.room)}"` : ""}>${escapeHtml(s.name)}</button>`).join("");
+      return g.storey === null ? `<div class="goto">${buttons}</div>` : `<div class="goto-storey" data-storey="${escapeHtml(g.storey)}"><h4>${escapeHtml(g.storey)}</h4><div class="goto">${buttons}</div></div>`;
+    }).join("");
   }
 
   function applySettings() {
@@ -785,7 +885,7 @@ export async function startLab(o: LabOptions): Promise<void> {
   /** Render the world, counting a shadow-map redraw if one was asked for. */
   function drawWorld() {
     if (renderer.shadowMap.enabled && renderer.shadowMap.needsUpdate && !renderer.getContext().isContextLost()) shadowDraws++;
-    renderer.render(scene, camera);
+    renderer.render(scene, shownCamera());
   }
   function frame(now: number) {
     const workFrom = performance.now();
@@ -819,6 +919,8 @@ export async function startLab(o: LabOptions): Promise<void> {
     const viewed = sim.pawns.get(viewedId) ?? me;
     const renderTick = net ? net.session.frame() : 0;
     shownRenderTick = renderTick;
+    /** Looking from outside your body: third person, or a map's plan view. */
+    const outside = thirdPerson || storeyView?.plan === true;
     syncPawnViews();
     for (const pawn of sim.pawns.values()) {
       const v = pawnViews.get(pawn.id)!;
@@ -834,8 +936,8 @@ export async function startLab(o: LabOptions): Promise<void> {
       drawnView.set(pawn.id, [rs.yaw, rs.pitch]);
       const eyes = pawn.id === viewed.id;
       // In first person your own body isn't drawn; your gun is the viewmodel.
-      v.setFirstPerson(eyes && !thirdPerson);
-      v.wire.visible = showHitboxes && (!eyes || thirdPerson);
+      v.setFirstPerson(eyes && !outside);
+      v.wire.visible = showHitboxes && (!eyes || outside);
     }
     updateShots(now);
     fx.update(now, shownRenderTick, ctrl.pawnIds, ownMuzzle, remoteMuzzle);
@@ -843,6 +945,9 @@ export async function startLab(o: LabOptions): Promise<void> {
     updateLasers();
 
     const rs = interpolated(viewed, alpha);
+    // A map follows the body you look through: its storey (and that storey's light), the plan view over it.
+    if (storeyView?.follow(rs.x, rs.y, rs.z, controls.yaw, elapsed)) renderer.shadowMap.needsUpdate = true;
+    whereHud?.update(now, storeyView?.storey ?? 0, rs.x, rs.z);
     const fov = aim(viewed, rs);
     const eye = eyePose(data.movement, data.hitboxes, { ...rs, yaw: controls.yaw });
     if (thirdPerson) {
@@ -853,12 +958,12 @@ export async function startLab(o: LabOptions): Promise<void> {
       camera.position.set(eye.pos[0], eye.pos[1], eye.pos[2]);
       camera.rotation.set(controls.pitch, controls.yaw, eye.roll);
     }
-    updateLabels(labScene.labels, camera);
+    updateLabels(labScene.labels, shownCamera());
     // A panel that changed changes the level's shadows too.
     if (panelView.update()) renderer.shadowMap.needsUpdate = true;
     for (const fn of hooks.frame) fn(now, renderTick);
     drawWorld();
-    const inHand = viewed.id === possessed()?.id && !thirdPerson && !ctrl.shellCam && ctrl.swapPhase === 0 ? (viewed.loadout?.weapons[rs.slot] ?? null) : null;
+    const inHand = viewed.id === possessed()?.id && !outside && !ctrl.shellCam && ctrl.swapPhase === 0 ? (viewed.loadout?.weapons[rs.slot] ?? null) : null;
     viewmodel.update(now, elapsed, inHand, rs, viewed.loadout?.swapTicks ?? 1);
     viewmodel.render(renderer);
     const held = viewed.loadout?.weapons[rs.slot];
@@ -1099,9 +1204,37 @@ export async function startLab(o: LabOptions): Promise<void> {
       set input(v: Partial<InputCmd> | null) {
         scripted = v;
       },
-      set view(v: { hitboxes?: boolean; thirdPerson?: boolean }) {
+      /**
+       * What the page shows: hitboxes, third person and, on a map, the storey views (the storey you're on by
+       * id, hide-above, the plan view and its zoom, the palette, the storeys and panels drawn, the static
+       * materials' colours) and the HUD line; with the level's storeys, rooms and plan units (`levelPlan`: metres
+       * per u and each storey's frame) (tools/e2e/oregon.mjs).
+       */
+      get view(): Record<string, unknown> {
+        const def = sim.level.def;
+        return {
+          hitboxes: showHitboxes,
+          thirdPerson,
+          storeys: def.storeys.map((s) => s.id),
+          rooms: def.rooms.map((r) => ({ id: r.id, callout: r.callout, storey: r.storey, rects: r.rects, anchor: r.anchor })),
+          levelPlan: def.plan ?? null,
+          hud: whereHud?.text ?? null,
+          ...(storeyView && {
+            storey: def.storeys[storeyView.storey].id,
+            hideAbove: storeyView.hideAbove,
+            plan: storeyView.plan,
+            planHalfM: storeyView.planHalfM,
+            palette: storeyView.palette,
+            shown: storeyView.shown(),
+            panels: storeyView.panelCounts(),
+            colors: Object.fromEntries([...labScene.materials].map(([k, m]) => [k, `#${m.color.getHexString()}`])),
+          }),
+        };
+      },
+      set view(v: { hitboxes?: boolean; thirdPerson?: boolean; hideAbove?: boolean; plan?: boolean; palette?: Palette }) {
         if (v.hitboxes !== undefined) showHitboxes = v.hitboxes;
         if (v.thirdPerson !== undefined) thirdPerson = v.thirdPerson;
+        setStoreyView(v);
       },
     },
   });

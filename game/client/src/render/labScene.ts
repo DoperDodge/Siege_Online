@@ -1,6 +1,6 @@
 // Three.js scene for labs and maps: greybox level colored by surface class (PLAN §9.1), its static boxes
-// drawn instanced per material and storey (tools/mapgen/DESIGN.md E4), labels, pawn bodies built from
-// hitbox capsules, and an F3 hitbox visualizer.
+// drawn instanced per material and storey (tools/mapgen/DESIGN.md E4), labels and a map's room callouts by
+// storey (E9), pawn bodies built from hitbox capsules, and an F3 hitbox visualizer.
 import * as THREE from "three";
 import { eyePose, isDowned, PawnMode, poseHitboxes, type BuiltLevel, type GameData, type Hitbox, type PanelSpec, type PawnState, type Renderable } from "@redmond/shared";
 import { buildGun, gunKey, type GunLook, type GunModel } from "./gunKit.js";
@@ -65,6 +65,15 @@ export function warmShaders(renderer: THREE.WebGLRenderer, scene: THREE.Scene, c
   if (shadowsAsked) renderer.shadowMap.needsUpdate = true;
 }
 
+/**
+ * The light every level is lit by, and a map's storeys above ground keep: the hemisphere light's sky and ground
+ * colours and intensity, and the sun's intensity (StoreyView dims a storey below ground).
+ */
+export const DAYLIGHT = { sky: 0xdfe9f5, ground: 0x3a3f36, hemi: 1.1, sun: 2.2 } as const;
+
+/** A room's callout floats this far over its anchor (a spot on the floor), about eye height. */
+export const CALLOUT_UP_M = 1.6;
+
 /** A level's scene, and the parts of it the page works with. */
 export interface LabScene {
   scene: THREE.Scene;
@@ -74,8 +83,22 @@ export interface LabScene {
    * (renderer.shadowMap.needsUpdate).
    */
   storeys: THREE.Group[];
-  /** This scene's labels (updateLabels hides the ones next to the camera). */
+  /**
+   * The labels, a group per storey as the boxes are (`labels:<id>`: a label goes with the box or panel it
+   * names), and the rooms' callouts (`callouts:<id>`). A map shows only the storey you're on (StoreyView).
+   */
+  labelGroups: THREE.Group[];
+  calloutGroups: THREE.Group[];
+  /** This scene's labels, callouts included (updateLabels hides the ones next to the camera). */
   labels: THREE.Sprite[];
+  /** The rooms' callouts, in the level's order. */
+  callouts: THREE.Sprite[];
+  /** The static boxes' materials, by surface ("floor": the labs' textured floor). */
+  materials: ReadonlyMap<string, THREE.MeshStandardMaterial>;
+  hemi: THREE.HemisphereLight;
+  sun: THREE.DirectionalLight;
+  /** Where the level is: its bounds (a map), else the box around everything drawn. */
+  box: THREE.Box3;
   /** Boxes drawn instanced, and the meshes the static boxes take (a draw call each, per pass). */
   staticBoxes: number;
   staticMeshes: number;
@@ -96,13 +119,15 @@ export function createLabScene(level: BuiltLevel): LabScene {
   scene.background = new THREE.Color(0x9fb4c7);
   scene.fog = new THREE.Fog(0x9fb4c7, 60, 140);
 
-  scene.add(new THREE.HemisphereLight(0xdfe9f5, 0x3a3f36, 1.1));
-  const sun = new THREE.DirectionalLight(0xfff1dc, 2.2);
+  const hemi = new THREE.HemisphereLight(DAYLIGHT.sky, DAYLIGHT.ground, DAYLIGHT.hemi);
+  scene.add(hemi);
+  const sun = new THREE.DirectionalLight(0xfff1dc, DAYLIGHT.sun);
   sun.castShadow = true;
-  fitSun(sun, levelBox(level));
+  const box = levelBox(level);
+  fitSun(sun, box);
   scene.add(sun, sun.target);
 
-  const materials = new Map<string, THREE.Material>();
+  const materials = new Map<string, THREE.MeshStandardMaterial>();
   const material = (r: Renderable) => {
     const key = r.id === "floor" ? "floor" : r.surface;
     let mat = materials.get(key);
@@ -117,17 +142,22 @@ export function createLabScene(level: BuiltLevel): LabScene {
     return mat;
   };
 
-  const storeys = (level.def.storeys.length ? level.def.storeys : [{ id: "all" }]).map((s) => {
-    const g = new THREE.Group();
-    g.name = `storey:${s.id}`;
-    scene.add(g);
-    return g;
-  });
+  const ids = level.def.storeys.length ? level.def.storeys.map((s) => s.id) : ["all"];
+  const groups = (kind: string) =>
+    ids.map((id) => {
+      const g = new THREE.Group();
+      g.name = `${kind}:${id}`;
+      scene.add(g);
+      return g;
+    });
+  const storeys = groups("storey");
+  const labelGroups = groups("labels");
+  const calloutGroups = groups("callouts");
   const labels: THREE.Sprite[] = [];
   const label = (text: string, r: Renderable) => {
     const sprite = labelSprite(text, r.center[0], r.center[1] + r.size[1] / 2 + 0.4, r.center[2]);
     labels.push(sprite);
-    scene.add(sprite);
+    labelGroups[storeyOf(level.def.storeys, r.center[1] - r.size[1] / 2)].add(sprite);
   };
   /** The boxes each instanced mesh draws, by storey and material. */
   const batches = new Map<string, { storey: number; surface: string; material: THREE.Material; boxes: Renderable[] }>();
@@ -177,7 +207,18 @@ export function createLabScene(level: BuiltLevel): LabScene {
     staticBoxes += b.boxes.length;
     staticMeshes++;
   }
-  return { scene, storeys, labels, staticBoxes, staticMeshes };
+
+  // Each room's callout over its anchor, with the room's storey (tools/mapgen/DESIGN.md E9).
+  const callouts: THREE.Sprite[] = [];
+  for (const room of level.def.rooms) {
+    const [x, y, z] = room.anchor;
+    const sprite = labelSprite(room.callout, x, y + CALLOUT_UP_M, z, CALLOUT);
+    const on = level.def.storeys.findIndex((s) => s.id === room.storey);
+    calloutGroups[on >= 0 ? on : storeyOf(level.def.storeys, y)].add(sprite);
+    labels.push(sprite);
+    callouts.push(sprite);
+  }
+  return { scene, storeys, labelGroups, calloutGroups, labels, callouts, materials, hemi, sun, box, staticBoxes, staticMeshes };
 }
 
 /** A wall that takes reinforcement shows its sections: seams on its faces (PanelView) and a count in its label. */
@@ -338,27 +379,39 @@ function gridTexture(): THREE.CanvasTexture {
   return tex;
 }
 
-function labelSprite(text: string, x: number, y: number, z: number): THREE.Sprite {
+/** How a label looks: its height in the world (metres), its font, and its text and backing colours. */
+export interface LabelStyle {
+  heightM: number;
+  font: string;
+  color: string;
+  back: string;
+}
+
+/** The level's own labels (a soft wall's id and sections, a lab's signs) and players' name tags. */
+export const TAG: LabelStyle = { heightM: 0.34, font: "600 30px system-ui, sans-serif", color: "#f3f4f6", back: "rgba(10,12,16,0.72)" };
+/** A room's callout: bigger, and warm, so it stands apart from the level's own labels. */
+const CALLOUT: LabelStyle = { heightM: 0.46, font: "700 30px system-ui, sans-serif", color: "#ffd48a", back: "rgba(10,12,16,0.8)" };
+
+function labelSprite(text: string, x: number, y: number, z: number, style: LabelStyle = TAG): THREE.Sprite {
   const c = document.createElement("canvas");
   const g = c.getContext("2d")!;
-  const font = "600 30px system-ui, sans-serif";
-  g.font = font;
+  g.font = style.font;
   const w = Math.ceil(g.measureText(text).width) + 28;
   c.width = w;
   c.height = 48;
-  g.font = font;
-  g.fillStyle = "rgba(10,12,16,0.72)";
+  g.font = style.font;
+  g.fillStyle = style.back;
   g.beginPath();
   g.roundRect(0, 0, w, 48, 10);
   g.fill();
-  g.fillStyle = "#f3f4f6";
+  g.fillStyle = style.color;
   g.textBaseline = "middle";
   g.fillText(text, 14, 25);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false }));
   sprite.name = text;
-  sprite.scale.set((w / 48) * 0.34, 0.34, 1);
+  sprite.scale.set((w / 48) * style.heightM, style.heightM, 1);
   sprite.position.set(x, y, z);
   return sprite;
 }

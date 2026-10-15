@@ -1,7 +1,7 @@
 // Presentation pieces that run without a GPU (Phase 3 M9): placeholder guns for every weapon and attachment
 // in the data, the effects bus's pools, and that a correction's replay never repeats an effect. The level's
-// scene (Phase 5): static boxes instanced per material and storey, labels per scene, the sun fitted to the
-// level, and nothing that moves casting a shadow.
+// scene (Phase 5): static boxes instanced per material and storey, labels per scene and storey, the sun
+// fitted to the level, and nothing that moves casting a shadow.
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import {
@@ -258,13 +258,13 @@ async function storeyLevel(): Promise<BuiltLevel> {
     solids: [
       { id: "floor", center: [0, -0.1, 0], size: [40, 0.2, 40], surface: "HARD_FLOOR" },
       { id: "b_slab", center: [10, -3.3, 0], size: [8, 0.2, 8], surface: "HARD_FLOOR" },
-      { id: "b_wall", center: [10, -1.7, 4], size: [8, 3, 0.2], surface: "HARD_WALL" },
+      { id: "b_wall", center: [10, -1.7, 4], size: [8, 3, 0.2], surface: "HARD_WALL", label: "B wall" },
       { id: "deep", center: [0, -10, 0], size: [1, 1, 1], surface: "PROP" },
       { id: "f1_slab", center: [10, -0.1, 10], size: [6, 0.2, 6], surface: "HARD_FLOOR" },
       { id: "f1_wall", center: [10, 1.5, 14], size: [6, 3, 0.2], yawDeg: 30, surface: "HARD_WALL", label: "1F wall" },
       { id: "f2_slab", center: [10, 3.1, 10], size: [6, 0.2, 6], surface: "HARD_FLOOR" },
       { id: "f2_wall", center: [-10, 4.7, 0], size: [0.2, 3, 6], yawDeg: 90, surface: "HARD_WALL" },
-      { id: "f2_prop", center: [-10, 3.7, 3], size: [1, 1, 1], yawDeg: 45, surface: "PROP" },
+      { id: "f2_prop", center: [-10, 3.7, 3], size: [1, 1, 1], yawDeg: 45, surface: "PROP", label: "2F prop" },
       { id: "blocker", center: [0, 1, -15], size: [4, 2, 0.2], surface: "HARD_WALL", bodiesOnly: true },
       { id: "soft", center: [-5, 1.5, -10], size: [3, 3, 0.2], surface: "SOFT_WALL", label: "Soft" },
       { id: "reinf_3", center: [0, 1.5, -10], size: [4.5, 3, 0.2], surface: "REINFORCEABLE", panel: { sections: 3 } },
@@ -364,16 +364,29 @@ describe("level scene", () => {
     expect(floor[0].material.map).not.toBeNull();
   });
 
-  it("each scene owns its labels; a reinforceable wall's label says how many sections it has", async () => {
+  it("each scene owns its labels, each with its storey; a reinforceable wall's label says how many sections it has", async () => {
     const level = await storeyLevel();
     const a = createLabScene(level);
     const b = createLabScene(level);
     const names = (lab: LabScene) => lab.labels.map((l) => l.name).sort();
-    expect(names(a)).toEqual(["1F wall", "3 sections", "Kitchen · 1 section", "Soft"]);
+    expect(names(a)).toEqual(["1F wall", "2F prop", "3 sections", "B wall", "Kitchen · 1 section", "Soft"]);
     // Building a second scene took nothing from the first, and the two share no sprite.
     expect(names(b)).toEqual(names(a));
-    for (const lab of [a, b]) for (const l of lab.labels) expect(l.parent).toBe(lab.scene);
+    // A label goes in its storey's label group (a map shows only the storey you're on), as its box is binned.
+    expect(a.labelGroups.map((g) => g.name)).toEqual(["labels:B", "labels:1F", "labels:2F"]);
+    const storeyOfLabel: Record<string, string> = { "B wall": "B", "2F prop": "2F" };
+    for (const lab of [a, b])
+      for (const l of lab.labels) {
+        expect(l.parent!.name).toBe(`labels:${storeyOfLabel[l.name] ?? "1F"}`);
+        expect(l.parent!.parent).toBe(lab.scene);
+      }
     expect(a.labels.some((l) => b.labels.includes(l))).toBe(false);
+    // No rooms, no callouts; a lab without storeys keeps all its labels in one group.
+    expect(a.callouts).toEqual([]);
+    const lab = createLabScene((await Sim.create("destruction_lab")).level);
+    expect(lab.labelGroups.map((g) => g.name)).toEqual(["labels:all"]);
+    expect(lab.labels.length).toBeGreaterThan(5);
+    for (const l of lab.labels) expect(l.parent).toBe(lab.labelGroups[0]);
     // Hiding the labels next to the camera touches only the scene asked about.
     const soft = a.labels.find((l) => l.name === "Soft")!;
     const camera = new THREE.PerspectiveCamera();

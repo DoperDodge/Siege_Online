@@ -40,6 +40,8 @@ export class Controls {
    * wheel turn into a single swap press only when the slot would change (C16 in the Phase 3 plan).
    */
   weaponState: () => { slot: number; equipping: boolean; zoom?: number } | null = () => null;
+  /** When this returns true (a map's plan view zooms with it), the mouse wheel doesn't switch weapons. */
+  wheelTaken: () => boolean = () => false;
   /** Touch joystick, -1..1 each. */
   touchMove = { x: 0, y: 0 };
   private held = new Set<Action>();
@@ -139,7 +141,7 @@ export class Controls {
     canvas.addEventListener(
       "wheel",
       (e) => {
-        if (document.pointerLockElement !== canvas || this.isBlocked() || e.deltaY === 0) return;
+        if (document.pointerLockElement !== canvas || this.isBlocked() || this.wheelTaken() || e.deltaY === 0) return;
         this.press("swap");
         this.release("swap");
       },
