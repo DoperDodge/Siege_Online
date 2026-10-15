@@ -2,10 +2,13 @@
 // npm run mapgen:import [-- --force] seed walls_<floor>.json from extracted.json (once; --force overwrites)
 // npm run mapgen:refs                download the official blueprints and the r6calls map (gitignored)
 // npm run mapgen:compare             our plans over the blueprints and rasters, for checking by eye
+// npm run mapgen -- --where x,y,floor  a position in a floor's own u (or world u, or metres with ",m") in every
+//                                    frame, and the room there (DESIGN amendment 17)
 // Run from the repo root (npm does). Bundled by esbuild like netsim; no extra runner.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { compile, loadInputs } from "./compile.js";
+import { frames, type FrameId } from "./frames.js";
 import { readableJson } from "./format.js";
 import { importFloor, type Extracted } from "./import.js";
 import { writePlans } from "./plans.js";
@@ -74,7 +77,33 @@ function runCompile() {
   console.log(`wrote data/maps/oregon/level.json (${(text.length / 1024).toFixed(0)} KB)`);
 }
 
+/** `--where x,y,floor[,m]`: x, y in that floor's own u ("world" for world u), or metres (X, Z) with ",m". */
+function runWhere(spec: string) {
+  const [xs, ys, floorArg = "1F", unit = "u"] = spec.split(",").map((t) => t.trim());
+  const [x, y] = [Number(xs), Number(ys)];
+  if (!Number.isFinite(x) || !Number.isFinite(y)) throw new Error(`--where ${spec}: expected x,y,floor (e.g. 175.2,182,2F)`);
+  const inputs = loadInputs(ROOT);
+  const { layout } = inputs;
+  const fr = frames(layout);
+  const k = layout.units.mPerU;
+  const frame = floorArg as FrameId;
+  if (!(frame in layout.frames)) throw new Error(`--where ${spec}: floor must be one of ${Object.keys(layout.frames).join(", ")}`);
+  const [wx, wy] = unit === "m" ? [x / k, y / k] : fr.toWorld(frame, x, y);
+  const storey = layout.storeys.find((s) => s.id === frame);
+  const f1 = (v: number) => v.toFixed(2);
+  console.log(`world u ${f1(wx)}, ${f1(wy)}  =  X ${f1(wx * k)}, Z ${f1(wy * k)} m${storey ? `, floor Y ${storey.floorY} m` : ""}`);
+  for (const s of layout.storeys) {
+    const [nx, ny] = fr.toNative(s.id, wx, wy);
+    console.log(`  ${s.id} u ${f1(nx)}, ${f1(ny)}`);
+  }
+  const rooms = (compile(inputs).level.rooms ?? []) as { id: string; callout: string; storey: string; rects: number[][] }[];
+  const here = rooms.filter((r) => (!storey || r.storey === storey.id) && r.rects.some(([x0, z0, x1, z1]) => wx * k >= x0 && wx * k <= x1 && wy * k >= z0 && wy * k <= z1));
+  console.log(here.length ? here.map((r) => `in ${r.id} (${r.callout}, ${r.storey})`).join("\n") : `in no room${storey ? ` on ${storey.id}` : ""}`);
+}
+
 async function main() {
+  const where = args.indexOf("--where");
+  if (where >= 0) return runWhere(args[where + 1] ?? "");
   if (command === "import") runImport();
   else if (command === "compile") runCompile();
   else if (command === "refs") await downloadRefs(ROOT);
