@@ -555,6 +555,8 @@ export const levelSchema = z.strictObject({
       vaultable: z.boolean().default(false),
       /** An invisible blocker (Phase 5): it stops bodies, not bullets or sight; never a panel (a railing, the play-area edge). */
       bodiesOnly: z.boolean().default(false),
+      /** Drawn only, never collides (Phase 5): a railing's top bar over its bodies-only blocker; never a panel. */
+      drawOnly: z.boolean().default(false),
       label: z.string().optional(),
       /**
        * A destructible surface is a panel (Phase 4, data/destruction.json): its construction (the surface's
@@ -570,6 +572,11 @@ export const levelSchema = z.strictObject({
           reinforced: z.boolean().optional(),
           reinforcedFrom: z.enum(["minus", "plus"]).optional(),
           empty: z.boolean().optional(),
+          /**
+           * Panels that are one surface cut into tiles (a soft floor, Phase 5): a bullet that crosses a seam
+           * between two of them goes into one surface, not two (wallbang.maxSurfaces, damageMult).
+           */
+          region: z.string().optional(),
         })
         .optional(),
     }),
@@ -621,6 +628,16 @@ export const levelSchema = z.strictObject({
   // ---- Map metadata (Phase 5, DECISIONS D-076): compiled maps fill these; labs leave them out. ----
   /** The play area's box; a body whose feet fall below killY is out of the level (Sim: back to spawn 0 in a lab). */
   bounds: z.strictObject({ min: vec3, max: vec3, killY: z.number() }).optional(),
+  /**
+   * How the map's plans relate to metres (Phase 5 tools and the HUD): metres = mPerU × world u, and each
+   * storey's own drawing maps to world u by world = a · native + b per axis (tools/mapgen/DESIGN.md §3.2).
+   */
+  plan: z
+    .strictObject({
+      mPerU: z.number().positive(),
+      frames: z.record(z.string(), z.strictObject({ ax: z.number(), bx: z.number(), ay: z.number(), by: z.number() })),
+    })
+    .optional(),
   /** Storeys by height (B, 1F, 2F, 3F): walking level and the underside of what covers it. */
   storeys: z.array(z.strictObject({ id: z.string(), floorY: z.number(), ceilingY: z.number() })).default([]),
   /** Rooms with their callouts: floor rectangles [x0, z0, x1, z1] in metres, and a free spot to go to. */

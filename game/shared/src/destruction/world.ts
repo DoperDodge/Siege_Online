@@ -66,6 +66,7 @@ export function panelSpec(d: DestructionData, s: LevelSolid, index: number, cons
     reinforcedHatchHp: d.reinforcement.reinforcedHatchHp,
     canReReinforce: d.reinforcement.canReReinforce,
     passableBelowHp: d.barricade.passableBelowHp,
+    ...(s.panel?.region !== undefined ? { region: s.panel.region } : {}),
   };
   return { spec, frame };
 }

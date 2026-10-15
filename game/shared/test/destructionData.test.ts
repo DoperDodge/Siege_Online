@@ -50,8 +50,8 @@ describe("destruction data", () => {
     delete noSmg.bullets.classTiers.smg;
     expect(problemsWith(noSmg)).toMatch(/no tier for "smg"/);
     const lvl = clone(data.levels.get("movement_lab")!) as LevelDef;
-    lvl.solids.push({ id: "thin", center: [0, 1, 0], size: [2, 2, 0.03], yawDeg: 0, surface: "SOFT_WALL", vaultable: false, bodiesOnly: false });
-    lvl.solids.push({ id: "hardpanel", center: [0, 1, 3], size: [2, 2, 0.2], yawDeg: 0, surface: "HARD_WALL", vaultable: false, bodiesOnly: false, panel: { sections: 2 } });
+    lvl.solids.push({ id: "thin", center: [0, 1, 0], size: [2, 2, 0.03], yawDeg: 0, surface: "SOFT_WALL", vaultable: false, bodiesOnly: false, drawOnly: false });
+    lvl.solids.push({ id: "hardpanel", center: [0, 1, 3], size: [2, 2, 0.2], yawDeg: 0, surface: "HARD_WALL", vaultable: false, bodiesOnly: false, drawOnly: false, panel: { sections: 2 } });
     const problems = problemsWith(data.destruction, new Map([[lvl.id, lvl]]));
     expect(problems).toMatch(/solid "thin" is 0\.03 m thick/);
     expect(problems).toMatch(/solid "hardpanel" has panel options but a HARD_WALL isn't destructible/);

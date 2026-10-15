@@ -181,6 +181,27 @@ describe("breakable panels and floors", () => {
     expect(through(tier("explosive"), [48.5 + 0.425, 3, -5], DOWN, 5).stop).toBeCloseTo(1.95 + 0.02, 9);
     expect(through(tier("low"), [48.5 + 0.2, 3, -5], DOWN, 5).stop).toBeNull();
   });
+
+  it("a bullet across the seam between two tiles of one soft floor goes into one surface (DESIGN amendment 14)", async () => {
+    // Two 1.6 m tiles meeting at x 60.8, slab-thick; a shot at 45° down and east comes in through the left
+    // tile's top skin, crosses the seam in the core (clear of joists: 60.40–60.45 left, 61.20–61.25 right)
+    // and leaves through the right tile's bottom skin.
+    const passage = async (region: string | undefined) => {
+      const tile = (id: string, x: number) => ({ id, center: [x, 1, -5], size: [1.6, 0.2, 3], surface: "SOFT_FLOOR", ...(region ? { panel: { region } } : {}) });
+      const def = levelSchema.parse({
+        id: "tiles",
+        name: "Tiles",
+        spawns: [{ id: "s", pos: [0, 0, 5], yawDeg: 0 }],
+        solids: [{ id: "floor", center: [0, -0.25, 0], size: [200, 0.5, 200], surface: "HARD_FLOOR" }, tile("a", 60), tile("b", 61.6)],
+      });
+      const sim = await Sim.create("tiles", { ...data, levels: new Map(data.levels).set("tiles", def) });
+      const p = bulletThroughPanels(sim.level.panels, d, tier("medium"), [60.55, 1.2, -5], [Math.SQRT1_2, -Math.SQRT1_2, 0], 5);
+      const panelsCut = new Set(p.ops.map((o) => o.panel));
+      return { enters: p.enters.length, stop: p.stop, panelsCut: panelsCut.size };
+    };
+    expect(await passage("SF-X")).toEqual({ enters: 1, stop: null, panelsCut: 2 });
+    expect(await passage(undefined)).toEqual({ enters: 2, stop: null, panelsCut: 2 }); // without a region: two surfaces
+  });
 });
 
 describe("judged as the shooter had the panels", () => {

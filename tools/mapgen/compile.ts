@@ -137,6 +137,13 @@ export function compile(inputs: Inputs): Compiled {
     spawns,
     solids: [ground, ...solids, ...boundary].map(out),
     bounds: { min: v3([px0, lowest - d.killDepthM, py0]), max: v3([px1, highest + 10, py1]), killY: r4(lowest - d.killDepthM) },
+    plan: {
+      mPerU: k,
+      frames: Object.fromEntries(layout.storeys.map((s) => {
+        const a = fr.affine(s.id);
+        return [s.id, { ax: a.ax, bx: a.bx, ay: a.ay, by: a.by }];
+      })),
+    },
     storeys,
     zones: zones.map((z) => ({ id: z.id, kind: z.kind, boxes: z.boxes.map((b) => ({ center: v3(b.center), size: v3(b.size) })) })),
   };

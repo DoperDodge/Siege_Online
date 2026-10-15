@@ -1,7 +1,8 @@
 // What a bullet or the knife does to the panels in its way (Phase 4 M4; research/destruction.md §3–§4,
 // data/destruction.json). A bullet passes the material it can break, making a hole in each layer, and stops
 // at what it can't: steel, metal supports, and wooden studs its tier doesn't cut (wallbang.uncutStudsStop).
-// It goes into at most wallbang.maxSurfaces panels; the next one stops it. Hatches, barricades and glass
+// It goes into at most wallbang.maxSurfaces surfaces; the next one stops it (the tiles of one soft floor are
+// one surface: a bullet crossing a seam between two goes on into the same one). Hatches, barricades and glass
 // also wear down. Nothing is applied here: the ops come back, each with where along the ray it happens, for
 // the room to apply at the end of the tick (and to drop if a body stopped the bullet first).
 import type { Vec3 } from "../core/math.js";
@@ -84,17 +85,24 @@ function wear(e: PanelEntry, rule: PanelHitRule): number {
 export function bulletThroughPanels(panels: PanelSet, d: DestructionData, rule: PanelHitRule, origin: Vec3, dir: Vec3, maxT: number, view?: PanelView): PanelPassage {
   const out: PanelPassage = { stop: null, enters: [], ops: [] };
   const met = new MaterialMet();
-  // Panels it went into (two whose boxes overlap, at a corner, have their crossings interleaved).
+  // Panels it went into (two whose boxes overlap, at a corner, have their crossings interleaved), and the
+  // regions they belong to: a tile of a region it is already in is the same surface.
   const entered = new Set<number>();
+  const regions = new Set<string>();
   let last = false;
   for (const { entry, crossing: c } of panels.crossings(origin, dir, maxT)) {
     const index = entry.panel.spec.index;
     if (!met.meets(index, c, solidAs(entry, c, view))) continue;
     if (!entered.has(index)) {
       entered.add(index);
-      // One wall too many: this one stops it, where it hits.
-      if (out.enters.length >= d.wallbang.maxSurfaces) last = true;
-      else out.enters.push(c.face);
+      const region = entry.panel.spec.region;
+      const sameSurface = region !== undefined && regions.has(region); // across a seam, still in the surface it went into
+      if (region !== undefined) regions.add(region);
+      if (!sameSurface) {
+        // One wall too many: this one stops it, where it hits.
+        if (out.enters.length >= d.wallbang.maxSurfaces) last = true;
+        else out.enters.push(c.face);
+      }
       const w = wear(entry, rule);
       if (w > 0) out.ops.push({ t: c.face, panel: index, op: { kind: "damage", amount: w, hard: false } });
     }

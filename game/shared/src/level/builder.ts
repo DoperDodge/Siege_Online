@@ -75,9 +75,9 @@ export function buildLevel(R: Rapier, world: World, def: LevelDef, destruction?:
   for (const s of def.solids) {
     const quat = quatYawPitch(s.yawDeg * DEG, 0);
     const info: SolidInfo = { id: s.id, surface: s.surface, vaultable: s.vaultable };
-    if (s.bodiesOnly) {
-      // Stops bodies only: never a panel (data/load.ts refuses one with a destructible surface).
-      addBox(info, "solid", s.center, s.size, quat, { collides: true, visible: false, label: s.label });
+    if (s.bodiesOnly || s.drawOnly) {
+      // Stops bodies only, or nothing: never a panel (data/load.ts refuses one with a destructible surface).
+      addBox(info, "solid", s.center, s.size, quat, { collides: s.bodiesOnly, visible: s.drawOnly, label: s.label });
       continue;
     }
     const construction = destruction ? constructionOf(destruction, s) : null;

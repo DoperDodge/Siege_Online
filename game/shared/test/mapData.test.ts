@@ -18,8 +18,11 @@ function testMap(): LevelDef {
     solids: [
       { id: "floor", center: [0, -0.25, 0], size: [20, 0.5, 20], surface: "HARD_FLOOR" },
       { id: "fence", center: [0, 1, -5], size: [10, 2, 0.2], surface: "HARD_WALL", bodiesOnly: true },
+      { id: "deck#r0c0", center: [-2, 3.1, 8], size: [2, 0.2, 2], surface: "SOFT_FLOOR", panel: { region: "deck" } },
+      { id: "deck#r0c1", center: [0, 3.1, 8], size: [2, 0.2, 2], surface: "SOFT_FLOOR", panel: { region: "deck" } },
     ],
     bounds: { min: [-10, -6, -10], max: [10, 6, 10], killY: -5 },
+    plan: { mPerU: 0.15, frames: { "1F": { ax: 1, bx: 0, ay: 1, by: 0 } } },
     storeys: [{ id: "1F", floorY: 0, ceilingY: 3 }],
     rooms: [{ id: "1F_YARD", callout: "Yard", storey: "1F", rects: [[-10, -10, 10, 10]], anchor: [0, 0, 0] }],
     sites: [{ id: "S1", name: "Yard", rooms: ["1F_YARD"], bombs: [{ id: "S1A", pos: [1, 0, 1], room: "1F_YARD" }], plantMarginM: 0.5 }],
@@ -57,8 +60,12 @@ describe("map metadata", () => {
     lvl.sites[0].bombs[0].room = "1F_ELSEWHERE";
     lvl.cameras[0].room = "1F_GONE";
     lvl.solids.push({ ...lvl.solids[0] });
-    lvl.solids.push({ id: "soft_fence", center: [0, 1, 5], size: [4, 2, 0.2], yawDeg: 0, surface: "SOFT_WALL", vaultable: false, bodiesOnly: true });
+    lvl.solids.push({ id: "soft_fence", center: [0, 1, 5], size: [4, 2, 0.2], yawDeg: 0, surface: "SOFT_WALL", vaultable: false, bodiesOnly: true, drawOnly: false });
+    lvl.solids.push({ id: "soft_bar", center: [0, 1, 6], size: [4, 0.05, 0.05], yawDeg: 0, surface: "SOFT_WALL", vaultable: false, bodiesOnly: false, drawOnly: true });
+    lvl.solids.push({ id: "both", center: [0, 1, 7], size: [4, 0.05, 0.05], yawDeg: 0, surface: "HARD_WALL", vaultable: false, bodiesOnly: true, drawOnly: true });
     lvl.bounds!.killY = 0;
+    lvl.plan!.frames = { "2F": { ax: 1, bx: 0, ay: 1, by: 0 } };
+    lvl.solids.find((s) => s.id === "deck#r0c1")!.center[1] = 3.2;
     const problems = crossFileProblems(withLevel(lvl)).join("\n");
     expect(problems).toMatch(/data\/maps\/map_test\/layout\.json: room "1F_YARD" is on storey "2F"/);
     expect(problems).toMatch(/site "S1" names room "1F_NOWHERE"/);
@@ -66,7 +73,19 @@ describe("map metadata", () => {
     expect(problems).toMatch(/camera "CAM1" names room "1F_GONE"/);
     expect(problems).toMatch(/two solids share the id "floor"/);
     expect(problems).toMatch(/solid "soft_fence" stops bodies only/);
+    expect(problems).toMatch(/solid "soft_bar" is drawn only/);
+    expect(problems).toMatch(/solid "both" can't both stop bodies only and be drawn only/);
     expect(problems).toMatch(/bounds\.killY 0 isn't below the lowest solid or spawn \(-0\.5\)/);
+    expect(problems).toMatch(/plan\.frames has no frame for storey "1F"/);
+    expect(problems).toMatch(/solid "deck#r0c1" is in region "deck" but isn't the same surface at the same height as "deck#r0c0"/);
+  });
+
+  it("a drawn-only bar is drawn and stops nothing", async () => {
+    const lvl = clone(testMap());
+    lvl.solids.push({ id: "bar", center: [0, 1, -3], size: [10, 0.05, 0.05], yawDeg: 0, surface: "HARD_WALL", vaultable: false, bodiesOnly: false, drawOnly: true });
+    const sim = await Sim.create("map_test", withLevel(lvl));
+    expect(sim.level.renderables.find((r) => r.id === "bar")!.visible).toBe(true);
+    expect(raycastLevel(sim, [0, 1, 0], [0, 0, -1], 4)).toBeNull(); // through the bar, short of the fence
   });
 
   it("a bodies-only wall stops a body but not a bullet, and isn't drawn", async () => {

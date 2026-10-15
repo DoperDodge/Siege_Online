@@ -1,7 +1,7 @@
 """Read what the r6calls Oregon SVG gives us per floor, in u (layout_notes §1):
   - the embedded floor rasters N-pic (written to PNG files on request),
   - vector rects of the overlay layers: bw (soft walls + separators), dt (drone holes), fh/ch (floor/ceiling hatches),
-    losf (line-of-sight floors), fe (extinguishers), gp (gas pipe).
+    losf (line-of-sight floors, with their outlines: pts), fe (extinguishers), gp (gas pipe).
 
 Coordinates: inside every 'Floor N' group, u = (x - 236.996, y - 64.0). The floor images sit at x 236.996 and
 y 63.973 (floors 0 and 2: 63.974) or 64 (floors 1, 3, 4), 361.244 u square, 1024 px -> 0.352777 u per px.
@@ -60,18 +60,63 @@ def path_bbox(d):
     return min(xs), min(ys), max(xs), max(ys)
 
 
-def apply_transform(tr, bb):
-    """bbox through an element transform: matrix(a b c d e f), translate(x [y]) or scale(s [t]); None if other."""
+def path_points(d):
+    """The vertices of a path made of M/L/H/V/Z (abs or rel) commands, one list per subpath; curves are taken
+    by their end points (the soft-floor outlines are straight-edged apart from one near-straight curve)."""
+    toks = re.findall(r'[MmLlHhVvCcSsQqTtAaZz]|' + NUM, d)
+    x = y = 0.0
+    sx = sy = 0.0
+    subs = []
+    cmd = None
+    i = 0
+    nargs = dict(M=2, L=2, H=1, V=1, C=6, S=4, Q=4, T=2, A=7, Z=0)
+    while i < len(toks):
+        t = toks[i]
+        if re.match(r'[A-Za-z]', t):
+            cmd = t
+            i += 1
+            if cmd in 'Zz':
+                x, y = sx, sy
+            continue
+        n = nargs[cmd.upper()]
+        args = [float(v) for v in toks[i:i + n]]
+        i += n
+        rel = cmd.islower()
+        c = cmd.upper()
+        if c == 'H':
+            x = x + args[0] if rel else args[0]
+        elif c == 'V':
+            y = y + args[0] if rel else args[0]
+        else:
+            nx, ny = args[-2], args[-1]
+            x, y = (x + nx, y + ny) if rel else (nx, ny)
+        if c == 'M':
+            sx, sy = x, y
+            subs.append([])
+            cmd = 'l' if rel else 'L'  # implicit lineto after moveto
+        subs[-1].append((x, y))
+    return subs
+
+
+def transform_matrix(tr):
+    """An element transform as (a, b, c, d, e, f): matrix(...), translate(x [y]) or scale(s [t]); None if other."""
     m = re.match(r'\s*(matrix|translate|scale)\(([^)]*)\)\s*$', tr)
     if not m:
         return None
     v = [float(q) for q in re.findall(NUM, m.group(2))]
     if m.group(1) == 'matrix':
-        a, b, c, d, e, f = v
-    elif m.group(1) == 'translate':
-        a, b, c, d, e, f = 1, 0, 0, 1, v[0], v[1] if len(v) > 1 else 0.0
-    else:
-        a, b, c, d, e, f = v[0], 0, 0, v[1] if len(v) > 1 else v[0], 0, 0
+        return tuple(v)
+    if m.group(1) == 'translate':
+        return 1, 0, 0, 1, v[0], v[1] if len(v) > 1 else 0.0
+    return v[0], 0, 0, v[1] if len(v) > 1 else v[0], 0, 0
+
+
+def apply_transform(tr, bb):
+    """bbox through an element transform (transform_matrix); None if the transform is of another kind."""
+    mt = transform_matrix(tr)
+    if mt is None:
+        return None
+    a, b, c, d, e, f = mt
     pts = [(x, y) for x in (bb[0], bb[2]) for y in (bb[1], bb[3])]
     xs = [a * x + c * y + e for x, y in pts]
     ys = [b * x + d * y + f for x, y in pts]
@@ -118,10 +163,15 @@ def read(svg_path, img_dir=None):
             if bb:
                 key = layer.split('-', 1)[1] if '-' in layer else layer
                 sub = stack[2] if len(stack) > 2 else None
-                F['layers'].setdefault(key, []).append(dict(
-                    id=el.attrib.get('id'), sub=sub,
-                    fill=el.attrib.get('fill'),
-                    x0=round(bb[0] - OX, 3), y0=round(bb[1] - OY, 3), x1=round(bb[2] - OX, 3), y1=round(bb[3] - OY, 3)))
+                item = dict(id=el.attrib.get('id'), sub=sub, fill=el.attrib.get('fill'),
+                            x0=round(bb[0] - OX, 3), y0=round(bb[1] - OY, 3), x1=round(bb[2] - OX, 3), y1=round(bb[3] - OY, 3))
+                if key == 'losf' and t == 'path':
+                    # Soft floors aren't all rectangles (one is an L of three rooms, two have holes): keep the
+                    # outline, one vertex list per subpath, in u.
+                    a, b, c, d, e, f = transform_matrix(tr) if tr else (1, 0, 0, 1, 0, 0)
+                    item['pts'] = [[[round(a * x + c * y + e - OX, 3), round(b * x + d * y + f - OY, 3)] for x, y in sp]
+                                   for sp in path_points(el.attrib.get('d', ''))]
+                F['layers'].setdefault(key, []).append(item)
         el.clear()
     return floors
 

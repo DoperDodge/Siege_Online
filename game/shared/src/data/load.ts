@@ -210,6 +210,18 @@ function mapProblems(lvl: LevelDef, file: string): string[] {
   }
   for (const c of lvl.cameras) if (c.room !== undefined && !rooms.has(c.room)) out.push(`${file}: camera "${c.id}" names room "${c.room}", which isn't in rooms`);
   for (const i of lvl.ingredients) if (i.room !== undefined && !rooms.has(i.room)) out.push(`${file}: ingredient "${i.id}" names room "${i.room}", which isn't in rooms`);
+  if (lvl.plan) for (const s of lvl.storeys) if (!lvl.plan.frames[s.id]) out.push(`${file}: plan.frames has no frame for storey "${s.id}"`);
+  // The tiles of one region are one surface: the same kind, at the same height and thickness.
+  const regions = new Map<string, LevelDef["solids"][number]>();
+  for (const s of lvl.solids) {
+    const region = s.panel?.region;
+    if (region === undefined) continue;
+    const first = regions.get(region);
+    if (!first) regions.set(region, s);
+    else if (first.surface !== s.surface || first.center[1] !== s.center[1] || first.size[1] !== s.size[1]) {
+      out.push(`${file}: solid "${s.id}" is in region "${region}" but isn't the same surface at the same height as "${first.id}"`);
+    }
+  }
   if (lvl.bounds) {
     const bottom = Math.min(...lvl.solids.map((s) => s.center[1] - s.size[1] / 2), ...lvl.spawns.map((s) => s.pos[1]));
     if (lvl.bounds.killY >= bottom) out.push(`${file}: bounds.killY ${lvl.bounds.killY} isn't below the lowest solid or spawn (${bottom})`);
@@ -256,8 +268,9 @@ function destructionProblems(d: DestructionData, weapons: Map<string, WeaponData
     for (const s of lvl.solids) {
       const at = `${levelFile(lvl.id)}: solid "${s.id}"`;
       const id = s.panel?.construction ?? d.surfaces[s.surface];
-      if (s.bodiesOnly) {
-        if (id || s.panel) out.push(`${at} stops bodies only, so it can't be a destructible ${s.surface} or have panel options`);
+      if (s.bodiesOnly && s.drawOnly) out.push(`${at} can't both stop bodies only and be drawn only`);
+      if (s.bodiesOnly || s.drawOnly) {
+        if (id || s.panel) out.push(`${at} ${s.bodiesOnly ? "stops bodies only" : "is drawn only"}, so it can't be a destructible ${s.surface} or have panel options`);
         continue;
       }
       if (!id) {
