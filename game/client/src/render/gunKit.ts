@@ -1,6 +1,7 @@
 // Placeholder guns built from boxes and cylinders (Phase 3 M9): one look per weapon class, with the sight,
 // barrel attachment, grip and laser the loadout carries (data/presentation/gun_kit.json). The same model
-// serves the first-person viewmodel and the gun other players hold.
+// serves the first-person viewmodel and the gun other players hold. It casts no shadow: guns move, and the
+// shadow map is only redrawn when the level changes (labScene.ts, createRenderer).
 import * as THREE from "three";
 import { loadPresentationData, type GunKit } from "@redmond/shared";
 
@@ -46,7 +47,6 @@ export function buildGun(look: GunLook, kit: GunKit = loadPresentationData().gun
     geoms.push(g);
     const mesh = new THREE.Mesh(g, m);
     mesh.position.set(x, y, z);
-    mesh.castShadow = true;
     group.add(mesh);
     return mesh;
   };
@@ -57,7 +57,6 @@ export function buildGun(look: GunLook, kit: GunKit = loadPresentationData().gun
     const mesh = new THREE.Mesh(g, m);
     mesh.quaternion.setFromUnitVectors(UP, FORWARD);
     mesh.position.set(x, y, z);
-    mesh.castShadow = true;
     group.add(mesh);
     return mesh;
   };

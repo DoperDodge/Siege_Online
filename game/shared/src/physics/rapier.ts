@@ -48,10 +48,28 @@ export const QUERY_PLAYERS = groups(G_PLAYER, G_PLAYER);
 
 /**
  * Rebuild the broad phase so queries see colliders moved, resized, added or removed since the last call.
- * Rapier answers every query through a bounding-box tree that only world.step() updates; the world has
+ * Rapier answers every query through a bounding-box tree that only a physics step updates; the world has
  * no rigid bodies, so this does nothing else (Phase 2 investigation, D-029; the timestep is DT, not 0,
  * see Sim.create and D-037).
+ *
+ * It runs the physics pipeline directly instead of world.step(): the wrapper's step also walks every body
+ * and collider handle across the WASM boundary to map ones made on the WASM side (177 µs at 1,500 colliders,
+ * against 7–20 µs for the pipeline). We make and remove every collider through the wrapper, which keeps its
+ * own maps, so nothing needs that walk (DECISIONS D-073). This uses Rapier 0.21's World fields and
+ * PhysicsPipeline.step arguments: re-check them on any Rapier upgrade (physics.test.ts compares the two).
  */
 export function refreshBroadPhase(world: World): void {
-  world.step();
+  world.physicsPipeline.step(
+    world.gravity,
+    world.integrationParameters,
+    world.islands,
+    world.broadPhase,
+    world.narrowPhase,
+    world.bodies,
+    world.colliders,
+    world.softBodies,
+    world.impulseJoints,
+    world.multibodyJoints,
+    world.ccdSolver,
+  );
 }

@@ -1,0 +1,89 @@
+{
+ "_doc": "Oregon B wall lines, in the B image's own frame (u; layout.json frames map it to the world). Seeded from extracted.json by `npm run mapgen:import`, then curated by hand: every hand edit sets src \"hand\" (or \"ulo\") and a note. A line is HARD wherever no span covers it. tools/mapgen/DESIGN.md §4.",
+ "floor": "B",
+ "frame": "B",
+ "walls": [
+  {"id": "B.w017", "axis": "H", "at": 50.42, "span": [231.07, 266.35], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w017"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "B.w029", "axis": "H", "at": 80.41, "span": [254.35, 266.35], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w029"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "B.w011", "axis": "H", "at": 89.23, "span": [254.35, 326.32], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w011"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "B.w010", "axis": "H", "at": 90.29, "span": [209.9, 235.3], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w010"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "B.w021", "axis": "H", "at": 112.33, "span": [322.09, 353.84], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w021"], "src": "raster", "conf": "low", "_unverified": []},
+  {"id": "B.w020", "axis": "H", "at": 114.45, "span": [255.41, 285.4], "weight": "int", "kind": "wall", "from": ["0-w020a", "0-w020b", "0-w020c"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
+   {"kind": "SOFT", "id": "SW-B-04", "at": [257.94, 282.8], "sections": 2, "research": "surfaces §2: B_ELECTRIC | B_BOILER", "from": ["0-w020b"], "_unverified": ["sections"]}
+  ]},
+  {"id": "B.w000", "axis": "H", "at": 135.62, "span": [209.9, 285.4], "weight": "int", "kind": "wall", "from": ["0-w000", "0-w001a", "0-w001b", "0-w001c", "0-w002"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
+   {"kind": "DOOR", "id": "B.o000", "at": [215.19, 225.78], "research": "layout_notes §6: B_BOILER | B_CORRIDOR (DOOR)", "from": ["0-o000"], "_unverified": []},
+   {"kind": "SOFT", "id": "SW-B-07", "at": [237.44, 250.96], "sections": 1, "research": "surfaces §2: B_SUPPLY | B_BOILER", "from": ["0-w001b"], "_unverified": ["sections"]},
+   {"kind": "DOOR", "id": "B.o001", "at": [263.52, 272.34], "research": "layout_notes §6: B_ELECTRIC | B_SUPPLY (DOOR)", "from": ["0-o001"], "_unverified": []}
+  ]},
+  {"id": "B.w003", "axis": "H", "at": 138.62, "span": [315.74, 325.61], "weight": 1.25, "kind": "wall", "spans": [], "from": ["0-w003"], "src": "raster", "conf": "medium", "_unverified": []},
+  {"id": "B.w013", "axis": "H", "at": 140.73, "span": [323.14, 361.24], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w013"], "src": "raster", "conf": "low", "_unverified": []},
+  {"id": "B.w023", "axis": "H", "at": 156.26, "span": [190.15, 214.14], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w023"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "B.w022", "axis": "H", "at": 179.71, "span": [234.95, 264.23], "weight": "int", "kind": "wall", "spans": [], "from": ["0-w022"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "B.w019", "axis": "H", "at": 184.13, "span": [282.93, 319.97], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w019"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "B.w004", "axis": "H", "at": 198.94, "span": [136.17, 194.38], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w004"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "B.w007", "axis": "H", "at": 198.94, "span": [282.93, 292.81], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w007"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "B.w005", "axis": "H", "at": 199.83, "span": [211.67, 287.16], "weight": "int", "kind": "wall", "from": ["0-w005", "0-w006a", "0-w006b", "0-w006c", "0-w006d", "0-w006e"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
+   {"kind": "DOOR", "id": "B.o002", "at": [215.19, 227.19], "research": "layout_notes §6: B_CORRIDOR | B_LAUNDRY (DOOR)", "from": ["0-o002"], "_unverified": []},
+   {"kind": "SOFT", "id": "SW-B-05", "at": [237.57, 261.7], "sections": 2, "research": "surfaces §2: B_SUPPLY_CLOSET | B_LAUNDRY", "from": ["0-w006b"], "_unverified": ["sections"]},
+   {"kind": "SOFT", "id": "SW-B-06", "at": [268.89, 282.9], "sections": 1, "research": "surfaces §2: B_SUPPLY (SE strip) | B_LAUNDRY", "from": ["0-w006d"], "_unverified": ["sections"]}
+  ]},
+  {"id": "B.w027", "axis": "H", "at": 225.58, "span": [262.82, 287.16], "weight": "int", "kind": "wall", "spans": [], "from": ["0-w027"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "B.w028", "axis": "H", "at": 226.46, "span": [282.93, 292.81], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w028"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "B.w009", "axis": "H", "at": 231.4, "span": [162.28, 214.14], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w009"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "B.w015", "axis": "H", "at": 236.51, "span": [237.07, 270.23], "weight": "int", "kind": "wall", "from": ["0-w015", "0-w016"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
+   {"kind": "DOOR", "id": "B.o003", "at": [242.71, 259.29], "research": "layout_notes §6: B_LAUNDRY | B_LAUNDRY_STORAGE (DOOR)", "from": ["0-o003"], "_unverified": []}
+  ]},
+  {"id": "B.w014", "axis": "H", "at": 237.4, "span": [209.9, 241.3], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w014"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "B.w025", "axis": "H", "at": 246.04, "span": [162.28, 179.21], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w025"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "B.w024", "axis": "H", "at": 247.1, "span": [153.11, 166.51], "weight": "int", "kind": "wall", "spans": [], "from": ["0-w024"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "B.w012", "axis": "H", "at": 265.62, "span": [136.17, 179.21], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w012"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "B.w018", "axis": "H", "at": 277.61, "span": [237.07, 287.16], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w018"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "B.w040", "axis": "V", "at": 138.29, "span": [196.82, 267.73], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w040"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "B.w061", "axis": "V", "at": 164.4, "span": [229.28, 248.33], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w061"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "B.w060", "axis": "V", "at": 177.1, "span": [243.74, 267.73], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w060"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "B.w046", "axis": "V", "at": 192.27, "span": [154.14, 201.06], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w046"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "B.w035", "axis": "V", "at": 212.02, "span": [88.17, 158.37], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w035"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "B.w038", "axis": "V", "at": 212.02, "span": [229.28, 239.51], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w038"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "B.w036", "axis": "V", "at": 212.9, "span": [154.14, 233.51], "weight": "int", "kind": "wall", "from": ["0-w036", "0-w037a", "0-w037b", "0-w037c"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
+   {"kind": "DOOR", "id": "B.o005", "at": [159.78, 166.84], "research": "layout_notes §6: B_CORRIDOR | B_FREEZER_HALL (DOOR)", "from": ["0-o005"], "_unverified": []},
+   {"kind": "DRONE_HOLE", "id": "B.dt2", "at": [188.74, 191.41], "from": ["0-dt-rect2903"], "note": "slot centred on the r6calls drone-tunnel icon", "_unverified": ["at"]},
+   {"kind": "SOFT", "id": "SW-B-01", "at": [201.15, 228.11], "sections": 2, "research": "surfaces §2: B_LAUNDRY | B_FREEZER", "from": ["0-w037b"], "_unverified": ["sections"]}
+  ]},
+  {"id": "B.w045", "axis": "V", "at": 230.71, "span": [108.98, 120.62], "weight": 1.25, "kind": "wall", "spans": [], "from": ["0-w045"], "src": "raster", "conf": "low", "_unverified": []},
+  {"id": "B.w044", "axis": "V", "at": 233.19, "span": [48.3, 92.4], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w044"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "B.w041", "axis": "V", "at": 236.19, "span": [134.38, 201.06], "weight": "int", "kind": "wall", "from": ["0-w041", "0-w042"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
+   {"kind": "DOOR", "id": "B.o006", "at": [156.25, 170.01], "research": "layout_notes §6: B_SUPPLY | B_CORRIDOR (DOOR)", "from": ["0-o006"], "_unverified": []},
+   {"kind": "DRONE_HOLE", "id": "B.dt3", "at": [184.01, 186.68], "from": ["0-dt-rect2905"], "note": "slot centred on the r6calls drone-tunnel icon", "_unverified": ["at"]}
+  ]},
+  {"id": "B.w049", "axis": "V", "at": 239.19, "span": [235.28, 279.73], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w049"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "B.w057", "axis": "V", "at": 256.47, "span": [78.29, 91.34], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w057"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "B.w058", "axis": "V", "at": 256.64, "span": [113.21, 136.85], "weight": "int", "kind": "wall", "from": ["0-w058", "0-w059"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
+   {"kind": "DOOR", "id": "B.o010", "at": [120.98, 127.68], "research": "layout_notes §6: B_BOILER | B_ELECTRIC (DOOR)", "from": ["0-o010"], "_unverified": []}
+  ]},
+  {"id": "B.w051", "axis": "V", "at": 263, "span": [178.48, 205.99], "weight": "int", "kind": "wall", "from": ["0-w051", "0-w052"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
+   {"kind": "DOOR", "id": "B.o008", "at": [185.53, 193.65], "research": "layout_notes §6: B_SUPPLY | B_SUPPLY_CLOSET (DOOR)", "from": ["0-o008"], "_unverified": []}
+  ]},
+  {"id": "B.w053", "axis": "V", "at": 264.06, "span": [224.34, 237.74], "weight": "int", "kind": "wall", "spans": [], "from": ["0-w053"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "B.w050", "axis": "V", "at": 264.23, "span": [48.3, 82.52], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w050"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "B.w047", "axis": "V", "at": 268.99, "span": [224.34, 279.73], "weight": "int", "kind": "wall", "from": ["0-w047", "0-w048"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
+   {"kind": "DOOR", "id": "B.o007", "at": [265.61, 274.08], "research": "layout_notes §6: B_LAUNDRY_STORAGE | B_LAUNDRY_STAIRS (DOOR)", "from": ["0-o007"], "_unverified": []}
+  ]},
+  {"id": "B.w030", "axis": "V", "at": 284.16, "span": [87.11, 186.24], "weight": "int", "kind": "wall", "from": ["0-w030", "0-w031a", "0-w031b", "0-w031c", "0-w031d", "0-w031e"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
+   {"kind": "DOOR", "id": "B.o004", "at": [95.58, 104.4], "research": "layout_notes §6: B_BOILER | B_BUNKER_ENTRANCE (DOOR)", "from": ["0-o004"], "_unverified": []},
+   {"kind": "SOFT", "id": "SW-B-03", "at": [115.75, 134.4], "sections": 2, "research": "surfaces §2: B_ELECTRIC | B_BUNKER_ENTRANCE", "from": ["0-w031b"], "_unverified": ["sections"]},
+   {"kind": "SOFT", "id": "SW-B-02", "at": [161.54, 182.03], "sections": 2, "research": "surfaces §2: B_SUPPLY | B_BUNKER_ENTRANCE", "from": ["0-w031d"], "_unverified": ["sections"]}
+  ]},
+  {"id": "B.w032", "axis": "V", "at": 285.05, "span": [182.01, 201.06], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w032"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "B.w034", "axis": "V", "at": 285.05, "span": [224.34, 279.73], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w034"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "B.w056", "axis": "V", "at": 290.69, "span": [196.82, 228.57], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w056"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "B.w043", "axis": "V", "at": 317.86, "span": [134.38, 186.24], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w043"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "B.w054", "axis": "V", "at": 324.21, "span": [87.11, 134.38], "weight": "ext", "kind": "wall", "from": ["0-w054"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
+   {"kind": "DOOR", "id": "B.o009", "at": [119.56, 134.38], "research": "layout_notes §6: B_BUNKER_ENTRANCE | EXT_BUNKER (EXT_OPENING (door, likely))", "from": ["0-o009"], "note": "kind from the research guess", "_unverified": ["kind"]}
+  ]},
+  {"id": "B.w062", "axis": "V", "at": 351.9, "span": [105.45, 114.27], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w062"], "src": "raster", "conf": "low", "_unverified": []}
+ ],
+ "dropped": [
+  {"from": "0-dt-rect22247", "note": "drone-hole icon with no wall under it in this floor's image: place it by hand"}
+ ]
+}

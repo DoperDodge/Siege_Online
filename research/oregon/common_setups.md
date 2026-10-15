@@ -289,7 +289,7 @@ doors_and_openings:                                                             
   - {between: [2F_dorm_main_hall_ne, 2F_trophy_room], px: [860,516]}
   - {between: [2F_dorm_main_hall, 2F_game_room], note: "wide opening in Game Room north wall ~ (792-832, 572)"}
   - {exterior: "Kids' north opening ~(744,440)", type: "window? UNVERIFIED"}
-  - {exterior: "Dorm Main Hall west opening ~(641,549) = 'Big Window' candidate", ev: "OFF: large central window repositioned in Y5S1"}
+  - {exterior: "Dorm Main Hall west opening ~(641,549) = 'Big Window'", ev: "OFF: large central window repositioned in Y5S1; Ulo 2026-10-09"}
 hatches: {H4: "Kids' floor -> 1F Kitchen", H5: "Attic -> 1F Meeting Hall (not in site)"}
 floors: "Kids', Dorm Main Hall, Game Room, Walk-In, Trophy, Master are destructible (from below too)"   # ev: BP
 breakable_walls:                                                                         # ev: BP

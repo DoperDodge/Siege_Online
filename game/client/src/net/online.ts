@@ -128,13 +128,24 @@ export class OnlineConnection {
     this.ws.close(1000, "left");
   }
 
+  /** Main-thread time spent handling messages since the last takeHandleMs() (ms): the stats overlay counts it as work. */
+  private handleMs = 0;
+
+  takeHandleMs(): number {
+    const ms = this.handleMs;
+    this.handleMs = 0;
+    return ms;
+  }
+
   private receive(bytes: Uint8Array) {
     if (this.closed) return;
+    const from = performance.now();
     try {
       this.session.handle(bytes);
     } catch (e) {
       this.badMessage(e);
     }
+    this.handleMs += performance.now() - from;
   }
 
   private badMessage(e: unknown) {

@@ -173,6 +173,8 @@ interface JudgedShot {
   rewoundTick: number;
   origin: [number, number, number];
   bodies: ShotOnBody[];
+  /** Each body's life when the shot was judged (Pawn.life): a body back in a new life by the time it applies is spared. */
+  lives: Map<number, number>;
   /** What it did to panels (holes, wear), in order: applied with its damage. */
   panelOps: IndexedOp[];
 }
@@ -231,8 +233,12 @@ export class Room {
   readonly rules: ModeData;
   /** Shots judged this tick, applied together at its end (DECISIONS D-044). */
   private judged: JudgedShot[] = [];
-  /** Who downed each body that is down now: they get the kill when it dies (research/core_mechanics.md §10.2). */
-  private readonly downedBy = new Map<number, { ctrl: number; weapon: string }>();
+  /**
+   * Who downed each body that is down now, and in which of its lives (Pawn.life): they get the kill when it
+   * dies (research/core_mechanics.md §10.2). A body that came back since (a teleport, the kill plane in the
+   * middle of a step, a respawn) is in a new life, and the entry no longer counts.
+   */
+  private readonly downedBy = new Map<number, { ctrl: number; weapon: string; life: number }>();
 
   private constructor(
     readonly code: string,
@@ -545,7 +551,7 @@ export class Room {
     this.stats.shots++;
     if (rewoundTick > viewTick) this.stats.cappedShots++;
     const panelOps = paths.flatMap((p) => p.ops);
-    this.judged.push({ m, cause: Cause.Bullet, ctrlId: m.ctrl.id, team: shooter.team, seq: shot.seq, weaponId: w.id, receivedTick: now, rewoundTick, origin, bodies, panelOps });
+    this.judged.push({ m, cause: Cause.Bullet, ctrlId: m.ctrl.id, team: shooter.team, seq: shot.seq, weaponId: w.id, receivedTick: now, rewoundTick, origin, bodies, lives: this.livesOf(bodies), panelOps });
     // Everyone sees and hears it (the shooter's own client draws its flash itself, but not where pellets went).
     const ends = paths.map((p): [number, number, number] => [origin[0] + p.dir[0] * p.end, origin[1] + p.dir[1] * p.end, origin[2] + p.dir[2] * p.end]);
     for (const other of this.members.values()) other.events.push({ kind: "shotFx", pawnId: shooter.id, slot: shot.slot, suppressed: w.suppressed, ends });
@@ -606,7 +612,7 @@ export class Room {
     const base = { m, cause: Cause.Melee, ctrlId: m.ctrl.id, team: attacker.team, seq: hit.seq, weaponId: "knife", receivedTick: now, rewoundTick, origin: hit.origin };
     if (target) {
       const body: ShotOnBody = { pawnId: target.pawnId, kill: false, amount: 0, headshot: false, zone: target.zone, pellets: 1, distance: target.reach };
-      this.judged.push({ ...base, bodies: [body], panelOps: [] });
+      this.judged.push({ ...base, bodies: [body], lives: this.livesOf([body]), panelOps: [] });
       return;
     }
     const dir = viewDir(hit.yaw, hit.pitch);
@@ -614,7 +620,12 @@ export class Room {
     const ray = new this.sim.R.Ray({ x: hit.origin[0], y: hit.origin[1], z: hit.origin[2] }, { x: dir[0], y: dir[1], z: dir[2] });
     const plain = this.sim.world.castRay(ray, reach, true, undefined, QUERY_BULLET)?.timeOfImpact ?? reach;
     const onPanel = meleeOnPanels(this.sim.level.panels, this.sim.data.destruction, hit.origin, dir, reach, plain, { tick: panelTick, history: this.panelHistory });
-    if (onPanel) this.judged.push({ ...base, bodies: [], panelOps: onPanel.ops.map(({ panel, op }) => ({ panel, op })) });
+    if (onPanel) this.judged.push({ ...base, bodies: [], lives: new Map(), panelOps: onPanel.ops.map(({ panel, op }) => ({ panel, op })) });
+  }
+
+  /** The life each body hit is in now (Pawn.life), kept with a judged shot until it applies. */
+  private livesOf(bodies: readonly ShotOnBody[]): Map<number, number> {
+    return new Map(bodies.map((b) => [b.pawnId, this.sim.pawns.get(b.pawnId)?.life ?? -1]));
   }
 
   /**
@@ -661,7 +672,8 @@ export class Room {
   /**
    * Apply the tick's judged shots (DECISIONS D-044): all of them were judged first, so two players who shoot
    * each other in the same tick both land; then they apply in a fixed order (rewound time, arrival, shooter,
-   * input) to the bodies as they are now. A shot on a body already dead does nothing.
+   * input) to the bodies as they are now. A shot on a body already dead, or back in a new life since it was
+   * judged (a catch-up step can cross the kill plane in between), does nothing.
    */
   private resolveShots() {
     for (const { panel, op } of this.queuedOps.splice(0)) this.applyPanelOp(panel, op);
@@ -671,7 +683,7 @@ export class Room {
       for (const { panel, op } of shot.panelOps) this.applyPanelOp(panel, op);
       for (const body of shot.bodies) {
         const victim = this.sim.pawns.get(body.pawnId);
-        if (!victim || victim.state.mode === PawnMode.Dead) continue;
+        if (!victim || victim.state.mode === PawnMode.Dead || victim.life !== shot.lives.get(body.pawnId)) continue;
         const friendly = victim.team === shot.team;
         if (friendly && !this.rules.friendlyFire.actionPhase) continue; // team damage off: no damage, no marker
         const by = { cause: shot.cause, attacker: shot, headshot: body.headshot };
@@ -722,7 +734,7 @@ export class Room {
     const weapon = by.attacker?.weaponId ?? "";
     const friendly = by.attacker !== null && victim.team === by.attacker.team;
     if (r.outcome === "downed") {
-      this.downedBy.set(victim.id, { ctrl, weapon });
+      this.downedBy.set(victim.id, { ctrl, weapon, life: victim.life });
       const e: GameEvent = { kind: "down", victimPawn: victim.id, victimCtrl: victim.ownerId ?? 0, downerCtrl: ctrl, weapon, cause: by.cause, friendly };
       for (const m of this.members.values()) m.events.push(e);
     }
@@ -732,14 +744,16 @@ export class Room {
 
   /**
    * Everyone hears about a death. A body that was down credits whoever downed it, and whoever finished it
-   * (if someone else) gets the assist (core_mechanics.md §10.2).
+   * (if someone else) gets the assist (core_mechanics.md §10.2). `life`: the life it died in (a death inside
+   * the step is announced after it, when the kill plane may already have brought the body back).
    */
-  private announceDeath(victim: Pawn, finisherCtrl: number, weapon: string, cause: Cause, headshot: boolean, friendly: boolean) {
+  private announceDeath(victim: Pawn, finisherCtrl: number, weapon: string, cause: Cause, headshot: boolean, friendly: boolean, life = victim.life) {
     this.stats.kills++;
     const ownerCtrl = victim.ownerId ?? 0;
-    const downer = this.downedBy.get(victim.id);
+    const entry = this.downedBy.get(victim.id);
     this.downedBy.delete(victim.id);
-    // Downed by nobody (a lab tool, reflected damage): the kill is the finisher's.
+    const downer = entry?.life === life ? entry : undefined;
+    // Downed by nobody (a lab tool, reflected damage) or in an earlier life: the kill is the finisher's.
     const killerCtrl = downer?.ctrl || finisherCtrl;
     const assistCtrl = downer?.ctrl && finisherCtrl !== downer.ctrl ? finisherCtrl : 0;
     const e: GameEvent = isIdleShell(this.sim, victim)
@@ -757,7 +771,7 @@ export class Room {
     for (const e of this.sim.events) {
       if (e.kind === "death") {
         const p = this.sim.pawns.get(e.pawnId);
-        if (p) this.announceDeath(p, 0, "", e.cause === "bleed" ? Cause.Bleed : Cause.Fall, false, false);
+        if (p) this.announceDeath(p, 0, "", e.cause === "bleed" ? Cause.Bleed : Cause.Fall, false, false, e.life);
       } else if (e.kind === "deploy") {
         this.completeDeploy(e);
       } else if (e.kind === "reviveStart" || e.kind === "reviveEnd") {

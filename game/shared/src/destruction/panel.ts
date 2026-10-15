@@ -43,6 +43,8 @@ export interface PanelSpec {
   canReReinforce: boolean;
   /** A barricade worn below this many hit points no longer stops bodies (data: barricade.passableBelowHp). */
   passableBelowHp: number;
+  /** One surface cut into tiles (a soft floor): a bullet crossing a seam between two goes into one surface. */
+  region?: string;
 }
 
 /** Worn down to this counts as nothing left: hit points are fractions (3 − 20 × 0.15 leaves 1e-15, not 0). */

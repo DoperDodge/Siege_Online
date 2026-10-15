@@ -5,6 +5,102 @@ known issues, and what's next.
 
 ---
 
+## Phase 5 — Oregon greybox · 🚧 in progress (M1 of 8 done)
+
+**Done when (PLAN §17):** you walk it and sign off on layout accuracy. Rappel (M8) comes before the Phase 5
+report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIGN.md`.
+
+| Milestone | Status |
+|---|---|
+| M1 Oregon 1F walkable, offline and online (generator, wall extraction, engine prep) | ✅ 1F built from the floor plans; batched drawing and a stats overlay (F8); browser test |
+| M2 All storeys stacked: B, 2F, Cat Walk; rooms and callouts; ceilings, soft floors, hatches, drone holes; storey views | ⏳ |
+| M3 Stairs and the ladder (grab it from the top too) | ⏳ |
+| M4 Roofs, the outside and the three attacker spawns; free camera | ⏳ |
+| M5 Sites, defender spawns, cameras, ingredients, zones, cover props | ⏳ |
+| M6 Walk-ready: every check, performance on Oregon, your walk #1 | ⏳ |
+| M7 Your corrections, round by round, to sign-off | ⏳ |
+| M8 Rappel | ⏳ |
+
+### What's done (M1)
+- **Walls from the floor plans (D-071):** `tools/mapgen/extract` reads r6calls' Oregon map (the floor images and
+  their soft-wall, hatch and drone-hole overlays) and checks it against Ubisoft's official blueprint. It finds
+  every wall, door, window, soft wall and drone hole on B, 1F, 2F and the Cat Walk (285 wall pieces, 69
+  openings, all 32 soft walls), and writes only numbers to `data/maps/oregon/extracted.json`. Those became one
+  file per floor (`walls_<floor>.json`): wall lines with their soft sections, doors, windows, passages and drone
+  holes, each tied to the research row it answers to. The 2F image is drawn 2.4% larger than 1F, so each floor
+  has its own frame (D-072).
+- **The generator (D-070):** `npm run mapgen` compiles `data/maps/oregon/layout.json` and its parts into
+  `level.json`, the level the game loads: hard walls, the 17 soft walls of 1F as reinforceable panels with
+  their research section counts, door and window frames (exterior ones barricaded, inside doorways empty, glass
+  on windows; D-074), drone-hole slots, the ground, the play area's edge and the spawns. Hard geometry never
+  overlaps a soft wall (D-075). Only 1F is compiled so far.
+- **Checks:** level.json must equal what the layout compiles to; the compiled walls must close every room the
+  plan draws (no slot between rooms or to the outside); the wall files must still match the extraction, and
+  every extracted item is used or listed as dropped with a reason; every 1F soft wall, door, exterior opening
+  and passage in the research must be there with the research's type and its door-or-window guess.
+- **Engine:** a faster physics refresh (D-073: room step p99 7.6 → 3.8 ms on an Oregon-sized level, movement
+  identical), map data in the level format (spawn sides, invisible blockers, bounds, storeys, rooms, sites,
+  cameras, zones; D-076), and a kill plane: fall out of the map and you're back at the start.
+- **The Oregon page**, offline and online, with Go to for the main rooms and the three attacker spawns; the
+  destruction tools work there as in the Destruction Lab.
+- **Our 1F plan** is in `research/oregon/compare/1F.svg` (open it in a browser). The overlay page puts it over
+  the official blueprint and the r6calls image on your PC (the images stay out of the repo, D-079).
+- **Review fixes:** a review of M1 found 11 problems, and a second check of the fixes found that some had gone
+  wrong or fell short. All are fixed now:
+  - Walls: the Big Tower's east wall is no longer merged into the facade, and its corner block sits flush.
+    Corners are settled in pairs: a door or soft wall at a corner gets a post, and a wall ending on a soft wall
+    meets its face. Wall heights change where a wall goes from outside to inside, so the facade stays at full
+    height at every corner.
+  - Checks: tests now catch gaps between rooms, 5 cm slots, and a building shell that isn't closed at the top
+    of the outer walls. They also catch a deleted soft wall on any floor.
+  - The image check reads what git stages, including large-file storage. It catches archives, image bytes and
+    base64 images anywhere, plan SVGs that link a picture, and odd file names.
+  - Kill credit survives the kill plane: a body brought back keeps nobody's old credit, a bleed-out on that
+    very step still credits whoever downed it, and a shot can't land on the new life.
+  - The physics guard test now runs Rapier's own step and checks every collider.
+  - Shadows come back after the graphics card resets.
+  - The stats overlay shows the page's work a frame: its own code plus the messages it handled.
+- **Drawing a whole map (D-077):** level boxes are drawn in batches (one instanced mesh per material and
+  storey), the floors carry a 1 m grid to judge distances by, soft walls show their section seams and a
+  "N sections" label, and shadows are redrawn only when a wall changes (players and guns cast none now). A
+  stats overlay in every lab (F8, or `?stats` in the address) shows FPS, frame time, the 1% low, the work
+  time a frame and draw calls against the target: 120 FPS on average and 90 at the 1% lows, at 1080p on High.
+
+### How to test (needs Node 22.12+)
+1. `npm ci`, then `npm run dev` and, in a second terminal, `npm run build -w @redmond/server && npm start`.
+2. Open http://localhost:5173/labs/oregon.html (offline) or `?online` (a room on your local server; send the
+   invite link to play together). You start outside the Main Entrance.
+3. Walk 1F against the blueprint: every wall, door and window where it should be; the 17 soft walls blue with
+   their ids (SW-1F-01 … 17) and sections; exterior doors and windows barricaded. Note anything wrong with the
+   room and roughly where (Go to names the rooms).
+4. Press F8 and read the overlay on your PC: average FPS and the 1% low (target 120 and 90 at 1080p High).
+   The browser draws no faster than your display refreshes, and a missed refresh counts as a whole extra one,
+   so read the FPS on a display faster than 120 Hz (144 Hz or more). At 120 Hz or less, read the work instead:
+   the page's own work each frame on the main thread, 8.3 ms on average and 11.1 ms for the slowest 1% leaving
+   room for 120 and 90 FPS. It doesn't include the graphics card's time.
+5. The plan: open `research/oregon/compare/1F.svg`. To see it over the official blueprint:
+   `npm run mapgen:refs` (downloads the blueprint and r6calls' map into a gitignored folder), then
+   `npm run mapgen:compare`, and open `builds/mapgen/compare/index.html`.
+6. Checks: `npm run typecheck`, `npm test`, `npm run build && npm run test:e2e` (adds `oregon.mjs`),
+   `npm run mapgen -- --check`.
+
+### Known issues
+- Only 1F exists: no ceilings yet (you see the sky), no stairs, bare ground outside. Storeys come in M2,
+  stairs in M3, roofs and the outside in M4.
+- Every size is a placeholder until you've walked it: 1 u of the plans = 0.15 m, walls 3 m, doors 2.1 m
+  (research/OPEN_QUESTIONS.md, "Placeholders added while building Phase 5").
+- Go to uses hand-picked room centres until rooms are computed from the walls (M2).
+- The online test on Railway needs Railway to deploy this branch (it deploys the Phase 4 branch today).
+- You no longer see your own shadow (shadows are drawn once for the level, D-077). The Destruction Lab's
+  wall labels name their sections twice ("Reinforceable (2 sections) · 2 sections").
+
+### Next: Phase 5 M2 — all storeys
+B, 2F and the Cat Walk through their frames; rooms and callouts; ceilings with stairwell holes; soft floors in
+tiles; hatches; storey views and the plan view. The leak checks then cover every storey (2F's outer walls don't
+close at their tops yet: its balconies and rails arrive with it).
+
+---
+
 ## Phase 4 — Destruction v1 · ✅ complete (PR #5)
 
 **Done when (PLAN §17):** wallbangs, punch holes and reinforcing are all synced across clients.

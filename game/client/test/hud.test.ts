@@ -1,5 +1,6 @@
 // The HUD's maths and wording (Phase 3 M9): the zoomed field of view, where the spread ticks sit, which
-// way the damage arc points, and what the hit marker, ammo readout and kill feed say.
+// way the damage arc points, and what the hit marker, ammo readout and kill feed say; the stats overlay's
+// 1% low (Phase 5).
 import { describe, expect, it } from "vitest";
 import { Cause, DEG, defaultLoadoutPick, initialPawnState, loadGameData, resolveLoadout, WeaponAct, type GameEvent } from "@redmond/shared";
 import { ammoLow, fireModeText } from "../src/ui/ammo.js";
@@ -8,6 +9,7 @@ import { damageArcDeg } from "../src/ui/damage.js";
 import { reviveSecondsLeft } from "../src/ui/downed.js";
 import { hitText } from "../src/ui/hitMarkers.js";
 import { deathLine, feedLine, type FeedNames } from "../src/ui/killFeed.js";
+import { onePercentLowFps, slowestOnePercentMs } from "../src/ui/stats.js";
 
 const data = loadGameData();
 
@@ -120,5 +122,36 @@ describe("what the HUD says", () => {
     expect(deathLine({ ...base, cause: Cause.Bleed }, names)).toBe("You bled out (downed by Bot)");
     expect(deathLine({ ...base, killerCtrl: 0, cause: Cause.Fall }, names)).toBeNull();
     expect(deathLine({ ...base, killerCtrl: 0, cause: Cause.Lab }, names)).toBe("You died");
+  });
+});
+
+describe("stats overlay", () => {
+  it("1% low: the frame rate of the mean of the slowest 1% of frame times, in any order", () => {
+    // A thousand frames at 144 FPS, ten of them 20 ms hitches: the slowest 1% are the hitches.
+    const frames = [...Array.from({ length: 990 }, () => 1000 / 144), ...Array.from({ length: 10 }, () => 20)];
+    expect(onePercentLowFps(frames)).toBeCloseTo(50, 9);
+    expect(onePercentLowFps([...frames].reverse())).toBeCloseTo(50, 9);
+    // Two of 1,000 frames slow: the slowest ten are those two and eight ordinary ones.
+    const two = [...Array.from({ length: 998 }, () => 8), 30, 50];
+    expect(onePercentLowFps(two)).toBeCloseTo(1000 / ((30 + 50 + 8 * 8) / 10), 9);
+    // A steady frame rate is its own 1% low.
+    expect(onePercentLowFps(Array.from({ length: 500 }, () => 1000 / 120))).toBeCloseTo(120, 9);
+  });
+
+  it("1% low: under a hundred frames it is the slowest frame; no frames, no number", () => {
+    expect(onePercentLowFps([10, 12, 40, 11])).toBeCloseTo(25, 9);
+    expect(onePercentLowFps([16])).toBeCloseTo(62.5, 9);
+    expect(onePercentLowFps([])).toBe(0);
+  });
+
+  it("work: the mean of the slowest 1%, the same statistic as the 1% low", () => {
+    // A thousand frames of 3 ms work, ten of them 12 ms: the slowest 1% are those ten.
+    const ms = [...Array.from({ length: 990 }, () => 3), ...Array.from({ length: 10 }, () => 12)];
+    expect(slowestOnePercentMs(ms)).toBeCloseTo(12, 9);
+    expect(slowestOnePercentMs([...ms].reverse())).toBeCloseTo(12, 9);
+    expect(onePercentLowFps(ms)).toBeCloseTo(1000 / slowestOnePercentMs(ms), 9);
+    // Under a hundred frames it is the slowest one; none, none.
+    expect(slowestOnePercentMs([3, 9, 4])).toBe(9);
+    expect(slowestOnePercentMs([])).toBe(0);
   });
 });

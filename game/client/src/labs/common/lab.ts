@@ -68,6 +68,7 @@ import { damageArcDeg, DamageIndicator } from "../../ui/damage.js";
 import { DownedHud } from "../../ui/downed.js";
 import { HitMarkers } from "../../ui/hitMarkers.js";
 import { deathLine, feedLine, KillFeed } from "../../ui/killFeed.js";
+import { StatsOverlay } from "../../ui/stats.js";
 
 /** What scripts and page additions can reach in a running lab. */
 export interface LabHandle {
@@ -258,9 +259,19 @@ export async function startLab(o: LabOptions): Promise<void> {
 
   const view = $("#view");
   const renderer = createRenderer(view, params.has("lowgfx"));
-  const scene = createLabScene(sim.level);
+  const labScene = createLabScene(sim.level);
+  const scene = labScene.scene;
   /** Destructible panels, drawn from their cells and redrawn as they change. */
   const panelView = new PanelView(scene, sim.level.panels);
+  // The level is all there: its shadows are drawn at the next render, and again only when it changes.
+  renderer.shadowMap.needsUpdate = true;
+  // The stats overlay counts every draw of a frame (the world, the viewmodel, a shadow pass), so the counts
+  // are reset once a frame rather than at each render call.
+  renderer.info.autoReset = false;
+  const stats = new StatsOverlay(app, params.has("stats"), () => [
+    `static: ${labScene.staticBoxes} boxes in ${labScene.staticMeshes} meshes · panels: ${panelView.meshCount} meshes`,
+    `${renderer.domElement.width} × ${renderer.domElement.height} px${renderer.shadowMap.enabled ? "" : " · no shadows (?lowgfx)"}`,
+  ]);
   let settings: Settings = loadSettings();
   const camera = new THREE.PerspectiveCamera(settings.fovVertical, view.clientWidth / view.clientHeight, 0.05, 300);
   camera.rotation.order = "YXZ";
@@ -342,6 +353,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     else if (a === "settings") togglePause();
     else if (a === "respawn") respawn();
     else if (a === "fire") noteClick();
+    else if (a === "stats") stats.toggle();
   }
 
   function respawn() {
@@ -644,6 +656,7 @@ export async function startLab(o: LabOptions): Promise<void> {
         ${row(`Hold <kbd>${keyLabel(k.interact)}</kbd>`, "Revive a downed teammate (4 s, facing them)")}
         ${hooks.help.map(([keys, what]) => row(keys, what)).join("")}
         ${row("<kbd>F3</kbd> / <kbd>F4</kbd>", "Hitboxes / third-person view")}
+        ${row("<kbd>F8</kbd>", "Stats: frame rate, frame time, 1% low, work time, draw calls (<code>?stats</code> in the link shows them from the start)")}
         ${row("<kbd>Esc</kbd>", "Pause: settings, operator, go-to menu")}
       </table>
       <h2>Try this</h2>
@@ -767,7 +780,16 @@ export async function startLab(o: LabOptions): Promise<void> {
   let frames = 0;
   let fpsFrames = 0;
   let fpsAt = performance.now();
+  /** Shadow-map redraws so far (they happen on request only: createRenderer). */
+  let shadowDraws = 0;
+  /** Render the world, counting a shadow-map redraw if one was asked for. */
+  function drawWorld() {
+    if (renderer.shadowMap.enabled && renderer.shadowMap.needsUpdate && !renderer.getContext().isContextLost()) shadowDraws++;
+    renderer.render(scene, camera);
+  }
   function frame(now: number) {
+    const workFrom = performance.now();
+    renderer.info.reset();
     // The frame's timestamp can predate the code that ran just before it (a page busy for seconds
     // starting up gets a first frame stamped from before): never step time backwards.
     const elapsed = Math.max(0, Math.min(0.25, (now - last) / 1000));
@@ -776,7 +798,8 @@ export async function startLab(o: LabOptions): Promise<void> {
     if (net && !followServer(elapsed)) {
       // Between bodies (joining, respawning, a new operator): wait for the server's exact state.
       acc = 0;
-      renderer.render(scene, camera);
+      drawWorld();
+      stats.frame(now, performance.now() - workFrom + (net?.takeHandleMs() ?? 0), renderer.info.render.calls, renderer.info.render.triangles);
       $(".center-msg").textContent = disconnected ?? "Waiting for the server…";
       $(".center-msg").classList.remove("hidden");
       requestAnimationFrame(frame);
@@ -810,7 +833,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       v.update(sim.data, rs.mode === PawnMode.Dead ? corpse(rs) : rs);
       drawnView.set(pawn.id, [rs.yaw, rs.pitch]);
       const eyes = pawn.id === viewed.id;
-      // Your own body only casts its shadow in first person; your gun is the viewmodel.
+      // In first person your own body isn't drawn; your gun is the viewmodel.
       v.setFirstPerson(eyes && !thirdPerson);
       v.wire.visible = showHitboxes && (!eyes || thirdPerson);
     }
@@ -830,10 +853,11 @@ export async function startLab(o: LabOptions): Promise<void> {
       camera.position.set(eye.pos[0], eye.pos[1], eye.pos[2]);
       camera.rotation.set(controls.pitch, controls.yaw, eye.roll);
     }
-    updateLabels(camera);
-    panelView.update();
+    updateLabels(labScene.labels, camera);
+    // A panel that changed changes the level's shadows too.
+    if (panelView.update()) renderer.shadowMap.needsUpdate = true;
     for (const fn of hooks.frame) fn(now, renderTick);
-    renderer.render(scene, camera);
+    drawWorld();
     const inHand = viewed.id === possessed()?.id && !thirdPerson && !ctrl.shellCam && ctrl.swapPhase === 0 ? (viewed.loadout?.weapons[rs.slot] ?? null) : null;
     viewmodel.update(now, elapsed, inHand, rs, viewed.loadout?.swapTicks ?? 1);
     viewmodel.render(renderer);
@@ -855,6 +879,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       fpsAt = now;
     }
     updateHud(me);
+    stats.frame(now, performance.now() - workFrom + (net?.takeHandleMs() ?? 0), renderer.info.render.calls, renderer.info.render.triangles);
     requestAnimationFrame(frame);
   }
 
@@ -980,6 +1005,10 @@ export async function startLab(o: LabOptions): Promise<void> {
       report,
       get frames() {
         return frames;
+      },
+      /** Shadow-map redraws so far (tools/e2e/oregon.mjs checks a lost and restored context asks for one). */
+      get shadowDraws() {
+        return shadowDraws;
       },
       /** Online state for the two-browser test (tools/e2e/online-lab.mjs). */
       get net() {

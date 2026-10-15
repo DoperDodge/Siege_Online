@@ -580,6 +580,7 @@ export class Sim {
         // A body driven without its player's buttons (left behind on the camera, or being looked
         // through) has its weapon parked: nothing it was doing carries on unseen.
         stepPawn(this.ctx, pawn, cmd, !idleDriven.has(pawn.id));
+        this.belowKillPlane(pawn);
         refreshBroadPhase(this.world); // the next pawn must see this one where it now is
         if (idleDriven.has(pawn.id)) pawn.state.prevButtons = held;
         else if (cmd !== input) pawn.state.prevButtons |= input.buttons & Btn.Interact; // still held: not a fresh press later
@@ -593,10 +594,23 @@ export class Sim {
       const held = pawn.state.prevButtons;
       this.letGo(pawn, idleShell);
       stepPawn(this.ctx, pawn, idleInput(pawn, idleShell ? Stance.Crouch : pawn.state.stance), !idleShell);
+      this.belowKillPlane(pawn);
       refreshBroadPhase(this.world);
       pawn.state.prevButtons = held;
     }
     if (advanceTick) this.tick++;
+  }
+
+  /**
+   * A body whose feet fell below the level's kill plane (bounds.killY, DECISIONS D-076) is out of the level:
+   * it goes back to spawn 0 standing, with no fall damage (lab rooms; a match will kill it, Phase 6). Part of
+   * the step, so a client predicts it exactly as the server does.
+   */
+  private belowKillPlane(pawn: Pawn) {
+    const killY = this.level.def.bounds?.killY;
+    if (killY === undefined || pawn.state.y >= killY) return;
+    const s = this.level.def.spawns[0];
+    this.teleport(pawn.id, s.pos[0], s.pos[1], s.pos[2], s.yawDeg);
   }
 
   /**
