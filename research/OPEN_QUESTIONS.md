@@ -254,8 +254,9 @@ under a reinforcement, what blocks reinforcing) are not repeated here.
 
 Each value is in `data/maps/oregon/layout.json` or a wall file (`walls_<floor>.json`) and listed in its
 `_unverified`; tools/mapgen/DESIGN.md §10 has the full table (P1–P37). An answer changes one value, and
-`npm run mapgen` rebuilds the map. Built so far (M2): every storey's walls, the 49 rooms, the floors with their
-soft floors and hatches, and the Cat Walk's well; stairs, roofs and the outside come next.
+`npm run mapgen` rebuilds the map. Built so far (M3): every storey's walls, the 49 rooms, the floors with their
+soft floors and hatches, the Cat Walk's well, the stairs inside the building and the Cat Walk ladder; roofs and
+the outside come next.
 
 1. **Map scale (P1):** one unit of the floor plans = 0.15 m (±15%). The school bus is 77 u long (11.6 m at
    0.15; school buses are 10.5–12 m), and the white van in the parking lot is about 33 u (5 m; vans are 5–6 m);
@@ -319,9 +320,24 @@ soft floors and hatches, and the Cat Walk's well; stairs, roofs and the outside 
       both draw a wall there, with the stairs opening only into the Laundry Storage. We follow the images
       (layout_notes §6.1 corrected).
 
-Later milestones add their placeholders here as they build them: stairs (P19), the ladder (P20), the Meeting
-Hall's height (P23), roofs (P24), defender spawns (P28), bombs (P30), cameras (P31), ingredients (P32), rappel
-faces (P33), zones (P34), props (P35), and fall damage from the roofs (P37).
+20. **Stairs (P19):** each staircase is built in its footprint from the research, but the shapes are guesses:
+    which way each goes up, where it turns, and how many steps. The Tower Stairs (S1) are a switchback, up north
+    and turning right at a landing, from B to 1F and again from 1F to 2F. The White Stairs (S2) are straight, up
+    east in the basement and up west from 1F. The Armory Stairs (S3) are your two straight flights, one over the
+    other, up south. The Small Stairs (S4) are an L: up north along the west wall of the Small Tower's corner,
+    then east along its north wall onto the 2F walkway to the Office. Neither image draws S4's treads, while both
+    draw the other stairs', so S4 is the shakiest. Every step is 0.2 m high and 0.22–0.3 m deep (a straight
+    flight fills its stairwell), with 2.0 m of headroom. Which way does each staircase really go up, and where does it turn?
+21. **The ladder (P20):** L1 runs from the 2F Tower to the Cat Walk, 0.6 m wide, on the north edge of the well at
+    the gap in the rail. Is that where it stands?
+22. **Found while building M3:** inside the L-shaped wall of the 2F Small Tower (the Workshop Balcony), Ubisoft's
+    2F blueprint and r6calls' 2F image both show the 1F workshop's floor (the blue tarp, the planks), as if the
+    2F there were open to the room below. We build a floor there and a full wall where the images draw the L.
+    Is the west part of the 2F Small Tower a balcony over the workshop, with a railing?
+
+Later milestones add their placeholders here as they build them: the Meeting Hall's height (P23), roofs (P24),
+the Bunker's stairs and the outside tower stairs (P19, moved to M4), defender spawns (P28), bombs (P30), cameras
+(P31), ingredients (P32), rappel faces (P33), zones (P34), props (P35), and fall damage from the roofs (P37).
 
 ### [core_mechanics.md](core_mechanics.md) — 16
 

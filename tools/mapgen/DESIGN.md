@@ -599,7 +599,7 @@ explicit metres of a pillar), with its spans sorted:
   Soft-floor rectangles run to the walls of the rooms the research names: r6calls' outlines are traced around
   furniture and aren't consistently in one frame, so they serve as a check, not as geometry. Amendment 7 wins
   over the lines above: SF-2F-10 and SF-2F-11 are soft (`hard: true` makes either hard), and Ubisoft's five
-  larger extents are built, r6calls' are `alt`. Stairwell holes: M3.
+  larger extents are built, r6calls' are `alt`. Stairwell holes: §5.7, as built in M3.
 
 ### 5.7 Stairs and ladders
 
@@ -617,6 +617,26 @@ explicit metres of a pillar), with its spans sorted:
   is a one-line edit of `up`, `plan`, `turn`, `steps`.
 - **Ladder L1**: `ladders` entry from 2F to 3F (height = the 2F->3F storey), 0.6 m wide, facing the wall it
   stands on; the well rail leaves a gap at its top. Engine change E8 lets a body grab it from the top.
+- **As built (M3, D-091):** flights are open (`stairs` with `solid: false`): each step is a box two risers deep,
+  so a run can stand over the one below it, and the builder's invisible ramp through the nosings is what a body
+  walks on. A straight run fills its shaft (treads = its length over its steps); a switchback's flights are half
+  the shaft less a 0.1 m wall between them, with 0.3 m treads and the rest for the landing; a quarter-turn's
+  flights are `widthM` wide, its steps split as its two legs' lengths do, and its landing is the square in the
+  far corner. The slab above loses each run's hole on the 5 cm grid, from the first tread where the line
+  through the nosings, a body's reach (0.35 m) on, comes within `headroomM` of the slab, through to the arrival;
+  a hole never runs under the storey's own walls. Rails (the Cat Walk's kind) go round each hole where the
+  floor beyond is open: not along a wall, not across the arrival tread, not where a flight passes lower than
+  the rail's top. Room anchors keep clear of holes, flights and landings. S1 is a switchback up north, turning
+  right (B→1F under 1F→2F); S2 is straight, up east in B and up west from 1F; S3 is two straight flights
+  stacked, up south; S4 is a quarter-turn, up north along the west wall of the Small Tower's corner, then east
+  along its north wall onto the 2F walkway to the Office (the walk graph found the first guess, a switchback
+  arriving at the west, shut the Office off). S5 and the outside tower stairs move to M4, with the outside
+  they start from. L1 stands on the Cat Walk well's north edge, at (284.17, 57.68) in the 3F frame, facing
+  north.
+- **E8 as built (D-092):** a body grabs the ladder from the top standing where a climb sets it down (within
+  `attachDistance` of the point a body's radius, 5 cm and `dismountForward` out from the rungs), within a step
+  of the top, facing the drop (cosine ≤ −0.5), from a settled stand. F puts its feet `topMountDrop` (1.0 m)
+  below the top; on the ladder W climbs and S descends, whatever the facing.
 
 ### 5.8 Roofs
 
@@ -832,7 +852,11 @@ Estimated real counts (Appendix B): about 1,100–1,600 static colliders, 150–
 9. **Stacking**: every hatch lies inside its top and bottom rooms with 0.3 m to spare; every stair run starts
    and ends on its floors (2 cm) with 2.0 m headroom; the report prints both B frame options.
 10. **Reachability** (walk graph, M3): every room reachable from attacker group A with barricades broken and no
-    breaching; every storey connected; the playable boundary holds.
+    breaching; every storey connected; the playable boundary holds. As built (D-093): `walkgraph.ts` rasterises
+    every collider a body collides with into 10 cm columns of solid spans; a node is a walkable top with a
+    crouching body's height clear above it and nothing it can't step over within its radius; neighbours join a
+    step apart, each ladder joins its foot to its top, and drops aren't edges. The boundary check comes with
+    the outside (M4).
 11. **Lab samples**: the Destruction Lab's five Oregon walls (destruction_lab layout `oregon_*`) match the
     compiled panels (length, height, sections), so an answer from Ulo reaches both.
 12. **Determinism**: two Sims on Oregon apply the same panel-op log to identical hashes (existing pattern).
@@ -879,8 +903,8 @@ the fix, the commit). Sign-off is recorded there and in PROGRESS.
 | P16 | Soft floors: each to the walls of the rooms the research names, Ubisoft's five larger extents (r6calls' as `alt`); SF-2F-10 Trophy and SF-2F-11 White Stairs landing soft (amendment 7, D-078); tiles ≤ 4 x 4 m in 0.4 m joist spacings | blueprint-only areas (surfaces Q5); tiles are an engine budget |
 | P17 | Hatches: research rectangles in the 1F frame (about 1.6 m square); H5 only east of the Attic wall | surfaces §5 and Q11 |
 | P18 | Everything not in surfaces §2 is HARD (Kitchen NE partition and 2F annex partition included); 1F floor HARD apart from H1–H3; roofs HARD; no skylights | surfaces §1, §4.1, §6 |
-| P19 | Stairs: S1 switchback; S2 straight E–W on 1F, U-turn in B; S3 two staircases stacked one over the other, B → 1F and 1F → 2F (Ulo, 2026-10-20), each straight N–S with a landing, B foot at Laundry; S4 switchback; S5 straight flight in the Bunker passage to the B east door; exterior tower stairs up to a 2F-level landing; risers ≤ 0.2 m (16 per 3.2 m), tread 0.3 m, headroom 2.0 m | footprints only (layout_notes §5.1, map_features §5) |
-| P20 | Ladder L1 at the 3F inner-square gap mapped to 2F, 0.6 m wide, 2F->3F storey tall | ±12 u position uncertainty (data inventory) |
+| P19 | Stairs (as built, D-091): S1 switchback up N turning right, B → 1F under 1F → 2F; S2 straight, up E in B and up W from 1F; S3 two staircases stacked one over the other, B → 1F and 1F → 2F (Ulo, 2026-10-20), straight, up S, B foot in the Laundry Stairs; S4 quarter-turn, up N along the Small Tower corner's west wall, then E onto the 2F walkway; S5 straight flight in the Bunker passage to the B east door and the exterior tower stairs up to a 2F-level landing (M4); risers ≤ 0.2 m (16 per 3.2 m), tread 0.3 m (a straight run fills its shaft), headroom 2.0 m | footprints only (layout_notes §5.1, map_features §5); no image shows S4's treads |
+| P20 | Ladder L1 on the Cat Walk well's north edge, at the rail's gap ((284.17, 57.68) in the 3F frame), from the 2F floor to the Cat Walk, 0.6 m wide, facing N | ±12 u position uncertainty (data inventory) |
 | P21 | Cat Walk centre = open well over the 2F tower room, 1.0 m railing on the inner-square bands, gap at the ladder | surfaces §4.1 ring + central opening |
 | P22 | Rails: bands listed as rails get a 1.0 m rail (bodies blocked, bullets pass); every other band is a full wall | the rasters can't tell rails from walls |
 | P23 | No double-height rooms (Meeting Hall 3.0 m under the Attic and the flat Meeting W roof) | layout_notes §1 says "appears single-storey under a pitched roof": ambiguous |
@@ -943,8 +967,8 @@ the fix, the commit). Sign-off is recorded there and in PROGRESS.
   samples equal the compiled panels; kill plane; frame diagnostics printed for both B options.
 
 ### M3: stairs and the ladder
-- **Deliverables**: S1–S5 and the exterior tower stairs as parametric runs, landings, rails, slab holes; L1 and
-  the ladder grab from the top (E8); the walk graph.
+- **Deliverables**: S1–S4 as parametric runs, landings, rails, slab holes; L1 and the ladder grab from the top
+  (E8); the walk graph. S5 and the exterior tower stairs moved to M4 (D-091).
 - **Done when**: Ulo walks from B to 2F on each staircase and climbs the ladder to the Cat Walk and back down
   from the top.
 - **Tests**: stair runs (feet and tops on their floors within 2 cm, headroom, step height ≤ 0.35 m, foot and top
@@ -953,8 +977,9 @@ the fix, the commit). Sign-off is recorded there and in PROGRESS.
 
 ### M4: roofs and the exterior
 - **Deliverables**: roofs (flat slabs, gable and mono ramps, stepped gable ends), the balcony, walls raised to
-  eaves; exterior ground, the Bunker passage, fences, vehicles, sheds, the construction house and the rest of
-  the exterior blockout; boundary blockers and bounds; attacker spawn groups A, B, C (5 each); free camera (E10).
+  eaves; exterior ground, the Bunker passage with S5, the exterior tower stairs (both from M3, D-091), fences,
+  vehicles, sheds, the construction house and the rest of the exterior blockout; boundary blockers and bounds;
+  attacker spawn groups A, B, C (5 each); free camera (E10).
 - **Done when**: Ulo spawns at each attacker spawn, walks to the building, gets onto the Dining roof from Small
   Tower 2F, and flies over every roof.
 - **Tests**: cover (every room has a ceiling or roof); roofs sit on the walls (eaves within 5 cm of wall tops);

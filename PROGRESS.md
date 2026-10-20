@@ -5,7 +5,7 @@ known issues, and what's next.
 
 ---
 
-## Phase 5 — Oregon greybox · 🚧 in progress (M2 of 8 done)
+## Phase 5 — Oregon greybox · 🚧 in progress (M3 of 8 done)
 
 **Done when (PLAN §17):** you walk it and sign off on layout accuracy. Rappel (M8) comes before the Phase 5
 report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIGN.md`.
@@ -14,12 +14,37 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
 |---|---|
 | M1 Oregon 1F walkable, offline and online (generator, wall extraction, engine prep) | ✅ 1F built from the floor plans; batched drawing and a stats overlay (F8); browser test |
 | M2 All storeys stacked: B, 2F, Cat Walk; rooms and callouts; ceilings, soft floors, hatches, drone holes; storey views | ✅ four storeys, 49 rooms, 12 soft floors, 6 hatches; hide-above, plan view, HUD line; browser test |
-| M3 Stairs and the ladder (grab it from the top too) | ⏳ |
+| M3 Stairs and the ladder (grab it from the top too) | ✅ every staircase inside the building, the ladder both ways, the walk graph: every room reachable; browser test |
 | M4 Roofs, the outside and the three attacker spawns; free camera | ⏳ |
 | M5 Sites, defender spawns, cameras, ingredients, zones, cover props | ⏳ |
 | M6 Walk-ready: every check, performance on Oregon, your walk #1 | ⏳ |
 | M7 Your corrections, round by round, to sign-off | ⏳ |
 | M8 Rappel | ⏳ |
+
+### What's done (M3)
+- **Stairs (D-091):** all seven runs of the four staircases inside the building. The Tower Stairs (S1), the
+  White Stairs (S2) and the Armory Stairs (S3) go from the basement to 2F; the Small Stairs (S4) go from 1F to
+  2F.
+  - Each run is built from its stairwell: straight, a switchback with a landing, or an L (the Small Stairs).
+  - The flights are open underneath, so one can stand over another: the Armory Stairs are two flights, one
+    over the other, as you described.
+  - The floor above opens where your head would meet it, with a rail round the hole wherever there's no wall.
+  - Every step is 0.2 m high (16 to a storey).
+- **The ladder (D-092):** from the 2F Tower up to the Cat Walk. You can now get on it from the top too: stand at
+  the gap in the well's rail, face the drop and press F; S climbs down, W back up.
+- **The walk graph (D-093):** a map of everywhere a body can stand and walk, read from the game's own
+  collision. From the Junkyard spawn, with every barricade broken and nothing breached, it reaches all 49
+  rooms on every storey.
+  - It found the 2F Office shut off: my first guess at the Small Stairs put their stairwell across the only
+    walkway to the Office door.
+  - They're now an L that arrives on that walkway.
+- **Plans:** the stairs are on the plans in red, darker as they climb, with an arrow pointing up. Landings and
+  the ladder are drawn too, and the comparison page has a stairs layer.
+- **The Oregon page:** the help explains the stairs and the ladder.
+- **Checks:**
+  - A body walks up and down every run, between the rooms the research names.
+  - A body climbs the ladder and comes back down from the top.
+  - The browser test walks the Armory Stairs from the basement to 1F and back, and takes the ladder both ways.
 
 ### What's done (M2)
 - **Every storey stacked:** B, 1F, 2F and the Cat Walk (3F), each from its own wall file and placed through its
@@ -121,26 +146,38 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
 3. Go to (Esc, then a room) takes you to any room on B, 1F, 2F or the Cat Walk. Its callout floats over the
    floor, and the line at the bottom left names the room you're in. Walk each storey against the blueprint and
    note anything out of place with that line (it gives your position in the plan's units).
-4. Press H to hide the storeys above you, M for the plan view (the wheel zooms; M again to go back), and P to
+4. Stairs: walk from the basement up to 2F on each staircase. Go to puts you at the foot of each one.
+   - The Tower Stairs: B → Tower Stairs.
+   - The White Stairs: B → Freezer Stairs.
+   - The Armory Stairs: B → Laundry Stairs.
+   - The Small Stairs go from 1F to 2F: 1F → Small Tower, then its north-west corner.
+5. The ladder: Go to 2F → Tower. The ladder stands under the north edge of the Cat Walk's well. Face it, press F,
+   then hold W up to the Cat Walk. To come down, stand at the gap in the rail at the top, face the drop, press F,
+   then hold S.
+6. Press H to hide the storeys above you, M for the plan view (the wheel zooms; M again to go back), and P to
    switch to plain grey.
-5. Soft floors: Go to 1F Kitchen, look straight up and fire. The yellow floor above (the Kids' Dorms, SF-2F-01)
+7. Soft floors: Go to 1F Kitchen, look straight up and fire. The yellow floor above (the Kids' Dorms, SF-2F-01)
    takes holes; every soft floor works the same way from the room below.
-6. Hatches: Go to 2F Kids' Dorms and stand on the green square (H4). Crouch (C), look down and knife it (V)
+8. Hatches: Go to 2F Kids' Dorms and stand on the green square (H4). Crouch (C), look down and knife it (V)
    until it breaks, and you drop into the 1F Kitchen. H1–H3 go from 1F to the basement, H5 and H6 from 2F to 1F.
-7. Press F8 and read the overlay on your PC: average FPS and the 1% low (target 120 and 90 at 1080p High).
+9. Press F8 and read the overlay on your PC: average FPS and the 1% low (target 120 and 90 at 1080p High).
    The browser draws no faster than your display refreshes, and a missed refresh counts as a whole extra one,
    so read the FPS on a display faster than 120 Hz (144 Hz or more). At 120 Hz or less, read the work instead:
    the page's own work each frame on the main thread, 8.3 ms on average and 11.1 ms for the slowest 1% leaving
    room for 120 and 90 FPS. It doesn't include the graphics card's time.
-8. The plans: open `research/oregon/compare/B.svg`, `1F.svg`, `2F.svg` and `3F.svg`. To see them over the
+10. The plans: open `research/oregon/compare/B.svg`, `1F.svg`, `2F.svg` and `3F.svg`. To see them over the
    official blueprint: `npm run mapgen:refs` (downloads the blueprint and r6calls' map into a gitignored
    folder), then `npm run mapgen:compare`, and open `builds/mapgen/compare/index.html`.
-9. Checks: `npm run typecheck`, `npm test`, `npm run build && npm run test:e2e` (`oregon.mjs` now shoots
-   through a soft floor and drops through a hatch), `npm run mapgen -- --check`.
+11. Checks: `npm run typecheck`, `npm test`, `npm run build && npm run test:e2e` (`oregon.mjs` shoots through a
+   soft floor, drops through a hatch, walks the Armory Stairs and takes the ladder both ways),
+   `npm run mapgen -- --check`.
 
 ### Known issues
-- No stairs or ladder yet (M3): Go to takes you between storeys, and the floors over the stairwells are still
-  closed.
+- The stairs' shapes are guesses from their footprints (open question 20): which way each goes up, where it
+  turns, and how many steps. The Small Stairs are the shakiest, because neither image draws their treads.
+- The Bunker's stairs (S5) and the outside tower stairs come with the outside (M4, D-091).
+- Ubisoft's 2F blueprint seems to show the 1F workshop through the floor inside the 2F Small Tower's L-shaped
+  wall. We build a floor and a full wall there (open question 22).
 - No roofs yet (M4): wherever no storey stands above (1F's single-storey rooms, most of 2F, the Cat Walk) you
   see the sky, and 2F's walls stop at 3.0 m. The ground outside is bare.
 - The basement's frame is an assumption (P2, open question 10). With B as drawn, the hatches H1, H2 and H3 land
@@ -152,9 +189,10 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
 - The online test on Railway needs Railway to deploy this branch (it deploys the Phase 4 branch today).
 - You no longer see your own shadow (shadows are drawn once for the level, D-077).
 
-### Next: Phase 5 M3 — stairs and the ladder
-Every staircase from the research, cut through the floors above it, and the Cat Walk ladder (grab it from the top
-too). Then Go to is no longer the only way between storeys.
+### Next: Phase 5 M4 — roofs and the outside
+Roofs on every part of the building, with the walls raised to meet them. The outside: the ground, fences,
+vehicles, sheds and the construction house; the Bunker passage with its stairs and the outside tower stairs; the
+three attacker spawn groups, five spots each; and a free camera to fly over the roofs.
 
 ---
 
