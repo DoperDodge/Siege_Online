@@ -1,5 +1,5 @@
 // npm run mapgen:compare (DESIGN §9.1, amendment 11): a plan of the compiled level per storey, cut 1.2 m above
-// the floor, with the storey's floor panels (soft floors, hatches) and its room callouts, drawn in that floor's
+// the floor, with the storey's floor panels (soft floors, hatches), its stairs and ladders and its room callouts, drawn in that floor's
 // own image frame (u), so it lies exactly over the r6calls raster and,
 // through the registration below, over the official blueprint. The plans are our geometry only: they are
 // committed to research/oregon/compare/ for Ulo to open. The comparison page that puts them over the
@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { frames, type FrameId } from "./frames.js";
 import { loadInputs } from "./compile.js";
 import type { Floor } from "./research.js";
+import { stepBoxes, type Flight } from "./stairs.js";
 
 /** One r6calls floor image is 361.244 u square (research/oregon/layout_notes.md §1). */
 const IMAGE_U = 361.244;
@@ -27,6 +28,7 @@ const COLOURS: Record<string, string> = {
   WINDOW: "#4fc3e8",
   SOFT_FLOOR: "#d9a441",
   HATCH: "#3fa75a",
+  STAIRS: "#d1495b",
 };
 
 interface Solid {
@@ -37,6 +39,14 @@ interface Solid {
   bodiesOnly?: boolean;
   vaultable?: boolean;
   label?: string;
+}
+
+interface Ladder {
+  id: string;
+  base: number[];
+  height: number;
+  yawDeg: number;
+  width: number;
 }
 
 interface Room {
@@ -77,6 +87,54 @@ export function planSvg(root: string, level: Record<string, unknown>, floor: Flo
     if (!s.bodiesOnly || !s.vaultable || Math.abs(s.center[1] - s.size[1] / 2 - storey.floorY) > 0.01) continue;
     rects.push(`<rect class="walls" ${box(s).attrs} fill="none" stroke="${COLOURS.HARD_WALL}" stroke-width="0.3" stroke-dasharray="1 0.6"><title>${esc(s.id)} (rail)</title></rect>`);
   }
+  // Stairs: each flight that starts on this storey, its treads darker the higher they are and an arrow up it; the
+  // landings; a ladder on the storey it climbs from and the one it reaches (the dividers are walls, cut above).
+  const C = COLOURS.STAIRS;
+  const next = Math.min(...layout.storeys.map((s) => s.floorY).filter((y) => y > storey.floorY));
+  const onStorey = (y: number) => y > storey.floorY - 0.01 && y < next - 0.01;
+  const stairs: string[] = [];
+  for (const f of (level.stairs ?? []) as Flight[]) {
+    if (!onStorey(f.start[1])) continue;
+    for (const [i, step] of stepBoxes(f).entries()) {
+      const [x0, y0] = native(step.rect[0], step.rect[1]);
+      const [x1, y1] = native(step.rect[2], step.rect[3]);
+      const fill = f2(0.1 + (0.4 * (i + 1)) / f.steps);
+      stairs.push(`<rect class="stairs" x="${f2(x0)}" y="${f2(y0)}" width="${f2(x1 - x0)}" height="${f2(y1 - y0)}" fill="${C}" fill-opacity="${fill}" stroke="${C}" stroke-width="0.1"><title>${esc(f.id)} step ${i + 1}</title></rect>`);
+    }
+    const [fx, fz] = [-Math.sin((f.yawDeg * Math.PI) / 180), -Math.cos((f.yawDeg * Math.PI) / 180)];
+    const [ax, ay] = native(f.start[0] + fx * f.run * 0.5, f.start[2] + fz * f.run * 0.5);
+    const [bx, by] = native(f.start[0] + fx * f.run * (f.steps - 0.5), f.start[2] + fz * f.run * (f.steps - 0.5));
+    const len = Math.hypot(bx - ax, by - ay);
+    const [dx, dy] = [(bx - ax) / len, (by - ay) / len];
+    const [hx, hy] = [bx - dx * 1.5, by - dy * 1.5];
+    stairs.push(
+      `<path class="stairs" d="M${f2(ax)} ${f2(ay)}L${f2(hx)} ${f2(hy)}" stroke="${C}" stroke-width="0.4" fill="none"/>` +
+        `<path class="stairs" d="M${f2(bx)} ${f2(by)}L${f2(hx - dy * 0.8)} ${f2(hy + dx * 0.8)}L${f2(hx + dy * 0.8)} ${f2(hy - dx * 0.8)}Z" fill="${C}"><title>${esc(f.id)}: up</title></path>`,
+    );
+    // The run's name along its first flight, between the arrow and the edge, upright.
+    const run = /^(.*):(.*)#0$/.exec(f.id);
+    const side = f.width / k / 4;
+    const [tx, ty] = [(ax + bx) / 2 - dy * side, (ay + by) / 2 + dx * side];
+    const turn = (((Math.atan2(dy, dx) * 180) / Math.PI + 450) % 180) - 90;
+    if (run) labels.push(`<text class="labels stairs" x="${f2(tx)}" y="${f2(ty)}" transform="rotate(${f2(turn)} ${f2(tx)} ${f2(ty)})">${esc(`${run[1]} ${run[2]}`)}</text>`);
+  }
+  for (const s of level.solids as Solid[]) {
+    if (!s.id.endsWith(".landing") || !onStorey(s.center[1] + s.size[1] / 2)) continue;
+    stairs.push(`<rect class="stairs" ${box(s).attrs} fill="${C}" fill-opacity="0.5" stroke="${C}" stroke-width="0.1"><title>${esc(s.id)}</title></rect>`);
+  }
+  for (const l of (level.ladders ?? []) as Ladder[]) {
+    const up = onStorey(l.base[1]);
+    if (!up && !onStorey(l.base[1] + l.height)) continue;
+    // The rungs stand 6 cm off the wall face, across the climber's facing (game/shared/src/level/builder.ts).
+    const [fx, fz] = [-Math.sin((l.yawDeg * Math.PI) / 180), -Math.cos((l.yawDeg * Math.PI) / 180)];
+    const [cx, cz] = [l.base[0] - fx * 0.06, l.base[2] - fz * 0.06];
+    const [hw, hd] = [Math.abs(fz) * (l.width / 2) + Math.abs(fx) * 0.06, Math.abs(fx) * (l.width / 2) + Math.abs(fz) * 0.06];
+    const [x0, y0] = native(cx - hw, cz - hd);
+    const [x1, y1] = native(cx + hw, cz + hd);
+    const [lx, ly] = native(l.base[0] - fx * 0.8, l.base[2] - fz * 0.8);
+    stairs.push(`<rect class="stairs" x="${f2(x0)}" y="${f2(y0)}" width="${f2(x1 - x0)}" height="${f2(y1 - y0)}" fill="${C}" stroke="${C}" stroke-width="0.3"><title>${esc(l.id)}: ladder ${up ? "up" : "down from the top"}</title></rect>`);
+    labels.push(`<text class="labels stairs" x="${f2(lx)}" y="${f2(ly)}">${esc(`${l.id} ladder ${up ? "up" : "down"}`)}</text>`);
+  }
   // Rooms: each callout at its anchor.
   const rooms = ((level.rooms ?? []) as Room[]).filter((r) => r.storey === floor);
   const callouts = rooms.map((r) => {
@@ -99,8 +157,9 @@ export function planSvg(root: string, level: Record<string, unknown>, floor: Flo
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" data-generator="tools/mapgen" viewBox="0 0 ${IMAGE_U} ${IMAGE_U}" width="1024" height="1024">`,
     `<!-- Oregon ${floor}, compiled level cut at ${f2(cut)} m, in the ${floor} image's own u. Generated by npm run mapgen:compare; our geometry only. -->`,
-    `<style>text{font:3px sans-serif;fill:#102040;text-anchor:middle;dominant-baseline:middle}text.rooms{font:bold 4px sans-serif;fill:#7a1f5c}</style>`,
+    `<style>text{font:3px sans-serif;fill:#102040;text-anchor:middle;dominant-baseline:middle}text.rooms{font:bold 4px sans-serif;fill:#7a1f5c}text.stairs{fill:#7a1424;paint-order:stroke;stroke:#fff;stroke-width:0.6px}</style>`,
     ...floors,
+    ...stairs,
     ...rects,
     ...labels,
     ...callouts,
@@ -126,10 +185,10 @@ function comparePage(floors: { floor: Floor; svg: string }[]): string {
 .bg{position:absolute;max-width:none}.plan{position:absolute;inset:0}label{margin-right:14px}</style>
 <p>Our compiled plan (coloured) over the r6calls raster or Ubisoft's blueprint. The images are local downloads
 (npm run mapgen:refs) and are never committed. Blue: soft walls; brown: barricades; cyan: glass; grey: hard walls (dashed: rails);
-yellow: soft floor; green: hatches; purple: room callouts.</p>
+yellow: soft floor; green: hatches; red: stairs (darker as they climb, the arrow points up) and ladders; purple: room callouts.</p>
 <p><label>Background <select id="bg"><option value="r6c">r6calls raster</option><option value="bp">official blueprint</option><option value="none">none</option></select></label>
 <label>Plan opacity <input id="op" type="range" min="0" max="1" step="0.05" value="0.6"></label>
-${["walls", "panels", "openings", "floors", "rooms", "labels"].map((l) => `<label><input type="checkbox" data-layer="${l}" checked> ${l}</label>`).join("")}</p>
+${["walls", "panels", "openings", "floors", "stairs", "rooms", "labels"].map((l) => `<label><input type="checkbox" data-layer="${l}" checked> ${l}</label>`).join("")}</p>
 ${sections.join("\n")}
 <script>
 const bg = document.getElementById("bg"), op = document.getElementById("op");
