@@ -257,6 +257,29 @@ describe("storey views", () => {
     expect(panelColors(lab, "skin:REINFORCEABLE")).toEqual([SURFACE_COLORS.REINFORCEABLE]);
   });
 
+  it("bodies and bullet marks go with their storey; the gun in hand is lit as your storey is", async () => {
+    const { lab, view } = await views(0);
+    // Bodies by their feet: all drawn, until hide-above or the plan view hides what's over you.
+    expect([view.draws(-3.2), view.draws(0), view.draws(3.2)]).toEqual([true, true, true]);
+    view.setHideAbove(true);
+    expect([view.draws(-3.2), view.draws(0), view.draws(2.9), view.draws(3.0), view.draws(3.2)]).toEqual([true, true, true, false, false]);
+    view.setHideAbove(false);
+    view.setPlan(true);
+    expect([view.draws(0), view.draws(3.2)]).toEqual([true, false]);
+    view.setPlan(false);
+    // Marks: a slab's underside and its top are the slab's storey; a wall's face the storey under it.
+    expect(view.markGroup(3.0, -1)).toBe(lab.storeys[2]); // the 1F ceiling is 2F's slab
+    expect(view.markGroup(3.2, 1)).toBe(lab.storeys[2]);
+    expect(view.markGroup(2.97, 0)).toBe(lab.storeys[1]); // a 1F wall just under its ceiling
+    expect(view.markGroup(-0.21, 0)).toBe(lab.storeys[0]); // a B wall just under the ground
+    expect(view.markGroup(-0.2, -1)).toBe(lab.storeys[1]); // the ground's underside, B's ceiling
+    // Light: daylight above ground; the basement's is well under half of it.
+    expect(view.light()).toBeCloseTo(1, 6);
+    for (let t = 0; t < 3; t += 0.016) view.follow(0, -3.2, 0, 0, 0.016);
+    expect(view.light()).toBeCloseTo((BELOW_GROUND.hemi + BELOW_GROUND.sun + BELOW_GROUND.ambient) / (DAYLIGHT.hemi + DAYLIGHT.sun), 6);
+    expect(view.light()).toBeLessThan(0.5);
+  });
+
   it("the light starts as your storey's, blends to the basement's when you go down (a short blend), and back up", async () => {
     const { lab, view } = await views(0);
     const ambient = lab.scene.children.find((o): o is THREE.AmbientLight => o instanceof THREE.AmbientLight)!;

@@ -5,7 +5,7 @@
 // materials: nothing is rebuilt, and a frame allocates nothing.
 import * as THREE from "three";
 import { clamp, type BuiltLevel } from "@redmond/shared";
-import { DAYLIGHT, storeyOf, SURFACE_COLORS, TAG, type LabScene } from "./labScene.js";
+import { DAYLIGHT, STOREY_SLACK_M, storeyOf, SURFACE_COLORS, TAG, type LabScene } from "./labScene.js";
 import type { PanelView } from "./panelView.js";
 
 /** The greybox palette (surface classes) or the neutral one. */
@@ -186,6 +186,26 @@ export class StoreyView {
     this.fit();
   }
 
+  /** Whether a body with its feet at `feetY` is drawn: not while its storey is hidden over yours. */
+  draws(feetY: number): boolean {
+    return storeyOf(this.storeys, feetY) <= this.topShown();
+  }
+
+  /**
+   * The storey group a mark on the level at height `y` goes in, so it's hidden with what it's on (`normalY`:
+   * the surface's normal, up or down for a floor or a ceiling). A floor's top and a slab's underside are the
+   * slab's storey, as boxes are binned; a wall's face is the storey whose floor is under it, so a mark just
+   * under a ceiling stays on its wall.
+   */
+  markGroup(y: number, normalY: number): THREE.Group {
+    return this.lab.storeys[storeyOf(this.storeys, Math.abs(normalY) >= 0.5 ? y : y - STOREY_SLACK_M)];
+  }
+
+  /** How bright your storey's light is now against daylight (1 above ground): for what has lights of its own, the gun in hand. */
+  light(): number {
+    return (this.lab.hemi.intensity + this.lab.sun.intensity + this.ambient.intensity) / (DAYLIGHT.hemi + DAYLIGHT.sun);
+  }
+
   /** The storeys drawn now, by id (tests). */
   shown(): string[] {
     return this.storeys.filter((_, i) => this.lab.storeys[i].visible).map((s) => s.id);
@@ -207,7 +227,7 @@ export class StoreyView {
    * hide-above or the plan view is on), and only your storey's labels and callouts.
    */
   private apply(): void {
-    const top = this.hideAbove || this.plan ? this.storey : Infinity;
+    const top = this.topShown();
     const groups = this.lab.storeys;
     for (let i = 0; i < groups.length; i++) {
       const visible = i <= top;
@@ -222,6 +242,11 @@ export class StoreyView {
       labels[i].visible = i === this.storey && this.tagsShown;
       callouts[i].visible = i === this.storey;
     }
+  }
+
+  /** The highest storey drawn: yours while hide-above or the plan view is on, else the top one. */
+  private topShown(): number {
+    return this.hideAbove || this.plan ? this.storey : Infinity;
   }
 
   /**

@@ -226,14 +226,17 @@ export function showsSections(spec: PanelSpec): boolean {
   return spec.construction.kind === "wall" && spec.construction.reinforceable;
 }
 
+/** How far under a storey's floor a box's bottom (its own 0.2 m slab) or a body's feet (a top step) still count as on it. */
+export const STOREY_SLACK_M = 0.25;
+
 /**
  * The storey a box is drawn with, by its place in `storeys` (listed by height): the last whose floor, less
- * 0.25 m, is at or below the box's bottom (a storey's own 0.2 m slab hangs just under its floorY), or the
- * first for anything lower. 0 when the level has no storeys.
+ * STOREY_SLACK_M, is at or below the box's bottom (a storey's own 0.2 m slab hangs just under its floorY), or
+ * the first for anything lower. 0 when the level has no storeys.
  */
 export function storeyOf(storeys: readonly { floorY: number }[], bottom: number): number {
   let at = 0;
-  for (let i = 0; i < storeys.length; i++) if (storeys[i].floorY - 0.25 <= bottom) at = i;
+  for (let i = 0; i < storeys.length; i++) if (storeys[i].floorY - STOREY_SLACK_M <= bottom) at = i;
   return at;
 }
 

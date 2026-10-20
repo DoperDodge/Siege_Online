@@ -46,7 +46,8 @@ function runImport() {
 }
 
 function runCompile() {
-  const { level, report } = compile(loadInputs(ROOT));
+  const inputs = loadInputs(ROOT);
+  const { level, report } = compile(inputs);
   const text = readableJson(level);
   const file = join(MAP, "level.json");
   write(join(ROOT, "builds", "mapgen", "report.json"), JSON.stringify(report, null, 1) + "\n");
@@ -57,7 +58,7 @@ function runCompile() {
   );
   for (const [frame, options] of Object.entries(report.frames)) {
     for (const [use, landings] of Object.entries(options)) {
-      const chosen = use === "main" ? " (in use)" : "";
+      const chosen = use === inputs.layout.frames[frame as FrameId].use ? " (in use)" : "";
       console.log(`  frames.${frame} ${use}${chosen}: ` + landings.map((l) => `${l.hatch} ${Math.round(l.over * 100)}% over ${l.bottom}${l.over === 1 ? `, ${l.clearM} m clear` : ""}`).join("; "));
     }
   }

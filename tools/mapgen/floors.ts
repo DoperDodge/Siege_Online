@@ -6,9 +6,9 @@
 // region so a bullet counts them as one surface). What's left is hard slab, in as few rectangles as the
 // greedy cover gives. Stairwell holes come with the stairs (M3).
 import type { Frames } from "./frames.js";
-import { greedyRects, PlanGrid, subtractRects, type Rect } from "./grid.js";
+import { distanceInside, greedyRects, maxIn, subtractRects, type Rect } from "./grid.js";
 import type { Floor } from "./research.js";
-import { CELL_M, fillBox, storeyOfBox, type RoomsResult } from "./rooms.js";
+import { CELL_M, clearCells, fillBox, storeyOfBox, type RoomsResult } from "./rooms.js";
 import type { Layout } from "./schema.js";
 import type { Solid } from "./walls.js";
 
@@ -130,7 +130,7 @@ export function compileFloors(layout: Layout, fr: Frames, wallSolids: Solid[], r
     for (let c = 0; c < n; c++) kind[c] = g.cells[c] === 2 ? 0 : 1;
     const below = order[si - 1];
     if (below) {
-      const pierce = new PlanGrid(g.x0, g.y0, g.x0 + g.w * CELL_M, g.y0 + g.h * CELL_M, CELL_M);
+      const pierce = g.blank();
       for (const b of wallSolids) {
         if (b.drawOnly || storeyOfBox(layout, b) !== below.id) continue;
         if (b.center[1] + b.size[1] / 2 > y0 + 0.01 && b.center[1] - b.size[1] / 2 < y1 - 0.01) fillBox(pierce, b);
@@ -198,11 +198,15 @@ export function compileFloors(layout: Layout, fr: Frames, wallSolids: Solid[], r
       }
     });
     soft.forEach((f, fi) => {
-      const rects = greedyRects(g.w, g.h, (c) => kind[c] === 2 && region[c] === fi);
+      const inArea = (c: number) => kind[c] === 2 && region[c] === fi;
+      const rects = greedyRects(g.w, g.h, inArea);
+      // Worked out only if a thin rectangle needs it: is part of it open floor, not a doorway's sliver?
+      let dist: Int32Array | undefined;
+      const open = (cells: Rect) => maxIn((dist ??= distanceInside(g.w, g.h, inArea)), g.w, cells) >= clearCells(SLIVER_M);
       const mine: Solid[] = [];
       rects.forEach((cells, ri) => {
         const r = cellRect(cells);
-        if (Math.min(r[2] - r[0], r[3] - r[1]) < SLIVER_M - 1e-9) {
+        if (Math.min(r[2] - r[0], r[3] - r[1]) < SLIVER_M - 1e-9 && !open(cells)) {
           // A doorway's sliver: hard slab.
           for (let j = cells[1]; j < cells[3]; j++) for (let i = cells[0]; i < cells[2]; i++) kind[j * g.w + i] = 1;
           return;

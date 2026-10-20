@@ -33,10 +33,12 @@ export function frameDiagnostics(layout: Layout, walls: WallsPart[], playable: [
       const rooms = compileRooms(variant, fr, compileWalls(variant, fr, [part], playable).solids);
       const plan = rooms.plans.get(floor)!;
       const g = plan.grid;
-      both[use] = drops.map((h) => {
+      both[use] = drops.flatMap((h) => {
+        // A hatch that didn't compile has nothing to land: the compile's errors say why.
+        const rect = hatches.find((x) => x.id === h.id)?.rect;
+        if (!rect) return [];
         const index = rooms.rooms.findIndex((r) => r.id === h.bottom);
         const dist = distanceInside(g.w, g.h, (c) => plan.room[c] === index);
-        const rect = hatches.find((x) => x.id === h.id)!.rect;
         let cells = 0;
         let over = 0;
         let clear = Infinity;
@@ -48,7 +50,7 @@ export function frameDiagnostics(layout: Layout, walls: WallsPart[], playable: [
             clear = Math.min(clear, i < 0 || j < 0 || i >= g.w || j >= g.h ? 0 : dist[c]);
           }
         }
-        return { hatch: h.id, bottom: h.bottom, over: cells ? Math.round((over / cells) * 1000) / 1000 : 0, clearM: over === cells ? Math.round(Math.max(0, clear - 1) * CELL_M * 100) / 100 : 0 };
+        return [{ hatch: h.id, bottom: h.bottom, over: cells ? Math.round((over / cells) * 1000) / 1000 : 0, clearM: over === cells ? Math.round(Math.max(0, clear - 1) * CELL_M * 100) / 100 : 0 }];
       });
     }
     out[frame] = both;

@@ -11,8 +11,10 @@ import { frames } from "./frames.js";
 import { compile, loadInputs } from "./compile.js";
 import { readableJson } from "./format.js";
 import { enclosureLeaks, planGrid } from "./enclosure.js";
+import { distanceInside, PlanGrid } from "./grid.js";
 import type { Extracted } from "./import.js";
 import { connections, hatchTable, roomTable, softFloorTable, softWalls } from "./research.js";
+import { CELL_M, clearCells, compileRooms, storeyOfBox } from "./rooms.js";
 import { FLOOR_IDS, wallSchema, type SpanDef, type WallDef } from "./schema.js";
 import type { Floor } from "./research.js";
 import { compileWalls } from "./walls.js";
@@ -202,6 +204,20 @@ describe("oregon level.json", () => {
       if (w.axis !== row.axis) problems.push(`${row.id}: on a ${w.axis} line, research says ${row.axis}`);
     }
     expect(problems).toEqual([]);
+  });
+});
+
+describe("grid helpers", () => {
+  it("a blank grid has the same cells as its model, wherever it starts", () => {
+    const off: string[] = [];
+    for (let a = -400; a <= 400; a += 7) {
+      for (let n = 1; n <= 300; n += 13) {
+        const g = new PlanGrid(a * CELL_M, -a * CELL_M, (a + n) * CELL_M, (n - a) * CELL_M, CELL_M);
+        const b = g.blank();
+        if (b.x0 !== g.x0 || b.y0 !== g.y0 || b.w !== g.w || b.h !== g.h) off.push(`${a}, ${n}: ${g.w}×${g.h} → ${b.w}×${b.h}`);
+      }
+    }
+    expect(off).toEqual([]);
   });
 });
 
@@ -442,6 +458,57 @@ describe("oregon rooms and floors", () => {
       expect(inRoom(r, r.anchor[0], r.anchor[2]), r.id).toBe(true);
     }
     expect(report.errors).toEqual([]);
+  });
+
+  it("every spot of a room where a body fits is in its rectangles (the HUD's lookup)", () => {
+    const out = compileRooms(inputs.layout, fr, compileWalls(inputs.layout, fr, inputs.walls, inputs.exterior.playable).solids);
+    const open = clearCells(0.3);
+    const problems: string[] = [];
+    for (const plan of out.plans.values()) {
+      const g = plan.grid;
+      // Each room's bounding box on the plan, to work its distances out in.
+      const bounds = new Map<number, [number, number, number, number]>();
+      for (let c = 0; c < plan.room.length; c++) {
+        const index = plan.room[c];
+        if (index < 0) continue;
+        const [i, j] = [c % g.w, Math.floor(c / g.w)];
+        const b = bounds.get(index) ?? bounds.set(index, [i, j, i + 1, j + 1]).get(index)!;
+        [b[0], b[1], b[2], b[3]] = [Math.min(b[0], i), Math.min(b[1], j), Math.max(b[2], i + 1), Math.max(b[3], j + 1)];
+      }
+      for (const [index, [i0, j0, i1, j1]] of bounds) {
+        const room = rooms.find((r) => r.id === out.rooms[index].id)!;
+        const w = i1 - i0;
+        const cell = (c: number) => (j0 + Math.floor(c / w)) * g.w + i0 + (c % w);
+        const dist = distanceInside(w, j1 - j0, (c) => plan.room[cell(c)] === index);
+        let missed = 0;
+        for (let c = 0; c < dist.length; c++) {
+          const at = cell(c);
+          if (dist[c] >= open && !inRoom(room, g.x0 + ((at % g.w) + 0.5) * CELL_M, g.y0 + (Math.floor(at / g.w) + 0.5) * CELL_M)) missed++;
+        }
+        if (missed) problems.push(`${room.id}: ${missed} cells 0.3 m clear of its edge are in none of its rectangles`);
+      }
+    }
+    expect(problems).toEqual([]);
+  });
+
+  it("every room's anchor stands 0.45 m clear of the walls around it", () => {
+    const problems: string[] = [];
+    for (const r of rooms) {
+      for (const b of solids) {
+        if (b.drawOnly || ["HARD_FLOOR", "SOFT_FLOOR", "HATCH"].includes(b.surface) || storeyOfBox(inputs.layout, b as never) !== r.storey) continue;
+        const dx = Math.max(b.center[0] - b.size[0] / 2 - r.anchor[0], 0, r.anchor[0] - b.center[0] - b.size[0] / 2);
+        const dz = Math.max(b.center[2] - b.size[2] / 2 - r.anchor[2], 0, r.anchor[2] - b.center[2] - b.size[2] / 2);
+        if (Math.hypot(dx, dz) < 0.45 - 1e-6) problems.push(`${r.id}'s anchor is ${Math.hypot(dx, dz).toFixed(3)} m from ${b.id}`);
+      }
+    }
+    expect(problems).toEqual([]);
+  });
+
+  it("a hatch whose top room doesn't compile is reported, not a crash", () => {
+    const layout = structuredClone(inputs.layout);
+    layout.rooms.find((r) => r.id === "1F_MEETING_HALL")!.seed = [-500, -500];
+    const out = compile({ ...inputs, layout });
+    expect(out.report.errors.join("\n")).toMatch(/1F_MEETING_HALL's seed \(-500, -500 1F u\) is outside the 1F building/);
   });
 
   it("a body put at any room's anchor stands there, on that storey's floor", async () => {

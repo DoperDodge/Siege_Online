@@ -18,6 +18,11 @@ export class PlanGrid {
     this.cells = new Uint8Array(this.w * this.h);
   }
 
+  /** An empty grid over the same cells (x0 + w·cell would round to an extra column now and then). */
+  blank(): PlanGrid {
+    return new PlanGrid(this.x0, this.y0, this.x0 + (this.w - 0.5) * this.cellU, this.y0 + (this.h - 0.5) * this.cellU, this.cellU);
+  }
+
   /** Mark a rectangle [x0, y0, x1, y1] (u) as wall. */
   fill(x0: number, y0: number, x1: number, y1: number) {
     const i0 = Math.max(0, Math.floor((x0 - this.x0) / this.cellU));
@@ -174,6 +179,13 @@ export function subtractRects(outer: Rect, holes: Rect[]): Rect[] {
     else strips.push({ x0, x1, keep });
   }
   return strips.flatMap((s) => s.keep.map(([y0, y1]): Rect => [s.x0, y0, s.x1, y1]));
+}
+
+/** The largest value of a per-cell array (`w` cells a row) inside a cell rectangle [i0, j0, i1, j1). */
+export function maxIn(a: ArrayLike<number>, w: number, r: Rect): number {
+  let m = -Infinity;
+  for (let j = r[1]; j < r[3]; j++) for (let i = r[0]; i < r[2]; i++) m = Math.max(m, a[j * w + i]);
+  return m;
 }
 
 /**

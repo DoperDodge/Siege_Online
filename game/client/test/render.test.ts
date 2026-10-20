@@ -140,6 +140,25 @@ describe("effects bus", () => {
     expect(audio.heard).toEqual(["shot"]); // the suppressed one: no sound hook until audio arrives (Phase 11)
   });
 
+  it("a map puts each bullet mark in the group it names for the mark's height and surface (its storey)", async () => {
+    const { sim, wall } = await level();
+    const scene = new THREE.Scene();
+    const storey = new THREE.Group();
+    scene.add(storey);
+    const asked: [number, number][] = [];
+    const fx = new FxBus(scene, sim, undefined, (y, normalY) => (asked.push([y, normalY]), storey));
+    const at = () => new THREE.Vector3(0, 1.2, 4);
+    fx.server(100, [{ kind: "shotFx", pawnId: 5, slot: 0, suppressed: false, ends: [wall] }]);
+    fx.update(16, 100, [1], at, at);
+    expect(fx.counts.decalsShown).toBe(1);
+    expect(storey.children).toHaveLength(1);
+    expect(asked).toHaveLength(1);
+    expect(asked[0][0]).toBeCloseTo(1.2, 3); // on the wall ahead, at the shot's height
+    expect(Math.abs(asked[0][1])).toBeLessThan(1e-6); // a wall's normal is level
+    const mark = storey.children[0];
+    expect(mark.position.z).toBeCloseTo(wall[2] - 0.002, 3); // where it was, just off the face
+  });
+
   it("a hidden tab (no frames) keeps only the newest shots, and draws none over a second old when it comes back", async () => {
     const { sim, wall } = await level();
     const audio = ear();

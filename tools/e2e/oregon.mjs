@@ -68,6 +68,31 @@ try {
   const own = (page) => page.evaluate(() => window.__lab.net.own);
   const view = (page) => page.evaluate(() => window.__lab.view);
   const hudLine = (page) => page.evaluate(() => document.querySelector(".hud.where")?.textContent ?? "");
+  /**
+   * The HUD line names the room you're in ("outside" between rooms, "—" before the level has any) and your
+   * storey, and gives where you are in world u and in the storey's own u (its frame, world = a·native + b).
+   */
+  const hudSaysWhereYouAre = async (page) => {
+    const v = await view(page);
+    const me = await own(page);
+    const line = await hudLine(page);
+    const m = WHERE.exec(line);
+    const frame = v.levelPlan.frames[v.storey];
+    const [wx, wz] = [me.x / v.levelPlan.mPerU, me.z / v.levelPlan.mPerU];
+    const here = roomAt(v.rooms, v.storey, me.x, me.z);
+    const ok =
+      m !== null &&
+      m[1] === (here ? here.callout : v.rooms.length ? "outside" : "—") &&
+      m[2] === v.storey &&
+      m[5] === v.storey &&
+      Math.abs(Number(m[3]) - wx) < 0.2 &&
+      Math.abs(Number(m[4]) - wz) < 0.2 &&
+      Math.abs(Number(m[6]) - (wx - frame.bx) / frame.ax) < 0.2 &&
+      Math.abs(Number(m[7]) - (wz - frame.by) / frame.ay) < 0.2;
+    return { ok, line, frame };
+  };
+  /** A frame that moves nothing (1F's own, and B's as drawn): a check in it can't tell the two frames apart. */
+  const identity = (f) => f.ax === 1 && f.bx === 0 && f.ay === 1 && f.by === 0;
   /** Open or close the pause menu (Escape toggles it; the pointer is let go first, or Escape would only do that). */
   const menu = async (page, open) => {
     await page.evaluate(() => document.exitPointerLock());
@@ -121,30 +146,16 @@ try {
 
   // ---- the storey views (tools/mapgen/DESIGN.md E9 part 1)
   v = await view(off);
-  const me = await own(off);
   /** The storeys up to yours: what hide-above and the plan view keep. */
   const kept = v.storeys.slice(0, v.storeys.indexOf(v.storey) + 1);
   const panelsKept = kept.reduce((n, id) => n + (v.panels.byStorey[id] ?? 0), 0);
   const panelsAll = Object.values(v.panels.byStorey).reduce((a, b) => a + b, 0);
   result.view = { storey: v.storey, storeys: v.storeys, rooms: v.rooms.length, panels: v.panels.byStorey };
-  // The HUD line: the room ("outside" between rooms, "—" before the level has any), the storey, world u and the
-  // storey's own u (its frame), against where you are.
+  // The HUD line, against where you are.
   await off.waitForFunction((re) => new RegExp(re).test(document.querySelector(".hud.where")?.textContent ?? ""), WHERE.source, { timeout: 5000, polling: 100 });
-  const line = await hudLine(off);
-  const m = WHERE.exec(line);
-  const frame = v.levelPlan.frames[v.storey];
-  const [wx, wz] = [me.x / v.levelPlan.mPerU, me.z / v.levelPlan.mPerU];
-  const here = roomAt(v.rooms, v.storey, me.x, me.z);
-  result.hud = line;
-  result.checks.hudLineSaysWhereYouAre =
-    m !== null &&
-    m[1] === (here ? here.callout : v.rooms.length ? "outside" : "—") &&
-    m[2] === v.storey &&
-    m[5] === v.storey &&
-    Math.abs(Number(m[3]) - wx) < 0.2 &&
-    Math.abs(Number(m[4]) - wz) < 0.2 &&
-    Math.abs(Number(m[6]) - (wx - frame.bx) / frame.ax) < 0.2 &&
-    Math.abs(Number(m[7]) - (wz - frame.by) / frame.ay) < 0.2;
+  const hud = await hudSaysWhereYouAre(off);
+  result.hud = hud.line;
+  result.checks.hudLineSaysWhereYouAre = hud.ok;
   // H hides the storeys above yours, panels and all; again shows them.
   await off.keyboard.press("KeyH");
   v = await view(off);
@@ -174,19 +185,25 @@ try {
   v = await view(off);
   result.checks.greyboxPalette = v.palette === "greybox" && v.colors.HARD_WALL === HARD_WALL;
   // Once the level has rooms: Go to has every room under its storey's heading, and going to one (on another
-  // storey if there is one) puts you there with its callout on the HUD.
+  // storey, one drawn in a frame of its own if there is one) puts you there with its callout on the HUD, and
+  // the HUD's own u in that frame.
   if (v.rooms.length) {
     await menu(off, true);
     const entries = await off.evaluate(() => [...document.querySelectorAll(".pause [data-room]")].map((b) => [b.dataset.room, b.closest("[data-storey]")?.dataset.storey ?? null, b.textContent]));
     result.goToRooms = entries.length;
     result.checks.goToEveryRoomByStorey = v.rooms.every((r) => entries.some(([id, storey, name]) => id === r.id && storey === r.storey && name === r.callout));
-    const target = v.rooms.find((r) => r.storey !== v.storey) ?? v.rooms[0];
+    const elsewhere = v.rooms.filter((r) => r.storey !== v.storey);
+    const target = elsewhere.find((r) => !identity(v.levelPlan.frames[r.storey])) ?? elsewhere[0] ?? v.rooms[0];
     result.goToRoom = target.id;
     await off.locator(`.pause [data-room="${target.id}"]`).click();
     await menu(off, false);
     await off.waitForFunction((s) => window.__lab.view.storey === s, target.storey, { timeout: 10000, polling: 100 });
     await off.waitForFunction((t) => (document.querySelector(".hud.where")?.textContent ?? "").startsWith(t), `${target.callout} · ${target.storey} · `, { timeout: 5000, polling: 100 });
     result.checks.goToRoomShowsItsCallout = true;
+    const there = await hudSaysWhereYouAre(off);
+    result.hudThere = there.line;
+    // Oregon's 2F and Cat Walk are drawn in frames of their own: the line's second u must be theirs.
+    result.checks.hudLineInTheRoomsOwnFrame = there.ok && (!identity(there.frame) || !Object.values(v.levelPlan.frames).some((f) => !identity(f)));
     await sleep(800);
     await off.screenshot({ path: shot("oregon-room.png") });
   }

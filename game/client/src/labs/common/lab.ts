@@ -293,7 +293,7 @@ export async function startLab(o: LabOptions): Promise<void> {
   /** The gun in your hands (drawn over the world) and the world's effects: flashes, tracers, bullet marks. */
   const viewmodel = new Viewmodel(data);
   viewmodel.setAspect(camera.aspect);
-  const fx = new FxBus(scene, sim);
+  const fx = new FxBus(scene, sim, undefined, storeyView ? (y, normalY) => storeyView.markGroup(y, normalY) : undefined);
   const laserDots = new Map<number, THREE.Sprite>();
   const laserMat = new THREE.SpriteMaterial({ color: 0xff2a2a, depthTest: true, transparent: true, opacity: 0.95 });
   // Every shader the effects use is readied now, not in the middle of the first shot (warmShaders).
@@ -927,8 +927,10 @@ export async function startLab(o: LabOptions): Promise<void> {
       // Other players are drawn a little in the past, between two server snapshots; our own bodies are
       // drawn from our prediction.
       const rs = pawn.proxy ? net!.session.remoteAt(pawn.id, renderTick) : interpolated(pawn, alpha);
-      v.body.visible = rs !== null;
-      v.wire.visible = rs !== null && showHitboxes;
+      // On a map, a body on a storey hidden over yours is hidden with it.
+      const drawn = rs !== null && (storeyView?.draws(rs.y) ?? true);
+      v.body.visible = drawn;
+      v.wire.visible = drawn && showHitboxes;
       if (!rs) continue;
       const w = pawn.loadout?.weapons[rs.slot];
       v.setWeapon(w ? { class: w.class, pick: w.pick } : null);
@@ -937,7 +939,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       const eyes = pawn.id === viewed.id;
       // In first person your own body isn't drawn; your gun is the viewmodel.
       v.setFirstPerson(eyes && !outside);
-      v.wire.visible = showHitboxes && (!eyes || outside);
+      v.wire.visible = drawn && showHitboxes && (!eyes || outside);
     }
     updateShots(now);
     fx.update(now, shownRenderTick, ctrl.pawnIds, ownMuzzle, remoteMuzzle);
@@ -947,6 +949,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     const rs = interpolated(viewed, alpha);
     // A map follows the body you look through: its storey (and that storey's light), the plan view over it.
     if (storeyView?.follow(rs.x, rs.y, rs.z, controls.yaw, elapsed)) renderer.shadowMap.needsUpdate = true;
+    if (storeyView) viewmodel.setLight(storeyView.light());
     whereHud?.update(now, storeyView?.storey ?? 0, rs.x, rs.z);
     const fov = aim(viewed, rs);
     const eye = eyePose(data.movement, data.hitboxes, { ...rs, yaw: controls.yaw });

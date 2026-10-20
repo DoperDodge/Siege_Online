@@ -293,6 +293,8 @@ function destructionProblems(d: DestructionData, weapons: Map<string, WeaponData
       if (reinforced && !("reinforceable" in c && c.reinforceable)) out.push(`${at} starts reinforced but "${id}" can't be reinforced`);
       if (s.panel?.reinforcedFrom && !reinforced) out.push(`${at}: panel.reinforcedFrom on a panel that doesn't start reinforced`);
       if (s.panel?.empty !== undefined && c.kind !== "barricade") out.push(`${at}: only a barricade can start empty`);
+      // A region is one surface cut into tiles, which lie flat at one height (mapProblems): floor tiles only.
+      if (s.panel?.region !== undefined && c.kind !== "floor") out.push(`${at}: only floor tiles can share a region, not a ${c.kind}`);
     }
   }
   return out;

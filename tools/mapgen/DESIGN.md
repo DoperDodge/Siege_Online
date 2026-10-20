@@ -561,7 +561,8 @@ explicit metres of a pillar), with its spans sorted:
 - **As built (M2, D-085):** the plan is rasterised at 5 cm (metres) from the compiled boxes standing on the
   storey, not from the wall lines, so it is exactly what the level has; wells are no room; each seed is its
   §4 box centre (the Cat Walk's moved onto the ring); the callout is r6calls' name, or the official name for
-  the eight bomb-site rooms; room rectangles leave out doorway slivers under 0.3 m; the anchor stands 0.45 m
+  the eight bomb-site rooms; room rectangles leave out doorway slivers under 0.3 m (a thin rectangle with a
+  spot 0.3 m clear of the room's edge is open floor the greedy cover cut, and stays); the anchor stands 0.45 m
   clear of walls. Eleven splits cover the open-plan links (B 3, 1F 5, 2F 3).
 
 ### 5.6 Floors: slabs, stairwell holes, soft floors, hatches
@@ -590,7 +591,7 @@ explicit metres of a pillar), with its spans sorted:
 - **As built (M2, D-086):** each storey's floor is one 5 cm raster: the footprint (inside and under its boxes)
   less what the storey below runs up into the slab, then wells (holes), hatches (the largest rectangle of the
   square inside the top room), soft floors (their rectangles' floor inside the walls; slivers under 0.3 m stay
-  hard) and hard slab (greedy rectangles). The ground is the first storey above ground's floor over the whole
+  hard unless part of one is 0.3 m clear of the area's edge) and hard slab (greedy rectangles). The ground is the first storey above ground's floor over the whole
   play area, less its hatches. An `underground` storey's walls all stop under the slab, so B needs no cutback.
   Soft-floor rectangles run to the walls of the rooms the research names: r6calls' outlines are traced around
   furniture and aren't consistently in one frame, so they serve as a check, not as geometry. Amendment 7 wins

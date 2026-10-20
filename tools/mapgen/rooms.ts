@@ -4,7 +4,7 @@
 // stairs). A room is the region its seed falls in; it compiles to rectangles (the HUD's lookup, later the
 // sites) and an anchor, the spot nearest its middle where a body fits, for goTo and its label.
 import type { Frames } from "./frames.js";
-import { distanceInside, greedyRects, PlanGrid, type Rect } from "./grid.js";
+import { distanceInside, greedyRects, maxIn, PlanGrid, type Rect } from "./grid.js";
 import type { Floor } from "./research.js";
 import type { Layout } from "./schema.js";
 import type { Solid } from "./walls.js";
@@ -43,6 +43,12 @@ export interface RoomsResult {
   errors: string[];
   warnings: string[];
 }
+
+/**
+ * The distance (distanceInside's count: 1 next to the edge) at which a cell's centre is at least `m` metres
+ * from the edge: it is (d − 0.5) cells away, and the chessboard count never overstates the true distance.
+ */
+export const clearCells = (m: number) => Math.ceil(m / CELL_M + 0.5);
 
 const snapOut = (v: number, dir: -1 | 1) => (dir < 0 ? Math.floor(v / CELL_M) : Math.ceil(v / CELL_M)) * CELL_M;
 
@@ -174,14 +180,18 @@ function roomShape(
   const mine = (c: number) => labels[(st.j0 + Math.floor(c / w)) * grid.w + st.i0 + (c % w)] === label;
   const round = (v: number) => Math.round(v * 1e4) / 1e4;
   const toM = (r: Rect): Rect => [grid.x0 + (st.i0 + r[0]) * CELL_M, grid.y0 + (st.j0 + r[1]) * CELL_M, grid.x0 + (st.i0 + r[2]) * CELL_M, grid.y0 + (st.j0 + r[3]) * CELL_M].map(round) as Rect;
-  const all = greedyRects(w, h, mine).map(toM);
-  const big = all.filter((r) => Math.min(r[2] - r[0], r[3] - r[1]) >= SLIVER_M - 1e-9);
+  const cells = greedyRects(w, h, mine);
+  const all = cells.map(toM);
+  const dist = distanceInside(w, h, mine);
+  // A thin rectangle is a doorway's sliver, unless part of it is open floor: the greedy cover also cuts thin
+  // strips across a room where two wall faces are a few centimetres out of line.
+  const open = clearCells(SLIVER_M);
+  const big = all.filter((r, i) => Math.min(r[2] - r[0], r[3] - r[1]) >= SLIVER_M - 1e-9 || maxIn(dist, w, cells[i]) >= open);
   const area = (r: Rect) => (r[2] - r[0]) * (r[3] - r[1]);
   const rects = big.length ? big : [all.reduce((a, b) => (area(b) > area(a) ? b : a))];
   // Anchor: the cell clear of walls by ANCHOR_CLEAR_M nearest the room's middle (else the clearest one).
-  const dist = distanceInside(w, h, mine);
   const [cx, cz] = [st.sx / st.n - st.i0, st.sz / st.n - st.j0];
-  const need = Math.ceil(ANCHOR_CLEAR_M / CELL_M);
+  const need = clearCells(ANCHOR_CLEAR_M);
   let best = -1;
   let bestScore = Infinity;
   let clearest = -1;

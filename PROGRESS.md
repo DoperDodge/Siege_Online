@@ -59,6 +59,10 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
     research names.
   - The browser test shoots up through the Kids' Dorms floor from the 1F Kitchen, then knifes H4 open from
     above and lands in the Kitchen.
+- **Review (D-089):** two reviewers read the M2 changes; nine findings held up and all are fixed, each with a
+  test. The ones you'd notice: six rooms had strips of floor in no room (the HUD said "outside" in the Lobby),
+  bullet marks and other players floated in view when their storey was hidden, and the gun in hand stayed
+  daylight-bright in the basement.
 - **Smaller fixes:** the Destruction Lab's walls no longer name their sections twice; Go to uses the rooms'
   anchors instead of hand-picked centres.
 
