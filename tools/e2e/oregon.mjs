@@ -4,7 +4,9 @@
 // rooms). There the HUD line says where you are; H hides the storeys above, M shows the plan view (the wheel
 // zooms it) and P switches the palette; with rooms, Go to lists every room under its storey and going to one
 // shows its callout. From the Kitchen, a burst goes up through the Kids' Dorms' soft floor; on H4 in the Kids'
-// Dorms, the knife opens the hatch and you drop into the Kitchen. With shadows on, a lost and restored WebGL
+// Dorms, the knife opens the hatch and you drop into the Kitchen. Up the Armory Stairs from the basement to 1F and
+// back down (M3); up the ladder from the 2F Tower onto the Cat Walk, then down it again from the top, facing the
+// drop (F, then S), the HUD line naming the room each time. With shadows on, a lost and restored WebGL
 // context draws the shadows again (they are drawn on request only, D-077), and hiding the storeys above redraws
 // them. Online, two pages at 100 ms of simulated round trip: A breaks the Main Entrance barricade and B sees
 // exactly the server's panels. Screenshots go to builds/e2e. Requires `npm run build` first. The checks follow
@@ -23,7 +25,7 @@ const shot = (name) => join(OUT, name);
 mkdirSync(OUT, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const LAG = 100;
-const Btn = { Fire: 64, Melee: 1024 };
+const Btn = { Interact: 4, Fire: 64, Melee: 1024 };
 const CROUCH = 1; // Stance.Crouch: the knife reaches a hatch underfoot from a crouch (1.5 m reach, eye at 1.15 m)
 const DOOR = "1F.o011.bar"; // the Main Entrance barricade (data/maps/oregon/level.json)
 const DOOR_Z = 42.45; // its plane; the Lobby is north of it (smaller z)
@@ -244,6 +246,90 @@ try {
     const landed = await own(off);
     result.offline.hatchDrop = { broken: (await panel(off, "H4")).broken, at: [landed.x, landed.y, landed.z] };
     result.checks.droppedThroughH4IntoTheKitchen = result.offline.hatchDrop.broken && Math.abs(landed.y) < 0.1 && inRoom("1F_KITCHEN", landed.x, landed.z);
+  }
+  // ---- stairs and the ladder (M3)
+  const PawnMode = { Walk: 0, Ladder: 2 };
+  const ahead = (deg) => [-Math.sin((deg * Math.PI) / 180), -Math.cos((deg * Math.PI) / 180)];
+  const rad = (deg) => (deg * Math.PI) / 180;
+  const calloutOf = (id) => lvl.rooms?.find((r) => r.id === id)?.callout;
+  const prompt = (page) => page.evaluate(() => (document.querySelector(".prompt.hidden") ? "" : (document.querySelector(".prompt")?.textContent ?? "")));
+  /** Steer along the points (yaw toward the next, forward held) until the last is reached; then let go. */
+  const walkAlong = async (page, pts, timeoutMs = 20000) => {
+    const until = Date.now() + timeoutMs;
+    let k = 0;
+    while (k < pts.length && Date.now() < until) {
+      const me = await own(page);
+      const [dx, dz] = [pts[k][0] - me.x, pts[k][1] - me.z];
+      if (Math.hypot(dx, dz) < 0.25) k++;
+      else await input(page, { forward: 1, yaw: Math.atan2(-dx, -dz) });
+      await sleep(40);
+    }
+    await input(page, null);
+    await sleep(500);
+    return k >= pts.length;
+  };
+  // The Armory Stairs' basement flight: before its first riser, along it, past its top (tools/mapgen's walk test).
+  const flight = lvl.stairs?.find((f) => f.id === "S3:B>1F#0");
+  if (flight) {
+    const [fx, fz] = ahead(flight.yawDeg);
+    const len = flight.run * flight.steps;
+    const along = (d) => [flight.start[0] + fx * d, flight.start[2] + fz * d];
+    const way = [along(-0.6), along(0.2), along(len + 0.25), along(len + 0.3)];
+    await off.evaluate(([x, y, z, yaw]) => window.__lab.teleport(x, y, z, yaw), [way[0][0], flight.start[1], way[0][1], flight.yawDeg]);
+    await sleep(600);
+    const upOk = await walkAlong(off, way.slice(1));
+    const up = await own(off);
+    const upHud = await hudSaysWhereYouAre(off);
+    result.offline.stairsUp = { at: [up.x, up.y, up.z], hud: upHud.line };
+    result.checks.upTheArmoryStairsFromBTo1F =
+      upOk && Math.abs(up.y - (flight.start[1] + flight.rise * flight.steps)) < 0.05 && upHud.ok && upHud.line.startsWith(`${calloutOf("1F_ARMORY_STAIRS")} · 1F · `);
+    await off.screenshot({ path: shot("oregon-stairs-up.png") });
+    const downOk = await walkAlong(off, [...way].reverse().slice(1));
+    const down = await own(off);
+    const downHud = await hudSaysWhereYouAre(off);
+    result.offline.stairsDown = { at: [down.x, down.y, down.z], hud: downHud.line };
+    result.checks.backDownTheArmoryStairsToB =
+      downOk && Math.abs(down.y - flight.start[1]) < 0.05 && downHud.ok && downHud.line.startsWith(`${calloutOf("B_LAUNDRY_STAIRS")} · B · `);
+  }
+  // The ladder: from the 2F Tower, facing it, F and W up onto the Cat Walk; then, turned round to face the drop
+  // at the top, F and S back down.
+  const ladder = lvl.ladders?.find((l) => l.id === "L1");
+  if (ladder) {
+    const [fx, fz] = ahead(ladder.yawDeg);
+    const top = ladder.base[1] + ladder.height;
+    await off.evaluate(([x, y, z, yaw]) => window.__lab.teleport(x, y, z, yaw), [ladder.base[0] - fx * 0.35, ladder.base[1], ladder.base[2] - fz * 0.35, ladder.yawDeg]);
+    await input(off, { yaw: rad(ladder.yawDeg) });
+    await sleep(600);
+    const atFoot = await prompt(off);
+    await input(off, { yaw: rad(ladder.yawDeg), buttons: Btn.Interact });
+    await off.waitForFunction((mode) => window.__lab.net.own.mode === mode, PawnMode.Ladder, { timeout: 5000, polling: 50 });
+    await input(off, { yaw: rad(ladder.yawDeg), forward: 1 });
+    await off.waitForFunction((mode) => window.__lab.net.own.mode !== mode, PawnMode.Ladder, { timeout: 10000, polling: 20 });
+    await input(off, { yaw: rad(ladder.yawDeg) }); // let go of W as the climb ends: the dismount carries you on
+    await off.waitForFunction((mode) => window.__lab.net.own.mode === mode, PawnMode.Walk, { timeout: 5000, polling: 50 });
+    await sleep(500);
+    const onTop = await own(off);
+    const topHud = await hudSaysWhereYouAre(off);
+    result.offline.ladderUp = { promptAtFoot: atFoot, at: [onTop.x, onTop.y, onTop.z], hud: topHud.line };
+    result.checks.upTheLadderOntoTheCatWalk =
+      /to climb/.test(atFoot) && Math.abs(onTop.y - top) < 0.05 && topHud.ok && topHud.line.startsWith(`${calloutOf("3F_CATWALK")} · 3F · `);
+    await off.screenshot({ path: shot("oregon-ladder-top.png") });
+    // Turn round: the drop in front, the prompt shows; F puts you on the rungs, S takes you down.
+    const back = rad(ladder.yawDeg + 180);
+    await input(off, { yaw: back });
+    await sleep(500);
+    const atTop = await prompt(off);
+    await input(off, { yaw: back, buttons: Btn.Interact });
+    await off.waitForFunction((mode) => window.__lab.net.own.mode === mode, PawnMode.Ladder, { timeout: 5000, polling: 50 });
+    await input(off, { yaw: back, forward: -1 });
+    await off.waitForFunction((k) => window.__lab.net.own.mode === k.walk && window.__lab.net.own.y < k.y, { walk: PawnMode.Walk, y: ladder.base[1] + 0.1 }, { timeout: 10000, polling: 50 });
+    await input(off, null);
+    await sleep(500);
+    const below = await own(off);
+    const belowHud = await hudSaysWhereYouAre(off);
+    result.offline.ladderDown = { promptAtTop: atTop, at: [below.x, below.y, below.z], hud: belowHud.line, hp: [onTop.hp, below.hp] };
+    result.checks.downTheLadderFromTheTop =
+      /to climb/.test(atTop) && Math.abs(below.y - ladder.base[1]) < 0.05 && below.hp === onTop.hp && belowHud.ok && belowHud.line.startsWith(`${calloutOf("2F_TOWER")} · 2F · `);
   }
   await off.close();
 
