@@ -134,6 +134,11 @@ export type ExteriorPart = z.infer<typeof exteriorPartSchema>;
 const affine = z.strictObject({ ax: num, bx: num, ay: num, by: num });
 export type Affine = z.infer<typeof affine>;
 
+/**
+ * A run of stairs from one storey's floor to the next (stairs.ts), in world u. Straight: one flight filling
+ * the shaft, `up` the way you face going up. Switchback: two flights side by side and a landing at the far end;
+ * turning left, the first flight is on the right. `foot` and `top`: the rooms it starts and arrives in (checked).
+ */
 const stairRun = z.strictObject({
   from: Level,
   to: Level,
@@ -143,7 +148,9 @@ const stairRun = z.strictObject({
   turn: z.enum(["left", "right"]).optional(),
   widthM: num.optional(),
   steps: z.number().int().optional(),
-  hole: z.array(URect).optional(),
+  foot: z.string().optional(),
+  top: z.string().optional(),
+  note: z.string().optional(),
   _unverified: Uv,
 });
 
@@ -246,9 +253,10 @@ export const layoutSchema = z.strictObject({
   wells: z
     .array(z.strictObject({ id: z.string(), floor: Floor, frame: Frame, rects: z.array(URect), note: z.string().optional(), _unverified: Uv }))
     .default([]),
-  stairs: z.array(z.strictObject({ id: z.string(), names: z.array(z.string()), runs: z.array(stairRun) })).default([]),
+  stairs: z.array(z.strictObject({ id: z.string(), names: z.array(z.string()), research: z.string().optional(), runs: z.array(stairRun) })).default([]),
+  /** A ladder on a wall face (or a slab's edge) at `at`, facing it, from a storey's floor to the next (stairs.ts). */
   ladders: z
-    .array(z.strictObject({ id: z.string(), from: Floor, to: Floor, frame: Frame, at: U2, facing: Dir, widthM: num, _unverified: Uv }))
+    .array(z.strictObject({ id: z.string(), from: Floor, to: Floor, frame: Frame, at: U2, facing: Dir, widthM: num, research: z.string().optional(), note: z.string().optional(), _unverified: Uv }))
     .default([]),
   roofs: z.array(roofSchema).default([]),
   spawns: z.array(

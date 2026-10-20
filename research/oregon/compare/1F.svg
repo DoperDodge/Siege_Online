@@ -4,6 +4,13 @@
 <rect class="floors" x="258.67" y="122" width="11" height="11" fill="#3fa75a" fill-opacity="0.45" stroke="#3fa75a" stroke-width="0.2"><title>H1</title></rect>
 <rect class="floors" x="184.67" y="218.67" width="11.33" height="11" fill="#3fa75a" fill-opacity="0.45" stroke="#3fa75a" stroke-width="0.2"><title>H2</title></rect>
 <rect class="floors" x="257.67" y="242.67" width="10.67" height="10.67" fill="#3fa75a" fill-opacity="0.45" stroke="#3fa75a" stroke-width="0.2"><title>H3</title></rect>
+<rect class="walls" x="241.33" y="51" width="22" height="0.33" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:1F#0 (rail)</title></rect>
+<rect class="walls" x="252" y="76.67" width="0.33" height="0.33" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:1F#1 (rail)</title></rect>
+<rect class="walls" x="157" y="259.33" width="15.33" height="0.33" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:1F#2 (rail)</title></rect>
+<rect class="walls" x="156.67" y="252" width="0.33" height="7.33" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:1F#3 (rail)</title></rect>
+<rect class="walls" x="276" y="260.33" width="0.33" height="3.67" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:1F#4 (rail)</title></rect>
+<rect class="walls" x="263.33" y="51.33" width="0.33" height="23.33" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:1F#5 (rail)</title></rect>
+<rect class="walls" x="284" y="252" width="0.33" height="12" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:1F#6 (rail)</title></rect>
 <rect class="walls" x="64.33" y="207" width="30.33" height="1.33" fill="#6b7178"><title>1F.w000#0</title></rect>
 <rect class="walls" x="117.67" y="207" width="3.33" height="1.33" fill="#6b7178"><title>1F.w000#1</title></rect>
 <rect class="walls" x="129" y="207" width="8" height="1.33" fill="#6b7178"><title>1F.w000#2</title></rect>
@@ -119,6 +126,8 @@
 <rect class="walls" x="193.67" y="251.33" width="2" height="22.33" fill="#6b7178"><title>1F.w090#0</title></rect>
 <rect class="walls" x="20" y="191.67" width="1.33" height="12.33" fill="#6b7178"><title>1F.w091#0</title></rect>
 <rect class="walls" x="152.33" y="266.33" width="1.33" height="7.33" fill="#6b7178"><title>1F.w092#0</title></rect>
+<rect class="walls" x="252" y="60.67" width="0.67" height="16" fill="#6b7178"><title>S1:1F&gt;2F.divider</title></rect>
+<rect class="walls" x="12" y="183.33" width="16" height="0.67" fill="#6b7178"><title>S4:1F&gt;2F.divider</title></rect>
 <rect class="panels" x="64.33" y="182" width="1.33" height="24.33" fill="#2f7de1"><title>SW-1F-01</title></rect>
 <rect class="panels" x="64.33" y="227" width="1.33" height="21.67" fill="#2f7de1"><title>SW-1F-02</title></rect>
 <rect class="panels" x="94.67" y="207" width="23" height="1.33" fill="#2f7de1"><title>SW-1F-03</title></rect>
@@ -196,15 +205,15 @@
 <text class="rooms" x="175.17" y="182.5"><title>1F_KITCHEN</title>Kitchen</text>
 <text class="rooms" x="211.83" y="121.5"><title>1F_KITCHEN_CORRIDOR</title>Kitchen Corridor</text>
 <text class="rooms" x="255.5" y="81.83"><title>1F_TOWER</title>Tower</text>
-<text class="rooms" x="254.5" y="63.5"><title>1F_TOWER_STAIRS</title>Tower Stairs</text>
+<text class="rooms" x="265.83" y="52.83"><title>1F_TOWER_STAIRS</title>Tower Stairs</text>
 <text class="rooms" x="254.17" y="158.5"><title>1F_MEETING_HALL</title>Meeting Hall</text>
 <text class="rooms" x="266.5" y="110.17"><title>1F_STAGE</title>Stage</text>
 <text class="rooms" x="251.5" y="197.17"><title>1F_SPLIT</title>Split</text>
 <text class="rooms" x="168.17" y="219.83"><title>1F_SECURITY</title>Security</text>
 <text class="rooms" x="176.17" y="241.5"><title>1F_SECURITY_CORRIDOR</title>Security Corridor</text>
-<text class="rooms" x="173.17" y="259.17"><title>1F_WHITE_STAIRS</title>White Stairs</text>
+<text class="rooms" x="179.5" y="256.17"><title>1F_WHITE_STAIRS</title>White Stairs</text>
 <text class="rooms" x="257.5" y="237.83"><title>1F_LOBBY</title>Lobby</text>
 <text class="rooms" x="230.5" y="253.83"><title>1F_CLASSROOM</title>Classroom</text>
-<text class="rooms" x="283.5" y="251.5"><title>1F_ARMORY_STAIRS</title>Armory Stairs</text>
+<text class="rooms" x="287.5" y="251.5"><title>1F_ARMORY_STAIRS</title>Armory Stairs</text>
 <text class="rooms" x="312.17" y="234.17"><title>1F_GARAGE</title>Garage</text>
 </svg>

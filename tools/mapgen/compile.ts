@@ -11,6 +11,7 @@ import { exteriorPartSchema, layoutSchema, wallsPartSchema, type ExteriorPart, t
 import { frameDiagnostics, type HatchLanding } from "./diagnostics.js";
 import { compileFloors, type HatchReport } from "./floors.js";
 import { compileRooms } from "./rooms.js";
+import { checkStairs, compileStairs, stairKeepOut, stairRails } from "./stairs.js";
 import { compileWalls, type Solid, type Zone } from "./walls.js";
 
 export interface Inputs {
@@ -82,12 +83,16 @@ export function compile(inputs: Inputs): Compiled {
     .filter((p) => emitted.has(p.floor))
     .sort((p, q) => order.indexOf(p.floor) - order.indexOf(q.floor));
   const wallsOut = compileWalls(layout, fr, parts, exterior.playable);
-  // ---- Rooms (seeds, splits) and floors (the ground, slabs, soft floors, hatches, wells).
-  const roomsOut = compileRooms(layout, fr, wallsOut.solids);
-  const floorsOut = compileFloors(layout, fr, wallsOut.solids, roomsOut, exterior.playable);
+  // ---- Stairs and ladders: flights, landings, the walls between flights, and the holes the floors above lose.
+  const stairsOut = compileStairs(layout, fr);
+  // ---- Rooms (seeds, splits) and floors (the ground, slabs, soft floors, hatches, wells, stairwells).
+  const roomsOut = compileRooms(layout, fr, wallsOut.solids, stairKeepOut(layout, stairsOut));
+  const floorsOut = compileFloors(layout, fr, wallsOut.solids, roomsOut, exterior.playable, stairsOut.holes);
+  // Rails round the stairwells come last: they'd part rooms in the plan's flood.
+  const rails = stairRails(layout, stairsOut, wallsOut.solids);
   const panelKind = new Set(["REINFORCEABLE", "SOFT_FLOOR", "HATCH"]);
   const byKind = (s: Solid) => (panelKind.has(s.surface) ? 1 : s.surface === "BARRICADE" || s.surface === "WINDOW" || /\.(head|sill)$/.test(s.id) ? 2 : 0);
-  const solids: Solid[] = [...wallsOut.solids, ...floorsOut.solids].sort((p, q) => byKind(p) - byKind(q) || (p.id < q.id ? -1 : p.id > q.id ? 1 : 0));
+  const solids: Solid[] = [...wallsOut.solids, ...floorsOut.solids, ...stairsOut.solids, ...rails].sort((p, q) => byKind(p) - byKind(q) || (p.id < q.id ? -1 : p.id > q.id ? 1 : 0));
 
   // ---- Play-area edge and kill plane (placeholders P25, P26).
   const [px0, py0, px1, py1] = exterior.playable.map((u) => u * k);
@@ -159,13 +164,15 @@ export function compile(inputs: Inputs): Compiled {
       })),
     },
     storeys,
+    stairs: stairsOut.flights.map((f) => ({ ...f, start: v3(f.start) })),
+    ladders: stairsOut.ladders.map((l) => ({ ...l, base: v3(l.base) })),
     rooms: roomsOut.rooms.map((r) => ({ id: r.id, callout: r.callout, storey: r.storey, rects: r.rects, anchor: v3(r.anchor) })),
     zones: zones.map((z) => ({ id: z.id, kind: z.kind, boxes: z.boxes.map((b) => ({ center: v3(b.center), size: v3(b.size) })) })),
   };
   // The engine's own schema has the last word on shape.
   levelSchema.parse(level);
   const checks = checkLevel(level.solids);
-  checks.errors.push(...roomsOut.errors, ...floorsOut.errors);
+  checks.errors.push(...roomsOut.errors, ...floorsOut.errors, ...stairsOut.errors, ...checkStairs(layout, stairsOut, level.solids, level.rooms));
   const counts: Record<string, number> = { solids: level.solids.length, spawns: spawns.length, zones: zones.length, rooms: roomsOut.rooms.length };
   for (const [floor, c] of Object.entries(floorsOut.counts)) {
     counts[`slabs ${floor}`] = c.slabs;

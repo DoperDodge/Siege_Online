@@ -48,16 +48,34 @@
 <rect class="floors" x="83.93" y="179.49" width="15.01" height="16.42" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-07#0.r0c1</title></rect>
 <rect class="floors" x="64.83" y="195.91" width="19.1" height="11.63" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-07#0.r1c0</title></rect>
 <rect class="floors" x="83.93" y="195.91" width="15.01" height="11.63" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-07#0.r1c1</title></rect>
-<rect class="floors" x="34.13" y="179.49" width="16.37" height="12.31" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-08#0.r0c0</title></rect>
-<rect class="floors" x="50.5" y="179.49" width="12.96" height="12.31" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-08#0.r0c1</title></rect>
+<rect class="floors" x="35.49" y="179.49" width="16.37" height="12.31" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-08#0.r0c0</title></rect>
+<rect class="floors" x="51.87" y="179.49" width="11.6" height="12.31" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-08#0.r0c1</title></rect>
 <rect class="floors" x="43.68" y="191.81" width="19.78" height="21.89" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-08#1.r0c0</title></rect>
 <rect class="floors" x="43.68" y="213.7" width="19.78" height="17.79" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-08#1.r1c0</title></rect>
 <rect class="floors" x="249.71" y="98.77" width="16.71" height="12.66" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-09#0.r0c0</title></rect>
 <rect class="floors" x="248" y="206.86" width="19.1" height="17.79" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-10#0.r0c0</title></rect>
 <rect class="floors" x="267.1" y="206.86" width="14.33" height="17.79" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-10#0.r0c1</title></rect>
-<rect class="floors" x="139.53" y="255.77" width="21.83" height="20.18" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-11#0.r0c0</title></rect>
-<rect class="floors" x="161.36" y="255.77" width="21.83" height="20.18" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-11#0.r0c1</title></rect>
-<rect class="floors" x="183.19" y="255.77" width="15.01" height="20.18" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-11#0.r0c2</title></rect>
+<rect class="floors" x="139.53" y="255.77" width="21.83" height="7.52" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-11#0.r0c0</title></rect>
+<rect class="floors" x="161.36" y="255.77" width="21.83" height="7.52" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-11#0.r0c1</title></rect>
+<rect class="floors" x="183.19" y="255.77" width="15.01" height="7.52" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-11#0.r0c2</title></rect>
+<rect class="floors" x="139.53" y="263.29" width="17.06" height="12.66" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-11#1.r0c0</title></rect>
+<rect class="floors" x="182.51" y="263.29" width="15.69" height="12.66" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-11#2.r0c0</title></rect>
+<rect class="floors" x="156.58" y="270.13" width="25.92" height="5.81" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-11#3.r0c0</title></rect>
+<rect class="walls" x="246.98" y="49.52" width="22.51" height="0.34" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:2F#0 (rail)</title></rect>
+<rect class="walls" x="282.79" y="249.27" width="7.85" height="0.34" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:2F#1 (rail)</title></rect>
+<rect class="walls" x="257.55" y="69.7" width="0.34" height="6.16" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:2F#10 (rail)</title></rect>
+<rect class="walls" x="35.49" y="179.49" width="0.34" height="12.31" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:2F#11 (rail)</title></rect>
+<rect class="walls" x="182.51" y="263.29" width="0.34" height="6.84" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:2F#12 (rail)</title></rect>
+<rect class="walls" x="269.49" y="49.86" width="0.34" height="23.94" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:2F#13 (rail)</title></rect>
+<rect class="walls" x="290.64" y="249.61" width="0.34" height="24.63" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:2F#14 (rail)</title></rect>
+<rect class="walls" x="158.63" y="262.95" width="23.88" height="0.34" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:2F#2 (rail)</title></rect>
+<rect class="walls" x="246.98" y="69.7" width="10.92" height="0.34" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:2F#3 (rail)</title></rect>
+<rect class="walls" x="257.89" y="75.86" width="0.34" height="0.34" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:2F#4 (rail)</title></rect>
+<rect class="walls" x="12.3" y="185.99" width="6.14" height="0.34" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:2F#5 (rail)</title></rect>
+<rect class="walls" x="18.44" y="191.81" width="1.36" height="0.34" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:2F#6 (rail)</title></rect>
+<rect class="walls" x="158.63" y="270.13" width="23.88" height="0.34" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:2F#7 (rail)</title></rect>
+<rect class="walls" x="11.96" y="185.65" width="0.34" height="0.34" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:2F#8 (rail)</title></rect>
+<rect class="walls" x="18.1" y="185.99" width="0.34" height="5.81" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:2F#9 (rail)</title></rect>
 <rect class="walls" x="3.77" y="177.44" width="81.86" height="2.05" fill="#6b7178"><title>2F.w000#0</title></rect>
 <rect class="walls" x="93.82" y="177.44" width="7.16" height="2.05" fill="#6b7178"><title>2F.w000#1</title></rect>
 <rect class="walls" x="137.82" y="205.49" width="8.53" height="1.37" fill="#6b7178"><title>2F.w003#0</title></rect>
@@ -185,7 +203,7 @@
 <text class="labels floors" x="53.57" y="202.75">SF-2F-08</text>
 <text class="labels floors" x="258.06" y="105.1">SF-2F-09</text>
 <text class="labels floors" x="257.55" y="215.75">SF-2F-10</text>
-<text class="labels floors" x="150.45" y="265.86">SF-2F-11</text>
+<text class="labels floors" x="148.06" y="269.62">SF-2F-11</text>
 <text class="labels" x="160" y="206.17">SW-2F-01</text>
 <text class="labels" x="209.8" y="170.6" transform="rotate(90 209.8 170.6)">SW-2F-02</text>
 <text class="labels" x="202.63" y="248.24" transform="rotate(90 202.63 248.24)">SW-2F-03</text>
@@ -205,9 +223,9 @@
 <text class="rooms" x="264.54" y="207.03"><title>2F_TROPHY</title>Trophy</text>
 <text class="rooms" x="242.37" y="174.19"><title>2F_LOW_ATTIC</title>Low Attic</text>
 <text class="rooms" x="261.81" y="129.04"><title>2F_ATTIC</title>Attic</text>
-<text class="rooms" x="266.93" y="75.69"><title>2F_TOWER</title>Tower</text>
+<text class="rooms" x="266.93" y="79.45"><title>2F_TOWER</title>Tower</text>
 <text class="rooms" x="289.78" y="217.29"><title>2F_ARMORY_CORRIDOR</title>Armory Corridor</text>
-<text class="rooms" x="290.13" y="263.12"><title>2F_ARMORY_STAIRS</title>Armory Stairs</text>
+<text class="rooms" x="294.22" y="263.12"><title>2F_ARMORY_STAIRS</title>Armory Stairs</text>
 <text class="rooms" x="318.78" y="231.65"><title>2F_ARMORY</title>Armory</text>
-<text class="rooms" x="169.04" y="265.86"><title>2F_WHITE_STAIRS</title>White Stairs</text>
+<text class="rooms" x="169.04" y="259.7"><title>2F_WHITE_STAIRS</title>White Stairs</text>
 </svg>

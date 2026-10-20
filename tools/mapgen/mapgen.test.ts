@@ -5,7 +5,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { bulletThroughPanels, crossFileProblems, loadGameData, missingUnverifiedPaths, QUERY_BULLET, QUERY_STATIC, Sim, type Vec3 } from "../../game/shared/src/index.js";
+import { Btn, bulletThroughPanels, crossFileProblems, DEG, loadGameData, missingUnverifiedPaths, PawnMode, QUERY_BULLET, QUERY_STATIC, Sim, Stance, type InputCmd, type Vec3 } from "../../game/shared/src/index.js";
 import { checkLevel } from "./checks.js";
 import { frames } from "./frames.js";
 import { compile, loadInputs } from "./compile.js";
@@ -18,6 +18,7 @@ import { connections, hatchTable, roomTable, softFloorTable, softWalls } from ".
 import { CELL_M, clearCells, compileRooms, storeyOfBox } from "./rooms.js";
 import { FLOOR_IDS, wallSchema, type SpanDef, type WallDef } from "./schema.js";
 import type { Floor } from "./research.js";
+import { compileStairs, type CompiledRun } from "./stairs.js";
 import { compileWalls } from "./walls.js";
 
 const ROOT = join(import.meta.dirname, "..", "..");
@@ -496,16 +497,20 @@ describe("oregon rooms and floors", () => {
     expect(problems).toEqual([]);
   });
 
-  it("every room's anchor stands 0.45 m clear of the walls around it", () => {
+  it("every room's anchor stands 0.45 m clear of the walls and stairs around it (a body's width where it can't be)", () => {
+    // A room the stairs fill (1F Tower Stairs) gets the clearest spot left, and says so in a warning.
+    const crowded = new Set(report.warnings.map((w) => /^(\S+): no spot 0\.45 m clear/.exec(w)?.[1]).filter(Boolean));
+    const radius = loadGameData().movement.stance.collisionRadius;
     const problems: string[] = [];
     for (const r of rooms) {
       for (const b of solids) {
         if (b.drawOnly || ["HARD_FLOOR", "SOFT_FLOOR", "HATCH"].includes(b.surface) || storeyOfBox(inputs.layout, b as never) !== r.storey) continue;
         const dx = Math.max(b.center[0] - b.size[0] / 2 - r.anchor[0], 0, r.anchor[0] - b.center[0] - b.size[0] / 2);
         const dz = Math.max(b.center[2] - b.size[2] / 2 - r.anchor[2], 0, r.anchor[2] - b.center[2] - b.size[2] / 2);
-        if (Math.hypot(dx, dz) < 0.45 - 1e-6) problems.push(`${r.id}'s anchor is ${Math.hypot(dx, dz).toFixed(3)} m from ${b.id}`);
+        if (Math.hypot(dx, dz) < (crowded.has(r.id) ? radius : 0.45) - 1e-6) problems.push(`${r.id}'s anchor is ${Math.hypot(dx, dz).toFixed(3)} m from ${b.id}`);
       }
     }
+    expect([...crowded]).toEqual(["1F_TOWER_STAIRS"]);
     expect(problems).toEqual([]);
   });
 
@@ -565,8 +570,10 @@ describe("oregon rooms and floors", () => {
       const below = inputs.layout.storeys[si - 1];
       if (!below) return;
       const soft = new Set<number>();
-      for (const t of solids.filter((b) => b.surface === "SOFT_FLOOR" && Math.abs(hi(b, 1) - st.floorY) < 0.01)) {
-        for (let i = Math.round(lo(t, 0) / C); i < Math.round(hi(t, 0) / C); i++) for (let j = Math.round(lo(t, 2) / C); j < Math.round(hi(t, 2) / C); j++) soft.add(key(i, j));
+      const hardCells = new Set<number>();
+      for (const t of solids.filter((b) => (b.surface === "SOFT_FLOOR" || b.surface === "HARD_FLOOR") && Math.abs(hi(b, 1) - st.floorY) < 0.01)) {
+        const into = t.surface === "SOFT_FLOOR" ? soft : hardCells;
+        for (let i = Math.round(lo(t, 0) / C); i < Math.round(hi(t, 0) / C); i++) for (let j = Math.round(lo(t, 2) / C); j < Math.round(hi(t, 2) / C); j++) into.add(key(i, j));
       }
       for (const r of rooms.filter((r) => r.storey === below.id)) {
         const cells = new Set<number>();
@@ -577,7 +584,7 @@ describe("oregon rooms and floors", () => {
           const [i, j] = [Math.floor(c / 100000), c % 100000];
           const edge = [key(i - 1, j), key(i + 1, j), key(i, j - 1), key(i, j + 1)].some((q) => !cells.has(q));
           const nearSoft = [-3, -2, -1, 1, 2, 3].some((d) => soft.has(key(i + d, j)) || soft.has(key(i, j + d)));
-          if (!soft.has(c) && edge && nearSoft) hard.add(c);
+          if (hardCells.has(c) && edge && nearSoft) hard.add(c); // under hard slab (a stairwell or a well has none)
         }
         const seen = new Set<number>();
         for (const c of hard) {
@@ -660,3 +667,98 @@ describe("oregon rooms and floors", () => {
   });
 });
 
+
+describe("oregon stairs and the ladder (M3)", () => {
+  const stairs = compileStairs(inputs.layout, fr);
+  type Room = { id: string; storey: string; rects: [number, number, number, number][] };
+  const roomAt = (storey: string, x: number, z: number) =>
+    (level.rooms as Room[]).find((r) => r.storey === storey && r.rects.some(([x0, z0, x1, z1]) => x >= x0 && x <= x1 && z >= z0 && z <= z1))?.id ?? "outside";
+  let seq = 0;
+  const cmd = (c: Partial<InputCmd> & { yawDeg?: number }): InputCmd => {
+    const { yawDeg, ...rest } = c;
+    return { seq: ++seq, forward: 0, strafe: 0, yaw: (yawDeg ?? 0) * DEG, pitch: 0, buttons: 0, stance: Stance.Stand, lean: 0, ...rest };
+  };
+  /** The way up a run: its foot, each flight's foot and top (across a switchback's landing between), its arrival. */
+  const wayUp = (run: CompiledRun): [number, number][] => {
+    const pts: [number, number][] = [[run.foot[0], run.foot[2]]];
+    for (const f of run.flights) {
+      const [fx, fz] = [-Math.sin(f.yawDeg * DEG), -Math.cos(f.yawDeg * DEG)];
+      const len = f.run * f.steps;
+      pts.push([f.start[0] + fx * 0.2, f.start[2] + fz * 0.2], [f.start[0] + fx * (len + 0.25), f.start[2] + fz * (len + 0.25)]);
+    }
+    pts.push([run.top[0], run.top[2]]);
+    return pts;
+  };
+  /** Walk a body along the points (yaw toward the next, forward held); where it ends up. */
+  const walk = (sim: Sim, ctrl: { id: number }, pawn: { state: { x: number; y: number; z: number } }, pts: [number, number][]) => {
+    let k = 1;
+    for (let t = 0; t < 64 * 30 && k < pts.length; t++) {
+      const [tx, tz] = pts[k];
+      const [dx, dz] = [tx - pawn.state.x, tz - pawn.state.z];
+      if (Math.hypot(dx, dz) < 0.2) {
+        k++;
+        continue;
+      }
+      sim.step(new Map([[ctrl.id, cmd({ forward: 1, yawDeg: Math.atan2(-dx, -dz) / DEG })]]));
+    }
+    for (let t = 0; t < 32; t++) sim.step(new Map([[ctrl.id, cmd({})]]));
+    return { reached: k >= pts.length, x: pawn.state.x, y: pawn.state.y, z: pawn.state.z };
+  };
+
+  it("builds every staircase inside the building as runs between storeys, with the ladder to the Cat Walk", () => {
+    expect(stairs.errors).toEqual([]);
+    expect(stairs.runs.map((r) => r.id).sort()).toEqual(["S1:1F>2F", "S1:B>1F", "S2:1F>2F", "S2:B>1F", "S3:1F>2F", "S3:B>1F", "S4:1F>2F"]);
+    expect((level as { stairs: unknown[] }).stairs.length).toBe(stairs.flights.length);
+    expect((level as { ladders: { id: string }[] }).ladders.map((l) => l.id)).toEqual(["L1"]);
+    for (const f of stairs.flights) expect(f.rise, f.id).toBeLessThanOrEqual(loadGameData().movement.step.maxStepHeight);
+  });
+
+  it("a body walks up every run from the room it starts in to the one it names, and back down", async () => {
+    const sim = await Sim.create("oregon");
+    const ctrl = sim.addPlayer("walker", "sledge");
+    const pawn = sim.pawns.get(ctrl.possessedPawnId)!;
+    const problems: string[] = [];
+    for (const run of stairs.runs) {
+      const up = wayUp(run);
+      sim.teleport(pawn.id, run.foot[0], run.foot[1], run.foot[2], 0, Stance.Stand);
+      const a = walk(sim, ctrl, pawn, up);
+      const room = roomAt(run.to, a.x, a.z);
+      if (!a.reached || Math.abs(a.y - run.top[1]) > 0.05 || room !== run.topRoom) problems.push(`${run.id} up: at (${a.x.toFixed(2)}, ${a.y.toFixed(2)}, ${a.z.toFixed(2)}) in ${room}, reached ${a.reached}`);
+      const b = walk(sim, ctrl, pawn, [...up].reverse());
+      const from = roomAt(run.from, b.x, b.z);
+      if (!b.reached || Math.abs(b.y - run.foot[1]) > 0.05 || from !== run.footRoom) problems.push(`${run.id} down: at (${b.x.toFixed(2)}, ${b.y.toFixed(2)}, ${b.z.toFixed(2)}) in ${from}, reached ${b.reached}`);
+    }
+    expect(problems).toEqual([]);
+  });
+
+  it("the ladder takes you from the 2F Tower up onto the Cat Walk, and back down from the top", async () => {
+    const sim = await Sim.create("oregon");
+    const ctrl = sim.addPlayer("climber", "sledge");
+    const pawn = sim.pawns.get(ctrl.possessedPawnId)!;
+    const m = sim.data.movement;
+    const l = stairs.ladders[0];
+    const [fx, fz] = [-Math.sin(l.yawDeg * DEG), -Math.cos(l.yawDeg * DEG)];
+    const off = m.stance.collisionRadius + 0.05;
+    const press = (c: Partial<InputCmd> & { yawDeg?: number }, ticks: number) => {
+      for (let t = 0; t < ticks; t++) sim.step(new Map([[ctrl.id, cmd(c)]]));
+    };
+    sim.teleport(pawn.id, l.base[0] - fx * off, l.base[1], l.base[2] - fz * off, l.yawDeg, Stance.Stand);
+    press({ yawDeg: l.yawDeg }, 16);
+    press({ yawDeg: l.yawDeg, buttons: Btn.Interact }, 1);
+    expect(pawn.state.mode).toBe(PawnMode.Ladder);
+    press({ yawDeg: l.yawDeg, forward: 1 }, 64 * 3);
+    press({ yawDeg: l.yawDeg }, 64);
+    expect(pawn.state.mode).toBe(PawnMode.Walk);
+    expect(pawn.state.y).toBeCloseTo(l.base[1] + l.height, 1);
+    expect(roomAt("3F", pawn.state.x, pawn.state.z)).toBe("3F_CATWALK");
+    // Turn round to face the well, grab it from the top, climb down to the 2F Tower.
+    press({ yawDeg: l.yawDeg + 180 }, 16);
+    press({ yawDeg: l.yawDeg + 180, buttons: Btn.Interact }, 1);
+    expect(pawn.state.mode).toBe(PawnMode.Ladder);
+    press({ yawDeg: l.yawDeg + 180, forward: -1 }, 64 * 3);
+    expect(pawn.state.mode).toBe(PawnMode.Walk);
+    expect(pawn.state.y).toBeCloseTo(l.base[1], 1);
+    expect(roomAt("2F", pawn.state.x, pawn.state.z)).toBe("2F_TOWER");
+    expect(pawn.state.hp).toBe(pawn.state.maxHp);
+  });
+});

@@ -162,6 +162,13 @@ export function createLabScene(level: BuiltLevel): LabScene {
   /** The boxes each instanced mesh draws, by storey and material. */
   const batches = new Map<string, { storey: number; surface: string; material: THREE.Material; boxes: Renderable[] }>();
   let staticMeshes = 0;
+  // A flight's steps and a ladder's rails and rungs go with the storey they start from (an open step's bottom is
+  // a riser or two under its tread, near the top that's the storey above).
+  const startY = new Map<string, number>([...level.def.stairs.map((f) => [f.id, f.start[1]] as const), ...level.def.ladders.map((l) => [l.id, l.base[1]] as const)]);
+  const bottomOf = (r: Renderable) => {
+    const of = r.kind === "stair_step" ? r.id.replace(/_step\d+$/, "") : r.kind === "ladder_rail" || r.kind === "ladder_rung" ? r.id.replace(/_(rail|rung)[^_]*$/, "") : null;
+    return (of !== null ? startY.get(of) : undefined) ?? r.center[1] - r.size[1] / 2;
+  };
   for (const r of level.renderables) {
     if (!r.visible) continue;
     if (r.kind === "panel") {
@@ -174,7 +181,7 @@ export function createLabScene(level: BuiltLevel): LabScene {
       continue;
     }
     if (r.label) label(r.label, r);
-    const storey = storeyOf(level.def.storeys, r.center[1] - r.size[1] / 2);
+    const storey = storeyOf(level.def.storeys, bottomOf(r));
     if (r.id === "floor") {
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(r.size[0], r.size[1], r.size[2]), material(r));
       mesh.position.set(r.center[0], r.center[1], r.center[2]);

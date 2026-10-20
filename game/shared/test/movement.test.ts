@@ -501,6 +501,65 @@ describe("review regressions (Phase 1 adversarial review)", () => {
     expect(() => levelSchema.parse({ ...lab, solids: [{ ...lab.solids[0], rotDeg: 45 }] })).toThrow();
   });
 
+  it("grabs the ladder from the top facing the drop, climbs down, and back up onto the platform (E8)", async () => {
+    const { sim, ctrl, pawn } = await labWith();
+    const m = sim.data.movement;
+    // Where a climb off the 6.5 m ladder sets you down: on the tower, a body's radius and the dismount past the face.
+    const topZ = -6.5 - (m.stance.collisionRadius + 0.05) - (m.ladder.dismountForward - 0.05);
+    teleport(sim, ctrl, -16, 6.5, topZ, 180); // facing +Z: the drop
+    run(sim, ctrl, { yawDeg: 180, buttons: Btn.Interact }, 1 / 64);
+    expect(pawn.state.mode).toBe(PawnMode.Ladder);
+    expect(pawn.state.y).toBeCloseTo(6.5 - m.ladder.topMountDrop, 3);
+    run(sim, ctrl, { yawDeg: 180, forward: -1 }, 5.5);
+    expect(pawn.state.mode).toBe(PawnMode.Walk);
+    expect(pawn.state.y).toBeLessThan(0.05);
+    expect(pawn.state.hp).toBe(pawn.state.maxHp); // climbed down, didn't fall
+    // Grab it from the top again and climb back up: off the top onto the tower, where you started.
+    teleport(sim, ctrl, -16, 6.5, topZ, 180);
+    run(sim, ctrl, { yawDeg: 180, buttons: Btn.Interact }, 1 / 64);
+    run(sim, ctrl, { yawDeg: 180, forward: 1 }, 0.7); // W climbs, whichever way you look
+    run(sim, ctrl, { yawDeg: 180 }, 1); // and lets go once off the top (W now would walk back over the edge)
+    expect(pawn.state.mode).toBe(PawnMode.Walk);
+    expect(pawn.state.y).toBeGreaterThan(6.4);
+    expect(pawn.state.z).toBeLessThan(-6.5);
+  });
+
+  it("doesn't grab the ladder from the top facing away from the drop, or from a crouch", async () => {
+    const { sim, ctrl, pawn } = await labWith();
+    const m = sim.data.movement;
+    const topZ = -6.5 - (m.stance.collisionRadius + 0.05) - (m.ladder.dismountForward - 0.05);
+    teleport(sim, ctrl, -16, 6.5, topZ, 0); // facing -Z: back across the tower
+    run(sim, ctrl, { yawDeg: 0, buttons: Btn.Interact }, 1 / 64);
+    expect(pawn.state.mode).toBe(PawnMode.Walk);
+    teleport(sim, ctrl, -16, 6.5, topZ, 180, Stance.Crouch);
+    run(sim, ctrl, { yawDeg: 180, stance: Stance.Crouch, buttons: Btn.Interact }, 1 / 64);
+    expect(pawn.state.mode).toBe(PawnMode.Walk);
+  });
+
+  it("an open flight leaves room under its high end, where a solid one is a block (stacked stairs)", async () => {
+    const data = loadGameData();
+    const lab = data.levels.get("movement_lab")!;
+    // 12 steps of 0.3 m up toward -Z from z 26: steps 9 to 11 (z 22.4..23.3) are 2.4, 2.7 and 3.0 m up at their
+    // undersides when open, over a standing body (1.8 m, 0.6 m across) at z 22.85.
+    const flight = { id: "flight", start: [24, 0, 26] as [number, number, number], yawDeg: 0, steps: 12, rise: 0.3, run: 0.3, width: 1.6, surface: "HARD_FLOOR" as const };
+    const walkUnder = async (solid: boolean) => {
+      const level = levelSchema.parse({ ...lab, id: `under_${solid}`, stairs: [{ ...flight, solid }] });
+      const sim = await Sim.create(level.id, { ...data, levels: new Map(data.levels).set(level.id, level) });
+      const ctrl = sim.addPlayer("p", "sledge");
+      const pawn = sim.pawns.get(ctrl.possessedPawnId)!;
+      const steps = sim.level.renderables.filter((r) => r.kind === "stair_step").map((r) => +r.size[1].toFixed(4));
+      teleport(sim, ctrl, 20, 0, 22.85, -90); // facing +X, under steps 9 to 11
+      run(sim, ctrl, { yawDeg: -90, forward: 1 }, 2.5);
+      return { x: pawn.state.x, steps };
+    };
+    const solid = await walkUnder(true);
+    const open = await walkUnder(false);
+    expect(solid.steps).toEqual([0.3, 0.6, 0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7, 3, 3.3, 3.6]);
+    expect(open.steps).toEqual([0.3, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6]);
+    expect(solid.x).toBeLessThan(23.2); // stopped at the block
+    expect(open.x).toBeGreaterThan(25); // walked on under it
+  });
+
   it("ladder rails follow the ladder's yaw", async () => {
     const sim = await Sim.create("movement_lab");
     const lab = sim.data.levels.get("movement_lab")!;

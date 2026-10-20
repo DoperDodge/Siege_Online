@@ -280,6 +280,26 @@ describe("storey views", () => {
     expect(view.light()).toBeLessThan(0.5);
   });
 
+  it("a flight and a ladder are drawn with the storey they start from, the parts that reach the next one too", async () => {
+    const R = await initRapier();
+    const def = levelSchema.parse({
+      id: "stairs",
+      name: "Stairs",
+      spawns: [{ id: "s0", pos: [0, 0, 0], yawDeg: 0 }],
+      storeys: [
+        { id: "1F", floorY: 0, ceilingY: 3 },
+        { id: "2F", floorY: 3.2, ceilingY: 6 },
+      ],
+      solids: [{ id: "ground", center: [0, -0.1, 0], size: [20, 0.2, 20], surface: "HARD_FLOOR" }],
+      stairs: [{ id: "S:1F>2F#0", start: [0, 0, 4], yawDeg: 0, steps: 32, rise: 0.1, run: 0.15, width: 1, surface: "HARD_WALL", solid: false }],
+      ladders: [{ id: "L", base: [5, 0, 0], height: 3.2, yawDeg: 0, width: 0.6 }],
+    });
+    const lab = createLabScene(buildLevel(R, new R.World({ x: 0, y: -9.81, z: 0 }), def, data.destruction));
+    const drawn = (storey: number, name: string) => lab.storeys[storey].children.filter((m) => m.name === name).reduce((n, m) => n + (m as THREE.InstancedMesh).count, 0);
+    expect([drawn(0, "HARD_WALL"), drawn(1, "HARD_WALL")]).toEqual([32, 0]); // all 32 steps, the top ones (bottoms 2.95 m up and more) too
+    expect([drawn(0, "LADDER"), drawn(1, "LADDER")]).toEqual([2 + 10, 0]); // two rails and the rungs every 0.3 m
+  });
+
   it("the light starts as your storey's, blends to the basement's when you go down (a short blend), and back up", async () => {
     const { lab, view } = await views(0);
     const ambient = lab.scene.children.find((o): o is THREE.AmbientLight => o instanceof THREE.AmbientLight)!;

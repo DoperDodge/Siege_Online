@@ -129,7 +129,8 @@
     "dismountSeconds": 0.5,
     "dismountApex": 0.15,
     "topGrabMargin": 1.0,
-    "bottomGrabMargin": 0.5
+    "bottomGrabMargin": 0.5,
+    "topMountDrop": 1.0
   },
   "fall": {
     "safeHeight": 3.0,

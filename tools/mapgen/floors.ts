@@ -3,8 +3,8 @@
 // the storey below run up into it (exterior walls reach the next floor). Out of it come the hatches (a HATCH
 // panel: the largest rectangle of the research square inside the room on top), the wells (no floor), and the
 // soft floors (SOFT_FLOOR tiles of at most tileMaxM, in whole joist spacings, the tiles of one area sharing a
-// region so a bullet counts them as one surface). What's left is hard slab, in as few rectangles as the
-// greedy cover gives. Stairwell holes come with the stairs (M3).
+// region so a bullet counts them as one surface), and the stairwells (stairs.ts: no floor where a run needs the
+// headroom). What's left is hard slab, in as few rectangles as the greedy cover gives.
 import type { Frames } from "./frames.js";
 import { distanceInside, greedyRects, maxIn, subtractRects, type Rect } from "./grid.js";
 import type { Floor } from "./research.js";
@@ -78,7 +78,7 @@ function largestRect(w: number, h: number, keep: (i: number) => boolean): Rect |
 
 const r4 = (v: number) => Math.round(v * 1e4) / 1e4;
 
-export function compileFloors(layout: Layout, fr: Frames, wallSolids: Solid[], rooms: RoomsResult, playable: Rect): FloorsResult {
+export function compileFloors(layout: Layout, fr: Frames, wallSolids: Solid[], rooms: RoomsResult, playable: Rect, stairHoles: Map<Floor, Rect[]> = new Map()): FloorsResult {
   const k = layout.units.mPerU;
   const d = layout.defaults;
   const solids: Solid[] = [];
@@ -148,6 +148,11 @@ export function compileFloors(layout: Layout, fr: Frames, wallSolids: Solid[], r
         for (let j = j0; j < j1; j++) for (let i = i0; i < i1; i++) if (kind[j * g.w + i] === 1 && g.cells[j * g.w + i] === 0) kind[j * g.w + i] = 4;
       }
     }
+    // ---- Stairwells: no floor where a run below needs the headroom, except under this storey's own walls.
+    for (const r of stairHoles.get(floor) ?? []) {
+      const { i0, i1, j0, j1 } = span(r);
+      for (let j = j0; j < j1; j++) for (let i = i0; i < i1; i++) if (kind[j * g.w + i] === 1 && g.cells[j * g.w + i] !== 1) kind[j * g.w + i] = 4;
+    }
     // ---- Hatches whose top room is on this storey: the largest rectangle of the square inside that room.
     const groundHoles: Rect[] = [];
     for (const h of layout.hatches) {
@@ -177,9 +182,10 @@ export function compileFloors(layout: Layout, fr: Frames, wallSolids: Solid[], r
       count.hatches++;
     }
     if (storey === groundStorey) {
-      // ---- The ground: the whole play area, less the hatches (and, later, stairwells and the bunker's trench).
+      // ---- The ground: the whole play area, less the hatches and the stairwells (and, with the outside, the
+      // bunker's trench).
       const [px0, pz0, px1, pz1] = playable.map((u) => u * k);
-      subtractRects([px0, pz0, px1, pz1], groundHoles).forEach((r, i) => solids.push(slab(`ground#${i}`, r, y0, y1, { surface: "HARD_FLOOR" })));
+      subtractRects([px0, pz0, px1, pz1], [...groundHoles, ...(stairHoles.get(floor) ?? [])]).forEach((r, i) => solids.push(slab(`ground#${i}`, r, y0, y1, { surface: "HARD_FLOOR" })));
       count.slabs = solids.filter((s) => s.id.startsWith("ground#")).length;
       continue;
     }

@@ -106,15 +106,17 @@ export function buildLevel(R: Rapier, world: World, def: LevelDef, destruction?:
     addRamp(r.id, r.surface, r.start, r.yawDeg * DEG, r.length, r.angleDeg * DEG, r.width, true, r.label);
   }
 
-  // Stairs: visible colliding steps plus an invisible ramp through the step nosings so movement is smooth.
+  // Stairs: visible colliding steps plus an invisible ramp through the step nosings so movement is smooth. A
+  // solid step reaches down to the flight's start; an open one is two risers deep (one for the first).
   for (const st of def.stairs) {
     const yaw = st.yawDeg * DEG;
     const [fx, fz] = forwardXZ(yaw);
     const quat = quatYawPitch(yaw, 0);
     for (let i = 0; i < st.steps; i++) {
-      const h = st.rise * (i + 1);
+      const top = st.rise * (i + 1);
+      const h = st.solid ? top : Math.min(top, 2 * st.rise);
       const d = st.run * (i + 0.5);
-      const center: Vec3 = [st.start[0] + fx * d, st.start[1] + h / 2, st.start[2] + fz * d];
+      const center: Vec3 = [st.start[0] + fx * d, st.start[1] + top - h / 2, st.start[2] + fz * d];
       addBox({ id: `${st.id}_step${i}`, surface: st.surface, vaultable: false }, "stair_step", center, [st.width, h, st.run], quat, {
         collides: true,
         visible: true,

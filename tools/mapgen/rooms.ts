@@ -65,7 +65,8 @@ export function fillBox(g: PlanGrid, b: Pick<Solid, "center" | "size">) {
   g.fillCentres(b.center[0] - b.size[0] / 2, b.center[2] - b.size[2] / 2, b.center[0] + b.size[0] / 2, b.center[2] + b.size[2] / 2);
 }
 
-export function compileRooms(layout: Layout, fr: Frames, wallSolids: Solid[]): RoomsResult {
+/** `keepOut`: per storey, rectangles (metres) a room's anchor keeps clear of (the stairs: stairs.ts stairKeepOut). */
+export function compileRooms(layout: Layout, fr: Frames, wallSolids: Solid[], keepOut: Map<Floor, Rect[]> = new Map()): RoomsResult {
   const k = layout.units.mPerU;
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -150,7 +151,7 @@ export function compileRooms(layout: Layout, fr: Frames, wallSolids: Solid[]): R
       }
       claimed.set(label, r.id);
       roomOfLabel[label] = rooms.length;
-      rooms.push({ ...roomShape(grid, labels, label, stats[label], storey.floorY, warnings, r.id), id: r.id, callout: r.callout, storey: floor });
+      rooms.push({ ...roomShape(grid, labels, label, stats[label], storey.floorY, warnings, r.id, keepOut.get(floor) ?? []), id: r.id, callout: r.callout, storey: floor });
     }
     const room = new Int16Array(grid.w * grid.h);
     for (let c = 0; c < labels.length; c++) room[c] = labels[c] ? roomOfLabel[labels[c]] : -1;
@@ -175,6 +176,7 @@ function roomShape(
   floorY: number,
   warnings: string[],
   id: string,
+  keepOut: Rect[],
 ): Pick<CompiledRoom, "rects" | "anchor"> {
   const [w, h] = [st.i1 - st.i0, st.j1 - st.j0];
   const mine = (c: number) => labels[(st.j0 + Math.floor(c / w)) * grid.w + st.i0 + (c % w)] === label;
@@ -189,16 +191,24 @@ function roomShape(
   const big = all.filter((r, i) => Math.min(r[2] - r[0], r[3] - r[1]) >= SLIVER_M - 1e-9 || maxIn(dist, w, cells[i]) >= open);
   const area = (r: Rect) => (r[2] - r[0]) * (r[3] - r[1]);
   const rects = big.length ? big : [all.reduce((a, b) => (area(b) > area(a) ? b : a))];
-  // Anchor: the cell clear of walls by ANCHOR_CLEAR_M nearest the room's middle (else the clearest one).
+  // Anchor: the cell clear of walls (and of the stairs) by ANCHOR_CLEAR_M nearest the room's middle (else the
+  // clearest one).
+  const free = (c: number) => {
+    if (!mine(c)) return false;
+    const x = grid.x0 + (st.i0 + (c % w) + 0.5) * CELL_M;
+    const z = grid.y0 + (st.j0 + Math.floor(c / w) + 0.5) * CELL_M;
+    return !keepOut.some((r) => x > r[0] && x < r[2] && z > r[1] && z < r[3]);
+  };
+  const clear = keepOut.length ? distanceInside(w, h, free) : dist;
   const [cx, cz] = [st.sx / st.n - st.i0, st.sz / st.n - st.j0];
   const need = clearCells(ANCHOR_CLEAR_M);
   let best = -1;
   let bestScore = Infinity;
   let clearest = -1;
   for (let c = 0; c < w * h; c++) {
-    if (!mine(c)) continue;
-    if (clearest < 0 || dist[c] > dist[clearest]) clearest = c;
-    if (dist[c] < need) continue;
+    if (!free(c)) continue;
+    if (clearest < 0 || clear[c] > clear[clearest]) clearest = c;
+    if (clear[c] < need) continue;
     const score = ((c % w) - cx) ** 2 + (Math.floor(c / w) - cz) ** 2;
     if (score < bestScore) {
       bestScore = score;
@@ -206,7 +216,7 @@ function roomShape(
     }
   }
   if (best < 0) {
-    warnings.push(`${id}: no spot ${ANCHOR_CLEAR_M} m clear of walls; its anchor is the clearest one`);
+    warnings.push(`${id}: no spot ${ANCHOR_CLEAR_M} m clear of walls and stairs; its anchor is the clearest one`);
     best = clearest;
   }
   const ax = grid.x0 + (st.i0 + (best % w) + 0.5) * CELL_M;

@@ -27,7 +27,9 @@
   "hatches": "research/oregon/surfaces.md §5: r6calls' hatch squares (extracted.json fh/ch), world positions",
   "wells": "research/oregon/layout_notes.md §4.4 and surfaces.md §4.1: the Cat Walk's centre (P21)",
   "walls": "walls_<floor>.json, seeded from extracted.json (r6calls floor rasters), research ids from surfaces.md §2 and layout_notes.md §6",
-  "sections SW-2F-01, SW-2F-02, SW-2F-04": "Ulo 2026-10-09"
+  "sections SW-2F-01, SW-2F-02, SW-2F-04": "Ulo 2026-10-09",
+  "stairs": "research/oregon/layout_notes.md §5.1 footprints and the r6calls floor images (treads, landings, rails), placed where the stair rooms of both storeys overlap (P19); S3 stacked: Ulo 2026-10-20",
+  "ladders": "research/oregon/layout_notes.md §5.3 and the gap in the Cat Walk well's rail (walls_3F.json 3F.o001), P20"
  },
  "id": "oregon",
  "name": "Oregon",
@@ -155,6 +157,26 @@
  ],
  "wells": [
   {"id": "W-3F-01", "floor": "3F", "frame": "3F", "rects": [[261.24, 57.68, 295.46, 84.14]], "note": "the Cat Walk's centre, open over the 2F Tower (P21; layout_notes §4.4), inside the rail (walls_3F.json 3F.w004, w006, w014, w015)", "_unverified": ["rects"]}
+ ],
+ "stairs": [
+  {"id": "S1", "names": ["Tower Stairs"], "research": "layout_notes §5.1 ST_TOWER; map_features §5 S1", "runs": [
+   {"from": "B", "to": "1F", "plan": "switchback", "shaft": [241.34, 51.34, 263.33, 76.67], "up": "N", "turn": "right", "foot": "B_TOWER_STAIRS", "top": "1F_TOWER", "note": "up north on the west side from the Boiler end (B opens south on that side only), back south on the east into 1F Tower, where the 1F image draws treads; the shaft is where the B and 1F stair rooms overlap (B frame as drawn)", "_unverified": ["plan", "shaft", "up", "turn", "steps"]},
+   {"from": "1F", "to": "2F", "plan": "switchback", "shaft": [241.34, 51.34, 263.33, 76.67], "up": "N", "turn": "right", "foot": "1F_TOWER", "top": "2F_TOWER", "note": "stacked over the run from B, the same way round (the r6calls 1F and 2F images draw a switchback with its rail down the middle)", "_unverified": ["plan", "shaft", "up", "turn", "steps"]}
+  ]},
+  {"id": "S2", "names": ["White Stairs", "West Stairs", "Freezer Stairs"], "research": "layout_notes §5.1 ST_WHITE; map_features §5 S2", "runs": [
+   {"from": "B", "to": "1F", "plan": "straight", "shaft": [153, 252, 176, 259.33], "up": "E", "foot": "B_FREEZER_STAIRS", "top": "1F_WHITE_STAIRS", "note": "from the Freezer side, up east along the north half of the 1F White Stairs, arriving by the Security Corridor door; side by side with the flight to 2F (rising the other way they can't stack)", "_unverified": ["plan", "shaft", "up", "steps"]},
+   {"from": "1F", "to": "2F", "plan": "straight", "shaft": [153, 259.33, 184, 266], "up": "W", "foot": "1F_WHITE_STAIRS", "top": "2F_WHITE_STAIRS", "note": "the 1F image's flight along the south half, up west from the landing by the door (x 184–194)", "_unverified": ["plan", "shaft", "up", "steps"]}
+  ]},
+  {"id": "S3", "names": ["Armory Stairs", "East Stairs", "Laundry Stairs"], "research": "layout_notes §5.1 ST_ARMORY; Ulo 2026-10-20: two staircases stacked one over the other", "runs": [
+   {"from": "B", "to": "1F", "plan": "straight", "shaft": [276.33, 234, 284, 266], "up": "S", "foot": "B_LAUNDRY_STAIRS", "top": "1F_ARMORY_STAIRS", "note": "up south from the basement's north landing, arriving at the south end of 1F, open to the Lobby behind a rail; where the B and 1F stair rooms overlap (B frame as drawn)", "_unverified": ["shaft", "up", "steps"]},
+   {"from": "1F", "to": "2F", "plan": "straight", "shaft": [276.33, 240, 284, 272], "up": "S", "foot": "1F_ARMORY_STAIRS", "top": "2F_ARMORY_STAIRS", "note": "over the flight from B, the same way (Ulo: stacked), from 1F's north landing by the Lobby door; a walkway beside it on the east", "_unverified": ["shaft", "up", "steps"]}
+  ]},
+  {"id": "S4", "names": ["Small Stairs"], "research": "layout_notes §5.1 ST_SMALL; map_features Q5", "runs": [
+   {"from": "1F", "to": "2F", "plan": "switchback", "shaft": [12, 177.67, 34.67, 189.67], "up": "E", "turn": "left", "foot": "1F_SMALL_TOWER", "top": "2F_SMALL_TOWER", "note": "the Small Tower's north-west corner, which opens only at its south-west (1F.w040, w089): up east on the south side, back west on the north (the images show no treads)", "_unverified": ["plan", "shaft", "up", "turn", "steps"]}
+  ]}
+ ],
+ "ladders": [
+  {"id": "L1", "from": "2F", "to": "3F", "frame": "3F", "at": [284.17, 57.68], "facing": "N", "widthM": 0.6, "research": "layout_notes §5.3 LD_TOWER", "note": "on the Cat Walk well's north edge, at the gap in its rail (3F.o001): up from the 2F Tower, off north onto the ring", "_unverified": ["at", "widthM"]}
  ],
  "rappel": { "refuse": [] }
 }

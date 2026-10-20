@@ -82,6 +82,8 @@ export const movementSchema = z.object({
     topGrabMargin: z.number().nonnegative(),
     /** How far below a ladder's base you can still grab it. */
     bottomGrabMargin: z.number().nonnegative(),
+    /** Grabbing a ladder from the top (standing where a climb ends, facing the drop) puts your feet this far below its top. */
+    topMountDrop: z.number().positive(),
   }),
   fall: z.object({ safeHeight: z.number().nonnegative(), lethalHeight: z.number().positive() }),
   step: z.object({ maxStepHeight: z.number().nonnegative(), snapToGround: z.number().nonnegative(), maxSlopeDeg: z.number().positive() }),
@@ -592,6 +594,11 @@ export const levelSchema = z.strictObject({
         run: z.number().positive(),
         width: z.number().positive(),
         surface: z.enum(SURFACES),
+        /**
+         * Solid (the default) fills each step down to the flight's start, a block of stairs. Open steps are two
+         * risers deep, a stepped stringer with room underneath, so a flight can run over another (Phase 5 M3).
+         */
+        solid: z.boolean().default(true),
       }),
     )
     .default([]),
