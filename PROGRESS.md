@@ -5,7 +5,7 @@ known issues, and what's next.
 
 ---
 
-## Phase 5 — Oregon greybox · 🚧 in progress (M1 of 8 done)
+## Phase 5 — Oregon greybox · 🚧 in progress (M2 of 8 done)
 
 **Done when (PLAN §17):** you walk it and sign off on layout accuracy. Rappel (M8) comes before the Phase 5
 report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIGN.md`.
@@ -13,13 +13,54 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
 | Milestone | Status |
 |---|---|
 | M1 Oregon 1F walkable, offline and online (generator, wall extraction, engine prep) | ✅ 1F built from the floor plans; batched drawing and a stats overlay (F8); browser test |
-| M2 All storeys stacked: B, 2F, Cat Walk; rooms and callouts; ceilings, soft floors, hatches, drone holes; storey views | ⏳ |
+| M2 All storeys stacked: B, 2F, Cat Walk; rooms and callouts; ceilings, soft floors, hatches, drone holes; storey views | ✅ four storeys, 49 rooms, 12 soft floors, 6 hatches; hide-above, plan view, HUD line; browser test |
 | M3 Stairs and the ladder (grab it from the top too) | ⏳ |
 | M4 Roofs, the outside and the three attacker spawns; free camera | ⏳ |
 | M5 Sites, defender spawns, cameras, ingredients, zones, cover props | ⏳ |
 | M6 Walk-ready: every check, performance on Oregon, your walk #1 | ⏳ |
 | M7 Your corrections, round by round, to sign-off | ⏳ |
 | M8 Rappel | ⏳ |
+
+### What's done (M2)
+- **Every storey stacked:** B, 1F, 2F and the Cat Walk (3F), each from its own wall file and placed through its
+  frame (P2: B as drawn, 3F scaled onto the tower's walls). Floors at −3.2, 0, 3.2 and 6.2 m. The basement is
+  underground, so its walls stop under the 1F slab. All 32 soft walls are in (7 on B, 17 on 1F, 8 on 2F), with
+  every storey's doors, windows and drone holes.
+- **Rooms and callouts (D-085):** the 49 rooms of the research, each with its callout. The generator floods each
+  storey's plan (5 cm cells) from the compiled walls; 11 splits divide spaces the plans draw as one (a hall and
+  its stairs). Each room becomes floor rectangles (what the HUD looks up) and an anchor 0.45 m clear of the
+  walls (Go to and its label). The checks fail on two rooms in one space, a seed on a wall, or an anchor where a
+  body doesn't fit, and report any enclosed space bigger than 2 m² that has no room.
+- **Floors and ceilings (D-086):** each storey's floor covers its footprint and is the ceiling of the one below;
+  the ground is the play area, less the hatches.
+  - 12 soft floors (SF-2F-01 to 11 on 2F, SF-3F-01 on the Cat Walk) cover the rooms the research names, to
+    their walls. They're cut into tiles of at most 4 m in 0.4 m joist spacings, and a bullet that crosses a
+    seam goes into one surface, not two (D-088).
+  - 6 hatches (H1–H6): r6calls' squares, clipped to the room above, breakable and reinforceable from the top.
+  - The Cat Walk's centre is an open well over the 2F tower, inside a 1.0 m rail you can vault.
+- **Where the sources disagree (D-087):** we follow Ubisoft's blueprint. SF-2F-10 and SF-2F-11 are soft, and five
+  soft floors use Ubisoft's bigger extents. The Game Room's south window and the 2F Small Tower's south opening,
+  which only r6calls 2026 draws, are built as wall. Each choice is one field in `layout.json`.
+- **The Oregon page:**
+  - H hides the storeys above yours. M opens the plan view: your storey from above, north up, centred on you;
+    the wheel zooms and you can keep walking. P switches between the surface colours and one light grey.
+  - Room callouts float over your storey. The line at the bottom left gives the room, the storey and your
+    position in the plan's units (u), in the world frame and in your storey's own drawing.
+  - Go to lists every room by storey.
+  - Each storey has its own light, darker below ground.
+- **Plans and tools:**
+  - `research/oregon/compare/{B,1F,2F,3F}.svg` draw every storey with its floors (soft yellow, hatches
+    green), rails and callouts.
+  - `npm run mapgen -- --where x,y,floor` gives a position in every floor's frame and the room there.
+  - `npm run mapgen` builds B both ways (as drawn, and 2.4% larger) and prints where each basement hatch lands.
+- **Checks:**
+  - Leak and shell checks run on every storey. Research tests cover the rooms, soft floors and hatches.
+  - A bullet goes up through each soft floor, and a body dropped through each hatch lands in the room the
+    research names.
+  - The browser test shoots up through the Kids' Dorms floor from the 1F Kitchen, then knifes H4 open from
+    above and lands in the Kitchen.
+- **Smaller fixes:** the Destruction Lab's walls no longer name their sections twice; Go to uses the rooms'
+  anchors instead of hand-picked centres.
 
 ### What's done (M1)
 - **Walls from the floor plans (D-071):** `tools/mapgen/extract` reads r6calls' Oregon map (the floor images and
@@ -70,34 +111,43 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
 1. `npm ci`, then `npm run dev` and, in a second terminal, `npm run build -w @redmond/server && npm start`.
 2. Open http://localhost:5173/labs/oregon.html (offline) or `?online` (a room on your local server; send the
    invite link to play together). You start outside the Main Entrance.
-3. Walk 1F against the blueprint: every wall, door and window where it should be; the 17 soft walls blue with
-   their ids (SW-1F-01 … 17) and sections; exterior doors and windows barricaded. Note anything wrong with the
-   room and roughly where (Go to names the rooms).
-4. Press F8 and read the overlay on your PC: average FPS and the 1% low (target 120 and 90 at 1080p High).
+3. Go to (Esc, then a room) takes you to any room on B, 1F, 2F or the Cat Walk. Its callout floats over the
+   floor, and the line at the bottom left names the room you're in. Walk each storey against the blueprint and
+   note anything out of place with that line (it gives your position in the plan's units).
+4. Press H to hide the storeys above you, M for the plan view (the wheel zooms; M again to go back), and P to
+   switch to plain grey.
+5. Soft floors: Go to 1F Kitchen, look straight up and fire. The yellow floor above (the Kids' Dorms, SF-2F-01)
+   takes holes; every soft floor works the same way from the room below.
+6. Hatches: Go to 2F Kids' Dorms and stand on the green square (H4). Crouch (C), look down and knife it (V)
+   until it breaks, and you drop into the 1F Kitchen. H1–H3 go from 1F to the basement, H5 and H6 from 2F to 1F.
+7. Press F8 and read the overlay on your PC: average FPS and the 1% low (target 120 and 90 at 1080p High).
    The browser draws no faster than your display refreshes, and a missed refresh counts as a whole extra one,
    so read the FPS on a display faster than 120 Hz (144 Hz or more). At 120 Hz or less, read the work instead:
    the page's own work each frame on the main thread, 8.3 ms on average and 11.1 ms for the slowest 1% leaving
    room for 120 and 90 FPS. It doesn't include the graphics card's time.
-5. The plan: open `research/oregon/compare/1F.svg`. To see it over the official blueprint:
-   `npm run mapgen:refs` (downloads the blueprint and r6calls' map into a gitignored folder), then
-   `npm run mapgen:compare`, and open `builds/mapgen/compare/index.html`.
-6. Checks: `npm run typecheck`, `npm test`, `npm run build && npm run test:e2e` (adds `oregon.mjs`),
-   `npm run mapgen -- --check`.
+8. The plans: open `research/oregon/compare/B.svg`, `1F.svg`, `2F.svg` and `3F.svg`. To see them over the
+   official blueprint: `npm run mapgen:refs` (downloads the blueprint and r6calls' map into a gitignored
+   folder), then `npm run mapgen:compare`, and open `builds/mapgen/compare/index.html`.
+9. Checks: `npm run typecheck`, `npm test`, `npm run build && npm run test:e2e` (`oregon.mjs` now shoots
+   through a soft floor and drops through a hatch), `npm run mapgen -- --check`.
 
 ### Known issues
-- Only 1F exists: no ceilings yet (you see the sky), no stairs, bare ground outside. Storeys come in M2,
-  stairs in M3, roofs and the outside in M4.
+- No stairs or ladder yet (M3): Go to takes you between storeys, and the floors over the stairwells are still
+  closed.
+- No roofs yet (M4): where nothing stands above 2F or the Cat Walk you see the sky, and 2F's walls stop at 3.0 m.
+  The ground outside is bare.
+- The basement's frame is an assumption (P2, open question 10). With B as drawn, the hatches H1, H2 and H3 land
+  in the right rooms but 0.2, 0.1 and 0 m from a wall; the other choice puts H1 only 55% over B Electric.
+- Behind the 1F White Stairs, a sealed 3.6 m² strip has no room (open question 19b).
+- Room callouts show for your storey only.
 - Every size is a placeholder until you've walked it: 1 u of the plans = 0.15 m, walls 3 m, doors 2.1 m
   (research/OPEN_QUESTIONS.md, "Placeholders added while building Phase 5").
-- Go to uses hand-picked room centres until rooms are computed from the walls (M2).
 - The online test on Railway needs Railway to deploy this branch (it deploys the Phase 4 branch today).
-- You no longer see your own shadow (shadows are drawn once for the level, D-077). The Destruction Lab's
-  wall labels name their sections twice ("Reinforceable (2 sections) · 2 sections").
+- You no longer see your own shadow (shadows are drawn once for the level, D-077).
 
-### Next: Phase 5 M2 — all storeys
-B, 2F and the Cat Walk through their frames; rooms and callouts; ceilings with stairwell holes; soft floors in
-tiles; hatches; storey views and the plan view. The leak checks then cover every storey (2F's outer walls don't
-close at their tops yet: its balconies and rails arrive with it).
+### Next: Phase 5 M3 — stairs and the ladder
+Every staircase from the research, cut through the floors above it, and the Cat Walk ladder (grab it from the top
+too). Then Go to is no longer the only way between storeys.
 
 ---
 

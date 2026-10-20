@@ -16,8 +16,8 @@
     { "id": "soft_studs", "center": [-12, 1.5, -6], "size": [3, 3, 0.2], "surface": "SOFT_WALL", "label": "Soft wall (wooden studs)" },
     { "id": "soft_plain", "center": [-8, 1.5, -6], "size": [3, 3, 0.2], "surface": "SOFT_WALL", "panel": { "construction": "soft_wall_no_studs" }, "label": "Soft wall (no studs)" },
     { "id": "semi", "center": [-4, 1.5, -6], "size": [3, 3, 0.2], "surface": "SOFT_WALL", "panel": { "construction": "semi_wall" }, "label": "Metal studs" },
-    { "id": "reinforce_2", "center": [1, 1.5, -6], "size": [3, 3, 0.2], "surface": "REINFORCEABLE", "label": "Reinforceable (2 sections)" },
-    { "id": "reinforce_3", "center": [6, 1.5, -6], "size": [4.5, 3, 0.2], "surface": "REINFORCEABLE", "panel": { "sections": 3 }, "label": "Reinforceable (3 sections)" },
+    { "id": "reinforce_2", "center": [1, 1.5, -6], "size": [3, 3, 0.2], "surface": "REINFORCEABLE", "label": "Reinforceable" },
+    { "id": "reinforce_3", "center": [6, 1.5, -6], "size": [4.5, 3, 0.2], "surface": "REINFORCEABLE", "panel": { "sections": 3 }, "label": "Reinforceable" },
     { "id": "reinforced", "center": [11.5, 1.5, -6], "size": [3, 3, 0.2], "surface": "REINFORCED_WALL", "label": "Reinforced" },
 
     { "id": "door_wall_w", "center": [-13.25, 1.25, 6], "size": [5.5, 2.5, 0.2], "surface": "HARD_WALL" },

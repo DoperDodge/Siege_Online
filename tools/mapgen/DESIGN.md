@@ -594,7 +594,8 @@ explicit metres of a pillar), with its spans sorted:
   play area, less its hatches. An `underground` storey's walls all stop under the slab, so B needs no cutback.
   Soft-floor rectangles run to the walls of the rooms the research names: r6calls' outlines are traced around
   furniture and aren't consistently in one frame, so they serve as a check, not as geometry. Amendment 7 wins
-  over the line above: Ubisoft's five larger extents are built, r6calls' are `alt`. Stairwell holes: M3.
+  over the lines above: SF-2F-10 and SF-2F-11 are soft (`hard: true` makes either hard), and Ubisoft's five
+  larger extents are built, r6calls' are `alt`. Stairwell holes: M3.
 
 ### 5.7 Stairs and ladders
 
