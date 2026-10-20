@@ -77,7 +77,7 @@ else here blocks Phase 1.
 - **Q1 (cameras):** r6calls shows **8** default cameras: EXT Junkyard/Bus, EXT Parking/Street, EXT Construction, B Freezer, 1F Rear Stage, 1F Lobby, 1F Shower Corridor, 2F Armory Corridor. Is that right? For each, which wall is it on and which way does it face (a screenshot of its view)?
 - **Q2 (ingredients):** r6calls shows **7 fire extinguishers** (B Basement Hall, B Freezer, 1F Security Corridor, 1F Kitchen Corridor, 1F Lobby hall, 2F Trophy, 2F Low Attic) and **2 gas pipes** (1F by Main Stairs / Garage SW corner, 2F Attic). Is that all? Which wall and height is each on? Any metal detectors?
 - **Q3 (Laundry hatch):** Does the 1F Lobby hatch (next to Classroom) drop into Laundry Storage, Laundry Room, or the Laundry Stairs?
-- **Q4 (stairs):** Are Main Stairs (1F↔2F) and Laundry Stairs (B↔1F) one stairwell or two separate flights? Where exactly does each flight start and end?
+- **Q4 (stairs):** *(Answered by Ulo, 2026-10-20: two separate staircases stacked one over the other, one from B to 1F and one from 1F to 2F.)* Where exactly does each flight start and end?
 - **Q5 (Small Tower):** r6calls labels "Small Stairs" in Small Tower. Confirm the staircase between 1F and 2F. Is there an office on both floors ("1F Small Tower Office" appears in a patch note)?
 - **Q6 (Big Tower ladder):** Confirm the ladder spot (north edge of the open well in Big Tower 2F's east room). Is the tower top ("Cat Walk") indoors, i.e. no out-of-bounds reveal?
 - **Q7 (Bunker):** Confirm the outside stairs down into Blue Bunker, and where they start outside.

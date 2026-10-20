@@ -28,5 +28,5 @@
 <rect class="openings" x="255.53" y="49.06" width="0.44" height="6.27" fill="#b5793a"><title>3F.o003.bar</title></rect>
 <rect class="openings" x="255.02" y="49.06" width="0.15" height="6.27" fill="#4fc3e8"><title>3F.o003.glass</title></rect>
 <text class="labels floors" x="269.78" y="51.28">SF-3F-01</text>
-<text class="rooms" x="299.35" y="72.11"><title>3F_CATWALK</title>Cat Walk</text>
+<text class="rooms" x="299.71" y="72.11"><title>3F_CATWALK</title>Cat Walk</text>
 </svg>

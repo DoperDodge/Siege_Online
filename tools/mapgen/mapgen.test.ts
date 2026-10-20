@@ -11,6 +11,7 @@ import { frames } from "./frames.js";
 import { compile, loadInputs } from "./compile.js";
 import { readableJson } from "./format.js";
 import { enclosureLeaks, planGrid } from "./enclosure.js";
+import { planSvg } from "./plans.js";
 import { distanceInside, PlanGrid } from "./grid.js";
 import type { Extracted } from "./import.js";
 import { connections, hatchTable, roomTable, softFloorTable, softWalls } from "./research.js";
@@ -35,6 +36,10 @@ describe("oregon level.json", () => {
     const text = readableJson(level);
     expect(readableJson(compile(loadInputs(ROOT)).level)).toBe(text);
     expect(readFileSync(join(MAP, "level.json"), "utf8"), "level.json is stale: run npm run mapgen").toBe(text);
+  });
+
+  it("the committed plans are what the level draws (research/oregon/compare)", () => {
+    for (const floor of inputs.layout.emit) expect(readFileSync(join(ROOT, "research", "oregon", "compare", `${floor}.svg`), "utf8") === planSvg(ROOT, level, floor), `${floor}.svg is stale: run npm run mapgen`).toBe(true);
   });
 
   it("loads with the game data, and every placeholder path in layout.json exists", () => {
@@ -538,10 +543,56 @@ describe("oregon rooms and floors", () => {
       for (const t of mine) {
         expect([+(t.center[1] + t.size[1] / 2).toFixed(4), +t.size[1].toFixed(4)], t.id).toEqual([s.floorY, s.slabM]);
         expect(Math.max(t.size[0], t.size[2]), t.id).toBeLessThanOrEqual(max + 1e-6);
-        expect(Math.min(t.size[0], t.size[2]), t.id).toBeGreaterThanOrEqual(0.3 - 1e-6);
+        if (/#e\d/.test(t.id)) {
+          // A strip along part of the edge, out to the wall below: at most 15 cm deep, at least 0.5 m long.
+          expect(Math.min(t.size[0], t.size[2]), t.id).toBeLessThanOrEqual(0.15 + 1e-6);
+          expect(Math.max(t.size[0], t.size[2]), t.id).toBeGreaterThanOrEqual(0.5 - 1e-6);
+        } else expect(Math.min(t.size[0], t.size[2]), t.id).toBeGreaterThanOrEqual(0.3 - 1e-6);
       }
     }
     expect(tiles.every((t) => t.panel?.region !== undefined)).toBe(true);
+  });
+
+  it("seen from below, a soft floor meets the walls of the room under it (no strip of hard ceiling over 0.5 m)", () => {
+    // Walls above needn't stand on the walls below (an outside wall over a thinner inside one): the strip
+    // between a soft floor's edge and the wall below is that room's ceiling, and soft too (corner bits aside).
+    const C = 0.05;
+    const key = (i: number, j: number) => i * 100000 + j;
+    const lo = (b: Box, a: number) => b.center[a] - b.size[a] / 2;
+    const hi = (b: Box, a: number) => b.center[a] + b.size[a] / 2;
+    const strips: string[] = [];
+    inputs.layout.storeys.forEach((st, si) => {
+      const below = inputs.layout.storeys[si - 1];
+      if (!below) return;
+      const soft = new Set<number>();
+      for (const t of solids.filter((b) => b.surface === "SOFT_FLOOR" && Math.abs(hi(b, 1) - st.floorY) < 0.01)) {
+        for (let i = Math.round(lo(t, 0) / C); i < Math.round(hi(t, 0) / C); i++) for (let j = Math.round(lo(t, 2) / C); j < Math.round(hi(t, 2) / C); j++) soft.add(key(i, j));
+      }
+      for (const r of rooms.filter((r) => r.storey === below.id)) {
+        const cells = new Set<number>();
+        for (const [x0, z0, x1, z1] of r.rects) for (let i = Math.round(x0 / C); i < Math.round(x1 / C); i++) for (let j = Math.round(z0 / C); j < Math.round(z1 / C); j++) cells.add(key(i, j));
+        // The room's edge cells with hard ceiling, within 15 cm of a soft floor.
+        const hard = new Set<number>();
+        for (const c of cells) {
+          const [i, j] = [Math.floor(c / 100000), c % 100000];
+          const edge = [key(i - 1, j), key(i + 1, j), key(i, j - 1), key(i, j + 1)].some((q) => !cells.has(q));
+          const nearSoft = [-3, -2, -1, 1, 2, 3].some((d) => soft.has(key(i + d, j)) || soft.has(key(i, j + d)));
+          if (!soft.has(c) && edge && nearSoft) hard.add(c);
+        }
+        const seen = new Set<number>();
+        for (const c of hard) {
+          if (seen.has(c)) continue;
+          const run = [c];
+          seen.add(c);
+          for (let q = 0; q < run.length; q++) for (const d of [100000, -100000, 1, -1]) if (hard.has(run[q] + d) && !seen.has(run[q] + d)) (seen.add(run[q] + d), run.push(run[q] + d));
+          const is = run.map((x) => Math.floor(x / 100000));
+          const js = run.map((x) => x % 100000);
+          const long = Math.max(Math.max(...is) - Math.min(...is), Math.max(...js) - Math.min(...js)) + 1;
+          if (long * C > 0.5 + 1e-9) strips.push(`${r.id}: ${(long * C).toFixed(2)} m of hard ceiling at x ${(Math.min(...is) * C).toFixed(2)}, z ${(Math.min(...js) * C).toFixed(2)}`);
+        }
+      }
+    });
+    expect(strips).toEqual([]);
   });
 
   it("a bullet from the room below goes up through every soft floor, into one surface", async () => {

@@ -4,41 +4,46 @@
 <rect class="floors" x="141.92" y="181.89" width="10.92" height="11.29" fill="#3fa75a" fill-opacity="0.45" stroke="#3fa75a" stroke-width="0.2"><title>H4</title></rect>
 <rect class="floors" x="250.39" y="127.16" width="11.6" height="11.97" fill="#3fa75a" fill-opacity="0.45" stroke="#3fa75a" stroke-width="0.2"><title>H5</title></rect>
 <rect class="floors" x="325.09" y="243.11" width="11.26" height="11.29" fill="#3fa75a" fill-opacity="0.45" stroke="#3fa75a" stroke-width="0.2"><title>H6</title></rect>
-<rect class="floors" x="139.87" y="161.02" width="24.56" height="20.86" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-01#0.r0c0</title></rect>
-<rect class="floors" x="164.43" y="161.02" width="24.56" height="20.86" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-01#0.r0c1</title></rect>
-<rect class="floors" x="188.99" y="161.02" width="20.12" height="20.86" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-01#0.r0c2</title></rect>
-<rect class="floors" x="139.87" y="181.89" width="2.05" height="23.6" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-01#1.r0c0</title></rect>
+<rect class="floors" x="139.53" y="161.02" width="24.56" height="20.86" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-01#0.r0c0</title></rect>
+<rect class="floors" x="164.09" y="161.02" width="24.56" height="20.86" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-01#0.r0c1</title></rect>
+<rect class="floors" x="188.65" y="161.02" width="20.47" height="20.86" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-01#0.r0c2</title></rect>
+<rect class="floors" x="139.53" y="181.89" width="2.39" height="23.6" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-01#1.r0c0</title></rect>
 <rect class="floors" x="152.83" y="181.89" width="19.1" height="23.6" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-01#2.r0c0</title></rect>
 <rect class="floors" x="171.93" y="181.89" width="19.1" height="23.6" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-01#2.r0c1</title></rect>
 <rect class="floors" x="191.04" y="181.89" width="18.08" height="23.6" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-01#2.r0c2</title></rect>
 <rect class="floors" x="141.92" y="193.18" width="10.92" height="12.31" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-01#3.r0c0</title></rect>
-<rect class="floors" x="139.87" y="206.86" width="27.29" height="17.79" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-02#0.r0c0</title></rect>
-<rect class="floors" x="167.16" y="206.86" width="27.29" height="17.79" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-02#0.r0c1</title></rect>
-<rect class="floors" x="194.45" y="206.86" width="27.29" height="17.79" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-02#0.r0c2</title></rect>
-<rect class="floors" x="221.74" y="206.86" width="24.9" height="17.79" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-02#0.r0c3</title></rect>
-<rect class="floors" x="139.87" y="224.64" width="21.83" height="16.42" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-02#1.r0c0</title></rect>
-<rect class="floors" x="161.7" y="224.64" width="21.83" height="16.42" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-02#1.r0c1</title></rect>
-<rect class="floors" x="183.53" y="224.64" width="18.42" height="16.42" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-02#1.r0c2</title></rect>
-<rect class="floors" x="139.87" y="241.06" width="21.83" height="13.34" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-02#1.r1c0</title></rect>
-<rect class="floors" x="161.7" y="241.06" width="21.83" height="13.34" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-02#1.r1c1</title></rect>
-<rect class="floors" x="183.53" y="241.06" width="18.42" height="13.34" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-02#1.r1c2</title></rect>
+<rect class="floors" x="200.93" y="160" width="8.19" height="1.03" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-01#e1.r0c0</title></rect>
+<rect class="floors" x="139.53" y="206.86" width="27.29" height="17.79" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-02#0.r0c0</title></rect>
+<rect class="floors" x="166.82" y="206.86" width="27.29" height="17.79" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-02#0.r0c1</title></rect>
+<rect class="floors" x="194.11" y="206.86" width="27.29" height="17.79" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-02#0.r0c2</title></rect>
+<rect class="floors" x="221.39" y="206.86" width="25.24" height="17.79" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-02#0.r0c3</title></rect>
+<rect class="floors" x="139.53" y="224.64" width="21.83" height="16.42" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-02#1.r0c0</title></rect>
+<rect class="floors" x="161.36" y="224.64" width="21.83" height="16.42" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-02#1.r0c1</title></rect>
+<rect class="floors" x="183.19" y="224.64" width="18.76" height="16.42" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-02#1.r0c2</title></rect>
+<rect class="floors" x="139.53" y="241.06" width="21.83" height="13.34" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-02#1.r1c0</title></rect>
+<rect class="floors" x="161.36" y="241.06" width="21.83" height="13.34" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-02#1.r1c1</title></rect>
+<rect class="floors" x="183.19" y="241.06" width="18.76" height="13.34" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-02#1.r1c2</title></rect>
 <rect class="floors" x="203.32" y="226.01" width="21.83" height="16.42" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-02#2.r0c0</title></rect>
 <rect class="floors" x="225.15" y="226.01" width="21.49" height="16.42" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-02#2.r0c1</title></rect>
 <rect class="floors" x="203.32" y="242.43" width="21.83" height="11.97" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-02#2.r1c0</title></rect>
 <rect class="floors" x="225.15" y="242.43" width="21.49" height="11.97" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-02#2.r1c1</title></rect>
+<rect class="floors" x="203.32" y="254.4" width="16.71" height="0.68" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-02#e19.r0c0</title></rect>
 <rect class="floors" x="248" y="226.01" width="19.1" height="24.63" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-03#0.r0c0</title></rect>
 <rect class="floors" x="267.1" y="226.01" width="14.33" height="24.63" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-03#0.r0c1</title></rect>
 <rect class="floors" x="248" y="250.64" width="19.1" height="22.23" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-03#0.r1c0</title></rect>
 <rect class="floors" x="267.1" y="250.64" width="14.33" height="22.23" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-03#0.r1c1</title></rect>
+<rect class="floors" x="281.43" y="264.32" width="0.34" height="9.23" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-03#e3.r0c0</title></rect>
 <rect class="floors" x="222.08" y="255.77" width="24.56" height="17.1" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-04#0.r0c0</title></rect>
-<rect class="floors" x="282.79" y="208.57" width="13.99" height="16.42" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-05#0.r0c0</title></rect>
-<rect class="floors" x="282.79" y="224.98" width="13.99" height="15.05" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-05#0.r1c0</title></rect>
+<rect class="floors" x="282.79" y="208.57" width="15.01" height="16.42" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-05#0.r0c0</title></rect>
+<rect class="floors" x="282.79" y="224.98" width="15.01" height="15.05" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-05#0.r1c0</title></rect>
 <rect class="floors" x="299.85" y="208.22" width="21.83" height="19.15" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-06#0.r0c0</title></rect>
-<rect class="floors" x="321.68" y="208.22" width="17.74" height="19.15" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-06#0.r0c1</title></rect>
+<rect class="floors" x="321.68" y="208.22" width="18.08" height="19.15" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-06#0.r0c1</title></rect>
 <rect class="floors" x="299.85" y="227.38" width="21.83" height="15.73" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-06#0.r1c0</title></rect>
-<rect class="floors" x="321.68" y="227.38" width="17.74" height="15.73" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-06#0.r1c1</title></rect>
-<rect class="floors" x="299.85" y="243.11" width="25.24" height="12.31" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-06#2.r0c0</title></rect>
-<rect class="floors" x="336.34" y="243.11" width="3.07" height="12.31" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-06#3.r0c0</title></rect>
+<rect class="floors" x="321.68" y="227.38" width="18.08" height="15.73" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-06#0.r1c1</title></rect>
+<rect class="floors" x="298.82" y="243.11" width="26.26" height="12.31" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-06#2.r0c0</title></rect>
+<rect class="floors" x="336.34" y="243.11" width="3.41" height="12.31" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-06#3.r0c0</title></rect>
+<rect class="floors" x="298.82" y="209.59" width="1.02" height="19.15" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-06#e4.r0c0</title></rect>
+<rect class="floors" x="298.82" y="228.75" width="1.02" height="14.37" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-06#e4.r1c0</title></rect>
 <rect class="floors" x="64.83" y="179.49" width="19.1" height="16.42" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-07#0.r0c0</title></rect>
 <rect class="floors" x="83.93" y="179.49" width="15.01" height="16.42" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-07#0.r0c1</title></rect>
 <rect class="floors" x="64.83" y="195.91" width="19.1" height="11.63" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-07#0.r1c0</title></rect>
@@ -50,9 +55,9 @@
 <rect class="floors" x="249.71" y="98.77" width="16.71" height="12.66" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-09#0.r0c0</title></rect>
 <rect class="floors" x="248" y="206.86" width="19.1" height="17.79" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-10#0.r0c0</title></rect>
 <rect class="floors" x="267.1" y="206.86" width="14.33" height="17.79" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-10#0.r0c1</title></rect>
-<rect class="floors" x="139.87" y="255.77" width="21.83" height="20.18" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-11#0.r0c0</title></rect>
-<rect class="floors" x="161.7" y="255.77" width="21.83" height="20.18" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-11#0.r0c1</title></rect>
-<rect class="floors" x="183.53" y="255.77" width="14.67" height="20.18" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-11#0.r0c2</title></rect>
+<rect class="floors" x="139.53" y="255.77" width="21.83" height="20.18" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-11#0.r0c0</title></rect>
+<rect class="floors" x="161.36" y="255.77" width="21.83" height="20.18" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-11#0.r0c1</title></rect>
+<rect class="floors" x="183.19" y="255.77" width="15.01" height="20.18" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-11#0.r0c2</title></rect>
 <rect class="walls" x="3.77" y="177.44" width="81.86" height="2.05" fill="#6b7178"><title>2F.w000#0</title></rect>
 <rect class="walls" x="93.82" y="177.44" width="7.16" height="2.05" fill="#6b7178"><title>2F.w000#1</title></rect>
 <rect class="walls" x="137.82" y="205.49" width="8.53" height="1.37" fill="#6b7178"><title>2F.w003#0</title></rect>
@@ -170,17 +175,17 @@
 <text class="labels floors" x="147.38" y="187.53">H4</text>
 <text class="labels floors" x="256.19" y="133.15">H5</text>
 <text class="labels floors" x="330.72" y="248.76">H6</text>
-<text class="labels floors" x="152.15" y="171.46">SF-2F-01</text>
-<text class="labels floors" x="153.52" y="215.75">SF-2F-02</text>
+<text class="labels floors" x="151.81" y="171.46">SF-2F-01</text>
+<text class="labels floors" x="153.17" y="215.75">SF-2F-02</text>
 <text class="labels floors" x="257.55" y="238.32">SF-2F-03</text>
 <text class="labels floors" x="234.36" y="264.32">SF-2F-04</text>
-<text class="labels floors" x="289.78" y="216.78">SF-2F-05</text>
+<text class="labels floors" x="290.3" y="216.78">SF-2F-05</text>
 <text class="labels floors" x="310.76" y="217.8">SF-2F-06</text>
 <text class="labels floors" x="74.38" y="187.7">SF-2F-07</text>
 <text class="labels floors" x="53.57" y="202.75">SF-2F-08</text>
 <text class="labels floors" x="258.06" y="105.1">SF-2F-09</text>
 <text class="labels floors" x="257.55" y="215.75">SF-2F-10</text>
-<text class="labels floors" x="150.79" y="265.86">SF-2F-11</text>
+<text class="labels floors" x="150.45" y="265.86">SF-2F-11</text>
 <text class="labels" x="160" y="206.17">SW-2F-01</text>
 <text class="labels" x="209.8" y="170.6" transform="rotate(90 209.8 170.6)">SW-2F-02</text>
 <text class="labels" x="202.63" y="248.24" transform="rotate(90 202.63 248.24)">SW-2F-03</text>

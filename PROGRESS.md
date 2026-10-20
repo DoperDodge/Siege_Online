@@ -65,6 +65,9 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
   daylight-bright in the basement.
 - **Smaller fixes:** the Destruction Lab's walls no longer name their sections twice; Go to uses the rooms'
   anchors instead of hand-picked centres.
+- **After your walk (D-090):** the few-pixel gap you saw at some soft floors' sides was a strip of hard ceiling,
+  5–15 cm wide and up to 6.9 m long, where a 2F wall overhangs the 1F wall under it. Soft floors now run on to
+  the walls of the room below; the longest hard strip left is 0.4 m, at a corner.
 
 ### What's done (M1)
 - **Walls from the floor plans (D-071):** `tools/mapgen/extract` reads r6calls' Oregon map (the floor images and
@@ -138,8 +141,8 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
 ### Known issues
 - No stairs or ladder yet (M3): Go to takes you between storeys, and the floors over the stairwells are still
   closed.
-- No roofs yet (M4): where nothing stands above 2F or the Cat Walk you see the sky, and 2F's walls stop at 3.0 m.
-  The ground outside is bare.
+- No roofs yet (M4): wherever no storey stands above (1F's single-storey rooms, most of 2F, the Cat Walk) you
+  see the sky, and 2F's walls stop at 3.0 m. The ground outside is bare.
 - The basement's frame is an assumption (P2, open question 10). With B as drawn, the hatches H1, H2 and H3 land
   in the right rooms but 0.2, 0.1 and 0 m from a wall; the other choice puts H1 only 55% over B Electric.
 - Behind the 1F White Stairs, a sealed 3.6 m² strip has no room (open question 19b).

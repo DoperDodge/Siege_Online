@@ -1,4 +1,4 @@
-// npm run mapgen [-- --check]        compile data/maps/oregon/layout.json to level.json (--check: fail if stale)
+// npm run mapgen [-- --check]        compile data/maps/oregon/layout.json to level.json and its plans (--check: fail if stale)
 // npm run mapgen:import [-- --force] seed walls_<floor>.json from extracted.json (once; --force overwrites)
 // npm run mapgen:refs                download the official blueprints and the r6calls map (gitignored)
 // npm run mapgen:compare             our plans over the blueprints and rasters, for checking by eye
@@ -11,7 +11,7 @@ import { compile, loadInputs } from "./compile.js";
 import { frames, type FrameId } from "./frames.js";
 import { readableJson } from "./format.js";
 import { importFloor, type Extracted } from "./import.js";
-import { writePlans } from "./plans.js";
+import { planSvg, writePlans } from "./plans.js";
 import { downloadRefs } from "./refs.js";
 import { connections, FLOORS, softWalls } from "./research.js";
 
@@ -67,15 +67,20 @@ function runCompile() {
   if (report.errors.length) process.exit(1);
   if (flag("check")) {
     const old = existsSync(file) ? readFileSync(file, "utf8") : "";
-    if (old !== text) {
-      console.error("data/maps/oregon/level.json is stale: run npm run mapgen and commit it");
+    const plans = inputs.layout.emit.filter((floor) => {
+      const svg = join(ROOT, "research", "oregon", "compare", `${floor}.svg`);
+      return !existsSync(svg) || readFileSync(svg, "utf8") !== planSvg(ROOT, level, floor);
+    });
+    if (old !== text || plans.length) {
+      console.error(`${old !== text ? "data/maps/oregon/level.json" : `the plans of ${plans.join(", ")}`} ${old !== text && plans.length ? "and the plans are" : "is"} stale: run npm run mapgen and commit them`);
       process.exit(1);
     }
-    console.log("level.json is up to date");
+    console.log("level.json and the plans are up to date");
     return;
   }
   write(file, text);
   console.log(`wrote data/maps/oregon/level.json (${(text.length / 1024).toFixed(0)} KB)`);
+  writePlans(ROOT, level);
 }
 
 /** `--where x,y,floor[,m]`: x, y in that floor's own u ("world" for world u), or metres (X, Z) with ",m". */

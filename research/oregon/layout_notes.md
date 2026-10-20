@@ -211,7 +211,7 @@ Unnamed exterior features visible on the official blueprints (names UNVERIFIED):
 |---|---|---|---|
 | ST_TOWER | B ↔ 1F ↔ 2F | B (232–262, 45–88); 1F (241–265, 49–96); 2F (246–270, 47–96) | Big Tower stairwell (all three sources) |
 | ST_WHITE (West Stairs) | B ↔ 1F ↔ 2F | B Freezer Stairs (140–180, 232–265); 1F White Stairs (146–197, 252–268); 2F White Stairs (140–205, 256–276) | R6M names B "Freezer Stairs" and 1F/2F "West Stairs" at the same spot. B↔1F continuity is inferred from alignment (medium confidence) |
-| ST_ARMORY (East Stairs) | B ↔ 1F ↔ 2F | B Laundry Stairs (267–283, 232–277); 1F Armory Stairs (272–287, 228–268); 2F Armory Stairs (283–296, 245–275) | R6M: "Laundry Stairs" → "East Stairs". The 2F footprint is shifted about 11 u east (dog-leg), UNVERIFIED |
+| ST_ARMORY (East Stairs) | B ↔ 1F ↔ 2F | B Laundry Stairs (267–283, 232–277); 1F Armory Stairs (272–287, 228–268); 2F Armory Stairs (283–296, 245–275) | R6M: "Laundry Stairs" → "East Stairs". Two separate staircases stacked one over the other, B → 1F and 1F → 2F (Ulo, 2026-10-20). The 2F footprint is shifted about 11 u east (dog-leg), UNVERIFIED |
 | ST_SMALL | 1F ↔ 2F | 1F (3–34, 175–193); 2F (7–30, 181–193) | Small Tower stairs; the only indoor link to the 2F annex |
 | ST_EXT_TOWER_E | EXT ↔ 1F? | exterior (291–305, 48–90), outside the 1F Tower east door | Exterior staircase visible on the blueprints; where it leads is UNVERIFIED |
 | ST_EXT_BUNKER | EXT ↔ B | EXT_BUNKER passage (322–352+, 110–136) | Ramp/stairs down into B Bunker Entrance, UNVERIFIED |

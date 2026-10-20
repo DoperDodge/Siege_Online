@@ -16,6 +16,10 @@ import type { Solid } from "./walls.js";
 const JOIST_M = 0.4;
 /** A soft-floor rectangle thinner than this (a doorway's sliver) stays hard slab. */
 const SLIVER_M = 0.3;
+/** How far a soft floor reaches past its rooms' walls to meet the wall of the room below. */
+const OVERHANG_M = 0.15;
+/** A strip along part of a soft floor's edge gets a tile of its own from this long (shorter ones are corners). */
+const STRIP_MIN_M = 0.5;
 
 export interface HatchReport {
   id: string;
@@ -197,6 +201,63 @@ export function compileFloors(layout: Layout, fr: Frames, wallSolids: Solid[], r
         }
       }
     });
+    // ---- A soft floor ends at its rooms' walls on this storey, which needn't stand over the walls of the room
+    // below: an outside wall overhangs a thinner inside one, a line is drawn a few centimetres off, a room ends
+    // at a split. The strip left between the soft floor and the wall below is that room's ceiling, so a soft
+    // floor's rectangle grows across it where it runs the rectangle's whole edge, over a room below the soft
+    // floor covers and next to a wall below: seen from below, the soft floor meets the room's walls with no
+    // strip of hard ceiling between (a wall standing mid-ceiling keeps hard floor under it).
+    const planBelow = below ? rooms.plans.get(below.id) : undefined;
+    let roomBelow = (_c: number): number => -1;
+    let wallBelow = (_c: number): boolean => false;
+    let nearWallBelow: Int32Array = new Int32Array(0);
+    if (planBelow) {
+      const gb = planBelow.grid;
+      const [di, dj] = [Math.round((g.x0 - gb.x0) / CELL_M), Math.round((g.y0 - gb.y0) / CELL_M)];
+      const at = (c: number) => {
+        const [i, j] = [(c % g.w) + di, Math.floor(c / g.w) + dj];
+        return i < 0 || j < 0 || i >= gb.w || j >= gb.h ? -1 : j * gb.w + i;
+      };
+      roomBelow = (c) => (at(c) < 0 ? -1 : planBelow.room[at(c)]);
+      wallBelow = (c) => at(c) >= 0 && gb.cells[at(c)] === 1;
+      nearWallBelow = distanceInside(g.w, g.h, (c) => roomBelow(c) >= 0);
+    }
+    const reach = Math.round(OVERHANG_M / CELL_M);
+    /** Per soft floor, the rooms below it. */
+    const under = soft.map(() => new Set<number>());
+    if (planBelow) for (let c = 0; c < n; c++) if (region[c] >= 0) under[region[c]].add(roomBelow(c));
+    for (const u of under) u.delete(-1);
+    /** Whether a cell can join soft floor `fi`'s strip: 0 no; 1 hard floor over a wall below; 2 hard floor over a room below it covers, near a wall below. */
+    const strip = (c: number, fi: number) => {
+      if (kind[c] !== 1) return 0;
+      if (wallBelow(c)) return 1;
+      return nearWallBelow[c] > 0 && nearWallBelow[c] <= reach && under[fi].has(roomBelow(c)) ? 2 : 0;
+    };
+    /**
+     * A rectangle of cells grown across the strips along its edges, its new cells soft floor `fi`: each side
+     * moves out by up to `reach` cells while the whole row beyond it can join the strip, some of it over a room.
+     */
+    const grow = (r: Rect, fi: number): Rect => {
+      const line = (cells: [number, number][]) => {
+        const s = cells.map(([i, j]) => strip(j * g.w + i, fi));
+        return s.every((v) => v > 0) && s.some((v) => v === 2);
+      };
+      const span = (a: number, b: number) => Array.from({ length: b - a }, (_, t) => a + t);
+      const column = (i: number) => i >= 0 && i < g.w && line(span(out[1], out[3]).map((j) => [i, j]));
+      const row = (j: number) => j >= 0 && j < g.h && line(span(out[0], out[2]).map((i) => [i, j]));
+      const out: Rect = [r[0], r[1], r[2], r[3]];
+      for (let t = 0; t < reach && column(out[0] - 1); t++) out[0]--;
+      for (let t = 0; t < reach && column(out[2]); t++) out[2]++;
+      for (let t = 0; t < reach && row(out[1] - 1); t++) out[1]--;
+      for (let t = 0; t < reach && row(out[3]); t++) out[3]++;
+      for (let j = out[1]; j < out[3]; j++) {
+        for (let i = out[0]; i < out[2]; i++) {
+          const c = j * g.w + i;
+          if (kind[c] === 1) (kind[c] = 2), (region[c] = fi);
+        }
+      }
+      return out;
+    };
     soft.forEach((f, fi) => {
       const inArea = (c: number) => kind[c] === 2 && region[c] === fi;
       const rects = greedyRects(g.w, g.h, inArea);
@@ -204,26 +265,51 @@ export function compileFloors(layout: Layout, fr: Frames, wallSolids: Solid[], r
       let dist: Int32Array | undefined;
       const open = (cells: Rect) => maxIn((dist ??= distanceInside(g.w, g.h, inArea)), g.w, cells) >= clearCells(SLIVER_M);
       const mine: Solid[] = [];
-      rects.forEach((cells, ri) => {
-        const r = cellRect(cells);
-        if (Math.min(r[2] - r[0], r[3] - r[1]) < SLIVER_M - 1e-9 && !open(cells)) {
-          // A doorway's sliver: hard slab.
-          for (let j = cells[1]; j < cells[3]; j++) for (let i = cells[0]; i < cells[2]; i++) kind[j * g.w + i] = 1;
-          return;
-        }
-        const max = f.tileMaxM ?? d.softFloor.tileMaxM;
+      const max = f.tileMaxM ?? d.softFloor.tileMaxM;
+      /** A rectangle (metres) as tiles of at most `max`, in whole joist spacings. */
+      const tile = (r: Rect, id: string) => {
         const xs = tileSizes(r4(r[2] - r[0]), max);
         const zs = tileSizes(r4(r[3] - r[1]), max);
         let z = r[1];
         zs.forEach((dz, row) => {
           let x = r[0];
           xs.forEach((dx, col) => {
-            mine.push(slab(`${f.id}#${ri}.r${row}c${col}`, [x, z, x + dx, z + dz], y0, y1, { surface: "SOFT_FLOOR", panel: { region: f.id } }));
+            mine.push(slab(`${id}.r${row}c${col}`, [x, z, x + dx, z + dz], y0, y1, { surface: "SOFT_FLOOR", panel: { region: f.id } }));
             x += dx;
           });
           z += dz;
         });
+      };
+      rects.forEach((cells, ri) => {
+        if (Math.min(cells[2] - cells[0], cells[3] - cells[1]) * CELL_M < SLIVER_M - 1e-9 && !open(cells)) {
+          // A doorway's sliver: hard slab.
+          for (let j = cells[1]; j < cells[3]; j++) for (let i = cells[0]; i < cells[2]; i++) kind[j * g.w + i] = 1;
+          return;
+        }
+        tile(cellRect(planBelow ? grow(cells, fi) : cells), `${f.id}#${ri}`);
       });
+      if (planBelow) {
+        // What's left of the strips, where one runs along only part of an edge: within `reach` cells of the soft
+        // floor, tiles of their own, those long enough to see (corner bits stay hard).
+        const left = new Uint8Array(n); // steps from the soft floor, 0 for none
+        const queue: number[] = [];
+        for (let c = 0; c < n; c++) if (kind[c] === 2 && region[c] === fi) queue.push(c);
+        for (let q = 0; q < queue.length; q++) {
+          const c = queue[q];
+          if (left[c] >= reach) continue;
+          const [i, j] = [c % g.w, Math.floor(c / g.w)];
+          for (const m of [i > 0 ? c - 1 : -1, i < g.w - 1 ? c + 1 : -1, j > 0 ? c - g.w : -1, j < g.h - 1 ? c + g.w : -1]) {
+            if (m < 0 || left[m] || strip(m, fi) !== 2) continue;
+            left[m] = left[c] + 1;
+            queue.push(m);
+          }
+        }
+        greedyRects(g.w, g.h, (c) => left[c] > 0).forEach((cells, k) => {
+          if (Math.max(cells[2] - cells[0], cells[3] - cells[1]) * CELL_M < STRIP_MIN_M - 1e-9) return;
+          for (let j = cells[1]; j < cells[3]; j++) for (let i = cells[0]; i < cells[2]; i++) (kind[j * g.w + i] = 2), (region[j * g.w + i] = fi);
+          tile(cellRect(cells), `${f.id}#e${k}`);
+        });
+      }
       // The area's id on its largest tile, so it can be checked by eye.
       const area = (t: Solid) => t.size[0] * t.size[2];
       if (mine.length) mine.reduce((a, b) => (area(b) > area(a) ? b : a)).label = f.id;

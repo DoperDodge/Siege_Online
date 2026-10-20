@@ -591,7 +591,10 @@ explicit metres of a pillar), with its spans sorted:
 - **As built (M2, D-086):** each storey's floor is one 5 cm raster: the footprint (inside and under its boxes)
   less what the storey below runs up into the slab, then wells (holes), hatches (the largest rectangle of the
   square inside the top room), soft floors (their rectangles' floor inside the walls; slivers under 0.3 m stay
-  hard unless part of one is 0.3 m clear of the area's edge) and hard slab (greedy rectangles). The ground is the first storey above ground's floor over the whole
+  hard unless part of one is 0.3 m clear of the area's edge) and hard slab (greedy rectangles). A soft floor
+  meets the walls of the room below too (D-090): where a wall above overhangs the wall below, or the rectangle
+  stops short of it, its tiles grow across the strip (up to 0.15 m) where it runs a whole edge, and a strip
+  along part of an edge gets a thin tile of its own from 0.5 m long. The ground is the first storey above ground's floor over the whole
   play area, less its hatches. An `underground` storey's walls all stop under the slab, so B needs no cutback.
   Soft-floor rectangles run to the walls of the rooms the research names: r6calls' outlines are traced around
   furniture and aren't consistently in one frame, so they serve as a check, not as geometry. Amendment 7 wins
@@ -876,7 +879,7 @@ the fix, the commit). Sign-off is recorded there and in PROGRESS.
 | P16 | Soft floors: each to the walls of the rooms the research names, Ubisoft's five larger extents (r6calls' as `alt`); SF-2F-10 Trophy and SF-2F-11 White Stairs landing soft (amendment 7, D-078); tiles ≤ 4 x 4 m in 0.4 m joist spacings | blueprint-only areas (surfaces Q5); tiles are an engine budget |
 | P17 | Hatches: research rectangles in the 1F frame (about 1.6 m square); H5 only east of the Attic wall | surfaces §5 and Q11 |
 | P18 | Everything not in surfaces §2 is HARD (Kitchen NE partition and 2F annex partition included); 1F floor HARD apart from H1–H3; roofs HARD; no skylights | surfaces §1, §4.1, §6 |
-| P19 | Stairs: S1 switchback; S2 straight E–W on 1F, U-turn in B; S3 straight N–S with a landing, B foot at Laundry; S4 switchback; S5 straight flight in the Bunker passage to the B east door; exterior tower stairs up to a 2F-level landing; risers ≤ 0.2 m (16 per 3.2 m), tread 0.3 m, headroom 2.0 m | footprints only (layout_notes §5.1, map_features §5) |
+| P19 | Stairs: S1 switchback; S2 straight E–W on 1F, U-turn in B; S3 two staircases stacked one over the other, B → 1F and 1F → 2F (Ulo, 2026-10-20), each straight N–S with a landing, B foot at Laundry; S4 switchback; S5 straight flight in the Bunker passage to the B east door; exterior tower stairs up to a 2F-level landing; risers ≤ 0.2 m (16 per 3.2 m), tread 0.3 m, headroom 2.0 m | footprints only (layout_notes §5.1, map_features §5) |
 | P20 | Ladder L1 at the 3F inner-square gap mapped to 2F, 0.6 m wide, 2F->3F storey tall | ±12 u position uncertainty (data inventory) |
 | P21 | Cat Walk centre = open well over the 2F tower room, 1.0 m railing on the inner-square bands, gap at the ladder | surfaces §4.1 ring + central opening |
 | P22 | Rails: bands listed as rails get a 1.0 m rail (bodies blocked, bullets pass); every other band is a full wall | the rasters can't tell rails from walls |
