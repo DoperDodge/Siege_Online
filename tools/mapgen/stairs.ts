@@ -1,6 +1,7 @@
 // Stairs and ladders (DESIGN §5.7, M3). Each run of layout.stairs climbs from one storey's floor to the next.
 // A straight run is one flight that fills its shaft; a switchback is two flights side by side with a landing at
-// the far end and a wall between them. Flights are open (level stairs with solid: false; the builder adds the
+// the far end and a wall between them; a quarter-turn is an L, one flight up a side of its shaft to a square
+// landing in the far corner and one along the far side toward the turn. Flights are open (level stairs with solid: false; the builder adds the
 // invisible ramp), so a run can stand over the one below it. The floor above loses the run's hole: the treads
 // with less than headroomM under that slab, through to where the run arrives. The hole gets a rail where no wall
 // stands, the run doesn't arrive and no flight passes low over the edge. A ladder stands on a wall face (or a
@@ -201,8 +202,42 @@ export function compileStairs(layout: Layout, fr: Frames): StairsResult {
         holes.push(rectOf(len - landing - n2 * tread, len - landing, -DIVIDER_M / 2, DIVIDER_M / 2)); // over the divider
         arrival = rectOf(len - landing - n2 * tread, len - landing - (n2 - 1) * tread, a2, b2);
       } else {
-        out.errors.push(`${id}: a quarter-turn run isn't built yet`);
-        continue;
+        if (!run.turn) {
+          out.errors.push(`${id}: a quarter-turn needs a turn`);
+          continue;
+        }
+        // Turning right, the first flight runs up the left side, the landing fills the far left corner and the
+        // second flight leaves it along the far side, to the right; the steps split as the two legs' lengths do.
+        const width = run.widthM ?? Math.min(len, across) / 2;
+        const side = run.turn === "right" ? 1 : -1;
+        const [len1, len2] = [len - width, across - width];
+        const n1 = Math.max(1, Math.min(steps - 1, Math.round((steps * len1) / (len1 + len2))));
+        const n2 = steps - n1;
+        const [t1, t2] = [len1 / n1, len2 / n2];
+        for (const t of [t1, t2]) if (t < d.treadM * 0.7 || t > d.treadM * 1.5) out.errors.push(`${id}: ${n1} + ${n2} steps make ${t.toFixed(3)} m treads in a ${len.toFixed(2)} x ${across.toFixed(2)} m shaft`);
+        const yLanding = y0 + (rise / steps) * n1;
+        const f1 = flight(0, 0, -side * (across / 2 - width / 2), 1, y0, n1, t1, width);
+        const c2 = -side * (across / 2 - width); // where the second flight leaves the landing
+        const [px, pz] = at(len - width / 2, c2);
+        const to = (Object.keys(DIRS) as Dir[]).find((k) => DIRS[k][0] === side * rx && DIRS[k][1] === side * rz)!;
+        const f2: Flight = { id: `${id}#1`, start: [r4(px), r4(yLanding), r4(pz)], yawDeg: YAW[to], steps: n2, rise: r4(rise / steps), run: r4(t2), width: r4(width), surface: "HARD_FLOOR", solid: false };
+        flights = [f1, f2];
+        const landingRect = rectOf(len - width, len, -side * (across / 2), c2);
+        out.solids.push({
+          id: `${id}.landing`,
+          center: [r4((landingRect[0] + landingRect[2]) / 2), r4(yLanding - LANDING_M / 2), r4((landingRect[1] + landingRect[3]) / 2)],
+          size: [r4(landingRect[2] - landingRect[0]), LANDING_M, r4(landingRect[3] - landingRect[1])],
+          surface: "HARD_FLOOR",
+        });
+        // The hole: from where the first flight needs it, or the landing, or the second flight, on to the top.
+        const h1 = needsHole(y0, n1, t1);
+        const overLanding = h1 < n1 || yLanding + d.headroomM > ceiling + 1e-6;
+        const h2 = overLanding ? 0 : needsHole(yLanding, n2, t2);
+        holes = [];
+        if (h1 < n1) holes.push(rectOf(h1 * t1, len1, -side * (across / 2), c2));
+        if (overLanding) holes.push(landingRect);
+        if (h2 < n2) holes.push(rectOf(len - width, len, c2 + side * h2 * t2, side * (across / 2)));
+        arrival = rectOf(len - width, len, side * (across / 2 - t2), side * (across / 2));
       }
       const last = flights[flights.length - 1];
       const [lx, lz] = [-Math.sin((last.yawDeg * Math.PI) / 180), -Math.cos((last.yawDeg * Math.PI) / 180)];

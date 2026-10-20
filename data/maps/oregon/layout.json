@@ -172,7 +172,7 @@
    {"from": "1F", "to": "2F", "plan": "straight", "shaft": [276.33, 240, 284, 272], "up": "S", "foot": "1F_ARMORY_STAIRS", "top": "2F_ARMORY_STAIRS", "note": "over the flight from B, the same way (Ulo: stacked), from 1F's north landing by the Lobby door; a walkway beside it on the east", "_unverified": ["shaft", "up", "steps"]}
   ]},
   {"id": "S4", "names": ["Small Stairs"], "research": "layout_notes §5.1 ST_SMALL; map_features Q5", "runs": [
-   {"from": "1F", "to": "2F", "plan": "switchback", "shaft": [12, 177.67, 34.67, 189.67], "up": "E", "turn": "left", "foot": "1F_SMALL_TOWER", "top": "2F_SMALL_TOWER", "note": "the Small Tower's north-west corner, which opens only at its south-west (1F.w040, w089): up east on the south side, back west on the north (the images show no treads)", "_unverified": ["plan", "shaft", "up", "turn", "steps"]}
+   {"from": "1F", "to": "2F", "plan": "quarter", "shaft": [6, 177.67, 34.67, 191.67], "up": "N", "turn": "right", "widthM": 0.9, "foot": "1F_SMALL_TOWER", "top": "2F_SMALL_TOWER", "note": "the Small Tower's north-west corner, which opens only at its south-west (1F.w040, w089): in from the south-west, up north along the west wall, then east along the north wall onto the 2F walkway that leads to the Office door (2F.o020), the annex's only way in (layout_notes §5.1; the images show no treads)", "_unverified": ["plan", "shaft", "up", "turn", "widthM", "steps"]}
   ]}
  ],
  "ladders": [

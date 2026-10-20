@@ -20,6 +20,7 @@ import { FLOOR_IDS, wallSchema, type SpanDef, type WallDef } from "./schema.js";
 import type { Floor } from "./research.js";
 import { compileStairs, type CompiledRun } from "./stairs.js";
 import { compileWalls } from "./walls.js";
+import { buildWalkGraph, nodeNear, nodesIn, type WalkGraph } from "./walkgraph.js";
 
 const ROOT = join(import.meta.dirname, "..", "..");
 const MAP = join(ROOT, "data", "maps", "oregon");
@@ -760,5 +761,63 @@ describe("oregon stairs and the ladder (M3)", () => {
     expect(pawn.state.y).toBeCloseTo(l.base[1], 1);
     expect(roomAt("2F", pawn.state.x, pawn.state.z)).toBe("2F_TOWER");
     expect(pawn.state.hp).toBe(pawn.state.maxHp);
+  });
+});
+
+describe("oregon walk graph (M3, DESIGN §9.2 check 10)", () => {
+  type Room = { id: string; storey: string; rects: [number, number, number, number][] };
+  const storeys = level.storeys as { id: string; floorY: number }[];
+  /** A storey's floors, from its own level up to the next one's (the flights that start on it count as its). */
+  const band = (id: string): [number, number] => {
+    const y = storeys.find((s) => s.id === id)!.floorY;
+    return [y - 0.1, Math.min(...storeys.map((s) => s.floorY).filter((f) => f > y), Infinity) - 0.1];
+  };
+  const junkyard = (level.spawns as { id: string; pos: Vec3 }[]).find((s) => s.id === "A_JUNKYARD")!;
+  /** The rooms with a floor node in the component of attacker spawn A (the Junkyard). */
+  const reached = (g: WalkGraph) => {
+    const start = nodeNear(g, ...junkyard.pos);
+    const main = g.comp[start];
+    const rooms = (level.rooms as Room[]).filter((r) => r.rects.some((rect) => nodesIn(g, rect, ...band(r.storey)).some((n) => g.comp[n] === main)));
+    return { start, main, rooms: rooms.map((r) => r.id) };
+  };
+  const breakAll = (sim: Sim, kind: string) => {
+    for (const e of sim.level.panels.list) if (e.panel.kind === kind) sim.level.panels.apply(e.panel.spec.index, { kind: "damage", amount: 1e9, hard: false });
+  };
+
+  it("from the Junkyard attacker spawn, every barricade broken and nothing breached, a body walks to every room on every storey", async () => {
+    const sim = await Sim.create("oregon");
+    breakAll(sim, "barricade");
+    const g = buildWalkGraph(sim);
+    const r = reached(g);
+    expect(r.start).toBeGreaterThanOrEqual(0);
+    expect((level.rooms as Room[]).map((x) => x.id).filter((id) => !r.rooms.includes(id))).toEqual([]);
+    for (const s of storeys) {
+      const [y0, y1] = band(s.id);
+      expect(g.comp.some((c, n) => c === r.main && g.y[n] >= y0 && g.y[n] < y1), s.id).toBe(true);
+    }
+    // The ladder joins the 2F Tower to the Cat Walk.
+    for (const l of g.ladders) expect([l.id, g.comp[l.foot], g.comp[l.top]]).toEqual([l.id, r.main, r.main]);
+  });
+
+  it("a barricade shuts its doorway: the Main Entrance's two sides join only once it is broken", async () => {
+    const sim = await Sim.create("oregon");
+    const sides = (g: WalkGraph) => [nodeNear(g, 37.95, 0, 41.5), nodeNear(g, 37.95, 0, 43.4)];
+    const up = buildWalkGraph(sim);
+    const [inside, outside] = sides(up);
+    expect(Math.min(inside, outside)).toBeGreaterThanOrEqual(0);
+    expect(up.comp[inside]).not.toBe(up.comp[outside]);
+    expect(reached(up).rooms).toEqual([]); // every way in is barricaded at the start
+    sim.level.panels.apply(sim.level.panels.byId.get("1F.o011.bar")!.panel.spec.index, { kind: "damage", amount: 1e9, hard: false });
+    const open = buildWalkGraph(sim);
+    const [a, b] = sides(open);
+    expect(open.comp[a]).toBe(open.comp[b]);
+    expect(reached(open).rooms).toContain("1F_LOBBY");
+  });
+
+  it("without the ladder, nothing reaches the Cat Walk: the graph doesn't leak through floors or walls", async () => {
+    const sim = await Sim.create("oregon");
+    breakAll(sim, "barricade");
+    const r = reached(buildWalkGraph(sim, { ladders: false }));
+    expect((level.rooms as Room[]).map((x) => x.id).filter((id) => !r.rooms.includes(id))).toEqual(["3F_CATWALK"]);
   });
 });
