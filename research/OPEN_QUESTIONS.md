@@ -280,10 +280,11 @@ the outside come next.
 8. **Soft-wall sections (P14):** r6calls' separators, except Ulo's SW-2F-01 (3), SW-2F-02 and SW-2F-04 (2). The
    long walls most likely to take 3: SW-B-01, SW-1F-06, SW-B-04, SW-B-05, SW-1F-01, SW-1F-17, SW-2F-05.
 9. **Garage south wall (P15, SW-1F-17):** a normal reinforceable soft wall, or a garage door?
-10. **Floor frames (P2):** B and 3F are placed over 1F by assumption (B as drawn; 3F scaled onto the tower
-    walls). It decides where the hatches and stairs land. With B as drawn, each basement hatch lands wholly in
-    the room the research names (H1 0.2 m, H2 0.1 m and H3 0 m from a wall of that room); with the alternative
-    (B 2.4% larger about the 2F fixed point), H1 lands only 55% over B Electric. `npm run mapgen` prints both.
+10. **Floor frames (P2):** B and 3F are placed over 1F by assumption (3F scaled onto the tower walls). It
+    decides where the hatches and stairs land. Since your stairs walk, B takes the same 2.4% perspective step as
+    2F (D-095). With it, the Tower, White and Armory stairwells stack on their 1F walls, and the hatches H2 and
+    H3 land 0.55 and 0.35 m clear of the walls below; with B as drawn, they were 0.1 and 0 m. H1 then sat over
+    B Electric's west wall and door, so it moved (item 15). `npm run mapgen` prints both frames.
 11. **Play area (P25, P26):** x −210 to 535, y −70 to 490 u (about 112 × 84 m), with 4 m invisible walls at the
     edge; the ground is flat at 1F level; a fall 30 m under the basement puts you back at the lab spawn.
 12. **Spawns (P27, P29):** the lab spawn is just outside the Main Entrance; the attacker spawns are r6calls'
@@ -303,6 +304,8 @@ the outside come next.
 15. **Hatches (P17):** r6calls' hatch squares (about 1.65 m), reinforced from the top: H1 Meeting Hall → B
     Electric, H2 Security → B Freezer, H3 Lobby → B Laundry Storage, H4 Kids' Dorms → 1F Kitchen, H5 Attic →
     1F Meeting Hall, H6 Armory → 1F Garage. Do you land where you expect when you break and drop through each?
+    H1 is built 1.07 m east of r6calls' square so that it lands inside B Electric (D-095): is it nearer the
+    Stage, or does it drop by Electric's west door?
 16. **The Cat Walk (P21, P22):** the centre is an open well over the 2F Tower, inside a 1.0 m rail you can
     vault (a blocker for bodies only, with a bar drawn on top), with a gap where the ladder from 2F arrives.
     The ring around it is soft floor, r6calls' four strips; its west strip is only 0.4 m wide in r6calls'
@@ -320,20 +323,32 @@ the outside come next.
       both draw a wall there, with the stairs opening only into the Laundry Storage. We follow the images
       (layout_notes §6.1 corrected).
 
-20. **Stairs (P19):** each staircase is built in its footprint from the research, but the shapes are guesses:
-    which way each goes up, where it turns, and how many steps. The Tower Stairs (S1) are a switchback, up north
-    and turning right at a landing, from B to 1F and again from 1F to 2F. The White Stairs (S2) are straight, up
-    east in the basement and up west from 1F. The Armory Stairs (S3) are your two straight flights, one over the
-    other, up south. The Small Stairs (S4) are an L: up north along the west wall of the Small Tower's corner,
-    then east along its north wall onto the 2F walkway to the Office. Neither image draws S4's treads, while both
-    draw the other stairs', so S4 is the shakiest. Every step is 0.2 m high and 0.22–0.3 m deep (a straight
-    flight fills its stairwell), with 2.0 m of headroom. Which way does each staircase really go up, and where does it turn?
+20. **Stairs (P19), after your walk (D-095):**
+    - The White Stairs (S2) are two straight flights, one over the other, both up east and wall to wall: from the
+      basement to the 1F landing by the Security Corridor door, and from the Security Corridor's south-west
+      corner to the 2F door.
+    - The Armory Stairs (S3) are built the same way, both up north: from the basement's south landing to the 1F
+      north landing, and from the 1F south landing by the Lobby to the 2F corridor.
+    - The Small Stairs (S4) turn the other way round: from a landing at the east end of the Small Tower's corner,
+      up west along its north wall, then south down its west wall onto 2F. They stay 0.9 m wide: any wider,
+      there'd be no way to their first step on 1F, and the walk to the Office on 2F would be too narrow.
+    - The Tower Stairs (S1) are a switchback, up north and turning right. Their flights stop 0.7 m short of the
+      1F east wall, under the 2F floor the 2F image draws there, where the Cat Walk ladder stands.
+    - Every step is 0.2 m high and 0.25–0.3 m deep, with 2.0 m of headroom.
+    - Are the Small Stairs right this way round, and how wide are they? Is there a gap beside the Tower Stairs
+      on 1F?
 21. **The ladder (P20):** L1 runs from the 2F Tower to the Cat Walk, 0.6 m wide, on the north edge of the well at
     the gap in the rail. Is that where it stands?
 22. **Found while building M3:** inside the L-shaped wall of the 2F Small Tower (the Workshop Balcony), Ubisoft's
     2F blueprint and r6calls' 2F image both show the 1F workshop's floor (the blue tarp, the planks), as if the
     2F there were open to the room below. We build a floor there and a full wall where the images draw the L.
     Is the west part of the 2F Small Tower a balcony over the workshop, with a railing?
+23. **Found while answering your stairs walk (D-095):**
+    - (a) With the Armory Stairs going up north, the 2F floor over their foot (the stairwell's south end, with
+      its window) is cut off by the hole: only the window reaches it.
+    - (b) In the basement, the White Stairs' flight stands 0.15–0.3 m off its stairwell's walls, and the Tower
+      Stairs' east flight 0.95 m off the east wall: the basement image draws those stairwells a little wider
+      than 1F's.
 
 Later milestones add their placeholders here as they build them: the Meeting Hall's height (P23), roofs (P24),
 the Bunker's stairs and the outside tower stairs (P19, moved to M4), defender spawns (P28), bombs (P30), cameras

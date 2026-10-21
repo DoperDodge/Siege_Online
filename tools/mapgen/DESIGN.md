@@ -187,7 +187,7 @@ Each floor gets an affine `world = a * native + b` per axis:
 | 1F | identity | reference |
 | 2F | x1 = (x2 - 0.02) / 1.0233, y1 = (y2 + 2.81) / 1.0261 (rms 0.29 / 0.31 u) | fitted, medium-high |
 | 3F | x2 = (x3 + 9.36) / 1.0767, y2 = (y3 + 7.27) / 1.078, then 2F -> 1F | assumed: the Cat Walk walls stand on the 2F tower walls. UNVERIFIED |
-| B | identity (default); alternative: x1 = -10 + 1.024 (xB + 10), y1 = 107 + 1.024 (yB - 107) | UNVERIFIED: hatch H1 lands inside B Electric only with identity; the stairwells and H3 favour the scale |
+| B | x1 = -10 + 1.024 (xB + 10), y1 = 107 + 1.024 (yB - 107) (`alt`, in use since D-095); identity is `main` | UNVERIFIED: the 1F -> 2F perspective step; it stacks the Tower, White and Armory stairwells on their 1F walls and lands H2 and H3 clear of walls. H1's B square is r6calls' copy of the 1F one; H1 moves 7.1 u east (D-095) |
 | roof | roofs are authored in world u and snapped to the walls below (section 5.8) | — |
 | exterior | identity | assumed |
 
@@ -630,10 +630,11 @@ explicit metres of a pillar), with its spans sorted:
   (tread + `headroomM` above its underside) and with no wall of the storey below alongside, a guard: a
   blocker for bodies from the stair up to the slab, with a handrail drawn a rail's height over each tread
   (D-094). Room anchors keep clear of holes, flights, landings and guards. S1 is a switchback up north, turning
-  right (B→1F under 1F→2F); S2 is straight, up east in B and up west from 1F; S3 is two straight flights
-  stacked, up south; S4 is a quarter-turn, up north along the west wall of the Small Tower's corner, then east
-  along its north wall onto the 2F walkway to the Office (the walk graph found the first guess, a switchback
-  arriving at the west, shut the Office off). S5 and the outside tower stairs move to M4, with the outside
+  right (B→1F under 1F→2F); S2 and S3 are two straight flights each, stacked and wall to wall, S2 up east and
+  S3 up north; S4 is a quarter-turn from a landing at the east end of the Small Tower's corner, up west along
+  its north wall, then south down its west wall onto 2F (D-095, after Ulo's walk: S2's upper flight went up
+  west, S3 up south and S4 north then east, all backwards; and the walk graph had found S4's very first guess,
+  a switchback arriving at the west, shutting the Office off). S5 and the outside tower stairs move to M4, with the outside
   they start from. L1 stands on the Cat Walk well's north edge, at (284.17, 57.68) in the 3F frame, facing
   north.
 - **E8 as built (D-092):** a body grabs the ladder from the top with F (not the held vault key) on its feet
@@ -892,7 +893,7 @@ the fix, the commit). Sign-off is recorded there and in PROGRESS.
 | # | Value used | Rule and source |
 |---|---|---|
 | P1 | 1 u = 0.15 m | ESTIMATE ±15% from the bus length (layout_notes §1); `units.mPerU` |
-| P2 | Frames: 2F fitted; 3F fitted to the tower walls; B identity | 2F medium-high confidence; 3F assumes the Cat Walk walls stand on the tower walls; B evidence conflicts (alt: 2.4% scale) |
+| P2 | Frames: 2F fitted; 3F fitted to the tower walls; B the 1F -> 2F perspective step (`alt`, D-095) | 2F medium-high confidence; 3F assumes the Cat Walk walls stand on the tower walls; B: three stairwells stack and H2/H3 land clear with it, H1 moved |
 | P3 | Floors at B -3.2, 1F 0, 2F 3.2, 3F 6.2 m; tower roof 9.2 m | storeys 3.2 / 3.2 / 3.0 m (layout_notes §1) |
 | P4 | Hard slab 0.2 m; soft floors and hatches as thick as the slab | flush ceilings (the lab used 0.1 m) |
 | P5 | Wall height = floor to the cover above (3.0 m under a slab); exterior walls to the next floor or the eave | destruction_lab precedent (3 m walls) |
@@ -907,9 +908,9 @@ the fix, the commit). Sign-off is recorded there and in PROGRESS.
 | P14 | Soft-wall sections from r6calls separators, except Ulo's SW-2F-01 = 3, SW-2F-02 = 2, SW-2F-04 = 2 | SW-B-01, SW-1F-06, SW-B-04, SW-B-05, SW-1F-01, SW-1F-17, SW-2F-05 may be 3 (surfaces §2, §7) |
 | P15 | All 32 soft walls REINFORCEABLE; Garage south (SW-1F-17) a normal soft wall | common_setups SQ2; surfaces Q3 |
 | P16 | Soft floors: each to the walls of the rooms the research names, Ubisoft's five larger extents (r6calls' as `alt`); SF-2F-10 Trophy and SF-2F-11 White Stairs landing soft (amendment 7, D-078); tiles ≤ 4 x 4 m in 0.4 m joist spacings | blueprint-only areas (surfaces Q5); tiles are an engine budget |
-| P17 | Hatches: research rectangles in the 1F frame (about 1.6 m square); H5 only east of the Attic wall | surfaces §5 and Q11 |
+| P17 | Hatches: research rectangles in the 1F frame (about 1.6 m square); H5 only east of the Attic wall; H1 7.1 u east of r6calls' square, inside B Electric (D-095) | surfaces §5 and Q11 |
 | P18 | Everything not in surfaces §2 is HARD (Kitchen NE partition and 2F annex partition included); 1F floor HARD apart from H1–H3; roofs HARD; no skylights | surfaces §1, §4.1, §6 |
-| P19 | Stairs (as built, D-091): S1 switchback up N turning right, B → 1F under 1F → 2F; S2 straight, up E in B and up W from 1F; S3 two staircases stacked one over the other, B → 1F and 1F → 2F (Ulo, 2026-10-20), straight, up S, B foot in the Laundry Stairs; S4 quarter-turn, up N along the Small Tower corner's west wall, then E onto the 2F walkway; S5 straight flight in the Bunker passage to the B east door and the exterior tower stairs up to a 2F-level landing (M4); risers ≤ 0.2 m (16 per 3.2 m), tread 0.3 m (a straight run fills its shaft), headroom 2.0 m | footprints only (layout_notes §5.1, map_features §5); no image shows S4's treads |
+| P19 | Stairs (as built, D-091, D-095): S1 switchback up N turning right, B → 1F under 1F → 2F; S2 two straight flights stacked, up E, wall to wall; S3 two staircases stacked one over the other, B → 1F and 1F → 2F (Ulo, 2026-10-20), straight, up N, wall to wall (Ulo, 2026-10-21); S4 quarter-turn from a landing at the corner's east end, up W along its north wall, then S down its west wall onto 2F (Ulo: the other way was backwards); S5 straight flight in the Bunker passage to the B east door and the exterior tower stairs up to a 2F-level landing (M4); risers ≤ 0.2 m (16 per 3.2 m), tread 0.3 m (a straight run fills its shaft), headroom 2.0 m | footprints only (layout_notes §5.1, map_features §5); no image shows S4's treads |
 | P20 | Ladder L1 on the Cat Walk well's north edge, at the rail's gap ((284.17, 57.68) in the 3F frame), from the 2F floor to the Cat Walk, 0.6 m wide, facing N | ±12 u position uncertainty (data inventory) |
 | P21 | Cat Walk centre = open well over the 2F tower room, 1.0 m railing on the inner-square bands, gap at the ladder | surfaces §4.1 ring + central opening |
 | P22 | Rails: bands listed as rails get a 1.0 m rail (bodies blocked, bullets pass); every other band is a full wall | the rasters can't tell rails from walls |
@@ -1063,7 +1064,8 @@ Rough effort (agent days): M1 2–3, M2 2, M3 1.5–2, M4 2–3, M5 2, M6 1–1.
    seeds the wall parts; research tables give ids, types, room pairs and section counts; B/1F research spans are
    superseded.
 3. **Per-floor frames**: the floor images are not in one frame (2F about 2.4% larger); 1F is the world frame;
-   2F fitted; 3F fitted to the tower; B identity, UNVERIFIED; metres = 0.15 x u from u (0, 0), +X east, +Z south.
+   2F fitted; 3F fitted to the tower; B the 1F -> 2F perspective step (D-095), UNVERIFIED; metres = 0.15 x u from
+   u (0, 0), +X east, +Z south.
 4. **Broad-phase refresh calls the physics pipeline directly** (E1); Rapier pinned at 0.21.0.
 5. **Soft floors are tiles of at most 4 x 4 m** and any panel is at most 6,400 cells per layer; explosive cuts stop
    at seams until E6 (before Phase 8).

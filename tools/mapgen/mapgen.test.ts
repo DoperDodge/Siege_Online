@@ -746,16 +746,16 @@ describe("oregon stairs and the ladder (M3)", () => {
         const [p, q] = [at(0.1, side * f.width / 2), at(len - 0.1, side * (f.width / 2 + 0.1))];
         const strip = [Math.min(p[0], q[0]), Math.min(p[1], q[1]), Math.max(p[0], q[0]), Math.max(p[1], q[1])];
         const [y0, y1] = [f.start[1] + 0.3, f.start[1] + f.rise * f.steps - 0.3];
-        const walled = solids.some(
-          (b) =>
-            !b.drawOnly && !b.bodiesOnly && !["HARD_FLOOR", "SOFT_FLOOR", "HATCH"].includes(b.surface) &&
-            b.center[0] + b.size[0] / 2 > strip[0] + 0.01 && b.center[0] - b.size[0] / 2 < strip[2] - 0.01 &&
-            b.center[2] + b.size[2] / 2 > strip[1] + 0.01 && b.center[2] - b.size[2] / 2 < strip[3] - 0.01 &&
-            b.center[1] + b.size[1] / 2 > y0 && b.center[1] - b.size[1] / 2 < y1,
-        );
-        if (walled) continue;
-        // On the first tread, 5 cm in from that side, facing up the flight.
-        const c = side * (f.width / 2 - 0.05);
+        const alongside = (b: (typeof solids)[number]) =>
+          !b.drawOnly && !["HARD_FLOOR", "SOFT_FLOOR", "HATCH"].includes(b.surface) &&
+          b.center[0] + b.size[0] / 2 > strip[0] + 0.01 && b.center[0] - b.size[0] / 2 < strip[2] - 0.01 &&
+          b.center[2] + b.size[2] / 2 > strip[1] + 0.01 && b.center[2] - b.size[2] / 2 < strip[3] - 0.01 &&
+          b.center[1] + b.size[1] / 2 > y0 && b.center[1] - b.size[1] / 2 < y1;
+        if (solids.some((b) => !b.bodiesOnly && alongside(b))) continue;
+        // On the first tread, 5 cm in from that side, facing up the flight; beside a guard (bodies only), just
+        // clear of it: no body stands inside one, and from in there it can hook onto its top edge.
+        const r = sim.data.movement.stance.collisionRadius;
+        const c = side * (f.width / 2 - (solids.some((b) => b.bodiesOnly && alongside(b)) ? r + 0.02 : 0.05));
         sim.teleport(pawn.id, f.start[0] + fx * 0.15 - fz * c, f.start[1] + f.rise, f.start[2] + fz * 0.15 + fx * c, f.yawDeg, Stance.Stand);
         let along = 0;
         for (let t = 0; t < 64 * 6 && along < len - 0.1; t++) {

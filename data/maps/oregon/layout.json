@@ -18,17 +18,17 @@
   "units.mPerU": "research/oregon/layout_notes.md §1: the school bus is about 77 u long (ESTIMATE, ±15%)",
   "frames.2F": "tools/mapgen/extract xfloor.py: 22 + 18 stacked 1F/2F wall pairs, rms 0.29 / 0.31 u (extracted.json cross_floor)",
   "frames.3F": "assumed: the Cat Walk walls stand on the 2F tower walls (scale 1.0767 / 1.078), then the 2F frame",
-  "frames.B": "identity; the alternative scales about the 2F fixed point (hatch H1 favours identity, the stairwells the scale)",
+  "frames.B": "alt since 2026-10-21 (D-095): the 1F-to-2F perspective step, which stacks the Tower, White and Armory stairwells on their 1F walls and lands hatches H2 and H3 clear of walls; identity (main) suited only H1, whose B square r6calls copied from 1F",
   "storeys": "research/oregon/layout_notes.md §1 placeholders: storeys 3.2 / 3.2 / 3.0 m",
   "spawns": "r6calls insertion points (extracted.json points, EXT ip rects); lab spawn 0 is ours (P29)",
   "rooms": "research/oregon/layout_notes.md §2 (callouts: r6calls, and the official names of the eight bomb-site rooms; names keeps all three sources) and §4 (each seed is its room's box centre, in its floor's frame). B_FREEZER_HALL's callout is ours (r6calls leaves it unlabelled)",
   "splits": "research/oregon/layout_notes.md §6 open-plan links (OPEN rows), each on the wall lines beside it",
   "softFloors": "research/oregon/surfaces.md §4.2, each to its room's walls; Ubisoft's extents where they are larger, with r6calls' as alt (DESIGN amendment 7)",
-  "hatches": "research/oregon/surfaces.md §5: r6calls' hatch squares (extracted.json fh/ch), world positions",
+  "hatches": "research/oregon/surfaces.md §5: r6calls' hatch squares (extracted.json fh/ch), world positions; H1 moved 7.1 u east to land inside B_ELECTRIC under the alt B frame (D-095)",
   "wells": "research/oregon/layout_notes.md §4.4 and surfaces.md §4.1: the Cat Walk's centre (P21)",
   "walls": "walls_<floor>.json, seeded from extracted.json (r6calls floor rasters), research ids from surfaces.md §2 and layout_notes.md §6",
   "sections SW-2F-01, SW-2F-02, SW-2F-04": "Ulo 2026-10-09",
-  "stairs": "research/oregon/layout_notes.md §5.1 footprints and the r6calls floor images (treads, landings, rails), placed where the stair rooms of both storeys overlap (P19); S3 stacked: Ulo 2026-10-20",
+  "stairs": "research/oregon/layout_notes.md §5.1 footprints and the r6calls floor images (treads, landings, rails), placed where the stair rooms of the storeys they pass overlap (P19); S3 stacked: Ulo 2026-10-20; S2, S3 and S4 the other way round and every flight wall to wall: Ulo 2026-10-21 (D-095)",
   "ladders": "research/oregon/layout_notes.md §5.3 and the gap in the Cat Walk well's rail (walls_3F.json 3F.o001), P20"
  },
  "id": "oregon",
@@ -41,7 +41,7 @@
   "1F": { "ax": 1, "bx": 0, "ay": 1, "by": 0, "status": "reference", "use": "main", "note": "the world frame" },
   "2F": { "ax": 0.9772305, "bx": -0.0195446, "ay": 0.9745639, "by": 2.7385245, "status": "fitted", "use": "main", "note": "x1 = (x2 - 0.02) / 1.0233, y1 = (y2 + 2.81) / 1.0261: the 2F image is drawn about 2.4% larger" },
   "3F": { "ax": 0.9076164, "bx": 8.4757445, "ay": 0.9040481, "by": 9.3109544, "status": "assumed", "use": "main", "note": "x2 = (x3 + 9.36) / 1.0767, y2 = (y3 + 7.27) / 1.078, then the 2F frame" },
-  "B": { "ax": 1, "bx": 0, "ay": 1, "by": 0, "status": "assumed", "use": "main", "alt": { "ax": 1.024, "bx": 0.24, "ay": 1.024, "by": -2.568 }, "note": "alt: x1 = -10 + 1.024 (xB + 10), y1 = 107 + 1.024 (yB - 107)" }
+  "B": { "ax": 1, "bx": 0, "ay": 1, "by": 0, "status": "assumed", "use": "alt", "alt": { "ax": 1.024, "bx": 0.24, "ay": 1.024, "by": -2.568 }, "note": "alt: x1 = -10 + 1.024 (xB + 10), y1 = 107 + 1.024 (yB - 107), the perspective step 1F to 2F also shows (extracted.json cross_floor)" }
  },
  "storeys": [
   { "id": "B", "floorY": -3.2, "slabM": 0.2, "underground": true },
@@ -131,7 +131,7 @@
   {"floor": "1F", "frame": "1F", "axis": "H", "at": 254.89, "span": [119.06, 135.64], "note": "1F_DINING_HALLWAY | 1F_SHOWER_CORRIDOR (§6.2 OPEN y≈255), on 1F.w014's line"},
   {"floor": "2F", "frame": "2F", "axis": "V", "at": 205.2, "span": [206.18, 225.23], "note": "2F_DORMS_MAIN_HALL | 2F_MIDDLE (§6.3 OPEN, no wall, x≈201–209): between 2F.w067's and 2F.w068's lines"},
   {"floor": "2F", "frame": "2F", "axis": "H", "at": 160.14, "span": [248.71, 274.82], "note": "2F_ATTIC | 2F_LOW_ATTIC (§6.3 OPEN y≈160), on 2F.w013's line"},
-  {"floor": "2F", "frame": "2F", "axis": "H", "at": 245, "span": [282.04, 297.57], "note": "2F_ARMORY_CORRIDOR | 2F_ARMORY_STAIRS (§6.3 OPEN): the stairwell's top (§4.3 stairs y 245–275)"}
+  {"floor": "2F", "frame": "2F", "axis": "H", "at": 240, "span": [282.04, 297.57], "note": "2F_ARMORY_CORRIDOR | 2F_ARMORY_STAIRS (§6.3 OPEN): just north of where S3 arrives (the 2F image's treads start at y 241; §4.3 has the stairs at y 245–275), at the end of SF-2F-05"}
  ],
  "softFloors": [
   {"id": "SF-2F-01", "floor": "2F", "frame": "2F", "rects": [[139, 160.14, 209.73, 206.18]], "research": "surfaces.md §4.2 SF-2F-01: 2F_KIDS_DORMS (whole)", "src": "research", "note": "the room to its walls' centrelines (2F.w063, w013, w068, w003); r6calls' outline (losf path16836) traces the same room", "_unverified": ["rects"]},
@@ -148,7 +148,7 @@
   {"id": "SF-3F-01", "floor": "3F", "frame": "3F", "rects": [[255.41, 44.81, 306.4, 57.68], [255.41, 84.14, 306.4, 98.78], [255.41, 57.68, 261.24, 84.14], [295.46, 57.68, 306.4, 84.14]], "research": "surfaces.md §4.2 SF-3F-01: 3F_CATWALK ring", "src": "vector", "note": "r6calls' four strips (3-losf) around the well, to the outer walls and the rail; east of x 306.4 is hard, as r6calls draws it", "_unverified": ["rects"]}
  ],
  "hatches": [
-  {"id": "H1", "frame": "world", "rect": [258.565, 122.063, 269.575, 133.092], "top": "1F_MEETING_HALL", "bottom": "B_ELECTRIC", "research": "surfaces.md §5 H1", "note": "r6calls' 1F floor-hatch square (fh rect1075), a world position", "_unverified": ["rect"]},
+  {"id": "H1", "frame": "world", "rect": [265.665, 122.063, 276.675, 133.092], "top": "1F_MEETING_HALL", "bottom": "B_ELECTRIC", "research": "surfaces.md §5 H1", "note": "r6calls' 1F floor-hatch square (fh rect1075, x 258.565-269.575) moved 7.1 u east: under the alt B frame that square sits over B_ELECTRIC's west wall and door (B.w058, B.o010), so it goes as far in as a body needs (0.3 m clear, D-095)", "_unverified": ["rect"]},
   {"id": "H2", "frame": "world", "rect": [184.529, 218.746, 196.09, 229.517], "top": "1F_SECURITY", "bottom": "B_FREEZER", "research": "surfaces.md §5 H2", "note": "r6calls' 1F floor-hatch square (fh rect1075-5)", "_unverified": ["rect"]},
   {"id": "H3", "frame": "world", "rect": [257.584, 242.727, 268.5, 253.44], "top": "1F_LOBBY", "bottom": "B_LAUNDRY_STORAGE", "research": "surfaces.md §5 H3", "note": "r6calls' 1F floor-hatch square (fh rect1075-2)", "_unverified": ["rect"]},
   {"id": "H4", "frame": "world", "rect": [138.783, 179.995, 149.326, 191.133], "top": "2F_KIDS_DORMS", "bottom": "1F_KITCHEN", "research": "surfaces.md §5 H4", "note": "r6calls' 2F floor-hatch square (fh rect329-0)", "_unverified": ["rect"]},
@@ -160,19 +160,19 @@
  ],
  "stairs": [
   {"id": "S1", "names": ["Tower Stairs"], "research": "layout_notes §5.1 ST_TOWER; map_features §5 S1", "runs": [
-   {"from": "B", "to": "1F", "plan": "switchback", "shaft": [241.34, 51.34, 263.33, 76.67], "up": "N", "turn": "right", "foot": "B_TOWER_STAIRS", "top": "1F_TOWER", "note": "up north on the west side from the Boiler end (B opens south on that side only), back south on the east into 1F Tower, where the 1F image draws treads; the shaft is where the B and 1F stair rooms overlap (B frame as drawn)", "_unverified": ["plan", "shaft", "up", "turn", "steps"]},
-   {"from": "1F", "to": "2F", "plan": "switchback", "shaft": [241.34, 51.34, 263.33, 76.67], "up": "N", "turn": "right", "foot": "1F_TOWER", "top": "2F_TOWER", "note": "stacked over the run from B, the same way round (the r6calls 1F and 2F images draw a switchback with its rail down the middle)", "_unverified": ["plan", "shaft", "up", "turn", "steps"]}
+   {"from": "B", "to": "1F", "plan": "switchback", "shaft": [241.33, 50.67, 263.33, 76.67], "up": "N", "turn": "right", "foot": "B_TOWER_STAIRS", "top": "1F_TOWER", "note": "up north on the west side from the Boiler end (B opens south on that side only), back south on the east into 1F Tower, where the 1F image draws treads; the shaft is where the B and 1F stair rooms overlap, its landing against the north walls. Its east side stops where the 2F image's opening does (x 263), clear of the 2F floor the Cat Walk ladder stands on (L1): the 1F room runs on 0.7 m under that floor", "_unverified": ["plan", "shaft", "up", "turn", "steps"]},
+   {"from": "1F", "to": "2F", "plan": "switchback", "shaft": [241.33, 50.67, 263.33, 76.67], "up": "N", "turn": "right", "foot": "1F_TOWER", "top": "2F_TOWER", "note": "stacked over the run from B, the same way round (the r6calls 1F and 2F images draw a switchback with its rail down the middle)", "_unverified": ["plan", "shaft", "up", "turn", "steps"]}
   ]},
-  {"id": "S2", "names": ["White Stairs", "West Stairs", "Freezer Stairs"], "research": "layout_notes §5.1 ST_WHITE; map_features §5 S2", "runs": [
-   {"from": "B", "to": "1F", "plan": "straight", "shaft": [153, 252, 176, 259.33], "up": "E", "foot": "B_FREEZER_STAIRS", "top": "1F_WHITE_STAIRS", "note": "from the Freezer side, up east along the north half of the 1F White Stairs, arriving by the Security Corridor door; side by side with the flight to 2F (rising the other way they can't stack)", "_unverified": ["plan", "shaft", "up", "steps"]},
-   {"from": "1F", "to": "2F", "plan": "straight", "shaft": [153, 259.33, 184, 266], "up": "W", "foot": "1F_WHITE_STAIRS", "top": "2F_WHITE_STAIRS", "note": "the 1F image's flight along the south half, up west from the landing by the door (x 184–194)", "_unverified": ["plan", "shaft", "up", "steps"]}
+  {"id": "S2", "names": ["White Stairs", "West Stairs", "Freezer Stairs"], "research": "layout_notes §5.1 ST_WHITE; map_features §5 S2; Ulo 2026-10-21", "runs": [
+   {"from": "B", "to": "1F", "plan": "straight", "shaft": [153, 252, 180, 266.33], "up": "E", "foot": "B_FREEZER_STAIRS", "top": "1F_WHITE_STAIRS", "note": "up east from the Freezer side, wall to wall across the 1F stair room, arriving on the landing by the Security Corridor door (1F.o010); the 1F image draws treads across the room's width west of that landing", "_unverified": ["plan", "shaft", "steps"]},
+   {"from": "1F", "to": "2F", "plan": "straight", "shaft": [153, 252, 180, 266.33], "up": "E", "foot": "1F_SECURITY_CORRIDOR", "top": "2F_WHITE_STAIRS", "note": "stacked over the run from B, the same way (Ulo 2026-10-21: it went up west before, backwards), from the Security Corridor's south-west corner to the 2F door (2F.o002); from the 1F landing you go round by the corridor", "_unverified": ["plan", "shaft", "steps"]}
   ]},
-  {"id": "S3", "names": ["Armory Stairs", "East Stairs", "Laundry Stairs"], "research": "layout_notes §5.1 ST_ARMORY; Ulo 2026-10-20: two staircases stacked one over the other", "runs": [
-   {"from": "B", "to": "1F", "plan": "straight", "shaft": [276.33, 234, 284, 266], "up": "S", "foot": "B_LAUNDRY_STAIRS", "top": "1F_ARMORY_STAIRS", "note": "up south from the basement's north landing, arriving at the south end of 1F, open to the Lobby behind a rail; where the B and 1F stair rooms overlap (B frame as drawn)", "_unverified": ["shaft", "up", "steps"]},
-   {"from": "1F", "to": "2F", "plan": "straight", "shaft": [276.33, 240, 284, 272], "up": "S", "foot": "1F_ARMORY_STAIRS", "top": "2F_ARMORY_STAIRS", "note": "over the flight from B, the same way (Ulo: stacked), from 1F's north landing by the Lobby door; a walkway beside it on the east", "_unverified": ["shaft", "up", "steps"]}
+  {"id": "S3", "names": ["Armory Stairs", "East Stairs", "Laundry Stairs"], "research": "layout_notes §5.1 ST_ARMORY; Ulo 2026-10-20: two staircases stacked one over the other; Ulo 2026-10-21: up north, wall to wall", "runs": [
+   {"from": "B", "to": "1F", "plan": "straight", "shaft": [276.33, 239.33, 290, 266.33], "up": "N", "foot": "B_LAUNDRY_STAIRS", "top": "1F_ARMORY_STAIRS", "note": "up north from the basement's south landing by its west door (B.o007) to the 1F north landing by the Lobby door (1F.o025); wall to wall (the B image's treads end at y 265, the 1F image's landing at y 239.6)", "_unverified": ["shaft", "steps"]},
+   {"from": "1F", "to": "2F", "plan": "straight", "shaft": [276.33, 239.33, 290, 266.33], "up": "N", "foot": "1F_ARMORY_STAIRS", "top": "2F_ARMORY_STAIRS", "note": "stacked over the run from B, the same way, from the 1F south landing open to the Lobby, arriving at the corridor's south end (the 2F image's treads start at y 241). Both runs stop at x 290, where 2F's east wall (2F.w055) and 1F's by the foot (1F.w046) stand; 1F's east wall beside the hole is at 290.67. The 2F floor over its foot, with the window, is cut off by the hole", "_unverified": ["shaft", "steps"]}
   ]},
-  {"id": "S4", "names": ["Small Stairs"], "research": "layout_notes §5.1 ST_SMALL; map_features Q5", "runs": [
-   {"from": "1F", "to": "2F", "plan": "quarter", "shaft": [6, 177.67, 34.67, 191.67], "up": "N", "turn": "right", "widthM": 0.9, "foot": "1F_SMALL_TOWER", "top": "2F_SMALL_TOWER", "note": "the Small Tower's north-west corner, which opens only at its south-west (1F.w040, w089): in from the south-west, up north along the west wall, then east along the north wall onto the 2F walkway that leads to the Office door (2F.o020), the annex's only way in (layout_notes §5.1; the images show no treads)", "_unverified": ["plan", "shaft", "up", "turn", "widthM", "steps"]}
+  {"id": "S4", "names": ["Small Stairs"], "research": "layout_notes §5.1 ST_SMALL; map_features Q5; Ulo 2026-10-21: backwards", "runs": [
+   {"from": "1F", "to": "2F", "plan": "quarter", "shaft": [6, 177.67, 28.67, 191.67], "up": "W", "turn": "left", "widthM": 0.9, "foot": "1F_SMALL_TOWER", "top": "2F_SMALL_TOWER", "note": "the Small Tower's north-west corner, which opens only at its south-west (1F.w040, w089): in there and along to a landing at its east end (0.9 m, x 28.67-34.67), up west along the north wall, then south down the west wall onto 2F by the corner (Ulo 2026-10-21: the other way round was backwards). 0.9 m wide: wider, the 2F walk to the Office door (2F.o020) between the hole and 2F.w038 gets narrower than a body", "_unverified": ["plan", "shaft", "up", "turn", "widthM", "steps"]}
   ]}
  ],
  "ladders": [

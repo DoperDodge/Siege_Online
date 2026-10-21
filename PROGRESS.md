@@ -21,6 +21,26 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
 | M7 Your corrections, round by round, to sign-off | ⏳ |
 | M8 Rappel | ⏳ |
 
+### What's done since M3: your stairs walk (D-095)
+- **The White Stairs** now go up east, both flights, one over the other, and each fills the stairwell wall to
+  wall. From the basement you arrive on the 1F landing by the Security Corridor door. The flight to 2F starts in
+  the Security Corridor's south-west corner, so from that landing you go round through the corridor, and it
+  arrives by the 2F door.
+- **The Armory Stairs** now go up north, both flights, wall to wall. From the basement's south landing (by its
+  door) you arrive on the 1F north landing (by the Lobby door). The flight to 2F starts at the 1F south end,
+  open to the Lobby, and arrives at the south end of the Armory Corridor. The 2F "Armory Stairs" callout now
+  covers the top of the stairs.
+- **The Small Stairs** turn the other way round: from a small landing at the east end of the Small Tower's
+  corner, up west along the north wall, then south along the west wall onto 2F. I couldn't stretch them to the
+  walls as well (my question below).
+- **The Tower Stairs** keep their width: the 2F image has floor beside them, where the Cat Walk ladder stands.
+  Their landing now meets the north walls.
+- **The basement's frame:** to stack full-width flights, the basement's stairwells have to sit under the 1F
+  ones, and the basement image does that only when drawn 2.4% larger, as 2F is. That frame also puts hatches H2
+  and H3 well inside their rooms. H1 then sat over a wall, so it moved 1.07 m east inside the Meeting Hall.
+- **Checks:** every run walks up and down; every flight can be climbed hugging its open sides; the walk graph
+  still reaches all 49 rooms; the browser test walks the Armory Stairs up north now.
+
 ### What's done (M3)
 - **Stairs (D-091):** all seven runs of the four staircases inside the building. The Tower Stairs (S1), the
   White Stairs (S2) and the Armory Stairs (S3) go from the basement to 2F; the Small Stairs (S4) go from 1F to
@@ -179,20 +199,21 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
    `npm run mapgen -- --check`.
 
 ### Known issues
-- The stairs' shapes are guesses from their footprints (open question 20): which way each goes up, where it
-  turns, and how many steps. The Small Stairs are the shakiest, because neither image draws their treads.
+- The stairs follow your walk now (open question 20), but the Small Stairs are still the shakiest: neither image
+  draws their treads, and turned round they can't also reach the walls.
+- In the basement, the White Stairs stand 0.15–0.3 m off their stairwell's walls, and the Tower Stairs 0.95 m off
+  the east one (open question 23b). On 2F, the floor over the Armory Stairs' foot is cut off by the hole (23a).
 - The Bunker's stairs (S5) and the outside tower stairs come with the outside (M4, D-091).
 - Ubisoft's 2F blueprint seems to show the 1F workshop through the floor inside the 2F Small Tower's L-shaped
   wall. We build a floor and a full wall there (open question 22).
 - No roofs yet (M4): wherever no storey stands above (1F's single-storey rooms, most of 2F, the Cat Walk) you
   see the sky, and 2F's walls stop at 3.0 m. The ground outside is bare.
-- The basement's frame is an assumption (P2, open question 10). With B as drawn, the hatches H1, H2 and H3 land
-  in the right rooms but 0.2, 0.1 and 0 m from a wall; the other choice puts H1 only 55% over B Electric.
+- The basement's frame is still an assumption (P2, open question 10), now the 2.4% perspective step; hatch H1
+  moved 1.07 m east to land inside B Electric under it (open question 15).
 - Behind the 1F White Stairs, a sealed 3.6 m² strip has no room (open question 19b).
 - Room callouts show for your storey only.
 - Every size is a placeholder until you've walked it: 1 u of the plans = 0.15 m, walls 3 m, doors 2.1 m
   (research/OPEN_QUESTIONS.md, "Placeholders added while building Phase 5").
-- The online test on Railway needs Railway to deploy this branch (it deploys the Phase 4 branch today).
 - You no longer see your own shadow (shadows are drawn once for the level, D-077).
 
 ### Next: Phase 5 M4 — roofs and the outside
