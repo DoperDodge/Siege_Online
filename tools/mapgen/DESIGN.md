@@ -633,10 +633,11 @@ explicit metres of a pillar), with its spans sorted:
   arriving at the west, shut the Office off). S5 and the outside tower stairs move to M4, with the outside
   they start from. L1 stands on the Cat Walk well's north edge, at (284.17, 57.68) in the 3F frame, facing
   north.
-- **E8 as built (D-092):** a body grabs the ladder from the top standing where a climb sets it down (within
-  `attachDistance` of the point a body's radius, 5 cm and `dismountForward` out from the rungs), within a step
-  of the top, facing the drop (cosine ≤ −0.5), from a settled stand. F puts its feet `topMountDrop` (1.0 m)
-  below the top; on the ladder W climbs and S descends, whatever the facing.
+- **E8 as built (D-092):** a body grabs the ladder from the top with F (not the held vault key) on its feet
+  where a climb sets it down (within `attachDistance` of the point a body's radius, 5 cm and `dismountForward`
+  out from the rungs), within a step of the top, facing the drop (cosine ≤ −0.5), from a settled stand, with
+  nothing between it and the rungs. Its feet go `topMountDrop` (1.0 m) below the top, never below the foot; on
+  the ladder W climbs and S descends, whatever the facing.
 
 ### 5.8 Roofs
 
