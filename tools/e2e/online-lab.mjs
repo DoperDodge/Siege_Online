@@ -120,13 +120,17 @@ try {
   result.checks.rewindInRange = rewoundMs !== null && rewoundMs > 60 && rewoundMs <= 250 + 1e-6;
   result.checks.bSawAMove = bSeesEnd.x - bSeesStart.x > 2 && Math.abs(bSeesEnd.x - aEnd.x) < 0.05;
 
-  // No contact anywhere: corrections only for the join and the teleport.
+  // No contact anywhere: corrections only for the joins, the teleports and the hit, plus at most one per
+  // stall. The two pages share a CPU and a software GPU, and when one of them stalls (the other loading, a
+  // screenshot) its inputs stop for longer than the server holds a body still: the server steps the body
+  // without them (D-048) and corrects the next prediction (CI on 8f58865: three stalls while the pages
+  // loaded took A to six corrections). Every correction is the server's doing; mispredictions are checked
+  // against its own count at the end.
   const aNet = await net(a);
   const bNet = await net(b);
-  result.corrections = { a: aNet.corrections, b: bNet.corrections, rttA: aNet.rttMs, rttB: bNet.rttMs };
-  // (Every correction so far is the server's doing: joins, teleports, the hit; mispredictions are checked
-  // against the server's own count at the end.)
-  result.checks.fewCorrections = aNet.corrections <= 5 && bNet.corrections <= 4;
+  const { stalls } = (await (await fetch(`${BASE}/stats`)).json()).totals;
+  result.corrections = { a: aNet.corrections, b: bNet.corrections, stalls, rttA: aNet.rttMs, rttB: bNet.rttMs };
+  result.checks.fewCorrections = aNet.corrections + bNet.corrections <= 9 + stalls;
   result.checks.noResyncs = aNet.resyncs === 0 && bNet.resyncs === 0;
   result.checks.rttIncludesSimulatedLag = aNet.rttMs > LAG * 0.9 && aNet.rttMs < LAG + 80;
 

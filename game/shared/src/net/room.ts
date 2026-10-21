@@ -128,6 +128,8 @@ interface Member {
   idled: boolean;
   /** Hold budget spent (ticks held still, minus HOLD_REFUND per applied input). */
   held: number;
+  /** Stepped without input since the last input applied (one stall, however many ticks). */
+  stalled: boolean;
   /** Arrival tick minus claimed snapshot tick, for the last LAG_WINDOW inputs (a ring). */
   lags: number[];
   lagAt: number;
@@ -219,6 +221,12 @@ export class Room {
     mismatchCorrections: 0,
     droppedInputs: 0,
     idledTicks: 0,
+    /**
+     * Stalls: a body stepped on without input once its hold budget ran out (D-048), counted once however
+     * many ticks it lasts. Each costs its player at most one correction (a forced one: its next prediction
+     * misses unless the steps changed nothing).
+     */
+    stalls: 0,
     skippedSnapshots: 0,
     shots: 0,
     cappedShots: 0,
@@ -322,6 +330,7 @@ export class Room {
       lastApplied: null,
       idled: false,
       held: 0,
+      stalled: false,
       lags: [],
       lagAt: 0,
       needCorrection: false,
@@ -387,6 +396,7 @@ export class Room {
     m.newBody = true;
     m.credit = 0;
     m.held = 0;
+    m.stalled = false;
   }
 
   /** The server changed this member's bodies outside their inputs: correct them at the next snapshot. */
@@ -844,6 +854,7 @@ export class Room {
     const body = m.ctrl ? this.sim.pawns.get(m.ctrl.possessedPawnId) : undefined;
     if (body?.state.mode !== PawnMode.Downed) m.held = Math.max(0, m.held - HOLD_REFUND);
     m.lastSeq = next.cmd.seq;
+    m.stalled = false;
     return next;
   }
 
@@ -909,6 +920,8 @@ export class Room {
           m.credit = Math.max(0, m.credit - 1);
           active.add(m.ctrl.id);
           m.forced = true; // the client can't predict a tick it never sent (its correction comes with its next input)
+          if (!m.stalled) this.stats.stalls++;
+          m.stalled = true;
         }
         continue;
       }
