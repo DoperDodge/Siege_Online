@@ -183,7 +183,8 @@ try {
     window.__lab.teleport(0.8, 0, 12, 90);
     window.__lab.input = { buttons: 4 /* Btn.Interact, held */ };
   });
-  await a.waitForFunction(() => window.__lab.net.own?.mode === 0, null, { timeout: 9000 }).catch(() => {});
+  // The room sends the snapshot that stands A up, then that tick's events in a message of their own: wait for both.
+  await a.waitForFunction(() => window.__lab.net.own?.mode === 0 && window.__lab.net.events.some((e) => e.kind === "reviveEnd"), null, { timeout: 9000 }).catch(() => {});
   const aUp = await net(a);
   await b.evaluate(() => (window.__lab.input = null));
   await a.screenshot({ path: shot("online-revived.png") });
