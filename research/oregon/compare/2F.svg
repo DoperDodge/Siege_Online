@@ -48,10 +48,10 @@
 <rect class="floors" x="83.93" y="179.49" width="15.01" height="16.42" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-07#0.r0c1</title></rect>
 <rect class="floors" x="64.83" y="195.91" width="19.1" height="11.63" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-07#0.r1c0</title></rect>
 <rect class="floors" x="83.93" y="195.91" width="15.01" height="11.63" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-07#0.r1c1</title></rect>
-<rect class="floors" x="34.13" y="179.49" width="16.37" height="12.31" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-08#0.r0c0</title></rect>
-<rect class="floors" x="50.5" y="179.49" width="12.96" height="12.31" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-08#0.r0c1</title></rect>
-<rect class="floors" x="43.68" y="191.81" width="19.78" height="21.89" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-08#1.r0c0</title></rect>
-<rect class="floors" x="43.68" y="213.7" width="19.78" height="17.79" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-08#1.r1c0</title></rect>
+<rect class="floors" x="35.49" y="179.49" width="16.37" height="14.37" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-08#0.r0c0</title></rect>
+<rect class="floors" x="51.87" y="179.49" width="11.6" height="14.37" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-08#0.r0c1</title></rect>
+<rect class="floors" x="43.68" y="193.86" width="19.78" height="19.15" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-08#1.r0c0</title></rect>
+<rect class="floors" x="43.68" y="213.01" width="19.78" height="18.47" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-08#1.r1c0</title></rect>
 <rect class="floors" x="249.71" y="98.77" width="16.71" height="12.66" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-09#0.r0c0</title></rect>
 <rect class="floors" x="248" y="206.86" width="19.1" height="17.79" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-10#0.r0c0</title></rect>
 <rect class="floors" x="267.1" y="206.86" width="14.33" height="17.79" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-10#0.r0c1</title></rect>
@@ -61,16 +61,14 @@
 <rect class="stairs" x="270.57" y="60.25" width="4.09" height="0.82" fill="#d1495b" stroke="#d1495b" stroke-width="0.3"><title>L1: ladder up</title></rect>
 <rect class="walls" x="246.98" y="69.7" width="10.92" height="0.34" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:2F#0 (rail)</title></rect>
 <rect class="walls" x="257.89" y="75.86" width="0.34" height="0.34" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:2F#1 (rail)</title></rect>
-<rect class="walls" x="269.49" y="49.18" width="0.34" height="24.63" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:2F#10 (rail)</title></rect>
-<rect class="walls" x="296.78" y="257.48" width="0.34" height="7.87" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:2F#11 (rail)</title></rect>
-<rect class="walls" x="12.3" y="185.65" width="12.62" height="0.34" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:2F#2 (rail)</title></rect>
+<rect class="walls" x="6.16" y="201.38" width="14.33" height="0.34" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:2F#2 (rail)</title></rect>
 <rect class="walls" x="282.79" y="265.34" width="13.99" height="0.34" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:2F#3 (rail)</title></rect>
 <rect class="walls" x="161.7" y="270.47" width="20.81" height="0.34" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:2F#4 (rail)</title></rect>
-<rect class="walls" x="5.82" y="179.49" width="0.34" height="12.66" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:2F#5 (rail)</title></rect>
+<rect class="walls" x="5.82" y="179.49" width="0.34" height="21.89" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:2F#5 (rail)</title></rect>
 <rect class="walls" x="161.36" y="255.77" width="0.34" height="14.71" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:2F#6 (rail)</title></rect>
 <rect class="walls" x="257.55" y="69.7" width="0.34" height="6.16" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:2F#7 (rail)</title></rect>
-<rect class="walls" x="12.3" y="185.65" width="0.34" height="6.5" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:2F#8 (rail)</title></rect>
-<rect class="walls" x="24.92" y="179.49" width="0.34" height="6.16" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:2F#9 (rail)</title></rect>
+<rect class="walls" x="269.49" y="49.18" width="0.34" height="24.63" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:2F#8 (rail)</title></rect>
+<rect class="walls" x="296.78" y="257.48" width="0.34" height="7.87" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:2F#9 (rail)</title></rect>
 <rect class="walls" x="3.77" y="177.44" width="81.86" height="2.05" fill="#6b7178"><title>2F.w000#0</title></rect>
 <rect class="walls" x="93.82" y="177.44" width="7.16" height="2.05" fill="#6b7178"><title>2F.w000#1</title></rect>
 <rect class="walls" x="137.82" y="205.49" width="8.53" height="1.37" fill="#6b7178"><title>2F.w003#0</title></rect>
@@ -105,7 +103,7 @@
 <rect class="walls" x="272.56" y="97.41" width="3.41" height="1.37" fill="#6b7178"><title>2F.w034#1</title></rect>
 <rect class="walls" x="273.92" y="97.41" width="9.21" height="2.05" fill="#6b7178"><title>2F.w035#0</title></rect>
 <rect class="walls" x="292.34" y="97.41" width="10.57" height="2.05" fill="#6b7178"><title>2F.w035#1</title></rect>
-<rect class="walls" x="19.8" y="191.81" width="23.88" height="1.37" fill="#6b7178"><title>2F.w038#0</title></rect>
+<rect class="walls" x="20.49" y="193.86" width="23.19" height="1.37" fill="#6b7178"><title>2F.w038#0</title></rect>
 <rect class="walls" x="280.06" y="280.05" width="19.44" height="2.05" fill="#6b7178"><title>2F.w039#0</title></rect>
 <rect class="walls" x="218.32" y="74.83" width="10.57" height="2.05" fill="#6b7178"><title>2F.w041#0</title></rect>
 <rect class="walls" x="238.45" y="74.83" width="8.53" height="2.05" fill="#6b7178"><title>2F.w041#1</title></rect>
@@ -136,7 +134,7 @@
 <rect class="walls" x="300.87" y="47.13" width="2.05" height="52.33" fill="#6b7178"><title>2F.w062#0</title></rect>
 <rect class="walls" x="137.82" y="158.97" width="2.05" height="49.25" fill="#6b7178"><title>2F.w063#0</title></rect>
 <rect class="walls" x="137.82" y="222.59" width="2.05" height="55.41" fill="#6b7178"><title>2F.w063#1</title></rect>
-<rect class="walls" x="42.32" y="191.81" width="1.36" height="41.73" fill="#6b7178"><title>2F.w066#0</title></rect>
+<rect class="walls" x="42.32" y="193.86" width="1.36" height="39.68" fill="#6b7178"><title>2F.w066#0</title></rect>
 <rect class="walls" x="201.95" y="224.64" width="1.36" height="17.79" fill="#6b7178"><title>2F.w067#0</title></rect>
 <rect class="walls" x="201.95" y="254.06" width="1.36" height="3.08" fill="#6b7178"><title>2F.w067#1</title></rect>
 <rect class="walls" x="209.11" y="158.97" width="1.36" height="3.42" fill="#6b7178"><title>2F.w068#0</title></rect>
@@ -146,7 +144,7 @@
 <rect class="walls" x="218.32" y="74.83" width="2.05" height="24.63" fill="#6b7178"><title>2F.w073#0</title></rect>
 <rect class="walls" x="198.54" y="254.4" width="2.05" height="23.6" fill="#6b7178"><title>2F.w074#0</title></rect>
 <rect class="walls" x="220.03" y="254.4" width="2.05" height="20.52" fill="#6b7178"><title>2F.w075#0</title></rect>
-<rect class="walls" x="19.8" y="191.81" width="1.36" height="11.97" fill="#6b7178"><title>2F.w076#0</title></rect>
+<rect class="walls" x="20.49" y="193.86" width="1.36" height="12.66" fill="#6b7178"><title>2F.w076#0</title></rect>
 <rect class="panels" x="146.35" y="205.49" width="27.29" height="1.37" fill="#2f7de1"><title>SW-2F-01</title></rect>
 <rect class="panels" x="209.11" y="162.39" width="1.36" height="16.42" fill="#2f7de1"><title>SW-2F-02</title></rect>
 <rect class="panels" x="201.95" y="242.43" width="1.36" height="11.63" fill="#2f7de1"><title>SW-2F-03</title></rect>
@@ -195,7 +193,7 @@
 <text class="labels floors" x="290.3" y="216.78">SF-2F-05</text>
 <text class="labels floors" x="310.76" y="217.8">SF-2F-06</text>
 <text class="labels floors" x="74.38" y="187.7">SF-2F-07</text>
-<text class="labels floors" x="53.57" y="202.75">SF-2F-08</text>
+<text class="labels floors" x="53.57" y="203.44">SF-2F-08</text>
 <text class="labels floors" x="258.06" y="105.1">SF-2F-09</text>
 <text class="labels floors" x="257.55" y="215.75">SF-2F-10</text>
 <text class="labels floors" x="150.62" y="265.86">SF-2F-11</text>

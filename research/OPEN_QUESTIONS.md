@@ -329,20 +329,21 @@ the outside come next.
       corner to the 2F door.
     - The Armory Stairs (S3) are built the same way, both up north: from the basement's south landing to the 1F
       north landing, and from the 1F south landing by the Lobby to the 2F corridor.
-    - The Small Stairs (S4) turn the other way round: from a landing at the east end of the Small Tower's corner,
-      up west along its north wall, then south down its west wall onto 2F. They stay 0.9 m wide: any wider,
-      there'd be no way to their first step on 1F, and the walk to the Office on 2F would be too narrow.
+    - The Small Stairs (S4), after your second look (D-096): the first way round, wall to wall. Up north through
+      the passage west of the Small Tower corner, a landing in the corner's north-west, then east along its north
+      wall onto the 2F walkway to the Office, 2.1 m wide.
     - The Tower Stairs (S1) are a switchback, up north and turning right. Their flights stop 0.7 m short of the
       1F east wall, under the 2F floor the 2F image draws there, where the Cat Walk ladder stands.
     - Every step is 0.2 m high and 0.25–0.3 m deep, with 2.0 m of headroom.
-    - Are the Small Stairs right this way round, and how wide are they? Is there a gap beside the Tower Stairs
-      on 1F?
+    - Is there a gap beside the Tower Stairs on 1F?
 21. **The ladder (P20):** L1 runs from the 2F Tower to the Cat Walk, 0.6 m wide, on the north edge of the well at
     the gap in the rail. Is that where it stands?
 22. **Found while building M3:** inside the L-shaped wall of the 2F Small Tower (the Workshop Balcony), Ubisoft's
     2F blueprint and r6calls' 2F image both show the 1F workshop's floor (the blue tarp, the planks), as if the
     2F there were open to the room below. We build a floor there and a full wall where the images draw the L.
-    Is the west part of the 2F Small Tower a balcony over the workshop, with a railing?
+    Is the west part of the 2F Small Tower a balcony over the workshop, with a railing? Since the Small Stairs
+    fill their corner (D-096), that floor is cut off from the rest of 2F by the stairwell, and Go to's spot for
+    the 2F Small Tower is on it.
 23. **Found while answering your stairs walk (D-095):**
     - (a) With the Armory Stairs going up north, the 2F floor over their foot (the stairwell's south end, with
       its window) is cut off by the hole: only the window reaches it.

@@ -31,7 +31,7 @@
   {"id": "2F.w024", "axis": "H", "at": 188.71, "span": [272.7, 299.86], "weight": "ext", "kind": "wall", "from": ["2-w024", "2-w025"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
    {"kind": "WINDOW", "id": "2F.o008", "at": [286.81, 294.22], "research": "layout_notes §6: 2F_ARMORY_CORRIDOR | RF_MEETING_E (EXT_OPENING (window? UNVERIFIED))", "from": ["2-o008"], "note": "kind from the research guess", "_unverified": ["kind"]}
   ]},
-  {"id": "2F.w038", "axis": "H", "at": 192.42, "span": [19.4, 44.1], "weight": "int", "kind": "wall", "spans": [], "from": ["2-w038"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "2F.w038", "axis": "H", "at": 194.66, "span": [19.87, 44.1], "weight": "int", "kind": "wall", "spans": [], "from": ["2-w038"], "src": "hand", "conf": "high", "note": "The Small Stairs' south wall (1F.w040) going on up: drawn at 192.42 in 2F's image, the very pixels of 1F.w040, so it is that wall rather than one 0.3 m north of it, as 2F's frame would put it (over the stairs). Moved onto 1F.w040's line (world 192.44) and its west end, so the stairs fill the corner wall to wall (D-096)", "_unverified": ["at", "span"]},
   {"id": "2F.w003", "axis": "H", "at": 206.18, "span": [136.88, 210.96], "weight": "int", "kind": "wall", "from": ["2-w003a", "2-w003b", "2-w003c", "2-w004"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
    {"kind": "SOFT", "id": "SW-2F-01", "at": [146.47, 173.49], "sections": 3, "research": "surfaces §2: 2F_KIDS_DORMS | 2F_DORMS_MAIN_HALL", "from": ["2-w003b"], "_unverified": []},
    {"kind": "DOOR", "id": "2F.o001", "at": [186.62, 195.44], "research": "layout_notes §6: 2F_KIDS_DORMS | 2F_DORMS_MAIN_HALL (DOOR)", "from": ["2-o001"], "_unverified": []}
@@ -60,8 +60,8 @@
   {"id": "2F.w012", "axis": "H", "at": 276.9, "span": [137.94, 201.79], "weight": "ext", "kind": "wall", "spans": [], "from": ["2-w012"], "src": "raster", "conf": "high", "_unverified": []},
   {"id": "2F.w039", "axis": "H", "at": 281.14, "span": [279.05, 300.57], "weight": "ext", "kind": "wall", "spans": [], "from": ["2-w039"], "src": "raster", "conf": "high", "_unverified": []},
   {"id": "2F.w059", "axis": "V", "at": 4.94, "span": [176.36, 233.51], "weight": "ext", "kind": "wall", "spans": [], "from": ["2-w059"], "src": "raster", "conf": "high", "_unverified": []},
-  {"id": "2F.w076", "axis": "V", "at": 20.64, "span": [191.18, 203.88], "weight": "int", "kind": "wall", "spans": [], "from": ["2-w076"], "src": "raster", "conf": "high", "_unverified": []},
-  {"id": "2F.w066", "axis": "V", "at": 42.87, "span": [191.18, 234.57], "weight": "int", "kind": "wall", "spans": [], "from": ["2-w066"], "src": "raster", "conf": "high", "_unverified": []},
+  {"id": "2F.w076", "axis": "V", "at": 21.14, "span": [193.42, 206.42], "weight": "int", "kind": "wall", "spans": [], "from": ["2-w076"], "src": "hand", "conf": "high", "note": "The Small Stairs' east wall (1F.w091) going on up: drawn at the very pixels of 1F.w091 in 2F's image, so moved onto its line and length (world x 20.64, z 191.21-203.91), like 2F.w038 (D-096)", "_unverified": ["at", "span"]},
+  {"id": "2F.w066", "axis": "V", "at": 42.87, "span": [193.42, 234.57], "weight": "int", "kind": "wall", "spans": [], "from": ["2-w066"], "src": "hand", "conf": "high", "note": "Starts at 2F.w038, which moved 2.2 u south onto 1F.w040's line (D-096)", "_unverified": ["span"]},
   {"id": "2F.w060", "axis": "V", "at": 64.03, "span": [176.36, 234.57], "weight": "int", "kind": "wall", "from": ["2-w060", "2-w061"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
    {"kind": "DOOR", "id": "2F.o020", "at": [183.07, 192.59], "research": "layout_notes §6: 2F_SMALL_TOWER | 2F_OFFICE (DOOR)", "from": ["2-o020"], "_unverified": []}
   ]},

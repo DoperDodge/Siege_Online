@@ -30,9 +30,10 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
   door) you arrive on the 1F north landing (by the Lobby door). The flight to 2F starts at the 1F south end,
   open to the Lobby, and arrives at the south end of the Armory Corridor. The 2F "Armory Stairs" callout now
   covers the top of the stairs.
-- **The Small Stairs** turn the other way round: from a small landing at the east end of the Small Tower's
-  corner, up west along the north wall, then south along the west wall onto 2F. I couldn't stretch them to the
-  walls as well (my question below).
+- **The Small Stairs** (after your second look, D-096) go the first way round again, now wall to wall: up north
+  through the passage beside the Small Tower's corner, a landing in the corner, then east along its north wall
+  onto the 2F walkway to the Office, 2.1 m wide. The two 2F walls of that corner now stand on the 1F walls under
+  them (the 2F image draws them on the same spot).
 - **The Tower Stairs** keep their width: the 2F image has floor beside them, where the Cat Walk ladder stands.
   Their landing now meets the north walls.
 - **The basement's frame:** to stack full-width flights, the basement's stairwells have to sit under the 1F
@@ -174,9 +175,10 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
    note anything out of place with that line (it gives your position in the plan's units).
 4. Stairs: walk from the basement up to 2F on each staircase. Go to puts you at the foot of each one.
    - The Tower Stairs: B → Tower Stairs.
-   - The White Stairs: B → Freezer Stairs.
-   - The Armory Stairs: B → Laundry Stairs.
-   - The Small Stairs go from 1F to 2F: 1F → Small Tower, then its north-west corner.
+   - The White Stairs: B → Freezer Stairs; the flight on to 2F starts in the 1F Security Corridor's south-west
+     corner.
+   - The Armory Stairs: B → Laundry Stairs; the flight on to 2F starts at the 1F south end, by the Lobby.
+   - The Small Stairs go from 1F to 2F: 1F → Small Tower, then north up the passage on the west side.
 5. The ladder: Go to 2F → Tower. The ladder stands under the north edge of the Cat Walk's well. Face it, press F,
    then hold W up to the Cat Walk. To come down, stand at the gap in the rail at the top, face the drop, press F,
    then hold S.
@@ -199,8 +201,9 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
    `npm run mapgen -- --check`.
 
 ### Known issues
-- The stairs follow your walk now (open question 20), but the Small Stairs are still the shakiest: neither image
-  draws their treads, and turned round they can't also reach the walls.
+- The stairs follow your walk now (open question 20).
+- On 2F, the floor inside the Small Tower's L-shaped wall is cut off by the Small Stairs' opening, and Go to's
+  spot for the 2F Small Tower is on it. Both images show that spot open to the workshop below (open question 22).
 - In the basement, the White Stairs stand 0.15–0.3 m off their stairwell's walls, and the Tower Stairs 0.95 m off
   the east one (open question 23b). On 2F, the floor over the Armory Stairs' foot is cut off by the hole (23a).
 - The Bunker's stairs (S5) and the outside tower stairs come with the outside (M4, D-091).

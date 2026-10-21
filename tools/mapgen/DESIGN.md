@@ -631,10 +631,11 @@ explicit metres of a pillar), with its spans sorted:
   blocker for bodies from the stair up to the slab, with a handrail drawn a rail's height over each tread
   (D-094). Room anchors keep clear of holes, flights, landings and guards. S1 is a switchback up north, turning
   right (B→1F under 1F→2F); S2 and S3 are two straight flights each, stacked and wall to wall, S2 up east and
-  S3 up north; S4 is a quarter-turn from a landing at the east end of the Small Tower's corner, up west along
-  its north wall, then south down its west wall onto 2F (D-095, after Ulo's walk: S2's upper flight went up
-  west, S3 up south and S4 north then east, all backwards; and the walk graph had found S4's very first guess,
-  a switchback arriving at the west, shutting the Office off). S5 and the outside tower stairs move to M4, with the outside
+  S3 up north (D-095, after Ulo's walk: S2's upper flight went up west and S3 up south, both backwards); S4 is
+  a quarter-turn, wall to wall: up north through the passage west of 1F.w091, a landing in the Small Tower
+  corner's north-west, then east along its north wall onto the 2F walkway to the Office (D-096: Ulo found it
+  0.9 m wide too skinny, and turned round, wrong; the walk graph had found its very first guess, a switchback
+  arriving at the west, shutting the Office off). S5 and the outside tower stairs move to M4, with the outside
   they start from. L1 stands on the Cat Walk well's north edge, at (284.17, 57.68) in the 3F frame, facing
   north.
 - **E8 as built (D-092):** a body grabs the ladder from the top with F (not the held vault key) on its feet
@@ -910,7 +911,7 @@ the fix, the commit). Sign-off is recorded there and in PROGRESS.
 | P16 | Soft floors: each to the walls of the rooms the research names, Ubisoft's five larger extents (r6calls' as `alt`); SF-2F-10 Trophy and SF-2F-11 White Stairs landing soft (amendment 7, D-078); tiles ≤ 4 x 4 m in 0.4 m joist spacings | blueprint-only areas (surfaces Q5); tiles are an engine budget |
 | P17 | Hatches: research rectangles in the 1F frame (about 1.6 m square); H5 only east of the Attic wall; H1 7.1 u east of r6calls' square, inside B Electric (D-095) | surfaces §5 and Q11 |
 | P18 | Everything not in surfaces §2 is HARD (Kitchen NE partition and 2F annex partition included); 1F floor HARD apart from H1–H3; roofs HARD; no skylights | surfaces §1, §4.1, §6 |
-| P19 | Stairs (as built, D-091, D-095): S1 switchback up N turning right, B → 1F under 1F → 2F; S2 two straight flights stacked, up E, wall to wall; S3 two staircases stacked one over the other, B → 1F and 1F → 2F (Ulo, 2026-10-20), straight, up N, wall to wall (Ulo, 2026-10-21); S4 quarter-turn from a landing at the corner's east end, up W along its north wall, then S down its west wall onto 2F (Ulo: the other way was backwards); S5 straight flight in the Bunker passage to the B east door and the exterior tower stairs up to a 2F-level landing (M4); risers ≤ 0.2 m (16 per 3.2 m), tread 0.3 m (a straight run fills its shaft), headroom 2.0 m | footprints only (layout_notes §5.1, map_features §5); no image shows S4's treads |
+| P19 | Stairs (as built, D-091, D-095): S1 switchback up N turning right, B → 1F under 1F → 2F; S2 two straight flights stacked, up E, wall to wall; S3 two staircases stacked one over the other, B → 1F and 1F → 2F (Ulo, 2026-10-20), straight, up N, wall to wall (Ulo, 2026-10-21); S4 quarter-turn, 2.1 m wide, up N through the passage west of 1F.w091, then E along the Small Tower corner's north wall onto the 2F walkway (Ulo, D-096); S5 straight flight in the Bunker passage to the B east door and the exterior tower stairs up to a 2F-level landing (M4); risers ≤ 0.2 m (16 per 3.2 m), tread 0.3 m (a straight run fills its shaft), headroom 2.0 m | footprints only (layout_notes §5.1, map_features §5); no image shows S4's treads |
 | P20 | Ladder L1 on the Cat Walk well's north edge, at the rail's gap ((284.17, 57.68) in the 3F frame), from the 2F floor to the Cat Walk, 0.6 m wide, facing N | ±12 u position uncertainty (data inventory) |
 | P21 | Cat Walk centre = open well over the 2F tower room, 1.0 m railing on the inner-square bands, gap at the ladder | surfaces §4.1 ring + central opening |
 | P22 | Rails: bands listed as rails get a 1.0 m rail (bodies blocked, bullets pass); every other band is a full wall | the rasters can't tell rails from walls |
