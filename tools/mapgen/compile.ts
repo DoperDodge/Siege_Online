@@ -85,11 +85,12 @@ export function compile(inputs: Inputs): Compiled {
   const wallsOut = compileWalls(layout, fr, parts, exterior.playable);
   // ---- Stairs and ladders: flights, landings, the walls between flights, and the holes the floors above lose.
   const stairsOut = compileStairs(layout, fr);
-  // ---- Rooms (seeds, splits) and floors (the ground, slabs, soft floors, hatches, wells, stairwells).
-  const roomsOut = compileRooms(layout, fr, wallsOut.solids, stairKeepOut(layout, stairsOut));
-  const floorsOut = compileFloors(layout, fr, wallsOut.solids, roomsOut, exterior.playable, stairsOut.holes);
-  // Rails round the stairwells come last: they'd part rooms in the plan's flood.
+  // Rails round the stairwells and guards beside the stairs under them: kept out of the rooms' flood (they'd part
+  // rooms in the plan), but anchors keep clear of the guards.
   const rails = stairRails(layout, stairsOut, wallsOut.solids);
+  // ---- Rooms (seeds, splits) and floors (the ground, slabs, soft floors, hatches, wells, stairwells).
+  const roomsOut = compileRooms(layout, fr, wallsOut.solids, stairKeepOut(layout, stairsOut, rails));
+  const floorsOut = compileFloors(layout, fr, wallsOut.solids, roomsOut, exterior.playable, stairsOut.holes);
   const panelKind = new Set(["REINFORCEABLE", "SOFT_FLOOR", "HATCH"]);
   const byKind = (s: Solid) => (panelKind.has(s.surface) ? 1 : s.surface === "BARRICADE" || s.surface === "WINDOW" || /\.(head|sill)$/.test(s.id) ? 2 : 0);
   const solids: Solid[] = [...wallsOut.solids, ...floorsOut.solids, ...stairsOut.solids, ...rails].sort((p, q) => byKind(p) - byKind(q) || (p.id < q.id ? -1 : p.id > q.id ? 1 : 0));

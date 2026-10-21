@@ -45,6 +45,12 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
   - A body walks up and down every run, between the rooms the research names.
   - A body climbs the ladder and comes back down from the top.
   - The browser test walks the Armory Stairs from the basement to 1F and back, and takes the ladder both ways.
+- **Review (D-094):** two reviewers read the M3 changes. Seven findings held up, and all are fixed, each with a
+  test. The ones you'd notice:
+  - Walking up a staircase hugging an open side, you stopped dead a third of the way up, your head against
+    the floor above. Those sides now have a handrail, with an invisible guard up to the floor above.
+  - Holding Space at the top of the ladder grabbed it, so climbing with Space held could loop at the top.
+    Now only F grabs it from the top, on your feet, and never through a wall.
 
 ### What's done (M2)
 - **Every storey stacked:** B, 1F, 2F and the Cat Walk (3F), each from its own wall file and placed through its

@@ -5,7 +5,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { Btn, bulletThroughPanels, crossFileProblems, DEG, loadGameData, missingUnverifiedPaths, PawnMode, QUERY_BULLET, QUERY_STATIC, Sim, Stance, type InputCmd, type Vec3 } from "../../game/shared/src/index.js";
+import { Btn, bulletThroughPanels, crossFileProblems, DEG, levelSchema, loadGameData, missingUnverifiedPaths, PawnMode, QUERY_BULLET, QUERY_STATIC, Sim, Stance, type InputCmd, type Vec3 } from "../../game/shared/src/index.js";
 import { checkLevel } from "./checks.js";
 import { frames } from "./frames.js";
 import { compile, loadInputs } from "./compile.js";
@@ -732,6 +732,42 @@ describe("oregon stairs and the ladder (M3)", () => {
     expect(problems).toEqual([]);
   });
 
+  it("a body walking straight up any flight 5 cm in from an open side gets to its top: the slab never meets its head", async () => {
+    const sim = await Sim.create("oregon");
+    const ctrl = sim.addPlayer("walker", "sledge");
+    const pawn = sim.pawns.get(ctrl.possessedPawnId)!;
+    const problems: string[] = [];
+    for (const f of stairs.flights) {
+      const [fx, fz] = [-Math.sin(f.yawDeg * DEG), -Math.cos(f.yawDeg * DEG)];
+      const len = f.run * f.steps;
+      const at = (a: number, c: number): [number, number] => [f.start[0] + fx * a - fz * c, f.start[2] + fz * a + fx * c];
+      for (const side of [-1, 1]) {
+        // An open side only: a wall alongside (10 cm out, its length, its height) keeps bodies 0.3 m off it anyway.
+        const [p, q] = [at(0.1, side * f.width / 2), at(len - 0.1, side * (f.width / 2 + 0.1))];
+        const strip = [Math.min(p[0], q[0]), Math.min(p[1], q[1]), Math.max(p[0], q[0]), Math.max(p[1], q[1])];
+        const [y0, y1] = [f.start[1] + 0.3, f.start[1] + f.rise * f.steps - 0.3];
+        const walled = solids.some(
+          (b) =>
+            !b.drawOnly && !b.bodiesOnly && !["HARD_FLOOR", "SOFT_FLOOR", "HATCH"].includes(b.surface) &&
+            b.center[0] + b.size[0] / 2 > strip[0] + 0.01 && b.center[0] - b.size[0] / 2 < strip[2] - 0.01 &&
+            b.center[2] + b.size[2] / 2 > strip[1] + 0.01 && b.center[2] - b.size[2] / 2 < strip[3] - 0.01 &&
+            b.center[1] + b.size[1] / 2 > y0 && b.center[1] - b.size[1] / 2 < y1,
+        );
+        if (walled) continue;
+        // On the first tread, 5 cm in from that side, facing up the flight.
+        const c = side * (f.width / 2 - 0.05);
+        sim.teleport(pawn.id, f.start[0] + fx * 0.15 - fz * c, f.start[1] + f.rise, f.start[2] + fz * 0.15 + fx * c, f.yawDeg, Stance.Stand);
+        let along = 0;
+        for (let t = 0; t < 64 * 6 && along < len - 0.1; t++) {
+          sim.step(new Map([[ctrl.id, cmd({ forward: 1, yawDeg: f.yawDeg })]]));
+          along = (pawn.state.x - f.start[0]) * fx + (pawn.state.z - f.start[2]) * fz;
+        }
+        if (along < len - 0.1) problems.push(`${f.id} ${side < 0 ? "left" : "right"} side: stopped ${along.toFixed(2)} m up its ${len.toFixed(2)} m`);
+      }
+    }
+    expect(problems).toEqual([]);
+  });
+
   it("the ladder takes you from the 2F Tower up onto the Cat Walk, and back down from the top", async () => {
     const sim = await Sim.create("oregon");
     const ctrl = sim.addPlayer("climber", "sledge");
@@ -812,6 +848,56 @@ describe("oregon walk graph (M3, DESIGN §9.2 check 10)", () => {
     const [a, b] = sides(open);
     expect(open.comp[a]).toBe(open.comp[b]);
     expect(reached(open).rooms).toContain("1F_LOBBY");
+  });
+
+  /** The walk graph of a 20 m square floor with these boxes and ramps on it. */
+  const flat = async (id: string, solids: unknown[], ramps: unknown[] = []) => {
+    const data = loadGameData();
+    const lab = data.levels.get("movement_lab")!;
+    const level = levelSchema.parse({
+      ...lab,
+      id,
+      solids: [{ id: "floor", center: [0, -0.1, 0], size: [20, 0.2, 20], surface: "HARD_FLOOR" }, ...solids],
+      ramps,
+      stairs: [],
+      ladders: [],
+      spawns: [{ id: "s", pos: [-8, 0, -8], yawDeg: 0 }],
+    });
+    return buildWalkGraph(await Sim.create(id, { ...data, levels: new Map(data.levels).set(id, level) }), { area: [-10, -10, 10, 10] });
+  };
+
+  it("joins the two sides of a wall through a gap a body fits (1 m), never through one it doesn't (0.6 m)", async () => {
+    for (const [gap, joined] of [
+      [0.6, false],
+      [1.0, true],
+    ] as const) {
+      // A 0.2 m wall across the floor at x 0, the gap at z 0.
+      const g = await flat(`gap_${gap}`, [
+        { id: "north", center: [0, 1.5, (-10 - gap / 2) / 2], size: [0.2, 3, 10 - gap / 2], surface: "HARD_WALL" },
+        { id: "south", center: [0, 1.5, (10 + gap / 2) / 2], size: [0.2, 3, 10 - gap / 2], surface: "HARD_WALL" },
+      ]);
+      const [a, b] = [nodeNear(g, -3, 0, 0), nodeNear(g, 3, 0, 0)];
+      expect(Math.min(a, b), `${gap} m`).toBeGreaterThanOrEqual(0);
+      expect(g.comp[a] === g.comp[b], `${gap} m`).toBe(joined);
+    }
+  });
+
+  it("a ramp a body climbs (25°) joins the floor to the deck it leads to; one steeper than maxSlopeDeg (60°) doesn't", async () => {
+    for (const [deg, joined] of [
+      [25, true],
+      [60, false],
+    ] as const) {
+      // A deck 1 m up at x 2..4, the ramp's top edge on its west edge.
+      const rad = (deg * Math.PI) / 180;
+      const g = await flat(
+        `ramp_${deg}`,
+        [{ id: "deck", center: [3, 0.5, 0], size: [2, 1, 2], surface: "HARD_FLOOR" }],
+        [{ id: "ramp", start: [2 - 1 / Math.tan(rad), 0, 0], yawDeg: -90, length: 1 / Math.sin(rad), angleDeg: deg, width: 1.5, surface: "HARD_FLOOR" }],
+      );
+      const [floor, deck] = [nodeNear(g, -3, 0, 0), nodeNear(g, 3, 1, 0)];
+      expect(Math.min(floor, deck), `${deg}°`).toBeGreaterThanOrEqual(0);
+      expect(g.comp[floor] === g.comp[deck], `${deg}°`).toBe(joined);
+    }
   });
 
   it("without the ladder, nothing reaches the Cat Walk: the graph doesn't leak through floors or walls", async () => {

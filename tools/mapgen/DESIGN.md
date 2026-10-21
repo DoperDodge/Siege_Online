@@ -626,7 +626,10 @@ explicit metres of a pillar), with its spans sorted:
   through the nosings, a body's reach (0.35 m) on, comes within `headroomM` of the slab, through to the arrival;
   a hole never runs under the storey's own walls. Rails (the Cat Walk's kind) go round each hole where the
   floor beyond is open: not along a wall, not across the arrival tread, not where a flight passes lower than
-  the rail's top. Room anchors keep clear of holes, flights and landings. S1 is a switchback up north, turning
+  the rail's top. Under the same edges, beside a flight or landing whose walkers' heads reach the slab
+  (tread + `headroomM` above its underside) and with no wall of the storey below alongside, a guard: a
+  blocker for bodies from the stair up to the slab, with a handrail drawn a rail's height over each tread
+  (D-094). Room anchors keep clear of holes, flights, landings and guards. S1 is a switchback up north, turning
   right (B→1F under 1F→2F); S2 is straight, up east in B and up west from 1F; S3 is two straight flights
   stacked, up south; S4 is a quarter-turn, up north along the west wall of the Small Tower's corner, then east
   along its north wall onto the 2F walkway to the Office (the walk graph found the first guess, a switchback
@@ -855,9 +858,11 @@ Estimated real counts (Appendix B): about 1,100–1,600 static colliders, 150–
 10. **Reachability** (walk graph, M3): every room reachable from attacker group A with barricades broken and no
     breaching; every storey connected; the playable boundary holds. As built (D-093): `walkgraph.ts` rasterises
     every collider a body collides with into 10 cm columns of solid spans; a node is a walkable top with a
-    crouching body's height clear above it and nothing it can't step over within its radius; neighbours join a
-    step apart, each ladder joins its foot to its top, and drops aren't edges. The boundary check comes with
-    the outside (M4).
+    crouching body's height clear above it and nothing it can't step over within its radius and the
+    controller's 2 cm skin, counted half a column's diagonal wider (no gap a body can't pass is joined); a
+    tilted box is walkable where the face its column leaves through is no steeper than `maxSlopeDeg`.
+    Neighbours join a step apart, each ladder joins its foot to its top, and drops aren't edges. The boundary
+    check comes with the outside (M4).
 11. **Lab samples**: the Destruction Lab's five Oregon walls (destruction_lab layout `oregon_*`) match the
     compiled panels (length, height, sections), so an answer from Ulo reaches both.
 12. **Determinism**: two Sims on Oregon apply the same panel-op log to identical hashes (existing pattern).

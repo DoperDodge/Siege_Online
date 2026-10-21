@@ -152,7 +152,7 @@
 <text class="labels" x="249.67" y="199.67">SW-B-05</text>
 <text class="labels" x="276" y="199.67">SW-B-06</text>
 <text class="labels" x="244.17" y="135.67">SW-B-07</text>
-<text class="rooms" x="238.17" y="69.17"><title>B_TOWER_STAIRS</title>Tower Stairs</text>
+<text class="rooms" x="238.17" y="69.83"><title>B_TOWER_STAIRS</title>Tower Stairs</text>
 <text class="rooms" x="243.83" y="109.83"><title>B_BOILER</title>Pillar</text>
 <text class="rooms" x="270.17" y="124.83"><title>B_ELECTRIC</title>Electric</text>
 <text class="rooms" x="302.5" y="134.5"><title>B_BUNKER_ENTRANCE</title>Blue</text>
@@ -164,5 +164,5 @@
 <text class="rooms" x="149.83" y="249.83"><title>B_FREEZER_STAIRS</title>Freezer Stairs</text>
 <text class="rooms" x="248.5" y="216.83"><title>B_LAUNDRY</title>Laundry Room</text>
 <text class="rooms" x="254.17" y="256.83"><title>B_LAUNDRY_STORAGE</title>Storage</text>
-<text class="rooms" x="273.17" y="251.5"><title>B_LAUNDRY_STAIRS</title>Laundry Stairs</text>
+<text class="rooms" x="272.83" y="251.5"><title>B_LAUNDRY_STAIRS</title>Laundry Stairs</text>
 </svg>

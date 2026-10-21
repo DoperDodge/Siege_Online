@@ -37,6 +37,7 @@ interface Solid {
   size: number[];
   surface: string;
   bodiesOnly?: boolean;
+  drawOnly?: boolean;
   vaultable?: boolean;
   label?: string;
 }
@@ -142,7 +143,7 @@ export function planSvg(root: string, level: Record<string, unknown>, floor: Flo
     return `<text class="rooms" x="${f2(x)}" y="${f2(y)}"><title>${esc(r.id)}</title>${esc(r.callout)}</text>`;
   });
   for (const s of level.solids as Solid[]) {
-    if (s.bodiesOnly || s.surface === "HARD_FLOOR") continue;
+    if (s.bodiesOnly || s.drawOnly || s.surface === "HARD_FLOOR") continue; // a rail's bar isn't a wall
     if (s.center[1] - s.size[1] / 2 > cut || s.center[1] + s.size[1] / 2 < cut) continue;
     const [x0, y0] = native(s.center[0] - s.size[0] / 2, s.center[2] - s.size[2] / 2);
     const [x1, y1] = native(s.center[0] + s.size[0] / 2, s.center[2] + s.size[2] / 2);

@@ -34,6 +34,9 @@ export interface WalkGraphOptions {
 }
 
 /** A collider as a box: centre, half extents and the world directions of its three axes. */
+/** The character controller's offset (sim.ts createCharacterController): a body keeps that far off what it touches. */
+const SKIN_M = 0.02;
+
 interface Box {
   t: [number, number, number];
   he: [number, number, number];
@@ -94,15 +97,14 @@ export function buildWalkGraph(sim: Sim, opts: WalkGraphOptions = {}): WalkGraph
       }
       return;
     }
-    // Tilted (a ramp): where the vertical line through each column's centre crosses it; walkable if its top
-    // face is no steeper than a body climbs.
-    const top = box.axes.reduce((best, a, k) => (Math.abs(a[1]) > Math.abs(box.axes[best][1]) ? k : best), 0);
-    const walk = Math.abs(box.axes[top][1]) >= minUp;
+    // Tilted (a ramp): where the vertical line through each column's centre crosses it; walkable where the face it
+    // leaves the box through, at the top, is no steeper than a body climbs (a ramp's top, not a steep slab's end).
     for (let j = j0; j <= j1; j++) {
       for (let i = i0; i <= i1; i++) {
         const o = [x0 + (i + 0.5) * c - box.t[0], 0, z0 + (j + 0.5) * c - box.t[2]];
         let lo = -Infinity;
         let hi = Infinity;
+        let top = -1;
         for (let k = 0; k < 3 && lo <= hi; k++) {
           const a = box.axes[k];
           const s = o[0] * a[0] + o[2] * a[2]; // the line's offset along axis k at y = box centre
@@ -112,9 +114,9 @@ export function buildWalkGraph(sim: Sim, opts: WalkGraphOptions = {}): WalkGraph
           }
           const [ya, yb] = [(-box.he[k] - s) / a[1], (box.he[k] - s) / a[1]];
           lo = Math.max(lo, Math.min(ya, yb));
-          hi = Math.min(hi, Math.max(ya, yb));
+          if (Math.max(ya, yb) < hi) [hi, top] = [Math.max(ya, yb), k];
         }
-        if (lo <= hi) put(j * w + i, box.t[1] + lo, box.t[1] + hi, walk);
+        if (lo <= hi) put(j * w + i, box.t[1] + lo, box.t[1] + hi, top >= 0 && Math.abs(box.axes[top][1]) >= minUp);
       }
     }
   };
@@ -164,8 +166,10 @@ export function buildWalkGraph(sim: Sim, opts: WalkGraphOptions = {}): WalkGraph
   spanFirst[w * h] = spans;
 
   // ---- nodes: walkable tops with a crouching body's height above them and nothing in its way within its
-  // radius (less half a column: a box blocks every column it overlaps)
-  const reach = m.stance.collisionRadius - c / 2;
+  // radius and the controller's skin (Sim: 2 cm). A box blocks every column it overlaps, so the face nearest a
+  // node lies within half a column's diagonal of a blocked centre: counting centres that far out more joins
+  // no gap a body can't pass, at the price of seeing some up to that much narrower than they are.
+  const reach = m.stance.collisionRadius + SKIN_M + (c * Math.SQRT2) / 2;
   const disc: [number, number][] = [];
   const r = Math.ceil(reach / c);
   for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) if (Math.hypot(di, dj) * c <= reach + 1e-9) disc.push([di, dj]);

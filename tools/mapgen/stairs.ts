@@ -275,6 +275,9 @@ export function compileStairs(layout: Layout, fr: Frames): StairsResult {
  * Rails round the holes of each storey's floor, where the floor beyond the edge is open: not under a wall of
  * that storey (`walls`, its boxes), not where a run arrives, and not under a flight passing lower than the
  * rail's top. A vaultable blocker for bodies to rail height and a bar drawn on top, as the Cat Walk's rails.
+ * Under the same edges, beside a flight or landing whose walkers' heads reach the slab and where the storey
+ * below has no wall alongside, a guard: a blocker for bodies from the stair up to the slab, so a head never
+ * meets the slab beside the hole, with a handrail drawn a rail's height over each tread it has room for.
  */
 export function stairRails(layout: Layout, stairs: StairsResult, walls: Solid[]): Solid[] {
   const railH = layout.defaults.rail.hM;
@@ -313,57 +316,117 @@ export function stairRails(layout: Layout, stairs: StairsResult, walls: Solid[])
       if (arrivals.some((a) => covers(a, hx, hz))) return false;
       return !lowFlight(ox, oz) && !lowFlight(hx, hz);
     };
-    let n = 0;
-    const add = (ax: number, az: number, bx: number, bz: number) => {
-      const c: [number, number, number] = [r4((ax + bx) / 2), 0, r4((az + bz) / 2)];
-      const size = (t: number, hh: number): [number, number, number] => [r4(Math.max(bx - ax, t)), hh, r4(Math.max(bz - az, t))];
-      rails.push({ id: `rail:${floor}#${n}`, center: [c[0], r4(y + railH / 2), c[2]], size: size(RAIL_M, railH), surface: "HARD_WALL", vaultable: true, bodiesOnly: true });
-      rails.push({ id: `rail:${floor}#${n++}.bar`, center: [c[0], r4(y + railH - BAR_M / 2), c[2]], size: size(BAR_M, BAR_M), surface: "HARD_WALL", drawOnly: true });
+    /**
+     * Rows of edges facing ±z, then columns facing ±x: each run of edges `pick` gives a value for, as the strip
+     * just outside the hole it runs along (metres), with the values edge by edge.
+     */
+    const strips = <T>(pick: (i: number, j: number, di: number, dj: number) => T | null, place: (r: Rect, vals: T[], alongX: boolean) => void) => {
+      for (const dj of [-1, 1]) {
+        for (let j = 1; j < h - 1; j++) {
+          for (let i = 1; i < w - 1; ) {
+            const vals: T[] = [];
+            for (let v = pick(i, j, 0, dj); v !== null; v = i + vals.length < w - 1 ? pick(i + vals.length, j, 0, dj) : null) vals.push(v);
+            if (!vals.length) {
+              i++;
+              continue;
+            }
+            const z = z0 + (dj < 0 ? j * CELL_M - RAIL_M : (j + 1) * CELL_M);
+            place([x0 + i * CELL_M, z, x0 + (i + vals.length) * CELL_M, z + RAIL_M], vals, true);
+            i += vals.length;
+          }
+        }
+      }
+      for (const di of [-1, 1]) {
+        for (let i = 1; i < w - 1; i++) {
+          for (let j = 1; j < h - 1; ) {
+            const vals: T[] = [];
+            for (let v = pick(i, j, di, 0); v !== null; v = j + vals.length < h - 1 ? pick(i, j + vals.length, di, 0) : null) vals.push(v);
+            if (!vals.length) {
+              j++;
+              continue;
+            }
+            const x = x0 + (di < 0 ? i * CELL_M - RAIL_M : (i + 1) * CELL_M);
+            place([x, z0 + j * CELL_M, x + RAIL_M, z0 + (j + vals.length) * CELL_M], vals, false);
+            j += vals.length;
+          }
+        }
+      }
     };
-    // Rows of edges facing ±z, then columns facing ±x: each run of wanted edges is one rail, just outside the hole.
-    for (const dj of [-1, 1]) {
-      for (let j = 1; j < h - 1; j++) {
-        for (let i = 1; i < w - 1; ) {
-          if (!wants(i, j, 0, dj)) {
-            i++;
-            continue;
-          }
-          let e = i;
-          while (e < w - 1 && wants(e, j, 0, dj)) e++;
-          const z = z0 + (dj < 0 ? j * CELL_M - RAIL_M : (j + 1) * CELL_M);
-          add(x0 + i * CELL_M, z, x0 + e * CELL_M, z + RAIL_M);
-          i = e;
+    const box = (r: Rect, y0: number, y1: number): Pick<Solid, "center" | "size"> => ({
+      center: [r4((r[0] + r[2]) / 2), r4((y0 + y1) / 2), r4((r[1] + r[3]) / 2)],
+      size: [r4(Math.max(r[2] - r[0], RAIL_M)), r4(y1 - y0), r4(Math.max(r[3] - r[1], RAIL_M))],
+    });
+    let n = 0;
+    strips(
+      (i, j, di, dj) => (wants(i, j, di, dj) ? true : null),
+      (r) => {
+        rails.push({ id: `rail:${floor}#${n}`, ...box(r, y, y + railH), surface: "HARD_WALL", vaultable: true, bodiesOnly: true });
+        rails.push({ id: `rail:${floor}#${n++}.bar`, ...box(r, y + railH - BAR_M, y + railH), size: [r4(Math.max(r[2] - r[0], BAR_M)), BAR_M, r4(Math.max(r[3] - r[1], BAR_M))], surface: "HARD_WALL", drawOnly: true });
+      },
+    );
+
+    // The guards, under the slab: where this storey's runs climb with their heads at the slab.
+    const ceiling = y - layout.storeys.find((s) => s.id === floor)!.slabM;
+    const here = stairs.runs.filter((r) => r.to === floor);
+    const lowFloors = here.map((r) => layout.storeys.find((s) => s.id === r.from)!.floorY);
+    const below = [
+      ...walls.filter((b) => !b.drawOnly && lowFloors.some((f) => Math.abs(b.center[1] - b.size[1] / 2 - f) < 0.02)),
+      ...stairs.solids.filter((b) => b.id.endsWith(".divider")),
+    ];
+    const walledBelow = (x: number, z: number) => below.some((b) => Math.abs(x - b.center[0]) < b.size[0] / 2 && Math.abs(z - b.center[2]) < b.size[2] / 2);
+    const treads = here.flatMap((r) => r.flights.flatMap((f) => stepBoxes(f)));
+    const landings = stairs.solids.filter((b) => b.id.endsWith(".landing") && here.some((r) => b.id === `${r.id}.landing`));
+    /** The highest tread or landing of this storey's runs over (x, z), or null. */
+    const stairTop = (x: number, z: number) => {
+      let top: number | null = null;
+      for (const t of treads) if (covers(t.rect, x, z)) top = Math.max(top ?? -Infinity, t.y1);
+      for (const l of landings) if (Math.abs(x - l.center[0]) < l.size[0] / 2 && Math.abs(z - l.center[2]) < l.size[2] / 2) top = Math.max(top ?? -Infinity, l.center[1] + l.size[1] / 2);
+      return top;
+    };
+    const headroom = layout.defaults.stairs.headroomM;
+    const guarded = (i: number, j: number, di: number, dj: number): number | null => {
+      if (!hole[j * w + i] || hole[(j + dj) * w + i + di]) return null;
+      const s = stairTop(...centre(i, j));
+      if (s === null || s + headroom <= ceiling + 1e-6 || s >= ceiling - 1e-6) return null;
+      return walledBelow(...centre(i + di, j + dj)) ? null : s;
+    };
+    let g = 0;
+    strips(guarded, (r, tops, alongX) => {
+      const id = `guard:${floor}#${g++}`;
+      rails.push({ id, ...box(r, Math.min(...tops), ceiling), surface: "HARD_WALL", bodiesOnly: true });
+      // The handrail: over each tread along the guard (its edges of one height), where it fits under the slab.
+      let bars = 0;
+      for (let a = 0; a < tops.length; ) {
+        let b = a;
+        while (b < tops.length && Math.abs(tops[b] - tops[a]) < 1e-6) b++;
+        if (tops[a] + railH <= ceiling - 1e-6) {
+          const part: Rect = alongX ? [r[0] + a * CELL_M, r[1], r[0] + b * CELL_M, r[3]] : [r[0], r[1] + a * CELL_M, r[2], r[1] + b * CELL_M];
+          rails.push({ id: `${id}.bar${bars++}`, ...box(part, tops[a] + railH - BAR_M, tops[a] + railH), surface: "HARD_WALL", drawOnly: true });
         }
+        a = b;
       }
-    }
-    for (const di of [-1, 1]) {
-      for (let i = 1; i < w - 1; i++) {
-        for (let j = 1; j < h - 1; ) {
-          if (!wants(i, j, di, 0)) {
-            j++;
-            continue;
-          }
-          let e = j;
-          while (e < h - 1 && wants(i, e, di, 0)) e++;
-          const x = x0 + (di < 0 ? i * CELL_M - RAIL_M : (i + 1) * CELL_M);
-          add(x, z0 + j * CELL_M, x + RAIL_M, z0 + e * CELL_M);
-          j = e;
-        }
-      }
-    }
+    });
   }
   return rails;
 }
 
 /**
  * Where the stairs take a storey's floor space, for rooms' anchors to keep clear of (rooms.ts): the holes in its
- * floor and a cell round them (the rails), the flights that start on it, and its landings and dividers.
+ * floor and a cell round them (the rails), the flights that start on it, the guards beside them (`rails`, from
+ * stairRails), and its landings and dividers.
  */
-export function stairKeepOut(layout: Layout, stairs: StairsResult): Map<Floor, Rect[]> {
+export function stairKeepOut(layout: Layout, stairs: StairsResult, rails: Solid[] = []): Map<Floor, Rect[]> {
   const out = new Map<Floor, Rect[]>();
   const add = (floor: Floor, r: Rect) => (out.get(floor) ?? out.set(floor, []).get(floor)!).push(r);
   for (const [floor, holes] of stairs.holes) for (const h of holes) add(floor, [h[0] - CELL_M, h[1] - CELL_M, h[2] + CELL_M, h[3] + CELL_M]);
   for (const run of stairs.runs) for (const f of run.flights) for (const s of stepBoxes(f)) add(run.from, s.rect);
+  // The guards under the slabs' edges (stairRails), on the storey they hang in.
+  for (const g of rails) {
+    if (g.drawOnly || !g.id.startsWith("guard:")) continue;
+    const bottom = g.center[1] - g.size[1] / 2;
+    const floor = [...layout.storeys].reverse().find((st) => st.floorY <= bottom + 0.01)?.id;
+    if (floor) add(floor, [g.center[0] - g.size[0] / 2, g.center[2] - g.size[2] / 2, g.center[0] + g.size[0] / 2, g.center[2] + g.size[2] / 2]);
+  }
   for (const s of stairs.solids) {
     const bottom = s.center[1] - s.size[1] / 2;
     const floor = [...layout.storeys].reverse().find((st) => st.floorY <= bottom + 0.25)?.id;
