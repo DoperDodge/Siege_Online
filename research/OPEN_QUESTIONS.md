@@ -350,10 +350,22 @@ the outside come next.
     - (b) In the basement, the White Stairs' flight stands 0.15–0.3 m off its stairwell's walls, and the Tower
       Stairs' east flight 0.95 m off the east wall: the basement image draws those stairwells a little wider
       than 1F's.
+24. **The roofs (P24, D-097):** we read their shapes from the roof renders; every pitch is a guess (25 degrees,
+    the Meeting roof 10).
+    - (a) Which are flat? We built flat: the Dining roof (the research says so), the Meeting roof east of the
+      Attic, the Balcony, the Garage strip, the Kids roof (the corrugated one: no ridge in the render) and the
+      corners the cross roof leaves (north of it by the Armory Corridor, south of it over White Stairs, Walk In and
+      the Armory Stairs). The rest slope: the Tower, the Tower's two west parts, the brown cross roof (built as two
+      crossing gables, not hips), the Attic and the Small Tower.
+    - (b) Inside, do the 2F rooms have flat ceilings under the pitched roofs (we built them flat at 6.0 m), and is
+      the Attic's ceiling sloped?
+    - (c) The Meeting Hall and Kitchen Corridor look up into the Meeting roof (DESIGN amendment 5), whose eave is
+      at the 2F floor. Is that what you see, or a flat ceiling at 3 m like the rest of 1F?
+    - (d) The Dining roof's strip south of the Small Tower: part of the flat roof, or a sloped one of its own?
 
-Later milestones add their placeholders here as they build them: the Meeting Hall's height (P23), roofs (P24),
-the Bunker's stairs and the outside tower stairs (P19, moved to M4), defender spawns (P28), bombs (P30), cameras
-(P31), ingredients (P32), rappel faces (P33), zones (P34), props (P35), and fall damage from the roofs (P37).
+Later milestones add their placeholders here as they build them: the Meeting Hall's height (P23), the Bunker's
+stairs and the outside tower stairs (P19, moved to M4), defender spawns (P28), bombs (P30), cameras (P31),
+ingredients (P32), rappel faces (P33), zones (P34), props (P35), and fall damage from the roofs (P37).
 
 ### [core_mechanics.md](core_mechanics.md) — 16
 

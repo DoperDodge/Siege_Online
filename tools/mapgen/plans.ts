@@ -142,8 +142,10 @@ export function planSvg(root: string, level: Record<string, unknown>, floor: Flo
     const [x, y] = native(r.anchor[0], r.anchor[2]);
     return `<text class="rooms" x="${f2(x)}" y="${f2(y)}"><title>${esc(r.id)}</title>${esc(r.callout)}</text>`;
   });
+  // A storey's own boxes: a roof's steps (roofs.ts) can reach a storey's cut, but they aren't its walls.
+  const roofs = new Set(layout.roofs.map((r) => r.id));
   for (const s of level.solids as Solid[]) {
-    if (s.bodiesOnly || s.drawOnly || s.surface === "HARD_FLOOR") continue; // a rail's bar isn't a wall
+    if (s.bodiesOnly || s.drawOnly || s.surface === "HARD_FLOOR" || roofs.has(s.id.split(/[.#]/)[0])) continue; // a rail's bar isn't a wall
     if (s.center[1] - s.size[1] / 2 > cut || s.center[1] + s.size[1] / 2 < cut) continue;
     const [x0, y0] = native(s.center[0] - s.size[0] / 2, s.center[2] - s.size[2] / 2);
     const [x1, y1] = native(s.center[0] + s.size[0] / 2, s.center[2] + s.size[2] / 2);

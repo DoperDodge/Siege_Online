@@ -154,16 +154,27 @@ const stairRun = z.strictObject({
   _unverified: Uv,
 });
 
+/**
+ * A roof (roofs.ts), in world u: it covers the footprint of the storey whose walls stop at `eaveY`, inside its
+ * rectangles, where no storey above stands and no roof listed before it covers. Flat: a slab with its top at
+ * the eave. Gable (one rectangle, on the walls' outer faces): two slopes from the eaves up to a ridge along
+ * `ridge`; mono: one slope up from the `low` side. A pitched roof has a ceiling at the eave unless `ceiling` is
+ * false (the room below then looks up into the roof).
+ */
 const roofSchema = z.strictObject({
   id: z.string(),
   callout: z.string(),
-  rects: z.array(URect),
+  rects: z.array(URect).min(1),
   shape: z.enum(["flat", "gable", "mono"]),
   ridge: z.enum(["NS", "EW"]).optional(),
   low: Dir.optional(),
   eaveY: num,
   pitchDeg: num.optional(),
+  ceiling: z.boolean().default(true),
   walkable: z.boolean(),
+  research: z.string().optional(),
+  src: Src.optional(),
+  note: z.string().optional(),
   _unverified: Uv,
 });
 

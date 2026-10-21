@@ -93,6 +93,11 @@ export class Controls {
     this.adsToggled = false;
   }
 
+  /** Whether an action's key is down (the lab's free camera flies with the movement keys). */
+  isHeld(action: Action): boolean {
+    return this.held.has(action);
+  }
+
   get adsActive(): boolean {
     return this.settings.adsMode === "toggle" ? this.adsToggled : this.held.has("ads");
   }

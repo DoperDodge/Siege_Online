@@ -104,7 +104,9 @@ describe("oregon level.json", () => {
   it.each(FLOOR_IDS)("%s: the building's shell is closed between the interior and exterior wall tops", (floor) => {
     const { plan, storey, next } = storeyOf(floor);
     const top = (b: Box) => +(b.center[1] + b.size[1] / 2 - storey.floorY).toFixed(2);
-    const pieces = solids.filter((b) => /#\d/.test(b.id) && !b.bodiesOnly && !b.drawOnly && Math.abs(b.center[1] - b.size[1] / 2 - storey.floorY) < 0.01);
+    // The walls' pieces: not the steps a roof stands on them (roofs.ts), which start at their tops.
+    const roofs = new Set(inputs.layout.roofs.map((r) => r.id));
+    const pieces = solids.filter((b) => /#\d/.test(b.id) && !roofs.has(b.id.split(/[.#]/)[0]) && !b.bodiesOnly && !b.drawOnly && Math.abs(b.center[1] - b.size[1] / 2 - storey.floorY) < 0.01);
     const [topIn, topOut] = next ? [next.floorY - next.slabM - storey.floorY, storey.underground ? next.floorY - next.slabM - storey.floorY : next.floorY - storey.floorY] : [inputs.layout.defaults.wallHeightM, inputs.layout.defaults.wallHeightM];
     expect([...new Set(pieces.map(top))].sort(), floor).toEqual([...new Set([topIn, topOut].map((t) => +t.toFixed(2)))].sort());
     if (topOut - topIn < 0.05) return; // no band: every wall reaches the same height
@@ -905,5 +907,81 @@ describe("oregon walk graph (M3, DESIGN §9.2 check 10)", () => {
     breakAll(sim, "barricade");
     const r = reached(buildWalkGraph(sim, { ladders: false }));
     expect((level.rooms as Room[]).map((x) => x.id).filter((id) => !r.rooms.includes(id))).toEqual(["3F_CATWALK"]);
+  });
+});
+
+describe("oregon roofs (M4, DESIGN §5.8)", () => {
+  const roofs = inputs.layout.roofs;
+  type RoofDef = (typeof roofs)[number];
+  const withRoofs = (change: (r: RoofDef) => RoofDef | null) => compile({ ...inputs, layout: { ...inputs.layout, roofs: roofs.map(change).filter((r): r is RoofDef => r !== null) } });
+  /** A pitched roof's top surface at (x, z) metres, worked out from its record: the eave, the ramp's thickness, the slope. */
+  const topAt = (id: string, x: number, z: number) => {
+    const r = roofs.find((q) => q.id === id)!;
+    if (r.shape === "flat") return r.eaveY;
+    const [x0, z0, x1, z1] = r.rects[0].map((u) => u * k);
+    const a = (r.pitchDeg! * Math.PI) / 180;
+    const across = r.shape === "gable" ? (r.ridge === "NS" ? Math.min(x - x0, x1 - x) : Math.min(z - z0, z1 - z)) : { W: x - x0, E: x1 - x, N: z - z0, S: z1 - z }[r.low!];
+    return r.eaveY + 0.2 / Math.cos(a) + Math.tan(a) * across;
+  };
+
+  it("every roof covers part of the building and every room has a floor, a hatch or a roof over it", () => {
+    expect(report.warnings.filter((w) => roofs.some((r) => w.startsWith(`${r.id}:`)))).toEqual([]);
+    expect(report.errors).toEqual([]);
+    // Without the Dining roof the rooms under it are open to the sky, and the check says which.
+    const open = withRoofs((r) => (r.id === "RF_DINING" ? null : r))
+      .report.errors.filter((e) => e.includes("nothing over it"))
+      .map((e) => e.slice(0, e.indexOf(":")));
+    expect(open.sort()).toEqual(["1F_DINING", "1F_DINING_HALLWAY", "1F_SHOWERS", "1F_SHOWER_CORRIDOR", "1F_SMALL_TOWER"]);
+  });
+
+  it("an eave off its walls, or a slope rising over a window's sill, is reported", () => {
+    // The Small Tower roof 10 u south: its south eave hangs over the Dining roof, 3 m below it.
+    const off = withRoofs((r) => (r.id === "RF_SMALL_TOWER" ? { ...r, rects: [[3.67, 185.67, 98.67, 240.33]] } : r));
+    expect(off.report.errors.join("\n")).toMatch(/RF_SMALL_TOWER: its S eave rests on nothing at 6.2 m/);
+    // The Meeting roof at 25 degrees: its ridge comes up over the sill of the 2F Tower's south window.
+    const steep = withRoofs((r) => (r.id === "RF_MEETING_W" ? { ...r, pitchDeg: 25 } : r));
+    expect(steep.report.errors.join("\n")).toMatch(/RF_MEETING_W rises to [\d.]+ m outside 2F\.o012\.glass/);
+  });
+
+  it("a pitched roof's open end is closed by steps, up to the slope: a level shot along the ridge stops at the end", async () => {
+    const sim = await Sim.create("oregon");
+    // The Dorms roof's west end, from the Dining roof: shots at heights from the eave to just under the ridge, across
+    // the gable, each stopped within the end's wall thickness (0.3 m) of its face.
+    const r = roofs.find((q) => q.id === "RF_DORMS")!;
+    const [x0, z0, , z1] = r.rects[0].map((u) => u * k);
+    for (const y of [6.3, 6.8, 7.3, 7.8]) {
+      for (const f of [0.2, 0.35, 0.5, 0.65, 0.8]) {
+        const z = z0 + f * (z1 - z0);
+        if (topAt("RF_DORMS", x0 + 0.01, z) - 0.25 < y) continue; // above the slope there
+        const hit = sim.world.castRay(new sim.R.Ray({ x: x0 - 3, y, z }, { x: 1, y: 0, z: 0 }), 10, true, undefined, QUERY_STATIC);
+        expect(hit?.timeOfImpact, `y ${y} z ${z.toFixed(2)}`).toBeGreaterThan(3 - 0.16);
+        expect(hit!.timeOfImpact, `y ${y} z ${z.toFixed(2)}`).toBeLessThan(3 + 0.31);
+      }
+    }
+  });
+
+  it("a body stands on the flat roofs and on the slopes, where it is put, without sliding", async () => {
+    const sim = await Sim.create("oregon");
+    const ctrl = sim.addPlayer("roofer", "sledge");
+    const pawn = sim.pawns.get(ctrl.possessedPawnId)!;
+    const problems: string[] = [];
+    for (const [id, xu, zu] of [
+      ["RF_DINING", 110, 200],
+      ["EXT_BALCONY", 250, 278],
+      ["RF_KIDS", 190, 180],
+      ["RF_MEETING_W", 210, 130],
+      ["RF_DORMS", 200, 245],
+      ["RF_TOWER", 250, 74],
+      ["RF_SMALL_TOWER", 40, 190],
+    ] as const) {
+      const [x, z] = [xu * k, zu * k];
+      const top = topAt(id, x, z);
+      sim.teleport(pawn.id, x, top + 0.3, z, 0);
+      for (let t = 0; t < 64; t++) sim.step(new Map());
+      const s = pawn.state;
+      const off = Math.hypot(s.x - x, s.z - z);
+      if (!s.grounded || Math.abs(s.y - top) > 0.06 || off > 0.05) problems.push(`${id}: at y ${s.y.toFixed(2)} (roof ${top.toFixed(2)}), ${off.toFixed(2)} m off, grounded ${s.grounded}`);
+    }
+    expect(problems).toEqual([]);
   });
 });

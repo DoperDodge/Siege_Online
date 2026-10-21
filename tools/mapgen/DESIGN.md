@@ -658,6 +658,15 @@ explicit metres of a pillar), with its spans sorted:
 - Walls under a roof run to its eave (section 5.3); a coverage check requires every 1F/2F/3F room to have a
   slab, soft floor, hatch, well or roof above it.
 - No roof hatches or skylights (sources agree on hatches; skylights UNVERIFIED, surfaces Q6).
+- **As built (D-097):** a record covers its storey's footprint inside its rectangles, less the storeys above and
+  the roofs listed before it, so the rectangles say which roof is which and the footprint does the snapping
+  (a gable or mono rectangle is still drawn on the walls' outer faces: its slopes start there). Every eave is at
+  a storey level, where the walls already stop, so no wall changes height. Pitched roofs overhang 0.15 m at the
+  eaves and at ends left open, and have a ceiling slab at the eave unless `ceiling: false` (RF_MEETING_W only,
+  amendment 5), where the walls under the roof are raised to it in steps. Gable-end steps are 0.2 m, not 0.5 m:
+  no taller than the ramp is thick, so a step's corner stays inside it. An end that a storey above or a roof as
+  high closes gets none. The build fails if a room has nothing over it, an eave rests on nothing at its height
+  (±5 cm), or a slope rises over the sill of a window or door beside it.
 
 ### 5.9 Exterior and boundary
 
@@ -778,7 +787,7 @@ r6calls 2026 draws an opening where Ubisoft's 2020 blueprint draws a wall; we fo
 | E7 | Kill plane: a body below `bounds.killY` dies (matches, Phase 6) or respawns at spawn 0 (lab rooms) | `game/shared/src/sim.ts`, test | 1–2 h | M2 |
 | E8 | Ladder grab from the top: standing at the top edge facing the drop, Interact attaches at the top and climbs down (D-023b). Same settled-stand rule as the bottom grab | `game/shared/src/player/movement.ts`, test | 0.5 d | M3 |
 | E9 | Greybox viewing: palette toggle (surface classes per PLAN §9.1 with SOFT_FLOOR yellow, or neutral) by material colour only; room callout labels for the camera's storey; markers drawn (level `markers` are validated but never drawn today) plus debug markers for cameras (with facing), ingredients, bombs, spawns, rappel faces; HUD line with room callout, storey and position in u; storey hide-above and a top-down plan view (orthographic); pause-menu goTo grouped by storey | `labScene.ts`, `panelView.ts` (per-panel group visibility), `labs/common/lab.ts`, `labs/oregon.ts` | 1 d | M2 (plan view, labels), M5 (markers) |
-| E10 | Free camera (lab tool): fly without collision, pawn left in place; "teleport here" on exit | `labs/common/lab.ts` | 2–3 h | M4 |
+| E10 | Free camera (lab tool): fly without collision, pawn left in place; "teleport here" on exit. As built (D-098): N, with the movement keys, Space up and C down; F puts the body on the floor under the camera | `labs/common/lab.ts` | 2–3 h | M4 |
 | — | Walk graph (tooling, not engine): column-sampled walkable nodes at 0.25 m using the Sim's Rapier queries, edges where the step is ≤ `maxStepHeight` and the capsule fits, explicit ladder edges. Used by the reachability tests; a head start for the Phase 9 navmesh | `tools/mapgen/walkgraph.ts` | 1 d | M3 |
 | — | `netsim --level oregon` (the netsim room is hard-coded to movement_lab) | `tools/netsim/run.ts`, `netsim.ts` | 1 h | M6 |
 
@@ -916,7 +925,7 @@ the fix, the commit). Sign-off is recorded there and in PROGRESS.
 | P21 | Cat Walk centre = open well over the 2F tower room, 1.0 m railing on the inner-square bands, gap at the ladder | surfaces §4.1 ring + central opening |
 | P22 | Rails: bands listed as rails get a 1.0 m rail (bodies blocked, bullets pass); every other band is a full wall | the rasters can't tell rails from walls |
 | P23 | No double-height rooms (Meeting Hall 3.0 m under the Attic and the flat Meeting W roof) | layout_notes §1 says "appears single-storey under a pitched roof": ambiguous |
-| P24 | Roofs: flat ones at the next storey level; pitched ones two ramps at 25 degrees from the eaves; hips as gables; gable ends stepped 0.5 m; walkable if ≤ 46 degrees | walkability sourced only for Dining and Meeting W (layout_notes §4.5) |
+| P24 | Roofs (D-097): flat ones at the next storey level; pitched ones ramps at 25 degrees from the eaves (Meeting W 10 degrees, under the 2F Tower window's sill; the Tower's 1F lean-to 10 too), over a ceiling at the eave (not Meeting W); the cross-hip as two crossing gables; Kids and the cross roof's corners flat; gable ends stepped 0.2 m; walkable if ≤ 46 degrees | walkability sourced only for Dining and Meeting W (layout_notes §4.5); shapes read from the roof renders |
 | P25 | Exterior: ground flat at 1F level; playable x -180..500, y -70..440 u; fences 1.2 m, vehicles 2–3 m, sheds 3 m, the construction house 6 m; boundary walls 4 m | imagery only; image extent |
 | P26 | Kill plane 30 m below the basement floor (killY -33.2 m); lab rooms respawn | safety |
 | P27 | Attacker spawns: 5 points within 3 m of each insertion point, facing the building | insertion points exact (r6calls), spreads unknown |

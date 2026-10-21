@@ -10,6 +10,7 @@ import type { Floor } from "./research.js";
 import { exteriorPartSchema, layoutSchema, wallsPartSchema, type ExteriorPart, type Layout, type WallsPart } from "./schema.js";
 import { frameDiagnostics, type HatchLanding } from "./diagnostics.js";
 import { compileFloors, type HatchReport } from "./floors.js";
+import { checkRoofs, compileRoofs } from "./roofs.js";
 import { compileRooms } from "./rooms.js";
 import { checkStairs, compileStairs, stairKeepOut, stairRails } from "./stairs.js";
 import { compileWalls, type Solid, type Zone } from "./walls.js";
@@ -91,9 +92,11 @@ export function compile(inputs: Inputs): Compiled {
   // ---- Rooms (seeds, splits) and floors (the ground, slabs, soft floors, hatches, wells, stairwells).
   const roomsOut = compileRooms(layout, fr, wallsOut.solids, stairKeepOut(layout, stairsOut, rails));
   const floorsOut = compileFloors(layout, fr, wallsOut.solids, roomsOut, exterior.playable, stairsOut.holes);
+  // ---- Roofs: slabs at the eaves, ramps, and the steps that close the ends.
+  const roofsOut = compileRoofs(layout, roomsOut, wallsOut.solids);
   const panelKind = new Set(["REINFORCEABLE", "SOFT_FLOOR", "HATCH"]);
   const byKind = (s: Solid) => (panelKind.has(s.surface) ? 1 : s.surface === "BARRICADE" || s.surface === "WINDOW" || /\.(head|sill)$/.test(s.id) ? 2 : 0);
-  const solids: Solid[] = [...wallsOut.solids, ...floorsOut.solids, ...stairsOut.solids, ...rails].sort((p, q) => byKind(p) - byKind(q) || (p.id < q.id ? -1 : p.id > q.id ? 1 : 0));
+  const solids: Solid[] = [...wallsOut.solids, ...floorsOut.solids, ...stairsOut.solids, ...rails, ...roofsOut.solids].sort((p, q) => byKind(p) - byKind(q) || (p.id < q.id ? -1 : p.id > q.id ? 1 : 0));
 
   // ---- Play-area edge and kill plane (placeholders P25, P26).
   const [px0, py0, px1, py1] = exterior.playable.map((u) => u * k);
@@ -166,6 +169,7 @@ export function compile(inputs: Inputs): Compiled {
     },
     storeys,
     stairs: stairsOut.flights.map((f) => ({ ...f, start: v3(f.start) })),
+    ramps: roofsOut.ramps,
     ladders: stairsOut.ladders.map((l) => ({ ...l, base: v3(l.base) })),
     rooms: roomsOut.rooms.map((r) => ({ id: r.id, callout: r.callout, storey: r.storey, rects: r.rects, anchor: v3(r.anchor) })),
     zones: zones.map((z) => ({ id: z.id, kind: z.kind, boxes: z.boxes.map((b) => ({ center: v3(b.center), size: v3(b.size) })) })),
@@ -173,8 +177,15 @@ export function compile(inputs: Inputs): Compiled {
   // The engine's own schema has the last word on shape.
   levelSchema.parse(level);
   const checks = checkLevel(level.solids);
-  checks.errors.push(...roomsOut.errors, ...floorsOut.errors, ...stairsOut.errors, ...checkStairs(layout, stairsOut, level.solids, level.rooms));
-  const counts: Record<string, number> = { solids: level.solids.length, spawns: spawns.length, zones: zones.length, rooms: roomsOut.rooms.length };
+  checks.errors.push(
+    ...roomsOut.errors,
+    ...floorsOut.errors,
+    ...stairsOut.errors,
+    ...roofsOut.errors,
+    ...checkStairs(layout, stairsOut, level.solids, level.rooms),
+    ...checkRoofs(layout, roofsOut.roofs, level.solids, level.rooms),
+  );
+  const counts: Record<string, number> = { solids: level.solids.length, spawns: spawns.length, zones: zones.length, rooms: roomsOut.rooms.length, roofs: roofsOut.roofs.length, ramps: roofsOut.ramps.length };
   for (const [floor, c] of Object.entries(floorsOut.counts)) {
     counts[`slabs ${floor}`] = c.slabs;
     counts[`tiles ${floor}`] = c.tiles;
@@ -191,5 +202,5 @@ export function compile(inputs: Inputs): Compiled {
       .filter((l) => l.over < 1 || l.clearM < 0.3)
       .map((l) => (l.over < 1 ? `${l.hatch}: only ${Math.round(l.over * 100)}% over ${l.bottom}` : `${l.hatch} lands ${l.clearM} m from a wall of ${l.bottom} (under 0.3 m)`)),
   );
-  return { level, report: { ...checks, warnings: [...wallsOut.warnings, ...roomsOut.warnings, ...floorsOut.warnings, ...landWarnings], counts, openings, hatches: floorsOut.hatches, frames: frameReport } };
+  return { level, report: { ...checks, warnings: [...wallsOut.warnings, ...roomsOut.warnings, ...floorsOut.warnings, ...roofsOut.warnings, ...landWarnings], counts, openings, hatches: floorsOut.hatches, frames: frameReport } };
 }

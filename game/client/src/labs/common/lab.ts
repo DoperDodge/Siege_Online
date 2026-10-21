@@ -326,6 +326,61 @@ export async function startLab(o: LabOptions): Promise<void> {
     return armed && (!net || net.session.ready) ? { slot: p.state.slot, equipping: p.state.wAct === WeaponAct.Equip, zoom: p.loadout?.weapons[p.state.slot].ads.zoom ?? 1 } : null;
   };
 
+  // ------------------------------------------------------------------ free camera (a lab tool, DESIGN E10)
+
+  /**
+   * The free camera: the view flies on its own and through anything, while your body stands where you left it
+   * (it gets no input). N goes back to your body; the use key puts your body on the floor under the camera.
+   */
+  let freeCam: THREE.Vector3 | null = null;
+  /** Metres a second, and how many times faster with sprint held. */
+  const FLY_MPS = 8;
+  const FLY_FAST = 4;
+
+  function setFreeCam(on: boolean, putBody = false) {
+    const p = sim.pawns.get(ctrl.possessedPawnId);
+    if (on === (freeCam !== null) || !p) return;
+    if (on) {
+      freeCam = camera.position.clone();
+      flash(`Free camera: N goes back to your body, ${keyLabel(settings.keys.interact)} puts it here`, "info");
+    } else {
+      const at = freeCam!;
+      freeCam = null;
+      if (putBody) {
+        // On the floor under the camera; over nothing, an eye's height below it.
+        const hit = sim.world.castRay(new sim.R.Ray({ x: at.x, y: at.y, z: at.z }, { x: 0, y: -1, z: 0 }), 200, true, undefined, QUERY_STATIC);
+        const y = hit ? at.y - hit.timeOfImpact : at.y - data.movement.stance.stand.eye;
+        const yawDeg = controls.yaw / DEG;
+        if (net) net.send(encodeLabTool({ kind: "teleport", x: at.x, y, z: at.z, yawDeg }));
+        else sim.teleport(ctrl.possessedPawnId, at.x, y, at.z, yawDeg);
+        controls.setView(controls.yaw, controls.pitch);
+        snapshotAll();
+      } else controls.setView(p.state.yaw, p.state.pitch);
+      controls.resetStance(putBody ? Stance.Stand : p.state.stance);
+    }
+    if (!$(".pause").classList.contains("hidden")) renderPause();
+  }
+
+  /** Fly: the movement keys along the view, the vault key up and crouch down. */
+  function flyFreeCam(dt: number) {
+    if (!freeCam || controls.isBlocked()) return;
+    const h = (a: Action) => (controls.isHeld(a) ? 1 : 0);
+    const [forward, right, up] = [h("forward") - h("back"), h("right") - h("left"), h("vault") - h("crouch")];
+    if (!forward && !right && !up) return;
+    const look = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(controls.pitch, controls.yaw, 0, "YXZ"));
+    const side = new THREE.Vector3(1, 0, 0).applyEuler(new THREE.Euler(0, controls.yaw, 0, "YXZ"));
+    const move = look.multiplyScalar(forward).add(side.multiplyScalar(right));
+    move.y += up;
+    freeCam.add(move.normalize().multiplyScalar(FLY_MPS * (controls.isHeld("sprint") ? FLY_FAST : 1) * dt));
+  }
+
+  /** In the free camera your body gets no input: it stands as it was, looking where it looked. */
+  function still(input: InputCmd): InputCmd {
+    const p = sim.pawns.get(ctrl.possessedPawnId);
+    if (!freeCam || !p) return input;
+    return { ...input, forward: 0, strafe: 0, buttons: 0, yaw: p.state.yaw, pitch: p.state.pitch, stance: p.state.stance, lean: 0 };
+  }
+
   const MODE_KEY: Partial<Record<Action, "crouchMode" | "proneMode" | "leanMode" | "adsMode">> = {
     crouch: "crouchMode",
     prone: "proneMode",
@@ -414,6 +469,13 @@ export async function startLab(o: LabOptions): Promise<void> {
       { passive: true },
     );
   }
+
+  hooks.keys.set("KeyN", () => setFreeCam(freeCam === null));
+  addEventListener("keydown", (e) => {
+    if (!freeCam || e.code !== settings.keys.interact || e.repeat || controls.isBlocked()) return;
+    e.preventDefault();
+    setFreeCam(false, true);
+  });
 
   // ------------------------------------------------------------------ UI actions
 
@@ -632,7 +694,7 @@ export async function startLab(o: LabOptions): Promise<void> {
         <button data-view="palette">${storeyView.palette === "greybox" ? "Neutral palette (P)" : "Surface colours (P)"}</button></div></section>`
           : ""
       }
-      <section><h3>Lab tools</h3><div class="goto"><button class="refill">Refill ammo</button><button class="hurt-me">Take 30 damage</button><button class="down-me">Down me</button>${hooks.tools.map((t, i) => `<button data-tool="${i}">${t.label}</button>`).join("")}</div>
+      <section><h3>Lab tools</h3><div class="goto"><button class="free-cam">${freeCam ? "Back to your body (N)" : "Free camera (N)"}</button><button class="refill">Refill ammo</button><button class="hurt-me">Take 30 damage</button><button class="down-me">Down me</button>${hooks.tools.map((t, i) => `<button data-tool="${i}">${t.label}</button>`).join("")}</div>
         <p class="note">Down but not out: you crawl and bleed out in 60 s (30 s while crawling); a teammate holds ${keyLabel(settings.keys.interact)} for 4 s to revive you with 20 HP. A second down kills.</p></section>
       <section><h3>Controls</h3>
         <label>Sensitivity <input type="range" min="0.01" max="0.4" step="0.005" value="${settings.sensitivity}" data-num="sensitivity"><output>${settings.sensitivity.toFixed(3)}</output></label>
@@ -650,6 +712,10 @@ export async function startLab(o: LabOptions): Promise<void> {
       <p class="note">Press <kbd>F1</kbd> for the key list and what to try.</p>`;
     pause.querySelector(".resume")?.addEventListener("click", resume);
     pause.querySelector(".refill")!.addEventListener("click", labRefill);
+    pause.querySelector(".free-cam")!.addEventListener("click", (e) => {
+      setFreeCam(freeCam === null);
+      resume(e);
+    });
     pause.querySelectorAll<HTMLButtonElement>("[data-tool]").forEach((b) => b.addEventListener("click", () => hooks.tools[Number(b.dataset.tool)].run()));
     pause.querySelector(".hurt-me")!.addEventListener("click", () => labHurt(30));
     pause.querySelector(".down-me")!.addEventListener("click", () => labHurt(possessed().state.hp || 1));
@@ -755,6 +821,7 @@ export async function startLab(o: LabOptions): Promise<void> {
         ${row(`<kbd>${keyLabel(k.melee)}</kbd>`, "Knife: kills anyone in reach in front of you, standing or down (0.6 s a swing)")}
         ${row(`Hold <kbd>${keyLabel(k.interact)}</kbd>`, "Revive a downed teammate (4 s, facing them)")}
         ${hooks.help.map(([keys, what]) => row(keys, what)).join("")}
+        ${row("<kbd>N</kbd>", `Free camera: fly through anything (${keyLabel(k.forward)}${keyLabel(k.left)}${keyLabel(k.back)}${keyLabel(k.right)} along the view, ${keyLabel(k.vault)} up, ${keyLabel(k.crouch)} down, ${keyLabel(k.sprint)} faster) while your body stays where it is; <kbd>N</kbd> goes back to it, <kbd>${keyLabel(k.interact)}</kbd> puts it on the floor under the camera`)}
         ${row("<kbd>F3</kbd> / <kbd>F4</kbd>", "Hitboxes / third-person view")}
         ${row("<kbd>F8</kbd>", "Stats: frame rate, frame time, 1% low, work time, draw calls (<code>?stats</code> in the link shows them from the start)")}
         ${row("<kbd>Esc</kbd>", "Pause: settings, operator, go-to menu")}
@@ -816,14 +883,14 @@ export async function startLab(o: LabOptions): Promise<void> {
     if (net) {
       const sampled = controls.sample(++seq);
       // Test scripts add buttons to what the controls sample (a click still fires while a script holds ADS).
-      const input = scripted ? { ...sampled, ...scripted, buttons: sampled.buttons | (scripted.buttons ?? 0) } : sampled;
+      const input = still(scripted ? { ...sampled, ...scripted, buttons: sampled.buttons | (scripted.buttons ?? 0) } : sampled);
       // Predicts locally and sends the input; a shot claims the frame that was on screen when you clicked.
       const sent = net.session.tick(input, clickViewTick ?? undefined);
       if (sent) claims.set(sent.seq & 0xffff, { viewTick: net.session.lastViewTick, weapon: heldWeapon() });
       if (claims.size > 512) claims.delete(claims.keys().next().value!);
       clickViewTick = null;
     } else {
-      const input = script ? autoInput(++seq) : controls.sample(++seq);
+      const input = still(script ? autoInput(++seq) : controls.sample(++seq));
       sim.step(new Map([[ctrl.id, input]]));
       onWeaponEvents(sim.events);
     }
@@ -834,8 +901,8 @@ export async function startLab(o: LabOptions): Promise<void> {
     if (!p || !v) return; // online, between bodies (the server's new one hasn't arrived yet)
     if (nowViewed !== viewedId) {
       viewedId = nowViewed;
-      controls.setView(v.state.yaw, v.state.pitch);
-    } else {
+      if (!freeCam) controls.setView(v.state.yaw, v.state.pitch);
+    } else if (!freeCam) {
       controls.syncView(v.state.yaw, v.state.pitch, tickKick);
     }
     prompt = sim.prompt(ctrl.id);
@@ -855,6 +922,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     controls.limits = proneView
       ? { pitchMin: mv.stance.pronePitchMinDeg * DEG, pitchMax: mv.stance.pronePitchMaxDeg * DEG, maxYawStep: mv.stance.proneTurnRateDeg * DEG * DT }
       : { pitchMin: mv.look.pitchMinDeg * DEG, pitchMax: mv.look.pitchMaxDeg * DEG, maxYawStep: null };
+    if (freeCam) controls.limits = { pitchMin: -89 * DEG, pitchMax: 89 * DEG, maxYawStep: null };
     if (p.state.lastFallDamage > 0) flash(`-${p.state.lastFallDamage} HP (fall)`, "bad");
     observe(p);
     if (net) notePredicted();
@@ -920,7 +988,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     const renderTick = net ? net.session.frame() : 0;
     shownRenderTick = renderTick;
     /** Looking from outside your body: third person, or a map's plan view. */
-    const outside = thirdPerson || storeyView?.plan === true;
+    const outside = thirdPerson || storeyView?.plan === true || freeCam !== null;
     syncPawnViews();
     for (const pawn of sim.pawns.values()) {
       const v = pawnViews.get(pawn.id)!;
@@ -947,13 +1015,19 @@ export async function startLab(o: LabOptions): Promise<void> {
     updateLasers();
 
     const rs = interpolated(viewed, alpha);
-    // A map follows the body you look through: its storey (and that storey's light), the plan view over it.
-    if (storeyView?.follow(rs.x, rs.y, rs.z, controls.yaw, elapsed)) renderer.shadowMap.needsUpdate = true;
+    flyFreeCam(elapsed);
+    // A map follows the body you look through (or the free camera): its storey (and that storey's light), the
+    // plan view over it.
+    const [vx, vy, vz] = freeCam ? [freeCam.x, freeCam.y - data.movement.stance.stand.eye, freeCam.z] : [rs.x, rs.y, rs.z];
+    if (storeyView?.follow(vx, vy, vz, controls.yaw, elapsed)) renderer.shadowMap.needsUpdate = true;
     if (storeyView) viewmodel.setLight(storeyView.light());
-    whereHud?.update(now, storeyView?.storey ?? 0, rs.x, rs.z);
+    whereHud?.update(now, storeyView?.storey ?? 0, vx, vz);
     const fov = aim(viewed, rs);
     const eye = eyePose(data.movement, data.hitboxes, { ...rs, yaw: controls.yaw });
-    if (thirdPerson) {
+    if (freeCam) {
+      camera.position.copy(freeCam);
+      camera.rotation.set(controls.pitch, controls.yaw, 0);
+    } else if (thirdPerson) {
       const back = new THREE.Vector3(0, 0, 1).applyEuler(new THREE.Euler(controls.pitch, controls.yaw, 0, "YXZ"));
       camera.position.set(eye.pos[0] + back.x * 3 + Math.cos(controls.yaw) * 0.5, eye.pos[1] + back.y * 3 + 0.4, eye.pos[2] + back.z * 3 - Math.sin(controls.yaw) * 0.5);
       camera.rotation.set(controls.pitch, controls.yaw, 0);
@@ -973,7 +1047,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     const aimed = inHand !== null && viewmodel.aim > 0.9;
     crosshair.update({
       gapPx: held ? spreadGapPx(spreadCone(held, rs), fov, view.clientHeight) : 0,
-      noTicks: rs.mode === PawnMode.Dead || ctrl.shellCam || ctrl.swapPhase !== 0 || thirdPerson,
+      noTicks: rs.mode === PawnMode.Dead || ctrl.shellCam || ctrl.swapPhase !== 0 || thirdPerson || freeCam !== null,
       aimed,
       reticle: viewmodel.reticle,
       zoomed: aimed && inHand!.ads.zoom > 1,
@@ -1154,6 +1228,17 @@ export async function startLab(o: LabOptions): Promise<void> {
         else sim.teleport(ctrl.possessedPawnId, x, y, z, yawDeg);
         controls.setView(yawDeg * DEG, 0);
       },
+      /**
+       * The free camera (E10): on at a pose (metres, yaw and pitch in degrees), or off (null; `putBody` puts your
+       * body on the floor under the camera).
+       */
+      fly: (at: [number, number, number, number, number] | null, putBody = false) => {
+        if (!at) return setFreeCam(false, putBody);
+        setFreeCam(true);
+        freeCam?.set(at[0], at[1], at[2]);
+        controls.yaw = at[3] * DEG;
+        controls.pitch = at[4] * DEG;
+      },
       fire: () => fire(),
       /** Lab tool: hurt your own body (the whole of its health downs it). */
       hurt: (amount: number) => labHurt(amount),
@@ -1218,6 +1303,7 @@ export async function startLab(o: LabOptions): Promise<void> {
         return {
           hitboxes: showHitboxes,
           thirdPerson,
+          freeCam: freeCam ? [freeCam.x, freeCam.y, freeCam.z] : null,
           storeys: def.storeys.map((s) => s.id),
           rooms: def.rooms.map((r) => ({ id: r.id, callout: r.callout, storey: r.storey, rects: r.rects, anchor: r.anchor })),
           levelPlan: def.plan ?? null,

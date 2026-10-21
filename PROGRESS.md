@@ -21,6 +21,19 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
 | M7 Your corrections, round by round, to sign-off | ⏳ |
 | M8 Rappel | ⏳ |
 
+### What's done in M4 so far
+- **Roofs on the whole building (D-097):** 17 roofs with the research's names. Pitched where the roof renders
+  show a ridge (the Tower, the Tower's two west parts, the brown cross roof over Dorms, Armory, Attic and Master,
+  the Small Tower, the Meeting roof west of the Attic), flat where they don't (the Dining roof, the Kids roof, the
+  Meeting roof east of the Attic, the Balcony, the Garage strip, the corners round the cross). Every flat roof and
+  slope is walkable; the gable ends are closed. The 2F rooms have a ceiling at 6.0 m, the Meeting Hall and
+  Kitchen Corridor look up into their roof. Onto the roofs: the Office's north window and the Dorms' big window
+  onto the Dining roof, the Master's door onto the Balcony, the Armory Corridor's and 2F Tower's windows onto the
+  Meeting roof. The build now fails if a room has nothing over it or a roof stands on nothing.
+- **Free camera (D-098):** press N in any lab and fly (WASD along the view, Space up, C down, Shift faster)
+  while your body stays put; N goes back to it, F puts it on the floor under the camera. Also in the pause
+  menu's Lab tools.
+
 ### What's done since M3: your stairs walk (D-095)
 - **The White Stairs** now go up east, both flights, one over the other, and each fills the stairwell wall to
   wall. From the basement you arrive on the 1F landing by the Security Corridor door. The flight to 2F starts in
@@ -209,8 +222,8 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
 - The Bunker's stairs (S5) and the outside tower stairs come with the outside (M4, D-091).
 - Ubisoft's 2F blueprint seems to show the 1F workshop through the floor inside the 2F Small Tower's L-shaped
   wall. We build a floor and a full wall there (open question 22).
-- No roofs yet (M4): wherever no storey stands above (1F's single-storey rooms, most of 2F, the Cat Walk) you
-  see the sky, and 2F's walls stop at 3.0 m. The ground outside is bare.
+- Every roof's shape and pitch is our reading of the roof renders (open question 24). The ground outside is still
+  bare (the rest of M4).
 - The basement's frame is still an assumption (P2, open question 10), now the 2.4% perspective step; hatch H1
   moved 1.07 m east to land inside B Electric under it (open question 15).
 - Behind the 1F White Stairs, a sealed 3.6 m² strip has no room (open question 19b).
