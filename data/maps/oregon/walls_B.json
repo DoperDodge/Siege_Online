@@ -7,7 +7,7 @@
   {"id": "B.w029", "axis": "H", "at": 80.41, "span": [254.35, 266.35], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w029"], "src": "raster", "conf": "high", "_unverified": []},
   {"id": "B.w011", "axis": "H", "at": 89.23, "span": [254.35, 326.32], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w011"], "src": "raster", "conf": "high", "_unverified": []},
   {"id": "B.w010", "axis": "H", "at": 90.29, "span": [209.9, 235.3], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w010"], "src": "raster", "conf": "high", "_unverified": []},
-  {"id": "B.w021", "axis": "H", "at": 112.33, "span": [322.09, 353.84], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w021"], "src": "raster", "conf": "low", "_unverified": []},
+  {"id": "B.w021", "axis": "H", "at": 112.33, "span": [322.09, 364.35], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w021"], "src": "hand", "conf": "low", "note": "The Bunker passage's north wall, run on past the image's edge (x 361.2) to the top of S5 (the research: 322–352+): the passage goes on east beyond what r6calls draws (D-099)", "_unverified": ["span"]},
   {"id": "B.w020", "axis": "H", "at": 114.45, "span": [255.41, 285.4], "weight": "int", "kind": "wall", "from": ["0-w020a", "0-w020b", "0-w020c"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
    {"kind": "SOFT", "id": "SW-B-04", "at": [257.94, 282.8], "sections": 2, "research": "surfaces §2: B_ELECTRIC | B_BOILER", "from": ["0-w020b"], "_unverified": ["sections"]}
   ]},
@@ -17,7 +17,7 @@
    {"kind": "DOOR", "id": "B.o001", "at": [263.52, 272.34], "research": "layout_notes §6: B_ELECTRIC | B_SUPPLY (DOOR)", "from": ["0-o001"], "_unverified": []}
   ]},
   {"id": "B.w003", "axis": "H", "at": 138.62, "span": [315.74, 325.61], "weight": 1.25, "kind": "wall", "spans": [], "from": ["0-w003"], "src": "raster", "conf": "medium", "_unverified": []},
-  {"id": "B.w013", "axis": "H", "at": 140.73, "span": [323.14, 361.24], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w013"], "src": "raster", "conf": "low", "_unverified": []},
+  {"id": "B.w013", "axis": "H", "at": 140.73, "span": [323.14, 364.35], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w013"], "src": "hand", "conf": "low", "note": "The Bunker passage's south wall, run on past the image's edge to the top of S5, as B.w021 (D-099)", "_unverified": ["span"]},
   {"id": "B.w023", "axis": "H", "at": 156.26, "span": [190.15, 214.14], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w023"], "src": "raster", "conf": "high", "_unverified": []},
   {"id": "B.w022", "axis": "H", "at": 179.71, "span": [234.95, 264.23], "weight": "int", "kind": "wall", "spans": [], "from": ["0-w022"], "src": "raster", "conf": "high", "_unverified": []},
   {"id": "B.w019", "axis": "H", "at": 184.13, "span": [282.93, 319.97], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w019"], "src": "raster", "conf": "high", "_unverified": []},

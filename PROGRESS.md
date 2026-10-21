@@ -33,6 +33,18 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
 - **Free camera (D-098):** press N in any lab and fly (WASD along the view, Space up, C down, Shift faster)
   while your body stays put; N goes back to it, F puts it on the floor under the camera. Also in the pause
   menu's Lab tools.
+- **The outside (D-099):** 79 items read off the r6calls background: the greenhouse, sheds, silos and tanks,
+  the garden, the Junkyard's trailers and tyre walls, the bus, vans and cars, fences and low walls (1.0 m, you
+  vault them), and the construction site (the house's shell, the excavator, the generator, lumber). The
+  **Bunker stairs** go down from the ground east of the building, in a sunken passage, to the Bunker
+  Entrance's east door. The **Tower's outside stairs** go up from beside the 1F Tower's east door to the
+  Meeting roof east of the Attic. The **Balcony** has its railing.
+- **Attacker spawns (D-100):** five at each insertion point (Junkyard, Street, Construction), facing the
+  building. Go to takes you to each.
+- **Checks:** every room has something over it, every eave rests on a wall, no roof covers a window's sill;
+  the three spawn groups, the Bunker passage and the Meeting roof are one walkable piece of outside; a body
+  walking at the play area's edge stops there; the browser test visits each spawn and drops you on the
+  Dining roof from the free camera.
 
 ### What's done since M3: your stairs walk (D-095)
 - **The White Stairs** now go up east, both flights, one over the other, and each fills the stairwell wall to
@@ -219,11 +231,10 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
   spot for the 2F Small Tower is on it. Both images show that spot open to the workshop below (open question 22).
 - In the basement, the White Stairs stand 0.15–0.3 m off their stairwell's walls, and the Tower Stairs 0.95 m off
   the east one (open question 23b). On 2F, the floor over the Armory Stairs' foot is cut off by the hole (23a).
-- The Bunker's stairs (S5) and the outside tower stairs come with the outside (M4, D-091).
 - Ubisoft's 2F blueprint seems to show the 1F workshop through the floor inside the 2F Small Tower's L-shaped
   wall. We build a floor and a full wall there (open question 22).
-- Every roof's shape and pitch is our reading of the roof renders (open question 24). The ground outside is still
-  bare (the rest of M4).
+- Every roof's shape and pitch is our reading of the roof renders (open question 24), and every outside item is
+  read off the background, ±0.75 m (open question 25): where the Tower's outside stairs lead is a guess.
 - The basement's frame is still an assumption (P2, open question 10), now the 2.4% perspective step; hatch H1
   moved 1.07 m east to land inside B Electric under it (open question 15).
 - Behind the 1F White Stairs, a sealed 3.6 m² strip has no room (open question 19b).

@@ -679,6 +679,12 @@ explicit metres of a pillar), with its spans sorted:
   excavator is solid (map_features §7).
 - **Boundary**: four `bodiesOnly` walls (4 m) around `playable` (the image extent guess x -180..500,
   y -70..440 u) and `bounds.killY` 30 m under the basement floor (-33.2 m) for anything that still falls.
+- **As built (D-099):** `exterior.ts` compiles each item: a box, fence or rail turns `yawDeg` about its middle
+  (the LevelDef solids' yaw); a ramp or steps face a quarter. 79 items; fences and low walls 1.0 m and vaultable
+  (P25's 1.2 m is over the 1.1 m vault). S5 and S6 are ordinary stair runs to and from `EXT` (the ground's level):
+  the ground opens over S5 where a climber's head needs it, rails round it, and the passage's floor is an item (it
+  is outside the basement's footprint); S6 climbs in the open (no floor to cut) to a landing item on the 1F east
+  wall's top, beside the Meeting roof east of the Attic. The plans leave the outside's items off.
 
 ### 5.10 Props
 
@@ -920,15 +926,15 @@ the fix, the commit). Sign-off is recorded there and in PROGRESS.
 | P16 | Soft floors: each to the walls of the rooms the research names, Ubisoft's five larger extents (r6calls' as `alt`); SF-2F-10 Trophy and SF-2F-11 White Stairs landing soft (amendment 7, D-078); tiles ≤ 4 x 4 m in 0.4 m joist spacings | blueprint-only areas (surfaces Q5); tiles are an engine budget |
 | P17 | Hatches: research rectangles in the 1F frame (about 1.6 m square); H5 only east of the Attic wall; H1 7.1 u east of r6calls' square, inside B Electric (D-095) | surfaces §5 and Q11 |
 | P18 | Everything not in surfaces §2 is HARD (Kitchen NE partition and 2F annex partition included); 1F floor HARD apart from H1–H3; roofs HARD; no skylights | surfaces §1, §4.1, §6 |
-| P19 | Stairs (as built, D-091, D-095): S1 switchback up N turning right, B → 1F under 1F → 2F; S2 two straight flights stacked, up E, wall to wall; S3 two staircases stacked one over the other, B → 1F and 1F → 2F (Ulo, 2026-10-20), straight, up N, wall to wall (Ulo, 2026-10-21); S4 quarter-turn, 2.1 m wide, up N through the passage west of 1F.w091, then E along the Small Tower corner's north wall onto the 2F walkway (Ulo, D-096); S5 straight flight in the Bunker passage to the B east door and the exterior tower stairs up to a 2F-level landing (M4); risers ≤ 0.2 m (16 per 3.2 m), tread 0.3 m (a straight run fills its shaft), headroom 2.0 m | footprints only (layout_notes §5.1, map_features §5); no image shows S4's treads |
+| P19 | Stairs (as built, D-091, D-095): S1 switchback up N turning right, B → 1F under 1F → 2F; S2 two straight flights stacked, up E, wall to wall; S3 two staircases stacked one over the other, B → 1F and 1F → 2F (Ulo, 2026-10-20), straight, up N, wall to wall (Ulo, 2026-10-21); S4 quarter-turn, 2.1 m wide, up N through the passage west of 1F.w091, then E along the Small Tower corner's north wall onto the 2F walkway (Ulo, D-096); S5 straight, up E in the Bunker passage from a 1.2 m landing at the B east door to the ground, wall to wall; S6 (the Tower's outside stairs) straight, up S along the Tower's east wall to a landing on the 1F east wall's top, beside the Meeting roof (D-099); risers ≤ 0.2 m (16 per 3.2 m), tread 0.3 m (a straight run fills its shaft), headroom 2.0 m | footprints only (layout_notes §5.1, map_features §5); no image shows S4's treads |
 | P20 | Ladder L1 on the Cat Walk well's north edge, at the rail's gap ((284.17, 57.68) in the 3F frame), from the 2F floor to the Cat Walk, 0.6 m wide, facing N | ±12 u position uncertainty (data inventory) |
 | P21 | Cat Walk centre = open well over the 2F tower room, 1.0 m railing on the inner-square bands, gap at the ladder | surfaces §4.1 ring + central opening |
 | P22 | Rails: bands listed as rails get a 1.0 m rail (bodies blocked, bullets pass); every other band is a full wall | the rasters can't tell rails from walls |
 | P23 | No double-height rooms (Meeting Hall 3.0 m under the Attic and the flat Meeting W roof) | layout_notes §1 says "appears single-storey under a pitched roof": ambiguous |
 | P24 | Roofs (D-097): flat ones at the next storey level; pitched ones ramps at 25 degrees from the eaves (Meeting W 10 degrees, under the 2F Tower window's sill; the Tower's 1F lean-to 10 too), over a ceiling at the eave (not Meeting W); the cross-hip as two crossing gables; Kids and the cross roof's corners flat; gable ends stepped 0.2 m; walkable if ≤ 46 degrees | walkability sourced only for Dining and Meeting W (layout_notes §4.5); shapes read from the roof renders |
-| P25 | Exterior: ground flat at 1F level; playable x -180..500, y -70..440 u; fences 1.2 m, vehicles 2–3 m, sheds 3 m, the construction house 6 m; boundary walls 4 m | imagery only; image extent |
+| P25 | Exterior (D-099): ground flat at 1F level; playable x -210..535, y -70..490 u; fences and low walls 1.0 m (vaultable), vehicles 1.5–2.5 m, sheds and trailers 3 m, silos 8 m, the construction house a 3 m shell on a 0.3 m floor (its frame's 6 m and upper floor not built); boundary walls 4 m | imagery only; image extent |
 | P26 | Kill plane 30 m below the basement floor (killY -33.2 m); lab rooms respawn | safety |
-| P27 | Attacker spawns: 5 points within 3 m of each insertion point, facing the building | insertion points exact (r6calls), spreads unknown |
+| P27 | Attacker spawns (D-100): 5 per insertion point, the point itself and four in a line across the way to the building, 1.2 m apart, facing the building's middle | insertion points exact (r6calls), spreads unknown |
 | P28 | Defender spawns: 5 per site pair over the two site rooms | none in any source |
 | P29 | Lab spawn 0 just outside the Main Entrance | lab convenience, not a Siege fact |
 | P30 | Bomb objects at the r6calls marker centres; plant zone = site rooms minus 0.5 m | icon anchors; Kitchen shared or not (common_setups SQ3); "no-drop zone" size unknown (round_flow §5) |

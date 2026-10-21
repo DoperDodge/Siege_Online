@@ -340,6 +340,45 @@ try {
     result.checks.downTheLadderFromTheTop =
       /to climb/.test(atTop) && Math.abs(below.y - ladder.base[1]) < 0.05 && below.hp === onTop.hp && belowHud.ok && belowHud.line.startsWith(`${calloutOf("2F_TOWER")} · 2F · `);
   }
+
+  // ---- the outside (M4): Go to each attacker spawn group puts you on the ground outside the building, facing it;
+  // the free camera flies up over the roofs, and F puts you on the Dining roof under it.
+  const spawnSpots = lvl.spawns.filter((sp, i, all) => sp.side === "attack" && all.findIndex((o) => o.group === sp.group) === i);
+  await menu(off, true);
+  const gotoEntries = await off.evaluate(() => [...document.querySelectorAll(".pause [data-goto]")].map((b) => [b.dataset.goto, b.textContent]));
+  await menu(off, false);
+  result.offline.spawns = [];
+  for (const sp of spawnSpots) {
+    const entry = gotoEntries.find(([, text]) => text === `Attacker spawn ${sp.group.replace("_", " ")}`);
+    if (!entry) {
+      result.offline.spawns.push({ group: sp.group, entry: false });
+      continue;
+    }
+    await menu(off, true);
+    await off.locator(`.pause [data-goto="${entry[0]}"]`).click();
+    await menu(off, false);
+    await sleep(1200);
+    const at = await own(off);
+    const off0 = Math.hypot(at.x - sp.pos[0], at.z - sp.pos[2]);
+    const inside = lvl.rooms.some((r) => r.rects.some(([x0, z0, x1, z1]) => at.x >= x0 && at.x <= x1 && at.z >= z0 && at.z <= z1));
+    result.offline.spawns.push({ group: sp.group, at: [at.x, at.y, at.z], offM: off0, grounded: at.grounded, inside });
+    await off.screenshot({ path: shot(`oregon-spawn-${sp.group.toLowerCase()}.png`) });
+  }
+  result.checks.attackerSpawnsStandOutside =
+    result.offline.spawns.length === 3 && result.offline.spawns.every((x) => x.at && x.offM < 0.1 && x.grounded && Math.abs(x.at[1]) < 0.05 && !x.inside);
+  const dining = [110 * 0.15, 10, 200 * 0.15];
+  await off.evaluate((p) => window.__lab.fly([p[0], p[1], p[2], 0, -60]), dining);
+  await sleep(800);
+  const flying = await view(off);
+  await off.screenshot({ path: shot("oregon-free-camera.png") });
+  await off.keyboard.press("KeyF");
+  await sleep(1200);
+  const dropped = await own(off);
+  result.offline.freeCamera = { camera: flying.freeCam, body: [dropped.x, dropped.y, dropped.z], after: (await view(off)).freeCam };
+  result.checks.freeCameraPutsYouOnTheDiningRoof =
+    Array.isArray(flying.freeCam) && Math.abs(flying.freeCam[1] - 10) < 0.01 && (await view(off)).freeCam === null &&
+    Math.abs(dropped.x - dining[0]) < 0.1 && Math.abs(dropped.z - dining[2]) < 0.1 && Math.abs(dropped.y - 3.2) < 0.05 && dropped.grounded;
+  await off.screenshot({ path: shot("oregon-dining-roof.png") });
   await off.close();
 
   // ---- shadows on: a lost and restored WebGL context draws the shadow map again

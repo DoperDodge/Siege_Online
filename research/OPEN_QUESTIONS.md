@@ -362,6 +362,16 @@ the outside come next.
     - (c) The Meeting Hall and Kitchen Corridor look up into the Meeting roof (DESIGN amendment 5), whose eave is
       at the 2F floor. Is that what you see, or a flat ceiling at 3 m like the rest of 1F?
     - (d) The Dining roof's strip south of the Small Tower: part of the flat roof, or a sloped one of its own?
+25. **The outside (P25, D-099):** every item is read off the r6calls background, ±5 u.
+    - (a) The staircase outside the 1F Tower's east door (layout_notes question 5): we built it going up south
+      along the Tower's east wall to a landing on the 1F east wall, where you step onto the Meeting roof east of
+      the Attic. Where does it really go?
+    - (b) The Bunker stairs (S5): we built them in the sunken passage outside the Bunker Entrance's east door,
+      going up east to the ground, the passage open to the sky over the stairs and roofed for its first 1.5 m.
+      Is that where they are?
+    - (c) The construction house: we built a 3 m shell with open gaps. Does it have an upper floor you can
+      climb to, and how tall is it?
+    - (d) Which fences and low walls can you vault? We made every one 1.0 m and vaultable.
 
 Later milestones add their placeholders here as they build them: the Meeting Hall's height (P23), the Bunker's
 stairs and the outside tower stairs (P19, moved to M4), defender spawns (P28), bombs (P30), cameras (P31),

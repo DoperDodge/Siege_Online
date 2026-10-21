@@ -58,7 +58,11 @@
 <rect class="floors" x="139.53" y="255.77" width="22.17" height="20.18" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-11#0.r0c0</title></rect>
 <rect class="floors" x="184.21" y="255.77" width="13.99" height="20.18" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-11#1.r0c0</title></rect>
 <rect class="floors" x="161.7" y="270.47" width="22.51" height="5.47" fill="#d9a441" fill-opacity="0.45" stroke="#d9a441" stroke-width="0.2"><title>SF-2F-11#2.r0c0</title></rect>
+<rect class="stairs" x="299.95" y="105.96" width="12.51" height="6.16" fill="#d1495b" fill-opacity="0.5" stroke="#d1495b" stroke-width="0.1"><title>EXT_TOWER_STAIRS.landing</title></rect>
 <rect class="stairs" x="270.57" y="60.25" width="4.09" height="0.82" fill="#d1495b" stroke="#d1495b" stroke-width="0.3"><title>L1: ladder up</title></rect>
+<rect class="walls" x="296.78" y="282.11" width="2.05" height="4.44" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>EXT_BALCONY.railE (rail)</title></rect>
+<rect class="walls" x="220.03" y="286.55" width="78.79" height="2.05" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>EXT_BALCONY.railS (rail)</title></rect>
+<rect class="walls" x="220.03" y="274.92" width="2.05" height="11.63" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>EXT_BALCONY.railW (rail)</title></rect>
 <rect class="walls" x="246.98" y="69.7" width="10.92" height="0.34" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:2F#0 (rail)</title></rect>
 <rect class="walls" x="257.89" y="75.86" width="0.34" height="0.34" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:2F#1 (rail)</title></rect>
 <rect class="walls" x="6.16" y="201.38" width="14.33" height="0.34" fill="none" stroke="#6b7178" stroke-width="0.3" stroke-dasharray="1 0.6"><title>rail:2F#2 (rail)</title></rect>

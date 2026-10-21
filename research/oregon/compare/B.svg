@@ -53,6 +53,23 @@
 <rect class="stairs" x="269.62" y="237.88" width="13.35" height="1.65" fill="#d1495b" fill-opacity="0.48" stroke="#d1495b" stroke-width="0.1"><title>S3:B&gt;1F#0 step 15</title></rect>
 <rect class="stairs" x="269.62" y="236.23" width="13.35" height="1.65" fill="#d1495b" fill-opacity="0.5" stroke="#d1495b" stroke-width="0.1"><title>S3:B&gt;1F#0 step 16</title></rect>
 <path class="stairs" d="M276.3 261.78L276.3 238.56" stroke="#d1495b" stroke-width="0.4" fill="none"/><path class="stairs" d="M276.3 237.06L277.1 238.56L275.5 238.56Z" fill="#d1495b"><title>S3:B&gt;1F#0: up</title></path>
+<rect class="stairs" x="333.1" y="113.18" width="1.95" height="26.69" fill="#d1495b" fill-opacity="0.13" stroke="#d1495b" stroke-width="0.1"><title>S5:B&gt;EXT#0 step 1</title></rect>
+<rect class="stairs" x="335.05" y="113.18" width="1.95" height="26.69" fill="#d1495b" fill-opacity="0.15" stroke="#d1495b" stroke-width="0.1"><title>S5:B&gt;EXT#0 step 2</title></rect>
+<rect class="stairs" x="337.01" y="113.18" width="1.95" height="26.69" fill="#d1495b" fill-opacity="0.18" stroke="#d1495b" stroke-width="0.1"><title>S5:B&gt;EXT#0 step 3</title></rect>
+<rect class="stairs" x="338.96" y="113.18" width="1.95" height="26.69" fill="#d1495b" fill-opacity="0.2" stroke="#d1495b" stroke-width="0.1"><title>S5:B&gt;EXT#0 step 4</title></rect>
+<rect class="stairs" x="340.91" y="113.18" width="1.95" height="26.69" fill="#d1495b" fill-opacity="0.23" stroke="#d1495b" stroke-width="0.1"><title>S5:B&gt;EXT#0 step 5</title></rect>
+<rect class="stairs" x="342.86" y="113.18" width="1.95" height="26.69" fill="#d1495b" fill-opacity="0.25" stroke="#d1495b" stroke-width="0.1"><title>S5:B&gt;EXT#0 step 6</title></rect>
+<rect class="stairs" x="344.82" y="113.18" width="1.95" height="26.69" fill="#d1495b" fill-opacity="0.28" stroke="#d1495b" stroke-width="0.1"><title>S5:B&gt;EXT#0 step 7</title></rect>
+<rect class="stairs" x="346.77" y="113.18" width="1.95" height="26.69" fill="#d1495b" fill-opacity="0.3" stroke="#d1495b" stroke-width="0.1"><title>S5:B&gt;EXT#0 step 8</title></rect>
+<rect class="stairs" x="348.72" y="113.18" width="1.95" height="26.69" fill="#d1495b" fill-opacity="0.33" stroke="#d1495b" stroke-width="0.1"><title>S5:B&gt;EXT#0 step 9</title></rect>
+<rect class="stairs" x="350.68" y="113.18" width="1.95" height="26.69" fill="#d1495b" fill-opacity="0.35" stroke="#d1495b" stroke-width="0.1"><title>S5:B&gt;EXT#0 step 10</title></rect>
+<rect class="stairs" x="352.63" y="113.18" width="1.95" height="26.69" fill="#d1495b" fill-opacity="0.38" stroke="#d1495b" stroke-width="0.1"><title>S5:B&gt;EXT#0 step 11</title></rect>
+<rect class="stairs" x="354.58" y="113.18" width="1.95" height="26.69" fill="#d1495b" fill-opacity="0.4" stroke="#d1495b" stroke-width="0.1"><title>S5:B&gt;EXT#0 step 12</title></rect>
+<rect class="stairs" x="356.54" y="113.18" width="1.95" height="26.69" fill="#d1495b" fill-opacity="0.43" stroke="#d1495b" stroke-width="0.1"><title>S5:B&gt;EXT#0 step 13</title></rect>
+<rect class="stairs" x="358.49" y="113.18" width="1.95" height="26.69" fill="#d1495b" fill-opacity="0.45" stroke="#d1495b" stroke-width="0.1"><title>S5:B&gt;EXT#0 step 14</title></rect>
+<rect class="stairs" x="360.44" y="113.18" width="1.95" height="26.69" fill="#d1495b" fill-opacity="0.48" stroke="#d1495b" stroke-width="0.1"><title>S5:B&gt;EXT#0 step 15</title></rect>
+<rect class="stairs" x="362.4" y="113.18" width="1.95" height="26.69" fill="#d1495b" fill-opacity="0.5" stroke="#d1495b" stroke-width="0.1"><title>S5:B&gt;EXT#0 step 16</title></rect>
+<path class="stairs" d="M334.08 126.53L361.87 126.53" stroke="#d1495b" stroke-width="0.4" fill="none"/><path class="stairs" d="M363.37 126.53L361.87 127.33L361.87 125.73Z" fill="#d1495b"><title>S5:B&gt;EXT#0: up</title></path>
 <rect class="stairs" x="235.44" y="51.99" width="21.48" height="9.77" fill="#d1495b" fill-opacity="0.5" stroke="#d1495b" stroke-width="0.1"><title>S1:B&gt;1F.landing</title></rect>
 <rect class="walls" x="211.03" y="134.99" width="4.23" height="1.3" fill="#6b7178"><title>B.w000#0</title></rect>
 <rect class="walls" x="225.68" y="134.99" width="11.72" height="1.3" fill="#6b7178"><title>B.w000#1</title></rect>
@@ -69,7 +86,7 @@
 <rect class="walls" x="211.03" y="89.42" width="23.11" height="1.95" fill="#6b7178"><title>B.w010#0</title></rect>
 <rect class="walls" x="255.63" y="88.12" width="69.66" height="1.95" fill="#6b7178"><title>B.w011#0</title></rect>
 <rect class="walls" x="137.46" y="264.55" width="40.69" height="1.95" fill="#6b7178"><title>B.w012#0</title></rect>
-<rect class="walls" x="323.01" y="139.88" width="38.09" height="1.95" fill="#6b7178"><title>B.w013#0</title></rect>
+<rect class="walls" x="323.01" y="139.88" width="41.34" height="1.95" fill="#6b7178"><title>B.w013#0</title></rect>
 <rect class="walls" x="211.03" y="236.56" width="29.3" height="1.95" fill="#6b7178"><title>B.w014#0</title></rect>
 <rect class="walls" x="238.37" y="235.91" width="4.23" height="1.3" fill="#6b7178"><title>B.w015#0</title></rect>
 <rect class="walls" x="259.21" y="235.91" width="10.42" height="1.3" fill="#6b7178"><title>B.w015#1</title></rect>
@@ -78,7 +95,7 @@
 <rect class="walls" x="283.62" y="183.17" width="35.16" height="1.95" fill="#6b7178"><title>B.w019#0</title></rect>
 <rect class="walls" x="255.95" y="113.84" width="1.95" height="1.3" fill="#6b7178"><title>B.w020#0</title></rect>
 <rect class="walls" x="282.64" y="113.84" width="2.28" height="1.3" fill="#6b7178"><title>B.w020#1</title></rect>
-<rect class="walls" x="323.33" y="111.23" width="29.62" height="1.95" fill="#6b7178"><title>B.w021#0</title></rect>
+<rect class="walls" x="323.33" y="111.23" width="41.02" height="1.95" fill="#6b7178"><title>B.w021#0</title></rect>
 <rect class="walls" x="235.44" y="178.94" width="28.32" height="1.3" fill="#6b7178"><title>B.w022#0</title></rect>
 <rect class="walls" x="191.17" y="155.18" width="22.46" height="1.95" fill="#6b7178"><title>B.w023#0</title></rect>
 <rect class="walls" x="153.09" y="246.32" width="12.37" height="1.3" fill="#6b7178"><title>B.w024#0</title></rect>
@@ -145,6 +162,7 @@
 <text class="labels stairs" x="243.32" y="69.57" transform="rotate(-90 243.32 69.57)">S1 B&gt;1F</text>
 <text class="labels stairs" x="162.36" y="259.18" transform="rotate(0 162.36 259.18)">S2 B&gt;1F</text>
 <text class="labels stairs" x="279.71" y="249.42" transform="rotate(-90 279.71 249.42)">S3 B&gt;1F</text>
+<text class="labels stairs" x="348.72" y="133.36" transform="rotate(0 348.72 133.36)">S5 B&gt;EXT</text>
 <text class="labels" x="212.98" y="214.58" transform="rotate(90 212.98 214.58)">SW-B-01</text>
 <text class="labels" x="284.27" y="171.78" transform="rotate(90 284.27 171.78)">SW-B-02</text>
 <text class="labels" x="284.27" y="125.07" transform="rotate(90 284.27 125.07)">SW-B-03</text>

@@ -104,7 +104,8 @@ export type WallsPart = z.infer<typeof wallsPartSchema>;
 
 const itemSchema = z.strictObject({
   id: z.string(),
-  kind: z.enum(["box", "fence", "ramp", "stairs"]),
+  /** exterior.ts: a box (any yaw), a fence (a thin box), a rail (bodies stop, bullets pass), a ramp or steps. */
+  kind: z.enum(["box", "fence", "rail", "ramp", "stairs"]),
   level: Level,
   frame: Frame,
   rect: URect,

@@ -102,15 +102,20 @@ export function compileStairs(layout: Layout, fr: Frames): StairsResult {
   const slabM = (id: string) => layout.storeys.find((s) => s.id === id)!.slabM;
   const out: StairsResult = { flights: [], ladders: [], solids: [], runs: [], holes: new Map(), errors: [] };
 
+  // The outside's level is the ground: the floor of the first storey above ground.
+  const ground = layout.storeys.find((s) => !s.underground)!.id;
   for (const st of layout.stairs) {
     for (const run of st.runs) {
       const id = `${st.id}:${run.from}>${run.to}`;
-      const y0 = run.from === "EXT" ? floorY("1F") : floorY(run.from);
-      const y1 = run.to === "EXT" ? floorY("1F") : floorY(run.to);
-      if (y0 === undefined || y1 === undefined || run.from === "EXT" || run.to === "EXT") {
-        out.errors.push(`${id}: runs to or from the outside come with the outside (M4)`);
+      const [from, to] = [run.from === "EXT" ? ground : run.from, run.to === "EXT" ? ground : run.to];
+      const y0 = floorY(from);
+      const y1 = floorY(to);
+      if (y0 === undefined || y1 === undefined) {
+        out.errors.push(`${id}: no storey ${y0 === undefined ? run.from : run.to}`);
         continue;
       }
+      // A run that starts outside climbs in the open: no floor over it to cut.
+      const outdoors = run.from === "EXT";
       const rise = y1 - y0;
       if (rise <= 0) {
         out.errors.push(`${id}: ${run.to} isn't above ${run.from}`);
@@ -136,7 +141,7 @@ export function compileStairs(layout: Layout, fr: Frames): StairsResult {
         const facing = dir === 1 ? run.up : ({ N: "S", S: "N", E: "W", W: "E" } as const)[run.up];
         return { id: `${id}#${i}`, start: [r4(px), r4(base), r4(pz)], yawDeg: YAW[facing], steps: count, rise: r4(rise / steps), run: r4(tread), width: r4(width), surface: "HARD_FLOOR", solid: false };
       };
-      const ceiling = y1 - slabM(run.to); // the underside of the slab above
+      const ceiling = outdoors ? Infinity : y1 - slabM(to); // the underside of the slab above
       /**
        * The first step (0-based) of a flight the slab above must open over: a body climbs the line through the
        * nosings (a riser above the treads; the builder's ramp), and its head reaches BODY_REACH_M back, so the
@@ -239,6 +244,7 @@ export function compileStairs(layout: Layout, fr: Frames): StairsResult {
         if (h2 < n2) holes.push(rectOf(len - width, len, c2 + side * h2 * t2, side * (across / 2)));
         arrival = rectOf(len - width, len, side * (across / 2 - t2), side * (across / 2));
       }
+      if (outdoors) holes = [];
       const last = flights[flights.length - 1];
       const [lx, lz] = [-Math.sin((last.yawDeg * Math.PI) / 180), -Math.cos((last.yawDeg * Math.PI) / 180)];
       const end = [last.start[0] + lx * last.run * last.steps, last.start[2] + lz * last.run * last.steps];
@@ -247,8 +253,8 @@ export function compileStairs(layout: Layout, fr: Frames): StairsResult {
       out.flights.push(...flights);
       out.runs.push({
         id,
-        from: run.from,
-        to: run.to,
+        from,
+        to,
         foot: [r4(first.start[0] - ffx * FOOT_CHECK_M), y0, r4(first.start[2] - ffz * FOOT_CHECK_M)],
         top: [r4(end[0] + lx * TOP_CHECK_M), y1, r4(end[1] + lz * TOP_CHECK_M)],
         ...(run.foot ? { footRoom: run.foot } : {}),
@@ -257,7 +263,7 @@ export function compileStairs(layout: Layout, fr: Frames): StairsResult {
         holes,
         arrival,
       });
-      const list = out.holes.get(run.to) ?? out.holes.set(run.to, []).get(run.to)!;
+      const list = out.holes.get(to) ?? out.holes.set(to, []).get(to)!;
       list.push(...holes.map((h) => [Math.floor(h[0] / CELL_M + 1e-6), Math.floor(h[1] / CELL_M + 1e-6), Math.ceil(h[2] / CELL_M - 1e-6), Math.ceil(h[3] / CELL_M - 1e-6)].map((c) => r4(c * CELL_M)) as Rect));
     }
   }

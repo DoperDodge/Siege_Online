@@ -9,6 +9,7 @@ import { round } from "./format.js";
 import type { Floor } from "./research.js";
 import { exteriorPartSchema, layoutSchema, wallsPartSchema, type ExteriorPart, type Layout, type WallsPart } from "./schema.js";
 import { frameDiagnostics, type HatchLanding } from "./diagnostics.js";
+import { compileExterior } from "./exterior.js";
 import { compileFloors, type HatchReport } from "./floors.js";
 import { checkRoofs, compileRoofs } from "./roofs.js";
 import { compileRooms } from "./rooms.js";
@@ -94,9 +95,11 @@ export function compile(inputs: Inputs): Compiled {
   const floorsOut = compileFloors(layout, fr, wallsOut.solids, roomsOut, exterior.playable, stairsOut.holes);
   // ---- Roofs: slabs at the eaves, ramps, and the steps that close the ends.
   const roofsOut = compileRoofs(layout, roomsOut, wallsOut.solids);
+  // ---- The outside: exterior.json's boxes, fences, rails, ramps and steps.
+  const exteriorOut = compileExterior(layout, fr, exterior);
   const panelKind = new Set(["REINFORCEABLE", "SOFT_FLOOR", "HATCH"]);
   const byKind = (s: Solid) => (panelKind.has(s.surface) ? 1 : s.surface === "BARRICADE" || s.surface === "WINDOW" || /\.(head|sill)$/.test(s.id) ? 2 : 0);
-  const solids: Solid[] = [...wallsOut.solids, ...floorsOut.solids, ...stairsOut.solids, ...rails, ...roofsOut.solids].sort((p, q) => byKind(p) - byKind(q) || (p.id < q.id ? -1 : p.id > q.id ? 1 : 0));
+  const solids: Solid[] = [...wallsOut.solids, ...floorsOut.solids, ...stairsOut.solids, ...rails, ...roofsOut.solids, ...exteriorOut.solids].sort((p, q) => byKind(p) - byKind(q) || (p.id < q.id ? -1 : p.id > q.id ? 1 : 0));
 
   // ---- Play-area edge and kill plane (placeholders P25, P26).
   const [px0, py0, px1, py1] = exterior.playable.map((u) => u * k);
@@ -149,6 +152,7 @@ export function compile(inputs: Inputs): Compiled {
     ...(s.drawOnly ? { drawOnly: true } : {}),
     ...(s.label ? { label: s.label } : {}),
     ...(s.panel ? { panel: s.panel } : {}),
+    ...(s.yawDeg ? { yawDeg: s.yawDeg } : {}),
   });
   const level = {
     _doc:
@@ -168,8 +172,8 @@ export function compile(inputs: Inputs): Compiled {
       })),
     },
     storeys,
-    stairs: stairsOut.flights.map((f) => ({ ...f, start: v3(f.start) })),
-    ramps: roofsOut.ramps,
+    stairs: [...stairsOut.flights, ...exteriorOut.flights].map((f) => ({ ...f, start: v3(f.start) })),
+    ramps: [...roofsOut.ramps, ...exteriorOut.ramps],
     ladders: stairsOut.ladders.map((l) => ({ ...l, base: v3(l.base) })),
     rooms: roomsOut.rooms.map((r) => ({ id: r.id, callout: r.callout, storey: r.storey, rects: r.rects, anchor: v3(r.anchor) })),
     zones: zones.map((z) => ({ id: z.id, kind: z.kind, boxes: z.boxes.map((b) => ({ center: v3(b.center), size: v3(b.size) })) })),
@@ -182,6 +186,7 @@ export function compile(inputs: Inputs): Compiled {
     ...floorsOut.errors,
     ...stairsOut.errors,
     ...roofsOut.errors,
+    ...exteriorOut.errors,
     ...checkStairs(layout, stairsOut, level.solids, level.rooms),
     ...checkRoofs(layout, roofsOut.roofs, level.solids, level.rooms),
   );

@@ -104,36 +104,45 @@ describe("oregon level.json", () => {
   it.each(FLOOR_IDS)("%s: the building's shell is closed between the interior and exterior wall tops", (floor) => {
     const { plan, storey, next } = storeyOf(floor);
     const top = (b: Box) => +(b.center[1] + b.size[1] / 2 - storey.floorY).toFixed(2);
-    // The walls' pieces: not the steps a roof stands on them (roofs.ts), which start at their tops.
-    const roofs = new Set(inputs.layout.roofs.map((r) => r.id));
-    const pieces = solids.filter((b) => /#\d/.test(b.id) && !roofs.has(b.id.split(/[.#]/)[0]) && !b.bodiesOnly && !b.drawOnly && Math.abs(b.center[1] - b.size[1] / 2 - storey.floorY) < 0.01);
+    // The walls' pieces: not the steps a roof stands on them (roofs.ts), which start at their tops, nor the
+    // outside's boxes (exterior.ts) on the ground.
+    const others = new Set([...inputs.layout.roofs.map((r) => r.id), ...inputs.exterior.items.map((i) => i.id), ...inputs.exterior.props.map((i) => i.id)]);
+    const pieces = solids.filter((b) => /#\d/.test(b.id) && !others.has(b.id) && !others.has(b.id.split(/[.#]/)[0]) && !b.bodiesOnly && !b.drawOnly && Math.abs(b.center[1] - b.size[1] / 2 - storey.floorY) < 0.01);
     const [topIn, topOut] = next ? [next.floorY - next.slabM - storey.floorY, storey.underground ? next.floorY - next.slabM - storey.floorY : next.floorY - storey.floorY] : [inputs.layout.defaults.wallHeightM, inputs.layout.defaults.wallHeightM];
     expect([...new Set(pieces.map(top))].sort(), floor).toEqual([...new Set([topIn, topOut].map((t) => +t.toFixed(2)))].sort());
     if (topOut - topIn < 0.05) return; // no band: every wall reaches the same height
     expect(enclosureLeaks(solids, [], plan, [-3, 3, 56, 47], 0.025, k, storey.floorY + (topIn + topOut) / 2).toOutside, floor).toEqual([]);
   });
 
-  it("spawns stand on the ground: spawn 0 for the labs, the three attacker insertion points outside", async () => {
+  it("spawns stand on the ground: spawn 0 for the labs, five attackers within 3 m of each insertion point, outside the building, facing it", async () => {
+    // Sim.create refuses a spawn whose body would overlap anything, outside items included.
     const sim = await Sim.create("oregon");
     const lvl = sim.level.def;
     expect(lvl.spawns[0].side).toBeUndefined();
-    expect(lvl.spawns.filter((s) => s.side === "attack").map((s) => s.group)).toEqual(["A_JUNKYARD", "B_STREET", "C_CONSTRUCTION"]);
-    const fp = { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity };
-    for (const s of solids.filter((b) => b.surface !== "HARD_FLOOR" && !b.bodiesOnly)) {
-      fp.minX = Math.min(fp.minX, s.center[0]);
-      fp.maxX = Math.max(fp.maxX, s.center[0]);
-      fp.minZ = Math.min(fp.minZ, s.center[2]);
-      fp.maxZ = Math.max(fp.maxZ, s.center[2]);
+    const attack = lvl.spawns.filter((s) => s.side === "attack");
+    const groups = [...new Set(attack.map((s) => s.group))];
+    expect(groups).toEqual(["A_JUNKYARD", "B_STREET", "C_CONSTRUCTION"]);
+    // The building: every storey's rooms; its middle, the rooms' anchors' mean.
+    const anchors = lvl.rooms.map((r) => r.anchor);
+    const middle = [anchors.reduce((a, p) => a + p[0], 0) / anchors.length, anchors.reduce((a, p) => a + p[2], 0) / anchors.length];
+    const fromRooms = (x: number, z: number) => Math.min(...lvl.rooms.flatMap((r) => r.rects.map(([x0, z0, x1, z1]) => Math.hypot(Math.max(x0 - x, 0, x - x1), Math.max(z0 - z, 0, z - z1)))));
+    for (const g of groups) {
+      const mine = attack.filter((s) => s.group === g);
+      expect(mine, g).toHaveLength(5);
+      // The first is the insertion point itself (r6calls); the rest stand within 3 m of it.
+      expect(mine[0].id, g).toBe(g);
+      for (const s of mine) expect(Math.hypot(s.pos[0] - mine[0].pos[0], s.pos[2] - mine[0].pos[2]), s.id).toBeLessThanOrEqual(3 + 1e-6);
     }
     for (const s of lvl.spawns) {
       const hit = sim.world.castRay(new sim.R.Ray({ x: s.pos[0], y: s.pos[1] + 1, z: s.pos[2] }, { x: 0, y: -1, z: 0 }), 3, true, undefined, QUERY_STATIC);
       expect(hit?.timeOfImpact, s.id).toBeCloseTo(1, 1);
       const inBounds = s.pos[0] > lvl.bounds!.min[0] && s.pos[0] < lvl.bounds!.max[0] && s.pos[2] > lvl.bounds!.min[2] && s.pos[2] < lvl.bounds!.max[2];
       expect(inBounds, s.id).toBe(true);
-      if (s.side === "attack") {
-        const outside = s.pos[0] < fp.minX || s.pos[0] > fp.maxX || s.pos[2] < fp.minZ || s.pos[2] > fp.maxZ;
-        expect(outside, s.id).toBe(true);
-      }
+      if (s.side !== "attack") continue;
+      expect(fromRooms(s.pos[0], s.pos[2]), s.id).toBeGreaterThan(10);
+      // Facing the building: within 10 degrees of its middle.
+      const want = Math.atan2(-(middle[0] - s.pos[0]), -(middle[1] - s.pos[2])) / DEG;
+      expect(Math.abs(((s.yawDeg - want + 540) % 360) - 180), s.id).toBeLessThan(10);
     }
     // Two bodies join and walk; the level is a working room level.
     const a = sim.addPlayer("a", "sledge");
@@ -708,15 +717,15 @@ describe("oregon stairs and the ladder (M3)", () => {
     return { reached: k >= pts.length, x: pawn.state.x, y: pawn.state.y, z: pawn.state.z };
   };
 
-  it("builds every staircase inside the building as runs between storeys, with the ladder to the Cat Walk", () => {
+  it("builds every staircase as runs between storeys and the outside, with the ladder to the Cat Walk", () => {
     expect(stairs.errors).toEqual([]);
-    expect(stairs.runs.map((r) => r.id).sort()).toEqual(["S1:1F>2F", "S1:B>1F", "S2:1F>2F", "S2:B>1F", "S3:1F>2F", "S3:B>1F", "S4:1F>2F"]);
-    expect((level as { stairs: unknown[] }).stairs.length).toBe(stairs.flights.length);
+    expect(stairs.runs.map((r) => r.id).sort()).toEqual(["S1:1F>2F", "S1:B>1F", "S2:1F>2F", "S2:B>1F", "S3:1F>2F", "S3:B>1F", "S4:1F>2F", "S5:B>EXT", "S6:EXT>2F"]);
+    expect((level as { stairs: { id: string }[] }).stairs.filter((f) => stairs.flights.some((g) => g.id === f.id))).toHaveLength(stairs.flights.length);
     expect((level as { ladders: { id: string }[] }).ladders.map((l) => l.id)).toEqual(["L1"]);
     for (const f of stairs.flights) expect(f.rise, f.id).toBeLessThanOrEqual(loadGameData().movement.step.maxStepHeight);
   });
 
-  it("a body walks up every run from the room it starts in to the one it names, and back down", async () => {
+  it("a body walks up every run from the room it starts in to the one it names (outside, if none), and back down", async () => {
     const sim = await Sim.create("oregon");
     const ctrl = sim.addPlayer("walker", "sledge");
     const pawn = sim.pawns.get(ctrl.possessedPawnId)!;
@@ -726,10 +735,10 @@ describe("oregon stairs and the ladder (M3)", () => {
       sim.teleport(pawn.id, run.foot[0], run.foot[1], run.foot[2], 0, Stance.Stand);
       const a = walk(sim, ctrl, pawn, up);
       const room = roomAt(run.to, a.x, a.z);
-      if (!a.reached || Math.abs(a.y - run.top[1]) > 0.05 || room !== run.topRoom) problems.push(`${run.id} up: at (${a.x.toFixed(2)}, ${a.y.toFixed(2)}, ${a.z.toFixed(2)}) in ${room}, reached ${a.reached}`);
+      if (!a.reached || Math.abs(a.y - run.top[1]) > 0.05 || room !== (run.topRoom ?? "outside")) problems.push(`${run.id} up: at (${a.x.toFixed(2)}, ${a.y.toFixed(2)}, ${a.z.toFixed(2)}) in ${room}, reached ${a.reached}`);
       const b = walk(sim, ctrl, pawn, [...up].reverse());
       const from = roomAt(run.from, b.x, b.z);
-      if (!b.reached || Math.abs(b.y - run.foot[1]) > 0.05 || from !== run.footRoom) problems.push(`${run.id} down: at (${b.x.toFixed(2)}, ${b.y.toFixed(2)}, ${b.z.toFixed(2)}) in ${from}, reached ${b.reached}`);
+      if (!b.reached || Math.abs(b.y - run.foot[1]) > 0.05 || from !== (run.footRoom ?? "outside")) problems.push(`${run.id} down: at (${b.x.toFixed(2)}, ${b.y.toFixed(2)}, ${b.z.toFixed(2)}) in ${from}, reached ${b.reached}`);
     }
     expect(problems).toEqual([]);
   });
@@ -835,6 +844,35 @@ describe("oregon walk graph (M3, DESIGN §9.2 check 10)", () => {
     }
     // The ladder joins the 2F Tower to the Cat Walk.
     for (const l of g.ladders) expect([l.id, g.comp[l.foot], g.comp[l.top]]).toEqual([l.id, r.main, r.main]);
+  });
+
+  it("the outside is one piece: from the Junkyard a body walks to every attacker spawn, down S5 to the Bunker and up S6 to the Meeting roof", async () => {
+    const sim = await Sim.create("oregon");
+    breakAll(sim, "barricade");
+    const g = buildWalkGraph(sim);
+    const main = g.comp[nodeNear(g, ...junkyard.pos)];
+    const lost = (level.spawns as { id: string; side?: string; pos: Vec3 }[]).filter((s) => s.side === "attack").filter((s) => g.comp[nodeNear(g, ...s.pos)] !== main);
+    expect(lost.map((s) => s.id)).toEqual([]);
+    // The passage's floor at the Bunker's door, and the Meeting roof east of the Attic past S6's landing.
+    for (const [what, x, y, z] of [["the Bunker passage", 335 * k, -3.2, 127 * k], ["the Meeting roof", 285 * k, 3.2, 140 * k]] as const) {
+      const n = nodeNear(g, x, y, z);
+      expect([what, n >= 0 && g.comp[n] === main]).toEqual([what, true]);
+    }
+  });
+
+  it("the play area's edge holds a body in: walking at it from inside, on each side, it stops at the edge", async () => {
+    const sim = await Sim.create("oregon");
+    const ctrl = sim.addPlayer("walker", "sledge");
+    const pawn = sim.pawns.get(ctrl.possessedPawnId)!;
+    const [px0, pz0, px1, pz1] = inputs.exterior.playable.map((u) => u * k);
+    let seq = 0;
+    // From 3 m inside, at a spot clear of the outside's items, walking straight at the edge for 4 s.
+    for (const [x, z, yawDeg] of [[0, pz0 + 3, 0], [0, pz1 - 3, 180], [px0 + 3, 0, 90], [px1 - 3, 0, -90]] as const) {
+      sim.teleport(pawn.id, x, 0, z, yawDeg, Stance.Stand);
+      for (let t = 0; t < 64 * 4; t++) sim.step(new Map([[ctrl.id, { seq: ++seq, forward: 1, strafe: 0, yaw: yawDeg * DEG, pitch: 0, buttons: 0, stance: Stance.Stand, lean: 0 }]]));
+      const s = pawn.state;
+      expect([yawDeg, s.x > px0 && s.x < px1 && s.z > pz0 && s.z < pz1 && s.grounded && Math.abs(s.y) < 0.05]).toEqual([yawDeg, true]);
+    }
   });
 
   it("a barricade shuts its doorway: the Main Entrance's two sides join only once it is broken", async () => {

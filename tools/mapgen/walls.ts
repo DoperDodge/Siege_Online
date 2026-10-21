@@ -18,6 +18,8 @@ export interface Solid {
   drawOnly?: boolean;
   label?: string;
   panel?: { construction?: string; sections?: number; empty?: boolean; region?: string };
+  /** Turned about its middle (the outside's boxes, exterior.ts); 0 for everything else. */
+  yawDeg?: number;
 }
 
 export interface Zone {
