@@ -102,13 +102,25 @@ try {
     if ((await isOpen()) !== open) await page.keyboard.press("Escape");
     await page.waitForFunction((open) => !document.querySelector(".pause").classList.contains("hidden") === open, open, { timeout: 5000 });
   };
-  /** Knife until the barricade in front is broken (a few blows; each press is one swing). */
-  const knifeDown = async (page, id) => {
-    for (let i = 0; i < 12 && !(await panel(page, id)).broken; i++) {
-      await input(page, { buttons: Btn.Melee });
-      await sleep(150);
-      await input(page, null);
-      await sleep(900);
+  /**
+   * One knife swing: hold the key until the swing starts (the page samples it once per frame, and a slow frame
+   * can outlast a short press), let go, and wait for the swing to end. `held` is the rest of the input meanwhile.
+   */
+  const swing = async (page, held = null) => {
+    await input(page, { ...held, buttons: Btn.Melee });
+    const started = await page.waitForFunction(() => window.__lab.net.own.meleeTicks > 0, null, { timeout: 5000, polling: 20 }).then(() => true, () => false);
+    await input(page, held);
+    await page.waitForFunction(() => window.__lab.net.own.meleeTicks === 0, null, { timeout: 5000, polling: 50 }).catch(() => {});
+    await sleep(100);
+    return started;
+  };
+  /** Knife until the panel in front is broken (a few blows; each press is one swing); each swing's outcome in `log`. */
+  const knifeDown = async (page, id, held = null, log = [], tries = 12) => {
+    for (let i = 0; i < tries && !(await panel(page, id)).broken; i++) {
+      const started = await swing(page, held);
+      const p = await panel(page, id);
+      const me = await own(page);
+      log.push({ started, holes: p.holes, broken: p.broken, at: [me.x, me.y, me.z].map((v) => Math.round(v * 100) / 100), pitch: me.pitch });
     }
     return panel(page, id);
   };
@@ -123,7 +135,8 @@ try {
   await off.evaluate(() => window.__lab.teleport(37.95, 0, 43.2, 0)); // facing the barricade, an arm's length away
   await sleep(800);
   await off.screenshot({ path: shot("oregon-entrance.png") });
-  const broken = await knifeDown(off, DOOR);
+  result.offline.knife = [];
+  const broken = await knifeDown(off, DOOR, null, result.offline.knife);
   result.checks.knifedTheBarricadeDown = broken.broken === true;
   await input(off, { forward: 1 });
   await off.waitForFunction((z) => window.__lab.net.own.z < z - 2, DOOR_Z, { timeout: 20000, polling: 100 });
@@ -234,12 +247,8 @@ try {
     // H4: stand on it in the Kids' Dorms, knife it open from a crouch, and drop into the Kitchen.
     await off.evaluate(([x, y, z]) => window.__lab.teleport(x, y, z, 0), [h4.center[0], h4.center[1] + h4.size[1] / 2, h4.center[2]]);
     await sleep(600);
-    for (let i = 0; i < 16 && !(await panel(off, "H4")).broken; i++) {
-      await input(off, { pitch: -1.45, stance: CROUCH, buttons: Btn.Melee });
-      await sleep(150);
-      await input(off, { pitch: -1.45, stance: CROUCH });
-      await sleep(850);
-    }
+    result.offline.hatchKnife = [];
+    await knifeDown(off, "H4", { pitch: -1.45, stance: CROUCH }, result.offline.hatchKnife, 16); // a hatch takes about 10
     await off.waitForFunction(() => window.__lab.net.own.y < 0.2, null, { timeout: 10000, polling: 100 });
     await input(off, null);
     await sleep(600);
