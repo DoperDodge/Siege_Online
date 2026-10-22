@@ -9,7 +9,7 @@ import { round } from "./format.js";
 import type { Floor } from "./research.js";
 import { exteriorPartSchema, layoutSchema, wallsPartSchema, type ExteriorPart, type Layout, type WallsPart } from "./schema.js";
 import { frameDiagnostics, type HatchLanding } from "./diagnostics.js";
-import { compileExterior } from "./exterior.js";
+import { checkExterior, compileExterior } from "./exterior.js";
 import { compileFloors, type HatchReport } from "./floors.js";
 import { checkRoofs, compileRoofs } from "./roofs.js";
 import { compileRooms } from "./rooms.js";
@@ -189,6 +189,7 @@ export function compile(inputs: Inputs): Compiled {
     ...exteriorOut.errors,
     ...checkStairs(layout, stairsOut, level.solids, level.rooms),
     ...checkRoofs(layout, roofsOut.roofs, level.solids, level.rooms),
+    ...checkExterior(layout, level.solids, exteriorOut.ids, level.rooms),
   );
   const counts: Record<string, number> = { solids: level.solids.length, spawns: spawns.length, zones: zones.length, rooms: roomsOut.rooms.length, roofs: roofsOut.roofs.length, ramps: roofsOut.ramps.length };
   for (const [floor, c] of Object.entries(floorsOut.counts)) {

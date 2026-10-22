@@ -73,7 +73,7 @@
   {"id": "EXT_EXCAVATOR", "kind": "box", "level": "EXT", "frame": "world", "rect": [470, 18, 500, 60], "hM": 3.0, "src": "hand", "note": "map_features §7: solid", "_unverified": ["rect", "hM"]},
   {"id": "EXT_EXCAVATOR.arm", "kind": "box", "level": "EXT", "frame": "world", "rect": [474, 60, 486, 108], "hM": 1.5, "src": "hand", "_unverified": ["rect", "hM"]},
   {"id": "EXT_SHED_NE", "kind": "box", "level": "EXT", "frame": "world", "rect": [430, 138, 475, 168], "hM": 3.0, "src": "hand", "_unverified": ["rect", "hM"]},
-  {"id": "EXT_REEL", "kind": "box", "level": "EXT", "frame": "world", "rect": [282, 144, 298, 160], "hM": 1.2, "src": "hand", "note": "a cable reel", "_unverified": ["rect", "hM"]},
+  {"id": "EXT_REEL", "kind": "box", "level": "EXT", "frame": "world", "rect": [323, 145, 338, 164], "hM": 1.2, "src": "hand", "note": "a cable reel lying on its frame, east of the Meeting Hall (first placed 6 m west, through the wall: D-101)", "_unverified": ["rect", "hM"]},
   {"id": "EXT_GENERATOR", "kind": "box", "level": "EXT", "frame": "world", "rect": [371.52, 143.5, 393.48, 161.5], "yawDeg": 30.1, "hM": 2.0, "surface": "PROP", "src": "hand", "note": "map_features §7: the generator is not climbable", "_unverified": ["rect", "hM"]},
   {"id": "EXT_LUMBER#0", "kind": "box", "level": "EXT", "frame": "world", "rect": [262, 11, 320, 17], "hM": 0.5, "vaultable": true, "src": "hand", "note": "lumber and pipes", "_unverified": ["rect", "hM"]},
   {"id": "EXT_LUMBER#1", "kind": "box", "level": "EXT", "frame": "world", "rect": [280, 22, 312, 32], "hM": 0.8, "vaultable": true, "src": "hand", "note": "lumber and pipes", "_unverified": ["rect", "hM"]},

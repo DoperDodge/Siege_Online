@@ -21,6 +21,16 @@ describe("ladders", () => {
   });
 });
 
+describe("standsFree (the lab's free camera puts a body down only where it fits)", () => {
+  it("is true where a standing body has room, false in a wall or under a ceiling too low to stand", async () => {
+    const { sim } = await labWith();
+    expect(sim.standsFree(0, 0, 12)).toBe(true); // open floor
+    expect(sim.standsFree(14, 3, 2.9)).toBe(true); // on the 3 m platform
+    expect(sim.standsFree(-16, 0, -8)).toBe(false); // inside the tower
+    expect(sim.standsFree(18, 0, -8.5)).toBe(false); // the crouch tunnel: its ceiling is at 1.45 m
+  });
+});
+
 describe("Skopós shell camera and swap", () => {
   it("a key held since before the camera opened isn't a fresh press when you come back", async () => {
     const { sim, ctrl, pawn } = await labWith("skopos");

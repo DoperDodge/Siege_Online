@@ -847,17 +847,27 @@ describe("oregon walk graph (M3, DESIGN §9.2 check 10)", () => {
   });
 
   it("the outside is one piece: from the Junkyard a body walks to every attacker spawn, down S5 to the Bunker and up S6 to the Meeting roof", async () => {
-    const sim = await Sim.create("oregon");
-    breakAll(sim, "barricade");
-    const g = buildWalkGraph(sim);
-    const main = g.comp[nodeNear(g, ...junkyard.pos)];
-    const lost = (level.spawns as { id: string; side?: string; pos: Vec3 }[]).filter((s) => s.side === "attack").filter((s) => g.comp[nodeNear(g, ...s.pos)] !== main);
-    expect(lost.map((s) => s.id)).toEqual([]);
-    // The passage's floor at the Bunker's door, and the Meeting roof east of the Attic past S6's landing.
-    for (const [what, x, y, z] of [["the Bunker passage", 335 * k, -3.2, 127 * k], ["the Meeting roof", 285 * k, 3.2, 140 * k]] as const) {
-      const n = nodeNear(g, x, y, z);
-      expect([what, n >= 0 && g.comp[n] === main]).toEqual([what, true]);
-    }
+    // Barricades stay up: broken, the building would join the passage to the rest through the basement's east door.
+    /** Which of the passage's floor at the Bunker's door and the Meeting roof east of the Attic (past S6's landing) the spawns reach. */
+    const outside = async (without: string | null) => {
+      // (loadGameData() is shared: the level goes into a copy of its map.)
+      const data = { ...loadGameData(), levels: new Map(loadGameData().levels) };
+      const def = structuredClone(data.levels.get("oregon")!);
+      def.stairs = def.stairs.filter((f) => without === null || !f.id.startsWith(without));
+      data.levels.set("oregon", def);
+      const g = buildWalkGraph(await Sim.create("oregon", data));
+      const main = g.comp[nodeNear(g, ...junkyard.pos)];
+      const lost = (level.spawns as { id: string; side?: string; pos: Vec3 }[]).filter((s) => s.side === "attack").filter((s) => g.comp[nodeNear(g, ...s.pos)] !== main);
+      const reach = (x: number, y: number, z: number) => {
+        const n = nodeNear(g, x, y, z);
+        return n >= 0 && g.comp[n] === main;
+      };
+      return { lost: lost.map((s) => s.id), passage: reach(335 * k, -3.2, 127 * k), meetingRoof: reach(285 * k, 3.2, 140 * k) };
+    };
+    expect(await outside(null)).toEqual({ lost: [], passage: true, meetingRoof: true });
+    // Each way in hangs on its stairs.
+    expect(await outside("S5:")).toEqual({ lost: [], passage: false, meetingRoof: true });
+    expect(await outside("S6:")).toEqual({ lost: [], passage: true, meetingRoof: false });
   });
 
   it("the play area's edge holds a body in: walking at it from inside, on each side, it stops at the edge", async () => {
@@ -948,6 +958,23 @@ describe("oregon walk graph (M3, DESIGN §9.2 check 10)", () => {
   });
 });
 
+describe("oregon outside (M4, DESIGN §5.9)", () => {
+  type Item = (typeof inputs.exterior.items)[number];
+  const withItem = (item: Item) => compile({ ...inputs, exterior: { ...inputs.exterior, items: [...inputs.exterior.items, item] } });
+  const reel = inputs.exterior.items.find((i) => i.id === "EXT_REEL")!;
+
+  it("nothing outside stands in a room: an item placed inside the building is reported, turned by its yaw", () => {
+    expect(report.errors.filter((e) => e.startsWith("exterior.json"))).toEqual([]);
+    // Where the reel first went: across the Meeting Hall's east wall (its outer face at 293 u).
+    expect(withItem({ ...reel, id: "EXT_TEST", rect: [282, 144, 298, 160] }).report.errors).toContain("exterior.json EXT_TEST: stands in 1F_MEETING_HALL");
+    // A plank 0.3 m wide and 6 m long beside that wall's outer face: clear lying north–south, in the hall turned
+    // a quarter.
+    const plank = { ...reel, id: "EXT_TEST", rect: [295, 132, 297, 172] as [number, number, number, number] };
+    expect(withItem(plank).report.errors.filter((e) => e.includes("EXT_TEST"))).toEqual([]);
+    expect(withItem({ ...plank, yawDeg: 90 }).report.errors).toContain("exterior.json EXT_TEST: stands in 1F_MEETING_HALL");
+  });
+});
+
 describe("oregon roofs (M4, DESIGN §5.8)", () => {
   const roofs = inputs.layout.roofs;
   type RoofDef = (typeof roofs)[number];
@@ -995,6 +1022,16 @@ describe("oregon roofs (M4, DESIGN §5.8)", () => {
         expect(hit?.timeOfImpact, `y ${y} z ${z.toFixed(2)}`).toBeGreaterThan(3 - 0.16);
         expect(hit!.timeOfImpact, `y ${y} z ${z.toFixed(2)}`).toBeLessThan(3 + 0.31);
       }
+    }
+  });
+
+  it("a roof with a ceiling is closed where it meets one without: from the Kitchen Corridor, a shot into the Tower's west roof space stops at its end", async () => {
+    const sim = await Sim.create("oregon");
+    // Under the Meeting roof west of the Attic (no ceiling, open to the corridor), level shots north at the
+    // Tower West roof's south end (z 14.95 m), at heights between its ceiling and its slope.
+    for (const [x, y] of [[30.5, 3.3], [31, 3.32], [31.5, 3.45]]) {
+      const hit = sim.world.castRay(new sim.R.Ray({ x, y, z: 15.5 }, { x: 0, y: 0, z: -1 }), 10, true, undefined, QUERY_STATIC);
+      expect(hit?.timeOfImpact, `x ${x} y ${y}`).toBeCloseTo(15.5 - 14.95, 2);
     }
   });
 

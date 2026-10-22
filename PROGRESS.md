@@ -5,7 +5,7 @@ known issues, and what's next.
 
 ---
 
-## Phase 5 — Oregon greybox · 🚧 in progress (M3 of 8 done)
+## Phase 5 — Oregon greybox · 🚧 in progress (M4 of 8 done)
 
 **Done when (PLAN §17):** you walk it and sign off on layout accuracy. Rappel (M8) comes before the Phase 5
 report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIGN.md`.
@@ -15,13 +15,13 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
 | M1 Oregon 1F walkable, offline and online (generator, wall extraction, engine prep) | ✅ 1F built from the floor plans; batched drawing and a stats overlay (F8); browser test |
 | M2 All storeys stacked: B, 2F, Cat Walk; rooms and callouts; ceilings, soft floors, hatches, drone holes; storey views | ✅ four storeys, 49 rooms, 12 soft floors, 6 hatches; hide-above, plan view, HUD line; browser test |
 | M3 Stairs and the ladder (grab it from the top too) | ✅ every staircase inside the building, the ladder both ways, the walk graph: every room reachable; browser test |
-| M4 Roofs, the outside and the three attacker spawns; free camera | ⏳ |
+| M4 Roofs, the outside and the three attacker spawns; free camera | ✅ roofs on every part of the building, the outside blockout with the Bunker and Tower outside stairs, five attackers at each insertion point, a free camera in every lab; browser test |
 | M5 Sites, defender spawns, cameras, ingredients, zones, cover props | ⏳ |
 | M6 Walk-ready: every check, performance on Oregon, your walk #1 | ⏳ |
 | M7 Your corrections, round by round, to sign-off | ⏳ |
 | M8 Rappel | ⏳ |
 
-### What's done in M4 so far
+### What's done (M4)
 - **Roofs on the whole building (D-097):** 17 roofs with the research's names. Pitched where the roof renders
   show a ridge (the Tower, the Tower's two west parts, the brown cross roof over Dorms, Armory, Attic and Master,
   the Small Tower, the Meeting roof west of the Attic), flat where they don't (the Dining roof, the Kids roof, the
@@ -45,6 +45,12 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
   the three spawn groups, the Bunker passage and the Meeting roof are one walkable piece of outside; a body
   walking at the play area's edge stops there; the browser test visits each spawn and drops you on the
   Dining roof from the free camera.
+- **Review (D-101):** two reviewers read the M4 changes; eight findings held up, and all are fixed, each with a
+  test. The ones you'd notice: F, leaving the free camera, also pressed "use" for your body (it grabbed the
+  ladder if one was in reach); a weapon key pressed while flying switched weapons when you came back; F with the
+  camera inside a wall put you in the wall (now the camera stays, with a message); a cable reel stood half inside
+  the Meeting Hall (it's 6 m further east on the background); and a slot from the Kitchen Corridor ran into the
+  Tower's west roof space. The build now fails if anything outside stands in a room.
 
 ### What's done since M3: your stairs walk (D-095)
 - **The White Stairs** now go up east, both flights, one over the other, and each fills the stairwell wall to
@@ -204,25 +210,33 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
      corner.
    - The Armory Stairs: B → Laundry Stairs; the flight on to 2F starts at the 1F south end, by the Lobby.
    - The Small Stairs go from 1F to 2F: 1F → Small Tower, then north up the passage on the west side.
+   - The Bunker stairs go from the ground east of the building down a sunken passage to the basement's east
+     door; the Tower's outside stairs, beside the 1F Tower's east door, go up onto the Meeting roof.
 5. The ladder: Go to 2F → Tower. The ladder stands under the north edge of the Cat Walk's well. Face it, press F,
    then hold W up to the Cat Walk. To come down, stand at the gap in the rail at the top, face the drop, press F,
    then hold S.
 6. Press H to hide the storeys above you, M for the plan view (the wheel zooms; M again to go back), and P to
    switch to plain grey.
-7. Soft floors: Go to 1F Kitchen, look straight up and fire. The yellow floor above (the Kids' Dorms, SF-2F-01)
+7. The outside: Go to → Attacker spawn A Junkyard, B Street or C Construction puts you at that insertion point,
+   facing the building (four more spawns stand beside it); walk to the building from each.
+8. The roofs: Go to 2F → Office and vault out of its north window onto the Dining roof, or 2F → Master and
+   step out of its south door onto the Balcony. Press N for the free camera and fly over every roof (WASD along
+   the view, Space up, C down, Shift faster); F puts you on the floor under the camera, N takes you back.
+9. Soft floors: Go to 1F Kitchen, look straight up and fire. The yellow floor above (the Kids' Dorms, SF-2F-01)
    takes holes; every soft floor works the same way from the room below.
-8. Hatches: Go to 2F Kids' Dorms and stand on the green square (H4). Crouch (C), look down and knife it (V)
+10. Hatches: Go to 2F Kids' Dorms and stand on the green square (H4). Crouch (C), look down and knife it (V)
    until it breaks, and you drop into the 1F Kitchen. H1–H3 go from 1F to the basement, H5 and H6 from 2F to 1F.
-9. Press F8 and read the overlay on your PC: average FPS and the 1% low (target 120 and 90 at 1080p High).
+11. Press F8 and read the overlay on your PC: average FPS and the 1% low (target 120 and 90 at 1080p High).
    The browser draws no faster than your display refreshes, and a missed refresh counts as a whole extra one,
    so read the FPS on a display faster than 120 Hz (144 Hz or more). At 120 Hz or less, read the work instead:
    the page's own work each frame on the main thread, 8.3 ms on average and 11.1 ms for the slowest 1% leaving
    room for 120 and 90 FPS. It doesn't include the graphics card's time.
-10. The plans: open `research/oregon/compare/B.svg`, `1F.svg`, `2F.svg` and `3F.svg`. To see them over the
+12. The plans: open `research/oregon/compare/B.svg`, `1F.svg`, `2F.svg` and `3F.svg`. To see them over the
    official blueprint: `npm run mapgen:refs` (downloads the blueprint and r6calls' map into a gitignored
    folder), then `npm run mapgen:compare`, and open `builds/mapgen/compare/index.html`.
-11. Checks: `npm run typecheck`, `npm test`, `npm run build && npm run test:e2e` (`oregon.mjs` shoots through a
-   soft floor, drops through a hatch, walks the Armory Stairs and takes the ladder both ways),
+13. Checks: `npm run typecheck`, `npm test`, `npm run build && npm run test:e2e` (`oregon.mjs` shoots through a
+   soft floor, drops through a hatch, walks the Armory Stairs, takes the ladder both ways, stands at each attacker
+   spawn and drops onto the Dining roof from the free camera),
    `npm run mapgen -- --check`.
 
 ### Known issues
@@ -243,10 +257,11 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
   (research/OPEN_QUESTIONS.md, "Placeholders added while building Phase 5").
 - You no longer see your own shadow (shadows are drawn once for the level, D-077).
 
-### Next: Phase 5 M4 — roofs and the outside
-Roofs on every part of the building, with the walls raised to meet them. The outside: the ground, fences,
-vehicles, sheds and the construction house; the Bunker passage with its stairs and the outside tower stairs; the
-three attacker spawn groups, five spots each; and a free camera to fly over the roofs.
+### Next: Phase 5 M5 — sites, defender spawns, cameras, ingredients, zones, props
+The four bomb sites (rooms, bomb markers, plant zones) with Go to by site; the defender spawns; the default
+cameras with their facing (8 on r6calls' map) and the ingredients (7 extinguishers and 2 gas pipes there); the
+zones (the building, out of bounds, spawn-peek spots, drone holes); the rappel faces with a debug view; and the
+major cover props. Each marker is drawn in the lab (DESIGN E9).
 
 ---
 

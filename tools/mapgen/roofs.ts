@@ -203,11 +203,15 @@ export function compileRoofs(layout: Layout, rooms: RoomsResult, wallSolids: Sol
     const i = g.index(x, z);
     return i >= 0 && o.cells[i] === 1;
   };
-  /** How high what stands beside a roof at (x, z) reaches: a storey above (no limit), else the highest other roof. */
-  const besideTop = (self: Roof, x: number, z: number) => {
+  /**
+   * How high what stands beside a roof at (x, z) reaches: a storey above (no limit), else the highest other roof.
+   * `ceiled`: only roofs with a ceiling count (the space under one without is open to the room below it, so it
+   * doesn't close the roof space over a ceiling).
+   */
+  const besideTop = (self: Roof, x: number, z: number, ceiled = false) => {
     if (self.above.some((f) => !rooms.plans.get(f)!.grid.outside(x, z))) return Infinity;
     let top = -Infinity;
-    for (const o of roofs) if (o !== self && covers(o, x, z)) top = Math.max(top, topOf(o, x, z));
+    for (const o of roofs) if (o !== self && (!ceiled || !o.pitch || o.def.ceiling) && covers(o, x, z)) top = Math.max(top, topOf(o, x, z));
     return top;
   };
 
@@ -247,11 +251,13 @@ export function compileRoofs(layout: Layout, rooms: RoomsResult, wallSolids: Sol
     const across = (a: number, b: number): [number, number] => (p.axis === 0 ? [a, b] : [b, a]);
     const n = Math.max(1, Math.ceil((p.a1 - p.a0) / CELL_M));
     const step = (p.a1 - p.a0) / n;
-    const besideEnd = (b: number) => Array.from({ length: n }, (_, i) => besideTop(roof, ...across(p.a0 + (i + 0.5) * step, b)));
+    const besideEnd = (b: number, ceiled = false) => Array.from({ length: n }, (_, i) => besideTop(roof, ...across(p.a0 + (i + 0.5) * step, b), ceiled));
     const ends = (["b0", "b1"] as const).map((end) => {
-      const beside = besideEnd(end === "b0" ? p.b0 - CELL_M / 2 : p.b1 + CELL_M / 2);
+      const b = end === "b0" ? p.b0 - CELL_M / 2 : p.b1 + CELL_M / 2;
+      const beside = besideEnd(b);
       p.open[sideOf(p, end)] = beside.every((t) => t < eave + 0.01);
-      return { end, beside };
+      // Over a ceiling, the end steps stand wherever a roof without one is all that's beside (its room sees in).
+      return { end, beside: def.ceiling ? besideEnd(b, true) : beside };
     });
     if (p.low !== "both") {
       // A mono roof's high side stands against something taller (the walls under it stop at the eave).

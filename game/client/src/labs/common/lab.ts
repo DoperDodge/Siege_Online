@@ -345,40 +345,58 @@ export async function startLab(o: LabOptions): Promise<void> {
       flash(`Free camera: N goes back to your body, ${keyLabel(settings.keys.interact)} puts it here`, "info");
     } else {
       const at = freeCam!;
-      freeCam = null;
       if (putBody) {
-        // On the floor under the camera; over nothing, an eye's height below it.
+        // On the floor under the camera, lifted up to a step until a standing body fits (a slope); over
+        // nothing, an eye's height below the camera. In a wall, or with no room to stand, the camera stays.
         const hit = sim.world.castRay(new sim.R.Ray({ x: at.x, y: at.y, z: at.z }, { x: 0, y: -1, z: 0 }), 200, true, undefined, QUERY_STATIC);
-        const y = hit ? at.y - hit.timeOfImpact : at.y - data.movement.stance.stand.eye;
+        const floor = hit ? at.y - hit.timeOfImpact : at.y - data.movement.stance.stand.eye;
+        const lifts = hit?.timeOfImpact === 0 ? [] : [0, 0.1, 0.2, data.movement.step.maxStepHeight];
+        const y = lifts.map((d) => floor + d).find((y) => sim.standsFree(at.x, y, at.z));
+        if (y === undefined) {
+          flash("No room to stand under the camera", "bad");
+          return;
+        }
+        freeCam = null;
         const yawDeg = controls.yaw / DEG;
         if (net) net.send(encodeLabTool({ kind: "teleport", x: at.x, y, z: at.z, yawDeg }));
         else sim.teleport(ctrl.possessedPawnId, at.x, y, at.z, yawDeg);
         controls.setView(controls.yaw, controls.pitch);
         snapshotAll();
-      } else controls.setView(p.state.yaw, p.state.pitch);
+      } else {
+        freeCam = null;
+        // Back to the view you left: Skopós' other shell, if you were looking through it.
+        const v = sim.pawns.get(sim.viewedPawnId(ctrl.id)) ?? p;
+        controls.setView(v.state.yaw, v.state.pitch);
+      }
       controls.resetStance(putBody ? Stance.Stand : p.state.stance);
     }
     if (!$(".pause").classList.contains("hidden")) renderPause();
   }
 
-  /** Fly: the movement keys along the view, the vault key up and crouch down. */
+  /** Fly: the movement keys (or the touch stick) along the view, the vault key up and crouch down. */
   function flyFreeCam(dt: number) {
     if (!freeCam || controls.isBlocked()) return;
     const h = (a: Action) => (controls.isHeld(a) ? 1 : 0);
-    const [forward, right, up] = [h("forward") - h("back"), h("right") - h("left"), h("vault") - h("crouch")];
+    const [forward, right, up] = [h("forward") - h("back") + controls.touchMove.y, h("right") - h("left") + controls.touchMove.x, h("vault") - h("crouch")];
     if (!forward && !right && !up) return;
     const look = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(controls.pitch, controls.yaw, 0, "YXZ"));
     const side = new THREE.Vector3(1, 0, 0).applyEuler(new THREE.Euler(0, controls.yaw, 0, "YXZ"));
     const move = look.multiplyScalar(forward).add(side.multiplyScalar(right));
     move.y += up;
-    freeCam.add(move.normalize().multiplyScalar(FLY_MPS * (controls.isHeld("sprint") ? FLY_FAST : 1) * dt));
+    // Full speed on a key; the touch stick's tilt sets a fraction of it.
+    const speed = Math.min(1, move.length()) * FLY_MPS * (controls.isHeld("sprint") || controls.sprintIsLatched ? FLY_FAST : 1);
+    freeCam.add(move.normalize().multiplyScalar(speed * dt));
   }
 
-  /** In the free camera your body gets no input: it stands as it was, looking where it looked. */
+  /**
+   * In the free camera your body gets no input: it stands as it was, and the view it gives (Skopós' other
+   * shell's, on its camera) looks where it looked.
+   */
   function still(input: InputCmd): InputCmd {
     const p = sim.pawns.get(ctrl.possessedPawnId);
     if (!freeCam || !p) return input;
-    return { ...input, forward: 0, strafe: 0, buttons: 0, yaw: p.state.yaw, pitch: p.state.pitch, stance: p.state.stance, lean: 0 };
+    const v = sim.pawns.get(sim.viewedPawnId(ctrl.id)) ?? p;
+    return { ...input, forward: 0, strafe: 0, buttons: 0, yaw: v.state.yaw, pitch: v.state.pitch, stance: p.state.stance, lean: 0 };
   }
 
   const MODE_KEY: Partial<Record<Action, "crouchMode" | "proneMode" | "leanMode" | "adsMode">> = {
@@ -471,11 +489,9 @@ export async function startLab(o: LabOptions): Promise<void> {
   }
 
   hooks.keys.set("KeyN", () => setFreeCam(freeCam === null));
-  addEventListener("keydown", (e) => {
-    if (!freeCam || e.code !== settings.keys.interact || e.repeat || controls.isBlocked()) return;
-    e.preventDefault();
-    setFreeCam(false, true);
-  });
+  // While flying, keys only fly the camera; the use key (or the touch Use button) puts your body here.
+  controls.flying = () => freeCam !== null;
+  controls.onFlyUse = () => setFreeCam(false, true);
 
   // ------------------------------------------------------------------ UI actions
 
@@ -821,7 +837,7 @@ export async function startLab(o: LabOptions): Promise<void> {
         ${row(`<kbd>${keyLabel(k.melee)}</kbd>`, "Knife: kills anyone in reach in front of you, standing or down (0.6 s a swing)")}
         ${row(`Hold <kbd>${keyLabel(k.interact)}</kbd>`, "Revive a downed teammate (4 s, facing them)")}
         ${hooks.help.map(([keys, what]) => row(keys, what)).join("")}
-        ${row("<kbd>N</kbd>", `Free camera: fly through anything (${keyLabel(k.forward)}${keyLabel(k.left)}${keyLabel(k.back)}${keyLabel(k.right)} along the view, ${keyLabel(k.vault)} up, ${keyLabel(k.crouch)} down, ${keyLabel(k.sprint)} faster) while your body stays where it is; <kbd>N</kbd> goes back to it, <kbd>${keyLabel(k.interact)}</kbd> puts it on the floor under the camera`)}
+        ${row("<kbd>N</kbd>", `Free camera: fly through anything (${keyLabel(k.forward)}${keyLabel(k.left)}${keyLabel(k.back)}${keyLabel(k.right)} along the view, ${keyLabel(k.vault)} up, ${keyLabel(k.crouch)} down, ${keyLabel(k.sprint)} faster) while your body stays where it is; <kbd>N</kbd> goes back to it, <kbd>${keyLabel(k.interact)}</kbd> puts it on the floor under the camera (where a body fits). Keys you press while flying never reach your body`)}
         ${row("<kbd>F3</kbd> / <kbd>F4</kbd>", "Hitboxes / third-person view")}
         ${row("<kbd>F8</kbd>", "Stats: frame rate, frame time, 1% low, work time, draw calls (<code>?stats</code> in the link shows them from the start)")}
         ${row("<kbd>Esc</kbd>", "Pause: settings, operator, go-to menu")}
@@ -1287,6 +1303,14 @@ export async function startLab(o: LabOptions): Promise<void> {
       /** The camera's vertical field of view now (degrees; narrower down a magnified sight). */
       get fov() {
         return camera.fov;
+      },
+      /** The body you look through (Skopós' other shell, on its camera) and the one you control. */
+      get bodies() {
+        const st = (id: number) => {
+          const p = sim.pawns.get(id);
+          return p ? { ...p.state } : null;
+        };
+        return { viewed: st(sim.viewedPawnId(ctrl.id)), possessed: st(ctrl.possessedPawnId) };
       },
       /** Online tests: replace parts of the sampled input (e.g. { forward: 1 }); null hands back control. */
       set input(v: Partial<InputCmd> | null) {

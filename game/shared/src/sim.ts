@@ -519,6 +519,11 @@ export class Sim {
     refreshBroadPhase(this.world);
   }
 
+  /** Whether a standing body teleported to feet (x, y, z) has room there: no level geometry in it (lab tools). */
+  standsFree(x: number, y: number, z: number): boolean {
+    return capsuleFree(this.ctx, null, x, y + 0.02, z, this.data.movement.stance.stand.height);
+  }
+
   /**
    * Advance one tick. Possessed pawns get their controller's input. Idle pawns stand still (gravity only);
    * idle Skopós shells stay crouched. While Skopós looks through her other shell's camera, her mouse

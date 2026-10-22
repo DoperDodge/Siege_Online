@@ -42,6 +42,13 @@ export class Controls {
   weaponState: () => { slot: number; equipping: boolean; zoom?: number } | null = () => null;
   /** When this returns true (a map's plan view zooms with it), the mouse wheel doesn't switch weapons. */
   wheelTaken: () => boolean = () => false;
+  /**
+   * When this returns true (the lab's free camera is flying), a key only counts as held (the camera flies
+   * with isHeld) and does nothing for the body: no toggle, pulse or weapon request is left to reach it
+   * afterwards. The use key calls onFlyUse instead.
+   */
+  flying: () => boolean = () => false;
+  onFlyUse: () => void = () => {};
   /** Touch joystick, -1..1 each. */
   touchMove = { x: 0, y: 0 };
   private held = new Set<Action>();
@@ -193,6 +200,11 @@ export class Controls {
   }
 
   press(action: Action) {
+    if (this.flying() && action !== "respawn") {
+      if (action === "interact") this.onFlyUse();
+      else this.held.add(action);
+      return;
+    }
     if (STANCE_ACTIONS.has(action) && this.stanceLocked()) return;
     const s = this.settings;
     this.held.add(action);

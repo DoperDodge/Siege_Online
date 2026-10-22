@@ -6,7 +6,9 @@
 // shows its callout. From the Kitchen, a burst goes up through the Kids' Dorms' soft floor; on H4 in the Kids'
 // Dorms, the knife opens the hatch and you drop into the Kitchen. Up the Armory Stairs from the basement to 1F and
 // back down (M3); up the ladder from the 2F Tower onto the Cat Walk, then down it again from the top, facing the
-// drop (F, then S), the HUD line naming the room each time. With shadows on, a lost and restored WebGL
+// drop (F, then S), the HUD line naming the room each time. Go to each attacker spawn puts you outside on the
+// ground (M4); the free camera puts you on the Dining roof, and keeps its keys from your body (F with the camera
+// in a wall, 2 and F over the ladder's foot). With shadows on, a lost and restored WebGL
 // context draws the shadows again (they are drawn on request only, D-077), and hiding the storeys above redraws
 // them. Online, two pages at 100 ms of simulated round trip: A breaks the Main Entrance barricade and B sees
 // exactly the server's panels. Screenshots go to builds/e2e. Requires `npm run build` first. The checks follow
@@ -379,6 +381,38 @@ try {
     Array.isArray(flying.freeCam) && Math.abs(flying.freeCam[1] - 10) < 0.01 && (await view(off)).freeCam === null &&
     Math.abs(dropped.x - dining[0]) < 0.1 && Math.abs(dropped.z - dining[2]) < 0.1 && Math.abs(dropped.y - 3.2) < 0.05 && dropped.grounded;
   await off.screenshot({ path: shot("oregon-dining-roof.png") });
+
+  // The free camera keeps its keys (D-098): with the camera in a wall, F leaves the camera there and the body
+  // where it was; over the 2F Tower ladder's foot, facing the ladder, 2 and then F put the body down beside it,
+  // not on it, still holding its primary weapon (neither key reaches the body).
+  const roofed = await own(off);
+  const wall = lvl.solids.find((s) => s.id === "1F.w005#0");
+  await off.evaluate((c) => window.__lab.fly([c[0], 1.65, c[2], 0, 0]), wall.center);
+  await sleep(300);
+  await off.keyboard.press("KeyF");
+  await sleep(600);
+  const inWall = { camera: (await view(off)).freeCam, body: await own(off) };
+  await off.keyboard.press("KeyN");
+  await sleep(300);
+  const back = { camera: (await view(off)).freeCam, body: await own(off) };
+  const [lx, lz] = ladder ? ahead(ladder.yawDeg) : [0, 0];
+  if (ladder) {
+    await off.evaluate((p) => window.__lab.fly(p), [ladder.base[0] - lx * 0.35, ladder.base[1] + 1.65, ladder.base[2] - lz * 0.35, ladder.yawDeg, 0]);
+    await sleep(300);
+    await off.keyboard.press("Digit2");
+    await off.keyboard.press("KeyF");
+    await sleep(1500);
+  }
+  const foot = await own(off);
+  const moved = (b) => Math.hypot(b.x - roofed.x, b.y - roofed.y, b.z - roofed.z);
+  result.offline.freeCameraKeys = {
+    wall: { camera: inWall.camera, bodyMoved: moved(inWall.body), back: back.camera, bodyMovedBack: moved(back.body) },
+    foot: { at: [foot.x, foot.y, foot.z], mode: foot.mode, slot: foot.slot },
+  };
+  result.checks.freeCameraKeepsItsKeys =
+    Array.isArray(inWall.camera) && moved(inWall.body) < 0.05 && back.camera === null && moved(back.body) < 0.05 &&
+    ladder !== undefined && foot.mode === PawnMode.Walk && foot.slot === 0 && Math.abs(foot.y - ladder.base[1]) < 0.05 &&
+    Math.hypot(foot.x - (ladder.base[0] - lx * 0.35), foot.z - (ladder.base[2] - lz * 0.35)) < 0.1;
   await off.close();
 
   // ---- shadows on: a lost and restored WebGL context draws the shadow map again
