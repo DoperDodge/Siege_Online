@@ -697,8 +697,10 @@ export const levelSchema = z.strictObject({
         id: z.string(),
         kind: z.enum(["building", "out_of_bounds", "spawn_peek", "rappel", "drone_hole"]),
         boxes: z.array(z.strictObject({ center: vec3, size: vec3, yawDeg: z.number().default(0) })).min(1),
-        /** Which way the face looks (rappel faces). */
+        /** Which way it looks: out of a rappel face, or out of the opening a spawn peek or a run-out is at. */
         normal: vec3.optional(),
+        /** The attackers' spawn group (spawns[].group) a spawn peek or a run-out looks toward. */
+        faces: z.string().optional(),
       }),
     )
     .default([]),

@@ -26,8 +26,33 @@ export interface Solid {
 
 export interface Zone {
   id: string;
-  kind: "drone_hole";
+  kind: "building" | "out_of_bounds" | "spawn_peek" | "rappel" | "drone_hole";
   boxes: { center: [number, number, number]; size: [number, number, number] }[];
+  /** Which way it looks: out of a rappel face, or out of the opening a spawn peek or a run-out is at. */
+  normal?: [number, number, number];
+  /** The attackers' spawn group a spawn peek or a run-out looks toward. */
+  faces?: string;
+}
+
+/** A door or window as compiled: where it is in its wall line, how high, and which way is outside. */
+export interface Opening {
+  id: string;
+  floor: Floor;
+  kind: "DOOR" | "WINDOW";
+  /** H: its line runs along x (it looks along z); V: along z. */
+  axis: "H" | "V";
+  /** The line's centreline (z for H, x for V) and thickness, and the opening's ends along it, metres. */
+  at: number;
+  t: number;
+  a0: number;
+  a1: number;
+  /** The hole's bottom and top above the storey's floor, metres: a door's from the floor, a window's from its sill. */
+  y0: number;
+  y1: number;
+  /** In an outside wall: one side of it is outside the building. */
+  exterior: boolean;
+  /** The outside's side of the line: +1 toward +z (H) or +x (V), −1 the other way (−1 when neither side is). */
+  out: 1 | -1;
 }
 
 /** A wall line in world metres, after the frame and before the junction rule moved its ends. */
@@ -52,8 +77,8 @@ export interface WallsResult {
   solids: Solid[];
   zones: Zone[];
   warnings: string[];
-  /** Per compiled exterior opening: its id and which way is outside. */
-  exterior: Map<string, boolean>;
+  /** Every door and window, in the order compiled. */
+  openings: Opening[];
   /** The storey footprint (world u), for spawn facing and later checks. */
   footprint: { minX: number; minY: number; maxX: number; maxY: number };
   /** Each storey's plan raster after the flood (inside = 0), for checks and debugging. */
@@ -77,7 +102,7 @@ export function compileWalls(layout: Layout, fr: Frames, parts: { floor: Floor; 
   const warnings: string[] = [];
   const solids: Solid[] = [];
   const zones: Zone[] = [];
-  const exterior = new Map<string, boolean>();
+  const openings: Opening[] = [];
   const grids = new Map<Floor, PlanGrid>();
   let minX = Infinity;
   let minY = Infinity;
@@ -455,10 +480,11 @@ export function compileWalls(layout: Layout, fr: Frames, parts: { floor: Floor; 
           if (head !== null && h - head >= 0.05) solids.push(box(l, `${s.def.id}.head`, s.a0, s.a1, head, h, 0, l.t, { surface: "HARD_WALL" }));
           continue;
         }
-        exterior.set(s.def.id, isExterior);
         const barricade = s.def.barricade ?? (isExterior ? "standing" : "empty");
+        const opening = { id: s.def.id, floor: l.floor, axis: l.axis, at: l.at, t: l.t, a0: s.a0, a1: s.a1, exterior: isExterior, out } as const;
         if (s.def.kind === "DOOR") {
           const head = s.def.headM ?? d.door.headM;
+          openings.push({ ...opening, kind: "DOOR", y0: 0, y1: head });
           if (h - head >= 0.05) solids.push(box(l, `${s.def.id}.head`, s.a0, s.a1, head, h, 0, l.t, { surface: "HARD_WALL" }));
           if (barricade !== "none") {
             solids.push(box(l, `${s.def.id}.bar`, s.a0, s.a1, 0, head, 0, d.door.barricadeM, { surface: "BARRICADE", ...(barricade === "empty" ? { panel: { empty: true } } : {}) }));
@@ -468,6 +494,7 @@ export function compileWalls(layout: Layout, fr: Frames, parts: { floor: Floor; 
         // WINDOW: a vaultable sill, a header, glass toward the outside and the barricade toward the inside.
         const sill = s.def.sillM ?? d.window.sillM;
         const head = s.def.headM ?? d.window.headM;
+        openings.push({ ...opening, kind: "WINDOW", y0: sill, y1: head });
         solids.push(box(l, `${s.def.id}.sill`, s.a0, s.a1, 0, sill, 0, l.t, { surface: "HARD_WALL", vaultable: true }));
         if (h - head >= 0.05) solids.push(box(l, `${s.def.id}.head`, s.a0, s.a1, head, h, 0, l.t, { surface: "HARD_WALL" }));
         if (s.def.glass ?? d.window.glass) solids.push(box(l, `${s.def.id}.glass`, s.a0, s.a1, sill, head, out * 0.05, d.window.glassM, { surface: "WINDOW" }));
@@ -489,5 +516,5 @@ export function compileWalls(layout: Layout, fr: Frames, parts: { floor: Floor; 
       solids.push({ id: `post:${[h.def.id, v.def.id].sort().join("|")}`, center: [x, floorY + hgt / 2, z], size: [2 * hx, hgt, 2 * hz], surface: "HARD_WALL" });
     }
   }
-  return { solids, zones, warnings, exterior, footprint: { minX, minY, maxX, maxY }, grids };
+  return { solids, zones, warnings, openings, footprint: { minX, minY, maxX, maxY }, grids };
 }

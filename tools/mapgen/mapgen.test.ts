@@ -1136,6 +1136,155 @@ describe("oregon sites, cameras and ingredients (M5, DESIGN §5.11)", () => {
   });
 });
 
+describe("oregon zones and rappel faces (M5, DESIGN §5.11)", () => {
+  type ZoneBox = { center: Vec3; size: Vec3 };
+  type LevelZone = { id: string; kind: string; boxes: ZoneBox[]; normal?: Vec3; faces?: string };
+  const zones = level.zones as LevelZone[];
+  const storeys = level.storeys as { id: string; floorY: number }[];
+  const floorOf = (f: string) => storeys.find((s) => s.id === f)!.floorY;
+  const inBox = (b: ZoneBox, p: Vec3, eps = 1e-6) => p.every((v, a) => Math.abs(v - b.center[a]) <= b.size[a] / 2 + eps);
+  /** The building zones holding a point. */
+  const buildingAt = (p: Vec3, among = zones) => among.filter((z) => z.kind === "building" && z.boxes.some((b) => inBox(b, p))).map((z) => z.id);
+  const opened = compileWalls(inputs.layout, fr, inputs.walls, inputs.exterior.playable).openings;
+  type Opening = (typeof opened)[number];
+  /** The point `m` metres out from an opening's outer face (negative: in from it), at its middle, at height y. */
+  const outFrom = (o: Opening, m: number, y: number): Vec3 => {
+    const across = o.at + o.out * (o.t / 2 + m);
+    const along = (o.a0 + o.a1) / 2;
+    return o.axis === "H" ? [along, y, across] : [across, y, along];
+  };
+  /** The rappel faces over an opening: on its storey, looking out of it, against its outer face, across all of it. */
+  const facesOver = (o: Opening, among = zones) =>
+    among.filter((z) => {
+      if (z.kind !== "rappel" || z.id.split(":")[1] !== o.floor) return false;
+      const [b] = z.boxes;
+      const [axis, along] = o.axis === "H" ? [2, 0] : [0, 2];
+      if (z.normal![axis] !== o.out) return false;
+      const wallSide = b.center[axis] - (o.out * b.size[axis]) / 2;
+      return Math.abs(wallSide - (o.at + (o.out * o.t) / 2)) <= 0.2 && b.center[along] - b.size[along] / 2 <= o.a0 + 1e-6 && b.center[along] + b.size[along] / 2 >= o.a1 - 1e-6;
+    });
+
+  it("each storey's building zone holds its rooms and walls, from its floor to the next storey's; the roofs and the attackers' spawns are outside", () => {
+    expect(zones.filter((z) => z.kind === "building").map((z) => z.id)).toEqual(storeys.map((s) => `building:${s.id}`));
+    storeys.forEach((s, i) => {
+      const top = storeys[i + 1]?.floorY ?? s.floorY + inputs.layout.defaults.wallHeightM;
+      for (const b of zones.find((z) => z.id === `building:${s.id}`)!.boxes) expect([b.center[1] - b.size[1] / 2, b.center[1] + b.size[1] / 2].map((v) => +v.toFixed(4)), s.id).toEqual([s.floorY, top]);
+    });
+    // Every room, at chest height over its rectangles' middles and at its anchor, is in its storey's zone and no other.
+    for (const r of level.rooms as { id: string; storey: string; rects: [number, number, number, number][]; anchor: Vec3 }[]) {
+      const y = floorOf(r.storey) + 1.2;
+      for (const [x, z] of [...r.rects.map(([x0, z0, x1, z1]) => [(x0 + x1) / 2, (z0 + z1) / 2]), [r.anchor[0], r.anchor[2]]]) expect(buildingAt([x, y, z]), r.id).toEqual([`building:${r.storey}`]);
+    }
+    // In an outside door or window (its wall's middle line) a body is in; a metre out of it, out.
+    const outside = opened.filter((o) => o.exterior);
+    expect(outside.length).toBe(report.counts.exteriorOpenings);
+    for (const o of outside) {
+      const y = floorOf(o.floor) + (o.y0 + o.y1) / 2;
+      expect(buildingAt(outFrom(o, -o.t / 2, y)), o.id).toEqual([`building:${o.floor}`]);
+      expect(buildingAt(outFrom(o, 1, y)), o.id).toEqual([]);
+    }
+    // On a walkable roof, on its slabs or halfway up its slopes, a body is out (map_features §10: the roofs are outside).
+    type Ramp = { id: string; start: Vec3; yawDeg: number; length: number; angleDeg: number };
+    for (const roof of inputs.layout.roofs.filter((r) => r.walkable)) {
+      const slabs = solids.filter((b) => b.id.startsWith(`${roof.id}#`) && !b.id.includes("."));
+      const ramps = (level.ramps as Ramp[]).filter((r) => r.id.startsWith(`${roof.id}.`));
+      expect(slabs.length + ramps.length, roof.id).toBeGreaterThan(0);
+      for (const b of slabs) expect(buildingAt([b.center[0], b.center[1] + b.size[1] / 2 + 0.9, b.center[2]]), b.id).toEqual([]);
+      for (const r of ramps) {
+        const [run, rise] = [(r.length / 2) * Math.cos(r.angleDeg * DEG), (r.length / 2) * Math.sin(r.angleDeg * DEG)];
+        expect(buildingAt([r.start[0] - Math.sin(r.yawDeg * DEG) * run, r.start[1] + rise + 0.9, r.start[2] - Math.cos(r.yawDeg * DEG) * run]), r.id).toEqual([]);
+      }
+    }
+    // Attackers spawn outside it, defenders inside.
+    for (const s of level.spawns as { id: string; pos: Vec3; side?: string }[]) {
+      const at = buildingAt([s.pos[0], s.pos[1] + 0.9, s.pos[2]]);
+      if (s.side) expect(at.length, s.id).toBe(s.side === "attack" ? 0 : 1);
+    }
+  });
+
+  it("puts map_features §10's spawn peeks inside their doors and windows and its run-outs outside, looking out toward their spawn", () => {
+    const authored = inputs.layout.zones.flatMap((z) => z.openings.map((id) => ({ ...z, opening: id })));
+    const compiled = zones.filter((z) => z.kind === "spawn_peek" || z.kind === "out_of_bounds");
+    expect(compiled.map((z) => z.id).sort()).toEqual(authored.map((z) => `${z.id}:${z.opening}`).sort());
+    expect(new Set(authored.map((z) => z.faces))).toEqual(new Set(["A_JUNKYARD", "B_STREET", "C_CONSTRUCTION", undefined]));
+    expect(new Set(authored.map((z) => z.kind))).toEqual(new Set(["spawn_peek", "out_of_bounds"]));
+    const depth = inputs.layout.defaults.zone.depthM;
+    for (const a of authored) {
+      const z = compiled.find((c) => c.id === `${a.id}:${a.opening}`)!;
+      const o = opened.find((p) => p.id === a.opening)!;
+      expect(o.exterior, o.id).toBe(true);
+      expect(z.boxes.length).toBe(1);
+      const [b] = z.boxes;
+      const normal: Vec3 = o.axis === "H" ? [0, 0, o.out] : [o.out, 0, 0];
+      expect([z.kind, z.faces, z.normal], z.id).toEqual([a.kind, a.faces, normal]);
+      // From the floor to the opening's top, as wide as the opening, depthM deep, against its inner face or its outer one.
+      const y0 = floorOf(o.floor);
+      expect([b.center[1] - b.size[1] / 2, b.center[1] + b.size[1] / 2].map((v) => +v.toFixed(4)), z.id).toEqual([y0, +(y0 + o.y1).toFixed(4)]);
+      expect((o.axis === "H" ? [b.size[0], b.size[2]] : [b.size[2], b.size[0]]).map((v) => +v.toFixed(4)), z.id).toEqual([+(o.a1 - o.a0).toFixed(4), depth]);
+      const middle = a.kind === "spawn_peek" ? outFrom(o, -o.t - depth / 2, y0 + 1.2) : outFrom(o, depth / 2, y0 + 1.2);
+      expect(middle.map((v, i) => Math.abs(v - b.center[i]) < 1e-3 || i === 1), z.id).toEqual([true, true, true]);
+      expect(buildingAt(middle), z.id).toEqual(a.kind === "spawn_peek" ? [`building:${o.floor}`] : []);
+      // The spawn it faces is out in front of it.
+      for (const s of (level.spawns as { pos: Vec3; group?: string }[]).filter((s) => a.faces !== undefined && s.group === a.faces)) {
+        expect((s.pos[0] - b.center[0]) * normal[0] + (s.pos[2] - b.center[2]) * normal[2], `${z.id} looks toward ${a.faces}`).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("has a rappel face just outside every outside wall above ground, from its floor to its top: a wall behind it, the outside in front", () => {
+    const rappel = zones.filter((z) => z.kind === "rappel");
+    expect(rappel.length).toBeGreaterThan(40);
+    expect(new Set(rappel.map((z) => z.id.split(":")[1]))).toEqual(new Set(["1F", "2F", "3F"]));
+    const walls = solids.filter((b) => !b.drawOnly && !b.bodiesOnly && (b.surface === "HARD_WALL" || b.surface === "REINFORCEABLE")) as unknown as ZoneBox[];
+    for (const z of rappel) {
+      const [b] = z.boxes;
+      const n = z.normal!;
+      const [axis, along] = n[0] !== 0 ? [0, 2] : [2, 0];
+      const y0 = floorOf(z.id.split(":")[1]);
+      expect(+(b.center[1] - b.size[1] / 2).toFixed(4), z.id).toBe(y0);
+      expect(b.center[1] + b.size[1] / 2, z.id).toBeGreaterThanOrEqual(y0 + 3 - 1e-6);
+      expect([+b.size[axis].toFixed(4), b.size[along] >= 0.5], z.id).toEqual([0.05, true]);
+      // Every half metre along it, above the doors' and windows' heads: a wall right behind it, outside in front.
+      const wallSide = b.center[axis] - (n[axis] * b.size[axis]) / 2;
+      const [lo, len] = [b.center[along] - b.size[along] / 2, b.size[along]];
+      const steps = Math.ceil((len - 0.1) / 0.5);
+      for (let i = 0; i <= steps; i++) {
+        const at = (m: number): Vec3 => {
+          const p: Vec3 = [0, y0 + 2.5, 0];
+          p[axis] = wallSide + n[axis] * m;
+          p[along] = lo + 0.05 + ((len - 0.1) * i) / steps;
+          return p;
+        };
+        expect(walls.some((w) => inBox(w, at(-0.1))), `${z.id}: a wall behind ${at(0)}`).toBe(true);
+        expect(buildingAt(at(0.3)), `${z.id}: outside in front of ${at(0)}`).toEqual([]);
+      }
+    }
+    // Every outside door and window above ground is on one, across all of it.
+    for (const o of opened.filter((o) => o.exterior && floorOf(o.floor) >= 0)) expect(facesOver(o).length, o.id).toBe(1);
+  });
+
+  it("leaves out the faces of a wall rappel is refused on, and reports a zone or a refusal it can't place", () => {
+    const line = inputs.walls.find((p) => p.floor === "2F")!.walls.find((w) => w.spans.some((s) => s.id === "2F.o021"))!;
+    const refused = compile({ ...inputs, layout: { ...inputs.layout, rappel: { refuse: [line.id, "2F.w999"] } } });
+    const big = opened.find((o) => o.id === "2F.o021")!;
+    expect(facesOver(big).length).toBe(1);
+    expect(facesOver(big, refused.level.zones as LevelZone[])).toEqual([]);
+    expect(refused.report.errors).toEqual([`rappel.refuse: "2F.w999" isn't a wall line of the walls parts`]);
+    // The other storeys' faces don't change.
+    const others = (among: LevelZone[]) => among.filter((z) => z.kind === "rappel" && !z.id.startsWith("rappel:2F:"));
+    expect(others(refused.level.zones as LevelZone[])).toEqual(others(zones));
+
+    // A zone at a span built as wall (2F.o005, P36), at an inside door, or facing a defenders' group.
+    const inside = opened.find((o) => !o.exterior)!.id;
+    const bad = compile({ ...inputs, layout: { ...inputs.layout, zones: [{ id: "Z1", kind: "spawn_peek", openings: ["2F.o005", inside], faces: "SITE_DORMS", _unverified: [] }] } });
+    expect(bad.report.errors).toEqual([
+      `zone Z1: it faces "SITE_DORMS", which isn't an attackers' spawn group`,
+      `zone Z1: "2F.o005" isn't a door or window of the compiled walls`,
+      `zone Z1: ${inside} isn't in an outside wall`,
+    ]);
+  });
+});
+
 describe("oregon roofs (M4, DESIGN §5.8)", () => {
   const roofs = inputs.layout.roofs;
   type RoofDef = (typeof roofs)[number];

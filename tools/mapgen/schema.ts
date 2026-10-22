@@ -235,6 +235,8 @@ export const layoutSchema = z.strictObject({
     camera: z.strictObject({ belowCeilingM: num.positive(), pitchDeg: num, reachM: num.positive(), postM: num.positive() }),
     /** P32: extinguishers and gas pipes on the wall nearest their marker (within `reachM`), at these heights. */
     ingredient: z.strictObject({ fireExtinguisherM: num.positive(), gasPipeM: num.positive(), reachM: num.positive() }),
+    /** P34: a spawn peek's or a run-out's box reaches this far in or out from its opening. */
+    zone: z.strictObject({ depthM: num.positive() }),
   }),
   rooms: z
     .array(z.strictObject({ id: z.string(), floor: Floor, callout: z.string(), names: z.record(z.string(), z.string()).optional(), seed: U2, frame: Frame }))
@@ -350,9 +352,21 @@ export const layoutSchema = z.strictObject({
       }),
     )
     .default([]),
+  /**
+   * Spawn peeks and run-outs (zones.ts, map_features §10): a box in front of each door or window named, inside it
+   * (spawn_peek) or outside it (out_of_bounds), looking out of it toward the attackers' spawn group `faces`.
+   */
   zones: z
     .array(
-      z.strictObject({ id: z.string(), kind: z.enum(["out_of_bounds", "spawn_peek"]), level: Level, frame: Frame, rects: z.array(URect), faces: z.string().optional(), _unverified: Uv }),
+      z.strictObject({
+        id: z.string(),
+        kind: z.enum(["out_of_bounds", "spawn_peek"]),
+        openings: z.array(z.string()).min(1),
+        faces: z.string().optional(),
+        research: z.string().optional(),
+        note: z.string().optional(),
+        _unverified: Uv,
+      }),
     )
     .default([]),
   rappel: z.strictObject({ refuse: z.array(z.string()) }).default({ refuse: [] }),

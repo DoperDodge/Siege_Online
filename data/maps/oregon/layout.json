@@ -15,7 +15,8 @@
   "defaults.killDepthM",
   "defaults.site",
   "defaults.camera",
-  "defaults.ingredient"
+  "defaults.ingredient",
+  "defaults.zone"
  ],
  "_sources": {
   "units.mPerU": "research/oregon/layout_notes.md §1: the school bus is about 77 u long (ESTIMATE, ±15%)",
@@ -36,7 +37,9 @@
   "roofs": "research/oregon/layout_notes.md §4.5 (footprints and names, the Dining and Meeting W roofs walkable at 2F level) and the r6calls and Ubisoft roof renders (ridges, flat parts), each rectangle on the outer faces of the walls under it; shapes, pitches and ceilings are ours (P24)",
   "sites": "research/oregon/layout_notes.md §3 (rooms, A and B as r6calls letters them); bombs at r6calls' bomb markers (extracted.json points, `from`), icon anchors (P30)",
   "cameras": "research/oregon/map_features.md §2: r6calls' camera markers (extracted.json points, `from`); mounted by rule P31",
-  "ingredients": "research/oregon/map_features.md §3: r6calls' extinguisher and gas-pipe markers (extracted.json points, `from`); mounted by rule P32"
+  "ingredients": "research/oregon/map_features.md §3: r6calls' extinguisher and gas-pipe markers (extracted.json points, `from`); mounted by rule P32",
+  "zones": "research/oregon/map_features.md §10 candidates ([DER], UNVERIFIED), each at the doors and windows of the walls parts that match its row; boxes by rule P34",
+  "rappel": "research/oregon/map_features.md §8: every roof edge anchors a rappel down the exterior wall under it, none refused until Ulo reports one (Q9)"
  },
  "id": "oregon",
  "name": "Oregon",
@@ -71,7 +74,8 @@
   "junctionU": 1,
   "site": { "plantMarginM": 0.5 },
   "camera": { "belowCeilingM": 0.3, "pitchDeg": -20, "reachM": 2, "postM": 3 },
-  "ingredient": { "fireExtinguisherM": 1, "gasPipeM": 1.2, "reachM": 1.5 }
+  "ingredient": { "fireExtinguisherM": 1, "gasPipeM": 1.2, "reachM": 1.5 },
+  "zone": { "depthM": 1.5 }
  },
  "spawns": [
   { "id": "lab", "side": "lab", "group": "LAB", "level": "EXT", "frame": "world", "at": [253, 295], "facing": 0, "src": "hand", "note": "just outside the Main Entrance, facing it (P29)", "_unverified": ["at"] },
@@ -267,6 +271,16 @@
   {"id": "ING7", "kind": "fire_extinguisher", "level": "2F", "frame": "2F", "at": [243.61, 185.37], "from": "path12-0-3-8-7", "research": "map_features §3 ING7: Low Attic", "_unverified": ["at"]},
   {"id": "ING8", "kind": "gas_pipe", "level": "1F", "frame": "1F", "at": [288.61, 265.41], "from": "path5-1", "research": "map_features §3 ING8: Main Stairs / Garage south-west corner", "_unverified": ["at"]},
   {"id": "ING9", "kind": "gas_pipe", "level": "2F", "frame": "2F", "at": [270.23, 144.24], "from": "path5-1-8", "research": "map_features §3 ING9: Attic (north connector), east wall", "_unverified": ["at"]}
+ ],
+ "zones": [
+  {"id": "PEEK_C_TOWER", "kind": "spawn_peek", "openings": ["1F.o015", "1F.o027", "2F.o006", "2F.o014", "3F.o000"], "faces": "C_CONSTRUCTION", "research": "map_features §10: Big Tower windows (1F/2F) and the tower-top room, toward C Construction Site", "note": "the Tower's 1F north door and the Rear Stage east door, its two 2F north windows and the Cat Walk's north window", "_unverified": ["openings", "faces"]},
+  {"id": "PEEK_C_GARAGE", "kind": "spawn_peek", "openings": ["1F.o014"], "faces": "C_CONSTRUCTION", "research": "map_features §10: Meeting Hall east windows and the Garage north door, toward C / Parking", "note": "the Garage north door; the Meeting Hall's east windows aren't built (layout_notes §8: window-like shapes, no wall glyph)", "_unverified": ["openings", "faces"]},
+  {"id": "PEEK_A_SMALL_TOWER", "kind": "spawn_peek", "openings": ["1F.o021", "1F.o005"], "faces": "A_JUNKYARD", "research": "map_features §10: Small Tower 1F door and 2F windows, toward A Junkyard / Bus Yard", "note": "the Small Tower's 1F west and south doors; the walls built have no 2F Small Tower window looking west or south", "_unverified": ["openings", "faces"]},
+  {"id": "PEEK_A_DORMS", "kind": "spawn_peek", "openings": ["2F.o021"], "faces": "A_JUNKYARD", "research": "map_features §10: Dorm Main Hall / Kids' west windows, toward A (Bus Yard side)", "note": "the Big Window; Kids' Dorms has no west window in the walls built (its outside window, 2F.o004, looks north)", "_unverified": ["openings", "faces"]},
+  {"id": "PEEK_B_MASTER", "kind": "spawn_peek", "openings": ["2F.o011"], "faces": "B_STREET", "research": "map_features §10: Master / Balcony, Main Entrance and Classroom, toward B Street", "note": "the Master Bedroom's door onto the Balcony", "_unverified": ["openings", "faces"]},
+  {"id": "PEEK_B_ENTRANCE", "kind": "spawn_peek", "openings": ["1F.o011"], "faces": "B_STREET", "research": "map_features §10: Master / Balcony, Main Entrance and Classroom, toward B Street", "note": "the Main Entrance; the Classroom's one outside window (1F.o018) looks west into the recessed yard (layout_notes §6), away from the Street, so it isn't one", "_unverified": ["openings", "faces"]},
+  {"id": "RUNOUT_KITCHEN", "kind": "out_of_bounds", "openings": ["1F.o024"], "research": "map_features §10: the Kitchen Corridor west exterior door, a run-out to the Farmlands (north-west)", "note": "no attackers' spawn on that side", "_unverified": ["openings"]},
+  {"id": "RUNOUT_BUNKER", "kind": "out_of_bounds", "openings": ["B.o009"], "faces": "C_CONSTRUCTION", "research": "map_features §10: the Blue Bunker outside stairs / east door, a basement run-out toward C Construction Site", "note": "outside the Bunker's east door, at the foot of its outside stairs", "_unverified": ["openings", "faces"]}
  ],
  "rappel": { "refuse": [] }
 }

@@ -16,6 +16,7 @@ import { checkRoofs, compileRoofs } from "./roofs.js";
 import { compileRooms, storeyOfBox } from "./rooms.js";
 import { checkStairs, compileStairs, stairKeepOut, stairRails } from "./stairs.js";
 import { compileWalls, type Solid, type Zone } from "./walls.js";
+import { compileZones } from "./zones.js";
 
 export interface Inputs {
   layout: Layout;
@@ -111,6 +112,8 @@ export function compile(inputs: Inputs): Compiled {
   const fp = wallsOut.footprint;
   const centre: [number, number] = [((fp.minX + fp.maxX) / 2) * k, ((fp.minY + fp.maxY) / 2) * k];
   const markersOut = compileMarkers(layout, fr, wallsOut.solids, roomsOut, centre);
+  // ---- Zones: the building, spawn peeks and run-outs (P34), rappel faces; the drone holes came with the walls.
+  const zonesOut = compileZones(layout, wallsOut.openings, wallsOut.solids, roomsOut, parts);
   const panelKind = new Set(["REINFORCEABLE", "SOFT_FLOOR", "HATCH"]);
   const byKind = (s: Solid) => (panelKind.has(s.surface) ? 1 : s.surface === "BARRICADE" || s.surface === "WINDOW" || /\.(head|sill)$/.test(s.id) ? 2 : 0);
   const solids: Solid[] = [...wallsOut.solids, ...floorsOut.solids, ...stairsOut.solids, ...rails, ...roofsOut.solids, ...exteriorOut.solids, ...markersOut.solids].sort(
@@ -158,7 +161,7 @@ export function compile(inputs: Inputs): Compiled {
     const next = layout.storeys[i + 1];
     return { id: s.id, floorY: s.floorY, ceilingY: r4(next ? next.floorY - next.slabM : s.floorY + d.wallHeightM) };
   });
-  const zones: Zone[] = wallsOut.zones;
+  const zones: Zone[] = [...wallsOut.zones, ...zonesOut.zones];
 
   const out = (s: Solid) => ({
     id: s.id,
@@ -198,7 +201,13 @@ export function compile(inputs: Inputs): Compiled {
     sites: markersOut.sites,
     cameras: markersOut.cameras,
     ingredients: markersOut.ingredients,
-    zones: zones.map((z) => ({ id: z.id, kind: z.kind, boxes: z.boxes.map((b) => ({ center: v3(b.center), size: v3(b.size) })) })),
+    zones: zones.map((z) => ({
+      id: z.id,
+      kind: z.kind,
+      boxes: z.boxes.map((b) => ({ center: v3(b.center), size: v3(b.size) })),
+      ...(z.normal ? { normal: z.normal } : {}),
+      ...(z.faces !== undefined ? { faces: z.faces } : {}),
+    })),
   };
   // The engine's own schema has the last word on shape.
   levelSchema.parse(level);
@@ -210,6 +219,7 @@ export function compile(inputs: Inputs): Compiled {
     ...roofsOut.errors,
     ...exteriorOut.errors,
     ...markersOut.errors,
+    ...zonesOut.errors,
     ...checkStairs(layout, stairsOut, level.solids, level.rooms),
     ...checkRoofs(layout, roofsOut.roofs, level.solids, level.rooms),
     ...checkExterior(layout, level.solids, new Set(exterior.items.map((i) => i.id)), level.rooms),
@@ -222,9 +232,10 @@ export function compile(inputs: Inputs): Compiled {
     counts[`hatches ${floor}`] = c.hatches;
   }
   for (const s of level.solids) counts[s.surface] = (counts[s.surface] ?? 0) + 1;
-  counts.exteriorOpenings = [...wallsOut.exterior.values()].filter(Boolean).length;
-  counts.interiorOpenings = [...wallsOut.exterior.values()].filter((x) => !x).length;
-  const openings = Object.fromEntries([...wallsOut.exterior].sort(([p], [q]) => (p < q ? -1 : 1)).map(([id, ext]) => [id, ext ? "exterior" : "interior"] as const));
+  for (const z of zones) counts[`zones ${z.kind}`] = (counts[`zones ${z.kind}`] ?? 0) + 1;
+  counts.exteriorOpenings = wallsOut.openings.filter((o) => o.exterior).length;
+  counts.interiorOpenings = wallsOut.openings.filter((o) => !o.exterior).length;
+  const openings = Object.fromEntries([...wallsOut.openings].sort((p, q) => (p.id < q.id ? -1 : 1)).map((o) => [o.id, o.exterior ? "exterior" : "interior"] as const));
   const frameReport = frameDiagnostics(layout, inputs.walls, exterior.playable, floorsOut.hatches);
   // Amendment 2: a hatch whose opening lands under 0.3 m from a wall of the room below is worth a look.
   const landWarnings = Object.entries(frameReport).flatMap(([frame, o]) =>

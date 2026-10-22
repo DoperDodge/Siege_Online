@@ -28,7 +28,10 @@ function testMap(): LevelDef {
     sites: [{ id: "S1", name: "Yard", rooms: ["1F_YARD"], bombs: [{ id: "S1A", pos: [1, 0, 1], room: "1F_YARD" }], plantMarginM: 0.5 }],
     cameras: [{ id: "CAM1", pos: [9, 2.5, 9], yawDeg: 45, pitchDeg: -20, room: "1F_YARD" }],
     ingredients: [{ id: "FE1", kind: "fire_extinguisher", pos: [-9, 1, 0], yawDeg: -90, room: "1F_YARD" }],
-    zones: [{ id: "Z_OOB", kind: "out_of_bounds", boxes: [{ center: [0, 0, 15], size: [20, 4, 10] }] }],
+    zones: [
+      { id: "Z_OOB", kind: "out_of_bounds", boxes: [{ center: [0, 0, 15], size: [20, 4, 10] }] },
+      { id: "Z_PEEK", kind: "spawn_peek", boxes: [{ center: [0, 1, 9], size: [2, 2, 1.5] }], normal: [0, 0, 1], faces: "A_TEST" },
+    ],
   });
 }
 
@@ -59,6 +62,7 @@ describe("map metadata", () => {
     lvl.sites[0].rooms.push("1F_NOWHERE");
     lvl.sites[0].bombs[0].room = "1F_ELSEWHERE";
     lvl.cameras[0].room = "1F_GONE";
+    lvl.zones[1].faces = "B_NOWHERE";
     lvl.solids.push({ ...lvl.solids[0] });
     lvl.solids.push({ id: "soft_fence", center: [0, 1, 5], size: [4, 2, 0.2], yawDeg: 0, surface: "SOFT_WALL", vaultable: false, bodiesOnly: true, drawOnly: false });
     lvl.solids.push({ id: "soft_bar", center: [0, 1, 6], size: [4, 0.05, 0.05], yawDeg: 0, surface: "SOFT_WALL", vaultable: false, bodiesOnly: false, drawOnly: true });
@@ -71,6 +75,7 @@ describe("map metadata", () => {
     expect(problems).toMatch(/site "S1" names room "1F_NOWHERE"/);
     expect(problems).toMatch(/bomb "S1A" of site "S1" is in "1F_ELSEWHERE"/);
     expect(problems).toMatch(/camera "CAM1" names room "1F_GONE"/);
+    expect(problems).toMatch(/zone "Z_PEEK" faces "B_NOWHERE", which isn't an attackers' spawn group/);
     expect(problems).toMatch(/two solids share the id "floor"/);
     expect(problems).toMatch(/solid "soft_fence" stops bodies only/);
     expect(problems).toMatch(/solid "soft_bar" is drawn only/);

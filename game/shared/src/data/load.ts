@@ -210,6 +210,8 @@ function mapProblems(lvl: LevelDef, file: string): string[] {
   }
   for (const c of lvl.cameras) if (c.room !== undefined && !rooms.has(c.room)) out.push(`${file}: camera "${c.id}" names room "${c.room}", which isn't in rooms`);
   for (const i of lvl.ingredients) if (i.room !== undefined && !rooms.has(i.room)) out.push(`${file}: ingredient "${i.id}" names room "${i.room}", which isn't in rooms`);
+  const attackGroups = new Set(lvl.spawns.filter((s) => s.side === "attack").map((s) => s.group));
+  for (const z of lvl.zones) if (z.faces !== undefined && !attackGroups.has(z.faces)) out.push(`${file}: zone "${z.id}" faces "${z.faces}", which isn't an attackers' spawn group`);
   if (lvl.plan) for (const s of lvl.storeys) if (!lvl.plan.frames[s.id]) out.push(`${file}: plan.frames has no frame for storey "${s.id}"`);
   // The tiles of one region are one surface: the same kind, at the same height and thickness.
   const regions = new Map<string, LevelDef["solids"][number]>();
