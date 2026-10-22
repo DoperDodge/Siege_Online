@@ -155,4 +155,5 @@ html, body { overflow: hidden; overscroll-behavior: none; touch-action: none; us
 .hud.where { left: 16px; bottom: 6px; font: 12px var(--mono); white-space: nowrap; }
 .touch .hud.where { bottom: 186px; }
 .plan-view .crosshair, .plan-view .spread, .plan-view .reticle, .plan-view .scope { display: none; }
-.goto-storey h4 { margin: 8px 0 4px; font: 600 12px var(--mono); color: var(--muted); }
+.goto-storey h4,
+.goto-sites h4 { margin: 8px 0 4px; font: 600 12px var(--mono); color: var(--muted); }

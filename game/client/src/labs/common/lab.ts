@@ -62,6 +62,7 @@ import { OnlineConnection } from "../../net/online.js";
 import { createLabScene, createRenderer, PawnView, updateLabels, warmShaders } from "../../render/labScene.js";
 import { PanelView } from "../../render/panelView.js";
 import { StoreyView, type Palette } from "../../render/storeyView.js";
+import { MapMarkers } from "../../render/mapMarkers.js";
 import { FxBus } from "../../render/fxBus.js";
 import { Viewmodel } from "../../render/viewmodel.js";
 import { AmmoHud } from "../../ui/ammo.js";
@@ -276,6 +277,8 @@ export async function startLab(o: LabOptions): Promise<void> {
    */
   const storeyView = sim.level.def.storeys.length ? new StoreyView(labScene, panelView, sim.level, possessed().state.y) : null;
   storeyView?.setViewport(view.clientWidth, view.clientHeight);
+  /** A map's markers (E9 part 2): bombs, cameras, ingredients and spawns, and the zones view (O). */
+  const markers = storeyView ? new MapMarkers(labScene, sim.level.def) : null;
   /** On a map with a plan, the HUD line: the room, the storey and where you are in the plan's units (amendment 17). */
   const whereHud = sim.level.def.plan ? new WhereHud(app, sim.level.def) : null;
   // The level is all there: its shadows are drawn at the next render, and again only when it changes.
@@ -439,9 +442,10 @@ export async function startLab(o: LabOptions): Promise<void> {
   const shownCamera = (): THREE.Camera => (storeyView?.plan ? storeyView.camera : camera);
 
   /** Switch the storey views (keys, the pause menu, tests); the pause menu, if open, shows the new state. */
-  function setStoreyView(v: { hideAbove?: boolean; plan?: boolean; palette?: Palette }) {
+  function setStoreyView(v: { hideAbove?: boolean; plan?: boolean; palette?: Palette; zones?: boolean }) {
     if (!storeyView) return;
     if (v.hideAbove !== undefined) storeyView.setHideAbove(v.hideAbove);
+    if (v.zones !== undefined) markers?.setZones(v.zones);
     if (v.plan !== undefined) {
       storeyView.setPlan(v.plan);
       app.classList.toggle("plan-view", v.plan); // no crosshair or sights over the plan
@@ -467,14 +471,20 @@ export async function startLab(o: LabOptions): Promise<void> {
         setStoreyView({ palette: sv.palette === "greybox" ? "neutral" : "greybox" });
         flash(sv.palette === "greybox" ? "Palette: surface classes" : "Palette: neutral", "info");
       },
+      zones: () => {
+        setStoreyView({ zones: !markers?.zones });
+        flash(markers?.zones ? "Zones: rappel faces orange, spawn peeks green, run-outs red" : "Zones hidden", "info");
+      },
     });
     hooks.keys.set("KeyH", viewToggles.hideAbove);
     hooks.keys.set("KeyM", viewToggles.plan);
     hooks.keys.set("KeyP", viewToggles.palette);
+    hooks.keys.set("KeyO", viewToggles.zones);
     hooks.help.push(
       ["<kbd>H</kbd>", "Hide the storeys above yours (it follows you up and down)"],
       ["<kbd>M</kbd>", "Plan view: your storey from above, north up, centred on you, with the room names; the wheel zooms. You keep moving and turning as usual (W walks the way the arrow points); M again goes back"],
       ["<kbd>P</kbd>", "Palette: the surface classes (soft yellow, hard grey, reinforceable blue, hatch green) or one light grey"],
+      ["<kbd>O</kbd>", "Zones: the rappel faces (orange, just outside the walls), the spawn peeks (green, inside the doors and windows that look at a spawn) and the run-outs (red)"],
     );
     // In the plan view the wheel zooms instead of switching weapons.
     controls.wheelTaken = () => sv.plan;
@@ -513,7 +523,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     snapshotAll();
   }
 
-  /** The pause menu's Go to: a map's rooms by storey, and the page's own spots (ui/where.ts goToMenu). */
+  /** The pause menu's Go to: a map's bomb sites and rooms by storey, and the page's own spots (ui/where.ts goToMenu). */
   const GOTO = goToMenu(sim.level.def, o.goTo);
   /** Every entry, in the menu's order (a button's `data-goto` indexes this). */
   const SPOTS = GOTO.flatMap((g) => g.spots);
@@ -707,7 +717,8 @@ export async function startLab(o: LabOptions): Promise<void> {
           ? `<section><h3>View</h3><div class="goto">
         <button data-view="hideAbove">${storeyView.hideAbove ? "Show the storeys above (H)" : "Hide the storeys above (H)"}</button>
         <button data-view="plan">${storeyView.plan ? "Leave the plan view (M)" : "Plan view (M)"}</button>
-        <button data-view="palette">${storeyView.palette === "greybox" ? "Neutral palette (P)" : "Surface colours (P)"}</button></div></section>`
+        <button data-view="palette">${storeyView.palette === "greybox" ? "Neutral palette (P)" : "Surface colours (P)"}</button>
+        <button data-view="zones">${markers?.zones ? "Hide the zones (O)" : "Show the zones (O)"}</button></div></section>`
           : ""
       }
       <section><h3>Lab tools</h3><div class="goto"><button class="free-cam">${freeCam ? "Back to your body (N)" : "Free camera (N)"}</button><button class="refill">Refill ammo</button><button class="hurt-me">Take 30 damage</button><button class="down-me">Down me</button>${hooks.tools.map((t, i) => `<button data-tool="${i}">${t.label}</button>`).join("")}</div>
@@ -798,11 +809,14 @@ export async function startLab(o: LabOptions): Promise<void> {
     );
   }
 
-  /** Go to's buttons: one list, or on a map a heading per storey over its rooms and spots. */
+  /** Go to's buttons: one list, or on a map the bomb sites, then a heading per storey over its rooms and spots. */
   function goToHtml(): string {
     let i = 0;
     return GOTO.map((g) => {
-      const buttons = g.spots.map((s) => `<button data-goto="${i++}"${s.room ? ` data-room="${escapeHtml(s.room)}"` : ""}>${escapeHtml(s.name)}</button>`).join("");
+      const buttons = g.spots
+        .map((s) => `<button data-goto="${i++}"${s.room ? ` data-room="${escapeHtml(s.room)}"` : ""}${s.site ? ` data-site="${escapeHtml(s.site)}"` : ""}>${escapeHtml(s.name)}</button>`)
+        .join("");
+      if (g.sites) return `<div class="goto-sites"><h4>Bomb sites</h4><div class="goto">${buttons}</div></div>`;
       return g.storey === null ? `<div class="goto">${buttons}</div>` : `<div class="goto-storey" data-storey="${escapeHtml(g.storey)}"><h4>${escapeHtml(g.storey)}</h4><div class="goto">${buttons}</div></div>`;
     }).join("");
   }
@@ -1341,10 +1355,12 @@ export async function startLab(o: LabOptions): Promise<void> {
             shown: storeyView.shown(),
             panels: storeyView.panelCounts(),
             colors: Object.fromEntries([...labScene.materials].map(([k, m]) => [k, `#${m.color.getHexString()}`])),
+            zones: markers?.zones ?? false,
+            markers: markers?.counts ?? null,
           }),
         };
       },
-      set view(v: { hitboxes?: boolean; thirdPerson?: boolean; hideAbove?: boolean; plan?: boolean; palette?: Palette }) {
+      set view(v: { hitboxes?: boolean; thirdPerson?: boolean; hideAbove?: boolean; plan?: boolean; palette?: Palette; zones?: boolean }) {
         if (v.hitboxes !== undefined) showHitboxes = v.hitboxes;
         if (v.thirdPerson !== undefined) thirdPerson = v.thirdPerson;
         setStoreyView(v);

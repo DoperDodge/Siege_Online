@@ -402,7 +402,8 @@ export const TAG: LabelStyle = { heightM: 0.34, font: "600 30px system-ui, sans-
 /** A room's callout: bigger, and warm, so it stands apart from the level's own labels. */
 const CALLOUT: LabelStyle = { heightM: 0.46, font: "700 30px system-ui, sans-serif", color: "#ffd48a", back: "rgba(10,12,16,0.8)" };
 
-function labelSprite(text: string, x: number, y: number, z: number, style: LabelStyle = TAG): THREE.Sprite {
+/** A label facing the camera at (x, y, z), sized in the world by its style. */
+export function labelSprite(text: string, x: number, y: number, z: number, style: LabelStyle = TAG): THREE.Sprite {
   const c = document.createElement("canvas");
   const g = c.getContext("2d")!;
   g.font = style.font;

@@ -137,4 +137,30 @@ describe("Go to", () => {
     expect(menu.flatMap((g) => g.spots).filter((s) => s.room).length).toBe(map.rooms.length);
     expect(menu[0].spots[0].pos).not.toBe(map.rooms[0].anchor);
   });
+
+  it("lists the bomb sites first: each at its first defender spawn, facing as it does; without defenders, at its first bomb facing the other", () => {
+    const sites = [
+      { id: "SITE_DORMS", name: "2F Kids' Dorms", rooms: ["2F_DORMS"], bombs: [{ id: "1A", pos: [1, 3.2, 1] as [number, number, number], room: "2F_DORMS" }, { id: "1B", pos: [13, 3.2, 1] as [number, number, number], room: "2F_DORMS" }], plantMarginM: 0.5 },
+      { id: "SITE_HALL", name: "1F Hall", rooms: ["1F_HALL"], bombs: [{ id: "2A", pos: [2, 0, 1] as [number, number, number], room: "1F_HALL" }, { id: "2B", pos: [2, 0, 11] as [number, number, number], room: "1F_HALL" }], plantMarginM: 0.5 },
+    ];
+    const spawns = [
+      { id: "s0", pos: [0, 0, 0] as [number, number, number], yawDeg: 0 },
+      { id: "SITE_DORMS", pos: [5, 3.2, 2] as [number, number, number], yawDeg: -90, side: "defense" as const, group: "SITE_DORMS" },
+      { id: "SITE_DORMS.2", pos: [6, 3.2, 2] as [number, number, number], yawDeg: 90, side: "defense" as const, group: "SITE_DORMS" },
+    ];
+    const menu = goToMenu({ ...map, sites, spawns }, extra);
+    expect(menu.map((g) => [g.storey, g.sites ?? false])).toEqual([
+      [null, true],
+      ["1F", false],
+      ["2F", false],
+    ]);
+    expect(menu[0].spots).toEqual([
+      { name: "2F Kids' Dorms", pos: [5, 3.2, 2], yawDeg: -90, site: "SITE_DORMS" },
+      // The second bomb is due south of the first: facing south is 180 (0 faces north).
+      { name: "1F Hall", pos: [2, 0, 1], yawDeg: 180, site: "SITE_HALL" },
+    ]);
+    expect(menu[0].spots[0].pos).not.toBe(spawns[1].pos);
+    // A map without sites has no sites heading.
+    expect(goToMenu({ ...map, sites: [], spawns }, extra).some((g) => g.sites)).toBe(false);
+  });
 });

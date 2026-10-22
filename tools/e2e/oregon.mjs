@@ -8,7 +8,9 @@
 // back down (M3); up the ladder from the 2F Tower onto the Cat Walk, then down it again from the top, facing the
 // drop (F, then S), the HUD line naming the room each time. Go to each attacker spawn puts you outside on the
 // ground (M4); the free camera puts you on the Dining roof, and keeps its keys from your body (F with the camera
-// in a wall, 2 and F over the ladder's foot). With shadows on, a lost and restored WebGL
+// in a wall, 2 and F over the ladder's foot). Go to each bomb site puts you at its first defender spawn, in one of
+// its rooms, facing as the spawn does; the markers are drawn and O shows the zones and hides them (M5). With
+// shadows on, a lost and restored WebGL
 // context draws the shadows again (they are drawn on request only, D-077), and hiding the storeys above redraws
 // them. Online, two pages at 100 ms of simulated round trip: A breaks the Main Entrance barricade and B sees
 // exactly the server's panels. Screenshots go to builds/e2e. Requires `npm run build` first. The checks follow
@@ -264,8 +266,12 @@ try {
   const rad = (deg) => (deg * Math.PI) / 180;
   const calloutOf = (id) => lvl.rooms?.find((r) => r.id === id)?.callout;
   const prompt = (page) => page.evaluate(() => (document.querySelector(".prompt.hidden") ? "" : (document.querySelector(".prompt")?.textContent ?? "")));
-  /** Steer along the points (yaw toward the next, forward held) until the last is reached; then let go. */
-  const walkAlong = async (page, pts, timeoutMs = 20000) => {
+  /**
+   * Steer along the points (yaw toward the next, forward held) until the last is reached; then let go, and wait
+   * for the body to stand. A flight takes about 2 s; the time allowed is generous for a slow software-rendered
+   * page, where the game runs in slow motion when frames are slow (seen once: stopped short, in the air).
+   */
+  const walkAlong = async (page, pts, timeoutMs = 60000) => {
     const until = Date.now() + timeoutMs;
     let k = 0;
     while (k < pts.length && Date.now() < until) {
@@ -276,7 +282,9 @@ try {
       await sleep(40);
     }
     await input(page, null);
-    await sleep(500);
+    await sleep(300);
+    await page.waitForFunction(() => window.__lab.net.own.grounded, null, { timeout: 10000, polling: 50 }).catch(() => {});
+    await sleep(200);
     return k >= pts.length;
   };
   // The Armory Stairs' basement flight: before its first riser, along it, past its top (tools/mapgen's walk test).
@@ -413,6 +421,55 @@ try {
     Array.isArray(inWall.camera) && moved(inWall.body) < 0.05 && back.camera === null && moved(back.body) < 0.05 &&
     ladder !== undefined && foot.mode === PawnMode.Walk && foot.slot === 0 && Math.abs(foot.y - ladder.base[1]) < 0.05 &&
     Math.hypot(foot.x - (ladder.base[0] - lx * 0.35), foot.z - (ladder.base[2] - lz * 0.35)) < 0.1;
+
+  // ---- sites, markers and zones (M5): Go to has every bomb site under its own heading; each puts you at the
+  // site's first defender spawn, on its storey, in one of its rooms (the HUD names it), facing as the spawn does.
+  // Every marker is drawn (bombs, cameras, ingredients, spawns), and O shows the zones and hides them again.
+  if (lvl.sites?.length) {
+    await menu(off, true);
+    const siteEntries = await off.evaluate(() => [...document.querySelectorAll(".pause .goto-sites [data-site]")].map((b) => [b.dataset.goto, b.dataset.site, b.textContent]));
+    await menu(off, false);
+    result.offline.sites = [];
+    for (const site of lvl.sites) {
+      const entry = siteEntries.find(([, id]) => id === site.id);
+      const spawn = lvl.spawns.find((sp) => sp.side === "defense" && sp.group === site.id);
+      if (!entry || !spawn) {
+        result.offline.sites.push({ site: site.id, entry: Boolean(entry), spawn: Boolean(spawn) });
+        continue;
+      }
+      const storey = lvl.storeys.find((st) => Math.abs(st.floorY - spawn.pos[1]) < 0.01).id;
+      await menu(off, true);
+      await off.locator(`.pause [data-goto="${entry[0]}"]`).click();
+      await menu(off, false);
+      // The HUD line is rewritten on a frame (a few a second here): wait for it to name one of the site's rooms.
+      const lines = site.rooms.map((id) => `${calloutOf(id)} · ${storey} · `);
+      const named = await off
+        .waitForFunction((ls) => ls.some((l) => (document.querySelector(".hud.where")?.textContent ?? "").startsWith(l)), lines, { timeout: 15000, polling: 100 })
+        .then(() => true, () => false);
+      await sleep(300);
+      const at = await own(off);
+      const hud = await hudSaysWhereYouAre(off);
+      const turn = at.yaw - rad(spawn.yawDeg);
+      const ok =
+        entry[2] === site.name && Math.hypot(at.x - spawn.pos[0], at.z - spawn.pos[2]) < 0.1 && Math.abs(at.y - spawn.pos[1]) < 0.05 &&
+        Math.abs(Math.atan2(Math.sin(turn), Math.cos(turn))) < 0.01 && named && hud.ok && lines.some((l) => hud.line.startsWith(l));
+      result.offline.sites.push({ site: site.id, name: entry[2], at: [at.x, at.y, at.z], hud: hud.line, ok });
+      await off.screenshot({ path: shot(`oregon-site-${site.id.toLowerCase()}.png`) });
+    }
+    result.checks.goToEverySiteAtItsDefenders = siteEntries.length === lvl.sites.length && result.offline.sites.every((x) => x.ok);
+    const mv = await view(off);
+    const zonesOf = (kind) => lvl.zones.filter((z) => z.kind === kind).length;
+    result.offline.markers = mv.markers;
+    result.checks.everyMarkerDrawn =
+      mv.markers?.bombs === lvl.sites.reduce((n, x) => n + x.bombs.length, 0) && mv.markers.cameras === lvl.cameras.length && mv.markers.ingredients === lvl.ingredients.length &&
+      mv.markers.spawns === lvl.spawns.length && mv.markers.rappel === zonesOf("rappel") && mv.markers.spawn_peek === zonesOf("spawn_peek") && mv.markers.out_of_bounds === zonesOf("out_of_bounds");
+    await off.keyboard.press("KeyO");
+    const zonesOn = (await view(off)).zones;
+    await sleep(1800); // the switch's message has faded
+    await off.screenshot({ path: shot("oregon-zones.png") });
+    await off.keyboard.press("KeyO");
+    result.checks.zonesViewShowsAndHides = mv.zones === false && zonesOn === true && (await view(off)).zones === false;
+  }
   await off.close();
 
   // ---- shadows on: a lost and restored WebGL context draws the shadow map again

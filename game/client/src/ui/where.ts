@@ -44,28 +44,49 @@ export function whereText(level: MapInfo, storey: number, x: number, z: number):
   return `${text} · ${s.id} u ${nx.toFixed(1)}, ${ny.toFixed(1)}`;
 }
 
-/** A Go to entry: its name, where it puts your feet, which way you face (degrees), and its room, if it is one. */
+/** A Go to entry: its name, where it puts your feet, which way you face (degrees), and its room or site, if it is one. */
 export interface GoToSpot {
   name: string;
   pos: [number, number, number];
   yawDeg: number;
   room?: string;
-}
-
-/** The entries under one storey's heading; `storey` null: one plain list (a level without rooms). */
-export interface GoToGroup {
-  storey: string | null;
-  spots: GoToSpot[];
+  site?: string;
 }
 
 /**
- * The pause menu's Go to. A level with rooms lists them by storey (in the level's order), each by its callout
- * at its anchor, facing north (an anchor has no facing), and files the page's own spots (`extra`: name, x, y,
- * z, yaw in degrees) under the storey at their height, after its rooms. Without rooms, the page's list as it is.
+ * The entries under one storey's heading; `storey` null: one plain list (a level without rooms), or with
+ * `sites`, the bomb sites' heading over the storeys.
  */
-export function goToMenu(level: Pick<LevelDef, "storeys" | "rooms">, extra: readonly (readonly [string, number, number, number, number])[]): GoToGroup[] {
+export interface GoToGroup {
+  storey: string | null;
+  sites?: true;
+  spots: GoToSpot[];
+}
+
+/** Where Go to by site puts you: its first defender spawn, facing between its bombs as defenders do. */
+function siteSpot(level: Pick<LevelDef, "spawns">, site: LevelDef["sites"][number]): GoToSpot {
+  const spawn = level.spawns.find((s) => s.side === "defense" && s.group === site.id);
+  if (spawn) return { name: site.name, pos: [...spawn.pos], yawDeg: spawn.yawDeg, site: site.id };
+  // No defenders there: at its first bomb, facing the other.
+  const [a, b] = site.bombs;
+  const yawDeg = b ? (Math.atan2(a.pos[0] - b.pos[0], a.pos[2] - b.pos[2]) * 180) / Math.PI : 0;
+  return { name: site.name, pos: [...a.pos], yawDeg, site: site.id };
+}
+
+/**
+ * The pause menu's Go to. A level with rooms lists its bomb sites first (Go to by site: each site at its first
+ * defender spawn), then its rooms by storey (in the level's order), each by its callout at its anchor, facing
+ * north (an anchor has no facing), and files the page's own spots (`extra`: name, x, y, z, yaw in degrees) under
+ * the storey at their height, after its rooms. Without rooms, the page's list as it is.
+ */
+export function goToMenu(
+  level: Pick<LevelDef, "storeys" | "rooms"> & Partial<Pick<LevelDef, "sites" | "spawns">>,
+  extra: readonly (readonly [string, number, number, number, number])[],
+): GoToGroup[] {
   const spot = ([name, x, y, z, yawDeg]: readonly [string, number, number, number, number]): GoToSpot => ({ name, pos: [x, y, z], yawDeg });
   if (!level.rooms.length || !level.storeys.length) return [{ storey: null, spots: extra.map(spot) }];
+  const sites = (level.sites ?? []).filter((s) => s.bombs.length > 0);
+  const bySite: GoToGroup[] = sites.length ? [{ storey: null, sites: true, spots: sites.map((s) => siteSpot({ spawns: level.spawns ?? [] }, s)) }] : [];
   const groups: GoToGroup[] = level.storeys.map((s) => ({ storey: s.id, spots: [] }));
   for (const room of level.rooms) {
     const [x, y, z] = room.anchor;
@@ -73,7 +94,7 @@ export function goToMenu(level: Pick<LevelDef, "storeys" | "rooms">, extra: read
     groups[on >= 0 ? on : storeyOf(level.storeys, y)].spots.push({ name: room.callout, pos: [x, y, z], yawDeg: 0, room: room.id });
   }
   for (const e of extra) groups[storeyOf(level.storeys, e[2])].spots.push(spot(e));
-  return groups.filter((g) => g.spots.length > 0);
+  return [...bySite, ...groups.filter((g) => g.spots.length > 0)];
 }
 
 /** The line is rewritten at most this often (it changes as you walk; ten times a second reads fine). */
