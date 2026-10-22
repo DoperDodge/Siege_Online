@@ -11,6 +11,7 @@ import { exteriorPartSchema, layoutSchema, wallsPartSchema, type ExteriorPart, t
 import { frameDiagnostics, type HatchLanding } from "./diagnostics.js";
 import { checkExterior, compileExterior } from "./exterior.js";
 import { compileFloors, type HatchReport } from "./floors.js";
+import { compileMarkers } from "./markers.js";
 import { checkRoofs, compileRoofs } from "./roofs.js";
 import { compileRooms } from "./rooms.js";
 import { checkStairs, compileStairs, stairKeepOut, stairRails } from "./stairs.js";
@@ -97,9 +98,15 @@ export function compile(inputs: Inputs): Compiled {
   const roofsOut = compileRoofs(layout, roomsOut, wallsOut.solids);
   // ---- The outside: exterior.json's boxes, fences, rails, ramps and steps.
   const exteriorOut = compileExterior(layout, fr, exterior);
+  // ---- Sites, cameras and ingredients at r6calls' markers (P30–P32); cameras outside the building's middle.
+  const fp = wallsOut.footprint;
+  const centre: [number, number] = [((fp.minX + fp.maxX) / 2) * k, ((fp.minY + fp.maxY) / 2) * k];
+  const markersOut = compileMarkers(layout, fr, wallsOut.solids, roomsOut, centre);
   const panelKind = new Set(["REINFORCEABLE", "SOFT_FLOOR", "HATCH"]);
   const byKind = (s: Solid) => (panelKind.has(s.surface) ? 1 : s.surface === "BARRICADE" || s.surface === "WINDOW" || /\.(head|sill)$/.test(s.id) ? 2 : 0);
-  const solids: Solid[] = [...wallsOut.solids, ...floorsOut.solids, ...stairsOut.solids, ...rails, ...roofsOut.solids, ...exteriorOut.solids].sort((p, q) => byKind(p) - byKind(q) || (p.id < q.id ? -1 : p.id > q.id ? 1 : 0));
+  const solids: Solid[] = [...wallsOut.solids, ...floorsOut.solids, ...stairsOut.solids, ...rails, ...roofsOut.solids, ...exteriorOut.solids, ...markersOut.solids].sort(
+    (p, q) => byKind(p) - byKind(q) || (p.id < q.id ? -1 : p.id > q.id ? 1 : 0),
+  );
 
   // ---- Play-area edge and kill plane (placeholders P25, P26).
   const [px0, py0, px1, py1] = exterior.playable.map((u) => u * k);
@@ -122,16 +129,17 @@ export function compile(inputs: Inputs): Compiled {
   const highest = Math.max(...layout.storeys.map((s) => s.floorY));
 
   // ---- Spawns: lab spawn 0 first, then attackers and defenders by group (P27–P29).
-  const fp = wallsOut.footprint;
-  const centre: [number, number] = [((fp.minX + fp.maxX) / 2) * k, ((fp.minY + fp.maxY) / 2) * k];
   const spawnOrder = { lab: 0, attack: 1, defense: 2 } as const;
   const spawns = [...layout.spawns]
     .sort((p, q) => spawnOrder[p.side] - spawnOrder[q.side] || (p.id < q.id ? -1 : 1))
     .map((s) => {
       const [wx, wy] = fr.toWorld(s.frame, s.at[0], s.at[1]);
       const pos: [number, number, number] = [wx * k, s.level === "EXT" ? 0 : layout.storeys.find((st) => st.id === s.level)!.floorY, wy * k];
-      // Facing the building: yaw 0 faces −z (north), 90 faces −x (west).
-      const yawDeg = s.facing === "building" ? (Math.atan2(-(centre[0] - pos[0]), -(centre[1] - pos[2])) * 180) / Math.PI : s.facing;
+      // Facing the building, or a defender its site's bombs (between them): yaw 0 faces −z (north), 90 faces −x (west).
+      const site = s.facing === "site" ? markersOut.sites.find((q) => q.id === s.group) : undefined;
+      if (s.facing === "site" && !site) throw new Error(`layout.json: spawn ${s.id} faces its site, but no site is "${s.group}"`);
+      const [tx, tz] = site ? [(site.bombs[0].pos[0] + site.bombs[1].pos[0]) / 2, (site.bombs[0].pos[2] + site.bombs[1].pos[2]) / 2] : centre;
+      const yawDeg = typeof s.facing === "number" ? s.facing : (Math.atan2(-(tx - pos[0]), -(tz - pos[2])) * 180) / Math.PI;
       return { id: s.id, pos: v3(pos), yawDeg: round(yawDeg, 1), ...(s.side === "lab" ? {} : { side: s.side, group: s.group }) };
     });
   if (spawns[0] === undefined || layout.spawns.find((s) => s.id === spawns[0].id)!.side !== "lab") throw new Error("layout.json: spawn 0 must be a lab spawn (rooms put everyone there)");
@@ -176,6 +184,9 @@ export function compile(inputs: Inputs): Compiled {
     ramps: [...roofsOut.ramps, ...exteriorOut.ramps],
     ladders: stairsOut.ladders.map((l) => ({ ...l, base: v3(l.base) })),
     rooms: roomsOut.rooms.map((r) => ({ id: r.id, callout: r.callout, storey: r.storey, rects: r.rects, anchor: v3(r.anchor) })),
+    sites: markersOut.sites,
+    cameras: markersOut.cameras,
+    ingredients: markersOut.ingredients,
     zones: zones.map((z) => ({ id: z.id, kind: z.kind, boxes: z.boxes.map((b) => ({ center: v3(b.center), size: v3(b.size) })) })),
   };
   // The engine's own schema has the last word on shape.
@@ -187,11 +198,12 @@ export function compile(inputs: Inputs): Compiled {
     ...stairsOut.errors,
     ...roofsOut.errors,
     ...exteriorOut.errors,
+    ...markersOut.errors,
     ...checkStairs(layout, stairsOut, level.solids, level.rooms),
     ...checkRoofs(layout, roofsOut.roofs, level.solids, level.rooms),
     ...checkExterior(layout, level.solids, exteriorOut.ids, level.rooms),
   );
-  const counts: Record<string, number> = { solids: level.solids.length, spawns: spawns.length, zones: zones.length, rooms: roomsOut.rooms.length, roofs: roofsOut.roofs.length, ramps: roofsOut.ramps.length };
+  const counts: Record<string, number> = { solids: level.solids.length, spawns: spawns.length, zones: zones.length, rooms: roomsOut.rooms.length, roofs: roofsOut.roofs.length, ramps: roofsOut.ramps.length, sites: markersOut.sites.length, cameras: markersOut.cameras.length, ingredients: markersOut.ingredients.length };
   for (const [floor, c] of Object.entries(floorsOut.counts)) {
     counts[`slabs ${floor}`] = c.slabs;
     counts[`tiles ${floor}`] = c.tiles;

@@ -14,7 +14,7 @@ import { enclosureLeaks, planGrid } from "./enclosure.js";
 import { planSvg } from "./plans.js";
 import { distanceInside, PlanGrid } from "./grid.js";
 import type { Extracted } from "./import.js";
-import { connections, hatchTable, roomTable, softFloorTable, softWalls } from "./research.js";
+import { connections, hatchTable, markerTables, roomTable, siteTable, softFloorTable, softWalls } from "./research.js";
 import { CELL_M, clearCells, compileRooms, storeyOfBox } from "./rooms.js";
 import { FLOOR_IDS, wallSchema, type SpanDef, type WallDef } from "./schema.js";
 import type { Floor } from "./research.js";
@@ -972,6 +972,110 @@ describe("oregon outside (M4, DESIGN §5.9)", () => {
     const plank = { ...reel, id: "EXT_TEST", rect: [295, 132, 297, 172] as [number, number, number, number] };
     expect(withItem(plank).report.errors.filter((e) => e.includes("EXT_TEST"))).toEqual([]);
     expect(withItem({ ...plank, yawDeg: 90 }).report.errors).toContain("exterior.json EXT_TEST: stands in 1F_MEETING_HALL");
+  });
+});
+
+describe("oregon sites, cameras and ingredients (M5, DESIGN §5.11)", () => {
+  type Room = { id: string; callout: string; storey: string; rects: [number, number, number, number][] };
+  const rooms = level.rooms as Room[];
+  const roomOf = (id: string) => rooms.find((r) => r.id === id)!;
+  const holds = (r: Room, x: number, z: number, eps = 0.02) =>
+    r.rects.some(([x0, z0, x1, z1]) => x >= Math.min(x0, x1) - eps && x <= Math.max(x0, x1) + eps && z >= Math.min(z0, z1) - eps && z <= Math.max(z0, z1) + eps);
+  const storeys = level.storeys as { id: string; floorY: number; ceilingY: number }[];
+  const storey = (id: string) => storeys.find((s) => s.id === id)!;
+  /** A solid box at height y whose footprint is within `near` metres of (x, z), with (x, z) outside it. */
+  const wallBehind = (x: number, y: number, z: number, near = 0.08) =>
+    solids.some((b) => {
+      if (b.drawOnly || b.bodiesOnly || y <= b.center[1] - b.size[1] / 2 || y >= b.center[1] + b.size[1] / 2) return false;
+      const dx = Math.max(b.center[0] - b.size[0] / 2 - x, 0, x - b.center[0] - b.size[0] / 2);
+      const dz = Math.max(b.center[2] - b.size[2] / 2 - z, 0, z - b.center[2] - b.size[2] / 2);
+      return Math.hypot(dx, dz) > 0 && Math.hypot(dx, dz) <= near;
+    });
+  /** The point `m` metres ahead along a yaw (0 faces north, −z; 90 west, −x). */
+  const ahead = (x: number, z: number, yawDeg: number, m: number): [number, number] => [x - Math.sin((yawDeg * Math.PI) / 180) * m, z - Math.cos((yawDeg * Math.PI) / 180) * m];
+
+  it("has the four bomb sites of layout_notes §3, A and B as r6calls letters them, each bomb at its marker on its room's floor", () => {
+    type Site = { id: string; rooms: string[]; bombs: { id: string; pos: Vec3; room: string }[]; plantMarginM: number };
+    const research = siteTable(ROOT);
+    expect(research.map((r) => r.number)).toEqual([1, 2, 3, 4]);
+    const name = (id: string) => `${roomOf(id).storey} ${roomOf(id).callout}`;
+    for (const row of research) {
+      const def = inputs.layout.sites.find((s) => s.number === row.number)!;
+      expect([row.number, def.rooms.map(name)]).toEqual([row.number, [row.a, row.b]]);
+      // Each marker inside the research's box for it (the floor's own u).
+      def.bombs.forEach((b, i) => {
+        const [[x0, x1], [y0, y1]] = i === 0 ? row.markerA : row.markerB;
+        expect([b.id, b.at[0] >= x0 && b.at[0] <= x1 && b.at[1] >= y0 && b.at[1] <= y1]).toEqual([b.id, true]);
+      });
+      const site = (level.sites as Site[]).find((s) => s.id === def.id)!;
+      expect(site.rooms).toEqual(def.rooms);
+      expect(site.plantMarginM).toBe(0.5);
+      for (const b of site.bombs) {
+        expect([b.id, holds(roomOf(b.room), b.pos[0], b.pos[2], 0), b.pos[1]]).toEqual([b.id, true, storey(roomOf(b.room).storey).floorY]);
+      }
+    }
+  });
+
+  it("has r6calls' eight cameras (map_features §2), each on a wall of its room under the ceiling looking into it, or outside on a post", () => {
+    // The research's rooms by our ids: Rear Stage is r6calls' 1F "Tower" (map_features §0.4).
+    const want: Record<string, string | null> = { CAM1: null, CAM2: null, CAM3: null, CAM4: "B_FREEZER", CAM5: "1F_TOWER", CAM6: "1F_LOBBY", CAM7: "1F_SHOWER_CORRIDOR", CAM8: "2F_ARMORY_CORRIDOR" };
+    const research = markerTables(ROOT).cameras;
+    expect(research.map((c) => c.id)).toEqual(Object.keys(want));
+    expect(research.map((c) => c.floor)).toEqual(["EXT", "EXT", "EXT", "B", "1F", "1F", "1F", "2F"]);
+    const cams = level.cameras as { id: string; pos: Vec3; yawDeg: number; pitchDeg: number; room?: string }[];
+    expect(cams.map((c) => c.id)).toEqual(Object.keys(want));
+    for (const c of cams) {
+      const [x, y, z] = c.pos;
+      expect([c.id, c.room ?? null, c.pitchDeg, wallBehind(x, y, z)]).toEqual([c.id, want[c.id], -20, true]);
+      if (!c.room) {
+        expect(solids.some((b) => b.id === `${c.id}.post`)).toBe(true);
+        continue;
+      }
+      const r = roomOf(c.room);
+      expect([c.id, holds(r, x, z), y]).toEqual([c.id, true, Math.round((storey(r.storey).ceilingY - 0.3) * 1e4) / 1e4]);
+      expect([c.id, holds(r, ...ahead(x, z, c.yawDeg, 1))]).toEqual([c.id, true]); // looking into the room
+    }
+  });
+
+  it("has r6calls' seven extinguishers and two gas pipes (map_features §3), each on a wall of its room, facing out of it", () => {
+    const want: Record<string, string> = {
+      ING1: "B_CORRIDOR",
+      ING2: "B_FREEZER_HALL", // the Freezer's north arm
+      ING3: "1F_SECURITY_CORRIDOR",
+      ING4: "1F_KITCHEN_CORRIDOR",
+      ING5: "1F_LOBBY",
+      ING6: "2F_TROPHY",
+      ING7: "2F_LOW_ATTIC",
+      ING8: "1F_ARMORY_STAIRS", // the PC callout "Main Stairs" is r6calls' Armory Stairs (map_features §0.4)
+      ING9: "2F_ATTIC",
+    };
+    const research = markerTables(ROOT).ingredients;
+    expect(research.map((g) => [g.id, g.kind.includes("gas") ? "gas_pipe" : "fire_extinguisher"])).toEqual(
+      inputs.layout.ingredients.map((g) => [g.id, g.kind]),
+    );
+    const ings = level.ingredients as { id: string; kind: string; pos: Vec3; yawDeg: number; room?: string }[];
+    expect(ings.filter((g) => g.kind === "fire_extinguisher")).toHaveLength(7);
+    expect(ings.filter((g) => g.kind === "gas_pipe")).toHaveLength(2);
+    for (const g of ings) {
+      const [x, y, z] = g.pos;
+      const r = roomOf(want[g.id]);
+      expect([g.id, g.room, Math.round((y - storey(r.storey).floorY) * 1e4) / 1e4]).toEqual([g.id, want[g.id], g.kind === "gas_pipe" ? 1.2 : 1]);
+      expect([g.id, wallBehind(x, y, z), holds(r, x, z), holds(r, ...ahead(x, z, g.yawDeg, 0.3))]).toEqual([g.id, true, true, true]);
+    }
+  });
+
+  it("reports a marker it can't place: a camera far from every wall of its room, a bomb outside its room", () => {
+    const moved = compile({
+      ...inputs,
+      layout: {
+        ...inputs.layout,
+        // CAM6 into the middle of the Meeting Hall; bomb 2A over in the Kitchen.
+        cameras: inputs.layout.cameras.map((c) => (c.id === "CAM6" ? { ...c, at: [250, 160] as [number, number] } : c)),
+        sites: inputs.layout.sites.map((s) => (s.id === "SITE_DINING" ? { ...s, bombs: [{ ...s.bombs[0], at: [176.54, 175.7] as [number, number] }, s.bombs[1]] } : s)),
+      },
+    });
+    expect(moved.report.errors).toContain("camera CAM6: no wall of 1F_MEETING_HALL within 2 m of its marker reaches 2.70 m");
+    expect(moved.report.errors.join("\n")).toMatch(/site SITE_DINING: bomb 2A at \([\d.]+, [\d.]+\) isn't in 1F_DINING/);
   });
 });
 

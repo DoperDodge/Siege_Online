@@ -196,3 +196,30 @@ export function hatchTable(root: string): { id: string; top: string; bottom: str
   return t.rows.map((r) => ({ id: r[0], top: r[1], bottom: r[2] }));
 }
 
+
+/** layout_notes.md §3: the bomb sites, by number, with their A and B rooms ("2F Kids' Dorms") and r6calls' marker boxes (u). */
+export function siteTable(root: string): { number: number; a: string; b: string; markerA: [[number, number], [number, number]]; markerB: [[number, number], [number, number]] }[] {
+  const text = readFileSync(join(researchDir(root), "layout_notes.md"), "utf8");
+  const t = mdTables(text).find((x) => x.heading.startsWith("3.") && x.header[0] === "Site");
+  if (!t) throw new Error("layout_notes.md §3: no site table");
+  const box = (c: string): [[number, number], [number, number]] => {
+    const m = c.match(/\(([^,]+),\s*([^)]+)\)/);
+    if (!m) throw new Error(`layout_notes.md §3: no marker box in "${c}"`);
+    return [range(m[1])!, range(m[2])!];
+  };
+  return t.rows.map((r) => ({ number: Number(r[0]), a: r[1], b: r[2], markerA: box(r[3]), markerB: box(r[4]) }));
+}
+
+/** map_features.md §2 and §3: the default cameras and the ingredients, with their floor and room as the research words them. */
+export function markerTables(root: string): { cameras: { id: string; floor: string; room: string }[]; ingredients: { id: string; kind: string; floor: string; room: string }[] } {
+  const text = readFileSync(join(researchDir(root), "map_features.md"), "utf8");
+  const tables = mdTables(text);
+  const cams = tables.find((x) => x.heading.startsWith("2.") && x.header[0] === "id");
+  const ings = tables.find((x) => x.heading.startsWith("3.") && x.header[0] === "id");
+  if (!cams || !ings) throw new Error("map_features.md §2/§3: no camera or ingredient table");
+  const plain = (c: string) => c.replace(/\*/g, "").trim();
+  return {
+    cameras: cams.rows.map((r) => ({ id: r[0], floor: r[1], room: plain(r[2]) })),
+    ingredients: ings.rows.map((r) => ({ id: r[0], kind: plain(r[1]), floor: r[2], room: plain(r[3]) })),
+  };
+}

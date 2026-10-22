@@ -214,6 +214,9 @@
 <rect class="walls" x="193.67" y="251.33" width="2" height="22.33" fill="#6b7178"><title>1F.w090#0</title></rect>
 <rect class="walls" x="20" y="191.67" width="1.33" height="12.33" fill="#6b7178"><title>1F.w091#0</title></rect>
 <rect class="walls" x="152.33" y="266.33" width="1.33" height="7.33" fill="#6b7178"><title>1F.w092#0</title></rect>
+<rect class="walls" x="-43.6" y="257.67" width="1" height="1" fill="#6b7178"><title>CAM1.post</title></rect>
+<rect class="walls" x="365.38" y="271.39" width="1" height="1" fill="#6b7178"><title>CAM2.post</title></rect>
+<rect class="walls" x="331.22" y="-13.28" width="1" height="1" fill="#6b7178"><title>CAM3.post</title></rect>
 <rect class="walls" x="252" y="60.67" width="0.67" height="16" fill="#6b7178"><title>S1:1F&gt;2F.divider</title></rect>
 <rect class="panels" x="64.33" y="182" width="1.33" height="24.33" fill="#2f7de1"><title>SW-1F-01</title></rect>
 <rect class="panels" x="64.33" y="227" width="1.33" height="21.67" fill="#2f7de1"><title>SW-1F-02</title></rect>

@@ -12,7 +12,10 @@
   "defaults.open",
   "defaults.droneHole",
   "defaults.boundary",
-  "defaults.killDepthM"
+  "defaults.killDepthM",
+  "defaults.site",
+  "defaults.camera",
+  "defaults.ingredient"
  ],
  "_sources": {
   "units.mPerU": "research/oregon/layout_notes.md §1: the school bus is about 77 u long (ESTIMATE, ±15%)",
@@ -30,7 +33,10 @@
   "sections SW-2F-01, SW-2F-02, SW-2F-04": "Ulo 2026-10-09",
   "stairs": "research/oregon/layout_notes.md §5.1 footprints and the r6calls floor images (treads, landings, rails), placed where the stair rooms of the storeys they pass overlap (P19); S3 stacked: Ulo 2026-10-20; S2, S3 and S4 the other way round and every flight wall to wall: Ulo 2026-10-21 (D-095)",
   "ladders": "research/oregon/layout_notes.md §5.3 and the gap in the Cat Walk well's rail (walls_3F.json 3F.o001), P20",
-  "roofs": "research/oregon/layout_notes.md §4.5 (footprints and names, the Dining and Meeting W roofs walkable at 2F level) and the r6calls and Ubisoft roof renders (ridges, flat parts), each rectangle on the outer faces of the walls under it; shapes, pitches and ceilings are ours (P24)"
+  "roofs": "research/oregon/layout_notes.md §4.5 (footprints and names, the Dining and Meeting W roofs walkable at 2F level) and the r6calls and Ubisoft roof renders (ridges, flat parts), each rectangle on the outer faces of the walls under it; shapes, pitches and ceilings are ours (P24)",
+  "sites": "research/oregon/layout_notes.md §3 (rooms, A and B as r6calls letters them); bombs at r6calls' bomb markers (extracted.json points, `from`), icon anchors (P30)",
+  "cameras": "research/oregon/map_features.md §2: r6calls' camera markers (extracted.json points, `from`); mounted by rule P31",
+  "ingredients": "research/oregon/map_features.md §3: r6calls' extinguisher and gas-pipe markers (extracted.json points, `from`); mounted by rule P32"
  },
  "id": "oregon",
  "name": "Oregon",
@@ -62,7 +68,10 @@
   "stairs": { "riserMaxM": 0.2, "treadM": 0.3, "headroomM": 2 },
   "boundary": { "hM": 4, "thickM": 0.5 },
   "killDepthM": 30,
-  "junctionU": 1
+  "junctionU": 1,
+  "site": { "plantMarginM": 0.5 },
+  "camera": { "belowCeilingM": 0.3, "pitchDeg": -20, "reachM": 2, "postM": 3 },
+  "ingredient": { "fireExtinguisherM": 1, "gasPipeM": 1.2, "reachM": 1.5 }
  },
  "spawns": [
   { "id": "lab", "side": "lab", "group": "LAB", "level": "EXT", "frame": "world", "at": [253, 295], "facing": 0, "src": "hand", "note": "just outside the Main Entrance, facing it (P29)", "_unverified": ["at"] },
@@ -211,6 +220,33 @@
   {"id": "RF_DINING", "callout": "Dining Roof", "rects": [[46.33, 149.67, 136.33, 273.67], [4, 230.33, 46.33, 256.67]], "shape": "flat", "eaveY": 3.2, "walkable": true, "research": "layout_notes §4.5 RF_DINING (flat, at 2F level)", "src": "hand", "note": "wraps the 2F Small Tower and Office; the strip south of the Small Tower (the second rectangle) is built as part of it", "_unverified": ["rects"]},
   {"id": "EXT_BALCONY", "callout": "Balcony", "rects": [[215, 270.67, 292, 284]], "shape": "flat", "eaveY": 3.2, "walkable": true, "research": "layout_notes §4.5 EXT_BALCONY (over the 1F Main Entrance; door into Master)", "src": "hand", "note": "its railing comes with the outside (M4b)", "_unverified": []},
   {"id": "RF_GARAGE", "callout": "Garage Roof", "rects": [[293, 253.67, 334, 266]], "shape": "flat", "eaveY": 3.2, "walkable": true, "research": "map_features §7 R6 (Garage roof, [PRE])", "src": "hand", "note": "the strip of the Garage south of the 2F Armory", "_unverified": ["shape"]}
+ ],
+ "sites": [
+  {"id": "SITE_DORMS", "name": "2F Kids' Dorms / Dorms Main Hall", "number": 1, "rooms": ["2F_DORMS_MAIN_HALL", "2F_KIDS_DORMS"], "bombs": [{"id": "1A", "room": "2F_DORMS_MAIN_HALL", "frame": "2F", "at": [168.36, 247.16], "from": "rect81727"}, {"id": "1B", "room": "2F_KIDS_DORMS", "frame": "2F", "at": [197.78, 183.55], "from": "rect81741"}], "research": "layout_notes §3 site 1 (A Dorms Main Hall, B Kids' Dorms)", "_unverified": ["bombs"]},
+  {"id": "SITE_DINING", "name": "1F Kitchen / Dining Hall", "number": 2, "rooms": ["1F_DINING", "1F_KITCHEN"], "bombs": [{"id": "2A", "room": "1F_DINING", "frame": "1F", "at": [102.37, 160.1], "from": "rect78713"}, {"id": "2B", "room": "1F_KITCHEN", "frame": "1F", "at": [176.54, 175.7], "from": "rect78703"}], "research": "layout_notes §3 site 2 (A Dining Hall, B Kitchen)", "_unverified": ["bombs"]},
+  {"id": "SITE_MEETING", "name": "1F Meeting Hall / Kitchen", "number": 3, "rooms": ["1F_MEETING_HALL", "1F_KITCHEN"], "bombs": [{"id": "3A", "room": "1F_MEETING_HALL", "frame": "1F", "at": [234.98, 126.95], "from": "rect81751"}, {"id": "3B", "room": "1F_KITCHEN", "frame": "1F", "at": [176.54, 183.64], "from": "rect81717"}], "research": "layout_notes §3 site 3 (A Meeting Hall, north end near Stage; B Kitchen)", "_unverified": ["bombs"]},
+  {"id": "SITE_LAUNDRY", "name": "B Laundry / Supply", "number": 4, "rooms": ["B_LAUNDRY", "B_SUPPLY"], "bombs": [{"id": "4A", "room": "B_LAUNDRY", "frame": "B", "at": [218.25, 228.85], "from": "rect76029"}, {"id": "4B", "room": "B_SUPPLY", "frame": "B", "at": [260.76, 165.59], "from": "rect2141"}], "research": "layout_notes §3 site 4 (A Laundry Room, west end; B Supply Room)", "_unverified": ["bombs"]}
+ ],
+ "cameras": [
+  {"id": "CAM1", "level": "EXT", "frame": "world", "at": [-43.1, 258.17], "from": "image6078-1", "research": "map_features §2 CAM1: EXT Junkyard / Bus, west of the Small Tower's south end", "_unverified": ["at", "yawDeg", "pitchDeg"]},
+  {"id": "CAM2", "level": "EXT", "frame": "world", "at": [365.88, 271.89], "from": "image6078", "research": "map_features §2 CAM2: EXT Parking / Street, south-east of the Garage", "_unverified": ["at", "yawDeg", "pitchDeg"]},
+  {"id": "CAM3", "level": "EXT", "frame": "world", "at": [331.72, -12.78], "from": "image6078-7", "research": "map_features §2 CAM3: EXT Construction, the north-east yard", "_unverified": ["at", "yawDeg", "pitchDeg"]},
+  {"id": "CAM4", "level": "B", "frame": "B", "at": [160.01, 206.76], "from": "image6186", "research": "map_features §2 CAM4: B Freezer, west part", "_unverified": ["at", "yawDeg", "pitchDeg"]},
+  {"id": "CAM5", "level": "1F", "frame": "1F", "at": [287.7, 92.73], "from": "image6198", "research": "map_features §2 CAM5: 1F Rear Stage, east end (west along it [PRE])", "_unverified": ["at", "yawDeg", "pitchDeg"]},
+  {"id": "CAM6", "level": "1F", "frame": "1F", "at": [261.73, 212.72], "from": "image6198-7", "research": "map_features §2 CAM6: 1F Lobby, north edge of the east-west hall", "_unverified": ["at", "yawDeg", "pitchDeg"]},
+  {"id": "CAM7", "level": "1F", "frame": "1F", "at": [128.54, 265.28], "from": "image6198-7-6", "research": "map_features §2 CAM7: 1F Shower Corridor, south end", "_unverified": ["at", "yawDeg", "pitchDeg"]},
+  {"id": "CAM8", "level": "2F", "frame": "2F", "at": [291.41, 194.57], "from": "image6192", "research": "map_features §2 CAM8: 2F Armory Corridor, north end (south along it [PRE])", "_unverified": ["at", "yawDeg", "pitchDeg"]}
+ ],
+ "ingredients": [
+  {"id": "ING1", "kind": "fire_extinguisher", "level": "B", "frame": "B", "at": [232.57, 180.8], "from": "path12-0", "research": "map_features §3 ING1: Basement Hall, south part (between the Supply and Laundry doors)", "_unverified": ["at"]},
+  {"id": "ING2", "kind": "fire_extinguisher", "level": "B", "frame": "B", "at": [209.7, 196.07], "from": "path12-0-1", "research": "map_features §3 ING2: Freezer, north arm", "_unverified": ["at"]},
+  {"id": "ING3", "kind": "fire_extinguisher", "level": "1F", "frame": "1F", "at": [153.13, 234.43], "from": "path12-0-3", "research": "map_features §3 ING3: Security Corridor, north wall by the Security door", "_unverified": ["at"]},
+  {"id": "ING4", "kind": "fire_extinguisher", "level": "1F", "frame": "1F", "at": [212.28, 128.34], "from": "path12-0-0", "research": "map_features §3 ING4: Kitchen Corridor", "_unverified": ["at"]},
+  {"id": "ING5", "kind": "fire_extinguisher", "level": "1F", "frame": "1F", "at": [242.24, 210.36], "from": "path12-0-9", "research": "map_features §3 ING5: Lobby / White Hall junction, south of Split", "_unverified": ["at"]},
+  {"id": "ING6", "kind": "fire_extinguisher", "level": "2F", "frame": "2F", "at": [276.86, 192.47], "from": "path12-0-3-8", "research": "map_features §3 ING6: Trophy Room, north-east corner", "_unverified": ["at"]},
+  {"id": "ING7", "kind": "fire_extinguisher", "level": "2F", "frame": "2F", "at": [243.61, 185.37], "from": "path12-0-3-8-7", "research": "map_features §3 ING7: Low Attic", "_unverified": ["at"]},
+  {"id": "ING8", "kind": "gas_pipe", "level": "1F", "frame": "1F", "at": [288.61, 265.41], "from": "path5-1", "research": "map_features §3 ING8: Main Stairs / Garage south-west corner", "_unverified": ["at"]},
+  {"id": "ING9", "kind": "gas_pipe", "level": "2F", "frame": "2F", "at": [270.23, 144.24], "from": "path5-1-8", "research": "map_features §3 ING9: Attic (north connector), east wall", "_unverified": ["at"]}
  ],
  "rappel": { "refuse": [] }
 }

@@ -297,6 +297,8 @@ the outside come next.
     builds r6calls' extent for any of them). The Game Room's south window and the 2F Small Tower's south opening
     (P36), which r6calls 2026 draws and the 2020 blueprint doesn't, are built as wall: the patch notes' "new
     exterior second-floor window" is the Attic's, which the blueprint has (the span's `hard: false` builds it).
+    Asked after M4 (can you go from the 2F Small Tower straight out onto the Dining roof, or only through the
+    Office next door?): Ulo can't check yet (2026-10-22). Ask again at walk #1 (M6).
 14. **Soft floors (P16):** each covers the rooms the research names, to their walls (the Kids' Dorms whole, the
     Office's north 60%, the Attic's north end…), cut into tiles of at most 4 m in 0.4 m joist spacings; a
     bullet crossing a seam goes into one surface. Shoot up from 1F: is the soft part of each ceiling the right

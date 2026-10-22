@@ -224,6 +224,15 @@ export const layoutSchema = z.strictObject({
     killDepthM: num.positive(),
     /** A wall end this close (u) to a perpendicular wall's band meets it (DESIGN §5.3 junctions). */
     junctionU: num.positive(),
+    /** P30: a plant counts only this far inside the site's rooms. */
+    site: z.strictObject({ plantMarginM: num.nonnegative() }),
+    /**
+     * P31: a camera goes on the wall nearest its marker (within `reachM`), `belowCeilingM` under the ceiling,
+     * looking `pitchDeg` down at the room's middle; outside, with no building wall that near, on a post `postM` tall.
+     */
+    camera: z.strictObject({ belowCeilingM: num.positive(), pitchDeg: num, reachM: num.positive(), postM: num.positive() }),
+    /** P32: extinguishers and gas pipes on the wall nearest their marker (within `reachM`), at these heights. */
+    ingredient: z.strictObject({ fireExtinguisherM: num.positive(), gasPipeM: num.positive(), reachM: num.positive() }),
   }),
   rooms: z
     .array(z.strictObject({ id: z.string(), floor: Floor, callout: z.string(), names: z.record(z.string(), z.string()).optional(), seed: U2, frame: Frame }))
@@ -279,31 +288,64 @@ export const layoutSchema = z.strictObject({
       level: Level,
       frame: Frame,
       at: U2,
-      /** Compass-free facing: yaw in degrees (0 faces north), or toward the building's middle. */
-      facing: z.union([num, z.literal("building")]),
+      /** Compass-free facing: yaw in degrees (0 faces north), toward the building's middle, or (a defender) toward the middle of its site's bombs. */
+      facing: z.union([num, z.literal("building"), z.literal("site")]),
       src: Src.optional(),
       note: z.string().optional(),
       _unverified: Uv,
     }),
   ),
+  /**
+   * Bomb sites (markers.ts): two rooms each, the bombs at r6calls' markers (frame and u as extracted), each in
+   * the room named. `number` is the site's number on r6calls and Liquipedia.
+   */
   sites: z
     .array(
       z.strictObject({
         id: z.string(),
         name: z.string(),
-        liquipedia: z.number().int(),
+        number: z.number().int(),
         rooms: z.array(z.string()).length(2),
-        bombs: z.array(z.strictObject({ id: z.string(), room: z.string(), frame: Frame, at: U2 })),
+        bombs: z.array(z.strictObject({ id: z.string(), room: z.string(), frame: Frame, at: U2, from: z.string().optional() })).length(2),
+        research: z.string().optional(),
         _unverified: Uv,
       }),
     )
     .default([]),
+  /**
+   * Default cameras (markers.ts): r6calls' marker; mounted on the nearest wall of its room (`room`: which room the
+   * marker is in, where it sits on a wall line), facing the room's middle, unless `yawDeg` says otherwise.
+   */
   cameras: z
-    .array(z.strictObject({ id: z.string(), level: Level, room: z.string().optional(), frame: Frame, at: U2, yawDeg: num.optional(), pitchDeg: num.optional(), _unverified: Uv }))
+    .array(
+      z.strictObject({
+        id: z.string(),
+        level: Level,
+        room: z.string().optional(),
+        frame: Frame,
+        at: U2,
+        yawDeg: num.optional(),
+        pitchDeg: num.optional(),
+        from: z.string().optional(),
+        research: z.string().optional(),
+        _unverified: Uv,
+      }),
+    )
     .default([]),
+  /** Fire extinguishers and gas pipes (markers.ts): r6calls' marker, on the nearest wall, facing out of it. */
   ingredients: z
     .array(
-      z.strictObject({ id: z.string(), kind: z.enum(["fire_extinguisher", "gas_pipe"]), level: Level, room: z.string().optional(), frame: Frame, at: U2, _unverified: Uv }),
+      z.strictObject({
+        id: z.string(),
+        kind: z.enum(["fire_extinguisher", "gas_pipe"]),
+        level: Level,
+        room: z.string().optional(),
+        frame: Frame,
+        at: U2,
+        from: z.string().optional(),
+        research: z.string().optional(),
+        _unverified: Uv,
+      }),
     )
     .default([]),
   zones: z

@@ -298,6 +298,9 @@
   {"id": "B.w060#0", "center": [27.25, -1.7, 38.9], "size": [0.3, 3, 3.3], "surface": "HARD_WALL"},
   {"id": "B.w061#0", "center": [25.3, -1.7, 36.325], "size": [0.3, 3, 2.65], "surface": "HARD_WALL"},
   {"id": "B.w062#0", "center": [54.1, -1.7, 16.4], "size": [0.3, 3, 1.2], "surface": "HARD_WALL"},
+  {"id": "CAM1.post", "center": [-6.465, 1.5, 38.7255], "size": [0.15, 3, 0.15], "surface": "HARD_WALL"},
+  {"id": "CAM2.post", "center": [54.882, 1.5, 40.7835], "size": [0.15, 3, 0.15], "surface": "HARD_WALL"},
+  {"id": "CAM3.post", "center": [49.758, 1.5, -1.917], "size": [0.15, 3, 0.15], "surface": "HARD_WALL"},
   {"id": "EXT_BALCONY#0", "center": [36.8, 3.1, 41.45], "size": [8.5, 0.2, 1.7], "surface": "HARD_FLOOR", "label": "Balcony"},
   {"id": "EXT_BALCONY#1", "center": [42.275, 3.1, 41.975], "size": [2.45, 0.2, 0.65], "surface": "HARD_FLOOR"},
   {"id": "EXT_BALCONY.railE", "center": [43.65, 3.7, 41.9753], "size": [0.3, 1, 0.6495], "surface": "HARD_WALL", "vaultable": true, "bodiesOnly": true},
@@ -1067,6 +1070,45 @@
   {"id": "2F_ARMORY", "callout": "Armory", "storey": "2F", "rects": [[43.7, 30.85, 49.75, 37.75]], "anchor": [46.725, 3.2, 34.275]},
   {"id": "2F_WHITE_STAIRS", "callout": "White Stairs", "storey": "2F", "rects": [[20.5, 37.8, 29.1, 40.75]], "anchor": [23.175, 3.2, 39.275]},
   {"id": "3F_CATWALK", "callout": "Cat Walk", "storey": "3F", "rects": [[36.2, 7.6, 44.1, 9.1], [36.2, 9.1, 36.75, 14.65], [41.6, 9.1, 44.1, 14.65], [36.75, 12.9, 41.6, 14.65]], "anchor": [42.075, 6.2, 11.175]}
+ ],
+ "sites": [
+  {"id": "SITE_DORMS", "name": "2F Kids' Dorms / Dorms Main Hall", "rooms": ["2F_DORMS_MAIN_HALL", "2F_KIDS_DORMS"], "plantMarginM": 0.5, "bombs": [
+   {"id": "1A", "pos": [24.676, 3.2, 36.5418], "room": "2F_DORMS_MAIN_HALL"},
+   {"id": "1B", "pos": [28.9886, 3.2, 27.243], "room": "2F_KIDS_DORMS"}
+  ]},
+  {"id": "SITE_DINING", "name": "1F Kitchen / Dining Hall", "rooms": ["1F_DINING", "1F_KITCHEN"], "plantMarginM": 0.5, "bombs": [
+   {"id": "2A", "pos": [15.3555, 0, 24.015], "room": "1F_DINING"},
+   {"id": "2B", "pos": [26.481, 0, 26.355], "room": "1F_KITCHEN"}
+  ]},
+  {"id": "SITE_MEETING", "name": "1F Meeting Hall / Kitchen", "rooms": ["1F_MEETING_HALL", "1F_KITCHEN"], "plantMarginM": 0.5, "bombs": [
+   {"id": "3A", "pos": [35.247, 0, 19.0425], "room": "1F_MEETING_HALL"},
+   {"id": "3B", "pos": [26.481, 0, 27.546], "room": "1F_KITCHEN"}
+  ]},
+  {"id": "SITE_LAUNDRY", "name": "B Laundry / Supply", "rooms": ["B_LAUNDRY", "B_SUPPLY"], "plantMarginM": 0.5, "bombs": [
+   {"id": "4A", "pos": [33.5592, -3.2, 34.7662], "room": "B_LAUNDRY"},
+   {"id": "4B", "pos": [40.0887, -3.2, 25.0494], "room": "B_SUPPLY"}
+  ]}
+ ],
+ "cameras": [
+  {"id": "CAM1", "pos": [-6.3504, 2.7, 38.6756], "yawDeg": -66.5, "pitchDeg": -20},
+  {"id": "CAM2", "pos": [54.7719, 2.7, 40.7243], "yawDeg": 61.8, "pitchDeg": -20},
+  {"id": "CAM3", "pos": [49.6738, 2.7, -1.8246], "yawDeg": 137.6, "pitchDeg": -20},
+  {"id": "CAM4", "pos": [24.6135, -0.5, 30.35], "yawDeg": -132.9, "pitchDeg": -20, "room": "B_FREEZER"},
+  {"id": "CAM5", "pos": [43.155, 2.7, 14.65], "yawDeg": 63.6, "pitchDeg": -20, "room": "1F_TOWER"},
+  {"id": "CAM6", "pos": [39.2595, 2.7, 31.3], "yawDeg": 171.6, "pitchDeg": -20, "room": "1F_LOBBY"},
+  {"id": "CAM7", "pos": [19.25, 2.7, 40.7], "yawDeg": 78.1, "pitchDeg": -20, "room": "1F_SHOWER_CORRIDOR"},
+  {"id": "CAM8", "pos": [42.7133, 5.7, 28.2], "yawDeg": 176.2, "pitchDeg": -20, "room": "2F_ARMORY_CORRIDOR"}
+ ],
+ "ingredients": [
+  {"id": "ING1", "kind": "fire_extinguisher", "pos": [36.15, -2.2, 27.3857], "yawDeg": 90, "room": "B_CORRIDOR"},
+  {"id": "ING2", "kind": "fire_extinguisher", "pos": [32.6, -2.2, 29.7312], "yawDeg": 90, "room": "B_FREEZER_HALL"},
+  {"id": "ING3", "kind": "fire_extinguisher", "pos": [22.9695, 1, 35], "yawDeg": -180, "room": "1F_SECURITY_CORRIDOR"},
+  {"id": "ING4", "kind": "fire_extinguisher", "pos": [32.2, 1, 19.251], "yawDeg": 90, "room": "1F_KITCHEN_CORRIDOR"},
+  {"id": "ING5", "kind": "fire_extinguisher", "pos": [36.336, 1, 31.3], "yawDeg": -180, "room": "1F_LOBBY"},
+  {"id": "ING6", "kind": "fire_extinguisher", "pos": [40.5805, 4.2, 28.2], "yawDeg": -180, "room": "2F_TROPHY"},
+  {"id": "ING7", "kind": "fire_extinguisher", "pos": [35.7065, 4.2, 27.8], "yawDeg": 0, "room": "2F_LOW_ATTIC"},
+  {"id": "ING8", "kind": "gas_pipe", "pos": [43.45, 1.2, 39.8115], "yawDeg": 90, "room": "1F_ARMORY_STAIRS"},
+  {"id": "ING9", "kind": "gas_pipe", "pos": [40.1, 4.4, 21.4964], "yawDeg": 90, "room": "2F_ATTIC"}
  ],
  "zones": [
   {"id": "B.dt2", "kind": "drone_hole", "boxes": [
