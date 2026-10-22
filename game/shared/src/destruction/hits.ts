@@ -2,7 +2,8 @@
 // data/destruction.json). A bullet passes the material it can break, making a hole in each layer, and stops
 // at what it can't: steel, metal supports, and wooden studs its tier doesn't cut (wallbang.uncutStudsStop).
 // It goes into at most wallbang.maxSurfaces surfaces; the next one stops it (the tiles of one soft floor are
-// one surface: a bullet crossing a seam between two goes on into the same one). Hatches, barricades and glass
+// one surface: a bullet crossing a seam between two goes on into the same one). A prop with a class (Phase 5)
+// is a surface too, without holes, unless its class stops bullets. Hatches, barricades and glass
 // also wear down. Nothing is applied here: the ops come back, each with where along the ray it happens, for
 // the room to apply at the end of the tick (and to drop if a body stopped the bullet first).
 import type { Vec3 } from "../core/math.js";
@@ -30,9 +31,9 @@ export interface PanelOpAt {
 }
 
 export interface PanelPassage {
-  /** Where the panels stopped it (metres along the ray), or null. */
+  /** Where the panels or a prop stopped it (metres along the ray), or null. */
   stop: number | null;
-  /** Where it met material in each panel it went through, in order: damage past each is multiplied down. */
+  /** Where it met material in each panel (and went into each prop) it went through, in order: damage past each is multiplied down. */
   enters: number[];
   ops: PanelOpAt[];
 }
@@ -78,12 +79,46 @@ function wear(e: PanelEntry, rule: PanelHitRule): number {
   return kind === "hatch" ? rule.hatchDamage : kind === "barricade" ? rule.barricadeDamage : kind === "glass" ? 1 : 0;
 }
 
+/** A prop with a class along a bullet's way: where the bullet goes into it, and whether its class stops it. */
+export interface PropCrossing {
+  t: number;
+  stops: boolean;
+}
+
 /**
- * A bullet from `origin` along unit `dir` through the panels, up to `maxT` (where plain level geometry
- * stops it), as the shooter's client had them (`view`).
+ * The props of `props` (nearest first) from index `from` that a bullet reaches before `upTo`: each one it goes
+ * through is a surface like a panel (out.enters: it costs damage and counts toward wallbang.maxSurfaces, but
+ * makes no hole); one whose class stops bullets, or one surface too many, ends it there (out.stop). Returns
+ * the index of the first prop not reached, or -1 if one ended it.
  */
-export function bulletThroughPanels(panels: PanelSet, d: DestructionData, rule: PanelHitRule, origin: Vec3, dir: Vec3, maxT: number, view?: PanelView): PanelPassage {
+export function passProps(out: PanelPassage, props: readonly PropCrossing[], from: number, upTo: number, maxSurfaces: number): number {
+  let i = from;
+  for (; i < props.length && props[i].t < upTo; i++) {
+    if (props[i].stops || out.enters.length >= maxSurfaces) {
+      out.stop = props[i].t;
+      return -1;
+    }
+    out.enters.push(props[i].t);
+  }
+  return i;
+}
+
+/**
+ * A bullet from `origin` along unit `dir` through the panels and `props` (nearest first), up to `maxT` (where
+ * plain level geometry stops it), as the shooter's client had them (`view`).
+ */
+export function bulletThroughPanels(
+  panels: PanelSet,
+  d: DestructionData,
+  rule: PanelHitRule,
+  origin: Vec3,
+  dir: Vec3,
+  maxT: number,
+  view?: PanelView,
+  props: readonly PropCrossing[] = [],
+): PanelPassage {
   const out: PanelPassage = { stop: null, enters: [], ops: [] };
+  let prop = 0;
   const met = new MaterialMet();
   // Panels it went into (two whose boxes overlap, at a corner, have their crossings interleaved), and the
   // regions they belong to: a tile of a region it is already in is the same surface.
@@ -91,6 +126,8 @@ export function bulletThroughPanels(panels: PanelSet, d: DestructionData, rule: 
   const regions = new Set<string>();
   let last = false;
   for (const { entry, crossing: c } of panels.crossings(origin, dir, maxT)) {
+    // The props before this crossing come first.
+    if ((prop = passProps(out, props, prop, c.t, d.wallbang.maxSurfaces)) < 0) return out;
     const index = entry.panel.spec.index;
     if (!met.meets(index, c, solidAs(entry, c, view))) continue;
     if (!entered.has(index)) {
@@ -117,6 +154,7 @@ export function bulletThroughPanels(panels: PanelSet, d: DestructionData, rule: 
       break;
     }
   }
+  if (out.stop === null) passProps(out, props, prop, maxT, d.wallbang.maxSurfaces);
   return out;
 }
 

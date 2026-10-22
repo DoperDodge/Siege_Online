@@ -559,6 +559,11 @@ export const levelSchema = z.strictObject({
       bodiesOnly: z.boolean().default(false),
       /** Drawn only, never collides (Phase 5): a railing's top bar over its bodies-only blocker; never a panel. */
       drawOnly: z.boolean().default(false),
+      /**
+       * A PROP's class (Phase 5, data/destruction.json `props`): bullets go through it as through a panel (it
+       * costs damage and counts as a surface) unless its class stops them. A PROP without one stops bullets.
+       */
+      prop: z.string().optional(),
       label: z.string().optional(),
       /**
        * A destructible surface is a panel (Phase 4, data/destruction.json): its construction (the surface's
@@ -750,6 +755,8 @@ export const destructionSchema = z.strictObject({
   }),
   /** Through panels: damage kept per panel, panels a bullet can go into, and whether wooden studs it can't cut stop it. */
   wallbang: z.strictObject({ damageMult: z.number().min(0).max(1), maxSurfaces: z.number().int().positive(), uncutStudsStop: z.boolean() }),
+  /** Props by class (a level PROP's `prop`): which stop bullets; the rest a bullet goes through like a panel, without holes. */
+  props: z.strictObject({ classes: z.record(z.string(), z.strictObject({ stopsBullets: z.boolean() })) }),
   melee: z.strictObject({ holeDiameterM: metres, bothSkins: z.boolean(), studs: z.boolean(), hatchDamage: z.number().nonnegative(), barricadeDamage: z.number().nonnegative() }),
   explosives: z.record(z.string(), explosiveSchema),
   reinforcement: z.strictObject({

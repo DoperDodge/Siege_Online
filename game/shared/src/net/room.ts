@@ -23,7 +23,7 @@ import { controllerState, writeControllerState, writePawnState } from "./pawnSta
 import type { SimEvent } from "../weapons/step.js";
 import { defaultLoadoutPick, resolveLoadout, type LoadoutPick } from "../weapons/loadout.js";
 import { hash4, pelletDirections, viewDir } from "../weapons/spread.js";
-import { QUERY_BULLET } from "../physics/rapier.js";
+import { QUERY_SIGHT } from "../physics/rapier.js";
 import { sideTeam } from "../sim.js";
 import { encodeEvents, type GameEvent } from "./events.js";
 import { encodeError, encodePong, encodeRoster, encodeShotResult, encodeWelcome, ErrorCode, unwrap16, type InputMsg, type LabTool, type RosterEntry, type ShotResult } from "./protocol.js";
@@ -504,7 +504,7 @@ export class Room {
       const dir = viewDir(tool.yaw, tool.pitch);
       const reach = explosiveReach(ex);
       const ray = new this.sim.R.Ray({ x: eye[0], y: eye[1], z: eye[2] }, { x: dir[0], y: dir[1], z: dir[2] });
-      const plain = this.sim.world.castRay(ray, reach, true, undefined, QUERY_BULLET)?.timeOfImpact ?? reach;
+      const plain = this.sim.world.castRay(ray, reach, true, undefined, QUERY_SIGHT)?.timeOfImpact ?? reach;
       for (const o of explosiveOps(this.sim.level.panels, this.sim.data.destruction, ex, eye, dir, plain)) this.queuePanelOp(o.panel, o.op);
     } else if (tool.kind === "resetPanels") {
       this.resetPanels();
@@ -628,7 +628,7 @@ export class Room {
     const dir = viewDir(hit.yaw, hit.pitch);
     const reach = this.sim.data.combat.melee.reach;
     const ray = new this.sim.R.Ray({ x: hit.origin[0], y: hit.origin[1], z: hit.origin[2] }, { x: dir[0], y: dir[1], z: dir[2] });
-    const plain = this.sim.world.castRay(ray, reach, true, undefined, QUERY_BULLET)?.timeOfImpact ?? reach;
+    const plain = this.sim.world.castRay(ray, reach, true, undefined, QUERY_SIGHT)?.timeOfImpact ?? reach;
     const onPanel = meleeOnPanels(this.sim.level.panels, this.sim.data.destruction, hit.origin, dir, reach, plain, { tick: panelTick, history: this.panelHistory });
     if (onPanel) this.judged.push({ ...base, bodies: [], lives: new Map(), panelOps: onPanel.ops.map(({ panel, op }) => ({ panel, op })) });
   }

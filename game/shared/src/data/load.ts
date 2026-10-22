@@ -268,6 +268,11 @@ function destructionProblems(d: DestructionData, weapons: Map<string, WeaponData
     for (const s of lvl.solids) {
       const at = `${levelFile(lvl.id)}: solid "${s.id}"`;
       const id = s.panel?.construction ?? d.surfaces[s.surface];
+      if (s.prop !== undefined) {
+        if (s.surface !== "PROP") out.push(`${at} has a prop class but is a ${s.surface}`);
+        else if (!Object.hasOwn(d.props.classes, s.prop)) out.push(`${at}: prop class "${s.prop}" isn't in ${file} props.classes`);
+        if (s.bodiesOnly || s.drawOnly) out.push(`${at} has a prop class, so it can't ${s.bodiesOnly ? "stop bodies only" : "be drawn only"}`);
+      }
       if (s.bodiesOnly && s.drawOnly) out.push(`${at} can't both stop bodies only and be drawn only`);
       if (s.bodiesOnly || s.drawOnly) {
         if (id || s.panel) out.push(`${at} ${s.bodiesOnly ? "stops bodies only" : "is drawn only"}, so it can't be a destructible ${s.surface} or have panel options`);

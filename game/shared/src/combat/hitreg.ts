@@ -6,10 +6,10 @@ import type { Vec3 } from "../core/math.js";
 import type { CombatData } from "../data/schemas.js";
 import type { HitboxHistory, SentTicks } from "../net/lagComp.js";
 import type { BodyPart } from "../player/hitboxes.js";
-import { bulletThroughPanels, type PanelHitRule, type PanelPassage, type PanelView } from "../destruction/hits.js";
+import { bulletThroughPanels, passProps, type PanelHitRule, type PanelPassage, type PanelView, type PropCrossing } from "../destruction/hits.js";
 import type { IndexedOp } from "../destruction/panels.js";
 import { raycastLevel } from "../level/raycast.js";
-import { QUERY_BULLET } from "../physics/rapier.js";
+import { QUERY_BULLET, QUERY_PROPS } from "../physics/rapier.js";
 import type { Sim } from "../sim.js";
 import type { ResolvedDamage } from "../weapons/loadout.js";
 import { bulletDamage, penetrationChain, type BodyEntry, type BodyHit, type BulletOptions, type Zone } from "./damage.js";
@@ -34,8 +34,8 @@ export interface PelletPath {
   end: number;
   /** What it did to panels before it ended (holes, wear), in order along it. */
   ops: IndexedOp[];
-  /** Panels it went into before it ended. */
-  panels: number;
+  /** Surfaces it went into before it ended: panels, and props it went through. */
+  surfaces: number;
 }
 
 /** How pellets treat destructible panels: the weapon's tier rule, and the panels as the shooter had them. */
@@ -45,10 +45,34 @@ export interface ThroughPanels {
 }
 
 /**
+ * The props with a class along a ray within maxT, nearest first (ties by collider, so every machine agrees):
+ * where it goes into each, and whether the class stops bullets (data/destruction.json props).
+ */
+function propsAlong(sim: Sim, origin: Vec3, dir: Vec3, maxT: number): PropCrossing[] {
+  const ray = new sim.R.Ray({ x: origin[0], y: origin[1], z: origin[2] }, { x: dir[0], y: dir[1], z: dir[2] });
+  const classes = sim.data.destruction.props.classes;
+  const found: (PropCrossing & { handle: number })[] = [];
+  sim.world.intersectionsWithRay(
+    ray,
+    maxT,
+    true,
+    (hit) => {
+      const prop = sim.level.solids.get(hit.collider.handle)?.prop;
+      if (prop !== undefined) found.push({ t: hit.timeOfImpact, stops: !Object.hasOwn(classes, prop) || classes[prop].stopsBullets, handle: hit.collider.handle });
+      return true;
+    },
+    undefined,
+    QUERY_PROPS,
+  );
+  return found.sort((a, b) => a.t - b.t || a.handle - b.handle).map(({ t, stops }) => ({ t, stops }));
+}
+
+/**
  * One pellet from `origin` along unit `dir`: the level stops it, and the bodies `bodiesAlong` finds before a
  * distance take hits by the weapon's penetration rule. With `through`, it goes through panels by the
  * weapon's destruction rule (destruction/hits.ts), each panel costing damage (wallbang.damageMult);
- * without, a panel stops it where it meets material.
+ * without, a panel stops it where it meets material. Either way it goes through props with a class that
+ * doesn't stop bullets, each costing damage and counting as a surface like a panel.
  */
 export function pelletPath(
   sim: Sim,
@@ -62,9 +86,13 @@ export function pelletPath(
   const d = sim.data.destruction;
   const ray = new sim.R.Ray({ x: origin[0], y: origin[1], z: origin[2] }, { x: dir[0], y: dir[1], z: dir[2] });
   const plain = sim.world.castRay(ray, max, true, undefined, QUERY_BULLET)?.timeOfImpact ?? null;
+  const props = propsAlong(sim, origin, dir, plain ?? max);
   let passage: PanelPassage;
-  if (through) passage = bulletThroughPanels(sim.level.panels, d, through.rule, origin, dir, plain ?? max, through.view);
-  else passage = { stop: sim.level.panels.firstSolid(origin, dir, plain ?? max)?.crossing.face ?? null, enters: [], ops: [] };
+  if (through) passage = bulletThroughPanels(sim.level.panels, d, through.rule, origin, dir, plain ?? max, through.view, props);
+  else {
+    passage = { stop: sim.level.panels.firstSolid(origin, dir, plain ?? max)?.crossing.face ?? null, enters: [], ops: [] };
+    passProps(passage, props, 0, passage.stop ?? plain ?? max, d.wallbang.maxSurfaces);
+  }
   const wall = passage.stop ?? plain;
   const bodies = bodiesAlong(wall ?? max);
   const hits = penetrationChain(sim.data.combat, penetration, bodies);
@@ -74,7 +102,7 @@ export function pelletPath(
   const end = stopped ? hits[hits.length - 1].t : (wall ?? max);
   // A body that stopped it kept it from the panels behind.
   const ops = passage.ops.filter((o) => !stopped || o.t <= end).map(({ panel, op }) => ({ panel, op }));
-  return { dir, wall, hits, first, end, ops, panels: passage.enters.filter((e) => !stopped || e <= end).length };
+  return { dir, wall, hits, first, end, ops, surfaces: passage.enters.filter((e) => !stopped || e <= end).length };
 }
 
 /**

@@ -2,7 +2,7 @@
 // plus a render list.
 // Server and client both call this, so what you see is exactly what you collide with.
 import { DEG, forwardXZ, quatYawPitch, rotateXZ, type Vec3 } from "../core/math.js";
-import { HELPER_GROUPS, refreshBroadPhase, STATIC_GROUPS, type Collider, type Rapier, type World } from "../physics/rapier.js";
+import { HELPER_GROUPS, PROP_GROUPS, refreshBroadPhase, STATIC_GROUPS, type Collider, type Rapier, type World } from "../physics/rapier.js";
 import type { DestructionData, LevelDef, Surface } from "../data/schemas.js";
 import { PanelSet } from "../destruction/panels.js";
 import { constructionOf, panelSpec } from "../destruction/world.js";
@@ -24,6 +24,8 @@ export interface SolidInfo {
   id: string;
   surface: Surface;
   vaultable: boolean;
+  /** A prop's class (data/destruction.json props): bullets decide at it instead of stopping (combat/hitreg.ts). */
+  prop?: string;
 }
 
 export interface LadderRuntime {
@@ -65,7 +67,8 @@ export function buildLevel(R: Rapier, world: World, def: LevelDef, destruction?:
       const desc = R.ColliderDesc.cuboid(size[0] / 2, size[1] / 2, size[2] / 2)
         .setTranslation(center[0], center[1], center[2])
         .setRotation({ x: quat[0], y: quat[1], z: quat[2], w: quat[3] })
-        .setCollisionGroups(opts.visible ? STATIC_GROUPS : HELPER_GROUPS); // invisible = a movement helper
+        // Invisible = a movement helper; a prop with a class is skipped by the bullet query.
+        .setCollisionGroups(!opts.visible ? HELPER_GROUPS : info.prop !== undefined ? PROP_GROUPS : STATIC_GROUPS);
       const c: Collider = world.createCollider(desc);
       solids.set(c.handle, info);
     }
@@ -74,7 +77,7 @@ export function buildLevel(R: Rapier, world: World, def: LevelDef, destruction?:
 
   for (const s of def.solids) {
     const quat = quatYawPitch(s.yawDeg * DEG, 0);
-    const info: SolidInfo = { id: s.id, surface: s.surface, vaultable: s.vaultable };
+    const info: SolidInfo = { id: s.id, surface: s.surface, vaultable: s.vaultable, ...(s.prop !== undefined ? { prop: s.prop } : {}) };
     if (s.bodiesOnly || s.drawOnly) {
       // Stops bodies only, or nothing: never a panel (data/load.ts refuses one with a destructible surface).
       addBox(info, "solid", s.center, s.size, quat, { collides: s.bodiesOnly, visible: s.drawOnly, label: s.label });
