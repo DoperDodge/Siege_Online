@@ -219,8 +219,9 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
    switch to plain grey.
 7. The outside: Go to → Attacker spawn A Junkyard, B Street or C Construction puts you at that insertion point,
    facing the building (four more spawns stand beside it); walk to the building from each.
-8. The roofs: Go to 2F → Office and vault out of its north window onto the Dining roof, or 2F → Master and
-   step out of its south door onto the Balcony. Press N for the free camera and fly over every roof (WASD along
+8. The roofs: Go to 2F → Office and vault out of its north window onto the Dining roof (from the 2F Small Tower,
+   its east door leads into the Office; the Small Tower's own south opening is built as wall, D-087), or
+   2F → Master and step out of its south door onto the Balcony. Press N for the free camera and fly over every roof (WASD along
    the view, Space up, C down, Shift faster); F puts you on the floor under the camera, N takes you back.
 9. Soft floors: Go to 1F Kitchen, look straight up and fire. The yellow floor above (the Kids' Dorms, SF-2F-01)
    takes holes; every soft floor works the same way from the room below.

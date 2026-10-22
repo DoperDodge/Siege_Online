@@ -1035,6 +1035,24 @@ describe("oregon roofs (M4, DESIGN §5.8)", () => {
     }
   });
 
+  it("from the 2F Small Tower, a body goes through the Office and vaults out of its north window onto the Dining roof (M4's done-when)", async () => {
+    const sim = await Sim.create("oregon");
+    // The Small Tower's own south opening is built as wall (D-087); its door east (2F.o020, an empty frame) leads
+    // into the Office.
+    const g = buildWalkGraph(sim);
+    expect(g.comp[nodeNear(g, 8.5, 3.2, 27.85)]).toBe(g.comp[nodeNear(g, 13.15, 3.2, 27.3)]);
+    // The Office's north window (2F.o000, its wall at z 26.5 m), barricade and glass broken: run at it and vault.
+    for (const id of ["2F.o000.bar", "2F.o000.glass"]) sim.level.panels.apply(sim.level.panels.byId.get(id)!.panel.spec.index, { kind: "damage", amount: 1e9, hard: false });
+    const ctrl = sim.addPlayer("vaulter", "sledge");
+    const pawn = sim.pawns.get(ctrl.possessedPawnId)!;
+    sim.teleport(pawn.id, 13.15, 3.2, 27.3, 0, Stance.Stand);
+    let seq = 0;
+    for (let t = 0; t < 64 * 2; t++) sim.step(new Map([[ctrl.id, { seq: ++seq, forward: 1, strafe: 0, yaw: 0, pitch: 0, buttons: Btn.Vault, stance: Stance.Stand, lean: 0 }]]));
+    for (let t = 0; t < 32; t++) sim.step(new Map([[ctrl.id, { seq: ++seq, forward: 0, strafe: 0, yaw: 0, pitch: 0, buttons: 0, stance: Stance.Stand, lean: 0 }]]));
+    const s = pawn.state;
+    expect([s.z < 26.2, s.grounded, Math.abs(s.y - 3.2) < 0.05], `at ${s.x.toFixed(2)}, ${s.y.toFixed(2)}, ${s.z.toFixed(2)}`).toEqual([true, true, true]);
+  });
+
   it("a body stands on the flat roofs and on the slopes, where it is put, without sliding", async () => {
     const sim = await Sim.create("oregon");
     const ctrl = sim.addPlayer("roofer", "sledge");
