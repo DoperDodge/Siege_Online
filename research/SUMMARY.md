@@ -30,7 +30,7 @@ Sources, in priority order (PLAN §0.3): official Ubisoft operator/map pages, pa
 ## Oregon (what we'll build — see DECISIONS D-013)
 - **Layout:** the **Y5S1 (2020) rework**, plus the **Y11S1 (March 2026) modernization** layer: **7 fire extinguishers + 2 gas pipes** (no metal detectors), new lighting. No layout change was found. Oregon left Ranked mid-Y11S1 but is still live in other playlists.
 - **Sites (confirmed):** B Laundry / B Supply · 1F Kitchen / 1F Dining Hall · 1F Meeting Hall / 1F Kitchen · 2F Kids' Dorms / 2F Dorms Main Hall.
-- **Surfaces:** 32 soft (reinforceable) walls = 54 reinforcement sections; the Garage south wall is the only soft exterior wall. 6 hatches. Soft floors only on 2F and the 3F catwalk; the 1F floor is hard except 3 hatches.
+- **Surfaces:** 32 soft (reinforceable) walls = 55 reinforcement sections (r6calls' counts, one corrected by Ulo; most UNVERIFIED); the Garage south wall is the only soft exterior wall. 6 hatches. Soft floors only on 2F and the 3F catwalk; the 1F floor is hard except 3 hatches.
 - **Access:** 3 attacker spawns (Junkyard, Street, Construction Site), 5 staircases, a ladder up to the Big Tower's 3F Cat Walk, and 8 default cameras (single source; facings unknown).
 
 ## Our 12 operators — current loadouts (official pages, 2026-09-29)

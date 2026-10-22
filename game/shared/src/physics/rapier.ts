@@ -25,6 +25,11 @@ export const G_MOVE_HELPER = 0x0004;
  * geometry; bullets and sight go through the panels' cells instead (level/raycast.ts), so holes count.
  */
 export const G_PANEL = 0x0008;
+/**
+ * Props with a class (Phase 5, a level solid's `prop`): bodies collide with them and sight stops at them like
+ * level geometry, but the bullet query skips them: a bullet decides at each one (combat/hitreg.ts).
+ */
+export const G_PROP = 0x0010;
 const groups = (membership: number, filter: number) => ((membership << 16) | filter) >>> 0;
 
 /** Level geometry: collides with players and other statics. */
@@ -33,25 +38,52 @@ export const STATIC_GROUPS = groups(G_STATIC, G_STATIC | G_PLAYER);
 export const HELPER_GROUPS = groups(G_MOVE_HELPER, G_STATIC | G_PLAYER);
 /** Panel movement boxes: like level geometry for movement, but no bullet query sees them. */
 export const PANEL_GROUPS = groups(G_PANEL, G_STATIC | G_PLAYER);
+/** Props: like level geometry for movement and sight, but the bullet query doesn't see them. */
+export const PROP_GROUPS = groups(G_PROP, G_STATIC | G_PLAYER);
 /** Player movement bodies: blocked by the level and by each other (Skopós' two shells included). */
-export const PLAYER_GROUPS = groups(G_PLAYER, G_STATIC | G_PLAYER | G_PANEL);
+export const PLAYER_GROUPS = groups(G_PLAYER, G_STATIC | G_PLAYER | G_PANEL | G_PROP);
 /** Dead bodies: invisible to every query. Takes effect at once (setEnabled(false) waits for a refresh). */
 export const NONSOLID_PLAYER_GROUPS = groups(G_PLAYER, 0);
-/** Query filter that only sees static geometry (ground, walls, panels, the prone body, lean). */
-export const QUERY_STATIC = groups(G_PLAYER, G_STATIC | G_MOVE_HELPER | G_PANEL);
+/** Query filter that only sees static geometry (ground, walls, panels, props, the prone body, lean). */
+export const QUERY_STATIC = groups(G_PLAYER, G_STATIC | G_MOVE_HELPER | G_PANEL | G_PROP);
 /** Query filter that sees the level and players (walking, vault landings, choosing spawn spots). */
-export const QUERY_SOLID = groups(G_PLAYER, G_STATIC | G_PLAYER | G_MOVE_HELPER | G_PANEL);
-/** Query filter for bullets: the level you can see that isn't a panel, not movement helpers (DECISIONS D-046). */
+export const QUERY_SOLID = groups(G_PLAYER, G_STATIC | G_PLAYER | G_MOVE_HELPER | G_PANEL | G_PROP);
+/**
+ * Query filter for bullets: the level you can see that isn't a panel or a prop with a class (each decided on
+ * its own), not movement helpers (DECISIONS D-046).
+ */
 export const QUERY_BULLET = groups(G_PLAYER, G_STATIC);
+/** Query filter for sight (marks, lasers, the knife's line, a tool's reach): the level you can see that isn't a panel, props included. */
+export const QUERY_SIGHT = groups(G_PLAYER, G_STATIC | G_PROP);
+/** Query filter that only sees props with a class. */
+export const QUERY_PROPS = groups(G_PLAYER, G_PROP);
 /** Query filter that only sees players. */
 export const QUERY_PLAYERS = groups(G_PLAYER, G_PLAYER);
 
 /**
  * Rebuild the broad phase so queries see colliders moved, resized, added or removed since the last call.
- * Rapier answers every query through a bounding-box tree that only world.step() updates; the world has
+ * Rapier answers every query through a bounding-box tree that only a physics step updates; the world has
  * no rigid bodies, so this does nothing else (Phase 2 investigation, D-029; the timestep is DT, not 0,
  * see Sim.create and D-037).
+ *
+ * It runs the physics pipeline directly instead of world.step(): the wrapper's step also walks every body
+ * and collider handle across the WASM boundary to map ones made on the WASM side (177 µs at 1,500 colliders,
+ * against 7–20 µs for the pipeline). We make and remove every collider through the wrapper, which keeps its
+ * own maps, so nothing needs that walk (DECISIONS D-073). This uses Rapier 0.21's World fields and
+ * PhysicsPipeline.step arguments: re-check them on any Rapier upgrade (physics.test.ts compares the two).
  */
 export function refreshBroadPhase(world: World): void {
-  world.step();
+  world.physicsPipeline.step(
+    world.gravity,
+    world.integrationParameters,
+    world.islands,
+    world.broadPhase,
+    world.narrowPhase,
+    world.bodies,
+    world.colliders,
+    world.softBodies,
+    world.impulseJoints,
+    world.multibodyJoints,
+    world.ccdSolver,
+  );
 }

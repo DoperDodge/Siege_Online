@@ -26,6 +26,17 @@ Thumbs.db
 # and must never be committed (this repo is public). Link them from
 # research/oregon/refs/SOURCES.md instead. Ulo's own screenshots go in refs/ulo/ (tracked via LFS).
 research/oregon/refs/web/
+# While the repo is public, Ulo's own screenshots stay local too (they show Ubisoft's game); share them in the
+# chat instead. Remove these two lines once the repo is private (research/oregon/refs/ulo/README.md).
+research/oregon/refs/ulo/*
+!research/oregon/refs/ulo/README.md
+
+# Oregon extraction scratch (tools/mapgen/extract): floor rasters, overlays and intermediate JSON. The images
+# contain r6calls or Ubisoft imagery: never commit them. Only data/maps/oregon/extracted.json (numbers) is kept.
+tools/mapgen/extract/img/
+tools/mapgen/extract/out/
+tools/mapgen/extract/work/
+__pycache__/
 
 # Blender backups
 *.blend1

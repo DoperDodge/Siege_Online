@@ -5,7 +5,7 @@ import { clamp, forwardXZ, rotateXZ, DEG } from "./core/math.js";
 import { loadGameData, type GameData } from "./data/load.js";
 import { deployAction, deployTicks, DeployKind, type DeployAction, type DeployRules } from "./destruction/deploy.js";
 import { buildLevel, type BuiltLevel } from "./level/builder.js";
-import { initRapier, PLAYER_GROUPS, QUERY_BULLET, QUERY_SOLID, QUERY_STATIC as QUERY_STATIC_FILTER, refreshBroadPhase, type CharacterController, type Rapier, type World } from "./physics/rapier.js";
+import { initRapier, PLAYER_GROUPS, QUERY_SIGHT, QUERY_SOLID, QUERY_STATIC as QUERY_STATIC_FILTER, refreshBroadPhase, type CharacterController, type Rapier, type World } from "./physics/rapier.js";
 import { capsuleFree, movementPrompt, poseCollider, stepPawn, type MoveContext, type MovementPrompt } from "./player/movement.js";
 import { initialPawnState, type Pawn, type PlayerController } from "./player/pawn.js";
 import { eyePose, poseHitboxes } from "./player/hitboxes.js";
@@ -273,7 +273,7 @@ export class Sim {
     const dir = viewDir(s.yaw, s.pitch);
     const ray = new this.R.Ray({ x: eye[0], y: eye[1], z: eye[2] }, { x: dir[0], y: dir[1], z: dir[2] });
     const limit = this.data.destruction.reinforcement.reach + 1.5;
-    const plain = this.world.castRay(ray, limit, true, undefined, QUERY_BULLET)?.timeOfImpact ?? limit;
+    const plain = this.world.castRay(ray, limit, true, undefined, QUERY_SIGHT)?.timeOfImpact ?? limit;
     return deployAction(this.data.destruction, this.level.panels, eye, dir, [s.x, s.y, s.z], pawn.team, this.deployRules, plain);
   }
 
@@ -519,6 +519,11 @@ export class Sim {
     refreshBroadPhase(this.world);
   }
 
+  /** Whether a standing body teleported to feet (x, y, z) has room there: no level geometry in it (lab tools). */
+  standsFree(x: number, y: number, z: number): boolean {
+    return capsuleFree(this.ctx, null, x, y + 0.02, z, this.data.movement.stance.stand.height);
+  }
+
   /**
    * Advance one tick. Possessed pawns get their controller's input. Idle pawns stand still (gravity only);
    * idle Skopós shells stay crouched. While Skopós looks through her other shell's camera, her mouse
@@ -580,6 +585,7 @@ export class Sim {
         // A body driven without its player's buttons (left behind on the camera, or being looked
         // through) has its weapon parked: nothing it was doing carries on unseen.
         stepPawn(this.ctx, pawn, cmd, !idleDriven.has(pawn.id));
+        this.belowKillPlane(pawn);
         refreshBroadPhase(this.world); // the next pawn must see this one where it now is
         if (idleDriven.has(pawn.id)) pawn.state.prevButtons = held;
         else if (cmd !== input) pawn.state.prevButtons |= input.buttons & Btn.Interact; // still held: not a fresh press later
@@ -593,10 +599,23 @@ export class Sim {
       const held = pawn.state.prevButtons;
       this.letGo(pawn, idleShell);
       stepPawn(this.ctx, pawn, idleInput(pawn, idleShell ? Stance.Crouch : pawn.state.stance), !idleShell);
+      this.belowKillPlane(pawn);
       refreshBroadPhase(this.world);
       pawn.state.prevButtons = held;
     }
     if (advanceTick) this.tick++;
+  }
+
+  /**
+   * A body whose feet fell below the level's kill plane (bounds.killY, DECISIONS D-076) is out of the level:
+   * it goes back to spawn 0 standing, with no fall damage (lab rooms; a match will kill it, Phase 6). Part of
+   * the step, so a client predicts it exactly as the server does.
+   */
+  private belowKillPlane(pawn: Pawn) {
+    const killY = this.level.def.bounds?.killY;
+    if (killY === undefined || pawn.state.y >= killY) return;
+    const s = this.level.def.spawns[0];
+    this.teleport(pawn.id, s.pos[0], s.pos[1], s.pos[2], s.yawDeg);
   }
 
   /**

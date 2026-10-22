@@ -141,8 +141,9 @@ function stepWalk(ctx: MoveContext, pawn: Pawn, input: InputCmd, pressed: number
   const height = currentHeight(m, s);
   placeCollider(ctx, pawn, height);
 
-  // Contextual actions first: ladders (interact or vault key) and vaulting (held vault key is buffered).
-  if ((pressed & Btn.Interact || input.buttons & Btn.Vault) && tryAttachLadder(ctx, pawn)) return;
+  // Contextual actions first: ladders (interact or vault key; from the top, interact only) and vaulting (held
+  // vault key is buffered).
+  if ((pressed & Btn.Interact || input.buttons & Btn.Vault) && tryAttachLadder(ctx, pawn, (pressed & Btn.Interact) !== 0)) return;
   if (input.buttons & Btn.Vault && s.grounded && s.stance !== Stance.Prone && s.stanceT >= 1 && tryVault(ctx, pawn)) return;
 
   // Speed for this tick. The weapon in hand scales it (LMGs slower, the horizontal grip faster; which
@@ -470,7 +471,7 @@ function trackFall(ctx: MoveContext, pawn: Pawn, wasGrounded: boolean) {
         s.lastFallDamage = dmg;
         if (s.downHp === 0) {
           s.mode = PawnMode.Dead;
-          ctx.events.push({ kind: "death", pawnId: pawn.id, cause: "fall" });
+          ctx.events.push({ kind: "death", pawnId: pawn.id, cause: "fall", life: pawn.life });
         }
       } else {
         const dmg = frac >= 1 ? s.hp : Math.round(frac * s.maxHp);
@@ -479,7 +480,7 @@ function trackFall(ctx: MoveContext, pawn: Pawn, wasGrounded: boolean) {
         // Lethal falls kill outright, no DBNO (research/core_mechanics.md §8).
         if (s.hp === 0) {
           s.mode = PawnMode.Dead;
-          ctx.events.push({ kind: "death", pawnId: pawn.id, cause: "fall" });
+          ctx.events.push({ kind: "death", pawnId: pawn.id, cause: "fall", life: pawn.life });
         }
       }
     }
@@ -503,7 +504,7 @@ function stepDowned(ctx: MoveContext, pawn: Pawn, input: InputCmd) {
   if (s.mode !== PawnMode.Downed) return; // a fall finished it
   if (s.invulnTicks > 0) s.invulnTicks--;
   if (s.revivedBy === 0 && bleedTick(ctx.data.combat, s, Math.hypot(s.vx, s.vz) > ctx.data.combat.dbno.movingSpeed)) {
-    ctx.events.push({ kind: "death", pawnId: pawn.id, cause: "bleed" });
+    ctx.events.push({ kind: "death", pawnId: pawn.id, cause: "bleed", life: pawn.life });
   }
 }
 
@@ -653,37 +654,83 @@ function ladderClimbPoint(ctx: MoveContext, i: number): [number, number] {
   return [L.base[0] - L.forward[0] * off, L.base[2] - L.forward[1] * off];
 }
 
-/** Index of a ladder you're standing at and facing (you can grab it), or -1. Read-only. */
+/** Where a climb off the ladder's top sets you down (the dismount), and where you grab it from the top. */
+function ladderTopPoint(ctx: MoveContext, i: number): [number, number] {
+  const L = ctx.level.ladders[i];
+  const [cx, cz] = ladderClimbPoint(ctx, i);
+  const d = ctx.data.movement.stance.collisionRadius + 0.05 + ctx.data.movement.ladder.dismountForward;
+  return [cx + L.forward[0] * d, cz + L.forward[1] * d];
+}
+
+/**
+ * A ladder you can grab, or -1. Read-only. From below or partway up: at it, facing it. From the top (E8,
+ * D-092): on your feet on the platform where a climb ends, facing the drop, with nothing between you and the
+ * rungs. Either way only from a settled stand (stand up first: Siege makes you wait out the transition too).
+ */
 export function findLadder(ctx: MoveContext, pawn: Pawn): number {
+  return findLadderGrab(ctx, pawn, true)?.i ?? -1;
+}
+
+/** `fromTop`: the top counts too (F does that; the vault key held only grabs from below, D-092). */
+function findLadderGrab(ctx: MoveContext, pawn: Pawn, fromTop: boolean): { i: number; top: boolean } | null {
   const m = ctx.data.movement;
   const s = pawn.state;
+  if (s.stance !== Stance.Stand || s.stanceT < 1) return null;
   const [pfx, pfz] = forwardXZ(s.yaw);
   for (let i = 0; i < ctx.level.ladders.length; i++) {
     const L = ctx.level.ladders[i];
+    const facing = pfx * L.forward[0] + pfz * L.forward[1];
+    const top = L.base[1] + L.height;
     const [cx, cz] = ladderClimbPoint(ctx, i);
-    if (Math.hypot(s.x - cx, s.z - cz) > m.ladder.attachDistance) continue;
-    if (s.y < L.base[1] - m.ladder.bottomGrabMargin || s.y > L.base[1] + L.height - m.ladder.topGrabMargin) continue;
-    if (pfx * L.forward[0] + pfz * L.forward[1] < 0.5) continue; // must face the ladder
-    // Only from a settled stand: stand up first (Siege makes you wait out the transition too).
-    if (s.stance !== Stance.Stand || s.stanceT < 1) continue;
-    return i;
+    if (
+      Math.hypot(s.x - cx, s.z - cz) <= m.ladder.attachDistance &&
+      s.y >= L.base[1] - m.ladder.bottomGrabMargin &&
+      s.y <= top - m.ladder.topGrabMargin &&
+      facing >= 0.5 // facing the ladder
+    ) {
+      return { i, top: false };
+    }
+    if (!fromTop || !s.grounded) continue; // a body falling past the top doesn't catch it
+    const [tx, tz] = ladderTopPoint(ctx, i);
+    if (Math.hypot(s.x - tx, s.z - tz) <= m.ladder.attachDistance && Math.abs(s.y - top) <= m.step.maxStepHeight && facing <= -0.5 && reachesRungs(ctx, pawn, cx, cz, top)) {
+      return { i, top: true }; // on the platform at the top, facing the drop
+    }
   }
-  return -1;
+  return null;
 }
 
-function tryAttachLadder(ctx: MoveContext, pawn: Pawn): boolean {
-  const i = findLadder(ctx, pawn);
-  if (i < 0) return false;
+/**
+ * Nothing stands between a body on the platform and the rungs it would be put on: two rays across, half a
+ * metre and a metre and a half up (a wall the ladder's top is behind, a rail beside the gap).
+ */
+function reachesRungs(ctx: MoveContext, pawn: Pawn, cx: number, cz: number, top: number): boolean {
+  const s = pawn.state;
+  const len = Math.hypot(cx - s.x, cz - s.z);
+  if (len < 1e-6) return true;
+  for (const up of [0.5, 1.5]) {
+    const ray = new ctx.R.Ray({ x: s.x, y: top + up, z: s.z }, { x: (cx - s.x) / len, y: 0, z: (cz - s.z) / len });
+    if (ctx.world.castRay(ray, len, true, undefined, QUERY_STATIC, pawn.collider) !== null) return false;
+  }
+  return true;
+}
+
+function tryAttachLadder(ctx: MoveContext, pawn: Pawn, fromTop: boolean): boolean {
+  const grab = findLadderGrab(ctx, pawn, fromTop);
+  if (!grab) return false;
   const m = ctx.data.movement;
   const s = pawn.state;
-  const [cx, cz] = ladderClimbPoint(ctx, i);
+  const L = ctx.level.ladders[grab.i];
+  const [cx, cz] = ladderClimbPoint(ctx, grab.i);
   s.mode = PawnMode.Ladder;
-  s.ladder = i;
+  s.ladder = grab.i;
   s.vx = s.vy = s.vz = 0;
   s.lean = 0;
   s.sprinting = false;
   s.grounded = false;
-  setFeet(ctx, pawn, cx, s.y, cz, m.stance.stand.height);
+  // From the top: over the edge onto the rungs, feet a little below the top (climb on down, or back up), never
+  // below the ladder's foot.
+  setFeet(ctx, pawn, cx, grab.top ? Math.max(L.base[1], L.base[1] + L.height - m.ladder.topMountDrop) : s.y, cz, m.stance.stand.height);
+  s.airPeakY = s.y;
   return true;
 }
 

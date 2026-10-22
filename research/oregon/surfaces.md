@@ -1,6 +1,6 @@
 # Oregon — surface tagging (walls, floors, ceilings, hatches, openings)
 Verified against: Y11S3 (Operation Split Fire) — researched 2026-09-29. Geometry is the Y5S1 rework, unchanged by the Y11S1 modernization (see `version.md`).
-Confidence: **high** for the soft-wall and hatch list: three independent sources agree wall by wall (official Ubisoft blueprints 2020, r6calls.com vector map rev 5 from 2026, and Ubisoft's Rainbow Six Mobile blueprints). **Medium** for the "everything else is HARD" rule, for reinforcement section counts (inferred from r6calls section dividers) and for soft-floor extents (two sources differ slightly). **Low** for door-vs-window typing of exterior openings.
+Confidence: **high** for the soft-wall and hatch list: three independent sources agree wall by wall (official Ubisoft blueprints 2020, r6calls.com vector map rev 5 from 2026, and Ubisoft's Rainbow Six Mobile blueprints). **Medium** for the "everything else is HARD" rule and for soft-floor extents (sources differ, §4.2). **Low** for reinforcement section counts Ulo hasn't confirmed (r6calls wall separators, which Ulo corrected on the longest 2F wall: §2) and for door-vs-window typing of exterior openings.
 
 Coordinates use the `u` system defined in `layout_notes.md` §1 (+x east, +y south; **1 u ≈ 0.15 m, ESTIMATE**). Room IDs match `layout_notes.md`.
 
@@ -22,10 +22,11 @@ Coordinates use the `u` system defined in `layout_notes.md` §1 (+x east, +y sou
 
 **Default rule for `layout.json`:** every wall segment not listed in §2 as `SOFT`, and not an opening in `layout_notes.md` §6, is `HARD`. That includes **all exterior walls except the Garage south wall**, and all basement walls except the seven listed.
 
-## 2. Soft (destructible + reinforceable) walls — complete list (32 walls, 54 sections)
-- Section dividers come from r6calls' divider marks. `div at` gives the divider coordinate along the wall.
+## 2. Soft (destructible + reinforceable) walls — complete list (32 walls, 55 sections)
+- Section counts come from r6calls' *wall separators*: n separators mean n + 1 reinforcements (r6calls changelog, December 2021: "Added wall separators. You now know how many reinforcements is required to block each wall."). On Oregon every separator sits at its wall's exact midpoint; every wall of 16.1 u or more has exactly one and every wall of 14.0 u or less has none, so r6calls shows no 3-reinforcement wall on Oregon. `div at` is that midpoint (equal thirds where a wall has 3 sections, ESTIMATE): r6calls snaps single separators to the centre, so the game's boundary may differ.
+- **Ulo checked three 2F walls (2026-10-09):** SW-2F-02 and SW-2F-04 take 2 reinforcements, as r6calls says; SW-2F-01, the long interior wall beside the Dorms' "Big Window", takes **3** where r6calls says 2. So r6calls can under-count long walls: every count Ulo hasn't confirmed is UNVERIFIED, the ≈24–27 u walls most of all (SW-B-01 and SW-1F-06 are as long as SW-2F-01).
 - All 32 walls appear in the official 2020 blueprint and in r6calls. An `R6M` ✓ means the Mobile blueprint also shows it.
-- `verified` = yes where ≥2 sources agree on existence. Section counts stay UNVERIFIED until Ulo confirms a sample.
+- `verified` = yes where ≥2 sources agree on existence; "(sections: Ulo)" marks a count Ulo confirmed.
 
 ### 2.1 Basement (7 walls, 12 sections)
 | id | room A | room B | x (u) | y (u) | orient | length u / m | sections | div at | R6M | verified |
@@ -59,17 +60,19 @@ Coordinates use the `u` system defined in `layout_notes.md` §1 (+x east, +y sou
 | SW-1F-16 | 1F_LOBBY (hall) | 1F_ARMORY_STAIRS | 276.9–289.9 | 225.7–228.4 | E–W | 13.0 / 2.0 | 1 | — | ✓ | yes |
 | SW-1F-17 | 1F_GARAGE | EXT_PARKING (**exterior**) | 306.1–330.9 | 262.8–267.0 | E–W | 24.7 / 3.7 | 2 | x 318.5 | ✓ | yes. Drawn thicker (4.2 u vs ~2.7) → possibly a garage door, UNVERIFIED |
 
-### 2.3 Second floor (8 walls, 15 sections)
+### 2.3 Second floor (8 walls, 16 sections)
 | id | room A | room B | x (u) | y (u) | orient | length u / m | sections | div at | R6M | verified |
 |---|---|---|---|---|---|---|---|---|---|---|
-| SW-2F-01 | 2F_KIDS_DORMS | 2F_DORMS_MAIN_HALL | 146.5–173.5 | 204.9–207.5 | E–W | 27.0 / 4.1 | 2 | x 160.0 | ✓ | yes |
-| SW-2F-02 | 2F_KIDS_DORMS | 2F_LOW_ATTIC | 208.4–211.1 | 162.3–178.8 | N–S | 16.5 / 2.5 | 2 | y 170.6 | ✓ | yes |
+| SW-2F-01 | 2F_KIDS_DORMS | 2F_DORMS_MAIN_HALL | 146.5–173.5 | 204.9–207.5 | E–W | 27.0 / 4.1 | **3** | x 155.5, 164.5 (thirds, ESTIMATE) | ✓ | yes (sections: Ulo, 3; r6calls 2) |
+| SW-2F-02 | 2F_KIDS_DORMS | 2F_LOW_ATTIC | 208.4–211.1 | 162.3–178.8 | N–S | 16.5 / 2.5 | 2 | y 170.6 | ✓ | yes (sections: Ulo) |
 | SW-2F-03 | 2F_DORMS_MAIN_HALL | 2F_GAME_ROOM | 201.4–203.9 | 242.5–254.1 | N–S | 11.6 / 1.7 | 1 | — | ✓ | yes |
-| SW-2F-04 | 2F_GAME_ROOM | 2F_WALK_IN | 223.3–246.2 | 253.9–256.6 | E–W | 22.9 / 3.4 | 2 | x 234.8 | ✓ | yes |
+| SW-2F-04 | 2F_GAME_ROOM | 2F_WALK_IN | 223.3–246.2 | 253.9–256.6 | E–W | 22.9 / 3.4 | 2 | x 234.8 | ✓ | yes (sections: Ulo) |
 | SW-2F-05 | 2F_LOW_ATTIC | 2F_TROPHY | 248.7–272.6 | 187.2–189.9 | E–W | 23.9 / 3.6 | 2 | x 260.7 | ✓ | yes |
 | SW-2F-06 | 2F_MASTER_BEDROOM | 2F_ARMORY_CORRIDOR | 280.7–283.5 | 226.5–245.6 | N–S | 19.1 / 2.9 | 2 | y 236.1 | ✓ | yes |
 | SW-2F-07 | 2F_ARMORY_CORRIDOR | 2F_ARMORY | 296.3–298.9 | 209.4–229.9 | N–S | 20.5 / 3.1 | 2 | y 219.7 | ✓ | yes |
 | SW-2F-08 | 2F_ATTIC | 2F_TOWER (Big Tower 2F) | 251.1–272.7 | 96.9–99.6 | E–W | 21.6 / 3.2 | 2 | x 261.9 | ? (not clear on R6M) | yes (official + r6calls) |
+
+Ubisoft's 2020 blueprint ends three of these 1–2 u further than r6calls: SW-2F-02 at y 180.6, SW-2F-03 from y 240.5, SW-2F-06 at y 246.8 (measured 2026-10-09). The table keeps r6calls' values.
 
 ### 2.4 3F / Roof
 No soft walls anywhere (official 3F/roof blueprints and r6calls show none).
@@ -156,7 +159,7 @@ Read each row left to right along the wall line. Anything not named SOFT, DOOR, 
 |---|---|---|---|
 | 2F_SMALL_TOWER | 2F_OFFICE | x 62–65, y 181–229 | HARD · DOOR 183–193 · HARD |
 | 2F_SMALL_TOWER / 2F_OFFICE | RF_DINING / exterior | annex perimeter | HARD · EXT_OPENING S of Small Tower (y≈230, x 45–56) · EXT_OPENING N of Office (y≈178, x 84–94) |
-| 2F_KIDS_DORMS | 2F_DORMS_MAIN_HALL | y 204–207, x 140–209 | HARD 140–146.5 · SOFT(2) 146.5–173.5 (SW-2F-01) · HARD 173.5–180 · DOOR 180–192 · HARD 192–209 |
+| 2F_KIDS_DORMS | 2F_DORMS_MAIN_HALL | y 204–207, x 140–209 | HARD 140–146.5 · SOFT(3) 146.5–173.5 (SW-2F-01) · HARD 173.5–186 · DOOR 186–195 · HARD 195–209 |
 | 2F_KIDS_DORMS | 2F_LOW_ATTIC | x 208–211, y 160–189 | HARD 160–162.3 · SOFT(2) 162.3–178.8 (SW-2F-02) · HARD 178.8–189 |
 | 2F_KIDS_DORMS | 2F_MIDDLE | x 208–211, y 189–204 | HARD |
 | 2F_KIDS_DORMS | exterior N / W | y 157–160 · x 137–140 | N: HARD · EXT_OPENING (window) 183–197 · HARD. W: HARD |
@@ -164,27 +167,27 @@ Read each row left to right along the wall line. Anything not named SOFT, DOOR, 
 | 2F_DORMS_MAIN_HALL | 2F_GAME_ROOM | x 201–204, y 226–254 | HARD 226–242.5 · SOFT(1) 242.5–254.1 (SW-2F-03) |
 | 2F_DORMS_MAIN_HALL | 2F_WHITE_STAIRS | y 254–257, x 140–201 | HARD · DOOR 185–196 · HARD |
 | 2F_DORMS_MAIN_HALL | RF_DINING (west) | x 136–140, y 207–254 | HARD · EXT_OPENING 208–221 · HARD |
-| 2F_MIDDLE | 2F_GAME_ROOM | y 224–227, x 204–249 | HARD 204–215 · OPEN 215–229 · HARD 229–249 |
-| 2F_MIDDLE | 2F_LOW_ATTIC | y 189–191, x 211–249 | HARD · DOOR 216–226 · HARD |
+| 2F_MIDDLE | 2F_GAME_ROOM | y 224–227, x 204–249 | HARD 204–213.5 · OPEN 213.5–232 · HARD 232–249 |
+| 2F_MIDDLE | 2F_LOW_ATTIC | y 189–191, x 211–249 | HARD · DOOR 214.5–223 · HARD |
 | 2F_MIDDLE | 2F_TROPHY | x 247–251, y 190–224 | HARD · DOOR 195–203 · HARD |
 | 2F_GAME_ROOM | 2F_MASTER_BEDROOM | x 248–251, y 227–254 | DRONE_HOLE 227.7–231 · HARD |
 | 2F_GAME_ROOM | 2F_WALK_IN | y 254–257, x 222–248 | SOFT(2) 223.3–246.2 (SW-2F-04) · HARD ends |
-| 2F_GAME_ROOM | exterior S | y 254–256, x 204–222 | EXT_OPENING 205–216 · HARD |
+| 2F_GAME_ROOM | exterior S | y 254–256, x 204–222 | EXT_OPENING 205–216 (r6calls 2026 only; Ubisoft's 2020 blueprint draws a solid wall: CONFLICT) · HARD |
 | 2F_WALK_IN | 2F_MASTER_BEDROOM | x 248–251, y 256–273 | HARD · DOOR 262–270 · HARD |
 | 2F_TROPHY | 2F_LOW_ATTIC | y 187–190, x 249–280 | SOFT(2) 248.7–272.6 (SW-2F-05) · HARD 272.6–280 |
-| 2F_TROPHY | 2F_MASTER_BEDROOM | y 224–227, x 251–280 | HARD · DOOR 257–270 · HARD |
+| 2F_TROPHY | 2F_MASTER_BEDROOM | y 224–227, x 251–280 | HARD · DOOR 261–271 · HARD |
 | 2F_TROPHY | 2F_ARMORY_CORRIDOR | x 280–283, y 190–224 | HARD · DOOR 195–203 · HARD |
 | 2F_MASTER_BEDROOM | 2F_ARMORY_CORRIDOR / 2F_ARMORY_STAIRS | x 280–283, y 226–272 | SOFT(2) 226.5–245.6 (SW-2F-06) · HARD 245.6–272 |
-| 2F_MASTER_BEDROOM | EXT_BALCONY | y 272–274, x 251–280 | HARD · EXT_OPENING 254–264 · HARD |
+| 2F_MASTER_BEDROOM | EXT_BALCONY | y 272–274, x 251–280 | HARD · EXT_OPENING 251–260 · HARD |
 | 2F_LOW_ATTIC | 2F_ATTIC | y≈160 | OPEN |
 | 2F_LOW_ATTIC | RF_MEETING_W (north) | y 157–160, x 211–249 | HARD |
 | 2F_ATTIC | 2F_TOWER | y 97–100, x 249–273 | SOFT(2) 251.1–272.7 (SW-2F-08) |
-| 2F_ATTIC | RF_MEETING_W | x 245–249, y 99–160 | HARD · DRONE_HOLE 112–115.3 · HARD · EXT_OPENING 146–156 · HARD |
+| 2F_ATTIC | RF_MEETING_W | x 245–249, y 99–160 | HARD · DRONE_HOLE 112–115.3 · HARD · EXT_OPENING 146–153 · HARD |
 | 2F_ATTIC / 2F_LOW_ATTIC | RF_MEETING_E | x 273–277, y 99–187 | HARD |
-| 2F_ARMORY_CORRIDOR | RF_MEETING_E | y 186–189, x 280–296 | EXT_OPENING 280–292 · HARD |
+| 2F_ARMORY_CORRIDOR | RF_MEETING_E | y 186–189, x 280–296 | HARD 280–287 · EXT_OPENING 287–294.5 · HARD |
 | 2F_ARMORY_CORRIDOR | 2F_ARMORY | x 296–299, y 205–245 | SOFT(2) 209.4–229.9 (SW-2F-07) · DOOR 232–241 · HARD |
 | 2F_ARMORY | exterior | perimeter | HARD · EXT_OPENING E (x≈333, y 234–243) |
-| 2F_TOWER | exterior / RF_MEETING_W / RF_MEETING_E | perimeter | HARD · EXT_OPENING N-west (y≈74, x 228–241) · S-west to RF_MEETING_W (y≈99, x 229–241) · S-east to RF_MEETING_E (y≈99, x 281–293) · N-east (y≈47, x 282–292) |
+| 2F_TOWER | exterior / RF_MEETING_W / RF_MEETING_E | perimeter | HARD · EXT_OPENING N-west (y≈74, x 229–238.5) · S-west to RF_MEETING_W (y≈99, x 226.5–236) · S-east to RF_MEETING_E (y≈99, x 283.5–293) · N-east (y≈47, x 282–292) |
 
 ### 3.4 3F
 | Room | Neighbour | Composition |
@@ -220,6 +223,8 @@ Read each row left to right along the wall line. Anything not named SOFT, DOOR, 
 | SF-2F-11 | 2F_WHITE_STAIRS landing | ≈ (140–197, 256–275) | 1F_WHITE_STAIRS | official only | **UNVERIFIED** |
 | SF-3F-01 | 3F_CATWALK ring | outer (256.6–306.5, 48.7–96.8); inner edge ≈ (260–297, 56–85) | 2F_TOWER (NE part) | r6calls, official | yes |
 
+Ubisoft's 2020 blueprint draws five of these larger than r6calls (measured 2026-10-09): SF-2F-03 reaches Master's east wall (x≈281; r6calls stops at 273.0 and also leaves out x 255.9–269.6 for y 249.3–263.6); SF-2F-04 reaches x≈246, y≈272; SF-2F-02's east edge reaches x≈246 (Game Room, Middle south); SF-2F-05 spans the whole Armory Corridor (x≈284.0–296.6); SF-2F-06 reaches Armory's south wall (y≈254.5). Which one the game matches is UNVERIFIED (open question 5).
+
 **HARD 2F floors** (no marking in any source): 2F_TOWER; 2F_LOW_ATTIC; 2F_ATTIC except SF-2F-09 and H5; north half of 2F_MIDDLE; 2F_TROPHY (r6calls; see SF-2F-10); north and south ends of 2F_ARMORY_CORRIDOR; 2F_ARMORY_STAIRS; west part of 2F_SMALL_TOWER (stairs/partition area) and south ~40% of 2F_OFFICE.
 
 ## 5. Hatches (6)
@@ -234,6 +239,8 @@ All six are breakable and reinforceable from the top (Fandom *Reinforcement*: "T
 | H5 | 2F_ATTIC | 1F_MEETING_HALL | (244.6–256.1, 126.7–138.3) | official, r6calls, R6M |
 | H6 | 2F_ARMORY | 1F_GARAGE | (317.6–328.7, 239.6–250.7) | official, r6calls, R6M |
 
+H5's r6calls rectangle straddles the Attic west wall (wall band x 246.3–250.8); Ubisoft's 2020 blueprint draws the hatch only east of it (x≈250.8–257.0, y 125.7–138.2). The walkable hatch is therefore x≈250.8–256.1, UNVERIFIED (open question 11).
+
 ## 6. Other fixed hard geometry
 | What | Where (u) | Tag | Source |
 |---|---|---|---|
@@ -242,7 +249,7 @@ All six are breakable and reinforceable from the top (Fandom *Reinforcement*: "T
 | 2F Small Tower inner partition | x 20–43, y 191–193 and x 41–43, y 193–229 | HARD (UNVERIFIED) | r6calls / official |
 
 ## 7. Notes for implementation (PLAN §8)
-- **Section widths vary** from 8.9 u (1.3 m) to 13.5 u (2.0 m) per section. Reinforcements should follow the listed sections, not a fixed width (Fandom: "The width of a Reinforced Wall is dependent on the section it is reinforcing").
+- **Section widths vary.** On Ulo's three walls a section is 8.3 u (SW-2F-02), 9.0 u (SW-2F-01) and 11.5 u (SW-2F-04): 1.2–1.7 m at the scale estimate. Reinforcements follow each wall's sections, not a fixed width (Fandom: "The width of a Reinforced Wall is dependent on the section it is reinforcing"). A maximum section width of roughly 11.6–13 u would reproduce all three counts and r6calls' 1-section walls, and would make the ≈24–27 u walls 3-section walls too; that rule is a guess, so those walls are the ones to check. Section counts can't calibrate the map's scale: no source gives a section's width in metres, and widths differ.
 - Fandom: "Reinforced walls have fixed heights, though map walls can be higher and thus leave a small unreinforced section at the top". This matters for tall rooms (Meeting Hall, Big Tower stairwell, basement stair shafts). Which Oregon walls leave a gap is UNVERIFIED.
 - Only one soft wall faces the outside (SW-1F-17, Garage south). Every other attacker entry from outside is through a door or window, a hatch (none on the roof), or the soft floors from 2F.
 
@@ -253,12 +260,10 @@ All six are breakable and reinforceable from the top (Fandom *Reinforcement*: "T
    - (c) Meeting Hall east exterior wall (and does it have windows?);
    - (d) the Kitchen–Security wall between the two soft sections (x 164–184);
    - (e) Boiler–Corridor walls in the basement.
-2. **Section counts:** how many reinforcements do these take:
-   - Kitchen↔Meeting (expected 2);
-   - Kitchen↔Dining (expected 1);
-   - Laundry↔Freezer (expected 2);
-   - Kids'↔Dorms (expected 2);
-   - Garage south wall (expected 2)?
+2. **Section counts:** answered by Ulo (2026-10-09): Kids'↔Dorms Main Hall (SW-2F-01) **3**, Kids'↔Low Attic (SW-2F-02) 2, Game Room↔Walk-in (SW-2F-04) 2. Still open, most likely to differ from r6calls first:
+   - Laundry↔Freezer (SW-B-01, 27.0 u) and Kitchen↔Security west (SW-1F-06, 26.9 u): 2 or 3?
+   - the ≈24–25 u walls: Electric↔Boiler (SW-B-04), Supply Closet↔Laundry (SW-B-05), Small Tower↔Dining (SW-1F-01), Garage south (SW-1F-17), Low Attic↔Trophy (SW-2F-05): 2 or 3?
+   - Kitchen↔Meeting (expected 2); Kitchen↔Dining (expected 1).
 3. **Garage south:** is it a roll-up/garage-door-style destructible panel, or a normal soft wall?
 4. **1F floor over the basement:** confirm it is indestructible (no vertical into Laundry/Supply except via the 3 hatches). One low-quality guide claims soft floors above Laundry.
 5. **Soft floors:** is the **Trophy** floor (south half) destructible? The **2F White Stairs landing**? Only Ubisoft's 2020 blueprint marks them.
@@ -266,10 +271,13 @@ All six are breakable and reinforceable from the top (Fandom *Reinforcement*: "T
 7. **Exterior openings:** for each EXT_OPENING in `layout_notes.md` §6 — door or window, and can defenders barricade it?
 8. **3F catwalk:** is the middle an open drop to 2F, and can the catwalk floor be shot or blown through?
 9. Are any **doorways NOT barricadable**? For example, the Split doors, the Stage door, or 2F Middle↔Game Room (we tagged that one OPEN).
+10. **Game Room south wall:** is there a window (r6calls 2026 draws one, west part, x 205–216), or is the wall solid (Ubisoft's 2020 blueprint)?
+11. **Attic hatch H5:** r6calls' rectangle straddles the Attic west wall (x 244.6–256.1); Ubisoft's blueprint draws it only east of the wall (x≈250.8–257.0). Is the whole hatch in the Attic?
 
 ## Sources
 - https://ubistatic-a.ubisoft.com/0106/gamesites/rainbow6/blueprints/r6-maps-oregon-blueprints.zip — official blueprints with legend (Breakable walls / Breakable floor traps / Line of sight walls / Line of sight floor). Primary source for SOFT, HATCH and SOFT_FLOOR.
-- https://r6calls.com/img/maps/oregon.svg — vector layers `bw` (breakable walls plus section dividers), `fh`/`ch` (hatches), `losf` (soft floors), `dt` (drone holes), `ld` (ladders). All coordinates and section counts come from here.
+- https://r6calls.com/img/maps/oregon.svg — vector layers `bw` (breakable walls plus wall separators: n separators = n + 1 reinforcements, per the r6calls changelog in https://r6calls.com/language/en.json), `fh`/`ch` (hatches), `losf` (soft floors), `dt` (drone holes), `ld` (ladders). All coordinates come from here, and the section counts except where Ulo confirmed or corrected them.
+- Ulo (2026-10-09): the reinforcement counts of SW-2F-01, -02 and -04, and a top-down 2F screenshot from a site-setup guide. The screenshot is a restyled crop of Ubisoft's 2020 2F blueprint (a uniform ×3.15 scale maps one onto the other within 1.3 px), so it is not an independent source; it is not stored in the repo.
 - https://liquipedia.net/commons/File:R6M_Blueprint_Oregon_-_Basement.jpg, https://liquipedia.net/commons/File:R6M_Blueprint_Oregon_-_1st_Floor.jpg, https://liquipedia.net/commons/File:R6M_Blueprint_Oregon_-_2nd_Floor.jpg — Rainbow Six Mobile official blueprints (soft walls, hatches, destructible floors). Third cross-check.
 - https://rainbowsix.fandom.com/wiki/Reinforcement — reinforcement rules: fully destructible walls only, 2–3 sections per wall, section-dependent width, hatches reinforced from the top, fixed reinforcement height.
 - https://rainbowsix.fandom.com/wiki/Oregon — "6 Hatches", "many soft walls".

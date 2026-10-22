@@ -7,9 +7,10 @@ import { adsSensitivity, type Keybinds, type Settings } from "./settings.js";
 export type Action = keyof Keybinds | "ads" | "fire" | "swap" | "hitboxes" | "thirdPerson" | "help" | "settings";
 
 /** One-shot actions the lab handles itself (not sent to the simulation). */
-export type UiAction = "respawn" | "hitboxes" | "thirdPerson" | "help" | "settings" | "fire";
+export type UiAction = "respawn" | "hitboxes" | "thirdPerson" | "help" | "settings" | "fire" | "stats";
 
-const UI_KEYS: Record<string, UiAction> = { F1: "help", F3: "hitboxes", F4: "thirdPerson", Escape: "settings" };
+/** F2 is left to the pages (the Range Lab's overlay); F5–F7 and F9–F12 are browser shortcuts. */
+const UI_KEYS: Record<string, UiAction> = { F1: "help", F3: "hitboxes", F4: "thirdPerson", F8: "stats", Escape: "settings" };
 
 /** Keys that change the body's pose; ignored while stanceLocked() (see there). */
 const STANCE_ACTIONS = new Set<Action>(["crouch", "prone", "leanLeft", "leanRight", "ads"]);
@@ -39,6 +40,15 @@ export class Controls {
    * wheel turn into a single swap press only when the slot would change (C16 in the Phase 3 plan).
    */
   weaponState: () => { slot: number; equipping: boolean; zoom?: number } | null = () => null;
+  /** When this returns true (a map's plan view zooms with it), the mouse wheel doesn't switch weapons. */
+  wheelTaken: () => boolean = () => false;
+  /**
+   * When this returns true (the lab's free camera is flying), a key only counts as held (the camera flies
+   * with isHeld) and does nothing for the body: no toggle, pulse or weapon request is left to reach it
+   * afterwards. The use key calls onFlyUse instead.
+   */
+  flying: () => boolean = () => false;
+  onFlyUse: () => void = () => {};
   /** Touch joystick, -1..1 each. */
   touchMove = { x: 0, y: 0 };
   private held = new Set<Action>();
@@ -90,6 +100,11 @@ export class Controls {
     this.adsToggled = false;
   }
 
+  /** Whether an action's key is down (the lab's free camera flies with the movement keys). */
+  isHeld(action: Action): boolean {
+    return this.held.has(action);
+  }
+
   get adsActive(): boolean {
     return this.settings.adsMode === "toggle" ? this.adsToggled : this.held.has("ads");
   }
@@ -138,7 +153,7 @@ export class Controls {
     canvas.addEventListener(
       "wheel",
       (e) => {
-        if (document.pointerLockElement !== canvas || this.isBlocked() || e.deltaY === 0) return;
+        if (document.pointerLockElement !== canvas || this.isBlocked() || this.wheelTaken() || e.deltaY === 0) return;
         this.press("swap");
         this.release("swap");
       },
@@ -185,6 +200,11 @@ export class Controls {
   }
 
   press(action: Action) {
+    if (this.flying() && action !== "respawn") {
+      if (action === "interact") this.onFlyUse();
+      else this.held.add(action);
+      return;
+    }
     if (STANCE_ACTIONS.has(action) && this.stanceLocked()) return;
     const s = this.settings;
     this.held.add(action);

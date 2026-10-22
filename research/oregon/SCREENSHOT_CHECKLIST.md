@@ -137,7 +137,7 @@ How: play defense in prep. Walk up to each wall below and hold the reinforce key
 
 | Wall (see `common_setups.md`) | Where |
 |---|---|
-| Laundry ↔ Freezer | B, west wall of Laundry |
+| Laundry ↔ Freezer | B, west wall of Laundry — **first**: as long as the 3-reinforcement Kids' ↔ Dorm wall |
 | Supply ↔ Blue Bunker | B, east wall of Supply |
 | Supply ↔ Boiler Room | B, north-west wall of Supply |
 | Electric Room ↔ Boiler / ↔ Blue Bunker | B, the walls of the small Electric Room |
@@ -150,10 +150,10 @@ How: play defense in prep. Walk up to each wall below and hold the reinforce key
 | Rear Stage ↔ Meeting Hall | 1F, north wall of Meeting Hall |
 | Meeting Hall corners ↔ White Hall / Lobby | 1F, south corners |
 | Classroom ↔ Lobby | 1F |
-| Kids' Dorms ↔ Attic | 2F |
-| Kids' Dorms ↔ Dorm Main Hall | 2F |
+| Kids' Dorms ↔ Attic | 2F — answered by Ulo: 2 reinforcements |
+| Kids' Dorms ↔ Dorm Main Hall | 2F — answered by Ulo: 3 reinforcements |
 | Attic ↔ Trophy Room | 2F |
-| Dorm Main Hall ↔ Game Room, Game Room ↔ Walk-In | 2F |
+| Dorm Main Hall ↔ Game Room, Game Room ↔ Walk-In | 2F — Game Room ↔ Walk-In answered by Ulo: 2 |
 | Big Tower ↔ Attic connector | 2F |
 | Master ↔ Armory Corridor, Armory Corridor ↔ Armory | 2F |
 

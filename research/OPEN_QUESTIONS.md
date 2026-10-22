@@ -15,7 +15,7 @@ else here blocks Phase 1.
 | 1 | ✅ **Answered: browser** (D-019/D-020). ~~**Browser or desktop?** Switch the stack to a browser game (TypeScript + Three.js + a Node server on Railway, WebSockets), or keep the plan's Windows desktop build (Godot C#, ENet/UDP)? ~~ | Decides the whole tech stack before Phase 1. | DECISIONS.md D-019 |
 | 2 | ✅ **Answered: yes, Lesion** (D-011). ~~**"Legion" = Lesion?** No Siege operator is named Legion. Lesion (Gu mines) was researched in its place.~~ | Needs a yes, or the real name, before Phase 8. | [operators/legion_name_check.md](operators/legion_name_check.md) |
 | 3 | ✅ **Answered: 6, like Siege** (D-015). ~~**1v1 reinforcements:** keep the plan's scaling (1 defender → **2** reinforcements), or use Siege's own 1v1 Arcade value (**6**)?~~ | The plan formula makes 1v1 defense much harder than Siege's. | DECISIONS.md D-015 |
-| 4 | **Repo visibility:** the GitHub repo is **public**. Make it private before you add screenshots? | Your screenshots are Ubisoft game imagery. | [oregon/SCREENSHOT_CHECKLIST.md](oregon/SCREENSHOT_CHECKLIST.md) |
+| 4 | **Repo visibility:** the GitHub repo is **public**. Make it private before you add screenshots? Until then, screenshots in `research/oregon/refs/ulo/` stay on your PC (gitignored, D-079): send them in the chat. | Your screenshots are Ubisoft game imagery. | [oregon/SCREENSHOT_CHECKLIST.md](oregon/SCREENSHOT_CHECKLIST.md) |
 | 5 | **Oregon layout:** since the March 2026 modernization, have you noticed any wall, door, window, or hatch that changed? | We build the 2020 layout plus the 2026 gas pipes and extinguishers, assuming no layout change. | [oregon/version.md](oregon/version.md) |
 | 6 | **Soft vs hard walls and reinforcement counts** per site, plus default camera facings. The 30-minute minimum screenshot set answers most of these at once. | This is what makes the map feel like Oregon; it's also what the bots' setups rely on. | [oregon/SCREENSHOT_CHECKLIST.md](oregon/SCREENSHOT_CHECKLIST.md), [oregon/surfaces.md](oregon/surfaces.md) |
 | 7 | **Movement speeds:** two community datasets disagree for 1/2-speed sprint (4.0/4.5 vs 4.25/4.75 m/s). Crouch, prone and ADS-walk speeds are unknown. | Movement feel is Phase 1's "done when". | [core_mechanics.md](core_mechanics.md) Q1 |
@@ -36,7 +36,7 @@ else here blocks Phase 1.
 ### [oregon/layout_notes.md](oregon/layout_notes.md) — 10
 
 (For Ulo — a Custom Game walk-through answers most of these.)
-1. **Scale:** stand at a doorway and estimate its width, or tell us how many reinforcements the Kitchen↔Meeting soft wall takes (we expect 2). This calibrates the 0.15 m/u estimate.
+1. **Scale:** stand at a doorway and estimate its width. This calibrates the 0.15 m/u estimate. (Reinforcement counts can't: section widths differ wall to wall.)
 2. **Storey heights:** roughly how tall are B, 1F, 2F? Is Meeting Hall a tall single-storey room (pitched ceiling), with the Attic only along its east side?
 3. **Exterior openings — door or window?**
    - 1F: Small Tower west, Small Tower south, Shower Corridor south, Security Corridor SW-south, Kitchen Corridor west, Tower north, Tower east, Garage north/south/east, Classroom west.
@@ -48,9 +48,9 @@ else here blocks Phase 1.
 7. Is the **3F Cat Walk** a ring around an open drop to 2F, or is its middle solid?
 8. Does **2F Middle ↔ Game Room** have a door (barricadable), or is it an open archway?
 9. Where do the **basement drone tunnels** lead? One enters from the south exterior near White/Freezer Stairs; one runs along Supply's SE strip.
-10. Any **callout names** that differ from the table? What do you and your squad call these rooms, and what does the in-game HUD show?
+10. Any **callout names** that differ from the table? What do you and your squad call these rooms, and what does the in-game HUD show? *(Partly answered 2026-10-09: "big window" is the Dorms west window; a guide's 2F labels match ours.)*
 
-### [oregon/surfaces.md](oregon/surfaces.md) — 9
+### [oregon/surfaces.md](oregon/surfaces.md) — 11
 
 1. **Default HARD rule:** is every wall not in §2 really indestructible? Please spot-check in a Custom Game:
    - (a) Kitchen north exterior wall;
@@ -58,12 +58,10 @@ else here blocks Phase 1.
    - (c) Meeting Hall east exterior wall (and does it have windows?);
    - (d) the Kitchen–Security wall between the two soft sections (x 164–184);
    - (e) Boiler–Corridor walls in the basement.
-2. **Section counts:** how many reinforcements do these take:
-   - Kitchen↔Meeting (expected 2);
-   - Kitchen↔Dining (expected 1);
-   - Laundry↔Freezer (expected 2);
-   - Kids'↔Dorms (expected 2);
-   - Garage south wall (expected 2)?
+2. **Section counts:** answered by Ulo (2026-10-09): Kids'↔Dorms Main Hall **3**, Kids'↔Low Attic 2, Game Room↔Walk-in 2. Still open, most likely to differ from r6calls first:
+   - Laundry↔Freezer and Kitchen↔Security west (both as long as Kids'↔Dorms): 2 or 3?
+   - the ≈24–25 u walls: Electric↔Boiler, Supply Closet↔Laundry, Small Tower↔Dining, Garage south, Low Attic↔Trophy: 2 or 3?
+   - Kitchen↔Meeting (expected 2); Kitchen↔Dining (expected 1).
 3. **Garage south:** is it a roll-up/garage-door-style destructible panel, or a normal soft wall?
 4. **1F floor over the basement:** confirm it is indestructible (no vertical into Laundry/Supply except via the 3 hatches). One low-quality guide claims soft floors above Laundry.
 5. **Soft floors:** is the **Trophy** floor (south half) destructible? The **2F White Stairs landing**? Only Ubisoft's 2020 blueprint marks them.
@@ -71,13 +69,15 @@ else here blocks Phase 1.
 7. **Exterior openings:** for each EXT_OPENING in `layout_notes.md` §6 — door or window, and can defenders barricade it?
 8. **3F catwalk:** is the middle an open drop to 2F, and can the catwalk floor be shot or blown through?
 9. Are any **doorways NOT barricadable**? For example, the Split doors, the Stage door, or 2F Middle↔Game Room (we tagged that one OPEN).
+10. **Game Room south wall:** is there a window (r6calls 2026 draws one), or is the wall solid (Ubisoft's 2020 blueprint)?
+11. **Attic hatch:** is the whole hatch inside the Attic? (r6calls' rectangle straddles the Attic west wall; Ubisoft's blueprint draws it only on the Attic side.)
 
 ### [oregon/map_features.md](oregon/map_features.md) — 12
 
 - **Q1 (cameras):** r6calls shows **8** default cameras: EXT Junkyard/Bus, EXT Parking/Street, EXT Construction, B Freezer, 1F Rear Stage, 1F Lobby, 1F Shower Corridor, 2F Armory Corridor. Is that right? For each, which wall is it on and which way does it face (a screenshot of its view)?
 - **Q2 (ingredients):** r6calls shows **7 fire extinguishers** (B Basement Hall, B Freezer, 1F Security Corridor, 1F Kitchen Corridor, 1F Lobby hall, 2F Trophy, 2F Low Attic) and **2 gas pipes** (1F by Main Stairs / Garage SW corner, 2F Attic). Is that all? Which wall and height is each on? Any metal detectors?
 - **Q3 (Laundry hatch):** Does the 1F Lobby hatch (next to Classroom) drop into Laundry Storage, Laundry Room, or the Laundry Stairs?
-- **Q4 (stairs):** Are Main Stairs (1F↔2F) and Laundry Stairs (B↔1F) one stairwell or two separate flights? Where exactly does each flight start and end?
+- **Q4 (stairs):** *(Answered by Ulo, 2026-10-20: two separate staircases stacked one over the other, one from B to 1F and one from 1F to 2F.)* Where exactly does each flight start and end?
 - **Q5 (Small Tower):** r6calls labels "Small Stairs" in Small Tower. Confirm the staircase between 1F and 2F. Is there an office on both floors ("1F Small Tower Office" appears in a patch note)?
 - **Q6 (Big Tower ladder):** Confirm the ladder spot (north edge of the open well in Big Tower 2F's east room). Is the tower top ("Cat Walk") indoors, i.e. no out-of-bounds reveal?
 - **Q7 (Bunker):** Confirm the outside stairs down into Blue Bunker, and where they start outside.
@@ -90,7 +90,7 @@ else here blocks Phase 1.
 ### [oregon/common_setups.md](oregon/common_setups.md) — 10
 
 (Ulo: answer in any format. "yes/no + a screenshot" is ideal. File names are in `SCREENSHOT_CHECKLIST.md`.)
-- **SQ1:** For each site, which walls and hatches does your team usually reinforce? Is my priority list in each YAML close? The main doubts are B (Laundry–Freezer wall + Supply–Bunker wall + the Lobby and Meeting hatches?) and 2F (Kids'–Attic wall + Game Room–Walk-In?).
+- **SQ1:** For each site, which walls and hatches does your team usually reinforce? Is my priority list in each YAML close? The main doubts are B (Laundry–Freezer wall + Supply–Bunker wall + the Lobby and Meeting hatches?) and 2F (Kids'–Attic wall + Game Room–Walk-In?). Costs, per Ulo (2026-10-09): Kids'–Attic 2 reinforcements, Game Room–Walk-In 2, Kids'–Dorms 3.
 - **SQ2:** Are all the yellow "breakable" walls listed here actually **reinforceable**? Are the **exterior** walls of Oregon hard? The blueprint only marks the Garage south exterior wall as breakable.
 - **SQ3:** Where exactly is each **bomb object** (7 rooms; Kitchen is shared by two sites)? The r6calls markers suggest: Laundry SW part, Supply centre, Dining north-centre, Kitchen centre-east, Meeting NW part, Kids' east part, Dorm Main Hall SW part. Screenshot each bomb from 2 angles. Also, what are the in-game A/B letters?
 - **SQ4:** Standard Mira window spots on live Oregon (which wall, facing where) for Laundry/Supply and Kids'/Dorms.
@@ -249,6 +249,157 @@ under a reinforcement, what blocks reinforcing) are not repeated here.
 8. **Studs and bullets:** a bullet that can't destroy a wooden stud (anything below the Full tier): does the
    stud stop it, or does it pass through and leave the stud standing? We stop it (`wallbang.uncutStudsStop`),
    as bullets pass only what they can break.
+
+### Placeholders added while building Phase 5 (not in the original research)
+
+Each value is in `data/maps/oregon/layout.json` or a wall file (`walls_<floor>.json`) and listed in its
+`_unverified`; tools/mapgen/DESIGN.md §10 has the full table (P1–P37). An answer changes one value, and
+`npm run mapgen` rebuilds the map. Built so far (M5): every storey's walls, the 49 rooms, the floors with their
+soft floors and hatches, the Cat Walk's well, the stairs and the Cat Walk ladder, the roofs, the outside, the
+spawns, the four bomb sites, the cameras and ingredients, the major cover props and the zones.
+
+1. **Map scale (P1):** one unit of the floor plans = 0.15 m (±15%). The school bus is 77 u long (11.6 m at
+   0.15; school buses are 10.5–12 m), and the white van in the parking lot is about 33 u (5 m; vans are 5–6 m);
+   the stair treads in the floor images are too blurred to measure. Stand in an ordinary interior doorway: is
+   it about 1.2 m wide, two-thirds of an operator's height? Every distance in the map scales with this one number.
+2. **Storey heights (P3, P4):** floors at B −3.2 m, 1F 0, 2F 3.2 m, 3F (Cat Walk) 6.2 m, Big Tower roof 9.2 m;
+   slabs 0.2 m. How many steps does a staircase take from 1F to 2F?
+3. **Walls (P5, P6):** 3.0 m from floor to ceiling (outside walls 3.2 m, up to the next floor); inside and soft
+   walls 0.2 m thick, outside walls 0.3 m.
+4. **Doors and windows (P7, P8, P11, P12):** doors 2.1 m tall; windows from 0.9 m to 2.1 m, with glass outside
+   the barricade; open passages have a header at 2.1 m.
+5. **Door or window (P9):** each exterior opening uses the research's guess, else a door at ground level and a
+   window above it. On 1F that makes the Tower's north opening (Shooting Range) a door by the rule, the
+   Classroom west and Garage east openings windows (research), and the other nine doors. Which are wrong?
+   map_features §11 calls the Garage east opening a door; layout_notes §6 (the authority on glyphs) a window:
+   we follow layout_notes. map_features §11 also lists Meeting Hall east windows that the r6calls 1F image
+   doesn't draw: are there windows in the Meeting Hall's east wall?
+6. **Barricades (P10):** exterior doors and windows start barricaded, inside doorways start as empty frames.
+   Any inside doorway that starts barricaded, or an outside one that doesn't?
+7. **Drone holes (P13):** a 0.4 × 0.2 m slot at floor level, centred on r6calls' drone-tunnel icon.
+8. **Soft-wall sections (P14):** r6calls' separators, except Ulo's SW-2F-01 (3), SW-2F-02 and SW-2F-04 (2). The
+   long walls most likely to take 3: SW-B-01, SW-1F-06, SW-B-04, SW-B-05, SW-1F-01, SW-1F-17, SW-2F-05.
+9. **Garage south wall (P15, SW-1F-17):** a normal reinforceable soft wall, or a garage door?
+10. **Floor frames (P2):** B and 3F are placed over 1F by assumption (3F scaled onto the tower walls). It
+    decides where the hatches and stairs land. Since your stairs walk, B takes the same 2.4% perspective step as
+    2F (D-095). With it, the Tower, White and Armory stairwells stack on their 1F walls, and the hatches H2 and
+    H3 land 0.55 and 0.35 m clear of the walls below; with B as drawn, they were 0.1 and 0 m. H1 then sat over
+    B Electric's west wall and door, so it moved (item 15). `npm run mapgen` prints both frames.
+11. **Play area (P25, P26):** x −210 to 535, y −70 to 490 u (about 112 × 84 m), with 4 m invisible walls at the
+    edge; the ground is flat at 1F level; a fall 30 m under the basement puts you back at the lab spawn.
+12. **Spawns (P27, P29):** the lab spawn is just outside the Main Entrance; the attacker spawns are r6calls'
+    insertion points (A Junkyard, B Street, C Construction), facing the building. How spread out are the five
+    spawn spots of each group?
+13. **Where r6calls and the official blueprint disagree (D-078, D-087):** we follow the official blueprint:
+    SF-2F-10 (Trophy) and SF-2F-11 (White Stairs landing) are soft floors (`hard: true` makes either hard), and
+    five soft-floor areas use Ubisoft's bigger extents: SF-2F-02 to x≈246, SF-2F-03 the whole Master Bedroom,
+    SF-2F-04 the whole Walk-In, SF-2F-05 the corridor's whole width, SF-2F-06 the whole Armory (`use: "alt"`
+    builds r6calls' extent for any of them). The Game Room's south window and the 2F Small Tower's south opening
+    (P36), which r6calls 2026 draws and the 2020 blueprint doesn't, are built as wall: the patch notes' "new
+    exterior second-floor window" is the Attic's, which the blueprint has (the span's `hard: false` builds it).
+    Asked after M4 (can you go from the 2F Small Tower straight out onto the Dining roof, or only through the
+    Office next door?): Ulo can't check yet (2026-10-22). Ask again at walk #1 (M6).
+14. **Soft floors (P16):** each covers the rooms the research names, to their walls (the Kids' Dorms whole, the
+    Office's north 60%, the Attic's north end…), cut into tiles of at most 4 m in 0.4 m joist spacings; a
+    bullet crossing a seam goes into one surface. Shoot up from 1F: is the soft part of each ceiling the right
+    shape?
+15. **Hatches (P17):** r6calls' hatch squares (about 1.65 m), reinforced from the top: H1 Meeting Hall → B
+    Electric, H2 Security → B Freezer, H3 Lobby → B Laundry Storage, H4 Kids' Dorms → 1F Kitchen, H5 Attic →
+    1F Meeting Hall, H6 Armory → 1F Garage. Do you land where you expect when you break and drop through each?
+    H1 is built 1.07 m east of r6calls' square so that it lands inside B Electric (D-095): is it nearer the
+    Stage, or does it drop by Electric's west door?
+16. **The Cat Walk (P21, P22):** the centre is an open well over the 2F Tower, inside a 1.0 m rail you can
+    vault (a blocker for bodies only, with a bar drawn on top), with a gap where the ladder from 2F arrives.
+    The ring around it is soft floor, r6calls' four strips; its west strip is only 0.4 m wide in r6calls'
+    drawing. Is the centre open, is the rail that high, and is the west side walkable?
+17. **2F walls (P5):** until the roofs come (M4), 2F's outside walls stand 3.0 m and its inside walls 2.8 m.
+18. **Room names:** the callouts are r6calls' names (Kids' Dorms, Pillar, Gaming, Low Attic…), and the eight
+    bomb-site rooms take their official names. If the game's HUD calls a room something else, it is one field.
+19. **Found while building M2:**
+    - (a) The Cat Walk's west wall has a window in r6calls' 3F image near its north end (y 49–55) that the
+      research doesn't list (only the north and south openings): it is built. Is it there?
+    - (b) Behind the 1F White Stairs, a sealed strip 0.9 m deep runs between the stairs' south wall and the
+      facade, and the facade's drone hole (r6calls' dt3, which the research says reaches the White Stairs) opens
+      into it. Is the stairs' south wall a wall, or does the drone hole reach the stairs?
+    - (c) The research had the B Laundry open to the Laundry Stairs; Ubisoft's blueprint and r6calls' B image
+      both draw a wall there, with the stairs opening only into the Laundry Storage. We follow the images
+      (layout_notes §6.1 corrected).
+
+20. **Stairs (P19), after your walk (D-095):**
+    - The White Stairs (S2) are two straight flights, one over the other, both up east and wall to wall: from the
+      basement to the 1F landing by the Security Corridor door, and from the Security Corridor's south-west
+      corner to the 2F door.
+    - The Armory Stairs (S3) are built the same way, both up north: from the basement's south landing to the 1F
+      north landing, and from the 1F south landing by the Lobby to the 2F corridor.
+    - The Small Stairs (S4), after your second look (D-096): the first way round, wall to wall. Up north through
+      the passage west of the Small Tower corner, a landing in the corner's north-west, then east along its north
+      wall onto the 2F walkway to the Office, 2.1 m wide.
+    - The Tower Stairs (S1) are a switchback, up north and turning right. Their flights stop 0.7 m short of the
+      1F east wall, under the 2F floor the 2F image draws there, where the Cat Walk ladder stands.
+    - Every step is 0.2 m high and 0.25–0.3 m deep, with 2.0 m of headroom.
+    - Is there a gap beside the Tower Stairs on 1F?
+21. **The ladder (P20):** L1 runs from the 2F Tower to the Cat Walk, 0.6 m wide, on the north edge of the well at
+    the gap in the rail. Is that where it stands?
+22. **Found while building M3:** inside the L-shaped wall of the 2F Small Tower (the Workshop Balcony), Ubisoft's
+    2F blueprint and r6calls' 2F image both show the 1F workshop's floor (the blue tarp, the planks), as if the
+    2F there were open to the room below. We build a floor there and a full wall where the images draw the L.
+    Is the west part of the 2F Small Tower a balcony over the workshop, with a railing? Since the Small Stairs
+    fill their corner (D-096), that floor is cut off from the rest of 2F by the stairwell, and Go to's spot for
+    the 2F Small Tower is on it.
+23. **Found while answering your stairs walk (D-095):**
+    - (a) With the Armory Stairs going up north, the 2F floor over their foot (the stairwell's south end, with
+      its window) is cut off by the hole: only the window reaches it.
+    - (b) In the basement, the White Stairs' flight stands 0.15–0.3 m off its stairwell's walls, and the Tower
+      Stairs' east flight 0.95 m off the east wall: the basement image draws those stairwells a little wider
+      than 1F's.
+24. **The roofs (P24, D-097):** we read their shapes from the roof renders; every pitch is a guess (25 degrees,
+    the Meeting roof 10).
+    - (a) Which are flat? We built flat: the Dining roof (the research says so), the Meeting roof east of the
+      Attic, the Balcony, the Garage strip, the Kids roof (the corrugated one: no ridge in the render) and the
+      corners the cross roof leaves (north of it by the Armory Corridor, south of it over White Stairs, Walk In and
+      the Armory Stairs). The rest slope: the Tower, the Tower's two west parts, the brown cross roof (built as two
+      crossing gables, not hips), the Attic and the Small Tower.
+    - (b) Inside, do the 2F rooms have flat ceilings under the pitched roofs (we built them flat at 6.0 m), and is
+      the Attic's ceiling sloped?
+    - (c) The Meeting Hall and Kitchen Corridor look up into the Meeting roof (DESIGN amendment 5), whose eave is
+      at the 2F floor. Is that what you see, or a flat ceiling at 3 m like the rest of 1F?
+    - (d) The Dining roof's strip south of the Small Tower: part of the flat roof, or a sloped one of its own?
+25. **The outside (P25, D-099):** every item is read off the r6calls background, ±5 u.
+    - (a) The staircase outside the 1F Tower's east door (layout_notes question 5): we built it going up south
+      along the Tower's east wall to a landing on the 1F east wall, where you step onto the Meeting roof east of
+      the Attic. Where does it really go?
+    - (b) The Bunker stairs (S5): we built them in the sunken passage outside the Bunker Entrance's east door,
+      going up east to the ground, the passage open to the sky over the stairs and roofed for its first 1.5 m.
+      Is that where they are?
+    - (c) The construction house: we built a 3 m shell with open gaps. Does it have an upper floor you can
+      climb to, and how tall is it?
+    - (d) Which fences and low walls can you vault? We made every one 1.0 m and vaultable.
+
+26. **Bomb sites (P30, D-103):** each bomb stands where r6calls draws its icon, A and B as r6calls letters
+    them: 1A Dorms Main Hall and 1B Kids' Dorms, 2A Dining Hall and 2B Kitchen, 3A Meeting Hall and 3B Kitchen,
+    4A Laundry and 4B Supply. Is each bomb where the game puts it? A plant counts 0.5 m inside the site's rooms.
+27. **Defender spawns (P28):** five at each site, three in its A room and two in its B, all facing between the
+    bombs. Where do defenders spawn at each site?
+28. **Cameras (P31):** r6calls' eight. Inside, each is on the wall nearest r6calls' icon, 0.3 m under the ceiling,
+    looking 20° down at the room's middle: CAM4 in the B Freezer, CAM5 on the Rear Stage, CAM6 in the Lobby, CAM7 in
+    the Shower Corridor, CAM8 in the 2F Armory Corridor. The three outside (Junkyard, Parking, Construction) stand
+    on 3 m posts at their icons, looking at the building. Which wall is each on, and which way does it look?
+29. **Ingredients (P32):** seven extinguishers 1.0 m up and two gas pipes 1.2 m up, each on the wall nearest
+    r6calls' icon in its room. The right walls and heights?
+30. **Props (P35, D-104):** 29 pieces of furniture read off r6calls' floor images (±0.15 m): tables 0.75 m,
+    counters 0.9, sofas 0.8, beds 0.6, the Dorms' bunk beds 1.6 and wardrobe 2.0. Everything up to 1.1 m can be vaulted, the
+    bunks can't. Bullets go through the wooden and soft ones at ×0.7 a piece; the metal ones (the washers, the
+    chest freezers, the bunks) stop them (D-102). Which can you vault, and which stop bullets?
+31. **Zones (P33, P34, D-105):** the building is everything inside the walls; the roofs, the Balcony and the
+    outside stairwells are outside. Is the Cat Walk inside? The spawn-peek spots are inside the Big Tower's 1F
+    north and east doors, its 2F north windows and the Cat Walk's north window (toward Construction), the Garage
+    north door (Construction), the Small Tower's 1F west and south doors and the Dorms' Big Window (Junkyard), the
+    Master's Balcony door and the Main Entrance (Street). The run-outs are the Kitchen Corridor's west door and
+    the Bunker's east door. Every outside wall can be rappelled. Which spots do defenders really use (map_features
+    Q11), and is rappel refused anywhere (Q9)?
+
+Later milestones add their placeholders here as they build them: the Meeting Hall's height (P23) and fall damage
+from the roofs (P37).
 
 ### [core_mechanics.md](core_mechanics.md) — 16
 

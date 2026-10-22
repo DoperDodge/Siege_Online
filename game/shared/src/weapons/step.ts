@@ -47,8 +47,11 @@ export type SimEvent =
   | { kind: "kick"; pawnId: number; dYaw: number; dPitch: number }
   /** The knife lands (Phase 3 M8): the server judges what it hits, at the view time of the input that swung. */
   | { kind: "meleeImpact"; pawnId: number; seq: number; yaw: number; pitch: number; origin: Vec3 }
-  /** A body died inside the simulation: a lethal fall, or bleeding out while down. */
-  | { kind: "death"; pawnId: number; cause: "fall" | "bleed" }
+  /**
+   * A body died inside the simulation: a lethal fall, or bleeding out while down. `life`: the life it died in
+   * (Pawn.life), as the kill plane can bring the body back later in the same step.
+   */
+  | { kind: "death"; pawnId: number; cause: "fall" | "bleed"; life: number }
   /** Reviving (DECISIONS D-049): started, and finished (`completed`) or cancelled. */
   | { kind: "reviveStart"; reviverPawn: number; targetPawn: number }
   | { kind: "reviveEnd"; reviverPawn: number; targetPawn: number; completed: boolean }

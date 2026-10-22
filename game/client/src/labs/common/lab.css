@@ -146,3 +146,14 @@ html, body { overflow: hidden; overscroll-behavior: none; touch-action: none; us
 .dmg-numbers .head { color: #ffd23f; }
 .dmg-numbers .kill { color: #ff4d4d; font-size: 18px; }
 .destruction-readout { top: 64px; left: 50%; transform: translateX(-50%); font: 12px var(--mono); color: var(--muted); white-space: nowrap; }
+
+/* The stats overlay (F8, or ?stats in the link), clear of the HP bar and the Destruction Lab's readout. */
+.hud.stats { top: 96px; left: 16px; padding: 6px 10px; border-radius: 6px; background: rgba(0, 0, 0, 0.55); font: 12px/1.45 var(--mono); white-space: pre; }
+
+/* A map (tools/mapgen/DESIGN.md E9): the HUD line with the room, storey and plan position you're at (clear of
+   the stance readout, and of the touch stick), no crosshair or sights over the plan view, and Go to by storey. */
+.hud.where { left: 16px; bottom: 6px; font: 12px var(--mono); white-space: nowrap; }
+.touch .hud.where { bottom: 186px; }
+.plan-view .crosshair, .plan-view .spread, .plan-view .reticle, .plan-view .scope { display: none; }
+.goto-storey h4,
+.goto-sites h4 { margin: 8px 0 4px; font: 600 12px var(--mono); color: var(--muted); }

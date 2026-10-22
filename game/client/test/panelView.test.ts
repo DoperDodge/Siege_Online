@@ -1,6 +1,7 @@
 // Panels drawn from their cells (Phase 4 M3, render/panelView.ts), without a GPU: an intact wall is its two
 // skins, together the exact size of its level solid; the studs show only around a hole; a hole redraws only
-// that panel; steel sits on the side it went up from, over that side's skin.
+// that panel; steel sits on the side it went up from, over that side's skin; a reinforceable wall shows its
+// section seams on both faces (Phase 5); a hidden panel keeps redrawing, and a palette recolours only skins.
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { L_BACK, L_CORE, L_FRONT, Sim, type PanelOp } from "@redmond/shared";
@@ -17,9 +18,9 @@ describe("panel view", () => {
     const view = new PanelView(scene, sim.level.panels);
     const [soft, reinforceable] = groups(scene);
     // Two skins and the caps closing the gap between them at the edges (the studs inside can't be seen, and a
-    // reinforceable wall that isn't reinforced draws no steel).
+    // reinforceable wall that isn't reinforced draws no steel, only its section seams).
     expect(soft.children.length).toBe(3);
-    expect(reinforceable.children.length).toBe(3);
+    expect(reinforceable.children.length).toBe(4);
     const b = box(soft);
     const s = sim.level.def.solids.find((x) => x.id === "sample_soft")!;
     for (let k = 0; k < 3; k++) {
@@ -70,6 +71,30 @@ describe("panel view", () => {
     expect(skins()).toEqual(["front", "core"]);
   });
 
+  it("a hidden panel keeps redrawing, so it shows as it is; a palette recolours the skins in place, not the studs or seams", async () => {
+    const sim = await Sim.create("movement_lab");
+    const scene = new THREE.Scene();
+    const view = new PanelView(scene, sim.level.panels);
+    const [soft, reinforceable] = groups(scene);
+    // Hidden (a map's storey views hide the storeys above you): only the group's own visibility changes.
+    expect(view.setVisible(0, false)).toBe(true);
+    expect(view.setVisible(0, false)).toBe(false);
+    expect([soft.visible, view.isVisible(0), view.isVisible(1)]).toEqual([false, false, true]);
+    sim.level.panels.apply(0, { kind: "cut", layer: L_FRONT, shape: { kind: "rect", u0: 10, v0: 10, u1: 20, v1: 20 }, hard: false });
+    expect(view.update()).toBe(true);
+    expect(soft.children.length).toBe(4); // the stud behind the hole, drawn while hidden
+    expect(view.setVisible(0, true)).toBe(true);
+    expect(soft.visible).toBe(true);
+    // The same skin materials take the palette's colours; the studs and the section seams keep theirs.
+    const colour = (g: THREE.Group, name: string) => ((g.children.find((m) => m.name === name) as THREE.Mesh).material as THREE.MeshStandardMaterial).color;
+    const skin = colour(reinforceable, "skin:REINFORCEABLE");
+    const [stud, seam] = [colour(soft, "core:wood").getHex(), colour(reinforceable, "seam").getHex()];
+    view.setSkinColors((surface) => (surface === "SOFT_WALL" ? 0x123456 : 0x654321));
+    expect(colour(reinforceable, "skin:REINFORCEABLE")).toBe(skin);
+    expect([colour(soft, "skin:SOFT_WALL").getHex(), skin.getHex()]).toEqual([0x123456, 0x654321]);
+    expect([colour(soft, "core:wood").getHex(), colour(reinforceable, "seam").getHex()]).toEqual([stud, seam]);
+  });
+
   it("redrawing a shot-up wall takes well under a frame on the main thread (PLAN §8.2 budget)", async () => {
     const sim = await Sim.create("destruction_lab");
     const scene = new THREE.Scene();
@@ -104,12 +129,72 @@ describe("panel view", () => {
     view.update();
     scene.updateMatrixWorld(true);
     const g = groups(scene)[1];
-    expect(g.children.length).toBe(5); // each skin where no plate covers it, a plate on each side, and the caps
+    expect(g.children.length).toBe(6); // each skin where no plate covers it, a plate on each side, the caps and the seams
     const [minus, plus] = g.children.slice(2).map(box);
     const face = e.frame.center[2] + e.frame.t / 2;
     expect(plus.max.z).toBeGreaterThan(face);
     expect(plus.max.x).toBeLessThanOrEqual(e.frame.center[0] + 1e-6); // section 0 is the −x half
     expect(minus.min.z).toBeLessThan(e.frame.center[2] - e.frame.t / 2);
     expect(minus.min.x).toBeGreaterThanOrEqual(e.frame.center[0] - 1e-6);
+  });
+
+  it("a reinforceable wall shows its section seams on both faces, reinforced or not; a hole takes them with it", async () => {
+    const sim = await Sim.create("destruction_lab");
+    const scene = new THREE.Scene();
+    const view = new PanelView(scene, sim.level.panels);
+    // Only walls built reinforceable with two sections or more have seams (the Reinforced wall too; not the
+    // one-section Oregon wall, the hatch or the soft walls).
+    for (const entry of sim.level.panels.list) {
+      const { construction: c, sections, id } = entry.panel.spec;
+      const has = (scene.children[entry.panel.spec.index] as THREE.Group).children.some((m) => m.name === "seam");
+      expect(has, id).toBe(c.kind === "wall" && c.reinforceable && sections > 1);
+    }
+    const e = sim.level.panels.byId.get("reinforce_3")!; // 4.5 × 3 m at x 6, z −6, 0.2 m thick: sections of 30 cells
+    const index = e.panel.spec.index;
+    /** Each seam box: which face, where across (x), how high, and how far it stands off the wall's face. */
+    const seams = () => {
+      scene.updateMatrixWorld(true);
+      const seam = (scene.children[index] as THREE.Group).children.find((m): m is THREE.Mesh => m.name === "seam")!;
+      expect(seam.castShadow).toBe(false);
+      const pos = seam.geometry.getAttribute("position");
+      const out: string[] = [];
+      for (let k = 0; k < pos.count; k += 8) {
+        const b = new THREE.Box3();
+        for (let c = 0; c < 8; c++) b.expandByPoint(new THREE.Vector3().fromBufferAttribute(pos, k + c).applyMatrix4(seam.matrixWorld));
+        const front = b.max.z < -6;
+        const off = front ? -6.1 - b.min.z : b.max.z + 5.9;
+        expect(b.max.x - b.min.x).toBeCloseTo(0.03, 6);
+        out.push(`${front ? "front" : "back"} x ${((b.min.x + b.max.x) / 2).toFixed(2)} y ${b.min.y.toFixed(2)}–${b.max.y.toFixed(2)} off ${(off * 1000).toFixed(0)} mm`);
+      }
+      return out.sort();
+    };
+    // Intact: a seam where each section meets the next, full height, a millimetre off each face.
+    expect(seams()).toEqual(["back x 5.25 y 0.00–3.00 off 1 mm", "back x 6.75 y 0.00–3.00 off 1 mm", "front x 5.25 y 0.00–3.00 off 1 mm", "front x 6.75 y 0.00–3.00 off 1 mm"]);
+    // A hole through the front skin across the first boundary takes that seam with it, there only.
+    sim.level.panels.apply(index, { kind: "cut", layer: L_FRONT, shape: { kind: "rect", u0: 25, v0: 20, u1: 35, v1: 30 }, hard: false });
+    expect(view.update()).toBe(true);
+    expect(view.update()).toBe(false); // nothing new
+    expect(seams()).toEqual([
+      "back x 5.25 y 0.00–3.00 off 1 mm",
+      "back x 6.75 y 0.00–3.00 off 1 mm",
+      "front x 5.25 y 0.00–1.00 off 1 mm",
+      "front x 5.25 y 1.50–3.00 off 1 mm",
+      "front x 6.75 y 0.00–3.00 off 1 mm",
+    ]);
+    // Steel on the middle section from the front: the seams beside it lie on the plate (2.6 m of it) and stand
+    // off it; where the skin beside the plate is holed there is still no seam.
+    sim.level.panels.apply(index, { kind: "reinforce", section: 1, side: 0 });
+    view.update();
+    expect(seams()).toEqual([
+      "back x 5.25 y 0.00–3.00 off 1 mm",
+      "back x 6.75 y 0.00–3.00 off 1 mm",
+      "front x 5.25 y 0.00–1.00 off 7 mm",
+      "front x 5.25 y 1.50–2.60 off 7 mm",
+      "front x 5.25 y 2.60–3.00 off 1 mm",
+      "front x 6.75 y 0.00–2.60 off 7 mm",
+      "front x 6.75 y 2.60–3.00 off 1 mm",
+    ]);
+    // The stats overlay's count: every mesh in every panel's group.
+    expect(view.meshCount).toBe(sim.level.panels.list.reduce((n, entry) => n + scene.children[entry.panel.spec.index].children.length, 0));
   });
 });

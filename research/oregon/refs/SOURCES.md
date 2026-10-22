@@ -84,3 +84,6 @@ Read it through the MediaWiki API (`https://rainbowsix.fandom.com/api.php?...`);
 
 ## Sources
 (This file is itself the source list.)
+
+## Ulo's references (not stored in the repo)
+- 2026-10-09: a top-down screenshot of Oregon 2F from a site-setup guide, sent in chat to show the layout and which walls Ulo meant (step markers and A/B objectives on it are the guide's, not reinforcement counts). Measured against our data, it is a restyled crop of Ubisoft's 2020 2F blueprint (U2, sheet 3): a uniform ×3.15 scale maps one onto the other within 1.3 px. So it confirms nothing on its own, but its sharper rendering showed nine 2F opening spans we had transcribed 2.5–7.4 u off (`layout_notes.md` §6.3). Not stored here (third-party image).
