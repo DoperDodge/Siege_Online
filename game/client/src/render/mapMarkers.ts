@@ -50,12 +50,10 @@ function dart(): THREE.BufferGeometry {
 export class MapMarkers {
   /** The zones view (O): rappel faces, spawn peeks and run-outs. */
   zones = false;
-  /** How many of each marker is drawn (tests): bombs, cameras, ingredients, spawns, and each kind of zone. */
-  readonly counts: Record<string, number> = {};
   private readonly zoneMeshes: THREE.Object3D[] = [];
   private readonly storeys: readonly { floorY: number }[];
   /** Per kind and storey, the instances to draw: their geometry, their material and each one's matrix. */
-  private readonly batches = new Map<string, { storey: number; geometry: THREE.BufferGeometry; material: THREE.Material; zone: boolean; matrices: THREE.Matrix4[] }>();
+  private readonly batches = new Map<string, { kind: string; storey: number; geometry: THREE.BufferGeometry; material: THREE.Material; zone: boolean; matrices: THREE.Matrix4[] }>();
 
   constructor(
     private readonly lab: LabScene,
@@ -87,7 +85,6 @@ export class MapMarkers {
         this.name(`Bomb ${b.id}`, b.pos[0], b.pos[1] + 0.35 + NAME_UP_M, b.pos[2], b.pos[1]);
       }
     }
-    this.counts.bombs = level.sites.reduce((n, x) => n + x.bombs.length, 0);
 
     // Cameras: a box on the wall, turned the way it looks, and a cone out from it.
     const cam = solid("camera");
@@ -106,7 +103,6 @@ export class MapMarkers {
       this.add("cameraCone", floor, cone, coneMat, m.compose(p.set(x, y, z).addScaledVector(look, CONE_M / 2), q, s.set(1, 1, 1)));
       this.name(c.id, x, y + NAME_UP_M, z, floor);
     }
-    this.counts.cameras = level.cameras.length;
 
     // Extinguishers stand on the wall; gas pipes run along it.
     const can = new THREE.CylinderGeometry(0.08, 0.08, 0.45, 12);
@@ -123,7 +119,6 @@ export class MapMarkers {
       }
       this.name(g.kind === "fire_extinguisher" ? `Extinguisher ${g.id}` : `Gas pipe ${g.id}`, x, y + 0.25 + NAME_UP_M, z, floor);
     }
-    this.counts.ingredients = level.ingredients.length;
 
     // Spawns: a disc on the floor and a dart the way it faces; each group's name over its first spawn.
     const disc = new THREE.CircleGeometry(0.3, 20).rotateX(-Math.PI / 2);
@@ -144,7 +139,6 @@ export class MapMarkers {
       const text = side === "lab" ? "Lab spawn" : side === "attack" ? `Attackers ${group.replace(/_/g, " ")}` : `Defenders ${site ? site.name : group}`;
       this.name(text, x, y + 0.3 + NAME_UP_M, z, y);
     }
-    this.counts.spawns = level.spawns.length;
 
     // The zones view: rappel faces, spawn peeks and run-outs, each box see-through.
     const zoneMat = { rappel: seeThrough("rappel", 0.3, true), spawn_peek: seeThrough("spawnPeek", 0.3, true), out_of_bounds: seeThrough("runOut", 0.3, true) };
@@ -156,7 +150,6 @@ export class MapMarkers {
         q.setFromAxisAngle(up, (b.yawDeg * Math.PI) / 180);
         this.add(kind, bottom, box, zoneMat[zone.kind], m.compose(p.set(...b.center), q, s.set(...b.size)), true);
       }
-      this.counts[zone.kind] = (this.counts[zone.kind] ?? 0) + 1;
     }
 
     for (const [key, b] of this.batches) {
@@ -164,6 +157,7 @@ export class MapMarkers {
       b.matrices.forEach((mat, i) => mesh.setMatrixAt(i, mat));
       mesh.computeBoundingSphere();
       mesh.name = `marker:${key}`;
+      mesh.userData.marker = b.kind;
       // See-through markers are drawn after the level, so the level shows through them.
       if ((b.material as THREE.MeshBasicMaterial).transparent) mesh.renderOrder = 2;
       if (b.zone) {
@@ -181,12 +175,32 @@ export class MapMarkers {
     for (const mesh of this.zoneMeshes) mesh.visible = on;
   }
 
+  /**
+   * What the scene holds (tests), read from its storeys' meshes: the instances of each kind of marker (bomb,
+   * camera, cameraCone, extinguisher, gasPipe; attack, defense and lab, a disc and a dart a spawn; rappel,
+   * spawnPeek, runOut), and how many of the zone instances are shown now.
+   */
+  drawn(): { instances: Record<string, number>; zonesShown: number } {
+    const instances: Record<string, number> = {};
+    let zonesShown = 0;
+    for (const group of this.lab.storeys) {
+      for (const o of group.children) {
+        const kind = o.userData.marker as string | undefined;
+        if (!kind || !(o as THREE.InstancedMesh).isInstancedMesh) continue;
+        const n = (o as THREE.InstancedMesh).count;
+        instances[kind] = (instances[kind] ?? 0) + n;
+        if (this.zoneMeshes.includes(o) && o.visible) zonesShown += n;
+      }
+    }
+    return { instances, zonesShown };
+  }
+
   /** An instance of `kind` standing on height `floorY` (it goes with that storey). */
   private add(kind: string, floorY: number, geometry: THREE.BufferGeometry, material: THREE.Material, matrix: THREE.Matrix4, zone = false): void {
     const storey = storeyOf(this.storeys, floorY);
     const key = `${kind}:${material.uuid}:${geometry.uuid}:${storey}`;
     let batch = this.batches.get(key);
-    if (!batch) this.batches.set(key, (batch = { storey, geometry, material, zone, matrices: [] }));
+    if (!batch) this.batches.set(key, (batch = { kind, storey, geometry, material, zone, matrices: [] }));
     batch.matrices.push(matrix.clone());
   }
 

@@ -1356,7 +1356,7 @@ export async function startLab(o: LabOptions): Promise<void> {
             panels: storeyView.panelCounts(),
             colors: Object.fromEntries([...labScene.materials].map(([k, m]) => [k, `#${m.color.getHexString()}`])),
             zones: markers?.zones ?? false,
-            markers: markers?.counts ?? null,
+            markers: markers?.drawn() ?? null,
           }),
         };
       },

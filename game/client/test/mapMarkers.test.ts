@@ -66,7 +66,11 @@ describe("a map's markers", () => {
     const lab = createLabScene(level);
     const before = lab.labels.length;
     const markers = new MapMarkers(lab, level.def);
-    expect(markers.counts).toEqual({ bombs: 2, cameras: 2, ingredients: 2, spawns: 4, rappel: 2, spawn_peek: 1, out_of_bounds: 1 });
+    // What the scene holds: a bomb case each, a box and a cone a camera, a disc and a dart a spawn, a box a zone.
+    expect(markers.drawn()).toEqual({
+      instances: { bomb: 2, camera: 2, cameraCone: 2, extinguisher: 1, gasPipe: 1, lab: 2, attack: 4, defense: 2, rappel: 2, spawnPeek: 1, runOut: 1 },
+      zonesShown: 0,
+    });
     // [B, 1F, 2F]: the bombs on 2F; CAM1 on 1F and CAM2 in the basement (each a box and a cone); the extinguisher
     // on 1F, the gas pipe on 2F; the lab spawn and the attackers on 1F, the defender on 2F (a disc and a dart each).
     expect(storeyNames(lab, "bomb")).toEqual([0, 0, 2]);
@@ -115,11 +119,11 @@ describe("a map's markers", () => {
     expect(storeyNames(lab, "rappel")).toEqual([0, 1, 1]);
     expect(storeyNames(lab, "spawnPeek")).toEqual([0, 1, 0]);
     expect(storeyNames(lab, "runOut")).toEqual([1, 0, 0]);
-    expect(zoneMeshes().every((m) => !m.visible)).toBe(true);
+    expect([zoneMeshes().every((m) => !m.visible), markers.drawn().zonesShown]).toEqual([true, 0]);
     markers.setZones(true);
-    expect([markers.zones, zoneMeshes().every((m) => m.visible)]).toEqual([true, true]);
+    expect([markers.zones, zoneMeshes().every((m) => m.visible), markers.drawn().zonesShown]).toEqual([true, true, 4]);
     markers.setZones(false);
-    expect(zoneMeshes().some((m) => m.visible)).toBe(false);
+    expect([zoneMeshes().some((m) => m.visible), markers.drawn().zonesShown]).toEqual([false, 0]);
     // Every other marker stays shown, and none casts a shadow (the shadow map is drawn only when the level changes).
     const all = lab.storeys.flatMap((g) => markerMeshes(g));
     expect(all.filter((m) => !zoneMeshes().includes(m)).every((m) => m.visible)).toBe(true);

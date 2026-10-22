@@ -457,18 +457,29 @@ try {
       await off.screenshot({ path: shot(`oregon-site-${site.id.toLowerCase()}.png`) });
     }
     result.checks.goToEverySiteAtItsDefenders = siteEntries.length === lvl.sites.length && result.offline.sites.every((x) => x.ok);
+    // The instances in the scene's storeys, kind by kind: a case a bomb, a box and a cone a camera, a disc and a
+    // dart a spawn, a box a zone.
     const mv = await view(off);
-    const zonesOf = (kind) => lvl.zones.filter((z) => z.kind === kind).length;
+    const drawn = mv.markers?.instances ?? {};
+    const boxesOf = (kind) => lvl.zones.filter((z) => z.kind === kind).reduce((n, z) => n + z.boxes.length, 0);
+    const spawnsOf = (side) => lvl.spawns.filter((sp) => (sp.side ?? "lab") === side).length;
+    const ingredientsOf = (kind) => lvl.ingredients.filter((g) => g.kind === kind).length;
+    const zoneBoxes = boxesOf("rappel") + boxesOf("spawn_peek") + boxesOf("out_of_bounds");
     result.offline.markers = mv.markers;
     result.checks.everyMarkerDrawn =
-      mv.markers?.bombs === lvl.sites.reduce((n, x) => n + x.bombs.length, 0) && mv.markers.cameras === lvl.cameras.length && mv.markers.ingredients === lvl.ingredients.length &&
-      mv.markers.spawns === lvl.spawns.length && mv.markers.rappel === zonesOf("rappel") && mv.markers.spawn_peek === zonesOf("spawn_peek") && mv.markers.out_of_bounds === zonesOf("out_of_bounds");
+      drawn.bomb === lvl.sites.reduce((n, x) => n + x.bombs.length, 0) && drawn.camera === lvl.cameras.length && drawn.cameraCone === lvl.cameras.length &&
+      drawn.extinguisher === ingredientsOf("fire_extinguisher") && drawn.gasPipe === ingredientsOf("gas_pipe") &&
+      ["attack", "defense", "lab"].every((side) => (drawn[side] ?? 0) === 2 * spawnsOf(side)) &&
+      drawn.rappel === boxesOf("rappel") && drawn.spawnPeek === boxesOf("spawn_peek") && drawn.runOut === boxesOf("out_of_bounds");
     await off.keyboard.press("KeyO");
-    const zonesOn = (await view(off)).zones;
+    const on = await view(off);
     await sleep(1800); // the switch's message has faded
     await off.screenshot({ path: shot("oregon-zones.png") });
     await off.keyboard.press("KeyO");
-    result.checks.zonesViewShowsAndHides = mv.zones === false && zonesOn === true && (await view(off)).zones === false;
+    const offAgain = await view(off);
+    result.offline.zonesShown = [mv.markers?.zonesShown, on.markers?.zonesShown, offAgain.markers?.zonesShown];
+    result.checks.zonesViewShowsAndHides =
+      zoneBoxes > 0 && mv.zones === false && mv.markers.zonesShown === 0 && on.zones === true && on.markers.zonesShown === zoneBoxes && offAgain.zones === false && offAgain.markers.zonesShown === 0;
   }
   await off.close();
 
