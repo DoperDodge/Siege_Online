@@ -254,9 +254,9 @@ under a reinforcement, what blocks reinforcing) are not repeated here.
 
 Each value is in `data/maps/oregon/layout.json` or a wall file (`walls_<floor>.json`) and listed in its
 `_unverified`; tools/mapgen/DESIGN.md §10 has the full table (P1–P37). An answer changes one value, and
-`npm run mapgen` rebuilds the map. Built so far (M3): every storey's walls, the 49 rooms, the floors with their
-soft floors and hatches, the Cat Walk's well, the stairs inside the building and the Cat Walk ladder; roofs and
-the outside come next.
+`npm run mapgen` rebuilds the map. Built so far (M5): every storey's walls, the 49 rooms, the floors with their
+soft floors and hatches, the Cat Walk's well, the stairs and the Cat Walk ladder, the roofs, the outside, the
+spawns, the four bomb sites, the cameras and ingredients, the major cover props and the zones.
 
 1. **Map scale (P1):** one unit of the floor plans = 0.15 m (±15%). The school bus is 77 u long (11.6 m at
    0.15; school buses are 10.5–12 m), and the white van in the parking lot is about 33 u (5 m; vans are 5–6 m);
@@ -375,9 +375,31 @@ the outside come next.
       climb to, and how tall is it?
     - (d) Which fences and low walls can you vault? We made every one 1.0 m and vaultable.
 
-Later milestones add their placeholders here as they build them: the Meeting Hall's height (P23), the Bunker's
-stairs and the outside tower stairs (P19, moved to M4), defender spawns (P28), bombs (P30), cameras (P31),
-ingredients (P32), rappel faces (P33), zones (P34), props (P35), and fall damage from the roofs (P37).
+26. **Bomb sites (P30, D-103):** each bomb stands where r6calls draws its icon, A and B as r6calls letters
+    them: 1A Dorms Main Hall and 1B Kids' Dorms, 2A Dining Hall and 2B Kitchen, 3A Meeting Hall and 3B Kitchen,
+    4A Laundry and 4B Supply. Is each bomb where the game puts it? A plant counts 0.5 m inside the site's rooms.
+27. **Defender spawns (P28):** five at each site, three in its A room and two in its B, all facing between the
+    bombs. Where do defenders spawn at each site?
+28. **Cameras (P31):** r6calls' eight. Inside, each is on the wall nearest r6calls' icon, 0.3 m under the ceiling,
+    looking 20° down at the room's middle: CAM4 in the B Freezer, CAM5 on the Rear Stage, CAM6 in the Lobby, CAM7 in
+    the Shower Corridor, CAM8 in the 2F Armory Corridor. The three outside (Junkyard, Parking, Construction) stand
+    on 3 m posts at their icons, looking at the building. Which wall is each on, and which way does it look?
+29. **Ingredients (P32):** seven extinguishers 1.0 m up and two gas pipes 1.2 m up, each on the wall nearest
+    r6calls' icon in its room. The right walls and heights?
+30. **Props (P35, D-104):** 28 pieces of furniture read off r6calls' floor images (±0.15 m): tables 0.75 m,
+    counters 0.9, beds 0.6, the Dorms' bunk beds 1.6 and wardrobe 2.0. Everything up to 1.1 m can be vaulted, the
+    bunks can't. Bullets go through the wooden and soft ones at ×0.7 a piece; the metal ones (the washers, the
+    chest freezers, the bunks) stop them (D-102). Which can you vault, and which stop bullets?
+31. **Zones (P33, P34, D-105):** the building is everything inside the walls; the roofs, the Balcony and the
+    outside stairwells are outside. Is the Cat Walk inside? The spawn-peek spots are inside the Big Tower's 1F
+    north and east doors, its 2F north windows and the Cat Walk's north window (toward Construction), the Garage
+    north door (Construction), the Small Tower's 1F west and south doors and the Dorms' Big Window (Junkyard), the
+    Master's Balcony door and the Main Entrance (Street). The run-outs are the Kitchen Corridor's west door and
+    the Bunker's east door. Every outside wall can be rappelled. Which spots do defenders really use (map_features
+    Q11), and is rappel refused anywhere (Q9)?
+
+Later milestones add their placeholders here as they build them: the Meeting Hall's height (P23) and fall damage
+from the roofs (P37).
 
 ### [core_mechanics.md](core_mechanics.md) — 16
 

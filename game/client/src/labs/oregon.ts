@@ -1,6 +1,7 @@
 // Oregon greybox (Phase 5): the map compiled from data/maps/oregon/layout.json by tools/mapgen. M2 stacks every
 // storey (B, 1F, 2F and the Cat Walk) with its rooms and callouts, soft floors and hatches; M3 joins them with the
-// stairs and the Cat Walk ladder; the storey views
+// stairs and the Cat Walk ladder; M4 adds the roofs, the outside and the attacker spawns; M5 the bomb sites,
+// defenders, cameras, ingredients, furniture and zones, each drawn by the lab (render/mapMarkers.ts); the storey views
 // (hide-above, the plan view, the palette), the HUD line with your room and plan position, and Go to by storey
 // and room come from the lab (tools/mapgen/DESIGN.md E9). Offline the page runs a room of its own in a Web
 // Worker, as the Destruction Lab does; `?online` / `?room=CODE` play it on the server. The destruction tools
@@ -47,8 +48,11 @@ await startLab({
   help: {
     tryThis: [
       rooms
-        ? "Go to (pause menu) lists every room by storey, under its callout, with the Main Entrance and the three attacker spawns (A Junkyard, B Street, C Construction) on 1F."
+        ? "Go to (pause menu) lists the four bomb sites first, then every room by storey, under its callout, with the Main Entrance and the three attacker spawns (A Junkyard, B Street, C Construction) on 1F."
         : "The pause menu's Go to has the main rooms and the three attacker spawns (A Junkyard, B Street, C Construction).",
+      "The bomb sites: Go to → Bomb sites puts you at a site's first defender spawn, facing between its two bombs (red cases, named Bomb 1A, 1B…). Check them against the game, with the cameras (dark boxes, each with a pale cone the way it looks), the extinguishers (red) and the gas pipes (yellow). Every spawn has a disc and an arrow: attackers orange, defenders blue.",
+      "Press O for the zones: the rappel faces (orange, just outside every outside wall), the spawn-peek spots (green, inside the doors and windows that look at an attackers' spawn) and the run-outs (red, outside the doors defenders run out of).",
+      "The furniture: bullets go through the wooden and soft pieces (tables, counters, beds) at ×0.7 each, and the metal ones (the washers, the chest freezers, the bunk beds) stop them. Shoot through the Kitchen island. Pieces up to 1.1 m high can be vaulted.",
       "Walk each storey against the blueprint: every wall, door and window should be where it has them. Exterior doors and windows start barricaded; inside doors are empty frames you can barricade (hold F).",
       "Blue walls are the soft walls, labelled with their research ids (surfaces.md §2) and how many reinforcements they take (the dark seams split the sections); shoot, knife, reinforce or blow them open as in the Destruction Lab. Yellow floors are soft: shoot up through them from below. Green squares are hatches: break one and drop through.",
       "Take the stairs between storeys: the Tower, White and Armory Stairs run from the basement to 2F, and the Small Stairs from the Small Tower's corner up to 2F. The ladder in the 2F Tower goes up to the Cat Walk: face it, press F, and W climbs. To come down from the top, stand at the gap in the rail facing the drop and press F; S climbs down, W back up.",
@@ -61,7 +65,7 @@ await startLab({
       "Press H to hide the storeys above yours (it follows you up and down), and P to switch between the surface colours and one light grey.",
       "Press F8 (or open the page with ?stats) for the frame-rate overlay: the target is 120 FPS on average and 90 at the 1% lows, at 1080p on High. The browser draws no faster than the display refreshes, so read the FPS on a display faster than 120 Hz (144 Hz or more). On a slower one, read the work instead: the page's own work each frame on the main thread (8.3 ms on average and 11.1 ms for the slowest 1% leave room for 120 and 90 FPS); it can't see the graphics card, so it says nothing about a frame the GPU holds up.",
     ],
-    note: "Phase 5 milestone 4: roofs on the whole building, the outside (read off r6calls' background), five attacker spawns at each insertion point and a free camera, on top of every storey, room, stair and the ladder. Every shape and size is a placeholder until you've walked it: 1 u of the plan = 0.15 m, floors at −3.2, 0, 3.2 and 6.2 m, roofs at 3.2, 6.2 and 9.2 m, doors 2.1 m (research/OPEN_QUESTIONS.md).",
+    note: "Phase 5 milestone 5: the four bomb sites with five defenders each, r6calls' cameras and ingredients, the major furniture and the zones, on top of the roofs, the outside, the attacker spawns and every storey, room, stair and the ladder. Every shape, size and marker is a placeholder until you've walked it: 1 u of the plan = 0.15 m, floors at −3.2, 0, 3.2 and 6.2 m, roofs at 3.2, 6.2 and 9.2 m, doors 2.1 m (research/OPEN_QUESTIONS.md).",
   },
   extend: destructionFeatures,
 });

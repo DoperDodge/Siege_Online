@@ -5,7 +5,7 @@ known issues, and what's next.
 
 ---
 
-## Phase 5 — Oregon greybox · 🚧 in progress (M4 of 8 done)
+## Phase 5 — Oregon greybox · 🚧 in progress (M5 of 8 done)
 
 **Done when (PLAN §17):** you walk it and sign off on layout accuracy. Rappel (M8) comes before the Phase 5
 report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIGN.md`.
@@ -16,10 +16,35 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
 | M2 All storeys stacked: B, 2F, Cat Walk; rooms and callouts; ceilings, soft floors, hatches, drone holes; storey views | ✅ four storeys, 49 rooms, 12 soft floors, 6 hatches; hide-above, plan view, HUD line; browser test |
 | M3 Stairs and the ladder (grab it from the top too) | ✅ every staircase inside the building, the ladder both ways, the walk graph: every room reachable; browser test |
 | M4 Roofs, the outside and the three attacker spawns; free camera | ✅ roofs on every part of the building, the outside blockout with the Bunker and Tower outside stairs, five attackers at each insertion point, a free camera in every lab; browser test |
-| M5 Sites, defender spawns, cameras, ingredients, zones, cover props | ⏳ |
+| M5 Sites, defender spawns, cameras, ingredients, zones, cover props | ✅ the four bomb sites with Go to by site, five defenders at each, eight cameras, nine ingredients, 28 cover props (bullets go through the wooden and soft ones), the building, spawn-peek, run-out and rappel zones, every marker drawn; browser test |
 | M6 Walk-ready: every check, performance on Oregon, your walk #1 | ⏳ |
 | M7 Your corrections, round by round, to sign-off | ⏳ |
 | M8 Rappel | ⏳ |
+
+### What's done (M5)
+- **The four bomb sites (D-103):** Kids' Dorms / Dorms Main Hall (2F), Kitchen / Dining Hall and Meeting Hall /
+  Kitchen (1F), and Laundry / Supply (B), each bomb where r6calls draws it, A and B as r6calls letters them. The
+  pause menu's Go to lists them first, under "Bomb sites": each puts you at the site's first defender spawn.
+- **Defenders (D-103):** five at each site, three in its A room and two in its B room, facing between the bombs.
+- **Cameras and ingredients (D-103):** r6calls' eight cameras, each on the nearest wall of its room under the
+  ceiling, looking down at the room's middle (the three outside on 3 m posts, looking at the building), and its
+  seven extinguishers and two gas pipes on the nearest wall.
+- **Cover props (D-104):** 28 pieces of furniture from r6calls' floor images: the tables, counters and the Kitchen
+  island, the beds and the Dorms' bunks and wardrobe, the Laundry washers, the chest freezers, the pool table.
+  Low ones (up to 1.1 m) can be vaulted. **Bullets go through the wooden and soft ones** at ×0.7 each, counting
+  toward the two walls a bullet can go through; the metal ones (washers, freezers, bunks) stop them (D-102). No
+  prop blocks a doorway, a hatch or the stairs, and every room is still reachable.
+- **Zones (D-105):** the building on each storey (inside the walls; the roofs and the Balcony are outside), the
+  spawn-peek spots and run-outs of the research at the doors and windows they name, and rappel faces on every
+  outside wall above ground. Press O to see them: rappel faces orange, spawn peeks green, run-outs red.
+- **Markers (D-106):** the bombs (red cases), the cameras (with a cone the way each looks), the extinguishers
+  (red), the gas pipes (yellow) and every spawn (a disc and an arrow: attackers orange, defenders blue) are drawn
+  with their names, and hide with their storey.
+- **Checks:** every bomb in its room, every camera and ingredient against a wall of its room, the defenders on
+  their site's floor, each prop clear of doorways, hatches and stairs, a bullet through the Kitchen island and
+  stopped by a freezer, each storey's building zone holding its rooms, the peeks inside and the run-outs outside
+  their openings, a rappel face outside every outside door and window. The browser test goes to each site from
+  Go to, counts the markers and switches the zones view.
 
 ### What's done (M4)
 - **Roofs on the whole building (D-097):** 17 roofs with the research's names. Pitched where the roof renders
@@ -219,26 +244,30 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
    switch to plain grey.
 7. The outside: Go to → Attacker spawn A Junkyard, B Street or C Construction puts you at that insertion point,
    facing the building (four more spawns stand beside it); walk to the building from each.
-8. The roofs: Go to 2F → Office and vault out of its north window onto the Dining roof (from the 2F Small Tower,
+8. The sites: Go to → Bomb sites → each site puts you at its first defender spawn, facing between its bombs.
+   Check each site's rooms, its two bombs (red cases), the cameras (dark boxes with a cone) and the extinguishers
+   and gas pipes against the game. Press O to see the rappel faces, spawn peeks and run-outs.
+9. The props: Go to 1F → Kitchen and shoot through the island; a chest freezer in the basement stops bullets.
+10. The roofs: Go to 2F → Office and vault out of its north window onto the Dining roof (from the 2F Small Tower,
    its east door leads into the Office; the Small Tower's own south opening is built as wall, D-087), or
    2F → Master and step out of its south door onto the Balcony. Press N for the free camera and fly over every roof (WASD along
    the view, Space up, C down, Shift faster); F puts you on the floor under the camera, N takes you back.
-9. Soft floors: Go to 1F Kitchen, look straight up and fire. The yellow floor above (the Kids' Dorms, SF-2F-01)
+11. Soft floors: Go to 1F Kitchen, look straight up and fire. The yellow floor above (the Kids' Dorms, SF-2F-01)
    takes holes; every soft floor works the same way from the room below.
-10. Hatches: Go to 2F Kids' Dorms and stand on the green square (H4). Crouch (C), look down and knife it (V)
+12. Hatches: Go to 2F Kids' Dorms and stand on the green square (H4). Crouch (C), look down and knife it (V)
    until it breaks, and you drop into the 1F Kitchen. H1–H3 go from 1F to the basement, H5 and H6 from 2F to 1F.
-11. Press F8 and read the overlay on your PC: average FPS and the 1% low (target 120 and 90 at 1080p High).
+13. Press F8 and read the overlay on your PC: average FPS and the 1% low (target 120 and 90 at 1080p High).
    The browser draws no faster than your display refreshes, and a missed refresh counts as a whole extra one,
    so read the FPS on a display faster than 120 Hz (144 Hz or more). At 120 Hz or less, read the work instead:
    the page's own work each frame on the main thread, 8.3 ms on average and 11.1 ms for the slowest 1% leaving
    room for 120 and 90 FPS. It doesn't include the graphics card's time.
-12. The plans: open `research/oregon/compare/B.svg`, `1F.svg`, `2F.svg` and `3F.svg`. To see them over the
+14. The plans: open `research/oregon/compare/B.svg`, `1F.svg`, `2F.svg` and `3F.svg`. To see them over the
    official blueprint: `npm run mapgen:refs` (downloads the blueprint and r6calls' map into a gitignored
    folder), then `npm run mapgen:compare`, and open `builds/mapgen/compare/index.html`.
-13. Checks: `npm run typecheck`, `npm test`, `npm run build && npm run test:e2e` (`oregon.mjs` shoots through a
-   soft floor, drops through a hatch, walks the Armory Stairs, takes the ladder both ways, stands at each attacker
-   spawn and drops onto the Dining roof from the free camera),
-   `npm run mapgen -- --check`.
+15. Checks: `npm run typecheck`, `npm test` (499 tests), `npm run build && npm run test:e2e` (`oregon.mjs` shoots
+   through a soft floor, drops through a hatch, walks the Armory Stairs, takes the ladder both ways, stands at each
+   attacker spawn, drops onto the Dining roof from the free camera, goes to each bomb site and switches the zones
+   view), `npm run mapgen -- --check`.
 
 ### Known issues
 - The stairs follow your walk now (open question 20).
@@ -257,12 +286,18 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
 - Every size is a placeholder until you've walked it: 1 u of the plans = 0.15 m, walls 3 m, doors 2.1 m
   (research/OPEN_QUESTIONS.md, "Placeholders added while building Phase 5").
 - You no longer see your own shadow (shadows are drawn once for the level, D-077).
+- Every marker is a placeholder from r6calls' icons: which wall a camera is on and which way it looks, the
+  ingredients' heights, where defenders spawn, every prop's height and class, and which doors and windows are
+  spawn-peek spots (open questions 26–31).
+- Three spawn-peek candidates of the research aren't built: the Meeting Hall's east windows aren't drawn as
+  openings, there's no west window in Kids' Dorms or the 2F Small Tower, and the Classroom's one outside window
+  looks into the recessed yard, not at the Street (D-105).
 
-### Next: Phase 5 M5 — sites, defender spawns, cameras, ingredients, zones, props
-The four bomb sites (rooms, bomb markers, plant zones) with Go to by site; the defender spawns; the default
-cameras with their facing (8 on r6calls' map) and the ingredients (7 extinguishers and 2 gas pipes there); the
-zones (the building, out of bounds, spawn-peek spots, drone holes); the rappel faces with a debug view; and the
-major cover props. Each marker is drawn in the lab (DESIGN E9).
+### Next: Phase 5 M6 — walk-ready, then your walk #1
+Every check together (`npm run check`), the mapgen report (counts, budgets, drift, the UNVERIFIED list), the
+overlay page, performance on Oregon (10 walking and firing players, Room.step under 4 ms; netsim on Oregon), the
+walk checklist in this file, and `research/oregon/walkthrough.md` for what you find. Then you walk the greybox
+once and I log every mismatch (DESIGN M6).
 
 ---
 
