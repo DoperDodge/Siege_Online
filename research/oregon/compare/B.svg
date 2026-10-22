@@ -178,9 +178,9 @@
 <text class="rooms" x="249.6" y="189.52"><title>B_SUPPLY_CLOSET</title>Closet</text>
 <text class="rooms" x="224.54" y="167.38"><title>B_CORRIDOR</title>Basement Corridor</text>
 <text class="rooms" x="202.73" y="177.8"><title>B_FREEZER_HALL</title>Freezer Hall</text>
-<text class="rooms" x="175.71" y="215.24"><title>B_FREEZER</title>Freezer</text>
+<text class="rooms" x="175.71" y="212.96"><title>B_FREEZER</title>Freezer</text>
 <text class="rooms" x="155.53" y="243.23"><title>B_FREEZER_STAIRS</title>Freezer Stairs</text>
-<text class="rooms" x="248.63" y="216.86"><title>B_LAUNDRY</title>Laundry Room</text>
+<text class="rooms" x="254.16" y="216.86"><title>B_LAUNDRY</title>Laundry Room</text>
 <text class="rooms" x="254.16" y="256.9"><title>B_LAUNDRY_STORAGE</title>Storage</text>
 <text class="rooms" x="276.62" y="265.69"><title>B_LAUNDRY_STAIRS</title>Laundry Stairs</text>
 </svg>

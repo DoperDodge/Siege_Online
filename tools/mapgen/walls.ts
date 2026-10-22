@@ -12,7 +12,7 @@ export interface Solid {
   id: string;
   center: [number, number, number];
   size: [number, number, number];
-  surface: "HARD_WALL" | "HARD_FLOOR" | "REINFORCEABLE" | "BARRICADE" | "WINDOW" | "SOFT_FLOOR" | "HATCH";
+  surface: "HARD_WALL" | "HARD_FLOOR" | "REINFORCEABLE" | "BARRICADE" | "WINDOW" | "SOFT_FLOOR" | "HATCH" | "PROP";
   vaultable?: boolean;
   bodiesOnly?: boolean;
   drawOnly?: boolean;
@@ -20,6 +20,8 @@ export interface Solid {
   panel?: { construction?: string; sections?: number; empty?: boolean; region?: string };
   /** Turned about its middle (the outside's boxes, exterior.ts); 0 for everything else. */
   yawDeg?: number;
+  /** A PROP's class (data/destruction.json props). */
+  prop?: string;
 }
 
 export interface Zone {

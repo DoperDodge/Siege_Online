@@ -5,7 +5,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { Btn, bulletThroughPanels, crossFileProblems, DEG, levelSchema, loadGameData, missingUnverifiedPaths, PawnMode, QUERY_BULLET, QUERY_STATIC, Sim, Stance, type InputCmd, type Vec3 } from "../../game/shared/src/index.js";
+import { Btn, bulletThroughPanels, crossFileProblems, DEG, levelSchema, loadGameData, missingUnverifiedPaths, PawnMode, pelletPath, QUERY_BULLET, QUERY_STATIC, Sim, Stance, type InputCmd, type Vec3 } from "../../game/shared/src/index.js";
 import { checkLevel } from "./checks.js";
 import { frames } from "./frames.js";
 import { compile, loadInputs } from "./compile.js";
@@ -1062,6 +1062,63 @@ describe("oregon sites, cameras and ingredients (M5, DESIGN §5.11)", () => {
       expect([g.id, g.room, Math.round((y - storey(r.storey).floorY) * 1e4) / 1e4]).toEqual([g.id, want[g.id], g.kind === "gas_pipe" ? 1.2 : 1]);
       expect([g.id, wallBehind(x, y, z), holds(r, x, z), holds(r, ...ahead(x, z, g.yawDeg, 0.3))]).toEqual([g.id, true, true, true]);
     }
+  });
+
+  it("has five defenders at each site, three in its A room and two in its B, on the floor, facing between the bombs", () => {
+    type Spawn = { id: string; side?: string; group?: string; pos: Vec3; yawDeg: number };
+    type Site = { id: string; rooms: string[]; bombs: { pos: Vec3 }[] };
+    const spawns = (level.spawns as Spawn[]).filter((x) => x.side === "defense");
+    const sites = level.sites as Site[];
+    expect([...new Set(spawns.map((x) => x.group))].sort()).toEqual(sites.map((x) => x.id).sort());
+    for (const site of sites) {
+      const mine = spawns.filter((x) => x.group === site.id);
+      const where = mine.map((x) => site.rooms.findIndex((id) => holds(roomOf(id), x.pos[0], x.pos[2], 0)));
+      expect([site.id, where.filter((i) => i === 0).length, where.filter((i) => i === 1).length]).toEqual([site.id, 3, 2]);
+      const [mx, mz] = [(site.bombs[0].pos[0] + site.bombs[1].pos[0]) / 2, (site.bombs[0].pos[2] + site.bombs[1].pos[2]) / 2];
+      for (const x of mine) {
+        expect([x.id, x.pos[1]]).toEqual([x.id, storey(roomOf(site.rooms[where[mine.indexOf(x)]]).storey).floorY]);
+        const yaw = (Math.atan2(-(mx - x.pos[0]), -(mz - x.pos[2])) * 180) / Math.PI;
+        expect(Math.abs(((x.yawDeg - yaw + 540) % 360) - 180), x.id).toBeLessThan(0.1);
+      }
+    }
+    // A body fits at every spawn: Sim.create refuses one that overlaps anything (props included).
+  });
+
+  it("places the major cover props as PROPs with a class, on their storey's floor in a room; low ones vaultable, bunk beds not", () => {
+    type Solid = Box & { prop?: string; vaultable?: boolean };
+    const props = (solids as Solid[]).filter((b) => b.surface === "PROP" && b.prop !== undefined);
+    expect(props.map((b) => b.id).sort()).toEqual(inputs.exterior.props.map((p) => p.id).sort());
+    const classes = loadGameData().destruction.props.classes;
+    for (const b of props) {
+      const bottom = b.center[1] - b.size[1] / 2;
+      const st = storeys.find((x) => Math.abs(x.floorY - bottom) < 1e-6);
+      const room = rooms.find((r) => r.storey === st?.id && holds(r, b.center[0], b.center[2], 0));
+      const bunk = b.id.includes("BUNK");
+      expect([b.id, Object.hasOwn(classes, b.prop!), st?.id !== undefined, room !== undefined, !!b.vaultable]).toEqual([b.id, true, true, true, b.size[1] <= 1.1 && !bunk]);
+    }
+  });
+
+  it("refuses a prop in a doorway, on a hatch or on the stairs", () => {
+    const withProp = (id: string, change: Partial<(typeof inputs.exterior.props)[number]>) =>
+      compile({ ...inputs, exterior: { ...inputs.exterior, props: inputs.exterior.props.map((p) => (p.id === id ? { ...p, ...change } : p)) } }).report.errors;
+    // The Master's bed where the render first put it: its corner in front of the Master's south door.
+    expect(withProp("PROP_MASTER_BED", { rect: [250, 244, 266, 262] })).toContain("exterior.json PROP_MASTER_BED: stands in the doorway of 2F.o018");
+    // A Kids' Dorms bed on hatch H4.
+    expect(withProp("PROP_KIDS_BED_W", { frame: "world", rect: [140, 182, 148, 189] })).toContain("exterior.json PROP_KIDS_BED_W: stands on the hatch H4");
+    // The Kitchen island on the Tower Stairs' first flight up from 1F.
+    expect(withProp("PROP_KITCHEN_ISLAND", { frame: "world", rect: [244, 66, 250, 74] })).toContain("exterior.json PROP_KITCHEN_ISLAND: stands on the stairs");
+  });
+
+  it("a bullet goes through the Kitchen island (wood) at ×0.7 and stops at a chest freezer (metal)", async () => {
+    const sim = await Sim.create("oregon");
+    const rifle = { rule: loadGameData().destruction.bullets.tiers.medium! };
+    const bodyAt = (t: number) => (max: number) => (max > t ? [{ id: 9, parts: [{ part: "torso" as const, t }] }] : []);
+    // East at waist height across the island (x 22.5 to 25.8 m) to a body 6 m on.
+    const island = pelletPath(sim, [21.5, 0.5, 27], [1, 0, 0], bodyAt(6), "none", rifle);
+    expect([island.hits.map((h) => +h.mult.toFixed(6)), island.surfaces]).toEqual([[0.7], 1]);
+    // East in the Freezer at 0.4 m into the chest by its west end (from x 23.1 m): stopped at its face.
+    const chest = pelletPath(sim, [22, -2.8, 31.2], [1, 0, 0], bodyAt(3), "none", rifle);
+    expect([chest.hits, +chest.wall!.toFixed(2)]).toEqual([[], 1.08]);
   });
 
   it("reports a marker it can't place: a camera far from every wall of its room, a bomb outside its room", () => {

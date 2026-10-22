@@ -114,6 +114,8 @@ const itemSchema = z.strictObject({
   hM: num,
   surface: z.enum(SURFACES).default("HARD_WALL"),
   vaultable: z.boolean().default(false),
+  /** A PROP's class (data/destruction.json props): which bullets go through it. */
+  prop: z.string().optional(),
   angleDeg: num.optional(),
   label: z.string().optional(),
   src: Src,

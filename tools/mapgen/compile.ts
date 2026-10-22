@@ -9,11 +9,11 @@ import { round } from "./format.js";
 import type { Floor } from "./research.js";
 import { exteriorPartSchema, layoutSchema, wallsPartSchema, type ExteriorPart, type Layout, type WallsPart } from "./schema.js";
 import { frameDiagnostics, type HatchLanding } from "./diagnostics.js";
-import { checkExterior, compileExterior } from "./exterior.js";
+import { checkExterior, checkProps, compileExterior, footprintRect } from "./exterior.js";
 import { compileFloors, type HatchReport } from "./floors.js";
 import { compileMarkers } from "./markers.js";
 import { checkRoofs, compileRoofs } from "./roofs.js";
-import { compileRooms } from "./rooms.js";
+import { compileRooms, storeyOfBox } from "./rooms.js";
 import { checkStairs, compileStairs, stairKeepOut, stairRails } from "./stairs.js";
 import { compileWalls, type Solid, type Zone } from "./walls.js";
 
@@ -91,13 +91,22 @@ export function compile(inputs: Inputs): Compiled {
   // Rails round the stairwells and guards beside the stairs under them: kept out of the rooms' flood (they'd part
   // rooms in the plan), but anchors keep clear of the guards.
   const rails = stairRails(layout, stairsOut, wallsOut.solids);
-  // ---- Rooms (seeds, splits) and floors (the ground, slabs, soft floors, hatches, wells, stairwells).
-  const roomsOut = compileRooms(layout, fr, wallsOut.solids, stairKeepOut(layout, stairsOut, rails));
+  // ---- The outside: exterior.json's boxes, fences, rails, ramps and steps, and the props inside.
+  const exteriorOut = compileExterior(layout, fr, exterior);
+  const propIds = new Set(exterior.props.map((p) => p.id));
+  const props = exteriorOut.solids.filter((s) => propIds.has(s.id));
+  // ---- Rooms (seeds, splits) and floors (the ground, slabs, soft floors, hatches, wells, stairwells). A room's
+  // anchor keeps clear of the stairs and the props.
+  const onStairs = stairKeepOut(layout, stairsOut, rails);
+  const keepOut = new Map([...onStairs].map(([f, rs]) => [f, [...rs]]));
+  for (const p of props) {
+    const f = storeyOfBox(layout, p);
+    if (f) (keepOut.get(f) ?? keepOut.set(f, []).get(f)!).push(footprintRect(p));
+  }
+  const roomsOut = compileRooms(layout, fr, wallsOut.solids, keepOut);
   const floorsOut = compileFloors(layout, fr, wallsOut.solids, roomsOut, exterior.playable, stairsOut.holes);
   // ---- Roofs: slabs at the eaves, ramps, and the steps that close the ends.
   const roofsOut = compileRoofs(layout, roomsOut, wallsOut.solids);
-  // ---- The outside: exterior.json's boxes, fences, rails, ramps and steps.
-  const exteriorOut = compileExterior(layout, fr, exterior);
   // ---- Sites, cameras and ingredients at r6calls' markers (P30–P32); cameras outside the building's middle.
   const fp = wallsOut.footprint;
   const centre: [number, number] = [((fp.minX + fp.maxX) / 2) * k, ((fp.minY + fp.maxY) / 2) * k];
@@ -136,8 +145,9 @@ export function compile(inputs: Inputs): Compiled {
       const [wx, wy] = fr.toWorld(s.frame, s.at[0], s.at[1]);
       const pos: [number, number, number] = [wx * k, s.level === "EXT" ? 0 : layout.storeys.find((st) => st.id === s.level)!.floorY, wy * k];
       // Facing the building, or a defender its site's bombs (between them): yaw 0 faces −z (north), 90 faces −x (west).
+      // (A site that didn't compile is already reported: its defenders face the building meanwhile.)
+      if (s.facing === "site" && !layout.sites.some((q) => q.id === s.group)) throw new Error(`layout.json: spawn ${s.id} faces its site, but no site is "${s.group}"`);
       const site = s.facing === "site" ? markersOut.sites.find((q) => q.id === s.group) : undefined;
-      if (s.facing === "site" && !site) throw new Error(`layout.json: spawn ${s.id} faces its site, but no site is "${s.group}"`);
       const [tx, tz] = site ? [(site.bombs[0].pos[0] + site.bombs[1].pos[0]) / 2, (site.bombs[0].pos[2] + site.bombs[1].pos[2]) / 2] : centre;
       const yawDeg = typeof s.facing === "number" ? s.facing : (Math.atan2(-(tx - pos[0]), -(tz - pos[2])) * 180) / Math.PI;
       return { id: s.id, pos: v3(pos), yawDeg: round(yawDeg, 1), ...(s.side === "lab" ? {} : { side: s.side, group: s.group }) };
@@ -161,6 +171,7 @@ export function compile(inputs: Inputs): Compiled {
     ...(s.label ? { label: s.label } : {}),
     ...(s.panel ? { panel: s.panel } : {}),
     ...(s.yawDeg ? { yawDeg: s.yawDeg } : {}),
+    ...(s.prop !== undefined ? { prop: s.prop } : {}),
   });
   const level = {
     _doc:
@@ -201,7 +212,8 @@ export function compile(inputs: Inputs): Compiled {
     ...markersOut.errors,
     ...checkStairs(layout, stairsOut, level.solids, level.rooms),
     ...checkRoofs(layout, roofsOut.roofs, level.solids, level.rooms),
-    ...checkExterior(layout, level.solids, exteriorOut.ids, level.rooms),
+    ...checkExterior(layout, level.solids, new Set(exterior.items.map((i) => i.id)), level.rooms),
+    ...checkProps(layout, props, solids, onStairs),
   );
   const counts: Record<string, number> = { solids: level.solids.length, spawns: spawns.length, zones: zones.length, rooms: roomsOut.rooms.length, roofs: roofsOut.roofs.length, ramps: roofsOut.ramps.length, sites: markersOut.sites.length, cameras: markersOut.cameras.length, ingredients: markersOut.ingredients.length };
   for (const [floor, c] of Object.entries(floorsOut.counts)) {

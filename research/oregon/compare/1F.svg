@@ -301,7 +301,7 @@
 <text class="rooms" x="211.83" y="121.5"><title>1F_KITCHEN_CORRIDOR</title>Kitchen Corridor</text>
 <text class="rooms" x="255.5" y="81.83"><title>1F_TOWER</title>Tower</text>
 <text class="rooms" x="265.83" y="52.83"><title>1F_TOWER_STAIRS</title>Tower Stairs</text>
-<text class="rooms" x="254.17" y="158.5"><title>1F_MEETING_HALL</title>Meeting Hall</text>
+<text class="rooms" x="254.17" y="154.83"><title>1F_MEETING_HALL</title>Meeting Hall</text>
 <text class="rooms" x="266.5" y="110.17"><title>1F_STAGE</title>Stage</text>
 <text class="rooms" x="251.5" y="197.17"><title>1F_SPLIT</title>Split</text>
 <text class="rooms" x="168.17" y="219.83"><title>1F_SECURITY</title>Security</text>
