@@ -1,8 +1,10 @@
 // Sites, cameras and ingredients (DESIGN §5.11, P30–P32): r6calls' markers (extracted.json's points, in the
 // frame they were drawn in) placed in the compiled level. A bomb stands on its room's floor at the marker. A
-// camera goes on the wall face nearest its marker that faces into the marker's room (outside: a building face,
-// or a post where none is near), under the ceiling, looking down at the room's middle. An extinguisher or a gas
-// pipe goes on the nearest such wall face, facing out of it.
+// camera goes on the wall face nearest its marker that faces into the marker's room, under the ceiling, looking
+// down at the room's middle; outside (level EXT), on the building face nearest it, looking out from it, or on a
+// post where none is near, looking at the building. An extinguisher or a gas pipe goes on the nearest wall face
+// of its room (outside: of the building), facing out of it. A marker inside on no room's floor, or outside but
+// inside the building, is reported.
 import type { Frames } from "./frames.js";
 import type { Floor } from "./research.js";
 import type { CompiledRoom, RoomsResult } from "./rooms.js";
@@ -68,6 +70,25 @@ export function compileMarkers(layout: Layout, fr: Frames, wallSolids: Solid[], 
     return next ? next.floorY - next.slabM : floorY(f) + d.wallHeightM;
   };
   const roomById = new Map(rooms.rooms.map((r) => [r.id, r]));
+  /** Is (x, z) inside the building's walls on storey f (not on a wall, not outside)? */
+  const insideBuilding = (f: Floor, x: number, z: number) => {
+    const g = rooms.plans.get(f)?.grid;
+    const i = g ? g.index(x, z) : -1;
+    return g !== undefined && i >= 0 && g.cells[i] === 0;
+  };
+  /** The room a marker of `level` is in (null outside), or an error for a marker where its level says it isn't. */
+  const markerRoom = (what: string, level: string, f: Floor, x: number, z: number, named?: string): CompiledRoom | null | "bad" => {
+    const at = `its marker at (${x.toFixed(2)}, ${z.toFixed(2)})`;
+    if (level === "EXT") {
+      if (!insideBuilding(f, x, z)) return null;
+      out.errors.push(`${what}: ${at} is inside the building, but its level is EXT`);
+      return "bad";
+    }
+    const room = roomFor(what, f, x, z, named);
+    if (room) return room;
+    out.errors.push(`${what}: ${at} is in no room on ${f}`);
+    return "bad";
+  };
   // The walls markers mount on, by storey: upright solid boxes (soft walls too), not frames' barricades or glass.
   const walls = new Map<Floor, Solid[]>();
   for (const b of wallSolids) {
@@ -153,11 +174,8 @@ export function compileMarkers(layout: Layout, fr: Frames, wallSolids: Solid[], 
   for (const c of layout.cameras) {
     const f = storeyOf(c.level);
     const [x, z] = place(c.frame, c.at);
-    const room = c.level === "EXT" ? null : roomFor(`camera ${c.id}`, f, x, z, c.room);
-    if (c.level !== "EXT" && !room) {
-      out.errors.push(`camera ${c.id}: its marker at (${x.toFixed(2)}, ${z.toFixed(2)}) is in no room on ${f}`);
-      continue;
-    }
+    const room = markerRoom(`camera ${c.id}`, c.level, f, x, z, c.room);
+    if (room === "bad") continue;
     const y = c.level === "EXT" ? floorY(f) + cam.postM - cam.belowCeilingM : ceilingY(f) - cam.belowCeilingM;
     let at = mount(f, x, z, y, room, cam.reachM);
     if (!at && c.level === "EXT") {
@@ -171,11 +189,12 @@ export function compileMarkers(layout: Layout, fr: Frames, wallSolids: Solid[], 
       out.errors.push(`camera ${c.id}: no wall of ${room!.id} within ${cam.reachM} m of its marker reaches ${y.toFixed(2)} m`);
       continue;
     }
-    const [mx, mz] = room ? roomMiddle(room) : centre;
+    // Inside, at the room's middle; outside, out from the face it is on (a post's faces the building).
+    const middle = room ? roomMiddle(room) : null;
     out.cameras.push({
       id: c.id,
       pos: [r4(at.x), r4(y), r4(at.z)],
-      yawDeg: c.yawDeg ?? yawOf(mx - at.x, mz - at.z),
+      yawDeg: c.yawDeg ?? (middle ? yawOf(middle[0] - at.x, middle[1] - at.z) : yawOf(at.nx, at.nz)),
       pitchDeg: c.pitchDeg ?? cam.pitchDeg,
       ...(room ? { room: room.id } : {}),
     });
@@ -186,7 +205,8 @@ export function compileMarkers(layout: Layout, fr: Frames, wallSolids: Solid[], 
   for (const g of layout.ingredients) {
     const f = storeyOf(g.level);
     const [x, z] = place(g.frame, g.at);
-    const room = roomFor(`${g.kind} ${g.id}`, f, x, z, g.room);
+    const room = markerRoom(`${g.kind} ${g.id}`, g.level, f, x, z, g.room);
+    if (room === "bad") continue;
     const y = floorY(f) + (g.kind === "gas_pipe" ? ing.gasPipeM : ing.fireExtinguisherM);
     const at = mount(f, x, z, y, room, ing.reachM);
     if (!at) {

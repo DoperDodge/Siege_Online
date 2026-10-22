@@ -1,21 +1,19 @@
 // Zones (DESIGN §5.11, P34): areas later phases give meaning to, as boxes in world metres.
-// - building, one per storey: its footprint (the space inside its walls and the walls themselves; the roofs are
-//   outside, map_features §10) from its floor up to the next storey's floor, so a body anywhere inside is in one
-//   storey's zone.
+// - building, one per storey: its footprint (the space inside its walls and the walls round it, whatever their
+//   thickness; the roofs are outside, map_features §10) from its floor up to the next storey's floor, so a body
+//   anywhere inside is in one storey's zone.
 // - spawn_peek and out_of_bounds: map_features §10's candidates (UNVERIFIED) at the doors and windows layout.json
 //   names: a box `zone.depthM` deep in front of the opening, inside it (where a defender stands to peek at the
 //   attackers' spawn) or outside it (a run-out), as high as the opening's top, looking out of it.
 // - rappel: the outer faces of the exterior walls above ground (map_features §8: every roof edge anchors a rappel
 //   down the wall under it), a thin box just outside each stretch of face, looking out of it; none on the walls
 //   of layout.rappel.refuse.
-import { distanceInside, greedyRects } from "./grid.js";
+import { greedyRects, type PlanGrid } from "./grid.js";
 import type { Floor } from "./research.js";
 import { CELL_M, storeyOfBox, type RoomsResult } from "./rooms.js";
 import type { Layout, WallsPart } from "./schema.js";
 import type { Opening, Solid, Zone } from "./walls.js";
 
-/** A wall cell this close to the inside of the building (metres) is part of its shell: no wall is thicker. */
-const SHELL_M = 0.6;
 /** Rappel faces are sampled at every plan cell along a wall face (the boxes' ends are on that grid), this far out (metres). */
 const PROBE_M = 0.1;
 /** Faces looking the same way this close together (metres) are one face: a soft panel set into a hard wall's line. */
@@ -38,6 +36,36 @@ const span = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: nu
   size: [r4(x1 - x0), r4(y1 - y0), r4(z1 - z0)] as V3,
 });
 
+/**
+ * The building on a storey's plan, a flag per cell: every cell the outside's flood didn't reach (the inside and
+ * the walls) in a piece, joined side to side, that holds some of the inside. A wall belongs to it whatever its
+ * thickness; a wall standing alone in the yard doesn't.
+ */
+function buildingCells(g: PlanGrid): Uint8Array {
+  const keep = new Uint8Array(g.w * g.h);
+  const queue = new Int32Array(g.w * g.h);
+  let tail = 0;
+  for (let i = 0; i < g.cells.length; i++) {
+    if (g.cells[i] !== 0) continue;
+    keep[i] = 1;
+    queue[tail++] = i;
+  }
+  const visit = (n: number) => {
+    if (keep[n] || g.cells[n] === 2) return;
+    keep[n] = 1;
+    queue[tail++] = n;
+  };
+  for (let head = 0; head < tail; head++) {
+    const i = queue[head];
+    const x = i % g.w;
+    if (x > 0) visit(i - 1);
+    if (x < g.w - 1) visit(i + 1);
+    if (i >= g.w) visit(i - g.w);
+    if (i < (g.h - 1) * g.w) visit(i + g.w);
+  }
+  return keep;
+}
+
 /** The wall lines a compiled wall box belongs to: a hard part's, a corner post's two, a panel's or an opening's. */
 function linesOf(id: string, wallOfSpan: Map<string, string>): string[] {
   if (id.startsWith("post:")) return id.slice(5).split("|");
@@ -58,16 +86,14 @@ export function compileZones(layout: Layout, openings: Opening[], wallSolids: So
     return next ? next.floorY : storey(f).floorY + d.wallHeightM;
   };
 
-  // ---- The building, storey by storey: the plan's inside and the walls next to it.
+  // ---- The building, storey by storey: the plan's inside and the walls joined to it.
   const shell = new Map<Floor, (x: number, z: number) => boolean>();
   for (const s of layout.storeys) {
     const plan = rooms.plans.get(s.id);
     if (!plan) continue;
     const g = plan.grid;
-    // Each cell's distance from the inside, in cells (0 inside): walls this near are the building's.
-    const far = distanceInside(g.w, g.h, (i) => g.cells[i] !== 0);
-    const reach = Math.round(SHELL_M / CELL_M);
-    const keep = (i: number) => g.cells[i] === 0 || (g.cells[i] === 1 && far[i] <= reach);
+    const inBuilding = buildingCells(g);
+    const keep = (i: number) => inBuilding[i] === 1;
     shell.set(s.id, (x, z) => {
       const i = g.index(x, z);
       return i >= 0 && keep(i);

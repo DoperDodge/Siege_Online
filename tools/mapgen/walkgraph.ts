@@ -1,11 +1,11 @@
 // The walk graph (DESIGN §9.2 check 10, M3): where a body can stand and where it can walk to, read from the
 // physics world the Sim moves bodies in. Every collider a body collides with (walls, slabs, open steps and the
-// invisible ramps over them, rails, panels' movement boxes) is rasterised into columns cellM square, each
+// invisible ramps over them, rails, panels' movement boxes, props) is rasterised into columns cellM square, each
 // column a list of solid spans. A node is a span's walkable top with room above it for a crouching body and
 // nothing a body can't step over within its radius; nodes in neighbouring columns join when the step between
 // them is one a body takes (≤ maxStepHeight), and each ladder joins its foot to its top. Drops are left out:
 // what the graph joins, a body walks both ways. A head start for the Phase 9 navmesh.
-import { G_MOVE_HELPER, G_PANEL, G_STATIC } from "../../game/shared/src/physics/rapier.js";
+import { G_MOVE_HELPER, G_PANEL, G_PROP, G_STATIC } from "../../game/shared/src/physics/rapier.js";
 import type { Sim } from "../../game/shared/src/sim.js";
 
 export interface WalkGraph {
@@ -59,7 +59,7 @@ export function buildWalkGraph(sim: Sim, opts: WalkGraphOptions = {}): WalkGraph
   // ---- the colliders bodies collide with, as boxes
   const boxes: Box[] = [];
   sim.world.forEachCollider((col) => {
-    if (!((col.collisionGroups() >>> 16) & (G_STATIC | G_MOVE_HELPER | G_PANEL)) || col.isSensor() || !col.isEnabled()) return;
+    if (!((col.collisionGroups() >>> 16) & (G_STATIC | G_MOVE_HELPER | G_PANEL | G_PROP)) || col.isSensor() || !col.isEnabled()) return;
     if (col.shapeType() !== sim.R.ShapeType.Cuboid) throw new Error(`buildWalkGraph: collider ${col.handle} isn't a box`);
     const he = col.halfExtents()!;
     const t = col.translation();

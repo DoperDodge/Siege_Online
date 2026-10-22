@@ -16,7 +16,7 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
 | M2 All storeys stacked: B, 2F, Cat Walk; rooms and callouts; ceilings, soft floors, hatches, drone holes; storey views | ✅ four storeys, 49 rooms, 12 soft floors, 6 hatches; hide-above, plan view, HUD line; browser test |
 | M3 Stairs and the ladder (grab it from the top too) | ✅ every staircase inside the building, the ladder both ways, the walk graph: every room reachable; browser test |
 | M4 Roofs, the outside and the three attacker spawns; free camera | ✅ roofs on every part of the building, the outside blockout with the Bunker and Tower outside stairs, five attackers at each insertion point, a free camera in every lab; browser test |
-| M5 Sites, defender spawns, cameras, ingredients, zones, cover props | ✅ the four bomb sites with Go to by site, five defenders at each, eight cameras, nine ingredients, 28 cover props (bullets go through the wooden and soft ones), the building, spawn-peek, run-out and rappel zones, every marker drawn; browser test |
+| M5 Sites, defender spawns, cameras, ingredients, zones, cover props | ✅ the four bomb sites with Go to by site, five defenders at each, eight cameras, nine ingredients, 29 cover props (bullets go through the wooden and soft ones), the building, spawn-peek, run-out and rappel zones, every marker drawn; browser test |
 | M6 Walk-ready: every check, performance on Oregon, your walk #1 | ⏳ |
 | M7 Your corrections, round by round, to sign-off | ⏳ |
 | M8 Rappel | ⏳ |
@@ -29,8 +29,9 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
 - **Cameras and ingredients (D-103):** r6calls' eight cameras, each on the nearest wall of its room under the
   ceiling, looking down at the room's middle (the three outside on 3 m posts, looking at the building), and its
   seven extinguishers and two gas pipes on the nearest wall.
-- **Cover props (D-104):** 28 pieces of furniture from r6calls' floor images: the tables, counters and the Kitchen
-  island, the beds and the Dorms' bunks and wardrobe, the Laundry washers, the chest freezers, the pool table.
+- **Cover props (D-104):** 29 pieces of furniture from r6calls' floor images: the tables, counters and the Kitchen
+  island, the beds and the Dorms' bunks and wardrobe, the Laundry washers, the chest freezers, the Game Room's
+  table and sofa.
   Low ones (up to 1.1 m) can be vaulted. **Bullets go through the wooden and soft ones** at ×0.7 each, counting
   toward the two walls a bullet can go through; the metal ones (washers, freezers, bunks) stop them (D-102). No
   prop blocks a doorway, a hatch or the stairs, and every room is still reachable.
@@ -45,6 +46,11 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
   stopped by a freezer, each storey's building zone holding its rooms, the peeks inside and the run-outs outside
   their openings, a rappel face outside every outside door and window. The browser test goes to each site from
   Go to, counts the markers and switches the zones view.
+- **Review (D-107):** two reviewers read the M5 changes; seven findings held up, and all are fixed, each with a
+  test. The ones you'd notice: a Dorms bed stood through the wall, mostly in the Game Room, and what I'd traced as
+  the Game Room's pool table was its rug (now its table and sofa); an extinguisher outside could be put inside;
+  a prop could stand in an open passage. The build now also fails if a prop goes into a wall, and the walk graph
+  sees the props again.
 
 ### What's done (M4)
 - **Roofs on the whole building (D-097):** 17 roofs with the research's names. Pitched where the roof renders

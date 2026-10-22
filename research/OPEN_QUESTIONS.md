@@ -386,8 +386,8 @@ spawns, the four bomb sites, the cameras and ingredients, the major cover props 
     on 3 m posts at their icons, looking at the building. Which wall is each on, and which way does it look?
 29. **Ingredients (P32):** seven extinguishers 1.0 m up and two gas pipes 1.2 m up, each on the wall nearest
     r6calls' icon in its room. The right walls and heights?
-30. **Props (P35, D-104):** 28 pieces of furniture read off r6calls' floor images (±0.15 m): tables 0.75 m,
-    counters 0.9, beds 0.6, the Dorms' bunk beds 1.6 and wardrobe 2.0. Everything up to 1.1 m can be vaulted, the
+30. **Props (P35, D-104):** 29 pieces of furniture read off r6calls' floor images (±0.15 m): tables 0.75 m,
+    counters 0.9, sofas 0.8, beds 0.6, the Dorms' bunk beds 1.6 and wardrobe 2.0. Everything up to 1.1 m can be vaulted, the
     bunks can't. Bullets go through the wooden and soft ones at ×0.7 a piece; the metal ones (the washers, the
     chest freezers, the bunks) stop them (D-102). Which can you vault, and which stop bullets?
 31. **Zones (P33, P34, D-105):** the building is everything inside the walls; the roofs, the Balcony and the

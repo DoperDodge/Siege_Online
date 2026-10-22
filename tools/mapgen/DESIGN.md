@@ -695,8 +695,9 @@ explicit metres of a pillar), with its spans sorted:
   its class stops them (amendment 3, D-102).
 - Small clutter, decoration and exact shapes: Phase 10. Props must keep doors, stairs and hatches clear (the
   walk graph check).
-- **As built (D-104):** 28 props in `exterior.json` (16 wood, 7 soft, 5 metal); the build fails if one stands in
-  a doorway (0.7 m either side of a floor-level barricade), on a hatch or on the stairs.
+- **As built (D-104, D-107):** 29 props in `exterior.json` (16 wood, 8 soft, 5 metal); the build fails if one stands
+  in a doorway (any door or open passage, 0.7 m either side of the wall), on a hatch or on the stairs, or goes into
+  another solid at its height.
 
 ### 5.11 Spawns, sites, cameras, ingredients, zones, rappel faces
 
@@ -715,11 +716,11 @@ explicit metres of a pillar), with its spans sorted:
   §10), `out_of_bounds` and `spawn_peek` candidates (map_features §10, UNVERIFIED), `drone_hole` (12 rows),
   `rappel` faces: every exterior wall outer face above ground and every roof edge, minus `rappel.refuse`
   (empty, map_features §8 [DER]).
-- **As built (D-103, D-105, D-106):** `markers.ts` places the bombs, cameras and ingredients (a camera's wall face
-  must face into its room; the three outside cameras stand on posts); defenders are five per site, three in its
-  A room and two in its B, facing between its bombs. `zones.ts`: the building zone of a storey is its inside and
-  the walls within 0.6 m of it, from its floor to the next storey's (a doorway counts as inside, a roof as
-  outside); spawn peeks and run-outs are boxes 1.5 m deep at the doors and windows each candidate names, with
+- **As built (D-103, D-105, D-106, D-107):** `markers.ts` places the bombs, cameras and ingredients (a marker's wall
+  face must face into its room; an outside camera goes on a building face, looking out, or on a post: the three
+  outside cameras stand on posts); defenders are five per site, three in its A room and two in its B, facing
+  between its bombs. `zones.ts`: the building zone of a storey is its inside and every wall joined to it, from its
+  floor to the next storey's (a doorway counts as inside, a roof as outside); spawn peeks and run-outs are boxes 1.5 m deep at the doors and windows each candidate names, with
   `faces`; a rappel face is a thin box outside each stretch of wall face with the outside in front, from its
   storey's floor to the wall's top (a roof edge is the top of the face under it). The lab draws every marker and,
   with O, the zones; Go to lists the sites.
@@ -949,10 +950,10 @@ the fix, the commit). Sign-off is recorded there and in PROGRESS.
 | P28 | Defender spawns: 5 per site, three in its A room and two in its B, clear of walls and props, facing between its bombs (D-103) | none in any source |
 | P29 | Lab spawn 0 just outside the Main Entrance | lab convenience, not a Siege fact |
 | P30 | Bomb objects at the r6calls marker centres, on the room's floor (D-103); plant zone = site rooms minus 0.5 m | icon anchors; Kitchen shared or not (common_setups SQ3); "no-drop zone" size unknown (round_flow §5) |
-| P31 | Cameras on the wall face nearest the marker (within 2 m) that faces into its room, 0.3 m under the ceiling, yaw to the room's middle, pitch -20 degrees; the three outside ones on 3 m posts, facing the building (D-103) | positions r6calls only; facing [DER]/[PRE] for 4, unknown for CAM4 and CAM7 |
+| P31 | Cameras on the wall face nearest the marker (within 2 m) that faces into its room, 0.3 m under the ceiling, yaw to the room's middle, pitch -20 degrees; outside, on the nearest building face looking out, or on a 3 m post facing the building (all three are on posts) (D-103) | positions r6calls only; facing [DER]/[PRE] for 4, unknown for CAM4 and CAM7 |
 | P32 | Extinguishers at 1.0 m, gas pipes at 1.2 m on the nearest wall face of their room (within 1.5 m), facing out (D-103) | r6calls icons only |
 | P33 | Rappel allowed on every exterior wall face and roof edge: a face wherever a wall above ground has the outside in front, from its floor to its top (D-105) | map_features §8 [DER] |
-| P34 | Spawn-peek and out-of-bounds zones: map_features §10 candidates at the openings that match, 1.5 m deep; building = each storey's inside and its walls, floor to next floor (D-105) | map_features §10 |
+| P34 | Spawn-peek and out-of-bounds zones: map_features §10 candidates at the openings that match, 1.5 m deep; building = each storey's inside and the walls joined to it, floor to next floor (D-105) | map_features §10 |
 | P35 | Props: traced footprints ±1 u; heights table 0.75, counter 0.9, bed 0.6, bunk bed 1.6, shelf 2.0, sofa 0.8, washer 0.9, car 1.5 m; vaultable if ≤ 1.1 m except bunk beds; classes wood, soft (bullets pass) and metal (they stop) (D-102, D-104) | bunk beds not vaultable (map_features §7, pre-rework patch) |
 | P36 | Game Room S window and 2F Small Tower S opening are built as wall (D-087: the blueprint wins; `hard: false` builds r6calls' openings) | Ubisoft 2020 draws walls there; the patch notes' new 2F window is the Attic's |
 | P37 | Fall damage unchanged (safe 3 m, lethal 6 m): a drop from a 2F roof (6.2 m) is lethal | data/movement.json placeholders; OPEN_QUESTIONS core Q8 |

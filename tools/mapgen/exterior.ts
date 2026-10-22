@@ -154,29 +154,40 @@ export function checkExterior(layout: Layout, solids: Solid[], ids: Set<string>,
   return errors;
 }
 
+/** A door or an open passage as walls.ts compiles it: its line's centre and thickness, and its ends along it. */
+export interface Doorway {
+  id: string;
+  floor: string;
+  axis: "H" | "V";
+  at: number;
+  t: number;
+  a0: number;
+  a1: number;
+}
+
 /**
- * Props keep the ways through clear: none stands in a doorway (within `doorM` either side of a door's barricade
- * or empty frame, along the way through it), on a hatch, or on the stairs (`keepOut`: their steps, landings,
- * guards and the openings above them, per storey).
+ * Props keep the ways through clear and stay out of everything else: none stands in a doorway (`doorways`: every
+ * door, barricaded or not, and every open passage, from `doorM` before the wall to `doorM` past it), on a hatch, or
+ * on the stairs (`keepOut`: their steps, landings, guards and the openings above them, per storey), and none goes
+ * into another solid at its height (a wall, a rail, another prop).
  */
-export function checkProps(layout: Layout, props: Solid[], solids: Solid[], keepOut: Map<string, [number, number, number, number][]>, doorM = 0.7): string[] {
+export function checkProps(layout: Layout, props: Solid[], solids: Solid[], keepOut: Map<string, [number, number, number, number][]>, doorways: readonly Doorway[], doorM = 0.7): string[] {
   const EPS = 0.01;
   const errors: string[] = [];
-  const floors = layout.storeys.map((s) => s.floorY);
   const bottom = (b: Solid) => b.center[1] - b.size[1] / 2;
-  const onFloor = (b: Solid) => floors.some((f) => Math.abs(bottom(b) - f) < 0.05);
   const rect = (x0: number, z0: number, x1: number, z1: number): P[] => [[x0, z0], [x1, z0], [x1, z1], [x0, z1]];
-  const doors = solids.filter((s) => s.surface === "BARRICADE" && onFloor(s));
   const hatches = solids.filter((s) => s.surface === "HATCH");
   for (const p of props) {
     const corners = footprint(p);
     const base = bottom(p);
+    const top = base + p.size[1];
     const storey = [...layout.storeys].reverse().find((s) => s.floorY <= base + 0.01)?.id;
-    for (const d of doors) {
-      if (Math.abs(bottom(d) - base) > 0.05) continue;
-      // The way through runs along the barricade's thin side.
-      const [hx, hz] = [d.size[0] / 2 + (d.size[0] < d.size[2] ? doorM : 0), d.size[2] / 2 + (d.size[2] <= d.size[0] ? doorM : 0)];
-      if (overlapDepth(corners, rect(d.center[0] - hx, d.center[2] - hz, d.center[0] + hx, d.center[2] + hz)) > EPS) errors.push(`exterior.json ${p.id}: stands in the doorway of ${d.id.replace(/\.bar$/, "")}`);
+    for (const d of doorways) {
+      if (d.floor !== storey) continue;
+      // The way through runs across the wall's line.
+      const [c0, c1] = [d.at - d.t / 2 - doorM, d.at + d.t / 2 + doorM];
+      const way = d.axis === "H" ? rect(d.a0, c0, d.a1, c1) : rect(c0, d.a0, c1, d.a1);
+      if (overlapDepth(corners, way) > EPS) errors.push(`exterior.json ${p.id}: stands in the doorway of ${d.id}`);
     }
     for (const h of hatches) {
       if (Math.abs(h.center[1] + h.size[1] / 2 - base) > 0.05) continue;
@@ -188,6 +199,10 @@ export function checkProps(layout: Layout, props: Solid[], solids: Solid[], keep
         errors.push(`exterior.json ${p.id}: stands on the stairs`);
         break;
       }
+    }
+    for (const s of solids) {
+      if (s.id === p.id || s.drawOnly || Math.min(top, bottom(s) + s.size[1]) - Math.max(base, bottom(s)) <= EPS) continue;
+      if (overlapDepth(corners, footprint(s)) > EPS) errors.push(`exterior.json ${p.id}: goes into ${s.id}`);
     }
   }
   return errors;

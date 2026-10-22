@@ -223,7 +223,7 @@ export function compile(inputs: Inputs): Compiled {
     ...checkStairs(layout, stairsOut, level.solids, level.rooms),
     ...checkRoofs(layout, roofsOut.roofs, level.solids, level.rooms),
     ...checkExterior(layout, level.solids, new Set(exterior.items.map((i) => i.id)), level.rooms),
-    ...checkProps(layout, props, solids, onStairs),
+    ...checkProps(layout, props, solids, onStairs, [...wallsOut.openings.filter((o) => o.kind === "DOOR"), ...wallsOut.passages]),
   );
   const counts: Record<string, number> = { solids: level.solids.length, spawns: spawns.length, zones: zones.length, rooms: roomsOut.rooms.length, roofs: roofsOut.roofs.length, ramps: roofsOut.ramps.length, sites: markersOut.sites.length, cameras: markersOut.cameras.length, ingredients: markersOut.ingredients.length };
   for (const [floor, c] of Object.entries(floorsOut.counts)) {

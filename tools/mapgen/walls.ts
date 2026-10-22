@@ -79,6 +79,8 @@ export interface WallsResult {
   warnings: string[];
   /** Every door and window, in the order compiled. */
   openings: Opening[];
+  /** Every open passage (an OPEN span, a gap in a rail): where it is in its line. */
+  passages: Pick<Opening, "id" | "floor" | "axis" | "at" | "t" | "a0" | "a1">[];
   /** The storey footprint (world u), for spawn facing and later checks. */
   footprint: { minX: number; minY: number; maxX: number; maxY: number };
   /** Each storey's plan raster after the flood (inside = 0), for checks and debugging. */
@@ -103,6 +105,7 @@ export function compileWalls(layout: Layout, fr: Frames, parts: { floor: Floor; 
   const solids: Solid[] = [];
   const zones: Zone[] = [];
   const openings: Opening[] = [];
+  const passages: WallsResult["passages"] = [];
   const grids = new Map<Floor, PlanGrid>();
   let minX = Infinity;
   let minY = Infinity;
@@ -425,6 +428,7 @@ export function compileWalls(layout: Layout, fr: Frames, parts: { floor: Floor; 
         for (const s of l.spans) {
           run(c, s.a0);
           c = s.a1;
+          passages.push({ id: s.def.id, floor: l.floor, axis: l.axis, at: l.at, t: l.t, a0: s.a0, a1: s.a1 });
         }
         run(c, l.s1);
         continue;
@@ -476,6 +480,7 @@ export function compileWalls(layout: Layout, fr: Frames, parts: { floor: Floor; 
           continue;
         }
         if (s.def.kind === "OPEN") {
+          passages.push({ id: s.def.id, floor: l.floor, axis: l.axis, at: l.at, t: l.t, a0: s.a0, a1: s.a1 });
           const head = s.def.headM === undefined ? d.open.headM : s.def.headM;
           if (head !== null && h - head >= 0.05) solids.push(box(l, `${s.def.id}.head`, s.a0, s.a1, head, h, 0, l.t, { surface: "HARD_WALL" }));
           continue;
@@ -516,5 +521,5 @@ export function compileWalls(layout: Layout, fr: Frames, parts: { floor: Floor; 
       solids.push({ id: `post:${[h.def.id, v.def.id].sort().join("|")}`, center: [x, floorY + hgt / 2, z], size: [2 * hx, hgt, 2 * hz], surface: "HARD_WALL" });
     }
   }
-  return { solids, zones, warnings, openings, footprint: { minX, minY, maxX, maxY }, grids };
+  return { solids, zones, warnings, openings, passages, footprint: { minX, minY, maxX, maxY }, grids };
 }

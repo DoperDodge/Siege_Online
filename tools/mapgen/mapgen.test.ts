@@ -932,6 +932,20 @@ describe("oregon walk graph (M3, DESIGN §9.2 check 10)", () => {
     }
   });
 
+  it("a prop shuts a gap it stands across, with a bullet class (its own collision group) or without", async () => {
+    for (const cls of [undefined, "wood"]) {
+      // The 1 m gap of the test before, a wardrobe across it.
+      const g = await flat(`gap_prop_${cls ?? "none"}`, [
+        { id: "north", center: [0, 1.5, -5.25], size: [0.2, 3, 9.5], surface: "HARD_WALL" },
+        { id: "south", center: [0, 1.5, 5.25], size: [0.2, 3, 9.5], surface: "HARD_WALL" },
+        { id: "wardrobe", center: [0.4, 1, 0], size: [0.6, 2, 1.4], surface: "PROP", ...(cls ? { prop: cls } : {}) },
+      ]);
+      const [a, b] = [nodeNear(g, -3, 0, 0), nodeNear(g, 3, 0, 0)];
+      expect(Math.min(a, b), cls ?? "no class").toBeGreaterThanOrEqual(0);
+      expect(g.comp[a] === g.comp[b], cls ?? "no class").toBe(false);
+    }
+  });
+
   it("a ramp a body climbs (25°) joins the floor to the deck it leads to; one steeper than maxSlopeDeg (60°) doesn't", async () => {
     for (const [deg, joined] of [
       [25, true],
@@ -1093,12 +1107,19 @@ describe("oregon sites, cameras and ingredients (M5, DESIGN §5.11)", () => {
       const bottom = b.center[1] - b.size[1] / 2;
       const st = storeys.find((x) => Math.abs(x.floorY - bottom) < 1e-6);
       const room = rooms.find((r) => r.storey === st?.id && holds(r, b.center[0], b.center[2], 0));
+      // Wholly in that room: every corner of its footprint, turned by its yaw, 5 cm in.
+      const yaw = (((b as { yawDeg?: number }).yawDeg ?? 0) * Math.PI) / 180;
+      const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([i, j]) => {
+        const [dx, dz] = [i * (b.size[0] / 2 - 0.05), j * (b.size[2] / 2 - 0.05)];
+        return [b.center[0] + dx * Math.cos(yaw) + dz * Math.sin(yaw), b.center[2] - dx * Math.sin(yaw) + dz * Math.cos(yaw)];
+      });
+      const whole = room !== undefined && corners.every(([x, z]) => holds(room, x, z, 0));
       const bunk = b.id.includes("BUNK");
-      expect([b.id, Object.hasOwn(classes, b.prop!), st?.id !== undefined, room !== undefined, !!b.vaultable]).toEqual([b.id, true, true, true, b.size[1] <= 1.1 && !bunk]);
+      expect([b.id, Object.hasOwn(classes, b.prop!), st?.id !== undefined, whole, !!b.vaultable]).toEqual([b.id, true, true, true, b.size[1] <= 1.1 && !bunk]);
     }
   });
 
-  it("refuses a prop in a doorway, on a hatch or on the stairs", () => {
+  it("refuses a prop in a doorway or an open passage, on a hatch, on the stairs, or into a wall", () => {
     const withProp = (id: string, change: Partial<(typeof inputs.exterior.props)[number]>) =>
       compile({ ...inputs, exterior: { ...inputs.exterior, props: inputs.exterior.props.map((p) => (p.id === id ? { ...p, ...change } : p)) } }).report.errors;
     // The Master's bed where the render first put it: its corner in front of the Master's south door.
@@ -1107,6 +1128,12 @@ describe("oregon sites, cameras and ingredients (M5, DESIGN §5.11)", () => {
     expect(withProp("PROP_KIDS_BED_W", { frame: "world", rect: [140, 182, 148, 189] })).toContain("exterior.json PROP_KIDS_BED_W: stands on the hatch H4");
     // The Kitchen island on the Tower Stairs' first flight up from 1F.
     expect(withProp("PROP_KITCHEN_ISLAND", { frame: "world", rect: [244, 66, 250, 74] })).toContain("exterior.json PROP_KITCHEN_ISLAND: stands on the stairs");
+    // The island, a metre square, in the middle of the open passage from the Security Corridor to the Lobby (1F.o017).
+    const passage = compileWalls(inputs.layout, fr, inputs.walls, inputs.exterior.playable).passages.find((p) => p.id === "1F.o017")!;
+    const [px, pz] = (passage.axis === "H" ? [(passage.a0 + passage.a1) / 2, passage.at] : [passage.at, (passage.a0 + passage.a1) / 2]).map((m) => m / k);
+    expect(withProp("PROP_KITCHEN_ISLAND", { frame: "world", rect: [px - 3.33, pz - 3.33, px + 3.33, pz + 3.33] })).toContain("exterior.json PROP_KITCHEN_ISLAND: stands in the doorway of 1F.o017");
+    // The Dorms' east bed where it was first traced, across the wall into the Game Room.
+    expect(withProp("PROP_DORMS_BED_E", { rect: [201, 225, 209, 239] })).toContain("exterior.json PROP_DORMS_BED_E: goes into 2F.w067#0");
   });
 
   it("a bullet goes through the Kitchen island (wood) at ×0.7 and stops at a chest freezer (metal)", async () => {
@@ -1133,6 +1160,34 @@ describe("oregon sites, cameras and ingredients (M5, DESIGN §5.11)", () => {
     });
     expect(moved.report.errors).toContain("camera CAM6: no wall of 1F_MEETING_HALL within 2 m of its marker reaches 2.70 m");
     expect(moved.report.errors.join("\n")).toMatch(/site SITE_DINING: bomb 2A at \([\d.]+, [\d.]+\) isn't in 1F_DINING/);
+  });
+
+  it("puts an outside marker on the building's outer face, looking or facing out; reports one inside the building, and an inside one in no room", () => {
+    // 1.4 m south of the 1F south wall at x 18 m (world u 120, 283.33): more than 1.5 m from every room.
+    const outside: [number, number] = [120, 283.333];
+    type Cam = (typeof inputs.layout.cameras)[number];
+    type Ing = (typeof inputs.layout.ingredients)[number];
+    const withMarkers = (cams: (c: Cam) => Cam, ings: (g: Ing) => Ing) =>
+      compile({ ...inputs, layout: { ...inputs.layout, cameras: inputs.layout.cameras.map(cams), ingredients: inputs.layout.ingredients.map(ings) } });
+    const near = withMarkers(
+      (c) => (c.id === "CAM1" ? { ...c, frame: "world", at: outside } : c),
+      (g) => (g.id === "ING8" ? { ...g, level: "EXT", room: undefined, frame: "world", at: outside } : g),
+    );
+    expect(near.report.errors).toEqual([]);
+    const cam = (near.level.cameras as { id: string; pos: Vec3; yawDeg: number; room?: string }[]).find((c) => c.id === "CAM1")!;
+    const pipe = (near.level.ingredients as { id: string; pos: Vec3; yawDeg: number; room?: string }[]).find((g) => g.id === "ING8")!;
+    for (const m of [cam, pipe]) {
+      // On the wall's outer face (z about 41.1 m), in no room, looking or facing south: out from the wall.
+      expect([m.room, Math.abs(m.pos[2] - 41.15) < 0.1, Math.abs(m.pos[0] - 18) < 0.01], m.id).toEqual([undefined, true, true]);
+      expect(-Math.cos((m.yawDeg * Math.PI) / 180), m.id).toBeGreaterThan(0.99);
+    }
+    expect((near.level.solids as { id: string }[]).some((b) => b.id === "CAM1.post")).toBe(false);
+    // An outside camera whose marker is in the Meeting Hall; an extinguisher on 1F whose marker is out there.
+    const bad = withMarkers(
+      (c) => (c.id === "CAM1" ? { ...c, frame: "world", at: [250, 160] } : c),
+      (g) => (g.id === "ING3" ? { ...g, room: undefined, frame: "world", at: outside } : g),
+    );
+    expect(bad.report.errors).toEqual(["camera CAM1: its marker at (37.50, 24.00) is inside the building, but its level is EXT", "fire_extinguisher ING3: its marker at (18.00, 42.50) is in no room on 1F"]);
   });
 });
 
@@ -1200,6 +1255,26 @@ describe("oregon zones and rappel faces (M5, DESIGN §5.11)", () => {
       const at = buildingAt([s.pos[0], s.pos[1] + 0.9, s.pos[2]]);
       if (s.side) expect(at.length, s.id).toBe(s.side === "attack" ? 0 : 1);
     }
+  });
+
+  it("each storey's building zone holds the walls round its rooms, whatever their thickness (the basement's are 1.25 m in places)", () => {
+    type Room = { storey: string; rects: [number, number, number, number][] };
+    const touches = (b: Box, r: Room) =>
+      r.rects.some(([x0, z0, x1, z1]) => b.center[0] - b.size[0] / 2 <= Math.max(x0, x1) + 0.05 && b.center[0] + b.size[0] / 2 >= Math.min(x0, x1) - 0.05 && b.center[2] - b.size[2] / 2 <= Math.max(z0, z1) + 0.05 && b.center[2] + b.size[2] / 2 >= Math.min(z0, z1) - 0.05);
+    let thick = 0;
+    for (const s of storeys) {
+      const walls = solids.filter(
+        (b) => !b.drawOnly && !b.bodiesOnly && (b.surface === "HARD_WALL" || b.surface === "REINFORCEABLE") && storeyOfBox(inputs.layout, b as never) === s.id && (level.rooms as Room[]).some((r) => r.storey === s.id && touches(b, r)),
+      );
+      expect(walls.length, s.id).toBeGreaterThan(0);
+      for (const b of walls) {
+        if (Math.min(b.size[0], b.size[2]) > 0.6) thick++;
+        // Its middle and its corners, 2 cm in, a metre over the floor.
+        const [hx, hz] = [b.size[0] / 2 - 0.02, b.size[2] / 2 - 0.02];
+        for (const [i, j] of [[0, 0], [-1, -1], [1, -1], [1, 1], [-1, 1]]) expect(buildingAt([b.center[0] + i * hx, s.floorY + 1, b.center[2] + j * hz]), `${b.id} (${i}, ${j})`).toEqual([`building:${s.id}`]);
+      }
+    }
+    expect(thick).toBeGreaterThan(0);
   });
 
   it("puts map_features §10's spawn peeks inside their doors and windows and its run-outs outside, looking out toward their spawn", () => {
