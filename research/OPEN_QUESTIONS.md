@@ -363,7 +363,8 @@ you find is logged.
       Attic, the Balcony, the Garage strip, the Kids roof (the corrugated one: no ridge in the render) and the
       corners the cross roof leaves (north of it by the Armory Corridor, south of it over White Stairs, Walk In and
       the Armory Stairs). The rest slope: the Tower, the Tower's two west parts, the brown cross roof (built as two
-      crossing gables, not hips), the Attic and the Small Tower.
+      crossing gables, not hips), the Attic, the Small Tower, and the Meeting roof west of the Attic (a 10° gable
+      over the Meeting Hall). The walk's checklist lists every roof with its shape (research/oregon/walkthrough.md).
     - (b) Inside, do the 2F rooms have flat ceilings under the pitched roofs (we built them flat at 6.0 m), and is
       the Attic's ceiling sloped?
     - (c) The Meeting Hall and Kitchen Corridor look up into the Meeting roof (DESIGN amendment 5), whose eave is
@@ -378,7 +379,8 @@ you find is logged.
       Is that where they are?
     - (c) The construction house: we built a 3 m shell with open gaps. Does it have an upper floor you can
       climb to, and how tall is it?
-    - (d) Which fences and low walls can you vault? We made every one 1.0 m and vaultable.
+    - (d) Which fences and low walls can you vault? We made every one vaultable: most 1.0 m, the garden's two
+      low walls 0.8 m, and the low walls round the plot north of the construction house 0.6 m.
 
 26. **Bomb sites (P30, D-103):** each bomb stands where r6calls draws its icon, A and B as r6calls letters
     them: 1A Dorms Main Hall and 1B Kids' Dorms, 2A Dining Hall and 2B Kitchen, 3A Meeting Hall and 3B Kitchen,
@@ -408,11 +410,14 @@ you find is logged.
 
 32. **Found by M6's checks:**
     - (a) Measured against Ubisoft's blueprint (`python3 -I tools/mapgen/extract/bpcheck.py`), 93% of the
-      basement's hard walls by length agree within 1.5 u (0.23 m), and 99–100% on 1F, 2F and the Cat Walk. The
-      blueprint doesn't draw three basement walls where we built them, all low-confidence readings of the
-      r6calls image: the Boiler's pillar (B.w045, 1.25 m thick, in the Pillar room), a thick wall at the Blue
-      room's east end (B.w003, 0.34 m off) and a short one past it (B.w062). The Bunker passage's walls run on
-      by hand past both images' edges (D-099), and 2F.w038 sits on 1F.w040's line by your stairs walk (D-096).
+      basement's hard walls by length agree within 1.5 u (0.23 m), 99.6% on 1F, 99% on 2F and all of the Cat
+      Walk. Three basement walls read off the r6calls image aren't where the blueprint draws them: the Boiler's
+      pillar (B.w045, 1.25 m thick, in the Pillar room; a low-confidence reading the blueprint doesn't draw at
+      all), a thick wall at the Blue room's east end (B.w003, a medium-confidence reading, 0.34 m off), and a
+      short wall at the far east end of the Bunker passage, about 4 m past the Blue room (B.w062, low
+      confidence; the blueprint draws under half of it). On 1F two short stretches sit 0.24 m off (1F.w014's west
+      end, and 0.5 m of the south outside wall, 1F.w030). The Bunker passage's walls run on by hand past both
+      images' edges (D-099), and 2F.w038 sits on 1F.w040's line by your stairs walk (D-096).
     - (b) Every wall not in surfaces.md §2 is hard (P18), the Kitchen's north-east partition and the 2F annex
       partition included (surfaces.md question 1).
 

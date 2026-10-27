@@ -1048,12 +1048,16 @@ the fix, the commit). Sign-off is recorded there and in PROGRESS.
 - **Done when**: `npm run check` passes; Ulo has walked the greybox once and the mismatch list is logged.
 - **Tests**: everything above; Room.step p99 ≤ 4 ms on Oregon with 10 walking and firing clients; netsim with no
   desyncs and no panel differences; e2e.
-- **As built (D-108–D-110):** the structural checks gained the drone holes against layout_notes §5.4, the coplanar
-  face lint and the level.json budget in `checks.ts`/`compile.ts`, and Oregon determinism; `report.ts` writes
+- **As built (D-108–D-111):** the structural checks gained the drone holes against layout_notes §5.4, the coplanar
+  face lint (boxes and the stairs' steps; a panel never hides a face; the pitched ramps aren't checked) and the
+  level.json budget in `checks.ts`/`compile.ts`, and Oregon determinism; `report.ts` writes
   `builds/mapgen/report.md` (counts, budgets, the UNVERIFIED list by file and record, drift); `bpcheck.py` run on
   its own checks the wall files against the blueprints; the plans carry the research's room boxes for the
   overlay page; `npm run bench:oregon`, `netsim --level oregon` and `tools/e2e/oregon-perf.mjs` (in test:e2e)
-  measure the real level; `research/oregon/walkthrough.md` holds the walk's checklist and the mismatch log.
+  measure the real level; `research/oregon/walkthrough.md` holds the walk's checklist and the mismatch log. The
+  checklist is generated from the compiled level (`checklist.ts`: `compile` exposes where each span and split was
+  built and each storey's room plan): `npm run mapgen` writes it between markers, `--check` and a test fail when
+  it is stale, and a test holds that everything built is in it.
 
 ### M7: iterate to sign-off (the Phase 5 done-when)
 - **Deliverables**: Ulo's answers and mismatch fixes through the layout files; research notes corrected

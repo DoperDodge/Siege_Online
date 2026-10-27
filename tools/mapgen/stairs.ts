@@ -83,7 +83,7 @@ const r4 = (v: number) => Math.round(v * 1e4) / 1e4;
 const snap = (v: number) => Math.round(v / CELL_M) * CELL_M;
 
 /** Steps and the boxes they stand in, as the builder makes them (open: two risers deep). */
-export function stepBoxes(f: Flight): { rect: Rect; y0: number; y1: number }[] {
+export function stepBoxes(f: Pick<Flight, "start" | "yawDeg" | "steps" | "rise" | "run" | "width">): { rect: Rect; y0: number; y1: number }[] {
   const [fx, fz] = [-Math.sin((f.yawDeg * Math.PI) / 180), -Math.cos((f.yawDeg * Math.PI) / 180)];
   const [rx, rz] = [-fz, fx];
   return Array.from({ length: f.steps }, (_, i) => {
@@ -92,6 +92,17 @@ export function stepBoxes(f: Flight): { rect: Rect; y0: number; y1: number }[] {
     const xs = [f.start[0] + fx * a0 + rx * (f.width / 2), f.start[0] + fx * a1 - rx * (f.width / 2)];
     const zs = [f.start[2] + fz * a0 + rz * (f.width / 2), f.start[2] + fz * a1 - rz * (f.width / 2)];
     return { rect: [Math.min(...xs), Math.min(...zs), Math.max(...xs), Math.max(...zs)] as Rect, y0: Math.max(f.start[1], top - 2 * f.rise), y1: top };
+  });
+}
+
+/**
+ * A flight's steps as the level builder makes them (game/shared level/builder.ts): a solid flight's reach down
+ * to its start, an open flight's are two risers deep. For the shared-face check (checks.ts).
+ */
+export function flightBoxes(f: Omit<Flight, "solid"> & { solid: boolean }) {
+  return stepBoxes(f).map((s, i) => {
+    const y0 = f.solid === false ? s.y0 : f.start[1];
+    return { id: `${f.id}.step${i}`, center: [(s.rect[0] + s.rect[2]) / 2, (y0 + s.y1) / 2, (s.rect[1] + s.rect[3]) / 2] as [number, number, number], size: [s.rect[2] - s.rect[0], s.y1 - y0, s.rect[3] - s.rect[1]] as [number, number, number], surface: f.surface };
   });
 }
 

@@ -18,15 +18,17 @@ import { connections, droneHoleTable, hatchTable, markerTables, roomTable, siteT
 import { CELL_M, clearCells, compileRooms, storeyOfBox } from "./rooms.js";
 import { FLOOR_IDS, wallSchema, type SpanDef, type WallDef } from "./schema.js";
 import type { Floor } from "./research.js";
-import { compileStairs, type CompiledRun } from "./stairs.js";
+import { compileStairs, flightBoxes, type CompiledRun } from "./stairs.js";
 import { compileWalls } from "./walls.js";
 import { mapReport, reportMarkdown, wallDrift } from "./report.js";
+import { idList, walkChecklist, withChecklist } from "./checklist.js";
 import { buildWalkGraph, nodeNear, nodesIn, type WalkGraph } from "./walkgraph.js";
 
 const ROOT = join(import.meta.dirname, "..", "..");
 const MAP = join(ROOT, "data", "maps", "oregon");
 const inputs = loadInputs(ROOT);
-const { level, report } = compile(inputs);
+const compiled = compile(inputs);
+const { level, report } = compiled;
 const extracted = JSON.parse(readFileSync(join(MAP, "extracted.json"), "utf8")) as Extracted;
 type Box = { id: string; center: number[]; size: number[]; surface: string; bodiesOnly?: boolean; drawOnly?: boolean; panel?: { sections?: number; empty?: boolean; construction?: string; region?: string } };
 const solids = level.solids as Box[];
@@ -71,6 +73,13 @@ describe("oregon level.json", () => {
     const wreck = { id: "wreck", center: [0.2, 0.3, 0], size: [1, 0.6, 1], surface: "PROP" };
     expect(coplanarFaces([ground, fence, wreck] as never)).toEqual([]);
     expect(coplanarFaces([fence, wreck] as never)).toHaveLength(1);
+    // A panel isn't cover: a hole in it would show the face.
+    expect(coplanarFaces([{ ...ground, surface: "SOFT_FLOOR" }, fence, wreck] as never)).toHaveLength(1);
+    // The stairs' steps are checked too: a step's top flush with a slab of another surface is caught.
+    const flight = { id: "F", start: [0, 0, 0] as Vec3, yawDeg: 0, steps: 2, rise: 0.2, run: 0.3, width: 1, surface: "HARD_FLOOR" as const, solid: false };
+    const ledge = { id: "ledge", center: [0, 0.05, -0.15], size: [2, 0.3, 0.4], surface: "HARD_WALL" };
+    expect(checkLevel([ledge] as never, flightBoxes(flight)).errors).toEqual(["ledge (HARD_WALL) and F.step0 (HARD_FLOOR) share a face looking +y at 0.200 m"]);
+    expect(checkLevel(level.solids as never, (level.stairs as Parameters<typeof flightBoxes>[0][]).flatMap(flightBoxes)).errors).toEqual([]);
     // What the client downloads first (DESIGN §8).
     expect(Buffer.byteLength(readableJson(level))).toBeLessThanOrEqual(BUDGET.levelBytes);
   });
@@ -173,20 +182,72 @@ describe("oregon level.json", () => {
   });
 
   it("the report lists the budgets, every UNVERIFIED value by file and record, and the drift", () => {
-    const r = mapReport(ROOT, inputs, { level, report }, extracted);
+    const r = mapReport(ROOT, inputs, compiled, extracted);
     for (const b of r.budgets) expect(b.value, b.name).toBeLessThanOrEqual(b.limit);
-    expect(r.budgets.map((b) => b.name)).toEqual(["static colliders", "panels", "panel cells per layer", "cells per layer of the largest panel", "level.json bytes"]);
+    expect(r.budgets.map((b) => b.name)).toEqual(["solids", "panels", "panel cells per layer", "cells per layer of the largest panel", "level.json bytes"]);
     const find = (file: string, record: string) => r.unverified.find((u) => u.file === file && u.record === record)?.fields;
     expect(find("layout.json", "(file)")).toContain("units.mPerU");
-    expect(find("layout.json", "PEEK_C_TOWER")).toEqual(["openings", "faces"]);
-    expect(find("walls_1F.json", "SW-1F-03")).toBeDefined();
+    expect(find("layout.json", "zones PEEK_C_TOWER")).toEqual(["openings", "faces"]);
+    expect(find("walls_1F.json", "spans SW-1F-03")).toBeDefined();
+    // A site and its first defender spawn share an id; their records don't.
+    expect(find("layout.json", "sites SITE_DORMS")).toBeDefined();
+    expect(find("layout.json", "spawns SITE_DORMS")).toBeDefined();
+    expect(new Set(r.unverified.map((u) => `${u.file} ${u.record}`)).size).toBe(r.unverified.length);
     expect(new Set(r.unverified.map((u) => u.file))).toEqual(new Set(["layout.json", ...inputs.layout.parts]));
     // A record with nothing left to verify isn't listed.
     expect(r.unverified.every((u) => u.fields.length > 0)).toBe(true);
     expect(r.curated.length).toBeGreaterThan(0);
-    const md = reportMarkdown({ level, report }, r, { B: "alt" });
+    const md = reportMarkdown(compiled, r, { B: "alt" });
     for (const heading of ["## Counts", "## Budgets", "## Frames with an alternative", "## UNVERIFIED", "## Drift from the extraction"]) expect(md).toContain(heading);
     expect(md).toMatch(/\*\*B alt\*\* \(in use\)/);
+  });
+
+  it("the walk's checklist lists everything built, where it was built, and walkthrough.md has it fresh (DESIGN §9.4)", () => {
+    const list = walkChecklist(inputs, compiled);
+    const refs = new Set(list.items.map((i) => i.ref));
+    const want = [
+      ...compiled.walk.spans.map((s) => `span:${s.id}`),
+      ...compiled.walk.splits.map((_, n) => `split:${n}`),
+      ...new Set((level.stairs as { id: string }[]).map((f) => `stairs:${f.id.split("#")[0]}`)),
+      ...(level.ladders as { id: string }[]).map((l) => `ladder:${l.id}`),
+      ...solids.filter((s) => s.surface === "HATCH").map((s) => `hatch:${s.id}`),
+      ...new Set(solids.filter((s) => s.surface === "SOFT_FLOOR").map((s) => `softfloor:${s.panel?.region}`)),
+      ...(level.sites as { bombs: { id: string }[] }[]).flatMap((s) => s.bombs.map((b) => `bomb:${b.id}`)),
+      ...(level.spawns as { id: string; side?: string }[]).filter((s) => s.side).map((s) => `spawn:${s.id}`),
+      ...(level.cameras as { id: string }[]).map((c) => `camera:${c.id}`),
+      ...(level.ingredients as { id: string }[]).map((g) => `ingredient:${g.id}`),
+      ...inputs.exterior.props.map((p) => `prop:${p.id}`),
+      ...inputs.layout.roofs.map((r) => `roof:${r.id}`),
+      ...inputs.exterior.items.map((i) => `item:${i.id}`),
+    ];
+    expect(want.filter((r) => !refs.has(r))).toEqual([]);
+    // A span with a room on either side is in that room's line; every room has a way in.
+    for (const s of compiled.walk.spans) expect(list.items.some((i) => i.ref === `span:${s.id}` && (i.room !== null || i.text !== "")), s.id).toBe(true);
+    const line = (id: string) => list.lines.find((l) => l.includes(`(\`${id}\`)`)) ?? "";
+    for (const r of level.rooms as { id: string }[]) {
+      expect(list.items.some((i) => i.room === r.id && /^(door |open |gap in the rail|stairs |ladder )/.test(i.text)), `${r.id} has no way in`).toBe(true);
+    }
+    // What the M6 review found missing or misplaced in the hand-made list.
+    expect(line("B_FREEZER")).toContain("open north, to Freezer Hall, no wall between");
+    expect(line("B_FREEZER")).toContain("open south, to Freezer Stairs, no wall between");
+    expect(line("1F_TOWER_STAIRS")).toContain("open south, to Tower, no wall between");
+    expect(line("B_SUPPLY")).toContain("door west to Closet (B.o008)");
+    expect(line("1F_KITCHEN")).toContain("drone hole south, to Security Corridor (1F.dt4)");
+    expect(line("1F_SECURITY_CORRIDOR")).toContain("drone hole north, to Kitchen (1F.dt4)");
+    expect(line("1F_LOBBY")).not.toContain("1F.dt4");
+    expect(line("3F_CATWALK")).toContain("window west to the outside (3F.o003");
+    expect(list.lines.join("\n")).toContain("drone hole **1F.dt3** on 1F, into an enclosed space that is no room (beside White Stairs)");
+    const outside = list.lines.slice(list.lines.indexOf("#### Outside and roofs")).join("\n");
+    expect(outside).toMatch(/\*\*CAM1\*\*.*\*\*CAM2\*\*.*\*\*CAM3\*\*/);
+    expect(outside).toContain("Meeting Roof (`RF_MEETING_W`, gable 10°)");
+    expect(outside).toContain("0.8 m: EXT_GARDEN_S, EXT_GARDEN_W; 0.6 m: EXT_BED_NE#0–3");
+    expect(idList(["EXT_FENCE_N4", "EXT_A", "EXT_FENCE_N1", "EXT_FENCE_N2"])).toBe("EXT_A, EXT_FENCE_N1–2, EXT_FENCE_N4");
+    // walkthrough.md carries this list (npm run mapgen), and a ticked line stays ticked through a rewrite.
+    const doc = readFileSync(join(ROOT, "research", "oregon", "walkthrough.md"), "utf8");
+    expect(withChecklist(doc, list.lines) === doc, "the checklist in research/oregon/walkthrough.md is stale: run npm run mapgen").toBe(true);
+    const ticked = doc.replace("- [ ] **Freezer** (`B_FREEZER`)", "- [x] **Freezer** (`B_FREEZER`)");
+    expect(ticked).not.toBe(doc);
+    expect(withChecklist(ticked, list.lines)).toBe(ticked);
   });
 
   it("every extracted wall and opening is used by a wall file, or dropped there with a reason", () => {

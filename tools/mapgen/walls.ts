@@ -73,6 +73,20 @@ interface Line {
   spans: { def: SpanDef; a0: number; a1: number }[];
 }
 
+/**
+ * A span as built (the walk's checklist reads them): where it is in its line, its kind, and whether it is a gap in
+ * a rail or an opening built as wall (`hard`, P36). A soft wall stands on its own grid line, within its line's band.
+ */
+export interface WallSpan extends Pick<Opening, "id" | "floor" | "axis" | "at" | "t" | "a0" | "a1"> {
+  kind: SpanDef["kind"];
+  hard?: boolean;
+  rail?: boolean;
+  /** A soft wall's reinforcements. */
+  sections?: number;
+  /** The span's fields still placeholders (its `_unverified`). */
+  unverified: string[];
+}
+
 export interface WallsResult {
   solids: Solid[];
   zones: Zone[];
@@ -81,6 +95,8 @@ export interface WallsResult {
   openings: Opening[];
   /** Every open passage (an OPEN span, a gap in a rail): where it is in its line. */
   passages: Pick<Opening, "id" | "floor" | "axis" | "at" | "t" | "a0" | "a1">[];
+  /** Every span built, and every one built as wall. */
+  spans: WallSpan[];
   /** The storey footprint (world u), for spawn facing and later checks. */
   footprint: { minX: number; minY: number; maxX: number; maxY: number };
   /** Each storey's plan raster after the flood (inside = 0), for checks and debugging. */
@@ -97,6 +113,8 @@ const snapTo = (x: number, step: number) => {
   return Math.round(r * 1e6) / 1e6;
 };
 
+const builtSpan = (l: Line, def: SpanDef, a0: number, a1: number): WallSpan => ({ id: def.id, floor: l.floor, axis: l.axis, at: l.at, t: l.t, a0, a1, kind: def.kind, unverified: def._unverified ?? [] });
+
 export function compileWalls(layout: Layout, fr: Frames, parts: { floor: Floor; frame: keyof Layout["frames"]; walls: WallDef[] }[], playable: [number, number, number, number]): WallsResult {
   const k = layout.units.mPerU;
   const snap = (x: number) => snapTo(x, layout.units.snapM);
@@ -106,6 +124,7 @@ export function compileWalls(layout: Layout, fr: Frames, parts: { floor: Floor; 
   const zones: Zone[] = [];
   const openings: Opening[] = [];
   const passages: WallsResult["passages"] = [];
+  const built: WallSpan[] = [];
   const grids = new Map<Floor, PlanGrid>();
   let minX = Infinity;
   let minY = Infinity;
@@ -130,9 +149,10 @@ export function compileWalls(layout: Layout, fr: Frames, parts: { floor: Floor; 
       const drawnHalf = typeof w.weight === "number" ? w.weight / 2 : DRAWN_HALF_U[w.weight] * k;
       // Snap a face, not the centre, so an odd thickness (a 1.05 m pillar) still has both faces on the grid.
       const at = Math.round((snap((w.axis === "H" ? ay : ax) * k - t / 2) + t / 2) * 1e6) / 1e6;
-      const spans = w.spans
-        .filter((s) => !s.hard) // built as wall (an opening only one source draws)
-        .map((s) => ({ def: s, a0: along(s.at[0]), a1: along(s.at[1]) }))
+      const all = w.spans.map((s) => ({ def: s, a0: along(s.at[0]), a1: along(s.at[1]) }));
+      for (const s of all.filter((x) => x.def.hard)) built.push({ id: s.def.id, floor: part.floor, axis: w.axis, at, t, a0: s.a0, a1: s.a1, kind: s.def.kind, hard: true, unverified: s.def._unverified ?? [] });
+      const spans = all
+        .filter((s) => !s.def.hard) // built as wall (an opening only one source draws)
         .sort((p, q) => p.a0 - q.a0);
       for (let i = 1; i < spans.length; i++) {
         if (spans[i].a0 < spans[i - 1].a1 - 1e-9) throw new Error(`walls_${part.floor}.json ${w.id}: spans ${spans[i - 1].def.id} and ${spans[i].def.id} overlap`);
@@ -429,6 +449,7 @@ export function compileWalls(layout: Layout, fr: Frames, parts: { floor: Floor; 
           run(c, s.a0);
           c = s.a1;
           passages.push({ id: s.def.id, floor: l.floor, axis: l.axis, at: l.at, t: l.t, a0: s.a0, a1: s.a1 });
+          built.push({ ...builtSpan(l, s.def, s.a0, s.a1), rail: true });
         }
         run(c, l.s1);
         continue;
@@ -457,6 +478,7 @@ export function compileWalls(layout: Layout, fr: Frames, parts: { floor: Floor; 
           pieces.push(box(l, "", h0, h1, d.droneHole.hM, top(h0, h1), 0, l.t, { surface: "HARD_WALL" }));
           const slot = box(l, s.def.id, h0, h1, 0, d.droneHole.hM, 0, l.t, { surface: "HARD_WALL" });
           zones.push({ id: s.def.id, kind: "drone_hole", boxes: [{ center: slot.center, size: slot.size }] });
+          built.push(builtSpan(l, s.def, h0, h1));
           c = h1;
         }
         solidRun(c, a1);
@@ -475,6 +497,7 @@ export function compileWalls(layout: Layout, fr: Frames, parts: { floor: Floor; 
         const [neg, pos] = sides(l, (s.a0 + s.a1) / 2);
         const isExterior = neg !== pos;
         const out = pos && !neg ? 1 : -1; // toward the outside (−perp when both or neither are)
+        built.push({ ...builtSpan(l, s.def, s.a0, s.a1), ...(s.def.kind === "SOFT" ? { at: panelAt(l), t: d.wallM.int, sections: s.def.sections } : {}) });
         if (s.def.kind === "SOFT") {
           solids.push(box(l, s.def.id, s.a0, s.a1, 0, h, panelAt(l) - l.at, d.wallM.int, { surface: "REINFORCEABLE", label: s.def.id, panel: { sections: s.def.sections, ...(s.def.construction ? { construction: s.def.construction } : {}) } }));
           continue;
@@ -521,5 +544,5 @@ export function compileWalls(layout: Layout, fr: Frames, parts: { floor: Floor; 
       solids.push({ id: `post:${[h.def.id, v.def.id].sort().join("|")}`, center: [x, floorY + hgt / 2, z], size: [2 * hx, hgt, 2 * hz], surface: "HARD_WALL" });
     }
   }
-  return { solids, zones, warnings, openings, passages, footprint: { minX, minY, maxX, maxY }, grids };
+  return { solids, zones, warnings, openings, passages, spans: built, footprint: { minX, minY, maxX, maxY }, grids };
 }

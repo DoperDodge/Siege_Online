@@ -23,18 +23,21 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
 
 ### What's done (M6)
 - **Your walk's checklist:** `research/oregon/walkthrough.md` has the route, the ten questions to settle on the
-  walk, and every room's list as we built it (soft walls with their reinforcements, doors and windows, stairs,
-  hatches, drone holes, soft floors, bombs, cameras, extinguishers, gas pipes and furniture), with the outside and
-  the roofs. Each mismatch you find goes into its table.
+  walk, and every room's list as we built it, read off the built level so each thing is in the rooms it really
+  joins: soft walls with their reinforcements, doors, windows and open passages with the side they are on and
+  where they lead, stairs, the ladder, hatches, drone holes, soft floors and ceilings, bombs, defender spawns,
+  cameras, extinguishers, gas pipes and furniture. Outside: the spawns, the outside cameras and stairs, every roof
+  with its shape, the ways onto the roofs, and the fences by height. `npm run mapgen` keeps it up to date (a ticked
+  line stays ticked). Each mismatch you find goes into its table.
 - **Every check of the design (DESIGN §9.2):** new: every drone hole of the research is built or left out with a
   reason (the tunnel along the basement Supply Room's south-east strip is left out: where it comes out is open);
   two faces of different colours never lie in one plane (they would flicker); level.json stays under 500 KB (it's
   150 KB); two copies of Oregon given the same damage end identical.
 - **The generator's report:** `npm run mapgen` writes `builds/mapgen/report.md`: what it built, against the budgets
-  the engine was sized for (977 of 2,500 colliders, 179 of 300 panels), every value still a placeholder (553 in
+  the engine was sized for (977 of 2,500 solids, 179 of 300 panels), every value still a placeholder (553 in
   297 records), and how far the wall files sit from the floor-plan extraction (at most 0.26 u).
 - **Against Ubisoft's blueprint:** `python3 -I tools/mapgen/extract/bpcheck.py` measures our walls on the
-  official blueprints: 93% of the basement's hard walls by length agree within 0.23 m, 100% of 1F's, 99% of
+  official blueprints: 93% of the basement's hard walls by length agree within 0.23 m, 99.6% of 1F's, 99% of
   2F's, 100% of the Cat Walk's, and no door or window stands where the blueprint draws solid wall (question 32
   has the few that don't agree). The overlay page can show the research's room boxes too.
 - **Performance on Oregon (D-108, D-109):**
@@ -297,7 +300,9 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
 14. The plans: open `research/oregon/compare/B.svg`, `1F.svg`, `2F.svg` and `3F.svg`. To see them over the
    official blueprint: `npm run mapgen:refs` (downloads the blueprint and r6calls' map into a gitignored
    folder), then `npm run mapgen:compare`, and open `builds/mapgen/compare/index.html`.
-15. Your walk: follow `research/oregon/walkthrough.md` (the route, the questions, a checklist per room).
+15. Your walk: follow `research/oregon/walkthrough.md` (the route, the questions, a checklist per room and
+   outside). `npm run mapgen` rewrites the checklist from the built level; `npm run mapgen -- --check` fails if it
+   is out of date.
 16. The generator's report: `npm run mapgen`, then open `builds/mapgen/report.md` (counts, budgets, every
    placeholder, the drift from the extraction).
 17. The blueprint check: `npm run mapgen:refs` once (downloads into a gitignored folder), then
@@ -307,7 +312,7 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
    the fight across the Kitchen's soft wall), `npm run bench:oregon` (loading, damage, redraw; writes
    `builds/bench/oregon.json`), and after `npm run build`, `node tools/e2e/oregon-perf.mjs` (the browser capture;
    writes `builds/e2e/oregon-perf.json`).
-19. Checks: `npm run check` runs them all: `npm run typecheck`, `npm test` (__TESTS__ tests), `npm run build && npm run
+19. Checks: `npm run check` runs them all: `npm run typecheck`, `npm test` (510 tests), `npm run build && npm run
    test:e2e` (`oregon.mjs` shoots through a soft floor, drops through a hatch, walks the Armory Stairs, takes the
    ladder both ways, stands at each attacker spawn, drops onto the Dining roof from the free camera, goes to each
    bomb site and switches the zones view; `oregon-perf.mjs` flies through every room and sets off 44

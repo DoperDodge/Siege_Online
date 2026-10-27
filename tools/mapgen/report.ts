@@ -19,7 +19,7 @@ export interface Budget {
 /** A record of an authoring file and the fields of it that are still placeholders. */
 export interface Unverified {
   file: string;
-  /** The record's id (or its path in the file when it has none); "(file)" for the file's own list. */
+  /** The record's collection and id ("spawns SITE_DORMS"), its path in the file when it has no id, "(file)" for the file's own list. */
   record: string;
   fields: string[];
 }
@@ -46,7 +46,8 @@ export function budgets(compiled: Compiled): Budget[] {
   const solids = compiled.level.solids as Parameters<typeof panelCells>[0][];
   const panels = solids.filter((s) => PANEL_SURFACES.has(s.surface) && !(s as { bodiesOnly?: boolean }).bodiesOnly);
   return [
-    { name: "static colliders", value: compiled.report.colliders, limit: BUDGET.colliders },
+    // Every box in level.json (walls, panels, props, draw-only bars): the static colliders' budget, steps and ramps aside.
+    { name: "solids", value: compiled.report.colliders, limit: BUDGET.colliders },
     { name: "panels", value: compiled.report.panels, limit: BUDGET.panels },
     { name: "panel cells per layer", value: compiled.report.cellsPerLayer, limit: BUDGET.cellsPerLayer },
     { name: "cells per layer of the largest panel", value: Math.max(0, ...panels.map(panelCells)), limit: BUDGET.panelCells },
@@ -64,7 +65,9 @@ export function unverifiedList(root: string, inputs: Inputs, mapId = "oregon"): 
       if (v === null || typeof v !== "object") return;
       const o = v as Record<string, unknown>;
       const fields = o._unverified;
-      if (Array.isArray(fields) && fields.length) out.push({ file, record: top ? "(file)" : typeof o.id === "string" ? o.id : path, fields: fields.map(String) });
+      // A site and its first defender spawn share an id: the collection (the array it is in) tells them apart.
+      const collection = path.replace(/\[\d+\]$/, "").split(".").pop();
+      if (Array.isArray(fields) && fields.length) out.push({ file, record: top ? "(file)" : typeof o.id === "string" ? `${collection} ${o.id}` : path, fields: fields.map(String) });
       for (const [k, x] of Object.entries(o)) if (k !== "_unverified") walk(x, path ? `${path}.${k}` : k, false);
     };
     walk(raw, "", true);

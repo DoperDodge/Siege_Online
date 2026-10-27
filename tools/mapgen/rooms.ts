@@ -37,9 +37,19 @@ export interface CompiledRoom {
   anchor: [number, number, number];
 }
 
+/** A split as built: its line (z for H, x for V) and its ends along it, metres. */
+export interface PlacedSplit {
+  floor: Floor;
+  axis: "H" | "V";
+  at: number;
+  a0: number;
+  a1: number;
+}
+
 export interface RoomsResult {
   rooms: CompiledRoom[];
   plans: Map<Floor, StoreyPlan>;
+  splits: PlacedSplit[];
   errors: string[];
   warnings: string[];
 }
@@ -72,6 +82,7 @@ export function compileRooms(layout: Layout, fr: Frames, wallSolids: Solid[], ke
   const warnings: string[] = [];
   const plans = new Map<Floor, StoreyPlan>();
   const rooms: CompiledRoom[] = [];
+  const splits: PlacedSplit[] = [];
   const emitted = new Set<Floor>(layout.emit);
   const byStorey = new Map<Floor, Solid[]>();
   for (const b of wallSolids) {
@@ -108,6 +119,7 @@ export function compileRooms(layout: Layout, fr: Frames, wallSolids: Solid[], ke
       // Two cells wide, centred on the line: a 4-connected flood can't cross it.
       if (sp.axis === "H") marks.fillCentres(ax * k, ay * k - CELL_M, bx * k, ay * k + CELL_M);
       else marks.fillCentres(ax * k - CELL_M, ay * k, ax * k + CELL_M, by * k);
+      splits.push(sp.axis === "H" ? { floor, axis: "H", at: ay * k, a0: ax * k, a1: bx * k } : { floor, axis: "V", at: ax * k, a0: ay * k, a1: by * k });
     }
     for (let i = 0; i < split.length; i++) split[i] = marks.cells[i] === 1 && grid.cells[i] === 0 ? 1 : 0;
     const flood = new PlanGrid(x0, z0, x1, z1, CELL_M);
@@ -164,7 +176,7 @@ export function compileRooms(layout: Layout, fr: Frames, wallSolids: Solid[], ke
     }
     plans.set(floor, { floor, grid, split, room });
   }
-  return { rooms, plans, errors, warnings };
+  return { rooms, plans, splits, errors, warnings };
 }
 
 /** A room's rectangles (slivers left out) and its anchor, worked out inside its bounding box. */

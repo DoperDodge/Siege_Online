@@ -7,6 +7,7 @@
 // Run from the repo root (npm does). Bundled by esbuild like netsim; no extra runner.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { walkChecklist, withChecklist } from "./checklist.js";
 import { compile, loadInputs } from "./compile.js";
 import { frames, type FrameId } from "./frames.js";
 import { readableJson } from "./format.js";
@@ -48,14 +49,19 @@ function runImport() {
 
 function runCompile() {
   const inputs = loadInputs(ROOT);
-  const { level, report } = compile(inputs);
+  const compiled = compile(inputs);
+  const { level, report } = compiled;
   const text = readableJson(level);
   const file = join(MAP, "level.json");
   const extracted = JSON.parse(readFileSync(join(MAP, "extracted.json"), "utf8")) as Extracted;
-  const more = mapReport(ROOT, inputs, { level, report }, extracted);
+  const more = mapReport(ROOT, inputs, compiled, extracted);
   const inUse = Object.fromEntries(Object.entries(inputs.layout.frames).map(([f, v]) => [f, v.use]));
   write(join(ROOT, "builds", "mapgen", "report.json"), JSON.stringify({ ...report, ...more }, null, 1) + "\n");
-  write(join(ROOT, "builds", "mapgen", "report.md"), reportMarkdown({ level, report }, more, inUse));
+  write(join(ROOT, "builds", "mapgen", "report.md"), reportMarkdown(compiled, more, inUse));
+  // The walk's checklist, in research/oregon/walkthrough.md between its markers.
+  const walkFile = join(ROOT, "research", "oregon", "walkthrough.md");
+  const walkOld = readFileSync(walkFile, "utf8");
+  const walkNew = withChecklist(walkOld, walkChecklist(inputs, compiled).lines);
   const c = report.counts;
   console.log(
     `oregon: ${c.solids} solids (${report.panels} panels, ${report.cellsPerLayer} cells per layer), ` +
@@ -77,14 +83,16 @@ function runCompile() {
       const svg = join(ROOT, "research", "oregon", "compare", `${floor}.svg`);
       return !existsSync(svg) || readFileSync(svg, "utf8") !== planSvg(ROOT, level, floor);
     });
-    if (old !== text || plans.length) {
-      console.error(`${old !== text ? "data/maps/oregon/level.json" : `the plans of ${plans.join(", ")}`} ${old !== text && plans.length ? "and the plans are" : "is"} stale: run npm run mapgen and commit them`);
+    const stale = [...(old !== text ? ["data/maps/oregon/level.json"] : []), ...(plans.length ? [`the plans of ${plans.join(", ")}`] : []), ...(walkOld !== walkNew ? ["the checklist in research/oregon/walkthrough.md"] : [])];
+    if (stale.length) {
+      console.error(`stale: ${stale.join(", ")}: run npm run mapgen and commit them`);
       process.exit(1);
     }
-    console.log("level.json and the plans are up to date");
+    console.log("level.json, the plans and the walk's checklist are up to date");
     return;
   }
   write(file, text);
+  if (walkNew !== walkOld) write(walkFile, walkNew);
   console.log(`wrote data/maps/oregon/level.json (${(text.length / 1024).toFixed(0)} KB)`);
   writePlans(ROOT, level);
 }

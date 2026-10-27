@@ -51,8 +51,9 @@ function extent(b: Box): [number[], number[]] | null {
 /**
  * Faces two visible boxes of different surfaces share (DESIGN §9.2 item 4's lint): in one plane (1 mm), looking
  * the same way, overlapping more than 1 cm both ways. Drawn in different colours, they flicker. A face another
- * box lies flat against (a bottom on the ground) can't be seen and doesn't count. Boxes turned by anything but
- * a quarter turn aren't checked.
+ * box lies flat against (a bottom on the ground) can't be seen and doesn't count, unless that box is a panel: a
+ * hole in it would show the face. Boxes turned by anything but a quarter turn aren't checked, nor are the roofs'
+ * ramps (pitched: their sides are parallelograms; each ramp side in a wall's plane is behind the next roof slab).
  */
 export function coplanarFaces(solids: Box[]): string[] {
   const E = 0.001;
@@ -61,9 +62,9 @@ export function coplanarFaces(solids: Box[]): string[] {
     return e ? [{ b, lo: e[0], hi: e[1] }] : [];
   });
   type Ext = (typeof boxes)[number];
-  /** Does a box lie against the face (axis `ax`, plane `at`, looking `dir`) over all of [r0, r1] in the other axes? */
+  /** Does a box that isn't a panel lie against the face (axis `ax`, plane `at`, looking `dir`) over all of [r0, r1] in the other axes? */
   const covered = (ax: number, dir: number, at: number, r0: number[], r1: number[], skip: Ext[]) =>
-    boxes.some((c) => !skip.includes(c) && Math.abs((dir > 0 ? c.lo : c.hi)[ax] - at) < E && [0, 1, 2].every((k) => k === ax || (c.lo[k] <= r0[k] + E && c.hi[k] >= r1[k] - E)));
+    boxes.some((c) => !skip.includes(c) && !PANEL_SURFACES.has(c.b.surface) && Math.abs((dir > 0 ? c.lo : c.hi)[ax] - at) < E && [0, 1, 2].every((k) => k === ax || (c.lo[k] <= r0[k] + E && c.hi[k] >= r1[k] - E)));
   const out: string[] = [];
   for (let i = 0; i < boxes.length; i++) {
     const a = boxes[i];
@@ -85,7 +86,8 @@ export function coplanarFaces(solids: Box[]): string[] {
   return out;
 }
 
-export function checkLevel(solids: Box[]): CheckReport {
+/** `steps`: the stairs' steps as boxes (stairs.ts flightBoxes): drawn, so checked for shared faces too. */
+export function checkLevel(solids: Box[], steps: Box[] = []): CheckReport {
   const errors: string[] = [];
   const panels = solids.filter((s) => PANEL_SURFACES.has(s.surface) && !s.bodiesOnly);
   const plain = solids.filter((s) => !PANEL_SURFACES.has(s.surface) && !s.bodiesOnly);
@@ -126,7 +128,7 @@ export function checkLevel(solids: Box[]): CheckReport {
       if (depth > BUDGET.overlapM) errors.push(`${p.id} (${p.surface}) and ${big.id} overlap by ${depth.toFixed(3)} m`);
     }
   }
-  errors.push(...coplanarFaces(solids));
+  errors.push(...coplanarFaces([...solids, ...steps]));
   const cellsPerLayer = panels.reduce((a, p) => a + panelCells(p), 0);
   if (panels.length > BUDGET.panels) errors.push(`${panels.length} panels, over the ${BUDGET.panels} budget`);
   if (solids.length > BUDGET.colliders) errors.push(`${solids.length} solids, over the ${BUDGET.colliders} collider budget`);

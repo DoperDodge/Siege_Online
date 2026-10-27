@@ -13,9 +13,9 @@ import { checkExterior, checkProps, compileExterior, footprintRect } from "./ext
 import { compileFloors, type HatchReport } from "./floors.js";
 import { compileMarkers } from "./markers.js";
 import { checkRoofs, compileRoofs } from "./roofs.js";
-import { compileRooms, storeyOfBox } from "./rooms.js";
-import { checkStairs, compileStairs, stairKeepOut, stairRails } from "./stairs.js";
-import { compileWalls, type Solid, type Zone } from "./walls.js";
+import { compileRooms, storeyOfBox, type PlacedSplit, type StoreyPlan } from "./rooms.js";
+import { checkStairs, compileStairs, flightBoxes, stairKeepOut, stairRails } from "./stairs.js";
+import { compileWalls, type Solid, type WallSpan, type Zone } from "./walls.js";
 import { compileZones } from "./zones.js";
 
 export interface Inputs {
@@ -50,6 +50,8 @@ export function loadInputs(root: string, mapId = "oregon"): Inputs {
 export interface Compiled {
   /** The LevelDef as written to level.json (defaults left out). */
   level: Record<string, unknown>;
+  /** Where the spans and splits were built, and each storey's room plan: what the walk's checklist reads (checklist.ts). */
+  walk: { spans: WallSpan[]; splits: PlacedSplit[]; plans: Map<Floor, StoreyPlan> };
   report: CheckReport & {
     warnings: string[];
     counts: Record<string, number>;
@@ -211,7 +213,7 @@ export function compile(inputs: Inputs): Compiled {
   };
   // The engine's own schema has the last word on shape.
   levelSchema.parse(level);
-  const checks = checkLevel(level.solids);
+  const checks = checkLevel(level.solids, level.stairs.flatMap(flightBoxes));
   // The client downloads it on every first visit (DESIGN §8).
   const bytes = Buffer.byteLength(readableJson(level));
   if (bytes > BUDGET.levelBytes) checks.errors.push(`level.json is ${bytes} bytes, over the ${BUDGET.levelBytes} budget`);
@@ -246,5 +248,5 @@ export function compile(inputs: Inputs): Compiled {
       .filter((l) => l.over < 1 || l.clearM < 0.3)
       .map((l) => (l.over < 1 ? `${l.hatch}: only ${Math.round(l.over * 100)}% over ${l.bottom}` : `${l.hatch} lands ${l.clearM} m from a wall of ${l.bottom} (under 0.3 m)`)),
   );
-  return { level, report: { ...checks, warnings: [...wallsOut.warnings, ...roomsOut.warnings, ...floorsOut.warnings, ...roofsOut.warnings, ...landWarnings], counts, openings, hatches: floorsOut.hatches, frames: frameReport } };
+  return { level, walk: { spans: wallsOut.spans, splits: roomsOut.splits, plans: roomsOut.plans }, report: { ...checks, warnings: [...wallsOut.warnings, ...roomsOut.warnings, ...floorsOut.warnings, ...roofsOut.warnings, ...landWarnings], counts, openings, hatches: floorsOut.hatches, frames: frameReport } };
 }
