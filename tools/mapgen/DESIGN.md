@@ -813,7 +813,8 @@ r6calls 2026 draws an opening where Ubisoft's 2020 blueprint draws a wall; we fo
 - **E6 (before Phase 8)**: local settle (floods only next to removed cells; prototype gives identical cells and
   makes floor cuts about 40x cheaper), incremental move mask, chunked PanelView, explosive cuts that continue
   across tile seams (destruction/explosives.ts). Removes the tile seams and the storm tail (Room.step p99 7.1 ms
-  with E1). 1.5–2 d.
+  with E1). 1.5–2 d. *M6 did the local settle and the incremental move mask (D-108); chunked drawing and the
+  seams remain.*
 - **Panel state compression** (column RLE or XOR with the as-built panel; protocol bump): late join after heavy
   destruction sends 70–130 KB against room.ts:77 `MAX_BUFFERED` 16 KB, a short snapshot hitch, not an error.
   Phase 6 or 12.
@@ -837,6 +838,15 @@ r6calls 2026 draws an opening where Ubisoft's 2020 blueprint draws a wall; we fo
 | Geometry counts | — | 1,495 colliders, 130–190 panels, 359k cells per layer; stress x3 4,310 / 380 / 719k fine | ≤ 2,500 static colliders, ≤ 300 panels, ≤ 600k cells per layer (test) |
 
 Estimated real counts (Appendix B): about 1,100–1,600 static colliders, 150–210 panels.
+
+**Measured on the real level (M6, D-108, D-109):** 977 colliders, 179 panels, 338k cells per layer, the largest
+panel 4,980 cells, level.json 150 KB. Room.step with 10 bots walking and firing in the street p99 3.0–3.4 ms
+(netsim, after the first second); fighting across a 4 m soft wall (26 panel ops a second) 4.2–5.4 ms, with panels
+about 1% of a step after the local settle. Sim.create 14–16 ms. A bullet on the biggest panels 0.04 ms (p95 0.09);
+the client's redraw after it 0.2–0.5 ms p50, p95 0.4–0.6 ms on the 4 m tiles and the 4.15 m walls alike, so the
+tiles stay at 4 m. In the browser (oregon-perf.mjs, software rendering): the page's work p50 3.5 / p95 7–9 ms, at
+most 492 draws a frame; an explosive's redraw p95 1.5–2.1 ms, the part E6's chunked drawing is for. A late joiner
+after five bullets and a knife in every panel is sent 65 KB.
 
 ---
 
@@ -1038,6 +1048,12 @@ the fix, the commit). Sign-off is recorded there and in PROGRESS.
 - **Done when**: `npm run check` passes; Ulo has walked the greybox once and the mismatch list is logged.
 - **Tests**: everything above; Room.step p99 ≤ 4 ms on Oregon with 10 walking and firing clients; netsim with no
   desyncs and no panel differences; e2e.
+- **As built (D-108–D-110):** the structural checks gained the drone holes against layout_notes §5.4, the coplanar
+  face lint and the level.json budget in `checks.ts`/`compile.ts`, and Oregon determinism; `report.ts` writes
+  `builds/mapgen/report.md` (counts, budgets, the UNVERIFIED list by file and record, drift); `bpcheck.py` run on
+  its own checks the wall files against the blueprints; the plans carry the research's room boxes for the
+  overlay page; `npm run bench:oregon`, `netsim --level oregon` and `tools/e2e/oregon-perf.mjs` (in test:e2e)
+  measure the real level; `research/oregon/walkthrough.md` holds the walk's checklist and the mismatch log.
 
 ### M7: iterate to sign-off (the Phase 5 done-when)
 - **Deliverables**: Ulo's answers and mismatch fixes through the layout files; research notes corrected

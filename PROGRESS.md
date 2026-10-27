@@ -5,7 +5,7 @@ known issues, and what's next.
 
 ---
 
-## Phase 5 — Oregon greybox · 🚧 in progress (M5 of 8 done)
+## Phase 5 — Oregon greybox · 🚧 in progress (M6 of 8: walk-ready, waiting for your walk #1)
 
 **Done when (PLAN §17):** you walk it and sign off on layout accuracy. Rappel (M8) comes before the Phase 5
 report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIGN.md`.
@@ -17,9 +17,36 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
 | M3 Stairs and the ladder (grab it from the top too) | ✅ every staircase inside the building, the ladder both ways, the walk graph: every room reachable; browser test |
 | M4 Roofs, the outside and the three attacker spawns; free camera | ✅ roofs on every part of the building, the outside blockout with the Bunker and Tower outside stairs, five attackers at each insertion point, a free camera in every lab; browser test |
 | M5 Sites, defender spawns, cameras, ingredients, zones, cover props | ✅ the four bomb sites with Go to by site, five defenders at each, eight cameras, nine ingredients, 29 cover props (bullets go through the wooden and soft ones), the building, spawn-peek, run-out and rappel zones, every marker drawn; browser test |
-| M6 Walk-ready: every check, performance on Oregon, your walk #1 | ⏳ |
+| M6 Walk-ready: every check, performance on Oregon, your walk #1 | ✅ walk-ready: every structural check, the generator's report, the blueprint check, Oregon's performance measured (server, client, browser); ⏳ your walk #1 (research/oregon/walkthrough.md) |
 | M7 Your corrections, round by round, to sign-off | ⏳ |
 | M8 Rappel | ⏳ |
+
+### What's done (M6)
+- **Your walk's checklist:** `research/oregon/walkthrough.md` has the route, the ten questions to settle on the
+  walk, and every room's list as we built it (soft walls with their reinforcements, doors and windows, stairs,
+  hatches, drone holes, soft floors, bombs, cameras, extinguishers, gas pipes and furniture), with the outside and
+  the roofs. Each mismatch you find goes into its table.
+- **Every check of the design (DESIGN §9.2):** new: every drone hole of the research is built or left out with a
+  reason (the tunnel along the basement Supply Room's south-east strip is left out: where it comes out is open);
+  two faces of different colours never lie in one plane (they would flicker); level.json stays under 500 KB (it's
+  150 KB); two copies of Oregon given the same damage end identical.
+- **The generator's report:** `npm run mapgen` writes `builds/mapgen/report.md`: what it built, against the budgets
+  the engine was sized for (977 of 2,500 colliders, 179 of 300 panels), every value still a placeholder (553 in
+  297 records), and how far the wall files sit from the floor-plan extraction (at most 0.26 u).
+- **Against Ubisoft's blueprint:** `python3 -I tools/mapgen/extract/bpcheck.py` measures our walls on the
+  official blueprints: 93% of the basement's hard walls by length agree within 0.23 m, 100% of 1F's, 99% of
+  2F's, 100% of the Cat Walk's, and no door or window stands where the blueprint draws solid wall (question 32
+  has the few that don't agree). The overlay page can show the research's room boxes too.
+- **Performance on Oregon (D-108, D-109):**
+  - The server, 10 bots walking and firing: a step takes 1.3 ms on average, 3.0–3.4 ms at the 99th percentile
+    (the bar: 4 ms). Fighting across the Kitchen's soft wall (523 cuts in 20 s): 4.2–5.4 ms, from 5.8 ms
+    before I made the walls' damage update local (the same result, a fraction of the work).
+  - The client: a bullet hole redraws its panel in 0.2–0.6 ms (the budget is 1 ms), so the soft floors stay
+    in 4 m tiles.
+  - In the browser: flying through every room, the page's own work is 3.5 ms a frame (9 ms at the 95th
+    percentile), with up to 492 draw calls; an explosive's redraw is 0.4 ms typical and up to 2 ms on this
+    machine.
+  - Your PC's frame rate is still the real test (F8).
 
 ### What's done (M5)
 - **The four bomb sites (D-103):** Kids' Dorms / Dorms Main Hall (2F), Kitchen / Dining Hall and Meeting Hall /
@@ -270,10 +297,21 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
 14. The plans: open `research/oregon/compare/B.svg`, `1F.svg`, `2F.svg` and `3F.svg`. To see them over the
    official blueprint: `npm run mapgen:refs` (downloads the blueprint and r6calls' map into a gitignored
    folder), then `npm run mapgen:compare`, and open `builds/mapgen/compare/index.html`.
-15. Checks: `npm run typecheck`, `npm test` (499 tests), `npm run build && npm run test:e2e` (`oregon.mjs` shoots
-   through a soft floor, drops through a hatch, walks the Armory Stairs, takes the ladder both ways, stands at each
-   attacker spawn, drops onto the Dining roof from the free camera, goes to each bomb site and switches the zones
-   view), `npm run mapgen -- --check`.
+15. Your walk: follow `research/oregon/walkthrough.md` (the route, the questions, a checklist per room).
+16. The generator's report: `npm run mapgen`, then open `builds/mapgen/report.md` (counts, budgets, every
+   placeholder, the drift from the extraction).
+17. The blueprint check: `npm run mapgen:refs` once (downloads into a gitignored folder), then
+   `python3 -I tools/mapgen/extract/bpcheck.py` (needs Python 3 with numpy and Pillow); detail in
+   `builds/mapgen/bpcheck.json`. The overlay page's "research rooms" box draws the research's room boxes.
+18. Performance: `npm run netsim -- --level oregon` (10 bots crowding in the street; add `--combat --walls` for
+   the fight across the Kitchen's soft wall), `npm run bench:oregon` (loading, damage, redraw; writes
+   `builds/bench/oregon.json`), and after `npm run build`, `node tools/e2e/oregon-perf.mjs` (the browser capture;
+   writes `builds/e2e/oregon-perf.json`).
+19. Checks: `npm run check` runs them all: `npm run typecheck`, `npm test` (__TESTS__ tests), `npm run build && npm run
+   test:e2e` (`oregon.mjs` shoots through a soft floor, drops through a hatch, walks the Armory Stairs, takes the
+   ladder both ways, stands at each attacker spawn, drops onto the Dining roof from the free camera, goes to each
+   bomb site and switches the zones view; `oregon-perf.mjs` flies through every room and sets off 44
+   explosives). Also `npm run mapgen -- --check`.
 
 ### Known issues
 - The stairs follow your walk now (open question 20).
@@ -298,12 +336,20 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
 - Three spawn-peek candidates of the research aren't built: the Meeting Hall's east windows aren't drawn as
   openings, there's no west window in Kids' Dorms or the 2F Small Tower, and the Classroom's one outside window
   looks into the recessed yard, not at the Street (D-105).
+- The basement drone tunnel along the Supply Room's south-east strip isn't built: where it comes out is open
+  (layout_notes question 9).
+- An explosive's redraw takes up to 2 ms at the 95th percentile on this machine, over the 1 ms budget: drawing big
+  panels in pieces comes before Phase 8 (DESIGN E6), with explosive holes that carry on across a soft floor's
+  tile seams (they stop at the seam now).
+- A fight across a soft wall still takes the server 4.2–5.4 ms a step at the 99th percentile (PLAN §18's ceiling
+  is 5 ms): three quarters of it is moving the bodies, as in the lab.
+- A player joining after heavy destruction is sent about 65 KB of wall state at once; compressing it is planned
+  (Phase 6 or 12).
 
-### Next: Phase 5 M6 — walk-ready, then your walk #1
-Every check together (`npm run check`), the mapgen report (counts, budgets, drift, the UNVERIFIED list), the
-overlay page, performance on Oregon (10 walking and firing players, Room.step under 4 ms; netsim on Oregon), the
-walk checklist in this file, and `research/oregon/walkthrough.md` for what you find. Then you walk the greybox
-once and I log every mismatch (DESIGN M6).
+### Next: your walk #1, then M7 (your corrections, round by round, to sign-off)
+You walk the greybox against the game with `research/oregon/walkthrough.md`, and I log every mismatch there and
+fix it through the layout files, one round per walk, until you sign off on the layout (DESIGN M7). Rappel (M8)
+comes before the Phase 5 report.
 
 ---
 

@@ -254,9 +254,11 @@ under a reinforcement, what blocks reinforcing) are not repeated here.
 
 Each value is in `data/maps/oregon/layout.json` or a wall file (`walls_<floor>.json`) and listed in its
 `_unverified`; tools/mapgen/DESIGN.md §10 has the full table (P1–P37). An answer changes one value, and
-`npm run mapgen` rebuilds the map. Built so far (M5): every storey's walls, the 49 rooms, the floors with their
-soft floors and hatches, the Cat Walk's well, the stairs and the Cat Walk ladder, the roofs, the outside, the
-spawns, the four bomb sites, the cameras and ingredients, the major cover props and the zones.
+`npm run mapgen` rebuilds the map. Built so far (M6, ready for your walk): every storey's walls, the 49 rooms, the
+floors with their soft floors and hatches, the Cat Walk's well, the stairs and the Cat Walk ladder, the roofs, the
+outside, the spawns, the four bomb sites, the cameras and ingredients, the major cover props and the zones. The
+walk's checklist and the questions to settle on it are in research/oregon/walkthrough.md, where every mismatch
+you find is logged.
 
 1. **Map scale (P1):** one unit of the floor plans = 0.15 m (±15%). The school bus is 77 u long (11.6 m at
    0.15; school buses are 10.5–12 m), and the white van in the parking lot is about 33 u (5 m; vans are 5–6 m);
@@ -276,7 +278,9 @@ spawns, the four bomb sites, the cameras and ingredients, the major cover props 
    doesn't draw: are there windows in the Meeting Hall's east wall?
 6. **Barricades (P10):** exterior doors and windows start barricaded, inside doorways start as empty frames.
    Any inside doorway that starts barricaded, or an outside one that doesn't?
-7. **Drone holes (P13):** a 0.4 × 0.2 m slot at floor level, centred on r6calls' drone-tunnel icon.
+7. **Drone holes (P13):** a 0.4 × 0.2 m slot at floor level, centred on r6calls' drone-tunnel icon. The tunnel
+   along the B Supply Room's south-east strip, which r6calls draws as a 19 u strip rather than an icon, isn't
+   built: where it comes out is layout_notes question 9 (walls_B.json lists it as dropped, with the reason).
 8. **Soft-wall sections (P14):** r6calls' separators, except Ulo's SW-2F-01 (3), SW-2F-02 and SW-2F-04 (2). The
    long walls most likely to take 3: SW-B-01, SW-1F-06, SW-B-04, SW-B-05, SW-1F-01, SW-1F-17, SW-2F-05.
 9. **Garage south wall (P15, SW-1F-17):** a normal reinforceable soft wall, or a garage door?
@@ -312,7 +316,8 @@ spawns, the four bomb sites, the cameras and ingredients, the major cover props 
     vault (a blocker for bodies only, with a bar drawn on top), with a gap where the ladder from 2F arrives.
     The ring around it is soft floor, r6calls' four strips; its west strip is only 0.4 m wide in r6calls'
     drawing. Is the centre open, is the rail that high, and is the west side walkable?
-17. **2F walls (P5):** until the roofs come (M4), 2F's outside walls stand 3.0 m and its inside walls 2.8 m.
+17. **2F walls (P5):** 2F's outside walls run up to 6.2 m, where the roofs' eaves sit, and its inside walls stop
+    under the 2F ceiling at 6.0 m (D-097).
 18. **Room names:** the callouts are r6calls' names (Kids' Dorms, Pillar, Gaming, Low Attic…), and the eight
     bomb-site rooms take their official names. If the game's HUD calls a room something else, it is one field.
 19. **Found while building M2:**
@@ -384,6 +389,9 @@ spawns, the four bomb sites, the cameras and ingredients, the major cover props 
     looking 20° down at the room's middle: CAM4 in the B Freezer, CAM5 on the Rear Stage, CAM6 in the Lobby, CAM7 in
     the Shower Corridor, CAM8 in the 2F Armory Corridor. The three outside (Junkyard, Parking, Construction) stand
     on 3 m posts at their icons, looking at the building. Which wall is each on, and which way does it look?
+    The research calls CAM5's room the Rear Stage ("T1", the Big Tower's ground floor); r6calls' icon is in our
+    1F Tower room, 0.7 m north of its wall with the Stage, so that is where it is built. Which room is the Rear
+    Stage: the Tower's ground room, or the Stage at the north end of the Meeting Hall?
 29. **Ingredients (P32):** seven extinguishers 1.0 m up and two gas pipes 1.2 m up, each on the wall nearest
     r6calls' icon in its room. The right walls and heights?
 30. **Props (P35, D-104):** 29 pieces of furniture read off r6calls' floor images (±0.15 m): tables 0.75 m,
@@ -397,6 +405,16 @@ spawns, the four bomb sites, the cameras and ingredients, the major cover props 
     Master's Balcony door and the Main Entrance (Street). The run-outs are the Kitchen Corridor's west door and
     the Bunker's east door. Every outside wall can be rappelled. Which spots do defenders really use (map_features
     Q11), and is rappel refused anywhere (Q9)?
+
+32. **Found by M6's checks:**
+    - (a) Measured against Ubisoft's blueprint (`python3 -I tools/mapgen/extract/bpcheck.py`), 93% of the
+      basement's hard walls by length agree within 1.5 u (0.23 m), and 99–100% on 1F, 2F and the Cat Walk. The
+      blueprint doesn't draw three basement walls where we built them, all low-confidence readings of the
+      r6calls image: the Boiler's pillar (B.w045, 1.25 m thick, in the Pillar room), a thick wall at the Blue
+      room's east end (B.w003, 0.34 m off) and a short one past it (B.w062). The Bunker passage's walls run on
+      by hand past both images' edges (D-099), and 2F.w038 sits on 1F.w040's line by your stairs walk (D-096).
+    - (b) Every wall not in surfaces.md §2 is hard (P18), the Kitchen's north-east partition and the 2F annex
+      partition included (surfaces.md question 1).
 
 Later milestones add their placeholders here as they build them: the Meeting Hall's height (P23) and fall damage
 from the roofs (P37).
