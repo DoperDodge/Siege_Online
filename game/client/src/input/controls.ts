@@ -160,9 +160,27 @@ export class Controls {
       { passive: true },
     );
     canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+    document.addEventListener("pointerlockchange", (e) => this.pointerLock(document.pointerLockElement === canvas, e.timeStamp));
     addEventListener("mousemove", (e) => {
-      if (document.pointerLockElement === canvas) this.look(e.movementX, e.movementY);
+      if (document.pointerLockElement === canvas) this.mouseMove(e.movementX, e.movementY, e.timeStamp);
     });
+  }
+
+  /** When the pointer was last locked (the change event's time, ms), or null while it isn't. */
+  private lockedAt: number | null = null;
+
+  /** The pointer was locked to the game view or let go; `at` is the change event's time. */
+  pointerLock(locked: boolean, at: number) {
+    this.lockedAt = locked ? at : null;
+  }
+
+  /**
+   * The mouse moved (counts) at event time `at`. It turns the view only once the pointer is locked, and only
+   * if it moved after the lock: Chrome hands a move over at the next frame, so the move onto a Go to or Resume
+   * button, whose click locks the pointer, could otherwise arrive locked and turn away from the view just set.
+   */
+  mouseMove(dx: number, dy: number, at: number) {
+    if (this.lockedAt !== null && at >= this.lockedAt) this.look(dx, dy);
   }
 
   lockPointer(canvas: HTMLCanvasElement) {

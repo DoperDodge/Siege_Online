@@ -149,3 +149,23 @@ describe("the lab's free camera (DESIGN E10)", () => {
     }
   });
 });
+
+describe("Mouse look and the pointer lock", () => {
+  it("turns the view only while the pointer is locked, and only for moves made after it was", () => {
+    const c = make({});
+    const count = DEFAULT_SETTINGS.sensitivity * DEG;
+    c.setView(1, 0);
+    c.mouseMove(50, 0, 10); // not locked: the mouse is on the menus
+    expect(c.sample(1).yaw).toBeCloseTo(1, 3);
+    c.pointerLock(true, 100);
+    // The move onto the Go to button (made at 99, before its click locked the pointer) arrives after the lock:
+    // Chrome hands moves over at the next frame. It mustn't turn away from the view Go to set.
+    c.mouseMove(50, 0, 99);
+    expect(c.sample(2).yaw).toBeCloseTo(1, 3);
+    c.mouseMove(10, 0, 101);
+    expect(c.sample(3).yaw).toBeCloseTo(1 - 10 * count, 3);
+    c.pointerLock(false, 200);
+    c.mouseMove(10, 0, 201);
+    expect(c.sample(4).yaw).toBeCloseTo(1 - 10 * count, 3);
+  });
+});
