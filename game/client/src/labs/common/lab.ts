@@ -976,6 +976,8 @@ export async function startLab(o: LabOptions): Promise<void> {
   }
 
   let frames = 0;
+  /** A performance capture's frames while one runs (tools/e2e/oregon-perf.mjs): each one's work, draws and panel redraw. */
+  let perfLog: { workMs: number; calls: number; triangles: number; panelMs: number }[] | null = null;
   let fpsFrames = 0;
   let fpsAt = performance.now();
   /** Shadow-map redraws so far (they happen on request only: createRenderer). */
@@ -1067,7 +1069,9 @@ export async function startLab(o: LabOptions): Promise<void> {
     }
     updateLabels(labScene.labels, shownCamera());
     // A panel that changed changes the level's shadows too.
+    const panelFrom = performance.now();
     if (panelView.update()) renderer.shadowMap.needsUpdate = true;
+    const panelMs = performance.now() - panelFrom;
     for (const fn of hooks.frame) fn(now, renderTick);
     drawWorld();
     const inHand = viewed.id === possessed()?.id && !outside && !ctrl.shellCam && ctrl.swapPhase === 0 ? (viewed.loadout?.weapons[rs.slot] ?? null) : null;
@@ -1091,7 +1095,9 @@ export async function startLab(o: LabOptions): Promise<void> {
       fpsAt = now;
     }
     updateHud(me);
-    stats.frame(now, performance.now() - workFrom + (net?.takeHandleMs() ?? 0), renderer.info.render.calls, renderer.info.render.triangles);
+    const workMs = performance.now() - workFrom + (net?.takeHandleMs() ?? 0);
+    stats.frame(now, workMs, renderer.info.render.calls, renderer.info.render.triangles);
+    perfLog?.push({ workMs, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, panelMs });
     requestAnimationFrame(frame);
   }
 
@@ -1221,6 +1227,19 @@ export async function startLab(o: LabOptions): Promise<void> {
       /** Shadow-map redraws so far (tools/e2e/oregon.mjs checks a lost and restored context asks for one). */
       get shadowDraws() {
         return shadowDraws;
+      },
+      /**
+       * A performance capture (tools/e2e/oregon-perf.mjs): `start` records every frame drawn from now on (the
+       * page's work in ms as the stats overlay counts it, draw calls, triangles, the panels' redraw in ms);
+       * `stop` ends it and returns them.
+       */
+      perf: {
+        start: () => void (perfLog = []),
+        stop: () => {
+          const log = perfLog ?? [];
+          perfLog = null;
+          return log;
+        },
       },
       /** Online state for the two-browser test (tools/e2e/online-lab.mjs). */
       get net() {
