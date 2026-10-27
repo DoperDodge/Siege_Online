@@ -24,8 +24,17 @@ export interface ExtractedOpening {
   rect: [number, number, number, number];
   type: "DOOR" | "EXT_OPENING" | "OPEN" | "DRONE_HOLE";
 }
+/** An r6calls icon (camera, extinguisher, drone tunnel...) on a floor: its layer's kind, SVG id and box (u). */
+export interface ExtractedPoint {
+  floor: Floor;
+  kind: string;
+  id: string;
+  rect: [number, number, number, number];
+  c: [number, number];
+}
 export interface Extracted {
   floors: Record<Floor, { walls: ExtractedWall[]; openings: ExtractedOpening[] }>;
+  points: ExtractedPoint[];
 }
 
 /** Thickness classes by drawn band (u): 7 px interior, 11–13 px exterior; anything thicker keeps its size. */

@@ -84,6 +84,7 @@
   {"id": "B.w062", "axis": "V", "at": 351.9, "span": [105.45, 114.27], "weight": "ext", "kind": "wall", "spans": [], "from": ["0-w062"], "src": "raster", "conf": "low", "_unverified": []}
  ],
  "dropped": [
-  {"from": "0-dt-rect22247", "note": "drone-hole icon with no wall under it in this floor's image: place it by hand"}
+  {"from": "0-dt-rect22247", "note": "the 1F south chevron (1-dt-rect3171-4, built as 1F.dt3) copied onto the basement image, with no wall under it: counted once (layout_notes §5.4); where it leads below is layout_notes question 9"},
+  {"from": "0-dt-rect2907", "note": "the tunnel along B Supply's south-east strip (layout_notes §5.4): r6calls draws it as a 19 u strip, not an icon (the extractor keeps icons under 12 u), and where it comes out is layout_notes question 9 (UNVERIFIED): not built"}
  ]
 }

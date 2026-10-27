@@ -3,9 +3,9 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { levelSchema } from "../../game/shared/src/data/schemas.js";
-import { checkLevel, type CheckReport } from "./checks.js";
+import { BUDGET, checkLevel, type CheckReport } from "./checks.js";
 import { frames } from "./frames.js";
-import { round } from "./format.js";
+import { readableJson, round } from "./format.js";
 import type { Floor } from "./research.js";
 import { exteriorPartSchema, layoutSchema, wallsPartSchema, type ExteriorPart, type Layout, type WallsPart } from "./schema.js";
 import { frameDiagnostics, type HatchLanding } from "./diagnostics.js";
@@ -212,6 +212,9 @@ export function compile(inputs: Inputs): Compiled {
   // The engine's own schema has the last word on shape.
   levelSchema.parse(level);
   const checks = checkLevel(level.solids);
+  // The client downloads it on every first visit (DESIGN §8).
+  const bytes = Buffer.byteLength(readableJson(level));
+  if (bytes > BUDGET.levelBytes) checks.errors.push(`level.json is ${bytes} bytes, over the ${BUDGET.levelBytes} budget`);
   checks.errors.push(
     ...roomsOut.errors,
     ...floorsOut.errors,

@@ -196,6 +196,18 @@ export function hatchTable(root: string): { id: string; top: string; bottom: str
   return t.rows.map((r) => ({ id: r[0], top: r[1], bottom: r[2] }));
 }
 
+/** layout_notes.md §5.4: the drone holes and tunnels r6calls draws, by floor, with the rooms they join and their box (u). */
+export function droneHoleTable(root: string): { floor: Floor; between: string; x: [number, number]; y: [number, number] }[] {
+  const text = readFileSync(join(researchDir(root), "layout_notes.md"), "utf8");
+  const t = mdTables(text).find((x) => x.heading.startsWith("5.4") && x.header[0] === "Floor");
+  if (!t) throw new Error("layout_notes.md §5.4: no drone-hole table");
+  return t.rows.map((r) => {
+    const m = r[2].match(/\(([^,]+),\s*([^)]+)\)/);
+    if (!m || !FLOORS.includes(r[0] as Floor)) throw new Error(`layout_notes.md §5.4: can't read "${r.join(" | ")}"`);
+    return { floor: r[0] as Floor, between: r[1], x: range(m[1])!, y: range(m[2])! };
+  });
+}
+
 
 /** layout_notes.md §3: the bomb sites, by number, with their A and B rooms ("2F Kids' Dorms") and r6calls' marker boxes (u). */
 export function siteTable(root: string): { number: number; a: string; b: string; markerA: [[number, number], [number, number]]; markerB: [[number, number], [number, number]] }[] {

@@ -1,6 +1,7 @@
 // Checks on a compiled level (DESIGN §9.2 items 4 and 5): hard geometry never overlaps a panel (a soft wall
-// behind a hard box would be bulletproof), panels never overlap each other, and the budgets the engine was
-// sized for hold. Errors fail `npm run mapgen` and the tests.
+// behind a hard box would be bulletproof), panels never overlap each other, no two visible faces of different
+// colours lie in one plane (they would flicker), and the budgets the engine was sized for hold. Errors fail
+// `npm run mapgen` and the tests.
 
 interface Box {
   id: string;
@@ -8,11 +9,12 @@ interface Box {
   size: [number, number, number];
   surface: string;
   bodiesOnly?: boolean;
+  yawDeg?: number;
 }
 
 /** Surfaces built as panels (data/destruction.json surfaces). */
 export const PANEL_SURFACES = new Set(["SOFT_WALL", "REINFORCEABLE", "REINFORCED_WALL", "SOFT_FLOOR", "HATCH", "BARRICADE", "WINDOW"]);
-export const BUDGET = { colliders: 2500, panels: 300, cellsPerLayer: 600_000, panelCells: 6400, cellM: 0.05, overlapM: 0.01 } as const;
+export const BUDGET = { colliders: 2500, panels: 300, cellsPerLayer: 600_000, panelCells: 6400, cellM: 0.05, overlapM: 0.01, levelBytes: 500_000 } as const;
 
 export interface CheckReport {
   errors: string[];
@@ -36,6 +38,51 @@ export function panelCells(b: Box): number {
   const flat = b.surface === "SOFT_FLOOR" || b.surface === "HATCH";
   const [w, h] = flat ? [b.size[0], b.size[2]] : [Math.max(b.size[0], b.size[2]), b.size[1]];
   return Math.max(1, Math.round(w / BUDGET.cellM)) * Math.max(1, Math.round(h / BUDGET.cellM));
+}
+
+/** A box's corners, [min, max] per axis, turned by its yaw when that is a quarter turn; null for any other yaw. */
+function extent(b: Box): [number[], number[]] | null {
+  const yaw = (((b.yawDeg ?? 0) % 180) + 180) % 180;
+  if (yaw !== 0 && yaw !== 90) return null;
+  const size = yaw === 90 ? [b.size[2], b.size[1], b.size[0]] : b.size;
+  return [b.center.map((c, i) => c - size[i] / 2), b.center.map((c, i) => c + size[i] / 2)];
+}
+
+/**
+ * Faces two visible boxes of different surfaces share (DESIGN §9.2 item 4's lint): in one plane (1 mm), looking
+ * the same way, overlapping more than 1 cm both ways. Drawn in different colours, they flicker. A face another
+ * box lies flat against (a bottom on the ground) can't be seen and doesn't count. Boxes turned by anything but
+ * a quarter turn aren't checked.
+ */
+export function coplanarFaces(solids: Box[]): string[] {
+  const E = 0.001;
+  const boxes = solids.filter((s) => !s.bodiesOnly).flatMap((b) => {
+    const e = extent(b);
+    return e ? [{ b, lo: e[0], hi: e[1] }] : [];
+  });
+  type Ext = (typeof boxes)[number];
+  /** Does a box lie against the face (axis `ax`, plane `at`, looking `dir`) over all of [r0, r1] in the other axes? */
+  const covered = (ax: number, dir: number, at: number, r0: number[], r1: number[], skip: Ext[]) =>
+    boxes.some((c) => !skip.includes(c) && Math.abs((dir > 0 ? c.lo : c.hi)[ax] - at) < E && [0, 1, 2].every((k) => k === ax || (c.lo[k] <= r0[k] + E && c.hi[k] >= r1[k] - E)));
+  const out: string[] = [];
+  for (let i = 0; i < boxes.length; i++) {
+    const a = boxes[i];
+    for (let j = i + 1; j < boxes.length; j++) {
+      const b = boxes[j];
+      if (a.b.surface === b.b.surface || [0, 1, 2].some((k) => a.hi[k] < b.lo[k] - E || b.hi[k] < a.lo[k] - E)) continue;
+      const r0 = [0, 1, 2].map((k) => Math.max(a.lo[k], b.lo[k]));
+      const r1 = [0, 1, 2].map((k) => Math.min(a.hi[k], b.hi[k]));
+      for (let ax = 0; ax < 3; ax++) {
+        if ([0, 1, 2].some((k) => k !== ax && r1[k] - r0[k] <= BUDGET.overlapM)) continue;
+        for (const dir of [-1, 1]) {
+          const [pa, pb] = dir < 0 ? [a.lo[ax], b.lo[ax]] : [a.hi[ax], b.hi[ax]];
+          if (Math.abs(pa - pb) >= E || covered(ax, dir, pa, r0, r1, [a, b])) continue;
+          out.push(`${a.b.id} (${a.b.surface}) and ${b.b.id} (${b.b.surface}) share a face looking ${dir < 0 ? "-" : "+"}${"xyz"[ax]} at ${pa.toFixed(3)} m`);
+        }
+      }
+    }
+  }
+  return out;
 }
 
 export function checkLevel(solids: Box[]): CheckReport {
@@ -79,6 +126,7 @@ export function checkLevel(solids: Box[]): CheckReport {
       if (depth > BUDGET.overlapM) errors.push(`${p.id} (${p.surface}) and ${big.id} overlap by ${depth.toFixed(3)} m`);
     }
   }
+  errors.push(...coplanarFaces(solids));
   const cellsPerLayer = panels.reduce((a, p) => a + panelCells(p), 0);
   if (panels.length > BUDGET.panels) errors.push(`${panels.length} panels, over the ${BUDGET.panels} budget`);
   if (solids.length > BUDGET.colliders) errors.push(`${solids.length} solids, over the ${BUDGET.colliders} collider budget`);

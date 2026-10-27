@@ -5,8 +5,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { Btn, bulletThroughPanels, crossFileProblems, DEG, levelSchema, loadGameData, missingUnverifiedPaths, PawnMode, pelletPath, QUERY_BULLET, QUERY_STATIC, Sim, Stance, type InputCmd, type Vec3 } from "../../game/shared/src/index.js";
-import { checkLevel } from "./checks.js";
+import { Btn, bulletThroughPanels, crossFileProblems, DEG, levelSchema, loadGameData, missingUnverifiedPaths, PawnMode, pelletPath, QUERY_BULLET, QUERY_STATIC, Sim, Stance, type InputCmd, type PanelOp, type Vec3 } from "../../game/shared/src/index.js";
+import { BUDGET, checkLevel, coplanarFaces } from "./checks.js";
 import { frames } from "./frames.js";
 import { compile, loadInputs } from "./compile.js";
 import { readableJson } from "./format.js";
@@ -14,7 +14,7 @@ import { enclosureLeaks, planGrid } from "./enclosure.js";
 import { planSvg } from "./plans.js";
 import { distanceInside, PlanGrid } from "./grid.js";
 import type { Extracted } from "./import.js";
-import { connections, hatchTable, markerTables, roomTable, siteTable, softFloorTable, softWalls } from "./research.js";
+import { connections, droneHoleTable, hatchTable, markerTables, roomTable, siteTable, softFloorTable, softWalls } from "./research.js";
 import { CELL_M, clearCells, compileRooms, storeyOfBox } from "./rooms.js";
 import { FLOOR_IDS, wallSchema, type SpanDef, type WallDef } from "./schema.js";
 import type { Floor } from "./research.js";
@@ -59,6 +59,19 @@ describe("oregon level.json", () => {
     const soft = solids.find((s) => s.id === "SW-1F-03")!;
     const intruder = { id: "intruder", center: [soft.center[0] + soft.size[0] / 2, soft.center[1], soft.center[2]], size: [0.2, 1, 0.3], surface: "HARD_WALL" };
     expect(checkLevel([soft, intruder] as never).errors.join()).toMatch(/SW-1F-03 \(REINFORCEABLE\) and intruder \(HARD_WALL\) overlap by 0\.100 m/);
+    // Two faces of different colours in one plane flicker: a wall's top flush with a slab's top is caught...
+    const slab = { id: "slab", center: [0, -0.1, 0], size: [4, 0.2, 4], surface: "HARD_FLOOR" };
+    const stub = { id: "stub", center: [1, -0.05, 0], size: [0.2, 0.1, 1], surface: "HARD_WALL" };
+    expect(coplanarFaces([slab, stub] as never)).toEqual(["slab (HARD_FLOOR) and stub (HARD_WALL) share a face looking +y at 0.000 m"]);
+    // ...turned a quarter turn too; a face something lies flat against (two bottoms on the ground) isn't seen.
+    expect(coplanarFaces([slab, { ...stub, size: [1, 0.1, 0.2], yawDeg: 90 }] as never)).toHaveLength(1);
+    const ground = { id: "ground", center: [0, -0.5, 0], size: [10, 1, 10], surface: "HARD_FLOOR" };
+    const fence = { id: "fence", center: [0, 0.5, 0], size: [1, 1, 0.2], surface: "HARD_WALL" };
+    const wreck = { id: "wreck", center: [0.2, 0.3, 0], size: [1, 0.6, 1], surface: "PROP" };
+    expect(coplanarFaces([ground, fence, wreck] as never)).toEqual([]);
+    expect(coplanarFaces([fence, wreck] as never)).toHaveLength(1);
+    // What the client downloads first (DESIGN §8).
+    expect(Buffer.byteLength(readableJson(level))).toBeLessThanOrEqual(BUDGET.levelBytes);
   });
 
   /** A storey's wall lines, its plan in world u, its storey record and the one above. */
@@ -222,6 +235,32 @@ describe("oregon level.json", () => {
       if (w.axis !== row.axis) problems.push(`${row.id}: on a ${w.axis} line, research says ${row.axis}`);
     }
     expect(problems).toEqual([]);
+  });
+
+  it("every drone hole of layout_notes §5.4 is a slot on its floor, or dropped there with a reason; the basement's copy of the 1F chevron counts once", () => {
+    const rows = droneHoleTable(ROOT);
+    expect(rows).toHaveLength(12);
+    // r6calls' drone-tunnel icons, by the id a wall file gives them ("0-dt-rect2903": B's rect2903).
+    const icons = new Map(extracted.points.filter((p) => p.kind === "dt").map((p) => [`${FLOOR_IDS.indexOf(p.floor)}-dt-${p.id}`, p]));
+    const problems: string[] = [];
+    const matched = new Set<string>();
+    for (const row of rows) {
+      const inRow = (x: number, y: number) => x >= row.x[0] - 0.5 && x <= row.x[1] + 0.5 && y >= row.y[0] - 0.5 && y <= row.y[1] + 0.5;
+      const part = inputs.walls.find((p) => p.floor === row.floor)!;
+      const slots = part.walls.flatMap((w) => w.spans.filter((s) => s.kind === "DRONE_HOLE" && (w.axis === "H" ? inRow((s.at[0] + s.at[1]) / 2, w.at) : inRow(w.at, (s.at[0] + s.at[1]) / 2))));
+      const dropped = part.dropped.filter((d) => icons.has(d.from) && inRow(...icons.get(d.from)!.c));
+      if (slots.length + dropped.length !== 1) problems.push(`${row.floor} ${row.between}: ${slots.length} slots and ${dropped.length} dropped icons`);
+      for (const d of dropped) if (!d.note.includes("layout_notes")) problems.push(`${d.from}: dropped without the research's reason`);
+      for (const s of slots) matched.add(s.id);
+    }
+    expect(problems).toEqual([]);
+    // No slot the research doesn't have.
+    const all = inputs.walls.flatMap((p) => p.walls.flatMap((w) => w.spans.filter((s) => s.kind === "DRONE_HOLE").map((s) => s.id)));
+    expect(all.filter((id) => !matched.has(id))).toEqual([]);
+    expect(all).toHaveLength(10);
+    // The basement's south chevron is 1F's, drawn again on the basement image: built once, on 1F.
+    const [b, f] = ["0-dt-rect22247", "1-dt-rect3171-4"].map((id) => icons.get(id)!);
+    expect([b.rect[0], b.rect[2]]).toEqual([f.rect[0], f.rect[2]]);
   });
 });
 
@@ -1462,4 +1501,61 @@ describe("oregon roofs (M4, DESIGN §5.8)", () => {
     }
     expect(problems).toEqual([]);
   });
+});
+
+describe("oregon determinism (DESIGN §9.2 check 12)", () => {
+  it("two Sims given the same panel-op log and the same inputs end with the same panels, and a body walks through the same hole", async () => {
+    const make = async () => {
+      const sim = await Sim.create("oregon");
+      const ctrl = sim.addPlayer("tester", "sledge");
+      // South of the Kitchen's 4 m soft wall to the Security room, facing it (netsim's wall fight).
+      sim.teleport(ctrl.possessedPawnId, 22.55, 0, 28.65, 180);
+      return { sim, ctrl };
+    };
+    const [A, B] = [await make(), await make()];
+    const panels = A.sim.level.panels.list;
+    const wall = panels.findIndex((e) => e.panel.spec.id === "SW-1F-06");
+    expect(wall).toBeGreaterThanOrEqual(0);
+    let seed = 11;
+    const rnd = (n: number) => ((seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) >>> 8) % n;
+    /** A seeded op on any panel but the wall the body walks to: holes of every size in any layer, lines, boxes, steel, damage, barricades. */
+    const randomOp = (): [number, PanelOp] => {
+      let index = rnd(panels.length);
+      if (index === wall) index = (index + 1) % panels.length;
+      const p = panels[index].panel;
+      const layer = rnd(4);
+      const hard = rnd(3) === 0;
+      const r = rnd(10);
+      if (r < 5) return [index, { kind: "cut", layer, shape: { kind: "disc", u4: rnd(4 * p.w), v4: rnd(4 * p.h), r4: 1 + rnd(16) }, hard }];
+      if (r < 7) {
+        const [u0, v0] = [rnd(p.w), rnd(p.h)];
+        return [index, { kind: "cut", layer, shape: { kind: "rect", u0, v0, u1: u0 + 1 + rnd(p.w), v1: rnd(2) ? v0 + 1 : p.h }, hard }];
+      }
+      if (r < 8) return [index, { kind: "reinforce", section: rnd(3), side: rnd(2) }];
+      if (r < 9) return [index, { kind: "damage", amount: [0.15, 2, 40][rnd(3)], hard }];
+      return [index, { kind: "barricade", up: rnd(2) === 0 }];
+    };
+    let seq = 0;
+    for (let t = 0; t < 160; t++) {
+      for (let k = 0; k < 8; k++) {
+        const [index, op] = randomOp();
+        const [a, b] = [A.sim.level.panels.apply(index, op), B.sim.level.panels.apply(index, op)];
+        expect(b, `tick ${t}: ${JSON.stringify(op)} on ${panels[index].panel.spec.id}`).toEqual(a);
+      }
+      // A breach in the wall ahead, every layer, a little after the start.
+      if (t === 30) {
+        const p = panels[wall].panel;
+        const mid = Math.floor(p.w / 2);
+        for (const sim of [A.sim, B.sim]) for (const layer of [0, 1, 2]) sim.level.panels.apply(wall, { kind: "cut", layer, shape: { kind: "rect", u0: mid - 10, v0: 0, u1: mid + 10, v1: 40 }, hard: false });
+      }
+      const input: InputCmd = { seq: ++seq, forward: t > 40 ? 1 : 0, strafe: 0, yaw: 180 * DEG, pitch: 0, buttons: 0, stance: Stance.Stand, lean: 0 };
+      A.sim.step(new Map([[A.ctrl.id, input]]));
+      B.sim.step(new Map([[B.ctrl.id, input]]));
+      expect(B.sim.pawns.get(B.ctrl.possessedPawnId)!.state, `tick ${t}`).toEqual(A.sim.pawns.get(A.ctrl.possessedPawnId)!.state);
+    }
+    expect(B.sim.level.panels.hash()).toBe(A.sim.level.panels.hash());
+    expect(panels.filter((e) => e.panel.modified).length).toBeGreaterThan(100);
+    // Through the hole, into the Security room beyond the wall (z 31.15).
+    expect(A.sim.pawns.get(A.ctrl.possessedPawnId)!.state.z).toBeGreaterThan(32);
+  }, 60000);
 });
