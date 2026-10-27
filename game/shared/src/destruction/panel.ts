@@ -106,8 +106,10 @@ export class Panel {
   /** Counts changes (renderers redraw a panel whose version moved); not part of the state. */
   version = 0;
   private moveMask: Uint8Array = new Uint8Array(0);
-  private readonly flood: Uint8Array;
-  private readonly stack: Int32Array;
+  /** Scratch for settle, made on the first cut: a stamp per cell (cells known to hang, or met by the search going on), and a queue. */
+  private mark: Int32Array | null = null;
+  private queue: Int32Array | null = null;
+  private stamp = 0;
 
   constructor(spec: PanelSpec) {
     this.spec = spec;
@@ -125,8 +127,6 @@ export class Panel {
     this.steelRows = c.kind === "hatch" ? this.h : Math.min(this.h, Math.max(1, Math.round(spec.steelHeightM / this.cellV)));
     this.hp = spec.hp;
     this.empty = c.kind === "barricade" && spec.empty;
-    this.flood = new Uint8Array(n);
-    this.stack = new Int32Array(n);
     this.layers[L_FRONT]!.fill(1);
     this.layers[L_BACK]?.fill(1);
     if (c.kind === "barricade") this.fillPlanks(this.empty ? 0 : 1);
@@ -239,7 +239,8 @@ export class Panel {
       this.modified = true;
       this.version++;
     }
-    const move = this.computeMoveMask();
+    // A cut changes only the coarse cells round the cells it took (and what fell with them).
+    const move = op.kind === "cut" && c.passable === "breach" ? this.moveMaskAfter(change) : this.computeMoveMask();
     for (let i = 0; i < move.length; i++)
       if (move[i] !== this.moveMask[i]) {
         change.movementChanged = true;
@@ -370,20 +371,25 @@ export class Panel {
    */
   private settle(change: PanelChange) {
     const { w, h } = this;
-    const drop = (l: Uint8Array, layer: number, keep: Uint8Array) => {
-      for (let i = 0; i < l.length; i++) if (l[i] && !keep[i]) (l[i] = 0), change.removed[layer].push(i);
-    };
+    // Before a change every piece hangs, so only a piece the change touched can fall: one next to a cell it
+    // took, or a skin's over a beam it took. Each is searched until it reaches what holds it (the global
+    // flood's answer, the same cells, at a hole's cost rather than the panel's).
     const core = this.layers[L_CORE];
-    if (core && !this.coreMetal) drop(core, L_CORE, reachable(core, w, h, (_u, v) => v === 0 || v === h - 1, this.flood, this.stack));
+    if (core && !this.coreMetal) this.fallAway(core, L_CORE, change, [], (i) => i < w || i >= (h - 1) * w);
+    const coreTaken = change.removed[L_CORE];
     const sidesOnly = this.kind === "barricade";
     for (const layer of [L_FRONT, L_BACK]) {
       const l = this.layers[layer];
       if (!l) continue;
-      const held = (u: number, v: number) => u === 0 || u === w - 1 || (!sidesOnly && (v === 0 || v === h - 1)) || (!!core && core[v * w + u] === 1);
-      drop(l, layer, reachable(l, w, h, held, this.flood, this.stack));
+      const held = (i: number) => {
+        const u = i % w;
+        return u === 0 || u === w - 1 || (!sidesOnly && (i < w || i >= (h - 1) * w)) || (!!core && core[i] === 1);
+      };
+      this.fallAway(l, layer, change, coreTaken, held);
     }
     const steel = this.layers[L_STEEL];
-    if (steel && this.reinforced) {
+    // Steel hangs from its own rows only: nothing else's change can drop it.
+    if (steel && this.reinforced && change.removed[L_STEEL].length) {
       for (let s = 0; s < this.sectionCount; s++) {
         if (!(this.reinforced & (1 << s))) continue;
         const [u0, u1] = this.sectionRange(s);
@@ -403,6 +409,60 @@ export class Panel {
     }
   }
 
+  /**
+   * The cells of `l` that nothing holds any longer drop (pushed to change.removed[layer] in index order): from
+   * each cell next to one the change took from this layer, and from each of `also` (where a skin lost the beam
+   * behind it), a search through set cells stops at the first one `held` holds, or one an earlier search found
+   * hanging: then all it went through hangs; if it runs out, all it went through falls.
+   */
+  private fallAway(l: Uint8Array, layer: number, change: PanelChange, also: readonly number[], held: (i: number) => boolean) {
+    const { w, h } = this;
+    const n = w * h;
+    const mark = (this.mark ??= new Int32Array(n));
+    const queue = (this.queue ??= new Int32Array(n));
+    if (this.stamp > 0x3fffffff) (this.stamp = 0), mark.fill(0);
+    const hangs = ++this.stamp;
+    const fallen: number[] = [];
+    const search = (start: number) => {
+      if (!l[start] || mark[start] === hangs) return;
+      const seen = ++this.stamp;
+      let head = 0;
+      let tail = 0;
+      queue[tail++] = start;
+      mark[start] = seen;
+      let held_ = false;
+      outer: while (head < tail) {
+        const i = queue[head++];
+        if (held(i)) {
+          held_ = true;
+          break;
+        }
+        const u = i % w;
+        for (const j of [u > 0 ? i - 1 : -1, u < w - 1 ? i + 1 : -1, i >= w ? i - w : -1, i < n - w ? i + w : -1]) {
+          if (j < 0 || !l[j] || mark[j] === seen) continue;
+          if (mark[j] === hangs) {
+            held_ = true;
+            break outer;
+          }
+          mark[j] = seen;
+          queue[tail++] = j;
+        }
+      }
+      if (held_) for (let k = 0; k < tail; k++) mark[queue[k]] = hangs;
+      else for (let k = 0; k < tail; k++) (l[queue[k]] = 0), fallen.push(queue[k]);
+    };
+    for (const i of change.removed[layer]) {
+      const u = i % w;
+      if (u > 0) search(i - 1);
+      if (u < w - 1) search(i + 1);
+      if (i >= w) search(i - w);
+      if (i < n - w) search(i + w);
+    }
+    for (const i of also) search(i);
+    fallen.sort((a, b) => a - b);
+    for (const i of fallen) change.removed[layer].push(i);
+  }
+
   private breakAll(change: PanelChange) {
     this.broken = true;
     this.reinforced = 0;
@@ -411,6 +471,29 @@ export class Panel {
       for (let i = 0; i < l.length; i++) if (l[i]) (l[i] = 0), change.removed[layer].push(i);
     });
     change.broke = true;
+  }
+
+  /** The move mask after a cut: only the coarse cells round the cells it took (and what fell with them) change. */
+  private moveMaskAfter(change: PanelChange): Uint8Array {
+    if (this.broken) return this.computeMoveMask();
+    const m = this.moveMask.slice();
+    const cw = Math.ceil(this.w / MOVE_CELLS);
+    for (const list of change.removed) {
+      for (const i of list) {
+        const u = i % this.w;
+        const cu = Math.floor(u / MOVE_CELLS);
+        const cv = Math.floor((i - u) / this.w / MOVE_CELLS);
+        m[cv * cw + cu] = this.coarseSolid(cu, cv);
+      }
+    }
+    return m;
+  }
+
+  /** Is there material in coarse cell (cu, cv), in any layer? */
+  private coarseSolid(cu: number, cv: number): number {
+    for (let v = cv * MOVE_CELLS; v < Math.min(this.h, (cv + 1) * MOVE_CELLS); v++)
+      for (let u = cu * MOVE_CELLS; u < Math.min(this.w, (cu + 1) * MOVE_CELLS); u++) for (const l of this.layers) if (l && l[v * this.w + u]) return 1;
+    return 0;
   }
 
   /** Coarse cells a body collides with (1). */
@@ -426,14 +509,7 @@ export class Panel {
       for (let cv = 0; cv < ch; cv++) if ((cv + 1) * MOVE_CELLS > this.gapRows) m.fill(1, cv * cw, cv * cw + cw);
       return m;
     }
-    for (let cv = 0; cv < ch; cv++)
-      for (let cu = 0; cu < cw; cu++) {
-        let solid = 0;
-        for (let v = cv * MOVE_CELLS; v < Math.min(this.h, (cv + 1) * MOVE_CELLS) && !solid; v++)
-          for (let u = cu * MOVE_CELLS; u < Math.min(this.w, (cu + 1) * MOVE_CELLS) && !solid; u++)
-            for (const l of this.layers) if (l && l[v * this.w + u]) solid = 1;
-        m[cv * cw + cu] = solid;
-      }
+    for (let cv = 0; cv < ch; cv++) for (let cu = 0; cu < cw; cu++) m[cv * cw + cu] = this.coarseSolid(cu, cv);
     return m;
   }
 }

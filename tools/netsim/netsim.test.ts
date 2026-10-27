@@ -61,6 +61,20 @@ describe("netsim: 10 clients, 100 ms round trip, jitter, stalls, drift", () => {
     expect(r.serverTickMs.mean).toBeLessThan(5);
   }, 90000);
 
+  it("on Oregon (Phase 5 M6): a fight across the Kitchen's soft wall; no desyncs, and every client ends with the server's panels", async () => {
+    const r = await runNetsim({ level: "oregon", seconds: 10, combat: true, walls: true, seed: 6 });
+    expect(r.desyncs).toEqual([]);
+    expect(r.room.droppedInputs).toBe(0);
+    expect(r.panels.ops).toBeGreaterThan(50);
+    expect(r.panels.differ).toEqual([]);
+    expect([r.panels.mismatches, r.panels.resyncs]).toEqual([0, 0]);
+    for (const c of r.perClient) {
+      expect(c.resyncs, c.name).toBe(0);
+      expect(c.downKbps, c.name).toBeLessThan(64); // PLAN §18, on the whole map
+    }
+    expect(r.serverTickMs.mean).toBeLessThan(5);
+  }, 90000);
+
   it("crowded (constant contact): still no desyncs, resyncs or dropped inputs", async () => {
     const r = await runNetsim({ seconds: 10, seed: 3 });
     expect(r.desyncs).toEqual([]);

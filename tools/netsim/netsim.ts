@@ -55,6 +55,8 @@ export interface NetsimOptions {
   walls?: boolean;
   /** One client holds Fire the whole run, and its uplink stalls `ms` once, at `atS` seconds. */
   sprayStall?: { client: number; atS: number; ms: number };
+  /** The level the room plays (a key of VENUES): the Movement Lab, or Oregon (Phase 5 M6). */
+  level?: string;
   operators?: string[];
 }
 
@@ -87,7 +89,9 @@ export interface NetsimReport {
     interpDelayMs: number;
   }[];
   room: Room["stats"];
+  /** room.step() wall time over every tick, and over the ticks after the first second (once the JIT has warmed up). */
   serverTickMs: { mean: number; p99: number; max: number };
+  serverTickMsWarm: { mean: number; p99: number; max: number };
   /** Every client's predicted state equals the server's once all inputs are applied. */
   desyncs: string[];
   /** Bodies corrected during the final second while pressed against another (expected, D-033 addendum). */
@@ -174,7 +178,7 @@ class Link {
  * A scripted player: changes what it's doing every second or so (moving, sprinting, crouching, leaning,
  * firing, reloading, swapping weapons, switching fire modes), and heads for the middle when crowding.
  */
-function bot(rng: Rng, crowd: boolean, home: { x: number; z: number } | null = null) {
+function bot(rng: Rng, crowd: boolean, home: { x: number; z: number } | null = null, middle: { x: number; z: number } = { x: 0, z: 10 }) {
   let until = 0;
   let cmd: Omit<InputCmd, "seq"> = { forward: 1, strafe: 0, yaw: 0, pitch: 0, buttons: 0, stance: Stance.Stand, lean: 0 };
   let turn = 0;
@@ -198,10 +202,10 @@ function bot(rng: Rng, crowd: boolean, home: { x: number; z: number } | null = n
     }
     let yaw = cmd.yaw + turn;
     if (crowd && pos) {
-      // Steer back toward the spawn area so players keep running into each other.
-      const home = Math.atan2(pos.x, 10 - pos.z) + Math.PI; // facing the spawn area around (0, 10)
-      const d = Math.atan2(Math.sin(home - yaw), Math.cos(home - yaw));
-      if (Math.hypot(pos.x, pos.z - 10) > 4) yaw += Math.sign(d) * Math.min(Math.abs(d), 0.06);
+      // Steer back toward the middle so players keep running into each other.
+      const back = Math.atan2(-(middle.x - pos.x), -(middle.z - pos.z));
+      const d = Math.atan2(Math.sin(back - yaw), Math.cos(back - yaw));
+      if (Math.hypot(pos.x - middle.x, pos.z - middle.z) > 4) yaw += Math.sign(d) * Math.min(Math.abs(d), 0.06);
     }
     cmd = { ...cmd, yaw: Math.atan2(Math.sin(yaw), Math.cos(yaw)) };
     let out = pulse ? { ...cmd, buttons: cmd.buttons | pulse } : cmd;
@@ -213,9 +217,6 @@ function bot(rng: Rng, crowd: boolean, home: { x: number; z: number } | null = n
     return out;
   };
 }
-
-/** Spread-out spots along the open south side of the lab, 6 m apart. */
-const spreadSpot = (i: number) => ({ x: -27 + (i % 10) * 6, z: 26 - Math.floor(i / 10) * 4 });
 
 /** The mode of the body this member drives, on the server. */
 function modeOf(room: Room, memberId: number): PawnMode | undefined {
@@ -274,16 +275,49 @@ function fight(session: ClientSession, own: PawnState, tick: number, cmd: Omit<I
   return { ...cmd, yaw: face(st) + wobble.yaw, pitch: pitch + wobble.pitch, buttons: (cmd.buttons & ~(Btn.Sprint | Btn.Fire)) | ((tick >> 6) % 2 === 0 ? Btn.Fire : 0) };
 }
 
-/** Combat runs: two lines of five, 8 m apart, facing each other (team 0 on the south line). */
-const combatSpot = (i: number) => ({ x: -6 + Math.floor(i / 2) * 3, z: i % 2 ? 12 : 4, yawDeg: i % 2 ? 0 : 180 });
-/** Combat across walls: the lines 2.5 m either side of the sample walls at z 17 (soft x −5.5…−3.5, reinforceable −2.5…−0.5, hard 0.5…2.5). */
-const wallSpot = (i: number) => ({ x: [-5, -4, -2, -1, 1.5][Math.floor(i / 2) % 5], z: i % 2 ? 14.5 : 19.5, yawDeg: i % 2 ? 180 : 0 });
+/** Where the bots play on a level: the middle crowds steer to, and the spots of a spread, a fight, and a fight across walls. */
+interface Venue {
+  middle: { x: number; z: number };
+  spread: (i: number) => { x: number; z: number };
+  combat: (i: number) => { x: number; z: number; yawDeg: number };
+  walls: (i: number) => { x: number; z: number; yawDeg: number };
+}
+
+export const VENUES: Record<string, Venue> = {
+  movement_lab: {
+    middle: { x: 0, z: 10 },
+    // Along the open south side of the lab, 6 m apart.
+    spread: (i) => ({ x: -27 + (i % 10) * 6, z: 26 - Math.floor(i / 10) * 4 }),
+    // Two lines of five, 8 m apart, facing each other (team 0 on the south line).
+    combat: (i) => ({ x: -6 + Math.floor(i / 2) * 3, z: i % 2 ? 12 : 4, yawDeg: i % 2 ? 0 : 180 }),
+    // The lines 2.5 m either side of the sample walls at z 17 (soft x −5.5…−3.5, reinforceable −2.5…−0.5, hard 0.5…2.5).
+    walls: (i) => ({ x: [-5, -4, -2, -1, 1.5][Math.floor(i / 2) % 5], z: i % 2 ? 14.5 : 19.5, yawDeg: i % 2 ? 180 : 0 }),
+  },
+  oregon: {
+    // The street south of the building, on the ground (1F's level).
+    middle: { x: 30, z: 54 },
+    spread: (i) => ({ x: 10 + (i % 10) * 6, z: 56 - Math.floor(i / 10) * 8 }),
+    combat: (i) => ({ x: 16 + Math.floor(i / 2) * 3, z: i % 2 ? 50 : 58, yawDeg: i % 2 ? 180 : 0 }),
+    // Inside, 2.5 m either side of SW-1F-06, the Kitchen's 4 m soft wall to the Security room (z 31.15, x 20.55…24.6).
+    walls: (i) => ({ x: [20.95, 21.75, 22.55, 23.35, 24.15][Math.floor(i / 2) % 5], z: i % 2 ? 33.65 : 28.65, yawDeg: i % 2 ? 0 : 180 }),
+  },
+};
 
 export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<NetsimReport> {
   const o: NetsimOptions = { ...DEFAULTS, ...partial };
   const rng = new Rng(o.seed);
   const clock = new Clock();
-  const room = await Room.create("SIM00", "movement_lab", { lab: true, seed: o.seed });
+  const level = o.level ?? "movement_lab";
+  const venue = VENUES[level];
+  if (!venue) throw new Error(`netsim: no venue for level "${level}" (one of ${Object.keys(VENUES).join(", ")})`);
+  const room = await Room.create("SIM00", level, { lab: true, seed: o.seed });
+  // Every spot the run uses must hold a standing body: one in a wall would be shoved out, and every client
+  // would mispredict it.
+  for (let i = 0; i < o.clients; i++) {
+    for (const [what, spot] of [["spread", venue.spread(i)], ["combat", venue.combat(i)], ["walls", venue.walls(i)]] as const) {
+      if (!room.sim.standsFree(spot.x, 0, spot.z)) throw new Error(`netsim: the ${level} ${what} spot of client ${i} (${spot.x}, ${spot.z}) doesn't hold a body`);
+    }
+  }
   /** Corrections that were real mispredictions (not damage or respawns). */
   const mismatches = (memberId: number) => {
     const i = room.memberInfo(memberId);
@@ -328,8 +362,8 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
       memberId = room.join(name, { send: (b) => down.send(b), buffered: () => 0 }, op)!;
       const drift = 1 + ((rng.next() * 2 - 1) * o.driftPct) / 100;
       // In a fight the first two (one a side) charge; everyone else keeps to their spot in the line.
-      const home = o.combat ? (o.walls ? wallSpot(i) : i < 2 ? null : combatSpot(i)) : o.spread ? spreadSpot(i) : null;
-      return { name, session, down, up, memberId, drift, brain: bot(new Rng(o.seed * 1000 + i), o.crowd && !o.combat, home), nextTickAt: 0, ticks: 0, deadSince: null as number | null };
+      const home = o.combat ? (o.walls ? venue.walls(i) : i < 2 ? null : venue.combat(i)) : o.spread ? venue.spread(i) : null;
+      return { name, session, down, up, memberId, drift, brain: bot(new Rng(o.seed * 1000 + i), o.crowd && !o.combat, home, venue.middle), nextTickAt: 0, ticks: 0, deadSince: null as number | null };
     }),
   );
 
@@ -340,7 +374,7 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
   // Deliver the join messages, then load every client's level.
   clock.runUntil(o.oneWayMs * 3 + o.jitterMs);
   await Promise.all(clients.map((c) => c.session.loaded()));
-  const place = (i: number) => room.onLabTool(clients[i].memberId, { kind: "teleport", y: 0, ...(o.combat ? (o.walls ? wallSpot(i) : combatSpot(i)) : { ...spreadSpot(i), yawDeg: 90 * i }) });
+  const place = (i: number) => room.onLabTool(clients[i].memberId, { kind: "teleport", y: 0, ...(o.combat ? (o.walls ? venue.walls(i) : venue.combat(i)) : { ...venue.spread(i), yawDeg: 90 * i }) });
   if (o.spread || o.combat) clients.forEach((_, i) => place(i));
 
   const endAt = clock.now + o.seconds * 1000;
@@ -414,7 +448,10 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
     if (touching(c.memberId)) contactLate.push(`${c.name}: ${late} correction(s) at rest, pressed against another body`);
     else desyncs.push(`${c.name}: ${late} correction(s) while standing still`);
   });
-  const sorted = [...serverTimes].sort((a, b) => a - b);
+  const spread = (times: number[]) => {
+    const sorted = [...times].sort((a, b) => a - b);
+    return { mean: sorted.reduce((a, b) => a + b, 0) / sorted.length, p99: sorted[Math.floor(sorted.length * 0.99)], max: sorted[sorted.length - 1] };
+  };
   const secs = o.seconds;
   return {
     options: o,
@@ -430,11 +467,8 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
       interpDelayMs: c.session.interpDelayMs,
     })),
     room: room.stats,
-    serverTickMs: {
-      mean: sorted.reduce((a, b) => a + b, 0) / sorted.length,
-      p99: sorted[Math.floor(sorted.length * 0.99)],
-      max: sorted[sorted.length - 1],
-    },
+    serverTickMs: spread(serverTimes),
+    serverTickMsWarm: spread(serverTimes.slice(Math.round(1 / DT))),
     desyncs,
     contactLate,
     sprayStallShots: o.sprayStall ? stallShots : null,
