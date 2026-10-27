@@ -128,6 +128,15 @@ describe("reinforcement", () => {
     expect(q.apply({ kind: "reinforce", section: 0, side: 1 }).added[L_STEEL].length).toBe(30 * rows);
   });
 
+  it("a section with no column of its own (a panel fewer cells across than it has sections) takes no steel", () => {
+    const p = panel("reinforceable_wall", 0.05, 2.5, 0.2, { sections: 2 });
+    expect(p.sectionRange(0)).toEqual([0, 0]);
+    expect(p.apply({ kind: "reinforce", section: 0, side: 0 }).added[L_STEEL]).toEqual([]);
+    expect([p.reinforced, p.everReinforced]).toEqual([0, 0]);
+    expect(p.apply({ kind: "reinforce", section: 1, side: 0 }).added[L_STEEL].length).toBeGreaterThan(0);
+    expect(p.reinforced).toBe(2);
+  });
+
   it("a damaged wall can be reinforced: the steel closes the hole to bodies", () => {
     const p = panel("reinforceable_wall", 2, 2.5, 0.2, { sections: 1 });
     for (const layer of [L_FRONT, L_CORE, L_BACK]) p.apply(rect(layer, 10, 0, 30, 36));
@@ -375,10 +384,16 @@ describe("settling after a cut", () => {
   }
 
   it("drops what a flood over the whole panel drops and moves the same cells, op by op, for every construction", () => {
-    const cases: [string, number, number, number, Partial<PanelSpec>][] = [
+    const cases: [string, number, number, number, Partial<PanelSpec>, PanelOp[]?][] = [
       ["soft_wall", 3.45, 2.95, 0.2, {}],
       ["reinforceable_wall", 3, 3, 0.2, { sections: 3 }],
       ["reinforceable_wall", 2.05, 2.5, 0.2, { sections: 2, reinforced: true, reinforcedSide: 1 }],
+      // One cell across, two sections: section 0 has no column (the data refuses it; the panel must still agree).
+      // First its steel, then a cut that settles the skin: the flood clears a section left without steel.
+      ["reinforceable_wall", 0.05, 2.5, 0.2, { sections: 2 }, [
+        { kind: "reinforce", section: 0, side: 0 },
+        { kind: "cut", layer: L_FRONT, shape: { kind: "disc", u4: 2, v4: 100, r4: 2 }, hard: false },
+      ]],
       ["soft_wall_no_studs", 2, 2.5, 0.15, {}],
       ["semi_wall", 2, 2.5, 0.2, {}],
       ["soft_floor", 4, 3.35, 0.25, {}],
@@ -388,8 +403,8 @@ describe("settling after a cut", () => {
       ["barricade_window", 1.2, 1.2, 0.05, { empty: true }],
       ["glass", 1, 1, 0.02, {}],
     ];
-    const fellPer: Record<string, number> = {};
-    cases.forEach(([id, wM, hM, tM, extra], n) => {
+    const fellPer: Record<string, { fell: number; cells: number }> = {};
+    cases.forEach(([id, wM, hM, tM, extra, script = []], n) => {
       let a = panel(id, wM, hM, tM, extra);
       const ref = panel(id, wM, hM, tM, extra);
       let fell = 0;
@@ -400,7 +415,7 @@ describe("settling after a cut", () => {
       });
       const rnd = stream(1000 + n);
       let k = 0;
-      for (const op of randomOps(a, rnd, 300)) {
+      for (const op of [...script, ...randomOps(a, rnd, 300)]) {
         if (k === 100) {
           // A joining player's copy carries on from the state it was sent.
           const out = new ByteWriter(8192);
@@ -416,10 +431,10 @@ describe("settling after a cut", () => {
         expect(a.movementRects(), `${id} #${n}, op ${k}`).toEqual(ref.movementRects());
         k++;
       }
-      fellPer[`${id} #${n}`] = fell;
+      fellPer[`${id} #${n}`] = { fell, cells: ref.w * ref.h };
     });
     // The ops cut pieces free on every wall and floor (each ring's inside, beams cut twice, steel cut through).
-    for (const [key, fell] of Object.entries(fellPer)) if (!/hatch|barricade|glass/.test(key)) expect(fell, key).toBeGreaterThan(50);
-    expect(Object.values(fellPer).reduce((s, x) => s + x, 0)).toBeGreaterThan(2000);
+    for (const [key, { fell, cells }] of Object.entries(fellPer)) if (!/hatch|barricade|glass/.test(key)) expect(fell, key).toBeGreaterThan(cells >= 1000 ? 50 : 0);
+    expect(Object.values(fellPer).reduce((s, x) => s + x.fell, 0)).toBeGreaterThan(2000);
   });
 });

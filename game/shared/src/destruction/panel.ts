@@ -213,6 +213,8 @@ export class Panel {
       const bit = 1 << op.section;
       if (!steel || op.section < 0 || op.section >= this.sectionCount || this.reinforcedBefore(op.section) || this.broken) return change;
       const [u0, u1] = this.sectionRange(op.section);
+      // A section with no column of its own (a panel fewer cells across than it has sections) takes no steel.
+      if (u1 <= u0) return change;
       for (let v = 0; v < this.steelRows; v++)
         for (let u = u0; u < u1; u++) {
           const i = v * this.w + u;
@@ -473,17 +475,25 @@ export class Panel {
     change.broke = true;
   }
 
-  /** The move mask after a cut: only the coarse cells round the cells it took (and what fell with them) change. */
+  /**
+   * The move mask after a cut: only the coarse cells round the cells it took (and what fell with them) change,
+   * each looked at once. A cut taking as many cells as there are coarse cells costs no more redone whole.
+   */
   private moveMaskAfter(change: PanelChange): Uint8Array {
-    if (this.broken) return this.computeMoveMask();
+    const taken = change.removed.reduce((n, list) => n + list.length, 0);
+    if (this.broken || taken >= this.moveMask.length) return this.computeMoveMask();
     const m = this.moveMask.slice();
+    const done = new Uint8Array(m.length);
     const cw = Math.ceil(this.w / MOVE_CELLS);
     for (const list of change.removed) {
       for (const i of list) {
         const u = i % this.w;
         const cu = Math.floor(u / MOVE_CELLS);
         const cv = Math.floor((i - u) / this.w / MOVE_CELLS);
-        m[cv * cw + cu] = this.coarseSolid(cu, cv);
+        const k = cv * cw + cu;
+        if (done[k]) continue;
+        done[k] = 1;
+        m[k] = this.coarseSolid(cu, cv);
       }
     }
     return m;

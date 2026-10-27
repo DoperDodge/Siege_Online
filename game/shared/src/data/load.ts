@@ -295,6 +295,9 @@ function destructionProblems(d: DestructionData, weapons: Map<string, WeaponData
       const flat = c.kind === "floor" || c.kind === "hatch";
       const [w, h, t] = flat ? [s.size[0], s.size[2], s.size[1]] : [Math.max(s.size[0], s.size[2]), s.size[1], Math.min(s.size[0], s.size[2])];
       if (w < d.cellM || h < d.cellM) out.push(`${at} is smaller than one ${d.cellM} m cell`);
+      // Every reinforcement section needs a column of cells of its own (a section with none could never take steel).
+      const sections = s.panel?.sections ?? (c.kind === "wall" ? 2 : 1);
+      if (c.kind === "wall" && c.reinforceable && Math.max(1, Math.round(w / d.cellM)) < sections) out.push(`${at}: ${sections} reinforcement sections across ${Math.max(1, Math.round(w / d.cellM))} cells`);
       if ("skinM" in c && t <= 2 * c.skinM) out.push(`${at} is ${t} m thick, no thicker than its two ${c.skinM} m skins`);
       const reinforced = s.panel?.reinforced ?? s.surface === "REINFORCED_WALL";
       if (reinforced && !("reinforceable" in c && c.reinforceable)) out.push(`${at} starts reinforced but "${id}" can't be reinforced`);

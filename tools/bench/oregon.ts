@@ -85,11 +85,14 @@ for (const [name, make] of shapes) {
   const pure: number[] = [];
   const withBoxes: number[] = [];
   for (const e of subjects) {
-    // A fresh copy of the panel for the op alone, then the level's own (its boxes rebuilt when bodies' cells change).
+    // A fresh copy of the panel for the op alone, then the level's own (its boxes rebuilt when bodies' cells change),
+    // started over first outside the timing: both take the op on a whole panel, and both pay for the settle's
+    // scratch arrays, as a panel's first hole in a round does.
     for (let i = 0; i < (name === "breach" ? 10 : 60); i++) {
       const list = make(e.panel);
       const copy = new Panel(e.panel.spec);
       pure.push(time(() => list.forEach((op) => copy.apply(op))));
+      panels.reset(e.panel.spec.index);
       withBoxes.push(time(() => list.forEach((op) => panels.apply(e.panel.spec.index, op))));
     }
   }

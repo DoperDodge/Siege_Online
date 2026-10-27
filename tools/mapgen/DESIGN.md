@@ -842,7 +842,7 @@ Estimated real counts (Appendix B): about 1,100–1,600 static colliders, 150–
 **Measured on the real level (M6, D-108, D-109):** 977 colliders, 179 panels, 338k cells per layer, the largest
 panel 4,980 cells, level.json 150 KB. Room.step with 10 bots walking and firing in the street p99 3.0–3.4 ms
 (netsim, after the first second); fighting across a 4 m soft wall (26 panel ops a second) 4.2–5.4 ms, with panels
-about 1% of a step after the local settle. Sim.create 14–16 ms. A bullet on the biggest panels 0.04 ms (p95 0.09);
+about 1% of a step after the local settle. Sim.create 14–21 ms. A bullet on the biggest panels 0.03 ms (p95 0.09);
 the client's redraw after it 0.2–0.5 ms p50, p95 0.4–0.6 ms on the 4 m tiles and the 4.15 m walls alike, so the
 tiles stay at 4 m. In the browser (oregon-perf.mjs, software rendering): the page's work p50 3.5 / p95 7–9 ms, at
 most 492 draws a frame; an explosive's redraw p95 1.5–2.1 ms, the part E6's chunked drawing is for. A late joiner
