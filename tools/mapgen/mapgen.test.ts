@@ -20,6 +20,7 @@ import { FLOOR_IDS, wallSchema, type SpanDef, type WallDef } from "./schema.js";
 import type { Floor } from "./research.js";
 import { compileStairs, type CompiledRun } from "./stairs.js";
 import { compileWalls } from "./walls.js";
+import { mapReport, reportMarkdown, wallDrift } from "./report.js";
 import { buildWalkGraph, nodeNear, nodesIn, type WalkGraph } from "./walkgraph.js";
 
 const ROOT = join(import.meta.dirname, "..", "..");
@@ -165,36 +166,27 @@ describe("oregon level.json", () => {
   });
 
   it("the wall files still match the extraction, except where curated by hand", () => {
-    const problems: string[] = [];
-    for (const part of inputs.walls) {
-      const ex = extracted.floors[part.floor];
-      const boxes = new Map(ex.walls.map((w) => [w.id, w]));
-      const opens = new Map(ex.openings.map((o) => [o.id, o]));
-      for (const w of part.walls) {
-        if (w.src === "hand" || w.src === "ulo") continue;
-        const from = (w.from ?? []).map((id) => boxes.get(id)!);
-        if (from.some((b) => !b)) problems.push(`${w.id}: from names a box extracted.json doesn't have`);
-        const along = from.flatMap((b) => (w.axis === "H" ? [b.rect[0], b.rect[2]] : [b.rect[1], b.rect[3]]));
-        const lo = Math.min(...along, ...w.spans.map((s) => s.at[0]));
-        const hi = Math.max(...along, ...w.spans.map((s) => s.at[1]));
-        if (Math.abs(lo - w.span[0]) > 0.5 || Math.abs(hi - w.span[1]) > 0.5) problems.push(`${w.id}: span ${w.span} drifted from the extraction (${lo}..${hi})`);
-        // Every box, not just the nearest: a line that swallowed a wall drawn elsewhere has one far off.
-        if (from.length && Math.max(...from.map((b) => Math.abs(b.c - w.at))) > 0.5) problems.push(`${w.id}: a box is off its centreline ${w.at}`);
-        for (const s of w.spans) {
-          if (s.src === "hand" || s.src === "ulo" || !s.from) continue;
-          const src = boxes.get(s.from[0]) ?? opens.get(s.from[0]);
-          if (!src) {
-            problems.push(`${s.id}: from names ${s.from[0]}, which extracted.json doesn't have`);
-            continue;
-          }
-          const [a0, a1] = w.axis === "H" ? [src.rect[0], src.rect[2]] : [src.rect[1], src.rect[3]];
-          if (s.kind === "DRONE_HOLE") {
-            if (Math.abs((s.at[0] + s.at[1]) / 2 - (a0 + a1) / 2) > 0.5) problems.push(`${s.id}: drone hole drifted from its icon`);
-          } else if (Math.abs(a0 - s.at[0]) > 0.5 || Math.abs(a1 - s.at[1]) > 0.5) problems.push(`${s.id}: ${s.at} drifted from the extraction (${a0}..${a1})`);
-        }
-      }
-    }
-    expect(problems).toEqual([]);
+    const { drift } = wallDrift(inputs, extracted);
+    expect(drift.length).toBeGreaterThan(300);
+    const far = drift.filter((d) => d.du > 0.5);
+    expect(far.map((d) => `${d.floor} ${d.id}: ${d.du === Infinity ? "from names a box extracted.json doesn't have" : `${d.what} drifted ${d.du} u from the extraction`}`)).toEqual([]);
+  });
+
+  it("the report lists the budgets, every UNVERIFIED value by file and record, and the drift", () => {
+    const r = mapReport(ROOT, inputs, { level, report }, extracted);
+    for (const b of r.budgets) expect(b.value, b.name).toBeLessThanOrEqual(b.limit);
+    expect(r.budgets.map((b) => b.name)).toEqual(["static colliders", "panels", "panel cells per layer", "cells per layer of the largest panel", "level.json bytes"]);
+    const find = (file: string, record: string) => r.unverified.find((u) => u.file === file && u.record === record)?.fields;
+    expect(find("layout.json", "(file)")).toContain("units.mPerU");
+    expect(find("layout.json", "PEEK_C_TOWER")).toEqual(["openings", "faces"]);
+    expect(find("walls_1F.json", "SW-1F-03")).toBeDefined();
+    expect(new Set(r.unverified.map((u) => u.file))).toEqual(new Set(["layout.json", ...inputs.layout.parts]));
+    // A record with nothing left to verify isn't listed.
+    expect(r.unverified.every((u) => u.fields.length > 0)).toBe(true);
+    expect(r.curated.length).toBeGreaterThan(0);
+    const md = reportMarkdown({ level, report }, r, { B: "alt" });
+    for (const heading of ["## Counts", "## Budgets", "## Frames with an alternative", "## UNVERIFIED", "## Drift from the extraction"]) expect(md).toContain(heading);
+    expect(md).toMatch(/\*\*B alt\*\* \(in use\)/);
   });
 
   it("every extracted wall and opening is used by a wall file, or dropped there with a reason", () => {

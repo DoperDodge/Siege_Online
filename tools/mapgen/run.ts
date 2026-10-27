@@ -13,6 +13,7 @@ import { readableJson } from "./format.js";
 import { importFloor, type Extracted } from "./import.js";
 import { planSvg, writePlans } from "./plans.js";
 import { downloadRefs } from "./refs.js";
+import { mapReport, reportMarkdown, summaryLines } from "./report.js";
 import { connections, FLOORS, softWalls } from "./research.js";
 
 const ROOT = process.cwd();
@@ -50,7 +51,11 @@ function runCompile() {
   const { level, report } = compile(inputs);
   const text = readableJson(level);
   const file = join(MAP, "level.json");
-  write(join(ROOT, "builds", "mapgen", "report.json"), JSON.stringify(report, null, 1) + "\n");
+  const extracted = JSON.parse(readFileSync(join(MAP, "extracted.json"), "utf8")) as Extracted;
+  const more = mapReport(ROOT, inputs, { level, report }, extracted);
+  const inUse = Object.fromEntries(Object.entries(inputs.layout.frames).map(([f, v]) => [f, v.use]));
+  write(join(ROOT, "builds", "mapgen", "report.json"), JSON.stringify({ ...report, ...more }, null, 1) + "\n");
+  write(join(ROOT, "builds", "mapgen", "report.md"), reportMarkdown({ level, report }, more, inUse));
   const c = report.counts;
   console.log(
     `oregon: ${c.solids} solids (${report.panels} panels, ${report.cellsPerLayer} cells per layer), ` +
@@ -62,6 +67,7 @@ function runCompile() {
       console.log(`  frames.${frame} ${use}${chosen}: ` + landings.map((l) => `${l.hatch} ${Math.round(l.over * 100)}% over ${l.bottom}${l.over === 1 ? `, ${l.clearM} m clear` : ""}`).join("; "));
     }
   }
+  for (const line of summaryLines(more)) console.log(`  ${line}`);
   for (const w of report.warnings) console.log(`  warning: ${w}`);
   for (const e of report.errors) console.error(`  error: ${e}`);
   if (report.errors.length) process.exit(1);
