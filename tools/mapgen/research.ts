@@ -180,6 +180,25 @@ export function roomTable(root: string): RoomRow[] {
   return out;
 }
 
+/**
+ * layout_notes.md §4.1–4.4: each room's bounding box as the research gives it (u, in its floor's own image). A room
+ * the research gives as two boxes (an L, a T) keeps the first.
+ */
+export function roomBoxes(root: string): { id: string; floor: Floor; x: [number, number]; y: [number, number] }[] {
+  const text = readFileSync(join(researchDir(root), "layout_notes.md"), "utf8");
+  const floorOf: Record<string, Floor> = { "4.1": "B", "4.2": "1F", "4.3": "2F", "4.4": "3F" };
+  const out: { id: string; floor: Floor; x: [number, number]; y: [number, number] }[] = [];
+  for (const t of mdTables(text)) {
+    const floor = floorOf[t.heading.slice(0, 3)];
+    if (!floor || t.header[0] !== "room_id" || !t.header[1].startsWith("bbox x")) continue;
+    for (const r of t.rows) {
+      const [x, y] = [range(r[1]), range(r[2])];
+      if (x && y) out.push({ id: r[0], floor, x, y });
+    }
+  }
+  return out;
+}
+
 /** surfaces.md §4.2: the soft floors, by id ("SF-2F-01"), with the area they cover and whether a source disputes them. */
 export function softFloorTable(root: string): { id: string; area: string; verified: string }[] {
   const text = readFileSync(join(researchDir(root), "surfaces.md"), "utf8");

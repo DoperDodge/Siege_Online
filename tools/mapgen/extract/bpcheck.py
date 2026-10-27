@@ -7,7 +7,13 @@
 2. Per wall: coverage of the blueprint's wall pixels along the wall's centre line at the best offset (+-4 u), and
    that offset after registration. status ok (|offset| <= 1.5 u, coverage >= 0.6), offset (coverage >= 0.6,
    |offset| <= 4 u), weak (0.35-0.6), missing (< 0.35), n/a (SOFT walls: exact vector data; walls < 3 u).
+
+Run on its own (`python3 -I tools/mapgen/extract/bpcheck.py`, DESIGN §9.1) it checks what we build instead: the wall
+files (data/maps/oregon/walls_<floor>.json, each floor's own u), every stretch of hard wall between the spans and
+every door, window and passage, and prints the agreement per floor (builds/mapgen/bpcheck.json has the detail).
 """
+import argparse
+import json
 import os
 
 import numpy as np
@@ -212,3 +218,92 @@ def check_all(W, O, fl, bp_dir, alpha=None, S=None, oy=0.0):
         return best >= 0.99
 
     return out, fitinfo, ops, sorted(extra, key=lambda e: -e['len']), solid_at
+
+
+FLOOR_INDEX = {'B': '0', '1F': '1', '2F': '2', '3F': '3'}
+#: Thickness classes in u (the drawn bands: about 7 px interior, 11-13 px exterior on the 2 px/u raster).
+WEIGHT_U = {'int': 3.0, 'ext': 5.0}
+
+
+def our_walls(part, m_per_u):
+    """A wall file as check_all reads it: each line's hard stretches between its spans (a drone hole's slot and an
+    opening built as wall all the same stay in them) and its SOFT spans as walls; its doors, windows and passages as
+    openings. Rails are left out: the blueprint doesn't draw them as walls."""
+    W, O = [], []
+    for line in part['walls']:
+        if line.get('kind', 'wall') == 'rail':
+            continue
+        t = WEIGHT_U[line['weight']] if isinstance(line['weight'], str) else line['weight'] / m_per_u
+        k, at = line['axis'], line['at']
+
+        def rect(a0, a1):
+            return [a0, at - t / 2, a1, at + t / 2] if k == 'H' else [at - t / 2, a0, at + t / 2, a1]
+
+        def hard(a0, a1):
+            if a1 - a0 > 0.05:
+                W.append(dict(id=f"{line['id']}@{a0:.1f}", line=line['id'], k=k, rect=rect(a0, a1), surface='HARD', len=a1 - a0))
+
+        cur = line['span'][0]
+        for s in sorted(line['spans'], key=lambda s: s['at'][0]):
+            if s['kind'] == 'DRONE_HOLE' or s.get('hard'):
+                continue
+            hard(cur, s['at'][0])
+            a0, a1 = s['at']
+            if s['kind'] == 'SOFT':
+                W.append(dict(id=s['id'], line=line['id'], k=k, rect=rect(a0, a1), surface='SOFT', len=a1 - a0))
+            else:
+                O.append(dict(id=s['id'], k=k, rect=rect(a0, a1), type={'DOOR': 'DOOR', 'WINDOW': 'EXT_OPENING', 'OPEN': 'OPEN'}[s['kind']]))
+            cur = max(cur, a1)
+        hard(cur, line['span'][1])
+    return W, O
+
+
+def main():
+    here = os.path.dirname(os.path.abspath(__file__))
+    ap = argparse.ArgumentParser(description='Our wall files against the official blueprints, per floor (DESIGN 9.1).')
+    ap.add_argument('--repo', default=os.path.abspath(os.path.join(here, '..', '..', '..')))
+    ap.add_argument('--bp-dir', default=None, help='folder with r6-maps-oregon-blueprint-{1..5}.jpg (default: research/oregon/refs/web/blueprint)')
+    ap.add_argument('--out', default=None, help='JSON detail (default: builds/mapgen/bpcheck.json)')
+    a = ap.parse_args()
+    bp_dir = a.bp_dir or os.path.join(a.repo, 'research', 'oregon', 'refs', 'web', 'blueprint')
+    out_path = a.out or os.path.join(a.repo, 'builds', 'mapgen', 'bpcheck.json')
+    m_per_u = json.load(open(os.path.join(a.repo, 'data', 'maps', 'oregon', 'layout.json')))['units']['mPerU']
+    report = {}
+    for floor, fl in FLOOR_INDEX.items():
+        part = json.load(open(os.path.join(a.repo, 'data', 'maps', 'oregon', f'walls_{floor}.json')))
+        W, O = our_walls(part, m_per_u)
+        walls, fit_info, ops, _extra, _solid = check_all(W, O, fl, bp_dir)
+        if fit_info is None:
+            print(f'{floor}: no blueprint image in {bp_dir} (npm run mapgen:refs downloads them)')
+            continue
+        hard = [w for w in W if w['surface'] == 'HARD' and walls[w['id']]['status'] != 'n/a']
+        by = {}
+        for w in hard:
+            st = walls[w['id']]['status']
+            by.setdefault(st, [0, 0.0])
+            by[st][0] += 1
+            by[st][1] += w['len']
+        total = sum(w['len'] for w in hard) or 1.0
+        conflicts = [o for o in ops if o['verdict'].endswith('(CONFLICT)')]
+        report[floor] = dict(
+            registration=fit_info,
+            hard=dict(stretches=len(hard), lengthU=round(total, 1), byStatus={k: dict(count=v[0], lengthU=round(v[1], 1), share=round(v[1] / total, 3)) for k, v in sorted(by.items())}),
+            notOk=[dict(id=w['id'], line=w['line'], lenU=round(w['len'], 1), **walls[w['id']]) for w in hard if walls[w['id']]['status'] != 'ok'],
+            openings=dict(count=len(ops), conflicts=[dict(id=o['id'], type=o['type'], blueprintWhite=o['bp_centre_white']) for o in conflicts]),
+        )
+        r = report[floor]
+        ok = r['hard']['byStatus'].get('ok', dict(share=0.0))['share']
+        rest = ', '.join(f"{k} {v['count']} ({v['lengthU']} u)" for k, v in r['hard']['byStatus'].items() if k != 'ok') or 'none other'
+        print(f"{floor}: {r['hard']['stretches']} stretches of hard wall ({r['hard']['lengthU']} u): {ok:.0%} of their length agrees with the blueprint (within 1.5 u); {rest}. "
+              f"{len(ops)} openings, {len(conflicts)} where the blueprint draws solid wall{': ' + ', '.join(o['id'] for o in conflicts) if conflicts else ''}.")
+        for w in r['notOk']:
+            print(f"   {w['status']:8} {w['id']:22} {w['lenU']:6.1f} u  offset {w['offset']} u, coverage {w['coverage']}")
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    with open(out_path, 'w') as f:
+        json.dump(report, f, indent=1)
+        f.write('\n')
+    print(f'wrote {out_path}')
+
+
+if __name__ == '__main__':
+    main()

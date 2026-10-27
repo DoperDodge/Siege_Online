@@ -34,11 +34,20 @@ Needs Python 3 with numpy and Pillow (not part of `npm ci`; nothing in CI runs t
 | `svgdata.py` | Writes each floor's embedded 1024 px raster to `img/r6c/` and reads the overlay vectors (soft walls `bw`, drone holes `dt`, hatches `fh`/`ch`, soft floors `losf`, icons) |
 | `wallgeo.py` | Finds the white wall bands in a raster and turns them into boxes (run-length vectorisation) |
 | `build.py` | Splits bands at the door and window glyphs, attaches soft-wall spans and drone holes |
-| `bpcheck.py`, `bpglyph.py` | Registers each blueprint floor to the raster and checks every wall and opening against it |
+| `bpcheck.py`, `bpglyph.py` | Registers each blueprint floor to the raster and checks every wall and opening against it. Run on its own, `bpcheck.py` checks what we build instead (next section) |
 | `evaluate.py`, `research.py`, `corrections.py` | Compare with the research tables (`research/oregon/*.md`) |
 | `run.py` | Runs the above per floor; writes `out/walls_<F>.json`, `out/eval_<F>.json` and overlay pictures in `img/` |
 | `xfloor.py`, `combine.py` | Fit the per-floor frames (2F is about 2.4% larger than 1F) and combine the floors |
 | `points.py` | Icon centres (cameras, extinguishers, gas pipes, ladders, bombs, spawns, hatches) |
 | `pack.py` | Packs the numbers into `data/maps/oregon/extracted.json` |
+
+## Our walls against the blueprint
+
+`python3 -I tools/mapgen/extract/bpcheck.py` (after `npm run mapgen:refs`) reads the wall files we build from,
+`data/maps/oregon/walls_<floor>.json`, registers each floor's blueprint to them, and prints per floor how much of
+the hard wall's length the blueprint draws within 1.5 u, which stretches it doesn't, and any door, window or
+passage where it draws solid wall; `builds/mapgen/bpcheck.json` has the detail. For the eye, `npm run
+mapgen:compare` writes `builds/mapgen/compare/index.html`: each floor's plan over the r6calls raster or the
+blueprint, with an opacity slider and the layers (the research's room boxes too) to switch.
 
 The design and its accuracy figures: `tools/mapgen/DESIGN.md` §6.
