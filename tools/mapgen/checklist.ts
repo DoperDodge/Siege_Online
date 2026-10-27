@@ -160,11 +160,12 @@ export function walkChecklist(inputs: Inputs, compiled: Compiled): Checklist {
 
   // ---- Roofs: the flat slabs and the sloped ramps of layout.roofs, by height at a spot.
   const roofCallout = new Map(layout.roofs.map((r) => [r.id, r.callout]));
-  const roofAt = (x: number, z: number, y: number): string | null => {
+  /** Every roof surface over a spot: its name and height (a flat roof's slab, a sloped one's ramp there). */
+  const roofsOver = (x: number, z: number) => {
+    const out: { callout: string; y: number }[] = [];
     for (const s of level.solids) {
       const callout = s.surface === "HARD_FLOOR" ? roofCallout.get(s.id.split("#")[0]) : undefined;
-      if (!callout || Math.abs(s.center[1] + s.size[1] / 2 - y) > 0.6) continue;
-      if (Math.abs(x - s.center[0]) <= s.size[0] / 2 && Math.abs(z - s.center[2]) <= s.size[2] / 2) return callout;
+      if (callout && Math.abs(x - s.center[0]) <= s.size[0] / 2 && Math.abs(z - s.center[2]) <= s.size[2] / 2) out.push({ callout, y: s.center[1] + s.size[1] / 2 });
     }
     for (const r of level.ramps) {
       const callout = roofCallout.get(r.id.split(".")[0]);
@@ -172,13 +173,17 @@ export function walkChecklist(inputs: Inputs, compiled: Compiled): Checklist {
       const [fx, fz] = forward(r.yawDeg);
       const [dx, dz] = [x - r.start[0], z - r.start[2]];
       const along = dx * fx + dz * fz;
-      const across = Math.abs(dx * fz - dz * fx);
-      if (along < 0 || along > r.length * Math.cos(r.angleDeg * DEG) || across > r.width / 2) continue;
-      const h = r.start[1] + along * Math.tan(r.angleDeg * DEG) - y;
-      if (h >= -0.6 && h <= 1.2) return callout;
+      if (along >= 0 && along <= r.length * Math.cos(r.angleDeg * DEG) && Math.abs(dx * fz - dz * fx) <= r.width / 2) out.push({ callout, y: r.start[1] + along * Math.tan(r.angleDeg * DEG) });
     }
-    return null;
+    return out;
   };
+  /** The roof you step out onto from a floor at height y: one within 0.6 m below it to 1.2 m above. */
+  const roofAt = (x: number, z: number, y: number): string | null => roofsOver(x, z).find((r) => r.y - y >= -0.6 && r.y - y <= 1.2)?.callout ?? null;
+  /** The highest roof further down, within a 4 m drop. */
+  const roofUnder = (x: number, z: number, y: number) =>
+    roofsOver(x, z)
+      .filter((r) => r.y < y - 0.6 && r.y >= y - 4)
+      .sort((a, b) => b.y - a.y)[0];
 
   /** A roof at a spot or within `r` metres of it. */
   const roofNear = (x: number, z: number, y: number, r: number) => {
@@ -201,7 +206,9 @@ export function walkChecklist(inputs: Inputs, compiled: Compiled): Checklist {
     if (typeof p.place === "number") return `to ${name(p.place, floor)}`;
     if (p.place === "outside") {
       const roof = roofOf(p, floor);
-      return roof ? `onto the ${roof}` : "to the outside";
+      const y = storeyById.get(floor)!.floorY;
+      const under = !roof && y > 0.5 ? roofUnder(p.x, p.z, y) : undefined;
+      return roof ? `onto the ${roof}` : under ? `to the outside, ${m1(y - under.y)} above the ${under.callout}` : "to the outside";
     }
     if (p.place === "well") {
       const down = below(floor);
@@ -239,8 +246,9 @@ export function walkChecklist(inputs: Inputs, compiled: Compiled): Checklist {
       else text = `${s.kind === "DOOR" ? "door" : "window"} ${side} ${to} (${s.id}${kindOpen})`;
       if (typeof me.place === "number") {
         add(me.place, ORDER[s.hard ? "hard" : s.kind] + SIDE_ORDER.indexOf(side), text, `span:${s.id}`);
-        const roof = s.hard ? null : roofOf(other, s.floor);
-        if (roof && (s.kind === "DOOR" || s.kind === "WINDOW" || s.kind === "OPEN")) onRoofs.push(`from ${s.floor} ${name(me.place)}, the ${s.kind === "OPEN" ? "opening" : s.kind.toLowerCase()} ${side} (${s.id}) onto the ${roof}`);
+        if (!s.hard && (s.kind === "DOOR" || s.kind === "WINDOW" || s.kind === "OPEN") && other.place === "outside" && /^(onto|to the outside, )/.test(to)) {
+          onRoofs.push(`from ${s.floor} ${name(me.place)}, the ${s.kind === "OPEN" ? "opening" : s.kind.toLowerCase()} ${side} (${s.id})${to.startsWith("onto") ? " " : ", "}${to.replace(/^to the outside, /, "")}`);
+        }
       }
     });
     if (both.every((p) => typeof p.place !== "number")) add(null, ORDER.none, `${KIND_WORD[s.kind]} **${s.id}** on ${s.floor}, ${toPlace(both[0], s.floor)} on one side and ${toPlace(both[1], s.floor)} on the other`, `span:${s.id}`);
