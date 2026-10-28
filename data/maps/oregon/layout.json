@@ -29,7 +29,8 @@
   "splits": "research/oregon/layout_notes.md §6 open-plan links (OPEN rows), each on the wall lines beside it",
   "softFloors": "research/oregon/surfaces.md §4.2, each to its room's walls; Ubisoft's extents where they are larger, with r6calls' as alt (DESIGN amendment 7)",
   "hatches": "research/oregon/surfaces.md §5: r6calls' hatch squares (extracted.json fh/ch), world positions; H1 moved 7.1 u east to land inside B_ELECTRIC under the alt B frame (D-095)",
-  "wells": "research/oregon/layout_notes.md §4.4 and surfaces.md §4.1: the Cat Walk's centre (P21)",
+  "drops": "Ulo 2026-10-28 (walk #1): the step into the Low Attic",
+ "wells": "research/oregon/layout_notes.md §4.4 and surfaces.md §4.1: the Cat Walk's centre (P21)",
   "walls": "walls_<floor>.json, seeded from extracted.json (r6calls floor rasters), research ids from surfaces.md §2 and layout_notes.md §6",
   "sections SW-2F-01, SW-2F-02, SW-2F-04": "Ulo 2026-10-09",
   "stairs": "research/oregon/layout_notes.md §5.1 footprints and the r6calls floor images (treads, landings, rails), placed where the stair rooms of the storeys they pass overlap (P19); S3 stacked: Ulo 2026-10-20; S2, S3 and S4 the other way round and every flight wall to wall: Ulo 2026-10-21 (D-095)",
@@ -200,6 +201,17 @@
   {"id": "H4", "frame": "world", "rect": [138.783, 179.995, 149.326, 191.133], "top": "2F_KIDS_DORMS", "bottom": "1F_KITCHEN", "research": "surfaces.md §5 H4", "note": "r6calls' 2F floor-hatch square (fh rect329-0)", "_unverified": ["rect"]},
   {"id": "H5", "frame": "world", "rect": [244.639, 126.707, 256.14, 138.29], "top": "2F_ATTIC", "bottom": "1F_MEETING_HALL", "research": "surfaces.md §5 H5", "note": "r6calls' 2F floor-hatch square (fh rect329-51); it straddles the Attic's west wall, so the panel is the part inside the Attic (DESIGN amendment 6; Ubisoft draws it only east of the wall)", "_unverified": ["rect"]},
   {"id": "H6", "frame": "world", "rect": [317.616, 239.584, 328.673, 250.676], "top": "2F_ARMORY", "bottom": "1F_GARAGE", "research": "surfaces.md §5 H6", "note": "r6calls' 2F floor-hatch square (fh rect329)", "_unverified": ["rect"]}
+ ],
+ "drops": [
+  {
+   "room": "2F_ATTIC",
+   "dropM": 0.2,
+   "src": "ulo",
+   "note": "Ulo's walk #1 (2026-10-28): walking south down the Attic's hall, the floor steps up about 20 cm where the hall opens into the Low Attic. Built as the hall's floor 0.2 m under 2F's, since nothing steps at the Low Attic's door to the Middle",
+   "_unverified": [
+    "dropM"
+   ]
+  }
  ],
  "wells": [
   {"id": "W-3F-01", "floor": "3F", "frame": "3F", "rects": [[261.24, 57.68, 295.46, 84.14]], "note": "the Cat Walk's centre, open over the 2F Tower (P21; layout_notes §4.4), inside the rail (walls_3F.json 3F.w004, w006, w014, w015)", "_unverified": ["rects"]}

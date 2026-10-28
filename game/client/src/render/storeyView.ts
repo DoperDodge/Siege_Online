@@ -104,7 +104,8 @@ export class StoreyView {
     feetY: number,
   ) {
     this.storeys = level.def.storeys;
-    this.panelStorey = level.panels.list.map((e) => storeyOf(this.storeys, e.min[1]));
+    // A soft floor or hatch goes with the storey whose floor its top is (a room's floor can hang lower, labScene.ts).
+    this.panelStorey = level.panels.list.map((e) => storeyOf(this.storeys, e.panel.kind === "floor" || e.panel.kind === "hatch" ? e.max[1] - 0.01 : e.min[1]));
     this.storey = storeyOf(this.storeys, feetY);
     lab.scene.add(this.ambient);
     const box = lab.box;

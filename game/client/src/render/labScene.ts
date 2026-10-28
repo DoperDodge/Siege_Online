@@ -153,22 +153,24 @@ export function createLabScene(level: BuiltLevel): LabScene {
   const storeys = groups("storey");
   const labelGroups = groups("labels");
   const calloutGroups = groups("callouts");
+  // A flight's steps and a ladder's rails and rungs go with the storey they start from (an open step's bottom is
+  // a riser or two under its tread, near the top that's the storey above).
+  const startY = new Map<string, number>([...level.def.stairs.map((f) => [f.id, f.start[1]] as const), ...level.def.ladders.map((l) => [l.id, l.base[1]] as const)]);
+  /** The height a box goes with a storey by: a flight's or ladder's start, a floor's top, else its bottom. */
+  const heightOf = (r: Renderable) => {
+    const of = r.kind === "stair_step" ? r.id.replace(/_step\d+$/, "") : r.kind === "ladder_rail" || r.kind === "ladder_rung" ? r.id.replace(/_(rail|rung)[^_]*$/, "") : null;
+    const floor = r.kind === "solid" || r.kind === "panel" ? floorTopHeight(r.surface, r.center, r.size) : null;
+    return (of !== null ? startY.get(of) : undefined) ?? floor ?? r.center[1] - r.size[1] / 2;
+  };
   const labels: THREE.Sprite[] = [];
   const label = (text: string, r: Renderable) => {
     const sprite = labelSprite(text, r.center[0], r.center[1] + r.size[1] / 2 + 0.4, r.center[2]);
     labels.push(sprite);
-    labelGroups[storeyOf(level.def.storeys, r.center[1] - r.size[1] / 2)].add(sprite);
+    labelGroups[storeyOf(level.def.storeys, heightOf(r))].add(sprite);
   };
   /** The boxes each instanced mesh draws, by storey and material. */
   const batches = new Map<string, { storey: number; surface: string; material: THREE.Material; boxes: Renderable[] }>();
   let staticMeshes = 0;
-  // A flight's steps and a ladder's rails and rungs go with the storey they start from (an open step's bottom is
-  // a riser or two under its tread, near the top that's the storey above).
-  const startY = new Map<string, number>([...level.def.stairs.map((f) => [f.id, f.start[1]] as const), ...level.def.ladders.map((l) => [l.id, l.base[1]] as const)]);
-  const bottomOf = (r: Renderable) => {
-    const of = r.kind === "stair_step" ? r.id.replace(/_step\d+$/, "") : r.kind === "ladder_rail" || r.kind === "ladder_rung" ? r.id.replace(/_(rail|rung)[^_]*$/, "") : null;
-    return (of !== null ? startY.get(of) : undefined) ?? r.center[1] - r.size[1] / 2;
-  };
   for (const r of level.renderables) {
     if (!r.visible) continue;
     if (r.kind === "panel") {
@@ -181,7 +183,7 @@ export function createLabScene(level: BuiltLevel): LabScene {
       continue;
     }
     if (r.label) label(r.label, r);
-    const storey = storeyOf(level.def.storeys, bottomOf(r));
+    const storey = storeyOf(level.def.storeys, heightOf(r));
     if (r.id === "floor") {
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(r.size[0], r.size[1], r.size[2]), material(r));
       mesh.position.set(r.center[0], r.center[1], r.center[2]);
@@ -235,6 +237,15 @@ export function showsSections(spec: PanelSpec): boolean {
 
 /** How far under a storey's floor a box's bottom (its own 0.2 m slab) or a body's feet (a top step) still count as on it. */
 export const STOREY_SLACK_M = 0.25;
+
+/**
+ * A floor (a slab, soft-floor tile or hatch: flat, of a floor surface) goes with the storey whose floor its top
+ * is, by the height this gives: a room's floor can hang lower than its storey's slab (a step down into the
+ * Attic's hall, Oregon's layout.drops), and its bottom would put it with the storey below.
+ */
+export function floorTopHeight(surface: string, center: readonly number[], size: readonly number[]): number | null {
+  return (surface === "HARD_FLOOR" || surface === "SOFT_FLOOR" || surface === "HATCH") && size[1] <= 0.3 ? center[1] + size[1] / 2 - 0.01 : null;
+}
 
 /**
  * The storey a box is drawn with, by its place in `storeys` (listed by height): the last whose floor, less

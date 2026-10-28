@@ -164,7 +164,8 @@ export function compileMarkers(layout: Layout, fr: Frames, wallSolids: Solid[], 
       const [x, z] = place(b.frame, b.at);
       if (!s.rooms.includes(b.room) || !room) out.errors.push(`site ${s.id}: bomb ${b.id}'s room ${b.room} isn't one of the site's`);
       else if (!inRoom(room, x, z, 0)) out.errors.push(`site ${s.id}: bomb ${b.id} at (${x.toFixed(2)}, ${z.toFixed(2)}) isn't in ${b.room}`);
-      return { id: b.id, pos: [r4(x), room ? floorY(room.storey) : 0, r4(z)] as V3, room: b.room };
+      // On the room's floor (its anchor's height: a dropped floor's is lower).
+      return { id: b.id, pos: [r4(x), room ? room.anchor[1] : 0, r4(z)] as V3, room: b.room };
     });
     out.sites.push({ id: s.id, name: s.name, rooms: s.rooms, bombs, plantMarginM: d.site.plantMarginM });
   }
@@ -207,7 +208,7 @@ export function compileMarkers(layout: Layout, fr: Frames, wallSolids: Solid[], 
     const [x, z] = place(g.frame, g.at);
     const room = markerRoom(`${g.kind} ${g.id}`, g.level, f, x, z, g.room);
     if (room === "bad") continue;
-    const y = floorY(f) + (g.kind === "gas_pipe" ? ing.gasPipeM : ing.fireExtinguisherM);
+    const y = (room ? room.anchor[1] : floorY(f)) + (g.kind === "gas_pipe" ? ing.gasPipeM : ing.fireExtinguisherM);
     const at = mount(f, x, z, y, room, ing.reachM);
     if (!at) {
       out.errors.push(`${g.kind} ${g.id}: no wall ${room ? `of ${room.id}` : "outside"} within ${ing.reachM} m of its marker reaches ${y.toFixed(2)} m`);

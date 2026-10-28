@@ -274,6 +274,14 @@ export const layoutSchema = z.strictObject({
       z.strictObject({ id: z.string(), frame: Frame, rect: URect, top: z.string(), bottom: z.string(), research: z.string().optional(), note: z.string().optional(), _unverified: Uv }),
     )
     .default([]),
+  /**
+   * A room whose floor lies lower than its storey's (the Attic's hall, Ulo's walk #1): its slab, soft floor and
+   * hatch drop by `dropM`, and so does the ceiling of the rooms under it. The floor under its walls stays at the
+   * storey's height, so a drop is a step wherever the room opens onto the rest of the storey.
+   */
+  drops: z
+    .array(z.strictObject({ room: z.string(), dropM: z.number().positive().max(0.3), src: Src.optional(), note: z.string().optional(), _unverified: Uv }))
+    .default([]),
   /** Openings in a storey's floor that nothing closes (the Cat Walk's centre): no floor, no room; any rail is a wall line. */
   wells: z
     .array(z.strictObject({ id: z.string(), floor: Floor, frame: Frame, rects: z.array(URect), note: z.string().optional(), _unverified: Uv }))

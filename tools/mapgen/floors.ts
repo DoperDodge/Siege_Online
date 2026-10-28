@@ -4,7 +4,9 @@
 // panel: the largest rectangle of the research square inside the room on top), the wells (no floor), and the
 // soft floors (SOFT_FLOOR tiles of at most tileMaxM, in whole joist spacings, the tiles of one area sharing a
 // region so a bullet counts them as one surface), and the stairwells (stairs.ts: no floor where a run needs the
-// headroom). What's left is hard slab, in as few rectangles as the greedy cover gives.
+// headroom). What's left is hard slab, in as few rectangles as the greedy cover gives. A room in layout.drops has
+// its floor lower: its slab, soft floor and hatch hang `dropM` under the storey's, except over anything of the
+// storey below that stands up to the slab (the floor under its walls is the storey's, so the drop is a step).
 import type { Frames } from "./frames.js";
 import { distanceInside, greedyRects, maxIn, subtractRects, type Rect } from "./grid.js";
 import type { Floor } from "./research.js";
@@ -101,6 +103,7 @@ export function compileFloors(layout: Layout, fr: Frames, wallSolids: Solid[], r
     ...extra,
   });
   const roomIndex = new Map(rooms.rooms.map((r, i) => [r.id, i]));
+  for (const x of layout.drops) if (!layout.rooms.some((r) => r.id === x.room)) errors.push(`drop: ${x.room} isn't in rooms`);
 
   for (let si = 0; si < order.length; si++) {
     const storey = order[si];
@@ -141,6 +144,22 @@ export function compileFloors(layout: Layout, fr: Frames, wallSolids: Solid[], r
       }
       for (let c = 0; c < n; c++) if (pierce.cells[c] === 1) kind[c] = 0;
     }
+    // ---- Rooms whose floor drops (layout.drops): how far each cell of the floor hangs under the storey's.
+    const drop = new Float64Array(n);
+    const drops = layout.drops.filter((x) => roomIndex.has(x.room) && rooms.rooms[roomIndex.get(x.room)!].storey === floor);
+    if (drops.length) {
+      const deepest = Math.max(...drops.map((x) => x.dropM));
+      const reaches = g.blank();
+      for (const b of wallSolids) {
+        if (b.drawOnly || !below || storeyOfBox(layout, b) !== below.id) continue;
+        if (b.center[1] + b.size[1] / 2 > y0 - deepest + 0.01) fillBox(reaches, b);
+      }
+      for (const x of drops) {
+        const idx = roomIndex.get(x.room)!;
+        for (let c = 0; c < n; c++) if (plan.room[c] === idx && reaches.cells[c] !== 1) drop[c] = x.dropM;
+      }
+    }
+    const levels = [...new Set([0, ...drop])];
     // ---- Wells: no floor where nothing stands.
     for (const well of layout.wells.filter((w) => w.floor === floor)) {
       for (const r of well.rects) {
@@ -174,9 +193,17 @@ export function compileFloors(layout: Layout, fr: Frames, wallSolids: Solid[], r
         continue;
       }
       const cells: Rect = [i0 + best[0], j0 + best[1], i0 + best[2], j0 + best[3]];
-      for (let j = cells[1]; j < cells[3]; j++) for (let i = cells[0]; i < cells[2]; i++) kind[j * g.w + i] = 3;
+      const sunk = drop[cells[1] * g.w + cells[0]];
+      let straddles = false;
+      for (let j = cells[1]; j < cells[3]; j++) {
+        for (let i = cells[0]; i < cells[2]; i++) {
+          kind[j * g.w + i] = 3;
+          straddles ||= drop[j * g.w + i] !== sunk;
+        }
+      }
+      if (straddles) errors.push(`hatch ${h.id}: part of it is in a dropped floor and part isn't`);
       const r = cellRect(cells);
-      solids.push(slab(h.id, r, y0, y1, { surface: "HATCH", label: h.id }));
+      solids.push(slab(h.id, r, y0 - sunk, y1 - sunk, { surface: "HATCH", label: h.id }));
       hatches.push({ id: h.id, storey: floor, rect: r, clipU: [r[0] - want[0], r[1] - want[1], want[2] - r[2], want[3] - r[3]].map((v) => r4(Math.max(0, v) / k)) as HatchReport["clipU"] });
       if (storey === groundStorey) groundHoles.push(r);
       count.hatches++;
@@ -235,7 +262,7 @@ export function compileFloors(layout: Layout, fr: Frames, wallSolids: Solid[], r
     for (const u of under) u.delete(-1);
     /** Whether a cell can join soft floor `fi`'s strip: 0 no; 1 hard floor over a wall below; 2 hard floor over a room below it covers, near a wall below. */
     const strip = (c: number, fi: number) => {
-      if (kind[c] !== 1) return 0;
+      if (kind[c] !== 1 || drop[c] !== 0) return 0;
       if (wallBelow(c)) return 1;
       return nearWallBelow[c] > 0 && nearWallBelow[c] <= reach && under[fi].has(roomBelow(c)) ? 2 : 0;
     };
@@ -266,40 +293,44 @@ export function compileFloors(layout: Layout, fr: Frames, wallSolids: Solid[], r
     };
     soft.forEach((f, fi) => {
       const inArea = (c: number) => kind[c] === 2 && region[c] === fi;
-      const rects = greedyRects(g.w, g.h, inArea);
       // Worked out only if a thin rectangle needs it: is part of it open floor, not a doorway's sliver?
       let dist: Int32Array | undefined;
       const open = (cells: Rect) => maxIn((dist ??= distanceInside(g.w, g.h, inArea)), g.w, cells) >= clearCells(SLIVER_M);
       const mine: Solid[] = [];
       const max = f.tileMaxM ?? d.softFloor.tileMaxM;
-      /** A rectangle (metres) as tiles of at most `max`, in whole joist spacings. */
-      const tile = (r: Rect, id: string) => {
+      /** A rectangle (metres) as tiles of at most `max`, in whole joist spacings, `sunk` under the storey's floor. */
+      const tile = (r: Rect, id: string, sunk = 0) => {
         const xs = tileSizes(r4(r[2] - r[0]), max);
         const zs = tileSizes(r4(r[3] - r[1]), max);
         let z = r[1];
         zs.forEach((dz, row) => {
           let x = r[0];
           xs.forEach((dx, col) => {
-            mine.push(slab(`${id}.r${row}c${col}`, [x, z, x + dx, z + dz], y0, y1, { surface: "SOFT_FLOOR", panel: { region: f.id } }));
+            mine.push(slab(`${id}.r${row}c${col}`, [x, z, x + dx, z + dz], y0 - sunk, y1 - sunk, { surface: "SOFT_FLOOR", panel: { region: f.id } }));
             x += dx;
           });
           z += dz;
         });
       };
-      rects.forEach((cells, ri) => {
-        if (Math.min(cells[2] - cells[0], cells[3] - cells[1]) * CELL_M < SLIVER_M - 1e-9 && !open(cells)) {
-          // A doorway's sliver: hard slab.
-          for (let j = cells[1]; j < cells[3]; j++) for (let i = cells[0]; i < cells[2]; i++) kind[j * g.w + i] = 1;
-          return;
-        }
-        tile(cellRect(planBelow ? grow(cells, fi) : cells), `${f.id}#${ri}`);
-      });
+      // Level by level: a dropped part of the area stays inside its room (it doesn't reach past the walls).
+      let ri = 0;
+      for (const v of levels) {
+        greedyRects(g.w, g.h, (c) => inArea(c) && drop[c] === v).forEach((cells) => {
+          const id = `${f.id}#${ri++}`;
+          if (Math.min(cells[2] - cells[0], cells[3] - cells[1]) * CELL_M < SLIVER_M - 1e-9 && !open(cells)) {
+            // A doorway's sliver: hard slab.
+            for (let j = cells[1]; j < cells[3]; j++) for (let i = cells[0]; i < cells[2]; i++) kind[j * g.w + i] = 1;
+            return;
+          }
+          tile(cellRect(planBelow && v === 0 ? grow(cells, fi) : cells), id, v);
+        });
+      }
       if (planBelow) {
         // What's left of the strips, where one runs along only part of an edge: within `reach` cells of the soft
         // floor, tiles of their own, those long enough to see (corner bits stay hard).
         const left = new Uint8Array(n); // steps from the soft floor, 0 for none
         const queue: number[] = [];
-        for (let c = 0; c < n; c++) if (kind[c] === 2 && region[c] === fi) queue.push(c);
+        for (let c = 0; c < n; c++) if (kind[c] === 2 && region[c] === fi && drop[c] === 0) queue.push(c);
         for (let q = 0; q < queue.length; q++) {
           const c = queue[q];
           if (left[c] >= reach) continue;
@@ -323,11 +354,13 @@ export function compileFloors(layout: Layout, fr: Frames, wallSolids: Solid[], r
       solids.push(...mine);
       count.tiles += mine.length;
     });
-    // ---- Hard slab: everything else the floor covers.
-    greedyRects(g.w, g.h, (c) => kind[c] === 1).forEach((cells, i) => {
-      solids.push(slab(`slab:${floor}#${i}`, cellRect(cells), y0, y1, { surface: "HARD_FLOOR" }));
-      count.slabs++;
-    });
+    // ---- Hard slab: everything else the floor covers, level by level.
+    for (const v of levels) {
+      greedyRects(g.w, g.h, (c) => kind[c] === 1 && drop[c] === v).forEach((cells) => {
+        solids.push(slab(`slab:${floor}#${count.slabs}`, cellRect(cells), y0 - v, y1 - v, { surface: "HARD_FLOOR" }));
+        count.slabs++;
+      });
+    }
   }
   return { solids, hatches, warnings, errors, counts };
 }

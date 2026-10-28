@@ -254,11 +254,11 @@ under a reinforcement, what blocks reinforcing) are not repeated here.
 
 Each value is in `data/maps/oregon/layout.json` or a wall file (`walls_<floor>.json`) and listed in its
 `_unverified`; tools/mapgen/DESIGN.md §10 has the full table (P1–P37). An answer changes one value, and
-`npm run mapgen` rebuilds the map. Built so far (M6, ready for your walk): every storey's walls, the 49 rooms, the
+`npm run mapgen` rebuilds the map. Built so far (M7, after your walk #1): every storey's walls, the 49 rooms, the
 floors with their soft floors and hatches, the Cat Walk's well, the stairs and the Cat Walk ladder, the roofs, the
 outside, the spawns, the four bomb sites, the cameras and ingredients, the major cover props and the zones. The
 walk's checklist and the questions to settle on it are in research/oregon/walkthrough.md, where every mismatch
-you find is logged.
+you find is logged (walk #1's three are fixed: items 33 and 34 ask what's left to confirm).
 
 1. **Map scale (P1):** one unit of the floor plans = 0.15 m (±15%). The school bus is 77 u long (11.6 m at
    0.15; school buses are 10.5–12 m), and the white van in the parking lot is about 33 u (5 m; vans are 5–6 m);
@@ -420,6 +420,19 @@ you find is logged.
       images' edges (D-099), and 2F.w038 sits on 1F.w040's line by your stairs walk (D-096).
     - (b) Every wall not in surfaces.md §2 is hard (P18), the Kitchen's north-east partition and the 2F annex
       partition included (surfaces.md question 1).
+
+33. **The Attic's step (your walk #1):** walking south down the Attic's hall, the floor steps up about 20 cm into
+    the Low Attic. We built the hall's floor 0.2 m lower than the rest of 2F (its hatch and soft floor with it),
+    since nothing steps at the Low Attic's door to the Middle. Is it about 20 cm? Is the step also there at the
+    Big Tower end (through the soft wall once it's open)? Do the hall's west window and drone hole sit lower to
+    match (ours are at the rest of 2F's height, 0.2 m higher from the hall's floor)?
+
+34. **Vaulting through a hole (your walk #1):** a hole in a soft or reinforceable wall can now be vaulted through
+    by the vault's own rules: a ledge 0.3–1.1 m up, about 1.0 m of room above it (the body tucked to 0.9 m) and the
+    body's width. So a Breach Charge hole set off at chest height is vaultable, but not the 1 m disc of an Impact
+    Grenade or the 0.8 m square of a Hard Breach Charge, which the research says you can crouch or vault through
+    (destruction.md). How small a hole can you vault or crouch through in the game? (The hole sizes are
+    placeholders too.)
 
 Later milestones add their placeholders here as they build them: the Meeting Hall's height (P23) and fall damage
 from the roofs (P37).

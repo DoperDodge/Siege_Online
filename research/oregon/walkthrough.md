@@ -114,8 +114,8 @@ mismatch. UNVERIFIED marks a placeholder (research/OPEN_QUESTIONS.md). North is 
 - [ ] **Walk In** (`2F_WALK_IN`): soft wall **SW-2F-04** north, to Gaming: 2 reinforcements; door east to Master (2F.o018); soft floor **SF-2F-04** (9 m², over 1F Classroom).
 - [ ] **Master** (`2F_MASTER_BEDROOM`): soft wall **SW-2F-06** east, to Armory Corridor: 2 reinforcements (UNVERIFIED); door north to Trophy (2F.o010); door south onto the Balcony (2F.o011; door or window UNVERIFIED); door west to Walk In (2F.o018); drone hole west, to Gaming (2F.dt1); soft floor **SF-2F-03** (32 m², over 1F Lobby); the bed (soft, 0.6 m, vaultable).
 - [ ] **Trophy** (`2F_TROPHY`): soft wall **SW-2F-05** north, to Low Attic: 2 reinforcements (UNVERIFIED); door east to Armory Corridor (2F.o015); door south to Master (2F.o010); door west to Middle (2F.o017); soft floor **SF-2F-10** (12 m², over 1F Lobby, 1F Split); extinguisher **ING6** in the north-east.
-- [ ] **Low Attic** (`2F_LOW_ATTIC`): soft wall **SW-2F-05** south, to Trophy: 2 reinforcements (UNVERIFIED); soft wall **SW-2F-02** west, to Kids' Dorms: 2 reinforcements; door south to Middle (2F.o007); open north, to Attic, no wall between; extinguisher **ING7** in the south.
-- [ ] **Attic** (`2F_ATTIC`): hatch **H5** in the floor, in the middle, down to 1F Meeting Hall; soft wall **SW-2F-08** north, to Tower: 2 reinforcements (UNVERIFIED); window west onto the Meeting Roof (2F.o016; door or window UNVERIFIED); open south, to Low Attic, no wall between; drone hole west, onto the Meeting Roof (2F.dt2); soft floor **SF-2F-09** (4 m², over 1F Stage); gas pipe **ING9** in the south-east.
+- [ ] **Low Attic** (`2F_LOW_ATTIC`): soft wall **SW-2F-05** south, to Trophy: 2 reinforcements (UNVERIFIED); soft wall **SW-2F-02** west, to Kids' Dorms: 2 reinforcements; door south to Middle (2F.o007); open north, to Attic, a 0.2 m step down, no wall between; extinguisher **ING7** in the south.
+- [ ] **Attic** (`2F_ATTIC`): the floor lies 0.2 m below the rest of 2F; hatch **H5** in the floor, in the middle, down to 1F Meeting Hall; soft wall **SW-2F-08** north, to Tower: 2 reinforcements (UNVERIFIED); window west onto the Meeting Roof (2F.o016; door or window UNVERIFIED); open south, to Low Attic, a 0.2 m step up, no wall between; drone hole west, onto the Meeting Roof (2F.dt2); soft floor **SF-2F-09** (4 m², over 1F Stage); gas pipe **ING9** in the south-east.
 - [ ] **Tower** (`2F_TOWER`): stairs **S1** (Tower Stairs) down to 1F Tower; ladder **L1** up to 3F Cat Walk; soft wall **SW-2F-08** south, to Attic: 2 reinforcements (UNVERIFIED); window north to the outside (2F.o006; door or window UNVERIFIED); window north to the outside (2F.o014; door or window UNVERIFIED); window south onto the Meeting Roof (2F.o012; door or window UNVERIFIED); window south onto the Meeting Roof (2F.o013; door or window UNVERIFIED); soft ceiling **SF-3F-01** (29 m², under 3F Cat Walk).
 - [ ] **Armory Corridor** (`2F_ARMORY_CORRIDOR`): soft wall **SW-2F-07** east, to Armory: 2 reinforcements (UNVERIFIED); soft wall **SW-2F-06** west, to Master: 2 reinforcements (UNVERIFIED); door east to Armory (2F.o019); door west to Trophy (2F.o015); window north onto the Meeting Roof (2F.o008; door or window UNVERIFIED); open south, to Armory Stairs, no wall between; soft floor **SF-2F-05** (10 m², over 1F Lobby, 1F Armory Stairs); camera **CAM8** in the north, 2.5 m up (the research: 2F Armory Corridor, north end (south along it [PRE])).
 - [ ] **Armory Stairs** (`2F_ARMORY_STAIRS`): stairs **S3** (Armory Stairs) down to 1F Armory Stairs; open north, to Armory Corridor, no wall between.
@@ -146,8 +146,12 @@ mismatch. UNVERIFIED marks a placeholder (research/OPEN_QUESTIONS.md). North is 
 
 | # | Walk | Where (room; HUD position) | What the game has | Fix | Commit |
 |---|---|---|---|---|---|
-| | | | | | |
+| 1 | 1 | 2F Attic, where its hall opens into the Low Attic | Walking south, the floor steps up about 20 cm into the Low Attic | The hall's floor (slab, hatch H5, soft floor SF-2F-09) 0.2 m under 2F's: layout.json `drops`, D-112 | M7 round 1 |
+| 2 | 1 | Any soft or reinforceable wall | A hole made in it can be vaulted (mantled) through | Vaulting through a hole low and big enough, by the vault's own rules (D-112) | e06b386 |
+| 3 | 1 | Phones and tablets | Tapping fast zoomed the page in, with no way back | Pinch and double-tap zoom blocked on every lab page (D-112) | e06b386 |
 
 ## Sign-off
 
-Not yet: walk #1 is next.
+Walk #1 (2026-10-28): "it looks good, actually really accurate", with the two issues above (and the phone zoom).
+Rows 1–3 are fixed. Not signed off yet: the next walk confirms the Attic's step and the ten questions above (none
+was answered one by one).

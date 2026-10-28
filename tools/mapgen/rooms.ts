@@ -163,7 +163,9 @@ export function compileRooms(layout: Layout, fr: Frames, wallSolids: Solid[], ke
       }
       claimed.set(label, r.id);
       roomOfLabel[label] = rooms.length;
-      rooms.push({ ...roomShape(grid, labels, label, stats[label], storey.floorY, warnings, r.id, keepOut.get(floor) ?? []), id: r.id, callout: r.callout, storey: floor });
+      // A room whose floor drops (layout.drops, floors.ts) has its anchor on that floor.
+      const floorY = storey.floorY - (layout.drops.find((x) => x.room === r.id)?.dropM ?? 0);
+      rooms.push({ ...roomShape(grid, labels, label, stats[label], floorY, warnings, r.id, keepOut.get(floor) ?? []), id: r.id, callout: r.callout, storey: floor });
     }
     const room = new Int16Array(grid.w * grid.h);
     for (let c = 0; c < labels.length; c++) room[c] = labels[c] ? roomOfLabel[labels[c]] : -1;

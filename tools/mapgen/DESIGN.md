@@ -1065,6 +1065,9 @@ the fix, the commit). Sign-off is recorded there and in PROGRESS.
   OPEN_QUESTIONS kept current; one walk per round.
 - **Done when**: Ulo signs off on layout accuracy (PLAN §17), recorded in walkthrough.md and PROGRESS.
 - **Tests**: all gates on every round; freshness proves level.json matches the layout.
+- **Walk #1 (D-112):** "really accurate"; the Attic's hall lies 0.2 m under 2F (`drops`: a room's floor can hang
+  lower than its storey's, the floor under its walls staying put, so the drop is a step where the room opens onto
+  the storey), and holes in breachable walls can be vaulted through (engine; plus a phone zoom fix).
 
 ### M8: rappel v1 (D-024; does not gate the sign-off)
 - **Deliverables**: a short design first (research/core_mechanics.md §6: attackers only, hold to start, needs a

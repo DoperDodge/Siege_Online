@@ -5,7 +5,7 @@ known issues, and what's next.
 
 ---
 
-## Phase 5 — Oregon greybox · 🚧 in progress (M6 of 8: walk-ready, waiting for your walk #1)
+## Phase 5 — Oregon greybox · 🚧 in progress (M7 of 8: your walk #1 done, its three fixes in)
 
 **Done when (PLAN §17):** you walk it and sign off on layout accuracy. Rappel (M8) comes before the Phase 5
 report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIGN.md`.
@@ -17,9 +17,22 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
 | M3 Stairs and the ladder (grab it from the top too) | ✅ every staircase inside the building, the ladder both ways, the walk graph: every room reachable; browser test |
 | M4 Roofs, the outside and the three attacker spawns; free camera | ✅ roofs on every part of the building, the outside blockout with the Bunker and Tower outside stairs, five attackers at each insertion point, a free camera in every lab; browser test |
 | M5 Sites, defender spawns, cameras, ingredients, zones, cover props | ✅ the four bomb sites with Go to by site, five defenders at each, eight cameras, nine ingredients, 29 cover props (bullets go through the wooden and soft ones), the building, spawn-peek, run-out and rappel zones, every marker drawn; browser test |
-| M6 Walk-ready: every check, performance on Oregon, your walk #1 | ✅ walk-ready: every structural check, the generator's report, the blueprint check, Oregon's performance measured (server, client, browser); ⏳ your walk #1 (research/oregon/walkthrough.md) |
-| M7 Your corrections, round by round, to sign-off | ⏳ |
+| M6 Walk-ready: every check, performance on Oregon, your walk #1 | ✅ every structural check, the generator's report, the blueprint check, Oregon's performance measured (server, client, browser); your walk #1: "really accurate" |
+| M7 Your corrections, round by round, to sign-off | 🚧 walk #1's fixes in: the Attic hall's step, vaulting through holes in walls, no page zoom on phones; ⏳ your sign-off |
 | M8 Rappel | ⏳ |
+
+### What's done (M7: your walk #1)
+You walked it and found it "really accurate", with two issues, and a bug on phones (research/oregon/walkthrough.md
+logs all three):
+- **The Attic's step:** the Attic's hall now lies 0.2 m lower than the rest of 2F, so walking south you step up
+  into the Low Attic. A room's floor can now drop (`drops` in layout.json): its slab, hatch and soft floor go down
+  with it, the Meeting Hall's ceiling under it too, and the floor under its walls stays at 2F's, so nothing shows
+  under them. The checklist says so in both rooms' lines. 20 cm is your estimate (open question 33).
+- **Vaulting through holes:** a hole in a soft or reinforceable wall can be vaulted through when it's low and big
+  enough, by the vault's own rules: its bottom 0.3–1.1 m up, about 1 m of room above that, and the body's width
+  (open question 34).
+- **Phones and tablets:** tapping fast no longer zooms the page in. iOS ignores the page's "no zoom" setting, so
+  the lab pages now cancel pinch gestures and a second tap within 0.35 s themselves.
 
 ### What's done (M6)
 - **Your walk's checklist:** `research/oregon/walkthrough.md` has the route, the ten questions to settle on the
@@ -312,13 +325,23 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
    the fight across the Kitchen's soft wall), `npm run bench:oregon` (loading, damage, redraw; writes
    `builds/bench/oregon.json`), and after `npm run build`, `node tools/e2e/oregon-perf.mjs` (the browser capture;
    writes `builds/e2e/oregon-perf.json`).
-19. Checks: `npm run check` runs them all: `npm run typecheck`, `npm test` (510 tests), `npm run build && npm run
+19. Checks: `npm run check` runs them all: `npm run typecheck`, `npm test` (513 tests), `npm run build && npm run
    test:e2e` (`oregon.mjs` shoots through a soft floor, drops through a hatch, walks the Armory Stairs, takes the
    ladder both ways, stands at each attacker spawn, drops onto the Dining roof from the free camera, goes to each
    bomb site and switches the zones view; `oregon-perf.mjs` flies through every room and sets off 44
    explosives). Also `npm run mapgen -- --check`.
+20. Walk #1's fixes:
+   - The Attic's step: Go to → 2F → Attic, then walk south into the Low Attic: a small step up, and down again
+     coming back.
+   - Vaulting through a hole: in the Destruction Lab (or Oregon), press T until the Breach Charge, aim at a soft
+     wall about chest high and press G. The hole's bottom is then off the floor: face it and hold Space.
+   - On a phone or tablet: open the Oregon page and tap quickly anywhere; the page keeps its size.
 
 ### Known issues
+- The Attic hall's west window and drone hole stand at the rest of 2F's height, so they sit 0.2 m higher above the
+  hall's lower floor (open question 33).
+- Some small holes the research says you can vault or crouch through aren't vaultable with the vault's own room
+  (an Impact Grenade's 1 m disc, a Hard Breach Charge's 0.8 m square: open question 34).
 - The stairs follow your walk now (open question 20).
 - On 2F, the floor inside the Small Tower's L-shaped wall is cut off by the Small Stairs' opening, and Go to's
   spot for the 2F Small Tower is on it. Both images show that spot open to the workshop below (open question 22).
@@ -351,9 +374,9 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
 - A player joining after heavy destruction is sent about 65 KB of wall state at once; compressing it is planned
   (Phase 6 or 12).
 
-### Next: your walk #1, then M7 (your corrections, round by round, to sign-off)
-You walk the greybox against the game with `research/oregon/walkthrough.md`, and I log every mismatch there and
-fix it through the layout files, one round per walk, until you sign off on the layout (DESIGN M7). Rappel (M8)
+### Next: your sign-off (M7), then rappel (M8)
+With walk #1's fixes in, the layout waits on your sign-off (PLAN §17's done-when). Anything else you find goes
+into `research/oregon/walkthrough.md` and gets fixed through the layout files, one round per walk. Rappel (M8)
 comes before the Phase 5 report.
 
 ---

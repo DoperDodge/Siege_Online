@@ -106,8 +106,8 @@ export function walkChecklist(inputs: Inputs, compiled: Compiled): Checklist {
   const rooms = level.rooms;
   const items: CheckItem[] = [];
   const storeys = [...level.storeys].sort((a, b) => a.floorY - b.floorY);
-  /** The storey whose floor a height is on or just above. */
-  const storeyAt = (y: number) => [...storeys].reverse().find((s) => s.floorY <= y + 0.05) ?? storeys[0];
+  /** The storey whose floor a height is on or just above, or just under where a room's floor drops (layout.drops, at most 0.3 m). */
+  const storeyAt = (y: number) => [...storeys].reverse().find((s) => s.floorY <= y + 0.31) ?? storeys[0];
   const storeyById = new Map(storeys.map((s) => [s.id, s]));
   const below = (f: Floor) => storeys[storeys.findIndex((s) => s.id === f) - 1];
 
@@ -222,6 +222,13 @@ export function walkChecklist(inputs: Inputs, compiled: Compiled): Checklist {
     return "into a wall";
   };
   const add = (room: number | null, order: number, text: string, ref: string) => items.push({ room: room === null ? null : rooms[room].id, text, ref, order });
+  // Rooms whose floor drops (layout.drops): the step at each way between such a room and one that doesn't.
+  const dropOf = new Map(layout.drops.map((x) => [x.room, x.dropM]));
+  const stepTo = (me: Place, other: Place) => {
+    if (typeof me !== "number" || typeof other !== "number") return "";
+    const d = (dropOf.get(rooms[me].id) ?? 0) - (dropOf.get(rooms[other].id) ?? 0);
+    return Math.abs(d) < 0.005 ? "" : `, a ${m1(Math.abs(d))} step ${d > 0 ? "up" : "down"}`;
+  };
   const onRoofs: string[] = [];
 
   // ---- Spans: soft walls, doors, windows, passages, gaps in rails, drone holes, and openings built as wall.
@@ -242,8 +249,8 @@ export function walkChecklist(inputs: Inputs, compiled: Compiled): Checklist {
       if (s.hard) text = `${side}: the ${s.kind === "OPEN" ? "opening" : s.kind.toLowerCase()} r6calls draws ${to} is built as wall (${s.id}; P36)`;
       else if (s.kind === "SOFT") text = `soft wall **${s.id}** ${side}, ${to}: ${plural(s.sections ?? 1, "reinforcement")}${s.unverified.includes("sections") ? " (UNVERIFIED)" : ""}`;
       else if (s.kind === "DRONE_HOLE") text = `drone hole ${side}, ${to} (${s.id})`;
-      else if (s.kind === "OPEN") text = `${s.rail ? "gap in the rail" : "open"} ${side}, ${to} (${s.id})`;
-      else text = `${s.kind === "DOOR" ? "door" : "window"} ${side} ${to} (${s.id}${kindOpen})`;
+      else if (s.kind === "OPEN") text = `${s.rail ? "gap in the rail" : "open"} ${side}, ${to}${stepTo(me.place, other.place)} (${s.id})`;
+      else text = `${s.kind === "DOOR" ? "door" : "window"} ${side} ${to}${s.kind === "DOOR" ? stepTo(me.place, other.place) : ""} (${s.id}${kindOpen})`;
       if (typeof me.place === "number") {
         add(me.place, ORDER[s.hard ? "hard" : s.kind] + SIDE_ORDER.indexOf(side), text, `span:${s.id}`);
         if (!s.hard && (s.kind === "DOOR" || s.kind === "WINDOW" || s.kind === "OPEN") && other.place === "outside" && /^(onto|to the outside, )/.test(to)) {
@@ -259,10 +266,16 @@ export function walkChecklist(inputs: Inputs, compiled: Compiled): Checklist {
     both.forEach((me, k) => {
       if (typeof me.place !== "number") return;
       const side = SIDE[sp.axis][k];
-      add(me.place, ORDER.OPEN + SIDE_ORDER.indexOf(side), `open ${side}, ${toPlace(both[1 - k], sp.floor)}, no wall between`, `split:${n}`);
+      add(me.place, ORDER.OPEN + SIDE_ORDER.indexOf(side), `open ${side}, ${toPlace(both[1 - k], sp.floor)}${stepTo(me.place, both[1 - k].place)}, no wall between`, `split:${n}`);
     });
     if (both.every((p) => typeof p.place !== "number")) add(null, ORDER.none, `a split on ${sp.floor} with no room either side`, `split:${n}`);
   });
+
+  for (const x of layout.drops) {
+    const i = rooms.findIndex((r) => r.id === x.room);
+    if (i >= 0) add(i, ORDER.ladder + 5, `the floor lies ${m1(x.dropM)} below the rest of ${rooms[i].storey}`, `drop:${x.room}`);
+    else add(null, ORDER.none, `a dropped floor for ${x.room}, which isn't built`, `drop:${x.room}`);
+  }
 
   // ---- Stairs: each run's foot and top (flights share an id up to their "#").
   const stairName = new Map(layout.stairs.map((s) => [s.id, s.names[0]]));
