@@ -18,11 +18,13 @@ export enum PawnMode {
 
 /** PawnState.rappelFlags bits. */
 export const RappelFlag = {
-  /** Hanging upside down (the stance key, research/core_mechanics.md §6.1). */
+  /** On the rope: upside down is where the body is turning to, or hangs (the stance key, research/core_mechanics.md §6.1). */
   Inverted: 1 << 0,
-  /** The hold to hook on is from a roof edge (it starts upside down), not a face's foot. */
+  /** The hold to hook on is at a roof edge (it goes over upside down), not a face's foot. */
   FromTop: 1 << 1,
-  // Bits 2–3 on the rope: the stance the stance key last asked for (player/movement.ts).
+  /** The hold to hook on is at a window from inside (it climbs out onto the rope outside). */
+  FromWindow: 1 << 2,
+  // Bits 3–4 on the rope: the stance the stance key last asked for (player/movement.ts).
 } as const;
 
 /** Held-button bitfield carried by every input command. */
@@ -144,10 +146,13 @@ export interface PawnState {
   // ladder
   ladder: number;
   // rappel (Phase 5 M8): the rope's face (BuiltLevel.rappel; -1 none: also the face a hold to hook on is for),
-  // RappelFlag bits, and ticks of holding Interact to hook on
+  // RappelFlag bits, ticks of holding the vault key to hook on (on foot) or of a swing (on the rope), and how far
+  // the body has turned upside down (0 right side up, 1 upside down; the turn takes rappel.turnSeconds). Moving
+  // onto the rope uses the scripted move's fields (moveT/moveDur > 0 while it lasts).
   rappel: number;
   rappelFlags: number;
   rappelTicks: number;
+  ropeTurn: number;
   // falls and health
   airPeakY: number;
   hp: number;
@@ -205,6 +210,12 @@ export const NEUTRAL_INPUT: Readonly<Omit<InputCmd, "seq" | "yaw" | "pitch">> = 
   stance: Stance.Stand,
   lean: 0,
 };
+
+/**
+ * On a rope and free to act (Phase 5 M8): not moving onto it, swinging, or turning over. Aiming, firing, the knife,
+ * Skopós' shell camera and the window prompts wait for it.
+ */
+export const ropeIdle = (s: PawnState) => s.mode === PawnMode.Rappel && s.moveDur === 0 && s.rappelTicks === 0 && (s.ropeTurn === 0 || s.ropeTurn === 1);
 
 /** Quantize an input exactly like the wire format will, so prediction matches the server bit-for-bit. */
 export function quantizeInput(cmd: InputCmd): InputCmd {

@@ -4,7 +4,7 @@
 import { DEG, lerp, rotateXZ, type Vec3 } from "../core/math.js";
 import type { HitboxData, MovementData } from "../data/schemas.js";
 import { currentEyeHeight, currentHeight, proneWeight } from "./stance.js";
-import { PawnMode, RappelFlag, type PawnState } from "./types.js";
+import { PawnMode, type PawnState } from "./types.js";
 
 export type BodyPart = "head" | "neck" | "torso" | "pelvis" | "arm_l" | "arm_r" | "leg_l" | "leg_r";
 
@@ -126,17 +126,26 @@ export function proneBodyExtents(m: MovementData, hb: HitboxData): { front: numb
   return { front, back, halfWidth, top };
 }
 
-/** Hanging upside down on a rope (Phase 5 M8): the body is turned over in its own capsule. */
-export const upsideDown = (s: PawnState) => s.mode === PawnMode.Rappel && (s.rappelFlags & RappelFlag.Inverted) !== 0;
+/** How far a body on a rope is turned over (Phase 5 M8): 0 right side up, π upside down (PawnState.ropeTurn). */
+export const ropeRoll = (s: PawnState) => (s.mode === PawnMode.Rappel ? Math.PI * s.ropeTurn : 0);
+
+/** Hanging upside down on a rope, or more than half turned over. */
+export const upsideDown = (s: PawnState) => s.mode === PawnMode.Rappel && s.ropeTurn > 0.5;
 
 /**
- * A local point on the body to the world. Upside down, the body is turned half round about its view's forward axis
- * inside the same capsule `height` tall: right is left, the head hangs at the bottom.
+ * A local point on the body to the world. On a rope the body turns over about its view's forward axis through the
+ * middle of the same capsule `height` tall: halfway, it lies on its side; upside down, right is left and the head
+ * hangs at the bottom.
  */
 function toWorld(s: PawnState, v: Vec3, height: number): Vec3 {
-  const flip = upsideDown(s);
-  const [x, z] = rotateXZ(flip ? -v[0] : v[0], v[2], s.yaw);
-  return [s.x + x, s.y + (flip ? height - v[1] : v[1]), s.z + z];
+  const roll = ropeRoll(s);
+  let [lx, ly] = [v[0], v[1]];
+  if (roll !== 0) {
+    const [c, n, mid] = [Math.cos(roll), Math.sin(roll), height / 2];
+    [lx, ly] = [v[0] * c - (v[1] - mid) * n, mid + v[0] * n + (v[1] - mid) * c];
+  }
+  const [x, z] = rotateXZ(lx, v[2], s.yaw);
+  return [s.x + x, s.y + ly, s.z + z];
 }
 
 export function poseHitboxes(m: MovementData, hb: HitboxData, s: PawnState): Hitbox[] {
@@ -169,5 +178,5 @@ export function eyePose(m: MovementData, hb: HitboxData, s: PawnState, leanOverr
   const prone = w > 0 ? proneLocal(hb, [0, m.stance.prone.eye, -hb.prone.headForward], shift, s.tiltF, s.tiltB, s.tiltSide, proneBendLift(hb, s.tiltF, s.tiltB)) : upright;
   const local: Vec3 = [lerp(upright[0], prone[0], w), lerp(upright[1], prone[1], w), lerp(upright[2], prone[2], w)];
   const rollScale = lerp(1, m.lean.proneRollScale, w);
-  return { pos: toWorld(s, local, currentHeight(m, s)), roll: -lean * m.lean.rollDeg * DEG * rollScale + (upsideDown(s) ? Math.PI : 0) };
+  return { pos: toWorld(s, local, currentHeight(m, s)), roll: -lean * m.lean.rollDeg * DEG * rollScale + ropeRoll(s) };
 }

@@ -6,11 +6,11 @@ import { loadGameData, type GameData } from "./data/load.js";
 import { deployAction, deployTicks, DeployKind, type DeployAction, type DeployRules } from "./destruction/deploy.js";
 import { buildLevel, type BuiltLevel } from "./level/builder.js";
 import { initRapier, PLAYER_GROUPS, QUERY_SIGHT, QUERY_SOLID, QUERY_STATIC as QUERY_STATIC_FILTER, refreshBroadPhase, type CharacterController, type Rapier, type World } from "./physics/rapier.js";
-import { cancelRappelHold, capsuleFree, findRappel, movementPrompt, poseCollider, stepPawn, type MoveContext, type MovementPrompt } from "./player/movement.js";
+import { cancelRappelHold, capsuleFree, movementPrompt, poseCollider, stepPawn, type MoveContext, type MovementPrompt } from "./player/movement.js";
 import { initialPawnState, type Pawn, type PlayerController } from "./player/pawn.js";
 import { eyePose, poseHitboxes } from "./player/hitboxes.js";
 import { capsuleDims, stanceDims } from "./player/stance.js";
-import { Btn, PawnMode, Stance, type InputCmd, type PawnState } from "./player/types.js";
+import { Btn, PawnMode, ropeIdle, Stance, type InputCmd, type PawnState } from "./player/types.js";
 import { defaultLoadoutPick, resolveLoadout, type LoadoutPick, type ResolvedLoadout } from "./weapons/loadout.js";
 import type { SimEvent } from "./weapons/step.js";
 import { viewDir } from "./weapons/spread.js";
@@ -269,13 +269,11 @@ export class Sim {
 
   /**
    * What holding Interact would do to a panel right now (destruction/deploy.ts): from the body's eye along
-   * its view, stopped by plain level geometry. Where a lab room lets a body do both (deployRules), its own
-   * side's tool comes first: an attacker offered a rope takes the rope, a defender the panel.
+   * its view, stopped by plain level geometry.
    */
   deployActionFor(pawn: Pawn): DeployAction | null {
     const s = pawn.state;
     if (s.mode !== PawnMode.Walk || !s.grounded) return null;
-    if (pawn.team === sideTeam("attacker") && findRappel(this.ctx, pawn)) return null;
     const eye = eyePose(this.data.movement, this.data.hitboxes, s).pos;
     const dir = viewDir(s.yaw, s.pitch);
     const ray = new this.R.Ray({ x: eye[0], y: eye[1], z: eye[2] }, { x: dir[0], y: dir[1], z: dir[2] });
@@ -444,8 +442,12 @@ export class Sim {
     if (pawn.state.reviveTarget !== 0 || pawn.state.deployKind !== DeployKind.None || pawn.state.rappelTicks > 0) return null; // its gauge shows instead
     if (pawn.state.mode === PawnMode.Walk && this.reviveCandidate(pawn)) return "revive"; // before ladders (D-049)
     const deploy = this.deployActionFor(pawn);
-    if (deploy) return deploy.kind === DeployKind.Reinforce ? "reinforce" : deploy.kind === DeployKind.BarricadeUp ? "barricade" : "unbarricade";
-    return movementPrompt(this.ctx, pawn);
+    const move = movementPrompt(this.ctx, pawn);
+    // A lab room gives both sides both tools (on different keys): an attacker is shown the rope's prompt first, a
+    // defender the panel's.
+    const rope = move === "rappel" || move === "rappelVault";
+    if (deploy && !(rope && pawn.team === sideTeam("attacker"))) return deploy.kind === DeployKind.Reinforce ? "reinforce" : deploy.kind === DeployKind.BarricadeUp ? "barricade" : "unbarricade";
+    return move;
   }
 
   /**
@@ -509,6 +511,9 @@ export class Sim {
       rappel: -1,
       rappelFlags: 0,
       rappelTicks: 0,
+      ropeTurn: 0,
+      moveT: 0,
+      moveDur: 0,
       airPeakY: Math.fround(y + 0.02),
       // Back on your feet: no longer down, and nothing half done carries over.
       downHp: 0,
@@ -668,14 +673,16 @@ export class Sim {
     }
 
     const active = this.pawns.get(c.possessedPawnId);
-    const ready = active !== undefined && active.state.mode === PawnMode.Walk && active.state.grounded;
+    // On her feet, or hanging on a rope (Ulo: cameras work on the rope; a lab room lets her rappel).
+    const ready = active !== undefined && ((active.state.mode === PawnMode.Walk && active.state.grounded) || ropeIdle(active.state));
     if (!this.otherPawn(c.id) || !ready) {
       c.shellCam = false; // nothing to look through, or busy (climbing, vaulting, dead)
       return;
     }
     if (pressed & Btn.Ability) {
       c.shellCam = !c.shellCam && c.swapCooldown <= 0;
-    } else if (c.shellCam && pressed & Btn.Interact) {
+    } else if (c.shellCam && pressed & Btn.Interact && active.state.mode !== PawnMode.Rappel) {
+      // No swap off a rope (Ulo): the shell left behind would hang there.
       c.swapPhase = 1;
       c.swapT = 0;
     }

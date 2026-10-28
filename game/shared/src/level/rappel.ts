@@ -55,40 +55,59 @@ export function rappelFaces(def: LevelDef): RappelFace[] {
 /** Whether two faces hang one rope where they overlap: the same way out, the same plane. */
 export const samePlane = (a: RappelFace, b: RappelFace) => a.n[0] * b.n[0] + a.n[1] * b.n[1] > 0.999 && Math.abs(a.d - b.d) <= PLANE_M;
 
-/**
- * The rope of face `i` at (x, z): from the bottom to the top of the faces in its plane over that spot, joined where
- * one stands on another, the run that height `y` is in (within a few centimetres), or null.
- */
-export function ropeAt(faces: readonly RappelFace[], i: number, x: number, z: number, y: number): [number, number] | null {
-  const f = faces[i];
-  const u = f.t[0] * x + f.t[1] * z;
-  const runs: [number, number][] = [];
-  for (const g of faces) if (samePlane(f, g) && u >= g.u0 - 1e-6 && u <= g.u1 + 1e-6) runs.push([g.y0, g.y1]);
-  runs.sort((a, b) => a[0] - b[0]);
-  let cur: [number, number] | null = null;
-  for (const r of runs) {
-    if (cur && r[0] <= cur[1] + JOIN_M) {
-      cur[1] = Math.max(cur[1], r[1]);
-      continue;
-    }
-    if (cur && y >= cur[0] - JOIN_M && y <= cur[1] + JOIN_M) return cur;
-    cur = [r[0], r[1]];
-  }
-  return cur && y >= cur[0] - JOIN_M && y <= cur[1] + JOIN_M ? cur : null;
+/** A rope's run: its bottom and top, and the outermost of its faces' planes (a body on it hangs off that one). */
+export interface RopeRun {
+  y0: number;
+  y1: number;
+  d: number;
 }
 
 /**
- * The rope a body hangs on, drawn from where it is: the face whose rope line (`hang` out from the wall) it's on and
- * whose extent it's in, and that rope's run at its middle (a body's height `height`), or null. Works for bodies
- * seen from afar too, which don't carry their face.
+ * The rope of face `i` at along-position `u` (t·(x, z)): from the bottom to the top of the faces in its plane over
+ * that spot, joined where one stands on another, the run that height `y` is in (within a few centimetres), or null.
+ * Its `d` is the outermost plane among the faces joined (storeys' walls a few centimetres apart: a body hanging off
+ * it clears each on the way up).
  */
-export function ropeOf(faces: readonly RappelFace[], x: number, y: number, z: number, hang: number, height: number): [number, number] | null {
+export function ropeRun(faces: readonly RappelFace[], i: number, u: number, y: number): RopeRun | null {
+  const f = faces[i];
+  const runs: RappelFace[] = [];
+  for (const g of faces) if (samePlane(f, g) && u >= g.u0 - 1e-6 && u <= g.u1 + 1e-6) runs.push(g);
+  runs.sort((a, b) => a.y0 - b.y0);
+  let cur: RopeRun | null = null;
+  for (const g of runs) {
+    if (cur && g.y0 <= cur.y1 + JOIN_M) {
+      cur.y1 = Math.max(cur.y1, g.y1);
+      cur.d = Math.max(cur.d, g.d);
+      continue;
+    }
+    if (cur && y >= cur.y0 - JOIN_M && y <= cur.y1 + JOIN_M) return cur;
+    cur = { y0: g.y0, y1: g.y1, d: g.d };
+  }
+  return cur && y >= cur.y0 - JOIN_M && y <= cur.y1 + JOIN_M ? cur : null;
+}
+
+/** The rope of face `i` at (x, z), the run that height `y` is in: its bottom and top (ropeRun), or null. */
+export function ropeAt(faces: readonly RappelFace[], i: number, x: number, z: number, y: number): [number, number] | null {
+  const f = faces[i];
+  const run = ropeRun(faces, i, f.t[0] * x + f.t[1] * z, y);
+  return run ? [run.y0, run.y1] : null;
+}
+
+/**
+ * The rope a body hangs on, drawn from where it is (bodies seen from afar don't carry their face): the face whose
+ * rope line (`hang` out from the rope's plane, or up to `slack` further out: a swing) it's on and whose extent it's
+ * in, and where that rope is fixed at its top (a body's height `height`, its middle on the rope's run), or null.
+ */
+export function ropeOf(faces: readonly RappelFace[], x: number, y: number, z: number, hang: number, height: number, slack = 0): { x: number; z: number; top: number } | null {
   for (let i = 0; i < faces.length; i++) {
     const f = faces[i];
     const u = f.t[0] * x + f.t[1] * z;
-    if (u < f.u0 - 1e-3 || u > f.u1 + 1e-3 || Math.abs(f.n[0] * x + f.n[1] * z - f.d - hang) > 0.05) continue;
-    const rope = ropeAt(faces, i, x, z, y + height / 2);
-    if (rope) return rope;
+    if (u < f.u0 - 1e-3 || u > f.u1 + 1e-3) continue;
+    const run = ropeRun(faces, i, u, y + height / 2);
+    if (!run) continue;
+    const out = f.n[0] * x + f.n[1] * z - run.d;
+    if (out < hang - 0.05 || out > hang + slack + 0.05) continue;
+    return { x: f.n[0] * (run.d + hang) + f.t[0] * u, z: f.n[1] * (run.d + hang) + f.t[1] * u, top: run.y1 };
   }
   return null;
 }

@@ -32,6 +32,8 @@ import {
   proneWeight,
   reserveOf,
   ropeOf,
+  ropeYawRange,
+  stanceKeyOf,
   Sim,
   spawnAmmo,
   spreadCone,
@@ -373,7 +375,7 @@ export async function startLab(o: LabOptions): Promise<void> {
         const v = sim.pawns.get(sim.viewedPawnId(ctrl.id)) ?? p;
         controls.setView(v.state.yaw, v.state.pitch);
       }
-      controls.resetStance(putBody ? Stance.Stand : p.state.stance);
+      controls.resetStance(putBody ? Stance.Stand : stanceKeyOf(p.state));
     }
     if (!$(".pause").classList.contains("hidden")) renderPause();
   }
@@ -401,7 +403,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     const p = sim.pawns.get(ctrl.possessedPawnId);
     if (!freeCam || !p) return input;
     const v = sim.pawns.get(sim.viewedPawnId(ctrl.id)) ?? p;
-    return { ...input, forward: 0, strafe: 0, buttons: 0, yaw: v.state.yaw, pitch: v.state.pitch, stance: p.state.stance, lean: 0 };
+    return { ...input, forward: 0, strafe: 0, buttons: 0, yaw: v.state.yaw, pitch: v.state.pitch, stance: stanceKeyOf(p.state), lean: 0 };
   }
 
   const MODE_KEY: Partial<Record<Action, "crouchMode" | "proneMode" | "leanMode" | "adsMode">> = {
@@ -942,19 +944,21 @@ export async function startLab(o: LabOptions): Promise<void> {
     // Keep toggles and view limits in step with what the simulation decided this tick.
     const mv = data.movement;
     controls.afterTick(
-      { sprinting: p.state.sprinting, onLadder: p.state.mode === PawnMode.Ladder },
+      { sprinting: p.state.sprinting, onLadder: p.state.mode === PawnMode.Ladder, onRope: p.state.mode === PawnMode.Rappel, stance: p.state.stance },
       { forcesStand: mv.sprint.forcesStand, sprintCancelsLean: mv.lean.sprintCancelsLean },
     );
     // Toggles belong to the body you control. On the other shell's camera the simulation ignores stance
     // input, so hold them at what the hand-over tick must send: your body's own stance when you go back,
     // standing when the new shell wakes up (D-025).
-    if (ctrl.shellCam || ctrl.swapPhase) controls.resetStance(ctrl.swapPhase ? Stance.Stand : p.state.stance);
+    if (ctrl.shellCam || ctrl.swapPhase) controls.resetStance(ctrl.swapPhase ? Stance.Stand : stanceKeyOf(p.state));
     else if (p.id !== possessedId || isDowned(p.state)) controls.resetStance(p.state.stance); // down: the body decides
     possessedId = p.id;
     const proneView = v.state.mode === PawnMode.Walk && proneWeight(v.state) > 0;
     controls.limits = proneView
       ? { pitchMin: mv.stance.pronePitchMinDeg * DEG, pitchMax: mv.stance.pronePitchMaxDeg * DEG, maxYawStep: mv.stance.proneTurnRateDeg * DEG * DT }
       : { pitchMin: mv.look.pitchMinDeg * DEG, pitchMax: mv.look.pitchMaxDeg * DEG, maxYawStep: null };
+    // On a rope the view turns only so far from the wall, and moving onto it, the move turns it.
+    controls.limits.yawRange = ropeYawRange(sim.level, data, v.state);
     if (freeCam) controls.limits = { pitchMin: -89 * DEG, pitchMax: 89 * DEG, maxYawStep: null };
     if (p.state.lastFallDamage > 0) flash(`-${p.state.lastFallDamage} HP (fall)`, "bad");
     observe(p);
@@ -1038,10 +1042,11 @@ export async function startLab(o: LabOptions): Promise<void> {
       const w = pawn.loadout?.weapons[rs.slot];
       v.setWeapon(w ? { class: w.class, pick: w.pick } : null);
       v.update(sim.data, rs.mode === PawnMode.Dead ? corpse(rs) : rs);
-      // On a rope: drawn from over the body up to the rope's top.
+      // On a rope: drawn from the body's middle (its harness) up to where the rope is fixed (a swing takes the body
+      // out from under it).
       const m = sim.data.movement;
-      const rope = rs.mode === PawnMode.Rappel ? ropeOf(sim.level.rappel, rs.x, rs.y, rs.z, m.stance.collisionRadius + m.rappel.wallGap, m.stance.stand.height) : null;
-      v.setRope(rs.x, rs.y + m.stance.stand.height, rs.z, rope ? rope[1] : null);
+      const rope = rs.mode === PawnMode.Rappel ? ropeOf(sim.level.rappel, rs.x, rs.y, rs.z, m.stance.collisionRadius + m.rappel.wallGap, m.stance.stand.height, m.rappel.swingOutM) : null;
+      v.setRope(rs.x, rs.y + m.stance.stand.height / 2, rs.z, rope);
       drawnView.set(pawn.id, [rs.yaw, rs.pitch]);
       const eyes = pawn.id === viewed.id;
       // In first person your own body isn't drawn; your gun is the viewmodel.
@@ -1063,7 +1068,8 @@ export async function startLab(o: LabOptions): Promise<void> {
     whereHud?.update(now, storeyView?.storey ?? 0, vx, vz);
     const fov = aim(viewed, rs);
     const eye = eyePose(data.movement, data.hitboxes, { ...rs, yaw: controls.yaw });
-    controls.upsideDown = !freeCam && upsideDown(rs);
+    // Only the first-person view turns over with the body (the third-person and plan views stay upright).
+    controls.upsideDown = !freeCam && !thirdPerson && !storeyView?.plan && upsideDown(rs);
     if (freeCam) {
       camera.position.copy(freeCam);
       camera.rotation.set(controls.pitch, controls.yaw, 0);
@@ -1141,7 +1147,9 @@ export async function startLab(o: LabOptions): Promise<void> {
     downedHud.update(s, data.combat, keyLabel(settings.keys.interact), nameOfPawn, data.destruction, data.movement);
     app.querySelectorAll<HTMLElement>(".stances span").forEach((el) => el.classList.toggle("on", Number(el.dataset.s) === s.stance));
     $(".stance-bar div").style.width = `${s.stanceT * 100}%`;
-    const speed = Math.hypot(s.vx, s.vz);
+    // On a rope the body is moved by position, not velocity: its speed from the last tick's move.
+    const before = prevStates.get(p.id);
+    const speed = s.mode === PawnMode.Rappel && before ? Math.hypot(s.x - before.x, s.y - before.y, s.z - before.z) / DT : Math.hypot(s.vx, s.vz);
     $(".readout").textContent = [
       `${speed.toFixed(2)} m/s`,
       s.sprinting ? "SPRINT" : controls.adsActive ? "ADS" : "",
@@ -1172,11 +1180,13 @@ export async function startLab(o: LabOptions): Promise<void> {
       prompt === "mantle"
         ? `${keyLabel(k.vault)} to mantle`
         : prompt === "rappel"
-          ? `Hold ${keyLabel(k.interact)} to rappel`
-          : prompt === "rappelIn"
-            ? `${keyLabel(k.vault)} to climb in`
-            : prompt === "rappelBreach"
-              ? `${keyLabel(k.vault)} to breach`
+          ? `Hold ${keyLabel(k.vault)} to rappel`
+          : prompt === "rappelVault"
+            ? `${keyLabel(k.vault)} to vault · hold to rappel`
+            : prompt === "rappelIn"
+              ? `${keyLabel(k.vault)} to swing in`
+              : prompt === "rappelBreach"
+                ? `${keyLabel(k.vault)} to breach`
         : prompt === "ladder"
           ? `${keyLabel(k.interact)} to climb`
           : prompt === "transfer"

@@ -511,13 +511,13 @@ export class PawnView {
     }
   }
 
-  /** Draw a rope from (x, y0, z) up to height y1, or none (null). */
-  setRope(x: number, y0: number, z: number, y1: number | null) {
-    this.rope.visible = y1 !== null && y1 > y0;
-    if (!this.rope.visible) return;
+  /** Draw a rope from (x, y0, z) up to where it's fixed (a swing angles it out), or none (null). */
+  setRope(x: number, y0: number, z: number, anchor: { x: number; z: number; top: number } | null) {
+    this.rope.visible = anchor !== null && anchor.top > y0;
+    if (!anchor || !this.rope.visible) return;
     const pos = this.rope.geometry.getAttribute("position") as THREE.BufferAttribute;
     pos.setXYZ(0, x, y0, z);
-    pos.setXYZ(1, x, y1!, z);
+    pos.setXYZ(1, anchor.x, anchor.top, anchor.z);
     pos.needsUpdate = true;
   }
 

@@ -87,10 +87,14 @@ export const movementSchema = z.object({
   }),
   /** Rappel (Phase 5 M8, research/core_mechanics.md §6): the hook-on hold, speeds on the rope, and where it starts. */
   rappel: z.object({
-    /** Hold Interact this long to hook on (Y11S3's gauge). */
+    /** Hold the vault key this long to hook on (Y11S3's gauge; Ulo: Space, the vault button on touch). */
     holdSeconds: z.number().positive(),
+    /** Where a vault can also be had, a press shorter than this vaults instead. */
+    tapSeconds: z.number().positive(),
     climbSpeed: z.number().positive(),
     descendSpeed: z.number().positive(),
+    /** Descending with sprint held (Siege's fast descent). */
+    rapidDescendSpeed: z.number().positive(),
     /** Along the wall, and sprinting along it (Siege X). */
     strafeSpeed: z.number().positive(),
     sprintStrafeSpeed: z.number().positive(),
@@ -98,18 +102,32 @@ export const movementSchema = z.object({
     wallGap: z.number().nonnegative(),
     /** At a face's foot: how far from the wall the capsule may stand and still hook on. */
     reach: z.number().positive(),
-    /** Facing the wall (from its foot) or the drop (from its top) within this. */
+    /** Facing the wall (from its foot), or out (at a roof edge, or a window from inside), within this. */
     facingDeg: z.number().positive(),
     /** At a face's top (a roof edge): how far back from the wall's plane a body may stand, and how far over the face's top its feet may be. */
     edgeReach: z.number().positive(),
     edgeAbove: z.number().nonnegative(),
     /** A rope shorter than this isn't offered. */
     minLength: z.number().positive(),
-    /** Climbing up, the body goes over the top when its feet are this far under it, taking overTopSeconds. */
+    /** On the rope the view turns at most this far either side of facing the wall. */
+    yawLimitDeg: z.number().positive().max(180),
+    /** Hooking on, the body moves onto the rope over this long: from a face's foot, over a roof edge (turning upside down), out of a window. */
+    attachSeconds: z.number().positive(),
+    edgeAttachSeconds: z.number().positive(),
+    windowAttachSeconds: z.number().positive(),
+    /** Out of a window, the body hangs with its feet this far under the sill. */
+    windowHangBelowSill: z.number().nonnegative(),
+    /** Turning upside down, or back. */
+    turnSeconds: z.number().positive(),
+    /** Climbing up, the body goes over the top when its feet are this far under it, taking overTopSeconds, onto what's at most overTopBack behind the edge (past a railing). */
     overTopDepth: z.number().positive(),
     overTopSeconds: z.number().positive(),
-    /** Rappel breach (Y10S2): the swing into a window's glass or barricade takes this long, then goes through or bounces back. */
-    breachSeconds: z.number().positive(),
+    overTopBack: z.number().positive(),
+    /** A swing into a window (Y10S2): out from the wall swingOutM and back in, over swingSeconds; then through, or bounced back bounceOutM over bounceSeconds. */
+    swingSeconds: z.number().positive(),
+    swingOutM: z.number().nonnegative(),
+    bounceSeconds: z.number().positive(),
+    bounceOutM: z.number().nonnegative(),
   }),
   fall: z.object({ safeHeight: z.number().nonnegative(), lethalHeight: z.number().positive() }),
   step: z.object({ maxStepHeight: z.number().nonnegative(), snapToGround: z.number().nonnegative(), maxSlopeDeg: z.number().positive() }),

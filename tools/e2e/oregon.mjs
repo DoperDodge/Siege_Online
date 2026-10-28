@@ -364,8 +364,9 @@ try {
     await input(off, { yaw: rad(facing) });
     await sleep(600);
     const atFoot = await prompt(off);
-    await input(off, { yaw: rad(facing), buttons: Btn.Interact });
-    const hooked = await off.waitForFunction((mode) => window.__lab.net.own.mode === mode, PawnMode.Rappel, { timeout: 10000, polling: 50 }).then(() => true, () => false);
+    // Hold Space (the vault key) to hook on; the body moves onto the rope.
+    await input(off, { yaw: rad(facing), buttons: Btn.Vault });
+    const hooked = await off.waitForFunction((mode) => window.__lab.net.own.mode === mode && window.__lab.net.own.moveDur === 0, PawnMode.Rappel, { timeout: 20000, polling: 50 }).then(() => true, () => false);
     await input(off, { yaw: rad(facing), forward: 1 });
     const climbed = await off.waitForFunction(() => window.__lab.net.own.y > 3, null, { timeout: 15000, polling: 50 }).then(() => true, () => false);
     await input(off, { yaw: rad(facing) });
@@ -373,11 +374,14 @@ try {
     await sleep(300);
     const onRope = await readout();
     await off.screenshot({ path: shot("oregon-rappel.png") });
+    // The crouch key turns the body upside down (over half a second, not a snap), and back.
     await input(off, { yaw: rad(facing), stance: CROUCH });
-    const turned = await off.waitForFunction(() => /UPSIDE DOWN/.test(document.querySelector(".readout")?.textContent ?? ""), null, { timeout: 5000, polling: 50 }).then(() => true, () => false);
+    const turned =
+      (await off.waitForFunction(() => window.__lab.net.own.ropeTurn === 1, null, { timeout: 10000, polling: 50 }).then(() => true, () => false)) &&
+      (await off.waitForFunction(() => /UPSIDE DOWN/.test(document.querySelector(".readout")?.textContent ?? ""), null, { timeout: 5000, polling: 50 }).then(() => true, () => false));
     await off.screenshot({ path: shot("oregon-rappel-upside-down.png") });
     await input(off, { yaw: rad(facing) });
-    const upright = await off.waitForFunction(() => !/UPSIDE DOWN/.test(document.querySelector(".readout")?.textContent ?? ""), null, { timeout: 5000, polling: 50 }).then(() => true, () => false);
+    const upright = await off.waitForFunction(() => window.__lab.net.own.ropeTurn === 0 && !/UPSIDE DOWN/.test(document.querySelector(".readout")?.textContent ?? ""), null, { timeout: 10000, polling: 50 }).then(() => true, () => false);
     await input(off, { yaw: rad(facing), forward: -1 });
     const landed = await off.waitForFunction((walk) => window.__lab.net.own.mode === walk && window.__lab.net.own.y < 0.1, PawnMode.Walk, { timeout: 15000, polling: 50 }).then(() => true, () => false);
     await input(off, null);
@@ -386,9 +390,9 @@ try {
     result.offline.rappel = { promptAtFoot: atFoot, onRope, steps: { hooked, climbed, turned, upright, landed }, at: [down.x, down.y, down.z], hp: [hp0, down.hp] };
     result.checks.rappelUpTheBigTowerAndDown = /to rappel/.test(atFoot) && hooked && climbed && /RAPPEL/.test(onRope) && turned && upright && landed && down.grounded && down.hp === hp0;
   }
-  // A rappel breach (M8): from the Kids' Dorms' roof edge, facing out over it, hook on upside down; turn to the
-  // wall, right side up (the crouch key), down to its window (2F.o004), and swing in: the fresh barricade bounces
-  // you back, kicked, and the glass breaks; the second swing goes through it into the Dorms.
+  // A rappel breach (M8): from the Kids' Dorms' roof edge, facing out over it, hold Space to go over it onto the
+  // rope upside down, facing the wall; right side up (the crouch key), down to its window (2F.o004), and swing in:
+  // the fresh barricade bounces you off, kicked, and the glass breaks; the second swing goes through it into the Dorms.
   const kids = lvl.solids.find((sd) => sd.id === "2F.o004.bar");
   if (kids) {
     const held = { yaw: rad(180), stance: CROUCH }; // facing the wall (south), right side up
@@ -397,22 +401,25 @@ try {
     await input(off, { yaw: 0 });
     await sleep(600);
     const atEdge = await prompt(off);
-    await input(off, { yaw: 0, buttons: Btn.Interact });
-    const hooked = await off.waitForFunction((mode) => window.__lab.net.own.mode === mode && (window.__lab.net.own.rappelFlags & 1) === 1, PawnMode.Rappel, { timeout: 10000, polling: 50 }).then(() => true, () => false);
+    // Hold Space: over the edge and down onto the rope, turning upside down on the way.
+    await input(off, { yaw: 0, buttons: Btn.Vault });
+    const hooked = await off
+      .waitForFunction((mode) => window.__lab.net.own.mode === mode && window.__lab.net.own.moveDur === 0 && window.__lab.net.own.ropeTurn === 1, PawnMode.Rappel, { timeout: 20000, polling: 50 })
+      .then(() => true, () => false);
     await input(off, held);
-    const upright = await off.waitForFunction(() => (window.__lab.net.own.rappelFlags & 1) === 0, null, { timeout: 5000, polling: 50 }).then(() => true, () => false);
+    const upright = await off.waitForFunction(() => window.__lab.net.own.ropeTurn === 0, null, { timeout: 10000, polling: 50 }).then(() => true, () => false);
     await input(off, { ...held, forward: -1 });
     const lowered = await off.waitForFunction(() => window.__lab.net.own.y < 3.6, null, { timeout: 10000, polling: 20 }).then(() => true, () => false);
     await input(off, held);
     await sleep(400);
     const atWindow = await prompt(off);
     const fresh = await panel(off, "2F.o004.bar");
-    /** One swing: hold Space until it starts, let go, and wait for it to end. */
+    /** One swing: press Space until it starts, let go, and wait for it to end (out and back, and a bounce off). */
     const swingIn = async () => {
       await input(off, { ...held, buttons: Btn.Vault });
       const started = await off.waitForFunction((mode) => window.__lab.net.own.mode === mode && window.__lab.net.own.rappelTicks > 0, PawnMode.Rappel, { timeout: 5000, polling: 20 }).then(() => true, () => false);
       await input(off, held);
-      await off.waitForFunction(() => window.__lab.net.own.rappelTicks === 0, null, { timeout: 5000, polling: 50 }).catch(() => {});
+      await off.waitForFunction(() => window.__lab.net.own.rappelTicks === 0, null, { timeout: 20000, polling: 50 }).catch(() => {});
       return started;
     };
     const first = await swingIn();

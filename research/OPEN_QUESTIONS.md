@@ -436,20 +436,32 @@ you find is logged (walk #1's three are fixed: items 33 and 34 ask what's left t
     (destruction.md). How small a hole can you vault or crouch through in the game? (The hole sizes are
     placeholders too.)
 
-35. **Rappel (M8, D-114):** built from core_mechanics.md §6, with these placeholders (its question 6 asks the first
-    ones):
-    - the hold to hook on 0.5 s; climbing 1.5 m/s, descending 2.5 m/s, along the wall 1.2 m/s and 2.5 m/s
-      sprinting;
+35. **Rappel (M8, D-114, D-116):** built from core_mechanics.md §6 and your test's corrections, with these
+    placeholders (its question 6 asks the first ones):
+    - the key: hold the vault key (Space, the vault button on touch) 0.5 s to hook on; where a vault can be had
+      too, a press under 0.25 s vaults instead (as you let go); F lets go (our choice: the game's own key to let
+      go isn't in the research);
+    - the moves onto the rope: 0.6 s from a wall's foot, 1 s over a roof edge (turning upside down on the way) or
+      out of a window (over the sill, hanging 0.9 m under it), turning to face the wall; turning over takes 0.5 s,
+      holding you still;
+    - climbing 1.5 m/s, descending 2.5 m/s (5 m/s with sprint), along the wall 1.2 m/s and 2.5 m/s sprinting; the
+      view turns at most 90° either side of facing the wall;
     - from a wall's foot: within 0.5 m of it, facing it within 45°; from a roof edge: up to 1 m back from the
-      wall and 0.6 m above the edge, facing out over it, hanging upside down; no rope under 2 m; the body hangs
-      5 cm off the wall; climbing past the top takes you over it (0.6 s) once your feet are 1.2 m under it;
-    - the crouch key turns you upside down and back; you can't climb in or breach upside down;
-    - rappel breach: the swing takes 0.8 s; a barricade worn to 2 of its 3 hit points gives way, a fresher one
-      bounces you back and your feet take 1 off (so a fresh one takes two swings, and one knife hit or a few
-      bullets first make it one); glass always breaks;
-    - one rope per plane: where a storey's wall stands a little out from the one above (the Kitchen's north wall
-      under the Kids' Dorms', 0.3 m), the two are separate ropes, so from the ground you stop at the ledge
-      between them. Siege's hook "goes to the highest ledge above you": does it go on up past such a ledge?
+      wall and 0.6 m above the edge, facing out over it, hanging upside down; from inside a window: a sill you could
+      vault, in a wall up to 0.6 m thick, glass and barricade gone; no rope under 2 m; the body hangs 5 cm off the
+      wall; climbing past the top takes you over it (0.6 s) once your feet are 1.2 m under it, onto what's up to
+      1.2 m behind the edge (past a railing);
+    - the crouch key turns you upside down and back (each change of it: with hold-to-crouch you hang upside down
+      while you hold it); you can't swing in or breach upside down; you can knife on the rope;
+    - the swing: out 0.9 m and back in 0.8 s; bounced off a barricade, out 0.35 m and back in 0.4 s; it only goes in
+      through the wall (a vault onto a roof over the wall is the climb over the top);
+    - rappel breach: a barricade worn to 2 of its 3 hit points gives way, a fresher one bounces you back and your
+      feet take 1 off (so a fresh one takes two swings, and one knife hit or a few bullets first make it one);
+      glass always breaks;
+    - one rope per plane: walls up to 10 cm apart one over the other are one rope, hung off the outermost; where a
+      storey's wall stands further out from the one above (the Kitchen's north wall under the Kids' Dorms', 0.3 m),
+      the two are separate ropes, so from the ground you stop at the ledge between them. Siege's hook "goes to the
+      highest ledge above you": does it go on up past such a ledge?
     How do these compare with the game? And for Phase 8 (D-115): going round a corner, what counts as the same
     height?
 

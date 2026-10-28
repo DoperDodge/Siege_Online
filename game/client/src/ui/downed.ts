@@ -48,8 +48,8 @@ export class DownedHud {
       $(".revive-title").textContent = `HOOKING ON… ${(Math.max(0, total - s.rappelTicks) / TICK_HZ).toFixed(1)} s`;
       $(".revive-bar div").style.width = `${Math.min(100, (100 * s.rappelTicks) / total)}%`;
     } else if (breaching) {
-      const total = ticks(movement.rappel.breachSeconds);
-      $(".revive-title").textContent = `SWINGING IN… ${(Math.max(0, total - s.rappelTicks) / TICK_HZ).toFixed(1)} s`;
+      const total = ticks(movement.rappel.swingSeconds);
+      $(".revive-title").textContent = s.rappelTicks > total ? "BOUNCED OFF" : `SWINGING IN… ${(Math.max(0, total - s.rappelTicks) / TICK_HZ).toFixed(1)} s`;
       $(".revive-bar div").style.width = `${Math.min(100, (100 * s.rappelTicks) / total)}%`;
     }
   }

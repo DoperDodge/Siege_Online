@@ -135,8 +135,10 @@
   },
   "rappel": {
     "holdSeconds": 0.5,
+    "tapSeconds": 0.25,
     "climbSpeed": 1.5,
     "descendSpeed": 2.5,
+    "rapidDescendSpeed": 5.0,
     "strafeSpeed": 1.2,
     "sprintStrafeSpeed": 2.5,
     "wallGap": 0.05,
@@ -145,9 +147,19 @@
     "edgeReach": 1.0,
     "edgeAbove": 0.6,
     "minLength": 2.0,
+    "yawLimitDeg": 90,
+    "attachSeconds": 0.6,
+    "edgeAttachSeconds": 1.0,
+    "windowAttachSeconds": 1.0,
+    "windowHangBelowSill": 0.9,
+    "turnSeconds": 0.5,
     "overTopDepth": 1.2,
     "overTopSeconds": 0.6,
-    "breachSeconds": 0.8
+    "overTopBack": 1.2,
+    "swingSeconds": 0.8,
+    "swingOutM": 0.9,
+    "bounceSeconds": 0.4,
+    "bounceOutM": 0.35
   },
   "fall": {
     "safeHeight": 3.0,

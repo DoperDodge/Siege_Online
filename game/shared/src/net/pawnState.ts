@@ -9,7 +9,7 @@ import { ByteReader, ByteWriter, fnv1a, ProtocolError } from "./bytes.js";
 export const PAWN_F32_FIELDS = [
   "x", "y", "z", "vx", "vy", "vz", "yaw", "pitch", "stanceT", "lean", "tiltF", "tiltB", "tiltSide",
   "sinceSprint", "moveT", "moveDur", "fromX", "fromY", "fromZ", "toX", "toY", "toZ", "apexY", "tuck", "airPeakY",
-  "recoilPendP", "recoilPendY", "recoilRecP", "recoilRecY", "downHp",
+  "recoilPendP", "recoilPendY", "recoilRecP", "recoilRecY", "downHp", "ropeTurn",
 ] as const satisfies readonly (keyof PawnState)[];
 
 /** Integer fields by wire width (after the flags, enums, buttons and ladder written by hand below). */
@@ -60,7 +60,7 @@ export function readPawnState(r: ByteReader): PawnState {
   for (const k of PAWN_U32_FIELDS) f[k] = r.u32();
   if (f.slot > 1 || f.wAct > 2 || f.reloadKind > 3) throw new ProtocolError("bad pawn weapon state");
   if (f.deployKind > 3 || f.deploySection > 2) throw new ProtocolError("bad pawn deploy state");
-  if (rappel < -1 || f.rappelFlags > 15) throw new ProtocolError("bad pawn rappel state");
+  if (rappel < -1 || f.rappelFlags > 31) throw new ProtocolError("bad pawn rappel state");
   return {
     ...(f as Record<(typeof PAWN_F32_FIELDS)[number] | (typeof PAWN_U8_FIELDS)[number] | (typeof PAWN_U16_FIELDS)[number] | (typeof PAWN_U32_FIELDS)[number], number>),
     grounded: (flags & 1) !== 0,

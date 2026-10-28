@@ -263,9 +263,10 @@ export function ropeSpots(room: Room, n: number, apart = 6): RopeSpot[] {
 }
 
 /**
- * A rappelling bot (Phase 5 M8): on its feet, it faces its wall and holds Interact; on the rope it does
- * something new every half second or so (climb, descend, along the wall sprinting or not, the crouch key to
- * turn over and back, lean, ADS, fire), and after a few seconds comes down.
+ * A rappelling bot (Phase 5 M8): on its feet, it faces its wall and holds the vault key (Space) to hook on; on
+ * the rope it does something new every half second or so (climb, descend, along the wall sprinting or not, the
+ * crouch key to turn over and back, lean, ADS, fire, the knife, Space to swing at a window), and after a few
+ * seconds comes down.
  */
 function rappeller(rng: Rng, spot: RopeSpot) {
   let until = 0;
@@ -276,10 +277,10 @@ function rappeller(rng: Rng, spot: RopeSpot) {
     if (!own || own.mode !== PawnMode.Rappel) {
       onRopeSince = -1;
       until = 0;
-      // On its feet: face the wall and hold Interact (it hooks on where it stands, if it's back at its spot),
+      // On its feet: face the wall and hold the vault key (it hooks on where it stands, if it's back at its spot),
       // letting go now and then (a hold starts on a fresh press).
       const hold = own?.mode === PawnMode.Walk && own.grounded && tick % 64 < 56;
-      return { forward: 0, strafe: 0, yaw, pitch: 0, buttons: hold ? Btn.Interact : 0, stance: Stance.Stand, lean: 0 };
+      return { forward: 0, strafe: 0, yaw, pitch: 0, buttons: hold ? Btn.Vault : 0, stance: Stance.Stand, lean: 0 };
     }
     if (onRopeSince < 0) onRopeSince = tick;
     if (tick - onRopeSince > 64 * 5) return { ...cmd, forward: -1, strafe: 0, stance: cmd.stance, buttons: 0, lean: 0 }; // time to come down
@@ -291,7 +292,12 @@ function rappeller(rng: Rng, spot: RopeSpot) {
         strafe: rng.next() < 0.35 ? (rng.next() < 0.5 ? -1 : 1) : 0,
         yaw: yaw + (rng.next() - 0.5) * 1.2,
         pitch: (rng.next() - 0.5) * 0.8,
-        buttons: (rng.next() < 0.3 ? Btn.Sprint : 0) | (rng.next() < 0.2 ? Btn.Ads : 0) | (rng.next() < 0.25 ? Btn.Fire : 0),
+        buttons:
+          (rng.next() < 0.3 ? Btn.Sprint : 0) |
+          (rng.next() < 0.2 ? Btn.Ads : 0) |
+          (rng.next() < 0.25 ? Btn.Fire : 0) |
+          (rng.next() < 0.1 ? Btn.Melee : 0) |
+          (rng.next() < 0.1 ? Btn.Vault : 0),
         stance: rng.next() < 0.2 ? (cmd.stance === Stance.Stand ? Stance.Crouch : Stance.Stand) : cmd.stance,
         lean: rng.next() < 0.2 ? (rng.next() < 0.5 ? -1 : 1) : 0,
       };

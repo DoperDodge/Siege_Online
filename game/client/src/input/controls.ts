@@ -21,6 +21,15 @@ export interface ViewLimits {
   pitchMax: number;
   /** Max yaw change per tick from the body's yaw (prone turn rate), or null for free turning. */
   maxYawStep: number | null;
+  /** The yaws the view may take (on a rope: either side of facing the wall), or none. */
+  yawRange?: { center: number; half: number } | null;
+}
+
+/** `yaw` kept within `range` (the nearer edge when outside it). */
+function inRange(yaw: number, range: { center: number; half: number } | null | undefined): number {
+  if (!range) return yaw;
+  const d = wrapAngle(yaw - range.center);
+  return Math.abs(d) <= range.half ? yaw : wrapAngle(range.center + Math.sign(d) * range.half);
 }
 
 export class Controls {
@@ -68,6 +77,7 @@ export class Controls {
   private wantSlot: 0 | 1 | null = null;
   private sentSwap = false;
   private wasOnLadder = false;
+  private wasOnRope = false;
   private lastLeanHold: -1 | 0 | 1 = 0;
   private sampledYaw = 0;
   private sampledPitch = 0;
@@ -200,7 +210,7 @@ export class Controls {
   look(dx: number, dy: number, scale = 1) {
     // Upside down on a rope the view is turned over: a move turns it the way it goes on the screen.
     const sens = this.settings.sensitivity * (this.adsActive ? adsSensitivity(this.settings, this.weaponState()?.zoom ?? 1) : 1) * scale * DEG * (this.upsideDown ? -1 : 1);
-    this.yaw = wrapAngle(this.yaw - dx * sens);
+    this.yaw = inRange(wrapAngle(this.yaw - dx * sens), this.limits.yawRange);
     this.pitch = clamp(this.pitch - dy * sens * (this.settings.invertY ? -1 : 1), this.limits.pitchMin, this.limits.pitchMax);
   }
 
@@ -208,8 +218,8 @@ export class Controls {
   upsideDown = false;
 
   /**
-   * Clamp the view to what the simulation will accept next tick (pitch arc, prone turn rate). Call once per
-   * frame, after that frame's ticks and before rendering.
+   * Clamp the view to what the simulation will accept next tick (pitch arc, prone turn rate, a rope's yaw
+   * range). Call once per frame, after that frame's ticks and before rendering.
    */
   applyLimits() {
     const l = this.limits;
@@ -218,7 +228,7 @@ export class Controls {
       const d = wrapAngle(this.yaw - this.sampledYaw);
       if (Math.abs(d) > l.maxYawStep) this.yaw = this.sampledYaw + Math.sign(d) * l.maxYawStep;
     }
-    this.yaw = wrapAngle(this.yaw);
+    this.yaw = inRange(wrapAngle(this.yaw), l.yawRange);
   }
 
   press(action: Action) {
@@ -400,13 +410,16 @@ export class Controls {
   /**
    * Keep toggles in line with what the simulation did this tick: sprinting stands you up and cancels a
    * lean (when data says so), and grabbing a ladder stands you up. On the ladder the crouch toggle is left
-   * alone, so it starts and stops a slide down.
+   * alone, so it starts and stops a slide down; on a rope it turns you over, so off the rope it's the body's
+   * stance again (on your feet, or crouched climbing in under a low lintel).
    */
-  afterTick(state: { sprinting: boolean; onLadder: boolean }, rules: { forcesStand: boolean; sprintCancelsLean: boolean }) {
+  afterTick(state: { sprinting: boolean; onLadder: boolean; onRope: boolean; stance: Stance }, rules: { forcesStand: boolean; sprintCancelsLean: boolean }) {
     if (state.sprinting && rules.forcesStand) this.stanceIntent = Stance.Stand;
     if (state.sprinting && rules.sprintCancelsLean) this.leanIntent = 0;
     if (state.onLadder && !this.wasOnLadder) this.resetStance();
+    if (!state.onRope && this.wasOnRope) this.resetStance(state.stance);
     this.wasOnLadder = state.onLadder;
+    this.wasOnRope = state.onRope;
   }
 
   /** Stance the player is asking for (for the HUD). */

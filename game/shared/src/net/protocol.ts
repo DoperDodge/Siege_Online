@@ -9,7 +9,7 @@ import { MSG_PANEL_OPS, MSG_PANEL_RESYNC, MSG_PANEL_STATE } from "./panels.js";
 import { MSG_SNAPSHOT } from "./snapshot.js";
 
 /** Bump when the wire format changes; client and server must match. */
-export const PROTOCOL_VERSION = 9;
+export const PROTOCOL_VERSION = 10;
 
 export const Msg = {
   // client → server

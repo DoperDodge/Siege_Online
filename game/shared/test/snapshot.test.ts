@@ -11,7 +11,6 @@ import {
   PawnMode,
   ProtocolError,
   quantizeRemote,
-  RappelFlag,
   remoteState,
   REVIVER_UNKNOWN,
   Sim,
@@ -82,10 +81,15 @@ describe("snapshot codec", () => {
     const back = remoteState(dec.have.get(5)!);
     expect([back.mode, back.stance, back.stanceFrom, back.sprinting, back.grounded]).toEqual([PawnMode.Downed, Stance.Prone, Stance.Crouch, true, true]);
     expect(back.revivedBy).toBe(REVIVER_UNKNOWN); // someone is reviving it (who isn't sent)
-    // On a rope, upside down (Phase 5 M8): others see it turned over.
-    const roped = remoteState(quantizeRemote({ ...initialPawnState(1, 4, 2, 0, 100), mode: PawnMode.Rappel, rappel: 3, rappelFlags: RappelFlag.Inverted }));
-    expect([roped.mode, roped.rappelFlags]).toEqual([PawnMode.Rappel, RappelFlag.Inverted]);
-    for (const flags of [(quantizeRemote(s).flags & ~(7 << 4)) | (6 << 4), quantizeRemote(s).flags | 1024]) {
+    // On a rope, turning over (Phase 5 M8): others see how far it has turned (to 1/255), and only on a rope.
+    const turning = { ...initialPawnState(1, 4, 2, 0, 100), mode: PawnMode.Rappel, rappel: 3, ropeTurn: 0.4 };
+    const roped = new SnapshotDecoder();
+    roped.decode(new SnapshotEncoder().encode({ tick: 2, ackSeq: 0, idled: false, queueDepth: 2 }, null, new Map([[5, quantizeRemote(turning)]])));
+    const seen = remoteState(roped.have.get(5)!);
+    expect(seen.mode).toBe(PawnMode.Rappel);
+    expect(seen.ropeTurn).toBeCloseTo(0.4, 2);
+    expect(remoteState(quantizeRemote({ ...turning, mode: PawnMode.Walk })).ropeTurn).toBe(0);
+    for (const flags of [(quantizeRemote(s).flags & ~(7 << 4)) | (6 << 4), quantizeRemote(s).flags | 512]) {
       const bad = { ...quantizeRemote(s), flags };
       expect(() => new SnapshotDecoder().decode(new SnapshotEncoder().encode({ tick: 2, ackSeq: 0, idled: false, queueDepth: 2 }, null, new Map([[5, bad]])))).toThrow(ProtocolError);
     }
@@ -193,7 +197,7 @@ describe("remote interpolation", () => {
   });
 
   it("interpolating halfway lands between the two states, turning the short way round", () => {
-    const a = remoteState({ ...quantizeRemote(remoteState({ x: 0, y: 0, z: 0, yaw: 0, pitch: 0, lean: 0, stanceT: 255, tiltF: 0, tiltB: 0, tiltSide: 0, tuck: 0, flags: 0, aux: 0 })), yaw: 65536 - 2000 });
+    const a = remoteState({ ...quantizeRemote(remoteState({ x: 0, y: 0, z: 0, yaw: 0, pitch: 0, lean: 0, stanceT: 255, tiltF: 0, tiltB: 0, tiltSide: 0, tuck: 0, flags: 0, aux: 0, turn: 0 })), yaw: 65536 - 2000 });
     const b = { ...a, x: 2, yaw: a.yaw + 0.3 };
     const mid = interpolateRemote(a, b, 0.5);
     expect(mid.x).toBeCloseTo(1, 9);

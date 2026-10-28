@@ -87,6 +87,7 @@ export function initialPawnState(x: number, y: number, z: number, yaw: number, m
     rappel: -1,
     rappelFlags: 0,
     rappelTicks: 0,
+    ropeTurn: 0,
     airPeakY: y,
     hp: maxHp,
     maxHp,

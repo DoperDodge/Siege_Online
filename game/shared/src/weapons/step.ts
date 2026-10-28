@@ -11,7 +11,7 @@ import type { GameData } from "../data/load.js";
 import { eyePose } from "../player/hitboxes.js";
 import { turnView, type MoveContext } from "../player/movement.js";
 import type { Pawn } from "../player/pawn.js";
-import { Btn, PawnMode, ReloadKind, WeaponAct, WFlag, type InputCmd, type PawnState } from "../player/types.js";
+import { Btn, PawnMode, ReloadKind, ropeIdle, WeaponAct, WFlag, type InputCmd, type PawnState } from "../player/types.js";
 import { STANCE_NAMES } from "../data/schemas.js";
 import type { ResolvedWeapon } from "./loadout.js";
 import { ticks } from "./ticks.js";
@@ -89,8 +89,8 @@ export function blocksSprint(s: PawnState, input: InputCmd): boolean {
   return (input.buttons & Btn.Fire) !== 0 || s.meleeTicks > 0 || handsBusy(s);
 }
 
-/** On a rope and not mid-swing (a rappel breach's swing takes the hands). */
-const onRope = (s: PawnState) => s.mode === PawnMode.Rappel && s.rappelTicks === 0;
+/** On a rope with the hands free (not moving onto it, swinging or turning over). */
+const onRope = ropeIdle;
 
 /**
  * Aiming down sights this tick: the ADS button, on your feet or a rope, not mid-swap, melee or a hold (revive,
@@ -254,7 +254,7 @@ export function stepWeapon(ctx: WeaponContext, pawn: Pawn, input: InputCmd, pres
   const s = pawn.state;
   const rules = ctx.data.gunplay.rules;
   const exitToFire = ctx.data.movement.sprint.exitToFireSeconds;
-  // On a rope too: aim, fire and reload (research/core_mechanics.md §6.1), but no knife, and nothing mid-swing.
+  // On a rope too: aim, fire, reload (research/core_mechanics.md §6.1) and knife (Ulo), when the hands are free.
   const walking = s.mode === PawnMode.Walk || onRope(s);
   let w = lo.weapons[s.slot];
 
@@ -293,7 +293,7 @@ export function stepWeapon(ctx: WeaponContext, pawn: Pawn, input: InputCmd, pres
   }
   if (pressed & Btn.Reload && s.wAct === WeaponAct.Ready && walking && !s.sprinting && s.meleeTicks === 0) startReload(ctx, pawn, w);
   // The knife: from any allowed stance, even mid-sprint (it ends the sprint) or mid-reload (it cancels it).
-  if (pressed & Btn.Melee && s.meleeTicks === 0 && s.mode === PawnMode.Walk && s.wAct !== WeaponAct.Equip && !handsBusy(s) && melee.allowInStances.includes(STANCE_NAMES[s.stance])) {
+  if (pressed & Btn.Melee && s.meleeTicks === 0 && (s.mode === PawnMode.Walk || onRope(s)) && s.wAct !== WeaponAct.Equip && !handsBusy(s) && melee.allowInStances.includes(STANCE_NAMES[s.stance])) {
     if (s.wAct === WeaponAct.Reload) endReload(s);
     s.meleeTicks = 1;
     s.burstLeft = 0;

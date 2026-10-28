@@ -75,8 +75,10 @@ describe("netsim: 10 clients, 100 ms round trip, jitter, stalls, drift", () => {
     expect(r.serverTickMs.mean).toBeLessThan(5);
   }, 90000);
 
-  it("on Oregon, rappelling (Phase 5 M8): each bot up, along and down a wall of its own, turning over and firing; no mispredictions", async () => {
-    const r = await runNetsim({ level: "oregon", seconds: 15, rappel: true, crowd: false, seed: 7 });
+  it("on Oregon, rappelling (Phase 5 M8): each bot up, along and down a wall of its own, turning over, firing and knifing, through stalls past the room's hold budget; no mispredictions", async () => {
+    // Stalls of 400 ms: past MAX_HOLD_TICKS, so the room steps bodies on ropes (and mid-hold) without input.
+    const r = await runNetsim({ level: "oregon", seconds: 15, rappel: true, crowd: false, seed: 7, stallMs: 400, stallsPerSecond: 0.1 });
+    expect(r.room.stalls).toBeGreaterThan(0);
     expect(r.desyncs).toEqual([]);
     expect(r.room.droppedInputs).toBe(0);
     expect(r.panels.differ).toEqual([]);
@@ -84,8 +86,9 @@ describe("netsim: 10 clients, 100 ms round trip, jitter, stalls, drift", () => {
       expect(c.resyncs, c.name).toBe(0);
       expect(r.rappel!.hookOns[i], c.name).toBeGreaterThanOrEqual(2);
       expect(r.rappel!.ropeTicks[i], c.name).toBeGreaterThan(64 * 4);
-      // Stalls cost none on a rope either: the hold to hook on and the stance key wait for the late input.
-      expect(c.corrections - c.forced, c.name).toBeLessThanOrEqual(2);
+      // Stalls cost no mispredictions on a rope either: the hold to hook on, the moves onto the rope, a turn, a swing
+      // and the stance key wait for the late input (a stall past the hold budget costs a forced correction at most).
+      expect(c.corrections - c.forced, c.name).toBe(0);
       expect(c.downKbps, c.name).toBeLessThan(64);
     });
     expect(r.serverTickMs.mean).toBeLessThan(5);
