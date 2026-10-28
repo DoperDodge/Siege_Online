@@ -56,7 +56,7 @@ import {
 } from "@redmond/shared";
 import { Controls, type Action, type UiAction } from "../../input/controls.js";
 import { horizontalFov, keyLabel, loadSettings, saveSettings, type HoldMode, type Settings } from "../../input/settings.js";
-import { isTouchDevice, mountTouchControls } from "../../input/touch.js";
+import { isTouchDevice, mountTouchControls, preventPageZoom } from "../../input/touch.js";
 import { LocalSocket } from "../../net/local.js";
 import { OnlineConnection } from "../../net/online.js";
 import { createLabScene, createRenderer, PawnView, updateLabels, warmShaders } from "../../render/labScene.js";
@@ -413,6 +413,7 @@ export async function startLab(o: LabOptions): Promise<void> {
   // touchscreen laptop keeps the mouse flow and gets touch controls the first time it is actually touched;
   // after that the pointer last used decides (the touch layer passes mouse clicks on to pointer lock).
   const touchOnly = isTouchDevice();
+  preventPageZoom();
   let usingTouch = touchOnly;
   let touchLayer: HTMLElement | null = null;
   const mountTouch = () => {

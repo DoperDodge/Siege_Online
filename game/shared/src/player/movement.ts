@@ -540,12 +540,23 @@ export function planVault(ctx: MoveContext, pawn: Pawn): VaultPlan | null {
   if (!front || !ctx.level.solids.get(front.collider.handle)?.vaultable) return null;
   const face = front.timeOfImpact;
 
-  // 2. Its top surface, found by casting down just past the front face.
-  const topStart = s.y + v.maxOntoHeight + 0.3;
+  // 2. Its top surface, found by casting down just past the front face. A ray that starts inside something (the
+  //    wall over a hole in it) starts again from the lowest height where nothing stands ahead: the hole.
+  let topStart = s.y + v.maxOntoHeight + 0.3;
   const px = s.x + fx * (face + 0.05);
   const pz = s.z + fz * (face + 0.05);
-  const down = ray(px, topStart, pz, 0, -1, 0, v.maxOntoHeight + 0.35);
-  if (!down || down.collider.handle !== front.collider.handle) return null;
+  let down = ray(px, topStart, pz, 0, -1, 0, v.maxOntoHeight + 0.35);
+  if (down && down.timeOfImpact < 1e-4) {
+    down = null;
+    for (let y = v.minHeight + 0.05; y < v.maxOntoHeight + 0.3; y += 0.05) {
+      if (ray(s.x, s.y + y, s.z, fx, 0, fz, face + 0.1)) continue;
+      topStart = s.y + y;
+      down = ray(px, topStart, pz, 0, -1, 0, y + 0.05);
+      break;
+    }
+  }
+  // The same solid (a panel's boxes are one solid: the part under a hole may be a box of its own).
+  if (!down || ctx.level.solids.get(down.collider.handle) !== ctx.level.solids.get(front.collider.handle)) return null;
   const topY = topStart - down.timeOfImpact;
   const h = topY - s.y;
   if (h < v.minHeight || h > v.maxOntoHeight) return null;

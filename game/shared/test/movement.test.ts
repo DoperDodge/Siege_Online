@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildLevel, Btn, DEG, eyePose, levelSchema, loadGameData, PawnMode, poseHitboxes, Sim, Stance, wrapAngle, type InputCmd } from "../src/index.js";
-import { hspeed, input, labWith, run, teleport } from "./helpers.js";
+import { buildLevel, Btn, DEG, eyePose, L_BACK, L_CORE, L_FRONT, levelSchema, loadGameData, PawnMode, poseHitboxes, Sim, Stance, wrapAngle, type InputCmd } from "../src/index.js";
+import { hspeed, input, labWith, run, settle, teleport } from "./helpers.js";
 
 const FWD = { forward: 1 } as const;
 
@@ -241,6 +241,39 @@ describe("vaulting", () => {
     teleport(sim, ctrl, 5.0, 0, 0.9);
     run(sim, ctrl, VAULT, 1.0);
     expect(pawn.state.z).toBeLessThan(-0.4);
+    expect(pawn.state.y).toBeLessThan(0.1);
+  });
+
+  it("vaults through a hole in a soft wall that is low and big enough, not over the wall or through a narrow hole (walk #1)", async () => {
+    const sim = await Sim.create("destruction_lab");
+    const ctrl = sim.addPlayer("tester", "sledge");
+    const pawn = sim.pawns.get(ctrl.possessedPawnId)!;
+    settle(sim, ctrl);
+    // The plain soft wall: 3 m wide and tall, its middle at x −8, z −6, 0.2 m thick; cells are 5 cm, v up from its foot.
+    const wall = sim.level.panels.byId.get("soft_plain")!;
+    const hole = (u0: number, v0: number, u1: number, v1: number) => {
+      for (const layer of [L_FRONT, L_CORE, L_BACK]) {
+        if (wall.panel.layers[layer]) sim.level.panels.apply(wall.panel.spec.index, { kind: "cut", layer, shape: { kind: "rect", u0, v0, u1, v1 }, hard: false });
+      }
+    };
+    const vaultAt = (seconds = 1.2) => {
+      teleport(sim, ctrl, -8, 0, -5.4);
+      run(sim, ctrl, VAULT, seconds);
+      return pawn.state;
+    };
+    expect(vaultAt().z).toBeGreaterThan(-6); // the whole wall: nothing to vault
+    hole(26, 12, 34, 40); // 0.4 m wide, 0.6 m to 2.0 m up: too narrow for a body
+    expect(vaultAt().z).toBeGreaterThan(-6);
+    sim.level.panels.reset(wall.panel.spec.index);
+    // 1.2 m wide, from 0.5 m to 1.6 m up: the wall over it stands lower than a vault looks for a top, so the
+    // ledge is found from inside the hole.
+    hole(18, 10, 42, 32);
+    teleport(sim, ctrl, -8, 0, -5.4);
+    run(sim, ctrl, VAULT, 0.1);
+    expect(pawn.state.mode).toBe(PawnMode.Vault);
+    run(sim, ctrl, VAULT, 1.1);
+    expect(pawn.state.mode).toBe(PawnMode.Walk);
+    expect(pawn.state.z).toBeLessThan(-6.3);
     expect(pawn.state.y).toBeLessThan(0.1);
   });
 

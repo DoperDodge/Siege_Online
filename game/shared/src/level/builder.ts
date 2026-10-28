@@ -87,7 +87,8 @@ export function buildLevel(R: Rapier, world: World, def: LevelDef, destruction?:
     if (destruction && construction) {
       // Its boxes are made in the same place in the level order a plain solid's would be.
       const { spec, frame } = panelSpec(destruction, s, panels.list.length, construction);
-      panels.add(spec, frame, info);
+      // A wall holes open to bodies can be vaulted through where one is low and big enough (the vault's own rules).
+      panels.add(spec, frame, spec.construction.passable === "breach" ? { ...info, vaultable: true } : info);
       renderables.push({ id: s.id, kind: "panel", center: s.center, size: s.size, quat, surface: s.surface, visible: true, label: s.label, panel: spec.index });
       continue;
     }

@@ -37,6 +37,28 @@ export function isTouchDevice(): boolean {
   return matchMedia("(pointer: coarse)").matches && !matchMedia("(any-pointer: fine)").matches;
 }
 
+/**
+ * Keep the page at its own scale on phones and tablets (walk #1: tapping fast zoomed the page in, with no way
+ * back out). iOS Safari ignores the viewport's user-scalable=no and the CSS touch-action, so: no pinch (Safari's
+ * gesture events, and any two-finger move), and no double-tap zoom (a tap ending within 350 ms of the last one
+ * has its default cancelled). The touch controls run on pointer events, which still arrive.
+ */
+export function preventPageZoom(target: EventTarget = document, now: () => number = () => performance.now()): void {
+  const stop = (e: Event) => e.preventDefault();
+  for (const type of ["gesturestart", "gesturechange", "gestureend", "dblclick"]) target.addEventListener(type, stop, { passive: false });
+  target.addEventListener("touchmove", (e) => (e as TouchEvent).touches.length > 1 && e.preventDefault(), { passive: false });
+  let lastTap = -Infinity;
+  target.addEventListener(
+    "touchend",
+    (e) => {
+      const t = now();
+      if (t - lastTap < 350) e.preventDefault();
+      lastTap = t;
+    },
+    { passive: false },
+  );
+}
+
 /** Hold/toggle setting for an action, or undefined when the action has no such setting. */
 export type ModeOf = (action: Action) => HoldMode | undefined;
 
