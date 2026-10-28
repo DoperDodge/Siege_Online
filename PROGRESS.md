@@ -28,8 +28,8 @@ You found it clunky and not like the game; each thing you asked for is in (D-116
 - **Out of windows:** inside, at an open window with nothing to vault onto outside (the Big Tower's 2F window), hold
   Space: you climb out over the sill onto the rope.
 - **Animations:** hooking on moves you onto the rope instead of snapping there (0.6 s from a wall's foot; 1 s over
-  a roof edge, turning upside down on the way, or out of a window), turning you to face the wall. C turns you over
-  in half a second (you hang still meanwhile). Others see all of it.
+  a roof edge, turning upside down on the way, or out of a window, ducking over the sill or the railing), turning you
+  to face the wall. C turns you over in half a second (you hang still meanwhile). Others see all of it.
 - **Swinging:** Space at a window swings you out about 0.9 m and back in (0.8 s): in through an open window, or
   into its glass and barricade (the rappel breach). A barricade that holds bounces you off, out and back again
   (0.4 s). The rope is drawn to where it's fixed, so it angles out with you.

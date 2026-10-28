@@ -1096,7 +1096,7 @@ the fix, the commit). Sign-off is recorded there and in PROGRESS.
   a tick without the player's input, as a panel hold does. Going around corners moves to Phase 8 (D-115).
 - **Round 2, after Ulo's test (D-116):** the vault key (Space) holds to hook on, a tap still vaulting where a
   vault can be had; a third start, out of a window from inside (windowSpot); the moves onto the rope use the
-  scripted move's fields in Rappel mode (stepRopeMove: an arc like a vault's, turning to face the wall); the turn
+  scripted move's fields in Rappel mode (stepRopeMove: an arc like a vault's, tucked over a sill or a railing, turning to face the wall); the turn
   over is `ropeTurn` (0 to 1 over `turnSeconds`), the body and its eye rolling through it (hitboxes.ts
   `ropeRoll`), sent to others as the snapshot's `turn` byte (protocol 10); a swing moves the body out from the
   wall and back (stepSwing), a bounce too; the view is held within `yawLimitDeg` of the wall, and still through a

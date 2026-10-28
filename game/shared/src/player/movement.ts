@@ -1054,7 +1054,8 @@ function hookOn(ctx: MoveContext, pawn: Pawn, spot: RappelSpot, input: InputCmd)
 
 /**
  * One tick of the move onto the rope: along an arc to the move's apex and down onto the rope (smoothstep along the
- * ground, as a vault), turning to face the wall by the end; from a roof edge, turning upside down with it.
+ * ground, as a vault), tucked over whatever it goes over, turning to face the wall by the end; from a roof edge,
+ * turning upside down with it.
  */
 function stepRopeMove(ctx: MoveContext, pawn: Pawn, f: RappelFace) {
   const s = pawn.state;
@@ -1066,7 +1067,9 @@ function stepRopeMove(ctx: MoveContext, pawn: Pawn, f: RappelFace) {
   const left = Math.max(1, Math.round((s.moveDur - s.moveT) / DT) + 1);
   s.yaw = wrapAngle(s.yaw + wrapAngle(wallYaw(f) - s.yaw) / left);
   if (s.rappelFlags & RappelFlag.Inverted) s.ropeTurn = Math.fround(e);
-  setFeet(ctx, pawn, lerp(s.fromX, s.toX, e), y, lerp(s.fromZ, s.toZ, e), ctx.data.movement.stance.stand.height);
+  // Over a sill or a railing on the way, the body tucks as a vault's does (stepScriptedMove).
+  s.tuck = s.apexY > Math.max(s.fromY, s.toY) + 0.05 && u < 1 ? Math.fround(Math.sin(Math.PI * u)) : 0;
+  setFeet(ctx, pawn, lerp(s.fromX, s.toX, e), y, lerp(s.fromZ, s.toZ, e), currentHeight(ctx.data.movement, s));
   if (u >= 1) {
     s.moveT = 0;
     s.moveDur = 0;

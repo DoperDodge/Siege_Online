@@ -146,7 +146,7 @@ describe("hooking on", () => {
     run(sim, ctrl, { yawDeg: TOWER.yawDeg }, R.attachSeconds / 2);
     expect(pawn.state.z).toBeGreaterThan(z0 + 0.05);
     expect(pawn.state.z).toBeLessThan(line - 0.05);
-    expect(sim.prompt(ctrl.id)).toBeNull();
+    expect([sim.prompt(ctrl.id), pawn.state.tuck]).toEqual([null, 0]); // nothing to go over: no tuck
     run(sim, ctrl, { yawDeg: TOWER.yawDeg }, R.attachSeconds / 2 + 2 / 64);
     expect([pawn.state.moveDur, pawn.state.rappelFlags & RappelFlag.Inverted, pawn.state.ropeTurn]).toEqual([0, 0, 0]);
     // On the rope's line, the body's capsule a wallGap off the wall, facing it.
@@ -276,12 +276,13 @@ describe("hooking on", () => {
     sim.level.panels.apply(panel("glass").spec.index, { kind: "damage", amount: 1, hard: false });
     expect([sim.prompt(ctrl.id), findRappel(ctx, pawn)?.start]).toEqual(["rappel", "window"]); // nothing outside to vault onto
     run(sim, ctrl, { yawDeg: 0, buttons: Btn.Vault }, R.holdSeconds);
-    let apex = pawn.state.y;
+    let [apex, tuck] = [pawn.state.y, 0];
     for (let t = 0; t < ticks(R.windowAttachSeconds) + 2; t++) {
       run(sim, ctrl, { yaw: pawn.state.yaw }, 1 / 64);
-      apex = Math.max(apex, pawn.state.y);
+      [apex, tuck] = [Math.max(apex, pawn.state.y), Math.max(tuck, pawn.state.tuck)];
     }
-    expect(apex).toBeGreaterThan(4.1); // over the sill
+    expect(apex).toBeGreaterThan(4.1); // over the sill, tucked as a vault is
+    expect([tuck > 0.95, pawn.state.tuck]).toEqual([true, 0]);
     expect([pawn.state.mode, pawn.state.moveDur, pawn.state.rappelFlags & RappelFlag.Inverted]).toEqual([PawnMode.Rappel, 0, 0]);
     expect([pawn.state.x, pawn.state.y]).toEqual([expect.closeTo(42.3, 2), expect.closeTo(4.1 - R.windowHangBelowSill, 2)]);
     expect(pawn.state.z).toBeCloseTo(TOWER.z - m.stance.collisionRadius - m.rappel.wallGap, 3);
