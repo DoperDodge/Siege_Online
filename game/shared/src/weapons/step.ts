@@ -56,7 +56,12 @@ export type SimEvent =
   | { kind: "reviveStart"; reviverPawn: number; targetPawn: number }
   | { kind: "reviveEnd"; reviverPawn: number; targetPawn: number; completed: boolean }
   /** A reinforcement or barricade hold completed (Phase 4 M6): the server puts it up (or takes it down). */
-  | { kind: "deploy"; pawnId: number; action: number; panel: number; section: number; side: number };
+  | { kind: "deploy"; pawnId: number; action: number; panel: number; section: number; side: number }
+  /**
+   * A swing in from a rope ended at a window (rappel breach, Phase 5 M8): the server breaks the glass and
+   * barricades in `panels` if the body went `through`, else breaks the glass and kicks the barricades.
+   */
+  | { kind: "rappelBreach"; pawnId: number; panels: number[]; through: boolean };
 
 export type WeaponContext = MoveContext & { data: GameData; events: SimEvent[] };
 
@@ -84,13 +89,16 @@ export function blocksSprint(s: PawnState, input: InputCmd): boolean {
   return (input.buttons & Btn.Fire) !== 0 || s.meleeTicks > 0 || handsBusy(s);
 }
 
+/** On a rope and not mid-swing (a rappel breach's swing takes the hands). */
+const onRope = (s: PawnState) => s.mode === PawnMode.Rappel && s.rappelTicks === 0;
+
 /**
- * Aiming down sights this tick: the ADS button, on your feet, not mid-swap, melee or a hold (revive,
+ * Aiming down sights this tick: the ADS button, on your feet or a rope, not mid-swap, melee or a hold (revive,
  * reinforcement), and not in a long drop (Siege X forces you out of ADS; the height is a placeholder).
  * Decides ADS walk speed too.
  */
 export function wantsAim(ctx: { data: GameData }, s: PawnState, input: InputCmd): boolean {
-  if (!(input.buttons & Btn.Ads) || s.mode !== PawnMode.Walk || s.wAct === WeaponAct.Equip || s.meleeTicks > 0 || handsBusy(s)) return false;
+  if (!(input.buttons & Btn.Ads) || (s.mode !== PawnMode.Walk && !onRope(s)) || s.wAct === WeaponAct.Equip || s.meleeTicks > 0 || handsBusy(s)) return false;
   return s.grounded || s.airPeakY - s.y <= ctx.data.gunplay.rules.adsDropCancelM;
 }
 
@@ -246,7 +254,8 @@ export function stepWeapon(ctx: WeaponContext, pawn: Pawn, input: InputCmd, pres
   const s = pawn.state;
   const rules = ctx.data.gunplay.rules;
   const exitToFire = ctx.data.movement.sprint.exitToFireSeconds;
-  const walking = s.mode === PawnMode.Walk;
+  // On a rope too: aim, fire and reload (research/core_mechanics.md §6.1), but no knife, and nothing mid-swing.
+  const walking = s.mode === PawnMode.Walk || onRope(s);
   let w = lo.weapons[s.slot];
 
   // 1. Timers. The knife (DECISIONS D-050): `meleeTicks` is 1 on the tick of the press and counts up; it lands
@@ -284,7 +293,7 @@ export function stepWeapon(ctx: WeaponContext, pawn: Pawn, input: InputCmd, pres
   }
   if (pressed & Btn.Reload && s.wAct === WeaponAct.Ready && walking && !s.sprinting && s.meleeTicks === 0) startReload(ctx, pawn, w);
   // The knife: from any allowed stance, even mid-sprint (it ends the sprint) or mid-reload (it cancels it).
-  if (pressed & Btn.Melee && s.meleeTicks === 0 && walking && s.wAct !== WeaponAct.Equip && !handsBusy(s) && melee.allowInStances.includes(STANCE_NAMES[s.stance])) {
+  if (pressed & Btn.Melee && s.meleeTicks === 0 && s.mode === PawnMode.Walk && s.wAct !== WeaponAct.Equip && !handsBusy(s) && melee.allowInStances.includes(STANCE_NAMES[s.stance])) {
     if (s.wAct === WeaponAct.Reload) endReload(s);
     s.meleeTicks = 1;
     s.burstLeft = 0;

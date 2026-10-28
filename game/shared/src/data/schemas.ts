@@ -85,6 +85,32 @@ export const movementSchema = z.object({
     /** Grabbing a ladder from the top (standing where a climb ends, facing the drop) puts your feet this far below its top. */
     topMountDrop: z.number().positive(),
   }),
+  /** Rappel (Phase 5 M8, research/core_mechanics.md §6): the hook-on hold, speeds on the rope, and where it starts. */
+  rappel: z.object({
+    /** Hold Interact this long to hook on (Y11S3's gauge). */
+    holdSeconds: z.number().positive(),
+    climbSpeed: z.number().positive(),
+    descendSpeed: z.number().positive(),
+    /** Along the wall, and sprinting along it (Siege X). */
+    strafeSpeed: z.number().positive(),
+    sprintStrafeSpeed: z.number().positive(),
+    /** How far the body's capsule hangs off the wall. */
+    wallGap: z.number().nonnegative(),
+    /** At a face's foot: how far from the wall the capsule may stand and still hook on. */
+    reach: z.number().positive(),
+    /** Facing the wall (from its foot) or the drop (from its top) within this. */
+    facingDeg: z.number().positive(),
+    /** At a face's top (a roof edge): how far back from the wall's plane a body may stand, and how far over the face's top its feet may be. */
+    edgeReach: z.number().positive(),
+    edgeAbove: z.number().nonnegative(),
+    /** A rope shorter than this isn't offered. */
+    minLength: z.number().positive(),
+    /** Climbing up, the body goes over the top when its feet are this far under it, taking overTopSeconds. */
+    overTopDepth: z.number().positive(),
+    overTopSeconds: z.number().positive(),
+    /** Rappel breach (Y10S2): the swing into a window's glass or barricade takes this long, then goes through or bounces back. */
+    breachSeconds: z.number().positive(),
+  }),
   fall: z.object({ safeHeight: z.number().nonnegative(), lethalHeight: z.number().positive() }),
   step: z.object({ maxStepHeight: z.number().nonnegative(), snapToGround: z.number().nonnegative(), maxSlopeDeg: z.number().positive() }),
 });
@@ -484,6 +510,8 @@ export const modeSchema = z.strictObject({
   reinforcements: z.number().int().nonnegative(),
   /** Lab rooms: both sides may reinforce and barricade (Siege: defenders only). */
   defenderToolsForAll: z.boolean(),
+  /** Lab rooms let defenders rappel too (Siege: attackers only, research/core_mechanics.md §6). */
+  attackerToolsForAll: z.boolean(),
 });
 export type ModeData = z.infer<typeof modeSchema>;
 
@@ -772,7 +800,19 @@ export const destructionSchema = z.strictObject({
     locksReinforcer: z.boolean(),
     reinforcedHatchHp: z.number().positive(),
   }),
-  barricade: z.strictObject({ hp: z.number().positive(), deploySeconds: secs, removeSeconds: secs, passableBelowHp: z.number().nonnegative() }),
+  barricade: z.strictObject({
+    hp: z.number().positive(),
+    deploySeconds: secs,
+    removeSeconds: secs,
+    passableBelowHp: z.number().nonnegative(),
+    /**
+     * Rappel breach (Phase 5 M8; research/core_mechanics.md §6.2, Y10S2): a body swinging in from a rope goes
+     * through a barricade worn down to `rappelThroughHp` or less (breaking it); a fresher one bounces it back,
+     * its feet taking `rappelKickDamage` off.
+     */
+    rappelKickDamage: z.number().positive(),
+    rappelThroughHp: z.number().nonnegative(),
+  }),
 });
 export type DestructionData = z.infer<typeof destructionSchema>;
 

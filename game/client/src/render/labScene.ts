@@ -456,6 +456,8 @@ export class PawnView {
   private gun: GunModel | null = null;
   private gunLook = "";
   private gunVisible = false;
+  /** The rope a body on one hangs from (Phase 5 M8): from over its body up to the rope's top. */
+  private readonly rope: THREE.Line;
 
   /** `name` puts a name tag over the head (other players online); `wireColor` colours the hitbox view. */
   constructor(
@@ -473,6 +475,12 @@ export class PawnView {
       this.wireParts.push(new CapsuleParts(this.wire, wireMat, false));
     }
     this.body.add(this.shape);
+    const ropeMat = new THREE.LineBasicMaterial({ color: 0xd8c08a });
+    this.materials.push(ropeMat);
+    this.rope = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), ropeMat);
+    this.rope.frustumCulled = false;
+    this.rope.visible = false;
+    this.body.add(this.rope);
     this.tag = name ? labelSprite(name, 0, 0, 0) : null;
     if (this.tag) {
       this.tag.scale.multiplyScalar(0.7);
@@ -501,6 +509,16 @@ export class PawnView {
       this.gun.group.position.set(...eye).add(new THREE.Vector3(0.16, -0.22, -0.2).applyEuler(rot));
       this.gun.group.rotation.copy(rot);
     }
+  }
+
+  /** Draw a rope from (x, y0, z) up to height y1, or none (null). */
+  setRope(x: number, y0: number, z: number, y1: number | null) {
+    this.rope.visible = y1 !== null && y1 > y0;
+    if (!this.rope.visible) return;
+    const pos = this.rope.geometry.getAttribute("position") as THREE.BufferAttribute;
+    pos.setXYZ(0, x, y0, z);
+    pos.setXYZ(1, x, y1!, z);
+    pos.needsUpdate = true;
   }
 
   /** The gun this body holds (from the roster's loadout), or none. */
@@ -532,6 +550,7 @@ export class PawnView {
   /** Remove from the scene and free the GPU resources it owns. */
   dispose() {
     this.gun?.dispose();
+    this.rope.geometry.dispose();
     this.scene.remove(this.body, this.wire);
     for (const m of this.materials) m.dispose();
     if (this.tag) {

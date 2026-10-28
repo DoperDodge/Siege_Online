@@ -12,6 +12,7 @@
     "lean.seconds",
     "lean.sprintCancelsLean",
     "look",
+    "rappel",
     "speed.adsWalkSpeed",
     "speed.airAccel",
     "speed.crouchWalkFactor",
@@ -131,6 +132,22 @@
     "topGrabMargin": 1.0,
     "bottomGrabMargin": 0.5,
     "topMountDrop": 1.0
+  },
+  "rappel": {
+    "holdSeconds": 0.5,
+    "climbSpeed": 1.5,
+    "descendSpeed": 2.5,
+    "strafeSpeed": 1.2,
+    "sprintStrafeSpeed": 2.5,
+    "wallGap": 0.05,
+    "reach": 0.5,
+    "facingDeg": 45,
+    "edgeReach": 1.0,
+    "edgeAbove": 0.6,
+    "minLength": 2.0,
+    "overTopDepth": 1.2,
+    "overTopSeconds": 0.6,
+    "breachSeconds": 0.8
   },
   "fall": {
     "safeHeight": 3.0,

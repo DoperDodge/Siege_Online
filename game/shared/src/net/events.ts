@@ -32,8 +32,11 @@ export type GameEvent =
   | { kind: "reviveEnd"; reviverPawn: number; targetPawn: number; completed: boolean }
   /** To everyone: Skopós's idle shell was destroyed (not an elimination; she can't swap any more). */
   | { kind: "shellDestroyed"; pawnId: number; ownerCtrl: number; killerCtrl: number; weapon: string; headshot: boolean }
-  /** To a joining player, and to everyone when it changes: who may reinforce and barricade, and the reinforcements left (Phase 4 M6). */
-  | { kind: "deployRules"; anyone: boolean; pools: [number, number] };
+  /**
+   * To a joining player, and to everyone when it changes: who may reinforce and barricade, and the reinforcements
+   * left (Phase 4 M6), and who may rappel (Phase 5 M8).
+   */
+  | { kind: "deployRules"; anyone: boolean; rappel: boolean; pools: [number, number] };
 
 const KIND = { shotFx: 1, hitConfirm: 2, damageTaken: 3, down: 4, kill: 5, shellDestroyed: 6, reviveStart: 7, reviveEnd: 8, deployRules: 10 } as const;
 // 9 Threat (Phase 11) is reserved.
@@ -83,7 +86,7 @@ export function encodeEvents(tick: number, events: readonly GameEvent[]): Uint8A
         w.varu(e.pawnId).varu(e.ownerCtrl).varu(e.killerCtrl).str(e.weapon).u8(e.headshot ? 1 : 0);
         break;
       case "deployRules":
-        w.u8(e.anyone ? 1 : 0).varu(e.pools[0]).varu(e.pools[1]);
+        w.u8((e.anyone ? 1 : 0) | (e.rappel ? 2 : 0)).varu(e.pools[0]).varu(e.pools[1]);
         break;
     }
   }
@@ -161,9 +164,9 @@ export function decodeEvents(r: ByteReader): { tick: number; events: GameEvent[]
       if (f > 1) throw new ProtocolError("bad shell event");
       events.push({ kind: "shellDestroyed", pawnId, ownerCtrl, killerCtrl, weapon, headshot: f === 1 });
     } else if (k === KIND.deployRules) {
-      const anyone = r.u8();
-      if (anyone > 1) throw new ProtocolError("bad deploy rules");
-      events.push({ kind: "deployRules", anyone: anyone === 1, pools: [r.varu(), r.varu()] });
+      const f = r.u8();
+      if (f > 3) throw new ProtocolError("bad deploy rules");
+      events.push({ kind: "deployRules", anyone: (f & 1) !== 0, rappel: (f & 2) !== 0, pools: [r.varu(), r.varu()] });
     } else throw new ProtocolError(`unknown event ${k}`);
   }
   if (r.remaining !== 0) throw new ProtocolError("trailing bytes");

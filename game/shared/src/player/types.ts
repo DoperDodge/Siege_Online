@@ -12,7 +12,18 @@ export enum PawnMode {
   Dead = 3,
   /** Down but not out (DECISIONS D-048): lying down, crawling, bleeding out until revived or finished. */
   Downed = 4,
+  /** On a rope down an outside wall (Phase 5 M8, PawnState.rappel). */
+  Rappel = 5,
 }
+
+/** PawnState.rappelFlags bits. */
+export const RappelFlag = {
+  /** Hanging upside down (the stance key, research/core_mechanics.md §6.1). */
+  Inverted: 1 << 0,
+  /** The hold to hook on is from a roof edge (it starts upside down), not a face's foot. */
+  FromTop: 1 << 1,
+  // Bits 2–3 on the rope: the stance the stance key last asked for (player/movement.ts).
+} as const;
 
 /** Held-button bitfield carried by every input command. */
 export const Btn = {
@@ -132,6 +143,11 @@ export interface PawnState {
   tuck: number;
   // ladder
   ladder: number;
+  // rappel (Phase 5 M8): the rope's face (BuiltLevel.rappel; -1 none: also the face a hold to hook on is for),
+  // RappelFlag bits, and ticks of holding Interact to hook on
+  rappel: number;
+  rappelFlags: number;
+  rappelTicks: number;
   // falls and health
   airPeakY: number;
   hp: number;

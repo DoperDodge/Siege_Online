@@ -17,13 +17,13 @@
 //   bit0 x, bit1 z, bit5 y : varu zigzag(Δ), 1/512 m
 //   bit2 yaw               : varu zigzag(wrapped Δ) of a u16 angle (full turn = 65536)
 //   bit3 pitch             : varu zigzag(Δ), pitch · 16384/π
-//   bit4 flags             : u16 stance | stanceFrom<<2 | mode<<4 (3 bits) | sprinting<<7 | grounded<<8
+//   bit4 flags             : u16 stance | stanceFrom<<2 | mode<<4 (3 bits) | sprinting<<7 | grounded<<8 | upside down on a rope<<9
 //   bit6 lean (i8 ·127)   bit7 stanceT (u8 ·255)   bit8 tilts (3 × i8 ·128)   bit9 tuck (u8 ·255)
 //   bit10 aux              : u8, bit0 = aiming, bit1 = secondary weapon in hand, bit4 = being revived (2–3, 5–7 free)
 // TCP delivers every snapshot in order, so deltas are against the last one *sent*, never lost ones.
 import { lerp, wrapAngle } from "../core/math.js";
 import { initialPawnState } from "../player/pawn.js";
-import { Btn, PawnMode, Stance, type PawnState } from "../player/types.js";
+import { Btn, PawnMode, RappelFlag, Stance, type PawnState } from "../player/types.js";
 import { ByteReader, ByteWriter, fnv1a, ProtocolError } from "./bytes.js";
 import { readControllerState, readPawnState, writeControllerState, writePawnState, type ControllerState } from "./pawnState.js";
 
@@ -80,7 +80,7 @@ export function quantizeRemote(s: PawnState): RemoteQ {
     tiltB: i8(s.tiltB, 128),
     tiltSide: i8(s.tiltSide, 128),
     tuck: round(s.tuck * 255),
-    flags: s.stance | (s.stanceFrom << 2) | (s.mode << 4) | (s.sprinting ? 128 : 0) | (s.grounded ? 256 : 0),
+    flags: s.stance | (s.stanceFrom << 2) | (s.mode << 4) | (s.sprinting ? 128 : 0) | (s.grounded ? 256 : 0) | (s.mode === PawnMode.Rappel && s.rappelFlags & RappelFlag.Inverted ? 512 : 0),
     aux: (s.prevButtons & Btn.Ads ? 1 : 0) | (s.slot === 1 ? AUX_SECONDARY : 0) | (s.revivedBy !== 0 ? AUX_REVIVED : 0),
   };
 }
@@ -100,6 +100,7 @@ export function remoteState(q: RemoteQ, maxHp = 100): PawnState {
   s.mode = (q.flags >> 4) & 7;
   s.sprinting = (q.flags & 128) !== 0;
   s.grounded = (q.flags & 256) !== 0;
+  s.rappelFlags = q.flags & 512 ? RappelFlag.Inverted : 0;
   s.prevButtons = q.aux & 1 ? Btn.Ads : 0;
   s.slot = q.aux & AUX_SECONDARY ? 1 : 0; // (others see which weapon is out)
   // Someone is reviving this body (who, a remote client doesn't need: it can't start a second revive).
@@ -178,7 +179,7 @@ function readRecord(r: ByteReader, baseOf: (id: number) => RemoteQ): [number, Re
   if (m & 8) q.pitch += unzz(r.varu());
   if (m & 16) {
     q.flags = r.u16();
-    if ((q.flags & 3) > Stance.Prone || ((q.flags >> 2) & 3) > Stance.Prone || ((q.flags >> 4) & 7) > PawnMode.Downed || q.flags >= 512) throw new ProtocolError("bad flags");
+    if ((q.flags & 3) > Stance.Prone || ((q.flags >> 2) & 3) > Stance.Prone || ((q.flags >> 4) & 7) > PawnMode.Rappel || q.flags >= 1024) throw new ProtocolError("bad flags");
   }
   if (m & 32) q.y += unzz(r.varu());
   if (m & 64) q.lean = r.i8();

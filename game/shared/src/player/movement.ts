@@ -3,14 +3,17 @@
 import { DT } from "../core/constants.js";
 import { approach, clamp, DEG, forwardXZ, lerp, quatYawPitchRoll, rightXZ, rotateXZ, smoothstep, wrapAngle } from "../core/math.js";
 import type { GameData } from "../data/load.js";
+import type { Panel } from "../destruction/panel.js";
 import type { BuiltLevel } from "../level/builder.js";
+import { ropeAt, type RappelFace } from "../level/rappel.js";
 import { NONSOLID_PLAYER_GROUPS, PLAYER_GROUPS, QUERY_PLAYERS, QUERY_SOLID, QUERY_STATIC, type CharacterController, type Collider, type Rapier, type World } from "../physics/rapier.js";
 import { eyePose, proneBendLift, proneBodyExtents } from "./hitboxes.js";
 import type { Pawn } from "./pawn.js";
 import { capsuleDims, currentHeight, proneWeight, stanceDims, transitionSeconds } from "./stance.js";
-import { Btn, PawnMode, STANCE_KEYS, Stance, type InputCmd, type PawnState } from "./types.js";
+import { Btn, PawnMode, RappelFlag, STANCE_KEYS, Stance, type InputCmd, type PawnState } from "./types.js";
 import { blocksSprint, parkWeapon, stepWeapon, wantsAim, type SimEvent } from "../weapons/step.js";
 import { bleedTick, isDowned } from "./downed.js";
+import { ticks } from "../weapons/ticks.js";
 
 export interface MoveContext {
   R: Rapier;
@@ -20,6 +23,8 @@ export interface MoveContext {
   level: BuiltLevel;
   /** What happened this step (shots, reloads); Sim clears it at the start of every step. */
   events: SimEvent[];
+  /** Whether this body may rappel: an attacker, or anyone in a lab room (the room's rules, Phase 5 M8). */
+  canRappel(pawn: Pawn): boolean;
 }
 
 const IDENTITY = { x: 0, y: 0, z: 0, w: 1 };
@@ -29,9 +34,11 @@ const PRONE_TOLERANCE = 0.005;
 
 /**
  * One tick of a body: look, move, then the weapon in hand. `weapons` is false for a body nobody is driving
- * (Skopós's shell she isn't in): its weapon is parked instead of stepped.
+ * (Skopós's shell she isn't in): its weapon is parked instead of stepped. `live` is false when the input isn't
+ * its player's this tick (a stall, or a body driven idle): a rappel hold or swing waits, neither going on nor
+ * ending, as a panel hold does (Sim.step), so the player's next input carries on where the client predicted.
  */
-export function stepPawn(ctx: MoveContext, pawn: Pawn, input: InputCmd, weapons = true): void {
+export function stepPawn(ctx: MoveContext, pawn: Pawn, input: InputCmd, weapons = true, live = true): void {
   const s = pawn.state;
   const pressed = input.buttons & ~s.prevButtons;
   s.prevButtons = input.buttons;
@@ -42,12 +49,14 @@ export function stepPawn(ctx: MoveContext, pawn: Pawn, input: InputCmd, weapons 
 
   if (s.mode === PawnMode.Ladder) {
     stepLadder(ctx, pawn, input, pressed);
+  } else if (s.mode === PawnMode.Rappel) {
+    stepRappel(ctx, pawn, input, pressed, live);
   } else if (s.mode === PawnMode.Vault) {
     stepScriptedMove(ctx, pawn);
   } else if (s.mode === PawnMode.Downed) {
     stepDowned(ctx, pawn, input);
   } else {
-    stepWalk(ctx, pawn, input, pressed);
+    stepWalk(ctx, pawn, input, pressed, live);
   }
   const down = isDowned(s);
   if (weapons && !down) stepWeapon(ctx, pawn, input, pressed);
@@ -133,9 +142,14 @@ function updateLook(ctx: MoveContext, pawn: Pawn, input: InputCmd) {
 
 // ---------------------------------------------------------------- walking (incl. stance, sprint, lean)
 
-function stepWalk(ctx: MoveContext, pawn: Pawn, input: InputCmd, pressed: number) {
+function stepWalk(ctx: MoveContext, pawn: Pawn, input: InputCmd, pressed: number, live = true) {
   const m = ctx.data.movement;
   const s = pawn.state;
+
+  // Holding Interact to hook on a rope holds the body still (and standing) meanwhile.
+  const hold = s.mode === PawnMode.Walk ? rappelHold(ctx, pawn, input, pressed, live) : "none";
+  if (hold === "on") return;
+  if (hold === "holding") input = { ...input, forward: 0, strafe: 0, stance: Stance.Stand, buttons: input.buttons & ~(Btn.Sprint | Btn.Vault) };
 
   updateStance(ctx, pawn, input);
   const height = currentHeight(m, s);
@@ -524,16 +538,17 @@ export interface VaultPlan {
 
 /**
  * Is there something to vault or mantle straight ahead (the direction you're facing, even standing
- * still)? Read-only: used both to start a vault and to show the on-screen prompt.
+ * still)? Read-only: used both to start a vault and to show the on-screen prompt. `keep`: only colliders it
+ * passes count (a rappel breach plans through glass and barricades as though they weren't there).
  */
-export function planVault(ctx: MoveContext, pawn: Pawn): VaultPlan | null {
+export function planVault(ctx: MoveContext, pawn: Pawn, keep?: (c: Collider) => boolean): VaultPlan | null {
   const m = ctx.data.movement;
   const v = m.vault;
   const s = pawn.state;
   const r = m.stance.collisionRadius;
   const [fx, fz] = forwardXZ(s.yaw);
   const ray = (ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, max: number) =>
-    ctx.world.castRay(new ctx.R.Ray({ x: ox, y: oy, z: oz }, { x: dx, y: dy, z: dz }), max, true, undefined, QUERY_STATIC, pawn.collider);
+    ctx.world.castRay(new ctx.R.Ray({ x: ox, y: oy, z: oz }, { x: dx, y: dy, z: dz }), max, true, undefined, QUERY_STATIC, pawn.collider, undefined, keep);
 
   // 1. A vaultable obstacle straight ahead at shin height (vaultability is tagged in map data).
   const front = ray(s.x, s.y + v.minHeight * 0.5, s.z, fx, 0, fz, r + v.reach);
@@ -595,10 +610,10 @@ export function planVault(ctx: MoveContext, pawn: Pawn): VaultPlan | null {
   const midX = s.x + fx * (face + Math.min(depth === Infinity ? 0.2 : depth, 0.5) / 2);
   const midZ = s.z + fz * (face + Math.min(depth === Infinity ? 0.2 : depth, 0.5) / 2);
   // (Other players count here: you can't vault into or onto someone.)
-  if (!capsuleFree(ctx, pawn, midX, topY + v.clearance, midZ, v.apexBodyHeight, QUERY_SOLID)) return null;
+  if (!capsuleFree(ctx, pawn, midX, topY + v.clearance, midZ, v.apexBodyHeight, QUERY_SOLID, keep)) return null;
   let landCrouched = false;
-  if (!capsuleFree(ctx, pawn, toX, toY, toZ, currentHeight(m, s), QUERY_SOLID)) {
-    if (!capsuleFree(ctx, pawn, toX, toY, toZ, m.stance.crouch.height, QUERY_SOLID)) return null;
+  if (!capsuleFree(ctx, pawn, toX, toY, toZ, currentHeight(m, s), QUERY_SOLID, keep)) {
+    if (!capsuleFree(ctx, pawn, toX, toY, toZ, m.stance.crouch.height, QUERY_SOLID, keep)) return null;
     landCrouched = true;
   }
   return { over, toX, toY, toZ, apexY: topY + v.clearance, seconds: v.secondsBase + v.secondsPerMeter * h, landCrouched };
@@ -745,7 +760,7 @@ function tryAttachLadder(ctx: MoveContext, pawn: Pawn, fromTop: boolean): boolea
   return true;
 }
 
-export type MovementPrompt = "mantle" | "ladder" | null;
+export type MovementPrompt = "mantle" | "ladder" | "rappel" | "rappelIn" | "rappelBreach" | null;
 
 /**
  * Which contextual prompt to show right now ("Space to mantle", "F to climb"). Like Siege, it appears
@@ -753,8 +768,13 @@ export type MovementPrompt = "mantle" | "ladder" | null;
  */
 export function movementPrompt(ctx: MoveContext, pawn: Pawn): MovementPrompt {
   const s = pawn.state;
+  if (s.mode === PawnMode.Rappel) {
+    if (s.rappelFlags & RappelFlag.Inverted || s.rappelTicks > 0) return null;
+    return planVault(ctx, pawn) ? "rappelIn" : planBreach(ctx, pawn) ? "rappelBreach" : null;
+  }
   if (s.mode !== PawnMode.Walk) return null;
   if (findLadder(ctx, pawn) >= 0) return "ladder";
+  if (findRappel(ctx, pawn)) return "rappel";
   if (s.grounded && s.stance !== Stance.Prone && s.stanceT >= 1 && planVault(ctx, pawn)) return "mantle";
   return null;
 }
@@ -788,6 +808,338 @@ function stepLadder(ctx: MoveContext, pawn: Pawn, input: InputCmd, pressed: numb
   }
   setFeet(ctx, pawn, cx, y, cz, m.stance.stand.height);
   s.airPeakY = s.y;
+}
+
+// ---------------------------------------------------------------- rappel (Phase 5 M8)
+
+/** A rope a body could hook on: the face, whether from its top (a roof edge: upside down), and where it would hang. */
+export interface RappelSpot {
+  face: number;
+  top: boolean;
+  /** Feet. */
+  x: number;
+  y: number;
+  z: number;
+}
+
+/** Where a body on face `f`'s rope hangs at along-position `u`: its centre `wallGap` off the wall. */
+function ropeLine(ctx: MoveContext, f: RappelFace, u: number): [number, number] {
+  const out = f.d + ctx.data.movement.stance.collisionRadius + ctx.data.movement.rappel.wallGap;
+  return [f.n[0] * out + f.t[0] * u, f.n[1] * out + f.t[1] * u];
+}
+
+/**
+ * A rope this body could hook on now, or null (research/core_mechanics.md §6.1): on its feet, standing settled,
+ * and allowed to (an attacker, or anyone in a lab room). At a face's foot: within `reach` of the wall, facing it,
+ * the rope starting about where it stands and reaching at least `minLength` up. At a face's top, a roof edge:
+ * standing on it at most `edgeReach` back from the wall's plane, facing out over it with nothing in the way; it
+ * hangs upside down under the edge. Either way the spot it would hang at must be free. Read-only (the prompt, and
+ * each tick of the hold).
+ */
+export function findRappel(ctx: MoveContext, pawn: Pawn): RappelSpot | null {
+  const m = ctx.data.movement;
+  const R = m.rappel;
+  const s = pawn.state;
+  if (s.mode !== PawnMode.Walk || !s.grounded || s.stance !== Stance.Stand || s.stanceT < 1 || !ctx.canRappel(pawn)) return null;
+  const faces = ctx.level.rappel;
+  const r = m.stance.collisionRadius;
+  const H = m.stance.stand.height;
+  const [fx, fz] = forwardXZ(s.yaw);
+  const cos = Math.cos(R.facingDeg * DEG);
+  let best: RappelSpot | null = null;
+  let bestD = Infinity;
+  for (let i = 0; i < faces.length; i++) {
+    const f = faces[i];
+    const u = f.t[0] * s.x + f.t[1] * s.z;
+    if (u < f.u0 || u > f.u1) continue;
+    const out = f.n[0] * s.x + f.n[1] * s.z - f.d; // how far out from the wall
+    const facing = fx * f.n[0] + fz * f.n[1]; // 1 looking out, -1 looking at the wall
+    const [x, z] = ropeLine(ctx, f, u);
+    if (out >= r - 0.05 && out <= r + R.reach && -facing >= cos) {
+      // At its foot.
+      const rope = ropeAt(faces, i, s.x, s.z, s.y + 0.1);
+      const y = s.y + SKIN;
+      if (rope && rope[0] <= s.y + m.step.maxStepHeight && rope[1] - s.y >= R.minLength && out - r < bestD && capsuleFree(ctx, pawn, x, y, z, H, QUERY_SOLID)) {
+        [best, bestD] = [{ face: i, top: false, x, y, z }, out - r];
+      }
+    } else if (out >= -R.edgeReach && out <= r && facing >= cos && s.y >= f.y1 - SKIN && s.y <= f.y1 + R.edgeAbove) {
+      // At its top, where the rope tops out.
+      const rope = ropeAt(faces, i, s.x, s.z, f.y1 - 0.01);
+      const y = f.y1 - H - 0.05;
+      if (rope && Math.abs(rope[1] - f.y1) < 0.06 && rope[1] - rope[0] >= R.minLength && -out < bestD && capsuleFree(ctx, pawn, x, y, z, H, QUERY_SOLID) && clearTo(ctx, pawn, x, s.y + 1, z)) {
+        [best, bestD] = [{ face: i, top: true, x, y, z }, -out];
+      }
+    }
+  }
+  return best;
+}
+
+/** Nothing static between the body's chest and (x, y, z) across. */
+function clearTo(ctx: MoveContext, pawn: Pawn, x: number, y: number, z: number): boolean {
+  const s = pawn.state;
+  const [dx, dz] = [x - s.x, z - s.z];
+  const len = Math.hypot(dx, dz);
+  if (len < 1e-6) return true;
+  return ctx.world.castRay(new ctx.R.Ray({ x: s.x, y, z: s.z }, { x: dx / len, y: 0, z: dz / len }), len, true, undefined, QUERY_STATIC, pawn.collider) === null;
+}
+
+/**
+ * Hooking on (research/core_mechanics.md §6.1: hold to start, Y11S3's gauge): a fresh press of Interact where
+ * findRappel offers a rope starts the hold, keeping the rope's face and whether it's from the top; holding on,
+ * offered the same, for `holdSeconds` hooks on. Letting go, moving off or turning away ends it; a tick without
+ * the player's input (`live` false) leaves it as it is.
+ */
+function rappelHold(ctx: MoveContext, pawn: Pawn, input: InputCmd, pressed: number, live: boolean): "none" | "holding" | "on" {
+  const s = pawn.state;
+  if (s.rappelTicks > 0) {
+    if (!live) return "holding";
+    const spot = input.buttons & Btn.Interact ? findRappel(ctx, pawn) : null;
+    if (!spot || spot.face !== s.rappel || spot.top !== ((s.rappelFlags & RappelFlag.FromTop) !== 0)) {
+      endRappelHold(s);
+      return "none";
+    }
+    s.rappelTicks = Math.min(0xffff, s.rappelTicks + 1);
+    if (s.rappelTicks < ticks(ctx.data.movement.rappel.holdSeconds)) return "holding";
+    hookOn(ctx, pawn, spot, input);
+    return "on";
+  }
+  if (!live || !(pressed & Btn.Interact)) return "none";
+  const spot = findRappel(ctx, pawn);
+  if (!spot) return "none";
+  s.rappel = spot.face;
+  s.rappelFlags = spot.top ? RappelFlag.FromTop : 0;
+  s.rappelTicks = 1;
+  return "holding";
+}
+
+function endRappelHold(s: PawnState) {
+  s.rappel = -1;
+  s.rappelFlags = 0;
+  s.rappelTicks = 0;
+}
+
+/** A hold to hook on let go of (its player elsewhere: Sim.letGo). */
+export function cancelRappelHold(s: PawnState): void {
+  if (s.mode === PawnMode.Walk && s.rappelTicks > 0) endRappelHold(s);
+}
+
+/** Onto the rope: from the top upside down, from the foot right side up; the stance key's last ask is kept. */
+function hookOn(ctx: MoveContext, pawn: Pawn, spot: RappelSpot, input: InputCmd) {
+  const s = pawn.state;
+  s.mode = PawnMode.Rappel;
+  s.rappel = spot.face;
+  s.rappelFlags = (spot.top ? RappelFlag.Inverted : 0) | (input.stance << RAPPEL_ASK_SHIFT);
+  s.rappelTicks = 0;
+  s.vx = s.vy = s.vz = 0;
+  s.sprinting = false;
+  s.grounded = false;
+  setFeet(ctx, pawn, spot.x, spot.y, spot.z, ctx.data.movement.stance.stand.height);
+  s.airPeakY = s.y;
+}
+
+/** RappelFlag bits 2–3: the stance the stance key last asked for, so each change of it turns the body over. */
+const RAPPEL_ASK_SHIFT = 2;
+
+/** Off the rope, on its feet (falling, landing or climbing on from here). */
+function leaveRope(s: PawnState) {
+  s.mode = PawnMode.Walk;
+  endRappelHold(s);
+  s.stance = s.stanceFrom = Stance.Stand;
+  s.stanceT = 1;
+  s.grounded = false;
+  s.airPeakY = s.y;
+}
+
+/**
+ * One tick on a rope: Interact lets go; the stance key turns the body upside down and back; Space climbs in through
+ * an opening in front (right side up, by the vault's own rules), or swings into the glass or barricade in it (a
+ * rappel breach, `rappelTicks` counting the swing); W climbs and S descends, A and D move along the wall (right as
+ * seen), sprinting faster. It stops where something's in the way and at the rope's ends: at the bottom onto the
+ * floor there, at the top over the edge onto what's there (right side up) or under it. It can lean, aim and fire
+ * meanwhile (weapons/step.ts), but not while swinging.
+ */
+function stepRappel(ctx: MoveContext, pawn: Pawn, input: InputCmd, pressed: number, live = true) {
+  const m = ctx.data.movement;
+  const R = m.rappel;
+  const s = pawn.state;
+  const H = m.stance.stand.height;
+  const faces = ctx.level.rappel;
+  const f = faces[s.rappel];
+  if (!f || pressed & Btn.Interact) {
+    leaveRope(s);
+    return;
+  }
+  const asked = (s.rappelFlags >> RAPPEL_ASK_SHIFT) & 3;
+  // Without the player's input this tick, the stance key is as it was (an idle input's stance would turn the body over).
+  const stance = live ? input.stance : asked;
+  if (s.rappelTicks > 0) {
+    // Mid-swing: the stance key's changes are let go by (the body stays right side up), nothing else moves.
+    s.rappelFlags = (s.rappelFlags & RappelFlag.Inverted) | (stance << RAPPEL_ASK_SHIFT);
+    if (!live) return;
+    s.rappelTicks = Math.min(0xffff, s.rappelTicks + 1);
+    if (s.rappelTicks >= ticks(R.breachSeconds)) {
+      s.rappelTicks = 0;
+      endBreach(ctx, pawn);
+    }
+    return;
+  }
+  let inverted = (s.rappelFlags & RappelFlag.Inverted) !== 0;
+  if (stance !== asked) inverted = !inverted;
+  s.rappelFlags = (inverted ? RappelFlag.Inverted : 0) | (stance << RAPPEL_ASK_SHIFT);
+  s.vx = s.vy = s.vz = 0;
+  s.sprinting = false;
+  updateLean(ctx, pawn, input);
+  if (pressed & Btn.Vault && !inverted) {
+    const plan = planVault(ctx, pawn);
+    if (plan) {
+      climbIn(s, plan);
+      return;
+    }
+    if (planBreach(ctx, pawn)) {
+      s.rappelTicks = 1;
+      s.lean = 0;
+      return;
+    }
+  }
+  const rope = ropeAt(faces, s.rappel, s.x, s.z, s.y + H / 2);
+  if (!rope) {
+    leaveRope(s);
+    return;
+  }
+  const vy = input.forward >= 0 ? input.forward * R.climbSpeed : input.forward * R.descendSpeed;
+  const [rx, rz] = rightXZ(s.yaw);
+  const along = input.strafe * (input.buttons & Btn.Sprint ? R.sprintStrafeSpeed : R.strafeSpeed) * (rx * f.t[0] + rz * f.t[1] >= 0 ? 1 : -1);
+  let y = s.y + vy * DT;
+  // The top: right side up, over the edge onto what's there once the head reaches it, else no higher.
+  const top = inverted ? rope[1] - H - 0.05 : rope[1] - R.overTopDepth;
+  if (vy > 0 && y >= top) {
+    if (!inverted && overTheTop(ctx, pawn, f, rope[1])) return;
+    y = Math.max(s.y, top);
+  }
+  // The bottom: onto the floor under the body.
+  if (vy < 0) {
+    const floor = floorUnder(ctx, pawn, s.x, s.y, s.z, s.y - y + SKIN);
+    if (floor !== null) {
+      setFeet(ctx, pawn, s.x, floor + SKIN, s.z, H);
+      leaveRope(s);
+      return;
+    }
+    y = Math.max(y, rope[0]);
+  }
+  const u = f.t[0] * s.x + f.t[1] * s.z;
+  let [x, z] = ropeLine(ctx, f, u + along * DT);
+  // Along the wall only as far as the rope goes there.
+  if (along !== 0 && !ropeAt(faces, s.rappel, x, z, y + H / 2)) [x, z] = [s.x, s.z];
+  if (!capsuleFree(ctx, pawn, x, y, z, H, QUERY_SOLID)) {
+    if (capsuleFree(ctx, pawn, s.x, y, s.z, H, QUERY_SOLID)) [x, z] = [s.x, s.z];
+    else if (capsuleFree(ctx, pawn, x, s.y, z, H, QUERY_SOLID)) y = s.y;
+    else [x, y, z] = [s.x, s.y, s.z];
+  }
+  setFeet(ctx, pawn, x, y, z, H);
+  s.airPeakY = s.y;
+}
+
+/** Off the rope into a window by a vault's plan. */
+function climbIn(s: PawnState, plan: VaultPlan) {
+  leaveRope(s);
+  if (plan.landCrouched) {
+    s.stance = s.stanceFrom = Stance.Crouch;
+    s.stanceT = 1;
+  }
+  startScriptedMove(s, plan.toX, plan.toY, plan.toZ, plan.apexY, plan.seconds);
+}
+
+/** Glass, and barricades put up, that a swing from a rope breaks or kicks. */
+const standingBreakable = (p: Panel) => (p.kind === "glass" || p.kind === "barricade") && !p.broken && !p.empty;
+/** How far around the body planBreach looks for them. */
+const BREACH_NEAR = 2.5;
+
+export interface BreachPlan {
+  /** The way in, as a vault through the window with its glass and barricades gone. */
+  plan: VaultPlan;
+  /** The glass and barricades in that way (level panel indices, ascending). */
+  panels: number[];
+  /** Whether a swing ending now goes through: every barricade among them worn to `rappelThroughHp` or less. */
+  through: boolean;
+}
+
+/**
+ * A rappel breach's way in (research/core_mechanics.md §6.2, Y10S2: no charge needed, you swing into the
+ * barricade): a vault through the window in front as though its glass and barricades weren't there, and which of
+ * them are in the way; null if none are, or there's no way in even without them. Read-only (the prompt, and the
+ * swing's start and end).
+ */
+export function planBreach(ctx: MoveContext, pawn: Pawn): BreachPlan | null {
+  const s = pawn.state;
+  const near = new Set<number>();
+  const handles = new Set<number>();
+  for (const e of ctx.level.panels.list) {
+    if (!standingBreakable(e.panel)) continue;
+    if (e.max[0] < s.x - BREACH_NEAR || e.min[0] > s.x + BREACH_NEAR || e.max[2] < s.z - BREACH_NEAR || e.min[2] > s.z + BREACH_NEAR || e.max[1] < s.y || e.min[1] > s.y + 3) continue;
+    near.add(e.panel.spec.index);
+    for (const c of e.colliders) handles.add(c.handle);
+  }
+  if (!near.size) return null;
+  const plan = planVault(ctx, pawn, (c) => !handles.has(c.handle));
+  if (!plan) return null;
+  // The ones the way in crosses: along the body's path, low, middle and high in the opening over the sill.
+  const [dx, dz] = [plan.toX - s.x, plan.toZ - s.z];
+  const len = Math.hypot(dx, dz);
+  if (len < 1e-6) return null;
+  const sill = plan.apexY - ctx.data.movement.vault.clearance;
+  const hit = new Set<number>();
+  for (const up of [0.1, 0.5, 0.9]) for (const h of ctx.level.panels.crossings([s.x, sill + up, s.z], [dx / len, 0, dz / len], len)) if (near.has(h.entry.panel.spec.index)) hit.add(h.entry.panel.spec.index);
+  if (!hit.size) return null;
+  const panels = [...hit].sort((a, b) => a - b);
+  const B = ctx.data.destruction.barricade;
+  const through = panels.every((i) => {
+    const p = ctx.level.panels.list[i].panel;
+    return p.kind !== "barricade" || p.hp <= B.rappelThroughHp + 1e-9;
+  });
+  return { plan, panels, through };
+}
+
+/**
+ * A swing's end: in through the window if what's in it gives (glass always does; the server breaks it all), else
+ * back onto the rope with the barricades kicked (the server takes `rappelKickDamage` off each, and breaks the glass).
+ * A window cleared meanwhile (shot out) is climbed in through as it is.
+ */
+function endBreach(ctx: MoveContext, pawn: Pawn) {
+  const plan = planVault(ctx, pawn);
+  if (plan) {
+    climbIn(pawn.state, plan);
+    return;
+  }
+  const b = planBreach(ctx, pawn);
+  if (!b) return;
+  ctx.events.push({ kind: "rappelBreach", pawnId: pawn.id, panels: b.panels, through: b.through });
+  if (b.through) climbIn(pawn.state, b.plan);
+}
+
+/**
+ * Climbing over a rope's top at `topY`: a body's radius and a quarter metre in from the wall's plane, on what's
+ * there if a body stands there (a roof edge, at most `edgeAbove` over the top, no steeper than a body climbs).
+ */
+function overTheTop(ctx: MoveContext, pawn: Pawn, f: RappelFace, topY: number): boolean {
+  const m = ctx.data.movement;
+  const s = pawn.state;
+  const back = f.d - m.stance.collisionRadius - 0.25;
+  const u = f.t[0] * s.x + f.t[1] * s.z;
+  const [x, z] = [f.n[0] * back + f.t[0] * u, f.n[1] * back + f.t[1] * u];
+  const from = topY + m.rappel.edgeAbove + 0.1;
+  const hit = ctx.world.castRayAndGetNormal(new ctx.R.Ray({ x, y: from, z }, { x: 0, y: -1, z: 0 }), m.rappel.edgeAbove + 0.5, true, undefined, QUERY_STATIC, pawn.collider);
+  if (!hit || hit.normal.y < Math.cos(m.step.maxSlopeDeg * DEG) - 1e-6) return false;
+  const y = from - hit.timeOfImpact;
+  if (y < topY - 0.3 || !capsuleFree(ctx, pawn, x, y + SKIN, z, m.stance.stand.height, QUERY_SOLID)) return false;
+  leaveRope(s);
+  startScriptedMove(s, x, y + SKIN, z, y + 0.3, m.rappel.overTopSeconds);
+  return true;
+}
+
+/** The top of the floor at most `depth` under these feet, or null. */
+function floorUnder(ctx: MoveContext, pawn: Pawn, x: number, y: number, z: number, depth: number): number | null {
+  const hit = ctx.world.castRay(new ctx.R.Ray({ x, y: y + 0.1, z }, { x: 0, y: -1, z: 0 }), depth + 0.1, true, undefined, QUERY_STATIC, pawn.collider);
+  return hit ? y + 0.1 - hit.timeOfImpact : null;
 }
 
 // ---------------------------------------------------------------- collider helpers
@@ -859,8 +1211,11 @@ function groundWithin(ctx: MoveContext, pawn: Pawn, x: number, y: number, z: num
   return ctx.world.castRay(ray, depth + 0.1 + SKIN, true, undefined, QUERY_STATIC, pawn.collider) !== null;
 }
 
-/** Is an upright capsule of `height` standing at these feet free of level geometry (and players, with QUERY_SOLID)? */
-export function capsuleFree(ctx: MoveContext, pawn: Pawn | null, x: number, y: number, z: number, height: number, filter = QUERY_STATIC): boolean {
+/**
+ * Is an upright capsule of `height` standing at these feet free of level geometry (and players, with QUERY_SOLID)?
+ * `keep`: only colliders it passes count.
+ */
+export function capsuleFree(ctx: MoveContext, pawn: Pawn | null, x: number, y: number, z: number, height: number, filter = QUERY_STATIC, keep?: (c: Collider) => boolean): boolean {
   const { r, hh } = capsuleDims(height - SKIN * 2, ctx.data.movement.stance.collisionRadius - SKIN);
   const hit = ctx.world.intersectionWithShape(
     { x, y: y + SKIN * 1.5 + hh + r, z },
@@ -869,6 +1224,8 @@ export function capsuleFree(ctx: MoveContext, pawn: Pawn | null, x: number, y: n
     undefined,
     filter,
     pawn?.collider,
+    undefined,
+    keep,
   );
   return hit === null;
 }

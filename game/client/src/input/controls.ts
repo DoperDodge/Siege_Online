@@ -198,10 +198,14 @@ export class Controls {
    * the turn rate doesn't depend on the frame rate.
    */
   look(dx: number, dy: number, scale = 1) {
-    const sens = this.settings.sensitivity * (this.adsActive ? adsSensitivity(this.settings, this.weaponState()?.zoom ?? 1) : 1) * scale * DEG;
+    // Upside down on a rope the view is turned over: a move turns it the way it goes on the screen.
+    const sens = this.settings.sensitivity * (this.adsActive ? adsSensitivity(this.settings, this.weaponState()?.zoom ?? 1) : 1) * scale * DEG * (this.upsideDown ? -1 : 1);
     this.yaw = wrapAngle(this.yaw - dx * sens);
     this.pitch = clamp(this.pitch - dy * sens * (this.settings.invertY ? -1 : 1), this.limits.pitchMin, this.limits.pitchMax);
   }
+
+  /** The body looked through hangs upside down on a rope (the lab sets it every frame). */
+  upsideDown = false;
 
   /**
    * Clamp the view to what the simulation will accept next tick (pitch arc, prone turn rate). Call once per

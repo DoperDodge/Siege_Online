@@ -31,6 +31,7 @@ import {
   poseHitboxes,
   proneWeight,
   reserveOf,
+  ropeOf,
   Sim,
   spawnAmmo,
   spreadCone,
@@ -43,6 +44,7 @@ import {
   type PanelChange,
   type PawnState,
   type PlayerController,
+  upsideDown,
   type GunData,
   type LoadoutPick,
   type Offer,
@@ -1036,6 +1038,10 @@ export async function startLab(o: LabOptions): Promise<void> {
       const w = pawn.loadout?.weapons[rs.slot];
       v.setWeapon(w ? { class: w.class, pick: w.pick } : null);
       v.update(sim.data, rs.mode === PawnMode.Dead ? corpse(rs) : rs);
+      // On a rope: drawn from over the body up to the rope's top.
+      const m = sim.data.movement;
+      const rope = rs.mode === PawnMode.Rappel ? ropeOf(sim.level.rappel, rs.x, rs.y, rs.z, m.stance.collisionRadius + m.rappel.wallGap, m.stance.stand.height) : null;
+      v.setRope(rs.x, rs.y + m.stance.stand.height, rs.z, rope ? rope[1] : null);
       drawnView.set(pawn.id, [rs.yaw, rs.pitch]);
       const eyes = pawn.id === viewed.id;
       // In first person your own body isn't drawn; your gun is the viewmodel.
@@ -1057,6 +1063,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     whereHud?.update(now, storeyView?.storey ?? 0, vx, vz);
     const fov = aim(viewed, rs);
     const eye = eyePose(data.movement, data.hitboxes, { ...rs, yaw: controls.yaw });
+    controls.upsideDown = !freeCam && upsideDown(rs);
     if (freeCam) {
       camera.position.copy(freeCam);
       camera.rotation.set(controls.pitch, controls.yaw, 0);
@@ -1127,18 +1134,18 @@ export async function startLab(o: LabOptions): Promise<void> {
   // ------------------------------------------------------------------ HUD
 
   const STANCE_NAMES = ["STAND", "CROUCH", "PRONE"];
-  const MODE_NAMES = ["", "VAULT", "LADDER", "DEAD"];
+  const MODE_NAMES = ["", "VAULT", "LADDER", "DEAD", "", "RAPPEL"];
   function updateHud(p: Pawn) {
     const s = p.state;
     $(".op-name").textContent = `${op.name} · ${op.side} · ${op.healthRating} health / ${op.speedRating} speed${op.pawns > 1 ? ` · shell ${ctrl.pawnIds.indexOf(p.id) + 1}/2` : ""}`;
-    downedHud.update(s, data.combat, keyLabel(settings.keys.interact), nameOfPawn, data.destruction);
+    downedHud.update(s, data.combat, keyLabel(settings.keys.interact), nameOfPawn, data.destruction, data.movement);
     app.querySelectorAll<HTMLElement>(".stances span").forEach((el) => el.classList.toggle("on", Number(el.dataset.s) === s.stance));
     $(".stance-bar div").style.width = `${s.stanceT * 100}%`;
     const speed = Math.hypot(s.vx, s.vz);
     $(".readout").textContent = [
       `${speed.toFixed(2)} m/s`,
       s.sprinting ? "SPRINT" : controls.adsActive ? "ADS" : "",
-      MODE_NAMES[s.mode],
+      upsideDown(s) ? "RAPPEL · UPSIDE DOWN" : MODE_NAMES[s.mode],
       s.stanceT < 1 ? `${STANCE_NAMES[s.stanceFrom]} → ${STANCE_NAMES[s.stance]}` : "",
     ]
       .filter(Boolean)
@@ -1164,6 +1171,12 @@ export async function startLab(o: LabOptions): Promise<void> {
     const promptText =
       prompt === "mantle"
         ? `${keyLabel(k.vault)} to mantle`
+        : prompt === "rappel"
+          ? `Hold ${keyLabel(k.interact)} to rappel`
+          : prompt === "rappelIn"
+            ? `${keyLabel(k.vault)} to climb in`
+            : prompt === "rappelBreach"
+              ? `${keyLabel(k.vault)} to breach`
         : prompt === "ladder"
           ? `${keyLabel(k.interact)} to climb`
           : prompt === "transfer"
@@ -1313,7 +1326,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       panel: (id: string) => {
         const p = sim.level.panels.byId.get(id)?.panel;
         if (!p) return null;
-        return { reinforced: p.reinforced, steelSides: p.steelSides, broken: p.broken, empty: p.empty, modified: p.modified, holes: p.layers.map((l) => (l ? l.reduce((n, c) => n + (c ? 0 : 1), 0) : null)) };
+        return { hp: p.hp, reinforced: p.reinforced, steelSides: p.steelSides, broken: p.broken, empty: p.empty, modified: p.modified, holes: p.layers.map((l) => (l ? l.reduce((n, c) => n + (c ? 0 : 1), 0) : null)) };
       },
       /** The destructible panels as this page has them (browser tests compare players' panels). */
       get panels() {

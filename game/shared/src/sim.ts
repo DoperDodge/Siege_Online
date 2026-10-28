@@ -6,7 +6,7 @@ import { loadGameData, type GameData } from "./data/load.js";
 import { deployAction, deployTicks, DeployKind, type DeployAction, type DeployRules } from "./destruction/deploy.js";
 import { buildLevel, type BuiltLevel } from "./level/builder.js";
 import { initRapier, PLAYER_GROUPS, QUERY_SIGHT, QUERY_SOLID, QUERY_STATIC as QUERY_STATIC_FILTER, refreshBroadPhase, type CharacterController, type Rapier, type World } from "./physics/rapier.js";
-import { capsuleFree, movementPrompt, poseCollider, stepPawn, type MoveContext, type MovementPrompt } from "./player/movement.js";
+import { cancelRappelHold, capsuleFree, findRappel, movementPrompt, poseCollider, stepPawn, type MoveContext, type MovementPrompt } from "./player/movement.js";
 import { initialPawnState, type Pawn, type PlayerController } from "./player/pawn.js";
 import { eyePose, poseHitboxes } from "./player/hitboxes.js";
 import { capsuleDims, stanceDims } from "./player/stance.js";
@@ -24,10 +24,11 @@ export class Sim {
   readonly controllers = new Map<number, PlayerController>();
   tick = 0;
   /**
-   * Who may reinforce and barricade, and the reinforcements left per team (Phase 4 M6): set by the room,
-   * and on a client from the room's deployRules event, so holds are predicted the way the server judges them.
+   * Who may reinforce, barricade (Phase 4 M6) and rappel (Phase 5 M8), and the reinforcements left per team: set
+   * by the room, and on a client from the room's deployRules event, so holds are predicted the way the server
+   * judges them.
    */
-  deployRules: DeployRules = { anyone: false, pools: [0, 0] };
+  deployRules: DeployRules = { anyone: false, rappel: false, pools: [0, 0] };
   private nextId = 1;
   private readonly ctx: MoveContext;
 
@@ -38,7 +39,8 @@ export class Sim {
     readonly data: GameData,
     readonly level: BuiltLevel,
   ) {
-    this.ctx = { R, world, cc, data, level, events: [] };
+    // Attackers rappel; in a lab room anyone does (deployRules.rappel, from the room's rules).
+    this.ctx = { R, world, cc, data, level, events: [], canRappel: (pawn) => pawn.team === sideTeam("attacker") || this.deployRules.rappel };
   }
 
   /**
@@ -253,22 +255,27 @@ export class Sim {
 
   /**
    * A body its player's buttons don't reach this tick lets go of a revive (D-061: a stalled reviver can't
-   * keep one going). A hold on a panel lets go only when the player is elsewhere (driven idle on the shell
-   * camera, `idle`); through a stall it just waits, and goes on if the key is still held when inputs come
-   * back (it takes a fresh press to start, so a hold ended by a stall could never restart while held).
+   * keep one going). A hold on a panel, or to hook on a rope, lets go only when the player is elsewhere (driven
+   * idle on the shell camera, `idle`); through a stall it just waits, and goes on if the key is still held when
+   * inputs come back (it takes a fresh press to start, so a hold ended by a stall could never restart while held).
    */
   private letGo(pawn: Pawn, idle: boolean) {
     if (pawn.state.reviveTarget !== 0) this.endRevive(pawn, this.pawns.get(pawn.state.reviveTarget), false);
-    if (idle) endDeploy(pawn);
+    if (idle) {
+      endDeploy(pawn);
+      cancelRappelHold(pawn.state);
+    }
   }
 
   /**
    * What holding Interact would do to a panel right now (destruction/deploy.ts): from the body's eye along
-   * its view, stopped by plain level geometry.
+   * its view, stopped by plain level geometry. Where a lab room lets a body do both (deployRules), its own
+   * side's tool comes first: an attacker offered a rope takes the rope, a defender the panel.
    */
   deployActionFor(pawn: Pawn): DeployAction | null {
     const s = pawn.state;
     if (s.mode !== PawnMode.Walk || !s.grounded) return null;
+    if (pawn.team === sideTeam("attacker") && findRappel(this.ctx, pawn)) return null;
     const eye = eyePose(this.data.movement, this.data.hitboxes, s).pos;
     const dir = viewDir(s.yaw, s.pitch);
     const ray = new this.R.Ray({ x: eye[0], y: eye[1], z: eye[2] }, { x: dir[0], y: dir[1], z: dir[2] });
@@ -434,7 +441,7 @@ export class Sim {
     if (c.shellCam) return "transfer";
     const pawn = this.pawns.get(c.possessedPawnId);
     if (!pawn) return null;
-    if (pawn.state.reviveTarget !== 0 || pawn.state.deployKind !== DeployKind.None) return null; // its gauge shows instead
+    if (pawn.state.reviveTarget !== 0 || pawn.state.deployKind !== DeployKind.None || pawn.state.rappelTicks > 0) return null; // its gauge shows instead
     if (pawn.state.mode === PawnMode.Walk && this.reviveCandidate(pawn)) return "revive"; // before ladders (D-049)
     const deploy = this.deployActionFor(pawn);
     if (deploy) return deploy.kind === DeployKind.Reinforce ? "reinforce" : deploy.kind === DeployKind.BarricadeUp ? "barricade" : "unbarricade";
@@ -499,6 +506,9 @@ export class Sim {
       sprinting: false,
       mode: PawnMode.Walk,
       ladder: -1,
+      rappel: -1,
+      rappelFlags: 0,
+      rappelTicks: 0,
       airPeakY: Math.fround(y + 0.02),
       // Back on your feet: no longer down, and nothing half done carries over.
       downHp: 0,
@@ -584,7 +594,7 @@ export class Sim {
         }
         // A body driven without its player's buttons (left behind on the camera, or being looked
         // through) has its weapon parked: nothing it was doing carries on unseen.
-        stepPawn(this.ctx, pawn, cmd, !idleDriven.has(pawn.id));
+        stepPawn(this.ctx, pawn, cmd, !idleDriven.has(pawn.id), !idleDriven.has(pawn.id));
         this.belowKillPlane(pawn);
         refreshBroadPhase(this.world); // the next pawn must see this one where it now is
         if (idleDriven.has(pawn.id)) pawn.state.prevButtons = held;
@@ -598,7 +608,7 @@ export class Sim {
       // is in keeps its weapon running (a reload goes on through a lag spike); an idle shell's is parked.
       const held = pawn.state.prevButtons;
       this.letGo(pawn, idleShell);
-      stepPawn(this.ctx, pawn, idleInput(pawn, idleShell ? Stance.Crouch : pawn.state.stance), !idleShell);
+      stepPawn(this.ctx, pawn, idleInput(pawn, idleShell ? Stance.Crouch : pawn.state.stance), !idleShell, false);
       this.belowKillPlane(pawn);
       refreshBroadPhase(this.world);
       pawn.state.prevButtons = held;

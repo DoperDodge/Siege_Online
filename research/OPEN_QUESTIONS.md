@@ -436,6 +436,23 @@ you find is logged (walk #1's three are fixed: items 33 and 34 ask what's left t
     (destruction.md). How small a hole can you vault or crouch through in the game? (The hole sizes are
     placeholders too.)
 
+35. **Rappel (M8, D-114):** built from core_mechanics.md §6, with these placeholders (its question 6 asks the first
+    ones):
+    - the hold to hook on 0.5 s; climbing 1.5 m/s, descending 2.5 m/s, along the wall 1.2 m/s and 2.5 m/s
+      sprinting;
+    - from a wall's foot: within 0.5 m of it, facing it within 45°; from a roof edge: up to 1 m back from the
+      wall and 0.6 m above the edge, facing out over it, hanging upside down; no rope under 2 m; the body hangs
+      5 cm off the wall; climbing past the top takes you over it (0.6 s) once your feet are 1.2 m under it;
+    - the crouch key turns you upside down and back; you can't climb in or breach upside down;
+    - rappel breach: the swing takes 0.8 s; a barricade worn to 2 of its 3 hit points gives way, a fresher one
+      bounces you back and your feet take 1 off (so a fresh one takes two swings, and one knife hit or a few
+      bullets first make it one); glass always breaks;
+    - one rope per plane: where a storey's wall stands a little out from the one above (the Kitchen's north wall
+      under the Kids' Dorms', 0.3 m), the two are separate ropes, so from the ground you stop at the ledge
+      between them. Siege's hook "goes to the highest ledge above you": does it go on up past such a ledge?
+    How do these compare with the game? And for Phase 8 (D-115): going round a corner, what counts as the same
+    height?
+
 Later milestones add their placeholders here as they build them: the Meeting Hall's height (P23) and fall damage
 from the roofs (P37).
 

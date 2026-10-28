@@ -23,6 +23,8 @@ export interface DeployAction {
 export interface DeployRules {
   /** Lab rooms let attackers do it too (data/modes `defenderToolsForAll`); otherwise defenders only. */
   anyone: boolean;
+  /** Lab rooms let defenders rappel too (data/modes `attackerToolsForAll`); otherwise attackers only (Phase 5 M8). */
+  rappel: boolean;
   /** Reinforcements left per team (attackers 0, defenders 1). */
   pools: [number, number];
 }

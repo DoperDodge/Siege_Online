@@ -261,8 +261,9 @@ export class Room {
   ) {
     this.history = new HitboxHistory(sim, 32);
     this.rules = sim.data.modes.get("lab")!;
-    // Reinforcing and barricades (Phase 4 M6): each team's pool; lab rooms let attackers do it too.
-    sim.deployRules = { anyone: this.rules.defenderToolsForAll, pools: [this.rules.reinforcements, this.rules.reinforcements] };
+    // Reinforcing and barricades (Phase 4 M6): each team's pool; lab rooms let attackers do it too, and let
+    // defenders rappel (Phase 5 M8).
+    sim.deployRules = { anyone: this.rules.defenderToolsForAll, rappel: this.rules.attackerToolsForAll, pools: [this.rules.reinforcements, this.rules.reinforcements] };
     // A revive cut by what another body did (left, respawned, jumped, went down or died): the other side's
     // owner couldn't predict it.
     sim.onReviveCut = (p) => {
@@ -673,9 +674,22 @@ export class Room {
     for (const m of this.members.values()) m.events.push(this.deployRulesEvent());
   }
 
+  /**
+   * A rappel breach's swing ended (Phase 5 M8; the simulation chose the panels): through, the glass and
+   * barricades break; bounced back, the glass breaks and each barricade takes the kick.
+   */
+  private completeBreach(e: Extract<SimEvent, { kind: "rappelBreach" }>) {
+    const kick = this.sim.data.destruction.barricade.rappelKickDamage;
+    for (const index of e.panels) {
+      const p = this.sim.level.panels.list[index]?.panel;
+      if (!p) continue;
+      this.applyPanelOp(index, { kind: "damage", amount: e.through || p.kind === "glass" ? Math.max(1, p.hp) : kick, hard: false });
+    }
+  }
+
   private deployRulesEvent(): GameEvent {
     const r = this.sim.deployRules;
-    return { kind: "deployRules", anyone: r.anyone, pools: [r.pools[0], r.pools[1]] };
+    return { kind: "deployRules", anyone: r.anyone, rappel: r.rappel, pools: [r.pools[0], r.pools[1]] };
   }
 
 
@@ -784,6 +798,8 @@ export class Room {
         if (p) this.announceDeath(p, 0, "", e.cause === "bleed" ? Cause.Bleed : Cause.Fall, false, false, e.life);
       } else if (e.kind === "deploy") {
         this.completeDeploy(e);
+      } else if (e.kind === "rappelBreach") {
+        this.completeBreach(e);
       } else if (e.kind === "reviveStart" || e.kind === "reviveEnd") {
         const target = this.sim.pawns.get(e.targetPawn);
         const owner = target && target.ownerId !== null ? this.memberOf(target.ownerId) : null;

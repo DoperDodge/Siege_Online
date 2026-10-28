@@ -6,6 +6,7 @@ export * from "./data/presentation.js";
 export * from "./physics/rapier.js";
 export * from "./level/builder.js";
 export * from "./level/raycast.js";
+export * from "./level/rappel.js";
 export * from "./player/types.js";
 export * from "./player/pawn.js";
 export * from "./player/stance.js";

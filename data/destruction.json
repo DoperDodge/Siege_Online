@@ -43,7 +43,7 @@
     "reinforcement.locksReinforcer",
     "barricade.deploySeconds",
     "barricade.removeSeconds",
-    "barricade.passableBelowHp"
+    "barricade.passableBelowHp", "barricade.rappelKickDamage", "barricade.rappelThroughHp"
   ],
   "cellM": 0.05,
   "constructions": {
@@ -112,5 +112,5 @@
     "locksReinforcer": true,
     "reinforcedHatchHp": 1000000
   },
-  "barricade": { "hp": 3, "deploySeconds": 2.0, "removeSeconds": 1.0, "passableBelowHp": 0 }
+  "barricade": { "hp": 3, "deploySeconds": 2.0, "removeSeconds": 1.0, "passableBelowHp": 0, "rappelKickDamage": 1, "rappelThroughHp": 2 }
 }

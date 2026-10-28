@@ -75,6 +75,22 @@ describe("netsim: 10 clients, 100 ms round trip, jitter, stalls, drift", () => {
     expect(r.serverTickMs.mean).toBeLessThan(5);
   }, 90000);
 
+  it("on Oregon, rappelling (Phase 5 M8): each bot up, along and down a wall of its own, turning over and firing; no mispredictions", async () => {
+    const r = await runNetsim({ level: "oregon", seconds: 15, rappel: true, crowd: false, seed: 7 });
+    expect(r.desyncs).toEqual([]);
+    expect(r.room.droppedInputs).toBe(0);
+    expect(r.panels.differ).toEqual([]);
+    r.perClient.forEach((c, i) => {
+      expect(c.resyncs, c.name).toBe(0);
+      expect(r.rappel!.hookOns[i], c.name).toBeGreaterThanOrEqual(2);
+      expect(r.rappel!.ropeTicks[i], c.name).toBeGreaterThan(64 * 4);
+      // Stalls cost none on a rope either: the hold to hook on and the stance key wait for the late input.
+      expect(c.corrections - c.forced, c.name).toBeLessThanOrEqual(2);
+      expect(c.downKbps, c.name).toBeLessThan(64);
+    });
+    expect(r.serverTickMs.mean).toBeLessThan(5);
+  }, 90000);
+
   it("crowded (constant contact): still no desyncs, resyncs or dropped inputs", async () => {
     const r = await runNetsim({ seconds: 10, seed: 3 });
     expect(r.desyncs).toEqual([]);

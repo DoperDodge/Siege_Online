@@ -8,8 +8,11 @@
 // back down (M3); up the ladder from the 2F Tower onto the Cat Walk, then down it again from the top, facing the
 // drop (F, then S), the HUD line naming the room each time. Go to each attacker spawn puts you outside on the
 // ground (M4); the free camera puts you on the Dining roof, and keeps its keys from your body (F with the camera
-// in a wall, 2 and F over the ladder's foot). Go to each bomb site puts you at its first defender spawn, in one of
-// its rooms, facing as the spawn does; the markers are drawn and O shows the zones and hides them (M5). With
+// in a wall, 2 and F over the ladder's foot). At the Big Tower's foot, facing its north wall, holding F hooks you on
+// a rope (M8): W climbs, crouch turns you upside down and standing back, S brings you down onto the ground; from
+// the Kids' Dorms' roof edge you hook on upside down, turn right side up, come down to its north window, and Space
+// swings into its barricade (bounced back, kicked) and again through it into the Dorms. Go to each bomb site puts you at its first defender spawn, in one of its rooms,
+// facing as the spawn does; the markers are drawn and O shows the zones and hides them (M5). With
 // shadows on, a lost and restored WebGL
 // context draws the shadows again (they are drawn on request only, D-077), and hiding the storeys above redraws
 // them. Online, two pages at 100 ms of simulated round trip: A breaks the Main Entrance barricade and B sees
@@ -29,7 +32,7 @@ const shot = (name) => join(OUT, name);
 mkdirSync(OUT, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const LAG = 100;
-const Btn = { Interact: 4, Fire: 64, Melee: 1024 };
+const Btn = { Vault: 2, Interact: 4, Fire: 64, Melee: 1024 };
 const CROUCH = 1; // Stance.Crouch: the knife reaches a hatch underfoot from a crouch (1.5 m reach, eye at 1.15 m)
 const DOOR = "1F.o011.bar"; // the Main Entrance barricade (data/maps/oregon/level.json)
 const DOOR_Z = 42.45; // its plane; the Lobby is north of it (smaller z)
@@ -261,7 +264,7 @@ try {
     result.checks.droppedThroughH4IntoTheKitchen = result.offline.hatchDrop.broken && Math.abs(landed.y) < 0.1 && inRoom("1F_KITCHEN", landed.x, landed.z);
   }
   // ---- stairs and the ladder (M3)
-  const PawnMode = { Walk: 0, Ladder: 2 };
+  const PawnMode = { Walk: 0, Ladder: 2, Rappel: 5 };
   const ahead = (deg) => [-Math.sin((deg * Math.PI) / 180), -Math.cos((deg * Math.PI) / 180)];
   const rad = (deg) => (deg * Math.PI) / 180;
   const calloutOf = (id) => lvl.rooms?.find((r) => r.id === id)?.callout;
@@ -349,6 +352,92 @@ try {
     result.offline.ladderDown = { promptAtTop: atTop, at: [below.x, below.y, below.z], hud: belowHud.line, hp: [onTop.hp, below.hp] };
     result.checks.downTheLadderFromTheTop =
       /to climb/.test(atTop) && Math.abs(below.y - ladder.base[1]) < 0.05 && below.hp === onTop.hp && belowHud.ok && belowHud.line.startsWith(`${calloutOf("2F_TOWER")} · 2F · `);
+  }
+
+  // ---- rappel (M8): the Big Tower's north wall is one rope from the ground to the Cat Walk's top.
+  const north = lvl.zones?.find((z) => z.id === "rappel:1F:N01");
+  if (north) {
+    const hp0 = (await own(off)).hp;
+    const wallZ = north.boxes[0].center[2] + north.boxes[0].size[2] / 2;
+    const facing = 180; // south, at the wall
+    await off.evaluate(([x, z, yaw]) => window.__lab.teleport(x, 0, z, yaw), [north.boxes[0].center[0], wallZ - 0.6, facing]);
+    await input(off, { yaw: rad(facing) });
+    await sleep(600);
+    const atFoot = await prompt(off);
+    await input(off, { yaw: rad(facing), buttons: Btn.Interact });
+    const hooked = await off.waitForFunction((mode) => window.__lab.net.own.mode === mode, PawnMode.Rappel, { timeout: 10000, polling: 50 }).then(() => true, () => false);
+    await input(off, { yaw: rad(facing), forward: 1 });
+    const climbed = await off.waitForFunction(() => window.__lab.net.own.y > 3, null, { timeout: 15000, polling: 50 }).then(() => true, () => false);
+    await input(off, { yaw: rad(facing) });
+    const readout = () => off.evaluate(() => document.querySelector(".readout")?.textContent ?? "");
+    await sleep(300);
+    const onRope = await readout();
+    await off.screenshot({ path: shot("oregon-rappel.png") });
+    await input(off, { yaw: rad(facing), stance: CROUCH });
+    const turned = await off.waitForFunction(() => /UPSIDE DOWN/.test(document.querySelector(".readout")?.textContent ?? ""), null, { timeout: 5000, polling: 50 }).then(() => true, () => false);
+    await off.screenshot({ path: shot("oregon-rappel-upside-down.png") });
+    await input(off, { yaw: rad(facing) });
+    const upright = await off.waitForFunction(() => !/UPSIDE DOWN/.test(document.querySelector(".readout")?.textContent ?? ""), null, { timeout: 5000, polling: 50 }).then(() => true, () => false);
+    await input(off, { yaw: rad(facing), forward: -1 });
+    const landed = await off.waitForFunction((walk) => window.__lab.net.own.mode === walk && window.__lab.net.own.y < 0.1, PawnMode.Walk, { timeout: 15000, polling: 50 }).then(() => true, () => false);
+    await input(off, null);
+    await sleep(300);
+    const down = await own(off);
+    result.offline.rappel = { promptAtFoot: atFoot, onRope, steps: { hooked, climbed, turned, upright, landed }, at: [down.x, down.y, down.z], hp: [hp0, down.hp] };
+    result.checks.rappelUpTheBigTowerAndDown = /to rappel/.test(atFoot) && hooked && climbed && /RAPPEL/.test(onRope) && turned && upright && landed && down.grounded && down.hp === hp0;
+  }
+  // A rappel breach (M8): from the Kids' Dorms' roof edge, facing out over it, hook on upside down; turn to the
+  // wall, right side up (the crouch key), down to its window (2F.o004), and swing in: the fresh barricade bounces
+  // you back, kicked, and the glass breaks; the second swing goes through it into the Dorms.
+  const kids = lvl.solids.find((sd) => sd.id === "2F.o004.bar");
+  if (kids) {
+    const held = { yaw: rad(180), stance: CROUCH }; // facing the wall (south), right side up
+    const hp0 = (await own(off)).hp;
+    await off.evaluate(([x, z]) => window.__lab.teleport(x, 6.3, z, 0), [kids.center[0], kids.center[2] + 0.2]);
+    await input(off, { yaw: 0 });
+    await sleep(600);
+    const atEdge = await prompt(off);
+    await input(off, { yaw: 0, buttons: Btn.Interact });
+    const hooked = await off.waitForFunction((mode) => window.__lab.net.own.mode === mode && (window.__lab.net.own.rappelFlags & 1) === 1, PawnMode.Rappel, { timeout: 10000, polling: 50 }).then(() => true, () => false);
+    await input(off, held);
+    const upright = await off.waitForFunction(() => (window.__lab.net.own.rappelFlags & 1) === 0, null, { timeout: 5000, polling: 50 }).then(() => true, () => false);
+    await input(off, { ...held, forward: -1 });
+    const lowered = await off.waitForFunction(() => window.__lab.net.own.y < 3.6, null, { timeout: 10000, polling: 20 }).then(() => true, () => false);
+    await input(off, held);
+    await sleep(400);
+    const atWindow = await prompt(off);
+    const fresh = await panel(off, "2F.o004.bar");
+    /** One swing: hold Space until it starts, let go, and wait for it to end. */
+    const swingIn = async () => {
+      await input(off, { ...held, buttons: Btn.Vault });
+      const started = await off.waitForFunction((mode) => window.__lab.net.own.mode === mode && window.__lab.net.own.rappelTicks > 0, PawnMode.Rappel, { timeout: 5000, polling: 20 }).then(() => true, () => false);
+      await input(off, held);
+      await off.waitForFunction(() => window.__lab.net.own.rappelTicks === 0, null, { timeout: 5000, polling: 50 }).catch(() => {});
+      return started;
+    };
+    const first = await swingIn();
+    const kicked = await off.waitForFunction((hp) => window.__lab.panel("2F.o004.bar").hp < hp && window.__lab.panel("2F.o004.glass").broken, fresh.hp, { timeout: 5000, polling: 50 }).then(() => true, () => false);
+    const bounced = (await own(off)).mode === PawnMode.Rappel;
+    const worn = await panel(off, "2F.o004.bar");
+    const second = await swingIn();
+    const inside = await off.waitForFunction((k) => window.__lab.net.own.mode === k.walk && window.__lab.net.own.grounded && window.__lab.net.own.z > k.z, { walk: PawnMode.Walk, z: kids.center[2] + 0.3 }, { timeout: 10000, polling: 50 }).then(() => true, () => false);
+    await input(off, null);
+    await sleep(500);
+    const me = await own(off);
+    const hud = await hudSaysWhereYouAre(off);
+    const after = await panel(off, "2F.o004.bar");
+    await off.screenshot({ path: shot("oregon-rappel-breach.png") });
+    result.offline.rappelBreach = {
+      promptAtEdge: atEdge,
+      promptAtWindow: atWindow,
+      steps: { hooked, upright, lowered, first, kicked, bounced, second, inside },
+      barricadeHp: [fresh.hp, worn.hp, after.hp],
+      at: [me.x, me.y, me.z],
+      hud: hud.line,
+      hp: [hp0, me.hp],
+    };
+    result.checks.rappelBreachIntoTheKidsDorms =
+      /to rappel/.test(atEdge) && hooked && upright && lowered && /to breach/.test(atWindow) && first && kicked && bounced && second && inside && after.broken && Math.abs(me.y - 3.2) < 0.05 && me.hp === hp0 && hud.ok && hud.line.startsWith(`${calloutOf("2F_KIDS_DORMS")} · 2F · `);
   }
 
   // ---- the outside (M4): Go to each attacker spawn group puts you on the ground outside the building, facing it;

@@ -6,6 +6,7 @@ import { HELPER_GROUPS, PROP_GROUPS, refreshBroadPhase, STATIC_GROUPS, type Coll
 import type { DestructionData, LevelDef, Surface } from "../data/schemas.js";
 import { PanelSet } from "../destruction/panels.js";
 import { constructionOf, panelSpec } from "../destruction/world.js";
+import { rappelFaces, type RappelFace } from "./rappel.js";
 
 export interface Renderable {
   id: string;
@@ -43,6 +44,8 @@ export interface BuiltLevel {
   def: LevelDef;
   renderables: Renderable[];
   ladders: LadderRuntime[];
+  /** The faces a rope hangs on (level/rappel.ts), from the level's rappel zones. */
+  rappel: RappelFace[];
   /** Keyed by collider handle (panels' movement boxes too). */
   solids: Map<number, SolidInfo>;
   /** Destructible surfaces (Phase 4): solids whose surface data/destruction.json builds as a panel. */
@@ -168,5 +171,5 @@ export function buildLevel(R: Rapier, world: World, def: LevelDef, destruction?:
   }
 
   refreshBroadPhase(world); // build the broad phase so queries work immediately
-  return { def, renderables, ladders, solids, panels };
+  return { def, renderables, ladders, rappel: rappelFaces(def), solids, panels };
 }
