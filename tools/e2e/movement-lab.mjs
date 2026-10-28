@@ -99,7 +99,12 @@ try {
   // (Turned a quarter first, so the shell on the camera faces another way than the body.)
   const bodies = () => page.evaluate(() => window.__lab.bodies);
   await page.evaluate((p) => window.__lab.teleport(p.x, p.y, p.z, 90), (await bodies()).possessed);
-  await sleep(200);
+  // A teleport puts the body just off the floor: the camera opens only for a body walking on the ground, so a Z
+  // pressed before it lands (one slow frame can hold both) is dropped. Wait for it to land.
+  await page.waitForFunction(() => {
+    const b = window.__lab.bodies.possessed;
+    return b && b.grounded && b.mode === 0;
+  }, null, { timeout: 10000, polling: 50 });
   await page.keyboard.press("KeyZ");
   await page.waitForFunction(() => !document.querySelector(".shellcam").classList.contains("hidden"), null, { timeout: 5000 });
   const camPrompt = await page.locator(".prompt").textContent();
