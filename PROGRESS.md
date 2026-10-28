@@ -5,7 +5,7 @@ known issues, and what's next.
 
 ---
 
-## Phase 5 — Oregon greybox · 🚧 in progress (rappel round 2 in, after your test; waiting on your rappel test and your layout sign-off)
+## Phase 5 — Oregon greybox · 🚧 in progress (rappel round 3 in, after your tests; waiting on your rappel test and your layout sign-off)
 
 **Done when (PLAN §17):** you walk it and sign off on layout accuracy. Rappel (M8) comes before the Phase 5
 report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIGN.md`.
@@ -20,6 +20,19 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
 | M6 Walk-ready: every check, performance on Oregon, your walk #1 | ✅ every structural check, the generator's report, the blueprint check, Oregon's performance measured (server, client, browser); your walk #1: "really accurate" |
 | M7 Your corrections, round by round, to sign-off | 🚧 walk #1's fixes in: the Attic's hall a vault over the Low Attic (after your screenshot), vaulting through holes in walls, no page zoom on phones; ⏳ your sign-off |
 | M8 Rappel | ✅ on every outside wall: hold Space to hook on (at a wall's foot, upside down over a roof edge, or out of a window), climb, move along, turn over, shoot and knife; swing into a window or breach it with Space; your test's round 2 in (animated moves, the swing, the view limit); predicted online with no mispredictions; browser test and a netsim run; ⏳ your test online at +100 ms |
+
+### What's done (M8: rappel, round 3 after your second test)
+- **Over the eaves:** where a roof hangs over the wall, climbing up stopped with your head under it. Climbing into
+  it now takes you over the edge onto the roof's slope, as at a bare edge (D-117). 20 of the 55 rope faces had the
+  problem: the Dorms' south wall from your screenshot, the other 6.2 m roofs' eaves, and the Big Tower's and Cat
+  Walk's 9.2 m ones.
+- **Not through walls:** climbing over the top went through the Big Tower's gable end into its closed roof space,
+  and from the Kitchen's north wall through the Kids' Dorms' wall (set back from the edge) or its barricaded window
+  into the room. Over the top now needs nothing behind the edge taller than a vault, and room for a tucked body,
+  as a vault does; those spots stop under the edge.
+- **The rope drawn:** near an inside corner the rope was drawn slanting to the next wall's rope; it now hangs from
+  your own.
+- F stays the key to let go.
 
 ### What's done (M8: rappel, round 2 after your test)
 You found it clunky and not like the game; each thing you asked for is in (D-116):
@@ -55,8 +68,9 @@ Rappel (D-114, D-116), on Oregon's 55 rappel faces (the orange zones, O):
   barricade (F), the prompt shows an attacker the rope first and a defender the panel.
 - **On the rope:** W climbs, S descends (Shift: fast), A and D move along the wall (Shift faster); C turns you
   upside down and back. You can lean, aim, fire, reload and knife, looking at most 90° either side of the wall;
-  lethal damage kills outright. At the top you climb over onto the roof where you can stand (over a railing too),
-  else stop under the edge; at the bottom you land, and F lets go anywhere.
+  lethal damage kills outright. At the top you climb over onto the roof where you can stand (over a railing, or
+  from under an eave), else stop under the edge (a gable end, a wall set back from the edge); at the bottom you
+  land, and F lets go anywhere.
 - **Windows:** right side up, Space swings you into the window in front: in through it when it's open; at glass
   or a barricade (the Siege X rappel breach) the glass breaks, and a fresh barricade bounces you off with a kick
   that wears it; the next swing goes through it. A barricade already worn (a knife hit, a few bullets) gives way
@@ -375,7 +389,7 @@ logs all three):
    the fight across the Kitchen's soft wall), `npm run bench:oregon` (loading, damage, redraw; writes
    `builds/bench/oregon.json`), and after `npm run build`, `node tools/e2e/oregon-perf.mjs` (the browser capture;
    writes `builds/e2e/oregon-perf.json`).
-19. Checks: `npm run check` runs them all: `npm run typecheck`, `npm test` (544 tests), `npm run build && npm run
+19. Checks: `npm run check` runs them all: `npm run typecheck`, `npm test` (547 tests), `npm run build && npm run
    test:e2e` (`oregon.mjs` shoots through a soft floor, drops through a hatch, walks the Armory Stairs, takes the
    ladder both ways, rappels up the Big Tower and down, breaches into the Kids' Dorms from its roof edge, stands
    at each attacker spawn, drops onto the Dining roof from the free camera, goes to each bomb site and switches
@@ -407,6 +421,9 @@ logs all three):
      Dorms' big window opened, from inside), a quick tap still vaults.
    - The Balcony: from the ground under it, hook on and climb: you go over the railing onto it. From the Balcony,
      face out over the railing and hold Space.
+   - Over an eave: the wall from your screenshot (the HUD's world u about 205, 257). Press N, fly down to the ground
+     in front of that wall and press F, then face the wall, hold Space and climb with W: you go over the eave onto
+     the roof.
 
 ### Known issues
 - Rappel: every timing, speed, distance and angle is a placeholder (open question 35): the hold and the tap, the
@@ -456,8 +473,8 @@ logs all three):
   (Phase 6 or 12).
 
 ### Next: your rappel test (M8) and your sign-off (M7)
-Round 2 of rappel is in. M8 is done when you rappel down the Big Tower and into a Dorms window online at +100 ms
-(How to test, item 21); tell me what still feels off.
+Round 3 of rappel is in (over the eaves). M8 is done when you rappel down the Big Tower and into a Dorms window
+online at +100 ms (How to test, item 21); tell me what still feels off.
 The layout waits on your sign-off (PLAN §17's done-when), with the Attic's ledge to check. Anything else you find
 goes into `research/oregon/walkthrough.md` and gets fixed through the layout files, one round per walk. Then the
 Phase 5 report.

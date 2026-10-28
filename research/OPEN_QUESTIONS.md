@@ -450,7 +450,8 @@ you find is logged (walk #1's three are fixed: items 33 and 34 ask what's left t
       wall and 0.6 m above the edge, facing out over it, hanging upside down; from inside a window: a sill you could
       vault, in a wall up to 0.6 m thick, glass and barricade gone; no rope under 2 m; the body hangs 5 cm off the
       wall; climbing past the top takes you over it (0.6 s) once your feet are 1.2 m under it, onto what's up to
-      1.2 m behind the edge (past a railing);
+      1.2 m behind the edge (past a railing), or sooner when your head meets a roof hanging over the wall (an eave)
+      0.5 m or less under the top; never over anything behind the edge taller than a vault (1.1 m);
     - the crouch key turns you upside down and back (each change of it: with hold-to-crouch you hang upside down
       while you hold it); you can't swing in or breach upside down; you can knife on the rope;
     - the swing: out 0.9 m and back in 0.8 s; bounced off a barricade, out 0.35 m and back in 0.4 s; it only goes in

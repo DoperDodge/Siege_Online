@@ -1104,6 +1104,11 @@ the fix, the commit). Sign-off is recorded there and in PROGRESS.
   hands are free (`ropeIdle`); fast descent with sprint; over the top past a railing (`overTopBack`); Skopós' shell
   camera opens on the rope, the swap doesn't. A rope's run hangs the body off its outermost plane (`ropeRun`).
   Upside down in the first-person view, the camera rolls and the mouse's look turns with it.
+- **Round 3, after Ulo's second test (D-117):** over the top from under an eave (`overhangReach`: climbing into
+  something over the rope's top goes over from there); over the top only past what a vault goes over, with room for
+  a tucked body (no more through the Big Tower's gable end or a storey's wall set back from the edge); the rope
+  drawn on the body's own face, else the nearest line. Tests: the Dorms' eave from the ground, the Big Tower's gable
+  end, the Kids' Dorms' wall and barricaded window over the Kitchen, the rope at an inside corner.
   Tests: `game/shared/test/rappel.test.ts` (29: faces and the stepped wall; hooking on at the foot, the roof edge
   and a window, the tap that vaults, both tools in a lab, who may, a stall, Skopós' camera; on the rope: the
   speeds, the view, the ends, the knife, an open window, the breach at the Big Tower's 2F window, a turn mid-swing,
