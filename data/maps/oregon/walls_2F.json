@@ -85,7 +85,7 @@
    {"kind": "DOOR", "id": "2F.o018", "at": [261.73, 269.5], "research": "layout_notes §6: 2F_WALK_IN | 2F_MASTER_BEDROOM (DOOR)", "from": ["2-o018"], "_unverified": []}
   ]},
   {"id": "2F.w049", "axis": "V", "at": 248.71, "span": [96.28, 162.25], "weight": "ext", "kind": "wall", "from": ["2-w049", "2-w050"], "src": "raster", "conf": "high", "_unverified": [], "spans": [
-   {"kind": "DRONE_HOLE", "id": "2F.dt2", "at": [112.29, 114.95], "from": ["2-dt-rect111"], "note": "slot centred on the r6calls drone-tunnel icon", "_unverified": ["at"]},
+   {"kind": "DRONE_HOLE", "id": "2F.dt2", "at": [112.29, 114.95], "sillM": 0.9, "from": ["2-dt-rect111"], "note": "slot centred on the r6calls drone-tunnel icon; 0.9 m up, on the Attic hall's raised floor (layout.floorShifts)", "_unverified": ["at", "sillM"]},
    {"kind": "WINDOW", "id": "2F.o016", "at": [146.38, 153.08], "research": "layout_notes §6: 2F_ATTIC | RF_MEETING_W (EXT_OPENING (window? UNVERIFIED))", "from": ["2-o016"], "note": "kind from the research guess", "_unverified": ["kind"]}
   ]},
   {"id": "2F.w043", "axis": "V", "at": 274.82, "span": [96.28, 190.83], "weight": "ext", "kind": "wall", "spans": [], "from": ["2-w043"], "src": "raster", "conf": "high", "_unverified": []},

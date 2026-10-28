@@ -77,10 +77,11 @@ export function planSvg(root: string, level: Record<string, unknown>, floor: Flo
   };
   // The floor under this storey: soft-floor tiles and hatches (hard slab is everything else).
   const floors: string[] = [];
+  const lift = Math.max(0, ...layout.floorShifts.map((x) => x.raiseM ?? 0));
   for (const s of level.solids as Solid[]) {
     const top = s.center[1] + s.size[1] / 2;
-    // The storey's floor panels, a dropped room's too (layout.drops: up to 0.3 m lower).
-    if ((s.surface !== "SOFT_FLOOR" && s.surface !== "HATCH") || top > storey.floorY + 0.01 || top < storey.floorY - 0.31) continue;
+    // The storey's floor panels, a shifted room's too (layout.floorShifts: up to 0.3 m lower, or raised).
+    if ((s.surface !== "SOFT_FLOOR" && s.surface !== "HATCH") || top > storey.floorY + lift + 0.01 || top < storey.floorY - 0.31) continue;
     const b = box(s);
     floors.push(`<rect class="floors" ${b.attrs} fill="${COLOURS[s.surface]}" fill-opacity="0.45" stroke="${COLOURS[s.surface]}" stroke-width="0.2"><title>${esc(s.id)}</title></rect>`);
     if (s.label) labels.push(`<text class="labels floors" x="${f2((b.x0 + b.x1) / 2)}" y="${f2((b.y0 + b.y1) / 2)}">${esc(s.label)}</text>`);

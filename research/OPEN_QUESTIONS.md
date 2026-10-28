@@ -421,11 +421,13 @@ you find is logged (walk #1's three are fixed: items 33 and 34 ask what's left t
     - (b) Every wall not in surfaces.md §2 is hard (P18), the Kitchen's north-east partition and the 2F annex
       partition included (surfaces.md question 1).
 
-33. **The Attic's step (your walk #1):** walking south down the Attic's hall, the floor steps up about 20 cm into
-    the Low Attic. We built the hall's floor 0.2 m lower than the rest of 2F (its hatch and soft floor with it),
-    since nothing steps at the Low Attic's door to the Middle. Is it about 20 cm? Is the step also there at the
-    Big Tower end (through the soft wall once it's open)? Do the hall's west window and drone hole sit lower to
-    match (ours are at the rest of 2F's height, 0.2 m higher from the hall's floor)?
+33. **The Attic's ledge (your walk #1, and your note on its screenshot):** "the part that is down needs to be raised
+    to about vault height". We read it as the Attic's hall standing about a vault over the rest of 2F, and built
+    its floor 0.9 m up (our window sills' height): from the Low Attic you vault up into the hall, and going south
+    you drop back down (D-113). No in-game picture of the Low Attic looking into the hall turned up to check it.
+    Is the hall the higher side, and is 0.9 m about right? Is there a ledge at the Big Tower end too (through the
+    soft wall once it's open: ours is 0.9 m up from the Tower's floor)? The hall's west window now opens at its
+    floor and its drone hole sits on it, 0.9 m over the Meeting roof outside; is that how they are?
 
 34. **Vaulting through a hole (your walk #1):** a hole in a soft or reinforceable wall can now be vaulted through
     by the vault's own rules: a ledge 0.3–1.1 m up, about 1.0 m of room above it (the body tucked to 0.9 m) and the

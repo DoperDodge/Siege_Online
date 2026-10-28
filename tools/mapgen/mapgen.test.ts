@@ -15,7 +15,7 @@ import { planSvg } from "./plans.js";
 import { distanceInside, PlanGrid } from "./grid.js";
 import type { Extracted } from "./import.js";
 import { connections, droneHoleTable, hatchTable, markerTables, roomTable, siteTable, softFloorTable, softWalls } from "./research.js";
-import { CELL_M, clearCells, compileRooms, storeyOfBox } from "./rooms.js";
+import { CELL_M, clearCells, compileRooms, floorShift, storeyOfBox } from "./rooms.js";
 import { FLOOR_IDS, wallSchema, type SpanDef, type WallDef } from "./schema.js";
 import type { Floor } from "./research.js";
 import { compileStairs, flightBoxes, type CompiledRun } from "./stairs.js";
@@ -30,13 +30,13 @@ const inputs = loadInputs(ROOT);
 const compiled = compile(inputs);
 const { level, report } = compiled;
 const extracted = JSON.parse(readFileSync(join(MAP, "extracted.json"), "utf8")) as Extracted;
-type Box = { id: string; center: number[]; size: number[]; surface: string; bodiesOnly?: boolean; drawOnly?: boolean; panel?: { sections?: number; empty?: boolean; construction?: string; region?: string } };
+type Box = { id: string; center: number[]; size: number[]; surface: string; bodiesOnly?: boolean; drawOnly?: boolean; vaultable?: boolean; panel?: { sections?: number; empty?: boolean; construction?: string; region?: string } };
 const solids = level.solids as Box[];
 const k = inputs.layout.units.mPerU;
 const spansOf = (floor: string) => inputs.walls.find((w) => w.floor === floor)!.walls.flatMap((w) => w.spans.map((s) => ({ wall: w, span: s })));
 const fr = frames(inputs.layout);
-/** How far a room's floor hangs under its storey's (layout.drops: the Attic's hall, Ulo's walk #1). */
-const dropOf = (room: string) => inputs.layout.drops.find((x) => x.room === room)?.dropM ?? 0;
+/** How far a room's floor sits over its storey's (layout.floorShifts: the Attic's hall, Ulo's walk #1). */
+const shiftOf = (room: string) => floorShift(inputs.layout, room);
 
 describe("oregon level.json", () => {
   it("is exactly what the layout compiles to, and compiling is deterministic", () => {
@@ -221,7 +221,7 @@ describe("oregon level.json", () => {
       ...inputs.exterior.props.map((p) => `prop:${p.id}`),
       ...inputs.layout.roofs.map((r) => `roof:${r.id}`),
       ...inputs.exterior.items.map((i) => `item:${i.id}`),
-      ...inputs.layout.drops.map((x) => `drop:${x.room}`),
+      ...inputs.layout.floorShifts.map((x) => `shift:${x.room}`),
     ];
     expect(want.filter((r) => !refs.has(r))).toEqual([]);
     // A span with a room on either side is in that room's line; every room has a way in.
@@ -239,10 +239,10 @@ describe("oregon level.json", () => {
     expect(line("1F_SECURITY_CORRIDOR")).toContain("drone hole north, to Kitchen (1F.dt4)");
     expect(line("1F_LOBBY")).not.toContain("1F.dt4");
     expect(line("3F_CATWALK")).toContain("window west to the outside (3F.o003");
-    // Walk #1: the Attic's hall lies lower than the Low Attic.
-    expect(line("2F_ATTIC")).toContain("the floor lies 0.2 m below the rest of 2F");
-    expect(line("2F_ATTIC")).toContain("open south, to Low Attic, a 0.2 m step up, no wall between");
-    expect(line("2F_LOW_ATTIC")).toContain("open north, to Attic, a 0.2 m step down, no wall between");
+    // Walk #1: the Attic's hall stands a vault over the Low Attic.
+    expect(line("2F_ATTIC")).toContain("the floor lies 0.9 m above the rest of 2F");
+    expect(line("2F_ATTIC")).toContain("open south, to Low Attic, a 0.9 m drop, no wall between");
+    expect(line("2F_LOW_ATTIC")).toContain("open north, to Attic, a 0.9 m ledge to vault up onto, no wall between");
     expect(list.lines.join("\n")).toContain("drone hole **1F.dt3** on 1F, into an enclosed space that is no room (beside White Stairs)");
     const outside = list.lines.slice(list.lines.indexOf("#### Outside and roofs")).join("\n");
     expect(outside).toMatch(/\*\*CAM1\*\*.*\*\*CAM2\*\*.*\*\*CAM3\*\*/);
@@ -571,7 +571,7 @@ describe("oregon rooms and floors", () => {
     for (const r of rooms) {
       expect(r.storey, r.id).toBe(research.find((x) => x.id === r.id)!.floor);
       expect(r.callout, r.id).not.toBe("");
-      expect(r.anchor[1], r.id).toBe(storey(r.storey).floorY - dropOf(r.id));
+      expect(r.anchor[1], r.id).toBeCloseTo(storey(r.storey).floorY + shiftOf(r.id), 6);
       expect(inRoom(r, r.anchor[0], r.anchor[2]), r.id).toBe(true);
     }
     expect(report.errors).toEqual([]);
@@ -657,9 +657,9 @@ describe("oregon rooms and floors", () => {
       const s = storey(f.floor);
       const max = f.tileMaxM ?? inputs.layout.defaults.softFloor.tileMaxM;
       for (const t of mine) {
-        // On the storey's floor, or a dropped room's (only inside that room).
+        // On the storey's floor, or a shifted room's (only inside that room).
         const room = rooms.find((r) => r.storey === f.floor && inRoom(r, t.center[0], t.center[2]));
-        expect([+(t.center[1] + t.size[1] / 2).toFixed(4), +t.size[1].toFixed(4)], t.id).toEqual([+(s.floorY - (room ? dropOf(room.id) : 0)).toFixed(4), s.slabM]);
+        expect([+(t.center[1] + t.size[1] / 2).toFixed(4), +t.size[1].toFixed(4)], t.id).toEqual([+(s.floorY + (room ? shiftOf(room.id) : 0)).toFixed(4), s.slabM]);
         expect(Math.max(t.size[0], t.size[2]), t.id).toBeLessThanOrEqual(max + 1e-6);
         if (/#e\d/.test(t.id)) {
           // A strip along part of the edge, out to the wall below: at most 15 cm deep, at least 0.5 m long.
@@ -745,7 +745,7 @@ describe("oregon rooms and floors", () => {
       const authored = inputs.layout.hatches.find((x) => x.id === row.id)!;
       expect([h.surface, authored.top, authored.bottom], row.id).toEqual(["HATCH", row.top, row.bottom]);
       const [top, bottom] = [rooms.find((r) => r.id === row.top)!, rooms.find((r) => r.id === row.bottom)!];
-      expect(+(h.center[1] + h.size[1] / 2).toFixed(4), row.id).toBe(+(storey(top.storey).floorY - dropOf(top.id)).toFixed(4));
+      expect(+(h.center[1] + h.size[1] / 2).toFixed(4), row.id).toBe(+(storey(top.storey).floorY + shiftOf(top.id)).toFixed(4));
       expect(Math.min(h.size[0], h.size[2]), row.id).toBeGreaterThanOrEqual(1.2);
       // The square r6calls draws, give or take 0.5 u a side (H5 straddles the Attic's wall: amendment 6).
       const clip = report.hatches.find((x) => x.id === row.id)!.clipU;
@@ -779,41 +779,52 @@ describe("oregon rooms and floors", () => {
     expect(problems).toEqual([]);
   });
 
-  it("the Attic's hall lies 0.2 m under 2F (walk #1): a step down from the Low Attic and back up, nothing open under its walls", async () => {
+  it("the Attic's hall stands 0.9 m over 2F (walk #1): a ledge vaulted onto from the Low Attic and dropped off, its hatch and soft floor over shafts, open to its roof", async () => {
     const [hall, low] = [rooms.find((r) => r.id === "2F_ATTIC")!, rooms.find((r) => r.id === "2F_LOW_ATTIC")!];
-    expect([hall.anchor[1], low.anchor[1]]).toEqual([3, 3.2]);
-    // The hall's floor (slab, hatch H5, soft floor SF-2F-09) tops out at 3.0 m; everything else of 2F's at 3.2.
-    const floors = solids.filter((b) => ["HARD_FLOOR", "SOFT_FLOOR", "HATCH"].includes(b.surface) && Math.abs(b.center[1] - 3.1) < 0.21 && b.size[1] < 0.3);
-    const tops = (inside: boolean) => [...new Set(floors.filter((b) => inRoom(hall, b.center[0], b.center[2]) === inside).map((b) => +(b.center[1] + b.size[1] / 2).toFixed(3)))].sort();
-    expect([tops(true), tops(false)]).toEqual([[3], [3.2]]);
-    expect(floors.filter((b) => b.id === "H5" || b.panel?.region === "SF-2F-09").every((b) => +(b.center[1] + b.size[1] / 2).toFixed(3) === 3)).toBe(true);
-    // Walk north from the Low Attic into the hall, then back.
+    expect([hall.anchor[1], low.anchor[1]]).toEqual([4.1, 3.2]);
+    // The hall's floor tops out at 4.1 m: its slab solid from 2F's slab up and vaultable, its hatch H5 and soft floor
+    // SF-2F-09 slab-thick on top. Beside it, 2F's floor is at 3.2.
+    const floors = solids.filter((b) => ["HARD_FLOOR", "SOFT_FLOOR", "HATCH"].includes(b.surface) && b.center[1] > 2.5 && b.center[1] < 5);
+    const top = (b: Box) => +(b.center[1] + b.size[1] / 2).toFixed(3);
+    const inHall = floors.filter((b) => inRoom(hall, b.center[0], b.center[2]));
+    expect([...new Set(inHall.map(top))]).toEqual([4.1]);
+    expect([...new Set(floors.filter((b) => inRoom(low, b.center[0], b.center[2])).map(top))]).toEqual([3.2]);
+    for (const b of inHall) {
+      const bottom = +(b.center[1] - b.size[1] / 2).toFixed(3);
+      if (b.surface === "HARD_FLOOR") expect([b.id, b.vaultable, bottom <= 3.2]).toEqual([b.id, true, true]);
+      else expect([b.id, bottom]).toEqual([b.id, 3.9]);
+    }
+    expect(inHall.filter((b) => b.id === "H5" || b.panel?.region === "SF-2F-09").length).toBeGreaterThan(1);
+    // Its west window opens at its floor; its drone hole is a slot on it.
+    expect(top(solids.find((b) => b.id === "2F.o016.sill")!)).toBe(4.1);
+    const slot = (level.zones as { id: string; boxes: { center: number[]; size: number[] }[] }[]).find((z) => z.id === "2F.dt2")!.boxes[0];
+    expect(+(slot.center[1] - slot.size[1] / 2).toFixed(3)).toBe(4.1);
+
     const sim = await Sim.create("oregon");
+    // Under the hatch and the soft floor, a shaft down to the floor of the room below (the Meeting Hall, the Stage).
+    for (const b of [inHall.find((x) => x.id === "H5")!, inHall.find((x) => x.panel?.region === "SF-2F-09")!]) {
+      expect([b.id, raycastLevel(sim, [b.center[0], 3.85, b.center[2]], [0, -1, 0], 6)?.t.toFixed(2)]).toEqual([b.id, "3.85"]);
+    }
+    // No ceiling: a standing body has room across the hall's floor, up to the roof's slopes.
+    const [ax, , az] = hall.anchor;
+    for (const x of [ax - 1.2, ax, ax + 1.2]) expect(raycastLevel(sim, [x, 4.2, az], [0, 1, 0], 4)!.t).toBeGreaterThan(sim.data.movement.stance.stand.height + 0.05);
+    // Walking north from the Low Attic, the ledge stops the body; facing it, the vault key mantles onto the hall's
+    // floor; walking back south, it drops off.
     const ctrl = sim.addPlayer("walker", "sledge");
     const pawn = sim.pawns.get(ctrl.possessedPawnId)!;
     let seq = 0;
-    const go = (yawDeg: number, seconds: number) => {
-      for (let t = 0; t < seconds * TICK_HZ; t++) sim.step(new Map([[ctrl.id, { seq: ++seq, forward: 1, strafe: 0, yaw: yawDeg * DEG, pitch: 0, buttons: 0, stance: Stance.Stand, lean: 0 }]]));
+    const go = (yawDeg: number, seconds: number, buttons = 0) => {
+      for (let t = 0; t < seconds * TICK_HZ; t++) sim.step(new Map([[ctrl.id, { seq: ++seq, forward: buttons ? 0 : 1, strafe: 0, yaw: yawDeg * DEG, pitch: 0, buttons, stance: Stance.Stand, lean: 0 }]]));
       for (let t = 0; t < 16; t++) sim.step(new Map([[ctrl.id, { seq: ++seq, forward: 0, strafe: 0, yaw: yawDeg * DEG, pitch: 0, buttons: 0, stance: Stance.Stand, lean: 0 }]]));
       return { ...pawn.state };
     };
     sim.teleport(pawn.id, 39.3, 3.2, 26, 0, Stance.Stand);
-    const down = go(0, 1.5);
-    expect([inRoom(hall, down.x, down.z), down.grounded, +down.y.toFixed(1)]).toEqual([true, true, 3]);
-    const up = go(180, 1.5);
-    expect([inRoom(low, up.x, up.z), up.grounded, +up.y.toFixed(1)]).toEqual([true, true, 3.2]);
-    // Between the hall's floor and its walls' feet (3.0 to 3.2 m) there is 2F's slab, seen from anywhere in the hall.
-    const [ax, , az] = hall.anchor;
-    const gaps: string[] = [];
-    for (const [x, z] of [[ax, az], [ax, 16], [ax, 23]]) {
-      for (let a = 0; a < 360; a += 15) {
-        const dir: Vec3 = [Math.cos(a * DEG), 0, Math.sin(a * DEG)];
-        const hit = raycastLevel(sim, [x, 3.1, z], dir, 12);
-        if (!hit) gaps.push(`from (${x}, ${z}) at ${a}°`);
-        else if (!inRoom(hall, x + dir[0] * (hit.t - 0.06), z + dir[2] * (hit.t - 0.06))) gaps.push(`from (${x}, ${z}) at ${a}°: ${hit.t.toFixed(2)} m, out of the hall`);
-      }
-    }
-    expect(gaps).toEqual([]);
+    const stopped = go(0, 1.5);
+    expect([inRoom(low, stopped.x, stopped.z), stopped.grounded, +stopped.y.toFixed(1)]).toEqual([true, true, 3.2]);
+    const onto = go(0, 1.2, Btn.Vault);
+    expect([inRoom(hall, onto.x, onto.z), onto.grounded, onto.mode, +onto.y.toFixed(1)]).toEqual([true, true, PawnMode.Walk, 4.1]);
+    const back = go(180, 1.5);
+    expect([inRoom(low, back.x, back.z), back.grounded, +back.y.toFixed(1)]).toEqual([true, true, 3.2]);
   });
 });
 
@@ -1102,6 +1113,20 @@ describe("oregon walk graph (M3, DESIGN §9.2 check 10)", () => {
     }
   });
 
+  it("a vaultable top a body mantles onto (0.9 m) joins the floor beside it; a plain one, or one too tall to mantle (1.6 m), doesn't", async () => {
+    for (const [h, vaultable, joined] of [
+      [0.9, true, true],
+      [0.9, false, false],
+      [1.6, true, false],
+    ] as const) {
+      // A deck at x 2..6, its west face a ledge.
+      const g = await flat(`mantle_${h}_${vaultable}`, [{ id: "deck", center: [4, h / 2, 0], size: [4, h, 4], surface: "HARD_FLOOR", vaultable }]);
+      const [floor, deck] = [nodeNear(g, -3, 0, 0), nodeNear(g, 4, h, 0)];
+      expect(Math.min(floor, deck), `${h} m, ${vaultable}`).toBeGreaterThanOrEqual(0);
+      expect(g.comp[floor] === g.comp[deck], `${h} m, ${vaultable}`).toBe(joined);
+    }
+  });
+
   it("without the ladder, nothing reaches the Cat Walk: the graph doesn't leak through floors or walls", async () => {
     const sim = await Sim.create("oregon");
     breakAll(sim, "barricade");
@@ -1211,7 +1236,7 @@ describe("oregon sites, cameras and ingredients (M5, DESIGN §5.11)", () => {
     for (const g of ings) {
       const [x, y, z] = g.pos;
       const r = roomOf(want[g.id]);
-      expect([g.id, g.room, Math.round((y - storey(r.storey).floorY + dropOf(r.id)) * 1e4) / 1e4]).toEqual([g.id, want[g.id], g.kind === "gas_pipe" ? 1.2 : 1]);
+      expect([g.id, g.room, Math.round((y - storey(r.storey).floorY - shiftOf(r.id)) * 1e4) / 1e4]).toEqual([g.id, want[g.id], g.kind === "gas_pipe" ? 1.2 : 1]);
       expect([g.id, wallBehind(x, y, z), holds(r, x, z), holds(r, ...ahead(x, z, g.yawDeg, 0.3))]).toEqual([g.id, true, true, true]);
     }
   });

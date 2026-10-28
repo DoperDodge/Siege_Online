@@ -29,7 +29,7 @@
   "splits": "research/oregon/layout_notes.md §6 open-plan links (OPEN rows), each on the wall lines beside it",
   "softFloors": "research/oregon/surfaces.md §4.2, each to its room's walls; Ubisoft's extents where they are larger, with r6calls' as alt (DESIGN amendment 7)",
   "hatches": "research/oregon/surfaces.md §5: r6calls' hatch squares (extracted.json fh/ch), world positions; H1 moved 7.1 u east to land inside B_ELECTRIC under the alt B frame (D-095)",
-  "drops": "Ulo 2026-10-28 (walk #1): the step into the Low Attic",
+  "floorShifts": "Ulo 2026-10-28: walk #1 (a step where the Attic's hall opens into the Low Attic) and a phone screenshot after it (the part that is down raised to about vault height)",
  "wells": "research/oregon/layout_notes.md §4.4 and surfaces.md §4.1: the Cat Walk's centre (P21)",
   "walls": "walls_<floor>.json, seeded from extracted.json (r6calls floor rasters), research ids from surfaces.md §2 and layout_notes.md §6",
   "sections SW-2F-01, SW-2F-02, SW-2F-04": "Ulo 2026-10-09",
@@ -202,14 +202,14 @@
   {"id": "H5", "frame": "world", "rect": [244.639, 126.707, 256.14, 138.29], "top": "2F_ATTIC", "bottom": "1F_MEETING_HALL", "research": "surfaces.md §5 H5", "note": "r6calls' 2F floor-hatch square (fh rect329-51); it straddles the Attic's west wall, so the panel is the part inside the Attic (DESIGN amendment 6; Ubisoft draws it only east of the wall)", "_unverified": ["rect"]},
   {"id": "H6", "frame": "world", "rect": [317.616, 239.584, 328.673, 250.676], "top": "2F_ARMORY", "bottom": "1F_GARAGE", "research": "surfaces.md §5 H6", "note": "r6calls' 2F floor-hatch square (fh rect329)", "_unverified": ["rect"]}
  ],
- "drops": [
+ "floorShifts": [
   {
    "room": "2F_ATTIC",
-   "dropM": 0.2,
+   "raiseM": 0.9,
    "src": "ulo",
-   "note": "Ulo's walk #1 (2026-10-28): walking south down the Attic's hall, the floor steps up about 20 cm where the hall opens into the Low Attic. Built as the hall's floor 0.2 m under 2F's, since nothing steps at the Low Attic's door to the Middle",
+   "note": "Ulo's walk #1 (2026-10-28) found a step where the Attic's hall opens into the Low Attic, built first as the hall 0.2 m lower; on a phone screenshot of that, Ulo said the part that is down needs to be raised to about vault height. Built as the hall's floor 0.9 m over 2F's (our window sills' height), a ledge vaulted onto from the Low Attic: the hall lies over the Meeting Hall and Stage, nothing steps at the Low Attic's door to the Middle, and 'Low Attic' is the lower part. No in-game image of the Low Attic looking into the hall was found to check the height or which side is up",
    "_unverified": [
-    "dropM"
+    "raiseM"
    ]
   }
  ],
@@ -243,7 +243,8 @@
   {"id": "RF_TOWER_LOW", "callout": "Tower Roof", "rects": [[213.33, 75.67, 239.33, 99.67]], "shape": "mono", "low": "W", "eaveY": 6.2, "pitchDeg": 25, "walkable": true, "research": "layout_notes §4.5 RF_TOWER_LOW", "src": "hand", "note": "over the 2F Tower's west part, leaning on the Cat Walk's west wall", "_unverified": ["shape", "low", "pitchDeg", "ceiling"]},
   {"id": "RF_DORMS", "callout": "Dorms Roof", "rects": [[134.67, 203.67, 292, 253.67]], "shape": "gable", "ridge": "EW", "eaveY": 6.2, "pitchDeg": 25, "walkable": true, "research": "layout_notes §4.5 RF_DORMS (official name EXT Dorms Roof)", "src": "hand", "note": "the east–west arm of the brown cross roof (a cross-hip in the roof render, built as gables, DESIGN §5.8); RF_ARMORY carries it on to the Armory's east wall", "_unverified": ["shape", "rects", "pitchDeg", "ceiling"]},
   {"id": "RF_ARMORY", "callout": "Armory Roof", "rects": [[292, 203.67, 333.67, 253.67]], "shape": "gable", "ridge": "EW", "eaveY": 6.2, "pitchDeg": 25, "walkable": true, "research": "layout_notes §4.5 RF_ARMORY", "src": "hand", "note": "the cross roof's east–west arm over the Armory, one slope with RF_DORMS", "_unverified": ["shape", "pitchDeg", "ceiling"]},
-  {"id": "RF_ATTIC", "callout": "Attic Roof", "rects": [[242, 99.67, 269.67, 203.67]], "shape": "gable", "ridge": "NS", "eaveY": 6.2, "pitchDeg": 25, "walkable": true, "research": "layout_notes §4.5 RF_ATTIC", "src": "hand", "note": "over the Attic, from the Cat Walk's south wall to the cross roof; RF_MASTER carries the same slopes on south", "_unverified": ["rects", "pitchDeg", "ceiling"]},
+  {"id": "RF_ATTIC_HALL", "callout": "Attic Roof", "rects": [[242, 99.67, 269.67, 158.81]], "shape": "gable", "ridge": "NS", "eaveY": 6.2, "pitchDeg": 25, "ceiling": false, "walkable": true, "research": "layout_notes §4.5 RF_ATTIC", "src": "hand", "note": "RF_ATTIC over the Attic's hall, from the Cat Walk's south wall to where the hall opens into the Low Attic (the 2F split at y 160.14): no ceiling, so a body stands on the hall's raised floor (layout.floorShifts) under the slopes", "_unverified": ["rects", "pitchDeg", "ceiling"]},
+  {"id": "RF_ATTIC", "callout": "Attic Roof", "rects": [[242, 158.81, 269.67, 203.67]], "shape": "gable", "ridge": "NS", "eaveY": 6.2, "pitchDeg": 25, "walkable": true, "research": "layout_notes §4.5 RF_ATTIC", "src": "hand", "note": "over the Low Attic's east part, on from RF_ATTIC_HALL to the cross roof; RF_MASTER carries the same slopes on south", "_unverified": ["rects", "pitchDeg", "ceiling"]},
   {"id": "RF_MASTER", "callout": "Master Roof", "rects": [[242, 203.67, 269.67, 270.67]], "shape": "gable", "ridge": "NS", "eaveY": 6.2, "pitchDeg": 25, "walkable": true, "research": "layout_notes §4.5 RF_MASTER", "src": "hand", "note": "the cross roof's north–south arm over Trophy and Master, lower than RF_DORMS where they cross (a hip at its south end in the render)", "_unverified": ["shape", "rects", "pitchDeg", "ceiling"]},
   {"id": "RF_KIDS", "callout": "Kids Roof", "rects": [[134.67, 157.67, 242, 203.67]], "shape": "flat", "eaveY": 6.2, "walkable": true, "research": "layout_notes §4.5 RF_KIDS", "src": "hand", "note": "the corrugated roof over Kids' Dorms and Low Attic: no ridge in the render, built flat", "_unverified": ["shape"]},
   {"id": "RF_ARMORY_N", "callout": "Armory Roof", "rects": [[269.67, 185.67, 292.67, 203.67]], "shape": "flat", "eaveY": 6.2, "walkable": true, "src": "hand", "note": "the corner north of the cross roof, over the Armory Corridor's north end", "_unverified": ["shape"]},

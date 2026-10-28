@@ -70,6 +70,12 @@ export function storeyOfBox(layout: Layout, b: Pick<Solid, "center" | "size">): 
   return at;
 }
 
+/** How far a room's floor sits above its storey's (layout.floorShifts: up for raiseM, down for dropM), metres. */
+export function floorShift(layout: Pick<Layout, "floorShifts">, room: string): number {
+  const x = layout.floorShifts.find((f) => f.room === room);
+  return x ? (x.raiseM ?? -(x.dropM ?? 0)) : 0;
+}
+
 /** Mark the plan footprint of a box (metres) by cell centres. */
 export function fillBox(g: PlanGrid, b: Pick<Solid, "center" | "size">) {
   g.fillCentres(b.center[0] - b.size[0] / 2, b.center[2] - b.size[2] / 2, b.center[0] + b.size[0] / 2, b.center[2] + b.size[2] / 2);
@@ -163,8 +169,8 @@ export function compileRooms(layout: Layout, fr: Frames, wallSolids: Solid[], ke
       }
       claimed.set(label, r.id);
       roomOfLabel[label] = rooms.length;
-      // A room whose floor drops (layout.drops, floors.ts) has its anchor on that floor.
-      const floorY = storey.floorY - (layout.drops.find((x) => x.room === r.id)?.dropM ?? 0);
+      // A room whose floor is shifted (layout.floorShifts, floors.ts) has its anchor on that floor.
+      const floorY = storey.floorY + floorShift(layout, r.id);
       rooms.push({ ...roomShape(grid, labels, label, stats[label], floorY, warnings, r.id, keepOut.get(floor) ?? []), id: r.id, callout: r.callout, storey: floor });
     }
     const room = new Int16Array(grid.w * grid.h);

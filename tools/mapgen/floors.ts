@@ -4,9 +4,12 @@
 // panel: the largest rectangle of the research square inside the room on top), the wells (no floor), and the
 // soft floors (SOFT_FLOOR tiles of at most tileMaxM, in whole joist spacings, the tiles of one area sharing a
 // region so a bullet counts them as one surface), and the stairwells (stairs.ts: no floor where a run needs the
-// headroom). What's left is hard slab, in as few rectangles as the greedy cover gives. A room in layout.drops has
-// its floor lower: its slab, soft floor and hatch hang `dropM` under the storey's, except over anything of the
-// storey below that stands up to the slab (the floor under its walls is the storey's, so the drop is a step).
+// headroom). What's left is hard slab, in as few rectangles as the greedy cover gives. A room in
+// layout.floorShifts has its floor lower or higher. Dropped (`dropM`): its slab, soft floor and hatch hang that
+// much under the storey's, except over anything of the storey below that stands up to the slab (the floor under
+// its walls is the storey's, so the drop is a step). Raised (`raiseM`): its slab is solid from the storey's slab
+// up and vaultable (its edge is a ledge a body mantles onto), and its soft floor and hatch lie on top over a
+// shaft down to the room below, whose ceiling stays where it was.
 import type { Frames } from "./frames.js";
 import { distanceInside, greedyRects, maxIn, subtractRects, type Rect } from "./grid.js";
 import type { Floor } from "./research.js";
@@ -103,7 +106,7 @@ export function compileFloors(layout: Layout, fr: Frames, wallSolids: Solid[], r
     ...extra,
   });
   const roomIndex = new Map(rooms.rooms.map((r, i) => [r.id, i]));
-  for (const x of layout.drops) if (!layout.rooms.some((r) => r.id === x.room)) errors.push(`drop: ${x.room} isn't in rooms`);
+  for (const x of layout.floorShifts) if (!layout.rooms.some((r) => r.id === x.room)) errors.push(`floor shift: ${x.room} isn't in rooms`);
 
   for (let si = 0; si < order.length; si++) {
     const storey = order[si];
@@ -144,20 +147,23 @@ export function compileFloors(layout: Layout, fr: Frames, wallSolids: Solid[], r
       }
       for (let c = 0; c < n; c++) if (pierce.cells[c] === 1) kind[c] = 0;
     }
-    // ---- Rooms whose floor drops (layout.drops): how far each cell of the floor hangs under the storey's.
+    // ---- Rooms whose floor is shifted (layout.floorShifts): how far each cell of the floor lies under the
+    // storey's (negative: over it). A dropped floor stays at the storey's height over anything of the storey below
+    // that stands up to where it would hang; a raised one covers its whole room.
     const drop = new Float64Array(n);
-    const drops = layout.drops.filter((x) => roomIndex.has(x.room) && rooms.rooms[roomIndex.get(x.room)!].storey === floor);
-    if (drops.length) {
-      const deepest = Math.max(...drops.map((x) => x.dropM));
-      const reaches = g.blank();
+    const shifts = layout.floorShifts.filter((x) => roomIndex.has(x.room) && rooms.rooms[roomIndex.get(x.room)!].storey === floor);
+    const deepest = Math.max(0, ...shifts.map((x) => x.dropM ?? 0));
+    const reaches = g.blank();
+    if (deepest > 0) {
       for (const b of wallSolids) {
         if (b.drawOnly || !below || storeyOfBox(layout, b) !== below.id) continue;
         if (b.center[1] + b.size[1] / 2 > y0 - deepest + 0.01) fillBox(reaches, b);
       }
-      for (const x of drops) {
-        const idx = roomIndex.get(x.room)!;
-        for (let c = 0; c < n; c++) if (plan.room[c] === idx && reaches.cells[c] !== 1) drop[c] = x.dropM;
-      }
+    }
+    for (const x of shifts) {
+      const idx = roomIndex.get(x.room)!;
+      const v = x.dropM ?? -x.raiseM!;
+      for (let c = 0; c < n; c++) if (plan.room[c] === idx && (v < 0 || reaches.cells[c] !== 1)) drop[c] = v;
     }
     const levels = [...new Set([0, ...drop])];
     // ---- Wells: no floor where nothing stands.
@@ -171,6 +177,13 @@ export function compileFloors(layout: Layout, fr: Frames, wallSolids: Solid[], r
     for (const r of stairHoles.get(floor) ?? []) {
       const { i0, i1, j0, j1 } = span(r);
       for (let j = j0; j < j1; j++) for (let i = i0; i < i1; i++) if (kind[j * g.w + i] === 1 && g.cells[j * g.w + i] !== 1) kind[j * g.w + i] = 4;
+    }
+    // A raised floor is solid down to the storey's slab: nothing can open through it but a hatch or a soft floor.
+    for (let c = 0; c < n; c++) {
+      if (kind[c] === 4 && drop[c] < 0) {
+        errors.push(`${rooms.rooms[plan.room[c]].id}: a well or stairwell in its raised floor`);
+        break;
+      }
     }
     // ---- Hatches whose top room is on this storey: the largest rectangle of the square inside that room.
     const groundHoles: Rect[] = [];
@@ -201,7 +214,7 @@ export function compileFloors(layout: Layout, fr: Frames, wallSolids: Solid[], r
           straddles ||= drop[j * g.w + i] !== sunk;
         }
       }
-      if (straddles) errors.push(`hatch ${h.id}: part of it is in a dropped floor and part isn't`);
+      if (straddles) errors.push(`hatch ${h.id}: part of it is in a shifted floor and part isn't`);
       const r = cellRect(cells);
       solids.push(slab(h.id, r, y0 - sunk, y1 - sunk, { surface: "HATCH", label: h.id }));
       hatches.push({ id: h.id, storey: floor, rect: r, clipU: [r[0] - want[0], r[1] - want[1], want[2] - r[2], want[3] - r[3]].map((v) => r4(Math.max(0, v) / k)) as HatchReport["clipU"] });
@@ -298,7 +311,7 @@ export function compileFloors(layout: Layout, fr: Frames, wallSolids: Solid[], r
       const open = (cells: Rect) => maxIn((dist ??= distanceInside(g.w, g.h, inArea)), g.w, cells) >= clearCells(SLIVER_M);
       const mine: Solid[] = [];
       const max = f.tileMaxM ?? d.softFloor.tileMaxM;
-      /** A rectangle (metres) as tiles of at most `max`, in whole joist spacings, `sunk` under the storey's floor. */
+      /** A rectangle (metres) as tiles of at most `max`, in whole joist spacings, `sunk` under the storey's floor (negative: over it). */
       const tile = (r: Rect, id: string, sunk = 0) => {
         const xs = tileSizes(r4(r[2] - r[0]), max);
         const zs = tileSizes(r4(r[3] - r[1]), max);
@@ -312,7 +325,7 @@ export function compileFloors(layout: Layout, fr: Frames, wallSolids: Solid[], r
           z += dz;
         });
       };
-      // Level by level: a dropped part of the area stays inside its room (it doesn't reach past the walls).
+      // Level by level: a shifted part of the area stays inside its room (it doesn't reach past the walls).
       let ri = 0;
       for (const v of levels) {
         greedyRects(g.w, g.h, (c) => inArea(c) && drop[c] === v).forEach((cells) => {
@@ -354,10 +367,17 @@ export function compileFloors(layout: Layout, fr: Frames, wallSolids: Solid[], r
       solids.push(...mine);
       count.tiles += mine.length;
     });
-    // ---- Hard slab: everything else the floor covers, level by level.
+    // ---- Hard slab: everything else the floor covers, level by level. A raised floor's is solid from the
+    // storey's slab up (and from the top of what the storey below runs up into the slab), vaultable at its edge.
     for (const v of levels) {
+      const raised = v < 0 ? { vaultable: true } : {};
       greedyRects(g.w, g.h, (c) => kind[c] === 1 && drop[c] === v).forEach((cells) => {
-        solids.push(slab(`slab:${floor}#${count.slabs}`, cellRect(cells), y0 - v, y1 - v, { surface: "HARD_FLOOR" }));
+        solids.push(slab(`slab:${floor}#${count.slabs}`, cellRect(cells), y0 - Math.max(v, 0), y1 - v, { surface: "HARD_FLOOR", ...raised }));
+        count.slabs++;
+      });
+      if (v >= 0) continue;
+      greedyRects(g.w, g.h, (c) => kind[c] === 0 && drop[c] === v).forEach((cells) => {
+        solids.push(slab(`slab:${floor}#${count.slabs}`, cellRect(cells), y1, y1 - v, { surface: "HARD_FLOOR", ...raised }));
         count.slabs++;
       });
     }

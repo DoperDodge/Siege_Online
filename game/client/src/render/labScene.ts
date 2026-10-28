@@ -240,8 +240,9 @@ export const STOREY_SLACK_M = 0.25;
 
 /**
  * A floor (a slab, soft-floor tile or hatch: flat, of a floor surface) goes with the storey whose floor its top
- * is, by the height this gives: a room's floor can hang lower than its storey's slab (a step down into the
- * Attic's hall, Oregon's layout.drops), and its bottom would put it with the storey below.
+ * is, by the height this gives: a room's floor can hang lower than its storey's slab (Oregon's
+ * layout.floorShifts), and its bottom would put it with the storey below. A raised floor's slab is thick (solid
+ * down to the storey's slab), so its bottom puts it with its storey.
  */
 export function floorTopHeight(surface: string, center: readonly number[], size: readonly number[]): number | null {
   return (surface === "HARD_FLOOR" || surface === "SOFT_FLOOR" || surface === "HATCH") && size[1] <= 0.3 ? center[1] + size[1] / 2 - 0.01 : null;

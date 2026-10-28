@@ -8,7 +8,7 @@
 // `npm run mapgen` writes it, `--check` fails when it is stale, and a tick ([x]) on a line survives a rewrite.
 import type { Compiled, Inputs } from "./compile.js";
 import type { Floor } from "./research.js";
-import { CELL_M } from "./rooms.js";
+import { CELL_M, floorShift } from "./rooms.js";
 
 export const CHECKLIST_START = "<!-- checklist: npm run mapgen writes everything down to the end marker (tools/mapgen/checklist.ts); ticks are kept -->";
 export const CHECKLIST_END = "<!-- checklist end -->";
@@ -106,7 +106,7 @@ export function walkChecklist(inputs: Inputs, compiled: Compiled): Checklist {
   const rooms = level.rooms;
   const items: CheckItem[] = [];
   const storeys = [...level.storeys].sort((a, b) => a.floorY - b.floorY);
-  /** The storey whose floor a height is on or just above, or just under where a room's floor drops (layout.drops, at most 0.3 m). */
+  /** The storey whose floor a height is on or above, or just under where a room's floor drops (layout.floorShifts: at most 0.3 m). */
   const storeyAt = (y: number) => [...storeys].reverse().find((s) => s.floorY <= y + 0.31) ?? storeys[0];
   const storeyById = new Map(storeys.map((s) => [s.id, s]));
   const below = (f: Floor) => storeys[storeys.findIndex((s) => s.id === f) - 1];
@@ -222,12 +222,14 @@ export function walkChecklist(inputs: Inputs, compiled: Compiled): Checklist {
     return "into a wall";
   };
   const add = (room: number | null, order: number, text: string, ref: string) => items.push({ room: room === null ? null : rooms[room].id, text, ref, order });
-  // Rooms whose floor drops (layout.drops): the step at each way between such a room and one that doesn't.
-  const dropOf = new Map(layout.drops.map((x) => [x.room, x.dropM]));
+  // Rooms whose floor is shifted (layout.floorShifts): the step, or the ledge, at each way between such a room
+  // and one that isn't. A shift over a step's 0.3 m is a ledge: vaulted onto going up, dropped off going down.
   const stepTo = (me: Place, other: Place) => {
     if (typeof me !== "number" || typeof other !== "number") return "";
-    const d = (dropOf.get(rooms[me].id) ?? 0) - (dropOf.get(rooms[other].id) ?? 0);
-    return Math.abs(d) < 0.005 ? "" : `, a ${m1(Math.abs(d))} step ${d > 0 ? "up" : "down"}`;
+    const d = floorShift(layout, rooms[other].id) - floorShift(layout, rooms[me].id);
+    if (Math.abs(d) < 0.005) return "";
+    if (Math.abs(d) <= 0.3 + 1e-9) return `, a ${m1(Math.abs(d))} step ${d > 0 ? "up" : "down"}`;
+    return d > 0 ? `, a ${m1(d)} ledge to vault up onto` : `, a ${m1(-d)} drop`;
   };
   const onRoofs: string[] = [];
 
@@ -271,10 +273,11 @@ export function walkChecklist(inputs: Inputs, compiled: Compiled): Checklist {
     if (both.every((p) => typeof p.place !== "number")) add(null, ORDER.none, `a split on ${sp.floor} with no room either side`, `split:${n}`);
   });
 
-  for (const x of layout.drops) {
+  for (const x of layout.floorShifts) {
     const i = rooms.findIndex((r) => r.id === x.room);
-    if (i >= 0) add(i, ORDER.ladder + 5, `the floor lies ${m1(x.dropM)} below the rest of ${rooms[i].storey}`, `drop:${x.room}`);
-    else add(null, ORDER.none, `a dropped floor for ${x.room}, which isn't built`, `drop:${x.room}`);
+    const v = floorShift(layout, x.room);
+    if (i >= 0) add(i, ORDER.ladder + 5, `the floor lies ${m1(Math.abs(v))} ${v > 0 ? "above" : "below"} the rest of ${rooms[i].storey}`, `shift:${x.room}`);
+    else add(null, ORDER.none, `a shifted floor for ${x.room}, which isn't built`, `shift:${x.room}`);
   }
 
   // ---- Stairs: each run's foot and top (flights share an id up to their "#").

@@ -3,8 +3,9 @@
 // invisible ramps over them, rails, panels' movement boxes, props) is rasterised into columns cellM square, each
 // column a list of solid spans. A node is a span's walkable top with room above it for a crouching body and
 // nothing a body can't step over within its radius; nodes in neighbouring columns join when the step between
-// them is one a body takes (≤ maxStepHeight), and each ladder joins its foot to its top. Drops are left out:
-// what the graph joins, a body walks both ways. A head start for the Phase 9 navmesh.
+// them is one a body takes (≤ maxStepHeight), a floor joins a vaultable top a body mantles onto from it (a ledge
+// 0.3–1.35 m up within the vault's reach: data/movement.json vault), and each ladder joins its foot to its top.
+// Other drops are left out: what the graph joins, a body walks both ways. A head start for the Phase 9 navmesh.
 import { G_MOVE_HELPER, G_PANEL, G_PROP, G_STATIC } from "../../game/shared/src/physics/rapier.js";
 import type { Sim } from "../../game/shared/src/sim.js";
 
@@ -41,6 +42,8 @@ interface Box {
   t: [number, number, number];
   he: [number, number, number];
   axes: [number, number, number][];
+  /** A body vaults onto it or over it (the level's tag: rails, fences, sills, props, a raised floor). */
+  vault: boolean;
 }
 
 export function buildWalkGraph(sim: Sim, opts: WalkGraphOptions = {}): WalkGraph {
@@ -64,7 +67,8 @@ export function buildWalkGraph(sim: Sim, opts: WalkGraphOptions = {}): WalkGraph
     const he = col.halfExtents()!;
     const t = col.translation();
     const q = col.rotation();
-    boxes.push({ t: [t.x, t.y, t.z], he: [he.x, he.y, he.z], axes: [rotate(q, [1, 0, 0]), rotate(q, [0, 1, 0]), rotate(q, [0, 0, 1])] });
+    const vault = sim.level.solids.get(col.handle)?.vaultable === true;
+    boxes.push({ t: [t.x, t.y, t.z], he: [he.x, he.y, he.z], axes: [rotate(q, [1, 0, 0]), rotate(q, [0, 1, 0]), rotate(q, [0, 0, 1])], vault });
   });
 
   // ---- each column's solid intervals (two passes: count, then fill), flagged walkable on top or not
@@ -126,6 +130,7 @@ export function buildWalkGraph(sim: Sim, opts: WalkGraphOptions = {}): WalkGraph
   const iy0 = new Float32Array(n);
   const iy1 = new Float32Array(n);
   const iwalk = new Uint8Array(n);
+  const ivault = new Uint8Array(n);
   const fill = count.slice(0, w * h);
   for (const box of boxes) {
     raster(box, (col, y0, y1, walk) => {
@@ -133,6 +138,7 @@ export function buildWalkGraph(sim: Sim, opts: WalkGraphOptions = {}): WalkGraph
       iy0[k] = y0;
       iy1[k] = y1;
       iwalk[k] = walk ? 1 : 0;
+      ivault[k] = box.vault ? 1 : 0;
     });
   }
 
@@ -141,6 +147,8 @@ export function buildWalkGraph(sim: Sim, opts: WalkGraphOptions = {}): WalkGraph
   const sy0 = new Float32Array(n);
   const sy1 = new Float32Array(n);
   const swalk = new Uint8Array(n);
+  /** Whether a span's top is a vaultable box's. */
+  const svault = new Uint8Array(n);
   let spans = 0;
   const order: number[] = [];
   for (let col = 0; col < w * h; col++) {
@@ -154,12 +162,17 @@ export function buildWalkGraph(sim: Sim, opts: WalkGraphOptions = {}): WalkGraph
         if (iy1[k] > sy1[last] + 1e-4) {
           sy1[last] = iy1[k];
           swalk[last] = iwalk[k];
-        } else if (iy1[k] > sy1[last] - 1e-4) swalk[last] |= iwalk[k];
+          svault[last] = ivault[k];
+        } else if (iy1[k] > sy1[last] - 1e-4) {
+          swalk[last] |= iwalk[k];
+          svault[last] |= ivault[k];
+        }
         continue;
       }
       sy0[spans] = iy0[k];
       sy1[spans] = iy1[k];
       swalk[spans] = iwalk[k];
+      svault[spans] = ivault[k];
       spans++;
     }
   }
@@ -216,6 +229,68 @@ export function buildWalkGraph(sim: Sim, opts: WalkGraphOptions = {}): WalkGraph
         if (ii < 0 || jj >= h || ii >= w) continue;
         const other = jj * w + ii;
         for (let a = first[col]; a < first[col + 1]; a++) for (let b2 = first[other]; b2 < first[other + 1]; b2++) if (Math.abs(y[a] - y[b2]) <= step) union(a, b2);
+      }
+    }
+  }
+  // ---- mantles: from each vaultable top a body stands on near its edge, out past the edge (nothing as high in
+  // the way) to the first column with a floor: a body there facing the top has it within the vault's reach, and
+  // mantles onto it from 0.3–1.35 m under it (planVault, game/shared/src/player/movement.ts); off it, it drops.
+  const v = m.vault;
+  /** How far in from its edge a mantle sets a body down (the vault's landing), and how far out its front ray looks. */
+  const [landIn, look] = [m.stance.collisionRadius + 0.15 + c, m.stance.collisionRadius + v.reach];
+  const nodeAt = (col: number, top: number) => {
+    for (let a = first[col]; a < first[col + 1]; a++) if (Math.abs(y[a] - top) <= 0.01) return a;
+    return -1;
+  };
+  const hasTop = (col: number, top: number) => {
+    for (let s = spanFirst[col]; s < spanFirst[col + 1]; s++) if (Math.abs(sy1[s] - top) <= 0.02) return true;
+    return false;
+  };
+  /** Something in the column reaches up to where the top is (a wall, the top's own box seen from the other side). */
+  const stands = (col: number, top: number) => {
+    for (let s = spanFirst[col]; s < spanFirst[col + 1]; s++) if (sy1[s] > top - v.minHeight + 0.01 && sy0[s] < top + height) return true;
+    return false;
+  };
+  const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]] as const;
+  for (let j = 0; j < h; j++) {
+    for (let i = 0; i < w; i++) {
+      const col = j * w + i;
+      for (let s = spanFirst[col]; s < spanFirst[col + 1]; s++) {
+        if (!svault[s]) continue;
+        const top = sy1[s];
+        const on = nodeAt(col, top);
+        if (on < 0) continue;
+        for (const [di, dj] of DIRS) {
+          const len = c * Math.hypot(di, dj);
+          const cell = (q: number) => {
+            const [ii, jj] = [i + q * di, j + q * dj];
+            return ii < 0 || jj < 0 || ii >= w || jj >= h ? -1 : jj * w + ii;
+          };
+          // Out to the edge: the first column the top doesn't go on into, near enough to land from.
+          let edge = 1;
+          while (cell(edge) >= 0 && hasTop(cell(edge), top) && (edge - 0.5) * len <= landIn) edge++;
+          if (cell(edge) < 0 || (edge - 0.5) * len > landIn) continue;
+          // The floor under the edge, 0.3–1.35 m down, and on along it (a step up or down) to the first node on it,
+          // nothing standing up into the way.
+          let under = -Infinity;
+          for (let s2 = spanFirst[cell(edge)]; s2 < spanFirst[cell(edge) + 1]; s2++) {
+            const rise = top - sy1[s2];
+            if (rise >= v.minHeight - 1e-4 && rise <= v.maxOntoHeight + 1e-4) under = Math.max(under, sy1[s2]);
+          }
+          if (under === -Infinity) continue;
+          walk: for (let q = edge; cell(q) >= 0 && (q - edge + 0.5) * len <= look; q++) {
+            const other = cell(q);
+            if (stands(other, top)) break;
+            let floor = false;
+            for (let s2 = spanFirst[other]; s2 < spanFirst[other + 1]; s2++) floor ||= Math.abs(sy1[s2] - under) <= step;
+            if (!floor) break;
+            for (let a = first[other]; a < first[other + 1]; a++) {
+              if (Math.abs(y[a] - under) > step) continue;
+              union(on, a);
+              break walk;
+            }
+          }
+        }
       }
     }
   }

@@ -474,9 +474,12 @@ export function compileWalls(layout: Layout, fr: Frames, parts: { floor: Floor; 
           const mid = snap((s.a0 + s.a1) / 2);
           const h0 = mid - d.droneHole.wM / 2;
           const h1 = mid + d.droneHole.wM / 2;
+          // At floor level, or `sillM` up (in the wall of a raised floor).
+          const sill = s.def.kind === "DRONE_HOLE" ? (s.def.sillM ?? 0) : 0;
           solidRun(c, h0);
-          pieces.push(box(l, "", h0, h1, d.droneHole.hM, top(h0, h1), 0, l.t, { surface: "HARD_WALL" }));
-          const slot = box(l, s.def.id, h0, h1, 0, d.droneHole.hM, 0, l.t, { surface: "HARD_WALL" });
+          if (sill > 0) solids.push(box(l, `${s.def.id}.sill`, h0, h1, 0, sill, 0, l.t, { surface: "HARD_WALL" }));
+          pieces.push(box(l, "", h0, h1, sill + d.droneHole.hM, top(h0, h1), 0, l.t, { surface: "HARD_WALL" }));
+          const slot = box(l, s.def.id, h0, h1, sill, sill + d.droneHole.hM, 0, l.t, { surface: "HARD_WALL" });
           zones.push({ id: s.def.id, kind: "drone_hole", boxes: [{ center: slot.center, size: slot.size }] });
           built.push(builtSpan(l, s.def, h0, h1));
           c = h1;

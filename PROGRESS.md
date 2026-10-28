@@ -5,7 +5,7 @@ known issues, and what's next.
 
 ---
 
-## Phase 5 — Oregon greybox · 🚧 in progress (M7 of 8: your walk #1 done, its three fixes in)
+## Phase 5 — Oregon greybox · 🚧 in progress (M7 of 8: walk #1's fixes in, the Attic's hall raised; rappel next)
 
 **Done when (PLAN §17):** you walk it and sign off on layout accuracy. Rappel (M8) comes before the Phase 5
 report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIGN.md`.
@@ -18,16 +18,20 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
 | M4 Roofs, the outside and the three attacker spawns; free camera | ✅ roofs on every part of the building, the outside blockout with the Bunker and Tower outside stairs, five attackers at each insertion point, a free camera in every lab; browser test |
 | M5 Sites, defender spawns, cameras, ingredients, zones, cover props | ✅ the four bomb sites with Go to by site, five defenders at each, eight cameras, nine ingredients, 29 cover props (bullets go through the wooden and soft ones), the building, spawn-peek, run-out and rappel zones, every marker drawn; browser test |
 | M6 Walk-ready: every check, performance on Oregon, your walk #1 | ✅ every structural check, the generator's report, the blueprint check, Oregon's performance measured (server, client, browser); your walk #1: "really accurate" |
-| M7 Your corrections, round by round, to sign-off | 🚧 walk #1's fixes in: the Attic hall's step, vaulting through holes in walls, no page zoom on phones; ⏳ your sign-off |
+| M7 Your corrections, round by round, to sign-off | 🚧 walk #1's fixes in: the Attic's hall a vault over the Low Attic (after your screenshot), vaulting through holes in walls, no page zoom on phones; ⏳ your sign-off |
 | M8 Rappel | ⏳ |
 
 ### What's done (M7: your walk #1)
 You walked it and found it "really accurate", with two issues, and a bug on phones (research/oregon/walkthrough.md
 logs all three):
-- **The Attic's step:** the Attic's hall now lies 0.2 m lower than the rest of 2F, so walking south you step up
-  into the Low Attic. A room's floor can now drop (`drops` in layout.json): its slab, hatch and soft floor go down
-  with it, the Meeting Hall's ceiling under it too, and the floor under its walls stays at 2F's, so nothing shows
-  under them. The checklist says so in both rooms' lines. 20 cm is your estimate (open question 33).
+- **The Attic's ledge:** first built as the hall 0.2 m lower than the rest of 2F; on your screenshot of that you
+  said the part that is down needs to be raised to about vault height. The Attic's hall now stands 0.9 m over the
+  Low Attic (our window sills' height): facing it from the Low Attic, Space vaults you up; walking south you drop
+  back down. A room's floor can now be raised or dropped (`floorShifts` in layout.json): a raised one is solid
+  down to the storey's slab, its hatch and soft floor on top over a shaft to the room below; the hall's part of
+  the Attic roof has no ceiling, so you stand under the slopes; its drone hole sits on its floor. The walk graph
+  now counts a ledge you can vault onto as a way between rooms. I couldn't find an in-game picture of the Low Attic
+  looking into the hall, so the height, and which side is up, are my reading of your note (open question 33).
 - **Vaulting through holes:** a hole in a soft or reinforceable wall can be vaulted through when it's low and big
   enough, by the vault's own rules: its bottom 0.3–1.1 m up, about 1 m of room above that, and the body's width
   (open question 34).
@@ -325,21 +329,22 @@ logs all three):
    the fight across the Kitchen's soft wall), `npm run bench:oregon` (loading, damage, redraw; writes
    `builds/bench/oregon.json`), and after `npm run build`, `node tools/e2e/oregon-perf.mjs` (the browser capture;
    writes `builds/e2e/oregon-perf.json`).
-19. Checks: `npm run check` runs them all: `npm run typecheck`, `npm test` (513 tests), `npm run build && npm run
+19. Checks: `npm run check` runs them all: `npm run typecheck`, `npm test` (514 tests), `npm run build && npm run
    test:e2e` (`oregon.mjs` shoots through a soft floor, drops through a hatch, walks the Armory Stairs, takes the
    ladder both ways, stands at each attacker spawn, drops onto the Dining roof from the free camera, goes to each
    bomb site and switches the zones view; `oregon-perf.mjs` flies through every room and sets off 44
    explosives). Also `npm run mapgen -- --check`.
 20. Walk #1's fixes:
-   - The Attic's step: Go to → 2F → Attic, then walk south into the Low Attic: a small step up, and down again
-     coming back.
+   - The Attic's ledge: Go to → 2F → Low Attic, then walk north: the hall stands 0.9 m up; face it and press
+     Space to vault up, then walk south to drop back down.
    - Vaulting through a hole: in the Destruction Lab (or Oregon), press T until the Breach Charge, aim at a soft
      wall about chest high and press G. The hole's bottom is then off the floor: face it and hold Space.
    - On a phone or tablet: open the Oregon page and tap quickly anywhere; the page keeps its size.
 
 ### Known issues
-- The Attic hall's west window and drone hole stand at the rest of 2F's height, so they sit 0.2 m higher above the
-  hall's lower floor (open question 33).
+- The Attic's hall stands 0.9 m over the Low Attic and the Tower, our reading of your note with no in-game picture
+  to check it; its west window opens at its floor, and its drone hole sits 0.9 m over the Meeting roof outside
+  (open question 33).
 - Some small holes the research says you can vault or crouch through aren't vaultable with the vault's own room
   (an Impact Grenade's 1 m disc, a Hard Breach Charge's 0.8 m square: open question 34).
 - The stairs follow your walk now (open question 20).
@@ -374,10 +379,10 @@ logs all three):
 - A player joining after heavy destruction is sent about 65 KB of wall state at once; compressing it is planned
   (Phase 6 or 12).
 
-### Next: your sign-off (M7), then rappel (M8)
-With walk #1's fixes in, the layout waits on your sign-off (PLAN §17's done-when). Anything else you find goes
-into `research/oregon/walkthrough.md` and gets fixed through the layout files, one round per walk. Rappel (M8)
-comes before the Phase 5 report.
+### Next: rappel (M8), and your sign-off (M7)
+Rappel (M8) is next, before the Phase 5 report. The layout waits on your sign-off (PLAN §17's done-when), with the
+Attic's ledge to check. Anything else you find goes into `research/oregon/walkthrough.md` and gets fixed through
+the layout files, one round per walk.
 
 ---
 

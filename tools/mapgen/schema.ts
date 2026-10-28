@@ -57,8 +57,8 @@ export const spanSchema = z.discriminatedUnion("kind", [
   }),
   /** A passage with no barricade: a header at `headM`, or nothing above it (null). */
   z.strictObject({ kind: z.literal("OPEN"), ...common, headM: num.nullable().optional() }),
-  /** A drone hole: a slot at floor level centred on the span. */
-  z.strictObject({ kind: z.literal("DRONE_HOLE"), ...common }),
+  /** A drone hole: a slot at floor level centred on the span, or `sillM` up (a room whose floor is raised: layout.floorShifts). */
+  z.strictObject({ kind: z.literal("DRONE_HOLE"), ...common, sillM: num.optional() }),
 ]);
 export type SpanDef = z.infer<typeof spanSchema>;
 
@@ -275,12 +275,26 @@ export const layoutSchema = z.strictObject({
     )
     .default([]),
   /**
-   * A room whose floor lies lower than its storey's (the Attic's hall, Ulo's walk #1): its slab, soft floor and
-   * hatch drop by `dropM`, and so does the ceiling of the rooms under it. The floor under its walls stays at the
-   * storey's height, so a drop is a step wherever the room opens onto the rest of the storey.
+   * A room whose floor isn't at its storey's height (floors.ts). `dropM` lower, at most a step: its slab, soft
+   * floor and hatch hang that much under the storey's, and so does the ceiling of the rooms under it. `raiseM`
+   * higher, at most what a body mantles onto (data/movement.json vault.maxOntoHeight): its floor is solid from the
+   * storey's slab up (vaultable at its edge), with its soft floor and hatch on top over a shaft down to the room
+   * below, which keeps its ceiling. Either way the floor under its walls stays at the storey's height, so the shift
+   * is a step or a ledge wherever the room opens onto the rest of the storey.
    */
-  drops: z
-    .array(z.strictObject({ room: z.string(), dropM: z.number().positive().max(0.3), src: Src.optional(), note: z.string().optional(), _unverified: Uv }))
+  floorShifts: z
+    .array(
+      z
+        .strictObject({
+          room: z.string(),
+          dropM: z.number().positive().max(0.3).optional(),
+          raiseM: z.number().positive().max(1.35).optional(),
+          src: Src.optional(),
+          note: z.string().optional(),
+          _unverified: Uv,
+        })
+        .refine((x) => (x.dropM === undefined) !== (x.raiseM === undefined), "a floor shift has dropM or raiseM, not both"),
+    )
     .default([]),
   /** Openings in a storey's floor that nothing closes (the Cat Walk's centre): no floor, no room; any rail is a wall line. */
   wells: z

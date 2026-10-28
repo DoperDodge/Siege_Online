@@ -1068,6 +1068,11 @@ the fix, the commit). Sign-off is recorded there and in PROGRESS.
 - **Walk #1 (D-112):** "really accurate"; the Attic's hall lies 0.2 m under 2F (`drops`: a room's floor can hang
   lower than its storey's, the floor under its walls staying put, so the drop is a step where the room opens onto
   the storey), and holes in breachable walls can be vaulted through (engine; plus a phone zoom fix).
+- **After walk #1 (D-113):** on a screenshot of that step, Ulo had the part that is down raised to about vault
+  height: the hall stands 0.9 m over 2F. `drops` became `floorShifts` (`dropM` a step down, `raiseM` a ledge up
+  to what a body mantles onto): a raised floor is solid from the storey's slab up and vaultable, its hatch and soft
+  floor on top over shafts, its roof part without a ceiling (RF_ATTIC_HALL), its drone hole up the wall (`sillM`).
+  The walk graph (§9.2 check 10) now joins a floor to a vaultable top a body mantles onto.
 
 ### M8: rappel v1 (D-024; does not gate the sign-off)
 - **Deliverables**: a short design first (research/core_mechanics.md §6: attackers only, hold to start, needs a
