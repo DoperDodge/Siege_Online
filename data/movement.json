@@ -156,6 +156,7 @@
     "overTopDepth": 1.2,
     "overTopSeconds": 0.6,
     "overTopBack": 1.2,
+    "overhangReach": 0.5,
     "swingSeconds": 0.8,
     "swingOutM": 0.9,
     "bounceSeconds": 0.4,

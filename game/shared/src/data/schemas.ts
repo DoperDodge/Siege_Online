@@ -123,6 +123,8 @@ export const movementSchema = z.object({
     overTopDepth: z.number().positive(),
     overTopSeconds: z.number().positive(),
     overTopBack: z.number().positive(),
+    /** Climbing into something that hangs over the rope's top (a roof's eave: Ulo), the head at most this far under the top, the body goes over the top from there. */
+    overhangReach: z.number().nonnegative(),
     /** A swing into a window (Y10S2): out from the wall swingOutM and back in, over swingSeconds; then through, or bounced back bounceOutM over bounceSeconds. */
     swingSeconds: z.number().positive(),
     swingOutM: z.number().nonnegative(),

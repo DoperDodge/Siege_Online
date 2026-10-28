@@ -1045,7 +1045,10 @@ export async function startLab(o: LabOptions): Promise<void> {
       // On a rope: drawn from the body's middle (its harness) up to where the rope is fixed (a swing takes the body
       // out from under it).
       const m = sim.data.movement;
-      const rope = rs.mode === PawnMode.Rappel ? ropeOf(sim.level.rappel, rs.x, rs.y, rs.z, m.stance.collisionRadius + m.rappel.wallGap, m.stance.stand.height, m.rappel.swingOutM) : null;
+      const rope =
+        rs.mode === PawnMode.Rappel
+          ? ropeOf(sim.level.rappel, rs.x, rs.y, rs.z, m.stance.collisionRadius + m.rappel.wallGap, m.stance.stand.height, m.rappel.swingOutM, pawn.proxy ? -1 : rs.rappel)
+          : null;
       v.setRope(rs.x, rs.y + m.stance.stand.height / 2, rs.z, rope);
       drawnView.set(pawn.id, [rs.yaw, rs.pitch]);
       const eyes = pawn.id === viewed.id;

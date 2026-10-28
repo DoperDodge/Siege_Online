@@ -961,14 +961,15 @@ function windowSpot(ctx: MoveContext, pawn: Pawn, i: number): RappelSpot | null 
 
 /**
  * The highest top of anything along the way from (x0, z0) to (x1, z1), looking down from `fromY` (a railing at a
- * roof edge, a sill), or null if nothing is under the way within 3 m.
+ * roof edge, a sill; something reaching `fromY` or higher counts as `fromY`), or null if nothing is under the way
+ * within 3 m.
  */
 function pathTop(ctx: MoveContext, pawn: Pawn, x0: number, z0: number, x1: number, z1: number, fromY: number): number | null {
   let top: number | null = null;
   for (let k = 0; k <= 8; k++) {
     const [x, z] = [lerp(x0, x1, k / 8), lerp(z0, z1, k / 8)];
     const hit = ctx.world.castRay(new ctx.R.Ray({ x, y: fromY, z }, { x: 0, y: -1, z: 0 }), 3, true, undefined, QUERY_STATIC, pawn.collider);
-    if (hit && hit.timeOfImpact > 1e-4) top = Math.max(top ?? -Infinity, fromY - hit.timeOfImpact);
+    if (hit) top = Math.max(top ?? -Infinity, fromY - hit.timeOfImpact);
   }
   return top;
 }
@@ -1108,7 +1109,7 @@ function leaveRope(s: PawnState) {
  * (right side up) swings into it (stepSwing, `rappelTicks` counting the swing); W climbs and S descends (faster with
  * sprint held), A and D move along the wall (right as seen; faster with sprint). It stops where something's in the
  * way and at the rope's ends: at the bottom onto the floor there (turning right side up first), at the top over the
- * edge onto what's there (right side up) or under it. It can lean, aim, fire and knife when nothing else is going on
+ * edge onto what's there (right side up; from under an eave too) or under it. It can lean, aim, fire and knife when nothing else is going on
  * (weapons/step.ts, ropeIdle). A tick without the player's input moves nothing on (`live`).
  */
 function stepRappel(ctx: MoveContext, pawn: Pawn, input: InputCmd, pressed: number, live = true) {
@@ -1192,6 +1193,8 @@ function stepRappel(ctx: MoveContext, pawn: Pawn, input: InputCmd, pressed: numb
   // Along the wall only as far as the rope goes there.
   if (along !== 0 && !ropeAt(faces, s.rappel, x, z, y + H / 2)) [x, z] = [s.x, s.z];
   if (!capsuleFree(ctx, pawn, x, y, z, H, QUERY_SOLID)) {
+    // Climbing into a roof that hangs over the wall (its eave: Ulo), the head up at the rope's top: over it from here.
+    if (vy > 0 && !inverted && y + H >= rope[1] - R.overhangReach && overTheTop(ctx, pawn, f, rope[1])) return;
     if (capsuleFree(ctx, pawn, s.x, y, s.z, H, QUERY_SOLID)) [x, z] = [s.x, s.z];
     else if (capsuleFree(ctx, pawn, x, s.y, z, H, QUERY_SOLID)) y = s.y;
     else [x, y, z] = [s.x, s.y, s.z];
@@ -1315,7 +1318,9 @@ function endSwing(ctx: MoveContext, pawn: Pawn): boolean {
 /**
  * Climbing over a rope's top at `topY` (right side up): onto what's behind the edge where a body stands, no
  * steeper than a body climbs, from a body's radius and a quarter metre in from the wall's plane back to
- * `overTopBack` (past a railing at the edge: Ulo, the Balcony), going over the highest thing on the way.
+ * `overTopBack` (past a railing at the edge: Ulo, the Balcony), going over the highest thing on the way, which
+ * stands no higher over the edge than a vault goes (not a gable end's wall, nor a storey's wall set back from the
+ * edge), with room for a tucked body over it.
  */
 function overTheTop(ctx: MoveContext, pawn: Pawn, f: RappelFace, topY: number): boolean {
   const m = ctx.data.movement;
@@ -1329,9 +1334,12 @@ function overTheTop(ctx: MoveContext, pawn: Pawn, f: RappelFace, topY: number): 
     if (!hit || hit.timeOfImpact < 1e-4 || hit.normal.y < Math.cos(m.step.maxSlopeDeg * DEG) - 1e-6) continue;
     const y = from - hit.timeOfImpact;
     if (y < topY - 0.3 || !capsuleFree(ctx, pawn, x, y + SKIN, z, m.stance.stand.height, QUERY_SOLID)) continue;
-    const over = pathTop(ctx, pawn, s.x, s.z, x, z, topY + 2) ?? y;
+    const over = Math.max(y, pathTop(ctx, pawn, s.x, s.z, x, z, topY + 2) ?? y);
+    if (over > topY + m.vault.maxOverHeight) continue;
+    // Room for a tucked body over the way, as a vault's (a window in a wall behind the edge, its glass or barricade: no).
+    if (![0.25, 0.5, 0.75].every((k) => capsuleFree(ctx, pawn, lerp(s.x, x, k), over + m.vault.clearance, lerp(s.z, z, k), m.vault.apexBodyHeight, QUERY_SOLID))) continue;
     leaveRope(s);
-    startScriptedMove(s, x, y + SKIN, z, Math.max(y, over) + 0.3, m.rappel.overTopSeconds);
+    startScriptedMove(s, x, y + SKIN, z, over + 0.3, m.rappel.overTopSeconds);
     return true;
   }
   return false;

@@ -94,20 +94,25 @@ export function ropeAt(faces: readonly RappelFace[], i: number, x: number, z: nu
 }
 
 /**
- * The rope a body hangs on, drawn from where it is (bodies seen from afar don't carry their face): the face whose
- * rope line (`hang` out from the rope's plane, or up to `slack` further out: a swing) it's on and whose extent it's
- * in, and where that rope is fixed at its top (a body's height `height`, its middle on the rope's run), or null.
+ * The rope a body hangs on, drawn from where it is: on face `face`'s rope when the body carries it, else (a body
+ * seen from afar doesn't) the face whose rope line (`hang` out from the rope's plane, or up to `slack` further out: a
+ * swing) it's nearest and whose extent it's in (at an inside corner, the next wall's line passes close by too). Where
+ * that rope is fixed at its top (a body's height `height`, its middle on the rope's run), or null.
  */
-export function ropeOf(faces: readonly RappelFace[], x: number, y: number, z: number, hang: number, height: number, slack = 0): { x: number; z: number; top: number } | null {
+export function ropeOf(faces: readonly RappelFace[], x: number, y: number, z: number, hang: number, height: number, slack = 0, face = -1): { x: number; z: number; top: number } | null {
+  let best: { x: number; z: number; top: number } | null = null;
+  let bestOff = Infinity;
   for (let i = 0; i < faces.length; i++) {
+    if (face >= 0 && i !== face) continue;
     const f = faces[i];
     const u = f.t[0] * x + f.t[1] * z;
-    if (u < f.u0 - 1e-3 || u > f.u1 + 1e-3) continue;
+    if (face < 0 && (u < f.u0 - 1e-3 || u > f.u1 + 1e-3)) continue;
     const run = ropeRun(faces, i, u, y + height / 2);
     if (!run) continue;
     const out = f.n[0] * x + f.n[1] * z - run.d;
-    if (out < hang - 0.05 || out > hang + slack + 0.05) continue;
-    return { x: f.n[0] * (run.d + hang) + f.t[0] * u, z: f.n[1] * (run.d + hang) + f.t[1] * u, top: run.y1 };
+    if (out < hang - 0.05 || out > hang + slack + 0.05 || Math.abs(out - hang) >= bestOff) continue;
+    best = { x: f.n[0] * (run.d + hang) + f.t[0] * u, z: f.n[1] * (run.d + hang) + f.t[1] * u, top: run.y1 };
+    bestOff = Math.abs(out - hang);
   }
-  return null;
+  return best;
 }

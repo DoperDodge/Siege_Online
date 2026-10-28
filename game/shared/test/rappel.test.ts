@@ -27,6 +27,7 @@ import {
   RappelFlag,
   readPawnState,
   ropeAt,
+  ropeOf,
   ropeRun,
   ropeYawRange,
   Room,
@@ -38,6 +39,7 @@ import {
   writePawnState,
   type InputCmd,
   type PlayerController,
+  type RappelFace,
   type RopeStart,
 } from "../src/index.js";
 import { run, settle } from "./helpers.js";
@@ -123,6 +125,19 @@ describe("rappel faces (D-105's zones)", () => {
     // Up past the step, and over the top onto the roof.
     expect([pawn.state.mode, pawn.state.grounded, +pawn.state.y.toFixed(1)]).toEqual([PawnMode.Walk, true, 6.2]);
     expect(pawn.state.x).toBeLessThan(faces[high].d);
+  });
+});
+
+describe("the rope drawn", () => {
+  it("is the nearest rope line's (at an inside corner the next wall's line passes close by too), or the body's own face's", () => {
+    // An inside corner: wall A along x (plane z = 0, looking +z), wall B along z (plane x = 0, looking +x).
+    const A: RappelFace = { id: "A", n: [0, 1], d: 0, t: [-1, 0], u0: -10, u1: 0, y0: 0, y1: 6 };
+    const B: RappelFace = { id: "B", n: [1, 0], d: 0, t: [0, 1], u0: 0, u1: 10, y0: 0, y1: 6 };
+    const hang = 0.35;
+    // On A's rope 1.2 m from the corner: inside B's band too (with a swing's slack), but A's line is the nearer.
+    expect(ropeOf([B, A], 1.2, 2, hang, hang, 1.8, 0.9)).toEqual({ x: 1.2, z: hang, top: 6 });
+    expect(ropeOf([B, A], 1.2, 2, hang, hang, 1.8, 0.9, 0)).toEqual({ x: hang, z: hang, top: 6 }); // told B: B's
+    expect(ropeOf([B, A], 1.2, 2, hang, hang, 1.8, 0.9, 1)).toEqual({ x: 1.2, z: hang, top: 6 });
   });
 });
 
@@ -602,6 +617,40 @@ describe("on the rope", () => {
     run(sim, ctrl, { yawDeg: 180 }, 1);
     expect([pawn.state.mode, pawn.state.grounded, +pawn.state.y.toFixed(1)]).toEqual([PawnMode.Walk, true, 6.2]);
     expect(pawn.state.z).toBeGreaterThan(23.65);
+  });
+
+  it("under a roof that hangs over the wall (Ulo: the Dorms' eave over its south wall), climbing goes over the eave onto the roof", async () => {
+    const { sim, ctrl, pawn } = await oregon();
+    const R = sim.data.movement.rappel;
+    // The 1F wall under the Dorms' south wall (rappel:1F:S01, z 38; one rope with 2F:S04 above, to 6.2 m), from the ground.
+    stand(sim, ctrl, 30.8, 0, 38.6, 0);
+    hookOn(sim, ctrl, 0);
+    expect(ropeAt(sim.level.rappel, pawn.state.rappel, pawn.state.x, pawn.state.z, 1)?.[1]).toBeCloseTo(6.2, 5);
+    for (let t = 0; t < 64 * 6 && pawn.state.mode === PawnMode.Rappel; t++) run(sim, ctrl, { yawDeg: 0, forward: 1 }, 1 / 64);
+    // The eave stopped the head short of where the climb goes over a bare edge; it went over from there.
+    expect(pawn.state.mode).toBe(PawnMode.Vault);
+    expect(pawn.state.fromY).toBeLessThan(6.2 - R.overTopDepth - 0.2);
+    run(sim, ctrl, { yawDeg: 0 }, 1);
+    expect([pawn.state.mode, pawn.state.grounded]).toEqual([PawnMode.Walk, true]);
+    expect(pawn.state.y).toBeGreaterThan(6.2); // on the roof's slope
+    expect(pawn.state.z).toBeLessThan(38);
+  });
+
+  it("no climbing over the top through what stands higher than a vault behind the edge: a gable end (the Big Tower's), a storey's wall set back from the edge or its barricaded window (the Kids' Dorms' over the Kitchen)", async () => {
+    const { sim, ctrl, pawn } = await onTower();
+    const top = (yawDeg: number) => {
+      for (let t = 0; t < 64 * 8; t++) run(sim, ctrl, { yawDeg, forward: 1 }, 1 / 64);
+      return [pawn.state.mode, +pawn.state.y.toFixed(2)];
+    };
+    expect(top(TOWER.yawDeg)).toEqual([PawnMode.Rappel, 8]); // under the gable end, which rises to 11.2 m
+    // The Kitchen's north wall (rappel:1F:N04, z 23.35, to 3.2 m): the Kids' Dorms' wall stands 0.3 m back from its
+    // top, its north window (2F.o004, barricaded) at x 27.2–28.55.
+    for (const x of [25, 27.77]) {
+      stand(sim, ctrl, x, 0, 22.75, 180);
+      hookOn(sim, ctrl, 180);
+      expect(top(180), `x ${x}`).toEqual([PawnMode.Rappel, 2]);
+      expect(pawn.state.z, `x ${x}`).toBeLessThan(23.35);
+    }
   });
 
   it("the Balcony: climbing its wall goes over the railing onto it (Ulo); from it, facing out over the railing, a hold goes over it onto the rope, upside down", async () => {
