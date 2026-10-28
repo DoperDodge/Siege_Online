@@ -5,7 +5,7 @@ known issues, and what's next.
 
 ---
 
-## Phase 5 — Oregon greybox · 🚧 in progress (rappel in, M8; waiting on your rappel test and your layout sign-off)
+## Phase 5 — Oregon greybox · 🚧 in progress (rappel round 2 in, after your test; waiting on your rappel test and your layout sign-off)
 
 **Done when (PLAN §17):** you walk it and sign off on layout accuracy. Rappel (M8) comes before the Phase 5
 report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIGN.md`.
@@ -19,27 +19,52 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
 | M5 Sites, defender spawns, cameras, ingredients, zones, cover props | ✅ the four bomb sites with Go to by site, five defenders at each, eight cameras, nine ingredients, 29 cover props (bullets go through the wooden and soft ones), the building, spawn-peek, run-out and rappel zones, every marker drawn; browser test |
 | M6 Walk-ready: every check, performance on Oregon, your walk #1 | ✅ every structural check, the generator's report, the blueprint check, Oregon's performance measured (server, client, browser); your walk #1: "really accurate" |
 | M7 Your corrections, round by round, to sign-off | 🚧 walk #1's fixes in: the Attic's hall a vault over the Low Attic (after your screenshot), vaulting through holes in walls, no page zoom on phones; ⏳ your sign-off |
-| M8 Rappel | ✅ on every outside wall: hold F to hook on (at a wall's foot, or upside down at a roof edge), climb, move along, turn over, shoot; climb in or breach a window with Space; predicted online with no mispredictions; browser test and a netsim run; ⏳ your test online at +100 ms |
+| M8 Rappel | ✅ on every outside wall: hold Space to hook on (at a wall's foot, upside down over a roof edge, or out of a window), climb, move along, turn over, shoot and knife; swing into a window or breach it with Space; your test's round 2 in (animated moves, the swing, the view limit); predicted online with no mispredictions; browser test and a netsim run; ⏳ your test online at +100 ms |
+
+### What's done (M8: rappel, round 2 after your test)
+You found it clunky and not like the game; each thing you asked for is in (D-116):
+- **The key:** hold Space (the vault button on touch) to hook on; F lets go. Where you could also vault, a quick
+  tap still vaults (as you let go of Space).
+- **Out of windows:** inside, at an open window with nothing to vault onto outside (the Big Tower's 2F window), hold
+  Space: you climb out over the sill onto the rope.
+- **Animations:** hooking on moves you onto the rope instead of snapping there (0.6 s from a wall's foot; 1 s over
+  a roof edge, turning upside down on the way, or out of a window), turning you to face the wall. C turns you over
+  in half a second (you hang still meanwhile). Others see all of it.
+- **Swinging:** Space at a window swings you out about 0.9 m and back in (0.8 s): in through an open window, or
+  into its glass and barricade (the rappel breach). A barricade that holds bounces you off, out and back again
+  (0.4 s). The rope is drawn to where it's fixed, so it angles out with you.
+- **The view:** at most 90° either side of the wall; it holds still while you move onto the rope or swing.
+- **The knife** works on the rope.
+- **Fast descent:** Shift with S drops you twice as fast (5 m/s).
+- **The Balcony:** climbing its wall takes you over the railing onto it; from the Balcony, facing out over the
+  railing, hold Space to go over it onto the rope.
+- **Skopós:** her shell's camera works on the rope; swapping to her other shell doesn't while she hangs there.
+- **From the reviews of round 1:** walls a few centimetres apart one over the other (the Garage's east wall) no
+  longer stop the climb halfway; at the bottom of a rope over a ledge narrower than you (the Kids' Dorms' north
+  wall) S puts you on the ledge; on the Garage's south wall Space no longer offers a swing onto its roof (W climbs
+  over); the crouch toggle no longer leaves you crouched after the rope; the free camera or Skopós' camera no
+  longer turns you back over; in third person and the plan view the mouse isn't reversed upside down; the speed
+  readout works on the rope.
 
 ### What's done (M8: rappel)
-Rappel v1 (D-114), on Oregon's 55 rappel faces (the orange zones, O):
-- **Hooking on:** at the foot of an outside wall, facing it, hold F (0.5 s, a gauge shows it); at a roof edge,
-  facing out over the drop, hold F to hang upside down under it. Faces one over another in a plane are one rope,
-  so the Big Tower's north wall is one rope from the ground to the top of its wall (9.2 m). Attackers only in a match;
-  anyone in a lab room. In a lab, where you could also reinforce or barricade, an attacker gets the rope and a
-  defender the panel.
-- **On the rope:** W climbs, S descends, A and D move along the wall, Shift faster; C (the crouch key) turns you
-  upside down and back. You can lean, aim, fire and reload (not knife); lethal damage kills outright. At the top
-  you climb over onto the roof where you can stand on it (right side up), else stop under the edge; at the bottom
-  you land, and F lets go anywhere.
-- **Windows:** right side up, Space climbs in through an open window. At glass or a barricade, Space swings into
-  it (the Siege X rappel breach): the glass breaks, and a fresh barricade bounces you back with a kick that
-  wears it; the next swing goes through it. A barricade already worn (a knife hit, a few bullets) gives way on
-  the first swing.
-- **Online:** predicted like the ladder: the online test at 94 ms each way, hooking on, climbing, moving, turning
-  over, coming down and the breach, has no corrections; the netsim's rappel run (ten bots on ten walls, 100 ms
-  round trip with jitter, stalls and clock drift) has no mispredictions. A hold or a swing now waits through a
-  network stall instead of ending (the browser test caught a stall cancelling the hold).
+Rappel (D-114, D-116), on Oregon's 55 rappel faces (the orange zones, O):
+- **Hooking on:** hold Space (0.5 s, a gauge shows it) at the foot of an outside wall facing it, at a roof edge
+  facing out over the drop (you go over upside down), or inside at an open window (you climb out). Faces one over
+  another in a plane are one rope, so the Big Tower's north wall is one rope from the ground to the top of its
+  wall (9.2 m). Attackers only in a match; anyone in a lab room. In a lab, where you could also reinforce or
+  barricade (F), the prompt shows an attacker the rope first and a defender the panel.
+- **On the rope:** W climbs, S descends (Shift: fast), A and D move along the wall (Shift faster); C turns you
+  upside down and back. You can lean, aim, fire, reload and knife, looking at most 90° either side of the wall;
+  lethal damage kills outright. At the top you climb over onto the roof where you can stand (over a railing too),
+  else stop under the edge; at the bottom you land, and F lets go anywhere.
+- **Windows:** right side up, Space swings you into the window in front: in through it when it's open; at glass
+  or a barricade (the Siege X rappel breach) the glass breaks, and a fresh barricade bounces you off with a kick
+  that wears it; the next swing goes through it. A barricade already worn (a knife hit, a few bullets) gives way
+  on the first swing.
+- **Online:** predicted like the ladder. The online tests at 94 ms each way (hooking on, climbing, moving, turning
+  over, coming down, the breach), each with a lag spike longer than the server waits (mid-hold, mid-turn, upside
+  down, mid-swing), have no mispredictions; the netsim's rappel run (ten bots on ten walls, 100 ms round trip with
+  jitter, 400 ms stalls and clock drift; they knife and swing too) has none.
 - **Not in v1:** going around a corner from one wall to the next (Siege X) moves to Phase 8 (D-115).
 
 ### What's done (M7: your walk #1)
@@ -350,7 +375,7 @@ logs all three):
    the fight across the Kitchen's soft wall), `npm run bench:oregon` (loading, damage, redraw; writes
    `builds/bench/oregon.json`), and after `npm run build`, `node tools/e2e/oregon-perf.mjs` (the browser capture;
    writes `builds/e2e/oregon-perf.json`).
-19. Checks: `npm run check` runs them all: `npm run typecheck`, `npm test` (534 tests), `npm run build && npm run
+19. Checks: `npm run check` runs them all: `npm run typecheck`, `npm test` (544 tests), `npm run build && npm run
    test:e2e` (`oregon.mjs` shoots through a soft floor, drops through a hatch, walks the Armory Stairs, takes the
    ladder both ways, rappels up the Big Tower and down, breaches into the Kids' Dorms from its roof edge, stands
    at each attacker spawn, drops onto the Dining roof from the free camera, goes to each bomb site and switches
@@ -364,25 +389,35 @@ logs all three):
    - On a phone or tablet: open the Oregon page and tap quickly anywhere; the page keeps its size.
 21. Rappel (M8's done-when is the first two, online at +100 ms: open `?online&lag=100`, or the deployed site):
    - Down the Big Tower: Go to → Attacker spawn C Construction, walk to the Big Tower (the tallest part of the
-     building) and face its north wall: "Hold F to rappel". Hold F, then W: you climb to about 8 m, under the
-     roof's edge (the roof is a steep gable, nothing to climb onto). On the way, C turns you upside down and
-     back, A and D move along the wall (Shift faster), and you can aim and shoot; S brings you down.
+     building) and face its north wall: "Hold Space to rappel". Hold Space: you move onto the rope. W climbs to
+     about 8 m, under the roof's edge (the roof is a steep gable, nothing to climb onto). On the way, C turns you
+     upside down and back, A and D move along the wall (Shift faster), you can aim, shoot and knife, and you look
+     at most 90° either side; S brings you down (Shift with S faster).
    - Into a Dorms window: the Dorms' big window (the Dorms Main Hall's west wall) from the Dining roof under it.
-     Get onto the Dining roof (N, fly over it, F; or knife open the 2F Office's north window and vault out), face the Dorms'
-     wall under the big window, hold F, then Space: the first swing breaks the glass and bounces off the
-     barricade, the second goes through it. Or from above: at the Kids' Dorms' roof edge over its north window,
-     face out and hold F (you hang upside down), turn round, C to turn right side up, S down until the sill is at
-     your chest, and Space twice.
+     Get onto the Dining roof (N, fly over it, F; or knife open the 2F Office's north window and vault out), face
+     the Dorms' wall under the big window, hold Space, then press Space: you swing out and into it; the first swing
+     breaks the glass and bounces off the barricade, the second goes through it. Or from above: at the Kids' Dorms'
+     roof edge over its north window, face out and hold Space (you go over upside down, turning to face the wall),
+     C to turn right side up, S down until "Space to breach" shows (the sill between your knees and hips), and
+     Space twice.
    - From the ground into the Big Tower's 2F north window (the one east of the middle): hook on below it, climb
-     until the sill is at your chest, and Space twice the same way.
+     until "Space to breach" shows, and Space twice the same way.
+   - Out of a window: inside that window in the 2F Tower, once its glass and barricade are gone (shoot the glass,
+     knife the barricade), face it and hold Space: you climb out onto the rope. Where you could also vault (the
+     Dorms' big window opened, from inside), a quick tap still vaults.
+   - The Balcony: from the ground under it, hook on and climb: you go over the railing onto it. From the Balcony,
+     face out over the railing and hold Space.
 
 ### Known issues
-- Rappel: every timing, speed and reach is a placeholder (open question 35): the hold, the speeds, how far from a
-  wall or back from a roof edge you can hook on, how much a swing wears a barricade. You can't climb in or breach
-  upside down, and you stop at a wall's end (corners are Phase 8, D-115). Where a storey's wall stands out from the
-  one above (the Kitchen's north wall under the Kids' Dorms', 0.3 m), they're separate ropes, so from the ground
-  you stop at the ledge between them. The rope is a thin line, and a swing is a gauge only: the body doesn't move,
-  so others see just the window break.
+- Rappel: every timing, speed, distance and angle is a placeholder (open question 35): the hold and the tap, the
+  moves onto the rope, the turn, the swing and the bounce, the speeds, the 90° view, how far from a wall or back
+  from a roof edge you can hook on, how much a swing wears a barricade. You can't swing in or breach upside down,
+  and you stop at a wall's end (corners are Phase 8, D-115). Where a storey's wall stands out from the one above by
+  more than 10 cm (the Kitchen's north wall under the Kids' Dorms', 0.3 m), they're separate ropes, so from the
+  ground you stop at the ledge between them. With hold-to-crouch, you hang upside down only while you hold C (each
+  change of the key turns you over). Where a rope is offered too, a vault comes as you let go of Space, a moment
+  later than elsewhere. The body is the greybox shape: the moves, the turn and the swing move and roll it, with no
+  climbing or swinging pose of the limbs (Phase 10's art); the rope is a thin line.
 - The Attic's hall stands 0.9 m over the Low Attic and the Tower, our reading of your note with no in-game picture
   to check it; its west window opens at its floor, and its drone hole sits 0.9 m over the Meeting roof outside
   (open question 33).
@@ -421,7 +456,8 @@ logs all three):
   (Phase 6 or 12).
 
 ### Next: your rappel test (M8) and your sign-off (M7)
-M8 is done when you rappel down the Big Tower and into a Dorms window online at +100 ms (How to test, item 21).
+Round 2 of rappel is in. M8 is done when you rappel down the Big Tower and into a Dorms window online at +100 ms
+(How to test, item 21); tell me what still feels off.
 The layout waits on your sign-off (PLAN §17's done-when), with the Attic's ledge to check. Anything else you find
 goes into `research/oregon/walkthrough.md` and gets fixed through the layout files, one round per walk. Then the
 Phase 5 report.

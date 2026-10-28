@@ -1085,23 +1085,34 @@ the fix, the commit). Sign-off is recorded there and in PROGRESS.
   determinism, netsim with rappel.
 - **Built (D-114):** the level's rappel zones are the ropes, one per plane (`game/shared/src/level/rappel.ts`):
   faces one over another in a plane join, so the Big Tower's north wall is one rope from the ground to the top
-  of its wall. A `Rappel` pawn mode (5) keeps the face, flags (upside down, hooked from the top, the stance key's
-  last ask) and a tick count (the hold to hook on, then a breach's swing) in PawnState, on the wire like the
-  ladder's. `player/movement.ts`: findRappel (a face's foot, facing the wall; or a roof edge, facing out),
-  rappelHold, stepRappel (climb, descend, along the wall, turn over, over the top, onto the floor at the bottom,
-  let go, climb in through an open window by planVault), and planBreach (planVault with the window's glass and
-  barricades left out, and the panels in the way). Rappel breach fit: a swing (`breachSeconds`) goes through glass
-  and a barricade worn to `barricade.rappelThroughHp`, else bounces back and kicks it; the simulation decides, a
-  `rappelBreach` event carries the panels, and the room applies the ops (`Room.completeBreach`). Lab rooms let
-  anyone rappel (`attackerToolsForAll` in the deployRules event); where a body could also reinforce or barricade,
-  its side's own tool comes first. A hold or a swing waits through a tick without the player's input, as a panel
-  hold does. Upside down, the eye and hitboxes turn over inside the capsule, the camera rolls and the mouse's
-  look turns with it; others see the body turned over. Going around corners moves to Phase 8 (D-115).
-  Tests: `game/shared/test/rappel.test.ts` (faces; hooking on at the foot and the roof edge, who may, a stall; on
-  the rope; an open window; the breach at the Big Tower's 2F window, into the Dorms' big window from the Dining
-  roof and, from the Kids' Dorms' roof edge, into the Kids' Dorms; the wire; online at 94 ms each way, hooking on and moving, and the breach, with no corrections),
-  `npm run netsim -- --level oregon --rappel` (and its test: ten bots on ten walls, no mispredictions), and
-  `tools/e2e/oregon.mjs` (up the Big Tower and down; the breach into the Kids' Dorms).
+  of its wall. A `Rappel` pawn mode (5) keeps the face, flags (upside down, where the hold started, the stance
+  key's last ask) and a tick count (the hold to hook on, then a swing) in PawnState, on the wire like the
+  ladder's. `player/movement.ts`: findRappel, rappelHold, stepRappel (climb, descend, along the wall, turn over,
+  over the top, onto the floor at the bottom, let go) and planBreach (planVault with the window's glass and
+  barricades left out, and the panels in the way). Rappel breach fit: a swing goes through glass and a barricade
+  worn to `barricade.rappelThroughHp`, else bounces back and kicks it; the simulation decides, a `rappelBreach`
+  event carries the panels, and the room applies the ops (`Room.completeBreach`). Lab rooms let anyone rappel
+  (`attackerToolsForAll` in the deployRules event). A hold, a move onto the rope, a turn or a swing waits through
+  a tick without the player's input, as a panel hold does. Going around corners moves to Phase 8 (D-115).
+- **Round 2, after Ulo's test (D-116):** the vault key (Space) holds to hook on, a tap still vaulting where a
+  vault can be had; a third start, out of a window from inside (windowSpot); the moves onto the rope use the
+  scripted move's fields in Rappel mode (stepRopeMove: an arc like a vault's, turning to face the wall); the turn
+  over is `ropeTurn` (0 to 1 over `turnSeconds`), the body and its eye rolling through it (hitboxes.ts
+  `ropeRoll`), sent to others as the snapshot's `turn` byte (protocol 10); a swing moves the body out from the
+  wall and back (stepSwing), a bounce too; the view is held within `yawLimitDeg` of the wall, and still through a
+  move or a swing (`ropeYawRange`, used by the simulation and the client's controls); the knife works when the
+  hands are free (`ropeIdle`); fast descent with sprint; over the top past a railing (`overTopBack`); Skopós' shell
+  camera opens on the rope, the swap doesn't. A rope's run hangs the body off its outermost plane (`ropeRun`).
+  Upside down in the first-person view, the camera rolls and the mouse's look turns with it.
+  Tests: `game/shared/test/rappel.test.ts` (29: faces and the stepped wall; hooking on at the foot, the roof edge
+  and a window, the tap that vaults, both tools in a lab, who may, a stall, Skopós' camera; on the rope: the
+  speeds, the view, the ends, the knife, an open window, the breach at the Big Tower's 2F window, a turn mid-swing,
+  into the Dorms' big window from the Dining roof and, from the Kids' Dorms' roof edge, into the Kids' Dorms,
+  stalls mid-turn and mid-swing, over the top, the Balcony, a narrow ledge, the Garage's roof, lethal damage; the
+  wire; online at 94 ms each way, with lag spikes past the room's hold budget, and the breach, with no
+  mispredictions), `npm run netsim -- --level oregon --rappel` (and its test: ten bots on ten walls through
+  400 ms stalls, no mispredictions), and `tools/e2e/oregon.mjs` (up the Big Tower and down; the breach into the
+  Kids' Dorms).
 
 Rough effort (agent days): M1 2–3, M2 2, M3 1.5–2, M4 2–3, M5 2, M6 1–1.5, M7 0.5–1 per round, M8 2–4.
 
