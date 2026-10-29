@@ -270,25 +270,27 @@ try {
   const calloutOf = (id) => lvl.rooms?.find((r) => r.id === id)?.callout;
   const prompt = (page) => page.evaluate(() => (document.querySelector(".prompt.hidden") ? "" : (document.querySelector(".prompt")?.textContent ?? "")));
   /**
-   * Steer along the points (yaw toward the next, forward held) until the last is reached; then let go, and wait
-   * for the body to stand. A flight takes about 2 s; the time allowed is generous for a slow software-rendered
-   * page, where the game runs in slow motion when frames are slow (seen once: stopped short, in the air).
+   * Walk through the points: the page steers toward each in turn (window.__lab.walk, tick by tick) and lets go after
+   * the last; then wait for the body to stand still on the ground. A flight takes about 2 s of game time. Budgets
+   * are game time (the page's ticks), not the clock's: a slow software-rendered page runs the game in slow motion
+   * (seen twice: the clock ran out mid-flight), so only a generous clock limit backs them up.
    */
-  const walkAlong = async (page, pts, timeoutMs = 60000) => {
-    const until = Date.now() + timeoutMs;
-    let k = 0;
-    while (k < pts.length && Date.now() < until) {
-      const me = await own(page);
-      const [dx, dz] = [pts[k][0] - me.x, pts[k][1] - me.z];
-      if (Math.hypot(dx, dz) < 0.25) k++;
-      else await input(page, { forward: 1, yaw: Math.atan2(-dx, -dz) });
-      await sleep(40);
+  const gameTick = (page) => page.evaluate(() => window.__lab.tick);
+  const walkAlong = async (page, pts, gameSeconds = 20, wallMs = 300000) => {
+    const until = Date.now() + wallMs;
+    await page.evaluate((p) => window.__lab.walk(p), pts);
+    let w = await page.evaluate(() => window.__lab.walking);
+    while (!w.done && w.ticks < gameSeconds * 64 && Date.now() < until) {
+      await sleep(50);
+      w = await page.evaluate(() => window.__lab.walking);
     }
-    await input(page, null);
-    await sleep(300);
-    await page.waitForFunction(() => window.__lab.net.own.grounded, null, { timeout: 10000, polling: 50 }).catch(() => {});
-    await sleep(200);
-    return k >= pts.length;
+    await page.evaluate(() => window.__lab.walk(null));
+    const from = await gameTick(page);
+    for (let t = 0; (t = (await gameTick(page)) - from) < 2 * 64 && Date.now() < until; await sleep(50)) {
+      const me = await own(page);
+      if (t > 16 && me.grounded && Math.hypot(me.vx, me.vz) < 0.01) break;
+    }
+    return w.done;
   };
   // The Armory Stairs' basement flight: before its first riser, along it, past its top (tools/mapgen's walk test).
   const flight = lvl.stairs?.find((f) => f.id === "S3:B>1F#0");

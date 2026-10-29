@@ -226,6 +226,11 @@ export async function startLab(o: LabOptions): Promise<void> {
   let panelEvents: (ops: readonly IndexedOp[], changes: readonly PanelChange[]) => void = () => {};
   /** Online tests can script the input (window.__lab.input). */
   let scripted: Partial<InputCmd> | null = null;
+  /**
+   * Browser tests' walks (window.__lab.walk): the page steers the body through the points itself, tick by tick,
+   * so a walk doesn't depend on how often a slow test can poll; `ticks` counts the ticks it has taken.
+   */
+  let walkPath: { pts: [number, number][]; k: number; ticks: number; done: boolean } | null = null;
   /** Render tick of the frame on screen (remote players are drawn at it), and of the one last clicked on. */
   let shownRenderTick = 0;
   let clickViewTick: number | null = null;
@@ -912,9 +917,26 @@ export async function startLab(o: LabOptions): Promise<void> {
   let prompt: ReturnType<Sim["prompt"]> = null;
   let last = performance.now();
 
+  /** A test's walk: forward toward the next point not yet within 0.25 m, and stop after the last. */
+  function steerWalk() {
+    const p = sim.pawns.get(ctrl.possessedPawnId);
+    if (!walkPath || walkPath.done || !p) return;
+    const w = walkPath;
+    while (w.k < w.pts.length && Math.hypot(w.pts[w.k][0] - p.state.x, w.pts[w.k][1] - p.state.z) < 0.25) w.k++;
+    w.ticks++;
+    if (w.k >= w.pts.length) {
+      w.done = true;
+      scripted = null;
+      return;
+    }
+    const [dx, dz] = [w.pts[w.k][0] - p.state.x, w.pts[w.k][1] - p.state.z];
+    scripted = { forward: 1, yaw: Math.atan2(-dx, -dz) };
+  }
+
   function tick() {
     snapshotAll();
     tickKick.yaw = tickKick.pitch = 0;
+    steerWalk();
     if (net) {
       const sampled = controls.sample(++seq);
       // Test scripts add buttons to what the controls sample (a click still fires while a script holds ADS).
@@ -1250,6 +1272,18 @@ export async function startLab(o: LabOptions): Promise<void> {
       report,
       get frames() {
         return frames;
+      },
+      /** Ticks this page has played (one per input; replays don't count): browser tests measure game time with it. */
+      get tick() {
+        return seq;
+      },
+      /** A test's walk through points [x, z] (steered by the page each tick, see walkPath; null stops it); `walking` reports on it. */
+      walk(pts: [number, number][] | null) {
+        walkPath = pts && { pts: pts.map(([x, z]) => [x, z]), k: 0, ticks: 0, done: false };
+        if (!pts) scripted = null;
+      },
+      get walking() {
+        return walkPath && { k: walkPath.k, ticks: walkPath.ticks, done: walkPath.done };
       },
       /** Shadow-map redraws so far (tools/e2e/oregon.mjs checks a lost and restored context asks for one). */
       get shadowDraws() {
