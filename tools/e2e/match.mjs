@@ -125,8 +125,10 @@ try {
   // Who attacks round 1 was drawn: the pages by side.
   const sideOf = async (page) => me(await view(page)).side;
   const [att1, def1] = (await sideOf(a)) === 0 ? [a, b] : [b, a];
-  const greyed = await def1.evaluate((ban) => document.querySelector(`.match-screen [data-act=op][data-op="${ban}"]`)?.hasAttribute("disabled") ?? false, v.bans[1][0]);
-  result.checks.bannedOperatorGreyedOut = greyed;
+  // The screen is drawn on the page's next frame: wait for the operator's button.
+  result.checks.bannedOperatorGreyedOut = await def1
+    .waitForFunction((ban) => document.querySelector(`.match-screen [data-act=op][data-op="${ban}"]`)?.hasAttribute("disabled") ?? false, v.bans[1][0], { timeout: 10000 })
+    .then(() => true, () => false);
   for (const p of [att1, def1]) await p.click(".match-screen [data-act=op]:not([disabled])");
   await def1.click(`.match-screen [data-act=site][data-site="${SITE}"]`);
   await att1.click(`.match-screen [data-act=spawn][data-group="${SPAWN}"]`);
@@ -224,12 +226,12 @@ try {
   await pages[0].click(".match-screen [data-act=op]:not([disabled])");
   await pages[1].click(".match-screen [data-act=op]:not([disabled])");
   for (const d of defenders) await d.click(`.match-screen [data-act=site][data-site="${SITE}"]`);
-  await phase(host, P.Prep, 30000);
+  await phase(host, P.Action, 60000);
+  // Everyone's operator is shown to both teams once action starts (in prep only teammates').
   v = await view(host);
   const byTeam = [0, 1].map((t) => v.players.filter((p) => p.team === t).map((p) => p.operator));
   result.twoVsThree.operators = byTeam;
   result.checks.everyoneHasAnOperator = byTeam.flat().every((o) => o !== null) && byTeam.every((ops) => new Set(ops).size === ops.length);
-  await phase(host, P.Action, 30000);
   // A defender shoots a teammate in the head: the two first defender spawns at the Dining site share the room.
   const [shooter, victim] = defenders;
   await victim.waitForFunction(() => window.__lab.net.own !== null, null, { timeout: 20000 });
