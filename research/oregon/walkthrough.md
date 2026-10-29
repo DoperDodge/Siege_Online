@@ -153,5 +153,8 @@ mismatch. UNVERIFIED marks a placeholder (research/OPEN_QUESTIONS.md). North is 
 ## Sign-off
 
 Walk #1 (2026-10-28): "it looks good, actually really accurate", with the two issues above (and the phone zoom).
-Rows 1–3 are fixed; row 1 again after Ulo's screenshot of the step. Not signed off yet: the next walk confirms the
-Attic's ledge (open question 33) and the ten questions above (none was answered one by one).
+Rows 1–3 are fixed; row 1 again after Ulo's screenshot of the step.
+
+**Signed off (2026-10-29):** "I sign off", after testing rappel on the deployed site. The layout stands as built: the
+Attic's ledge, and the ten questions above as the build answers them (none was answered one by one; they stay in
+research/OPEN_QUESTIONS.md for later polish).

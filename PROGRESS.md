@@ -5,10 +5,10 @@ known issues, and what's next.
 
 ---
 
-## Phase 5 — Oregon greybox · 🚧 in progress (rappel done: your test passed; waiting on your layout sign-off)
+## Phase 5 — Oregon greybox · ✅ complete (PR #6)
 
-**Done when (PLAN §17):** you walk it and sign off on layout accuracy. Rappel (M8) comes before the Phase 5
-report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIGN.md`.
+**Done when (PLAN §17):** you walk it and sign off on layout accuracy: ✅ signed off 2026-10-29, after rappel (M8),
+which came before the Phase 5 report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIGN.md`.
 
 | Milestone | Status |
 |---|---|
@@ -18,7 +18,7 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
 | M4 Roofs, the outside and the three attacker spawns; free camera | ✅ roofs on every part of the building, the outside blockout with the Bunker and Tower outside stairs, five attackers at each insertion point, a free camera in every lab; browser test |
 | M5 Sites, defender spawns, cameras, ingredients, zones, cover props | ✅ the four bomb sites with Go to by site, five defenders at each, eight cameras, nine ingredients, 29 cover props (bullets go through the wooden and soft ones), the building, spawn-peek, run-out and rappel zones, every marker drawn; browser test |
 | M6 Walk-ready: every check, performance on Oregon, your walk #1 | ✅ every structural check, the generator's report, the blueprint check, Oregon's performance measured (server, client, browser); your walk #1: "really accurate" |
-| M7 Your corrections, round by round, to sign-off | 🚧 walk #1's fixes in: the Attic's hall a vault over the Low Attic (after your screenshot), vaulting through holes in walls, no page zoom on phones; ⏳ your sign-off |
+| M7 Your corrections, round by round, to sign-off | ✅ walk #1's fixes in: the Attic's hall a vault over the Low Attic (after your screenshot), vaulting through holes in walls, no page zoom on phones; your sign-off on 2026-10-29 |
 | M8 Rappel | ✅ on every outside wall: hold Space to hook on (at a wall's foot, upside down over a roof edge, or out of a window), climb (over the eaves too), move along, turn over, shoot and knife; swing into a window or breach it with Space; predicted online with no mispredictions; browser test and a netsim run; three rounds of your corrections; ✅ your test online at +100 ms passed (2026-10-29) |
 
 ### What's done (M8: rappel, round 3 after your second test)
@@ -472,11 +472,12 @@ logs all three):
 - A player joining after heavy destruction is sent about 65 KB of wall state at once; compressing it is planned
   (Phase 6 or 12).
 
-### Next: your sign-off (M7)
-M8 is done: you rappelled down the Big Tower and into a Dorms window online at +100 ms, and the eave fix held.
-The layout waits on your sign-off (PLAN §17's done-when), with the Attic's ledge to check. Anything else you find
-goes into `research/oregon/walkthrough.md` and gets fixed through the layout files, one round per walk. Then the
-Phase 5 report.
+### Next: Phase 6 — Match flow + lobby
+You signed off on the layout (2026-10-29), after M8's test passed. Phase 6 (PLAN §17): every format, any team size
+1–5 (uneven too), operator select, preparation and action phases, plant and defuse, rounds, the side swap, bans and
+the scoreboard; done when full 1v1 and 2v3 matches play start to finish. The layout's open questions (20–35) stay in
+`research/OPEN_QUESTIONS.md` for later polish; anything you find on Oregon from now on goes into
+`research/oregon/walkthrough.md` as before.
 
 ---
 
