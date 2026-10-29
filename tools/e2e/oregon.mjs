@@ -408,8 +408,10 @@ try {
       .then(() => true, () => false);
     await input(off, held);
     const upright = await off.waitForFunction(() => window.__lab.net.own.ropeTurn === 0, null, { timeout: 10000, polling: 50 }).then(() => true, () => false);
-    await input(off, { ...held, forward: -1 });
-    const lowered = await off.waitForFunction(() => window.__lab.net.own.y < 3.6, null, { timeout: 10000, polling: 20 }).then(() => true, () => false);
+    // Down slowly to the window (the sill 0.3–1.1 m over the feet: feet 3.0–3.8 m): at full speed a slow page can
+    // overshoot to the rope's foot (3.2 m), and S there steps off onto the Kitchen wall's ledge.
+    await input(off, { ...held, forward: -0.3 });
+    const lowered = await off.waitForFunction(() => window.__lab.net.own.y < 3.75, null, { timeout: 20000, polling: 20 }).then(() => true, () => false);
     await input(off, held);
     await sleep(400);
     const atWindow = await prompt(off);
