@@ -1109,6 +1109,7 @@ the fix, the commit). Sign-off is recorded there and in PROGRESS.
   a tucked body (no more through the Big Tower's gable end or a storey's wall set back from the edge); the rope
   drawn on the body's own face, else the nearest line. Tests: the Dorms' eave from the ground, the Big Tower's gable
   end, the Kids' Dorms' wall and barricaded window over the Kitchen, the rope at an inside corner.
+- **Done (2026-10-29):** Ulo's test passed: down the Big Tower and into a Dorms window online at +100 ms.
   Tests: `game/shared/test/rappel.test.ts` (29: faces and the stepped wall; hooking on at the foot, the roof edge
   and a window, the tap that vaults, both tools in a lab, who may, a stall, Skopós' camera; on the rope: the
   speeds, the view, the ends, the knife, an open window, the breach at the Big Tower's 2F window, a turn mid-swing,

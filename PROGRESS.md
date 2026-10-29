@@ -5,7 +5,7 @@ known issues, and what's next.
 
 ---
 
-## Phase 5 — Oregon greybox · 🚧 in progress (rappel round 3 in, after your tests; waiting on your rappel test and your layout sign-off)
+## Phase 5 — Oregon greybox · 🚧 in progress (rappel done: your test passed; waiting on your layout sign-off)
 
 **Done when (PLAN §17):** you walk it and sign off on layout accuracy. Rappel (M8) comes before the Phase 5
 report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIGN.md`.
@@ -19,7 +19,7 @@ report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIG
 | M5 Sites, defender spawns, cameras, ingredients, zones, cover props | ✅ the four bomb sites with Go to by site, five defenders at each, eight cameras, nine ingredients, 29 cover props (bullets go through the wooden and soft ones), the building, spawn-peek, run-out and rappel zones, every marker drawn; browser test |
 | M6 Walk-ready: every check, performance on Oregon, your walk #1 | ✅ every structural check, the generator's report, the blueprint check, Oregon's performance measured (server, client, browser); your walk #1: "really accurate" |
 | M7 Your corrections, round by round, to sign-off | 🚧 walk #1's fixes in: the Attic's hall a vault over the Low Attic (after your screenshot), vaulting through holes in walls, no page zoom on phones; ⏳ your sign-off |
-| M8 Rappel | ✅ on every outside wall: hold Space to hook on (at a wall's foot, upside down over a roof edge, or out of a window), climb, move along, turn over, shoot and knife; swing into a window or breach it with Space; your test's round 2 in (animated moves, the swing, the view limit); predicted online with no mispredictions; browser test and a netsim run; ⏳ your test online at +100 ms |
+| M8 Rappel | ✅ on every outside wall: hold Space to hook on (at a wall's foot, upside down over a roof edge, or out of a window), climb (over the eaves too), move along, turn over, shoot and knife; swing into a window or breach it with Space; predicted online with no mispredictions; browser test and a netsim run; three rounds of your corrections; ✅ your test online at +100 ms passed (2026-10-29) |
 
 ### What's done (M8: rappel, round 3 after your second test)
 - **Over the eaves:** where a roof hangs over the wall, climbing up stopped with your head under it. Climbing into
@@ -472,9 +472,8 @@ logs all three):
 - A player joining after heavy destruction is sent about 65 KB of wall state at once; compressing it is planned
   (Phase 6 or 12).
 
-### Next: your rappel test (M8) and your sign-off (M7)
-Round 3 of rappel is in (over the eaves). M8 is done when you rappel down the Big Tower and into a Dorms window
-online at +100 ms (How to test, item 21); tell me what still feels off.
+### Next: your sign-off (M7)
+M8 is done: you rappelled down the Big Tower and into a Dorms window online at +100 ms, and the eave fix held.
 The layout waits on your sign-off (PLAN §17's done-when), with the Attic's ledge to check. Anything else you find
 goes into `research/oregon/walkthrough.md` and gets fixed through the layout files, one round per walk. Then the
 Phase 5 report.
