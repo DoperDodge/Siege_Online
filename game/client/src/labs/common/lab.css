@@ -157,3 +157,10 @@ html, body { overflow: hidden; overscroll-behavior: none; touch-action: none; us
 .plan-view .crosshair, .plan-view .spread, .plan-view .reticle, .plan-view .scope { display: none; }
 .goto-storey h4,
 .goto-sites h4 { margin: 8px 0 4px; font: 600 12px var(--mono); color: var(--muted); }
+
+/* A match page with no living body to play (the lobby and planning screens, an attacker in prep, the dead): none of
+   your own crosshair, sights, stance, weapon, health or prompts. */
+.spectating .crosshair, .spectating .spread, .spectating .reticle, .spectating .scope, .spectating .hitmarker, .spectating .hurt,
+.spectating .hurt-dir, .spectating .hud-tl, .spectating .hud-br, .spectating .hud-bottom, .spectating .lean-ind, .spectating .prompt,
+.spectating .down-ui, .spectating .revive-ui, .spectating .shellcam { display: none; }
+#app.spectating #view { filter: none; }

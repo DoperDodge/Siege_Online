@@ -15,9 +15,31 @@ known issues, and what's next.
 | M1 Format presets (Quick Match, Unranked, Ranked, 1v1, Custom, Practice) and the match logic, tested on its own | ✅ six formats in `data/modes`, the match logic in `game/shared/src/match/` (sides, overtime, bans, votes, picks, attrition, pools, rating, the nine win conditions) |
 | M2 Match rooms on the server: lobby, rounds with spawns, red walls, run-outs, elimination and time wins | ✅ a room runs a match: lobby, bodies only in prep and action, defenders at the site behind red walls (predicted), attackers at their spawn, run-outs, the kill plane, leavers; protocol 11 and the room list; tested with a 1v1 and a 2v3 through the real messages |
 | M3 The defuser: carry, drop, pick up, plant, disable, every win condition | ✅ hold F to plant (7 s, predicted) or disable (7 s), F to pick up, G to drop, dropped where the carrier goes down, a plant under way past the timer, a hatch broken under it, the last attacker downed after the plant; finding the site by sight |
-| M4 In the browser: Play page, lobby, ban and planning screen, HUD, scoreboard, round and match summaries | ⏳ |
+| M4 In the browser: Play page, lobby, ban and planning screen, HUD, scoreboard, round and match summaries | 🚧 built and played through: the Play page (create in any format, join by code, the open matches); the match page: lobby, ban vote, planning (operator, weapons, site vote or spawn, the defuser), HUD and markers, Tab scoreboard, round banner, summary; with no body the camera circles the map, waits at an attacker's spawn in prep, or follows a teammate after you die. Next: the browser test of a 1v1 and a 2v3 (`tools/e2e/match.mjs`) |
 | M5 Each format's details: Quick Match, Ranked rating, 1v1 attrition, Custom, Practice | ⏳ |
 | M6 Checks: a 10-round netsim match, browser tests of a 1v1 and a 2v3 match, docs, report | ⏳ |
+
+### What's done (M4: matches in the browser)
+- **Play** (home page → *Play a match*): your name, *Create* a match in any of the six formats, *Join* by code,
+  and the open matches (the server's list, every 3 s; private rooms aren't in it).
+- **Lobby:** Blue and Orange, 1–5 each (uneven is fine), ready marks, the host's star. Join a team, ready up; the
+  host moves (⇄) and kicks (✕) players, swaps the teams, picks the format, sets the bans and reinforcements (and
+  in Custom the rounds and every timer), makes the room private, and starts once everyone is ready.
+- **Ban** (Unranked, Ranked, Custom with bans): vote for one of the other side's operators; your team bans the
+  most-voted one.
+- **Planning** (one screen, one timer, D-118): your operator (banned and taken ones greyed out), your weapons, the
+  site vote (defenders) or your spawn (attackers), and an attacker takes the defuser. Attackers keep the screen in
+  prep, over their spawn's view (click the view to look around; Esc brings the screen back).
+- **The round:** the top bar has both scores with each team's side, the phase and its clock (the fuse once
+  planted), the round and overtime. Under it: the site (attackers: once found), who has the defuser (G drops it),
+  run-outs detected, the reinforcements left in prep, the red walls. Plant and disable show on the hold gauge; the
+  defuser, its carrier and detected defenders are marked in the world. F plants, disables and picks up.
+- **Tab:** the scoreboard (operator, K/A/D, alive, dead or left). **Dead:** after 3 s you look through a living
+  teammate's eyes (click for the next).
+- **Round end:** a banner with the winner and how. **Match end:** the score, every round and how it ended, each
+  player's K/A/D, the MVP, and the host's *Back to the lobby* (same teams).
+- In a match there are no lab tools, Go to, free camera, storey views, third person or hitboxes, and none of the
+  lab's labels, spawn discs or camera cones (the bombs stay) (D-125).
 
 ---
 

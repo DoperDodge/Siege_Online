@@ -25,6 +25,8 @@ export interface Keybinds {
   fireMode: string;
   /** The knife (Phase 3 M8). */
   melee: string;
+  /** Drop the defuser (Phase 6, match/DESIGN.md §8). */
+  drop: string;
 }
 
 export interface Settings {
@@ -77,6 +79,7 @@ export const DEFAULT_SETTINGS: Settings = {
     secondary: "Digit2",
     fireMode: "KeyB",
     melee: "KeyV",
+    drop: "KeyG",
   },
 };
 

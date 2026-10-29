@@ -40,6 +40,7 @@ import {
   Stance,
   TICK_HZ,
   wrapAngle,
+  zoneBoxes,
   type IndexedOp,
   type InputCmd,
   type Pawn,
@@ -123,9 +124,24 @@ export interface LabOptions {
    * in a Web Worker ("local", the Range Lab: hits, downs and dummies are the server's side, DECISIONS D-052).
    */
   offline?: "sim" | "local";
+  /**
+   * A match (Phase 6, match/DESIGN.md §11): always online, a room joined from the link (`?room=CODE`) or created
+   * with `?format=<mode id>`. You often have no body (the lobby and planning screens, an attacker in prep, after
+   * dying): the camera is then the page's (LabApi.spectate). No lab tools, Go to, free camera or storey views.
+   */
+  match?: boolean;
   /** What this page adds (the Range Lab's shot overlay, damage numbers and last-shot panel). */
   extend?(lab: LabApi): void;
 }
+
+/** Where a match page's camera looks while you have no living body (LabApi.spectate). */
+export type SpectateView =
+  /** Through another body's eyes (a teammate, after you die). */
+  | { kind: "pawn"; pawnId: number }
+  /** From a fixed spot (feet there, eye above); the mouse looks around (an attacker's spawn in prep). */
+  | { kind: "spot"; pos: [number, number, number]; yawDeg: number }
+  /** Over the whole map, turning slowly (the lobby and the planning screen). */
+  | { kind: "overview" };
 
 /** What a page's additions can reach in the running lab (LabOptions.extend). */
 export interface LabApi extends LabHandle {
@@ -155,14 +171,23 @@ export interface LabApi extends LabHandle {
   addHelp(keys: string, what: string): void;
   /** A short message in the middle of the screen. */
   flash(text: string, kind: "bad" | "info"): void;
+  /** Your body if you have one and it is alive (match pages show their screens when you don't). */
+  body(): Pawn | null;
+  /** Match pages: where the camera looks while you have no living body (null: over the map). */
+  spectate(fn: () => SpectateView | null): void;
+  /** Let go of the mouse without opening the pause menu (a match screen that needs the pointer). */
+  releasePointer(): void;
 }
+
+/** A match page's stand-in controller while you have no body: it controls no pawns, so nothing of yours is ever found. */
+const NO_BODY: PlayerController = { id: 0, name: "", operatorId: "sledge", pawnIds: [], possessedPawnId: 0, shellCam: false, swapPhase: 0, swapT: 0, swapCooldown: 0, prevButtons: 0, team: 0 };
 
 export async function startLab(o: LabOptions): Promise<void> {
   // ------------------------------------------------------------------ setup
 
   const params = new URLSearchParams(location.search);
   const autotest = params.has("autotest");
-  const online = params.has("online") || params.has("room");
+  const online = o.match === true || params.has("online") || params.has("room");
   const data = loadGameData();
   let operatorId = data.operators.has(params.get("op") ?? "") ? params.get("op")! : "sledge";
   let op = data.operators.get(operatorId)!;
@@ -250,6 +275,8 @@ export async function startLab(o: LabOptions): Promise<void> {
     tools: [] as { label: string; run: () => void }[],
     help: [] as [string, string][],
   };
+  /** A match page's camera while you have no living body (LabApi.spectate). */
+  let spectateFn: (() => SpectateView | null) | null = null;
   /** Recoil the viewed body's view took this tick (added to the mouse view so the next input includes it). */
   const tickKick = { yaw: 0, pitch: 0 };
   let flashUntil = 0;
@@ -257,15 +284,16 @@ export async function startLab(o: LabOptions): Promise<void> {
   // Online: the lobby connects (create or join a room) and the session builds the simulation from the
   // server's Welcome; our controller arrives with the roster. Offline: a local simulation and player.
   const local = !online && o.offline === "local";
-  const net = online ? await lobby() : local ? await localRoom() : null;
+  const net = online ? await (o.match ? matchRoom() : lobby()) : local ? await localRoom() : null;
   const sim = net ? net.session.sim! : await Sim.create(o.levelId, data);
   let ctrl: PlayerController = net ? await firstBody(net) : sim.addPlayer("you", operatorId, 0, undefined, pickFromUrl(operatorId));
+  /** Your body (Skopós: the shell you control). Only a match page can be without one (NO_BODY), and it checks first. */
   const possessed = () => sim.pawns.get(ctrl.possessedPawnId)!;
   const heldWeapon = (): ResolvedWeapon | null => {
     const p = sim.pawns.get(ctrl.possessedPawnId);
     return p?.loadout?.weapons[p.state.slot] ?? null;
   };
-  if (net) {
+  if (net && !o.match) {
     // The server starts everyone as the default operator; ask for the loadout in the link, if different.
     const wanted = pickFromUrl(operatorId);
     const mine = net.session.roster.find((e) => e.controllerId === ctrl.id);
@@ -284,12 +312,17 @@ export async function startLab(o: LabOptions): Promise<void> {
    * A map's storey views (tools/mapgen/DESIGN.md E9): the storey you're on and its light, the storeys above it
    * hidden (H), the plan view (M), the palette (P). None in a lab without storeys.
    */
-  const storeyView = sim.level.def.storeys.length ? new StoreyView(labScene, panelView, sim.level, possessed().state.y) : null;
+  const storeyView = sim.level.def.storeys.length ? new StoreyView(labScene, panelView, sim.level, sim.pawns.get(ctrl.possessedPawnId)?.state.y ?? 0) : null;
   storeyView?.setViewport(view.clientWidth, view.clientHeight);
   /** A map's markers (E9 part 2): bombs, cameras, ingredients and spawns, and the zones view (O). */
-  const markers = storeyView ? new MapMarkers(labScene, sim.level.def) : null;
-  /** On a map with a plan, the HUD line: the room, the storey and where you are in the plan's units (amendment 17). */
-  const whereHud = sim.level.def.plan ? new WhereHud(app, sim.level.def) : null;
+  const markers = storeyView ? new MapMarkers(labScene, o.match ? { ...sim.level.def, cameras: [], ingredients: [], spawns: [], zones: [] } : sim.level.def) : null;
+  /** On a map with a plan, the HUD line: the room, the storey and where you are in the plan's units (amendment 17); a match's, the room only. */
+  const whereHud = sim.level.def.plan ? new WhereHud(app, sim.level.def, o.match) : null;
+  if (o.match) {
+    // A match shows the bombs, not the lab's labels (wall ids, room callouts), spawn discs or camera cones.
+    for (const g of [...labScene.labelGroups, ...labScene.calloutGroups]) g.clear();
+    app.classList.add("match");
+  }
   // The level is all there: its shadows are drawn at the next render, and again only when it changes.
   renderer.shadowMap.needsUpdate = true;
   // The stats overlay counts every draw of a frame (the world, the viewmodel, a shadow pass), so the counts
@@ -324,7 +357,7 @@ export async function startLab(o: LabOptions): Promise<void> {
   let showHitboxes = false;
   let thirdPerson = false;
   const controls = new Controls(settings, onUi);
-  controls.setView(possessed().state.yaw, 0);
+  controls.setView(sim.pawns.get(ctrl.possessedPawnId)?.state.yaw ?? 0, 0);
   controls.attach(renderer.domElement);
   controls.isBlocked = () => !$(".pause").classList.contains("hidden") || !$(".help").classList.contains("hidden");
   controls.stanceLocked = () => {
@@ -466,7 +499,7 @@ export async function startLab(o: LabOptions): Promise<void> {
 
   /** The storey views' switches by name (their keys, and the pause menu's View buttons). */
   const viewToggles: Record<string, () => void> = {};
-  if (storeyView) {
+  if (storeyView && !o.match) {
     const sv = storeyView;
     Object.assign(viewToggles, {
       hideAbove: () => {
@@ -508,14 +541,17 @@ export async function startLab(o: LabOptions): Promise<void> {
     );
   }
 
-  hooks.keys.set("KeyN", () => setFreeCam(freeCam === null));
-  // While flying, keys only fly the camera; the use key (or the touch Use button) puts your body here.
-  controls.flying = () => freeCam !== null;
-  controls.onFlyUse = () => setFreeCam(false, true);
+  if (!o.match) {
+    hooks.keys.set("KeyN", () => setFreeCam(freeCam === null));
+    // While flying, keys only fly the camera; the use key (or the touch Use button) puts your body here.
+    controls.flying = () => freeCam !== null;
+    controls.onFlyUse = () => setFreeCam(false, true);
+  }
 
   // ------------------------------------------------------------------ UI actions
 
   function onUi(a: UiAction) {
+    if (o.match && (a === "hitboxes" || a === "thirdPerson" || a === "respawn")) return; // lab tools
     if (a === "hitboxes") showHitboxes = !showHitboxes;
     else if (a === "thirdPerson") thirdPerson = !thirdPerson;
     else if (a === "help") $(".help").classList.toggle("hidden");
@@ -584,6 +620,11 @@ export async function startLab(o: LabOptions): Promise<void> {
     const d = defaultLoadoutPick(data, opId);
     const pick = { ...d, primary: parseWeaponParam(params.get("primary")) ?? d.primary, secondary: parseWeaponParam(params.get("secondary")) ?? d.secondary };
     return resolveLoadout(data, pick).loadout.pick;
+  }
+  /** Your body if you have one and it is alive (only a match page can be without one). */
+  function livingBody(): Pawn | null {
+    const p = sim.pawns.get(ctrl.possessedPawnId);
+    return p && p.state.mode !== PawnMode.Dead ? p : null;
   }
   /** What the body we're in carries. */
   const currentPick = (): LoadoutPick => sim.pawns.get(ctrl.possessedPawnId)?.loadout?.pick ?? defaultLoadoutPick(data, operatorId);
@@ -680,9 +721,14 @@ export async function startLab(o: LabOptions): Promise<void> {
     }
   }
 
+  /** The pointer was let go on purpose (LabApi.releasePointer): no pause menu for it. */
+  let releasing = false;
   document.addEventListener("pointerlockchange", () => {
-    if (!document.pointerLockElement && !autotest) togglePause(true); // a lost lock means the mouse was in use
-    else if (document.pointerLockElement) togglePause(false);
+    if (document.pointerLockElement) togglePause(false);
+    // A lost lock means the mouse was in use, unless a page let it go itself, or a match page has no body to play
+    // (its own screens are up).
+    else if (!autotest && !releasing && !(o.match && !livingBody())) togglePause(true);
+    releasing = false;
   });
   $(".gear").addEventListener("click", () => togglePause());
 
@@ -703,7 +749,10 @@ export async function startLab(o: LabOptions): Promise<void> {
         <label>Simulated extra latency <select data-net="rttMs">${[0, 50, 100, 150, 200].map((ms) => `<option value="${ms}" ${ms === conditions.rttMs ? "selected" : ""}>${ms ? `+${ms} ms round trip` : "Off"}</option>`).join("")}</select></label>
         <label>Simulated jitter <select data-net="jitterMs">${[0, 10, 20, 40].map((ms) => `<option value="${ms}" ${ms === conditions.jitterMs ? "selected" : ""}>${ms ? `up to ${ms} ms each way` : "Off"}</option>`).join("")}</select></label>
         <label>Simulated loss <select data-net="lossPct">${[0, 0.5, 1, 2, 5].map((p) => `<option value="${p}" ${p === conditions.lossPct ? "selected" : ""}>${p ? `${p} % (a 200 ms stall each)` : "Off"}</option>`).join("")}</select></label>`;
-    const room = local
+    const room = o.match
+      ? `<section><h3>Room ${net!.session.roomCode}</h3>
+        <div class="goto"><button class="invite">Copy invite link</button><button class="leave">Leave the match</button></div>${conditionSelects}</section>`
+      : local
       ? `<section><h3>Offline room</h3>${conditionSelects}
         <p class="note">This page runs a room of its own (no server): hits, downs and the dummies work exactly as online, and the latency settings above try lag compensation alone. <a href="${o.page}?online">Play online</a> to bring friends.</p></section>`
       : net
@@ -711,10 +760,8 @@ export async function startLab(o: LabOptions): Promise<void> {
         <div class="goto"><button class="invite">Copy invite link</button><button class="leave">Leave room</button></div>${conditionSelects}
         <p class="note">Shots do real damage now: the server rewinds everyone else to what you saw (lag compensation), and the white line shows where your first pellet went and what it hit first. Headshots kill; friendly fire is on.</p></section>`
         : "";
-    pause.innerHTML = `
-      <h2>${o.title}${net && !local ? " · Online" : ""}</h2>
-      ${touchOnly ? "" : `<button class="primary resume">Resume (click)</button>`}
-      ${room}
+    /** The lab's own sections: operator and team, loadout, Go to, the storey views and the lab tools. */
+    const labSections = () => `
       <section><h3>Operator</h3>
         <select class="op-select"><optgroup label="Attackers">${opts("attacker")}</optgroup><optgroup label="Defenders">${opts("defender")}</optgroup></select>
         ${op.pawns > 1 ? `<p class="note">${op.name} has two shells: press <kbd>${keyLabel(settings.keys.ability)}</kbd> to look through the other shell's camera, then <kbd>${keyLabel(settings.keys.interact)}</kbd> to transfer (${swap.transferSeconds} s + ${swap.activationSeconds} s).</p>` : ""}
@@ -732,7 +779,12 @@ export async function startLab(o: LabOptions): Promise<void> {
           : ""
       }
       <section><h3>Lab tools</h3><div class="goto"><button class="free-cam">${freeCam ? "Back to your body (N)" : "Free camera (N)"}</button><button class="refill">Refill ammo</button><button class="hurt-me">Take 30 damage</button><button class="down-me">Down me</button>${hooks.tools.map((t, i) => `<button data-tool="${i}">${t.label}</button>`).join("")}</div>
-        <p class="note">Down but not out: you crawl and bleed out in 60 s (30 s while crawling); a teammate holds ${keyLabel(settings.keys.interact)} for 4 s to revive you with 20 HP. A second down kills.</p></section>
+        <p class="note">Down but not out: you crawl and bleed out in 60 s (30 s while crawling); a teammate holds ${keyLabel(settings.keys.interact)} for 4 s to revive you with 20 HP. A second down kills.</p></section>`;
+    pause.innerHTML = `
+      <h2>${o.title}${net && !local ? " · Online" : ""}</h2>
+      ${touchOnly ? "" : `<button class="primary resume">Resume (click)</button>`}
+      ${room}
+      ${o.match ? "" : labSections()}
       <section><h3>Controls</h3>
         <label>Sensitivity <input type="range" min="0.01" max="0.4" step="0.005" value="${settings.sensitivity}" data-num="sensitivity"><output>${settings.sensitivity.toFixed(3)}</output></label>
         ${(["1", "2.5", "3.5"] as const)
@@ -748,15 +800,15 @@ export async function startLab(o: LabOptions): Promise<void> {
       </section>
       <p class="note">Press <kbd>F1</kbd> for the key list and what to try.</p>`;
     pause.querySelector(".resume")?.addEventListener("click", resume);
-    pause.querySelector(".refill")!.addEventListener("click", labRefill);
-    pause.querySelector(".free-cam")!.addEventListener("click", (e) => {
+    pause.querySelector(".refill")?.addEventListener("click", labRefill);
+    pause.querySelector(".free-cam")?.addEventListener("click", (e) => {
       setFreeCam(freeCam === null);
       resume(e);
     });
     pause.querySelectorAll<HTMLButtonElement>("[data-tool]").forEach((b) => b.addEventListener("click", () => hooks.tools[Number(b.dataset.tool)].run()));
-    pause.querySelector(".hurt-me")!.addEventListener("click", () => labHurt(30));
-    pause.querySelector(".down-me")!.addEventListener("click", () => labHurt(possessed().state.hp || 1));
-    pause.querySelector<HTMLSelectElement>(".op-select")!.addEventListener("change", (e) => pickOperator((e.target as HTMLSelectElement).value));
+    pause.querySelector(".hurt-me")?.addEventListener("click", () => labHurt(30));
+    pause.querySelector(".down-me")?.addEventListener("click", () => labHurt(possessed().state.hp || 1));
+    pause.querySelector<HTMLSelectElement>(".op-select")?.addEventListener("change", (e) => pickOperator((e.target as HTMLSelectElement).value));
     pause.querySelector<HTMLSelectElement>(".team-select")?.addEventListener("change", (e) => net?.send(encodeLabTool({ kind: "team", team: Number((e.target as HTMLSelectElement).value) })));
     pause.querySelectorAll<HTMLSelectElement>(".loadout select").forEach((el) =>
       el.addEventListener("change", () => {
@@ -773,7 +825,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     });
     pause.querySelector(".leave")?.addEventListener("click", () => {
       net?.close();
-      location.href = "/";
+      location.href = o.match ? "/play.html" : "/";
     });
     pause.querySelectorAll<HTMLSelectElement>("[data-net]").forEach((sel) =>
       sel.addEventListener("change", () => (conditions[sel.dataset.net as keyof typeof conditions] = Number(sel.value))),
@@ -853,7 +905,7 @@ export async function startLab(o: LabOptions): Promise<void> {
         ${row(`<kbd>${keyLabel(k.slowWalk)}</kbd>`, "Slow walk")}
         ${row("Right mouse", "Aim down sights (slower walk)")}
         ${row(`<kbd>${keyLabel(k.ability)}</kbd>`, "Ability — Skopós: view your other shell's camera (press again to go back)")}
-        ${row(`<kbd>${keyLabel(k.respawn)}</kbd>`, "Respawn")}
+        ${o.match ? "" : row(`<kbd>${keyLabel(k.respawn)}</kbd>`, "Respawn")}
         ${row("Left mouse", net ? "Fire (hold for automatic weapons). Online, each shot shows what the server's lag compensation hit." : "Fire (hold for automatic weapons)")}
         ${row(`<kbd>${keyLabel(k.reload)}</kbd>`, "Reload")}
         ${row(`<kbd>${keyLabel(k.primary)}</kbd> / <kbd>${keyLabel(k.secondary)}</kbd> / wheel`, "Primary / secondary weapon")}
@@ -861,10 +913,10 @@ export async function startLab(o: LabOptions): Promise<void> {
         ${row(`<kbd>${keyLabel(k.melee)}</kbd>`, "Knife: kills anyone in reach in front of you, standing or down (0.6 s a swing)")}
         ${row(`Hold <kbd>${keyLabel(k.interact)}</kbd>`, "Revive a downed teammate (4 s, facing them)")}
         ${hooks.help.map(([keys, what]) => row(keys, what)).join("")}
-        ${row("<kbd>N</kbd>", `Free camera: fly through anything (${keyLabel(k.forward)}${keyLabel(k.left)}${keyLabel(k.back)}${keyLabel(k.right)} along the view, ${keyLabel(k.vault)} up, ${keyLabel(k.crouch)} down, ${keyLabel(k.sprint)} faster) while your body stays where it is; <kbd>N</kbd> goes back to it, <kbd>${keyLabel(k.interact)}</kbd> puts it on the floor under the camera (where a body fits). Keys you press while flying never reach your body`)}
-        ${row("<kbd>F3</kbd> / <kbd>F4</kbd>", "Hitboxes / third-person view")}
+        ${o.match ? "" : row("<kbd>N</kbd>", `Free camera: fly through anything (${keyLabel(k.forward)}${keyLabel(k.left)}${keyLabel(k.back)}${keyLabel(k.right)} along the view, ${keyLabel(k.vault)} up, ${keyLabel(k.crouch)} down, ${keyLabel(k.sprint)} faster) while your body stays where it is; <kbd>N</kbd> goes back to it, <kbd>${keyLabel(k.interact)}</kbd> puts it on the floor under the camera (where a body fits). Keys you press while flying never reach your body`)}
+        ${o.match ? "" : row("<kbd>F3</kbd> / <kbd>F4</kbd>", "Hitboxes / third-person view")}
         ${row("<kbd>F8</kbd>", "Stats: frame rate, frame time, 1% low, work time, draw calls (<code>?stats</code> in the link shows them from the start)")}
-        ${row("<kbd>Esc</kbd>", "Pause: settings, operator, go-to menu")}
+        ${row("<kbd>Esc</kbd>", o.match ? "Pause: settings, the invite link, leave the match" : "Pause: settings, operator, go-to menu")}
       </table>
       <h2>Try this</h2>
       <ul>
@@ -893,6 +945,13 @@ export async function startLab(o: LabOptions): Promise<void> {
     addLabTool: (label, run) => hooks.tools.push({ label, run }),
     addHelp: (keys, what) => hooks.help.push([keys, what]),
     flash,
+    body: livingBody,
+    spectate: (fn) => (spectateFn = fn),
+    releasePointer: () => {
+      if (!document.pointerLockElement) return;
+      releasing = true;
+      document.exitPointerLock();
+    },
   });
   addEventListener("keydown", (e) => {
     const fn = hooks.keys.get(e.code);
@@ -1024,9 +1083,14 @@ export async function startLab(o: LabOptions): Promise<void> {
     const elapsed = Math.max(0, Math.min(0.25, (now - last) / 1000));
     acc += elapsed;
     last = now;
-    if (net && !followServer(elapsed)) {
+    const live = !net || followServer(elapsed);
+    /** A match page with no living body to look through: the page's camera (spectating). */
+    const spec = o.match ? spectating(live) : null;
+    app.classList.toggle("spectating", spec !== null);
+    if (!live && !spec) {
       // Between bodies (joining, respawning, a new operator): wait for the server's exact state.
       acc = 0;
+      if (o.match && disconnected && !app.classList.contains("disconnected")) matchFail(disconnected);
       drawWorld();
       stats.frame(now, performance.now() - workFrom + (net?.takeHandleMs() ?? 0), renderer.info.render.calls, renderer.info.render.triangles);
       $(".center-msg").textContent = disconnected ?? "Waiting for the server…";
@@ -1037,24 +1101,108 @@ export async function startLab(o: LabOptions): Promise<void> {
     // Online, the tick period stretches or shrinks a few percent so our inputs reach the server just
     // before it needs them (clock sync, PLAN §5).
     const period = net ? DT * net.session.tickScale() : DT;
-    while (acc >= period) {
-      acc -= period;
-      tick();
-    }
+    if (live)
+      while (acc >= period) {
+        acc -= period;
+        tick();
+      }
+    else acc = 0;
     controls.applyLimits();
     const alpha = acc / period;
 
-    const me = possessed();
-    const viewed = sim.pawns.get(viewedId) ?? me;
+    const me = live ? possessed() : undefined;
+    const viewed = me ? (sim.pawns.get(viewedId) ?? me) : undefined;
     const renderTick = net ? net.session.frame() : 0;
     shownRenderTick = renderTick;
     /** Looking from outside your body: third person, or a map's plan view. */
     const outside = thirdPerson || storeyView?.plan === true || freeCam !== null;
+    drawBodies(alpha, renderTick, spec ? (spec.kind === "pawn" ? spec.pawnId : -1) : viewed!.id, spec ? spec.kind !== "pawn" : outside);
+    updateShots(now);
+    fx.update(now, shownRenderTick, ctrl.pawnIds, ownMuzzle, remoteMuzzle);
+    updateCombatHud(now);
+    updateLasers();
+
+    let rs: PawnState | null = null;
+    if (spec) {
+      const [vx, vy, vz] = placeSpectator(spec, renderTick, elapsed);
+      if (storeyView?.follow(vx, vy, vz, camera.rotation.y, elapsed)) renderer.shadowMap.needsUpdate = true;
+      if (storeyView) viewmodel.setLight(storeyView.light());
+      whereHud?.update(now, storeyView?.storey ?? 0, vx, vz);
+      controls.upsideDown = false;
+      if (Math.abs(camera.fov - settings.fovVertical) > 1e-4) {
+        camera.fov = settings.fovVertical;
+        camera.updateProjectionMatrix();
+      }
+    } else {
+      rs = interpolated(viewed!, alpha);
+      flyFreeCam(elapsed);
+      // A map follows the body you look through (or the free camera): its storey (and that storey's light), the
+      // plan view over it.
+      const [vx, vy, vz] = freeCam ? [freeCam.x, freeCam.y - data.movement.stance.stand.eye, freeCam.z] : [rs.x, rs.y, rs.z];
+      if (storeyView?.follow(vx, vy, vz, controls.yaw, elapsed)) renderer.shadowMap.needsUpdate = true;
+      if (storeyView) viewmodel.setLight(storeyView.light());
+      whereHud?.update(now, storeyView?.storey ?? 0, vx, vz);
+      aim(viewed!, rs);
+      const eye = eyePose(data.movement, data.hitboxes, { ...rs, yaw: controls.yaw });
+      // Only the first-person view turns over with the body (the third-person and plan views stay upright).
+      controls.upsideDown = !freeCam && !thirdPerson && !storeyView?.plan && upsideDown(rs);
+      if (freeCam) {
+        camera.position.copy(freeCam);
+        camera.rotation.set(controls.pitch, controls.yaw, 0);
+      } else if (thirdPerson) {
+        const back = new THREE.Vector3(0, 0, 1).applyEuler(new THREE.Euler(controls.pitch, controls.yaw, 0, "YXZ"));
+        camera.position.set(eye.pos[0] + back.x * 3 + Math.cos(controls.yaw) * 0.5, eye.pos[1] + back.y * 3 + 0.4, eye.pos[2] + back.z * 3 - Math.sin(controls.yaw) * 0.5);
+        camera.rotation.set(controls.pitch, controls.yaw, 0);
+      } else {
+        camera.position.set(eye.pos[0], eye.pos[1], eye.pos[2]);
+        camera.rotation.set(controls.pitch, controls.yaw, eye.roll);
+      }
+    }
+    updateLabels(labScene.labels, shownCamera());
+    // A panel that changed changes the level's shadows too.
+    const panelFrom = performance.now();
+    if (panelView.update()) renderer.shadowMap.needsUpdate = true;
+    const panelMs = performance.now() - panelFrom;
+    for (const fn of hooks.frame) fn(now, renderTick);
+    drawWorld();
+    if (rs && viewed && me) {
+      const inHand = viewed.id === me.id && !outside && !ctrl.shellCam && ctrl.swapPhase === 0 ? (viewed.loadout?.weapons[rs.slot] ?? null) : null;
+      viewmodel.update(now, elapsed, inHand, rs, viewed.loadout?.swapTicks ?? 1);
+      viewmodel.render(renderer);
+      const held = viewed.loadout?.weapons[rs.slot];
+      const aimed = inHand !== null && viewmodel.aim > 0.9;
+      crosshair.update({
+        gapPx: held ? spreadGapPx(spreadCone(held, rs), camera.fov, view.clientHeight) : 0,
+        noTicks: rs.mode === PawnMode.Dead || ctrl.shellCam || ctrl.swapPhase !== 0 || thirdPerson || freeCam !== null,
+        aimed,
+        reticle: viewmodel.reticle,
+        zoomed: aimed && inHand!.ads.zoom > 1,
+      });
+    }
+    frames++;
+    fpsFrames++;
+    if (now - fpsAt > 500) {
+      $(".fps").textContent = `${Math.round((fpsFrames * 1000) / (now - fpsAt))} fps · tick ${sim.tick}`;
+      if (net) updateNetStats(now - fpsAt);
+      fpsFrames = 0;
+      fpsAt = now;
+    }
+    if (me && !spec) updateHud(me);
+    else spectatorHud();
+    const workMs = performance.now() - workFrom + (net?.takeHandleMs() ?? 0);
+    stats.frame(now, workMs, renderer.info.render.calls, renderer.info.render.triangles);
+    perfLog?.push({ workMs, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, panelMs });
+    requestAnimationFrame(frame);
+  }
+
+  /**
+   * Pose and show every body: other players a little in the past, between two server snapshots; our own from our
+   * prediction. The body whose eyes the camera is at (`eyesId`) isn't drawn in first person (`outside` false).
+   */
+  function drawBodies(alpha: number, renderTick: number, eyesId: number, outside: boolean) {
     syncPawnViews();
     for (const pawn of sim.pawns.values()) {
       const v = pawnViews.get(pawn.id)!;
-      // Other players are drawn a little in the past, between two server snapshots; our own bodies are
-      // drawn from our prediction.
       const rs = pawn.proxy ? net!.session.remoteAt(pawn.id, renderTick) : interpolated(pawn, alpha);
       // On a map, a body on a storey hidden over yours is hidden with it.
       const drawn = rs !== null && (storeyView?.draws(rs.y) ?? true);
@@ -1073,71 +1221,89 @@ export async function startLab(o: LabOptions): Promise<void> {
           : null;
       v.setRope(rs.x, rs.y + m.stance.stand.height / 2, rs.z, rope);
       drawnView.set(pawn.id, [rs.yaw, rs.pitch]);
-      const eyes = pawn.id === viewed.id;
+      const eyes = pawn.id === eyesId;
       // In first person your own body isn't drawn; your gun is the viewmodel.
       v.setFirstPerson(eyes && !outside);
       v.wire.visible = drawn && showHitboxes && (!eyes || outside);
     }
-    updateShots(now);
-    fx.update(now, shownRenderTick, ctrl.pawnIds, ownMuzzle, remoteMuzzle);
-    updateCombatHud(now);
-    updateLasers();
+  }
 
-    const rs = interpolated(viewed, alpha);
-    flyFreeCam(elapsed);
-    // A map follows the body you look through (or the free camera): its storey (and that storey's light), the
-    // plan view over it.
-    const [vx, vy, vz] = freeCam ? [freeCam.x, freeCam.y - data.movement.stance.stand.eye, freeCam.z] : [rs.x, rs.y, rs.z];
-    if (storeyView?.follow(vx, vy, vz, controls.yaw, elapsed)) renderer.shadowMap.needsUpdate = true;
-    if (storeyView) viewmodel.setLight(storeyView.light());
-    whereHud?.update(now, storeyView?.storey ?? 0, vx, vz);
-    const fov = aim(viewed, rs);
-    const eye = eyePose(data.movement, data.hitboxes, { ...rs, yaw: controls.yaw });
-    // Only the first-person view turns over with the body (the third-person and plan views stay upright).
-    controls.upsideDown = !freeCam && !thirdPerson && !storeyView?.plan && upsideDown(rs);
-    if (freeCam) {
-      camera.position.copy(freeCam);
-      camera.rotation.set(controls.pitch, controls.yaw, 0);
-    } else if (thirdPerson) {
-      const back = new THREE.Vector3(0, 0, 1).applyEuler(new THREE.Euler(controls.pitch, controls.yaw, 0, "YXZ"));
-      camera.position.set(eye.pos[0] + back.x * 3 + Math.cos(controls.yaw) * 0.5, eye.pos[1] + back.y * 3 + 0.4, eye.pos[2] + back.z * 3 - Math.sin(controls.yaw) * 0.5);
-      camera.rotation.set(controls.pitch, controls.yaw, 0);
-    } else {
-      camera.position.set(eye.pos[0], eye.pos[1], eye.pos[2]);
-      camera.rotation.set(controls.pitch, controls.yaw, eye.roll);
+  // ------------------------------------------------------------------ without a body (match pages)
+
+  /** How long a match page shows your own dead body before the camera moves on (to a teammate). */
+  const DEAD_VIEW_MS = 3000;
+  let deadSince: number | null = null;
+
+  /** The spectator view for this frame, or null while you have a living body (or a fresh death) to look through. */
+  function spectating(live: boolean): SpectateView | null {
+    if (disconnected || !net?.session.match) return null;
+    const p = live ? possessed() : undefined;
+    if (p && p.state.mode !== PawnMode.Dead) {
+      deadSince = null;
+      return null;
     }
-    updateLabels(labScene.labels, shownCamera());
-    // A panel that changed changes the level's shadows too.
-    const panelFrom = performance.now();
-    if (panelView.update()) renderer.shadowMap.needsUpdate = true;
-    const panelMs = performance.now() - panelFrom;
-    for (const fn of hooks.frame) fn(now, renderTick);
-    drawWorld();
-    const inHand = viewed.id === possessed()?.id && !outside && !ctrl.shellCam && ctrl.swapPhase === 0 ? (viewed.loadout?.weapons[rs.slot] ?? null) : null;
-    viewmodel.update(now, elapsed, inHand, rs, viewed.loadout?.swapTicks ?? 1);
-    viewmodel.render(renderer);
-    const held = viewed.loadout?.weapons[rs.slot];
-    const aimed = inHand !== null && viewmodel.aim > 0.9;
-    crosshair.update({
-      gapPx: held ? spreadGapPx(spreadCone(held, rs), fov, view.clientHeight) : 0,
-      noTicks: rs.mode === PawnMode.Dead || ctrl.shellCam || ctrl.swapPhase !== 0 || thirdPerson || freeCam !== null,
-      aimed,
-      reticle: viewmodel.reticle,
-      zoomed: aimed && inHand!.ads.zoom > 1,
-    });
-    frames++;
-    fpsFrames++;
-    if (now - fpsAt > 500) {
-      $(".fps").textContent = `${Math.round((fpsFrames * 1000) / (now - fpsAt))} fps · tick ${sim.tick}`;
-      if (net) updateNetStats(now - fpsAt);
-      fpsFrames = 0;
-      fpsAt = now;
+    if (p) {
+      deadSince ??= performance.now();
+      if (performance.now() - deadSince < DEAD_VIEW_MS) return null;
     }
-    updateHud(me);
-    const workMs = performance.now() - workFrom + (net?.takeHandleMs() ?? 0);
-    stats.frame(now, workMs, renderer.info.render.calls, renderer.info.render.triangles);
-    perfLog?.push({ workMs, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, panelMs });
-    requestAnimationFrame(frame);
+    return spectateFn?.() ?? { kind: "overview" };
+  }
+
+  /** The overview's centre (the building's middle: its zones, else the level's bounds) and how far out it circles. */
+  const overview = (() => {
+    const boxes = zoneBoxes(sim.level.def, "building");
+    const lo = [Infinity, Infinity, Infinity];
+    const hi = [-Infinity, -Infinity, -Infinity];
+    for (const b of boxes)
+      for (let i = 0; i < 3; i++) {
+        lo[i] = Math.min(lo[i], b.c[i] - b.h[i]);
+        hi[i] = Math.max(hi[i], b.c[i] + b.h[i]);
+      }
+    const bb = boxes.length ? { min: lo, max: hi } : sim.level.def.bounds;
+    if (!bb) return { c: [0, 0, 0], r: 20 };
+    return { c: [0, 1, 2].map((i) => (bb.min[i] + bb.max[i]) / 2), r: Math.max(15, Math.hypot(bb.max[0] - bb.min[0], bb.max[2] - bb.min[2]) * 0.7) };
+  })();
+  /** Radians a second the overview turns. */
+  const OVERVIEW_TURN = 0.05;
+  let overviewAngle = 0.6;
+  /** The fixed spot last looked from (a new one turns the view to its yaw once; then the mouse looks around). */
+  let spotKey = "";
+
+  /** Put the camera where a spectator view says; returns the feet position the storey views and the HUD line follow. */
+  function placeSpectator(v: SpectateView, renderTick: number, elapsed: number): [number, number, number] {
+    const eyeH = data.movement.stance.stand.eye;
+    if (v.kind === "pawn") {
+      const st = net?.session.remoteAt(v.pawnId, renderTick) ?? sim.pawns.get(v.pawnId)?.state;
+      if (st) {
+        const eye = eyePose(data.movement, data.hitboxes, st);
+        camera.position.set(eye.pos[0], eye.pos[1], eye.pos[2]);
+        camera.rotation.set(st.pitch, st.yaw, eye.roll);
+        return [st.x, st.y, st.z];
+      }
+    } else if (v.kind === "spot") {
+      const key = `${v.pos.join()},${v.yawDeg}`;
+      if (key !== spotKey) {
+        spotKey = key;
+        controls.setView(v.yawDeg * DEG, 0);
+      }
+      camera.position.set(v.pos[0], v.pos[1] + eyeH, v.pos[2]);
+      camera.rotation.set(controls.pitch, controls.yaw, 0);
+      return [v.pos[0], v.pos[1], v.pos[2]];
+    }
+    // Over the map, circling its middle.
+    overviewAngle += elapsed * OVERVIEW_TURN;
+    const [cx, cy, cz] = overview.c;
+    camera.position.set(cx + Math.sin(overviewAngle) * overview.r, cy + overview.r * 0.6, cz + Math.cos(overviewAngle) * overview.r);
+    camera.lookAt(cx, cy, cz);
+    return [camera.position.x, camera.position.y - eyeH, camera.position.z];
+  }
+
+  /** The HUD while spectating: nobody's prompt, and the centre message only for a lost connection. */
+  function spectatorHud() {
+    $(".prompt").classList.add("hidden");
+    $(".center-msg").classList.toggle("hidden", !disconnected);
+    if (disconnected) $(".center-msg").textContent = disconnected;
+    $(".flash").classList.toggle("show", performance.now() < flashUntil);
   }
 
   /**
@@ -1169,7 +1335,7 @@ export async function startLab(o: LabOptions): Promise<void> {
   function updateHud(p: Pawn) {
     const s = p.state;
     $(".op-name").textContent = `${op.name} · ${op.side} · ${op.healthRating} health / ${op.speedRating} speed${op.pawns > 1 ? ` · shell ${ctrl.pawnIds.indexOf(p.id) + 1}/2` : ""}`;
-    downedHud.update(s, data.combat, keyLabel(settings.keys.interact), nameOfPawn, data.destruction, data.movement);
+    downedHud.update(s, data.combat, keyLabel(settings.keys.interact), nameOfPawn, data.destruction, data.movement, sim.objective);
     app.querySelectorAll<HTMLElement>(".stances span").forEach((el) => el.classList.toggle("on", Number(el.dataset.s) === s.stance));
     $(".stance-bar div").style.width = `${s.stanceT * 100}%`;
     // On a rope the body is moved by position, not velocity: its speed from the last tick's move.
@@ -1196,7 +1362,9 @@ export async function startLab(o: LabOptions): Promise<void> {
       : waiting
         ? "Waiting for the server…"
         : dead
-          ? `${deathText ?? "You died from the fall"} — press ${keyLabel(settings.keys.respawn)} to respawn`
+          ? o.match
+            ? (deathText ?? "You died")
+            : `${deathText ?? "You died from the fall"} — press ${keyLabel(settings.keys.respawn)} to respawn`
           : "Click to play · F1 for controls";
     if (touchLayer) touchLayer.querySelector(".touch-btn")!.classList.toggle("on", controls.sprintIsLatched);
 
@@ -1224,7 +1392,13 @@ export async function startLab(o: LabOptions): Promise<void> {
                   ? `Hold ${keyLabel(k.interact)} to barricade`
                   : prompt === "unbarricade"
                     ? `Hold ${keyLabel(k.interact)} to remove the barricade`
-                    : "";
+                    : prompt === "plant"
+                      ? `Hold ${keyLabel(k.interact)} to plant the defuser`
+                      : prompt === "disable"
+                        ? `Hold ${keyLabel(k.interact)} to disable the defuser`
+                        : prompt === "pickUp"
+                          ? `${keyLabel(k.interact)} to pick up the defuser`
+                          : "";
     $(".prompt").textContent = promptText;
     $(".prompt").classList.toggle("hidden", !promptText || dead);
     const onCam = ctrl.shellCam || ctrl.swapPhase !== 0;
@@ -1581,9 +1755,83 @@ export async function startLab(o: LabOptions): Promise<void> {
     });
   }
 
-  /** Our first body comes with the roster; we predict from the server's exact state once that arrives. */
+  /** A match page that can't go on (a room that can't be joined, a lost connection): why, and the way back to Play. */
+  function matchFail(why: string) {
+    const panel = $(".lobby");
+    app.classList.add("disconnected");
+    panel.classList.remove("hidden");
+    panel.innerHTML = `<h2>${escapeHtml(o.title)}</h2><p class="error">${escapeHtml(why)}</p><p class="note"><a href="/play.html">Back to Play</a></p>`;
+  }
+
+  /**
+   * A match page's room: the one in the link (`?room=CODE`), or a new one in the link's format (`?format=`, the Play
+   * page's Create), under the name the Play page remembered. Resolves once the room's level is loaded; a room that
+   * can't be joined leaves a message and a way back to the Play page.
+   */
+  function matchRoom(): Promise<OnlineConnection> {
+    const code = (params.get("room") ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 5);
+    const format = params.get("format");
+    const fail = matchFail;
+    if (!code && !format) {
+      location.replace("/play.html");
+      return new Promise(() => {});
+    }
+    let name = params.get("name") ?? "";
+    try {
+      name ||= localStorage.getItem("redmond.name") ?? "";
+    } catch {
+      // storage blocked: the default name
+    }
+    $(".center-msg").textContent = "Connecting…";
+    $(".center-msg").classList.remove("hidden");
+    return new Promise((resolve) => {
+      let joined = false;
+      const conn: OnlineConnection = new OnlineConnection({
+        name: name.trim().slice(0, 24) || "Player",
+        room: code || null,
+        format: format ?? undefined,
+        levelId: o.levelId,
+        conditions: () => conditions,
+        session: {
+          onWelcome: () => {
+            if (conn.closed) return;
+            joined = true;
+            void conn.session.loaded().then(() => {
+              if (conn.closed) return fail(disconnected ?? "Lost connection to the server.");
+              const url = new URL(location.href);
+              url.searchParams.delete("format");
+              url.searchParams.delete("name");
+              url.searchParams.set("room", conn.session.roomCode);
+              history.replaceState(null, "", url); // a reload rejoins, and the link is the invite
+              resolve(conn);
+            });
+          },
+          onError: (_code, message) => {
+            if (joined) return flash(message, "bad");
+            conn.close();
+            fail(message);
+          },
+          onRoster: () => (rosterChanged = true),
+          onShot: (shot) => showShot(shot),
+          onEvents: (tick, events) => gameEvents(tick, events),
+          onPanels: (_tick, ops, changes) => panelEvents(ops, changes),
+          trackMispredictions: autotest,
+          onLocalEvents: (events) => onWeaponEvents(events),
+        },
+        onClose: (reason) => {
+          if (joined) disconnected = reason;
+          else fail(reason);
+        },
+      });
+    });
+  }
+
+  /**
+   * Our first body comes with the roster; we predict from the server's exact state once that arrives. A match page
+   * starts with the match's state instead, often with no body at all (NO_BODY until the server spawns one).
+   */
   async function firstBody(c: OnlineConnection): Promise<PlayerController> {
-    while (!c.session.ready) {
+    while (o.match ? !c.session.match : !c.session.ready) {
       if (disconnected) {
         $(".center-msg").textContent = disconnected;
         $(".center-msg").classList.remove("hidden");
@@ -1591,7 +1839,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       }
       await new Promise((r) => setTimeout(r, 20));
     }
-    return c.session.ctrl!;
+    return c.session.ctrl ?? NO_BODY;
   }
 
   /** Offline with a room of its own (the Range Lab): a Web Worker runs it, and we talk to it like the server. */
@@ -1667,7 +1915,21 @@ export async function startLab(o: LabOptions): Promise<void> {
       disconnected = "Lost connection to the server.";
       net!.close();
     }
-    if (disconnected || !s.ready || !s.ctrl || !sim.pawns.has(s.ctrl.possessedPawnId)) return false;
+    // Other players' views are rebuilt with their (new) name tags, with a body of our own or not (a match page).
+    const newRoster = rosterChanged;
+    if (newRoster) {
+      rosterChanged = false;
+      for (const [id, v] of pawnViews)
+        if (sim.pawns.get(id)?.proxy !== false) {
+          v.dispose();
+          pawnViews.delete(id);
+          drawnView.delete(id);
+        }
+    }
+    if (disconnected || !s.ready || !s.ctrl || !sim.pawns.has(s.ctrl.possessedPawnId)) {
+      if (newRoster && !$(".pause").classList.contains("hidden")) renderPause();
+      return false;
+    }
     // A new body first (respawn, operator or loadout pick): what is drawn next (the pause menu) reads it.
     const newBody = s.ctrl !== ctrl;
     if (newBody) {
@@ -1683,17 +1945,6 @@ export async function startLab(o: LabOptions): Promise<void> {
       snapshotAll();
       notePredicted();
       seenCorrections = s.stats.corrections;
-    }
-    const newRoster = rosterChanged;
-    if (newRoster) {
-      rosterChanged = false;
-      // Other players' views are rebuilt with their (new) name tags.
-      for (const [id, v] of pawnViews)
-        if (sim.pawns.get(id)?.proxy !== false) {
-          v.dispose();
-          pawnViews.delete(id);
-          drawnView.delete(id);
-        }
     }
     if ((newBody || newRoster) && !$(".pause").classList.contains("hidden")) renderPause();
     if (s.stats.corrections !== seenCorrections) {
@@ -1831,8 +2082,8 @@ export async function startLab(o: LabOptions): Promise<void> {
       if (e.kind === "hitConfirm") hitMarkers.confirm(now, e);
       else if (e.kind === "damageTaken") {
         // Which way it came from, relative to where you're looking.
-        const at = sim.pawns.get(e.pawnId)?.state ?? possessed().state;
-        damageHud.hurt(now, e.from ? damageArcDeg(at, controls.yaw, e.from) : null);
+        const at = sim.pawns.get(e.pawnId)?.state ?? possessed()?.state;
+        if (at) damageHud.hurt(now, e.from ? damageArcDeg(at, controls.yaw, e.from) : null);
       } else {
         const line = feedLine(e, feedNames, { ctrl: me, pawns: ctrl.pawnIds });
         if (line) killFeed.push(line, now);

@@ -1,0 +1,69 @@
+/* A match's screens and HUD (labs/matchFeatures.ts): the lobby, ban, planning and summary screens, the top bar with the
+   score and the clock, the lines under it, the round banner and the Tab scoreboard. */
+.team-0 { --team: #4d8fe0; }
+.team-1 { --team: #f2a33a; }
+
+.match-screen { width: min(860px, calc(100vw - 32px)); }
+.match-screen h2 .timer { font-family: var(--mono); color: var(--accent); }
+.match-screen .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
+.match-screen .row label { margin: 0; }
+.match-screen .check { gap: 6px; }
+.match-screen button.on { border-color: var(--good); color: var(--good); }
+.match-screen button.primary { width: auto; padding: 8px 16px; }
+.match-screen .teams, .scoreboard .teams { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.match-screen .team, .scoreboard .team { border: 1px solid var(--line); border-top: 3px solid var(--team); border-radius: 8px; padding: 6px 10px 10px; }
+.match-screen .team h3, .scoreboard .team h3 { margin-top: 4px; color: var(--team); }
+.match-screen .team ul, .match-screen .mates { list-style: none; margin: 0 0 8px; padding: 0; }
+.match-screen .team li { display: flex; align-items: center; gap: 6px; padding: 3px 0; }
+.match-screen .team li .name { flex: 1; }
+.match-screen .team li button { padding: 1px 7px; }
+.match-screen li.you .name, .match-screen .mates li.you, tr.you td { font-weight: 700; }
+.match-screen li.gone { opacity: 0.5; }
+.match-screen li.empty { color: var(--muted); font-style: italic; }
+.match-screen .ready { width: 1.2em; text-align: center; color: var(--muted); }
+.match-screen .ready.on { color: var(--good); }
+.match-screen .host { color: var(--accent); }
+.match-screen .op-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 6px; }
+.match-screen .op { text-align: left; }
+.match-screen .op small { display: block; color: var(--muted); font-size: 11px; }
+.match-screen .op.mine { border-color: var(--accent); background: rgba(242, 163, 58, 0.18); }
+.match-screen .op:disabled { opacity: 0.4; cursor: not-allowed; }
+.match-screen .rules { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px 12px; }
+.match-screen .rules input { width: 70px; margin-left: auto; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-solid); }
+.match-screen table, .scoreboard table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.match-screen th, .match-screen td, .scoreboard th, .scoreboard td { text-align: left; padding: 3px 6px; border-bottom: 1px solid var(--line); }
+.match-screen td.team-0, .match-screen td.team-1 { color: var(--team); font-weight: 600; }
+.match-screen .mvp { font: 700 10px var(--mono); color: #111; background: var(--accent); border-radius: 3px; padding: 0 4px; }
+
+.match-top { top: 10px; left: 50%; transform: translateX(-50%); display: flex; align-items: stretch; gap: 10px; }
+.match-top .score { display: flex; flex-direction: column; align-items: center; min-width: 74px; padding: 2px 8px; border-radius: 6px; background: rgba(0, 0, 0, 0.55); border-bottom: 3px solid var(--team); }
+.match-top .score b { font: 700 24px/1.1 var(--mono); }
+.match-top .score span { font: 600 10px var(--mono); letter-spacing: 0.08em; color: var(--muted); }
+.match-top .mid { display: flex; flex-direction: column; align-items: center; min-width: 150px; padding: 2px 10px; border-radius: 6px; background: rgba(0, 0, 0, 0.55); }
+.match-top .phase { font: 700 11px var(--mono); letter-spacing: 0.1em; color: var(--muted); }
+.match-top .timer { font: 700 22px/1.15 var(--mono); }
+.match-top .timer.urgent { color: var(--bad); }
+.match-top.planted .phase, .match-top.planted .timer { color: var(--bad); }
+.match-top .round { font: 600 10px var(--mono); letter-spacing: 0.08em; color: var(--muted); }
+.match-info { top: 76px; left: 50%; transform: translateX(-50%); text-align: center; font: 600 12px system-ui, sans-serif; }
+.match-info div { display: inline-block; margin: 0 4px 3px; padding: 2px 8px; border-radius: 4px; background: rgba(0, 0, 0, 0.5); }
+
+.match-banner { position: fixed; top: 22%; left: 50%; transform: translateX(-50%); pointer-events: none; text-align: center; padding: 12px 26px; border-radius: 10px; background: rgba(0, 0, 0, 0.7); }
+.match-banner .title { font: 800 26px system-ui, sans-serif; letter-spacing: 0.04em; color: var(--team); }
+.match-banner .why { font: 600 15px system-ui, sans-serif; margin-top: 4px; }
+.match-banner .you { font: 700 12px var(--mono); letter-spacing: 0.1em; margin-top: 6px; }
+.match-banner .you.won { color: var(--good); }
+.match-banner .you.lost { color: var(--bad); }
+
+.scoreboard { width: min(760px, calc(100vw - 32px)); pointer-events: none; }
+.scoreboard tr.dead td { opacity: 0.55; }
+
+/* A connection lost: the lab's message panel, not a screen that can't be used any more. */
+.disconnected .match-screen, .disconnected .scoreboard { display: none; }
+@media (max-width: 700px) {
+  .match-screen .teams, .scoreboard .teams { grid-template-columns: 1fr; }
+}
+
+/* The lab's network line is for the labs; a match keeps the frame rate and the kill feed up there. */
+.match .hud-tr .net { display: none; }
+.match.spectating .hud.where { display: none; }

@@ -195,20 +195,29 @@ misprediction.
 
 ## 11. Client
 
-- **Play page** (`/play.html`, linked from the home page): name, create a match (pick the format), join by code, the
-  room list. The match itself runs in the existing game client (labs/common/lab.ts) with a `match` option: no lab
-  tools, no Go to, no free camera; the lobby, planning and HUD overlays below.
-- **No body:** lab.ts learns to run without a body (the controller is null): the camera shows the plan view of the
-  site storey on the planning screen, the spawn's view (mouse look only) for attackers in prep, and after death the
-  view of a teammate still alive (click for the next; full spectating is Phase 7).
-- **Lobby overlay:** two team columns, ready buttons, host controls and settings, the room code and invite link.
-- **Ban and planning overlay:** the operator grid (banned, taken, attrition-locked greyed out), loadout, site vote
-  (defenders) or spawn pick (attackers) on the plan, the defuser button, the timer.
-- **HUD:** round timer or fuse, score and round, phase, the site marker, the defuser marker and carrier icon, plant /
-  disable progress (the deploy gauge), the reinforcement pool, safeguard and Detected markers.
-- **Tab scoreboard:** both teams, operator, K/A/D, alive or dead, ping, connected.
-- **Round banner and match summary:** who won the round and how (research §4 icons are drawn our way), the next
-  round's sides; at the end the score, each round's result, MVP and the rating change.
+- **Play page** (`/play.html`, linked from the home page; `game/client/src/play/`): name, create a match (pick the
+  format), join by code, the room list (refreshed every 3 s). It sends you to the match page
+  (`labs/match.html?format=…` creates, `?room=CODE` joins), which runs the existing game client
+  (labs/common/lab.ts) with a `match` option: no lab tools, Go to, free camera, storey views, third person or
+  hitboxes; the screens and HUD below are `labs/matchFeatures.ts`.
+- **No body** (D-125): lab.ts runs without a body (a stand-in controller with no pawns until the server spawns one).
+  The page picks the camera: circling the building on the lobby, ban and planning screens and at the end; for an
+  attacker in prep, their spawn's first point with mouse look; after a death, 3 s on your own body, then a living
+  teammate's eyes (click for the next; full spectating is Phase 7).
+- **Lobby screen:** two team columns (ready, host star, left), Join a team, Ready, the host's move, kick, swap
+  teams and start, the format, the bans and reinforcement toggles, Custom's rounds and timers, private, the room
+  code and invite link.
+- **Ban and planning screens:** the operator grid (banned and taken greyed out), the weapons, the site vote
+  (defenders) or the spawn (attackers) as buttons, the defuser button, the team's picks, the timer. Attackers keep it
+  through prep, over their spawn's view.
+- **HUD:** the score with each team's side this round, the phase and its clock (the fuse once planted, red in its
+  last 10 s), the round and overtime; a line each for the site, the defuser (carrier, dropped, planted), Detected
+  run-outs, the pool in prep and the red walls; plant and disable progress on the deploy gauge; the defuser, its
+  carrier and Detected defenders marked in the world.
+- **Tab scoreboard:** both teams, operator, K/A/D, alive, dead or left; your ping.
+- **Round banner and match summary:** who won the round and how (research §4's icons, drawn our way: in words), the
+  next round's sides on the top bar; at the end the score, each round's result, the players' K/A/D and the MVP, and
+  the host's Back to the lobby. The rating change comes with M5.
 
 ## 12. Ranked rating
 
