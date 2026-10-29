@@ -16,9 +16,6 @@ import {
   eyePose,
   GRIPS,
   isDowned,
-  isGun,
-  isPickable,
-  offerId,
   resolveLoadout,
   QUERY_STATIC,
   raycastLevel,
@@ -48,9 +45,7 @@ import {
   type PawnState,
   type PlayerController,
   upsideDown,
-  type GunData,
   type LoadoutPick,
-  type Offer,
   type ResolvedWeapon,
   type GameData,
   type GameEvent,
@@ -79,6 +74,7 @@ import { HitMarkers } from "../../ui/hitMarkers.js";
 import { deathLine, feedLine, KillFeed } from "../../ui/killFeed.js";
 import { StatsOverlay } from "../../ui/stats.js";
 import { goToMenu, WhereHud } from "../../ui/where.js";
+import { changedPick, saveLoadout, savedLoadout, SLOTS, weaponRow, type Slot } from "../../ui/loadout.js";
 
 /** What scripts and page additions can reach in a running lab. */
 export interface LabHandle {
@@ -588,23 +584,6 @@ export async function startLab(o: LabOptions): Promise<void> {
 
   // ------------------------------------------------------------------ loadout (Phase 3 M4, DECISIONS D-042)
 
-  const SLOTS = ["primary", "secondary"] as const;
-  const ATTACHMENT_NAMES: Record<string, string> = {
-    iron: "Iron sight",
-    nonmag: "Red dot / holo (1x)",
-    magnified: "Magnified (2.5x)",
-    telescopic: "Telescopic (3.5x)",
-    muzzle_brake: "Muzzle brake",
-    compensator: "Compensator",
-    flash_hider: "Flash hider",
-    suppressor: "Suppressor",
-    extended_barrel: "Extended barrel",
-    vertical: "Vertical grip",
-    angled: "Angled grip",
-    horizontal: "Horizontal grip",
-    laser: "Laser",
-  };
-
   /** A weapon pick in the link: `para_308.magnified.extended_barrel.angled.laser` (trailing parts optional). */
   function weaponParam(w: WeaponPick): string {
     return [w.weapon, w.sight ?? "", w.barrel ?? "", w.grip ?? "", w.underbarrel ?? ""].join(".").replace(/\.+$/, "");
@@ -615,9 +594,9 @@ export async function startLab(o: LabOptions): Promise<void> {
     const one = <T extends string>(list: readonly T[], x: string | undefined): T | null => ((list as readonly string[]).includes(x ?? "") ? (x as T) : null);
     return { weapon, sight: one(SIGHTS, sight), barrel: one(BARRELS, barrel), grip: one(GRIPS, grip), underbarrel: one(UNDERBARRELS, under) };
   }
-  /** The loadout in the link for this operator (anything invalid becomes their default). */
+  /** The loadout in the link for this operator, else the one you keep for them (ui/loadout.ts; anything invalid becomes their default). */
   function pickFromUrl(opId: string): LoadoutPick {
-    const d = defaultLoadoutPick(data, opId);
+    const d = savedLoadout(data, opId);
     const pick = { ...d, primary: parseWeaponParam(params.get("primary")) ?? d.primary, secondary: parseWeaponParam(params.get("secondary")) ?? d.secondary };
     return resolveLoadout(data, pick).loadout.pick;
   }
@@ -632,58 +611,8 @@ export async function startLab(o: LabOptions): Promise<void> {
   function loadoutSection(): string {
     const pick = currentPick();
     const lo = sim.pawns.get(ctrl.possessedPawnId)?.loadout;
-    return `<section class="loadout"><h3>Loadout</h3>${SLOTS.map((slot, i) => weaponRow(slot, pick, lo?.weapons[i] ?? null)).join("")}
+    return `<section class="loadout"><h3>Loadout</h3>${SLOTS.map((slot, i) => weaponRow(data, op, slot, pick, lo?.weapons[i] ?? null)).join("")}
       <p class="note">Changing anything gives you a new body${net ? " (the server spawns it)" : ""}. <span class="unv">?</span> marks a value that is still a placeholder (research/OPEN_QUESTIONS.md).</p></section>`;
-  }
-
-  function weaponRow(slot: (typeof SLOTS)[number], pick: LoadoutPick, resolved: ResolvedWeapon | null): string {
-    const wp = pick[slot];
-    const w = data.weapons.get(wp.weapon);
-    const allowed = <T extends string>(offers: Offer<T>[]) => offers.filter((o) => typeof o === "string" || o.operators.includes(op.id)).map(offerId);
-    const select = (part: string, options: [string, string, boolean?][], current: string) =>
-      `<select data-slot="${slot}" data-part="${part}">${options.map(([v, label, off]) => `<option value="${v}" ${v === current ? "selected" : ""} ${off ? "disabled" : ""}>${label}</option>`).join("")}</select>`;
-    const ids = op.loadout[slot === "primary" ? "primaries" : "secondaries"];
-    const weapons: [string, string, boolean][] = ids.map((id) => [id, isPickable(data, id) ? data.weapons.get(id)!.name : `${data.weapons.get(id)!.name} (Phase 8)`, !isPickable(data, id)]);
-    let atts = "";
-    if (w && isGun(w)) {
-      const named = (v: string): [string, string] => [v, ATTACHMENT_NAMES[v] ?? v];
-      const sights = allowed(w.attachments.sights).map(named);
-      const barrels = allowed(w.attachments.barrels).map(named);
-      const grips = allowed(w.attachments.grips).map(named);
-      const unders = allowed(w.attachments.underbarrel).map(named);
-      atts = [
-        sights.length > 1 ? select("sight", sights, wp.sight ?? "iron") : "",
-        barrels.length ? select("barrel", [["", "No barrel"], ...barrels], wp.barrel ?? "") : "",
-        grips.length > 1 ? select("grip", grips, wp.grip ?? "horizontal") : "",
-        unders.length ? select("underbarrel", [["", "No laser"], ...unders], wp.underbarrel ?? "") : "",
-      ].join("");
-    }
-    return `<div class="loadout-row"><label>${slot === "primary" ? "Primary" : "Secondary"} ${select("weapon", weapons, wp.weapon)}</label>
-      <div class="atts">${atts}</div>
-      ${resolved && w && isGun(w) ? `<p class="note stats">${weaponStats(resolved, w)}</p>` : ""}</div>`;
-  }
-
-  /** The numbers the simulation uses for this weapon, with a "?" on placeholders. */
-  function weaponStats(r: ResolvedWeapon, w: GunData): string {
-    const unv = (path: string) =>
-      w._unverified.some((u) => path === u || path.startsWith(u + ".")) ? `<span class="unv" title="Placeholder: not verified yet (research/OPEN_QUESTIONS.md)">?</span>` : "";
-    const sec = (ticks: number) => `${(ticks / TICK_HZ).toFixed(2)} s`;
-    const reload =
-      r.reload.kind === "magazine"
-        ? `reload ${sec(r.reload.tacticalTicks)}${unv("reload.tacticalS")} / ${sec(r.reload.emptyTicks)}${unv("reload.emptyS")}`
-        : r.reload.kind === "per_shell"
-          ? `${sec(r.reload.perShellTicks)}${unv("reload.perShellS")} a shell`
-          : "";
-    return [
-      r.damage ? `${r.damage.base}${unv(r.pick.barrel === "extended_barrel" ? "damage.extendedBarrel" : "damage.base")} dmg${r.fire.pellets > 1 ? ` × ${r.fire.pellets} pellets` : ""}` : "",
-      `${r.fire.rpm}${unv("fire.rpm")} rpm`,
-      `${r.ammo.magazine}${r.ammo.plusOne ? "+1" : ""} / ${r.ammo.maxAmmo}${unv("ammo.maxAmmo")}`,
-      `ADS ${sec(r.ads.ticks)}`,
-      reload,
-      r.moveSpeedMult < 0.999 ? `${Math.round((1 - r.moveSpeedMult) * 100)} % slower` : "",
-    ]
-      .filter(Boolean)
-      .join(" · ");
   }
 
   /** A new body with this loadout: offline the page reloads with it in the link; online the server spawns it. */
@@ -699,9 +628,9 @@ export async function startLab(o: LabOptions): Promise<void> {
     net.send(encodePickLoadout(pick)); // the new body arrives with the roster
   }
 
-  /** Another operator, with their default loadout. */
+  /** Another operator, with the loadout you keep for them (else their default). */
   function pickOperator(id: string) {
-    applyLoadout(defaultLoadoutPick(data, id));
+    applyLoadout(savedLoadout(data, id));
   }
 
   /** Leave the pause menu from a button: mouse clicks lock the pointer again, taps just close it. */
@@ -812,11 +741,8 @@ export async function startLab(o: LabOptions): Promise<void> {
     pause.querySelector<HTMLSelectElement>(".team-select")?.addEventListener("change", (e) => net?.send(encodeLabTool({ kind: "team", team: Number((e.target as HTMLSelectElement).value) })));
     pause.querySelectorAll<HTMLSelectElement>(".loadout select").forEach((el) =>
       el.addEventListener("change", () => {
-        const pick: LoadoutPick = structuredClone(currentPick());
-        const slot = el.dataset.slot as (typeof SLOTS)[number];
-        const part = el.dataset.part as keyof WeaponPick;
-        if (part === "weapon") pick[slot] = { weapon: el.value, sight: null, barrel: null, grip: null, underbarrel: null };
-        else (pick[slot] as unknown as Record<string, string | null>)[part] = el.value || null;
+        const pick = changedPick(currentPick(), el.dataset.slot as Slot, el.dataset.part as keyof WeaponPick, el.value);
+        saveLoadout(pick); // the loadout you keep for this operator, in matches too
         applyLoadout(pick);
       }),
     );
@@ -1494,6 +1420,8 @@ export async function startLab(o: LabOptions): Promise<void> {
           weapon: possessed()?.loadout
             ? { id: possessed().loadout!.weapons[possessed().state.slot].id, slot: possessed().state.slot, loaded: loadedOf(possessed().state), reserve: reserveOf(possessed().state) }
             : null,
+          /** What your body carries (operator, weapons and attachments). */
+          loadout: possessed()?.loadout?.pick ?? null,
           pawnId: ctrl.possessedPawnId,
           frames,
           lastShot,

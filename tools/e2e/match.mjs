@@ -9,7 +9,8 @@
 // takes everyone back to the lobby. 2v3: five players (three on Blue, two on Orange; some never pick and get an
 // operator anyway, one per team each); in action a defender shoots a teammate (friendly fire on, reverse friendly fire
 // off), who then looks through a living teammate's eyes, and the scoreboard counts the death; the match ends with the
-// summary. Requires `npm run build` first. Screenshots go to builds/e2e.
+// summary. Also: a loadout set on the Play page is kept, and a sight fitted on the planning screen is carried into action.
+// Requires `npm run build` first. Screenshots go to builds/e2e.
 import { spawn } from "node:child_process";
 import { mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -97,6 +98,17 @@ try {
     .waitForFunction((code) => [...document.querySelectorAll(".rooms td.code")].some((td) => td.textContent === code), room, { timeout: 15000 })
     .then(() => true, () => false);
   await lister.screenshot({ path: shot("match-play-list.png") });
+  // Loadouts on the Play page: another sight on Thermite's primary is kept (this browser's storage) across a reload.
+  const sightSel = '.loadout [data-slot="primary"][data-part="sight"]';
+  await lister.selectOption(".lo-op", "thermite");
+  const sights = await lister.$$eval(`${sightSel} option`, (os) => os.map((o) => o.value));
+  const wantSight = sights.find((v) => v !== "iron") ?? null;
+  if (wantSight) await lister.selectOption(sightSel, wantSight);
+  await lister.reload();
+  await lister.waitForSelector(sightSel);
+  result.oneVsOne.playLoadout = { sights, wantSight, kept: [await lister.$eval(".lo-op", (sel) => sel.value), await lister.$eval(sightSel, (sel) => sel.value)] };
+  result.checks.loadoutKeptOnThePlayPage = wantSight !== null && result.oneVsOne.playLoadout.kept[0] === "thermite" && result.oneVsOne.playLoadout.kept[1] === wantSight;
+  await lister.screenshot({ path: shot("match-play-loadouts.png"), fullPage: true });
   await lister.context().close();
   const b = await viaPlay("Bo", { room });
   await a.waitForFunction(() => window.__match.view.players.length === 2, null, { timeout: 10000 });
@@ -130,6 +142,17 @@ try {
     .waitForFunction((ban) => document.querySelector(`.match-screen [data-act=op][data-op="${ban}"]`)?.hasAttribute("disabled") ?? false, v.bans[1][0], { timeout: 10000 })
     .then(() => true, () => false);
   for (const p of [att1, def1]) await p.click(".match-screen [data-act=op]:not([disabled])");
+  // The attacker fits another sight on the planning screen: the body carries it into action.
+  const planSight = '.match-screen .loadout [data-slot="primary"][data-part="sight"]';
+  const fitted = await att1
+    .waitForSelector(planSight, { timeout: 10000 })
+    .then(async () => {
+      const current = await att1.$eval(planSight, (sel) => sel.value);
+      const other = (await att1.$$eval(`${planSight} option`, (os) => os.map((o) => o.value))).find((v) => v !== current) ?? null;
+      if (other) await att1.selectOption(planSight, other);
+      return other;
+    })
+    .catch(() => null);
   await def1.click(`.match-screen [data-act=site][data-site="${SITE}"]`);
   await att1.click(`.match-screen [data-act=spawn][data-group="${SPAWN}"]`);
   await att1.click('.match-screen [data-act=defuser][data-take="1"]');
@@ -145,6 +168,8 @@ try {
   // Prep: the defender at the voted site's spawn, the attacker without a body at the spawn's view (the planning screen up).
   await phase(a, P.Prep, 30000);
   await def1.waitForFunction(() => window.__lab.net.own !== null && !window.__match.spectating, null, { timeout: 20000 });
+  // Each page sees the phase change on its own next frame: wait on the attacker's own page for its prep camera.
+  await att1.waitForFunction(() => window.__match.view.phase === 3 && window.__match.camera?.kind === "spot", null, { timeout: 10000 }).catch(() => {});
   const siteSpawns = lvl.spawns.filter((s) => s.group === SITE);
   const defAt = await own(def1);
   result.oneVsOne.prep = { defenderAt: defAt && [defAt.x, defAt.y, defAt.z], attackerCamera: await att1.evaluate(() => window.__match.camera), screen: await att1.evaluate(() => window.__match.screen) };
@@ -162,10 +187,13 @@ try {
   const attAt = await own(att1);
   result.oneVsOne.action = { attackerAt: attAt && [attAt.x, attAt.y, attAt.z] };
   result.checks.attackerAtTheirSpawn = lvl.spawns.filter((s) => s.group === SPAWN).some((s) => near(attAt, s.pos, 1));
+  const carried = await att1.evaluate(() => window.__lab.net.loadout);
+  result.oneVsOne.action.loadout = { fitted, carried };
+  result.checks.attachmentCarriedIntoAction = fitted !== null && carried?.primary.sight === fitted;
   result.checks.carrierToldOnTheHud = await att1
     .waitForFunction(() => /You carry the defuser/.test(document.querySelector(".match-info")?.textContent ?? ""), null, { timeout: 10000 })
     .then(() => true, () => false);
-  result.checks.redWallsDownInAction = (await view(def1)).redWalls === false;
+  result.checks.redWallsDownInAction = await def1.waitForFunction(() => window.__match.view.redWalls === false, null, { timeout: 10000 }).then(() => true, () => false);
   await att1.screenshot({ path: shot("match-action-attacker.png") });
   await b.keyboard.down("Tab");
   result.checks.scoreboardOnTab = await b.waitForFunction(() => !document.querySelector(".scoreboard").classList.contains("hidden"), null, { timeout: 5000 }).then(() => true, () => false);

@@ -175,32 +175,54 @@ export class Sim {
     if (op.pawns > 1 && shellOffset < minOffset) {
       throw new Error(`${op.name}: ability.params.idleShellOffset (${shellOffset}) must be at least two body radii (${minOffset})`);
     }
-    const shellSpots = (bx: number, bz: number): [number, number][] =>
+    // The shells stand in a line from the first: to its right, or another way round when a wall or a prop is there.
+    const turns = op.pawns > 1 ? [0, 180, 90, -90, 45, -45, 135, -135].map((d) => d * DEG) : [0];
+    const shellSpots = (bx: number, bz: number, turn: number): [number, number][] =>
       Array.from({ length: op.pawns }, (_, i) => {
-        const [ox, oz] = rotateXZ(i * shellOffset, 0, yaw);
+        const [ox, oz] = rotateXZ(i * shellOffset, 0, yaw + turn);
         return [bx + ox, bz + oz];
       });
     // capsuleFree tests a slightly shrunken body (right for walls); between players, keep a full body gap.
     const clearOfPlayers = ([px, pz]: [number, number]) =>
       [...this.pawns.values()].every((p) => p.state.mode === PawnMode.Dead || Math.hypot(p.state.x - px, p.state.z - pz) >= minOffset);
-    const fits = (spots: [number, number][], filter: number) =>
-      spots.every(([px, pz]) => capsuleFree(this.ctx, null, px, spawn.pos[1] + 0.02, pz, m.stance.stand.height, filter) && (filter !== QUERY_SOLID || clearOfPlayers([px, pz])));
-    const home = shellSpots(spawn.pos[0], spawn.pos[2]);
-    if (!fits(home.slice(1), QUERY_STATIC_FILTER)) {
-      throw new Error(`${op.name}'s second shell would spawn inside level geometry at spawn "${spawn.id}"`);
-    }
-    // Other players already on the spawn: take the nearest free spot around it (rings 0.8 m apart).
-    let spots = home;
+    // Nothing static between two spots at chest height: a free spot behind a thin wall is in the next room.
+    const inSight = ([ax, az]: [number, number], [bx, bz]: [number, number]) => {
+      const len = Math.hypot(bx - ax, bz - az);
+      if (len < 1e-6) return true;
+      const ray = new this.R.Ray({ x: ax, y: spawn.pos[1] + 1, z: az }, { x: (bx - ax) / len, y: 0, z: (bz - az) / len });
+      return this.world.castRay(ray, len, true, undefined, QUERY_STATIC_FILTER) === null;
+    };
+    // Spots from `from` on (1: the shells only, the spawn itself trusted) are free, and in sight of the first.
+    const fits = (spots: [number, number][], filter: number, from = 0) =>
+      spots.every(
+        ([px, pz], i) =>
+          i < from ||
+          (capsuleFree(this.ctx, null, px, spawn.pos[1] + 0.02, pz, m.stance.stand.height, filter) &&
+            (filter !== QUERY_SOLID || clearOfPlayers([px, pz])) &&
+            inSight(spots[0], [px, pz])),
+      );
+    // The nearest arrangement around the spawn clear of the level and of other players (rings 0.8 m apart, each
+    // in sight of the spawn); with none, the first on the spawn itself clear of the level (players get pushed apart).
+    const at: [number, number] = [spawn.pos[0], spawn.pos[2]];
+    let spots: [number, number][] | null = null;
+    let crowded: [number, number][] | null = null;
     search: for (let ring = 0; ring <= 6; ring++) {
       for (let k = 0; k < (ring === 0 ? 1 : 8); k++) {
         const a = (k / 8) * 2 * Math.PI;
-        const cand = shellSpots(spawn.pos[0] + Math.cos(a) * ring * 0.8, spawn.pos[2] + Math.sin(a) * ring * 0.8);
-        if (fits(cand, QUERY_SOLID)) {
-          spots = cand;
-          break search;
+        const base: [number, number] = [at[0] + Math.cos(a) * ring * 0.8, at[1] + Math.sin(a) * ring * 0.8];
+        if (!inSight(at, base)) continue;
+        for (const turn of turns) {
+          const cand = shellSpots(base[0], base[1], turn);
+          if (fits(cand, QUERY_SOLID)) {
+            spots = cand;
+            break search;
+          }
+          if (ring === 0 && !crowded && fits(cand, QUERY_STATIC_FILTER, 1)) crowded = cand;
         }
       }
     }
+    spots ??= crowded;
+    if (!spots) throw new Error(`${op.name}'s second shell has no room at spawn "${spawn.id}": a wall or a prop on every side`);
     for (const [i, [px, pz]] of spots.entries()) {
       const pawn = this.spawnPawn(operatorId, px, spawn.pos[1], pz, yaw, controller.id, ids?.pawns[i], loadout, side);
       if (i > 0) pawn.state.stance = pawn.state.stanceFrom = Stance.Crouch; // idle shells crouch behind their shield
@@ -734,7 +756,10 @@ export class Sim {
             const k = pawn.state.deployKind !== DeployKind.None ? pawn.state.deployKind : holding;
             const d = this.data.objective.defuser;
             const still = reviving || (k === DeployKind.Plant ? d.plantLocksBody : k === DeployKind.Disable ? d.disableLocksBody : k !== DeployKind.None && this.data.destruction.reinforcement.locksReinforcer);
-            cmd = { ...input, forward: still ? 0 : input.forward, strafe: still ? 0 : input.strafe, buttons: input.buttons & ~Btn.Interact };
+            // A standing body crouches for the defuser's holds where the data says so (prone stays prone); it stands
+            // back up when the hold ends, as its stance key says.
+            const kneel = !reviving && input.stance === Stance.Stand && (k === DeployKind.Plant ? d.plantCrouches : k === DeployKind.Disable && d.disableCrouches);
+            cmd = { ...input, forward: still ? 0 : input.forward, strafe: still ? 0 : input.strafe, buttons: input.buttons & ~Btn.Interact, stance: kneel ? Stance.Crouch : input.stance };
           }
         }
         // A body driven without its player's buttons (left behind on the camera, or being looked

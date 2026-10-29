@@ -73,16 +73,61 @@ describe("Skopós shell camera and swap", () => {
     expect(b.state.stance).toBe(Stance.Stand);
   });
 
-  it("a Skopós join that can't place both shells leaves nothing behind", async () => {
+  /** The movement lab with these spawns, and these walls added (3 m tall, HARD_WALL). */
+  async function labWithSpawns(spawns: { id: string; pos: [number, number, number]; yawDeg: number }[], walls: [cx: number, cz: number, sx: number, sz: number][] = []) {
     const data = loadGameData();
     const lab = data.levels.get("movement_lab")!;
-    // Right next to wall_e (x 31.75..32.25): the second shell would land inside it.
-    const tight = levelSchema.parse({ ...lab, id: "tight", spawns: [{ id: "by_wall", pos: [30.6, 0, 0], yawDeg: 0 }] });
-    const sim = await Sim.create("tight", { ...data, levels: new Map(data.levels).set("tight", tight) });
+    const solids = [...lab.solids, ...walls.map(([cx, cz, sx, sz], i) => ({ id: `extra_${i}`, center: [cx, 1.5, cz], size: [sx, 3, sz], surface: "HARD_WALL" }))];
+    const tight = levelSchema.parse({ ...lab, id: "tight", spawns, solids });
+    return Sim.create("tight", { ...data, levels: new Map(data.levels).set("tight", tight) });
+  }
+
+  it("Skopós's second shell stands the other way when a wall is to the right of the spawn", async () => {
+    // Right next to wall_e (x 31.75..32.25): 1.5 m to the right is inside it.
+    const sim = await labWithSpawns([{ id: "by_wall", pos: [30.6, 0, 0], yawDeg: 0 }]);
+    const [a, b] = sim.addPlayer("p", "skopos").pawnIds.map((id) => sim.pawns.get(id)!.state);
+    expect([a.x, a.z, b.x, b.z].map((v) => +v.toFixed(5) + 0)).toEqual([30.6, 0, 30.6 - 1.5, 0]);
+  });
+
+  it("Skopós's second shell never stands on the far side of a thin wall", async () => {
+    // Facing west, so the right is +z: 1.5 m that way is clear floor, but behind winwall_left (z -0.1..0.1).
+    const sim = await labWithSpawns([{ id: "by_thin_wall", pos: [3.2, 0, -0.8], yawDeg: -90 }]);
+    const [a, b] = sim.addPlayer("p", "skopos").pawnIds.map((id) => sim.pawns.get(id)!.state);
+    expect([a.x, a.z, b.x, b.z].map((v) => +v.toFixed(5) + 0)).toEqual([3.2, -0.8, 3.2, -0.8 - 1.5]);
+  });
+
+  it("a Skopós join with no room for the second shell on any side leaves nothing behind", async () => {
+    // A closet 1.2 m square: one body fits, and no second one 1.5 m away is inside it.
+    const sim = await labWithSpawns(
+      [{ id: "closet", pos: [24, 0, 20], yawDeg: 0 }],
+      [
+        [24, 19.3, 1.6, 0.2],
+        [24, 20.7, 1.6, 0.2],
+        [24.7, 20, 0.2, 1.6],
+        [23.3, 20, 0.2, 1.6],
+      ],
+    );
     const colliders = sim.world.colliders.len();
     expect(() => sim.addPlayer("p", "skopos")).toThrow(/second shell/);
     expect(sim.pawns.size).toBe(0);
     expect(sim.world.colliders.len()).toBe(colliders);
+    // One body still joins there.
+    expect(sim.addPlayer("q", "sledge").pawnIds).toHaveLength(1);
+  });
+
+  it("every spawn on every map has room for Skopós's second shell", async () => {
+    const data = loadGameData();
+    for (const id of data.levels.keys()) {
+      const sim = await Sim.create(id, data);
+      for (const [i, spawn] of sim.level.def.spawns.entries()) {
+        const ctrl = sim.addPlayer("p", "skopos", i); // throws, naming the spawn, when there's no room
+        const [a, b] = ctrl.pawnIds.map((pid) => sim.pawns.get(pid)!.state);
+        const where = `${id} spawn ${spawn.id}`;
+        expect(Math.hypot(a.x - spawn.pos[0], a.z - spawn.pos[2]), where).toBeCloseTo(0, 5);
+        expect(Math.hypot(b.x - spawn.pos[0], b.z - spawn.pos[2]), where).toBeCloseTo(1.5, 5);
+        sim.removePlayer(ctrl.id);
+      }
+    }
   });
 
   it("rejects shell offsets and swap timings that can't work", async () => {

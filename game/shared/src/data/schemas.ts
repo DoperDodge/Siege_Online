@@ -623,6 +623,9 @@ export const objectiveSchema = z.strictObject({
     /** The planter / the defender disabling it holds still meanwhile. */
     plantLocksBody: z.boolean(),
     disableLocksBody: z.boolean(),
+    /** A standing planter / defender disabling it crouches for the hold (a prone one stays prone). */
+    plantCrouches: z.boolean(),
+    disableCrouches: z.boolean(),
   }),
   /** Finding the site (D-120): an attacker's eye on a bomb within this range and this far off the view. */
   siteSight: z.strictObject({ rangeM: z.number().positive(), coneDeg: z.number().positive().max(180) }),

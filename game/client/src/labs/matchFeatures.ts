@@ -8,11 +8,9 @@ import * as THREE from "three";
 import {
   ATTACK,
   DEFENSE,
-  defaultLoadoutPick,
   encodeLobbyAction,
   encodeMatchAction,
   encodePickLoadout,
-  isPickable,
   NO_END,
   PawnMode,
   Phase,
@@ -26,9 +24,11 @@ import {
   type MatchView,
   type MatchViewPlayer,
   type RoundRecord,
+  type WeaponPick,
 } from "@redmond/shared";
 import { keyLabel, loadSettings } from "../input/settings.js";
 import { escapeHtml } from "../ui/dom.js";
+import { changedPick, loadoutRows, saveLoadout, savedLoadout, type Slot } from "../ui/loadout.js";
 import type { LabApi, SpectateView } from "./common/lab.js";
 
 const PHASE_LABEL: Record<Phase, string> = {
@@ -148,10 +148,13 @@ export function matchFeatures(lab: LabApi): void {
 
   /** This round's loadout, kept here (the server only says which operator you have). */
   let myPick: LoadoutPick | null = null;
+  /** An operator, carrying the loadout you keep for them (ui/loadout.ts: the Play page's Loadouts, this screen). */
   const pickOperator = (id: string) => {
-    myPick = defaultLoadoutPick(data, id);
+    myPick = savedLoadout(data, id);
     send(encodePickLoadout(myPick));
   };
+  /** The loadout to show and change for your operator now. */
+  const pickFor = (op: string) => (myPick?.operator === op ? myPick : savedLoadout(data, op));
 
   // ---------------------------------------------------------------- the screens (lobby, ban, planning, summary)
 
@@ -268,8 +271,6 @@ export function matchFeatures(lab: LabApi): void {
     if (!me || side === null) return [["head", `${head}<p class="note">Your team sits this round out.</p>`]];
     const mates = v.players.filter((p) => p.team === me.team);
     const banned = new Set(v.bans[side]);
-    // A pick of mine the server dropped (taken, banned) is forgotten; a new operator starts from its default loadout.
-    if (myPick && myPick.operator !== me.operator) myPick = me.operator ? defaultLoadoutPick(data, me.operator) : null;
     const ops = sideOps(side)
       .map((o) => {
         const holder = mates.find((p) => p.operator === o.id && p.id !== me.id);
@@ -286,16 +287,12 @@ export function matchFeatures(lab: LabApi): void {
       ],
       ["ops", `<h3>Operator</h3><div class="op-grid">${ops}</div>${me.operator ? "" : '<p class="note">Pick one, or you get one when the timer runs out.</p>'}`],
     ];
-    if (me.operator) {
-      const op = data.operators.get(me.operator)!;
-      const pick = myPick ?? defaultLoadoutPick(data, me.operator);
-      const sel = (slot: "primary" | "secondary", ids: string[]) =>
-        `<label>${slot === "primary" ? "Primary" : "Secondary"} <select data-act="weapon" data-slot="${slot}">${ids
-          .filter((id) => isPickable(data, id))
-          .map((id) => `<option value="${id}" ${id === pick[slot].weapon ? "selected" : ""}>${escapeHtml(data.weapons.get(id)?.name ?? id)}</option>`)
-          .join("")}</select></label>`;
-      parts.push(["loadout", `<h3>Loadout</h3><div class="row">${sel("primary", op.loadout.primaries)}${sel("secondary", op.loadout.secondaries)}</div>`]);
-    }
+    if (me.operator)
+      parts.push([
+        "loadout",
+        `<h3>Loadout</h3><div class="loadout">${loadoutRows(data, pickFor(me.operator))}</div>
+        <p class="note">${escapeHtml(opName(me.operator))} keeps these weapons and attachments in every match until you change them, here or on the Play page.</p>`,
+      ]);
     if (side === DEFENSE) {
       const vote = currentRules()?.match.site === "vote" && v.phase === Phase.Planning;
       parts.push([
@@ -398,15 +395,14 @@ export function matchFeatures(lab: LabApi): void {
       if (b) (match[a] as Record<string, unknown>)[b] = Number(t.value);
       else match[a] = Number(t.value);
       lobby({ kind: "change", change: { kind: "rules", rules: { match } } });
-    } else if (d.act === "weapon") {
+    } else if (d.slot && d.part) {
+      // The loadout: a weapon or attachment, kept for this operator and carried now.
       const v = session.match;
       const me = v && meOf(v);
       if (!me?.operator) return;
-      const pick = structuredClone(myPick ?? defaultLoadoutPick(data, me.operator));
-      const slot = d.slot as "primary" | "secondary";
-      pick[slot] = { weapon: t.value, sight: null, barrel: null, grip: null, underbarrel: null };
-      myPick = pick;
-      send(encodePickLoadout(pick));
+      myPick = changedPick(pickFor(me.operator), d.slot as Slot, d.part as keyof WeaponPick, t.value);
+      saveLoadout(myPick);
+      send(encodePickLoadout(myPick));
     }
   });
 
@@ -560,6 +556,9 @@ export function matchFeatures(lab: LabApi): void {
     const v = session.match;
     if (!v) return;
     const me = meOf(v);
+    // The operator the server has for you (your pick, or one it gave you when the timer ran out) carries the loadout you
+    // keep for it, sent once; defenders are locked once they spawn.
+    if (me?.operator && myPick?.operator !== me.operator && (v.phase === Phase.Planning || (v.phase === Phase.Prep && me.side === ATTACK))) pickOperator(me.operator);
     // A new phase with a screen to click lets go of the mouse.
     if (v.phase !== lastPhase) {
       if (v.phase === Phase.Lobby || v.phase === Phase.Ban || v.phase === Phase.Planning || v.phase === Phase.MatchEnd) lab.releasePointer();

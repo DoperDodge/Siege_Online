@@ -1,13 +1,15 @@
 {
-  "_doc": "Bomb's objective rules that every format shares (Phase 6; game/shared/src/match/DESIGN.md §8, DECISIONS D-120). Pickup within about 1 m with no need to look at it is research/round_flow.md §5 (North Star [Y6S2]; Fandom). How close a defender must be to disable, and whether the planter and the defender disabling it hold still, are our placeholders. `siteSight` is how attackers find the site until drones exist (Phase 7): one of them has a bomb in view, with nothing in the way, within `rangeM` and `coneDeg` off the view. Metres and degrees.",
+  "_doc": "Bomb's objective rules that every format shares (Phase 6; game/shared/src/match/DESIGN.md §8, DECISIONS D-120). Pickup within about 1 m with no need to look at it is research/round_flow.md §5 (North Star [Y6S2]; Fandom). How close a defender must be to disable, and whether the planter and the defender disabling it hold still, are our placeholders. The planter crouches for the plant (a standing body; prone stays prone): Ulo's call, 2026-10-29; whether disabling does too is open. `siteSight` is how attackers find the site until drones exist (Phase 7): one of them has a bomb in view, with nothing in the way, within `rangeM` and `coneDeg` off the view. Metres and degrees.",
   "_season": "Y11S3",
-  "_unverified": ["defuser.disableReachM", "defuser.disableFacingDeg", "defuser.plantLocksBody", "defuser.disableLocksBody", "siteSight"],
+  "_unverified": ["defuser.disableReachM", "defuser.disableFacingDeg", "defuser.plantLocksBody", "defuser.disableLocksBody", "defuser.disableCrouches", "siteSight"],
   "defuser": {
     "pickupRangeM": 1.0,
     "disableReachM": 1.5,
     "disableFacingDeg": 60,
     "plantLocksBody": true,
-    "disableLocksBody": true
+    "disableLocksBody": true,
+    "plantCrouches": true,
+    "disableCrouches": false
   },
   "siteSight": { "rangeM": 25, "coneDeg": 45 }
 }

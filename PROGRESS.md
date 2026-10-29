@@ -15,9 +15,24 @@ known issues, and what's next.
 | M1 Format presets (Quick Match, Unranked, Ranked, 1v1, Custom, Practice) and the match logic, tested on its own | ✅ six formats in `data/modes`, the match logic in `game/shared/src/match/` (sides, overtime, bans, votes, picks, attrition, pools, rating, the nine win conditions) |
 | M2 Match rooms on the server: lobby, rounds with spawns, red walls, run-outs, elimination and time wins | ✅ a room runs a match: lobby, bodies only in prep and action, defenders at the site behind red walls (predicted), attackers at their spawn, run-outs, the kill plane, leavers; protocol 11 and the room list; tested with a 1v1 and a 2v3 through the real messages |
 | M3 The defuser: carry, drop, pick up, plant, disable, every win condition | ✅ hold F to plant (7 s, predicted) or disable (7 s), F to pick up, G to drop, dropped where the carrier goes down, a plant under way past the timer, a hatch broken under it, the last attacker downed after the plant; finding the site by sight |
-| M4 In the browser: Play page, lobby, ban and planning screen, HUD, scoreboard, round and match summaries | 🚧 built and played through: the Play page (create in any format, join by code, the open matches); the match page: lobby, ban vote, planning (operator, weapons, site vote or spawn, the defuser), HUD and markers, Tab scoreboard, round banner, summary; with no body the camera circles the map, waits at an attacker's spawn in prep, or follows a teammate after you die. Next: the browser test of a 1v1 and a 2v3 (`tools/e2e/match.mjs`) |
+| M4 In the browser: Play page, lobby, ban and planning screen, HUD, scoreboard, round and match summaries | ✅ the Play page (create in any format, join by code, the open matches, your loadouts); the match page: lobby, ban vote, planning (operator, weapons and attachments, site vote or spawn, the defuser), HUD and markers, Tab scoreboard, round banner, summary; with no body the camera circles the map, waits at an attacker's spawn in prep, or follows a teammate after you die; browser test of a 1v1 and a 2v3 |
 | M5 Each format's details: Quick Match, Ranked rating, 1v1 attrition, Custom, Practice | ⏳ |
 | M6 Checks: a 10-round netsim match, browser tests of a 1v1 and a 2v3 match, docs, report | ⏳ |
+
+### What's done (your requests, 2026-10-29)
+- **Planting crouches you:** a standing planter crouches for the 7 s plant and stands back up after it (prone stays
+  prone). It's in the shared simulation, so it's predicted and everyone sees it. Disabling doesn't crouch (yet): say
+  if it should (one switch in data/objective.json).
+- **Your loadouts:** the Play page has *Loadouts*: pick an operator and set both weapons and every attachment (sight,
+  barrel, grip, laser), with the numbers the game uses. The planning screen has the same rows for the operator you
+  pick, and the labs' pause menu too. Each operator keeps what you set, in this browser, and carries it into every
+  match and lab (D-126).
+- **Drones and default cameras** come with Phase 7 (Intel), after this phase: drones, the default cameras, the
+  bulletproof camera, pinging, spectating and the comm wheel.
+- **A crash the browser test found:** Skopós defending the Meeting Hall could stop the whole server (her second
+  shell's spot was inside a wall). The shell now stands on whichever side has room and never past a wall. A test
+  puts her at every spawn of every map. A room that hits a bug now closes on its own instead of stopping the
+  server (D-127).
 
 ### What's done (M4: matches in the browser)
 - **Play** (home page → *Play a match*): your name, *Create* a match in any of the six formats, *Join* by code,

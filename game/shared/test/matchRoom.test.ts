@@ -309,6 +309,8 @@ describe("the defuser (match/DESIGN.md §8)", () => {
     const missedBefore = atkClient.session.mispredictions.length;
     const stood = { ...t.bodyOf(atk)!.state };
     atkClient.cmd = { yaw: 0, forward: 1, buttons: Btn.Interact };
+    // The planter crouches for the plant (data/objective.json plantCrouches), with the stance key still on stand.
+    t.until(() => t.bodyOf(atk)!.state.stance === Stance.Crouch, 1, "crouching to plant");
     t.until(() => t.match.phase === Phase.PostPlant, 8, "the plant");
     expect(t.match.phase).toBe(Phase.PostPlant);
     const planted = t.room.sim.objective!.planted!;
@@ -317,6 +319,7 @@ describe("the defuser (match/DESIGN.md §8)", () => {
     expect(atkClient.session.mispredictions.length).toBe(missedBefore); // the hold was predicted
     t.tick();
     expect(defClient.session.match!.defuser!.planted).not.toBeNull();
+    t.until(() => t.bodyOf(atk)!.state.stance === Stance.Stand, 1, "standing up after the plant");
     atkClient.cmd = {};
     // The fuse (45 s): the attackers win.
     t.until(() => t.match.phase === Phase.RoundEnd, 47, "the fuse");

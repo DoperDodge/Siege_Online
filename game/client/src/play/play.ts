@@ -1,15 +1,18 @@
-// The Play page (Phase 6, match/DESIGN.md §11): your name, a new match in any format, a room by its code, and the
-// match rooms anyone may join (the server's room list, refreshed every few seconds). The match itself runs on the
-// match page (labs/match.html), which creates or joins the room from its link.
-import { ByteReader, decodeRoomList, encodeHello, encodeListRooms, isFormat, loadGameData, Msg, Phase, type RoomListEntry } from "@redmond/shared";
+// The Play page (Phase 6, match/DESIGN.md §11): your name, a new match in any format, a room by its code, the match
+// rooms anyone may join (the server's room list, refreshed every few seconds), and your loadouts: each operator's
+// weapons and attachments, kept in this browser for matches and the labs (ui/loadout.ts). The match itself runs on
+// the match page (labs/match.html), which creates or joins the room from its link.
+import { ByteReader, decodeRoomList, encodeHello, encodeListRooms, isFormat, loadGameData, Msg, Phase, type RoomListEntry, type WeaponPick } from "@redmond/shared";
 import { serverUrl } from "../net/online.js";
 import { escapeHtml } from "../ui/dom.js";
+import { changedPick, loadoutRows, saveLoadout, savedLoadout, type Slot } from "../ui/loadout.js";
 
 const data = loadGameData();
 const formats = [...data.modes.values()].filter(isFormat);
 const formatName = (id: string) => formats.find((m) => m.id === id)?.match.name ?? id;
 const NAME_KEY = "redmond.name";
 const FORMAT_KEY = "redmond.format";
+const LOADOUT_OP_KEY = "redmond.loadoutOperator";
 const remembered = (k: string) => {
   try {
     return localStorage.getItem(k) ?? "";
@@ -47,6 +50,19 @@ root.innerHTML = `
   </section>
   <section><h2>Join by code</h2><div class="row"><input class="code" maxlength="5" placeholder="CODE" autocapitalize="characters" spellcheck="false"><button class="join">Join</button></div><p class="error"></p></section>
   <section><h2>Open matches</h2><div class="rooms"><p class="empty">Looking for matches…</p></div></section>
+  <section><h2>Loadouts</h2>
+    <div class="row"><select class="lo-op">${(["attacker", "defender"] as const)
+      .map(
+        (side) =>
+          `<optgroup label="${side === "attacker" ? "Attackers" : "Defenders"}">${[...data.operators.values()]
+            .filter((o) => o.side === side)
+            .map((o) => `<option value="${o.id}">${escapeHtml(o.name)} — ${o.healthRating} health / ${o.speedRating} speed</option>`)
+            .join("")}</optgroup>`,
+      )
+      .join("")}</select></div>
+    <div class="loadout"></div>
+    <p class="note">Each operator keeps the weapons and attachments you set here: you carry them into every match and lab, and can still change them on a match's planning screen. <span class="unv">?</span> marks a number that is still a placeholder.</p>
+  </section>
   <footer>Non-commercial fan project. No Ubisoft assets are used.</footer>`;
 const $ = <T extends HTMLElement>(sel: string) => root.querySelector<T>(sel)!;
 const nameInput = $<HTMLInputElement>(".name");
@@ -82,6 +98,24 @@ codeInput.onkeydown = (e) => {
   if (e.key === "Enter") join(codeInput.value);
 };
 codeInput.value = (new URLSearchParams(location.search).get("room") ?? "").toUpperCase();
+
+// ---------------------------------------------------------------- your loadouts
+
+const opSelect = $<HTMLSelectElement>(".lo-op");
+const loadoutBox = $(".loadout");
+if (data.operators.has(remembered(LOADOUT_OP_KEY))) opSelect.value = remembered(LOADOUT_OP_KEY);
+const showLoadout = () => (loadoutBox.innerHTML = loadoutRows(data, savedLoadout(data, opSelect.value)));
+showLoadout();
+opSelect.onchange = () => {
+  remember(LOADOUT_OP_KEY, opSelect.value);
+  showLoadout();
+};
+loadoutBox.addEventListener("change", (e) => {
+  const t = e.target as HTMLSelectElement;
+  if (!t.dataset.slot || !t.dataset.part) return;
+  saveLoadout(changedPick(savedLoadout(data, opSelect.value), t.dataset.slot as Slot, t.dataset.part as keyof WeaponPick, t.value));
+  showLoadout(); // another weapon has other attachments
+});
 
 // ---------------------------------------------------------------- the room list
 

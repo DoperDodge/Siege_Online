@@ -116,7 +116,14 @@ export class RoomManager {
         continue; // nobody to simulate for
       }
       r.emptySince = null;
-      r.room.step();
+      try {
+        r.room.step();
+      } catch (e) {
+        // A bug in one room closes that room, not the server and every other room on it.
+        console.error(`[redmond] room ${code} failed and was closed:`, e);
+        this.rooms.delete(code);
+        r.room.fail();
+      }
     }
   }
 

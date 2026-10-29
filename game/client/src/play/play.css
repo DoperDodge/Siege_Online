@@ -18,3 +18,13 @@ th, td { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--line
 td.code { font: 600 14px var(--mono); letter-spacing: 0.12em; }
 .empty { color: var(--muted); font-size: 13px; }
 footer { margin-top: 28px; color: var(--muted); font-size: 12px; }
+.note { color: var(--muted); font-size: 12px; }
+/* Loadouts (ui/loadout.ts's rows, as the labs and the planning screen draw them). */
+.loadout-row { margin: 10px 0 14px; }
+.loadout-row > label { display: flex; align-items: center; gap: 10px; }
+.loadout-row > label select { flex: 1; max-width: 60%; }
+.atts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.atts select { flex: 1 1 140px; min-width: 0; }
+.loadout .stats { margin: 6px 0 0; font: 12px var(--mono); }
+.unv { display: inline-block; margin-left: 2px; padding: 0 4px; border-radius: 3px; font: 700 10px var(--mono); background: rgba(242, 163, 58, 0.25); color: var(--accent); vertical-align: 1px; }
+.lo-op { width: 100%; }

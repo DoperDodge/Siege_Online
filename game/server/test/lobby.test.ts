@@ -21,7 +21,7 @@ import {
   Phase,
   PROTOCOL_VERSION,
 } from "@redmond/shared";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   BAD_JOIN_BURST,
   cleanName,
@@ -55,6 +55,35 @@ async function until(cond: () => boolean) {
 }
 
 describe("lobby", () => {
+  it("closes a room whose step throws on its own: its players are told and dropped, the other rooms go on", async () => {
+    const clock = { t: 0 };
+    const rooms = new RoomManager(() => clock.t);
+    const [a, b] = [fakeClient(rooms, clock), fakeClient(rooms, clock)];
+    for (const [c, name] of [[a, "Alpha"], [b, "Bravo"]] as const) {
+      c.conn.onMessage(encodeHello(name));
+      c.conn.onMessage(encodeCreateRoom());
+    }
+    await until(() => a.of(Msg.Welcome).length === 1 && b.of(Msg.Welcome).length === 1);
+    const [broken, fine] = [rooms.get(a.conn.roomCode!)!, rooms.get(b.conn.roomCode!)!];
+    broken.step = () => {
+      throw new Error("a bug");
+    };
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    const ticks = fine.stats.ticks;
+    rooms.step();
+    expect(logged).toHaveBeenCalledTimes(1);
+    logged.mockRestore();
+    expect(rooms.get(broken.code)).toBeNull();
+    expect(a.of(Msg.Error).map((r) => decodeError(r).code)).toEqual([ErrorCode.RoomFailed]);
+    expect(a.closed).toEqual([{ code: Close.Internal, reason: "room failed" }]);
+    a.conn.onClose(); // as its socket closes
+    expect(broken.size).toBe(0);
+    // The other room ticked, and goes on.
+    expect([b.closed, rooms.get(fine.code), fine.stats.ticks]).toEqual([[], fine, ticks + 1]);
+    rooms.step();
+    expect(fine.stats.ticks).toBe(ticks + 2);
+  });
+
   it("creates a room, lets a second player join it by code, and removes it once empty for a while", async () => {
     const clock = { t: 0 };
     const rooms = new RoomManager(() => clock.t);

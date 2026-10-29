@@ -100,7 +100,9 @@ ban.
   won the previous round with. The first to lock an operator gets it. Anyone who hasn't picked when the timer ends
   keeps last round's operator if still allowed, else gets the first allowed one in roster order (Siege auto-picks
   from personal stats; we have none).
-- **Loadouts**: the existing PickLoadout message and resolution (D-042), now recorded as the round's choice.
+- **Loadouts**: the existing PickLoadout message and resolution (D-042), now recorded as the round's choice. Each
+  operator's weapons and attachments are kept in the browser, set on the Play page, the planning screen or a lab, and
+  picking an operator sends yours (D-126).
 - **Repick in prep**: attackers may change operator, loadout and spawn until action starts [Y7S1]; defenders are
   locked once they spawn.
 
@@ -149,7 +151,7 @@ it is planted and when; the site; whether the attackers have found the site.
   goes down or dies.
 - **Pick up:** within 1 m, press Use (F); no need to look at it (research §5). Attackers only.
 - **Plant:** carrying it inside one of the site's two rooms, at least `plantMarginM` (0.5 m) from the room's edges
-  and on the room's storey, hold Use for 7 s; the body holds still meanwhile. A plant started before the action
+  and on the room's storey, hold Use for 7 s; the body holds still meanwhile, crouched (D-126). A plant started before the action
   timer runs out may finish after it (research §2).
 - **Disable:** a defender within reach of the planted defuser holds Use for 7 s; it must finish before the fuse runs
   out.

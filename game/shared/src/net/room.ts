@@ -213,6 +213,8 @@ export class Room implements DirectorHost {
   private unsentOps: IndexedOp[] = [];
   private readonly members = new Map<number, Member>();
   private nextMemberId = 1;
+  /** Its step threw, and it closed (fail()). */
+  private failed = false;
   /** Range Lab dummies (lab rooms on a level that has some). */
   private readonly dummies: Dummy[] = [];
   /** Performance counters for the /stats endpoint and the netsim. */
@@ -403,6 +405,7 @@ export class Room implements DirectorHost {
   leave(memberId: number): void {
     const m = this.members.get(memberId);
     if (!m) return;
+    if (this.failed) return void this.members.delete(memberId); // nothing more to tell anyone
     this.director?.leave(memberId);
     if (m.ctrl) this.sim.removePlayer(m.ctrl.id);
     this.members.delete(memberId);
@@ -443,6 +446,7 @@ export class Room implements DirectorHost {
 
   private spawn(m: Member, spawnIndex = 0) {
     if (m.ctrl) this.sim.removePlayer(m.ctrl.id);
+    m.ctrl = null; // until the new body stands (addPlayer throws when there's no room for it)
     m.ctrl = this.sim.addPlayer(m.name, m.pick.operator, spawnIndex, undefined, m.pick, m.team);
     for (const id of m.ctrl.pawnIds) this.sim.pawns.get(id)!.state.rng = hash4(this.seed, id, 0x5eed, 1) || 1;
     m.queue = [];
@@ -493,6 +497,20 @@ export class Room implements DirectorHost {
 
   send(memberId: number, bytes: Uint8Array): void {
     this.members.get(memberId)?.client.send(bytes);
+  }
+
+  /**
+   * The room broke (its step threw: a bug). Everyone is told and dropped; the server has already let go of it.
+   * Nothing here touches the simulation, which may be half-way through a tick.
+   */
+  fail(): void {
+    this.failed = true;
+    for (const [id, m] of [...this.members]) {
+      m.client.send(encodeError(ErrorCode.RoomFailed, `Room ${this.code} hit a server error and was closed. Make a new room to play on.`));
+      // The server's connection leaves as its socket closes; an in-process one has no socket.
+      if (m.client.close) m.client.close(1011, "room failed");
+      else this.members.delete(id);
+    }
   }
 
   kick(memberId: number): void {
