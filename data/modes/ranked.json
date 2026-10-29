@@ -1,0 +1,66 @@
+{
+  "_doc": "Ranked (research/round_flow.md §0–§8, §14): Unranked's rules (data/modes/unranked.json says where each comes from) plus a local ranked rating (DECISIONS D-124: no accounts, so it lives in each browser and is labelled \"local ranked\"). There is no map ban: one map (D-122).",
+  "_season": "Y11S3",
+  "_unverified": [
+    "reverseFriendlyFire.thresholdHp",
+    "match.overtime.swapEvery",
+    "match.seconds.pick",
+    "match.seconds.roundEnd"
+  ],
+  "id": "ranked",
+  "friendlyFire": {
+    "actionPhase": true,
+    "prepPhase": false,
+    "scale": 1.0
+  },
+  "reverseFriendlyFire": {
+    "enabled": true,
+    "thresholdHp": 100
+  },
+  "lastAliveDies": true,
+  "dummyRespawnS": 0,
+  "reinforcements": 10,
+  "defenderToolsForAll": false,
+  "attackerToolsForAll": false,
+  "match": {
+    "name": "Ranked",
+    "teamSize": {
+      "min": 1,
+      "max": 5
+    },
+    "rounds": 6,
+    "swapEvery": 3,
+    "overtime": {
+      "rounds": 3,
+      "winBy": 2,
+      "swapEvery": 1
+    },
+    "bans": {
+      "maxPerSide": 1,
+      "voteSeconds": 15
+    },
+    "site": "vote",
+    "siteReveal": "sight",
+    "seconds": {
+      "pick": 30,
+      "pickSameSides": null,
+      "prep": 45,
+      "action": 180,
+      "plant": 7,
+      "fuse": 45,
+      "disable": 7,
+      "roundEnd": 6,
+      "runoutGrace": 1,
+      "attackerSafeguard": 0,
+      "redWallExtension": 0
+    },
+    "reinforcementScaling": "scaled",
+    "preSetups": false,
+    "attrition": "none",
+    "stats": "rated",
+    "host": [
+      "bans",
+      "reinforcementScaling"
+    ]
+  }
+}

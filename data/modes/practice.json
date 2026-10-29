@@ -1,0 +1,29 @@
+{
+  "_doc": "Practice (PLAN §6.2): rounds go on with no winner, one side may be empty, friendly fire off, and the host may change every setting (an endless reinforcement pool too). The sides swap every round (D-121). Otherwise Siege's Bomb values, as in Unranked (data/modes/unranked.json says where each comes from).",
+  "_season": "Y11S3",
+  "_unverified": ["match.seconds.pick", "match.seconds.roundEnd"],
+  "id": "practice",
+  "friendlyFire": { "actionPhase": false, "prepPhase": false, "scale": 1.0 },
+  "reverseFriendlyFire": { "enabled": false, "thresholdHp": 100 },
+  "lastAliveDies": true,
+  "dummyRespawnS": 0,
+  "reinforcements": 10,
+  "defenderToolsForAll": false,
+  "attackerToolsForAll": false,
+  "match": {
+    "name": "Practice",
+    "teamSize": { "min": 0, "max": 5 },
+    "rounds": null,
+    "swapEvery": 1,
+    "overtime": null,
+    "bans": null,
+    "site": "vote",
+    "siteReveal": "roundStart",
+    "seconds": { "pick": 30, "pickSameSides": null, "prep": 45, "action": 180, "plant": 7, "fuse": 45, "disable": 7, "roundEnd": 6, "runoutGrace": 1, "attackerSafeguard": 0, "redWallExtension": 0 },
+    "reinforcementScaling": "scaled",
+    "preSetups": false,
+    "attrition": "none",
+    "stats": "none",
+    "host": "all"
+  }
+}

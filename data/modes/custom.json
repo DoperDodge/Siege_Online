@@ -1,0 +1,63 @@
+{
+  "_doc": "Custom (PLAN §6.2; research/round_flow.md §13): starts as Unranked (data/modes/unranked.json says where each value comes from) and the host may change every setting, within the schema's bounds, including friendly fire.",
+  "_season": "Y11S3",
+  "_unverified": [
+    "reverseFriendlyFire.thresholdHp",
+    "match.overtime.swapEvery",
+    "match.seconds.pick",
+    "match.seconds.roundEnd"
+  ],
+  "id": "custom",
+  "friendlyFire": {
+    "actionPhase": true,
+    "prepPhase": false,
+    "scale": 1.0
+  },
+  "reverseFriendlyFire": {
+    "enabled": true,
+    "thresholdHp": 100
+  },
+  "lastAliveDies": true,
+  "dummyRespawnS": 0,
+  "reinforcements": 10,
+  "defenderToolsForAll": false,
+  "attackerToolsForAll": false,
+  "match": {
+    "name": "Custom",
+    "teamSize": {
+      "min": 1,
+      "max": 5
+    },
+    "rounds": 6,
+    "swapEvery": 3,
+    "overtime": {
+      "rounds": 3,
+      "winBy": 2,
+      "swapEvery": 1
+    },
+    "bans": {
+      "maxPerSide": 1,
+      "voteSeconds": 15
+    },
+    "site": "vote",
+    "siteReveal": "sight",
+    "seconds": {
+      "pick": 30,
+      "pickSameSides": null,
+      "prep": 45,
+      "action": 180,
+      "plant": 7,
+      "fuse": 45,
+      "disable": 7,
+      "roundEnd": 6,
+      "runoutGrace": 1,
+      "attackerSafeguard": 0,
+      "redWallExtension": 0
+    },
+    "reinforcementScaling": "scaled",
+    "preSetups": false,
+    "attrition": "none",
+    "stats": "none",
+    "host": "all"
+  }
+}

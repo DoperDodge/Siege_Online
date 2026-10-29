@@ -55,10 +55,10 @@ scaling). Values from research/round_flow.md §2–§3 and §14:
 |---|---|---|---|---|---|---|
 | Team size | 1–5 | 1–5 | 1–5 | 1 | 1–5 | 0–5 (one side may be empty) |
 | Regulation rounds / win at | 4 / 3 | 6 / 4 | 6 / 4 | 6 / 4 | any | ∞ |
-| Sides swap every | 2 rounds | 3 rounds | 3 rounds | 1 round (UNVERIFIED, D-121) | any | 1 round |
+| Sides swap every | 2 rounds | 3 rounds | 3 rounds | 3 rounds (UNVERIFIED, D-121) | any | 1 round |
 | Overtime | at 2–2: 1 round, first to 3 | at 3–3: up to 3 rounds, first to 5, swap every round | same | at 3–3: 1 round | any | — |
 | Bans | none | 1 per side per half (host 0–2) | same | none | any | none |
-| Site | random, defenders know it, attackers see it at action start | defenders vote | defenders vote | revealed at action start | any | any |
+| Site | random, defenders know it, attackers see it as the round starts | defenders vote | defenders vote | the defender picks; revealed as the round starts | any | any |
 | Operator pick | 20 s, 15 s when the sides didn't swap | 30 s UNVERIFIED | same | 30 s UNVERIFIED | any | 30 s |
 | Prep / action | 45 / 180 | 45 / 180 | 45 / 180 | 15 / 180 (action UNVERIFIED) | any | any |
 | Plant / fuse / disable | 7 / 45 / 7 | same | same | same (UNVERIFIED) | any | same |
@@ -161,8 +161,8 @@ it is planted and when; the site; whether the attackers have found the site.
 
 **Finding the site** (Ranked, Unranked, Custom with that setting): attackers know the four possible sites; the
 chosen one is revealed to all attackers when an attacker's body has the eye on one of its bombs (line of sight,
-within 45° of the view and 25 m: placeholders until drones in Phase 7). Quick Match and 1v1 reveal it at action
-start.
+within 45° of the view and 25 m: placeholders until drones in Phase 7). Quick Match and 1v1 reveal it when the round
+starts (prep), our reading of Siege's "at round start" (D-121).
 
 ## 9. Quick Match pre-setups
 

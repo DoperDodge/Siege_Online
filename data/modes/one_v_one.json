@@ -1,0 +1,29 @@
+{
+  "_doc": "1v1 (PLAN §6.2; research/round_flow.md §12, Siege's 1v1 Arcade v2 [Y11S2.2]): one player a side, 6 rounds, first to 4, one overtime round at 3–3 (max 7, siege.gg); no bans but attrition: \"winning players can no longer select the Operator they used in the previous round\" (official); prep 15 s (official); the site revealed at round start (official); a pool of 6 reinforcements (official), which the D-015 scaling gives one defender. The sides swap at round 4, as in Bomb's standard rules (\"same ruleset as Bomb mode\") and the 3v3 Arcade (siege.gg): attrition only matters to a player who plays the same side two rounds running (the Arcade's own pattern is unverified, D-121; Siege's Custom 1v1 Short Match preset swaps every round instead [Y9S3]). The defender picks the site. Action, plant, fuse and disable are Bomb's (\"same ruleset as Bomb\", official) but not confirmed for the Arcade; the pick time and the round-end banner are ours.",
+  "_season": "Y11S3",
+  "_unverified": ["match.swapEvery", "match.overtime.swapEvery", "match.site", "match.siteReveal", "match.seconds.pick", "match.seconds.action", "match.seconds.plant", "match.seconds.fuse", "match.seconds.disable", "match.seconds.roundEnd", "match.seconds.runoutGrace"],
+  "id": "one_v_one",
+  "friendlyFire": { "actionPhase": true, "prepPhase": false, "scale": 1.0 },
+  "reverseFriendlyFire": { "enabled": false, "thresholdHp": 100 },
+  "lastAliveDies": true,
+  "dummyRespawnS": 0,
+  "reinforcements": 10,
+  "defenderToolsForAll": false,
+  "attackerToolsForAll": false,
+  "match": {
+    "name": "1v1",
+    "teamSize": { "min": 1, "max": 1 },
+    "rounds": 6,
+    "swapEvery": 3,
+    "overtime": { "rounds": 1, "winBy": 1, "swapEvery": 1 },
+    "bans": null,
+    "site": "vote",
+    "siteReveal": "roundStart",
+    "seconds": { "pick": 30, "pickSameSides": null, "prep": 15, "action": 180, "plant": 7, "fuse": 45, "disable": 7, "roundEnd": 6, "runoutGrace": 1, "attackerSafeguard": 0, "redWallExtension": 0 },
+    "reinforcementScaling": "scaled",
+    "preSetups": false,
+    "attrition": "winnerLastOperator",
+    "stats": "local",
+    "host": ["reinforcementScaling"]
+  }
+}

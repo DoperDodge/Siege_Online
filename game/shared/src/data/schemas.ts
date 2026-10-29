@@ -518,6 +518,80 @@ export const combatSchema = z.strictObject({
 });
 export type CombatData = z.infer<typeof combatSchema>;
 
+/** Settings a format's host may change besides "all" of them (Custom, Practice): PLAN §6.2's toggles. */
+export const HOST_TOGGLES = ["bans", "reinforcementScaling"] as const;
+export type HostToggle = (typeof HOST_TOGGLES)[number];
+export const MAX_TEAM_SIZE = 5;
+
+/**
+ * A format's match rules (data/modes/<id>.json `match`; game/shared/src/match/DESIGN.md §3). Seconds in the data,
+ * ticks in the match logic.
+ */
+export const matchRulesSchema = z
+  .strictObject({
+    /** Shown in the lobby and the room list. */
+    name: z.string(),
+    /** Players per team: at least `min` (0 lets one side be empty: Practice), at most `max`. */
+    teamSize: z.strictObject({ min: z.number().int().min(0).max(MAX_TEAM_SIZE), max: z.number().int().min(1).max(MAX_TEAM_SIZE) }),
+    /** Regulation rounds, an even number (the first to half of them plus one wins), or null: rounds go on with no winner (Practice). */
+    rounds: z.number().int().min(2).max(24).multipleOf(2).nullable(),
+    /** The sides swap every this many regulation rounds. */
+    swapEvery: z.number().int().min(1).max(24),
+    /**
+     * At a tie after regulation: up to `rounds` more (an odd number, or null for no limit) until a team leads by
+     * `winBy`; after the last one the team ahead wins. The sides swap going in, then every `swapEvery` (D-121).
+     */
+    overtime: z
+      .strictObject({
+        rounds: z.number().int().min(1).max(15).nullable(),
+        winBy: z.number().int().min(1).max(3),
+        swapEvery: z.number().int().min(1).max(15),
+      })
+      .nullable(),
+    /** Pick & Ban (D-119): ban phases while fewer than `maxPerSide` operators are banned in the half; null: no bans. */
+    bans: z.strictObject({ maxPerSide: z.number().int().min(0).max(2), voteSeconds: secs }).nullable(),
+    /** How the site is chosen: the defenders' vote (no votes: at random), or at random. */
+    site: z.enum(["vote", "random"]),
+    /** When attackers learn the site: when one of them has a bomb in view (data/objective.json `siteSight`), or when prep starts. */
+    siteReveal: z.enum(["sight", "roundStart"]),
+    seconds: z.strictObject({
+      /** The planning screen; `pickSameSides`, when not null, if the sides are the ones of the round before (Quick Match). */
+      pick: secs,
+      pickSameSides: secs.nullable(),
+      prep: secs,
+      action: secs,
+      plant: secs,
+      fuse: secs,
+      disable: secs,
+      /** The round's result before the next round starts. */
+      roundEnd: secs,
+      /** A defender outside the building this long in action is Detected. */
+      runoutGrace: z.number().nonnegative(),
+      /** Attackers take no damage this long into action, or until they enter the building (0: none). */
+      attackerSafeguard: z.number().nonnegative(),
+      /** Red walls stay up this long into action (0: they come down as it starts). */
+      redWallExtension: z.number().nonnegative(),
+    }),
+    /** The reinforcement pool: the mode's `reinforcements` scaled for small teams (D-015), as it is, or endless. */
+    reinforcementScaling: z.enum(["scaled", "full", "infinite"]),
+    /** Quick Match's pre-placed reinforcements and rotation holes (DESIGN §9). */
+    preSetups: z.boolean(),
+    /** 1v1: a round's winner can't pick the operator they won it with in the next round. */
+    attrition: z.enum(["none", "winnerLastOperator"]),
+    /** What is kept after a match: nothing, local stats, or local stats and the local ranked rating (D-124). */
+    stats: z.enum(["none", "local", "rated"]),
+    /** What the host may change: everything (Custom, Practice) or only these toggles. */
+    host: z.union([z.literal("all"), z.array(z.enum(HOST_TOGGLES))]),
+  })
+  .superRefine((m, ctx) => {
+    if (m.teamSize.min > m.teamSize.max) ctx.addIssue({ code: "custom", path: ["teamSize"], message: "min is more than max" });
+    if (m.overtime && m.overtime.rounds !== null && m.overtime.rounds % 2 === 0) {
+      ctx.addIssue({ code: "custom", path: ["overtime", "rounds"], message: "an odd number, so someone always leads after the last one" });
+    }
+    if (m.rounds === null && m.overtime !== null) ctx.addIssue({ code: "custom", path: ["overtime"], message: "endless rounds have no overtime" });
+  });
+export type MatchRules = z.infer<typeof matchRulesSchema>;
+
 /** A mode preset (data/modes/<id>.json, PLAN §4). Damage-rule names follow research/core_mechanics.md §11. */
 export const modeSchema = z.strictObject({
   ...meta,
@@ -532,8 +606,28 @@ export const modeSchema = z.strictObject({
   defenderToolsForAll: z.boolean(),
   /** Lab rooms let defenders rappel too (Siege: attackers only, research/core_mechanics.md §6). */
   attackerToolsForAll: z.boolean(),
+  /** A match format's rules (Phase 6); lab presets have none. */
+  match: matchRulesSchema.optional(),
 });
 export type ModeData = z.infer<typeof modeSchema>;
+
+/** Bomb's objective rules shared by every format (data/objective.json; match/DESIGN.md §8). Metres and degrees. */
+export const objectiveSchema = z.strictObject({
+  ...meta,
+  defuser: z.strictObject({
+    /** A dropped defuser is picked up from this close (no need to look at it). */
+    pickupRangeM: z.number().positive(),
+    /** A defender disables a planted defuser from this close, facing it within `disableFacingDeg`. */
+    disableReachM: z.number().positive(),
+    disableFacingDeg: z.number().positive().max(180),
+    /** The planter / the defender disabling it holds still meanwhile. */
+    plantLocksBody: z.boolean(),
+    disableLocksBody: z.boolean(),
+  }),
+  /** Finding the site (D-120): an attacker's eye on a bomb within this range and this far off the view. */
+  siteSight: z.strictObject({ rangeM: z.number().positive(), coneDeg: z.number().positive().max(180) }),
+});
+export type ObjectiveData = z.infer<typeof objectiveSchema>;
 
 
 export const SURFACES = [

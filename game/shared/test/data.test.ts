@@ -40,6 +40,7 @@ describe("data files", () => {
       ["gunplay", rawData.gunplay],
       ["combat", rawData.combat],
       ["destruction", rawData.destruction],
+      ["objective", rawData.objective],
       ...rawData.operators.map((o): [string, Record<string, unknown>] => [`operators/${String(o.id)}`, o]),
       ...rawData.weapons.map((w): [string, Record<string, unknown>] => [`weapons/${String(w.id)}`, w]),
       ...rawData.modes.map((r): [string, Record<string, unknown>] => [`modes/${String(r.id)}`, r]),
@@ -47,6 +48,13 @@ describe("data files", () => {
     for (const [name, raw] of files) {
       expect(missingUnverifiedPaths(raw, (raw._unverified as string[] | undefined) ?? []), name).toEqual([]);
     }
+  });
+
+  it("mode files: one per file name, all imported", () => {
+    const dir = new URL("../../../data/modes/", import.meta.url);
+    const onDisk = readdirSync(dir).filter((f) => f.endsWith(".json")).map((f) => f.slice(0, -5)).sort();
+    expect(rawData.modes.map((m) => String(m.id)).sort()).toEqual(onDisk);
+    expect([...data.modes.keys()].sort()).toEqual(onDisk);
   });
 
   it("weapon files: one per file name, all imported, all carried by an operator", () => {
