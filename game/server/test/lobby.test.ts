@@ -1,4 +1,26 @@
-import { ByteReader, ByteWriter, decodeError, decodeRoster, decodeWelcome, defaultLoadoutPick, encodeCreateRoom, encodeHello as hello, encodeJoinRoom, encodePickLoadout, encodePing, ErrorCode, loadGameData, Msg, PROTOCOL_VERSION } from "@redmond/shared";
+import {
+  ByteReader,
+  ByteWriter,
+  decodeError,
+  decodeMatchState,
+  decodeRoomList,
+  decodeRoster,
+  decodeWelcome,
+  defaultLoadoutPick,
+  encodeCreateMatch,
+  encodeCreateRoom,
+  encodeHello as hello,
+  encodeJoinRoom,
+  encodeListRooms,
+  encodeLobbyAction,
+  encodePickLoadout,
+  encodePing,
+  ErrorCode,
+  loadGameData,
+  Msg,
+  Phase,
+  PROTOCOL_VERSION,
+} from "@redmond/shared";
 import { describe, expect, it } from "vitest";
 import {
   BAD_JOIN_BURST,
@@ -80,6 +102,34 @@ describe("lobby", () => {
     bad.conn.onMessage(new ByteWriter().u8(Msg.CreateRoom).str("../../etc").finish());
     expect(bad.closed).toEqual([{ code: Close.Protocol, reason: "bad message" }]);
     expect(rooms.count).toBe(1);
+  });
+
+  it("creates a match room on Oregon in its lobby, lists it (no names) unless it's private, and refuses unknown formats", async () => {
+    const clock = { t: 0 };
+    const rooms = new RoomManager(() => clock.t);
+    const a = fakeClient(rooms, clock);
+    a.conn.onMessage(encodeHello("Host"));
+    a.conn.onMessage(encodeCreateMatch("quick_match"));
+    await until(() => a.of(Msg.Welcome).length === 1);
+    const welcome = decodeWelcome(a.of(Msg.Welcome)[0]);
+    expect([welcome.levelId, welcome.controllerId]).toEqual(["oregon", 0]);
+    rooms.step();
+    const view = decodeMatchState(a.of(Msg.MatchState).at(-1)!);
+    expect(view).toMatchObject({ format: "quick_match", phase: Phase.Lobby, you: view.host });
+    const b = fakeClient(rooms, clock);
+    b.conn.onMessage(encodeHello("Browser"));
+    b.conn.onMessage(encodeListRooms());
+    expect(decodeRoomList(b.of(Msg.RoomList)[0])).toEqual([{ code: welcome.roomCode, format: "quick_match", players: 1, maxPlayers: 10, phase: Phase.Lobby, round: 0 }]);
+    b.conn.onMessage(encodeJoinRoom(welcome.roomCode));
+    expect(b.of(Msg.Welcome)).toHaveLength(1);
+    a.conn.onMessage(encodeLobbyAction({ kind: "private", private: true }));
+    rooms.step();
+    const c = fakeClient(rooms, clock);
+    c.conn.onMessage(encodeHello("Other"));
+    c.conn.onMessage(encodeListRooms());
+    expect(decodeRoomList(c.of(Msg.RoomList)[0])).toEqual([]);
+    c.conn.onMessage(encodeCreateMatch("lab"));
+    expect(c.closed[0]?.code).toBe(Close.Protocol);
   });
 
   it("refuses an unknown code but stays in the lobby", async () => {

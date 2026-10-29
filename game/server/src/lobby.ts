@@ -3,13 +3,16 @@
 import { randomInt } from "node:crypto";
 import {
   ByteReader,
+  decodeCreateMatch,
   decodeCreateRoom,
   decodeHelloRest,
   decodeHelloVersion,
   decodeJoinRoom,
   encodeError,
+  encodeRoomList,
   ErrorCode,
   handleRoomMessage,
+  isFormat,
   isHeavyRoomMessage,
   loadGameData,
   MAX_NAME,
@@ -19,7 +22,11 @@ import {
   Room,
   ROOM_CODE_ALPHABET,
   ROOM_CODE_LENGTH,
+  type RoomListEntry,
 } from "@redmond/shared";
+
+/** The map match rooms play (Phase 6; one map so far). */
+export const MATCH_LEVEL = "oregon";
 
 export const MAX_ROOMS = 50;
 /** An empty room is kept this long (someone may be reconnecting), then removed. */
@@ -69,20 +76,34 @@ export class RoomManager {
     return this.rooms.get(code)?.room ?? null;
   }
 
-  /** A new room on `levelId` (one of ROOM_LEVELS), or null when the server already has as many rooms as it allows. */
-  async create(levelId = "movement_lab"): Promise<Room | null> {
+  /**
+   * A new room on `levelId` (one of ROOM_LEVELS), or null when the server already has as many rooms as it allows.
+   * With `format` (a match format's id), a match room on that level, in its lobby.
+   */
+  async create(levelId = "movement_lab", format?: string): Promise<Room | null> {
     if (this.rooms.size + this.pending.size >= this.maxRooms) return null;
     let code: string;
     do code = Array.from({ length: ROOM_CODE_LENGTH }, () => ROOM_CODE_ALPHABET[randomInt(ROOM_CODE_ALPHABET.length)]).join("");
     while (this.rooms.has(code) || this.pending.has(code));
     this.pending.add(code);
     try {
-      const room = await Room.create(code, levelId, { lab: true, seed: randomInt(2 ** 32) }); // a secret seed: spread and recoil
+      const seed = randomInt(2 ** 32); // a secret seed: spread and recoil, and a match's draws
+      const room = await Room.create(code, levelId, format ? { format, seed } : { lab: true, seed });
       this.rooms.set(code, { room, emptySince: this.now() });
       return room;
     } finally {
       this.pending.delete(code);
     }
+  }
+
+  /** The match rooms open to anyone with the list (not private), for the Play page. */
+  listed(): RoomListEntry[] {
+    const out: RoomListEntry[] = [];
+    for (const { room } of this.rooms.values()) {
+      const e = room.size > 0 ? room.listing() : null;
+      if (e) out.push(e);
+    }
+    return out;
   }
 
   /** One server tick for every room; rooms empty for longer than EMPTY_ROOM_TTL_MS are removed. */
@@ -274,7 +295,17 @@ export class Connection {
         return type === Msg.Hello ? this.hello(r) : this.close(Close.Protocol, "expected hello");
       case "lobby":
         if (type === Msg.CreateRoom) return this.create(decodeCreateRoom(r).levelId);
+        if (type === Msg.CreateMatch) {
+          const { format } = decodeCreateMatch(r);
+          const mode = loadGameData().modes.get(format);
+          if (!mode || !isFormat(mode)) throw new ProtocolError("unknown format");
+          return this.create(MATCH_LEVEL, format);
+        }
         if (type === Msg.JoinRoom) return this.join(decodeJoinRoom(r).code);
+        if (type === Msg.ListRooms) {
+          if (this.heavy.take(this.now())) this.t.send(encodeRoomList(this.rooms.listed()));
+          return;
+        }
         return this.close(Close.Protocol, "expected create or join");
       case "joining":
         return; // the room is loading; the client waits for Welcome before sending anything else
@@ -299,13 +330,13 @@ export class Connection {
     this.state = "lobby";
   }
 
-  private create(levelId: string) {
+  private create(levelId: string, format?: string) {
     if (!this.gate.canCreate(this.ip)) {
       this.t.send(encodeError(ErrorCode.RateLimited, "You've created several rooms in a row. Wait a minute, or join one with its code."));
       return;
     }
     this.state = "joining";
-    this.rooms.create(levelId).then(
+    this.rooms.create(levelId, format).then(
       (room) => {
         if (this.state !== "joining") return; // the client left while the level loaded
         if (!room) {

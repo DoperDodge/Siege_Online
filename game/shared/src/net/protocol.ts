@@ -9,7 +9,7 @@ import { MSG_PANEL_OPS, MSG_PANEL_RESYNC, MSG_PANEL_STATE } from "./panels.js";
 import { MSG_SNAPSHOT } from "./snapshot.js";
 
 /** Bump when the wire format changes; client and server must match. */
-export const PROTOCOL_VERSION = 10;
+export const PROTOCOL_VERSION = 11;
 
 export const Msg = {
   // client → server
@@ -25,6 +25,11 @@ export const Msg = {
   LabTool: 0x09,
   /** Our panels disagree with the server's hash: send their state again (net/panels.ts). */
   PanelResync: MSG_PANEL_RESYNC,
+  /** Phase 6 (net/matchWire.ts): a new match room, the room list, lobby and match choices. */
+  CreateMatch: 0x0b,
+  ListRooms: 0x0c,
+  LobbyAction: 0x0d,
+  MatchAction: 0x0e,
   // server → client
   Snapshot: MSG_SNAPSHOT,
   Welcome: 0x11,
@@ -38,6 +43,10 @@ export const Msg = {
   PanelOps: MSG_PANEL_OPS,
   /** Every changed panel's state (on joining, and when a client asks). */
   PanelState: MSG_PANEL_STATE,
+  /** The listed match rooms (net/matchWire.ts). */
+  RoomList: 0x19,
+  /** The match as this player may see it (net/matchWire.ts). */
+  MatchState: 0x1a,
 } as const;
 
 export const MAX_NAME = 24;
@@ -233,7 +242,8 @@ export const decodePong = (r: ByteReader) => ({ clientTime: r.f64(), serverTick:
 
 // ---------------------------------------------------------------- errors
 
-export const ErrorCode = { BadVersion: 1, NoSuchRoom: 2, RoomFull: 3, BadRequest: 4, ServerRestarting: 5, ServerFull: 6, RateLimited: 7 } as const;
+/** `Kicked`: the host removed you; `Refused`: a lobby or match choice that didn't go through (the message says why). */
+export const ErrorCode = { BadVersion: 1, NoSuchRoom: 2, RoomFull: 3, BadRequest: 4, ServerRestarting: 5, ServerFull: 6, RateLimited: 7, Kicked: 8, Refused: 9 } as const;
 export const encodeError = (code: number, message: string) => new ByteWriter().u8(Msg.Error).u8(code).str(message).finish();
 export const decodeError = (r: ByteReader) => ({ code: r.u8(), message: r.str(512) });
 

@@ -8,6 +8,7 @@ import { buildLevel, type BuiltLevel } from "./level/builder.js";
 import { initRapier, PLAYER_GROUPS, QUERY_SIGHT, QUERY_SOLID, QUERY_STATIC as QUERY_STATIC_FILTER, refreshBroadPhase, type CharacterController, type Rapier, type World } from "./physics/rapier.js";
 import { cancelRappelHold, capsuleFree, movementPrompt, poseCollider, stepPawn, type MoveContext, type MovementPrompt } from "./player/movement.js";
 import { initialPawnState, type Pawn, type PlayerController } from "./player/pawn.js";
+import { insideAny, zoneBoxes, ZONE_TEST_HEIGHT, type ZoneBox } from "./level/zones.js";
 import { eyePose, poseHitboxes } from "./player/hitboxes.js";
 import { capsuleDims, stanceDims } from "./player/stance.js";
 import { Btn, PawnMode, ropeIdle, Stance, type InputCmd, type PawnState } from "./player/types.js";
@@ -15,6 +16,17 @@ import { defaultLoadoutPick, resolveLoadout, type LoadoutPick, type ResolvedLoad
 import type { SimEvent } from "./weapons/step.js";
 import { viewDir } from "./weapons/spread.js";
 import { ticks } from "./weapons/ticks.js";
+
+/**
+ * What a match decides that the simulation must know, so a client predicts it the way the server applies it
+ * (match/DESIGN.md §6): set by the room, and on a client from the room's match state.
+ */
+export interface MatchSimRules {
+  /** Red walls (prep): a defender's move that would take its feet out of the building zones is undone. */
+  redWalls: boolean;
+  /** Below the kill plane a body dies (the room kills it) instead of going back to spawn 0 (labs). */
+  killPlaneKills: boolean;
+}
 
 /** Contextual hint for the HUD: "Space to mantle", "F to climb", "F to transfer" (Skopós camera), "Hold F to reinforce". */
 export type Prompt = MovementPrompt | "transfer" | "revive" | "reinforce" | "barricade" | "unbarricade";
@@ -29,6 +41,10 @@ export class Sim {
    * judges them.
    */
   deployRules: DeployRules = { anyone: false, rappel: false, pools: [0, 0] };
+  /** A match room's rules for bodies (none in a lab). */
+  matchRules: MatchSimRules = { redWalls: false, killPlaneKills: false };
+  /** The level's building zones (level.json, D-105): red walls and run-outs. */
+  readonly building: ZoneBox[];
   private nextId = 1;
   private readonly ctx: MoveContext;
 
@@ -41,6 +57,44 @@ export class Sim {
   ) {
     // Attackers rappel; in a lab room anyone does (deployRules.rappel, from the room's rules).
     this.ctx = { R, world, cc, data, level, events: [], canRappel: (pawn) => pawn.team === sideTeam("attacker") || this.deployRules.rappel };
+    this.building = zoneBoxes(level.def, "building");
+  }
+
+  /** Whether a body's feet (x, y, z) are inside the building (false on a level without building zones). */
+  insideBuilding(x: number, y: number, z: number): boolean {
+    return insideAny(this.building, x, y + ZONE_TEST_HEIGHT, z);
+  }
+
+  /** One body's step, with what the level and the match add: the kill plane and the red walls. */
+  private stepBody(pawn: Pawn, cmd: InputCmd, live: boolean, fresh: boolean) {
+    const s = pawn.state;
+    const confined = this.matchRules.redWalls && pawn.team === sideTeam("defender") && this.building.length > 0;
+    const before = confined ? { x: s.x, y: s.y, z: s.z, mode: s.mode } : null;
+    stepPawn(this.ctx, pawn, cmd, live, fresh);
+    if (before) this.keepInside(pawn, before);
+    this.belowKillPlane(pawn);
+  }
+
+  /**
+   * Red walls: a move that took a defender's feet out of the building is undone (back where it was, stopped),
+   * and a vault or climb that would land outside doesn't start. Inside the building nothing changes.
+   */
+  private keepInside(pawn: Pawn, before: { x: number; y: number; z: number; mode: PawnMode }) {
+    const s = pawn.state;
+    const started = s.mode === PawnMode.Vault && before.mode !== PawnMode.Vault;
+    if (this.insideBuilding(s.x, s.y, s.z) && !(started && !this.insideBuilding(s.toX, s.toY, s.toZ))) return;
+    s.x = before.x;
+    s.y = before.y;
+    s.z = before.z;
+    s.vx = 0;
+    s.vz = 0;
+    if (s.mode === PawnMode.Vault) {
+      s.mode = PawnMode.Walk;
+      s.moveT = 0;
+      s.moveDur = 0;
+      s.tuck = 0;
+    }
+    poseCollider(this.ctx, pawn);
   }
 
   /**
@@ -599,8 +653,7 @@ export class Sim {
         }
         // A body driven without its player's buttons (left behind on the camera, or being looked
         // through) has its weapon parked: nothing it was doing carries on unseen.
-        stepPawn(this.ctx, pawn, cmd, !idleDriven.has(pawn.id), !idleDriven.has(pawn.id));
-        this.belowKillPlane(pawn);
+        this.stepBody(pawn, cmd, !idleDriven.has(pawn.id), !idleDriven.has(pawn.id));
         refreshBroadPhase(this.world); // the next pawn must see this one where it now is
         if (idleDriven.has(pawn.id)) pawn.state.prevButtons = held;
         else if (cmd !== input) pawn.state.prevButtons |= input.buttons & Btn.Interact; // still held: not a fresh press later
@@ -613,8 +666,7 @@ export class Sim {
       // is in keeps its weapon running (a reload goes on through a lag spike); an idle shell's is parked.
       const held = pawn.state.prevButtons;
       this.letGo(pawn, idleShell);
-      stepPawn(this.ctx, pawn, idleInput(pawn, idleShell ? Stance.Crouch : pawn.state.stance), !idleShell, false);
-      this.belowKillPlane(pawn);
+      this.stepBody(pawn, idleInput(pawn, idleShell ? Stance.Crouch : pawn.state.stance), !idleShell, false);
       refreshBroadPhase(this.world);
       pawn.state.prevButtons = held;
     }
@@ -623,12 +675,12 @@ export class Sim {
 
   /**
    * A body whose feet fell below the level's kill plane (bounds.killY, DECISIONS D-076) is out of the level:
-   * it goes back to spawn 0 standing, with no fall damage (lab rooms; a match will kill it, Phase 6). Part of
-   * the step, so a client predicts it exactly as the server does.
+   * in a lab it goes back to spawn 0 standing, with no fall damage, as part of the step, so a client predicts it
+   * exactly as the server does; in a match it keeps falling and the room kills it (MatchSimRules.killPlaneKills).
    */
   private belowKillPlane(pawn: Pawn) {
     const killY = this.level.def.bounds?.killY;
-    if (killY === undefined || pawn.state.y >= killY) return;
+    if (killY === undefined || pawn.state.y >= killY || this.matchRules.killPlaneKills) return;
     const s = this.level.def.spawns[0];
     this.teleport(pawn.id, s.pos[0], s.pos[1], s.pos[2], s.yawDeg);
   }

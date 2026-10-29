@@ -2,10 +2,14 @@
 // lobby (game/server/src/lobby.ts) and the Range Lab's in-page room (Phase 3 M10, DECISIONS D-052).
 import type { ByteReader } from "./bytes.js";
 import { decodeInput, decodeLabTool, decodePickLoadout, decodePing, Msg } from "./protocol.js";
+import { decodeLobbyAction, decodeMatchAction } from "./matchWire.js";
 import type { Room } from "./room.js";
 
-/** In-room messages that respawn or move a body: the server rate-limits these much more tightly. */
-export const isHeavyRoomMessage = (type: number) => type === Msg.PickLoadout || type === Msg.LabTool;
+/**
+ * In-room messages that respawn or move a body, or change a match for everyone (lobby and round choices): the
+ * server rate-limits these much more tightly.
+ */
+export const isHeavyRoomMessage = (type: number) => type === Msg.PickLoadout || type === Msg.LabTool || type === Msg.LobbyAction || type === Msg.MatchAction;
 
 /** Hand one in-room message to the room. False: not an in-room message (the caller decides what that means). */
 export function handleRoomMessage(room: Room, memberId: number, type: number, r: ByteReader): boolean {
@@ -27,6 +31,12 @@ export function handleRoomMessage(room: Room, memberId: number, type: number, r:
       return true;
     case Msg.LabTool:
       room.onLabTool(memberId, decodeLabTool(r));
+      return true;
+    case Msg.LobbyAction:
+      room.onLobby(memberId, decodeLobbyAction(r));
+      return true;
+    case Msg.MatchAction:
+      room.onMatchAction(memberId, decodeMatchAction(r));
       return true;
   }
   return false;

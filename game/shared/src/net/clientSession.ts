@@ -12,6 +12,7 @@ import type { IndexedOp } from "../destruction/panels.js";
 import { ByteReader, ProtocolError } from "./bytes.js";
 import { decodeEvents, type GameEvent } from "./events.js";
 import { applyPanelState, decodePanelOps } from "./panels.js";
+import { decodeMatchState, type MatchView } from "./matchWire.js";
 import {
   decodeError,
   decodePong,
@@ -51,6 +52,8 @@ export interface ClientSessionOptions {
   /** Panel ops the server applied, now applied here too, and what each changed (debris, sounds). */
   onPanels?(tick: number, ops: readonly IndexedOp[], changes: readonly PanelChange[]): void;
   onError?(code: number, message: string): void;
+  /** A match room's state, as this player may see it (Phase 6, net/matchWire.ts). */
+  onMatch?(view: MatchView): void;
   /**
    * A message held while the level loaded threw when it was replayed after (one arriving live throws from
    * handle() instead). Without this, the replay's error is rethrown.
@@ -72,6 +75,9 @@ export class ClientSession {
   sim: Sim | null = null;
   roomCode = "";
   roster: RosterEntry[] = [];
+  /** A match room's latest state (null in a lab room), and its rules as JSON (they come only when they change). */
+  match: MatchView | null = null;
+  matchRules: string | null = null;
   /** Our controller id (it changes when the server respawns us). */
   you = 0;
   /** Last correction epoch applied; inputs carry it so the server only judges fresh predictions. */
@@ -201,6 +207,15 @@ export class ClientSession {
       case Msg.Error: {
         const e = decodeError(r);
         this.opts.onError?.(e.code, e.message);
+        return;
+      }
+      case Msg.MatchState: {
+        const v = decodeMatchState(r);
+        if (v.rules !== null) this.matchRules = v.rules;
+        this.match = v;
+        // What the room's simulation applies, applied by our prediction too (red walls; out of the map is death).
+        this.sim!.matchRules = { redWalls: v.redWalls, killPlaneKills: true };
+        this.opts.onMatch?.(v);
         return;
       }
       default:

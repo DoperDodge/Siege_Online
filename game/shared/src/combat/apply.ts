@@ -10,11 +10,11 @@ import { ticks } from "../weapons/ticks.js";
 import { parkWeapon } from "../weapons/step.js";
 
 /** Why a body took damage. */
-export const Cause = { Bullet: 0, Melee: 1, Fall: 2, Explosive: 3, Lab: 4, Reflect: 5, Bleed: 6 } as const;
+export const Cause = { Bullet: 0, Melee: 1, Fall: 2, Explosive: 3, Lab: 4, Reflect: 5, Bleed: 6, Left: 7 } as const;
 export type Cause = (typeof Cause)[keyof typeof Cause];
-export const CAUSE_MAX = 6;
-/** The names data/combat.json uses (`dbno.lethalCauses`). */
-const CAUSE_NAMES = ["bullet", "melee", "fall", "explosive", "lab", "reflect", "bleed"] as const;
+export const CAUSE_MAX = 7;
+/** The names data/combat.json uses (`dbno.lethalCauses`); "left": the player left the match (D-123). */
+const CAUSE_NAMES = ["bullet", "melee", "fall", "explosive", "lab", "reflect", "bleed", "left"] as const;
 
 export type DamageOutcome = "ignored" | "hurt" | "downed" | "killed";
 

@@ -26,7 +26,7 @@ describe("panel ops on the wire", () => {
       shape: { kind: "disc", u4: 0x7fff, v4: 2, r4: 5 },
       hard: false,
     });
-    expect(PROTOCOL_VERSION).toBe(10);
+    expect(PROTOCOL_VERSION).toBe(11);
   });
 });
 
