@@ -56,6 +56,18 @@ known issues, and what's next.
 - In a match there are no lab tools, Go to, free camera, storey views, third person or hitboxes, and none of the
   lab's labels, spawn discs or camera cones (the bombs stay) (D-125).
 
+### How to test (needs Node 22.12+)
+1. `npm ci`, then `npm run build && npm start`, and open http://localhost:8080 → *Play a match*. (Or `npm run dev`
+   with the server in a second terminal, as in Phase 5, and open http://localhost:5173.)
+2. *Create* a match in any format and send its code or invite link. Every browser window is a player, so a second
+   window lets you try it alone; friends need the server where they can reach it (your Railway deployment).
+3. Your loadouts: on the Play page, *Loadouts*: pick an operator, change a weapon or an attachment, and reload
+   the page: it stays. In a match the planning screen has the same rows for the operator you pick.
+4. Planting: as an attacker, take the defuser on the planning screen, find the site in action and hold F inside
+   it: you crouch for the 7 s and stand back up after.
+5. Checks: `npm run typecheck`, `npm test`, and `npm run build && node tools/e2e/match.mjs` (a 1v1 and a 2v3
+   played in browsers from start to finish). `npm run check` runs everything.
+
 ---
 
 ## Phase 5 — Oregon greybox · ✅ complete (PR #6)
