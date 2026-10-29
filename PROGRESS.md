@@ -5,6 +5,22 @@ known issues, and what's next.
 
 ---
 
+## Phase 6 — Match flow + lobby · 🚧 in progress (branch `claude/phase-6-match-flow`)
+
+**Done when (PLAN §17):** full 1v1 and 2v3 matches play start to finish. The design is
+`game/shared/src/match/DESIGN.md` (D-118 to D-124).
+
+| Milestone | Status |
+|---|---|
+| M1 Format presets (Quick Match, Unranked, Ranked, 1v1, Custom, Practice) and the match logic, tested on its own | 🚧 |
+| M2 Match rooms on the server: lobby, rounds with spawns, red walls, run-outs, elimination and time wins | ⏳ |
+| M3 The defuser: carry, drop, pick up, plant, disable, every win condition | ⏳ |
+| M4 In the browser: Play page, lobby, ban and planning screen, HUD, scoreboard, round and match summaries | ⏳ |
+| M5 Each format's details: Quick Match, Ranked rating, 1v1 attrition, Custom, Practice | ⏳ |
+| M6 Checks: a 10-round netsim match, browser tests of a 1v1 and a 2v3 match, docs, report | ⏳ |
+
+---
+
 ## Phase 5 — Oregon greybox · ✅ complete (PR #6)
 
 **Done when (PLAN §17):** you walk it and sign off on layout accuracy: ✅ signed off 2026-10-29, after rappel (M8),
