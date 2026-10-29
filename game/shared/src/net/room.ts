@@ -866,6 +866,7 @@ export class Room implements DirectorHost {
     const weapon = by.attacker?.weaponId ?? "";
     const friendly = by.attacker !== null && victim.team === by.attacker.team;
     if (r.outcome === "downed") {
+      this.director?.onBodyDown(victim); // a carrier drops the defuser
       this.downedBy.set(victim.id, { ctrl, weapon, life: victim.life });
       const e: GameEvent = { kind: "down", victimPawn: victim.id, victimCtrl: victim.ownerId ?? 0, downerCtrl: ctrl, weapon, cause: by.cause, friendly };
       for (const m of this.members.values()) m.events.push(e);
@@ -893,6 +894,7 @@ export class Room implements DirectorHost {
       ? { kind: "shellDestroyed", pawnId: victim.id, ownerCtrl, killerCtrl, weapon, headshot }
       : { kind: "kill", victimPawn: victim.id, victimCtrl: ownerCtrl, killerCtrl, assistCtrl, weapon: weapon || downer?.weapon || "", cause, headshot, friendly };
     for (const m of this.members.values()) m.events.push(e);
+    this.director?.onBodyDown(victim); // a carrier drops the defuser
     // Skopós's idle shell isn't an elimination (research/operators/skopos.md): only a body's death counts.
     if (!idle) this.director?.onDeath(ownerCtrl, killerCtrl, assistCtrl, friendly);
   }
@@ -911,6 +913,8 @@ export class Room implements DirectorHost {
         this.completeDeploy(e);
       } else if (e.kind === "rappelBreach") {
         this.completeBreach(e);
+      } else if (e.kind === "plant" || e.kind === "disable" || e.kind === "pickup" || e.kind === "drop") {
+        this.director?.onSimEvent(e);
       } else if (e.kind === "reviveStart" || e.kind === "reviveEnd") {
         const target = this.sim.pawns.get(e.targetPawn);
         const owner = target && target.ownerId !== null ? this.memberOf(target.ownerId) : null;

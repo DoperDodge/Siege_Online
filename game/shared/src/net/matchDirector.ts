@@ -4,12 +4,18 @@
 // is still up and who died, detects run-outs, kills bodies that fall out of the map, and sends each player the
 // match as they may see it.
 import { Cause } from "../combat/apply.js";
+import { DEG, type Vec3 } from "../core/math.js";
+import { DeployKind } from "../destruction/deploy.js";
+import { QUERY_SIGHT } from "../physics/rapier.js";
 import { isDowned } from "../player/downed.js";
+import { eyePose } from "../player/hitboxes.js";
 import { PawnMode } from "../player/types.js";
-import type { PlayerController } from "../player/pawn.js";
+import type { Pawn, PlayerController } from "../player/pawn.js";
 import { defaultLoadoutPick, resolveLoadout, type LoadoutPick } from "../weapons/loadout.js";
 import type { Sim } from "../sim.js";
-import { ticksOrZero } from "../weapons/ticks.js";
+import { viewDir } from "../weapons/spread.js";
+import type { SimEvent } from "../weapons/step.js";
+import { ticks, ticksOrZero } from "../weapons/ticks.js";
 import { Match, matchMapOf, NO_END, Phase, type MatchEvent } from "../match/match.js";
 import { ATTACK, DEFENSE, isFormat, mvp, reinforcementPool, type FormatMode, type Side } from "../match/rules.js";
 import { encodeMatchState, type LobbyAction, type MatchAction, type MatchView, type RoomListEntry } from "./matchWire.js";
@@ -59,6 +65,8 @@ export class MatchDirector {
   private readonly rulesSent = new Map<number, number>();
   /** Not in the server's room list. */
   private hidden = false;
+  /** The hatch the defuser was planted on (a panel index), or null: destroying it deactivates the defuser (research §4 case 8). */
+  private plantHatch: number | null = null;
 
   constructor(
     private readonly host: DirectorHost,
@@ -199,7 +207,12 @@ export class MatchDirector {
     const live = m.phase === Phase.Action || m.phase === Phase.PostPlant;
     this.killBelowMap();
     if (live) this.runouts();
-    const facts = live ? { attackersUp: this.up(ATTACK), defendersUp: this.up(DEFENSE), plantInProgress: false } : undefined;
+    if ((m.phase === Phase.Prep || m.phase === Phase.Action) && !m.siteRevealed && this.mode.match.siteReveal === "sight" && this.siteInView()) {
+      m.siteFound();
+      this.changed(false);
+    }
+    if (m.phase === Phase.PostPlant && this.plantHatch !== null && sim.level.panels.list[this.plantHatch]?.panel.broken) m.defuserDeactivated();
+    const facts = live ? { attackersUp: this.up(ATTACK), defendersUp: this.up(DEFENSE), plantInProgress: this.planting() } : undefined;
     this.apply(m.update(sim.tick, facts));
     this.redWalls();
     this.sendState();
@@ -214,6 +227,70 @@ export class MatchDirector {
     };
     this.match.recordKill(member(victimCtrl), member(killerCtrl), member(assistCtrl), friendly);
     this.changed(false);
+  }
+
+  /** The simulation's defuser events (the room's step): planted, disabled, picked up, dropped. */
+  onSimEvent(e: SimEvent) {
+    const tick = this.host.sim.tick;
+    if (e.kind === "plant") {
+      this.apply(this.match.planted(tick));
+      this.plantHatch = this.hatchUnder(e.pos);
+    } else if (e.kind === "disable") this.match.defuserDisabled(tick);
+    else if (e.kind !== "pickup" && e.kind !== "drop") return;
+    this.changed(true);
+  }
+
+  /** A body went down or died: if it carried the defuser, it falls there (research §5). */
+  onBodyDown(pawn: Pawn) {
+    const o = this.host.sim.objective;
+    if (!o || o.carrier !== pawn.id) return;
+    o.carrier = 0;
+    o.dropped = [pawn.state.x, pawn.state.y, pawn.state.z];
+    this.changed(true);
+  }
+
+  /** An attacker is holding the plant (a plant under way when the timer runs out plays on, research §4 case 3). */
+  private planting(): boolean {
+    for (const id of this.match.sides[ATTACK]) {
+      const body = this.host.bodyOf(id);
+      if (body && this.host.sim.pawns.get(body.possessedPawnId)?.state.deployKind === DeployKind.Plant) return true;
+    }
+    return false;
+  }
+
+  /** The hatch under a spot (the panel a downward ray from just above it crosses first, if a hatch), or null. */
+  private hatchUnder(pos: Vec3): number | null {
+    const hit = this.host.sim.level.panels.crossings([pos[0], pos[1] + 0.3, pos[2]], [0, -1, 0], 0.6)[0];
+    return hit && hit.entry.panel.kind === "hatch" ? hit.entry.panel.spec.index : null;
+  }
+
+  /**
+   * Finding the site (D-120): an attacker's eye has one of its bombs in view, within data/objective.json's range and
+   * angle off the view, with no level geometry in the way.
+   */
+  private siteInView(): boolean {
+    const sim = this.host.sim;
+    const site = sim.level.def.sites.find((x) => x.id === this.match.site);
+    if (!site) return false;
+    const { rangeM, coneDeg } = sim.data.objective.siteSight;
+    const cos = Math.cos(coneDeg * DEG);
+    for (const id of this.match.sides[ATTACK]) {
+      const body = this.host.bodyOf(id);
+      const p = body ? sim.pawns.get(body.possessedPawnId) : undefined;
+      if (!p || p.state.mode === PawnMode.Dead) continue;
+      const eye = eyePose(sim.data.movement, sim.data.hitboxes, p.state).pos;
+      const look = viewDir(p.state.yaw, p.state.pitch);
+      for (const b of site.bombs) {
+        const d = [b.pos[0] - eye[0], b.pos[1] + 0.2 - eye[1], b.pos[2] - eye[2]];
+        const dist = Math.hypot(d[0], d[1], d[2]);
+        if (dist > rangeM || dist < 1e-3 || (d[0] * look[0] + d[1] * look[1] + d[2] * look[2]) / dist < cos) continue;
+        const ray = new sim.R.Ray({ x: eye[0], y: eye[1], z: eye[2] }, { x: d[0] / dist, y: d[1] / dist, z: d[2] / dist });
+        const wall = sim.world.castRay(ray, dist, true, undefined, QUERY_SIGHT)?.timeOfImpact ?? Infinity;
+        const panel = sim.level.panels.firstSolid(eye, [d[0] / dist, d[1] / dist, d[2] / dist], dist);
+        if (wall >= dist - 0.05 && !panel) return true;
+      }
+    }
+    return false;
   }
 
   /** Players of a side with their active body alive and not down (Skopós: her active shell; DESIGN §7). */
@@ -278,9 +355,15 @@ export class MatchDirector {
         continue;
       }
       const roundStart = e.phase === Phase.Ban || (e.phase === Phase.Planning && this.prevPhase !== Phase.Ban);
-      if (roundStart || e.phase === Phase.MatchEnd) this.clearBodies();
+      if (roundStart || e.phase === Phase.MatchEnd) {
+        this.clearBodies();
+        this.host.sim.objective = null;
+        this.plantHatch = null;
+      }
       if (e.phase === Phase.Prep) this.startPrep();
       if (e.phase === Phase.Action) this.startAction();
+      // The round is decided: no more plants (a planted defuser stays where it is until the next round).
+      if (e.phase === Phase.RoundEnd && this.host.sim.objective) this.host.sim.objective.canPlant = false;
       this.prevPhase = e.phase;
       this.changed(true);
     }
@@ -295,6 +378,7 @@ export class MatchDirector {
 
   private toLobby() {
     this.clearBodies();
+    this.host.sim.objective = null;
     this.host.resetPanels([0, 0]);
     this.prevPhase = Phase.Lobby;
   }
@@ -318,6 +402,8 @@ export class MatchDirector {
     this.host.resetPanels([0, reinforcementPool(this.mode, defenders.length)]);
     const spots = this.spawnsOf(this.match.site ?? "");
     defenders.forEach((id, k) => this.spawnOne(id, spots[k % Math.max(1, spots.length)] ?? 0, DEFENSE));
+    const sec = this.mode.match.seconds;
+    this.host.sim.objective = { carrier: 0, dropped: null, planted: null, site: this.match.site, canPlant: false, plantTicks: ticks(sec.plant), disableTicks: ticks(sec.disable) };
     this.host.rosterChanged();
   }
 
@@ -331,6 +417,10 @@ export class MatchDirector {
       used.set(group, k + 1);
       this.spawnOne(id, spots[k % Math.max(1, spots.length)] ?? 0, ATTACK);
     }
+    // The defuser comes in on its carrier (the match chose one as action started).
+    const o = this.host.sim.objective;
+    const carrier = this.match.carrier !== null ? this.host.bodyOf(this.match.carrier) : null;
+    if (o) Object.assign(o, { carrier: carrier?.possessedPawnId ?? 0, canPlant: true });
     this.host.rosterChanged();
   }
 
@@ -357,6 +447,22 @@ export class MatchDirector {
     this.urgent = false;
     this.lastSent = tick;
     for (const id of this.match.players.keys()) if (this.match.players.get(id)!.connected) this.host.send(id, encodeMatchState(this.view(id)));
+  }
+
+  /** Who carries the defuser: the owner of its carrier pawn once the round is under way, else the planning screen's choice. */
+  private carrierMember(): number {
+    const o = this.host.sim.objective;
+    if (!o || this.match.phase < Phase.Action) return this.match.carrier ?? 0;
+    for (const id of this.match.players.keys()) if (o.carrier !== 0 && this.host.bodyOf(id)?.pawnIds.includes(o.carrier)) return id;
+    return 0;
+  }
+
+  /** The defuser as a side may see it: its carrier and a dropped one for attackers only (D-120). */
+  private defuserView(attacker: boolean): MatchView["defuser"] {
+    const o = this.host.sim.objective;
+    if (!o) return null;
+    const v3 = (p: [number, number, number] | null): [number, number, number] | null => (p ? [p[0], p[1], p[2]] : null);
+    return { carrier: attacker ? o.carrier : 0, dropped: attacker ? v3(o.dropped) : null, planted: v3(o.planted), canPlant: o.canPlant, plantTicks: o.plantTicks, disableTicks: o.disableTicks };
   }
 
   /** The match as one member may see it (match/DESIGN.md §10). */
@@ -410,12 +516,13 @@ export class MatchDirector {
       bans: [[...m.banned(ATTACK)], [...m.banned(DEFENSE)]],
       site: attacker && !m.siteRevealed ? null : m.site,
       siteRevealed: m.siteRevealed,
-      carrier: attacker ? (m.carrier ?? 0) : 0,
+      carrier: attacker ? this.carrierMember() : 0,
       history: m.history.map((h) => ({ ...h })),
       winner: m.winner,
       forfeit: m.forfeit,
       mvp: m.phase === Phase.MatchEnd ? (mvp([...m.players.values()]) ?? 0) : 0,
       detected: attacker ? [...this.detected] : [],
+      defuser: this.defuserView(attacker),
       rules: rulesFresh ? null : JSON.stringify({ id: this.mode.id, friendlyFire: this.mode.friendlyFire, reverseFriendlyFire: this.mode.reverseFriendlyFire, lastAliveDies: this.mode.lastAliveDies, reinforcements: this.mode.reinforcements, match: this.mode.match }),
       rulesVersion: this.rulesVersion,
     };

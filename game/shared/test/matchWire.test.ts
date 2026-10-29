@@ -85,11 +85,15 @@ describe("match messages", () => {
       forfeit: false,
       mvp: 0,
       detected: [17, 18],
+      defuser: { carrier: 12, dropped: null, planted: [1.5, -3.25, 30.125], canPlant: false, plantTicks: 448, disableTicks: 448 },
       rules: '{"match":{"rounds":6}}',
       rulesVersion: 3,
     };
     expect(decodeMatchState(body(encodeMatchState(v)))).toEqual(v);
     expect(decodeMatchState(body(encodeMatchState({ ...v, rules: null, winner: 0, forfeit: true, mvp: 1 })))).toMatchObject({ rules: null, winner: 0, forfeit: true, mvp: 1 });
+    expect(decodeMatchState(body(encodeMatchState({ ...v, defuser: null }))).defuser).toBeNull();
+    const dropped = { carrier: 0, dropped: [4, 0, 2] as [number, number, number], planted: null, canPlant: true, plantTicks: 1, disableTicks: 2 };
+    expect(decodeMatchState(body(encodeMatchState({ ...v, defuser: dropped }))).defuser).toEqual(dropped);
     const rooms = [{ code: "ABCDE", format: "quick_match", players: 3, maxPlayers: 10, phase: Phase.Action, round: 2 }];
     expect(decodeRoomList(body(encodeRoomList(rooms)))).toEqual(rooms);
   });

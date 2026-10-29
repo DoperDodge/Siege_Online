@@ -12,9 +12,9 @@ known issues, and what's next.
 
 | Milestone | Status |
 |---|---|
-| M1 Format presets (Quick Match, Unranked, Ranked, 1v1, Custom, Practice) and the match logic, tested on its own | 🚧 |
-| M2 Match rooms on the server: lobby, rounds with spawns, red walls, run-outs, elimination and time wins | ⏳ |
-| M3 The defuser: carry, drop, pick up, plant, disable, every win condition | ⏳ |
+| M1 Format presets (Quick Match, Unranked, Ranked, 1v1, Custom, Practice) and the match logic, tested on its own | ✅ six formats in `data/modes`, the match logic in `game/shared/src/match/` (sides, overtime, bans, votes, picks, attrition, pools, rating, the nine win conditions) |
+| M2 Match rooms on the server: lobby, rounds with spawns, red walls, run-outs, elimination and time wins | ✅ a room runs a match: lobby, bodies only in prep and action, defenders at the site behind red walls (predicted), attackers at their spawn, run-outs, the kill plane, leavers; protocol 11 and the room list; tested with a 1v1 and a 2v3 through the real messages |
+| M3 The defuser: carry, drop, pick up, plant, disable, every win condition | ✅ hold F to plant (7 s, predicted) or disable (7 s), F to pick up, G to drop, dropped where the carrier goes down, a plant under way past the timer, a hatch broken under it, the last attacker downed after the plant; finding the site by sight |
 | M4 In the browser: Play page, lobby, ban and planning screen, HUD, scoreboard, round and match summaries | ⏳ |
 | M5 Each format's details: Quick Match, Ranked rating, 1v1 attrition, Custom, Practice | ⏳ |
 | M6 Checks: a 10-round netsim match, browser tests of a 1v1 and a 2v3 match, docs, report | ⏳ |

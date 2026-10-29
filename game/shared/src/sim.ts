@@ -9,6 +9,7 @@ import { initRapier, PLAYER_GROUPS, QUERY_SIGHT, QUERY_SOLID, QUERY_STATIC as QU
 import { cancelRappelHold, capsuleFree, movementPrompt, poseCollider, stepPawn, type MoveContext, type MovementPrompt } from "./player/movement.js";
 import { initialPawnState, type Pawn, type PlayerController } from "./player/pawn.js";
 import { insideAny, zoneBoxes, ZONE_TEST_HEIGHT, type ZoneBox } from "./level/zones.js";
+import { canDisable, canPickUp, inSite, siteArea, type DefuserState, type SiteArea } from "./match/objective.js";
 import { eyePose, poseHitboxes } from "./player/hitboxes.js";
 import { capsuleDims, stanceDims } from "./player/stance.js";
 import { Btn, PawnMode, ropeIdle, Stance, type InputCmd, type PawnState } from "./player/types.js";
@@ -29,7 +30,7 @@ export interface MatchSimRules {
 }
 
 /** Contextual hint for the HUD: "Space to mantle", "F to climb", "F to transfer" (Skopós camera), "Hold F to reinforce". */
-export type Prompt = MovementPrompt | "transfer" | "revive" | "reinforce" | "barricade" | "unbarricade";
+export type Prompt = MovementPrompt | "transfer" | "revive" | "reinforce" | "barricade" | "unbarricade" | "plant" | "disable" | "pickUp";
 
 export class Sim {
   readonly pawns = new Map<number, Pawn>();
@@ -43,6 +44,12 @@ export class Sim {
   deployRules: DeployRules = { anyone: false, rappel: false, pools: [0, 0] };
   /** A match room's rules for bodies (none in a lab). */
   matchRules: MatchSimRules = { redWalls: false, killPlaneKills: false };
+  /**
+   * The defuser in a match (null in a lab): who carries it, where it lies or is planted, the site and the holds
+   * (match/objective.ts). The simulation moves it (pick up, drop, plant); the room sets the rest.
+   */
+  objective: DefuserState | null = null;
+  private readonly siteAreas = new Map<string, SiteArea | null>();
   /** The level's building zones (level.json, D-105): red walls and run-outs. */
   readonly building: ZoneBox[];
   private nextId = 1;
@@ -336,15 +343,73 @@ export class Sim {
     return deployAction(this.data.destruction, this.level.panels, eye, dir, [s.x, s.y, s.z], pawn.team, this.deployRules, plain);
   }
 
+  /** The plantable area of a site (cached; null: no such site). */
+  private areaOf(site: string): SiteArea | null {
+    if (!this.siteAreas.has(site)) this.siteAreas.set(site, siteArea(this.level.def, site));
+    return this.siteAreas.get(site) ?? null;
+  }
+
   /**
-   * Reinforcing and barricades (Phase 4 M6): a fresh press of Interact at a panel starts what deployAction
-   * offers; holding it, still offered the same, for its time completes it (a "deploy" event: the server puts
-   * the steel or planks up), and the body holds still meanwhile (reinforcement.locksReinforcer, also for
-   * barricades). Letting go, looking away or anything else cancels it. Returns true while one is under way.
+   * What the Use key would do with the defuser now (match/DESIGN.md §8, D-120): an attacker on foot picks a dropped
+   * one up from close by; its carrier plants it in the site's rooms while planting is open; a defender disables a
+   * planted one within reach, facing it. Null: nothing (no match, or none of these).
+   */
+  defuserActionFor(pawn: Pawn): "pickUp" | "plant" | "disable" | null {
+    const o = this.objective;
+    const s = pawn.state;
+    if (!o || s.mode !== PawnMode.Walk || !s.grounded) return null;
+    const attacker = pawn.team === sideTeam("attacker");
+    if (attacker && o.dropped && o.carrier === 0 && canPickUp(this.data.objective, o.dropped, s.x, s.y, s.z)) return "pickUp";
+    if (attacker && o.carrier === pawn.id && o.canPlant && o.site) {
+      const area = this.areaOf(o.site);
+      if (area && inSite(area, s.x, s.y, s.z)) return "plant";
+    }
+    if (!attacker && o.planted && canDisable(this.data.objective, o.planted, s.x, s.y, s.z, s.yaw)) return "disable";
+    return null;
+  }
+
+  /** The defuser's hold kept up: the same action still offered, Interact still held; done after the format's time. */
+  private holdDefuser(pawn: Pawn, held: boolean): boolean {
+    const s = pawn.state;
+    const o = this.objective;
+    const want = s.deployKind === DeployKind.Plant ? "plant" : "disable";
+    if (!o || !held || s.meleeTicks > 0 || this.defuserActionFor(pawn) !== want) {
+      endDeploy(pawn);
+      return false;
+    }
+    s.deployTicks = Math.min(0xffff, s.deployTicks + 1);
+    if (s.deployTicks < (want === "plant" ? o.plantTicks : o.disableTicks)) return true;
+    if (want === "plant") {
+      o.planted = [s.x, s.y, s.z];
+      o.carrier = 0;
+      this.ctx.events.push({ kind: "plant", pawnId: pawn.id, pos: [s.x, s.y, s.z] });
+    } else this.ctx.events.push({ kind: "disable", pawnId: pawn.id });
+    endDeploy(pawn);
+    return true; // still this tick
+  }
+
+  /** The carrier's Drop key: the defuser falls where the body stands. */
+  private dropDefuser(pawn: Pawn, input: InputCmd) {
+    const o = this.objective;
+    if (!o || o.carrier !== pawn.id || !(input.buttons & ~pawn.state.prevButtons & Btn.Drop)) return;
+    const s = pawn.state;
+    o.carrier = 0;
+    o.dropped = [s.x, s.y, s.z];
+    this.ctx.events.push({ kind: "drop", pawnId: pawn.id, pos: [s.x, s.y, s.z] });
+  }
+
+  /**
+   * Holds of Interact: the defuser's first (pick up, plant, disable; D-120), then reinforcing and barricades (Phase
+   * 4 M6). A fresh press starts what is offered; holding it, still offered the same, for its time completes it (a
+   * "deploy", "plant" or "disable" event), and the body holds still meanwhile (reinforcement.locksReinforcer, also
+   * for barricades; the defuser's own data for plant and disable). Picking the defuser up is the press itself.
+   * Letting go, looking away or anything else cancels a hold. Returns true while one is under way, or the press
+   * was used.
    */
   private updateDeploy(pawn: Pawn, input: InputCmd): boolean {
     const s = pawn.state;
     const held = (input.buttons & Btn.Interact) !== 0;
+    if (s.deployKind === DeployKind.Plant || s.deployKind === DeployKind.Disable) return this.holdDefuser(pawn, held);
     if (s.deployKind !== DeployKind.None) {
       const a = held && s.meleeTicks === 0 ? this.deployActionFor(pawn) : null;
       if (!a || a.kind !== s.deployKind || a.panel !== s.deployPanel || a.section !== s.deploySection) {
@@ -359,6 +424,20 @@ export class Sim {
     }
     const pressed = input.buttons & ~s.prevButtons & Btn.Interact;
     if (!pressed || s.meleeTicks > 0) return false;
+    const d = this.defuserActionFor(pawn);
+    if (d === "pickUp") {
+      this.objective!.carrier = pawn.id;
+      this.objective!.dropped = null;
+      this.ctx.events.push({ kind: "pickup", pawnId: pawn.id });
+      return true;
+    }
+    if (d) {
+      s.deployKind = d === "plant" ? DeployKind.Plant : DeployKind.Disable;
+      s.deployPanel = 0;
+      s.deploySection = 0;
+      s.deployTicks = 1;
+      return true;
+    }
     const a = this.deployActionFor(pawn);
     if (!a) return false;
     s.deployKind = a.kind;
@@ -495,6 +574,8 @@ export class Sim {
     if (!pawn) return null;
     if (pawn.state.reviveTarget !== 0 || pawn.state.deployKind !== DeployKind.None || pawn.state.rappelTicks > 0) return null; // its gauge shows instead
     if (pawn.state.mode === PawnMode.Walk && this.reviveCandidate(pawn)) return "revive"; // before ladders (D-049)
+    const defuser = this.defuserActionFor(pawn);
+    if (defuser) return defuser; // before panels (D-120)
     const deploy = this.deployActionFor(pawn);
     const move = movementPrompt(this.ctx, pawn);
     // A lab room gives both sides both tools (on different keys): an attacker is shown the rope's prompt first, a
@@ -643,11 +724,16 @@ export class Sim {
         let cmd = input;
         if (idleDriven.has(pawn.id)) this.letGo(pawn, true);
         else {
+          this.dropDefuser(pawn, input);
+          const holding = pawn.state.deployKind;
           const reviving = this.updateRevive(pawn, input);
           if (reviving || this.updateDeploy(pawn, input)) {
             // Reviving holds you in place, and so do reinforcing and barricading (reinforcement.locksReinforcer;
-            // both placeholders); the held key never reaches a ladder.
-            const still = reviving || this.data.destruction.reinforcement.locksReinforcer;
+            // both placeholders) and the defuser's holds (data/objective.json), through the tick a hold completes;
+            // the held key never reaches a ladder.
+            const k = pawn.state.deployKind !== DeployKind.None ? pawn.state.deployKind : holding;
+            const d = this.data.objective.defuser;
+            const still = reviving || (k === DeployKind.Plant ? d.plantLocksBody : k === DeployKind.Disable ? d.disableLocksBody : k !== DeployKind.None && this.data.destruction.reinforcement.locksReinforcer);
             cmd = { ...input, forward: still ? 0 : input.forward, strafe: still ? 0 : input.strafe, buttons: input.buttons & ~Btn.Interact };
           }
         }

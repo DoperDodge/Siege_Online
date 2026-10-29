@@ -246,6 +246,12 @@ export interface MatchView {
   mvp: number;
   /** Defenders detected outside (pawn ids): attackers only. */
   detected: number[];
+  /**
+   * The defuser this round as the simulation has it (Sim.objective; null outside prep, action and the round end):
+   * its carrier's pawn and where it lies dropped (attackers only: 0 and null for defenders), where it is planted,
+   * and the format's plant and disable holds in ticks.
+   */
+  defuser: { carrier: number; dropped: [number, number, number] | null; planted: [number, number, number] | null; canPlant: boolean; plantTicks: number; disableTicks: number } | null;
   /** The rules (JSON of the format with the host's changes), sent when they changed since the last state this player got; else null. */
   rules: string | null;
   /** Counts every change of the rules (a client keeps the JSON it has while this stays the same). */
@@ -278,6 +284,12 @@ export function encodeMatchState(v: MatchView): Uint8Array {
   w.u8(v.winner ?? 2).varu(v.mvp);
   w.u8(Math.min(MAX_PLAYERS, v.detected.length));
   for (const id of v.detected.slice(0, MAX_PLAYERS)) w.varu(id);
+  const d = v.defuser;
+  w.u8(d ? 1 | (d.dropped ? 2 : 0) | (d.planted ? 4 : 0) | (d.canPlant ? 8 : 0) : 0);
+  if (d) {
+    w.varu(d.carrier).u16(Math.min(0xffff, d.plantTicks)).u16(Math.min(0xffff, d.disableTicks));
+    for (const p of [d.dropped, d.planted]) if (p) for (const c of p) w.f32(c);
+  }
   w.varu(v.rulesVersion);
   if (v.rules !== null) w.str(v.rules);
   return w.finish();
@@ -342,6 +354,18 @@ export function decodeMatchState(r: ByteReader): MatchView {
   const d = r.u8();
   if (d > MAX_PLAYERS) throw new ProtocolError("too many detected");
   const detected = Array.from({ length: d }, () => r.varu());
+  const df = r.u8();
+  if (df > 15 || (df !== 0 && !(df & 1))) throw new ProtocolError("bad defuser");
+  let defuser: MatchView["defuser"] = null;
+  if (df & 1) {
+    const carrier = r.varu();
+    const plantTicks = r.u16();
+    const disableTicks = r.u16();
+    const v3 = (): [number, number, number] => [r.finite(), r.finite(), r.finite()];
+    const dropped = df & 2 ? v3() : null;
+    const planted = df & 4 ? v3() : null;
+    defuser = { carrier, dropped, planted, canPlant: (df & 8) !== 0, plantTicks, disableTicks };
+  }
   const rulesVersion = r.varu();
   const rules = f & F.rules ? r.str(MAX_RULES_JSON) : null;
   if (r.remaining !== 0) throw new ProtocolError("trailing bytes");
@@ -368,6 +392,7 @@ export function decodeMatchState(r: ByteReader): MatchView {
     forfeit: (f & F.forfeit) !== 0,
     mvp,
     detected,
+    defuser,
     rules,
     rulesVersion,
   };

@@ -70,7 +70,7 @@ export function applyDamage(sim: Sim, pawn: Pawn, d: Damage, rules?: Pick<ModeDa
     s.downs < combat.dbno.downsPerRound &&
     !(combat.dbno.lethalCauses as readonly string[]).includes(CAUSE_NAMES[cause]) &&
     d.amount - s.hp <= combat.dbno.overkillKillsAbove &&
-    !(rules?.lastAliveDies && !teammateUp(sim, pawn));
+    !(rules?.lastAliveDies && !teammateUp(sim, pawn) && !plantedAttacker(sim, pawn));
   if (!canDown) return kill(sim, pawn, removed);
   // Down but not out: the 20 HP pool, a moment of invulnerability, and whatever it was doing stops. A body
   // mid-vault finishes the vault first; one on a ladder lets go and falls.
@@ -115,6 +115,12 @@ function dropRevive(sim: Sim, pawn: Pawn) {
 }
 
 /** Another player on the same team is on their feet (the "last one up dies" rule). */
+/**
+ * An attacker once the defuser is planted: the last one up going down isn't killed at once (core_mechanics.md §10.1,
+ * "an attacker on Bomb with the defuser planted").
+ */
+const plantedAttacker = (sim: Sim, pawn: Pawn) => pawn.team === 0 && (sim.objective?.planted ?? null) !== null;
+
 function teammateUp(sim: Sim, pawn: Pawn): boolean {
   for (const c of sim.controllers.values()) {
     if (c.id === pawn.ownerId) continue;
