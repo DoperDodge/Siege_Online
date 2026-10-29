@@ -82,6 +82,14 @@ try {
    * storey, and gives where you are in world u and in the storey's own u (its frame, world = a·native + b).
    */
   const hudSaysWhereYouAre = async (page) => {
+    // The line is redrawn every 100 ms of the page's time, so it trails a body that only just stopped: read again
+    // (up to 3 s) until it agrees. A wrong line never does.
+    for (const until = Date.now() + 3000; ; await sleep(100)) {
+      const r = await hudCheck(page);
+      if (r.ok || Date.now() > until) return r;
+    }
+  };
+  const hudCheck = async (page) => {
     const v = await view(page);
     const me = await own(page);
     const line = await hudLine(page);
@@ -276,6 +284,14 @@ try {
    * (seen twice: the clock ran out mid-flight), so only a generous clock limit backs them up.
    */
   const gameTick = (page) => page.evaluate(() => window.__lab.tick);
+  /** Wait, in game time (a slow page runs fewer ticks a second), for the body to stand still on the ground: 2 s of it at most. */
+  const settle = async (page, until = Date.now() + 60000) => {
+    const from = await gameTick(page);
+    for (let t = 0; (t = (await gameTick(page)) - from) < 2 * 64 && Date.now() < until; await sleep(50)) {
+      const me = await own(page);
+      if (t > 16 && me.grounded && Math.hypot(me.vx, me.vz) < 0.01) break;
+    }
+  };
   const walkAlong = async (page, pts, gameSeconds = 20, wallMs = 300000) => {
     const until = Date.now() + wallMs;
     await page.evaluate((p) => window.__lab.walk(p), pts);
@@ -285,11 +301,7 @@ try {
       w = await page.evaluate(() => window.__lab.walking);
     }
     await page.evaluate(() => window.__lab.walk(null));
-    const from = await gameTick(page);
-    for (let t = 0; (t = (await gameTick(page)) - from) < 2 * 64 && Date.now() < until; await sleep(50)) {
-      const me = await own(page);
-      if (t > 16 && me.grounded && Math.hypot(me.vx, me.vz) < 0.01) break;
-    }
+    await settle(page, until);
     return w.done;
   };
   // The Armory Stairs' basement flight: before its first riser, along it, past its top (tools/mapgen's walk test).
@@ -433,7 +445,7 @@ try {
     const second = await swingIn();
     const inside = await off.waitForFunction((k) => window.__lab.net.own.mode === k.walk && window.__lab.net.own.grounded && window.__lab.net.own.z > k.z, { walk: PawnMode.Walk, z: kids.center[2] + 0.3 }, { timeout: 10000, polling: 50 }).then(() => true, () => false);
     await input(off, null);
-    await sleep(500);
+    await settle(off);
     const me = await own(off);
     const hud = await hudSaysWhereYouAre(off);
     const after = await panel(off, "2F.o004.bar");
