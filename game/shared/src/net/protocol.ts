@@ -9,7 +9,7 @@ import { MSG_PANEL_OPS, MSG_PANEL_RESYNC, MSG_PANEL_STATE } from "./panels.js";
 import { MSG_SNAPSHOT } from "./snapshot.js";
 
 /** Bump when the wire format changes; client and server must match. */
-export const PROTOCOL_VERSION = 8;
+export const PROTOCOL_VERSION = 10;
 
 export const Msg = {
   // client → server
@@ -120,7 +120,7 @@ export function decodeHelloRest(r: ByteReader): { name: string; dataHash: number
 }
 
 /** Levels a client may ask a new room to load (the lab pages'). */
-export const ROOM_LEVELS = ["movement_lab", "range_lab", "destruction_lab"] as const;
+export const ROOM_LEVELS = ["movement_lab", "range_lab", "destruction_lab", "oregon"] as const;
 export const encodeCreateRoom = (levelId: string = "movement_lab") => new ByteWriter().u8(Msg.CreateRoom).str(levelId).finish();
 /** Throws ProtocolError for a level that isn't in ROOM_LEVELS. */
 export function decodeCreateRoom(r: ByteReader): { levelId: string } {

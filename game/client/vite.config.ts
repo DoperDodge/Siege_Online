@@ -14,6 +14,7 @@ export default defineConfig({
         movement_lab: resolve(import.meta.dirname, "labs/movement_lab.html"),
         range_lab: resolve(import.meta.dirname, "labs/range_lab.html"),
         destruction_lab: resolve(import.meta.dirname, "labs/destruction_lab.html"),
+        oregon: resolve(import.meta.dirname, "labs/oregon.html"),
       },
     },
   },

@@ -1,7 +1,7 @@
 // Health and being down (Phase 3 M7, M9): the health bar (the 20 HP down pool while down), the down screen
 // (crawl, bleed, wait for a teammate) and, while you revive someone, the revive's progress (D-048, D-049);
-// the same gauge shows a reinforcement or barricade going up (Phase 4 M6).
-import { DeployKind, deployTicks, isDowned, TICK_HZ, type CombatData, type DestructionData, type PawnState } from "@redmond/shared";
+// the same gauge shows a reinforcement or barricade going up (Phase 4 M6), and a rope being hooked on (Phase 5 M8).
+import { DeployKind, deployTicks, isDowned, PawnMode, ticks, TICK_HZ, type CombatData, type DestructionData, type MovementData, type PawnState } from "@redmond/shared";
 
 /** Seconds left on a revive `reviveTicks` in. */
 export const reviveSecondsLeft = (combat: CombatData, reviveTicks: number) => Math.max(0, reviveTotalTicks(combat) - reviveTicks) / TICK_HZ;
@@ -15,7 +15,7 @@ export class DownedHud {
   }
 
   /** `interactKey` names the revive key; `nameOfPawn` the teammate being revived. */
-  update(s: PawnState, combat: CombatData, interactKey: string, nameOfPawn: (id: number) => string, destruction?: DestructionData) {
+  update(s: PawnState, combat: CombatData, interactKey: string, nameOfPawn: (id: number) => string, destruction?: DestructionData, movement?: MovementData) {
     const $ = this.$;
     const pool = combat.dbno.hp;
     const down = isDowned(s);
@@ -32,7 +32,9 @@ export class DownedHud {
     }
     const reviving = s.reviveTarget !== 0;
     const deploying = destruction !== undefined && s.deployKind !== DeployKind.None;
-    $(".revive-ui").classList.toggle("hidden", !reviving && !deploying);
+    const hooking = movement !== undefined && s.mode === PawnMode.Walk && s.rappelTicks > 0;
+    const breaching = movement !== undefined && s.mode === PawnMode.Rappel && s.rappelTicks > 0;
+    $(".revive-ui").classList.toggle("hidden", !reviving && !deploying && !hooking && !breaching);
     if (reviving) {
       $(".revive-title").textContent = `REVIVING ${nameOfPawn(s.reviveTarget) || "teammate"}… ${reviveSecondsLeft(combat, s.reviveTicks).toFixed(1)} s`;
       $(".revive-bar div").style.width = `${Math.min(100, (100 * s.reviveTicks) / reviveTotalTicks(combat))}%`;
@@ -41,6 +43,14 @@ export class DownedHud {
       const what = s.deployKind === DeployKind.Reinforce ? "REINFORCING" : s.deployKind === DeployKind.BarricadeUp ? "BARRICADING" : "REMOVING THE BARRICADE";
       $(".revive-title").textContent = `${what}… ${(Math.max(0, total - s.deployTicks) / TICK_HZ).toFixed(1)} s`;
       $(".revive-bar div").style.width = `${Math.min(100, (100 * s.deployTicks) / total)}%`;
+    } else if (hooking) {
+      const total = ticks(movement.rappel.holdSeconds);
+      $(".revive-title").textContent = `HOOKING ON… ${(Math.max(0, total - s.rappelTicks) / TICK_HZ).toFixed(1)} s`;
+      $(".revive-bar div").style.width = `${Math.min(100, (100 * s.rappelTicks) / total)}%`;
+    } else if (breaching) {
+      const total = ticks(movement.rappel.swingSeconds);
+      $(".revive-title").textContent = s.rappelTicks > total ? "BOUNCED OFF" : `SWINGING IN… ${(Math.max(0, total - s.rappelTicks) / TICK_HZ).toFixed(1)} s`;
+      $(".revive-bar div").style.width = `${Math.min(100, (100 * s.rappelTicks) / total)}%`;
     }
   }
 }

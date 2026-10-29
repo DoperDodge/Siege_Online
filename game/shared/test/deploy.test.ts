@@ -25,7 +25,7 @@ const DEG = Math.PI / 180;
 
 async function lab(operator = "mute") {
   const sim = await Sim.create("destruction_lab");
-  sim.deployRules = { anyone: false, pools: [10, 10] };
+  sim.deployRules = { anyone: false, rappel: false, pools: [10, 10] };
   const ctrl = sim.addPlayer("p", operator);
   const pawn = sim.pawns.get(ctrl.possessedPawnId)!;
   return { sim, ctrl, pawn };
@@ -121,12 +121,12 @@ describe("reinforcing a wall (in the simulation)", () => {
     at(sim, pawn, 0.4, 0, -3.4, 0); // 2.5 m away
     expect(sim.prompt(ctrl.id)).toBeNull();
     at(sim, pawn, 0.4, 0, -5.0, 0);
-    sim.deployRules = { anyone: false, pools: [10, 0] };
+    sim.deployRules = { anyone: false, rappel: false, pools: [10, 0] };
     expect(sim.prompt(ctrl.id)).toBeNull();
     const att = await lab("sledge");
     at(att.sim, att.pawn, 0.4, 0, -5.0, 0);
     expect(att.sim.prompt(att.ctrl.id)).toBeNull();
-    att.sim.deployRules = { anyone: true, pools: [10, 10] };
+    att.sim.deployRules = { anyone: true, rappel: true, pools: [10, 10] };
     expect(att.sim.prompt(att.ctrl.id)).toBe("reinforce");
   });
 });
@@ -138,7 +138,7 @@ describe("in a lab room", () => {
     const [a] = clients;
     room.onLabTool(a.id, { kind: "teleport", x: 2.2, y: 0, z: -5.0, yawDeg: 0 });
     for (let i = 0; i < 20; i++) tick();
-    expect(a.session.sim!.deployRules).toEqual({ anyone: true, pools: [10, 10] });
+    expect(a.session.sim!.deployRules).toEqual({ anyone: true, rappel: true, pools: [10, 10] });
     a.cmd = { buttons: Btn.Interact };
     for (let i = 0; i < 4.5 * TICK_HZ + 10; i++) tick();
     a.cmd = {};

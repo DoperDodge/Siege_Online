@@ -161,6 +161,13 @@ Siege does not publish speeds. There are three community sources, and they disag
 | Blackbeard | Cannot ADS while rappelling into windows, and cannot break undamaged barricades while rappelling (Y10S3) | OFFICIAL (context) |
 | Speeds (climb, descend, strafe, horizontal sprint) | PLACEHOLDER: climb 1.5 m/s, descend 2.5 m/s, strafe 1.2 m/s, horizontal sprint 2.5 m/s | UNVERIFIED |
 
+**Ulo's corrections after testing our rappel (2026-10-28, D-116):** the rappel key is the vault key held (Space,
+or the vault button on mobile), not interact; you can rappel out of windows with no floor on the other side; you
+can knife on the rope; the view on the rope is limited (you can't look all the way round); entering the rope,
+turning upside down and swinging into a window are animated, not instant; climbing up at the Balcony goes over its
+railing; cameras (Skopós') work on the rope. The timings, distances and the view's limit we chose are placeholders
+(OPEN_QUESTIONS Phase 5 placeholder 35).
+
 ### 6.2 Siege X "Advanced Rappel" (Y10S2, June 2025) — still live
 - New motion capture. You can **sprint horizontally** on the wall and **climb faster** (OFFICIAL showcase/season page: "sprint along walls and hop around corners").
 - **Around corners:** you can move between **different wall faces of the same building** if the grapple points are at the **same height**. A height difference (building shape, protruding sills, metal barriers) means you must return to the ground or roof and start a new rappel (WIKI). There is a "corner turn prompt" (OFFICIAL, Y11S2.1 bug fix).

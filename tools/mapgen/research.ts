@@ -1,0 +1,256 @@
+// Reads the Oregon research tables (research/oregon/*.md) so the importer can name what it finds and the
+// tests notice a research edit: soft walls (surfaces.md §2) and the openings between rooms (layout_notes.md
+// §6). Plain markdown tables, parsed by heading.
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+export type Floor = "B" | "1F" | "2F" | "3F";
+export const FLOORS: readonly Floor[] = ["B", "1F", "2F", "3F"];
+
+/** One markdown table: header cells and rows of cells, trimmed. */
+export interface MdTable {
+  heading: string;
+  header: string[];
+  rows: string[][];
+}
+
+const cells = (line: string) => line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
+
+/** Every table in a markdown file, each with the nearest heading above it. */
+export function mdTables(text: string): MdTable[] {
+  const out: MdTable[] = [];
+  let heading = "";
+  const lines = text.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (/^#{1,6} /.test(line)) heading = line.replace(/^#+ /, "").trim();
+    if (!line.trim().startsWith("|") || !lines[i + 1]?.trim().match(/^\|[\s|:-]+\|?$/)) continue;
+    const header = cells(line);
+    const rows: string[][] = [];
+    i += 2;
+    while (i < lines.length && lines[i].trim().startsWith("|")) rows.push(cells(lines[i++]));
+    i--;
+    out.push({ heading, header, rows });
+  }
+  return out;
+}
+
+/** "137.0–164.0" or "x≈3" style numbers: [lo, hi] (equal for a single value). */
+export function range(text: string): [number, number] | null {
+  const m = text.replace(/\*/g, "").match(/(-?\d+(?:\.\d+)?)(?:\s*[–-]\s*(-?\d+(?:\.\d+)?))?/);
+  if (!m) return null;
+  const a = Number(m[1]);
+  const b = m[2] === undefined ? a : Number(m[2]);
+  return [Math.min(a, b), Math.max(a, b)];
+}
+
+export interface SoftWallRow {
+  id: string;
+  floor: Floor;
+  roomA: string;
+  roomB: string;
+  x: [number, number];
+  y: [number, number];
+  /** H runs east–west, V north–south. */
+  axis: "H" | "V";
+  sections: number;
+  /** Ulo confirmed the count ("sections: Ulo"). */
+  ulo: boolean;
+}
+
+const FLOOR_OF_SECTION: Record<string, Floor> = { "2.1": "B", "2.2": "1F", "2.3": "2F", "6.1": "B", "6.2": "1F", "6.3": "2F", "6.4": "3F" };
+
+export function researchDir(root: string): string {
+  return join(root, "research", "oregon");
+}
+
+/** surfaces.md §2: the 32 soft walls with their spans and reinforcement sections. */
+export function softWalls(root: string): SoftWallRow[] {
+  const text = readFileSync(join(researchDir(root), "surfaces.md"), "utf8");
+  const out: SoftWallRow[] = [];
+  for (const t of mdTables(text)) {
+    const floor = FLOOR_OF_SECTION[t.heading.split(" ")[0]];
+    if (!floor || t.header[0] !== "id") continue;
+    const col = (name: string) => t.header.indexOf(name);
+    for (const r of t.rows) {
+      const x = range(r[col("x (u)")]);
+      const y = range(r[col("y (u)")]);
+      const sections = range(r[col("sections")]);
+      if (!x || !y || !sections) throw new Error(`surfaces.md: can't read soft wall row ${r.join(" | ")}`);
+      out.push({
+        id: r[col("id")],
+        floor,
+        roomA: r[col("room A")],
+        roomB: r[col("room B")],
+        x,
+        y,
+        axis: r[col("orient")].startsWith("E") ? "H" : "V",
+        sections: sections[0],
+        ulo: /sections: Ulo/.test(r[col("verified")]),
+      });
+    }
+  }
+  return out;
+}
+
+export type ConnectionType = "DOOR" | "EXT_OPENING" | "OPEN" | "SOFT";
+
+export interface ConnectionRow {
+  floor: Floor;
+  roomA: string;
+  roomB: string;
+  type: ConnectionType;
+  /** The whole type cell, with the research's guesses ("EXT_OPENING (window, likely; different glyph)"). */
+  typeText: string;
+  /** Where the research puts it (u, the floor's own image); B and 1F spans can be several u off. */
+  axis: "H" | "V" | null;
+  line: number | null;
+  span: [number, number] | null;
+  /** For an exterior opening: the research's door or window guess, if it makes one. */
+  guess: "DOOR" | "WINDOW" | null;
+}
+
+/** "x 63–66, y 151–164" → the wall line and the span along it. */
+export function parseWhere(where: string): Pick<ConnectionRow, "axis" | "line" | "span"> {
+  const parts = [...where.matchAll(/([xy])\s*(≈)?\s*(-?\d+(?:\.\d+)?)(?:\s*[–-]\s*(-?\d+(?:\.\d+)?))?/g)].map((m) => ({
+    k: m[1] as "x" | "y",
+    approx: m[2] !== undefined,
+    lo: Number(m[3]),
+    hi: m[4] === undefined ? Number(m[3]) : Number(m[4]),
+  }));
+  if (parts.length === 0) return { axis: null, line: null, span: null };
+  // The wall line is the narrow one (a band a few u thick, or "≈"); the other is the span along it.
+  const lineIdx = parts.length === 1 ? 0 : parts.findIndex((p) => p.approx || p.hi - p.lo <= 4.5);
+  const linePart = parts[lineIdx === -1 ? 0 : lineIdx];
+  const spanPart = parts.find((p) => p !== linePart);
+  return {
+    axis: linePart.k === "y" ? "H" : "V",
+    line: (linePart.lo + linePart.hi) / 2,
+    span: spanPart ? [spanPart.lo, spanPart.hi] : null,
+  };
+}
+
+/** layout_notes.md §6: every door, exterior opening, open passage and soft wall between rooms. */
+export function connections(root: string): ConnectionRow[] {
+  const text = readFileSync(join(researchDir(root), "layout_notes.md"), "utf8");
+  const out: ConnectionRow[] = [];
+  for (const t of mdTables(text)) {
+    const floor = FLOOR_OF_SECTION[t.heading.split(" ")[0]];
+    if (!floor || t.header[0] !== "Room A") continue;
+    for (const r of t.rows) {
+      const [roomA, roomB, typeText, where] = r;
+      const plain = typeText.replace(/\*/g, "");
+      const type: ConnectionType | null = plain.startsWith("DOOR")
+        ? "DOOR"
+        : plain.startsWith("EXT_OPENING")
+          ? "EXT_OPENING"
+          : plain.startsWith("OPEN")
+            ? "OPEN"
+            : plain.startsWith("SOFT")
+              ? "SOFT"
+              : null;
+      if (!type) continue; // "—": a note row
+      const guess = type !== "EXT_OPENING" ? null : /window/i.test(plain) ? "WINDOW" : /door/i.test(plain) ? "DOOR" : null;
+      out.push({ floor, roomA, roomB, type, typeText: plain, ...parseWhere(where), guess });
+    }
+  }
+  return out;
+}
+
+export interface RoomRow {
+  id: string;
+  floor: Floor;
+  /** The callout in each source, as the table has it ("—" or "(unlabeled)" where a source has none). */
+  r6calls: string;
+  r6m: string;
+  pc: string;
+}
+
+/** layout_notes.md §2: the room ids and their names (roofs and exterior areas left out: they aren't rooms). */
+export function roomTable(root: string): RoomRow[] {
+  const text = readFileSync(join(researchDir(root), "layout_notes.md"), "utf8");
+  const out: RoomRow[] = [];
+  for (const t of mdTables(text)) {
+    if (t.header[0] !== "room_id" || t.header[1] !== "Floor") continue;
+    for (const r of t.rows) {
+      if (!(FLOORS as readonly string[]).includes(r[1])) continue;
+      out.push({ id: r[0], floor: r[1] as Floor, r6calls: r[2], r6m: r[3], pc: r[4] });
+    }
+  }
+  return out;
+}
+
+/**
+ * layout_notes.md §4.1–4.4: each room's bounding box as the research gives it (u, in its floor's own image). A room
+ * the research gives as two boxes (an L, a T) keeps the first.
+ */
+export function roomBoxes(root: string): { id: string; floor: Floor; x: [number, number]; y: [number, number] }[] {
+  const text = readFileSync(join(researchDir(root), "layout_notes.md"), "utf8");
+  const floorOf: Record<string, Floor> = { "4.1": "B", "4.2": "1F", "4.3": "2F", "4.4": "3F" };
+  const out: { id: string; floor: Floor; x: [number, number]; y: [number, number] }[] = [];
+  for (const t of mdTables(text)) {
+    const floor = floorOf[t.heading.slice(0, 3)];
+    if (!floor || t.header[0] !== "room_id" || !t.header[1].startsWith("bbox x")) continue;
+    for (const r of t.rows) {
+      const [x, y] = [range(r[1]), range(r[2])];
+      if (x && y) out.push({ id: r[0], floor, x, y });
+    }
+  }
+  return out;
+}
+
+/** surfaces.md §4.2: the soft floors, by id ("SF-2F-01"), with the area they cover and whether a source disputes them. */
+export function softFloorTable(root: string): { id: string; area: string; verified: string }[] {
+  const text = readFileSync(join(researchDir(root), "surfaces.md"), "utf8");
+  const t = mdTables(text).find((x) => x.heading.startsWith("4.2") && x.header[0] === "id");
+  if (!t) throw new Error("surfaces.md §4.2: no soft-floor table");
+  return t.rows.map((r) => ({ id: r[0], area: r[1], verified: r[r.length - 1] }));
+}
+
+/** surfaces.md §5: the hatches, with the room on top (reinforced from there) and the room below. */
+export function hatchTable(root: string): { id: string; top: string; bottom: string }[] {
+  const text = readFileSync(join(researchDir(root), "surfaces.md"), "utf8");
+  const t = mdTables(text).find((x) => x.heading.startsWith("5.") && x.header[0] === "id");
+  if (!t) throw new Error("surfaces.md §5: no hatch table");
+  return t.rows.map((r) => ({ id: r[0], top: r[1], bottom: r[2] }));
+}
+
+/** layout_notes.md §5.4: the drone holes and tunnels r6calls draws, by floor, with the rooms they join and their box (u). */
+export function droneHoleTable(root: string): { floor: Floor; between: string; x: [number, number]; y: [number, number] }[] {
+  const text = readFileSync(join(researchDir(root), "layout_notes.md"), "utf8");
+  const t = mdTables(text).find((x) => x.heading.startsWith("5.4") && x.header[0] === "Floor");
+  if (!t) throw new Error("layout_notes.md §5.4: no drone-hole table");
+  return t.rows.map((r) => {
+    const m = r[2].match(/\(([^,]+),\s*([^)]+)\)/);
+    if (!m || !FLOORS.includes(r[0] as Floor)) throw new Error(`layout_notes.md §5.4: can't read "${r.join(" | ")}"`);
+    return { floor: r[0] as Floor, between: r[1], x: range(m[1])!, y: range(m[2])! };
+  });
+}
+
+
+/** layout_notes.md §3: the bomb sites, by number, with their A and B rooms ("2F Kids' Dorms") and r6calls' marker boxes (u). */
+export function siteTable(root: string): { number: number; a: string; b: string; markerA: [[number, number], [number, number]]; markerB: [[number, number], [number, number]] }[] {
+  const text = readFileSync(join(researchDir(root), "layout_notes.md"), "utf8");
+  const t = mdTables(text).find((x) => x.heading.startsWith("3.") && x.header[0] === "Site");
+  if (!t) throw new Error("layout_notes.md §3: no site table");
+  const box = (c: string): [[number, number], [number, number]] => {
+    const m = c.match(/\(([^,]+),\s*([^)]+)\)/);
+    if (!m) throw new Error(`layout_notes.md §3: no marker box in "${c}"`);
+    return [range(m[1])!, range(m[2])!];
+  };
+  return t.rows.map((r) => ({ number: Number(r[0]), a: r[1], b: r[2], markerA: box(r[3]), markerB: box(r[4]) }));
+}
+
+/** map_features.md §2 and §3: the default cameras and the ingredients, with their floor and room as the research words them. */
+export function markerTables(root: string): { cameras: { id: string; floor: string; room: string }[]; ingredients: { id: string; kind: string; floor: string; room: string }[] } {
+  const text = readFileSync(join(researchDir(root), "map_features.md"), "utf8");
+  const tables = mdTables(text);
+  const cams = tables.find((x) => x.heading.startsWith("2.") && x.header[0] === "id");
+  const ings = tables.find((x) => x.heading.startsWith("3.") && x.header[0] === "id");
+  if (!cams || !ings) throw new Error("map_features.md §2/§3: no camera or ingredient table");
+  const plain = (c: string) => c.replace(/\*/g, "").trim();
+  return {
+    cameras: cams.rows.map((r) => ({ id: r[0], floor: r[1], room: plain(r[2]) })),
+    ingredients: ings.rows.map((r) => ({ id: r[0], kind: plain(r[1]), floor: r[2], room: plain(r[3]) })),
+  };
+}

@@ -333,6 +333,25 @@ describe("down but not out through the room (Phase 3 M7)", () => {
     expect(kinds(b.events, "kill").at(-1)).toMatchObject({ victimPawn: h.pawnOf(b).id, killerCtrl: a.session.ctrl!.id, assistCtrl: c.session.ctrl!.id });
   });
 
+  it("a downed body the kill plane brings back no longer credits whoever downed it", async () => {
+    const h = await harness(["sledge", "mute"]);
+    const [, b] = h.clients;
+    h.faceOff();
+    h.ticks(40, [A_TORSO]);
+    weaken(h, b, 40);
+    shoot(h, A_TORSO);
+    expect(h.pawnOf(b).state.mode).toBe(PawnMode.Downed);
+    // What the kill plane does inside a step (Sim.belowKillPlane): a teleport the room never hears of.
+    const life = h.pawnOf(b).life;
+    h.room.sim.teleport(h.pawnOf(b).id, 0, 0, 12, 0);
+    h.ticks(10);
+    expect(h.pawnOf(b)).toMatchObject({ life: life + 1, state: { mode: PawnMode.Walk } });
+    b.lab({ kind: "damage", pawnId: h.pawnOf(b).id, amount: 0, kill: true });
+    h.ticks(4);
+    expect(h.pawnOf(b).state.mode).toBe(PawnMode.Dead);
+    expect(kinds(b.events, "kill").at(-1)).toMatchObject({ victimPawn: h.pawnOf(b).id, killerCtrl: 0, assistCtrl: 0 });
+  });
+
   it("bleeding out is credited to whoever downed you", async () => {
     const h = await harness(["sledge", "mute"]);
     const [a, b] = h.clients;

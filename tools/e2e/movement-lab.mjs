@@ -96,10 +96,30 @@ try {
   await page.keyboard.press("KeyF");
   await sleep(300);
   const afterF = await hud();
+  // (Turned a quarter first, so the shell on the camera faces another way than the body.)
+  const bodies = () => page.evaluate(() => window.__lab.bodies);
+  await page.evaluate((p) => window.__lab.teleport(p.x, p.y, p.z, 90), (await bodies()).possessed);
+  // A teleport puts the body just off the floor: the camera opens only for a body walking on the ground, so a Z
+  // pressed before it lands (one slow frame can hold both) is dropped. Wait for it to land.
+  await page.waitForFunction(() => {
+    const b = window.__lab.bodies.possessed;
+    return b && b.grounded && b.mode === 0;
+  }, null, { timeout: 10000, polling: 50 });
   await page.keyboard.press("KeyZ");
   await page.waitForFunction(() => !document.querySelector(".shellcam").classList.contains("hidden"), null, { timeout: 5000 });
   const camPrompt = await page.locator(".prompt").textContent();
   await page.screenshot({ path: shot("skopos-shell-camera.png") });
+  // The free camera from the shell's camera (D-098): the shell keeps looking where it looked, flying and after.
+  const onCam = await bodies();
+  await page.keyboard.press("KeyN");
+  await sleep(1000);
+  const flying = await bodies();
+  await page.keyboard.press("KeyN");
+  await sleep(300);
+  const backOnCam = await bodies();
+  result.shellView = { shell: [onCam.viewed.yaw, flying.viewed.yaw, backOnCam.viewed.yaw], body: onCam.possessed.yaw };
+  result.checks.freeCameraLeavesTheShellsView =
+    onCam.viewed.yaw !== onCam.possessed.yaw && flying.viewed.yaw === onCam.viewed.yaw && backOnCam.viewed.yaw === onCam.viewed.yaw;
   await page.keyboard.press("KeyF");
   await page.waitForFunction(() => document.querySelector(".op-name").textContent.includes("shell 2/2"), null, { timeout: 20000 });
   const camClosed = await page.evaluate(() => document.querySelector(".shellcam").classList.contains("hidden"));

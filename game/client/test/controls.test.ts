@@ -121,3 +121,51 @@ describe("weapon buttons (DECISIONS D-055)", () => {
     expect([5, 6, 7].map((n) => c.sample(n).buttons & Btn.Swap)).toEqual([0, 0, 0]);
   });
 });
+
+describe("the lab's free camera (DESIGN E10)", () => {
+  it("while it flies, keys only count as held: the use key puts the body down, and nothing pressed reaches the body", () => {
+    let flying = true;
+    let uses = 0;
+    const ui: string[] = [];
+    const c = new Controls({ ...DEFAULT_SETTINGS, crouchMode: "toggle", keys: { ...DEFAULT_SETTINGS.keys } }, (a) => ui.push(a));
+    c.weaponState = () => ({ slot: 0, equipping: false });
+    c.flying = () => flying;
+    c.onFlyUse = () => {
+      uses++;
+      flying = false; // the lab leaves the free camera
+    };
+    const keys = ["secondary", "crouch", "vault", "fire", "melee", "reload", "ads"] as const;
+    for (const a of keys) c.press(a);
+    expect(c.isHeld("crouch") && c.isHeld("vault")).toBe(true); // the camera flies down and up with these
+    for (const a of keys) c.release(a);
+    c.press("respawn"); // still the page's
+    c.press("interact"); // the camera's: it puts the body down
+    expect(uses).toBe(1);
+    expect(ui).toEqual(["respawn"]);
+    for (let i = 1; i <= 3; i++) {
+      const s = c.sample(i);
+      expect(s.buttons).toBe(0); // no use, swap, vault, shot, knife or reload left over for the body
+      expect(s.stance).toBe(Stance.Stand); // the crouch toggle didn't flip
+    }
+  });
+});
+
+describe("Mouse look and the pointer lock", () => {
+  it("turns the view only while the pointer is locked, and only for moves made after it was", () => {
+    const c = make({});
+    const count = DEFAULT_SETTINGS.sensitivity * DEG;
+    c.setView(1, 0);
+    c.mouseMove(50, 0, 10); // not locked: the mouse is on the menus
+    expect(c.sample(1).yaw).toBeCloseTo(1, 3);
+    c.pointerLock(true, 100);
+    // The move onto the Go to button (made at 99, before its click locked the pointer) arrives after the lock:
+    // Chrome hands moves over at the next frame. It mustn't turn away from the view Go to set.
+    c.mouseMove(50, 0, 99);
+    expect(c.sample(2).yaw).toBeCloseTo(1, 3);
+    c.mouseMove(10, 0, 101);
+    expect(c.sample(3).yaw).toBeCloseTo(1 - 10 * count, 3);
+    c.pointerLock(false, 200);
+    c.mouseMove(10, 0, 201);
+    expect(c.sample(4).yaw).toBeCloseTo(1 - 10 * count, 3);
+  });
+});

@@ -21,7 +21,10 @@ describe("panels in the level", () => {
       const p = world.getCollider(c.handle);
       expect(plain.solids.get(c.handle)?.id).toBe(e.info.id);
       expect([c.translation(), c.rotation(), c.halfExtents()]).toEqual([p.translation(), p.rotation(), p.halfExtents()]);
-      expect(sim.level.solids.get(c.handle)).toEqual(plain.solids.get(c.handle));
+      // The same solid, except that a wall whose holes open to bodies counts as vaultable (a hole low and big
+      // enough can be vaulted through, D-112; the whole wall offers no ledge).
+      const breach = e.panel.spec.construction.passable === "breach";
+      expect(sim.level.solids.get(c.handle)).toEqual({ ...plain.solids.get(c.handle), ...(breach ? { vaultable: true } : {}) });
     }
     expect(sim.level.renderables.filter((r) => r.kind === "panel").map((r) => [r.id, r.panel])).toEqual([
       ["sample_soft", 0],

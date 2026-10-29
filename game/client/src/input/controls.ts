@@ -7,9 +7,10 @@ import { adsSensitivity, type Keybinds, type Settings } from "./settings.js";
 export type Action = keyof Keybinds | "ads" | "fire" | "swap" | "hitboxes" | "thirdPerson" | "help" | "settings";
 
 /** One-shot actions the lab handles itself (not sent to the simulation). */
-export type UiAction = "respawn" | "hitboxes" | "thirdPerson" | "help" | "settings" | "fire";
+export type UiAction = "respawn" | "hitboxes" | "thirdPerson" | "help" | "settings" | "fire" | "stats";
 
-const UI_KEYS: Record<string, UiAction> = { F1: "help", F3: "hitboxes", F4: "thirdPerson", Escape: "settings" };
+/** F2 is left to the pages (the Range Lab's overlay); F5–F7 and F9–F12 are browser shortcuts. */
+const UI_KEYS: Record<string, UiAction> = { F1: "help", F3: "hitboxes", F4: "thirdPerson", F8: "stats", Escape: "settings" };
 
 /** Keys that change the body's pose; ignored while stanceLocked() (see there). */
 const STANCE_ACTIONS = new Set<Action>(["crouch", "prone", "leanLeft", "leanRight", "ads"]);
@@ -20,6 +21,15 @@ export interface ViewLimits {
   pitchMax: number;
   /** Max yaw change per tick from the body's yaw (prone turn rate), or null for free turning. */
   maxYawStep: number | null;
+  /** The yaws the view may take (on a rope: either side of facing the wall), or none. */
+  yawRange?: { center: number; half: number } | null;
+}
+
+/** `yaw` kept within `range` (the nearer edge when outside it). */
+function inRange(yaw: number, range: { center: number; half: number } | null | undefined): number {
+  if (!range) return yaw;
+  const d = wrapAngle(yaw - range.center);
+  return Math.abs(d) <= range.half ? yaw : wrapAngle(range.center + Math.sign(d) * range.half);
 }
 
 export class Controls {
@@ -39,6 +49,15 @@ export class Controls {
    * wheel turn into a single swap press only when the slot would change (C16 in the Phase 3 plan).
    */
   weaponState: () => { slot: number; equipping: boolean; zoom?: number } | null = () => null;
+  /** When this returns true (a map's plan view zooms with it), the mouse wheel doesn't switch weapons. */
+  wheelTaken: () => boolean = () => false;
+  /**
+   * When this returns true (the lab's free camera is flying), a key only counts as held (the camera flies
+   * with isHeld) and does nothing for the body: no toggle, pulse or weapon request is left to reach it
+   * afterwards. The use key calls onFlyUse instead.
+   */
+  flying: () => boolean = () => false;
+  onFlyUse: () => void = () => {};
   /** Touch joystick, -1..1 each. */
   touchMove = { x: 0, y: 0 };
   private held = new Set<Action>();
@@ -58,6 +77,7 @@ export class Controls {
   private wantSlot: 0 | 1 | null = null;
   private sentSwap = false;
   private wasOnLadder = false;
+  private wasOnRope = false;
   private lastLeanHold: -1 | 0 | 1 = 0;
   private sampledYaw = 0;
   private sampledPitch = 0;
@@ -88,6 +108,11 @@ export class Controls {
     this.stanceIntent = toggled ? stance : Stance.Stand;
     this.leanIntent = 0;
     this.adsToggled = false;
+  }
+
+  /** Whether an action's key is down (the lab's free camera flies with the movement keys). */
+  isHeld(action: Action): boolean {
+    return this.held.has(action);
   }
 
   get adsActive(): boolean {
@@ -138,16 +163,34 @@ export class Controls {
     canvas.addEventListener(
       "wheel",
       (e) => {
-        if (document.pointerLockElement !== canvas || this.isBlocked() || e.deltaY === 0) return;
+        if (document.pointerLockElement !== canvas || this.isBlocked() || this.wheelTaken() || e.deltaY === 0) return;
         this.press("swap");
         this.release("swap");
       },
       { passive: true },
     );
     canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+    document.addEventListener("pointerlockchange", (e) => this.pointerLock(document.pointerLockElement === canvas, e.timeStamp));
     addEventListener("mousemove", (e) => {
-      if (document.pointerLockElement === canvas) this.look(e.movementX, e.movementY);
+      if (document.pointerLockElement === canvas) this.mouseMove(e.movementX, e.movementY, e.timeStamp);
     });
+  }
+
+  /** When the pointer was last locked (the change event's time, ms), or null while it isn't. */
+  private lockedAt: number | null = null;
+
+  /** The pointer was locked to the game view or let go; `at` is the change event's time. */
+  pointerLock(locked: boolean, at: number) {
+    this.lockedAt = locked ? at : null;
+  }
+
+  /**
+   * The mouse moved (counts) at event time `at`. It turns the view only once the pointer is locked, and only
+   * if it moved after the lock: Chrome hands a move over at the next frame, so the move onto a Go to or Resume
+   * button, whose click locks the pointer, could otherwise arrive locked and turn away from the view just set.
+   */
+  mouseMove(dx: number, dy: number, at: number) {
+    if (this.lockedAt !== null && at >= this.lockedAt) this.look(dx, dy);
   }
 
   lockPointer(canvas: HTMLCanvasElement) {
@@ -165,14 +208,18 @@ export class Controls {
    * the turn rate doesn't depend on the frame rate.
    */
   look(dx: number, dy: number, scale = 1) {
-    const sens = this.settings.sensitivity * (this.adsActive ? adsSensitivity(this.settings, this.weaponState()?.zoom ?? 1) : 1) * scale * DEG;
-    this.yaw = wrapAngle(this.yaw - dx * sens);
+    // Upside down on a rope the view is turned over: a move turns it the way it goes on the screen.
+    const sens = this.settings.sensitivity * (this.adsActive ? adsSensitivity(this.settings, this.weaponState()?.zoom ?? 1) : 1) * scale * DEG * (this.upsideDown ? -1 : 1);
+    this.yaw = inRange(wrapAngle(this.yaw - dx * sens), this.limits.yawRange);
     this.pitch = clamp(this.pitch - dy * sens * (this.settings.invertY ? -1 : 1), this.limits.pitchMin, this.limits.pitchMax);
   }
 
+  /** The body looked through hangs upside down on a rope (the lab sets it every frame). */
+  upsideDown = false;
+
   /**
-   * Clamp the view to what the simulation will accept next tick (pitch arc, prone turn rate). Call once per
-   * frame, after that frame's ticks and before rendering.
+   * Clamp the view to what the simulation will accept next tick (pitch arc, prone turn rate, a rope's yaw
+   * range). Call once per frame, after that frame's ticks and before rendering.
    */
   applyLimits() {
     const l = this.limits;
@@ -181,10 +228,15 @@ export class Controls {
       const d = wrapAngle(this.yaw - this.sampledYaw);
       if (Math.abs(d) > l.maxYawStep) this.yaw = this.sampledYaw + Math.sign(d) * l.maxYawStep;
     }
-    this.yaw = wrapAngle(this.yaw);
+    this.yaw = inRange(wrapAngle(this.yaw), l.yawRange);
   }
 
   press(action: Action) {
+    if (this.flying() && action !== "respawn") {
+      if (action === "interact") this.onFlyUse();
+      else this.held.add(action);
+      return;
+    }
     if (STANCE_ACTIONS.has(action) && this.stanceLocked()) return;
     const s = this.settings;
     this.held.add(action);
@@ -358,13 +410,16 @@ export class Controls {
   /**
    * Keep toggles in line with what the simulation did this tick: sprinting stands you up and cancels a
    * lean (when data says so), and grabbing a ladder stands you up. On the ladder the crouch toggle is left
-   * alone, so it starts and stops a slide down.
+   * alone, so it starts and stops a slide down; on a rope it turns you over, so off the rope it's the body's
+   * stance again (on your feet, or crouched climbing in under a low lintel).
    */
-  afterTick(state: { sprinting: boolean; onLadder: boolean }, rules: { forcesStand: boolean; sprintCancelsLean: boolean }) {
+  afterTick(state: { sprinting: boolean; onLadder: boolean; onRope: boolean; stance: Stance }, rules: { forcesStand: boolean; sprintCancelsLean: boolean }) {
     if (state.sprinting && rules.forcesStand) this.stanceIntent = Stance.Stand;
     if (state.sprinting && rules.sprintCancelsLean) this.leanIntent = 0;
     if (state.onLadder && !this.wasOnLadder) this.resetStance();
+    if (!state.onRope && this.wasOnRope) this.resetStance(state.stance);
     this.wasOnLadder = state.onLadder;
+    this.wasOnRope = state.onRope;
   }
 
   /** Stance the player is asking for (for the HUD). */

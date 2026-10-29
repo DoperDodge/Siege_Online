@@ -128,6 +128,24 @@ describe("room and client session", () => {
     expect(pawn().y).toBeLessThan(y0 - 2.5); // fell (and landed)
   });
 
+  it("counts a stall once however long it lasts, and its correction as the server's doing", async () => {
+    const h = await harness(["sledge"]);
+    const [a] = h.clients;
+    const stall = (n: number) => {
+      a.holdUp = true;
+      h.ticks(n, [{ forward: 1 }]);
+      a.holdUp = false;
+      h.ticks(2 * MAX_HOLD_TICKS, [{ forward: 1 }]); // the late inputs catch up
+    };
+    stall(MAX_HOLD_TICKS - 2); // held still: no stall, nothing to correct
+    expect(h.room.stats.stalls).toBe(0);
+    const corrections = a.session.stats.corrections;
+    stall(MAX_HOLD_TICKS + 8); // walked on without input for several ticks
+    expect(h.room.stats.stalls).toBe(1);
+    expect(a.session.stats.corrections).toBe(corrections + 1);
+    expect(h.room.stats.mismatchCorrections).toBe(0);
+  });
+
   it("a shot rides on the input that fired it: judged with that input's view, and claimed view times are bounded", async () => {
     const h = await harness(["sledge", "mute"]);
     const [a, b] = h.clients;

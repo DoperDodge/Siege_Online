@@ -5,6 +5,482 @@ known issues, and what's next.
 
 ---
 
+## Phase 5 — Oregon greybox · ✅ complete (PR #6)
+
+**Done when (PLAN §17):** you walk it and sign off on layout accuracy: ✅ signed off 2026-10-29, after rappel (M8),
+which came before the Phase 5 report (D-080). The design, with the review's amendments, is `tools/mapgen/DESIGN.md`.
+
+| Milestone | Status |
+|---|---|
+| M1 Oregon 1F walkable, offline and online (generator, wall extraction, engine prep) | ✅ 1F built from the floor plans; batched drawing and a stats overlay (F8); browser test |
+| M2 All storeys stacked: B, 2F, Cat Walk; rooms and callouts; ceilings, soft floors, hatches, drone holes; storey views | ✅ four storeys, 49 rooms, 12 soft floors, 6 hatches; hide-above, plan view, HUD line; browser test |
+| M3 Stairs and the ladder (grab it from the top too) | ✅ every staircase inside the building, the ladder both ways, the walk graph: every room reachable; browser test |
+| M4 Roofs, the outside and the three attacker spawns; free camera | ✅ roofs on every part of the building, the outside blockout with the Bunker and Tower outside stairs, five attackers at each insertion point, a free camera in every lab; browser test |
+| M5 Sites, defender spawns, cameras, ingredients, zones, cover props | ✅ the four bomb sites with Go to by site, five defenders at each, eight cameras, nine ingredients, 29 cover props (bullets go through the wooden and soft ones), the building, spawn-peek, run-out and rappel zones, every marker drawn; browser test |
+| M6 Walk-ready: every check, performance on Oregon, your walk #1 | ✅ every structural check, the generator's report, the blueprint check, Oregon's performance measured (server, client, browser); your walk #1: "really accurate" |
+| M7 Your corrections, round by round, to sign-off | ✅ walk #1's fixes in: the Attic's hall a vault over the Low Attic (after your screenshot), vaulting through holes in walls, no page zoom on phones; your sign-off on 2026-10-29 |
+| M8 Rappel | ✅ on every outside wall: hold Space to hook on (at a wall's foot, upside down over a roof edge, or out of a window), climb (over the eaves too), move along, turn over, shoot and knife; swing into a window or breach it with Space; predicted online with no mispredictions; browser test and a netsim run; three rounds of your corrections; ✅ your test online at +100 ms passed (2026-10-29) |
+
+### What's done (M8: rappel, round 3 after your second test)
+- **Over the eaves:** where a roof hangs over the wall, climbing up stopped with your head under it. Climbing into
+  it now takes you over the edge onto the roof's slope, as at a bare edge (D-117). 20 of the 55 rope faces had the
+  problem: the Dorms' south wall from your screenshot, the other 6.2 m roofs' eaves, and the Big Tower's and Cat
+  Walk's 9.2 m ones.
+- **Not through walls:** climbing over the top went through the Big Tower's gable end into its closed roof space,
+  and from the Kitchen's north wall through the Kids' Dorms' wall (set back from the edge) or its barricaded window
+  into the room. Over the top now needs nothing behind the edge taller than a vault, and room for a tucked body,
+  as a vault does; those spots stop under the edge.
+- **The rope drawn:** near an inside corner the rope was drawn slanting to the next wall's rope; it now hangs from
+  your own.
+- F stays the key to let go.
+
+### What's done (M8: rappel, round 2 after your test)
+You found it clunky and not like the game; each thing you asked for is in (D-116):
+- **The key:** hold Space (the vault button on touch) to hook on; F lets go. Where you could also vault, a quick
+  tap still vaults (as you let go of Space).
+- **Out of windows:** inside, at an open window with nothing to vault onto outside (the Big Tower's 2F window), hold
+  Space: you climb out over the sill onto the rope.
+- **Animations:** hooking on moves you onto the rope instead of snapping there (0.6 s from a wall's foot; 1 s over
+  a roof edge, turning upside down on the way, or out of a window, ducking over the sill or the railing), turning you
+  to face the wall. C turns you over in half a second (you hang still meanwhile). Others see all of it.
+- **Swinging:** Space at a window swings you out about 0.9 m and back in (0.8 s): in through an open window, or
+  into its glass and barricade (the rappel breach). A barricade that holds bounces you off, out and back again
+  (0.4 s). The rope is drawn to where it's fixed, so it angles out with you.
+- **The view:** at most 90° either side of the wall; it holds still while you move onto the rope or swing.
+- **The knife** works on the rope.
+- **Fast descent:** Shift with S drops you twice as fast (5 m/s).
+- **The Balcony:** climbing its wall takes you over the railing onto it; from the Balcony, facing out over the
+  railing, hold Space to go over it onto the rope.
+- **Skopós:** her shell's camera works on the rope; swapping to her other shell doesn't while she hangs there.
+- **From the reviews of round 1:** walls a few centimetres apart one over the other (the Garage's east wall) no
+  longer stop the climb halfway; at the bottom of a rope over a ledge narrower than you (the Kids' Dorms' north
+  wall) S puts you on the ledge; on the Garage's south wall Space no longer offers a swing onto its roof (W climbs
+  over); the crouch toggle no longer leaves you crouched after the rope; the free camera or Skopós' camera no
+  longer turns you back over; in third person and the plan view the mouse isn't reversed upside down; the speed
+  readout works on the rope.
+
+### What's done (M8: rappel)
+Rappel (D-114, D-116), on Oregon's 55 rappel faces (the orange zones, O):
+- **Hooking on:** hold Space (0.5 s, a gauge shows it) at the foot of an outside wall facing it, at a roof edge
+  facing out over the drop (you go over upside down), or inside at an open window (you climb out). Faces one over
+  another in a plane are one rope, so the Big Tower's north wall is one rope from the ground to the top of its
+  wall (9.2 m). Attackers only in a match; anyone in a lab room. In a lab, where you could also reinforce or
+  barricade (F), the prompt shows an attacker the rope first and a defender the panel.
+- **On the rope:** W climbs, S descends (Shift: fast), A and D move along the wall (Shift faster); C turns you
+  upside down and back. You can lean, aim, fire, reload and knife, looking at most 90° either side of the wall;
+  lethal damage kills outright. At the top you climb over onto the roof where you can stand (over a railing, or
+  from under an eave), else stop under the edge (a gable end, a wall set back from the edge); at the bottom you
+  land, and F lets go anywhere.
+- **Windows:** right side up, Space swings you into the window in front: in through it when it's open; at glass
+  or a barricade (the Siege X rappel breach) the glass breaks, and a fresh barricade bounces you off with a kick
+  that wears it; the next swing goes through it. A barricade already worn (a knife hit, a few bullets) gives way
+  on the first swing.
+- **Online:** predicted like the ladder. The online tests at 94 ms each way (hooking on, climbing, moving, turning
+  over, coming down, the breach), each with a lag spike longer than the server waits (mid-hold, mid-turn, upside
+  down, mid-swing), have no mispredictions; the netsim's rappel run (ten bots on ten walls, 100 ms round trip with
+  jitter, 400 ms stalls and clock drift; they knife and swing too) has none.
+- **Not in v1:** going around a corner from one wall to the next (Siege X) moves to Phase 8 (D-115).
+
+### What's done (M7: your walk #1)
+You walked it and found it "really accurate", with two issues, and a bug on phones (research/oregon/walkthrough.md
+logs all three):
+- **The Attic's ledge:** first built as the hall 0.2 m lower than the rest of 2F; on your screenshot of that you
+  said the part that is down needs to be raised to about vault height. The Attic's hall now stands 0.9 m over the
+  Low Attic (our window sills' height): facing it from the Low Attic, Space vaults you up; walking south you drop
+  back down. A room's floor can now be raised or dropped (`floorShifts` in layout.json): a raised one is solid
+  down to the storey's slab, its hatch and soft floor on top over a shaft to the room below; the hall's part of
+  the Attic roof has no ceiling, so you stand under the slopes; its drone hole sits on its floor. The walk graph
+  now counts a ledge you can vault onto as a way between rooms. I couldn't find an in-game picture of the Low Attic
+  looking into the hall, so the height, and which side is up, are my reading of your note (open question 33).
+- **Vaulting through holes:** a hole in a soft or reinforceable wall can be vaulted through when it's low and big
+  enough, by the vault's own rules: its bottom 0.3–1.1 m up, about 1 m of room above that, and the body's width
+  (open question 34).
+- **Phones and tablets:** tapping fast no longer zooms the page in. iOS ignores the page's "no zoom" setting, so
+  the lab pages now cancel pinch gestures and a second tap within 0.35 s themselves.
+
+### What's done (M6)
+- **Your walk's checklist:** `research/oregon/walkthrough.md` has the route, the ten questions to settle on the
+  walk, and every room's list as we built it, read off the built level so each thing is in the rooms it really
+  joins: soft walls with their reinforcements, doors, windows and open passages with the side they are on and
+  where they lead, stairs, the ladder, hatches, drone holes, soft floors and ceilings, bombs, defender spawns,
+  cameras, extinguishers, gas pipes and furniture. Outside: the spawns, the outside cameras and stairs, every roof
+  with its shape, the ways onto the roofs, and the fences by height. `npm run mapgen` keeps it up to date (a ticked
+  line stays ticked). Each mismatch you find goes into its table.
+- **Every check of the design (DESIGN §9.2):** new: every drone hole of the research is built or left out with a
+  reason (the tunnel along the basement Supply Room's south-east strip is left out: where it comes out is open);
+  two faces of different colours never lie in one plane (they would flicker); level.json stays under 500 KB (it's
+  150 KB); two copies of Oregon given the same damage end identical.
+- **The generator's report:** `npm run mapgen` writes `builds/mapgen/report.md`: what it built, against the budgets
+  the engine was sized for (977 of 2,500 solids, 179 of 300 panels), every value still a placeholder (553 in
+  297 records), and how far the wall files sit from the floor-plan extraction (at most 0.26 u).
+- **Against Ubisoft's blueprint:** `python3 -I tools/mapgen/extract/bpcheck.py` measures our walls on the
+  official blueprints: 93% of the basement's hard walls by length agree within 0.23 m, 99.6% of 1F's, 99% of
+  2F's, 100% of the Cat Walk's, and no door or window stands where the blueprint draws solid wall (question 32
+  has the few that don't agree). The overlay page can show the research's room boxes too.
+- **Performance on Oregon (D-108, D-109):**
+  - The server, 10 bots walking and firing: a step takes 1.3 ms on average, 3.0–3.4 ms at the 99th percentile
+    (the bar: 4 ms). Fighting across the Kitchen's soft wall (523 cuts in 20 s): 4.2–5.4 ms, from 5.8 ms
+    before I made the walls' damage update local (the same result, a fraction of the work).
+  - The client: a bullet hole redraws its panel in 0.2–0.6 ms (the budget is 1 ms), so the soft floors stay
+    in 4 m tiles.
+  - In the browser: flying through every room, the page's own work is 3.5 ms a frame (9 ms at the 95th
+    percentile), with up to 492 draw calls; an explosive's redraw is 0.4 ms typical and up to 2 ms on this
+    machine.
+  - Your PC's frame rate is still the real test (F8).
+
+### What's done (M5)
+- **The four bomb sites (D-103):** Kids' Dorms / Dorms Main Hall (2F), Kitchen / Dining Hall and Meeting Hall /
+  Kitchen (1F), and Laundry / Supply (B), each bomb where r6calls draws it, A and B as r6calls letters them. The
+  pause menu's Go to lists them first, under "Bomb sites": each puts you at the site's first defender spawn.
+- **Defenders (D-103):** five at each site, three in its A room and two in its B room, facing between the bombs.
+- **Cameras and ingredients (D-103):** r6calls' eight cameras, each on the nearest wall of its room under the
+  ceiling, looking down at the room's middle (the three outside on 3 m posts, looking at the building), and its
+  seven extinguishers and two gas pipes on the nearest wall.
+- **Cover props (D-104):** 29 pieces of furniture from r6calls' floor images: the tables, counters and the Kitchen
+  island, the beds and the Dorms' bunks and wardrobe, the Laundry washers, the chest freezers, the Game Room's
+  table and sofa.
+  Low ones (up to 1.1 m) can be vaulted. **Bullets go through the wooden and soft ones** at ×0.7 each, counting
+  toward the two walls a bullet can go through; the metal ones (washers, freezers, bunks) stop them (D-102). No
+  prop blocks a doorway, a hatch or the stairs, and every room is still reachable.
+- **Zones (D-105):** the building on each storey (inside the walls; the roofs and the Balcony are outside), the
+  spawn-peek spots and run-outs of the research at the doors and windows they name, and rappel faces on every
+  outside wall above ground. Press O to see them: rappel faces orange, spawn peeks green, run-outs red.
+- **Markers (D-106):** the bombs (red cases), the cameras (with a cone the way each looks), the extinguishers
+  (red), the gas pipes (yellow) and every spawn (a disc and an arrow: attackers orange, defenders blue) are drawn
+  with their names, and hide with their storey.
+- **Checks:** every bomb in its room, every camera and ingredient against a wall of its room, the defenders on
+  their site's floor, each prop clear of doorways, hatches and stairs, a bullet through the Kitchen island and
+  stopped by a freezer, each storey's building zone holding its rooms, the peeks inside and the run-outs outside
+  their openings, a rappel face outside every outside door and window. The browser test goes to each site from
+  Go to, counts the markers and switches the zones view.
+- **Review (D-107):** two reviewers read the M5 changes; seven findings held up, and all are fixed, each with a
+  test. The ones you'd notice: a Dorms bed stood through the wall, mostly in the Game Room, and what I'd traced as
+  the Game Room's pool table was its rug (now its table and sofa); an extinguisher outside could be put inside;
+  a prop could stand in an open passage. The build now also fails if a prop goes into a wall, and the walk graph
+  sees the props again.
+
+### What's done (M4)
+- **Roofs on the whole building (D-097):** 17 roofs with the research's names. Pitched where the roof renders
+  show a ridge (the Tower, the Tower's two west parts, the brown cross roof over Dorms, Armory, Attic and Master,
+  the Small Tower, the Meeting roof west of the Attic), flat where they don't (the Dining roof, the Kids roof, the
+  Meeting roof east of the Attic, the Balcony, the Garage strip, the corners round the cross). Every flat roof and
+  slope is walkable; the gable ends are closed. The 2F rooms have a ceiling at 6.0 m, the Meeting Hall and
+  Kitchen Corridor look up into their roof. Onto the roofs: the Office's north window and the Dorms' big window
+  onto the Dining roof, the Master's door onto the Balcony, the Armory Corridor's and 2F Tower's windows onto the
+  Meeting roof. The build now fails if a room has nothing over it or a roof stands on nothing.
+- **Free camera (D-098):** press N in any lab and fly (WASD along the view, Space up, C down, Shift faster)
+  while your body stays put; N goes back to it, F puts it on the floor under the camera. Also in the pause
+  menu's Lab tools.
+- **The outside (D-099):** 79 items read off the r6calls background: the greenhouse, sheds, silos and tanks,
+  the garden, the Junkyard's trailers and tyre walls, the bus, vans and cars, fences and low walls (1.0 m, you
+  vault them), and the construction site (the house's shell, the excavator, the generator, lumber). The
+  **Bunker stairs** go down from the ground east of the building, in a sunken passage, to the Bunker
+  Entrance's east door. The **Tower's outside stairs** go up from beside the 1F Tower's east door to the
+  Meeting roof east of the Attic. The **Balcony** has its railing.
+- **Attacker spawns (D-100):** five at each insertion point (Junkyard, Street, Construction), facing the
+  building. Go to takes you to each.
+- **Checks:** every room has something over it, every eave rests on a wall, no roof covers a window's sill;
+  the three spawn groups, the Bunker passage and the Meeting roof are one walkable piece of outside; a body
+  walking at the play area's edge stops there; the browser test visits each spawn and drops you on the
+  Dining roof from the free camera.
+- **Review (D-101):** two reviewers read the M4 changes; eight findings held up, and all are fixed, each with a
+  test. The ones you'd notice: F, leaving the free camera, also pressed "use" for your body (it grabbed the
+  ladder if one was in reach); a weapon key pressed while flying switched weapons when you came back; F with the
+  camera inside a wall put you in the wall (now the camera stays, with a message); a cable reel stood half inside
+  the Meeting Hall (it's 6 m further east on the background); and a slot from the Kitchen Corridor ran into the
+  Tower's west roof space. The build now fails if anything outside stands in a room.
+
+### What's done since M3: your stairs walk (D-095)
+- **The White Stairs** now go up east, both flights, one over the other, and each fills the stairwell wall to
+  wall. From the basement you arrive on the 1F landing by the Security Corridor door. The flight to 2F starts in
+  the Security Corridor's south-west corner, so from that landing you go round through the corridor, and it
+  arrives by the 2F door.
+- **The Armory Stairs** now go up north, both flights, wall to wall. From the basement's south landing (by its
+  door) you arrive on the 1F north landing (by the Lobby door). The flight to 2F starts at the 1F south end,
+  open to the Lobby, and arrives at the south end of the Armory Corridor. The 2F "Armory Stairs" callout now
+  covers the top of the stairs.
+- **The Small Stairs** (after your second look, D-096) go the first way round again, now wall to wall: up north
+  through the passage beside the Small Tower's corner, a landing in the corner, then east along its north wall
+  onto the 2F walkway to the Office, 2.1 m wide. The two 2F walls of that corner now stand on the 1F walls under
+  them (the 2F image draws them on the same spot).
+- **The Tower Stairs** keep their width: the 2F image has floor beside them, where the Cat Walk ladder stands.
+  Their landing now meets the north walls.
+- **The basement's frame:** to stack full-width flights, the basement's stairwells have to sit under the 1F
+  ones, and the basement image does that only when drawn 2.4% larger, as 2F is. That frame also puts hatches H2
+  and H3 well inside their rooms. H1 then sat over a wall, so it moved 1.07 m east inside the Meeting Hall.
+- **Checks:** every run walks up and down; every flight can be climbed hugging its open sides; the walk graph
+  still reaches all 49 rooms; the browser test walks the Armory Stairs up north now.
+
+### What's done (M3)
+- **Stairs (D-091):** all seven runs of the four staircases inside the building. The Tower Stairs (S1), the
+  White Stairs (S2) and the Armory Stairs (S3) go from the basement to 2F; the Small Stairs (S4) go from 1F to
+  2F.
+  - Each run is built from its stairwell: straight, a switchback with a landing, or an L (the Small Stairs).
+  - The flights are open underneath, so one can stand over another: the Armory Stairs are two flights, one
+    over the other, as you described.
+  - The floor above opens where your head would meet it, with a rail round the hole wherever there's no wall.
+  - Every step is 0.2 m high (16 to a storey).
+- **The ladder (D-092):** from the 2F Tower up to the Cat Walk. You can now get on it from the top too: stand at
+  the gap in the well's rail, face the drop and press F; S climbs down, W back up.
+- **The walk graph (D-093):** a map of everywhere a body can stand and walk, read from the game's own
+  collision. From the Junkyard spawn, with every barricade broken and nothing breached, it reaches all 49
+  rooms on every storey.
+  - It found the 2F Office shut off: my first guess at the Small Stairs put their stairwell across the only
+    walkway to the Office door.
+  - They're now an L that arrives on that walkway.
+- **Plans:** the stairs are on the plans in red, darker as they climb, with an arrow pointing up. Landings and
+  the ladder are drawn too, and the comparison page has a stairs layer.
+- **The Oregon page:** the help explains the stairs and the ladder.
+- **Checks:**
+  - A body walks up and down every run, between the rooms the research names.
+  - A body climbs the ladder and comes back down from the top.
+  - The browser test walks the Armory Stairs from the basement to 1F and back, and takes the ladder both ways.
+- **Review (D-094):** two reviewers read the M3 changes. Seven findings held up, and all are fixed, each with a
+  test. The ones you'd notice:
+  - Walking up a staircase hugging an open side, you stopped dead a third of the way up, your head against
+    the floor above. Those sides now have a handrail, with an invisible guard up to the floor above.
+  - Holding Space at the top of the ladder grabbed it, so climbing with Space held could loop at the top.
+    Now only F grabs it from the top, on your feet, and never through a wall.
+
+### What's done (M2)
+- **Every storey stacked:** B, 1F, 2F and the Cat Walk (3F), each from its own wall file and placed through its
+  frame (P2: B as drawn, 3F scaled onto the tower's walls). Floors at −3.2, 0, 3.2 and 6.2 m. The basement is
+  underground, so its walls stop under the 1F slab. All 32 soft walls are in (7 on B, 17 on 1F, 8 on 2F), with
+  every storey's doors, windows and drone holes.
+- **Rooms and callouts (D-085):** the 49 rooms of the research, each with its callout. The generator floods each
+  storey's plan (5 cm cells) from the compiled walls; 11 splits divide spaces the plans draw as one (a hall and
+  its stairs). Each room becomes floor rectangles (what the HUD looks up) and an anchor 0.45 m clear of the
+  walls (Go to and its label). The checks fail on two rooms in one space, a seed on a wall, or an anchor where a
+  body doesn't fit, and report any enclosed space bigger than 2 m² that has no room.
+- **Floors and ceilings (D-086):** each storey's floor covers its footprint and is the ceiling of the one below;
+  the ground is the play area, less the hatches.
+  - 12 soft floors (SF-2F-01 to 11 on 2F, SF-3F-01 on the Cat Walk) cover the rooms the research names, to
+    their walls. They're cut into tiles of at most 4 m in 0.4 m joist spacings, and a bullet that crosses a
+    seam goes into one surface, not two (D-088).
+  - 6 hatches (H1–H6): r6calls' squares, clipped to the room above, breakable and reinforceable from the top.
+  - The Cat Walk's centre is an open well over the 2F tower, inside a 1.0 m rail you can vault.
+- **Where the sources disagree (D-087):** we follow Ubisoft's blueprint. SF-2F-10 and SF-2F-11 are soft, and five
+  soft floors use Ubisoft's bigger extents. The Game Room's south window and the 2F Small Tower's south opening,
+  which only r6calls 2026 draws, are built as wall. Each choice is one field in `layout.json`.
+- **The Oregon page:**
+  - H hides the storeys above yours. M opens the plan view: your storey from above, north up, centred on you;
+    the wheel zooms and you can keep walking. P switches between the surface colours and one light grey.
+  - Room callouts float over your storey. The line at the bottom left gives the room, the storey and your
+    position in the plan's units (u), in the world frame and in your storey's own drawing.
+  - Go to lists every room by storey.
+  - Each storey has its own light, darker below ground.
+- **Plans and tools:**
+  - `research/oregon/compare/{B,1F,2F,3F}.svg` draw every storey with its floors (soft yellow, hatches
+    green), rails and callouts.
+  - `npm run mapgen -- --where x,y,floor` gives a position in every floor's frame and the room there.
+  - `npm run mapgen` builds B both ways (as drawn, and 2.4% larger) and prints where each basement hatch lands.
+- **Checks:**
+  - Leak and shell checks run on every storey. Research tests cover the rooms, soft floors and hatches.
+  - A bullet goes up through each soft floor, and a body dropped through each hatch lands in the room the
+    research names.
+  - The browser test shoots up through the Kids' Dorms floor from the 1F Kitchen, then knifes H4 open from
+    above and lands in the Kitchen.
+- **Review (D-089):** two reviewers read the M2 changes; nine findings held up and all are fixed, each with a
+  test. The ones you'd notice: six rooms had strips of floor in no room (the HUD said "outside" in the Lobby),
+  bullet marks and other players floated in view when their storey was hidden, and the gun in hand stayed
+  daylight-bright in the basement.
+- **Smaller fixes:** the Destruction Lab's walls no longer name their sections twice; Go to uses the rooms'
+  anchors instead of hand-picked centres.
+- **After your walk (D-090):** the few-pixel gap you saw at some soft floors' sides was a strip of hard ceiling,
+  5–15 cm wide and up to 6.9 m long, where a 2F wall overhangs the 1F wall under it. Soft floors now run on to
+  the walls of the room below; the longest hard strip left is 0.4 m, at a corner.
+
+### What's done (M1)
+- **Walls from the floor plans (D-071):** `tools/mapgen/extract` reads r6calls' Oregon map (the floor images and
+  their soft-wall, hatch and drone-hole overlays) and checks it against Ubisoft's official blueprint. It finds
+  every wall, door, window, soft wall and drone hole on B, 1F, 2F and the Cat Walk (285 wall pieces, 69
+  openings, all 32 soft walls), and writes only numbers to `data/maps/oregon/extracted.json`. Those became one
+  file per floor (`walls_<floor>.json`): wall lines with their soft sections, doors, windows, passages and drone
+  holes, each tied to the research row it answers to. The 2F image is drawn 2.4% larger than 1F, so each floor
+  has its own frame (D-072).
+- **The generator (D-070):** `npm run mapgen` compiles `data/maps/oregon/layout.json` and its parts into
+  `level.json`, the level the game loads: hard walls, the 17 soft walls of 1F as reinforceable panels with
+  their research section counts, door and window frames (exterior ones barricaded, inside doorways empty, glass
+  on windows; D-074), drone-hole slots, the ground, the play area's edge and the spawns. Hard geometry never
+  overlaps a soft wall (D-075). Only 1F is compiled so far.
+- **Checks:** level.json must equal what the layout compiles to; the compiled walls must close every room the
+  plan draws (no slot between rooms or to the outside); the wall files must still match the extraction, and
+  every extracted item is used or listed as dropped with a reason; every 1F soft wall, door, exterior opening
+  and passage in the research must be there with the research's type and its door-or-window guess.
+- **Engine:** a faster physics refresh (D-073: room step p99 7.6 → 3.8 ms on an Oregon-sized level, movement
+  identical), map data in the level format (spawn sides, invisible blockers, bounds, storeys, rooms, sites,
+  cameras, zones; D-076), and a kill plane: fall out of the map and you're back at the start.
+- **The Oregon page**, offline and online, with Go to for the main rooms and the three attacker spawns; the
+  destruction tools work there as in the Destruction Lab.
+- **Our 1F plan** is in `research/oregon/compare/1F.svg` (open it in a browser). The overlay page puts it over
+  the official blueprint and the r6calls image on your PC (the images stay out of the repo, D-079).
+- **Review fixes:** a review of M1 found 11 problems, and a second check of the fixes found that some had gone
+  wrong or fell short. All are fixed now:
+  - Walls: the Big Tower's east wall is no longer merged into the facade, and its corner block sits flush.
+    Corners are settled in pairs: a door or soft wall at a corner gets a post, and a wall ending on a soft wall
+    meets its face. Wall heights change where a wall goes from outside to inside, so the facade stays at full
+    height at every corner.
+  - Checks: tests now catch gaps between rooms, 5 cm slots, and a building shell that isn't closed at the top
+    of the outer walls. They also catch a deleted soft wall on any floor.
+  - The image check reads what git stages, including large-file storage. It catches archives, image bytes and
+    base64 images anywhere, plan SVGs that link a picture, and odd file names.
+  - Kill credit survives the kill plane: a body brought back keeps nobody's old credit, a bleed-out on that
+    very step still credits whoever downed it, and a shot can't land on the new life.
+  - The physics guard test now runs Rapier's own step and checks every collider.
+  - Shadows come back after the graphics card resets.
+  - The stats overlay shows the page's work a frame: its own code plus the messages it handled.
+- **Drawing a whole map (D-077):** level boxes are drawn in batches (one instanced mesh per material and
+  storey), the floors carry a 1 m grid to judge distances by, soft walls show their section seams and a
+  "N sections" label, and shadows are redrawn only when a wall changes (players and guns cast none now). A
+  stats overlay in every lab (F8, or `?stats` in the address) shows FPS, frame time, the 1% low, the work
+  time a frame and draw calls against the target: 120 FPS on average and 90 at the 1% lows, at 1080p on High.
+
+### How to test (needs Node 22.12+)
+1. `npm ci`, then `npm run dev` and, in a second terminal, `npm run build -w @redmond/server && npm start`.
+2. Open http://localhost:5173/labs/oregon.html (offline) or `?online` (a room on your local server; send the
+   invite link to play together). You start outside the Main Entrance.
+3. Go to (Esc, then a room) takes you to any room on B, 1F, 2F or the Cat Walk. Its callout floats over the
+   floor, and the line at the bottom left names the room you're in. Walk each storey against the blueprint and
+   note anything out of place with that line (it gives your position in the plan's units).
+4. Stairs: walk from the basement up to 2F on each staircase. Go to puts you at the foot of each one.
+   - The Tower Stairs: B → Tower Stairs.
+   - The White Stairs: B → Freezer Stairs; the flight on to 2F starts in the 1F Security Corridor's south-west
+     corner.
+   - The Armory Stairs: B → Laundry Stairs; the flight on to 2F starts at the 1F south end, by the Lobby.
+   - The Small Stairs go from 1F to 2F: 1F → Small Tower, then north up the passage on the west side.
+   - The Bunker stairs go from the ground east of the building down a sunken passage to the basement's east
+     door; the Tower's outside stairs, beside the 1F Tower's east door, go up onto the Meeting roof.
+5. The ladder: Go to 2F → Tower. The ladder stands under the north edge of the Cat Walk's well. Face it, press F,
+   then hold W up to the Cat Walk. To come down, stand at the gap in the rail at the top, face the drop, press F,
+   then hold S.
+6. Press H to hide the storeys above you, M for the plan view (the wheel zooms; M again to go back), and P to
+   switch to plain grey.
+7. The outside: Go to → Attacker spawn A Junkyard, B Street or C Construction puts you at that insertion point,
+   facing the building (four more spawns stand beside it); walk to the building from each.
+8. The sites: Go to → Bomb sites → each site puts you at its first defender spawn, facing between its bombs.
+   Check each site's rooms, its two bombs (red cases), the cameras (dark boxes with a cone) and the extinguishers
+   and gas pipes against the game. Press O to see the rappel faces, spawn peeks and run-outs.
+9. The props: Go to 1F → Kitchen and shoot through the island; a chest freezer in the basement stops bullets.
+10. The roofs: Go to 2F → Office and vault out of its north window onto the Dining roof (from the 2F Small Tower,
+   its east door leads into the Office; the Small Tower's own south opening is built as wall, D-087), or
+   2F → Master and step out of its south door onto the Balcony. Press N for the free camera and fly over every roof (WASD along
+   the view, Space up, C down, Shift faster); F puts you on the floor under the camera, N takes you back.
+11. Soft floors: Go to 1F Kitchen, look straight up and fire. The yellow floor above (the Kids' Dorms, SF-2F-01)
+   takes holes; every soft floor works the same way from the room below.
+12. Hatches: Go to 2F Kids' Dorms and stand on the green square (H4). Crouch (C), look down and knife it (V)
+   until it breaks, and you drop into the 1F Kitchen. H1–H3 go from 1F to the basement, H5 and H6 from 2F to 1F.
+13. Press F8 and read the overlay on your PC: average FPS and the 1% low (target 120 and 90 at 1080p High).
+   The browser draws no faster than your display refreshes, and a missed refresh counts as a whole extra one,
+   so read the FPS on a display faster than 120 Hz (144 Hz or more). At 120 Hz or less, read the work instead:
+   the page's own work each frame on the main thread, 8.3 ms on average and 11.1 ms for the slowest 1% leaving
+   room for 120 and 90 FPS. It doesn't include the graphics card's time.
+14. The plans: open `research/oregon/compare/B.svg`, `1F.svg`, `2F.svg` and `3F.svg`. To see them over the
+   official blueprint: `npm run mapgen:refs` (downloads the blueprint and r6calls' map into a gitignored
+   folder), then `npm run mapgen:compare`, and open `builds/mapgen/compare/index.html`.
+15. Your walk: follow `research/oregon/walkthrough.md` (the route, the questions, a checklist per room and
+   outside). `npm run mapgen` rewrites the checklist from the built level; `npm run mapgen -- --check` fails if it
+   is out of date.
+16. The generator's report: `npm run mapgen`, then open `builds/mapgen/report.md` (counts, budgets, every
+   placeholder, the drift from the extraction).
+17. The blueprint check: `npm run mapgen:refs` once (downloads into a gitignored folder), then
+   `python3 -I tools/mapgen/extract/bpcheck.py` (needs Python 3 with numpy and Pillow); detail in
+   `builds/mapgen/bpcheck.json`. The overlay page's "research rooms" box draws the research's room boxes.
+18. Performance: `npm run netsim -- --level oregon` (10 bots crowding in the street; add `--combat --walls` for
+   the fight across the Kitchen's soft wall), `npm run bench:oregon` (loading, damage, redraw; writes
+   `builds/bench/oregon.json`), and after `npm run build`, `node tools/e2e/oregon-perf.mjs` (the browser capture;
+   writes `builds/e2e/oregon-perf.json`).
+19. Checks: `npm run check` runs them all: `npm run typecheck`, `npm test` (547 tests), `npm run build && npm run
+   test:e2e` (`oregon.mjs` shoots through a soft floor, drops through a hatch, walks the Armory Stairs, takes the
+   ladder both ways, rappels up the Big Tower and down, breaches into the Kids' Dorms from its roof edge, stands
+   at each attacker spawn, drops onto the Dining roof from the free camera, goes to each bomb site and switches
+   the zones view; `oregon-perf.mjs` flies through every room and sets off 44 explosives). Also
+   `npm run mapgen -- --check`, and `npm run netsim -- --level oregon --rappel` for ten bots on ropes.
+20. Walk #1's fixes:
+   - The Attic's ledge: Go to → 2F → Low Attic, then walk north: the hall stands 0.9 m up; face it and press
+     Space to vault up, then walk south to drop back down.
+   - Vaulting through a hole: in the Destruction Lab (or Oregon), press T until the Breach Charge, aim at a soft
+     wall about chest high and press G. The hole's bottom is then off the floor: face it and hold Space.
+   - On a phone or tablet: open the Oregon page and tap quickly anywhere; the page keeps its size.
+21. Rappel (M8's done-when is the first two, online at +100 ms: open `?online&lag=100`, or the deployed site):
+   - Down the Big Tower: Go to → Attacker spawn C Construction, walk to the Big Tower (the tallest part of the
+     building) and face its north wall: "Hold Space to rappel". Hold Space: you move onto the rope. W climbs to
+     about 8 m, under the roof's edge (the roof is a steep gable, nothing to climb onto). On the way, C turns you
+     upside down and back, A and D move along the wall (Shift faster), you can aim, shoot and knife, and you look
+     at most 90° either side; S brings you down (Shift with S faster).
+   - Into a Dorms window: the Dorms' big window (the Dorms Main Hall's west wall) from the Dining roof under it.
+     Get onto the Dining roof (N, fly over it, F; or knife open the 2F Office's north window and vault out), face
+     the Dorms' wall under the big window, hold Space, then press Space: you swing out and into it; the first swing
+     breaks the glass and bounces off the barricade, the second goes through it. Or from above: at the Kids' Dorms'
+     roof edge over its north window, face out and hold Space (you go over upside down, turning to face the wall),
+     C to turn right side up, S down until "Space to breach" shows (the sill between your knees and hips), and
+     Space twice.
+   - From the ground into the Big Tower's 2F north window (the one east of the middle): hook on below it, climb
+     until "Space to breach" shows, and Space twice the same way.
+   - Out of a window: inside that window in the 2F Tower, once its glass and barricade are gone (shoot the glass,
+     knife the barricade), face it and hold Space: you climb out onto the rope. Where you could also vault (the
+     Dorms' big window opened, from inside), a quick tap still vaults.
+   - The Balcony: from the ground under it, hook on and climb: you go over the railing onto it. From the Balcony,
+     face out over the railing and hold Space.
+   - Over an eave: the wall from your screenshot (the HUD's world u about 205, 257). Press N, fly down to the ground
+     in front of that wall and press F, then face the wall, hold Space and climb with W: you go over the eave onto
+     the roof.
+
+### Known issues
+- Rappel: every timing, speed, distance and angle is a placeholder (open question 35): the hold and the tap, the
+  moves onto the rope, the turn, the swing and the bounce, the speeds, the 90° view, how far from a wall or back
+  from a roof edge you can hook on, how much a swing wears a barricade. You can't swing in or breach upside down,
+  and you stop at a wall's end (corners are Phase 8, D-115). Where a storey's wall stands out from the one above by
+  more than 10 cm (the Kitchen's north wall under the Kids' Dorms', 0.3 m), they're separate ropes, so from the
+  ground you stop at the ledge between them. With hold-to-crouch, you hang upside down only while you hold C (each
+  change of the key turns you over). Where a rope is offered too, a vault comes as you let go of Space, a moment
+  later than elsewhere. The body is the greybox shape: the moves, the turn and the swing move and roll it, with no
+  climbing or swinging pose of the limbs (Phase 10's art); the rope is a thin line.
+- The Attic's hall stands 0.9 m over the Low Attic and the Tower, our reading of your note with no in-game picture
+  to check it; its west window opens at its floor, and its drone hole sits 0.9 m over the Meeting roof outside
+  (open question 33).
+- Some small holes the research says you can vault or crouch through aren't vaultable with the vault's own room
+  (an Impact Grenade's 1 m disc, a Hard Breach Charge's 0.8 m square: open question 34).
+- The stairs follow your walk now (open question 20).
+- On 2F, the floor inside the Small Tower's L-shaped wall is cut off by the Small Stairs' opening, and Go to's
+  spot for the 2F Small Tower is on it. Both images show that spot open to the workshop below (open question 22).
+- In the basement, the White Stairs stand 0.15–0.3 m off their stairwell's walls, and the Tower Stairs 0.95 m off
+  the east one (open question 23b). On 2F, the floor over the Armory Stairs' foot is cut off by the hole (23a).
+- Ubisoft's 2F blueprint seems to show the 1F workshop through the floor inside the 2F Small Tower's L-shaped
+  wall. We build a floor and a full wall there (open question 22).
+- Every roof's shape and pitch is our reading of the roof renders (open question 24), and every outside item is
+  read off the background, ±0.75 m (open question 25): where the Tower's outside stairs lead is a guess.
+- The basement's frame is still an assumption (P2, open question 10), now the 2.4% perspective step; hatch H1
+  moved 1.07 m east to land inside B Electric under it (open question 15).
+- Behind the 1F White Stairs, a sealed 3.6 m² strip has no room (open question 19b).
+- Room callouts show for your storey only.
+- Every size is a placeholder until you've walked it: 1 u of the plans = 0.15 m, walls 3 m, doors 2.1 m
+  (research/OPEN_QUESTIONS.md, "Placeholders added while building Phase 5").
+- You no longer see your own shadow (shadows are drawn once for the level, D-077).
+- Every marker is a placeholder from r6calls' icons: which wall a camera is on and which way it looks, the
+  ingredients' heights, where defenders spawn, every prop's height and class, and which doors and windows are
+  spawn-peek spots (open questions 26–31).
+- Three spawn-peek candidates of the research aren't built: the Meeting Hall's east windows aren't drawn as
+  openings, there's no west window in Kids' Dorms or the 2F Small Tower, and the Classroom's one outside window
+  looks into the recessed yard, not at the Street (D-105).
+- The basement drone tunnel along the Supply Room's south-east strip isn't built: where it comes out is open
+  (layout_notes question 9).
+- An explosive's redraw takes up to 2 ms at the 95th percentile on this machine, over the 1 ms budget: drawing big
+  panels in pieces comes before Phase 8 (DESIGN E6), with explosive holes that carry on across a soft floor's
+  tile seams (they stop at the seam now).
+- A fight across a soft wall still takes the server 4.2–5.4 ms a step at the 99th percentile (PLAN §18's ceiling
+  is 5 ms): three quarters of it is moving the bodies, as in the lab.
+- A player joining after heavy destruction is sent about 65 KB of wall state at once; compressing it is planned
+  (Phase 6 or 12).
+
+### Next: Phase 6 — Match flow + lobby
+You signed off on the layout (2026-10-29), after M8's test passed. Phase 6 (PLAN §17): every format, any team size
+1–5 (uneven too), operator select, preparation and action phases, plant and defuse, rounds, the side swap, bans and
+the scoreboard; done when full 1v1 and 2v3 matches play start to finish. The layout's open questions (20–35) stay in
+`research/OPEN_QUESTIONS.md` for later polish; anything you find on Oregon from now on goes into
+`research/oregon/walkthrough.md` as before.
+
+---
+
 ## Phase 4 — Destruction v1 · ✅ complete (PR #5)
 
 **Done when (PLAN §17):** wallbangs, punch holes and reinforcing are all synced across clients.

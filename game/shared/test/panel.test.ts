@@ -1,7 +1,7 @@
 // The panel model (Phase 4 M2, destruction/panel.ts): holes in whole cells, what falls once nothing holds
 // it, steel's anchors, breakable panels, the movement mask, and a state that round-trips exactly.
 import { describe, expect, it } from "vitest";
-import { ByteReader, ByteWriter, greedyRects, L_BACK, L_CORE, L_FRONT, L_STEEL, loadGameData, MOVE_CELLS, Panel, type PanelOp, type PanelSpec } from "../src/index.js";
+import { ByteReader, ByteWriter, greedyRects, L_BACK, L_CORE, L_FRONT, L_STEEL, loadGameData, MOVE_CELLS, Panel, reachable, type PanelChange, type PanelOp, type PanelSpec } from "../src/index.js";
 
 const data = loadGameData();
 const d = data.destruction;
@@ -126,6 +126,15 @@ describe("reinforcement", () => {
     expect(q.apply({ kind: "reinforce", section: 0, side: 1 }).added[L_STEEL]).toEqual([]);
     q.apply(rect(L_STEEL, 0, 0, 30, rows, true));
     expect(q.apply({ kind: "reinforce", section: 0, side: 1 }).added[L_STEEL].length).toBe(30 * rows);
+  });
+
+  it("a section with no column of its own (a panel fewer cells across than it has sections) takes no steel", () => {
+    const p = panel("reinforceable_wall", 0.05, 2.5, 0.2, { sections: 2 });
+    expect(p.sectionRange(0)).toEqual([0, 0]);
+    expect(p.apply({ kind: "reinforce", section: 0, side: 0 }).added[L_STEEL]).toEqual([]);
+    expect([p.reinforced, p.everReinforced]).toEqual([0, 0]);
+    expect(p.apply({ kind: "reinforce", section: 1, side: 0 }).added[L_STEEL].length).toBeGreaterThan(0);
+    expect(p.reinforced).toBe(2);
   });
 
   it("a damaged wall can be reinforced: the steel closes the hole to bodies", () => {
@@ -280,5 +289,152 @@ describe("state", () => {
       expect([...hit]).toEqual([...mask]);
     }
     expect(MOVE_CELLS).toBe(2);
+  });
+});
+
+describe("settling after a cut", () => {
+  /**
+   * How the panel settled before M6 (Phase 4): a flood over every cell of each layer from what holds it, and
+   * the whole move mask after every op. It now searches only from the cells an op took; the two must agree.
+   * Returns how many cells fell.
+   */
+  function floodSettle(p: Panel, change: PanelChange): number {
+    const { w, h } = p;
+    const [flood, stack] = [new Uint8Array(w * h), new Int32Array(w * h)];
+    let fell = 0;
+    const drop = (l: Uint8Array, layer: number, keep: Uint8Array) => {
+      for (let i = 0; i < l.length; i++) if (l[i] && !keep[i]) (l[i] = 0), change.removed[layer].push(i), fell++;
+    };
+    const core = p.layers[L_CORE];
+    if (core && !p.coreMetal) drop(core, L_CORE, reachable(core, w, h, (_u, v) => v === 0 || v === h - 1, flood, stack));
+    const sidesOnly = p.kind === "barricade";
+    for (const layer of [L_FRONT, L_BACK]) {
+      const l = p.layers[layer];
+      if (!l) continue;
+      const held = (u: number, v: number) => u === 0 || u === w - 1 || (!sidesOnly && (v === 0 || v === h - 1)) || (!!core && core[v * w + u] === 1);
+      drop(l, layer, reachable(l, w, h, held, flood, stack));
+    }
+    const steel = p.layers[L_STEEL];
+    if (steel && p.reinforced) {
+      for (let s = 0; s < p.sectionCount; s++) {
+        if (!(p.reinforced & (1 << s))) continue;
+        const [u0, u1] = p.sectionRange(s);
+        const sw = u1 - u0;
+        const sub = new Uint8Array(sw * p.steelRows);
+        for (let v = 0; v < p.steelRows; v++) for (let u = u0; u < u1; u++) sub[v * sw + u - u0] = steel[v * w + u];
+        const keep = reachable(sub, sw, p.steelRows, (_u, v) => v === 0 || v === p.steelRows - 1, new Uint8Array(sub.length), new Int32Array(sub.length));
+        let left = 0;
+        for (let v = 0; v < p.steelRows; v++)
+          for (let u = u0; u < u1; u++) {
+            const i = v * w + u;
+            if (steel[i] && !keep[v * sw + u - u0]) (steel[i] = 0), change.removed[L_STEEL].push(i), fell++;
+            else if (steel[i]) left++;
+          }
+        if (left === 0) p.reinforced &= ~(1 << s);
+      }
+    }
+    return fell;
+  }
+
+  /** mulberry32: a seeded stream in [0, 1). */
+  const stream = (seed: number) => () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+
+  /** Bullet holes of every tier and the knife's, lines and rings that cut pieces free, breaches, steel, damage, barricades. */
+  function* randomOps(p: Panel, rnd: () => number, count: number): Generator<PanelOp> {
+    const int = (n: number) => Math.floor(rnd() * n);
+    const pick = <T>(xs: readonly T[]) => xs[int(xs.length)]!;
+    const layers = [L_FRONT, L_CORE, L_BACK, L_STEEL].filter((l) => p.layers[l]);
+    const r4 = (diameterM: number) => Math.round((4 * diameterM) / 2 / d.cellM);
+    const radii = [...Object.values(d.bullets.tiers).map((t) => r4(t!.holeDiameterM)), r4(d.melee.holeDiameterM)];
+    const cut = (layer: number, u0: number, v0: number, u1: number, v1: number, hard: boolean): PanelOp => ({ kind: "cut", layer, shape: { kind: "rect", u0, v0, u1, v1 }, hard });
+    for (let k = 0; k < count; k++) {
+      const layer = pick(layers);
+      const hard = rnd() < 0.4;
+      const r = rnd();
+      if (r < 0.4) yield { kind: "cut", layer, shape: { kind: "disc", u4: int(4 * p.w), v4: int(4 * p.h), r4: pick(radii) }, hard };
+      else if (r < 0.55) {
+        // A line across or up the panel, whole or in part.
+        const across = rnd() < 0.5;
+        const [n, m] = across ? [p.w, p.h] : [p.h, p.w];
+        const a0 = rnd() < 0.5 ? 0 : int(n);
+        const a1 = rnd() < 0.5 ? n : a0 + 1 + int(n - a0);
+        const b = int(m);
+        yield across ? cut(layer, a0, b, a1, b + 1, hard) : cut(layer, b, a0, b + 1, a1, hard);
+      } else if (r < 0.7) {
+        // A ring, its edges 1 cell wide (some past the panel's edge): its inside falls unless a beam or the frame holds it.
+        const [u0, v0] = [int(p.w + 4) - 2, int(p.h + 4) - 2];
+        const [u1, v1] = [u0 + 3 + int(10), v0 + 3 + int(10)];
+        for (const [a, b, c, e] of [[u0, v0, u1, v0 + 1], [u0, v1 - 1, u1, v1], [u0, v0, u0 + 1, v1], [u1 - 1, v0, u1, v1]]) yield cut(layer, a!, b!, c!, e!, hard);
+      } else if (r < 0.8) {
+        const [u0, v0] = [int(p.w) - 4, int(p.h) - 4];
+        yield cut(layer, u0, v0, u0 + 1 + int(30), v0 + 1 + int(40), hard);
+      } else if (r < 0.85) {
+        // A breach: every layer, steel too if hard.
+        const [u0, v0] = [int(p.w) - 10, int(p.h) - 10];
+        for (const l of layers) yield cut(l, u0, v0, u0 + 20, v0 + 36, hard);
+      } else if (r < 0.9) yield { kind: "reinforce", section: int(p.sectionCount + 1), side: int(2) };
+      else if (r < 0.95) yield { kind: "damage", amount: pick([0.15, 1, 3, 40]), hard };
+      else yield { kind: "barricade", up: rnd() < 0.7 };
+    }
+  }
+
+  it("drops what a flood over the whole panel drops and moves the same cells, op by op, for every construction", () => {
+    const cases: [string, number, number, number, Partial<PanelSpec>, PanelOp[]?][] = [
+      ["soft_wall", 3.45, 2.95, 0.2, {}],
+      ["reinforceable_wall", 3, 3, 0.2, { sections: 3 }],
+      ["reinforceable_wall", 2.05, 2.5, 0.2, { sections: 2, reinforced: true, reinforcedSide: 1 }],
+      // One cell across, two sections: section 0 has no column (the data refuses it; the panel must still agree).
+      // First its steel, then a cut that settles the skin: the flood clears a section left without steel.
+      ["reinforceable_wall", 0.05, 2.5, 0.2, { sections: 2 }, [
+        { kind: "reinforce", section: 0, side: 0 },
+        { kind: "cut", layer: L_FRONT, shape: { kind: "disc", u4: 2, v4: 100, r4: 2 }, hard: false },
+      ]],
+      ["soft_wall_no_studs", 2, 2.5, 0.15, {}],
+      ["semi_wall", 2, 2.5, 0.2, {}],
+      ["soft_floor", 4, 3.35, 0.25, {}],
+      ["hatch", 1, 1, 0.1, {}],
+      ["hatch", 1, 1, 0.1, { reinforced: true }],
+      ["barricade_door", 1, 2.1, 0.05, {}],
+      ["barricade_window", 1.2, 1.2, 0.05, { empty: true }],
+      ["glass", 1, 1, 0.02, {}],
+    ];
+    const fellPer: Record<string, { fell: number; cells: number }> = {};
+    cases.forEach(([id, wM, hM, tM, extra, script = []], n) => {
+      let a = panel(id, wM, hM, tM, extra);
+      const ref = panel(id, wM, hM, tM, extra);
+      let fell = 0;
+      const internals = ref as unknown as { computeMoveMask(): Uint8Array };
+      Object.assign(ref as unknown as Record<string, unknown>, {
+        settle: (change: PanelChange) => void (fell += floodSettle(ref, change)),
+        moveMaskAfter: () => internals.computeMoveMask(),
+      });
+      const rnd = stream(1000 + n);
+      let k = 0;
+      for (const op of [...script, ...randomOps(a, rnd, 300)]) {
+        if (k === 100) {
+          // A joining player's copy carries on from the state it was sent.
+          const out = new ByteWriter(8192);
+          a.encodeState(out);
+          a = panel(id, wM, hM, tM, extra);
+          a.decodeState(new ByteReader(out.finish()));
+        }
+        // Past the stamps' limit: the marks start again.
+        if (k === 200) (a as unknown as { stamp: number }).stamp = 0x3fffffff - 1;
+        const [got, want] = [a.apply(op), ref.apply(op)];
+        expect(got, `${id} #${n}, op ${k}: ${JSON.stringify(op)}`).toEqual(want);
+        expect(a.hash(), `${id} #${n}, op ${k}`).toBe(ref.hash());
+        expect(a.movementRects(), `${id} #${n}, op ${k}`).toEqual(ref.movementRects());
+        k++;
+      }
+      fellPer[`${id} #${n}`] = { fell, cells: ref.w * ref.h };
+    });
+    // The ops cut pieces free on every wall and floor (each ring's inside, beams cut twice, steel cut through).
+    for (const [key, { fell, cells }] of Object.entries(fellPer)) if (!/hatch|barricade|glass/.test(key)) expect(fell, key).toBeGreaterThan(cells >= 1000 ? 50 : 0);
+    expect(Object.values(fellPer).reduce((s, x) => s + x.fell, 0)).toBeGreaterThan(2000);
   });
 });

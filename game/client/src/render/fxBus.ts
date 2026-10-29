@@ -70,10 +70,15 @@ export class FxBus {
   private readonly ownTracer = new THREE.LineBasicMaterial({ color: 0xffe08a, transparent: true, opacity: 0.35 });
   private readonly otherTracer = new THREE.LineBasicMaterial({ color: 0xffe08a, transparent: true, opacity: 0.8 });
 
+  /**
+   * `markGroup`: where a bullet mark goes in the scene, by its height and its surface's normal (on a map, the
+   * group of the storey it's on, so it's hidden with it); the scene itself without one.
+   */
   constructor(
     scene: THREE.Scene,
     private readonly sim: Sim,
     private readonly audio: AudioSink = SILENT,
+    private readonly markGroup?: (y: number, normalY: number) => THREE.Object3D,
   ) {
     const decalGeo = new THREE.CircleGeometry(0.035, 10);
     const decalMat = new THREE.MeshBasicMaterial({ color: 0x15171a, transparent: true, opacity: 0.85, polygonOffset: true, polygonOffsetFactor: -2, depthWrite: false });
@@ -262,6 +267,8 @@ export class FxBus {
       if ((n.x * fn[0] + n.y * fn[1] + n.z * fn[2]) * (c.side ? 1 : -1) > 0) lift += STEEL_PLATE_M;
     }
     d.position.copy(start).addScaledVector(dir, hit.t).addScaledVector(n, lift);
+    const group = this.markGroup?.(d.position.y, n.y);
+    if (group && d.parent !== group) group.add(d); // the groups sit at the origin: the position holds
     d.lookAt(d.position.clone().add(n));
     d.visible = true;
   }

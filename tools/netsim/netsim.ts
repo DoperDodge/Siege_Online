@@ -16,6 +16,7 @@ import {
   poseHitboxes,
   rayCapsule,
   Room,
+  ropeAt,
   Stance,
   type BodyEntry,
   type GameEvent,
@@ -55,6 +56,14 @@ export interface NetsimOptions {
   walls?: boolean;
   /** One client holds Fire the whole run, and its uplink stalls `ms` once, at `atS` seconds. */
   sprayStall?: { client: number; atS: number; ms: number };
+  /** The level the room plays (a key of VENUES): the Movement Lab, or Oregon (Phase 5 M6). */
+  level?: string;
+  /**
+   * Rappel (Phase 5 M8, on a level with rappel faces): each bot has an outside wall of its own, hooks on at its
+   * foot and then climbs, moves along it (sprinting at times), turns upside down and back, leans and fires, and
+   * comes down onto the ground; back at its spot, it does it again.
+   */
+  rappel?: boolean;
   operators?: string[];
 }
 
@@ -87,7 +96,9 @@ export interface NetsimReport {
     interpDelayMs: number;
   }[];
   room: Room["stats"];
+  /** room.step() wall time over every tick, and over the ticks after the first second (once the JIT has warmed up). */
   serverTickMs: { mean: number; p99: number; max: number };
+  serverTickMsWarm: { mean: number; p99: number; max: number };
   /** Every client's predicted state equals the server's once all inputs are applied. */
   desyncs: string[];
   /** Bodies corrected during the final second while pressed against another (expected, D-033 addendum). */
@@ -106,6 +117,8 @@ export interface NetsimReport {
    * hash disagreements clients noticed along the way, and panel states the server had to send again.
    */
   panels: { ops: number; differ: string[]; mismatches: number; resyncs: number };
+  /** With `rappel`: per bot, how many times its body hooked on and the ticks it spent on a rope (the server's). */
+  rappel: { hookOns: number[]; ropeTicks: number[] } | null;
 }
 
 class Rng {
@@ -174,7 +187,7 @@ class Link {
  * A scripted player: changes what it's doing every second or so (moving, sprinting, crouching, leaning,
  * firing, reloading, swapping weapons, switching fire modes), and heads for the middle when crowding.
  */
-function bot(rng: Rng, crowd: boolean, home: { x: number; z: number } | null = null) {
+function bot(rng: Rng, crowd: boolean, home: { x: number; z: number } | null = null, middle: { x: number; z: number } = { x: 0, z: 10 }) {
   let until = 0;
   let cmd: Omit<InputCmd, "seq"> = { forward: 1, strafe: 0, yaw: 0, pitch: 0, buttons: 0, stance: Stance.Stand, lean: 0 };
   let turn = 0;
@@ -198,10 +211,10 @@ function bot(rng: Rng, crowd: boolean, home: { x: number; z: number } | null = n
     }
     let yaw = cmd.yaw + turn;
     if (crowd && pos) {
-      // Steer back toward the spawn area so players keep running into each other.
-      const home = Math.atan2(pos.x, 10 - pos.z) + Math.PI; // facing the spawn area around (0, 10)
-      const d = Math.atan2(Math.sin(home - yaw), Math.cos(home - yaw));
-      if (Math.hypot(pos.x, pos.z - 10) > 4) yaw += Math.sign(d) * Math.min(Math.abs(d), 0.06);
+      // Steer back toward the middle so players keep running into each other.
+      const back = Math.atan2(-(middle.x - pos.x), -(middle.z - pos.z));
+      const d = Math.atan2(Math.sin(back - yaw), Math.cos(back - yaw));
+      if (Math.hypot(pos.x - middle.x, pos.z - middle.z) > 4) yaw += Math.sign(d) * Math.min(Math.abs(d), 0.06);
     }
     cmd = { ...cmd, yaw: Math.atan2(Math.sin(yaw), Math.cos(yaw)) };
     let out = pulse ? { ...cmd, buttons: cmd.buttons | pulse } : cmd;
@@ -214,8 +227,84 @@ function bot(rng: Rng, crowd: boolean, home: { x: number; z: number } | null = n
   };
 }
 
-/** Spread-out spots along the open south side of the lab, 6 m apart. */
-const spreadSpot = (i: number) => ({ x: -27 + (i % 10) * 6, z: 26 - Math.floor(i / 10) * 4 });
+/** A bot's spot at the foot of its own rope: where it stands, facing the wall. */
+interface RopeSpot {
+  x: number;
+  z: number;
+  yawDeg: number;
+}
+
+/**
+ * Spots at the foot of `n` ropes from the ground, the longest first, each a body's reach out from its wall
+ * (facing it) and at least `apart` metres from every other: one per bot, so no two bodies meet on the walls.
+ */
+export function ropeSpots(room: Room, n: number, apart = 6): RopeSpot[] {
+  const faces = room.sim.level.rappel;
+  const m = room.sim.data.movement;
+  const out = 0.6; // from the wall's face: inside findRappel's reach
+  const hang = m.stance.collisionRadius + m.rappel.wallGap; // where the body hangs on the rope
+  const all: (RopeSpot & { len: number })[] = [];
+  faces.forEach((f, i) => {
+    const u = (f.u0 + f.u1) / 2;
+    if (f.u1 - f.u0 < 2) return;
+    const at = (o: number) => [f.n[0] * (f.d + o) + f.t[0] * u, f.n[1] * (f.d + o) + f.t[1] * u];
+    const [x, z] = at(out);
+    const [hx, hz] = at(hang);
+    const rope = ropeAt(faces, i, x, z, 0.1);
+    if (!rope || rope[0] > 0.05 || rope[1] < 3 || !room.sim.standsFree(x, 0, z) || !room.sim.standsFree(hx, 0, hz)) return;
+    all.push({ x, z, yawDeg: (Math.atan2(f.n[0], f.n[1]) * 180) / Math.PI, len: rope[1] - rope[0] });
+  });
+  const picked: RopeSpot[] = [];
+  for (const s of all.sort((a, b) => b.len - a.len || a.x - b.x || a.z - b.z)) {
+    if (picked.length < n && picked.every((p) => Math.hypot(p.x - s.x, p.z - s.z) >= apart)) picked.push({ x: s.x, z: s.z, yawDeg: s.yawDeg });
+  }
+  if (picked.length < n) throw new Error(`netsim: only ${picked.length} ropes from the ground ${apart} m apart for ${n} bots`);
+  return picked;
+}
+
+/**
+ * A rappelling bot (Phase 5 M8): on its feet, it faces its wall and holds the vault key (Space) to hook on; on
+ * the rope it does something new every half second or so (climb, descend, along the wall sprinting or not, the
+ * crouch key to turn over and back, lean, ADS, fire, the knife, Space to swing at a window), and after a few
+ * seconds comes down.
+ */
+function rappeller(rng: Rng, spot: RopeSpot) {
+  let until = 0;
+  let onRopeSince = -1;
+  let cmd: Omit<InputCmd, "seq"> = { forward: 0, strafe: 0, yaw: (spot.yawDeg * Math.PI) / 180, pitch: 0, buttons: 0, stance: Stance.Stand, lean: 0 };
+  return (tick: number, own: PawnState | null): Omit<InputCmd, "seq"> => {
+    const yaw = (spot.yawDeg * Math.PI) / 180;
+    if (!own || own.mode !== PawnMode.Rappel) {
+      onRopeSince = -1;
+      until = 0;
+      // On its feet: face the wall and hold the vault key (it hooks on where it stands, if it's back at its spot),
+      // letting go now and then (a hold starts on a fresh press).
+      const hold = own?.mode === PawnMode.Walk && own.grounded && tick % 64 < 56;
+      return { forward: 0, strafe: 0, yaw, pitch: 0, buttons: hold ? Btn.Vault : 0, stance: Stance.Stand, lean: 0 };
+    }
+    if (onRopeSince < 0) onRopeSince = tick;
+    if (tick - onRopeSince > 64 * 5) return { ...cmd, forward: -1, strafe: 0, stance: cmd.stance, buttons: 0, lean: 0 }; // time to come down
+    if (tick >= until) {
+      until = tick + 16 + Math.floor(rng.next() * 48);
+      const r = rng.next();
+      cmd = {
+        forward: r < 0.45 ? 1 : r < 0.65 ? -1 : 0,
+        strafe: rng.next() < 0.35 ? (rng.next() < 0.5 ? -1 : 1) : 0,
+        yaw: yaw + (rng.next() - 0.5) * 1.2,
+        pitch: (rng.next() - 0.5) * 0.8,
+        buttons:
+          (rng.next() < 0.3 ? Btn.Sprint : 0) |
+          (rng.next() < 0.2 ? Btn.Ads : 0) |
+          (rng.next() < 0.25 ? Btn.Fire : 0) |
+          (rng.next() < 0.1 ? Btn.Melee : 0) |
+          (rng.next() < 0.1 ? Btn.Vault : 0),
+        stance: rng.next() < 0.2 ? (cmd.stance === Stance.Stand ? Stance.Crouch : Stance.Stand) : cmd.stance,
+        lean: rng.next() < 0.2 ? (rng.next() < 0.5 ? -1 : 1) : 0,
+      };
+    }
+    return cmd;
+  };
+}
 
 /** The mode of the body this member drives, on the server. */
 function modeOf(room: Room, memberId: number): PawnMode | undefined {
@@ -274,16 +363,50 @@ function fight(session: ClientSession, own: PawnState, tick: number, cmd: Omit<I
   return { ...cmd, yaw: face(st) + wobble.yaw, pitch: pitch + wobble.pitch, buttons: (cmd.buttons & ~(Btn.Sprint | Btn.Fire)) | ((tick >> 6) % 2 === 0 ? Btn.Fire : 0) };
 }
 
-/** Combat runs: two lines of five, 8 m apart, facing each other (team 0 on the south line). */
-const combatSpot = (i: number) => ({ x: -6 + Math.floor(i / 2) * 3, z: i % 2 ? 12 : 4, yawDeg: i % 2 ? 0 : 180 });
-/** Combat across walls: the lines 2.5 m either side of the sample walls at z 17 (soft x −5.5…−3.5, reinforceable −2.5…−0.5, hard 0.5…2.5). */
-const wallSpot = (i: number) => ({ x: [-5, -4, -2, -1, 1.5][Math.floor(i / 2) % 5], z: i % 2 ? 14.5 : 19.5, yawDeg: i % 2 ? 180 : 0 });
+/** Where the bots play on a level: the middle crowds steer to, and the spots of a spread, a fight, and a fight across walls. */
+interface Venue {
+  middle: { x: number; z: number };
+  spread: (i: number) => { x: number; z: number };
+  combat: (i: number) => { x: number; z: number; yawDeg: number };
+  walls: (i: number) => { x: number; z: number; yawDeg: number };
+}
+
+export const VENUES: Record<string, Venue> = {
+  movement_lab: {
+    middle: { x: 0, z: 10 },
+    // Along the open south side of the lab, 6 m apart.
+    spread: (i) => ({ x: -27 + (i % 10) * 6, z: 26 - Math.floor(i / 10) * 4 }),
+    // Two lines of five, 8 m apart, facing each other (team 0 on the south line).
+    combat: (i) => ({ x: -6 + Math.floor(i / 2) * 3, z: i % 2 ? 12 : 4, yawDeg: i % 2 ? 0 : 180 }),
+    // The lines 2.5 m either side of the sample walls at z 17 (soft x −5.5…−3.5, reinforceable −2.5…−0.5, hard 0.5…2.5).
+    walls: (i) => ({ x: [-5, -4, -2, -1, 1.5][Math.floor(i / 2) % 5], z: i % 2 ? 14.5 : 19.5, yawDeg: i % 2 ? 180 : 0 }),
+  },
+  oregon: {
+    // The street south of the building, on the ground (1F's level).
+    middle: { x: 30, z: 54 },
+    spread: (i) => ({ x: 10 + (i % 10) * 6, z: 56 - Math.floor(i / 10) * 8 }),
+    combat: (i) => ({ x: 16 + Math.floor(i / 2) * 3, z: i % 2 ? 50 : 58, yawDeg: i % 2 ? 180 : 0 }),
+    // Inside, 2.5 m either side of SW-1F-06, the Kitchen's 4 m soft wall to the Security room (z 31.15, x 20.55…24.6).
+    walls: (i) => ({ x: [20.95, 21.75, 22.55, 23.35, 24.15][Math.floor(i / 2) % 5], z: i % 2 ? 33.65 : 28.65, yawDeg: i % 2 ? 0 : 180 }),
+  },
+};
 
 export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<NetsimReport> {
   const o: NetsimOptions = { ...DEFAULTS, ...partial };
   const rng = new Rng(o.seed);
   const clock = new Clock();
-  const room = await Room.create("SIM00", "movement_lab", { lab: true, seed: o.seed });
+  const level = o.level ?? "movement_lab";
+  const venue = VENUES[level];
+  if (!venue) throw new Error(`netsim: no venue for level "${level}" (one of ${Object.keys(VENUES).join(", ")})`);
+  const room = await Room.create("SIM00", level, { lab: true, seed: o.seed });
+  // Every spot the run uses must hold a standing body: one in a wall would be shoved out, and every client
+  // would mispredict it.
+  for (let i = 0; i < o.clients; i++) {
+    for (const [what, spot] of [["spread", venue.spread(i)], ["combat", venue.combat(i)], ["walls", venue.walls(i)]] as const) {
+      if (!room.sim.standsFree(spot.x, 0, spot.z)) throw new Error(`netsim: the ${level} ${what} spot of client ${i} (${spot.x}, ${spot.z}) doesn't hold a body`);
+    }
+  }
+  const spots = o.rappel ? ropeSpots(room, o.clients) : null;
   /** Corrections that were real mispredictions (not damage or respawns). */
   const mismatches = (memberId: number) => {
     const i = room.memberInfo(memberId);
@@ -328,8 +451,9 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
       memberId = room.join(name, { send: (b) => down.send(b), buffered: () => 0 }, op)!;
       const drift = 1 + ((rng.next() * 2 - 1) * o.driftPct) / 100;
       // In a fight the first two (one a side) charge; everyone else keeps to their spot in the line.
-      const home = o.combat ? (o.walls ? wallSpot(i) : i < 2 ? null : combatSpot(i)) : o.spread ? spreadSpot(i) : null;
-      return { name, session, down, up, memberId, drift, brain: bot(new Rng(o.seed * 1000 + i), o.crowd && !o.combat, home), nextTickAt: 0, ticks: 0, deadSince: null as number | null };
+      const home = o.combat ? (o.walls ? venue.walls(i) : i < 2 ? null : venue.combat(i)) : o.spread ? venue.spread(i) : null;
+      const brain = spots ? rappeller(new Rng(o.seed * 1000 + i), spots[i]) : bot(new Rng(o.seed * 1000 + i), o.crowd && !o.combat, home, venue.middle);
+      return { name, session, down, up, memberId, drift, brain, nextTickAt: 0, ticks: 0, deadSince: null as number | null, walkingSince: null as number | null };
     }),
   );
 
@@ -340,8 +464,11 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
   // Deliver the join messages, then load every client's level.
   clock.runUntil(o.oneWayMs * 3 + o.jitterMs);
   await Promise.all(clients.map((c) => c.session.loaded()));
-  const place = (i: number) => room.onLabTool(clients[i].memberId, { kind: "teleport", y: 0, ...(o.combat ? (o.walls ? wallSpot(i) : combatSpot(i)) : { ...spreadSpot(i), yawDeg: 90 * i }) });
-  if (o.spread || o.combat) clients.forEach((_, i) => place(i));
+  const place = (i: number) =>
+    room.onLabTool(clients[i].memberId, { kind: "teleport", y: 0, ...(spots ? spots[i] : o.combat ? (o.walls ? venue.walls(i) : venue.combat(i)) : { ...venue.spread(i), yawDeg: 90 * i }) });
+  if (o.spread || o.combat || spots) clients.forEach((_, i) => place(i));
+  const rappel = spots ? { hookOns: clients.map(() => 0), ropeTicks: clients.map(() => 0) } : null;
+  const wasRoped = clients.map(() => false);
 
   const endAt = clock.now + o.seconds * 1000;
   let serverNext = clock.now;
@@ -378,8 +505,25 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
           c.deadSince = null;
         } else if (!isDead(room, c.memberId)) return;
         room.onLabTool(c.memberId, { kind: "respawn" });
-        if (o.spread || o.combat) place(i);
+        if (o.spread || o.combat || spots) place(i);
       });
+      // Rappellers: count the time on ropes; one on its feet away from its spot for a second goes back to it.
+      if (rappel && spots) {
+        clients.forEach((c, i) => {
+          const roped = modeOf(room, c.memberId) === PawnMode.Rappel;
+          if (roped && !wasRoped[i]) rappel.hookOns[i]++;
+          if (roped) rappel.ropeTicks[i]++;
+          wasRoped[i] = roped;
+          const ctrl = room.sim.controllers.get(room.memberInfo(c.memberId)?.controllerId ?? 0);
+          const st = ctrl && room.sim.pawns.get(ctrl.possessedPawnId)?.state;
+          const away = !!st && st.mode === PawnMode.Walk && Math.hypot(st.x - spots[i].x, st.z - spots[i].z) > 0.3;
+          if (!away || clock.now >= inputsStopAt) return void (c.walkingSince = null);
+          c.walkingSince ??= clock.now;
+          if (clock.now - c.walkingSince < 1000) return;
+          c.walkingSince = null;
+          place(i);
+        });
+      }
     }
     for (const c of clients) {
       if (c.nextTickAt > t) continue;
@@ -414,7 +558,10 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
     if (touching(c.memberId)) contactLate.push(`${c.name}: ${late} correction(s) at rest, pressed against another body`);
     else desyncs.push(`${c.name}: ${late} correction(s) while standing still`);
   });
-  const sorted = [...serverTimes].sort((a, b) => a - b);
+  const spread = (times: number[]) => {
+    const sorted = [...times].sort((a, b) => a - b);
+    return { mean: sorted.reduce((a, b) => a + b, 0) / sorted.length, p99: sorted[Math.floor(sorted.length * 0.99)], max: sorted[sorted.length - 1] };
+  };
   const secs = o.seconds;
   return {
     options: o,
@@ -430,16 +577,14 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
       interpDelayMs: c.session.interpDelayMs,
     })),
     room: room.stats,
-    serverTickMs: {
-      mean: sorted.reduce((a, b) => a + b, 0) / sorted.length,
-      p99: sorted[Math.floor(sorted.length * 0.99)],
-      max: sorted[sorted.length - 1],
-    },
+    serverTickMs: spread(serverTimes),
+    serverTickMsWarm: spread(serverTimes.slice(Math.round(1 / DT))),
     desyncs,
     contactLate,
     sprayStallShots: o.sprayStall ? stallShots : null,
     starvedRemoteFrames: clients.reduce((n, c) => n + c.session.starvedFrames, 0),
     combat,
+    rappel,
     panels: {
       ops: room.stats.panelOps,
       differ: clients.filter((c) => c.session.sim!.level.panels.hash() !== room.sim.level.panels.hash()).map((c) => c.name),

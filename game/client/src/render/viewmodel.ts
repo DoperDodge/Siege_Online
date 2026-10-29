@@ -8,6 +8,9 @@ import { buildGun, gunKey, type GunModel } from "./gunKit.js";
 import { warmShaders } from "./labScene.js";
 
 const smooth = (t: number) => t * t * (3 - 2 * t);
+/** The gun's own lights in daylight: a sky fill and a key from above right. */
+const VIEWMODEL_FILL = 1.6;
+const VIEWMODEL_KEY = 1.8;
 
 export class Viewmodel {
   readonly scene = new THREE.Scene();
@@ -18,6 +21,8 @@ export class Viewmodel {
   private key = "";
   private readonly knife: THREE.Mesh;
   private readonly flash: THREE.Sprite;
+  private readonly fill: THREE.HemisphereLight;
+  private readonly keyLight: THREE.DirectionalLight;
   private flashUntil = 0;
   private kick = 0;
   private sprintW = 0;
@@ -29,10 +34,10 @@ export class Viewmodel {
   constructor(private readonly data: GameData) {
     this.kit = loadPresentationData().gunKit;
     this.camera = new THREE.PerspectiveCamera(this.kit.viewmodel.fovDeg, 1, 0.01, 10);
-    this.scene.add(new THREE.HemisphereLight(0xe8eef5, 0x3a3f36, 1.6));
-    const key = new THREE.DirectionalLight(0xfff1dc, 1.8);
-    key.position.set(0.6, 1, 0.4);
-    this.scene.add(key, this.camera);
+    this.fill = new THREE.HemisphereLight(0xe8eef5, 0x3a3f36, VIEWMODEL_FILL);
+    this.keyLight = new THREE.DirectionalLight(0xfff1dc, VIEWMODEL_KEY);
+    this.keyLight.position.set(0.6, 1, 0.4);
+    this.scene.add(this.fill, this.keyLight, this.camera);
     this.camera.add(this.rig);
     const blade = new THREE.BoxGeometry(0.012, 0.03, 0.2);
     this.knife = new THREE.Mesh(blade, new THREE.MeshStandardMaterial({ color: this.kit.colors.knife, metalness: 0.8, roughness: 0.25 }));
@@ -142,6 +147,12 @@ export class Viewmodel {
     gun.group.visible = !(w.ads.zoom > 1 && this.aim > 0.92);
     this.flash.visible = now < this.flashUntil && gun.group.visible;
     if (this.flash.visible) this.flash.position.copy(gun.muzzle).applyEuler(rot).add(pos);
+  }
+
+  /** Light the gun as the world around it is lit: `k` of daylight (a map's basement is darker). */
+  setLight(k: number) {
+    this.fill.intensity = VIEWMODEL_FILL * k;
+    this.keyLight.intensity = VIEWMODEL_KEY * k;
   }
 
   /** Draw over the world (call after rendering the world scene; clears depth first). */

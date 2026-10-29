@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildLevel, Btn, DEG, eyePose, levelSchema, loadGameData, PawnMode, poseHitboxes, Sim, Stance, wrapAngle, type InputCmd } from "../src/index.js";
-import { hspeed, input, labWith, run, teleport } from "./helpers.js";
+import { buildLevel, Btn, DEG, eyePose, L_BACK, L_CORE, L_FRONT, levelSchema, loadGameData, PawnMode, poseHitboxes, Sim, Stance, wrapAngle, type InputCmd } from "../src/index.js";
+import { hspeed, input, labWith, run, settle, teleport } from "./helpers.js";
 
 const FWD = { forward: 1 } as const;
 
@@ -241,6 +241,39 @@ describe("vaulting", () => {
     teleport(sim, ctrl, 5.0, 0, 0.9);
     run(sim, ctrl, VAULT, 1.0);
     expect(pawn.state.z).toBeLessThan(-0.4);
+    expect(pawn.state.y).toBeLessThan(0.1);
+  });
+
+  it("vaults through a hole in a soft wall that is low and big enough, not over the wall or through a narrow hole (walk #1)", async () => {
+    const sim = await Sim.create("destruction_lab");
+    const ctrl = sim.addPlayer("tester", "sledge");
+    const pawn = sim.pawns.get(ctrl.possessedPawnId)!;
+    settle(sim, ctrl);
+    // The plain soft wall: 3 m wide and tall, its middle at x −8, z −6, 0.2 m thick; cells are 5 cm, v up from its foot.
+    const wall = sim.level.panels.byId.get("soft_plain")!;
+    const hole = (u0: number, v0: number, u1: number, v1: number) => {
+      for (const layer of [L_FRONT, L_CORE, L_BACK]) {
+        if (wall.panel.layers[layer]) sim.level.panels.apply(wall.panel.spec.index, { kind: "cut", layer, shape: { kind: "rect", u0, v0, u1, v1 }, hard: false });
+      }
+    };
+    const vaultAt = (seconds = 1.2) => {
+      teleport(sim, ctrl, -8, 0, -5.4);
+      run(sim, ctrl, VAULT, seconds);
+      return pawn.state;
+    };
+    expect(vaultAt().z).toBeGreaterThan(-6); // the whole wall: nothing to vault
+    hole(26, 12, 34, 40); // 0.4 m wide, 0.6 m to 2.0 m up: too narrow for a body
+    expect(vaultAt().z).toBeGreaterThan(-6);
+    sim.level.panels.reset(wall.panel.spec.index);
+    // 1.2 m wide, from 0.5 m to 1.6 m up: the wall over it stands lower than a vault looks for a top, so the
+    // ledge is found from inside the hole.
+    hole(18, 10, 42, 32);
+    teleport(sim, ctrl, -8, 0, -5.4);
+    run(sim, ctrl, VAULT, 0.1);
+    expect(pawn.state.mode).toBe(PawnMode.Vault);
+    run(sim, ctrl, VAULT, 1.1);
+    expect(pawn.state.mode).toBe(PawnMode.Walk);
+    expect(pawn.state.z).toBeLessThan(-6.3);
     expect(pawn.state.y).toBeLessThan(0.1);
   });
 
@@ -499,6 +532,136 @@ describe("review regressions (Phase 1 adversarial review)", () => {
   it("level files reject unknown fields (e.g. a misspelled rotDeg)", () => {
     const lab = loadGameData().levels.get("movement_lab")!;
     expect(() => levelSchema.parse({ ...lab, solids: [{ ...lab.solids[0], rotDeg: 45 }] })).toThrow();
+  });
+
+  /** The lab tower's 6.5 m ladder, and where a climb off it sets you down: dismountForward past its face. */
+  const towerTop = (sim: Sim) => {
+    const L = sim.level.ladders.find((l) => Math.abs(l.base[0] + 16) < 1e-6)!;
+    return { L, y: L.base[1] + L.height, z: L.base[2] + L.forward[1] * sim.data.movement.ladder.dismountForward };
+  };
+  /** The movement lab with extra solids and ladders. */
+  const labPlus = async (id: string, extra: { solids?: unknown[]; ladders?: unknown[] }) => {
+    const data = loadGameData();
+    const lab = data.levels.get("movement_lab")!;
+    const level = levelSchema.parse({ ...lab, id, solids: [...lab.solids, ...(extra.solids ?? [])], ladders: [...lab.ladders, ...(extra.ladders ?? [])] });
+    const sim = await Sim.create(id, { ...data, levels: new Map(data.levels).set(id, level) });
+    const ctrl = sim.addPlayer("p", "sledge");
+    return { sim, ctrl, pawn: sim.pawns.get(ctrl.possessedPawnId)! };
+  };
+
+  it("grabs the ladder from the top facing the drop, climbs down, and back up onto the platform (E8)", async () => {
+    const { sim, ctrl, pawn } = await labWith();
+    const m = sim.data.movement;
+    const topZ = towerTop(sim).z;
+    teleport(sim, ctrl, -16, 6.5, topZ, 180); // facing +Z: the drop
+    run(sim, ctrl, { yawDeg: 180, buttons: Btn.Interact }, 1 / 64);
+    expect(pawn.state.mode).toBe(PawnMode.Ladder);
+    expect(pawn.state.y).toBeCloseTo(6.5 - m.ladder.topMountDrop, 3);
+    run(sim, ctrl, { yawDeg: 180, forward: -1 }, 5.5);
+    expect(pawn.state.mode).toBe(PawnMode.Walk);
+    expect(pawn.state.y).toBeLessThan(0.05);
+    expect(pawn.state.hp).toBe(pawn.state.maxHp); // climbed down, didn't fall
+    // Grab it from the top again and climb back up: off the top onto the tower, where you started.
+    teleport(sim, ctrl, -16, 6.5, topZ, 180);
+    run(sim, ctrl, { yawDeg: 180, buttons: Btn.Interact }, 1 / 64);
+    run(sim, ctrl, { yawDeg: 180, forward: 1 }, 0.7); // W climbs, whichever way you look
+    run(sim, ctrl, { yawDeg: 180 }, 1); // and lets go once off the top (W now would walk back over the edge)
+    expect(pawn.state.mode).toBe(PawnMode.Walk);
+    expect(pawn.state.y).toBeGreaterThan(6.4);
+    expect(pawn.state.z).toBeLessThan(-6.5);
+  });
+
+  it("doesn't grab the ladder from the top facing away from the drop, or from a crouch", async () => {
+    const { sim, ctrl, pawn } = await labWith();
+    const topZ = towerTop(sim).z;
+    teleport(sim, ctrl, -16, 6.5, topZ, 0); // facing -Z: back across the tower
+    run(sim, ctrl, { yawDeg: 0, buttons: Btn.Interact }, 1 / 64);
+    expect(pawn.state.mode).toBe(PawnMode.Walk);
+    teleport(sim, ctrl, -16, 6.5, topZ, 180, Stance.Crouch);
+    run(sim, ctrl, { yawDeg: 180, stance: Stance.Crouch, buttons: Btn.Interact }, 1 / 64);
+    expect(pawn.state.mode).toBe(PawnMode.Walk);
+  });
+
+  it("from the top only F grabs the ladder: the vault key held doesn't, so a climb holding W and Space ends there", async () => {
+    const { sim, ctrl, pawn } = await labWith();
+    const top = towerTop(sim);
+    teleport(sim, ctrl, -16, top.y, top.z, 180);
+    run(sim, ctrl, { yawDeg: 180, buttons: Btn.Vault }, 0.5);
+    expect(pawn.state.mode).toBe(PawnMode.Walk);
+    // Grab it from the foot with Space and climb, Space and W held, looking back: off the top, it isn't grabbed again.
+    teleport(sim, ctrl, -16, 0, top.L.base[2] - top.L.forward[1] * (sim.data.movement.stance.collisionRadius + 0.05), 0);
+    run(sim, ctrl, { yawDeg: 0, buttons: Btn.Vault }, 1 / 64);
+    expect(pawn.state.mode).toBe(PawnMode.Ladder);
+    let fromTop = 0;
+    for (let t = 0; t < 64 * 8; t++) {
+      const onTop = pawn.state.mode === PawnMode.Walk && pawn.state.y > top.y - 0.1;
+      run(sim, ctrl, { yawDeg: 180, forward: 1, buttons: Btn.Vault }, 1 / 64);
+      if (onTop && pawn.state.mode === PawnMode.Ladder) fromTop++;
+    }
+    expect(fromTop).toBe(0);
+  });
+
+  it("a body falling past the top doesn't catch the ladder: it has to stand on the platform", async () => {
+    const { sim, ctrl, pawn } = await labWith();
+    const top = towerTop(sim);
+    // Falling from 5.5 m over the platform, a step above it now, facing the drop: F as it passes.
+    sim.setPawnState(pawn.id, { ...pawn.state, x: -16, y: top.y + 0.3, z: top.z, vx: 0, vy: -10, vz: 0, yaw: Math.PI, grounded: false, airPeakY: top.y + 5.5 });
+    run(sim, ctrl, { yawDeg: 180, buttons: Btn.Interact }, 1 / 64);
+    expect(pawn.state.mode).toBe(PawnMode.Walk);
+    run(sim, ctrl, { yawDeg: 180 }, 1);
+    expect(pawn.state.y).toBeCloseTo(top.y, 1);
+    expect(pawn.state.hp).toBeLessThan(pawn.state.maxHp); // it landed, and the fall hurt
+  });
+
+  it("doesn't put a body through a wall: a ladder whose top is behind one isn't grabbed from beyond it", async () => {
+    // A wall 0.8 m thick and 6 m tall, a 3 m ladder up its face, and a deck 3 m up behind it.
+    const { sim, ctrl, pawn } = await labPlus("ladder_behind_wall", {
+      solids: [
+        { id: "thick", center: [24, 3, -6.9], size: [3, 6, 0.8], surface: "HARD_WALL" },
+        { id: "deck", center: [24, 2.9, -9.3], size: [3, 0.2, 3.2], surface: "HARD_FLOOR" },
+      ],
+      ladders: [{ id: "behind", base: [24, 0, -6.5], height: 3, yawDeg: 0, width: 0.6 }],
+    });
+    teleport(sim, ctrl, 24, 3, -7.65, 180); // on the deck against the wall, facing it: the ladder's drop
+    expect(sim.prompt(ctrl.id)).not.toBe("ladder");
+    run(sim, ctrl, { yawDeg: 180, buttons: Btn.Interact }, 1 / 64);
+    expect(pawn.state.mode).toBe(PawnMode.Walk);
+    expect(pawn.state.z).toBeLessThan(-7.3);
+  });
+
+  it("a ladder shorter than the top mount drop takes a body from the top to its foot, not under the floor", async () => {
+    const { sim, ctrl, pawn } = await labPlus("stub_ladder", {
+      solids: [{ id: "ledge", center: [24, 0.3, -8], size: [3, 0.6, 3], surface: "HARD_WALL" }],
+      ladders: [{ id: "stub", base: [24, 0, -6.5], height: 0.6, yawDeg: 0, width: 0.6 }],
+    });
+    teleport(sim, ctrl, 24, 0.6, -7.1, 180);
+    run(sim, ctrl, { yawDeg: 180, buttons: Btn.Interact }, 1 / 64);
+    expect(pawn.state.mode).toBe(PawnMode.Ladder);
+    expect(pawn.state.y).toBeCloseTo(0, 3);
+  });
+
+  it("an open flight leaves room under its high end, where a solid one is a block (stacked stairs)", async () => {
+    const data = loadGameData();
+    const lab = data.levels.get("movement_lab")!;
+    // 12 steps of 0.3 m up toward -Z from z 26: steps 9 to 11 (z 22.4..23.3) are 2.4, 2.7 and 3.0 m up at their
+    // undersides when open, over a standing body (1.8 m, 0.6 m across) at z 22.85.
+    const flight = { id: "flight", start: [24, 0, 26] as [number, number, number], yawDeg: 0, steps: 12, rise: 0.3, run: 0.3, width: 1.6, surface: "HARD_FLOOR" as const };
+    const walkUnder = async (solid: boolean) => {
+      const level = levelSchema.parse({ ...lab, id: `under_${solid}`, stairs: [{ ...flight, solid }] });
+      const sim = await Sim.create(level.id, { ...data, levels: new Map(data.levels).set(level.id, level) });
+      const ctrl = sim.addPlayer("p", "sledge");
+      const pawn = sim.pawns.get(ctrl.possessedPawnId)!;
+      const steps = sim.level.renderables.filter((r) => r.kind === "stair_step").map((r) => +r.size[1].toFixed(4));
+      teleport(sim, ctrl, 20, 0, 22.85, -90); // facing +X, under steps 9 to 11
+      run(sim, ctrl, { yawDeg: -90, forward: 1 }, 2.5);
+      return { x: pawn.state.x, steps };
+    };
+    const solid = await walkUnder(true);
+    const open = await walkUnder(false);
+    expect(solid.steps).toEqual([0.3, 0.6, 0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7, 3, 3.3, 3.6]);
+    expect(open.steps).toEqual([0.3, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6]);
+    expect(solid.x).toBeLessThan(23.2); // stopped at the block
+    expect(open.x).toBeGreaterThan(25); // walked on under it
   });
 
   it("ladder rails follow the ladder's yaw", async () => {

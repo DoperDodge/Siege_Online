@@ -82,6 +82,54 @@ export const movementSchema = z.object({
     topGrabMargin: z.number().nonnegative(),
     /** How far below a ladder's base you can still grab it. */
     bottomGrabMargin: z.number().nonnegative(),
+    /** Grabbing a ladder from the top (standing where a climb ends, facing the drop) puts your feet this far below its top. */
+    topMountDrop: z.number().positive(),
+  }),
+  /** Rappel (Phase 5 M8, research/core_mechanics.md §6): the hook-on hold, speeds on the rope, and where it starts. */
+  rappel: z.object({
+    /** Hold the vault key this long to hook on (Y11S3's gauge; Ulo: Space, the vault button on touch). */
+    holdSeconds: z.number().positive(),
+    /** Where a vault can also be had, a press shorter than this vaults instead. */
+    tapSeconds: z.number().positive(),
+    climbSpeed: z.number().positive(),
+    descendSpeed: z.number().positive(),
+    /** Descending with sprint held (Siege's fast descent). */
+    rapidDescendSpeed: z.number().positive(),
+    /** Along the wall, and sprinting along it (Siege X). */
+    strafeSpeed: z.number().positive(),
+    sprintStrafeSpeed: z.number().positive(),
+    /** How far the body's capsule hangs off the wall. */
+    wallGap: z.number().nonnegative(),
+    /** At a face's foot: how far from the wall the capsule may stand and still hook on. */
+    reach: z.number().positive(),
+    /** Facing the wall (from its foot), or out (at a roof edge, or a window from inside), within this. */
+    facingDeg: z.number().positive(),
+    /** At a face's top (a roof edge): how far back from the wall's plane a body may stand, and how far over the face's top its feet may be. */
+    edgeReach: z.number().positive(),
+    edgeAbove: z.number().nonnegative(),
+    /** A rope shorter than this isn't offered. */
+    minLength: z.number().positive(),
+    /** On the rope the view turns at most this far either side of facing the wall. */
+    yawLimitDeg: z.number().positive().max(180),
+    /** Hooking on, the body moves onto the rope over this long: from a face's foot, over a roof edge (turning upside down), out of a window. */
+    attachSeconds: z.number().positive(),
+    edgeAttachSeconds: z.number().positive(),
+    windowAttachSeconds: z.number().positive(),
+    /** Out of a window, the body hangs with its feet this far under the sill. */
+    windowHangBelowSill: z.number().nonnegative(),
+    /** Turning upside down, or back. */
+    turnSeconds: z.number().positive(),
+    /** Climbing up, the body goes over the top when its feet are this far under it, taking overTopSeconds, onto what's at most overTopBack behind the edge (past a railing). */
+    overTopDepth: z.number().positive(),
+    overTopSeconds: z.number().positive(),
+    overTopBack: z.number().positive(),
+    /** Climbing into something that hangs over the rope's top (a roof's eave: Ulo), the head at most this far under the top, the body goes over the top from there. */
+    overhangReach: z.number().nonnegative(),
+    /** A swing into a window (Y10S2): out from the wall swingOutM and back in, over swingSeconds; then through, or bounced back bounceOutM over bounceSeconds. */
+    swingSeconds: z.number().positive(),
+    swingOutM: z.number().nonnegative(),
+    bounceSeconds: z.number().positive(),
+    bounceOutM: z.number().nonnegative(),
   }),
   fall: z.object({ safeHeight: z.number().nonnegative(), lethalHeight: z.number().positive() }),
   step: z.object({ maxStepHeight: z.number().nonnegative(), snapToGround: z.number().nonnegative(), maxSlopeDeg: z.number().positive() }),
@@ -482,6 +530,8 @@ export const modeSchema = z.strictObject({
   reinforcements: z.number().int().nonnegative(),
   /** Lab rooms: both sides may reinforce and barricade (Siege: defenders only). */
   defenderToolsForAll: z.boolean(),
+  /** Lab rooms let defenders rappel too (Siege: attackers only, research/core_mechanics.md §6). */
+  attackerToolsForAll: z.boolean(),
 });
 export type ModeData = z.infer<typeof modeSchema>;
 
@@ -529,7 +579,22 @@ export const levelSchema = z.strictObject({
   _doc: z.string().optional(),
   id: z.string(),
   name: z.string(),
-  spawns: z.array(z.strictObject({ id: z.string(), pos: vec3, yawDeg: z.number() })).min(1),
+  /**
+   * Spawn 0 is where lab rooms put everyone (and where the kill plane sends you back). `side` and `group`
+   * (Phase 5): match spawns, an attacker insertion group ("A_JUNKYARD") or a defender site ("SITE_2F_KIDS");
+   * a spawn without a side is a lab spawn.
+   */
+  spawns: z
+    .array(
+      z.strictObject({
+        id: z.string(),
+        pos: vec3,
+        yawDeg: z.number(),
+        side: z.enum(["attack", "defense"]).optional(),
+        group: z.string().optional(),
+      }),
+    )
+    .min(1),
   solids: z.array(
     z.strictObject({
       id: z.string(),
@@ -538,6 +603,15 @@ export const levelSchema = z.strictObject({
       yawDeg: z.number().default(0),
       surface: z.enum(SURFACES),
       vaultable: z.boolean().default(false),
+      /** An invisible blocker (Phase 5): it stops bodies, not bullets or sight; never a panel (a railing, the play-area edge). */
+      bodiesOnly: z.boolean().default(false),
+      /** Drawn only, never collides (Phase 5): a railing's top bar over its bodies-only blocker; never a panel. */
+      drawOnly: z.boolean().default(false),
+      /**
+       * A PROP's class (Phase 5, data/destruction.json `props`): bullets go through it as through a panel (it
+       * costs damage and counts as a surface) unless its class stops them. A PROP without one stops bullets.
+       */
+      prop: z.string().optional(),
       label: z.string().optional(),
       /**
        * A destructible surface is a panel (Phase 4, data/destruction.json): its construction (the surface's
@@ -553,6 +627,11 @@ export const levelSchema = z.strictObject({
           reinforced: z.boolean().optional(),
           reinforcedFrom: z.enum(["minus", "plus"]).optional(),
           empty: z.boolean().optional(),
+          /**
+           * Panels that are one surface cut into tiles (a soft floor, Phase 5): a bullet that crosses a seam
+           * between two of them goes into one surface, not two (wallbang.maxSurfaces, damageMult).
+           */
+          region: z.string().optional(),
         })
         .optional(),
     }),
@@ -568,6 +647,11 @@ export const levelSchema = z.strictObject({
         run: z.number().positive(),
         width: z.number().positive(),
         surface: z.enum(SURFACES),
+        /**
+         * Solid (the default) fills each step down to the flight's start, a block of stairs. Open steps are two
+         * risers deep, a stepped stringer with room underneath, so a flight can run over another (Phase 5 M3).
+         */
+        solid: z.boolean().default(true),
       }),
     )
     .default([]),
@@ -601,6 +685,73 @@ export const levelSchema = z.strictObject({
   markers: z.array(z.strictObject({ id: z.string(), pos: vec3, label: z.string() })).default([]),
   /** Range Lab targets (Phase 3 M10, DECISIONS D-052): scripted bodies the room steps (lab/dummies.ts). */
   dummies: z.array(dummySchema).default([]),
+  // ---- Map metadata (Phase 5, DECISIONS D-076): compiled maps fill these; labs leave them out. ----
+  /** The play area's box; a body whose feet fall below killY is out of the level (Sim: back to spawn 0 in a lab). */
+  bounds: z.strictObject({ min: vec3, max: vec3, killY: z.number() }).optional(),
+  /**
+   * How the map's plans relate to metres (Phase 5 tools and the HUD): metres = mPerU × world u, and each
+   * storey's own drawing maps to world u by world = a · native + b per axis (tools/mapgen/DESIGN.md §3.2).
+   */
+  plan: z
+    .strictObject({
+      mPerU: z.number().positive(),
+      frames: z.record(z.string(), z.strictObject({ ax: z.number(), bx: z.number(), ay: z.number(), by: z.number() })),
+    })
+    .optional(),
+  /** Storeys by height (B, 1F, 2F, 3F): walking level and the underside of what covers it. */
+  storeys: z.array(z.strictObject({ id: z.string(), floorY: z.number(), ceilingY: z.number() })).default([]),
+  /** Rooms with their callouts: floor rectangles [x0, z0, x1, z1] in metres, and a free spot to go to. */
+  rooms: z
+    .array(
+      z.strictObject({
+        id: z.string(),
+        callout: z.string(),
+        storey: z.string(),
+        rects: z.array(z.tuple([z.number(), z.number(), z.number(), z.number()])).min(1),
+        anchor: vec3,
+      }),
+    )
+    .default([]),
+  /** Bomb sites: two rooms each, the bombs' spots, and how far inside the rooms a plant must be. */
+  sites: z
+    .array(
+      z.strictObject({
+        id: z.string(),
+        name: z.string(),
+        rooms: z.array(z.string()).min(1),
+        bombs: z.array(z.strictObject({ id: z.string(), pos: vec3, room: z.string() })),
+        plantMarginM: z.number().nonnegative(),
+      }),
+    )
+    .default([]),
+  /** Default cameras (Phase 7 uses them): mount point and view. */
+  cameras: z.array(z.strictObject({ id: z.string(), pos: vec3, yawDeg: z.number(), pitchDeg: z.number(), room: z.string().optional() })).default([]),
+  /** Destructible ingredients (Phase 8 gives them behaviour): fire extinguishers and gas pipes. */
+  ingredients: z
+    .array(
+      z.strictObject({
+        id: z.string(),
+        kind: z.enum(["fire_extinguisher", "gas_pipe"]),
+        pos: vec3,
+        yawDeg: z.number(),
+        room: z.string().optional(),
+      }),
+    )
+    .default([]),
+  /** Areas for later phases: the building, out-of-bounds and spawn-peek areas, rappel faces, drone holes. */
+  zones: z
+    .array(
+      z.strictObject({
+        id: z.string(),
+        kind: z.enum(["building", "out_of_bounds", "spawn_peek", "rappel", "drone_hole"]),
+        boxes: z.array(z.strictObject({ center: vec3, size: vec3, yawDeg: z.number().default(0) })).min(1),
+        /** Which way it looks: out of a rappel face, or out of the opening a spawn peek or a run-out is at. */
+        normal: vec3.optional(),
+        /** The attackers' spawn group (spawns[].group) a spawn peek or a run-out looks toward. */
+        faces: z.string().optional(),
+      }),
+    )
+    .default([]),
 });
 export type LevelDef = z.infer<typeof levelSchema>;
 
@@ -654,6 +805,8 @@ export const destructionSchema = z.strictObject({
   }),
   /** Through panels: damage kept per panel, panels a bullet can go into, and whether wooden studs it can't cut stop it. */
   wallbang: z.strictObject({ damageMult: z.number().min(0).max(1), maxSurfaces: z.number().int().positive(), uncutStudsStop: z.boolean() }),
+  /** Props by class (a level PROP's `prop`): which stop bullets; the rest a bullet goes through like a panel, without holes. */
+  props: z.strictObject({ classes: z.record(z.string(), z.strictObject({ stopsBullets: z.boolean() })) }),
   melee: z.strictObject({ holeDiameterM: metres, bothSkins: z.boolean(), studs: z.boolean(), hatchDamage: z.number().nonnegative(), barricadeDamage: z.number().nonnegative() }),
   explosives: z.record(z.string(), explosiveSchema),
   reinforcement: z.strictObject({
@@ -667,7 +820,19 @@ export const destructionSchema = z.strictObject({
     locksReinforcer: z.boolean(),
     reinforcedHatchHp: z.number().positive(),
   }),
-  barricade: z.strictObject({ hp: z.number().positive(), deploySeconds: secs, removeSeconds: secs, passableBelowHp: z.number().nonnegative() }),
+  barricade: z.strictObject({
+    hp: z.number().positive(),
+    deploySeconds: secs,
+    removeSeconds: secs,
+    passableBelowHp: z.number().nonnegative(),
+    /**
+     * Rappel breach (Phase 5 M8; research/core_mechanics.md §6.2, Y10S2): a body swinging in from a rope goes
+     * through a barricade worn down to `rappelThroughHp` or less (breaking it); a fresher one bounces it back,
+     * its feet taking `rappelKickDamage` off.
+     */
+    rappelKickDamage: z.number().positive(),
+    rappelThroughHp: z.number().nonnegative(),
+  }),
 });
 export type DestructionData = z.infer<typeof destructionSchema>;
 

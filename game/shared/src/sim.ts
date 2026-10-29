@@ -5,12 +5,12 @@ import { clamp, forwardXZ, rotateXZ, DEG } from "./core/math.js";
 import { loadGameData, type GameData } from "./data/load.js";
 import { deployAction, deployTicks, DeployKind, type DeployAction, type DeployRules } from "./destruction/deploy.js";
 import { buildLevel, type BuiltLevel } from "./level/builder.js";
-import { initRapier, PLAYER_GROUPS, QUERY_BULLET, QUERY_SOLID, QUERY_STATIC as QUERY_STATIC_FILTER, refreshBroadPhase, type CharacterController, type Rapier, type World } from "./physics/rapier.js";
-import { capsuleFree, movementPrompt, poseCollider, stepPawn, type MoveContext, type MovementPrompt } from "./player/movement.js";
+import { initRapier, PLAYER_GROUPS, QUERY_SIGHT, QUERY_SOLID, QUERY_STATIC as QUERY_STATIC_FILTER, refreshBroadPhase, type CharacterController, type Rapier, type World } from "./physics/rapier.js";
+import { cancelRappelHold, capsuleFree, movementPrompt, poseCollider, stepPawn, type MoveContext, type MovementPrompt } from "./player/movement.js";
 import { initialPawnState, type Pawn, type PlayerController } from "./player/pawn.js";
 import { eyePose, poseHitboxes } from "./player/hitboxes.js";
 import { capsuleDims, stanceDims } from "./player/stance.js";
-import { Btn, PawnMode, Stance, type InputCmd, type PawnState } from "./player/types.js";
+import { Btn, PawnMode, ropeIdle, Stance, type InputCmd, type PawnState } from "./player/types.js";
 import { defaultLoadoutPick, resolveLoadout, type LoadoutPick, type ResolvedLoadout } from "./weapons/loadout.js";
 import type { SimEvent } from "./weapons/step.js";
 import { viewDir } from "./weapons/spread.js";
@@ -24,10 +24,11 @@ export class Sim {
   readonly controllers = new Map<number, PlayerController>();
   tick = 0;
   /**
-   * Who may reinforce and barricade, and the reinforcements left per team (Phase 4 M6): set by the room,
-   * and on a client from the room's deployRules event, so holds are predicted the way the server judges them.
+   * Who may reinforce, barricade (Phase 4 M6) and rappel (Phase 5 M8), and the reinforcements left per team: set
+   * by the room, and on a client from the room's deployRules event, so holds are predicted the way the server
+   * judges them.
    */
-  deployRules: DeployRules = { anyone: false, pools: [0, 0] };
+  deployRules: DeployRules = { anyone: false, rappel: false, pools: [0, 0] };
   private nextId = 1;
   private readonly ctx: MoveContext;
 
@@ -38,7 +39,8 @@ export class Sim {
     readonly data: GameData,
     readonly level: BuiltLevel,
   ) {
-    this.ctx = { R, world, cc, data, level, events: [] };
+    // Attackers rappel; in a lab room anyone does (deployRules.rappel, from the room's rules).
+    this.ctx = { R, world, cc, data, level, events: [], canRappel: (pawn) => pawn.team === sideTeam("attacker") || this.deployRules.rappel };
   }
 
   /**
@@ -253,13 +255,16 @@ export class Sim {
 
   /**
    * A body its player's buttons don't reach this tick lets go of a revive (D-061: a stalled reviver can't
-   * keep one going). A hold on a panel lets go only when the player is elsewhere (driven idle on the shell
-   * camera, `idle`); through a stall it just waits, and goes on if the key is still held when inputs come
-   * back (it takes a fresh press to start, so a hold ended by a stall could never restart while held).
+   * keep one going). A hold on a panel, or to hook on a rope, lets go only when the player is elsewhere (driven
+   * idle on the shell camera, `idle`); through a stall it just waits, and goes on if the key is still held when
+   * inputs come back (it takes a fresh press to start, so a hold ended by a stall could never restart while held).
    */
   private letGo(pawn: Pawn, idle: boolean) {
     if (pawn.state.reviveTarget !== 0) this.endRevive(pawn, this.pawns.get(pawn.state.reviveTarget), false);
-    if (idle) endDeploy(pawn);
+    if (idle) {
+      endDeploy(pawn);
+      cancelRappelHold(pawn.state);
+    }
   }
 
   /**
@@ -273,7 +278,7 @@ export class Sim {
     const dir = viewDir(s.yaw, s.pitch);
     const ray = new this.R.Ray({ x: eye[0], y: eye[1], z: eye[2] }, { x: dir[0], y: dir[1], z: dir[2] });
     const limit = this.data.destruction.reinforcement.reach + 1.5;
-    const plain = this.world.castRay(ray, limit, true, undefined, QUERY_BULLET)?.timeOfImpact ?? limit;
+    const plain = this.world.castRay(ray, limit, true, undefined, QUERY_SIGHT)?.timeOfImpact ?? limit;
     return deployAction(this.data.destruction, this.level.panels, eye, dir, [s.x, s.y, s.z], pawn.team, this.deployRules, plain);
   }
 
@@ -434,11 +439,15 @@ export class Sim {
     if (c.shellCam) return "transfer";
     const pawn = this.pawns.get(c.possessedPawnId);
     if (!pawn) return null;
-    if (pawn.state.reviveTarget !== 0 || pawn.state.deployKind !== DeployKind.None) return null; // its gauge shows instead
+    if (pawn.state.reviveTarget !== 0 || pawn.state.deployKind !== DeployKind.None || pawn.state.rappelTicks > 0) return null; // its gauge shows instead
     if (pawn.state.mode === PawnMode.Walk && this.reviveCandidate(pawn)) return "revive"; // before ladders (D-049)
     const deploy = this.deployActionFor(pawn);
-    if (deploy) return deploy.kind === DeployKind.Reinforce ? "reinforce" : deploy.kind === DeployKind.BarricadeUp ? "barricade" : "unbarricade";
-    return movementPrompt(this.ctx, pawn);
+    const move = movementPrompt(this.ctx, pawn);
+    // A lab room gives both sides both tools (on different keys): an attacker is shown the rope's prompt first, a
+    // defender the panel's.
+    const rope = move === "rappel" || move === "rappelVault";
+    if (deploy && !(rope && pawn.team === sideTeam("attacker"))) return deploy.kind === DeployKind.Reinforce ? "reinforce" : deploy.kind === DeployKind.BarricadeUp ? "barricade" : "unbarricade";
+    return move;
   }
 
   /**
@@ -499,6 +508,12 @@ export class Sim {
       sprinting: false,
       mode: PawnMode.Walk,
       ladder: -1,
+      rappel: -1,
+      rappelFlags: 0,
+      rappelTicks: 0,
+      ropeTurn: 0,
+      moveT: 0,
+      moveDur: 0,
       airPeakY: Math.fround(y + 0.02),
       // Back on your feet: no longer down, and nothing half done carries over.
       downHp: 0,
@@ -517,6 +532,11 @@ export class Sim {
     }
     poseCollider(this.ctx, pawn); // also makes a dead body solid again
     refreshBroadPhase(this.world);
+  }
+
+  /** Whether a standing body teleported to feet (x, y, z) has room there: no level geometry in it (lab tools). */
+  standsFree(x: number, y: number, z: number): boolean {
+    return capsuleFree(this.ctx, null, x, y + 0.02, z, this.data.movement.stance.stand.height);
   }
 
   /**
@@ -579,7 +599,8 @@ export class Sim {
         }
         // A body driven without its player's buttons (left behind on the camera, or being looked
         // through) has its weapon parked: nothing it was doing carries on unseen.
-        stepPawn(this.ctx, pawn, cmd, !idleDriven.has(pawn.id));
+        stepPawn(this.ctx, pawn, cmd, !idleDriven.has(pawn.id), !idleDriven.has(pawn.id));
+        this.belowKillPlane(pawn);
         refreshBroadPhase(this.world); // the next pawn must see this one where it now is
         if (idleDriven.has(pawn.id)) pawn.state.prevButtons = held;
         else if (cmd !== input) pawn.state.prevButtons |= input.buttons & Btn.Interact; // still held: not a fresh press later
@@ -592,11 +613,24 @@ export class Sim {
       // is in keeps its weapon running (a reload goes on through a lag spike); an idle shell's is parked.
       const held = pawn.state.prevButtons;
       this.letGo(pawn, idleShell);
-      stepPawn(this.ctx, pawn, idleInput(pawn, idleShell ? Stance.Crouch : pawn.state.stance), !idleShell);
+      stepPawn(this.ctx, pawn, idleInput(pawn, idleShell ? Stance.Crouch : pawn.state.stance), !idleShell, false);
+      this.belowKillPlane(pawn);
       refreshBroadPhase(this.world);
       pawn.state.prevButtons = held;
     }
     if (advanceTick) this.tick++;
+  }
+
+  /**
+   * A body whose feet fell below the level's kill plane (bounds.killY, DECISIONS D-076) is out of the level:
+   * it goes back to spawn 0 standing, with no fall damage (lab rooms; a match will kill it, Phase 6). Part of
+   * the step, so a client predicts it exactly as the server does.
+   */
+  private belowKillPlane(pawn: Pawn) {
+    const killY = this.level.def.bounds?.killY;
+    if (killY === undefined || pawn.state.y >= killY) return;
+    const s = this.level.def.spawns[0];
+    this.teleport(pawn.id, s.pos[0], s.pos[1], s.pos[2], s.yawDeg);
   }
 
   /**
@@ -639,14 +673,16 @@ export class Sim {
     }
 
     const active = this.pawns.get(c.possessedPawnId);
-    const ready = active !== undefined && active.state.mode === PawnMode.Walk && active.state.grounded;
+    // On her feet, or hanging on a rope (Ulo: cameras work on the rope; a lab room lets her rappel).
+    const ready = active !== undefined && ((active.state.mode === PawnMode.Walk && active.state.grounded) || ropeIdle(active.state));
     if (!this.otherPawn(c.id) || !ready) {
       c.shellCam = false; // nothing to look through, or busy (climbing, vaulting, dead)
       return;
     }
     if (pressed & Btn.Ability) {
       c.shellCam = !c.shellCam && c.swapCooldown <= 0;
-    } else if (c.shellCam && pressed & Btn.Interact) {
+    } else if (c.shellCam && pressed & Btn.Interact && active.state.mode !== PawnMode.Rappel) {
+      // No swap off a rope (Ulo): the shell left behind would hang there.
       c.swapPhase = 1;
       c.swapT = 0;
     }

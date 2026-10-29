@@ -63,7 +63,9 @@ export function applyDamage(sim: Sim, pawn: Pawn, d: Damage, rules?: Pick<ModeDa
     return { outcome: "hurt", removed: d.amount };
   }
   const removed = s.hp;
+  // On a rope, lethal damage kills outright (research/core_mechanics.md §6.1).
   const canDown =
+    s.mode !== PawnMode.Rappel &&
     (sim.data.operators.get(pawn.operatorId)?.combat?.canDbno ?? true) &&
     s.downs < combat.dbno.downsPerRound &&
     !(combat.dbno.lethalCauses as readonly string[]).includes(CAUSE_NAMES[cause]) &&
