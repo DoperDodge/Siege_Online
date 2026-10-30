@@ -14,6 +14,14 @@ export enum PawnMode {
   Downed = 4,
   /** On a rope down an outside wall (Phase 5 M8, PawnState.rappel). */
   Rappel = 5,
+  /** A drone in its owner's hand (Phase 7, intel/DESIGN.md §2): no collider, not stepped, not sent to others. */
+  Held = 6,
+}
+
+/** What a pawn is (Phase 7): an operator's body (Skopós's shells too), or an attacker's drone. */
+export enum PawnKind {
+  Body = 0,
+  Drone = 1,
 }
 
 /** PawnState.rappelFlags bits. */
@@ -49,6 +57,11 @@ export const Btn = {
   Gadget: 1 << 12,
   /** Drop the defuser (Phase 6, D-120). */
   Drop: 1 << 13,
+  /**
+   * Drones and cameras (Phase 7, intel/DESIGN.md §2): from the body, throw a drone held or go to one out; from a
+   * drone, back to the body.
+   */
+  Observe: 1 << 14,
 } as const;
 
 /** What the weapon in hand is doing (PawnState.wAct). */
@@ -203,6 +216,11 @@ export interface PawnState {
   deployPanel: number;
   deploySection: number;
   deployTicks: number;
+  // a drone (Phase 7, intel/DESIGN.md §2): ticks until it may jump again, ticks of boost left, and ticks until a
+  // boost may start again (counted from the last one's start)
+  jumpCd: number;
+  boostTicks: number;
+  boostCd: number;
 }
 
 export const NEUTRAL_INPUT: Readonly<Omit<InputCmd, "seq" | "yaw" | "pitch">> = {

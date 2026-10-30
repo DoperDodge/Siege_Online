@@ -15,7 +15,7 @@ import type { DummyDef, ModeData } from "../data/schemas.js";
 import { DUMMY_STANCE, dummyInput } from "../lab/dummies.js";
 import { spawnAmmo, type Pawn, type PlayerController } from "../player/pawn.js";
 import { eyePose } from "../player/hitboxes.js";
-import { PawnMode, type InputCmd, type PawnState } from "../player/types.js";
+import { PawnKind, PawnMode, type InputCmd, type PawnState } from "../player/types.js";
 import { Sim } from "../sim.js";
 import { ByteWriter, fnv1a } from "./bytes.js";
 import { HitboxHistory, SentRing } from "./lagComp.js";
@@ -445,10 +445,24 @@ export class Room implements DirectorHost {
   }
 
   private spawn(m: Member, spawnIndex = 0) {
-    if (m.ctrl) this.sim.removePlayer(m.ctrl.id);
+    // An attacker's drones (Phase 7) outlive the body: prep's pilot stands up at action start with them.
+    const drones = m.ctrl ? this.sim.dronesOf(m.ctrl) : [];
+    if (m.ctrl) {
+      m.ctrl.pawnIds = m.ctrl.pawnIds.filter((id) => !drones.some((d) => d.id === id));
+      this.sim.removePlayer(m.ctrl.id);
+    }
     m.ctrl = null; // until the new body stands (addPlayer throws when there's no room for it)
-    m.ctrl = this.sim.addPlayer(m.name, m.pick.operator, spawnIndex, undefined, m.pick, m.team);
+    try {
+      m.ctrl = this.sim.addPlayer(m.name, m.pick.operator, spawnIndex, undefined, m.pick, m.team);
+    } catch (e) {
+      for (const d of drones) this.sim.removePawn(d.id);
+      throw e;
+    }
     for (const id of m.ctrl.pawnIds) this.sim.pawns.get(id)!.state.rng = hash4(this.seed, id, 0x5eed, 1) || 1;
+    for (const d of drones) {
+      d.ownerId = m.ctrl.id;
+      m.ctrl.pawnIds.push(d.id);
+    }
     m.queue = [];
     this.force(m);
     m.newBody = true;
@@ -469,6 +483,28 @@ export class Room implements DirectorHost {
     m.pick = resolveLoadout(this.sim.data, pick).loadout.pick;
     m.team = side;
     this.spawn(m, spawnIndex);
+  }
+
+  spawnPilot(memberId: number, spawnIndex: number, side: Side): void {
+    const m = this.members.get(memberId);
+    if (!m) return;
+    if (m.ctrl) {
+      for (const id of m.ctrl.pawnIds) this.downedBy.delete(id);
+      this.sim.removePlayer(m.ctrl.id);
+    }
+    m.team = side;
+    m.ctrl = this.sim.addPilot(m.name, m.pick.operator, side);
+    for (let i = 0; i < this.sim.data.intel.drone.perAttacker; i++) this.sim.addDrone(m.ctrl.id);
+    const spawns = this.sim.level.def.spawns;
+    const sp = spawns[spawnIndex % spawns.length];
+    const first = this.sim.dronesOf(m.ctrl)[0];
+    if (first) this.sim.placeDrone(first.id, sp.pos[0], sp.pos[1] + 0.02, sp.pos[2], sp.yawDeg);
+    m.queue = [];
+    this.force(m);
+    m.newBody = true;
+    m.credit = 0;
+    m.held = 0;
+    m.stalled = false;
   }
 
   removeBody(memberId: number): void {
@@ -900,8 +936,14 @@ export class Room implements DirectorHost {
    * the step is announced after it, when the kill plane may already have brought the body back).
    */
   private announceDeath(victim: Pawn, finisherCtrl: number, weapon: string, cause: Cause, headshot: boolean, friendly: boolean, life = victim.life) {
-    this.stats.kills++;
     const ownerCtrl = victim.ownerId ?? 0;
+    if (victim.kind === PawnKind.Drone) {
+      // A drone (Phase 7) isn't anyone's death: no kill feed, no score.
+      const e: GameEvent = { kind: "droneDestroyed", pawnId: victim.id, ownerCtrl, killerCtrl: finisherCtrl };
+      for (const m of this.members.values()) m.events.push(e);
+      return;
+    }
+    this.stats.kills++;
     const entry = this.downedBy.get(victim.id);
     this.downedBy.delete(victim.id);
     const downer = entry?.life === life ? entry : undefined;
@@ -976,12 +1018,22 @@ export class Room implements DirectorHost {
   roster(): RosterEntry[] {
     const players = [...this.members.values()]
       .filter((m) => m.ctrl)
-      .map((m) => ({ controllerId: m.ctrl!.id, name: m.name, operatorId: m.ctrl!.operatorId, pawnIds: [...m.ctrl!.pawnIds], team: m.team, kind: 0, loadout: m.pick }));
+      .map((m) => ({
+        controllerId: m.ctrl!.id,
+        name: m.name,
+        operatorId: m.ctrl!.operatorId,
+        pawnIds: this.sim.bodyIds(m.ctrl!),
+        drones: this.sim.dronesOf(m.ctrl!).map((d) => d.id),
+        team: m.team,
+        kind: 0,
+        loadout: m.pick,
+      }));
     const dummies = this.dummies.map((d) => ({
       controllerId: d.ctrl.id,
       name: d.ctrl.name,
       operatorId: d.ctrl.operatorId,
       pawnIds: [...d.ctrl.pawnIds],
+      drones: [],
       team: d.def.team,
       kind: 1,
       loadout: defaultLoadoutPick(this.sim.data, d.def.operator),
@@ -1146,7 +1198,8 @@ export class Room implements DirectorHost {
    */
   private sendSnapshots() {
     const all = new Map<number, RemoteQ>();
-    for (const p of this.sim.pawns.values()) all.set(p.id, quantizeRemote(p.state));
+    // A drone in its owner's hand (Phase 7) isn't in the world: nobody else hears of it until it's thrown.
+    for (const p of this.sim.pawns.values()) if (p.state.mode !== PawnMode.Held) all.set(p.id, quantizeRemote(p.state));
     const tick = this.sim.tick;
     const hash = this.unsentOps.length ? this.sim.level.panels.hash() : 0;
     let shared: Uint8Array | null = null;

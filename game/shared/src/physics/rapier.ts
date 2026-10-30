@@ -30,6 +30,11 @@ export const G_PANEL = 0x0008;
  * level geometry, but the bullet query skips them: a bullet decides at each one (combat/hitreg.ts).
  */
 export const G_PROP = 0x0010;
+/**
+ * Drones (Phase 7, intel/DESIGN.md §2): no query sees them (bodies, bullets and sight go through; shots hit them
+ * through their hitboxes), and they move against the level, panels and props, not bodies or the stairs' ramps.
+ */
+export const G_DRONE = 0x0020;
 const groups = (membership: number, filter: number) => ((membership << 16) | filter) >>> 0;
 
 /** Level geometry: collides with players and other statics. */
@@ -59,6 +64,10 @@ export const QUERY_SIGHT = groups(G_PLAYER, G_STATIC | G_PROP);
 export const QUERY_PROPS = groups(G_PLAYER, G_PROP);
 /** Query filter that only sees players. */
 export const QUERY_PLAYERS = groups(G_PLAYER, G_PLAYER);
+/** A drone's collider: nothing else's query sees it. */
+export const DRONE_GROUPS = groups(G_DRONE, 0);
+/** A drone's own movement: the level, panels and props, but no movement helper (it jumps the stairs' steps). */
+export const QUERY_DRONE = groups(G_PLAYER, G_STATIC | G_PANEL | G_PROP);
 
 /**
  * Rebuild the broad phase so queries see colliders moved, resized, added or removed since the last call.

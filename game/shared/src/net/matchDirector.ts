@@ -9,7 +9,6 @@ import { DeployKind } from "../destruction/deploy.js";
 import type { PanelOp } from "../destruction/panel.js";
 import { QUERY_SIGHT } from "../physics/rapier.js";
 import { isDowned } from "../player/downed.js";
-import { eyePose } from "../player/hitboxes.js";
 import { PawnMode } from "../player/types.js";
 import type { Pawn, PlayerController } from "../player/pawn.js";
 import { defaultLoadoutPick, resolveLoadout, type LoadoutPick } from "../weapons/loadout.js";
@@ -31,6 +30,8 @@ export interface DirectorHost {
   bodyOf(memberId: number): PlayerController | null | undefined;
   /** A new body for a member at this level spawn, carrying `pick`, on `side` (its client gets a correction). */
   spawnBody(memberId: number, pick: LoadoutPick, spawnIndex: number, side: Side): void;
+  /** An attacker in prep (Phase 7): no body, their drones, the first out at this spawn. */
+  spawnPilot(memberId: number, spawnIndex: number, side: Side): void;
   /** Take a member's body away. */
   removeBody(memberId: number): void;
   /** Tell everyone who has which body (after spawning or removing some). */
@@ -328,11 +329,13 @@ export class MatchDirector {
     const { rangeM, coneDeg } = sim.data.objective.siteSight;
     const cos = Math.cos(coneDeg * DEG);
     for (const id of this.match.sides[ATTACK]) {
+      // What the attacker is looking through: their body, or the drone they drive (Phase 7: drones find it too).
       const body = this.host.bodyOf(id);
-      const p = body ? sim.pawns.get(body.possessedPawnId) : undefined;
-      if (!p || p.state.mode === PawnMode.Dead) continue;
-      const eye = eyePose(sim.data.movement, sim.data.hitboxes, p.state).pos;
-      const look = viewDir(p.state.yaw, p.state.pitch);
+      const p = body ? sim.pawns.get(sim.viewedPawnId(body.id)) : undefined;
+      if (!p || p.state.mode === PawnMode.Dead || p.state.mode === PawnMode.Held) continue;
+      const view = sim.eyeOf(p);
+      const eye = view.pos;
+      const look = viewDir(view.yaw, view.pitch);
       for (const b of site.bombs) {
         const d = [b.pos[0] - eye[0], b.pos[1] + 0.2 - eye[1], b.pos[2] - eye[2]];
         const dist = Math.hypot(d[0], d[1], d[2]);
@@ -356,9 +359,12 @@ export class MatchDirector {
     if (!area) return false;
     const rooms = { ...area, margin: 0 };
     for (const id of this.match.sides[ATTACK]) {
+      // Their body, or the drone they drive (Phase 7).
       const body = this.host.bodyOf(id);
-      const p = body ? sim.pawns.get(body.possessedPawnId) : undefined;
-      if (p && p.state.mode !== PawnMode.Dead && inSite(rooms, p.state.x, p.state.y, p.state.z)) return true;
+      for (const pid of body ? new Set([body.possessedPawnId, sim.viewedPawnId(body.id)]) : []) {
+        const p = sim.pawns.get(pid);
+        if (p && p.state.mode !== PawnMode.Dead && p.state.mode !== PawnMode.Held && inSite(rooms, p.state.x, p.state.y, p.state.z)) return true;
+      }
     }
     return false;
   }
@@ -379,7 +385,7 @@ export class MatchDirector {
     const sim = this.host.sim;
     const killY = sim.level.def.bounds?.killY;
     if (killY === undefined) return;
-    for (const p of sim.pawns.values()) if (!p.proxy && p.state.mode !== PawnMode.Dead && p.state.y < killY) this.host.killBody(p.id, Cause.Fall);
+    for (const p of sim.pawns.values()) if (!p.proxy && p.state.mode !== PawnMode.Dead && p.state.mode !== PawnMode.Held && p.state.y < killY) this.host.killBody(p.id, Cause.Fall);
   }
 
   /** Run-outs (research §8): a defender outside the building for the grace time is detected until back in or dead. */
@@ -477,6 +483,9 @@ export class MatchDirector {
     if (this.mode.match.preSetups && this.match.site) for (const o of preSetupOps(sim.level.def, sim.level.panels, sim.data.destruction, this.match.site)) this.host.queuePanelOp(o.panel, o.op);
     const spots = this.spawnsOf(this.match.site ?? "");
     defenders.forEach((id, k) => this.spawnOne(id, spots[k % Math.max(1, spots.length)] ?? 0, DEFENSE));
+    // Attackers drone through prep (intel/DESIGN.md §2): their first drone out at the spawn they've chosen.
+    if (sim.data.intel.drone.perAttacker > 0)
+      for (const [id, spawn] of this.attackerSpawns()) if (this.match.players.get(id)?.connected) this.host.spawnPilot(id, spawn, ATTACK);
     const sec = this.mode.match.seconds;
     sim.objective = { carrier: 0, dropped: null, planted: null, site: this.match.site, canPlant: false, plantTicks: ticks(sec.plant), disableTicks: ticks(sec.disable) };
     this.host.rosterChanged();
@@ -487,19 +496,24 @@ export class MatchDirector {
     const sec = this.mode.match.seconds.attackerSafeguard;
     this.safeguardEnd = sec > 0 ? this.host.sim.tick + ticks(sec) : 0;
     this.safeguardOver.clear();
-    const used = new Map<string, number>();
-    for (const id of this.match.sides[ATTACK]) {
-      const group = this.match.players.get(id)?.spawn ?? this.match.map.spawnGroups[0] ?? "";
-      const spots = this.spawnsOf(group);
-      const k = used.get(group) ?? 0;
-      used.set(group, k + 1);
-      this.spawnOne(id, spots[k % Math.max(1, spots.length)] ?? 0, ATTACK);
-    }
+    for (const [id, spawn] of this.attackerSpawns()) this.spawnOne(id, spawn, ATTACK);
     // The defuser comes in on its carrier (the match chose one as action started).
     const o = this.host.sim.objective;
     const carrier = this.match.carrier !== null ? this.host.bodyOf(this.match.carrier) : null;
     if (o) Object.assign(o, { carrier: carrier?.possessedPawnId ?? 0, canPlant: true });
     this.host.rosterChanged();
+  }
+
+  /** Each attacker's point in their spawn group: the group's next free one, in slot order. */
+  private attackerSpawns(): [number, number][] {
+    const used = new Map<string, number>();
+    return this.match.sides[ATTACK].map((id) => {
+      const group = this.match.players.get(id)?.spawn ?? this.match.map.spawnGroups[0] ?? "";
+      const spots = this.spawnsOf(group);
+      const k = used.get(group) ?? 0;
+      used.set(group, k + 1);
+      return [id, spots[k % Math.max(1, spots.length)] ?? 0];
+    });
   }
 
   private spawnOne(memberId: number, spawnIndex: number, side: Side) {

@@ -10,7 +10,8 @@ import { NONSOLID_PLAYER_GROUPS, PLAYER_GROUPS, QUERY_PLAYERS, QUERY_SOLID, QUER
 import { eyePose, proneBendLift, proneBodyExtents } from "./hitboxes.js";
 import type { Pawn } from "./pawn.js";
 import { capsuleDims, currentHeight, proneWeight, stanceDims, transitionSeconds } from "./stance.js";
-import { Btn, PawnMode, RappelFlag, ropeIdle, STANCE_KEYS, Stance, type InputCmd, type PawnState } from "./types.js";
+import { Btn, PawnKind, PawnMode, RappelFlag, ropeIdle, STANCE_KEYS, Stance, type InputCmd, type PawnState } from "./types.js";
+import { poseDrone } from "./drone.js";
 import { blocksSprint, parkWeapon, stepWeapon, wantsAim, type SimEvent } from "../weapons/step.js";
 import { bleedTick, isDowned } from "./downed.js";
 import { ticks } from "../weapons/ticks.js";
@@ -19,6 +20,8 @@ export interface MoveContext {
   R: Rapier;
   world: World;
   cc: CharacterController;
+  /** Drones' own character controller (Phase 7, player/drone.ts): a small step, a thin skin. */
+  dcc: CharacterController;
   data: GameData;
   level: BuiltLevel;
   /** What happened this step (shots, reloads); Sim clears it at the start of every step. */
@@ -1362,6 +1365,7 @@ function placeCollider(ctx: MoveContext, pawn: Pawn, height: number) {
  * placing the collider from the state the same way, so a restored state steps exactly like the original.
  */
 export function poseCollider(ctx: MoveContext, pawn: Pawn): void {
+  if (pawn.kind === PawnKind.Drone) return poseDrone(ctx.data.intel.drone, pawn);
   const s = pawn.state;
   const { r, hh } = capsuleDims(currentHeight(ctx.data.movement, s), ctx.data.movement.stance.collisionRadius);
   pawn.collider.setRadius(r);

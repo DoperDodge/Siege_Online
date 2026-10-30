@@ -19,7 +19,7 @@ export const PAWN_U8_FIELDS = [
 ] as const satisfies readonly (keyof PawnState)[];
 export const PAWN_U16_FIELDS = [
   "hp", "maxHp", "lastFallDamage", "actTicks", "reserve0", "reserve1", "cycle", "adsQ", "shotIdx", "sinceShot", "reviveTicks",
-  "deployPanel", "deployTicks", "rappelTicks",
+  "deployPanel", "deployTicks", "rappelTicks", "jumpCd", "boostTicks", "boostCd",
 ] as const satisfies readonly (keyof PawnState)[];
 export const PAWN_U32_FIELDS = ["rng", "reviveTarget", "revivedBy"] as const satisfies readonly (keyof PawnState)[];
 
@@ -51,7 +51,7 @@ export function readPawnState(r: ByteReader): PawnState {
   const stance = r.u8();
   const stanceFrom = r.u8();
   const mode = r.u8();
-  if (stance > 2 || stanceFrom > 2 || mode > 5) throw new ProtocolError("bad pawn state enum");
+  if (stance > 2 || stanceFrom > 2 || mode > 6) throw new ProtocolError("bad pawn state enum");
   const prevButtons = r.u16();
   const ladder = r.i8();
   const rappel = r.i16();
@@ -81,16 +81,17 @@ export function hashPawnState(s: PawnState): number {
   return fnv1a(w.finish());
 }
 
-/** The predicted part of a controller (Skopós' camera and swap state): exact, like PawnState. */
-export type ControllerState = Pick<PlayerController, "possessedPawnId" | "shellCam" | "swapPhase" | "swapT" | "swapCooldown" | "prevButtons">;
+/** The predicted part of a controller (Skopós' camera and swap state, the drone driven): exact, like PawnState. */
+export type ControllerState = Pick<PlayerController, "possessedPawnId" | "shellCam" | "swapPhase" | "swapT" | "swapCooldown" | "prevButtons" | "drone" | "prevLean">;
 
 export function controllerState(c: PlayerController): ControllerState {
-  const { possessedPawnId, shellCam, swapPhase, swapT, swapCooldown, prevButtons } = c;
-  return { possessedPawnId, shellCam, swapPhase, swapT, swapCooldown, prevButtons };
+  const { possessedPawnId, shellCam, swapPhase, swapT, swapCooldown, prevButtons, drone, prevLean } = c;
+  return { possessedPawnId, shellCam, swapPhase, swapT, swapCooldown, prevButtons, drone, prevLean };
 }
 
 export function writeControllerState(w: ByteWriter, c: ControllerState): void {
   w.varu(c.possessedPawnId).u8((c.shellCam ? 1 : 0) | (c.swapPhase << 1)).f32(c.swapT).f32(c.swapCooldown).u16(c.prevButtons);
+  w.varu(c.drone).i8(c.prevLean);
 }
 
 export function readControllerState(r: ByteReader): ControllerState {
@@ -98,5 +99,9 @@ export function readControllerState(r: ByteReader): ControllerState {
   const flags = r.u8();
   const swapPhase = flags >> 1;
   if (swapPhase > 2) throw new ProtocolError("bad swap phase");
-  return { possessedPawnId, shellCam: (flags & 1) !== 0, swapPhase: swapPhase as 0 | 1 | 2, swapT: r.finite(), swapCooldown: r.finite(), prevButtons: r.u16() };
+  const head = { possessedPawnId, shellCam: (flags & 1) !== 0, swapPhase: swapPhase as 0 | 1 | 2, swapT: r.finite(), swapCooldown: r.finite(), prevButtons: r.u16() };
+  const drone = r.varu();
+  const prevLean = r.i8();
+  if (prevLean < -1 || prevLean > 1) throw new ProtocolError("bad lean");
+  return { ...head, drone, prevLean };
 }

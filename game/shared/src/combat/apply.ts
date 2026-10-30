@@ -4,7 +4,7 @@
 import type { ModeData } from "../data/schemas.js";
 import { isDowned } from "../player/downed.js";
 import type { Pawn } from "../player/pawn.js";
-import { PawnMode } from "../player/types.js";
+import { PawnKind, PawnMode } from "../player/types.js";
 import type { Sim } from "../sim.js";
 import { ticks } from "../weapons/ticks.js";
 import { parkWeapon } from "../weapons/step.js";
@@ -41,7 +41,9 @@ export function applyDamage(sim: Sim, pawn: Pawn, d: Damage, rules?: Pick<ModeDa
   const s = pawn.state;
   const combat = sim.data.combat;
   const cause = d.cause ?? Cause.Bullet;
-  if (s.mode === PawnMode.Dead) return { outcome: "ignored", removed: 0 };
+  if (s.mode === PawnMode.Dead || s.mode === PawnMode.Held) return { outcome: "ignored", removed: 0 };
+  // A drone (Phase 7): any damage destroys it but a fall (research/intel.md §1).
+  if (pawn.kind === PawnKind.Drone) return cause === Cause.Fall && !d.kill ? { outcome: "ignored", removed: 0 } : kill(sim, pawn, s.hp);
   if (cause === Cause.Melee) {
     // The knife: lethal on bodies standing or down (core_mechanics.md §10.1, §12), or a set amount.
     const v = isDowned(s) ? combat.melee.vsDowned : combat.melee.vsStanding;
@@ -134,7 +136,7 @@ function teammateUp(sim: Sim, pawn: Pawn): boolean {
 
 /** Skopós's shell that isn't being driven (her other body): it takes headshots differently and its loss isn't an elimination. */
 export function isIdleShell(sim: Sim, pawn: Pawn): boolean {
-  if (pawn.ownerId === null) return false;
+  if (pawn.ownerId === null || pawn.kind !== PawnKind.Body) return false;
   const c = sim.controllers.get(pawn.ownerId);
-  return c !== undefined && c.pawnIds.length > 1 && c.possessedPawnId !== pawn.id;
+  return c !== undefined && sim.bodyIds(c).length > 1 && c.possessedPawnId !== pawn.id;
 }

@@ -9,7 +9,7 @@ import { MSG_PANEL_OPS, MSG_PANEL_RESYNC, MSG_PANEL_STATE } from "./panels.js";
 import { MSG_SNAPSHOT } from "./snapshot.js";
 
 /** Bump when the wire format changes; client and server must match. */
-export const PROTOCOL_VERSION = 12;
+export const PROTOCOL_VERSION = 13;
 
 export const Msg = {
   // client → server
@@ -191,7 +191,10 @@ export interface RosterEntry {
   controllerId: number;
   name: string;
   operatorId: string;
+  /** The bodies (Skopós: her two shells), none for an attacker in prep. */
   pawnIds: number[];
+  /** An attacker's drones in a match (Phase 7, intel/DESIGN.md §2), held or out. */
+  drones: number[];
   /** 0 attackers, 1 defenders (from the operator's side unless a lab tool moved them). */
   team: number;
   /** 0 a player; 1 a range-lab dummy (Phase 3 M10). */
@@ -206,6 +209,8 @@ export function encodeRoster(entries: RosterEntry[], you: number): Uint8Array {
   for (const e of entries) {
     w.varu(e.controllerId).str(e.name).str(e.operatorId).u8(e.pawnIds.length);
     for (const id of e.pawnIds) w.varu(id);
+    w.u8(e.drones.length);
+    for (const id of e.drones) w.varu(id);
     w.u8(e.team).u8(e.kind);
     writeLoadoutPick(w, e.loadout);
   }
@@ -223,10 +228,13 @@ export function decodeRoster(r: ByteReader): { you: number; entries: RosterEntry
     const k = r.u8();
     if (k > 2) throw new ProtocolError("too many pawns");
     const pawnIds = Array.from({ length: k }, () => r.varu());
+    const nd = r.u8();
+    if (nd > 2 || k + nd === 0) throw new ProtocolError("bad drones");
+    const drones = Array.from({ length: nd }, () => r.varu());
     const team = r.u8();
     const kind = r.u8();
     if (team > 1 || kind > 1) throw new ProtocolError("bad roster entry");
-    out.push({ controllerId, name, operatorId, pawnIds, team, kind, loadout: readLoadoutPick(r) });
+    out.push({ controllerId, name, operatorId, pawnIds, drones, team, kind, loadout: readLoadoutPick(r) });
   }
   return { you, entries: out };
 }
@@ -257,7 +265,7 @@ export interface ShotBox {
   radius: number;
 }
 
-const BOX_PARTS: readonly BodyPart[] = ["head", "neck", "torso", "pelvis", "arm_l", "arm_r", "leg_l", "leg_r"];
+const BOX_PARTS: readonly BodyPart[] = ["head", "neck", "torso", "pelvis", "arm_l", "arm_r", "leg_l", "leg_r", "drone"];
 const MAX_SHOT_PELLETS = 16;
 
 /**

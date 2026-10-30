@@ -7,7 +7,8 @@ import type { ResolvedDamage } from "../weapons/loadout.js";
 
 export type Zone = "head" | "neck" | "torso" | "pelvis" | "arm" | "leg";
 
-export const zoneOf = (part: BodyPart): Zone => (part.startsWith("arm") ? "arm" : part.startsWith("leg") ? "leg" : (part as Zone));
+/** A drone's box counts as a torso (any hit destroys a drone anyway: combat/apply.ts). */
+export const zoneOf = (part: BodyPart): Zone => (part === "drone" ? "torso" : part.startsWith("arm") ? "arm" : part.startsWith("leg") ? "leg" : (part as Zone));
 
 const CORE: readonly Zone[] = ["head", "neck", "torso", "pelvis"];
 

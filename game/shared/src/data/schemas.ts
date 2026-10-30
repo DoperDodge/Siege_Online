@@ -634,6 +634,54 @@ export const objectiveSchema = z.strictObject({
 });
 export type ObjectiveData = z.infer<typeof objectiveSchema>;
 
+/** Intel (data/intel.json; intel/DESIGN.md): drones, default cameras, scans, pings, the Bulletproof Camera. Metres, seconds, degrees. */
+export const intelSchema = z.strictObject({
+  ...meta,
+  drone: z.strictObject({
+    /** Drones each attacker has a round (both can be out at once). */
+    perAttacker: z.number().int().min(0).max(2),
+    jumpCooldownS: z.number().positive(),
+    jumpHeightM: z.number().positive(),
+    /** Top speed on the ground, the same in every direction. */
+    speedMps: z.number().positive(),
+    /** How fast it gets to (or off) that speed on the ground; in the air `airControl` of it. */
+    accelMps2: z.number().positive(),
+    airControl: z.number().min(0).max(1),
+    /** Shift: `mult` times the speed for `seconds`, then `rechargeS` before the next. */
+    boost: z.strictObject({ mult: z.number().min(1), seconds: z.number().positive(), rechargeS: z.number().min(0) }),
+    /** Width, height, length: its collider is an upright cylinder as wide as it is and as tall. */
+    sizeM: z.tuple([z.number().positive(), z.number().positive(), z.number().positive()]),
+    /** The highest ledge it drives up onto without a jump. */
+    stepM: z.number().min(0),
+    fovDeg: z.number().positive().max(170),
+    pitchMinDeg: z.number().min(-89).max(0),
+    pitchMaxDeg: z.number().min(0).max(89),
+    /** Its camera over the bottom of the box. */
+    eyeM: z.number().min(0),
+    /** Thrown from a body: this far ahead of the feet and this high, moving forward and up this fast. */
+    throw: z.strictObject({ aheadM: z.number().min(0), heightM: z.number().min(0), forwardMps: z.number().min(0), upMps: z.number().min(0) }),
+    /** Its owner picks it up from this close (F). */
+    pickupReachM: z.number().positive(),
+  }),
+  camera: z.strictObject({
+    yawHalfRangeDeg: z.number().positive().max(180),
+    pitchMinDeg: z.number().min(-89).max(0),
+    pitchMaxDeg: z.number().min(0).max(89),
+    turnDegPerS: z.number().positive(),
+    fovDeg: z.number().positive().max(170),
+  }),
+  scan: z.strictObject({ holdS: z.number().positive(), coneDeg: z.number().positive().max(90) }),
+  ping: z.strictObject({ seconds: z.number().positive(), cooldownS: z.number().min(0), perPlayer: z.number().int().positive() }),
+  bulletproofCamera: z.strictObject({
+    count: z.number().int().min(0),
+    dartRadiusM: z.number().positive(),
+    dartRechargeS: z.number().min(0),
+    disableS: z.number().positive(),
+    outdoorSignalS: z.number().positive(),
+  }),
+});
+export type IntelData = z.infer<typeof intelSchema>;
+
 
 export const SURFACES = [
   "SOFT_WALL",

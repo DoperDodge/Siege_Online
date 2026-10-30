@@ -28,6 +28,7 @@ import oneVOneJson from "../../../../data/modes/one_v_one.json";
 import customJson from "../../../../data/modes/custom.json";
 import practiceJson from "../../../../data/modes/practice.json";
 import objectiveJson from "../../../../data/objective.json";
+import intelJson from "../../../../data/intel.json";
 import destructionJson from "../../../../data/destruction.json";
 import { weaponFiles } from "./weaponFiles.js";
 import { fnv1a, utf8Encode } from "../net/bytes.js";
@@ -43,6 +44,7 @@ import {
   operatorSchema,
   modeSchema,
   objectiveSchema,
+  intelSchema,
   weaponSchema,
   type CombatData,
   type Construction,
@@ -54,6 +56,7 @@ import {
   type OperatorData,
   type ModeData,
   type ObjectiveData,
+  type IntelData,
   type Surface,
   type WeaponData,
 } from "./schemas.js";
@@ -70,6 +73,8 @@ export interface GameData {
   modes: Map<string, ModeData>;
   /** Bomb's objective rules every format shares (Phase 6: the defuser, finding the site). */
   objective: ObjectiveData;
+  /** Drones, cameras, scans, pings (Phase 7, intel/DESIGN.md). */
+  intel: IntelData;
   /** Panels, holes, reinforcement, barricades and hatches (Phase 4). */
   destruction: DestructionData;
   /**
@@ -90,6 +95,7 @@ export const rawData = {
   combat: combatJson as Record<string, unknown>,
   modes: [labModeJson, quickMatchJson, unrankedJson, rankedJson, oneVOneJson, customJson, practiceJson] as Record<string, unknown>[],
   objective: objectiveJson as Record<string, unknown>,
+  intel: intelJson as Record<string, unknown>,
   destruction: destructionJson as Record<string, unknown>,
 };
 
@@ -141,6 +147,7 @@ export function loadGameData(): GameData {
     combat: parse("data/combat.json", combatSchema, rawData.combat),
     modes,
     objective: parse("data/objective.json", objectiveSchema, rawData.objective),
+    intel: parse("data/intel.json", intelSchema, rawData.intel),
     destruction: parse("data/destruction.json", destructionSchema, rawData.destruction),
     dataHash: fnv1a(utf8Encode(JSON.stringify(rawData))),
   };

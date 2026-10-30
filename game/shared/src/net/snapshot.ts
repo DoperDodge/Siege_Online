@@ -28,6 +28,9 @@ import { Btn, PawnMode, Stance, type PawnState } from "../player/types.js";
 import { ByteReader, ByteWriter, fnv1a, ProtocolError } from "./bytes.js";
 import { readControllerState, readPawnState, writeControllerState, writePawnState, type ControllerState } from "./pawnState.js";
 
+/** The most pawns a correction carries: a body and its drones (Phase 7), or Skopós's two shells. */
+export const MAX_OWN_PAWNS = 4;
+
 export const MSG_SNAPSHOT = 0x10;
 /** Snapshots go out on every SNAPSHOT_EVERY-th tick. */
 export const SNAPSHOT_EVERY = 2;
@@ -185,7 +188,7 @@ function readRecord(r: ByteReader, baseOf: (id: number) => RemoteQ): [number, Re
   if (m & 8) q.pitch += unzz(r.varu());
   if (m & 16) {
     q.flags = r.u16();
-    if ((q.flags & 3) > Stance.Prone || ((q.flags >> 2) & 3) > Stance.Prone || ((q.flags >> 4) & 7) > PawnMode.Rappel || q.flags >= 512) throw new ProtocolError("bad flags");
+    if ((q.flags & 3) > Stance.Prone || ((q.flags >> 2) & 3) > Stance.Prone || ((q.flags >> 4) & 7) > PawnMode.Held || q.flags >= 512) throw new ProtocolError("bad flags");
   }
   if (m & 32) q.y += unzz(r.varu());
   if (m & 64) q.lean = r.i8();
@@ -302,7 +305,7 @@ export class SnapshotDecoder {
     let correction: Correction | null = null;
     if (local & 1) {
       const n = r.u8();
-      if (n < 1 || n > 2) throw new ProtocolError("bad correction");
+      if (n < 1 || n > MAX_OWN_PAWNS) throw new ProtocolError("bad correction");
       const pawns: [number, PawnState][] = [];
       for (let i = 0; i < n; i++) pawns.push([r.varu(), readPawnState(r)]);
       correction = { pawns, ctrl: readControllerState(r), epoch: r.u8() };

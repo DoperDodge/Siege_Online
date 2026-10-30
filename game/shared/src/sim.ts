@@ -5,14 +5,16 @@ import { clamp, forwardXZ, rotateXZ, DEG } from "./core/math.js";
 import { loadGameData, type GameData } from "./data/load.js";
 import { deployAction, deployTicks, DeployKind, type DeployAction, type DeployRules } from "./destruction/deploy.js";
 import { buildLevel, type BuiltLevel } from "./level/builder.js";
-import { initRapier, PLAYER_GROUPS, QUERY_SIGHT, QUERY_SOLID, QUERY_STATIC as QUERY_STATIC_FILTER, refreshBroadPhase, type CharacterController, type Rapier, type World } from "./physics/rapier.js";
+import { initRapier, PLAYER_GROUPS, QUERY_DRONE, QUERY_SIGHT, QUERY_SOLID, QUERY_STATIC as QUERY_STATIC_FILTER, refreshBroadPhase, type CharacterController, type Rapier, type World } from "./physics/rapier.js";
 import { cancelRappelHold, capsuleFree, movementPrompt, poseCollider, stepPawn, type MoveContext, type MovementPrompt } from "./player/movement.js";
 import { initialPawnState, type Pawn, type PlayerController } from "./player/pawn.js";
+import { droneCollider, droneEye, stepDrone } from "./player/drone.js";
 import { insideAny, zoneBoxes, ZONE_TEST_HEIGHT, type ZoneBox } from "./level/zones.js";
 import { canDisable, canPickUp, inSite, siteArea, type DefuserState, type SiteArea } from "./match/objective.js";
 import { eyePose, poseHitboxes } from "./player/hitboxes.js";
 import { capsuleDims, stanceDims } from "./player/stance.js";
-import { Btn, PawnMode, ropeIdle, Stance, type InputCmd, type PawnState } from "./player/types.js";
+import { Btn, PawnKind, PawnMode, ropeIdle, Stance, type InputCmd, type PawnState } from "./player/types.js";
+import { isDowned } from "./player/downed.js";
 import { defaultLoadoutPick, resolveLoadout, type LoadoutPick, type ResolvedLoadout } from "./weapons/loadout.js";
 import type { SimEvent } from "./weapons/step.js";
 import { viewDir } from "./weapons/spread.js";
@@ -34,7 +36,7 @@ const DROP_FROM_ABOVE = 0.1;
 const DROP_MAX_FALL = 60;
 
 /** Contextual hint for the HUD: "Space to mantle", "F to climb", "F to transfer" (Skopós camera), "Hold F to reinforce". */
-export type Prompt = MovementPrompt | "transfer" | "revive" | "reinforce" | "barricade" | "unbarricade" | "plant" | "disable" | "pickUp";
+export type Prompt = MovementPrompt | "transfer" | "revive" | "reinforce" | "barricade" | "unbarricade" | "plant" | "disable" | "pickUp" | "pickUpDrone";
 
 export class Sim {
   readonly pawns = new Map<number, Pawn>();
@@ -63,11 +65,12 @@ export class Sim {
     readonly R: Rapier,
     readonly world: World,
     readonly cc: CharacterController,
+    readonly dcc: CharacterController,
     readonly data: GameData,
     readonly level: BuiltLevel,
   ) {
     // Attackers rappel; in a lab room anyone does (deployRules.rappel, from the room's rules).
-    this.ctx = { R, world, cc, data, level, events: [], canRappel: (pawn) => pawn.team === sideTeam("attacker") || this.deployRules.rappel };
+    this.ctx = { R, world, cc, dcc, data, level, events: [], canRappel: (pawn) => pawn.team === sideTeam("attacker") || this.deployRules.rappel };
     this.building = zoneBoxes(level.def, "building");
   }
 
@@ -134,7 +137,14 @@ export class Sim {
     cc.enableSnapToGround(m.step.snapToGround);
     cc.setMaxSlopeClimbAngle(m.step.maxSlopeDeg * DEG);
     cc.setMinSlopeSlideAngle(m.step.maxSlopeDeg * DEG);
-    const sim = new Sim(R, world, cc, data, level);
+    // Drones (Phase 7): a thin skin, a small step (data/intel.json `stepM`), the bodies' slopes.
+    const drone = data.intel.drone;
+    const dcc = world.createCharacterController(0.01);
+    if (drone.stepM > 0) dcc.enableAutostep(drone.stepM, 0.05, false);
+    dcc.enableSnapToGround(0.05);
+    dcc.setMaxSlopeClimbAngle(m.step.maxSlopeDeg * DEG);
+    dcc.setMinSlopeSlideAngle(m.step.maxSlopeDeg * DEG);
+    const sim = new Sim(R, world, cc, dcc, data, level);
     // A capsule spawned inside geometry gets stuck (found in the §3 spike), so check every spawn at load.
     for (const sp of def.spawns) {
       if (!capsuleFree(sim.ctx, null, sp.pos[0], sp.pos[1] + 0.02, sp.pos[2], m.stance.stand.height)) {
@@ -166,6 +176,8 @@ export class Sim {
       operatorId,
       pawnIds: [],
       possessedPawnId: 0,
+      drone: 0,
+      prevLean: 0,
       shellCam: false,
       swapPhase: 0,
       swapT: 0,
@@ -254,19 +266,23 @@ export class Sim {
     id?: number,
     loadout: ResolvedLoadout | null = null,
     team = 0,
+    kind = PawnKind.Body,
   ): Pawn {
     const m = this.data.movement;
     const op = this.data.operators.get(operatorId);
-    const maxHp = m.healthByRating[String(op?.healthRating ?? 2) as "1" | "2" | "3"];
+    const maxHp = kind === PawnKind.Drone ? 1 : m.healthByRating[String(op?.healthRating ?? 2) as "1" | "2" | "3"];
     const { r, hh } = capsuleDims(m.stance.stand.height, m.stance.collisionRadius);
-    const collider = this.world.createCollider(
-      this.R.ColliderDesc.capsule(hh, r).setTranslation(x, y + hh + r + 0.02, z).setCollisionGroups(PLAYER_GROUPS),
-    );
+    const collider =
+      kind === PawnKind.Drone
+        ? droneCollider(this.R, this.world, this.data.intel.drone)
+        : this.world.createCollider(this.R.ColliderDesc.capsule(hh, r).setTranslation(x, y + hh + r + 0.02, z).setCollisionGroups(PLAYER_GROUPS));
+    if (kind === PawnKind.Drone) collider.setTranslation({ x, y: y + this.data.intel.drone.sizeM[1] / 2 + 0.02, z });
     const pawnId = id !== undefined ? this.claimId(id) : this.nextId++;
     // Float32-exact like every other state, and the collider placed from that state the same way a client
     // places it from the correction it gets for this body, so both start bit-identical.
     const t = collider.translation();
-    const pawn: Pawn = { id: pawnId, operatorId, ownerId, collider, loadout, team, life: 0, state: initialPawnState(t.x, Math.fround(y + 0.02), t.z, Math.fround(yaw), maxHp, loadout) };
+    const pawn: Pawn = { id: pawnId, kind, operatorId, ownerId, collider, loadout, team, life: 0, state: initialPawnState(t.x, Math.fround(y + 0.02), t.z, Math.fround(yaw), maxHp, loadout) };
+    if (kind === PawnKind.Drone) pawn.state.mode = PawnMode.Held;
     // Recoil randomness: any non-zero start works for xorshift; a server reseeds it from its room seed and
     // the client gets the value with the body's first correction.
     pawn.state.rng = Math.imul(pawnId, 0x9e3779b1) >>> 0 || 1;
@@ -280,10 +296,13 @@ export class Sim {
    * A stand-in for a pawn simulated somewhere else (another player, as seen by a client): it blocks
    * movement like any pawn, but step() never moves it; setPawnState() places it.
    */
-  addProxy(id: number, operatorId: string, state: PawnState, loadout: ResolvedLoadout | null = null, team = 0): Pawn {
+  addProxy(id: number, operatorId: string, state: PawnState, loadout: ResolvedLoadout | null = null, team = 0, kind = PawnKind.Body): Pawn {
     if (this.pawns.has(id)) throw new Error(`pawn id ${id} is already in use`);
-    const collider = this.world.createCollider(this.R.ColliderDesc.capsule(0.5, 0.3).setCollisionGroups(PLAYER_GROUPS));
-    const pawn: Pawn = { id: this.claimId(id), operatorId, ownerId: null, collider, loadout, team, life: 0, state: { ...state }, proxy: true };
+    const collider =
+      kind === PawnKind.Drone
+        ? droneCollider(this.R, this.world, this.data.intel.drone)
+        : this.world.createCollider(this.R.ColliderDesc.capsule(0.5, 0.3).setCollisionGroups(PLAYER_GROUPS));
+    const pawn: Pawn = { id: this.claimId(id), kind, operatorId, ownerId: null, collider, loadout, team, life: 0, state: { ...state }, proxy: true };
     this.pawns.set(id, pawn);
     poseCollider(this.ctx, pawn);
     refreshBroadPhase(this.world);
@@ -475,6 +494,12 @@ export class Sim {
       s.deployTicks = 1;
       return true;
     }
+    const mine = this.droneToPickUp(pawn);
+    if (mine) {
+      mine.state.mode = PawnMode.Held;
+      mine.state.vx = mine.state.vy = mine.state.vz = 0;
+      return true;
+    }
     const a = this.deployActionFor(pawn);
     if (!a) return false;
     s.deployKind = a.kind;
@@ -496,17 +521,171 @@ export class Sim {
   otherPawn(controllerId: number): Pawn | null {
     const c = this.controllers.get(controllerId);
     if (!c) return null;
-    for (const id of c.pawnIds) {
+    for (const id of this.bodyIds(c)) {
       const p = this.pawns.get(id);
       if (id !== c.possessedPawnId && p && p.state.mode !== PawnMode.Dead) return p;
     }
     return null;
   }
 
-  /** The pawn whose eyes the player sees through: the idle shell while on its camera or mid-swap. */
+  /** A controller's bodies (Skopós: her two shells), not its drones. */
+  bodyIds(c: PlayerController): number[] {
+    return c.pawnIds.filter((id) => this.pawns.get(id)?.kind !== PawnKind.Drone);
+  }
+
+  /** A controller's drones (Phase 7), held, out or destroyed. */
+  dronesOf(c: PlayerController): Pawn[] {
+    const out: Pawn[] = [];
+    for (const id of c.pawnIds) {
+      const p = this.pawns.get(id);
+      if (p?.kind === PawnKind.Drone) out.push(p);
+    }
+    return out;
+  }
+
+  /**
+   * A controller with no body yet (Phase 7: an attacker in prep): it possesses the first drone `addDrone` gives it.
+   * `ids`: a client mirroring the server's controller id.
+   */
+  addPilot(name: string, operatorId: string, team: number, ids?: { controller: number }): PlayerController {
+    if (ids && this.controllers.has(ids.controller)) throw new Error(`controller id ${ids.controller} is already in use`);
+    const c: PlayerController = {
+      id: ids ? this.claimId(ids.controller) : this.nextId++,
+      name,
+      operatorId,
+      pawnIds: [],
+      possessedPawnId: 0,
+      drone: 0,
+      prevLean: 0,
+      shellCam: false,
+      swapPhase: 0,
+      swapT: 0,
+      swapCooldown: 0,
+      prevButtons: 0,
+      team,
+    };
+    this.controllers.set(c.id, c);
+    return c;
+  }
+
+  /** A held drone for a controller (Phase 7); one with no body possesses its first. `id`: a client mirroring the server's. */
+  addDrone(controllerId: number, id?: number): Pawn {
+    const c = this.controllers.get(controllerId);
+    if (!c) throw new Error(`no controller ${controllerId}`);
+    const at = this.pawns.get(c.possessedPawnId)?.state ?? { x: 0, y: 0, z: 0 };
+    const pawn = this.spawnPawn(c.operatorId, at.x, at.y, at.z, 0, c.id, id, null, c.team, PawnKind.Drone);
+    c.pawnIds.push(pawn.id);
+    if (!c.possessedPawnId) c.possessedPawnId = pawn.id;
+    return pawn;
+  }
+
+  /** Put a drone out at rest with its bottom at (x, y, z), facing `yawDeg` (an attacker's first drone at their spawn in prep). */
+  placeDrone(droneId: number, x: number, y: number, z: number, yawDeg: number): void {
+    const p = this.pawns.get(droneId);
+    if (!p || p.kind !== PawnKind.Drone) return;
+    Object.assign(p.state, { x: Math.fround(x), y: Math.fround(y), z: Math.fround(z), vx: 0, vy: 0, vz: 0, yaw: Math.fround(yawDeg * DEG), pitch: 0, grounded: false, mode: PawnMode.Walk });
+    poseCollider(this.ctx, p);
+    refreshBroadPhase(this.world);
+  }
+
+  /** Would a drone fit with its bottom at (x, y, z), clear of the level, panels and props? */
+  private droneFits(x: number, y: number, z: number): boolean {
+    const [w, h] = this.data.intel.drone.sizeM;
+    const shape = new this.R.Cylinder(h / 2 - 0.005, w / 2 - 0.005);
+    return this.world.intersectionWithShape({ x, y: y + h / 2, z }, { x: 0, y: 0, z: 0, w: 1 }, shape, undefined, QUERY_DRONE) === null;
+  }
+
+  /**
+   * A body throws a held drone (data/intel.json `drone.throw`): it appears ahead of the body, or in its place when a
+   * wall is that close, moving forward and up. Null when none is held.
+   */
+  private throwDrone(c: PlayerController, body: Pawn, buttons: number): Pawn | null {
+    const held = this.dronesOf(c).find((p) => p.state.mode === PawnMode.Held);
+    if (!held) return null;
+    const t = this.data.intel.drone.throw;
+    const b = body.state;
+    const [fx, fz] = forwardXZ(b.yaw);
+    const y = b.y + t.heightM;
+    const ahead = this.droneFits(b.x + fx * t.aheadM, y, b.z + fz * t.aheadM);
+    const x = ahead ? b.x + fx * t.aheadM : b.x;
+    const z = ahead ? b.z + fz * t.aheadM : b.z;
+    const s = held.state;
+    Object.assign(s, {
+      x: Math.fround(x),
+      y: Math.fround(y),
+      z: Math.fround(z),
+      vx: Math.fround(fx * t.forwardMps),
+      vy: Math.fround(t.upMps),
+      vz: Math.fround(fz * t.forwardMps),
+      yaw: b.yaw,
+      pitch: 0,
+      grounded: false,
+      mode: PawnMode.Walk,
+      prevButtons: buttons,
+    });
+    poseCollider(this.ctx, held);
+    refreshBroadPhase(this.world);
+    return held;
+  }
+
+  /**
+   * Drones' keys (Phase 7, intel/DESIGN.md §2). Observe: from a standing body, throw a held drone and drive it, or
+   * with none held drive the first one out (a dead body too); from a drone, back to the body. A new lean on a
+   * drone goes to the previous / next drone out. A drone destroyed or picked up while driven, or the body going
+   * down, ends the drive. In prep (no body yet) the first drone is all there is.
+   */
+  private updateDrones(c: PlayerController, input: InputCmd | undefined, heldBefore: number) {
+    const drones = this.dronesOf(c);
+    if (!drones.length) return;
+    const out = drones.filter((p) => p.state.mode === PawnMode.Walk);
+    const body = this.pawns.get(c.possessedPawnId);
+    const downed = body !== undefined && body.kind === PawnKind.Body && isDowned(body.state);
+    if (c.drone && (downed || !out.some((p) => p.id === c.drone))) c.drone = 0;
+    if (!input) return;
+    const lean = Math.sign(input.lean);
+    const newLean = lean !== 0 && lean !== c.prevLean ? lean : 0;
+    c.prevLean = lean;
+    if (!body || body.kind === PawnKind.Drone || downed) return;
+    const pressed = input.buttons & ~heldBefore;
+    if (c.drone) {
+      if (pressed & Btn.Observe) c.drone = 0;
+      else if (newLean && out.length > 1) {
+        const i = out.findIndex((p) => p.id === c.drone);
+        c.drone = out[(i + newLean + out.length) % out.length].id;
+      }
+      return;
+    }
+    if (!(pressed & Btn.Observe)) return;
+    const thrown = body.state.mode === PawnMode.Walk ? this.throwDrone(c, body, input.buttons) : null;
+    if (thrown) c.drone = thrown.id;
+    else if (out.length) c.drone = out[0].id;
+  }
+
+  /** One of this body's own drones out within reach (data/intel.json `drone.pickupReachM`), to pick up with F. */
+  private droneToPickUp(pawn: Pawn): Pawn | null {
+    const c = pawn.ownerId !== null ? this.controllers.get(pawn.ownerId) : undefined;
+    const s = pawn.state;
+    if (!c || s.mode !== PawnMode.Walk || !s.grounded) return null;
+    const reach = this.data.intel.drone.pickupReachM;
+    for (const d of this.dronesOf(c)) {
+      const q = d.state;
+      if (q.mode === PawnMode.Walk && Math.hypot(q.x - s.x, q.z - s.z) <= reach && Math.abs(q.y - s.y) <= 1.2) return d;
+    }
+    return null;
+  }
+
+  /** Where a pawn's eyes are: a body's, or a drone's camera (Phase 7). */
+  eyeOf(pawn: Pawn): { pos: [number, number, number]; yaw: number; pitch: number } {
+    if (pawn.kind === PawnKind.Drone) return droneEye(this.data.intel.drone, pawn.state);
+    const e = eyePose(this.data.movement, this.data.hitboxes, pawn.state);
+    return { pos: [e.pos[0], e.pos[1], e.pos[2]], yaw: pawn.state.yaw, pitch: pawn.state.pitch };
+  }
+
+  /** The pawn whose eyes the player sees through: the drone driven, the idle shell while on its camera or mid-swap. */
   viewedPawnId(controllerId: number): number {
     const c = this.controllers.get(controllerId);
     if (!c) return 0;
+    if (c.drone) return c.drone;
     if (c.shellCam || c.swapPhase) return this.otherPawn(controllerId)?.id ?? c.possessedPawnId;
     return c.possessedPawnId;
   }
@@ -605,14 +784,15 @@ export class Sim {
   prompt(controllerId: number): Prompt {
     const c = this.controllers.get(controllerId);
     if (!c) return null;
-    if (c.swapPhase) return null;
+    if (c.swapPhase || c.drone) return null;
     if (c.shellCam) return "transfer";
     const pawn = this.pawns.get(c.possessedPawnId);
-    if (!pawn) return null;
+    if (!pawn || pawn.kind === PawnKind.Drone) return null;
     if (pawn.state.reviveTarget !== 0 || pawn.state.deployKind !== DeployKind.None || pawn.state.rappelTicks > 0) return null; // its gauge shows instead
     if (pawn.state.mode === PawnMode.Walk && this.reviveCandidate(pawn)) return "revive"; // before ladders (D-049)
     const defuser = this.defuserActionFor(pawn);
     if (defuser) return defuser; // before panels (D-120)
+    if (this.droneToPickUp(pawn)) return "pickUpDrone";
     const deploy = this.deployActionFor(pawn);
     const move = movementPrompt(this.ctx, pawn);
     // A lab room gives both sides both tools (on different keys): an attacker is shown the rope's prompt first, a
@@ -730,11 +910,24 @@ export class Sim {
       const input = inputs.get(c.id);
       const heldBefore = c.prevButtons;
       const viewedBefore = this.viewedPawnId(c.id);
-      const onCamBefore = c.shellCam || c.swapPhase !== 0;
+      const onCamBefore = c.shellCam || c.swapPhase !== 0 || c.drone !== 0;
       this.updateShells(c, input);
+      this.updateDrones(c, input, heldBefore);
       // The view belongs to whichever body you were looking through: on the tick that changes (the camera
-      // opens or closes), the newly viewed body keeps its own facing instead of taking the old view's.
+      // opens or closes, a drone is entered or left), the newly viewed one keeps its own facing instead of taking
+      // the old view's.
       const viewChanged = this.viewedPawnId(c.id) !== viewedBefore;
+      const drone = c.drone ? this.pawns.get(c.drone) : undefined;
+      if (drone) {
+        // Driving a drone (Phase 7): it takes the input; the body, if it stands, idles with its weapon parked.
+        const body = this.pawns.get(c.possessedPawnId);
+        if (body && body.kind === PawnKind.Body && body.state.mode !== PawnMode.Dead) {
+          drive.set(body.id, idleInput(body, body.state.stance));
+          idleDriven.add(body.id);
+        }
+        if (input) drive.set(drone.id, viewChanged ? { ...input, yaw: drone.state.yaw, pitch: drone.state.pitch } : input);
+        continue;
+      }
       const target = c.shellCam || c.swapPhase ? this.otherPawn(c.id) : null;
       if (target) {
         const active = this.pawns.get(c.possessedPawnId);
@@ -755,6 +948,12 @@ export class Sim {
     for (const pawn of this.pawns.values()) {
       if (pawn.proxy) continue; // simulated elsewhere
       if (only && (pawn.ownerId === null || !only.has(pawn.ownerId))) continue;
+      if (pawn.kind === PawnKind.Drone) {
+        // Driven, or parked (settling under gravity); held and destroyed drones don't move.
+        stepDrone(this.ctx, pawn, drive.get(pawn.id) ?? null);
+        refreshBroadPhase(this.world);
+        continue;
+      }
       const input = drive.get(pawn.id);
       if (input) {
         const held = pawn.state.prevButtons;
@@ -786,7 +985,7 @@ export class Sim {
         continue;
       }
       const owner = pawn.ownerId !== null ? this.controllers.get(pawn.ownerId) : undefined;
-      const idleShell = owner !== undefined && owner.pawnIds.length > 1 && owner.possessedPawnId !== pawn.id;
+      const idleShell = owner !== undefined && this.bodyIds(owner).length > 1 && owner.possessedPawnId !== pawn.id;
       // No input this tick (idle shell, or a dropped packet): stand still, and keep the held-button
       // memory so keys still held when input resumes don't count as fresh presses. The body the player
       // is in keeps its weapon running (a reload goes on through a lag spike); an idle shell's is parked.
@@ -823,7 +1022,7 @@ export class Sim {
       pressed = input.buttons & ~c.prevButtons;
       c.prevButtons = input.buttons;
     }
-    if (c.pawnIds.length < 2) return;
+    if (this.bodyIds(c).length < 2) return;
     const params = this.data.operators.get(c.operatorId)!.ability.params; // validated by the schema
     const transfer = params.transferSeconds;
     const activation = params.activationSeconds;
