@@ -260,16 +260,19 @@ try {
   const byTeam = [0, 1].map((t) => v.players.filter((p) => p.team === t).map((p) => p.operator));
   result.twoVsThree.operators = byTeam;
   result.checks.everyoneHasAnOperator = byTeam.flat().every((o) => o !== null) && byTeam.every((ops) => new Set(ops).size === ops.length);
-  // A defender shoots a teammate in the head: the two first defender spawns at the Dining site share the room.
+  // A defender shoots a teammate in the head: the two first defender spawns at the Dining site share the room. Down the
+  // sights, once they are fully up: a bullet then goes where the view points (from the hip, more than half the shots at
+  // 3.6 m miss, and on a slow runner the tries ran out before one landed).
   const [shooter, victim] = defenders;
   await victim.waitForFunction(() => window.__lab.net.own !== null, null, { timeout: 20000 });
+  await shooter.waitForFunction(() => window.__lab.net.own !== null, null, { timeout: 20000 });
   const victimPawn = await victim.evaluate(() => window.__lab.net.pawnId);
   let killed = false;
   for (let tries = 0; tries < 8 && !killed; tries++) {
     const aim = await shooter.evaluate((id) => window.__lab.aimAt(id, "head"), victimPawn);
     if (aim) {
-      await shooter.evaluate((a) => (window.__lab.input = { yaw: a.yaw, pitch: a.pitch }), aim);
-      await sleep(400);
+      await shooter.evaluate((a) => (window.__lab.input = { yaw: a.yaw, pitch: a.pitch, buttons: 8 /* Btn.Ads */ }), aim);
+      await shooter.waitForFunction(() => window.__lab.net.own?.adsQ === 65535, null, { timeout: 10000 }).catch(() => {});
       await shooter.evaluate(() => window.__lab.fire());
     }
     killed = await victim.waitForFunction(() => window.__lab.net.dead, null, { timeout: 3000 }).then(() => true, () => false);
