@@ -1230,3 +1230,37 @@ describe("the feed list (Phase 7 M6)", () => {
     expect(c.session.mispredictions.length).toBe(missed);
   }, 60_000);
 });
+
+describe("Skopós's idle shell in a match", () => {
+  it("shooting her idle shell dead isn't her elimination: the round goes on", async () => {
+    const t = await matchRoom("custom", 2);
+    const [a, b] = await t.start(["a", "b"], quick({ siteReveal: "roundStart", firstAttack: "blue" }));
+    b.toServer.push(encodePickLoadout(defaultLoadoutPick(data, "skopos")));
+    t.until(() => t.match.phase === Phase.Action, 15, "action");
+    for (let i = 0; i < 16; i++) t.tick();
+    const ctrl = t.room.bodyOf(b.id)!;
+    expect(ctrl.operatorId).toBe("skopos");
+    const idle = t.room.sim.bodyIds(ctrl).find((id) => id !== ctrl.possessedPawnId)!;
+    const shell = t.room.sim.pawns.get(idle)!;
+    // The attacker, 3 m from the idle shell, shoots it down the sights until it's gone.
+    const at = shell.state;
+    t.place(a, at.x + 3, at.y, at.z, 90);
+    for (let i = 0; i < 16; i++) t.tick();
+    for (let shot = 0; shot < 30 && shell.state.mode !== PawnMode.Dead; shot++) {
+      const eye = eyePose(data.movement, data.hitboxes, t.bodyOf(a)!.state).pos;
+      const head = eyePose(data.movement, data.hitboxes, shell.state).pos;
+      const d = [0, 1, 2].map((k) => head[k] - eye[k]);
+      const aim = { yaw: Math.atan2(-d[0], -d[2]), pitch: Math.atan2(d[1] - 0.3, Math.hypot(d[0], d[2])) };
+      a.cmd = { ...aim, buttons: Btn.Ads };
+      for (let i = 0; i < 40; i++) t.tick();
+      a.cmd = { ...aim, buttons: Btn.Ads | Btn.Fire };
+      t.tick();
+      a.cmd = { ...aim };
+      for (let i = 0; i < 12; i++) t.tick();
+    }
+    for (let i = 0; i < 64; i++) t.tick();
+    expect(shell.state.mode).toBe(PawnMode.Dead);
+    expect([t.match.phase, t.match.history.length]).toEqual([Phase.Action, 0]);
+    expect(t.room.sim.pawns.get(ctrl.possessedPawnId)!.state.mode).not.toBe(PawnMode.Dead);
+  }, 60_000);
+});
