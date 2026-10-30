@@ -15,6 +15,7 @@ import {
   DEFENSE,
   DEG,
   DT,
+  encodeCallout,
   encodeLobbyAction,
   encodeMatchAction,
   encodePickLoadout,
@@ -929,3 +930,88 @@ describe("default cameras in a match (Phase 7 M3)", () => {
     expect(t.room.bodyOf(atk.id)!.cam).toBe(0);
   }, 60_000);
 });
+
+describe("pings, scans and callouts (Phase 7 M4)", () => {
+  const LAUNDRY: [number, number, number] = [39.345, -3.2, 32.805];
+  /** Three players: a and c on Blue, attacking first; b on Orange, defending the Laundry. */
+  const three = async () => {
+    const t = await matchRoom("custom", 3);
+    const [a, b, c] = await t.start(["a", "b", "c"], quick({ siteReveal: "roundStart", firstAttack: "blue" }));
+    t.act(b, { kind: "siteVote", site: "SITE_LAUNDRY" });
+    t.until(() => t.match.phase === Phase.Prep, 15, "prep");
+    t.tick();
+    return { t, a, b, c };
+  };
+  const press = (t: Awaited<ReturnType<typeof matchRoom>>, who: { cmd: Record<string, unknown> }, button: number, hold = 1) => {
+    const keep = { ...who.cmd };
+    who.cmd = { ...keep, buttons: button };
+    for (let i = 0; i < hold; i++) t.tick();
+    who.cmd = keep;
+    t.tick();
+  };
+
+  it("a ping goes to the pinger's team only, where they aim (from a drone too); a quick second one is danger; one soon after is dropped", async () => {
+    const { t, a, b, c } = await three();
+    // In prep, a is on their drone: it pings where its camera looks (its spawn faces the building).
+    a.cmd = { pitch: -10 * DEG };
+    press(t, a, Btn.Ping);
+    for (let i = 0; i < 4; i++) t.tick();
+    const pings = (x: { events: GameEvent[] }) => x.events.filter((e) => e.kind === "ping");
+    expect([pings(a).length, pings(c).length, pings(b).length]).toEqual([1, 1, 0]);
+    const first = pings(a)[0] as Extract<GameEvent, { kind: "ping" }>;
+    expect([first.ctrl, first.danger, first.ticks]).toEqual([t.room.bodyOf(a.id)!.id, false, 5 * 64]);
+    // Two quick presses (0.2 s apart): the second is danger.
+    for (let i = 0; i < 64; i++) t.tick();
+    press(t, a, Btn.Ping);
+    for (let i = 0; i < 12; i++) t.tick();
+    press(t, a, Btn.Ping);
+    for (let i = 0; i < 4; i++) t.tick();
+    expect(pings(c).map((e) => (e as Extract<GameEvent, { kind: "ping" }>).danger)).toEqual([false, false, true]);
+    // 0.4 s after that: inside the 0.5 s cooldown, past the double tap: dropped.
+    for (let i = 0; i < 24; i++) t.tick();
+    press(t, a, Btn.Ping);
+    for (let i = 0; i < 4; i++) t.tick();
+    expect(pings(c).length).toBe(3);
+  }, 60_000);
+
+  it("Fire held 1 s on a drone spots an enemy in its view's cone, in sight (the team and the one spotted are told); behind a wall, not", async () => {
+    const { t, a, b, c } = await three();
+    t.place(b, ...LAUNDRY, 90);
+    const [drone] = t.room.sim.dronesOf(t.room.bodyOf(a.id)!);
+    const aimFrom = (x: number, z: number) => {
+      t.room.sim.placeDrone(drone.id, x, LAUNDRY[1] + 0.02, z, 0);
+      t.room.correct(a.id);
+      const eye = t.room.sim.eyeOf(drone).pos;
+      const head = eyePose(data.movement, data.hitboxes, t.bodyOf(b)!.state).pos;
+      const d = [0, 1, 2].map((i) => head[i] - eye[i]);
+      a.cmd = { yaw: Math.atan2(-d[0], -d[2]), pitch: Math.atan2(d[1], Math.hypot(d[0], d[2])) };
+      for (let i = 0; i < 16; i++) t.tick();
+    };
+    const spotted = (x: { events: GameEvent[] }) => x.events.filter((e) => e.kind === "spotted").length;
+    // 2 m from the defender, in the Laundry (clear of its machines and table): spotted.
+    aimFrom(LAUNDRY[0], LAUNDRY[2] + 2);
+    press(t, a, Btn.Fire, 72);
+    for (let i = 0; i < 4; i++) t.tick();
+    expect([spotted(a), spotted(c), spotted(b)]).toEqual([1, 1, 1]);
+    // From the Supply room, a wall between: not.
+    aimFrom(40.375, 24.625);
+    press(t, a, Btn.Fire, 72);
+    for (let i = 0; i < 4; i++) t.tick();
+    expect(spotted(c)).toBe(1);
+  }, 60_000);
+
+  it("a callout off the wheel reaches the caller's team only, two a second at most", async () => {
+    const { t, a, b, c } = await three();
+    a.toServer.push(encodeCallout(0));
+    t.tick();
+    a.toServer.push(encodeCallout(4)); // too soon
+    t.tick();
+    for (let i = 0; i < 32; i++) t.tick();
+    a.toServer.push(encodeCallout(2));
+    t.tick();
+    const calls = (x: { events: GameEvent[] }) => x.events.filter((e) => e.kind === "callout").map((e) => (e as Extract<GameEvent, { kind: "callout" }>).id);
+    expect([calls(a), calls(c), calls(b)]).toEqual([[0, 2], [0, 2], []]);
+    expect(c.events.find((e) => e.kind === "callout")).toMatchObject({ name: "a", id: 0 });
+  }, 60_000);
+});
+

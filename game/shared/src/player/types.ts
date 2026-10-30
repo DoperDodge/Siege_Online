@@ -52,8 +52,9 @@ export const Btn = {
   Swap: 1 << 8,
   FireMode: 1 << 9,
   Melee: 1 << 10,
-  /** Reserved: ping (Phase 7) and gadget (Phase 8), so the numbers never change. */
+  /** Ping where the view is on (Phase 7, intel/DESIGN.md §6: the room shares it with the team). */
   Ping: 1 << 11,
+  /** Reserved: gadget (Phase 8), so the numbers never change. */
   Gadget: 1 << 12,
   /** Drop the defuser (Phase 6, D-120). */
   Drop: 1 << 13,

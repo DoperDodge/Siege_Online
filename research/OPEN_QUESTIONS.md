@@ -517,6 +517,10 @@ The intel questions above (drone numbers, camera limits, pings, the wheel) stay 
 6. **The comm wheel:** past Breach, Area Clear, Help, Danger and Thanks, which callouts are on it?
 7. **Drones and stairs:** ours climb only 5 cm ledges without a jump, so each stair step takes one. Does a Siege drone
    drive up stairs?
+8. **Pings (M4):** a second ping within 0.35 s is a danger ping (ours); a scan reaches 40 m (ours) and checks the cone
+   and the line of sight when the 1 s hold ends (not throughout it); a spotted enemy is marked for the ping's 5 s; the
+   ping key held 0.25 s opens the comm wheel (ours). How quick is Siege's double tap, how far does a scan reach, does
+   the enemy have to stay in the cone for the whole second, and how long does the wheel's hold take?
 
 ### [core_mechanics.md](core_mechanics.md) — 16
 

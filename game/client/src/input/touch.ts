@@ -27,6 +27,8 @@ const BUTTONS: TouchButton[] = [
   { label: "Reload", action: "reload", kind: "tap" },
   { label: "Swap", action: "swap", kind: "tap" },
   { label: "Knife", action: "melee", kind: "tap" },
+  { label: "Observe", action: "observe", kind: "tap" }, // drones and cameras (Phase 7)
+  { label: "Ping", action: "ping", kind: "tap" },
 ];
 
 /**

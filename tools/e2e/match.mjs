@@ -1,18 +1,18 @@
-// End-to-end check of a match (Phase 6, match/DESIGN.md §13): a 1v1 and a 2v3 played in browsers from start to
-// finish, with short Custom timers. 1v1: the host creates a Custom match on the Play page, which lists it; the other
-// player joins by its code. In the lobby the joiner lands on the other team, the host sets the rules (one field
-// through its input, and Blue to attack first through its select), both ready up and the host starts. Each team bans
-// one of the other side's operators; on the planning screen the banned one is greyed out, each player picks an
-// operator (the defender one, then 160 ms later another, over a slow link: the second stays), the defender votes for
-// the Dining site and the attacker picks the B Street spawn and takes the defuser. In prep the defender is at that
-// site and the attacker drives their first drone from the spawn (the defender's page has it), and the defender goes
-// round the cameras; in action the attacker is at B Street carrying the defuser; the defenders win on time, the
-// banner says so, the sides swap for round 2, and after it the summary has both rounds; the host takes everyone back
-// to the lobby. 2v3: five players (three on Blue, two on Orange; some never pick and get an operator anyway, one per
-// team each); in action a defender shoots a teammate down the sights (friendly fire on, reverse friendly fire off),
-// who then looks through a living teammate's eyes, and the scoreboard counts the death; the match ends with the
-// summary. Also: a loadout set on the Play page is kept, and a sight fitted on the planning screen is carried into
-// action.
+// End-to-end check of a match (Phase 6, match/DESIGN.md §13): a 1v1 and a 2v3 played in browsers from start to finish,
+// with short Custom timers. 1v1: the host creates a Custom match on the Play page, which lists it; the other player
+// joins by its code. In the lobby the joiner lands on the other team, the host sets the rules (one field through its
+// input, and Blue to attack first through its select), both ready up and the host starts. Each team bans one of the
+// other side's operators; on the planning screen the banned one is greyed out, each player picks an operator (the
+// defender one, then 160 ms later another, over a slow link: the second stays), the defender votes for the Dining site
+// and the attacker picks the B Street spawn and takes the defuser. In prep the defender is at that site and the
+// attacker drives their first drone from the spawn (the defender's page has it), and the defender goes round the
+// cameras; in action the attacker is at B Street carrying the defuser, and pings (their page marks it, the defender's
+// has nothing); the defenders win on time, the banner says so, the sides swap for round 2, and after it the summary has
+// both rounds; the host takes everyone back to the lobby. 2v3: five players (three on Blue, two on Orange; some never
+// pick and get an operator anyway, one per team each); in action a defender shoots a teammate down the sights (friendly
+// fire on, reverse friendly fire off), who then looks through a living teammate's eyes, and the scoreboard counts the
+// death; the match ends with the summary. Also: a loadout set on the Play page is kept, and a sight fitted on the
+// planning screen is carried into action.
 // Requires `npm run build` first. Screenshots go to builds/e2e.
 import { spawn } from "node:child_process";
 import { mkdirSync, readFileSync } from "node:fs";
@@ -268,6 +268,15 @@ try {
   result.checks.scoreboardOnTab = await b.waitForFunction(() => !document.querySelector(".scoreboard").classList.contains("hidden"), null, { timeout: 5000 }).then(() => true, () => false);
   await b.screenshot({ path: shot("match-scoreboard.png") });
   await b.keyboard.up("Tab");
+  // A ping (Phase 7): the attacker pings the ground ahead; their page marks it, and the defender's (the other team) has
+  // no ping by the time it has played half a second more.
+  const pinged = await holdUntil(att1, { buttons: 1 << 11, pitch: -0.3 }, () => window.__lab.net.intel.pings > 0);
+  await att1.screenshot({ path: shot("match-ping.png") });
+  const defTick = await def1.evaluate(() => window.__lab.tick);
+  await def1.waitForFunction((t) => window.__lab.tick >= t + 32, defTick, { timeout: 10000, polling: 50 }).catch(() => {});
+  const defPings = await def1.evaluate(() => window.__lab.net.events.filter((e) => e.kind === "ping").length);
+  result.oneVsOne.action.ping = { pinged, defenderPings: defPings };
+  result.checks.pingForTheTeamOnly = pinged && defPings === 0;
 
   // The defenders win on time; the banner says so.
   await phase(a, P.RoundEnd, 60000);

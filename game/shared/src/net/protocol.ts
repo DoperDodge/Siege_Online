@@ -30,6 +30,8 @@ export const Msg = {
   ListRooms: 0x0c,
   LobbyAction: 0x0d,
   MatchAction: 0x0e,
+  /** A callout off the comm wheel (Phase 7): its number in data/intel.json `callouts`. */
+  Callout: 0x0f,
   // server → client
   Snapshot: MSG_SNAPSHOT,
   Welcome: 0x11,
@@ -397,4 +399,14 @@ export function decodeLabTool(r: ByteReader): LabTool {
   if (k === LAB_KIND.explosive) return { kind: "explosive", id: r.str(32), yaw: r.finite(), pitch: r.finite() };
   if (k === LAB_KIND.resetPanels) return { kind: "resetPanels" };
   throw new ProtocolError("bad lab tool");
+}
+
+/** A callout off the comm wheel (Phase 7, intel/DESIGN.md §6): its number in data/intel.json `callouts`. */
+export function encodeCallout(id: number): Uint8Array {
+  return new ByteWriter().u8(Msg.Callout).u8(id).finish();
+}
+export function decodeCallout(r: ByteReader): number {
+  const id = r.u8();
+  if (id > 15) throw new ProtocolError("bad callout");
+  return id;
 }

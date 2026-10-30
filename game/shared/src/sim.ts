@@ -10,6 +10,7 @@ import { cancelRappelHold, capsuleFree, movementPrompt, poseCollider, stepPawn, 
 import { initialPawnState, type Pawn, type PlayerController } from "./player/pawn.js";
 import { droneCollider, droneEye, stepDrone } from "./player/drone.js";
 import { insideAny, zoneBoxes, ZONE_TEST_HEIGHT, type ZoneBox } from "./level/zones.js";
+import { raycastLevel } from "./level/raycast.js";
 import { canDisable, canPickUp, inSite, siteArea, type DefuserState, type SiteArea } from "./match/objective.js";
 import { eyePose, poseHitboxes } from "./player/hitboxes.js";
 import { capsuleDims, stanceDims } from "./player/stance.js";
@@ -720,6 +721,29 @@ export class Sim {
     if (first >= 0) this.openCam(c, first);
   }
 
+  /** Where a controller looks from now: a camera's lens, its drone's eye, or its body's; null for a dead body. */
+  viewOf(c: PlayerController, input?: InputCmd): { pos: [number, number, number]; yaw: number; pitch: number } | null {
+    if (c.cam) {
+      const cam = this.level.def.cameras[c.cam - 1];
+      const [fx, fz] = forwardXZ(c.camYaw);
+      return { pos: [cam.pos[0] + fx * 0.15, cam.pos[1], cam.pos[2] + fz * 0.15], yaw: c.camYaw, pitch: c.camPitch };
+    }
+    const p = this.pawns.get(this.viewedPawnId(c.id));
+    if (!p || p.state.mode === PawnMode.Dead || p.state.mode === PawnMode.Held) return null;
+    const eye = this.eyeOf(p);
+    return input ? { ...eye, yaw: input.yaw, pitch: input.pitch } : eye;
+  }
+
+  /** The ping key (Phase 7, intel/DESIGN.md §6): the point the view is on, a "ping" event for the room to share. */
+  private ping(c: PlayerController, input: InputCmd) {
+    const v = this.viewOf(c, input);
+    if (!v) return;
+    const dir = viewDir(v.yaw, v.pitch);
+    const hit = raycastLevel(this, v.pos, dir, 200);
+    if (!hit) return;
+    this.ctx.events.push({ kind: "ping", ctrlId: c.id, pos: [v.pos[0] + dir[0] * hit.t, v.pos[1] + dir[1] * hit.t, v.pos[2] + dir[2] * hit.t] });
+  }
+
   private camWorks(i: number): boolean {
     return i < 32 && (this.matchRules.camsBroken & (1 << i)) === 0;
   }
@@ -995,6 +1019,7 @@ export class Sim {
       this.updateShells(c, input);
       this.updateDrones(c, input, heldBefore);
       this.updateCams(c, input, heldBefore);
+      if (input && input.buttons & ~heldBefore & Btn.Ping) this.ping(c, input);
       if (c.cam) {
         // Watching a camera (Phase 7): the body, if it stands, idles with its weapon parked.
         const body = this.pawns.get(c.possessedPawnId);

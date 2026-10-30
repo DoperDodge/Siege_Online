@@ -768,6 +768,10 @@ export function matchFeatures(lab: LabApi): void {
     `<kbd>${keyLabel(keys.observe)}</kbd>`,
     `Drones (attackers): throw one, or go to one out, and back; on one ${keyLabel(keys.leanLeft)} / ${keyLabel(keys.leanRight)} switch, ${keyLabel(keys.vault)} jumps, ${keyLabel(keys.sprint)} boosts. Cameras (defenders): open them and back; ${keyLabel(keys.leanLeft)} / ${keyLabel(keys.leanRight)} switch`,
   );
+  lab.addHelp(
+    "Hold left mouse (on a drone or a camera)",
+    `Scan: an enemy within ${lab.data.intel.scan.coneDeg}° of the crosshair and in sight for ${lab.data.intel.scan.holdS} s is marked for your team for ${lab.data.intel.ping.seconds} s (they're told)`,
+  );
   lab.addHelp("Left mouse (dead)", "Look through the next teammate still alive");
 
   // Browser tests drive the match through this as well as the screens' buttons (tools/e2e/match.mjs).

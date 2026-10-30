@@ -7,12 +7,14 @@
 import * as THREE from "three";
 import {
   applyDamage,
+  Btn,
   DEG,
   DT,
   encodeLabTool,
   BARRELS,
   defaultLoadoutPick,
   encodePickLoadout,
+  encodeCallout,
   droneEye,
   eyePose,
   GRIPS,
@@ -38,6 +40,7 @@ import {
   spreadCone,
   Stance,
   TICK_HZ,
+  ticks,
   wrapAngle,
   zoneBoxes,
   type IndexedOp,
@@ -74,6 +77,7 @@ import { damageArcDeg, DamageIndicator } from "../../ui/damage.js";
 import { escapeHtml } from "../../ui/dom.js";
 import { DownedHud } from "../../ui/downed.js";
 import { HitMarkers } from "../../ui/hitMarkers.js";
+import { IntelHud } from "../../ui/intel.js";
 import { deathLine, feedLine, KillFeed } from "../../ui/killFeed.js";
 import { StatsOverlay } from "../../ui/stats.js";
 import { goToMenu, WhereHud } from "../../ui/where.js";
@@ -234,6 +238,8 @@ export async function startLab(o: LabOptions): Promise<void> {
   const hitMarkers = new HitMarkers(app);
   const damageHud = new DamageIndicator(app);
   const killFeed = new KillFeed(app);
+  /** Pings, spotted enemies, the comm wheel and the scan's gauge (Phase 7 M4). */
+  const intelHud = new IntelHud(app, data.intel.callouts, data.intel.ping.perPlayer);
 
   // Online state, declared before the lobby runs (its callbacks write some of it).
   /** Simulated network conditions (pause menu, or `?lag=100&jitter=20&loss=1`; PLAN §16.9). */
@@ -366,6 +372,9 @@ export async function startLab(o: LabOptions): Promise<void> {
   controls.attach(renderer.domElement);
   controls.isBlocked = () => !$(".pause").classList.contains("hidden") || !$(".help").classList.contains("hidden");
   controls.onDrone = () => ctrl.cam !== 0 || sim.pawns.get(sim.viewedPawnId(ctrl.id))?.kind === PawnKind.Drone;
+  // The comm wheel (Phase 7) needs a room to send its callouts to.
+  controls.wheelSize = () => (net ? data.intel.callouts.length : 0);
+  controls.onCallout = (id) => net?.send(encodeCallout(id));
   controls.stanceLocked = () => {
     const p = sim.pawns.get(ctrl.possessedPawnId);
     return ctrl.shellCam || ctrl.swapPhase !== 0 || (p !== undefined && isDowned(p.state)); // down: the body decides
@@ -858,6 +867,7 @@ export async function startLab(o: LabOptions): Promise<void> {
         ${row(`<kbd>${keyLabel(k.fireMode)}</kbd>`, "Fire mode (auto / burst / single, where the weapon has them)")}
         ${row(`<kbd>${keyLabel(k.melee)}</kbd>`, "Knife: kills anyone in reach in front of you, standing or down (0.6 s a swing)")}
         ${row(`Hold <kbd>${keyLabel(k.interact)}</kbd>`, "Revive a downed teammate (4 s, facing them)")}
+        ${net ? row(`<kbd>${keyLabel(k.ping)}</kbd>`, `Ping where you look (from a drone or a camera too): your team sees it through walls for ${data.intel.ping.seconds} s; two quick taps make it a danger ping. Hold it for the comm wheel: point the mouse at a callout and let go`) : ""}
         ${hooks.help.map(([keys, what]) => row(keys, what)).join("")}
         ${o.match ? "" : row("<kbd>N</kbd>", `Free camera: fly through anything (${keyLabel(k.forward)}${keyLabel(k.left)}${keyLabel(k.back)}${keyLabel(k.right)} along the view, ${keyLabel(k.vault)} up, ${keyLabel(k.crouch)} down, ${keyLabel(k.sprint)} faster) while your body stays where it is; <kbd>N</kbd> goes back to it, <kbd>${keyLabel(k.interact)}</kbd> puts it on the floor under the camera (where a body fits). Keys you press while flying never reach your body`)}
         ${o.match ? "" : row("<kbd>F3</kbd> / <kbd>F4</kbd>", "Hitboxes / third-person view")}
@@ -921,6 +931,8 @@ export async function startLab(o: LabOptions): Promise<void> {
   let viewedId = sim.viewedPawnId(ctrl.id);
   /** The default camera watched (Phase 7): ctrl.cam as of the last tick. */
   let camId = 0;
+  /** Ticks Fire has been held on a drone or a camera (Phase 7: a scan when it reaches data/intel.json `scan.holdS`). */
+  let scanTicks = 0;
   let possessedId = ctrl.possessedPawnId;
   let prompt: ReturnType<Sim["prompt"]> = null;
   let last = performance.now();
@@ -954,6 +966,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       if (sent) claims.set(sent.seq & 0xffff, { viewTick: net.session.lastViewTick, weapon: heldWeapon() });
       if (claims.size > 512) claims.delete(claims.keys().next().value!);
       clickViewTick = null;
+      scanTicks = input.buttons & Btn.Fire && controls.onDrone() ? scanTicks + 1 : 0;
     } else {
       const input = still(script ? autoInput(++seq) : controls.sample(++seq));
       sim.step(new Map([[ctrl.id, input]]));
@@ -1151,6 +1164,12 @@ export async function startLab(o: LabOptions): Promise<void> {
     if (panelView.update()) renderer.shadowMap.needsUpdate = true;
     const panelMs = performance.now() - panelFrom;
     for (const fn of hooks.frame) fn(now, renderTick);
+    intelHud.update(now, camera, app.clientWidth, app.clientHeight, (id) => {
+      const st = net?.session.remoteAt(id, renderTick);
+      return st && st.mode !== PawnMode.Dead ? [st.x, st.y, st.z] : null;
+    });
+    intelHud.showWheel(controls.wheelPick);
+    intelHud.showScan(scanTicks && !spec ? Math.min(1, scanTicks / ticks(data.intel.scan.holdS)) : null);
     drawWorld();
     if (rs && viewed && me) {
       const inHand = viewed.id === me.id && !outside && !onCamera && !ctrl.shellCam && ctrl.swapPhase === 0 ? (viewed.loadout?.weapons[rs.slot] ?? null) : null;
@@ -1522,6 +1541,8 @@ export async function startLab(o: LabOptions): Promise<void> {
           /** The default camera watched (Phase 7): its number in the level's list, 0: none. */
           cam: ctrl.cam,
           viewedKind: sim.pawns.get(sim.viewedPawnId(ctrl.id))?.kind ?? null,
+          /** Pings and spotted enemies marked on the screen (Phase 7). */
+          intel: intelHud.count,
           frames,
           lastShot,
           events: [...recentEvents],
@@ -2118,6 +2139,12 @@ export async function startLab(o: LabOptions): Promise<void> {
         const line = feedLine(e, feedNames, { ctrl: me, pawns: ctrl.pawnIds });
         if (line) killFeed.push(line, now);
         if (e.kind === "kill" && e.victimCtrl === me) death = { pawnId: e.victimPawn, life: sim.pawns.get(e.victimPawn)?.life ?? 0, text: deathLine(e, feedNames) };
+        // Intel (Phase 7): pings, scans and callouts from your team (and word that you were spotted).
+        if (e.kind === "ping") intelHud.ping(e, e.ctrl === me ? "you" : nameOfCtrl(e.ctrl), now);
+        else if (e.kind === "spotted") {
+          if (ctrl.pawnIds.includes(e.pawnId)) flash("You've been spotted", "bad");
+          else intelHud.spotted(e, now);
+        } else if (e.kind === "callout") killFeed.push({ text: `${e.name}: ${data.intel.callouts[e.id] ?? "?"}`, mine: false, callout: true }, now);
       }
     }
   }

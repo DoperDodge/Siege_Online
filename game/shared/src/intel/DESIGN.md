@@ -108,7 +108,19 @@ the top of the view.
 - **Danger:** a double-tap of ping (I:100).
 - **Comm wheel:** hold ping: a radial of callouts (Breach, Area Clear, Help, Danger, Thanks, and our Defuser, Rotate,
   Push: I:128-129, the list beyond the five a placeholder), sent to your team as a line in the feed.
-- Pings are inputs to the room (a message), not simulation state; the room checks the line of sight for scans.
+- Pings are never simulation state; the room checks the line of sight for scans.
+- **Built (M4, D-135):** the ping key is a button in the input (`Btn.Ping`): on the press the simulation casts the
+  view's ray (from the body, the drone or the camera the input drives; 200 m, the level and its panels) and the room
+  sends a `ping` event to the pinger's team, so it lands where that tick's view was. A second ping within `doubleTapS`
+  (0.35 s, ours) is a danger ping; otherwise one sooner than `cooldownS` is dropped; each player has `perPlayer` (1) up
+  at a time (a new one replaces it). The client sends a tap's ping when the key is let go; held 0.25 s (ours) it opens
+  the comm wheel instead: the mouse points at a callout and letting go sends it (a `Callout` message, two a second at
+  most) to the team's feed. A scan: Fire held `holdS` on a drone or a camera; then the room spots every enemy body
+  within `rangeM` (40 m, ours) and `coneDeg` of the view's direction with no level or panel between the view and their
+  eyes, and sends `spotted` to the scanner's team (a red mark over the enemy for `ping.seconds`) and to the one spotted
+  (told so). Fire is let go before the next scan. Marks are drawn over the view (seen through walls), at the screen's
+  edge toward what's off it, with whose ping it is and how far. Not built: pinging an enemy's gadget or a camera (its
+  icon; gadgets are Phase 8); our pings are named, not numbered.
 
 ## 7. Spectating when dead
 

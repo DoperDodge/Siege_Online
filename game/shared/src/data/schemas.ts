@@ -670,8 +670,12 @@ export const intelSchema = z.strictObject({
     turnDegPerS: z.number().positive(),
     fovDeg: z.number().positive().max(170),
   }),
-  scan: z.strictObject({ holdS: z.number().positive(), coneDeg: z.number().positive().max(90) }),
-  ping: z.strictObject({ seconds: z.number().positive(), cooldownS: z.number().min(0), perPlayer: z.number().int().positive() }),
+  /** Holding Fire on a drone or a camera spots an enemy this close and this near the crosshair, in sight. */
+  scan: z.strictObject({ holdS: z.number().positive(), coneDeg: z.number().positive().max(90), rangeM: z.number().positive() }),
+  /** A ping lasts `seconds`; pings closer than `cooldownS` are dropped; two within `doubleTapS` make a danger ping. */
+  ping: z.strictObject({ seconds: z.number().positive(), cooldownS: z.number().min(0), perPlayer: z.number().int().positive(), doubleTapS: z.number().positive() }),
+  /** The comm wheel's callouts, in order round the wheel (at most 16). */
+  callouts: z.array(z.string().min(1).max(24)).min(1).max(16),
   bulletproofCamera: z.strictObject({
     count: z.number().int().min(0),
     dartRadiusM: z.number().positive(),

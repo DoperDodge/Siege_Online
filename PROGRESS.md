@@ -15,9 +15,21 @@ known issues, and what's next.
 | M1 Drones in the simulation and rooms: drive, jump, boost, drone holes; throw, drive, leave, pick up; prep in drone 1; shots destroy drones; protocol 13 | ✅ drones are pawns of their attacker (predicted like walking), two a round, data/intel.json; through drone holes and under door barricades; a shot destroys one (no death); protocol 13 |
 | M2 Drones in the browser: the drone view and HUD, drawing drones, keys; dead attackers drive their drones | ✅ 5 throws / enters / leaves, Q / E switch, Space jumps, Shift boosts; the drone's camera and overlay; greybox drones; prep in your first drone; the match browser test drives one online |
 | M3 Default cameras: viewing within limits, shooting them, broken state, dead defenders on cameras | ✅ 5 opens Oregon's eight cameras (defenders, alive or dead), Q / E go round them; each viewer turns their own view within the camera's limits; any shot breaks one for the round; the match browser test watches them online |
-| M4 Pings, scans and the comm wheel | ⏳ |
+| M4 Pings, scans and the comm wheel | ✅ T pings where you look (from a drone or a camera too) for your team, through walls; a double tap is a danger ping; hold T for the comm wheel; Fire held 1 s on a drone or a camera spots enemies for your team; the match browser test pings online |
 | M5 Bulletproof Camera and its EMP dart | ⏳ |
 | M6 The feed list across everything, spectating; checks, docs, review, report | ⏳ |
+
+### What's done (M4: pings, scans and the comm wheel)
+- **Ping (T, ours):** a tap pings the spot you look at, from your body, a drone or a camera: a yellow mark for your
+  team only, seen through walls and held at the screen's edge when it's off screen, with whose it is and how far, for
+  5 s. Two quick taps make it a danger ping (orange). One each at a time: a new ping replaces yours.
+- **Comm wheel:** hold T a quarter of a second and the wheel opens; point the mouse at a callout (Breach, Area clear,
+  Help, Danger, Thanks, Defuser, Rotate, Push) and let go: your team's feed shows it. Let go in the middle to cancel.
+- **Scan:** on a drone or a camera, hold Fire for 1 s (a gauge under the crosshair fills): every enemy within 10° of
+  the crosshair and in sight is marked red over their head for your team for 5 s, and they're told they've been
+  spotted. Let go of Fire before the next scan.
+- Touch screens have Observe and Ping buttons. Pings and the wheel work in the labs' rooms too, for the players on
+  your operator's side. D-135 has the details.
 
 ### What's done (M3: default cameras)
 - **Watching (defenders, in prep and action, dead too):** 5 opens the first of Oregon's eight cameras; Q / E go to the
@@ -49,27 +61,30 @@ known issues, and what's next.
    Practice) match and join it from a second window (or a friend).
 2. Prep, as an attacker: you're in your first drone at your spawn. Click the view and drive it (W/A/S/D, the mouse,
    Space to jump, Shift to boost); drive through a drone hole: the basement corridor's to the Freezer hall, the
-   Kitchen corridor's to the Meeting
-   Hall, the Game Room's to the Master Bedroom. Esc
-   brings the planning screen back.
+   Kitchen corridor's to the Meeting Hall, the Game Room's to the Master Bedroom. Esc brings the planning screen back.
 3. Action: you're at the spawn. 5 throws your second drone; 5 again takes you back; Q / E (on a drone) switch between
    them. Walk up to one and press F to pick it up.
 4. As a defender, shoot a drone: one hit.
 5. As a defender: 5 opens the cameras, Q / E go round them, the mouse turns the view; shoot one (outside, at the
    Construction site or the Junkyard) and it's skipped from then on. Dead, 5 still opens them.
-6. Checks: `npm run typecheck`, `npm test`, `npm run build && node tools/e2e/match.mjs` (prep droning and the cameras,
-   online).
+6. Pings (with a teammate in a second window): tap T at a wall; your teammate sees the mark through walls, at the edge
+   of the screen when it's behind them. Tap twice quickly for a danger ping. Hold T, point the mouse at a callout and
+   let go: it's in your teammate's feed. On a drone or a camera, hold the left mouse button on an enemy for a second:
+   they're marked red for your team, and their screen says they've been spotted.
+7. Checks: `npm run typecheck`, `npm test`, `npm run build && node tools/e2e/match.mjs` (prep droning, the cameras
+   and a ping, online).
 
 ### Known issues
 - Drones pass through operators (they only hit the level, walls and props), and climb only 5 cm without a jump, so
   each stair step takes a jump (open questions, Phase 7).
-- At the Kitchen's drone hole to the Security corridor (1F.dt4) a prop stands 0.3 m behind it on the Kitchen side, so
-  a
+- At the Kitchen's drone hole to the Security corridor (1F.dt4) a prop stands 0.3 m behind it on the Kitchen side, so a
   drone can't get through from there (our placeholder props, Phase 5's open questions 26–31).
 - Each camera's wall and facing are placeholders (r6calls' icons, Phase 5's open questions); a camera doesn't stop the
   bullet that breaks it; attackers don't see a light on a watched camera yet; no sounds (Phase 11), no static near
   jammers (Mute, Phase 8).
-- Next: pings, scans and the comm wheel (M4), the Bulletproof Camera (M5), the feed list and spectating (M6).
+- Pinging an enemy's gadget or a camera doesn't mark it with its icon yet (gadgets are Phase 8); pings show the
+  pinger's name, not a number. On touch screens, Lean L / R don't switch drones or cameras yet.
+- Next: the Bulletproof Camera (M5), the feed list and spectating (M6).
 
 ---
 

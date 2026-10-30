@@ -12,6 +12,12 @@ export type UiAction = "respawn" | "hitboxes" | "thirdPerson" | "help" | "settin
 /** F2 is left to the pages (the Range Lab's overlay); F5–F7 and F9–F12 are browser shortcuts. */
 const UI_KEYS: Record<string, UiAction> = { F1: "help", F3: "hitboxes", F4: "thirdPerson", F8: "stats", Escape: "settings" };
 
+/** The ping key held this many ticks opens the comm wheel (a shorter press pings on its release). */
+const WHEEL_TICKS = 16;
+/** The comm wheel: the mouse's travel (counts) that picks a callout, and how far it is kept from the middle. */
+const WHEEL_DEAD = 30;
+const WHEEL_REACH = 120;
+
 /** Keys that change the body's pose; ignored while stanceLocked() (see there). */
 const STANCE_ACTIONS = new Set<Action>(["crouch", "prone", "leanLeft", "leanRight", "ads"]);
 
@@ -80,6 +86,19 @@ export class Controls {
    * drone out.
    */
   onDrone: () => boolean = () => false;
+  /**
+   * The ping key (Phase 7, intel/DESIGN.md §6): a tap pings where you look (sent for one tick when it's let go); held
+   * for WHEEL_TICKS it opens the comm wheel instead, where the mouse points at a callout and letting go sends it.
+   */
+  private pingDown = false;
+  private pingTicks = 0;
+  private pingPulse = false;
+  /** The comm wheel while it's open: the mouse's travel since it opened (counts), which picks the callout. */
+  private wheel: { x: number; y: number } | null = null;
+  /** How many callouts the comm wheel holds (0: none here, and a held ping key pings when let go). */
+  wheelSize: () => number = () => 0;
+  /** A callout picked off the comm wheel (its number in data/intel.json `callouts`). */
+  onCallout: (id: number) => void = () => {};
   /** The weapon slot asked for with 1 / 2 / the wheel, until the simulation is holding it. */
   private wantSlot: 0 | 1 | null = null;
   private sentSwap = false;
@@ -215,6 +234,18 @@ export class Controls {
    * the turn rate doesn't depend on the frame rate.
    */
   look(dx: number, dy: number, scale = 1) {
+    if (this.wheel) {
+      // The comm wheel is open: the mouse points at a callout instead of turning the view.
+      const w = this.wheel;
+      w.x += dx;
+      w.y += dy;
+      const l = Math.hypot(w.x, w.y);
+      if (l > WHEEL_REACH) {
+        w.x *= WHEEL_REACH / l;
+        w.y *= WHEEL_REACH / l;
+      }
+      return;
+    }
     // Upside down on a rope the view is turned over: a move turns it the way it goes on the screen.
     const sens = this.settings.sensitivity * (this.adsActive ? adsSensitivity(this.settings, this.weaponState()?.zoom ?? 1) : 1) * scale * DEG * (this.upsideDown ? -1 : 1);
     this.yaw = inRange(wrapAngle(this.yaw - dx * sens), this.limits.yawRange);
@@ -302,6 +333,10 @@ export class Controls {
       case "observe":
         this.observePulse = true;
         break;
+      case "ping":
+        this.pingDown = true;
+        this.pingTicks = 0;
+        break;
       case "primary":
         this.wantSlot = 0;
         break;
@@ -319,11 +354,31 @@ export class Controls {
 
   release(action: Action) {
     this.held.delete(action);
+    if (action === "ping" && this.pingDown) {
+      this.pingDown = false;
+      if (this.wheel) {
+        const pick = this.wheelPick;
+        this.wheel = null;
+        if (pick !== null && pick !== undefined) this.onCallout(pick);
+      } else this.pingPulse = true;
+    }
   }
 
   releaseAll() {
     this.held.clear();
     this.touchMove.x = this.touchMove.y = 0;
+    // A ping key let go with the page (a menu, another window): nothing is sent.
+    this.pingDown = false;
+    this.wheel = null;
+  }
+
+  /** The comm wheel: undefined while it's closed; the callout the mouse points at, or null in its middle. */
+  get wheelPick(): number | null | undefined {
+    if (!this.wheel) return undefined;
+    const n = this.wheelSize();
+    if (n === 0 || Math.hypot(this.wheel.x, this.wheel.y) < WHEEL_DEAD) return null;
+    const a = Math.atan2(this.wheel.x, -this.wheel.y); // 0 up, clockwise
+    return ((Math.round(a / ((2 * Math.PI) / n)) % n) + n) % n;
   }
 
   /** Touch has no comfortable "hold Shift": the sprint button latches until you stop moving forward. */
@@ -357,6 +412,8 @@ export class Controls {
     if (this.meleePulse) buttons |= Btn.Melee;
     if (this.dropPulse) buttons |= Btn.Drop;
     if (this.observePulse) buttons |= Btn.Observe;
+    if (this.pingDown && !this.wheel && ++this.pingTicks >= WHEEL_TICKS && this.wheelSize() > 0) this.wheel = { x: 0, y: 0 };
+    if (this.pingPulse) buttons |= Btn.Ping;
     // Weapon slot: one swap press, sent only while the slot differs and no swap is already under way
     // (a press then would be ignored); released for a tick in between so the next press is a new one.
     const ws = this.weaponState();
@@ -375,6 +432,7 @@ export class Controls {
     this.meleePulse = false;
     this.dropPulse = false;
     this.observePulse = false;
+    this.pingPulse = false;
 
     const s = this.settings;
     let stance = this.stanceIntent;

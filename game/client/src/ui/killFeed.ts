@@ -58,7 +58,7 @@ function weaponTag(e: Extract<GameEvent, { kind: "kill" | "shellDestroyed" }>, n
 }
 
 export class KillFeed {
-  private readonly lines: { text: string; mine: boolean; until: number }[] = [];
+  private readonly lines: { text: string; mine: boolean; callout?: boolean; until: number }[] = [];
   private readonly el: HTMLElement;
   private shown = "";
 
@@ -66,14 +66,15 @@ export class KillFeed {
     this.el = root.querySelector<HTMLElement>(".killfeed")!;
   }
 
-  push(line: { text: string; mine: boolean }, now: number) {
+  /** A line; `callout`: a teammate's off the comm wheel (Phase 7), in its own colour. */
+  push(line: { text: string; mine: boolean; callout?: boolean }, now: number) {
     this.lines.push({ ...line, until: now + SHOW_MS });
     if (this.lines.length > LINES) this.lines.shift();
   }
 
   update(now: number) {
     while (this.lines.length && this.lines[0].until < now) this.lines.shift();
-    const html = this.lines.map((f) => `<div class="${f.mine ? "mine" : ""}">${escapeHtml(f.text)}</div>`).join("");
+    const html = this.lines.map((f) => `<div class="${f.mine ? "mine" : f.callout ? "callout" : ""}">${escapeHtml(f.text)}</div>`).join("");
     if (html !== this.shown) this.el.innerHTML = this.shown = html;
   }
 }

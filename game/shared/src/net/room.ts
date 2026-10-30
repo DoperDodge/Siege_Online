@@ -1,7 +1,7 @@
 // A match room: the authoritative simulation plus everyone connected to it (PLAN §5). Transport-free, so
 // the Node server, the netsim harness and (later) offline Practice in a Web Worker all run this same code.
 import { DT, TICK_HZ } from "../core/constants.js";
-import type { Vec3 } from "../core/math.js";
+import { DEG, type Vec3 } from "../core/math.js";
 import { applyDamage, Cause, isIdleShell, type Damage } from "../combat/apply.js";
 import { shotOnBodies, tracePellets, type ShotOnBody } from "../combat/hitreg.js";
 import { judgeMelee } from "../combat/melee.js";
@@ -15,7 +15,7 @@ import type { DummyDef, ModeData } from "../data/schemas.js";
 import { DUMMY_STANCE, dummyInput } from "../lab/dummies.js";
 import { spawnAmmo, type Pawn, type PlayerController } from "../player/pawn.js";
 import { eyePose } from "../player/hitboxes.js";
-import { PawnKind, PawnMode, type InputCmd, type PawnState } from "../player/types.js";
+import { Btn, PawnKind, PawnMode, type InputCmd, type PawnState } from "../player/types.js";
 import { Sim } from "../sim.js";
 import { ByteWriter, fnv1a } from "./bytes.js";
 import { HitboxHistory, SentRing } from "./lagComp.js";
@@ -30,6 +30,8 @@ import { MatchDirector, type DirectorHost } from "./matchDirector.js";
 import type { LobbyAction, MatchAction, RoomListEntry } from "./matchWire.js";
 import { isFormat, type FormatMode, type Side } from "../match/rules.js";
 import { camerasOnRay } from "../intel/cameras.js";
+import { raycastLevel } from "../level/raycast.js";
+import { ticks, ticksOrZero } from "../weapons/ticks.js";
 import { encodeError, encodePong, encodeRoster, encodeShotResult, encodeWelcome, ErrorCode, unwrap16, type InputMsg, type LabTool, type RosterEntry, type ShotResult } from "./protocol.js";
 import { encodePanelOps, encodePanelState, wireOp } from "./panels.js";
 import { MAX_INTERP_MS, quantizeRemote, SNAPSHOT_EVERY, SnapshotEncoder, type RemoteQ } from "./snapshot.js";
@@ -134,6 +136,10 @@ interface Member {
   held: number;
   /** Stepped without input since the last input applied (one stall, however many ticks). */
   stalled: boolean;
+  /** Intel (Phase 7): the tick of the last ping and callout, and how long Fire has been held on a drone or camera. */
+  lastPing: number;
+  lastCallout: number;
+  scanTicks: number;
   /** Arrival tick minus claimed snapshot tick, for the last LAG_WINDOW inputs (a ring). */
   lags: number[];
   lagAt: number;
@@ -371,6 +377,9 @@ export class Room implements DirectorHost {
       idled: false,
       held: 0,
       stalled: false,
+      lastPing: -1e9,
+      lastCallout: -1e9,
+      scanTicks: 0,
       lags: [],
       lagAt: 0,
       needCorrection: false,
@@ -1077,9 +1086,69 @@ export class Room implements DirectorHost {
     else m.forced = false; // (stepped without input, but it still came out as predicted)
   }
 
+  /**
+   * A ping (Phase 7, intel/DESIGN.md §6) goes to the pinger's team for data/intel.json `ping.seconds`: yellow, or danger
+   * when it follows their last within `doubleTapS` (a double tap, in place of that one); none within `cooldownS`.
+   */
+  private ping(ctrlId: number, pos: Vec3) {
+    const m = this.memberOf(ctrlId);
+    if (!m) return;
+    const k = this.sim.data.intel.ping;
+    const since = this.sim.tick - m.lastPing;
+    const danger = since <= ticksOrZero(k.doubleTapS);
+    if (!danger && since < ticksOrZero(k.cooldownS)) return;
+    m.lastPing = this.sim.tick;
+    const e: GameEvent = { kind: "ping", ctrl: ctrlId, pos, danger, ticks: ticks(k.seconds) };
+    for (const o of this.members.values()) if (o.team === m.team) o.events.push(e);
+  }
+
+  /**
+   * Scans (Phase 7, intel/DESIGN.md §6): Fire held for data/intel.json `scan.holdS` while on a drone or a camera spots
+   * every enemy body within `rangeM` and `coneDeg` of the view, in sight: a red mark for the scanner's team (and the
+   * one spotted is told). Fire is let go before the next scan.
+   */
+  private scans(applied: ReadonlyMap<number, { m: Member; input: QueuedInput }>) {
+    const k = this.sim.data.intel.scan;
+    for (const { m, input } of applied.values()) {
+      const c = m.ctrl;
+      const onFeed = c !== null && (c.cam !== 0 || this.sim.pawns.get(this.sim.viewedPawnId(c.id))?.kind === PawnKind.Drone);
+      if (!onFeed || !(input.cmd.buttons & Btn.Fire)) {
+        m.scanTicks = 0;
+        continue;
+      }
+      if (++m.scanTicks !== ticks(k.holdS)) continue;
+      const view = this.sim.viewOf(c!);
+      if (!view) continue;
+      const look = viewDir(view.yaw, view.pitch);
+      const cos = Math.cos(k.coneDeg * DEG);
+      for (const p of this.sim.pawns.values()) {
+        if (p.kind !== PawnKind.Body || p.team === m.team || p.state.mode === PawnMode.Dead || p.proxy) continue;
+        const at = eyePose(this.sim.data.movement, this.sim.data.hitboxes, p.state).pos;
+        const d: Vec3 = [at[0] - view.pos[0], at[1] - view.pos[1], at[2] - view.pos[2]];
+        const dist = Math.hypot(d[0], d[1], d[2]);
+        if (dist > k.rangeM || dist < 1e-3 || (d[0] * look[0] + d[1] * look[1] + d[2] * look[2]) / dist < cos) continue;
+        const wall = raycastLevel(this.sim, view.pos, [d[0] / dist, d[1] / dist, d[2] / dist], dist);
+        if (wall && wall.t < dist - 0.05) continue;
+        const e: GameEvent = { kind: "spotted", pawnId: p.id, by: c!.id, ticks: ticks(this.sim.data.intel.ping.seconds) };
+        for (const o of this.members.values()) if (o.team === m.team || o.ctrl?.id === p.ownerId) o.events.push(e);
+      }
+    }
+  }
+
+  /** A callout off the comm wheel (Phase 7): to the caller's team, at most two a second. */
+  onCallout(memberId: number, id: number): void {
+    const m = this.members.get(memberId);
+    if (!m || id >= this.sim.data.intel.callouts.length || this.sim.tick - m.lastCallout < ticksOrZero(0.5)) return;
+    m.lastCallout = this.sim.tick;
+    const e: GameEvent = { kind: "callout", name: m.name, id };
+    for (const o of this.members.values()) if (o.team === m.team) o.events.push(e);
+  }
+
   /** Judge the shots of the step just taken; `applied` is each member's input in that step. */
   private judgeEvents(applied: ReadonlyMap<number, { m: Member; input: QueuedInput }>) {
+    this.scans(applied);
     for (const e of this.sim.events) {
+      if (e.kind === "ping") this.ping(e.ctrlId, e.pos);
       if (e.kind !== "shot" && e.kind !== "meleeImpact") continue;
       const owner = this.sim.pawns.get(e.pawnId)?.ownerId;
       if (owner === undefined || owner === null) continue;
