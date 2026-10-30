@@ -142,6 +142,7 @@ interface Member {
    * whether the gadget key was down (a Bulletproof Camera's dart fires on its press).
    */
   lastPing: number;
+  lastPingDanger: boolean;
   lastCallout: number;
   scanTicks: number;
   gadgetHeld: boolean;
@@ -383,6 +384,7 @@ export class Room implements DirectorHost {
       held: 0,
       stalled: false,
       lastPing: -1e9,
+      lastPingDanger: false,
       lastCallout: -1e9,
       scanTicks: 0,
       gadgetHeld: false,
@@ -501,9 +503,10 @@ export class Room implements DirectorHost {
     this.spawn(m, spawnIndex);
   }
 
-  spawnPilot(memberId: number, spawnIndex: number, side: Side): void {
+  spawnPilot(memberId: number, pick: LoadoutPick | null, spawnIndex: number, side: Side): void {
     const m = this.members.get(memberId);
     if (!m) return;
+    if (pick) m.pick = resolveLoadout(this.sim.data, pick).loadout.pick; // this round's operator, in prep already
     if (m.ctrl) {
       for (const id of m.ctrl.pawnIds) this.downedBy.delete(id);
       this.sim.removePlayer(m.ctrl.id);
@@ -951,7 +954,9 @@ export class Room implements DirectorHost {
     const owner = victim.ownerId !== null ? this.memberOf(victim.ownerId) : null;
     if (owner) {
       this.force(owner);
-      owner.events.push({ kind: "damageTaken", pawnId: victim.id, amount: r.removed, cause: by.cause, attackerCtrl: by.attacker?.ctrlId ?? 0, from: by.attacker?.origin ?? null });
+      // (A drone isn't its owner getting hurt: they hear of it as a drone destroyed.)
+      if (victim.kind === PawnKind.Body)
+        owner.events.push({ kind: "damageTaken", pawnId: victim.id, amount: r.removed, cause: by.cause, attackerCtrl: by.attacker?.ctrlId ?? 0, from: by.attacker?.origin ?? null });
     }
     const ctrl = by.attacker?.ctrlId ?? 0;
     const weapon = by.attacker?.weaponId ?? "";
@@ -1110,18 +1115,29 @@ export class Room implements DirectorHost {
 
   /**
    * A ping (Phase 7, intel/DESIGN.md §6) goes to the pinger's team for data/intel.json `ping.seconds`: yellow, or danger
-   * when it follows their last within `doubleTapS` (a double tap, in place of that one); none within `cooldownS`.
+   * when it follows their last (a yellow one) within `doubleTapS` (a double tap, in place of that one); otherwise none
+   * within `cooldownS` of the last, so a held or hammered key sends a few a second at most.
    */
   private ping(ctrlId: number, pos: Vec3) {
     const m = this.memberOf(ctrlId);
     if (!m) return;
     const k = this.sim.data.intel.ping;
     const since = this.sim.tick - m.lastPing;
-    const danger = since <= ticksOrZero(k.doubleTapS);
+    const danger = !m.lastPingDanger && since <= ticksOrZero(k.doubleTapS);
     if (!danger && since < ticksOrZero(k.cooldownS)) return;
     m.lastPing = this.sim.tick;
+    m.lastPingDanger = danger;
     const e: GameEvent = { kind: "ping", ctrl: ctrlId, pos, danger, ticks: ticks(k.seconds) };
-    for (const o of this.members.values()) if (o.team === m.team) o.events.push(e);
+    const team = this.teamOf(m);
+    for (const o of this.members.values()) if (this.teamOf(o) === team) o.events.push(e);
+  }
+
+  /**
+   * A member's team for team-only news (pings, spotted enemies, callouts) and a scan's or a dart's enemies: in a match
+   * their side (one who joined mid-round has no body yet to say so), else their body's.
+   */
+  private teamOf(m: Member): number {
+    return this.director?.match.sideOf(m.id) ?? m.team;
   }
 
   /**
@@ -1143,8 +1159,9 @@ export class Room implements DirectorHost {
       if (!view) continue;
       const look = viewDir(view.yaw, view.pitch);
       const cos = Math.cos(k.coneDeg * DEG);
+      const team = this.teamOf(m);
       for (const p of this.sim.pawns.values()) {
-        if (p.kind !== PawnKind.Body || p.team === m.team || p.state.mode === PawnMode.Dead || p.proxy) continue;
+        if (p.kind !== PawnKind.Body || p.team === team || p.state.mode === PawnMode.Dead || p.proxy) continue;
         const at = eyePose(this.sim.data.movement, this.sim.data.hitboxes, p.state).pos;
         const d: Vec3 = [at[0] - view.pos[0], at[1] - view.pos[1], at[2] - view.pos[2]];
         const dist = Math.hypot(d[0], d[1], d[2]);
@@ -1152,7 +1169,7 @@ export class Room implements DirectorHost {
         const wall = raycastLevel(this.sim, view.pos, [d[0] / dist, d[1] / dist, d[2] / dist], dist);
         if (wall && wall.t < dist - 0.05) continue;
         const e: GameEvent = { kind: "spotted", pawnId: p.id, by: c!.id, ticks: ticks(this.sim.data.intel.ping.seconds) };
-        for (const o of this.members.values()) if (o.team === m.team || o.ctrl?.id === p.ownerId) o.events.push(e);
+        for (const o of this.members.values()) if (this.teamOf(o) === team || o.ctrl?.id === p.ownerId) o.events.push(e);
       }
     }
   }
@@ -1178,7 +1195,8 @@ export class Room implements DirectorHost {
       const body = this.sim.pawns.get(c.possessedPawnId);
       if (!cam || !this.sim.camWorks(i) || this.sim.tick < cam.dartReady || !body || body.state.mode === PawnMode.Dead) continue;
       const view = this.sim.viewOf(c)!;
-      const drones = [...this.sim.pawns.values()].filter((p) => p.kind === PawnKind.Drone && p.state.mode === PawnMode.Walk && p.team !== m.team);
+      const team = this.teamOf(m);
+      const drones = [...this.sim.pawns.values()].filter((p) => p.kind === PawnKind.Drone && p.state.mode === PawnMode.Walk && p.team !== team);
       const centre = (p: Pawn): Vec3 => [p.state.x, p.state.y + size[1] / 2, p.state.z];
       const burst = dartBurst(this.sim, k, view.pos, viewDir(view.yaw, view.pitch), drones.map(centre), size[0] / 2);
       for (const p of drones) {
@@ -1197,7 +1215,8 @@ export class Room implements DirectorHost {
     if (!m || id >= this.sim.data.intel.callouts.length || this.sim.tick - m.lastCallout < ticksOrZero(0.5)) return;
     m.lastCallout = this.sim.tick;
     const e: GameEvent = { kind: "callout", name: m.name, id };
-    for (const o of this.members.values()) if (o.team === m.team) o.events.push(e);
+    const team = this.teamOf(m);
+    for (const o of this.members.values()) if (this.teamOf(o) === team) o.events.push(e);
   }
 
   /** Judge the shots of the step just taken; `applied` is each member's input in that step. */

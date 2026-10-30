@@ -98,7 +98,7 @@ export class IntelHud {
    * Every frame, once the camera is placed: each mark where its point is on the screen (`w` × `h` px), or at the
    * edge toward it; `posOf` is where a spotted enemy is drawn (null: not known, the mark waits).
    */
-  update(now: number, camera: THREE.PerspectiveCamera, w: number, h: number, posOf: (pawnId: number) => [number, number, number] | null) {
+  update(now: number, camera: THREE.Camera, w: number, h: number, posOf: (pawnId: number) => [number, number, number] | null) {
     camera.updateMatrixWorld();
     for (let i = this.marks.length - 1; i >= 0; i--) {
       const m = this.marks[i];

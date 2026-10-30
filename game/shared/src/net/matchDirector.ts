@@ -9,7 +9,7 @@ import { DeployKind } from "../destruction/deploy.js";
 import type { PanelOp } from "../destruction/panel.js";
 import { QUERY_SIGHT } from "../physics/rapier.js";
 import { isDowned } from "../player/downed.js";
-import { PawnMode } from "../player/types.js";
+import { PawnKind, PawnMode } from "../player/types.js";
 import type { Pawn, PlayerController } from "../player/pawn.js";
 import { defaultLoadoutPick, resolveLoadout, type LoadoutPick } from "../weapons/loadout.js";
 import type { Sim } from "../sim.js";
@@ -32,7 +32,7 @@ export interface DirectorHost {
   /** A new body for a member at this level spawn, carrying `pick`, on `side` (its client gets a correction). */
   spawnBody(memberId: number, pick: LoadoutPick, spawnIndex: number, side: Side): void;
   /** An attacker in prep (Phase 7): no body, their drones, the first out at this spawn. */
-  spawnPilot(memberId: number, spawnIndex: number, side: Side): void;
+  spawnPilot(memberId: number, pick: LoadoutPick | null, spawnIndex: number, side: Side): void;
   /** Take a member's body away. */
   removeBody(memberId: number): void;
   /** Tell everyone who has which body (after spawning or removing some). */
@@ -246,7 +246,18 @@ export class MatchDirector {
     this.apply(m.update(sim.tick, facts));
     this.redWalls();
     this.watchCams();
+    this.signalsLost();
     this.sendState();
+  }
+
+  /** Bulletproof Cameras placed outdoors lose their signal at their time (everyone hears at once: a feed is gone). */
+  private signalsLost() {
+    const tick = this.host.sim.tick;
+    for (const c of this.host.sim.matchRules.bpCams)
+      if (!c.lost && c.signalEnd !== 0 && tick >= c.signalEnd) {
+        c.lost = true;
+        this.changed(true);
+      }
   }
 
   /** A camera being watched lights up (Phase 7, research/intel.md §3: everyone sees it): who watches which, each tick. */
@@ -276,7 +287,8 @@ export class MatchDirector {
    * until its player first goes into the building. The room deals it no damage (bullets and the knife).
    */
   safeguarded(pawn: Pawn): boolean {
-    if (this.match.phase !== Phase.Action || this.host.sim.tick >= this.safeguardEnd || pawn.team !== ATTACK || pawn.ownerId === null) return false;
+    // (An attacker's body only: a drone isn't safeguarded, wherever it is.)
+    if (this.match.phase !== Phase.Action || this.host.sim.tick >= this.safeguardEnd || pawn.team !== ATTACK || pawn.kind !== PawnKind.Body || pawn.ownerId === null) return false;
     const member = this.memberOfCtrl(pawn.ownerId);
     return member !== null && !this.safeguardOver.has(member);
   }
@@ -324,7 +336,7 @@ export class MatchDirector {
     if (owner === undefined || owner === null) return;
     const pos: [number, number, number] = [Math.fround(e.pos[0]), Math.fround(e.pos[1]), Math.fround(e.pos[2])];
     const signalEnd = indoors(sim.level.def, ...pos) ? 0 : sim.tick + ticks(sim.data.intel.bulletproofCamera.outdoorSignalS);
-    sim.matchRules.bpCams.push({ pos, yaw: Math.fround(e.yaw), onFloor: e.onFloor, owner, broken: false, signalEnd, dartReady: 0, panel: e.panel });
+    sim.matchRules.bpCams.push({ pos, yaw: Math.fround(e.yaw), onFloor: e.onFloor, owner, broken: false, signalEnd, lost: false, dartReady: 0, panel: e.panel });
     this.changed(true);
   }
 
@@ -393,11 +405,11 @@ export class MatchDirector {
     const { rangeM, coneDeg } = sim.data.objective.siteSight;
     const cos = Math.cos(coneDeg * DEG);
     for (const id of this.match.sides[ATTACK]) {
-      // What the attacker is looking through: their body, or the drone they drive (Phase 7: drones find it too).
+      // What the attacker is looking through: their body, a drone they drive, or a teammate's they watch (Phase 7:
+      // drones find it too; on a teammate's, the view is the watcher's own).
       const body = this.host.bodyOf(id);
-      const p = body ? sim.pawns.get(sim.viewedPawnId(body.id)) : undefined;
-      if (!p || p.state.mode === PawnMode.Dead || p.state.mode === PawnMode.Held) continue;
-      const view = sim.eyeOf(p);
+      const view = body ? sim.viewOf(body) : null;
+      if (!view) continue;
       const eye = view.pos;
       const look = viewDir(view.yaw, view.pitch);
       for (const b of site.bombs) {
@@ -551,7 +563,7 @@ export class MatchDirector {
     defenders.forEach((id, k) => this.spawnOne(id, spots[k % Math.max(1, spots.length)] ?? 0, DEFENSE));
     // Attackers drone through prep (intel/DESIGN.md §2): their first drone out at the spawn they've chosen.
     if (sim.data.intel.drone.perAttacker > 0)
-      for (const [id, spawn] of this.attackerSpawns()) if (this.match.players.get(id)?.connected) this.host.spawnPilot(id, spawn, ATTACK);
+      for (const [id, spawn] of this.attackerSpawns()) if (this.match.players.get(id)?.connected) this.host.spawnPilot(id, this.loadoutFor(id), spawn, ATTACK);
     const sec = this.mode.match.seconds;
     sim.objective = { carrier: 0, dropped: null, planted: null, site: this.match.site, canPlant: false, plantTicks: ticks(sec.plant), disableTicks: ticks(sec.disable) };
     this.host.rosterChanged();

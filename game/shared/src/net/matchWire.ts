@@ -302,7 +302,7 @@ export function encodeMatchState(v: MatchView): Uint8Array {
   w.varu(v.carrier).u32(v.safeguardEnd >>> 0).u32(v.camsBroken >>> 0).u32(v.camsWatched >>> 0);
   w.u8(Math.min(MAX_BP_CAMS, v.bpCams.length));
   for (const c of v.bpCams.slice(0, MAX_BP_CAMS)) {
-    w.f32(c.pos[0]).f32(c.pos[1]).f32(c.pos[2]).f32(c.yaw).u8((c.onFloor ? 1 : 0) | (c.broken ? 2 : 0));
+    w.f32(c.pos[0]).f32(c.pos[1]).f32(c.pos[2]).f32(c.yaw).u8((c.onFloor ? 1 : 0) | (c.broken ? 2 : 0) | (c.lost ? 4 : 0));
     w.varu(c.owner).u32(c.signalEnd >>> 0).u32(c.dartReady >>> 0).varu(c.panel + 1);
   }
   const history = v.history.slice(-MAX_HISTORY);
@@ -384,8 +384,8 @@ export function decodeMatchState(r: ByteReader): MatchView {
     const pos: [number, number, number] = [r.finite(), r.finite(), r.finite()];
     const yaw = r.finite();
     const fl = r.u8();
-    if (fl > 3) throw new ProtocolError("bad camera");
-    return { pos, yaw, onFloor: (fl & 1) !== 0, broken: (fl & 2) !== 0, owner: r.varu(), signalEnd: r.u32(), dartReady: r.u32(), panel: r.varu() - 1 };
+    if (fl > 7) throw new ProtocolError("bad camera");
+    return { pos, yaw, onFloor: (fl & 1) !== 0, broken: (fl & 2) !== 0, lost: (fl & 4) !== 0, owner: r.varu(), signalEnd: r.u32(), dartReady: r.u32(), panel: r.varu() - 1 };
   });
   const h = r.u8();
   if (h > MAX_HISTORY) throw new ProtocolError("history too long");

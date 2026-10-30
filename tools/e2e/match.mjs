@@ -84,7 +84,7 @@ try {
     page.evaluate(
       ([extra, damage]) => {
         const r = window.__match.rules;
-        const match = { ...structuredClone(r.match), rounds: 2, swapEvery: 1, overtime: null, seconds: { ...r.match.seconds, pick: 12, prep: 5, action: 30, roundEnd: 3 }, ...extra };
+        const match = { ...structuredClone(r.match), rounds: 2, swapEvery: 1, overtime: null, seconds: { ...r.match.seconds, pick: 12, prep: 12, action: 30, roundEnd: 3 }, ...extra };
         window.__match.lobby({ kind: "change", change: { kind: "rules", rules: { match, ...damage } } });
       },
       [extra, damage],
@@ -209,7 +209,7 @@ try {
   const droneAt = await own(att1);
   result.oneVsOne.prep = { defenderAt: defAt && [defAt.x, defAt.y, defAt.z], attackerDrone: droneAt && [droneAt.x, droneAt.y, droneAt.z], screen: await att1.evaluate(() => window.__match.screen) };
   result.checks.defenderAtTheSite = siteSpawns.some((s) => near(defAt, s.pos, 1));
-  result.checks.redWallsInPrep = (await view(def1)).redWalls === true; // before the 5 s of prep are over
+  result.checks.redWallsInPrep = (await view(def1)).redWalls === true; // before the 12 s of prep are over
   const spawnSpot = lvl.spawns.find((s) => s.group === SPAWN);
   result.checks.attackerDronesFromTheSpawn =
     droneAt !== null && (await att1.evaluate(() => window.__lab.net.viewedKind)) === 1 && Math.hypot(droneAt.x - spawnSpot.pos[0], droneAt.z - spawnSpot.pos[2]) < 0.5 && result.oneVsOne.prep.screen === "planning";

@@ -100,7 +100,8 @@ watch them after the level's cameras, in `bulletproofCamera.view`'s limits. A bu
 its front meets the plate; from the side or the back it breaks it; a knife breaks it (Siege's only shatters the
 glass, but with no sound yet that is the same for us); steel going up on its panel breaks it. **Deviation
 (flagged):** like a default camera it doesn't stop the bullet. Outdoors (outside every room of the level) its feed
-ends `outdoorSignalS` after it's placed. The dart: the gadget key pressed while watching it, alive, when it's ready;
+ends `outdoorSignalS` after it's placed: the room marks it lost then and the match state says so (D-138: a client's
+ticks aren't the server's). The dart: the gadget key pressed while watching it, alive, when it's ready;
 it flies along the view up to `dartRangeM`, bursts on the first enemy drone on its way (or the level) and jams every
 enemy drone within `dartRadiusM` for `disableS` (the drone's `jammed`: it ignores its driver; its owner gets a
 correction); ready again `dartRechargeS` later, whoever fires it. The thermal view is the client's: bodies glow white,

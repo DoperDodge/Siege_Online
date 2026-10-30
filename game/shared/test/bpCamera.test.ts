@@ -35,6 +35,7 @@ const kept = (e: Extract<SimEvent, { kind: "camera" }>, owner: number): BpCam =>
   owner,
   broken: false,
   signalEnd: 0,
+  lost: false,
   dartReady: 0,
   panel: e.panel,
 });
@@ -111,7 +112,7 @@ describe("watching a Bulletproof Camera (Phase 7 M5)", () => {
     expect(c.camYaw / DEG).toBeCloseTo(170, 3);
   });
 
-  it("broken, or outdoors once its signal is gone, it's skipped: a viewer goes on to the next working camera", async () => {
+  it("broken, or outdoors once the room says its signal is gone, it's skipped: a viewer goes on to the next working camera", async () => {
     const { sim, c, step, placed } = await defender();
     step({ buttons: Btn.Gadget }, 64);
     sim.matchRules.bpCams.push(kept(placed()[0], c.id));
@@ -119,14 +120,14 @@ describe("watching a Bulletproof Camera (Phase 7 M5)", () => {
     step({ buttons: Btn.Observe });
     step({ lean: -1 });
     expect(c.cam).toBe(n + 1);
-    sim.matchRules.bpCams[0].signalEnd = sim.tick + 4;
     step({ lean: 0 }, 3);
     expect(c.cam).toBe(n + 1);
-    step({}, 2);
+    sim.matchRules.bpCams[0].lost = true;
+    step({});
     expect(c.cam).toBe(1); // round to the first
     step({ lean: -1 });
     expect(c.cam).toBe(n); // the level's last: the Bulletproof Camera is skipped
-    sim.matchRules.bpCams[0].signalEnd = 0;
+    sim.matchRules.bpCams[0].lost = false;
     sim.matchRules.bpCams[0].broken = true;
     step({ lean: 0 });
     step({ lean: 1 });
@@ -151,7 +152,7 @@ describe("a round's Bulletproof Cameras gone (Phase 7 M5)", () => {
 
 describe("a Bulletproof Camera's plate and its dart (Phase 7 M5)", () => {
   // Facing −z (yaw 0) at (0, 1, 0).
-  const cam: BpCam = { pos: [0, 1, 0], yaw: 0, onFloor: false, owner: 1, broken: false, signalEnd: 0, dartReady: 0, panel: -1 };
+  const cam: BpCam = { pos: [0, 1, 0], yaw: 0, onFloor: false, owner: 1, broken: false, signalEnd: 0, lost: false, dartReady: 0, panel: -1 };
 
   it("a bullet at its front within 50° of straight on meets the plate; from the side or the back it breaks it; a knife, any face", async () => {
     const k = (await Sim.create("range_lab")).data.intel.bulletproofCamera;

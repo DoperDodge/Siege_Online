@@ -18,6 +18,12 @@ const WHEEL_TICKS = 16;
 const WHEEL_DEAD = 30;
 const WHEEL_REACH = 120;
 
+/**
+ * Keys that, on a drone or a camera (Phase 7), would flip a toggle or ask for a weapon the body standing idle would
+ * then take back: they don't (a lean switches the feed instead).
+ */
+const FEED_IGNORES = new Set<Action>(["crouch", "prone", "leanLeft", "leanRight", "ads", "primary", "secondary", "swap"]);
+
 /** Keys that change the body's pose; ignored while stanceLocked() (see there). */
 const STANCE_ACTIONS = new Set<Action>(["crouch", "prone", "leanLeft", "leanRight", "ads"]);
 
@@ -84,10 +90,12 @@ export class Controls {
   /** The gadget key is held to place a camera (Phase 7); a tap shorter than a tick still goes out once (its dart). */
   private gadgetPulse = false;
   /**
-   * On a drone (Phase 7) the lean keys are held, whatever the lean setting: a new press goes to the previous / next
-   * drone out.
+   * On a drone or a camera (Phase 7) the lean keys are held, whatever the lean setting: a new press goes to the previous
+   * / next feed.
    */
   onDrone: () => boolean = () => false;
+  /** A lean pressed on a feed, sent for the next tick even if let go before it (−1 / 1; 0: none). */
+  private leanPulse: -1 | 0 | 1 = 0;
   /**
    * The ping key (Phase 7, intel/DESIGN.md §6): a tap pings where you look (sent for one tick when it's let go); held
    * for WHEEL_TICKS it opens the comm wheel instead, where the mouse points at a callout and letting go sends it.
@@ -280,6 +288,12 @@ export class Controls {
     if (STANCE_ACTIONS.has(action) && this.stanceLocked()) return;
     const s = this.settings;
     this.held.add(action);
+    if (this.onDrone() && FEED_IGNORES.has(action)) {
+      // On a drone or a camera (Phase 7) the body's toggles and weapons stay as they were (it stands idle), and a lean
+      // goes to the previous / next feed: for one tick at least, so a tap between ticks (or a touch button's) counts.
+      if (action === "leanLeft" || action === "leanRight") this.leanPulse = this.lastLeanHold = action === "leanLeft" ? -1 : 1;
+      return;
+    }
     switch (action) {
       case "crouch":
         if (s.crouchMode === "toggle") this.stanceIntent = this.stanceIntent === Stance.Crouch ? Stance.Stand : Stance.Crouch;
@@ -452,6 +466,8 @@ export class Controls {
       const r = this.held.has("leanRight");
       lean = l && r ? this.lastLeanHold : l ? -1 : r ? 1 : 0;
     }
+    if (this.onDrone() && lean === 0) lean = this.leanPulse;
+    this.leanPulse = 0;
     // Prone: turn toward the view by at most one step from where the body is (re-anchored in syncView).
     const step = this.limits.maxYawStep;
     const yaw = step === null ? this.yaw : wrapAngle(this.sampledYaw + clamp(wrapAngle(this.yaw - this.sampledYaw), -step, step));

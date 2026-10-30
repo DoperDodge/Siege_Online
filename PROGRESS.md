@@ -5,7 +5,7 @@ known issues, and what's next.
 
 ---
 
-## Phase 7 — Intel · 🚧 in progress (branch `claude/phase-7-intel`)
+## Phase 7 — Intel · ✅ done, waiting for your test (branch `claude/phase-7-intel`, PR #8)
 
 **Done when (PLAN §17):** prep-phase droning and watching the cameras work online. The design is
 `game/shared/src/intel/DESIGN.md` (D-134). It builds on Phase 6 (PR #7), which waits for your test.
@@ -32,7 +32,15 @@ known issues, and what's next.
   and both can follow a living teammate's eyes (Phase 6).
 - **Checks:** the match netsim now measures prep droning. In the 10-round match the attackers' drones covered 454 m
   over the 10 preps with no misprediction (`npm run netsim -- --match`); its 4-round unit test checks the same. The
-  match browser test has an attacker go from their own drone to a teammate's in the 2v3.
+  match browser test has an attacker go from their own drone to a teammate's in the 2v3 (38 checks in all), and there
+  are 679 unit tests.
+- **Review (D-138):** two reviewers read the phase (the shared code, the client); fourteen findings held up and all
+  are fixed, each with a test where one can be written. The ones you'd notice: an outdoor Bulletproof Camera's lost
+  signal and its dart's timer were wrong online; a ping key held down spammed danger pings; Q / E or C on a drone or
+  a camera left your body leaning or crouched when you came back (the touch Lean buttons now switch feeds); a
+  teammate's jammed drone never said so; on a camera, the storey and the where line followed your body; dead on a
+  camera, the death message stayed over the feed; picking up a drone whose boost was recharging cost a correction;
+  drones were covered by Quick Match's Attacker Safeguard.
 
 ### What's done (M5: the Bulletproof Camera)
 - **Placing it:** a defender who took it (Mute by default, Sentry's default kit, Lesion's second gadget) holds 3 (ours)
@@ -117,7 +125,7 @@ known issues, and what's next.
   bullet that breaks it; attackers don't see a light on a watched camera yet; no sounds (Phase 11), no static near
   jammers (Mute, Phase 8).
 - Pinging an enemy's gadget or a camera doesn't mark it with its icon yet (gadgets are Phase 8); pings show the
-  pinger's name, not a number. On touch screens, Lean L / R don't switch drones or cameras yet.
+  pinger's name, not a number.
 - The Bulletproof Camera doesn't stop the bullet that hits its plate, a knife breaks it outright (Siege's knife only
   breaks the glass), and it can't be picked up again. The gadget key does nothing else until Phase 8.
 - Drones in use show no light yet, and a camera's light is on whenever anyone watches it (whether a passive viewer

@@ -556,6 +556,8 @@ describe("each format's details (Phase 6 M5)", () => {
     const v = a1.session.match!;
     expect(v.safeguardEnd).toBe(start - 1 + 10 * 64);
     expect(v.players.filter((p) => p.side === ATTACK).map((p) => p.safe)).toEqual([true, true]);
+    // (Their drones aren't safeguarded, wherever they are: Phase 7.)
+    for (const c of [a1, a2]) for (const d of t.room.sim.dronesOf(t.room.bodyOf(c.id)!)) expect(t.room.director!.safeguarded(d)).toBe(false);
     const lobby = t.room.sim.level.def.rooms.find((r) => r.id === "1F_LOBBY")!.anchor;
     t.place(a2, lobby[0], lobby[1], lobby[2], 0);
     expect(t.room.director!.safeguarded(t.bodyOf(a2)!)).toBe(false);
@@ -818,6 +820,7 @@ describe("drones in a match (Phase 7 M1)", () => {
     expect(d1.state.mode).toBe(PawnMode.Dead);
     expect(def.events.some((e) => e.kind === "droneDestroyed" && e.pawnId === d1.id)).toBe(true);
     expect(def.events.some((e) => e.kind === "kill")).toBe(false);
+    expect(atk.events.some((e) => e.kind === "damageTaken")).toBe(false); // its owner wasn't hurt
     expect(t.match.players.get(atk.id)!.deaths).toBe(0);
     expect(t.match.phase).toBe(Phase.Prep);
   }, 60_000);
@@ -1000,6 +1003,33 @@ describe("pings, scans and callouts (Phase 7 M4)", () => {
     expect(spotted(c)).toBe(1);
   }, 60_000);
 
+  it("a ping key hammered every other tick sends a few a second at most", async () => {
+    const { t, a, c } = await three();
+    for (let i = 0; i < 64; i++) {
+      a.cmd = { pitch: -10 * DEG, buttons: i % 2 ? 0 : Btn.Ping };
+      t.tick();
+    }
+    a.cmd = { pitch: -10 * DEG };
+    for (let i = 0; i < 8; i++) t.tick();
+    const n = c.events.filter((e) => e.kind === "ping").length;
+    expect(n).toBeGreaterThan(0);
+    expect(n).toBeLessThanOrEqual(4);
+  }, 60_000);
+
+  it("one who rejoins mid-round, with no body yet, hears and reaches their own side only", async () => {
+    const { t, a, b, c } = await three();
+    t.room.leave(b.id);
+    t.tick();
+    const back = await t.add("b");
+    for (let i = 0; i < 8; i++) t.tick();
+    expect(t.match.sideOf(back.id)).toBe(DEFENSE);
+    back.toServer.push(encodeCallout(1));
+    a.toServer.push(encodeCallout(2));
+    for (let i = 0; i < 4; i++) t.tick();
+    const calls = (x: { events: GameEvent[] }) => x.events.filter((e) => e.kind === "callout").map((e) => (e as Extract<GameEvent, { kind: "callout" }>).id);
+    expect([calls(back), calls(a), calls(c)]).toEqual([[1], [2], [2]]);
+  }, 60_000);
+
   it("a callout off the wheel reaches the caller's team only, two a second at most", async () => {
     const { t, a, b, c } = await three();
     a.toServer.push(encodeCallout(0));
@@ -1127,6 +1157,9 @@ describe("the Bulletproof Camera in a match (Phase 7 M5)", () => {
     b.cmd = {};
     t.until(() => ctrl.cam === 1, 10.5, "its signal gone");
     expect(t.room.sim.tick).toBeGreaterThanOrEqual(cam.signalEnd);
+    // The room tells everyone; the defender's own client hands over as well.
+    for (let i = 0; i < 16; i++) t.tick();
+    expect([cam.lost, b.session.match!.bpCams[0].lost, b.session.ctrl!.cam]).toEqual([true, true, 1]);
   }, 60_000);
 
   it("its EMP dart jams the drone it bursts on (6 s, no driving); it's ready again 10 s later; the dead can't fire it", async () => {
@@ -1186,6 +1219,52 @@ describe("the Bulletproof Camera in a match (Phase 7 M5)", () => {
     }
     fire();
     expect(emps(b)).toBe(2);
+  }, 60_000);
+});
+
+describe("the review of Phase 7", () => {
+  it("in prep an attacker's pilot is this round's operator: the roster says so", async () => {
+    const t = await matchRoom("custom", 3);
+    const [a, b] = await t.start(["a", "b"], quick({ siteReveal: "roundStart", firstAttack: "blue" }));
+    a.toServer.push(encodePickLoadout(defaultLoadoutPick(data, "fuze")));
+    t.until(() => t.match.phase === Phase.Prep, 15, "prep");
+    for (let i = 0; i < 8; i++) t.tick();
+    const ctrl = t.room.bodyOf(a.id)!;
+    expect(ctrl.operatorId).toBe("fuze");
+    expect(b.session.roster.find((e) => e.controllerId === ctrl.id)!.operatorId).toBe("fuze");
+  }, 60_000);
+
+  it("an attacker picks up a drone whose boost is recharging: predicted (no corrections)", async () => {
+    const t = await matchRoom("custom", 3);
+    const [a] = await t.start(["a", "b"], quick({ siteReveal: "roundStart", firstAttack: "blue" }));
+    t.until(() => t.match.phase === Phase.Action, 15, "action");
+    for (let i = 0; i < 16; i++) t.tick();
+    const ctrl = t.room.bodyOf(a.id)!;
+    const yaw = t.bodyOf(a)!.state.yaw;
+    // Throw the second drone, boost it, and come back to the body; once it has rolled to a stop, pick it up (its boost
+    // still recharging: the server steps a drone it made before the body, a client one made after).
+    a.cmd = { yaw, buttons: Btn.Observe };
+    t.tick();
+    a.cmd = { yaw };
+    t.until(() => ctrl.drone !== 0, 0.5, "the drone");
+    const drone = t.room.sim.pawns.get(ctrl.drone)!;
+    a.cmd = { yaw, forward: 1, buttons: Btn.Sprint };
+    for (let i = 0; i < 24; i++) t.tick();
+    a.cmd = { yaw, buttons: Btn.Observe };
+    t.tick();
+    a.cmd = { yaw };
+    t.until(() => ctrl.drone === 0, 0.5, "back in the body");
+    t.until(() => Math.hypot(drone.state.vx, drone.state.vz) === 0, 1, "the drone at rest");
+    t.place(a, drone.state.x + 0.5, t.bodyOf(a)!.state.y, drone.state.z, 90);
+    for (let i = 0; i < 4; i++) t.tick();
+    expect(drone.state.boostCd).toBeGreaterThan(0);
+    const missed = a.session.mispredictions.length;
+    a.cmd = { yaw: 90 * DEG, buttons: Btn.Interact };
+    t.tick();
+    a.cmd = { yaw: 90 * DEG };
+    t.until(() => drone.state.mode === PawnMode.Held, 0.5, "in hand");
+    for (let i = 0; i < 16; i++) t.tick();
+    expect(a.session.mispredictions.length).toBe(missed);
   }, 60_000);
 });
 

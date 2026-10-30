@@ -110,6 +110,7 @@ html, body { overflow: hidden; overscroll-behavior: none; touch-action: none; us
 .dronecam.jammed { background: repeating-linear-gradient(0deg, rgba(200, 210, 220, 0.14) 0 2px, rgba(0, 0, 0, 0.2) 2px 4px); animation: jam 0.12s steps(2) infinite; }
 @keyframes jam { 50% { background-position: 0 3px; } }
 .gadget-line { margin-top: 2px; font: 600 11px var(--mono); color: var(--muted); }
+.on-feed .hud-bottom, .on-feed .lean-ind { display: none; }
 .hidden { display: none !important; }
 
 .gear { position: fixed; z-index: 3; top: 44px; right: 12px; width: 40px; height: 40px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); font-size: 20px; cursor: pointer; }

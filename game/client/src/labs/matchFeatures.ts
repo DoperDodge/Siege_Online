@@ -563,7 +563,8 @@ export function matchFeatures(lab: LabApi): void {
   /** Which living teammate the dead look through (a click moves on to the next). */
   let follow = 0;
   lab.app.addEventListener("mousedown", (e) => {
-    if (e.button === 0 && lab.body() === null && (e.target as Element).tagName === "CANVAS") follow++;
+    // (Not while watching a camera or a drone, where the button scans.)
+    if (e.button === 0 && lab.body() === null && lab.ctrl.cam === 0 && lab.ctrl.drone === 0 && (e.target as Element).tagName === "CANVAS") follow++;
   });
   /** Living teammates' bodies (the side you play this round), yours left out. */
   const livingMates = (side: 0 | 1): number[] =>

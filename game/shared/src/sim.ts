@@ -834,11 +834,14 @@ export class Sim {
     return i < this.level.def.cameras.length ? null : (this.matchRules.bpCams[i - this.level.def.cameras.length] ?? null);
   }
 
-  /** Whether camera i has a feed: not broken, and a Bulletproof Camera placed outdoors still has its signal. */
+  /**
+   * Whether camera i has a feed: not broken, and a Bulletproof Camera placed outdoors not yet without its signal (the
+   * room says when: a client's ticks aren't the server's).
+   */
   camWorks(i: number): boolean {
     if (i >= this.camCount()) return false; // a Bulletproof Camera from a round that's over
     const bp = this.bpCamAt(i);
-    if (bp) return !bp.broken && (bp.signalEnd === 0 || this.tick < bp.signalEnd);
+    if (bp) return !bp.broken && !bp.lost;
     return i < 32 && (this.matchRules.camsBroken & (1 << i)) === 0;
   }
 
@@ -1184,14 +1187,8 @@ export class Sim {
       }
     }
     for (const pawn of this.pawns.values()) {
-      if (pawn.proxy) continue; // simulated elsewhere
+      if (pawn.proxy || pawn.kind === PawnKind.Drone) continue; // simulated elsewhere; drones below
       if (only && (pawn.ownerId === null || !only.has(pawn.ownerId))) continue;
-      if (pawn.kind === PawnKind.Drone) {
-        // Driven, or parked (settling under gravity); held and destroyed drones don't move.
-        stepDrone(this.ctx, pawn, drive.get(pawn.id) ?? null);
-        refreshBroadPhase(this.world);
-        continue;
-      }
       const input = drive.get(pawn.id);
       if (input) {
         const held = pawn.state.prevButtons;
@@ -1234,6 +1231,15 @@ export class Sim {
       this.stepBody(pawn, idleInput(pawn, idleShell ? Stance.Crouch : pawn.state.stance), !idleShell, false);
       refreshBroadPhase(this.world);
       pawn.state.prevButtons = held;
+    }
+    // Drones (Phase 7) after every body, whatever order a server and a client made the pawns in: a drone picked up
+    // this tick is in hand before it would move, on both. Driven, or parked (settling under gravity); held and
+    // destroyed drones don't move.
+    for (const pawn of this.pawns.values()) {
+      if (pawn.proxy || pawn.kind !== PawnKind.Drone) continue;
+      if (only && (pawn.ownerId === null || !only.has(pawn.ownerId))) continue;
+      stepDrone(this.ctx, pawn, drive.get(pawn.id) ?? null);
+      refreshBroadPhase(this.world);
     }
     if (advanceTick) this.tick++;
   }

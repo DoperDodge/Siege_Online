@@ -600,6 +600,7 @@ export class PawnView {
   dispose() {
     this.gun?.dispose();
     this.rope.geometry.dispose();
+    this.drone?.traverse((o) => (o as THREE.Mesh).geometry?.dispose());
     this.scene.remove(this.body, this.wire);
     for (const m of this.materials) m.dispose();
     if (this.tag) {

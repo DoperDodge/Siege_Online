@@ -81,6 +81,8 @@ describe("snapshot codec", () => {
     const back = remoteState(dec.have.get(5)!);
     expect([back.mode, back.stance, back.stanceFrom, back.sprinting, back.grounded]).toEqual([PawnMode.Downed, Stance.Prone, Stance.Crouch, true, true]);
     expect(back.revivedBy).toBe(REVIVER_UNKNOWN); // someone is reviving it (who isn't sent)
+    // A drone jammed by an EMP dart (Phase 7): those watching it are told, not for how long.
+    expect([remoteState(quantizeRemote({ ...s, jammed: 300 })).jammed, back.jammed]).toEqual([1, 0]);
     // On a rope, turning over (Phase 5 M8): others see how far it has turned (to 1/255), and only on a rope.
     const turning = { ...initialPawnState(1, 4, 2, 0, 100), mode: PawnMode.Rappel, rappel: 3, ropeTurn: 0.4 };
     const roped = new SnapshotDecoder();

@@ -1010,8 +1010,10 @@ export async function startLab(o: LabOptions): Promise<void> {
     controls.limits = proneView
       ? { pitchMin: mv.stance.pronePitchMinDeg * DEG, pitchMax: mv.stance.pronePitchMaxDeg * DEG, maxYawStep: mv.stance.proneTurnRateDeg * DEG * DT }
       : { pitchMin: mv.look.pitchMinDeg * DEG, pitchMax: mv.look.pitchMaxDeg * DEG, maxYawStep: null };
-    // A drone's camera tilts within its own limits (data/intel.json).
+    // A drone's camera tilts within its own limits (data/intel.json); jammed, your own doesn't turn at all.
     if (v.kind === PawnKind.Drone) controls.limits = { pitchMin: data.intel.drone.pitchMinDeg * DEG, pitchMax: data.intel.drone.pitchMaxDeg * DEG, maxYawStep: null };
+    if (v.kind === PawnKind.Drone && v.state.jammed > 0 && ctrl.pawnIds.includes(v.id))
+      controls.limits = { pitchMin: v.state.pitch, pitchMax: v.state.pitch, maxYawStep: null, yawRange: { center: v.state.yaw, half: 0 } };
     // On a rope the view turns only so far from the wall, and moving onto it, the move turns it.
     controls.limits.yawRange = ropeYawRange(sim.level, data, v.state);
     // A camera (Phase 7): so far either side of its facing (a Bulletproof Camera on the floor: all the way round), its
@@ -1129,9 +1131,10 @@ export async function startLab(o: LabOptions): Promise<void> {
       // A teammate's drone (Phase 7) is drawn where others are: between the snapshots around the render tick.
       rs = viewed!.proxy && net ? (net.session.remoteAt(viewed!.id, renderTick) ?? viewed!.state) : interpolated(viewed!, alpha);
       flyFreeCam(elapsed);
-      // A map follows the body you look through (or the free camera): its storey (and that storey's light), the
-      // plan view over it.
-      const [vx, vy, vz] = freeCam ? [freeCam.x, freeCam.y - data.movement.stance.stand.eye, freeCam.z] : [rs.x, rs.y, rs.z];
+      // A map follows the body you look through (or the free camera, or the camera you watch): its storey (and that
+      // storey's light), the plan view over it.
+      const lens = onCamera ? sim.camLens(ctrl.cam - 1, ctrl.camYaw) : null;
+      const [vx, vy, vz] = freeCam ? [freeCam.x, freeCam.y - data.movement.stance.stand.eye, freeCam.z] : lens ? [lens[0], lens[1] - 0.05, lens[2]] : [rs.x, rs.y, rs.z];
       if (storeyView?.follow(vx, vy, vz, controls.yaw, elapsed)) renderer.shadowMap.needsUpdate = true;
       if (storeyView) viewmodel.setLight(storeyView.light());
       whereHud?.update(now, storeyView?.storey ?? 0, vx, vz);
@@ -1146,7 +1149,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       const eye = droneView ? { pos: droneEye(data.intel.drone, rs).pos, roll: 0 } : eyePose(data.movement, data.hitboxes, { ...rs, yaw: controls.yaw });
       if (onCamera) {
         // A camera: from just in front of its lens, where the camera looks (it follows the mouse at its rate).
-        eye.pos = sim.camLens(ctrl.cam - 1, ctrl.camYaw);
+        eye.pos = lens!;
         const fov = sim.camLimits(ctrl.cam - 1).fovDeg;
         if (Math.abs(camera.fov - fov) > 1e-4) {
           camera.fov = fov;
@@ -1176,7 +1179,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     if (panelView.update()) renderer.shadowMap.needsUpdate = true;
     const panelMs = performance.now() - panelFrom;
     for (const fn of hooks.frame) fn(now, renderTick);
-    intelHud.update(now, camera, app.clientWidth, app.clientHeight, (id) => {
+    intelHud.update(now, shownCamera(), app.clientWidth, app.clientHeight, (id) => {
       const st = net?.session.remoteAt(id, renderTick);
       return st && st.mode !== PawnMode.Dead ? [st.x, st.y, st.z] : null;
     });
@@ -1373,10 +1376,13 @@ export async function startLab(o: LabOptions): Promise<void> {
     $(".lean-r").style.opacity = String(Math.max(0, s.lean));
     const msg = $(".center-msg");
     const dead = s.mode === PawnMode.Dead;
+    // On a drone or a camera (Phase 7), the feed's own overlay: not the body's death message and readouts.
+    const onFeed = ctrl.cam !== 0 || ctrl.drone !== 0 || sim.pawns.get(ctrl.possessedPawnId)?.kind === PawnKind.Drone;
+    app.classList.toggle("on-feed", onFeed);
     const deathText = dead && death?.pawnId === p.id && death.life === p.life ? death.text : null;
     const needClick = !usingTouch && !autotest && !document.pointerLockElement && $(".pause").classList.contains("hidden");
     const waiting = net !== null && !net.session.ready;
-    msg.classList.toggle("hidden", !dead && !needClick && !waiting && !disconnected);
+    msg.classList.toggle("hidden", !(dead && !onFeed) && !needClick && !waiting && !disconnected);
     msg.textContent = disconnected
       ? disconnected
       : waiting
@@ -1442,11 +1448,13 @@ export async function startLab(o: LabOptions): Promise<void> {
       const cam = bp ? null : cams[ctrl.cam - 1];
       const broken = cams.filter((_, i) => sim.matchRules.camsBroken & (1 << i)).length + sim.matchRules.bpCams.filter((c) => c.broken).length;
       const room = cam?.room ? (sim.level.def.rooms.find((r) => r.id === cam.room)?.callout ?? "") : "";
-      const left = (t: number) => `${(Math.max(0, t - sim.tick) * DT).toFixed(1)} s`;
+      // The dart's and the signal's times are the server's ticks (the simulation here counts its own).
+      const now = net ? net.session.serverTick() : sim.tick;
+      const left = (t: number) => `${(Math.max(0, t - now) * DT).toFixed(1)} s`;
       $(".dronecam-title").textContent = [
         `${bp ? "BULLETPROOF CAM" : "CAM"} ${ctrl.cam}/${sim.camCount()}${room ? ` · ${room}` : ""}${broken ? ` · ${broken} broken` : ""}`,
-        bp && !dead ? `${keyLabel(k.gadget)} EMP dart ${sim.tick >= bp.dartReady ? "ready" : left(bp.dartReady)}` : "",
-        bp?.signalEnd ? `signal lost in ${left(bp.signalEnd)}` : "",
+        bp && !dead ? `${keyLabel(k.gadget)} EMP dart ${now >= bp.dartReady ? "ready" : left(bp.dartReady)}` : "",
+        bp?.signalEnd && !bp.lost ? `signal lost in ${left(bp.signalEnd)}` : "",
         `${keyLabel(k.leanLeft)} / ${keyLabel(k.leanRight)} switch · ${keyLabel(k.observe)} back`,
       ]
         .filter(Boolean)
@@ -1465,14 +1473,17 @@ export async function startLab(o: LabOptions): Promise<void> {
       const held = drones.filter((d) => d.state.mode === PawnMode.Held).length;
       const ds = drone.state;
       const secs = (t: number) => `${(t * DT).toFixed(1)} s`;
-      const bodyBack = drone.id !== ctrl.possessedPawnId || sim.feedDrones(ctrl).length > 1;
+      // In prep you are your drone (no body to go back to): only the teammates' drones to switch to.
+      const prep = drone.id === ctrl.possessedPawnId;
+      const others = prep ? sim.feedDrones(ctrl).filter((p) => !ctrl.pawnIds.includes(p.id)).length : sim.feedDrones(ctrl).length - 1;
+      const keys = [others > 0 ? `${keyLabel(k.leanLeft)} / ${keyLabel(k.leanRight)} switch` : "", prep ? "" : `${keyLabel(k.observe)} back`].filter(Boolean).join(" · ");
       $(".dronecam-title").textContent = [
         `DRONE ${drones.indexOf(drone) + 1}/${drones.length}${held ? ` · ${held} held` : ""}`,
         ds.mode === PawnMode.Dead ? "DESTROYED" : "",
         ds.jammed ? `JAMMED ${secs(ds.jammed)}` : "",
         `${keyLabel(k.vault)} jump ${ds.jumpCd ? secs(ds.jumpCd) : "ready"}`,
         `${keyLabel(k.sprint)} boost ${ds.boostTicks ? "ON" : ds.boostCd ? secs(ds.boostCd) : "ready"}`,
-        bodyBack ? `${keyLabel(k.leanLeft)} / ${keyLabel(k.leanRight)} switch · ${keyLabel(k.observe)} back` : "",
+        keys,
       ]
         .filter(Boolean)
         .join("  ·  ");

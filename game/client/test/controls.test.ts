@@ -232,3 +232,28 @@ describe("the ping key and the comm wheel (Phase 7, intel/DESIGN.md §6)", () =>
     expect([w.c.wheelPick, w.picked, w.c.sample(17).buttons & Btn.Ping]).toEqual([undefined, [], 0]);
   });
 });
+
+describe("on a drone or a camera (Phase 7)", () => {
+  it("the body's toggles and weapon keys stay as they were; a lean tap goes out for a tick (it switches the feed)", () => {
+    const c = make({}); // crouch and lean toggle by default
+    let feed = true;
+    c.onDrone = () => feed;
+    c.weaponState = () => ({ slot: 0, equipping: false });
+    c.press("crouch");
+    c.release("crouch");
+    c.press("leanLeft");
+    c.release("leanLeft"); // a tap between two ticks (a touch button's is one)
+    c.press("secondary");
+    c.press("swap");
+    let cmd = c.sample(1);
+    expect([cmd.stance, cmd.lean, cmd.buttons & Btn.Swap]).toEqual([Stance.Stand, -1, 0]);
+    expect(c.sample(2).lean).toBe(0);
+    c.press("leanRight"); // held: every tick while held
+    expect([c.sample(3).lean, c.sample(4).lean]).toEqual([1, 1]);
+    c.release("leanRight");
+    // Back in the body: nothing was left toggled or asked for.
+    feed = false;
+    cmd = c.sample(5);
+    expect([cmd.stance, cmd.lean, cmd.buttons & Btn.Swap]).toEqual([Stance.Stand, 0, 0]);
+  });
+});

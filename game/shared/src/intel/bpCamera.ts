@@ -20,8 +20,9 @@ export interface BpCam {
   owner: number;
   /** Shot from the side or the back, knifed, or its wall reinforced: no feed for the rest of the round. */
   broken: boolean;
-  /** Placed outdoors: the tick its signal ends (0: indoors, it never does). */
+  /** Placed outdoors: the server tick its signal ends (0: indoors, it never does), and whether it has (the room says). */
   signalEnd: number;
+  lost: boolean;
   /** The tick its EMP dart is ready again. */
   dartReady: number;
   /** The panel it's on (its index), or −1. */
@@ -37,7 +38,7 @@ const WALL_NY = 0.3;
  * the level, its props and its panels) within reach. On a floor it sits on it facing `yaw` (the placer's way); on a
  * wall it faces out of it. Null: nothing within reach, or a ceiling or a slope.
  */
-export function cameraSpot(q: LevelQuery, d: BpData, eye: Vec3, dir: Vec3, yaw: number): Omit<BpCam, "owner" | "broken" | "signalEnd" | "dartReady"> | null {
+export function cameraSpot(q: LevelQuery, d: BpData, eye: Vec3, dir: Vec3, yaw: number): Omit<BpCam, "owner" | "broken" | "signalEnd" | "lost" | "dartReady"> | null {
   const hit = raycastLevel(q, eye, dir, d.reachM);
   if (!hit) return null;
   const at: Vec3 = [eye[0] + dir[0] * hit.t, eye[1] + dir[1] * hit.t, eye[2] + dir[2] * hit.t];
