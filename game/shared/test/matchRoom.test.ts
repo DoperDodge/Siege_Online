@@ -746,7 +746,7 @@ describe("drones in a match (Phase 7 M1)", () => {
   const spawnYaw = (t: Awaited<ReturnType<typeof matchRoom>>, x: number, z: number) =>
     t.room.sim.level.def.spawns.reduce((a, b) => (Math.hypot(b.pos[0] - x, b.pos[2] - z) < Math.hypot(a.pos[0] - x, a.pos[2] - z) ? b : a)).yawDeg * DEG;
 
-  it("an attacker drives their first drone through prep (predicted: no corrections), the defender sees it; at action the body stands at the spawn and the drone stays where it was left; Observe throws the second", async () => {
+  it("an attacker drives their first drone through prep (predicted: no corrections), the defender sees it; at action the body stands at the spawn and the drone stays where it was left; Throw throws the second", async () => {
     const t = await matchRoom("custom", 3);
     const cs = await t.start(["a", "b"], quick({ siteReveal: "roundStart" }));
     const [atk, def] = sidesOf(t, cs);
@@ -782,7 +782,7 @@ describe("drones in a match (Phase 7 M1)", () => {
     expect(atk.session.ctrl!.pawnIds).toEqual(ctrl.pawnIds);
     for (let i = 0; i < 16; i++) t.tick();
     const missed2 = atk.session.mispredictions.length;
-    atk.cmd = { yaw, buttons: Btn.Observe };
+    atk.cmd = { yaw, buttons: Btn.Throw };
     t.tick();
     atk.cmd = { yaw };
     t.until(() => ctrl.drone === d2.id, 0.5, "the throw");
@@ -840,7 +840,7 @@ describe("drones in a match (Phase 7 M1)", () => {
       atk.cmd = { yaw };
       for (let i = 0; i < 4; i++) t.tick();
     };
-    press(); // throw drone 2 (drone 1 is out from prep)
+    press(); // to drone 1 (out from prep)
     press(); // back to the body
     expect(ctrl.drone).toBe(0);
     t.room.killBody(body.id, Cause.Lab);
@@ -1243,7 +1243,7 @@ describe("the review of Phase 7", () => {
     const yaw = t.bodyOf(a)!.state.yaw;
     // Throw the second drone, boost it, and come back to the body; once it has rolled to a stop, pick it up (its boost
     // still recharging: the server steps a drone it made before the body, a client one made after).
-    a.cmd = { yaw, buttons: Btn.Observe };
+    a.cmd = { yaw, buttons: Btn.Throw };
     t.tick();
     a.cmd = { yaw };
     t.until(() => ctrl.drone !== 0, 0.5, "the drone");
@@ -1342,4 +1342,34 @@ describe("Skopós's idle shell in a match", () => {
     expect([t.match.phase, t.match.history.length]).toEqual([Phase.Action, 0]);
     expect(t.room.sim.pawns.get(ctrl.possessedPawnId)!.state.mode).not.toBe(PawnMode.Dead);
   }, 60_000);
+
+  it("mid-transfer the shell she's leaving (crouched, going idle) is her inactive one: killed, she lands in the other; the one she's moving into killed, she stays", async () => {
+    for (const lose of ["leaving", "arriving"] as const) {
+      const t = await matchRoom("custom", 2);
+      const [, b] = await t.start(["a", "b"], quick({ siteReveal: "roundStart", firstAttack: "blue" }));
+      b.toServer.push(encodePickLoadout(defaultLoadoutPick(data, "skopos")));
+      t.until(() => t.match.phase === Phase.Action, 15, "action");
+      for (let i = 0; i < 16; i++) t.tick();
+      const ctrl = t.room.bodyOf(b.id)!;
+      const [leaving, arriving] = [ctrl.possessedPawnId, t.room.sim.bodyIds(ctrl).find((id) => id !== ctrl.possessedPawnId)!];
+      // Her shell's camera (Z), then F: the transfer starts, the shell she's in crouching.
+      b.cmd = { buttons: Btn.Ability };
+      t.tick();
+      b.cmd = {};
+      t.until(() => ctrl.shellCam, 0.5, "the shell camera");
+      b.cmd = { buttons: Btn.Interact };
+      t.tick();
+      b.cmd = {};
+      t.until(() => ctrl.swapPhase === 1, 0.5, "the transfer");
+      for (let i = 0; i < 16; i++) t.tick();
+      t.room.killBody(lose === "leaving" ? leaving : arriving, Cause.Bullet);
+      for (let i = 0; i < 4 * 64; i++) t.tick();
+      expect([t.match.phase, t.match.history.length], lose).toEqual([Phase.Action, 0]);
+      expect([ctrl.possessedPawnId, ctrl.swapPhase], lose).toEqual([lose === "leaving" ? arriving : leaving, 0]);
+      expect(t.room.sim.pawns.get(ctrl.possessedPawnId)!.state.mode, lose).not.toBe(PawnMode.Dead);
+      expect(b.session.ctrl!.possessedPawnId, lose).toBe(ctrl.possessedPawnId); // her client was told
+      expect(b.events.some((e) => e.kind === "shellDestroyed"), lose).toBe(true);
+    }
+  }, 60_000);
 });
+

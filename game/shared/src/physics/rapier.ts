@@ -32,15 +32,19 @@ export const G_PANEL = 0x0008;
 export const G_PROP = 0x0010;
 /**
  * Drones (Phase 7, intel/DESIGN.md §2): no query sees them (bodies, bullets and sight go through; shots hit them
- * through their hitboxes), and they move against the level, panels and props, not bodies or the stairs' ramps.
+ * through their hitboxes), and they move against the level, panels, props and the stairs' ramps, not bodies.
  */
 export const G_DRONE = 0x0020;
+/** A staircase's ramp (a movement helper too): drones drive up it as bodies walk up it (Ulo: drones climb stairs). */
+export const G_STAIR_RAMP = 0x0040;
 const groups = (membership: number, filter: number) => ((membership << 16) | filter) >>> 0;
 
 /** Level geometry: collides with players and other statics. */
 export const STATIC_GROUPS = groups(G_STATIC, G_STATIC | G_PLAYER);
 /** Movement helpers: like level geometry for movement, but no bullet query sees them. */
 export const HELPER_GROUPS = groups(G_MOVE_HELPER, G_STATIC | G_PLAYER);
+/** A staircase's ramp: a movement helper drones see too. */
+export const STAIR_RAMP_GROUPS = groups(G_MOVE_HELPER | G_STAIR_RAMP, G_STATIC | G_PLAYER);
 /** Panel movement boxes: like level geometry for movement, but no bullet query sees them. */
 export const PANEL_GROUPS = groups(G_PANEL, G_STATIC | G_PLAYER);
 /** Props: like level geometry for movement and sight, but the bullet query doesn't see them. */
@@ -66,8 +70,11 @@ export const QUERY_PROPS = groups(G_PLAYER, G_PROP);
 export const QUERY_PLAYERS = groups(G_PLAYER, G_PLAYER);
 /** A drone's collider: nothing else's query sees it. */
 export const DRONE_GROUPS = groups(G_DRONE, 0);
-/** A drone's own movement: the level, panels and props, but no movement helper (it jumps the stairs' steps). */
-export const QUERY_DRONE = groups(G_PLAYER, G_STATIC | G_PANEL | G_PROP);
+/**
+ * A drone's own movement: the level, panels, props and the stairs' ramps (it drives up a staircase), but no other
+ * movement helper (it rolls under railings that stop bodies).
+ */
+export const QUERY_DRONE = groups(G_PLAYER, G_STATIC | G_PANEL | G_PROP | G_STAIR_RAMP);
 
 /**
  * Rebuild the broad phase so queries see colliders moved, resized, added or removed since the last call.

@@ -30,8 +30,8 @@ come with their operators in Phase 8; this phase leaves room for them (a feed ca
 **What a drone is.** A pawn (`Pawn.kind` Drone) of its attacker's controller, next to the body: it is predicted by
 its owner's client like the body (driving at 100 ms must feel like walking), sent in snapshots like any pawn, and
 shot through the same lag-compensated hit registration. A drone is a box (`drone.sizeM`) moved by the same Rapier
-character controller as bodies, on its own collision group: it collides with the level, panels and props but not
-with bodies (our simplification, flagged). Its state is a `PawnState` (position, velocity, facing, grounded, mode)
+character controller as bodies, on its own collision group: it collides with the level, panels, props and the
+stairs' ramps (it drives up a staircase: Ulo's test, D-139) but not with bodies (our simplification, flagged). Its state is a `PawnState` (position, velocity, facing, grounded, mode)
 plus its jump cooldown and boost.
 
 **Two per attacker, made once per round.** When an attacker's round starts (prep), their controller gets both drones:
@@ -42,9 +42,9 @@ when the round does. In prep the attacker has no body: the controller's possesse
 the body stands at the chosen spawn and drone 1 stays where it was parked (I:45, verified).
 
 **Controls (our keys, flagged; Siege's own PC keys are an open question):**
-- **Observe (5):** in the body with a drone held, throw it (it lands about a metre ahead, rolling) and drive it; with
-  none held, drive the first one out; in a drone, back to the body (the drone stays put). Downed: nothing (I:234,
-  placeholder).
+- **Throw (6) and Observe (5)** (split since Ulo's test, D-139): 6 in the body with a drone held throws it (it lands
+  about a metre ahead, rolling) and drives it; 5 in the body goes to the first drone out (the feed list, §5); in a
+  drone, 5 goes back to the body (the drone stays put). Downed: nothing (I:234, placeholder).
 - **Driving:** W/A/S/D at full speed in every direction (I:31), the mouse turns and tilts the view, Space jumps (once
   per `jumpCooldownS`), Shift boosts while the boost lasts. Lean left / right (Q / E) goes to the previous / next of
   your drones out (the feed list, §5, adds teammates' and the cameras).

@@ -1,6 +1,6 @@
 // An attacker's drone (Phase 7, intel/DESIGN.md §2): a small upright cylinder as wide and tall as the drone, moved by
-// its own character controller against the level, panels and props (never bodies, never the stairs' ramps), driven
-// at full speed in every direction, a jump every few seconds and a boost. Its state is a PawnState like a body's, so
+// its own character controller against the level, panels, props and the stairs' ramps (never bodies, nor the helpers
+// that stop only bodies), driven at full speed in every direction, a jump every few seconds and a boost. Its state is a PawnState like a body's, so
 // it is predicted, corrected and sent like one; only the fields it uses change.
 import { DT } from "../core/constants.js";
 import { clamp, DEG, forwardXZ, rightXZ } from "../core/math.js";
@@ -93,6 +93,10 @@ export function stepDrone(ctx: MoveContext, pawn: Pawn, driver: InputCmd | null)
 
   poseDrone(d, pawn);
   const want = { x: s.vx * DT, y: s.vy * DT, z: s.vz * DT };
+  // On the ground, the step follows its plane so the speed holds up a staircase's ramp (the controller alone would
+  // turn most of it into pushing against the slope; bodies do the same, player/movement.ts).
+  const n = s.grounded ? groundNormal(ctx, pawn, d) : null;
+  if (n && n.y >= Math.cos(ctx.data.movement.step.maxSlopeDeg * DEG) && n.y < 1) want.y += -(n.x * want.x + n.z * want.z) / n.y;
   ctx.dcc.computeColliderMovement(pawn.collider, want, undefined, QUERY_DRONE);
   const got = ctx.dcc.computedMovement();
   const t = pawn.collider.translation();
@@ -111,6 +115,13 @@ export function stepDrone(ctx: MoveContext, pawn: Pawn, driver: InputCmd | null)
   s.yaw = Math.fround(s.yaw);
   s.pitch = Math.fround(s.pitch);
   poseDrone(d, pawn);
+}
+
+/** The ground's normal straight under a drone (what it drives on: the level, panels, props and the stairs' ramps), or null. */
+function groundNormal(ctx: MoveContext, pawn: Pawn, d: DroneData): { x: number; y: number; z: number } | null {
+  const t = pawn.collider.translation();
+  const hit = ctx.world.castRayAndGetNormal(new ctx.R.Ray({ x: t.x, y: t.y, z: t.z }, { x: 0, y: -1, z: 0 }), d.sizeM[1] / 2 + 0.15, true, undefined, QUERY_DRONE);
+  return hit ? hit.normal : null;
 }
 
 /** A drone's camera: `eyeM` over its bottom, facing its yaw and tilt. */

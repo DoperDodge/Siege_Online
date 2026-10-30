@@ -13,11 +13,23 @@ known issues, and what's next.
 | Milestone | Status |
 |---|---|
 | M1 Drones in the simulation and rooms: drive, jump, boost, drone holes; throw, drive, leave, pick up; prep in drone 1; shots destroy drones; protocol 13 | ✅ drones are pawns of their attacker (predicted like walking), two a round, data/intel.json; through drone holes and under door barricades; a shot destroys one (no death); protocol 13 |
-| M2 Drones in the browser: the drone view and HUD, drawing drones, keys; dead attackers drive their drones | ✅ 5 throws / enters / leaves, Q / E switch, Space jumps, Shift boosts; the drone's camera and overlay; greybox drones; prep in your first drone; the match browser test drives one online |
+| M2 Drones in the browser: the drone view and HUD, drawing drones, keys; dead attackers drive their drones | ✅ 6 throws, 5 enters and leaves (two keys since your test), Q / E switch, Space jumps, Shift boosts; the drone's camera and overlay; greybox drones; prep in your first drone; the match browser test drives one online |
 | M3 Default cameras: viewing within limits, shooting them, broken state, dead defenders on cameras | ✅ 5 opens Oregon's eight cameras (defenders, alive or dead), Q / E go round them; each viewer turns their own view within the camera's limits; any shot breaks one for the round; the match browser test watches them online |
 | M4 Pings, scans and the comm wheel | ✅ T pings where you look (from a drone or a camera too) for your team, through walls; a double tap is a danger ping; hold T for the comm wheel; Fire held 1 s on a drone or a camera spots enemies for your team; the match browser test pings online |
 | M5 Bulletproof Camera and its EMP dart | ✅ hold 3 (ours) at a wall or the floor to place it; it joins the cameras after the level's (thermal: bodies glow); its front is bulletproof, its sides and back aren't; outdoors its signal goes after 10 s; its EMP dart jams drones for 6 s; protocol 14; the match browser test places and watches one |
 | M6 The feed list across everything, spectating; checks, docs, review, report | ✅ attackers' feed list: their drones, then their teammates' (watched); a row of feeds over the view; watched cameras lit (blue to defenders, red to attackers); spectating when dead covers cameras, drones and teammates' eyes; the netsim measures prep droning (454 m over 10 preps, no misprediction); a review |
+
+### What's done (your test, 2026-10-30; D-139)
+- **Skopós's inactive shell no longer ends the round.** From the moment she starts a transfer, the shell she's leaving
+  crouches and stands still, so it looks like her inactive shell, but it still counted as her body: killing it ended
+  the round. Now a shell killed while she transfers out of it is her inactive one: she lands in the other at once.
+  (Killing her idle shell at any other time already didn't eliminate her; that is now tested with real shots.)
+- **Drones go up the stairs.** They drive up a staircase like bodies walk up it (its invisible ramp), at full speed;
+  they still roll under railings.
+- **Two drone keys:** 6 throws a drone you have in hand and drives it; 5 goes to a drone you have out (or a
+  teammate's) and back to your body, and opens the cameras for defenders. Touch screens have a Throw button.
+- **The planning screen on a touch screen in prep:** it now has a *Drive your drone* button, a tap outside it puts it
+  away too, and the *Plan* button (top right) brings it back. With a mouse, Esc still does.
 
 ### What's done (M6: the feed list, spectating, checks)
 - **The feed list (D-137):** on a drone, Q / E go round your drones out and then your teammates' out. On a
@@ -85,7 +97,7 @@ known issues, and what's next.
 - **Driving:** W/A/S/D at 4 m/s in every direction, the mouse turns and tilts the camera, Space jumps (1 m, once
   every 3 s), Shift boosts (6 m/s for 2 s, then 10 s to recharge). It fits through Oregon's drone holes and under a
   door barricade, not through walls; a fall doesn't hurt it. Its camera sits low and wide (90°).
-- **Keys:** 5 (ours) throws the drone in your hand and drives it, or goes to one you have out; 5 again goes back to
+- **Keys:** 6 (ours) throws the drone in your hand and drives it; 5 goes to one you have out, and 5 again goes back to
   your body (it stands still meanwhile). On a drone, Q / E go to your previous / next one out. F next to one of your
   own drones picks it up. Dead, 5 still drives the drones you have out. Down, you can't.
 - **Shooting a drone:** any hit destroys it (defenders can, in prep too); it isn't a kill or anyone's death.
@@ -98,9 +110,11 @@ known issues, and what's next.
    Practice) match and join it from a second window (or a friend).
 2. Prep, as an attacker: you're in your first drone at your spawn. Click the view and drive it (W/A/S/D, the mouse,
    Space to jump, Shift to boost); drive through a drone hole: the basement corridor's to the Freezer hall, the
-   Kitchen corridor's to the Meeting Hall, the Game Room's to the Master Bedroom. Esc brings the planning screen back.
-3. Action: you're at the spawn. 5 throws your second drone; 5 again takes you back; Q / E (on a drone) switch between
-   them. Walk up to one and press F to pick it up.
+   Kitchen corridor's to the Meeting Hall, the Game Room's to the Master Bedroom, and up a staircase. Esc brings the
+   planning screen back (on a touch screen, its Drive your drone button puts it away and Plan brings it back).
+3. Action: you're at the spawn. 6 throws your second drone; 5 takes you back, and 5 again goes to a drone out; Q / E
+   (on a drone) switch between them. Walk up to one and press F to pick it up.
+   As Skopós, start a transfer (Z, then F) and have someone shoot the shell you're leaving: you land in the other.
 4. As a defender, shoot a drone: one hit.
 5. As a defender: 5 opens the cameras, Q / E go round them, the mouse turns the view; shoot one (outside, at the
    Construction site or the Junkyard) and it's skipped from then on. Dead, 5 still opens them.
@@ -117,8 +131,8 @@ known issues, and what's next.
    Camera and a teammate's drone, online).
 
 ### Known issues
-- Drones pass through operators (they only hit the level, walls and props), and climb only 5 cm without a jump, so
-  each stair step takes a jump (open questions, Phase 7).
+- Drones pass through operators (they only hit the level, walls, props and the stairs' ramps), and away from the
+  stairs climb only 5 cm without a jump (open questions, Phase 7).
 - At the Kitchen's drone hole to the Security corridor (1F.dt4) a prop stands 0.3 m behind it on the Kitchen side, so a
   drone can't get through from there (our placeholder props, Phase 5's open questions 26–31).
 - Each camera's wall and facing are placeholders (r6calls' icons, Phase 5's open questions); a camera doesn't stop the

@@ -51,6 +51,8 @@
 .match-top .round { font: 600 10px var(--mono); letter-spacing: 0.08em; color: var(--muted); }
 .match-info { top: 76px; left: 50%; transform: translateX(-50%); text-align: center; font: 600 12px system-ui, sans-serif; }
 .match-info div { display: inline-block; margin: 0 4px 3px; padding: 2px 8px; border-radius: 4px; background: rgba(0, 0, 0, 0.5); }
+/* An attacker's way back to the planning screen in prep once it's put away (touch screens have no Esc). */
+.plan-btn { position: fixed; z-index: 3; top: 92px; right: 12px; height: 40px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); font: 600 13px system-ui, sans-serif; cursor: pointer; }
 /* On a drone or a camera in a match, its title and feed row sit under the match's lines. */
 .match .dronecam-title { top: 132px; }
 .match .dronecam .feeds { top: 154px; }

@@ -2,7 +2,7 @@
 // plus a render list.
 // Server and client both call this, so what you see is exactly what you collide with.
 import { DEG, forwardXZ, quatYawPitch, rotateXZ, type Vec3 } from "../core/math.js";
-import { HELPER_GROUPS, PROP_GROUPS, refreshBroadPhase, STATIC_GROUPS, type Collider, type Rapier, type World } from "../physics/rapier.js";
+import { HELPER_GROUPS, PROP_GROUPS, refreshBroadPhase, STAIR_RAMP_GROUPS, STATIC_GROUPS, type Collider, type Rapier, type World } from "../physics/rapier.js";
 import type { DestructionData, LevelDef, Surface } from "../data/schemas.js";
 import { PanelSet } from "../destruction/panels.js";
 import { constructionOf, panelSpec } from "../destruction/world.js";
@@ -64,14 +64,14 @@ export function buildLevel(R: Rapier, world: World, def: LevelDef, destruction?:
     center: Vec3,
     size: Vec3,
     quat: [number, number, number, number],
-    opts: { collides: boolean; visible: boolean; label?: string },
+    opts: { collides: boolean; visible: boolean; label?: string; stairRamp?: boolean },
   ) => {
     if (opts.collides) {
       const desc = R.ColliderDesc.cuboid(size[0] / 2, size[1] / 2, size[2] / 2)
         .setTranslation(center[0], center[1], center[2])
         .setRotation({ x: quat[0], y: quat[1], z: quat[2], w: quat[3] })
-        // Invisible = a movement helper; a prop with a class is skipped by the bullet query.
-        .setCollisionGroups(!opts.visible ? HELPER_GROUPS : info.prop !== undefined ? PROP_GROUPS : STATIC_GROUPS);
+        // Invisible = a movement helper (a staircase's ramp, drones' too); a prop with a class is skipped by the bullet query.
+        .setCollisionGroups(opts.stairRamp ? STAIR_RAMP_GROUPS : !opts.visible ? HELPER_GROUPS : info.prop !== undefined ? PROP_GROUPS : STATIC_GROUPS);
       const c: Collider = world.createCollider(desc);
       solids.set(c.handle, info);
     }
@@ -99,14 +99,14 @@ export function buildLevel(R: Rapier, world: World, def: LevelDef, destruction?:
   }
 
   // A ramp is a thin slab whose top surface starts on the ground at `start` and rises along yaw.
-  const addRamp = (id: string, surface: Surface, start: Vec3, yaw: number, length: number, angle: number, width: number, visible: boolean, label?: string) => {
+  const addRamp = (id: string, surface: Surface, start: Vec3, yaw: number, length: number, angle: number, width: number, visible: boolean, label?: string, stairRamp = false) => {
     const t = 0.2;
     // Local frame: ramp rises toward -Z. Offset from the slab center to its top low edge, after pitch.
     const ly = (t / 2) * Math.cos(angle) - (length / 2) * Math.sin(angle);
     const lz = (t / 2) * Math.sin(angle) + (length / 2) * Math.cos(angle);
     const [ox, oz] = rotateXZ(0, -lz, yaw);
     const center: Vec3 = [start[0] + ox, start[1] - ly, start[2] + oz];
-    addBox({ id, surface, vaultable: false }, "ramp", center, [width, t, length], quatYawPitch(yaw, angle), { collides: true, visible, label });
+    addBox({ id, surface, vaultable: false }, "ramp", center, [width, t, length], quatYawPitch(yaw, angle), { collides: true, visible, label, stairRamp });
   };
 
   for (const r of def.ramps) {
@@ -132,7 +132,7 @@ export function buildLevel(R: Rapier, world: World, def: LevelDef, destruction?:
     const angle = Math.atan2(st.rise, st.run);
     const horiz = st.steps * st.run;
     const rampStart: Vec3 = [st.start[0] - fx * st.run, st.start[1], st.start[2] - fz * st.run];
-    addRamp(`${st.id}_ramp`, st.surface, rampStart, yaw, Math.hypot(horiz, st.steps * st.rise), angle, st.width, false);
+    addRamp(`${st.id}_ramp`, st.surface, rampStart, yaw, Math.hypot(horiz, st.steps * st.rise), angle, st.width, false, undefined, true);
   }
 
   const ladders: LadderRuntime[] = [];

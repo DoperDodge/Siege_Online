@@ -1,4 +1,5 @@
-// Drones (Phase 7 M1, intel/DESIGN.md §2): the Observe key throws, drives, leaves and switches them, F picks one up;
+// Drones (Phase 7 M1, intel/DESIGN.md §2): the Throw key throws one and drives it, Observe enters one out and leaves
+// it, a lean switches, F picks one up;
 // they drive at full speed in every direction, jump on a cooldown, boost, fall without harm, fit through Oregon's
 // drone holes but not walls, and any shot destroys one. Teammates' drones are in the feed list too, watched (M6, §5).
 import { describe, expect, it } from "vitest";
@@ -37,10 +38,10 @@ describe("drones (Phase 7 M1)", () => {
     expect([d1.state.hp, d1.state.maxHp]).toEqual([1, 1]);
   });
 
-  it("Observe throws a held drone ahead and drives it while the body stands; again, back to the body; again, the second; a lean goes round those out; F beside one puts it back in hand", async () => {
+  it("Throw throws a held drone ahead and drives it while the body stands; Observe, back to the body; Throw, the second; a lean goes round those out; F beside one puts it back in hand; Observe goes to one out", async () => {
     const { sim, c, body, d1, d2, step } = await attacker();
     const stood = { x: body.state.x, z: body.state.z };
-    press(step, Btn.Observe);
+    press(step, Btn.Throw);
     expect([c.drone, d1.state.mode, sim.viewedPawnId(c.id)]).toEqual([d1.id, PawnMode.Walk, d1.id]);
     step({}, 64); // it lands
     expect(d1.state.grounded).toBe(true);
@@ -57,7 +58,7 @@ describe("drones (Phase 7 M1)", () => {
     step({ forward: 1 }, 16);
     expect(Math.hypot(body.state.x - stood.x, body.state.z - stood.z)).toBeGreaterThan(0.2);
     expect(Math.hypot(d1.state.x - left.x, d1.state.z - left.z)).toBeLessThan(0.01);
-    press(step, Btn.Observe);
+    press(step, Btn.Throw);
     expect([c.drone, d2.state.mode]).toEqual([d2.id, PawnMode.Walk]);
     step({}, 64);
     step({ lean: 1 });
@@ -75,8 +76,8 @@ describe("drones (Phase 7 M1)", () => {
     expect(sim.prompt(c.id)).toBe("pickUpDrone");
     press(step, Btn.Interact);
     expect(d2.state.mode).toBe(PawnMode.Held);
-    // Observe throws it again (one held); with none held it goes to the one out.
-    press(step, Btn.Observe);
+    // Throw throws it again (one held); from the body, Observe goes to the first out.
+    press(step, Btn.Throw);
     expect(c.drone).toBe(d2.id);
     press(step, Btn.Observe);
     press(step, Btn.Observe);
@@ -85,7 +86,7 @@ describe("drones (Phase 7 M1)", () => {
 
   it("drive at 4 m/s forward, sideways or both; a boost: ×1.5 for 2 s, then 10 s from its start before the next", async () => {
     const { sim, c, d1, step, yawDeg } = await attacker();
-    press(step, Btn.Observe);
+    press(step, Btn.Throw);
     step({}, 64);
     expect(c.drone).toBe(d1.id);
     // Each run starts from the same open spot down the range, at rest (the boost's clock keeps going).
@@ -113,7 +114,7 @@ describe("drones (Phase 7 M1)", () => {
 
   it("jump 1 m once every 3 s, and fall without harm", async () => {
     const { sim, d1, step } = await attacker();
-    press(step, Btn.Observe);
+    press(step, Btn.Throw);
     step({}, 64);
     const floor = d1.state.y;
     let top = floor;
@@ -141,7 +142,7 @@ describe("drones (Phase 7 M1)", () => {
 
   it("any shot destroys one; a held drone can't be hurt", async () => {
     const { sim, d1, d2, step } = await attacker();
-    press(step, Btn.Observe);
+    press(step, Btn.Throw);
     step({}, 8);
     expect(applyDamage(sim, d2, { amount: 50, kill: false, cause: Cause.Bullet }).outcome).toBe("ignored");
     expect(applyDamage(sim, d1, { amount: 1, kill: false, cause: Cause.Bullet }).outcome).toBe("killed");
@@ -167,7 +168,7 @@ describe("drones (Phase 7 M1)", () => {
       step({ forward: 1, yawDeg }, 64);
       return (alongZ ? d1.state.z - cz : d1.state.x - cx) * dir > 0.4;
     };
-    press(step, Btn.Observe);
+    press(step, Btn.Throw);
     step({}, 32);
     // The floor-level holes with nothing right behind them (1F.dt4 has a prop 0.3 m behind it on one side; 2F.dt2 is
     // 0.9 m up its wall: a jump).
@@ -175,6 +176,29 @@ describe("drones (Phase 7 M1)", () => {
       expect([through(id, 1), through(id, -1)], id).toEqual([true, true]);
       expect(through(id, 1, 1), `${id}, 1 m along the wall`).toBe(false);
     }
+  });
+});
+
+describe("a drone and the stairs (Ulo's test)", () => {
+  it("drives up a staircase (its ramp, as bodies walk up it): Oregon's S1, from the basement to the landing and on up to 1F", async () => {
+    const { sim, c, d1, step } = await attacker("oregon", "C_CONSTRUCTION");
+    press(step, Btn.Throw);
+    step({}, 32);
+    /** From (x, y, z) facing `yawDeg`, drive until `done` (at most 3 s). */
+    const drive = (x: number, y: number, z: number, yawDeg: number, done: () => boolean) => {
+      sim.placeDrone(d1.id, x, y + 0.02, z, yawDeg);
+      c.drone = d1.id;
+      step({ yawDeg }, 8);
+      for (let i = 0; i < 3 * 64 && !done(); i++) step({ forward: 1, yawDeg });
+    };
+    // Flight 0 rises north (−z) from (37, −3.2, 11.5) to the landing at −1.6 m.
+    drive(37, -3.2, 12.4, 0, () => d1.state.z < 8.6);
+    expect(d1.state.z).toBeLessThan(8.6);
+    expect(d1.state.y).toBeCloseTo(-1.6, 1);
+    // Flight 1 rises south (+z) from the landing (38.7, −1.6, 9.1) to 1F.
+    drive(38.7, -1.6, 8.6, 180, () => d1.state.z > 11.9);
+    expect(d1.state.z).toBeGreaterThan(11.9);
+    expect(d1.state.y).toBeCloseTo(0, 1);
   });
 });
 
@@ -188,7 +212,7 @@ describe("a drone and a door barricade (Phase 7 M1)", () => {
     const [cx, cy, cz] = e.frame.center;
     const bottom = cy - e.frame.h / 2;
     const yawDeg = (Math.atan2(-nx, -nz) * 180) / Math.PI; // facing along the normal
-    press(step, Btn.Observe);
+    press(step, Btn.Throw);
     step({}, 32);
     sim.placeDrone(d1.id, cx - nx * 0.6, bottom + 0.02, cz - nz * 0.6, yawDeg);
     c.drone = d1.id;
@@ -201,7 +225,7 @@ describe("a drone and a door barricade (Phase 7 M1)", () => {
 describe("a drone's view (Phase 7 M1)", () => {
   it("is at its camera, low over the floor, tilting within its limits", async () => {
     const { sim, d1, step } = await attacker();
-    press(step, Btn.Observe);
+    press(step, Btn.Throw);
     step({ pitch: 80 * DEG }, 4);
     expect(d1.state.pitch).toBeCloseTo(60 * DEG, 5);
     const eye = sim.eyeOf(d1);
@@ -224,7 +248,7 @@ describe("a teammate's drone (Phase 7 M6, intel/DESIGN.md §5)", () => {
       for (let i = 0; i < n; i++) sim.step(new Map([[a.id, input(ca)], [b.id, input(cb)], [d.id, input(cd)]]));
     };
     step({}, {}, 16);
-    step({ buttons: Btn.Observe }); // a throws their first and drives it
+    step({ buttons: Btn.Throw }); // a throws their first and drives it
     step({}, {}, 64);
     return { sim, a, b, d, step, drone: sim.dronesOf(a)[0] };
   }

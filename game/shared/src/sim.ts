@@ -587,6 +587,24 @@ export class Sim {
     return null;
   }
 
+  /**
+   * Skopós's shell died while she was transferring out of it (from the transfer's start it crouches and stands still:
+   * it is going idle, and an attacker sees her inactive shell, research/operators/skopos.md §3.2): she arrives in the
+   * other at once, if it stands, and isn't eliminated. True when that happened (the room tells her client).
+   */
+  shellLeftBehind(pawn: Pawn): boolean {
+    const c = pawn.ownerId !== null ? this.controllers.get(pawn.ownerId) : undefined;
+    if (!c || c.swapPhase === 0 || c.possessedPawnId !== pawn.id) return false;
+    const other = this.otherPawn(c.id);
+    if (!other) return false;
+    c.possessedPawnId = other.id;
+    c.swapPhase = 0;
+    c.swapT = 0;
+    c.shellCam = false;
+    c.swapCooldown = Math.fround(this.data.operators.get(c.operatorId)!.ability.params.swapCooldownSeconds);
+    return true;
+  }
+
   /** A controller's bodies (Skopós: her two shells), not its drones. */
   bodyIds(c: PlayerController): number[] {
     return c.pawnIds.filter((id) => this.pawns.get(id)?.kind !== PawnKind.Drone);
@@ -691,11 +709,11 @@ export class Sim {
   }
 
   /**
-   * Drones' keys (Phase 7, intel/DESIGN.md §2, §5). Observe: from a standing body, throw a held drone and drive it, or
-   * with none held go to the first in the feed list (feedDrones: your drones out, then your teammates'; a dead body
-   * too); from a drone, back to the body. A new lean on a drone goes to the previous / next in the list. A teammate's
-   * drone is watched, not driven. A drone destroyed or picked up while on it, or the body going down, ends it. In prep
-   * (no body yet) you are your first drone, and a new lean goes round it and your teammates' drones.
+   * Drones' keys (Phase 7, intel/DESIGN.md §2, §5). Throw: from a standing body, throw a held drone and drive it.
+   * Observe: from a body (a dead one too), go to the first in the feed list (feedDrones: your drones out, then your
+   * teammates'); from a drone, back to the body. A new lean on a drone goes to the previous / next in the list. A
+   * teammate's drone is watched, not driven. A drone destroyed or picked up while on it, or the body going down, ends
+   * it. In prep (no body yet) you are your first drone, and a new lean goes round it and your teammates' drones.
    */
   private updateDrones(c: PlayerController, input: InputCmd | undefined, heldBefore: number) {
     this.switchDrones(c, input, heldBefore);
@@ -731,10 +749,10 @@ export class Sim {
       }
       return;
     }
-    if (!(pressed & Btn.Observe)) return;
-    const thrown = body.state.mode === PawnMode.Walk ? this.throwDrone(c, body, input.buttons) : null;
-    if (thrown) c.drone = thrown.id;
-    else if (out.length) c.drone = out[0].id;
+    if (pressed & Btn.Throw) {
+      const thrown = body.state.mode === PawnMode.Walk ? this.throwDrone(c, body, input.buttons) : null;
+      if (thrown) c.drone = thrown.id;
+    } else if (pressed & Btn.Observe && out.length) c.drone = out[0].id;
   }
 
   /**

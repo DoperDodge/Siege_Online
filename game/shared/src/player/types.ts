@@ -62,10 +62,12 @@ export const Btn = {
   /** Drop the defuser (Phase 6, D-120). */
   Drop: 1 << 13,
   /**
-   * Drones and cameras (Phase 7, intel/DESIGN.md §2): from the body, throw a drone held or go to one out; from a
-   * drone, back to the body.
+   * Drones and cameras (Phase 7, intel/DESIGN.md §2, §3): from the body, go to a drone out (yours, then your
+   * teammates'); from a drone, back to the body. A defender's opens and closes the cameras.
    */
   Observe: 1 << 14,
+  /** Throw a drone in hand and drive it (Phase 7; its own key since Ulo's test: entering one is Observe's). */
+  Throw: 1 << 15,
 } as const;
 
 /** What the weapon in hand is doing (PawnState.wAct). */

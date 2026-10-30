@@ -89,6 +89,7 @@ export class Controls {
   private observePulse = false;
   /** The gadget key is held to place a camera (Phase 7); a tap shorter than a tick still goes out once (its dart). */
   private gadgetPulse = false;
+  private throwPulse = false;
   /**
    * On a drone or a camera (Phase 7) the lean keys are held, whatever the lean setting: a new press goes to the previous
    * / next feed.
@@ -352,6 +353,9 @@ export class Controls {
       case "gadget":
         this.gadgetPulse = true;
         break;
+      case "throwDrone":
+        this.throwPulse = true;
+        break;
       case "ping":
         this.pingDown = true;
         this.pingTicks = 0;
@@ -432,6 +436,7 @@ export class Controls {
     if (this.dropPulse) buttons |= Btn.Drop;
     if (this.observePulse) buttons |= Btn.Observe;
     if (this.held.has("gadget") || this.gadgetPulse) buttons |= Btn.Gadget;
+    if (this.throwPulse) buttons |= Btn.Throw;
     if (this.pingDown && !this.wheel && ++this.pingTicks >= WHEEL_TICKS && this.wheelSize() > 0) this.wheel = { x: 0, y: 0 };
     if (this.pingPulse) buttons |= Btn.Ping;
     // Weapon slot: one swap press, sent only while the slot differs and no swap is already under way
@@ -453,6 +458,7 @@ export class Controls {
     this.dropPulse = false;
     this.observePulse = false;
     this.gadgetPulse = false;
+    this.throwPulse = false;
     this.pingPulse = false;
 
     const s = this.settings;

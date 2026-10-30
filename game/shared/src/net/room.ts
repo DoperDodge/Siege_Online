@@ -991,7 +991,14 @@ export class Room implements DirectorHost {
     // Downed by nobody (a lab tool, reflected damage) or in an earlier life: the kill is the finisher's.
     const killerCtrl = downer?.ctrl || finisherCtrl;
     const assistCtrl = downer?.ctrl && finisherCtrl !== downer.ctrl ? finisherCtrl : 0;
-    const idle = isIdleShell(this.sim, victim);
+    // Skopós's shell she was transferring out of (crouched, going idle: Ulo's test) is her inactive one: she lands in
+    // the other, and her client is told.
+    const leftBehind = this.sim.shellLeftBehind(victim);
+    if (leftBehind) {
+      const owner = this.memberOf(ownerCtrl);
+      if (owner) this.force(owner);
+    }
+    const idle = leftBehind || isIdleShell(this.sim, victim);
     const e: GameEvent = idle
       ? { kind: "shellDestroyed", pawnId: victim.id, ownerCtrl, killerCtrl, weapon, headshot }
       : { kind: "kill", victimPawn: victim.id, victimCtrl: ownerCtrl, killerCtrl, assistCtrl, weapon: weapon || downer?.weapon || "", cause, headshot, friendly };

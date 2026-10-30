@@ -6,14 +6,14 @@
 // defender one, then 160 ms later another, over a slow link: the second stays), the defender votes for the Dining site
 // and the attacker picks the B Street spawn and takes the defuser. In prep the defender is at that site and the
 // attacker drives their first drone from the spawn (the defender's page has it), and the defender goes round the
-// cameras; in action the attacker is at B Street carrying the defuser, and pings (their page marks it, the defender's
-// has nothing); the defenders win on time, the banner says so, the sides swap for round 2 (where the new defender
-// places a Bulletproof Camera and watches it), and after it the summary has both rounds; the host takes everyone back
-// to the lobby. 2v3: five players (three on Blue, two on Orange; some never pick and get an operator anyway, one per
-// team each); in action an attacker goes from their drone to a teammate's (the feed list), and a defender shoots a
-// teammate down the sights (friendly fire on, reverse friendly fire off), who then looks through a living teammate's
-// eyes, and the scoreboard counts the death; the match ends with the summary. Also: a loadout set on the Play page is
-// kept, and a sight fitted on the planning screen is carried into action.
+// cameras; in action the attacker is at B Street carrying the defuser, pings (their page marks it, the defender's has
+// nothing) and throws their second drone (6); the defenders win on time, the banner says so, the sides swap for round 2
+// (where the new defender places a Bulletproof Camera and watches it), and after it the summary has both rounds; the
+// host takes everyone back to the lobby. 2v3: five players (three on Blue, two on Orange; some never pick and get an
+// operator anyway, one per team each); in action an attacker goes from their drone to a teammate's (the feed list), and
+// a defender shoots a teammate down the sights (friendly fire on, reverse friendly fire off), who then looks through a
+// living teammate's eyes, and the scoreboard counts the death; the match ends with the summary. Also: a loadout set on
+// the Play page is kept, and a sight fitted on the planning screen is carried into action.
 // Requires `npm run build` first. Screenshots go to builds/e2e.
 import { spawn } from "node:child_process";
 import { mkdirSync, readFileSync } from "node:fs";
@@ -213,6 +213,13 @@ try {
   const spawnSpot = lvl.spawns.find((s) => s.group === SPAWN);
   result.checks.attackerDronesFromTheSpawn =
     droneAt !== null && (await att1.evaluate(() => window.__lab.net.viewedKind)) === 1 && Math.hypot(droneAt.x - spawnSpot.pos[0], droneAt.z - spawnSpot.pos[2]) < 0.5 && result.oneVsOne.prep.screen === "planning";
+  // On a touch screen there's no mouse to lock (Ulo's test): the screen's own button puts it away, Plan brings it back.
+  await att1.click(".match-screen [data-act=closePlan]");
+  const putAway = await att1.waitForFunction(() => window.__match.screen === "", null, { timeout: 5000 }).then(() => true, () => false);
+  await att1.click(".plan-btn");
+  const brought = await att1.waitForFunction(() => window.__match.screen === "planning", null, { timeout: 5000 }).then(() => true, () => false);
+  result.oneVsOne.prep.planningScreen = { putAway, brought };
+  result.checks.planningScreenPutAwayInPrep = putAway && brought;
   // Driving it online: W moves it more than a metre (the page's game time, not the wall clock's: a slow runner's page
   // plays fewer ticks a second), and the defender's page has it.
   const droneId = await att1.evaluate(() => window.__lab.net.pawnId);
@@ -278,6 +285,11 @@ try {
   const defPings = await def1.evaluate(() => window.__lab.net.events.filter((e) => e.kind === "ping").length);
   result.oneVsOne.action.ping = { pinged, defenderPings: defPings };
   result.checks.pingForTheTeamOnly = pinged && defPings === 0;
+  // The attacker throws their second drone (6, its own key since Ulo's test) and drives it; 5 takes them back.
+  const thrown = await holdUntil(att1, { buttons: 1 << 15 }, () => window.__lab.net.drone !== 0 && window.__lab.net.viewedKind === 1);
+  const backFromIt = thrown && (await holdUntil(att1, { buttons: OBSERVE }, () => window.__lab.net.drone === 0));
+  result.oneVsOne.action.throw = { thrown, backFromIt };
+  result.checks.attackerThrowsADrone = thrown && backFromIt;
 
   // The defenders win on time; the banner says so.
   await phase(a, P.RoundEnd, 60000);
@@ -356,8 +368,8 @@ try {
   const byTeam = [0, 1].map((t) => v.players.filter((p) => p.team === t).map((p) => p.operator));
   result.twoVsThree.operators = byTeam;
   result.checks.everyoneHasAnOperator = byTeam.flat().every((o) => o !== null) && byTeam.every((ops) => new Set(ops).size === ops.length);
-  // The feed list (Phase 7 M6): an attacker throws their second drone (5), then a new lean goes on past their own
-  // drones to a teammate's, which they watch.
+  // The feed list (Phase 7 M6): an attacker goes to their first drone (5; it's been out since prep), then a new lean
+  // goes on to a teammate's, which they watch.
   const watcher = pages.find((_, i) => sides[i] === 0);
   await watcher.waitForFunction(() => window.__lab.net.own !== null && !window.__match.spectating, null, { timeout: 20000 }).catch(() => {});
   const mateDrones = await watcher.evaluate(() => {

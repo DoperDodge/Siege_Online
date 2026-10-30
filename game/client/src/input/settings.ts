@@ -27,8 +27,10 @@ export interface Keybinds {
   melee: string;
   /** Drop the defuser (Phase 6, match/DESIGN.md §8). */
   drop: string;
-  /** Drones (Phase 7, intel/DESIGN.md §2): throw one or go to one out; back to the body. */
+  /** Drones and cameras (Phase 7, intel/DESIGN.md §2, §3): go to a drone out, and back to the body; a defender's cameras. */
   observe: string;
+  /** Throw a drone in hand and drive it (Phase 7; its own key since Ulo's test). */
+  throwDrone: string;
   /** Ping where you look (Phase 7, intel/DESIGN.md §6); held, the comm wheel. */
   ping: string;
   /** Gadgets (Phase 7, intel/DESIGN.md §4): held, place a Bulletproof Camera; on one, fire its EMP dart. */
@@ -87,6 +89,7 @@ export const DEFAULT_SETTINGS: Settings = {
     melee: "KeyV",
     drop: "KeyG",
     observe: "Digit5",
+    throwDrone: "Digit6",
     // Siege pings with Z, our ability key.
     ping: "KeyT",
     gadget: "Digit3",

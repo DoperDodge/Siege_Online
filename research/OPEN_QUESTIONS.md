@@ -506,8 +506,8 @@ lists) and in game/shared/src/match/DESIGN.md. A quick look in a match answers m
 The intel questions above (drone numbers, camera limits, pings, the wheel) stay open; these are ours, each in
 `data/intel.json` (its `_unverified` list) and game/shared/src/intel/DESIGN.md.
 
-1. **Keys (D-134):** Observe 5 (drones, cameras), Ping T, Q / E for the previous / next feed, Space to jump a drone,
-   Shift to boost, Fire held to scan. What are Siege's PC defaults for the drone, the cameras, ping and scan?
+1. **Keys (D-134, D-139):** Observe 5 (enter and leave drones, cameras), Throw a drone 6, Ping T, the gadget 3, Q / E for
+   the previous / next feed, Space to jump a drone, Shift to boost, Fire held to scan. What are Siege's PC defaults for the drone, the cameras, ping and scan?
 2. **Drones and operators:** ours pass through operators (they only hit the level, walls and props). Does a drone in
    Siege bump into an operator, or get stuck under one?
 3. **Throwing a drone:** ours lands about a metre ahead, rolling, at once. How long is Siege's throw, and how far?
@@ -515,8 +515,8 @@ The intel questions above (drone numbers, camera limits, pings, the wheel) stay 
 5. **One camera, two viewers (D-134):** ours gives each viewer their own view. In Siege, when two defenders watch one
    camera, who turns it?
 6. **The comm wheel:** past Breach, Area Clear, Help, Danger and Thanks, which callouts are on it?
-7. **Drones and stairs:** ours climb only 5 cm ledges without a jump, so each stair step takes one. Does a Siege drone
-   drive up stairs?
+7. **Drones and stairs:** answered by Ulo's test (D-139): a drone drives up a staircase. Ours rides the staircase's
+   ramp, as bodies do; elsewhere it still climbs only 5 cm ledges without a jump.
 8. **Pings (M4):** a second ping within 0.35 s is a danger ping (ours); a scan reaches 40 m (ours) and checks the cone
    and the line of sight when the 1 s hold ends (not throughout it); a spotted enemy is marked for the ping's 5 s; the
    ping key held 0.25 s opens the comm wheel (ours). How quick is Siege's double tap, how far does a scan reach, does
