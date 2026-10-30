@@ -36,6 +36,7 @@ import {
   ropeYawRange,
   stanceKeyOf,
   Sim,
+  sideTeam,
   spawnAmmo,
   spreadCone,
   Stance,
@@ -223,7 +224,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     <div class="flash"></div>
     <div class="prompt hidden"></div>
     <div class="shellcam hidden"><div class="shellcam-title"></div><div class="swap-bar"><div></div></div></div>
-    <div class="dronecam hidden"><div class="dronecam-title"></div></div>
+    <div class="dronecam hidden"><div class="dronecam-title"></div><div class="feeds"></div></div>
     <div class="down-ui hidden"><div class="down-title"></div><div class="down-bar"><div></div></div></div>
     <div class="revive-ui hidden"><div class="revive-title"></div><div class="revive-bar"><div></div></div></div>
     <div class="center-msg hidden"></div>
@@ -988,7 +989,8 @@ export async function startLab(o: LabOptions): Promise<void> {
     } else if (nowViewed !== viewedId) {
       viewedId = nowViewed;
       if (!freeCam) controls.setView(v.state.yaw, v.state.pitch);
-    } else if (!freeCam) {
+    } else if (!freeCam && !(v.kind === PawnKind.Drone && !ctrl.pawnIds.includes(v.id))) {
+      // (On a teammate's drone the view is yours alone: the drone's own facing is its driver's.)
       controls.syncView(v.state.yaw, v.state.pitch, tickKick);
     }
     prompt = sim.prompt(ctrl.id);
@@ -1098,8 +1100,11 @@ export async function startLab(o: LabOptions): Promise<void> {
     // (A Bulletproof Camera of a round just over is still yours until the next tick hands you on: not this frame.)
     const onCamera = !spec && ctrl.cam !== 0 && ctrl.cam <= sim.camCount();
     drawBodies(alpha, renderTick, spec ? (spec.kind === "pawn" ? spec.pawnId : -1) : onCamera ? -1 : viewed!.id, spec ? spec.kind !== "pawn" : outside || onCamera);
-    cameraModels?.update(sim.matchRules.camsBroken);
-    bpCameraModels?.update(sim.matchRules.bpCams);
+    // A watched camera's light: blue to defenders, red to attackers.
+    const watched = net?.session.match?.camsWatched ?? 0;
+    const levelCams = sim.level.def.cameras.length;
+    cameraModels?.update(sim.matchRules.camsBroken, watched, ctrl.team === sideTeam("defender"));
+    bpCameraModels?.update(sim.matchRules.bpCams, watched >>> levelCams, ctrl.team === sideTeam("defender"));
     // A Bulletproof Camera's thermal view: the world tinted, bodies glowing white.
     const thermal = onCamera && sim.bpCamAt(ctrl.cam - 1) !== null;
     app.classList.toggle("thermal", thermal);
@@ -1121,7 +1126,8 @@ export async function startLab(o: LabOptions): Promise<void> {
         camera.updateProjectionMatrix();
       }
     } else {
-      rs = interpolated(viewed!, alpha);
+      // A teammate's drone (Phase 7) is drawn where others are: between the snapshots around the render tick.
+      rs = viewed!.proxy && net ? (net.session.remoteAt(viewed!.id, renderTick) ?? viewed!.state) : interpolated(viewed!, alpha);
       flyFreeCam(elapsed);
       // A map follows the body you look through (or the free camera): its storey (and that storey's light), the
       // plan view over it.
@@ -1424,6 +1430,11 @@ export async function startLab(o: LabOptions): Promise<void> {
     const onDrone = drone?.kind === PawnKind.Drone;
     $(".dronecam").classList.toggle("hidden", !onDrone && ctrl.cam === 0);
     $(".dronecam").classList.toggle("jammed", onDrone && drone.state.jammed > 0);
+    if (onDrone || ctrl.cam) {
+      const html = feedRow();
+      const row = $(".dronecam .feeds");
+      if (row.dataset.html !== html) row.innerHTML = row.dataset.html = html;
+    }
     if (ctrl.cam) {
       // Which camera (a Bulletproof Camera: its dart, and outdoors how long its signal lasts), how many are broken.
       const cams = sim.level.def.cameras;
@@ -1440,12 +1451,21 @@ export async function startLab(o: LabOptions): Promise<void> {
       ]
         .filter(Boolean)
         .join("  ·  ");
+    } else if (onDrone && !ctrl.pawnIds.includes(drone.id)) {
+      // A teammate's drone (Phase 7, intel/DESIGN.md §5): watched, not driven.
+      $(".dronecam-title").textContent = [
+        `${(ownerName(drone.id) || "A TEAMMATE").toUpperCase()}'S DRONE · watching`,
+        drone.state.jammed ? "JAMMED" : "",
+        `${keyLabel(k.leanLeft)} / ${keyLabel(k.leanRight)} switch · ${keyLabel(k.observe)} back`,
+      ]
+        .filter(Boolean)
+        .join("  ·  ");
     } else if (onDrone) {
       const drones = sim.dronesOf(ctrl);
       const held = drones.filter((d) => d.state.mode === PawnMode.Held).length;
       const ds = drone.state;
       const secs = (t: number) => `${(t * DT).toFixed(1)} s`;
-      const bodyBack = drone.id !== ctrl.possessedPawnId;
+      const bodyBack = drone.id !== ctrl.possessedPawnId || sim.feedDrones(ctrl).length > 1;
       $(".dronecam-title").textContent = [
         `DRONE ${drones.indexOf(drone) + 1}/${drones.length}${held ? ` · ${held} held` : ""}`,
         ds.mode === PawnMode.Dead ? "DESTROYED" : "",
@@ -2047,6 +2067,35 @@ export async function startLab(o: LabOptions): Promise<void> {
 
   function nameOfPawn(id: number): string {
     return net?.session.roster.find((e) => e.pawnIds.includes(id))?.name ?? "";
+  }
+
+  /** Whose drone (or body) a pawn is, from the roster. */
+  function ownerName(id: number): string {
+    return net?.session.roster.find((e) => e.pawnIds.includes(id) || e.drones.includes(id))?.name ?? "";
+  }
+
+  /**
+   * The feed row over a drone's or a camera's view (Phase 7, intel/DESIGN.md §5): every camera, or every drone in the
+   * list (your own, then your teammates'), the one watched lit, a broken one struck out, a teammate's greyed.
+   */
+  function feedRow(): string {
+    if (ctrl.cam) {
+      return Array.from({ length: sim.camCount() }, (_, i) => {
+        const cls = [i === ctrl.cam - 1 ? "on" : "", sim.camWorks(i) ? "" : "broken"].filter(Boolean).join(" ");
+        return `<span class="${cls}">${sim.bpCamAt(i) ? "BP" : i + 1}</span>`;
+      }).join("");
+    }
+    const viewed = sim.viewedPawnId(ctrl.id);
+    const own = sim.dronesOf(ctrl);
+    const self = sim.pawns.get(ctrl.possessedPawnId);
+    const list = self?.kind === PawnKind.Drone ? [self, ...sim.feedDrones(ctrl).filter((p) => !ctrl.pawnIds.includes(p.id))] : sim.feedDrones(ctrl);
+    return list
+      .map((p) => {
+        const mine = ctrl.pawnIds.includes(p.id);
+        const cls = [p.id === viewed ? "on" : "", mine ? "" : "view"].filter(Boolean).join(" ");
+        return `<span class="${cls}">${mine ? `D${own.indexOf(p) + 1}` : escapeHtml((ownerName(p.id) || "?").slice(0, 3).toUpperCase())}</span>`;
+      })
+      .join("");
   }
 
   /** One view per body in the simulation: blue for ours, orange with a name tag for everyone else. */

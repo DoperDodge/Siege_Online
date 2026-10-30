@@ -17,7 +17,22 @@ known issues, and what's next.
 | M3 Default cameras: viewing within limits, shooting them, broken state, dead defenders on cameras | ✅ 5 opens Oregon's eight cameras (defenders, alive or dead), Q / E go round them; each viewer turns their own view within the camera's limits; any shot breaks one for the round; the match browser test watches them online |
 | M4 Pings, scans and the comm wheel | ✅ T pings where you look (from a drone or a camera too) for your team, through walls; a double tap is a danger ping; hold T for the comm wheel; Fire held 1 s on a drone or a camera spots enemies for your team; the match browser test pings online |
 | M5 Bulletproof Camera and its EMP dart | ✅ hold 3 (ours) at a wall or the floor to place it; it joins the cameras after the level's (thermal: bodies glow); its front is bulletproof, its sides and back aren't; outdoors its signal goes after 10 s; its EMP dart jams drones for 6 s; protocol 14; the match browser test places and watches one |
-| M6 The feed list across everything, spectating; checks, docs, review, report | ⏳ |
+| M6 The feed list across everything, spectating; checks, docs, review, report | ✅ attackers' feed list: their drones, then their teammates' (watched); a row of feeds over the view; watched cameras lit (blue to defenders, red to attackers); spectating when dead covers cameras, drones and teammates' eyes; the netsim measures prep droning (454 m over 10 preps, no misprediction); a review |
+
+### What's done (M6: the feed list, spectating, checks)
+- **The feed list (D-137):** on a drone, Q / E go round your drones out and then your teammates' out. On a
+  teammate's drone you watch: your mouse turns your own view, its driver drives it. In prep (you are your first
+  drone), Q / E go from it to your teammates' drones and back. 5 takes you back to your body.
+- **The row of feeds** over a drone's or a camera's view: every one in the list (camera numbers, BP for a
+  Bulletproof Camera, D1 / D2 for your drones, a teammate's name for theirs), the one you're on lit, broken ones
+  struck out, teammates' drones in italics.
+- **Lit cameras:** a camera someone watches shows a light by its lens, blue to defenders and red to attackers
+  (Siege's colours since Y6S4).
+- **Spectating when dead** (§7): dead defenders watch the cameras, dead attackers their drones and their teammates',
+  and both can follow a living teammate's eyes (Phase 6).
+- **Checks:** the match netsim now measures prep droning. In the 10-round match the attackers' drones covered 454 m
+  over the 10 preps with no misprediction (`npm run netsim -- --match`); its 4-round unit test checks the same. The
+  match browser test has an attacker go from their own drone to a teammate's in the 2v3.
 
 ### What's done (M5: the Bulletproof Camera)
 - **Placing it:** a defender who took it (Mute by default, Sentry's default kit, Lesion's second gadget) holds 3 (ours)
@@ -87,8 +102,11 @@ known issues, and what's next.
    they're marked red for your team, and their screen says they've been spotted.
 7. Bulletproof Camera: pick Mute and, in prep, hold 3 looking at a wall. 5, then Q, watches it. With an attacker's
    drone in front of it, press 3: the drone is jammed for 6 s. Shoot it from the front (nothing), then the side.
-8. Checks: `npm run typecheck`, `npm test`, `npm run build && node tools/e2e/match.mjs` (prep droning, the cameras,
-   a ping and a Bulletproof Camera, online).
+8. With two attackers (a third window): on a drone, Q / E go on past your drones to your teammate's, which you watch
+   while they drive it. When a defender watches a camera, the attackers see a red light by its lens.
+9. Checks: `npm run typecheck`, `npm test`, `npm run netsim -- --match` (prep droning: metres driven, no
+   misprediction), `npm run build && node tools/e2e/match.mjs` (prep droning, the cameras, a ping, a Bulletproof
+   Camera and a teammate's drone, online).
 
 ### Known issues
 - Drones pass through operators (they only hit the level, walls and props), and climb only 5 cm without a jump, so
@@ -102,7 +120,8 @@ known issues, and what's next.
   pinger's name, not a number. On touch screens, Lean L / R don't switch drones or cameras yet.
 - The Bulletproof Camera doesn't stop the bullet that hits its plate, a knife breaks it outright (Siege's knife only
   breaks the glass), and it can't be picked up again. The gadget key does nothing else until Phase 8.
-- Next: the feed list across everything and spectating (M6).
+- Drones in use show no light yet, and a camera's light is on whenever anyone watches it (whether a passive viewer
+  lights it in Siege is an open question). A teammate's drone is seen about 100 ms late, like every other player.
 
 ---
 

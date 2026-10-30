@@ -1188,3 +1188,45 @@ describe("the Bulletproof Camera in a match (Phase 7 M5)", () => {
     expect(emps(b)).toBe(2);
   }, 60_000);
 });
+
+describe("the feed list (Phase 7 M6)", () => {
+  it("a camera someone watches is lit: the match state tells everyone which", async () => {
+    const t = await matchRoom("custom", 3);
+    const [atk, def] = await t.start(["a", "b"], quick({ siteReveal: "roundStart", firstAttack: "blue" }));
+    t.until(() => t.match.phase === Phase.Prep, 15, "prep");
+    t.tick();
+    const ctrl = t.room.bodyOf(def.id)!;
+    const toggle = (want: number) => {
+      def.cmd = { buttons: Btn.Observe };
+      t.tick();
+      def.cmd = {};
+      t.until(() => ctrl.cam === want, 0.5, `camera ${want}`);
+      for (let i = 0; i < 16; i++) t.tick();
+    };
+    toggle(1);
+    expect([atk.session.match!.camsWatched, def.session.match!.camsWatched]).toEqual([1, 1]);
+    toggle(0);
+    expect([atk.session.match!.camsWatched, def.session.match!.camsWatched]).toEqual([0, 0]);
+  }, 60_000);
+
+  it("in prep an attacker goes to a teammate's drone and back with a new lean, predicted (no corrections)", async () => {
+    const t = await matchRoom("custom", 3);
+    const [a, , c] = await t.start(["a", "b", "c"], quick({ siteReveal: "roundStart", firstAttack: "blue" }));
+    t.until(() => t.match.phase === Phase.Prep, 15, "prep");
+    for (let i = 0; i < 16; i++) t.tick();
+    const ctrl = t.room.bodyOf(c.id)!;
+    const [aDrone] = t.room.sim.dronesOf(t.room.bodyOf(a.id)!);
+    const missed = c.session.mispredictions.length;
+    c.cmd = { lean: 1 };
+    t.until(() => ctrl.drone === aDrone.id, 0.5, "a's drone");
+    c.cmd = { lean: 0, yaw: 1, pitch: -0.2 };
+    for (let i = 0; i < 32; i++) t.tick();
+    expect([c.session.ctrl!.drone, c.session.ctrl!.camYaw]).toEqual([aDrone.id, Math.fround(1)]);
+    expect(t.room.sim.viewedPawnId(ctrl.id)).toBe(aDrone.id);
+    c.cmd = { lean: 1 };
+    t.until(() => ctrl.drone === 0, 0.5, "back to their own");
+    c.cmd = {};
+    for (let i = 0; i < 16; i++) t.tick();
+    expect(c.session.mispredictions.length).toBe(missed);
+  }, 60_000);
+});

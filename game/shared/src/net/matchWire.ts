@@ -259,6 +259,8 @@ export interface MatchView {
   camsBroken: number;
   /** The round's Bulletproof Cameras (Phase 7 M5), in the order they were placed. */
   bpCams: BpCam[];
+  /** The cameras someone is watching (Phase 7): a bit each, the level's then the Bulletproof Cameras. */
+  camsWatched: number;
   history: RoundRecord[];
   /** At the match end: the winner (null: a draw), whether by forfeit, and the MVP (0: none). */
   winner: Team | null;
@@ -297,7 +299,7 @@ export function encodeMatchState(v: MatchView): Uint8Array {
     for (const op of side.slice(0, 6)) w.str(op);
   }
   optStr(w, v.site);
-  w.varu(v.carrier).u32(v.safeguardEnd >>> 0).u32(v.camsBroken >>> 0);
+  w.varu(v.carrier).u32(v.safeguardEnd >>> 0).u32(v.camsBroken >>> 0).u32(v.camsWatched >>> 0);
   w.u8(Math.min(MAX_BP_CAMS, v.bpCams.length));
   for (const c of v.bpCams.slice(0, MAX_BP_CAMS)) {
     w.f32(c.pos[0]).f32(c.pos[1]).f32(c.pos[2]).f32(c.yaw).u8((c.onFloor ? 1 : 0) | (c.broken ? 2 : 0));
@@ -375,6 +377,7 @@ export function decodeMatchState(r: ByteReader): MatchView {
   const carrier = r.varu();
   const safeguardEnd = r.u32();
   const camsBroken = r.u32();
+  const camsWatched = r.u32();
   const nb = r.u8();
   if (nb > MAX_BP_CAMS) throw new ProtocolError("too many cameras");
   const bpCams = Array.from({ length: nb }, (): BpCam => {
@@ -429,6 +432,7 @@ export function decodeMatchState(r: ByteReader): MatchView {
     safeguardEnd,
     camsBroken,
     bpCams,
+    camsWatched,
     history,
     winner: wv === 2 ? null : (wv as Team),
     forfeit: (f & F.forfeit) !== 0,

@@ -41,6 +41,7 @@ if (args.includes("--match")) {
   console.table(r.perClient.map((c) => ({ ...c, downKbps: +c.downKbps.toFixed(1), upKbps: +c.upKbps.toFixed(1), rttMs: +c.rttMs.toFixed(0) })));
   console.log("score", r.score, "winner", r.winner ?? "none (a draw)", "over", r.over, "kills", r.kills, "server tick ms", r.serverTickMs);
   console.log("panels", r.panels);
+  console.log("prep droning", { ...r.prepDroning, metres: +r.prepDroning.metres.toFixed(1) });
   if (r.contactLate.length) console.log(`at rest in contact (expected, D-033):\n${r.contactLate.join("\n")}`);
   for (const [what, list] of [["DESYNCS", r.desyncs], ["VIEWS DIFFER", r.viewsDiffer], ["PANELS DIFFER", r.panels.differ], ["ERRORS", r.errors]] as const) if (list.length) console.log(`${what}:\n${list.join("\n")}`);
   const ok = r.over && r.rounds.length === r.options.script.length && r.rounds.every((x) => x.asScripted) && !r.desyncs.length && !r.viewsDiffer.length && !r.panels.differ.length && !r.errors.length;

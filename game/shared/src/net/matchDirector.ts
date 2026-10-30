@@ -64,6 +64,8 @@ export class MatchDirector {
   /** Ticks each defender's body has been outside the building this round, and who is detected (pawn ids). */
   private readonly outside = new Map<number, number>();
   private detected: number[] = [];
+  /** The cameras someone is watching (a bit each, in the defenders' list: the level's, then Bulletproof Cameras). */
+  private watched = 0;
   private dirty = true;
   private urgent = false;
   private lastSent = -Infinity;
@@ -243,7 +245,17 @@ export class MatchDirector {
     const facts = live ? { attackersUp: this.up(ATTACK), defendersUp: this.up(DEFENSE), plantInProgress: this.planting() } : undefined;
     this.apply(m.update(sim.tick, facts));
     this.redWalls();
+    this.watchCams();
     this.sendState();
+  }
+
+  /** A camera being watched lights up (Phase 7, research/intel.md §3: everyone sees it): who watches which, each tick. */
+  private watchCams() {
+    let bits = 0;
+    for (const c of this.host.sim.controllers.values()) if (c.cam > 0 && c.cam <= 32) bits |= 1 << (c.cam - 1);
+    if (bits === this.watched) return;
+    this.watched = bits;
+    this.changed(false);
   }
 
   /** The member whose body has this controller id, or null. */
@@ -668,6 +680,7 @@ export class MatchDirector {
       carrier: attacker ? this.carrierMember() : 0,
       safeguardEnd: m.phase === Phase.Action && this.host.sim.tick < this.safeguardEnd ? this.safeguardEnd : 0,
       camsBroken: this.host.sim.matchRules.camsBroken,
+      camsWatched: this.watched >>> 0,
       bpCams: this.host.sim.matchRules.bpCams.map((c) => ({ ...c, pos: [c.pos[0], c.pos[1], c.pos[2]] })),
       history: m.history.slice(-MAX_HISTORY).map((h) => ({ ...h })),
       winner: m.winner,

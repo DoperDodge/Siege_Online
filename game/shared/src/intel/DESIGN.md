@@ -113,6 +113,15 @@ Defenders: the default cameras, then Bulletproof Cameras. Q / E go round the lis
 and skipped; a feed you can't drive is greyed (I:49 tint). Esc / Observe closes it. Each feed's icon sits in a row at
 the top of the view.
 
+**Built (M6, D-137):** an attacker's list is their drones out, then their teammates' out in pawn order
+(`Sim.feedDrones`); on a teammate's drone the controller's `drone` names it but nothing of theirs takes the input:
+the viewer turns their own view (the controller's camera view fields, from the input alone, so a client predicts it
+whatever it last heard of that drone), and the client draws it from the snapshots like any other player's. In prep,
+where you are your first drone, a new lean goes round it and your teammates'. The row over the view lists every feed
+(camera numbers, `BP` for a Bulletproof Camera; `D1`, `D2` for your drones and a teammate's name for theirs), the one
+watched lit, broken ones struck out, teammates' drones in italics. A camera someone watches shows a light by its lens
+(the match state carries which, `camsWatched`): blue to the defenders, red to the attackers (Y6S4's colours).
+
 ## 6. Pings, scans and the comm wheel
 
 - **Ping (T, ours; Siege uses Z, our ability key):** a yellow ping where you aim, from the body, a drone or a camera,

@@ -1,8 +1,8 @@
 // Drones (Phase 7 M1, intel/DESIGN.md §2): the Observe key throws, drives, leaves and switches them, F picks one up;
 // they drive at full speed in every direction, jump on a cooldown, boost, fall without harm, fit through Oregon's
-// drone holes but not walls, and any shot destroys one.
+// drone holes but not walls, and any shot destroys one. Teammates' drones are in the feed list too, watched (M6, §5).
 import { describe, expect, it } from "vitest";
-import { applyDamage, ATTACK, Btn, Cause, DEG, PawnKind, PawnMode, Sim, type InputCmd, type Pawn } from "../src/index.js";
+import { applyDamage, ATTACK, Btn, Cause, DEFENSE, DEG, PawnKind, PawnMode, Sim, type InputCmd, type Pawn } from "../src/index.js";
 import { input } from "./helpers.js";
 
 /** An attacker with two drones held, standing on `level`'s spawn (Oregon: the first of `group`). */
@@ -210,3 +210,94 @@ describe("a drone's view (Phase 7 M1)", () => {
   });
 });
 
+
+describe("a teammate's drone (Phase 7 M6, intel/DESIGN.md §5)", () => {
+  /** Two attackers in the range lab: a with two drones, b with none; and a defender, d. */
+  async function team() {
+    const sim = await Sim.create("range_lab");
+    const a = sim.addPlayer("a", "thermite", 0, undefined, undefined, ATTACK);
+    sim.addDrone(a.id);
+    sim.addDrone(a.id);
+    const b = sim.addPlayer("b", "sledge", 0, undefined, undefined, ATTACK);
+    const d = sim.addPlayer("d", "mute", 0, undefined, undefined, DEFENSE);
+    const step = (ca: Partial<InputCmd> & { yawDeg?: number } = {}, cb: Partial<InputCmd> & { yawDeg?: number } = {}, n = 1, cd: Partial<InputCmd> = {}) => {
+      for (let i = 0; i < n; i++) sim.step(new Map([[a.id, input(ca)], [b.id, input(cb)], [d.id, input(cd)]]));
+    };
+    step({}, {}, 16);
+    step({ buttons: Btn.Observe }); // a throws their first and drives it
+    step({}, {}, 64);
+    return { sim, a, b, d, step, drone: sim.dronesOf(a)[0] };
+  }
+
+  it("comes after your own in the feed list: watched, not driven; your view is your own; Observe takes you back", async () => {
+    const { sim, a, b, step, drone } = await team();
+    expect(a.drone).toBe(drone.id);
+    expect(sim.feedDrones(b).map((p) => p.id)).toEqual([drone.id]);
+    step({}, { buttons: Btn.Observe });
+    step();
+    expect([b.drone, sim.viewedPawnId(b.id)]).toEqual([drone.id, drone.id]);
+    const at = { x: drone.state.x, z: drone.state.z };
+    const body = sim.pawns.get(b.possessedPawnId)!;
+    const stood = { x: body.state.x, z: body.state.z };
+    step({}, { forward: 1, yawDeg: 90 }, 32);
+    expect(Math.hypot(drone.state.x - at.x, drone.state.z - at.z)).toBeLessThan(0.01); // b's keys don't drive it
+    expect(Math.hypot(body.state.x - stood.x, body.state.z - stood.z)).toBeLessThan(0.01); // nor their body
+    expect(b.camYaw).toBeCloseTo(90 * DEG, 5);
+    expect(sim.viewOf(b)).toMatchObject({ yaw: b.camYaw, pitch: b.camPitch });
+    expect(sim.viewOf(b)!.pos[1] - drone.state.y).toBeCloseTo(sim.data.intel.drone.eyeM, 5);
+    step({ forward: 1 }, { yawDeg: 90 }, 32); // a drives it on
+    expect(Math.hypot(drone.state.x - at.x, drone.state.z - at.z)).toBeGreaterThan(0.5);
+    expect(b.drone).toBe(drone.id);
+    step({}, { buttons: Btn.Observe });
+    expect(b.drone).toBe(0);
+    step();
+    // a losing it takes b off it.
+    step({}, { buttons: Btn.Observe });
+    step();
+    expect(b.drone).toBe(drone.id);
+    applyDamage(sim, drone, { amount: 1, kill: false, cause: Cause.Bullet });
+    step();
+    expect([a.drone, b.drone]).toEqual([0, 0]);
+  });
+
+  it("your own come first, then theirs, a new lean going round them all; an enemy's drone is never in it", async () => {
+    const { sim, b, d, step, drone } = await team();
+    // b gets a drone of their own, out.
+    const mine = sim.addDrone(b.id);
+    sim.placeDrone(mine.id, 3, 0.02, -3, 0);
+    expect(sim.feedDrones(b).map((p) => p.id)).toEqual([mine.id, drone.id]);
+    step({}, { buttons: Btn.Observe });
+    step();
+    expect(b.drone).toBe(mine.id);
+    step({}, { lean: 1 });
+    expect(b.drone).toBe(drone.id);
+    step({}, { lean: 0 });
+    step({}, { lean: 1 });
+    expect(b.drone).toBe(mine.id);
+    expect(sim.feedDrones(d)).toEqual([]);
+    step({}, {}, 1, { buttons: Btn.Observe });
+    expect(d.drone).toBe(0);
+  });
+
+  it("in prep, where you are your first drone, a new lean goes to a teammate's and back", async () => {
+    const { sim, a, step, drone } = await team();
+    const p = sim.addPilot("p", "fuze", ATTACK);
+    const own = sim.addDrone(p.id);
+    sim.placeDrone(own.id, -3, 0.02, -3, 0);
+    const run = (cmd: Partial<InputCmd> & { yawDeg?: number }, n = 1) => {
+      for (let i = 0; i < n; i++) sim.step(new Map([[a.id, input({})], [p.id, input(cmd)]]));
+    };
+    run({}, 16);
+    expect([p.possessedPawnId, p.drone]).toEqual([own.id, 0]);
+    run({ lean: 1 });
+    expect([p.drone, sim.viewedPawnId(p.id)]).toEqual([drone.id, drone.id]);
+    const parked = { x: own.state.x, z: own.state.z };
+    run({ lean: 0, forward: 1 }, 32); // watching: their own drone stays parked, the teammate's isn't driven
+    expect(Math.hypot(own.state.x - parked.x, own.state.z - parked.z)).toBeLessThan(0.01);
+    run({ lean: 1 });
+    expect([p.drone, sim.viewedPawnId(p.id)]).toEqual([0, own.id]);
+    run({ lean: 0, forward: 1 }, 32);
+    expect(Math.hypot(own.state.x - parked.x, own.state.z - parked.z)).toBeGreaterThan(0.5);
+    void step;
+  });
+});

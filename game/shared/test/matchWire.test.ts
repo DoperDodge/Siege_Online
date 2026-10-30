@@ -81,7 +81,7 @@ describe("match messages", () => {
       site: "SITE_LAUNDRY",
       siteRevealed: true,
       carrier: 2,
-      safeguardEnd: 70000, camsBroken: 0b101,
+      safeguardEnd: 70000, camsBroken: 0b101, camsWatched: 0b1000000010,
       bpCams: [
         { pos: [39.25, -1.5, 30.5], yaw: Math.fround(Math.PI), onFloor: false, owner: 2, broken: false, signalEnd: 0, dartReady: 9000, panel: 97 },
         { pos: [43.125, 0.0625, 62.25], yaw: 0, onFloor: true, owner: 3, broken: true, signalEnd: 12000, dartReady: 0, panel: -1 },

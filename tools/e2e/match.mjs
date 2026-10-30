@@ -10,9 +10,10 @@
 // has nothing); the defenders win on time, the banner says so, the sides swap for round 2 (where the new defender
 // places a Bulletproof Camera and watches it), and after it the summary has both rounds; the host takes everyone back
 // to the lobby. 2v3: five players (three on Blue, two on Orange; some never pick and get an operator anyway, one per
-// team each); in action a defender shoots a teammate down the sights (friendly fire on, reverse friendly fire off), who
-// then looks through a living teammate's eyes, and the scoreboard counts the death; the match ends with the summary.
-// Also: a loadout set on the Play page is kept, and a sight fitted on the planning screen is carried into action.
+// team each); in action an attacker goes from their drone to a teammate's (the feed list), and a defender shoots a
+// teammate down the sights (friendly fire on, reverse friendly fire off), who then looks through a living teammate's
+// eyes, and the scoreboard counts the death; the match ends with the summary. Also: a loadout set on the Play page is
+// kept, and a sight fitted on the planning screen is carried into action.
 // Requires `npm run build` first. Screenshots go to builds/e2e.
 import { spawn } from "node:child_process";
 import { mkdirSync, readFileSync } from "node:fs";
@@ -355,6 +356,21 @@ try {
   const byTeam = [0, 1].map((t) => v.players.filter((p) => p.team === t).map((p) => p.operator));
   result.twoVsThree.operators = byTeam;
   result.checks.everyoneHasAnOperator = byTeam.flat().every((o) => o !== null) && byTeam.every((ops) => new Set(ops).size === ops.length);
+  // The feed list (Phase 7 M6): an attacker throws their second drone (5), then a new lean goes on past their own
+  // drones to a teammate's, which they watch.
+  const watcher = pages.find((_, i) => sides[i] === 0);
+  await watcher.waitForFunction(() => window.__lab.net.own !== null && !window.__match.spectating, null, { timeout: 20000 }).catch(() => {});
+  const mateDrones = await watcher.evaluate(() => {
+    const n = window.__lab.net;
+    const mine = n.roster.find((e) => e.controllerId === n.you);
+    return n.roster.filter((e) => e.team === mine.team && e !== mine).flatMap((e) => e.drones);
+  });
+  const onOwn = await holdUntil(watcher, { buttons: OBSERVE }, () => window.__lab.net.viewedKind === 1);
+  const onMates = onOwn && (await holdUntil(watcher, { lean: 1 }, (ids) => ids.includes(window.__lab.net.drone), mateDrones));
+  await watcher.screenshot({ path: shot("match-teammate-drone.png") });
+  await holdUntil(watcher, { buttons: OBSERVE }, () => window.__lab.net.drone === 0);
+  result.twoVsThree.feedList = { mateDrones, onOwn, onMates };
+  result.checks.attackerWatchesATeammatesDrone = onMates;
   // A defender shoots a teammate in the head: the two first defender spawns at the Dining site share the room. Down the
   // sights, once they are fully up: a bullet then goes where the view points (from the hip, more than half the shots at
   // 3.6 m miss, and on a slow runner the tries ran out before one landed).

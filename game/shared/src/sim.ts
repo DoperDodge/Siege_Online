@@ -691,24 +691,38 @@ export class Sim {
   }
 
   /**
-   * Drones' keys (Phase 7, intel/DESIGN.md §2). Observe: from a standing body, throw a held drone and drive it, or
-   * with none held drive the first one out (a dead body too); from a drone, back to the body. A new lean on a
-   * drone goes to the previous / next drone out. A drone destroyed or picked up while driven, or the body going
-   * down, ends the drive. In prep (no body yet) the first drone is all there is.
+   * Drones' keys (Phase 7, intel/DESIGN.md §2, §5). Observe: from a standing body, throw a held drone and drive it, or
+   * with none held go to the first in the feed list (feedDrones: your drones out, then your teammates'; a dead body
+   * too); from a drone, back to the body. A new lean on a drone goes to the previous / next in the list. A teammate's
+   * drone is watched, not driven. A drone destroyed or picked up while on it, or the body going down, ends it. In prep
+   * (no body yet) you are your first drone, and a new lean goes round it and your teammates' drones.
    */
   private updateDrones(c: PlayerController, input: InputCmd | undefined, heldBefore: number) {
+    this.switchDrones(c, input, heldBefore);
+    if (input) this.lookFromMates(c, input);
+  }
+
+  private switchDrones(c: PlayerController, input: InputCmd | undefined, heldBefore: number) {
     const drones = this.dronesOf(c);
-    if (!drones.length) return;
-    const out = drones.filter((p) => p.state.mode === PawnMode.Walk);
+    const out = this.feedDrones(c);
     const body = this.pawns.get(c.possessedPawnId);
     const downed = body !== undefined && body.kind === PawnKind.Body && isDowned(body.state);
     if (c.drone && (downed || !out.some((p) => p.id === c.drone))) c.drone = 0;
-    if (!input) return;
+    if ((!drones.length && !out.length) || !input) return;
     const lean = Math.sign(input.lean);
     const newLean = lean !== 0 && lean !== c.prevLean ? lean : 0;
     c.prevLean = lean;
-    if (!body || body.kind === PawnKind.Drone || downed) return;
+    if (!body || downed) return;
     const pressed = input.buttons & ~heldBefore;
+    if (body.kind === PawnKind.Drone) {
+      // In prep the pawn you are is your first drone: a new lean goes round it and your teammates' drones out.
+      if (!newLean) return;
+      const list = [body, ...out.filter((p) => !c.pawnIds.includes(p.id))];
+      const at = Math.max(0, list.findIndex((p) => p.id === (c.drone || body.id)));
+      const next = list[(at + newLean + list.length) % list.length];
+      c.drone = next.id === body.id ? 0 : next.id;
+      return;
+    }
     if (c.drone) {
       if (pressed & Btn.Observe) c.drone = 0;
       else if (newLean && out.length > 1) {
@@ -721,6 +735,28 @@ export class Sim {
     const thrown = body.state.mode === PawnMode.Walk ? this.throwDrone(c, body, input.buttons) : null;
     if (thrown) c.drone = thrown.id;
     else if (out.length) c.drone = out[0].id;
+  }
+
+  /**
+   * The drones in an attacker's feed list (Phase 7, intel/DESIGN.md §5): their own out, then their teammates' out in
+   * pawn order (watched, not driven).
+   */
+  feedDrones(c: PlayerController): Pawn[] {
+    const own = this.dronesOf(c).filter((p) => p.state.mode === PawnMode.Walk);
+    const mates: Pawn[] = [];
+    for (const p of this.pawns.values()) if (p.kind === PawnKind.Drone && p.team === c.team && p.state.mode === PawnMode.Walk && !c.pawnIds.includes(p.id)) mates.push(p);
+    return [...own, ...mates.sort((a, b) => a.id - b.id)];
+  }
+
+  /**
+   * On a teammate's drone the viewer turns their own view (the camera's view fields), within the drone's tilt: from the
+   * input alone, so a client predicts it exactly, whatever it last heard of that drone.
+   */
+  private lookFromMates(c: PlayerController, input: InputCmd) {
+    if (!c.drone || c.pawnIds.includes(c.drone)) return;
+    const d = this.data.intel.drone;
+    c.camYaw = Math.fround(wrapAngle(input.yaw));
+    c.camPitch = Math.fround(clamp(input.pitch, d.pitchMinDeg * DEG, d.pitchMaxDeg * DEG));
   }
 
   /**
@@ -774,6 +810,7 @@ export class Sim {
     const p = this.pawns.get(this.viewedPawnId(c.id));
     if (!p || p.state.mode === PawnMode.Dead || p.state.mode === PawnMode.Held) return null;
     const eye = this.eyeOf(p);
+    if (p.kind === PawnKind.Drone && !c.pawnIds.includes(p.id)) return { ...eye, yaw: c.camYaw, pitch: c.camPitch }; // a teammate's drone
     return input ? { ...eye, yaw: input.yaw, pitch: input.pitch } : eye;
   }
 
@@ -1119,13 +1156,14 @@ export class Sim {
       const viewChanged = this.viewedPawnId(c.id) !== viewedBefore || c.cam !== camBefore;
       const drone = c.drone ? this.pawns.get(c.drone) : undefined;
       if (drone) {
-        // Driving a drone (Phase 7): it takes the input; the body, if it stands, idles with its weapon parked.
+        // Driving a drone (Phase 7): it takes the input; the body, if it stands, idles with its weapon parked. A
+        // teammate's drone is only watched (lookFromMates): nothing of theirs takes the input.
         const body = this.pawns.get(c.possessedPawnId);
         if (body && body.kind === PawnKind.Body && body.state.mode !== PawnMode.Dead) {
           drive.set(body.id, idleInput(body, body.state.stance));
           idleDriven.add(body.id);
         }
-        if (input) drive.set(drone.id, viewChanged ? { ...input, yaw: drone.state.yaw, pitch: drone.state.pitch } : input);
+        if (input && c.pawnIds.includes(drone.id)) drive.set(drone.id, viewChanged ? { ...input, yaw: drone.state.yaw, pitch: drone.state.pitch } : input);
         continue;
       }
       const target = c.shellCam || c.swapPhase ? this.otherPawn(c.id) : null;
