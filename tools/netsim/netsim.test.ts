@@ -1,7 +1,7 @@
 // The netsim harness as a regression test (PLAN §17 Phase 2 / §19): 10 clients at 100 ms round trip with
 // jitter, stalls and clock drift. Short runs here; `npm run netsim` runs longer ones.
 import { describe, expect, it } from "vitest";
-import { runHitreg, runNetsim } from "./netsim.js";
+import { runHitreg, runMatchNetsim, runNetsim } from "./netsim.js";
 
 describe("netsim: 10 clients, 100 ms round trip, jitter, stalls, drift", () => {
   it("spread out (no contact): no desyncs, nothing dropped, only the expected corrections", async () => {
@@ -136,3 +136,24 @@ describe("netsim hitreg: a still shooter at 100 ms round trip aims at heads as i
     expect(r.headHits / r.shots).toBeLessThan(0.5);
   }, 60000);
 });
+
+describe("a whole match (Phase 6 M6)", () => {
+  it("four clients through a 4-round Custom match on Oregon, each round ending another way: as scripted, no desyncs at rest, every client's walls and match the server's", async () => {
+    const r = await runMatchNetsim({ clients: 4, script: ["elimination", "detonate", "disable", "time"], seed: 2 });
+    expect(r.rounds.map((x) => [x.round, x.reason, x.asScripted])).toEqual([
+      [1, "elimination", true],
+      [2, "detonated", true],
+      [3, "disabled", true],
+      [4, "time", true],
+    ]);
+    // Blue attacks the odd rounds: 1–0, 1–1, 1–2, 2–2, a draw with no overtime.
+    expect([r.over, r.score, r.winner]).toEqual([true, [2, 2], null]);
+    expect(r.desyncs).toEqual([]);
+    expect(r.viewsDiffer).toEqual([]);
+    expect(r.panels.differ).toEqual([]);
+    expect(r.errors).toEqual([]);
+    expect(r.panels.ops).toBeGreaterThan(0); // the pre-setups, at least
+    expect(r.serverTickMs.p99).toBeLessThan(5);
+  }, 120000);
+});
+

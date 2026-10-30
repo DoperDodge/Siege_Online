@@ -254,7 +254,10 @@ model).
 - Room (in process): full 1v1 and 2v3 matches driven through the room's real messages: lobby, start, picks,
   prep with defenders at the site and red walls, action, rounds won by elimination, time, plant + fuse and disable,
   side swap, overtime, match end; Practice with an empty side.
-- netsim `--match`: ten clients through a 10-round match, no desyncs (PLAN §19).
+- netsim `--match`: ten clients through a 10-round match, no desyncs (PLAN §19). As built (D-132): a Custom match on
+  Oregon whose rounds the harness ends each scripted way (eliminations, on time, a plant that detonates, one
+  disabled), each team winning five; at each round's end, at rest, no client may need a correction, and every
+  client's walls and view of the match must be the server's. A 4-round version with four clients is a unit test.
 - Browser (e2e): a 1v1 and a 2v3 match with short Custom timers, through the Play page, lobby, planning, rounds and
   the match summary.
 
