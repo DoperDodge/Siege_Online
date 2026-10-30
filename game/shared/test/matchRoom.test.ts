@@ -406,6 +406,77 @@ describe("the defuser (match/DESIGN.md §8)", () => {
       t.until(() => t.match.phase === Phase.Planning || t.match.phase === Phase.MatchEnd, 5, "the next round");
     }
   }, 120_000);
+
+  it("let go of in the air (the Drop key, or its carrier killed off a rope or a ladder), it falls to the floor under them, where a teammate picks it up", async () => {
+    const t = await matchRoom("custom", 3);
+    const cs = await t.start(["a", "b", "c"], quick({ siteReveal: "roundStart", firstAttack: "blue" }));
+    t.until(() => t.match.phase === Phase.Action, 15, "action");
+    t.tick();
+    const [first, second] = t.match.sides[ATTACK].map((id) => cs.find((c) => c.id === id)!);
+    expect(t.room.sim.objective!.carrier).toBe(t.bodyOf(first)!.id);
+    /** A member's body 1.2 m over the Laundry's floor at `x` (in the air, under its ceiling). */
+    const lift = (c: (typeof cs)[number], x: number) => {
+      const body = t.bodyOf(c)!;
+      t.room.sim.teleport(body.id, x, LAUNDRY[1] + 1.2, LAUNDRY[2], 0);
+      t.room.correct(c.id);
+      return body;
+    };
+    const onFloorAt = (x: number) => {
+      const d = t.room.sim.objective!.dropped!;
+      expect(Math.hypot(d[0] - x, d[2] - LAUNDRY[2])).toBeLessThan(0.1);
+      expect(d[1]).toBeCloseTo(LAUNDRY[1], 1);
+    };
+    t.place(first, ...LAUNDRY, 0);
+    const body = lift(first, LAUNDRY[0]);
+    first.cmd = { buttons: Btn.Drop };
+    t.until(() => t.room.sim.objective!.carrier === 0, 0.25, "the drop");
+    first.cmd = {};
+    expect(body.state.y).toBeGreaterThan(LAUNDRY[1] + 0.8); // let go of in the air
+    onFloorAt(LAUNDRY[0]);
+    // From the floor, 0.8 m away: a press picks it up.
+    t.place(second, LAUNDRY[0] + 0.8, LAUNDRY[1], LAUNDRY[2], 90);
+    expect(t.room.sim.prompt(t.room.bodyOf(second.id)!.id)).toBe("pickUp");
+    second.cmd = { yaw: 90 * DEG, buttons: Btn.Interact };
+    t.until(() => t.room.sim.objective!.carrier === t.bodyOf(second)!.id, 0.25, "the pickup");
+    second.cmd = {};
+    t.room.killBody(lift(second, LAUNDRY[0] + 0.8).id, Cause.Lab);
+    t.tick();
+    expect(t.room.sim.objective!.carrier).toBe(0);
+    onFloorAt(LAUNDRY[0] + 0.8);
+  }, 60_000);
+
+  it("an attacker who walks into the site finds it (under \"sight\" too) at once: in the Laundry, facing away from both its bombs", async () => {
+    const t = await matchRoom("custom", 3);
+    const cs = await t.start(["a", "b"], quick());
+    expect(t.match.mode.match.siteReveal).toBe("sight");
+    const [atk, def] = sides(t, cs);
+    t.act(def, { kind: "siteVote", site: "SITE_LAUNDRY" });
+    // In prep, the defender out of the way: they start where the attacker goes.
+    t.until(() => t.match.phase === Phase.Prep, 15, "prep");
+    t.tick();
+    t.place(def, LAUNDRY[0] + 1, LAUNDRY[1], LAUNDRY[2], 90);
+    t.until(() => t.match.phase === Phase.Action, 15, "action");
+    t.tick();
+    expect([t.match.siteRevealed, atk.session.match!.site]).toEqual([false, null]);
+    // Just after the action phase went out to the clients, the attacker in, facing away from its bomb: the news
+    // reaches them in the same tick, not up to STATE_EVERY ticks later.
+    const bomb = t.room.sim.level.def.sites.find((s) => s.id === "SITE_LAUNDRY")!.bombs.find((b) => b.room === "B_LAUNDRY")!.pos;
+    const away = Math.atan2(-(LAUNDRY[0] - bomb[0]), -(LAUNDRY[2] - bomb[2])) / DEG; // the Supply's is behind walls
+    const body = t.bodyOf(atk)!;
+    t.room.sim.teleport(body.id, ...LAUNDRY, away);
+    t.room.correct(atk.id);
+    atk.cmd = { yaw: away * DEG };
+    t.tick();
+    t.tick();
+    expect(t.match.siteRevealed).toBe(true);
+    expect(atk.session.match!.site).toBe("SITE_LAUNDRY");
+    // Its carrier, settled there, plants: the hold predicted.
+    for (let i = 0; i < 18; i++) t.tick();
+    const missed = atk.session.mispredictions.length;
+    atk.cmd = { yaw: away * DEG, buttons: Btn.Interact };
+    t.until(() => t.match.phase === Phase.PostPlant, 8, "the plant");
+    expect(atk.session.mispredictions.length).toBe(missed);
+  }, 60_000);
 });
 
 describe("the defuser's edge cases", () => {
@@ -626,5 +697,35 @@ describe("each format's details (Phase 6 M5)", () => {
     t.tick();
     expect(host.session.match!.phase).toBe(Phase.Lobby);
   }, 60_000);
+
+  it("one who leaves mid-match and comes back by the same name gets their slot, team and stats back, even in a full 1v1", async () => {
+    const t = await matchRoom("one_v_one", 3);
+    const host = await t.add("host");
+    const guest = await t.add("guest");
+    t.tick();
+    t.lobby(guest, { kind: "ready", ready: true });
+    t.tick();
+    t.lobby(host, { kind: "start" });
+    t.tick();
+    const team = t.match.players.get(guest.id)!.team;
+    t.match.recordKill(host.id, guest.id, null, false);
+    t.room.leave(guest.id);
+    t.tick();
+    expect(t.match.players.get(guest.id)!.connected).toBe(false);
+    // Both teams' one slot is taken (the guest's is kept): only the guest's name gets it back.
+    const back = await t.add("guest");
+    t.tick();
+    expect(t.match.players.has(guest.id)).toBe(false);
+    expect(t.match.players.get(back.id)).toMatchObject({ name: "guest", team, kills: 1, connected: true });
+    expect(back.session.match!.players.map((p) => p.name)).toEqual(["host", "guest"]);
+  }, 60_000);
+
+  it("the history a state carries is the last 64 rounds (Practice's go on without end)", async () => {
+    const t = await matchRoom("practice", 8);
+    const host = await t.add("host");
+    t.tick();
+    for (let r = 1; r <= 70; r++) t.match.history.push({ round: r, attackers: 0, winner: 1, reason: WinReason.Time, site: "SITE_DINING" });
+    expect(t.room.director!.view(host.id).history.map((h) => h.round)).toEqual(Array.from({ length: 64 }, (_, i) => i + 7));
+  });
 });
 

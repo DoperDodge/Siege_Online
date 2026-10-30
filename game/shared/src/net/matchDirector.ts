@@ -18,9 +18,10 @@ import { viewDir } from "../weapons/spread.js";
 import type { SimEvent } from "../weapons/step.js";
 import { ticks, ticksOrZero } from "../weapons/ticks.js";
 import { Match, matchMapOf, NO_END, Phase, type MatchEvent } from "../match/match.js";
+import { inSite, siteArea } from "../match/objective.js";
 import { preSetupOps } from "../match/preSetup.js";
 import { ATTACK, DEFENSE, isFormat, mvp, RATING_MAX, RATING_MIN, reinforcementPool, type FormatMode, type Side } from "../match/rules.js";
-import { encodeMatchState, type LobbyAction, type MatchAction, type MatchView, type RoomListEntry } from "./matchWire.js";
+import { encodeMatchState, MAX_HISTORY, type LobbyAction, type MatchAction, type MatchView, type RoomListEntry } from "./matchWire.js";
 
 /** What the director needs from its room (net/room.ts implements it). */
 export interface DirectorHost {
@@ -93,9 +94,15 @@ export class MatchDirector {
     return this.match.mode;
   }
 
-  /** A new member joins the match's lobby (or a team mid-match, playing from the next round). False when full. */
+  /**
+   * A new member joins the match's lobby (or a team mid-match, playing from the next round). One who left this match
+   * under way and comes back by the same name takes their kept slot, team and stats again (D-123). False when full.
+   */
   join(memberId: number, name: string): boolean {
-    if (!this.match.addPlayer(memberId, name)) return false;
+    const m = this.match;
+    const under = m.phase !== Phase.Lobby && m.phase !== Phase.MatchEnd;
+    const gone = under ? [...m.players.values()].filter((p) => !p.connected && p.name === name).sort((a, b) => a.order - b.order)[0] : undefined;
+    if (!(gone ? m.rejoin(gone.id, memberId) : m.addPlayer(memberId, name))) return false;
     this.changed(true);
     return true;
   }
@@ -226,9 +233,9 @@ export class MatchDirector {
     this.killBelowMap();
     if (live) this.runouts();
     if (m.phase === Phase.Action && sim.tick < this.safeguardEnd) this.safeguardEntries();
-    if ((m.phase === Phase.Prep || m.phase === Phase.Action) && !m.siteRevealed && this.mode.match.siteReveal === "sight" && this.siteInView()) {
+    if ((m.phase === Phase.Prep || m.phase === Phase.Action) && !m.siteRevealed && this.mode.match.siteReveal === "sight" && (this.siteInView() || this.attackerInSite())) {
       m.siteFound();
-      this.changed(false);
+      this.changed(true); // at once: the carrier's client predicts a plant only once it knows the site
     }
     if (m.phase === Phase.PostPlant && this.plantHatch !== null && sim.level.panels.list[this.plantHatch]?.panel.broken) m.defuserDeactivated();
     const facts = live ? { attackersUp: this.up(ATTACK), defendersUp: this.up(DEFENSE), plantInProgress: this.planting() } : undefined;
@@ -285,12 +292,13 @@ export class MatchDirector {
     this.changed(true);
   }
 
-  /** A body went down or died: if it carried the defuser, it falls there (research §5). */
+  /** A body went down or died: if it carried the defuser, it falls to the floor under it (research §5; off a rope too). */
   onBodyDown(pawn: Pawn) {
-    const o = this.host.sim.objective;
+    const sim = this.host.sim;
+    const o = sim.objective;
     if (!o || o.carrier !== pawn.id) return;
     o.carrier = 0;
-    o.dropped = [pawn.state.x, pawn.state.y, pawn.state.z];
+    o.dropped = sim.dropSpot(pawn.state.x, pawn.state.y, pawn.state.z);
     this.changed(true);
   }
 
@@ -334,6 +342,23 @@ export class MatchDirector {
         const panel = sim.level.panels.firstSolid(eye, [d[0] / dist, d[1] / dist, d[2] / dist], dist);
         if (wall >= dist - 0.05 && !panel) return true;
       }
+    }
+    return false;
+  }
+
+  /**
+   * An attacker's body stands in the site's rooms: they have found it too (and its carrier can plant there, which
+   * their client predicts only with the site known).
+   */
+  private attackerInSite(): boolean {
+    const sim = this.host.sim;
+    const area = this.match.site ? siteArea(sim.level.def, this.match.site) : null;
+    if (!area) return false;
+    const rooms = { ...area, margin: 0 };
+    for (const id of this.match.sides[ATTACK]) {
+      const body = this.host.bodyOf(id);
+      const p = body ? sim.pawns.get(body.possessedPawnId) : undefined;
+      if (p && p.state.mode !== PawnMode.Dead && inSite(rooms, p.state.x, p.state.y, p.state.z)) return true;
     }
     return false;
   }
@@ -574,7 +599,7 @@ export class MatchDirector {
       siteRevealed: m.siteRevealed,
       carrier: attacker ? this.carrierMember() : 0,
       safeguardEnd: m.phase === Phase.Action && this.host.sim.tick < this.safeguardEnd ? this.safeguardEnd : 0,
-      history: m.history.map((h) => ({ ...h })),
+      history: m.history.slice(-MAX_HISTORY).map((h) => ({ ...h })),
       winner: m.winner,
       forfeit: m.forfeit,
       mvp: m.phase === Phase.MatchEnd ? (mvp([...m.players.values()]) ?? 0) : 0,

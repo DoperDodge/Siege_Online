@@ -13,7 +13,8 @@ const MAX_ID = 32;
 /** A Custom match's rules as JSON. */
 const MAX_RULES_JSON = 8192;
 const MAX_PLAYERS = 16;
-const MAX_ROUNDS = 64;
+/** The last rounds a match state carries (Practice's go on without end). */
+export const MAX_HISTORY = 64;
 const MAX_ROOMS = 100;
 const NO_RATING = 0xffff;
 
@@ -290,7 +291,7 @@ export function encodeMatchState(v: MatchView): Uint8Array {
   }
   optStr(w, v.site);
   w.varu(v.carrier).u32(v.safeguardEnd >>> 0);
-  const history = v.history.slice(-MAX_ROUNDS);
+  const history = v.history.slice(-MAX_HISTORY);
   w.u8(history.length);
   for (const h of history) w.u8(Math.min(255, h.round)).u8(h.attackers).u8(h.winner).u8(h.reason).str(h.site);
   w.u8(v.winner ?? 2).varu(v.mvp);
@@ -362,7 +363,7 @@ export function decodeMatchState(r: ByteReader): MatchView {
   const carrier = r.varu();
   const safeguardEnd = r.u32();
   const h = r.u8();
-  if (h > MAX_ROUNDS) throw new ProtocolError("history too long");
+  if (h > MAX_HISTORY) throw new ProtocolError("history too long");
   const history: RoundRecord[] = Array.from({ length: h }, () => ({ round: r.u8(), attackers: team(r.u8()), winner: team(r.u8()), reason: reason(r.u8()), site: r.str(MAX_ID) }));
   const wv = r.u8();
   if (wv > 2) throw new ProtocolError("bad winner");

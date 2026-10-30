@@ -5,7 +5,7 @@ known issues, and what's next.
 
 ---
 
-## Phase 6 — Match flow + lobby · 🚧 in progress (branch `claude/phase-6-match-flow`)
+## Phase 6 — Match flow + lobby · ✅ built, ⏳ waiting for your test (branch `claude/phase-6-match-flow`, PR #7)
 
 **Done when (PLAN §17):** full 1v1 and 2v3 matches play start to finish. The design is
 `game/shared/src/match/DESIGN.md` (D-118 to D-124).
@@ -17,7 +17,31 @@ known issues, and what's next.
 | M3 The defuser: carry, drop, pick up, plant, disable, every win condition | ✅ hold F to plant (7 s, predicted) or disable (7 s), F to pick up, G to drop, dropped where the carrier goes down, a plant under way past the timer, a hatch broken under it, the last attacker downed after the plant; finding the site by sight |
 | M4 In the browser: Play page, lobby, ban and planning screen, HUD, scoreboard, round and match summaries | ✅ the Play page (create in any format, join by code, the open matches, your loadouts); the match page: lobby, ban vote, planning (operator, weapons and attachments, site vote or spawn, the defuser), HUD and markers, Tab scoreboard, round banner, summary; with no body the camera circles the map, waits at an attacker's spawn in prep, or follows a teammate after you die; browser test of a 1v1 and a 2v3 |
 | M5 Each format's details: Quick Match, Ranked rating, 1v1 attrition, Custom, Practice | ✅ Quick Match's pre-setups and attacker safeguard; Ranked's local rating with our tiers; 1v1's attrition on the planning screen; Custom's every rule (who attacks first too); Practice ended by its host; protocol 12 |
-| M6 Checks: a 10-round netsim match, browser tests of a 1v1 and a 2v3 match, docs, report | ⏳ |
+| M6 Checks: a 10-round netsim match, browser tests of a 1v1 and a 2v3 match, docs, report | ✅ a whole 10-round match in the netsim, ten clients, no desyncs; the browser tests of a 1v1 and a 2v3; a review of the phase (ten problems, all fixed, each with a test); this report |
+
+### What's done (M6: checks and the review)
+- **A whole match in the netsim (D-132):** `npm run netsim -- --match` plays a 10-round Custom match on Oregon with
+  ten clients over a simulated bad network (100 ms round trip, jitter, stalls, clock drift): the lobby, a ban vote
+  every round, operator picks (two players taking the same operator: the second is refused), site votes and spawns,
+  prep behind red walls with the pre-setups, action with everyone moving and shooting, and the sides swapping every
+  round. The harness ends each round a different way (eliminations, on time, a plant that goes off, one disabled),
+  so each team wins five. At every round's end no client may need a correction, and every client's walls and view of
+  the match must be the server's. Three seeds: no desyncs, about 12 kbps down per player, the server's tick 0.5 ms on
+  average and 2.5 ms at the 99th percentile. A 4-round version with four clients runs with `npm test`.
+- **The review (D-133):** a review of the whole phase found ten problems. All are fixed, each with a test that fails
+  without its fix:
+  - picking a second operator on the planning screen could be undone by the server's answer to the first (over a
+    slow link the two kept swapping);
+  - a player who left couldn't get back into a full match, and elsewhere came back as a new player: now, back with the
+    room code under the same name, you get your slot, team and stats again;
+  - back in the lobby, players who had left during the match still held their slots;
+  - a defuser dropped off a rope or a ladder (or by a carrier killed in the air) hung where they were, out of reach:
+    it now falls to the floor under them;
+  - in prep, a defender held back by the red walls in mid-air kept gathering fall speed;
+  - the carrier could plant in a site the attackers hadn't found yet (Ranked, Unranked, Custom), and their own screen
+    didn't show the plant: an attacker who walks into the site now finds it;
+  - a player who had just gone down and then left (or fell out of the map) didn't die for it;
+  - smaller ones: the round history sent in a long Practice, the lobby's "first to N", a misplaced code comment.
 
 ### What's done (M5: each format's details)
 - **Quick Match's pre-setups (D-128):** as prep starts, the site has two walls (or a wall and a hatch) reinforced and
@@ -99,8 +123,38 @@ known issues, and what's next.
 8. Custom: in the lobby, the host picks who attacks first, the site, overtime, bans, pre-setups, the safeguard and
    friendly fire, as well as the rounds and timers. Practice: play a few rounds alone or with a side empty, then *End
    practice* (planning screen or pause menu).
-9. Checks: `npm run typecheck`, `npm test`, and `npm run build && node tools/e2e/match.mjs` (a 1v1 and a 2v3
-   played in browsers from start to finish). `npm run check` runs everything.
+9. Coming back (M6): in a 1v1 with a friend (or a second window), close one window mid-match, then join again with
+   the room code under the same name: you're back on your team, with your kills and deaths, from the next round.
+10. The defuser off a rope (M6): as the carrier, hook onto an outside wall (rappel), climb a few metres and press G:
+    it lands at the wall's foot, where a teammate picks it up (F).
+11. Finding the site (M6): in Unranked (or Custom), walk into the site with your back to its bombs: the HUD names the
+    site at once, and holding F there plants.
+12. Checks: `npm run typecheck`, `npm test`, `npm run netsim -- --match` (the 10-round match, about 30 s), and
+    `npm run build && node tools/e2e/match.mjs` (a 1v1 and a 2v3 played in browsers from start to finish, about
+    6 minutes). `npm run check` runs everything but the netsim.
+
+### Known issues
+- Every Phase 6 timing and rule we couldn't confirm is a placeholder: the planning screen's one timer, the round-end
+  banner, 1v1's side swap, overtime sides, Quick Match's reveal and safeguard, the defuser's reach and keys, finding
+  the site by sight (25 m, 45°), what happens to a leaver's operator, the pre-setups (research/OPEN_QUESTIONS.md,
+  "Placeholders added while building Phase 6", 1–9).
+- Coming back is by name (there are no accounts): whoever joins a match under way with the name of a player who left
+  takes their slot. Your body isn't kept while you're away: you die where you left and play again from the next round
+  (D-123).
+- Your ranked rating lives in your browser, so it's only as honest as your friends (D-124).
+- With nobody's pick to go on, the defuser goes to the first attacker in slot order (Siege's "defuser priority" is
+  unknown), and an attacker idle all prep keeps it: dropping it at action start needs bodies in prep (drones,
+  Phase 7).
+- Until drones and cameras (Phase 7), attackers find the site only with their own eyes or by walking into it, and in
+  prep they wait at their spawn's view.
+- While playing, clients are still corrected now and then where bodies touch or brush a wall (sub-millimetre
+  differences, Phase 2's known issue); the netsim finds none from the match itself.
+- Everything from Phase 5's list below still holds (Oregon's sizes and markers are placeholders until your walks).
+
+### Next: Phase 7 — Intel
+Once you've played matches and signed off: drones (prep-phase droning, the drone holes), the default cameras and the
+bulletproof camera, pinging, spectating and the comm wheel (PLAN §17); done when prep-phase droning and watching the
+cameras work online.
 
 ---
 

@@ -332,7 +332,10 @@ export class Match {
     return this.endMatch(tick, null, false);
   }
 
-  /** After the match: everyone back to the lobby on the same teams, not ready, a ranked player at the new rating. */
+  /**
+   * After the match: everyone back to the lobby on the same teams, not ready, a ranked player at the new rating; those
+   * who left during it are gone (their slots free again, as in the lobby).
+   */
   backToLobby(host: number): string | null {
     const why = this.byHost(host);
     if (why) return why;
@@ -342,7 +345,11 @@ export class Match {
     this.phaseEnd = NO_END;
     this.round = 0;
     this.sides = [[], []];
-    for (const p of this.players.values()) {
+    for (const p of [...this.players.values()]) {
+      if (!p.connected) {
+        this.players.delete(p.id);
+        continue;
+      }
       p.ready = false;
       p.rating = p.newRating ?? p.rating;
       p.newRating = null;

@@ -491,11 +491,11 @@ lists) and in game/shared/src/match/DESIGN.md. A quick look in a match answers m
    disable it (1.5 m placeholder), and must they face it (60°)? Do the planter and the defender hold still (yes,
    ours)? If nobody takes it, which attacker gets it ("highest defuser priority": what is that)? Can defenders see
    who carries it, or a dropped one through walls?
-7. **Finding the site (D-120):** until drones (Phase 7), attackers find the site when one of them has a bomb in view
-   (within 25 m and 45° of the view, nothing in the way). Does a body's own view count in Siege, or only drones and
-   cameras?
-8. **Leaving (D-123):** a player who leaves mid-round dies there and can come back for the next round. In Siege, what
-   happens to a disconnected player's operator: does it stand there, or die?
+7. **Finding the site (D-120, D-133):** until drones (Phase 7), attackers find the site when one of them has a bomb in
+   view (within 25 m and 45° of the view, nothing in the way) or walks into one of its rooms. Does a body's own view
+   count in Siege, or only drones and cameras? Can the carrier plant in a site the attackers haven't found?
+8. **Leaving (D-123, D-133):** a player who leaves mid-round dies there and can come back, by the same name, for the
+   next round. In Siege, what happens to a disconnected player's operator: does it stand there, or die?
 9. **Pre-setups (D-128):** in Quick Match on Oregon, which walls and hatches are reinforced when prep starts, and which
    rotation holes are open, at each site? Ours are each site's first two reinforcements and its rotation holes from
    research/oregon/common_setups.md (our derivation), on top of the pool: a vault hole 1.0 m wide from 0.8 m to 2.0 m

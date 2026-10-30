@@ -3,7 +3,8 @@
 // player joins by its code. In the lobby the joiner lands on the other team, the host sets the rules (one field
 // through its input, and Blue to attack first through its select), both ready up and the host starts. Each team bans
 // one of the other side's operators; on the planning screen the banned one is greyed out, each player picks an
-// operator, the defender votes for the Dining site and the attacker picks the B Street spawn and takes the defuser.
+// operator (the defender one, then 160 ms later another, over a slow link: the second stays), the defender votes for
+// the Dining site and the attacker picks the B Street spawn and takes the defuser.
 // In prep the defender is at that site and the attacker waits at the spawn's view; in action the attacker is at B
 // Street carrying the defuser; the defenders win on time, the banner says so, the sides swap for round 2, and after
 // it the summary has both rounds; the host takes everyone back to the lobby. 2v3: five players (three on Blue, two on
@@ -146,7 +147,32 @@ try {
   result.checks.bannedOperatorGreyedOut = await def1
     .waitForFunction((ban) => document.querySelector(`.match-screen [data-act=op][data-op="${ban}"]`)?.hasAttribute("disabled") ?? false, v.bans[1][0], { timeout: 10000 })
     .then(() => true, () => false);
-  for (const p of [att1, def1]) await p.click(".match-screen [data-act=op]:not([disabled])");
+  await att1.click(".match-screen [data-act=op]:not([disabled])");
+  // Changing your mind over a slow link (the page's simulated +200 ms round trip): the defender picks one operator and
+  // 160 ms later another. The server's answer to the first click goes out before the second reaches it (match updates
+  // go out at most 125 ms apart) and comes back after the second click: it mustn't take that one back.
+  const defOps = await def1.$$eval(".match-screen [data-act=op]:not([disabled])", (bs) => bs.map((b) => b.dataset.op));
+  const setLag = (page, ms) =>
+    page.evaluate((ms) => {
+      const gear = document.querySelector(".gear");
+      gear.click(); // the pause menu, drawn as it opens, has the simulated network's settings
+      const sel = document.querySelector('.pause select[data-net="rttMs"]');
+      sel.value = String(ms);
+      sel.dispatchEvent(new Event("change"));
+      gear.click();
+    }, ms);
+  await setLag(def1, 200);
+  await def1.evaluate(([first, second]) => {
+    const button = (op) => document.querySelector(`.match-screen [data-act=op][data-op="${op}"]`);
+    button(first).click();
+    setTimeout(() => button(second).click(), 160);
+  }, [defOps[1], defOps[0]]);
+  await sleep(1700);
+  const held = [];
+  for (let i = 0; i < 5; i++, await sleep(150)) held.push(me(await view(def1)).operator);
+  await setLag(def1, 0);
+  result.oneVsOne.operatorSwitch = { clicked: [defOps[1], defOps[0]], held };
+  result.checks.operatorSwitchKept = held.every((op) => op === defOps[0]);
   // The attacker fits another sight on the planning screen: the body carries it into action.
   const planSight = '.match-screen .loadout [data-slot="primary"][data-part="sight"]';
   const fitted = await att1

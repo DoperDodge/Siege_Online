@@ -310,3 +310,25 @@ describe("reviving (DECISIONS D-049)", () => {
     expect([s.a.state.reviveTarget, s.b.state.revivedBy, s.b.state.mode]).toEqual([0, 0, PawnMode.Walk]);
   });
 });
+
+/** Each cause by name, so a failure says which one. */
+const CAUSE_LABEL: Record<number, string> = { [Cause.Bullet]: "bullet", [Cause.Melee]: "knife", [Cause.Left]: "left", [Cause.Fall]: "fall", [Cause.Lab]: "lab" };
+
+describe("the moment after going down (D-048)", () => {
+  it("shrugs off shots and the knife, but not leaving, falling out of the map or a lab tool's kill", async () => {
+    const w = await world([{ at: [0, 0, 12] }, { at: [4, 0, 12] }]);
+    const p = w.pawn(w.ctrls[0]);
+    for (const [cause, outcome] of [
+      [Cause.Bullet, "ignored"],
+      [Cause.Melee, "ignored"],
+      [Cause.Left, "killed"],
+      [Cause.Fall, "killed"],
+      [Cause.Lab, "killed"],
+    ] as const) {
+      w.sim.respawn(p.id);
+      expect(down(w.sim, p).outcome).toBe("downed");
+      expect(p.state.invulnTicks).toBeGreaterThan(0);
+      expect([CAUSE_LABEL[cause], applyDamage(w.sim, p, { amount: 0, kill: true, cause }).outcome]).toEqual([CAUSE_LABEL[cause], outcome]);
+    }
+  });
+});

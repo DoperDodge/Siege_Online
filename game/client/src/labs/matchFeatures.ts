@@ -16,6 +16,7 @@ import {
   Phase,
   RATING_START,
   TEAM_NAMES,
+  winAt,
   TICK_HZ,
   WinReason,
   type FormatMode,
@@ -74,7 +75,7 @@ export function rulesSummary(r: FormatMode): string {
   const s = m.seconds;
   const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
   return [
-    m.rounds === null ? "rounds without end" : `${m.rounds} rounds, first to ${m.rounds / 2 + 1}`,
+    m.rounds === null ? "rounds without end" : `${m.rounds} rounds, first to ${winAt(m)}`,
     `sides swap every ${plural(m.swapEvery, "round")}`,
     m.overtime && m.rounds !== null ? `overtime at ${m.rounds / 2}–${m.rounds / 2}: ${m.overtime.rounds === 1 ? "one round" : `up to ${m.overtime.rounds} rounds`}` : "",
     m.firstAttack === "random" ? "" : `${TEAM_NAMES[m.firstAttack === "blue" ? 0 : 1]} attacks first`,
@@ -217,9 +218,15 @@ export function matchFeatures(lab: LabApi): void {
 
   /** This round's loadout, kept here (the server only says which operator you have). */
   let myPick: LoadoutPick | null = null;
+  /**
+   * The operators you asked for this round: one the server says you have that isn't among them is its own pick (the
+   * timer's), which takes the loadout you keep for it. An answer to an older click of yours is not.
+   */
+  const asked = { round: -1, ops: new Set<string>() };
   /** An operator, carrying the loadout you keep for them (ui/loadout.ts: the Play page's Loadouts, this screen). */
   const pickOperator = (id: string) => {
     myPick = savedLoadout(data, id);
+    asked.ops.add(id);
     send(encodePickLoadout(myPick));
   };
   /** The loadout to show and change for your operator now. */
@@ -666,9 +673,13 @@ export function matchFeatures(lab: LabApi): void {
     if (!v) return;
     const me = meOf(v);
     syncRating(v, me);
-    // The operator the server has for you (your pick, or one it gave you when the timer ran out) carries the loadout you
-    // keep for it, sent once; defenders are locked once they spawn.
-    if (me?.operator && myPick?.operator !== me.operator && (v.phase === Phase.Planning || (v.phase === Phase.Prep && me.side === ATTACK))) pickOperator(me.operator);
+    // An operator the server gave you (the timer ran out) carries the loadout you keep for it, sent once; defenders are
+    // locked once they spawn.
+    if (v.round !== asked.round || v.phase === Phase.Lobby) {
+      asked.round = v.round;
+      asked.ops.clear();
+    }
+    if (me?.operator && !asked.ops.has(me.operator) && (v.phase === Phase.Planning || (v.phase === Phase.Prep && me.side === ATTACK))) pickOperator(me.operator);
     // A new phase with a screen to click lets go of the mouse.
     if (v.phase !== lastPhase) {
       if (v.phase === Phase.Lobby || v.phase === Phase.Ban || v.phase === Phase.Planning || v.phase === Phase.MatchEnd) lab.releasePointer();

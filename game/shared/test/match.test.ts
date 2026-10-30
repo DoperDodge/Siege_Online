@@ -398,6 +398,18 @@ describe("whole matches", () => {
     expect(q.match.end(q.match.hostId, q.at.tick)).toEqual({ error: "Only a Practice match can be ended" });
   });
 
+  it("back in the lobby, players who left during the match are gone and their slots free", () => {
+    const { match, at } = started("one_v_one", 1, 1);
+    const orange = match.team(1)[0].id;
+    match.removePlayer(orange);
+    // Orange has nobody when the next round starts: it forfeits.
+    winRound(match, at, 0);
+    expect([match.phase, match.winner, match.forfeit]).toEqual([Phase.MatchEnd, 0, true]);
+    expect(match.backToLobby(match.hostId)).toBeNull();
+    expect(match.players.has(orange)).toBe(false);
+    expect(match.addPlayer(77, "new")?.team).toBe(1);
+  });
+
   it("a player who left comes back on a new connection with the same team and stats", () => {
     const { match } = started("unranked", 2, 2);
     const [a, mate] = match.sides[ATTACK];

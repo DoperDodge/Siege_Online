@@ -116,8 +116,9 @@ ban.
   it. Their pick at that moment is what they carry.
 - **Red walls (prep):** a defender can't leave the building (research §8). The simulation does it: while red walls are
   up, a defender's move that would put its feet outside the building zones (level.json `building` zones) is undone
-  and the move stops; vaults and climbs that would end outside don't start. Clients predict it (it lives in the
-  simulation's match rules, sent like deploy rules). Thrown gadgets come with gadgets (Phase 8).
+  and the move stops (in the air too, its fall speed with it: D-133); vaults and climbs that would end outside don't
+  start. Clients predict it (it lives in the simulation's match rules, sent like deploy rules). Thrown gadgets come
+  with gadgets (Phase 8).
 - **Runouts (action):** a defender whose feet stay outside the building zones for `runoutGraceS` (1 s) is Detected:
   every attacker sees a live marker on them until they are back inside or dead (research §8; the marker is our
   drawing).
@@ -125,8 +126,10 @@ ban.
   each until they first enter the building (D-129; a fall still hurts).
 - **Out of the map:** in a match a body below the kill plane dies (labs keep putting it back at spawn).
 - **Leaving mid-match:** the body dies (the kill feed says "left"); the slot is kept, so a player who rejoins with the
-  room code gets it back at the next round (reconnect proper, with the body kept, is a Phase 6 stretch, D-123). A
-  team with nobody connected at the start of a round forfeits the match (not in Practice).
+  room code under the same name gets it back, with their team and stats, at the next round, even when the teams are
+  full (D-123, D-133; reconnect proper, with the body kept, comes later). A team with nobody connected at the start of
+  a round forfeits the match (not in Practice). Back in the lobby after the match, those who left are gone and their
+  slots free.
 
 ## 7. Damage rules in a match
 
@@ -147,8 +150,9 @@ it is planted and when; the site; whether the attackers have found the site.
   has, it goes to the first attacker in slot order (Siege gives it to the operator with the highest defuser
   priority; we have no priority data, UNVERIFIED). An attacker idle all prep drops it at action start [Y4S3]: we
   skip this one until players have bodies in prep (drones, Phase 7).
-- **Drop:** the Drop defuser key (G, our default) drops it at the carrier's feet; it also drops where the carrier
-  goes down or dies.
+- **Drop:** the Drop defuser key (G, our default) drops it; it also drops when the carrier goes down or dies. It
+  lands on the first floor under the carrier (the level, its panels and props, never a body), off a rope or a ladder
+  too (D-133).
 - **Pick up:** within 1 m, press Use (F); no need to look at it (research §5). Attackers only.
 - **Plant:** carrying it inside one of the site's two rooms, at least `plantMarginM` (0.5 m) from the room's edges
   and on the room's storey, hold Use for 7 s; the body holds still meanwhile, crouched (D-126). A plant started before the action
@@ -163,8 +167,9 @@ it is planted and when; the site; whether the attackers have found the site.
 
 **Finding the site** (Ranked, Unranked, Custom with that setting): attackers know the four possible sites; the
 chosen one is revealed to all attackers when an attacker's body has the eye on one of its bombs (line of sight,
-within 45° of the view and 25 m: placeholders until drones in Phase 7). Quick Match and 1v1 reveal it when the round
-starts (prep), our reading of Siege's "at round start" (D-121).
+within 45° of the view and 25 m: placeholders until drones in Phase 7) or stands in one of its rooms (D-133: the
+carrier could otherwise plant in a site the attackers hadn't found). The news goes out at once. Quick Match and 1v1
+reveal it when the round starts (prep), our reading of Siege's "at round start" (D-121).
 
 ## 9. Quick Match pre-setups
 
@@ -259,7 +264,12 @@ model).
   disabled), each team winning five; at each round's end, at rest, no client may need a correction, and every
   client's walls and view of the match must be the server's. A 4-round version with four clients is a unit test.
 - Browser (e2e): a 1v1 and a 2v3 match with short Custom timers, through the Play page, lobby, planning, rounds and
-  the match summary.
+  the match summary; on the planning screen a second operator picked 160 ms after the first, over a simulated
+  +200 ms round trip, stays.
+- The review's fixes (D-133), each with a test that fails without it: rejoining a full 1v1 by name, the lobby freed
+  of those who left, the defuser falling to the floor (G, and its carrier killed in the air) and picked up there, the
+  site found by walking into it (at once, the plant predicted), the view's last 64 rounds, red walls in the air, a
+  just-downed body's death on leaving or falling out of the map.
 
 ## 14. Milestones
 

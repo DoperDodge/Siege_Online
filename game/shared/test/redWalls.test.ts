@@ -62,4 +62,19 @@ describe("red walls", () => {
     run(sim, def, { buttons: Btn.Vault }, 1.5);
     expect(sim.pawns.get(def.possessedPawnId)!.state.z).toBeLessThan(1.8);
   });
+
+  it("stop a body in the air outright: a fall held back doesn't gather speed, and it drops from rest once they're down", async () => {
+    const sim = await make();
+    const def = sim.addPlayer("def", "mute");
+    sim.matchRules.redWalls = true;
+    // Just outside building a and 1.5 m up: every move it makes (the fall too) is undone, so it hangs there.
+    sim.teleport(def.possessedPawnId, 0, 1.5, 8.5, 0);
+    const s = sim.pawns.get(def.possessedPawnId)!.state;
+    const y = s.y;
+    run(sim, def, { forward: 1 }, 0.5);
+    expect([s.vx, s.vy, s.vz, s.y]).toEqual([0, 0, 0, y]);
+    sim.matchRules.redWalls = false;
+    run(sim, def, {}, 1.5);
+    expect([s.grounded, +s.y.toFixed(1)]).toEqual([true, 0]);
+  });
 });

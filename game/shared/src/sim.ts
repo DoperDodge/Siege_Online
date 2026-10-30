@@ -29,6 +29,10 @@ export interface MatchSimRules {
   killPlaneKills: boolean;
 }
 
+/** A dropped thing's floor is looked for from this far over the point it was let go at, down to this far below it (metres). */
+const DROP_FROM_ABOVE = 0.1;
+const DROP_MAX_FALL = 60;
+
 /** Contextual hint for the HUD: "Space to mantle", "F to climb", "F to transfer" (Skopós camera), "Hold F to reinforce". */
 export type Prompt = MovementPrompt | "transfer" | "revive" | "reinforce" | "barricade" | "unbarricade" | "plant" | "disable" | "pickUp";
 
@@ -94,6 +98,7 @@ export class Sim {
     s.y = before.y;
     s.z = before.z;
     s.vx = 0;
+    s.vy = 0; // in the air too: a fall held back doesn't gather speed
     s.vz = 0;
     if (s.mode === PawnMode.Vault) {
       s.mode = PawnMode.Walk;
@@ -410,14 +415,24 @@ export class Sim {
     return true; // still this tick
   }
 
-  /** The carrier's Drop key: the defuser falls where the body stands. */
+  /** The carrier's Drop key: the defuser falls to the floor under the body (off a rope or a ladder too). */
   private dropDefuser(pawn: Pawn, input: InputCmd) {
     const o = this.objective;
     if (!o || o.carrier !== pawn.id || !(input.buttons & ~pawn.state.prevButtons & Btn.Drop)) return;
     const s = pawn.state;
     o.carrier = 0;
-    o.dropped = [s.x, s.y, s.z];
-    this.ctx.events.push({ kind: "drop", pawnId: pawn.id, pos: [s.x, s.y, s.z] });
+    o.dropped = this.dropSpot(s.x, s.y, s.z);
+    this.ctx.events.push({ kind: "drop", pawnId: pawn.id, pos: o.dropped });
+  }
+
+  /**
+   * Where something let go of at (x, y, z) comes to rest: on the first floor under it (the level, its panels and props;
+   * never a body), or where it is when nothing is under it. A defuser dropped from a rope lands at the wall's foot.
+   */
+  dropSpot(x: number, y: number, z: number): [number, number, number] {
+    const from = y + DROP_FROM_ABOVE;
+    const hit = this.world.castRay(new this.R.Ray({ x, y: from, z }, { x: 0, y: -1, z: 0 }), DROP_MAX_FALL, true, undefined, QUERY_STATIC_FILTER);
+    return [x, hit ? from - hit.timeOfImpact : y, z];
   }
 
   /**
