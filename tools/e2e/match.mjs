@@ -260,7 +260,9 @@ try {
 
   // Action: the attacker at B Street, carrying the defuser, told so on the HUD.
   await phase(a, P.Action, 30000);
-  await att1.waitForFunction(() => window.__lab.net.own !== null && !window.__match.spectating, null, { timeout: 20000 });
+  // Their body (in prep they were their drone, which has no loadout: a wait on any pawn of theirs reads it on a page
+  // the body hasn't reached yet).
+  await att1.waitForFunction(() => window.__lab.net.own !== null && window.__lab.net.loadout !== null && !window.__match.spectating, null, { timeout: 20000 });
   const attAt = await own(att1);
   result.oneVsOne.action = { attackerAt: attAt && [attAt.x, attAt.y, attAt.z] };
   result.checks.attackerAtTheirSpawn = lvl.spawns.filter((s) => s.group === SPAWN).some((s) => near(attAt, s.pos, 1));
@@ -371,7 +373,7 @@ try {
   // The feed list (Phase 7 M6): an attacker goes to their first drone (5; it's been out since prep), then a new lean
   // goes on to a teammate's, which they watch.
   const watcher = pages.find((_, i) => sides[i] === 0);
-  await watcher.waitForFunction(() => window.__lab.net.own !== null && !window.__match.spectating, null, { timeout: 20000 }).catch(() => {});
+  await watcher.waitForFunction(() => window.__lab.net.own !== null && window.__lab.net.loadout !== null && !window.__match.spectating, null, { timeout: 20000 }).catch(() => {});
   const mateDrones = await watcher.evaluate(() => {
     const n = window.__lab.net;
     const mine = n.roster.find((e) => e.controllerId === n.you);
