@@ -5,6 +5,22 @@ known issues, and what's next.
 
 ---
 
+## Phase 7 — Intel · 🚧 in progress (branch `claude/phase-7-intel`)
+
+**Done when (PLAN §17):** prep-phase droning and watching the cameras work online. The design is
+`game/shared/src/intel/DESIGN.md` (D-134). It builds on Phase 6 (PR #7), which waits for your test.
+
+| Milestone | Status |
+|---|---|
+| M1 Drones in the simulation and rooms: drive, jump, boost, drone holes; throw, drive, leave, pick up; prep in drone 1; shots destroy drones; protocol 13 | ⏳ |
+| M2 Drones in the browser: the drone view and HUD, drawing drones, keys; dead attackers drive their drones | ⏳ |
+| M3 Default cameras: viewing within limits, shooting them, broken state, dead defenders on cameras | ⏳ |
+| M4 Pings, scans and the comm wheel | ⏳ |
+| M5 Bulletproof Camera and its EMP dart | ⏳ |
+| M6 The feed list across everything, spectating; checks, docs, review, report | ⏳ |
+
+---
+
 ## Phase 6 — Match flow + lobby · ✅ built, ⏳ waiting for your test (branch `claude/phase-6-match-flow`, PR #7)
 
 **Done when (PLAN §17):** full 1v1 and 2v3 matches play start to finish. The design is

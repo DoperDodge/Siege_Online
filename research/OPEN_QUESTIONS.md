@@ -501,6 +501,21 @@ lists) and in game/shared/src/match/DESIGN.md. A quick look in a match answers m
    research/oregon/common_setups.md (our derivation), on top of the pool: a vault hole 1.0 m wide from 0.8 m to 2.0 m
    up and a crouch hole 1.0 m wide up to 1.5 m. Are Siege's taken from the pool, and how big are its holes?
 
+### Placeholders added while building Phase 7 (not in the original research)
+
+The intel questions above (drone numbers, camera limits, pings, the wheel) stay open; these are ours, each in
+`data/intel.json` (its `_unverified` list) and game/shared/src/intel/DESIGN.md.
+
+1. **Keys (D-134):** Observe 5 (drones, cameras), Ping T, Q / E for the previous / next feed, Space to jump a drone,
+   Shift to boost, Fire held to scan. What are Siege's PC defaults for the drone, the cameras, ping and scan?
+2. **Drones and operators:** ours pass through operators (they only hit the level, walls and props). Does a drone in
+   Siege bump into an operator, or get stuck under one?
+3. **Throwing a drone:** ours lands about a metre ahead, rolling, at once. How long is Siege's throw, and how far?
+4. **Picking a drone up:** within 1 m of it, pressing F. What is Siege's reach?
+5. **One camera, two viewers (D-134):** ours gives each viewer their own view. In Siege, when two defenders watch one
+   camera, who turns it?
+6. **The comm wheel:** past Breach, Area Clear, Help, Danger and Thanks, which callouts are on it?
+
 ### [core_mechanics.md](core_mechanics.md) — 16
 
 Most of these can be answered in a Custom Game (Local), usually in minutes, with a stopwatch or a 60 fps recording and known map distances.
