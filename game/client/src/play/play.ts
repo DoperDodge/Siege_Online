@@ -6,6 +6,7 @@ import { ByteReader, decodeRoomList, encodeHello, encodeListRooms, isFormat, loa
 import { serverUrl } from "../net/online.js";
 import { escapeHtml } from "../ui/dom.js";
 import { changedPick, loadoutRows, saveLoadout, savedLoadout, type Slot } from "../ui/loadout.js";
+import { rankBadge, storedRating } from "../ui/rank.js";
 
 const data = loadGameData();
 const formats = [...data.modes.values()].filter(isFormat);
@@ -30,12 +31,12 @@ const remember = (k: string, v: string) => {
 
 /** What each format is, in a line (the create box). */
 const FORMAT_NOTES: Record<string, string> = {
-  quick_match: "4 rounds, first to 3; the site is drawn; no bans.",
+  quick_match: "4 rounds, first to 3; the site is drawn; no bans; pre-set reinforcements and rotation holes; attackers are safe for 10 s unless they go in.",
   unranked: "6 rounds, first to 4; defenders vote for the site; one ban per side each half.",
   ranked: "Unranked's rules with a local rating kept in this browser.",
   one_v_one: "One player a side, 6 rounds; the winner of a round can't pick the same operator again.",
   custom: "Every setting is the host's (starts as Unranked).",
-  practice: "Rounds without end; one side may be empty.",
+  practice: "Rounds without end (the host ends it); one side may be empty.",
 };
 
 const root = document.getElementById("play")!;
@@ -71,7 +72,9 @@ const codeInput = $<HTMLInputElement>(".code");
 const error = $(".error");
 nameInput.value = remembered(NAME_KEY);
 formatSelect.value = formats.some((m) => m.id === remembered(FORMAT_KEY)) ? remembered(FORMAT_KEY) : (formats[0]?.id ?? "");
-const showNote = () => ($(".format-note").textContent = FORMAT_NOTES[formatSelect.value] ?? "");
+/** The format's line; Ranked's says your local rating (D-124). */
+const showNote = () =>
+  ($(".format-note").innerHTML = escapeHtml(FORMAT_NOTES[formatSelect.value] ?? "") + (formatSelect.value === "ranked" ? ` Yours: ${rankBadge(storedRating())}.` : ""));
 showNote();
 formatSelect.onchange = () => {
   remember(FORMAT_KEY, formatSelect.value);

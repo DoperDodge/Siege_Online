@@ -333,6 +333,18 @@ export const layoutSchema = z.strictObject({
         number: z.number().int(),
         rooms: z.array(z.string()).length(2),
         bombs: z.array(z.strictObject({ id: z.string(), room: z.string(), frame: Frame, at: U2, from: z.string().optional() })).length(2),
+        /**
+         * Quick Match's pre-setup (Phase 6 M5, game/shared/src/match/DESIGN.md §9), from common_setups.md: the
+         * soft walls and hatches reinforced (a wall from the side of `from`, a room beside it; a hatch from its top)
+         * and the rotation holes (data/destruction.json `rotationHoles`), by the compiled panels' ids.
+         */
+        preSetup: z
+          .strictObject({
+            reinforce: z.array(z.strictObject({ panel: z.string(), from: z.string().optional() })),
+            holes: z.array(z.strictObject({ panel: z.string(), size: z.enum(["vault", "crouch"]) })),
+            research: z.string(),
+          })
+          .optional(),
         research: z.string().optional(),
         _unverified: Uv,
       }),

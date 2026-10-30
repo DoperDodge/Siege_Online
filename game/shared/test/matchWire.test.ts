@@ -39,6 +39,7 @@ describe("match messages", () => {
       { kind: "backToLobby" },
       { kind: "private", private: true },
       { kind: "rating", rating: 1234 },
+      { kind: "end" },
     ];
     for (const a of all) {
       const b = encodeLobbyAction(a);
@@ -73,13 +74,14 @@ describe("match messages", () => {
       private: false,
       redWalls: true,
       players: [
-        { id: 1, name: "Ana", team: 0, ready: true, connected: true, side: 1, alive: true, operator: "mute", spawn: null, banVote: "sledge", siteVote: "SITE_DORMS", kills: 4, deaths: 2, assists: 1, rating: 1100 },
-        { id: 2, name: "Bo", team: 1, ready: false, connected: false, side: null, alive: false, operator: null, spawn: "B_STREET", banVote: null, siteVote: null, kills: 0, deaths: 3, assists: 0, rating: null },
+        { id: 1, name: "Ana", team: 0, ready: true, connected: true, side: 1, alive: true, safe: false, operator: "mute", spawn: null, banVote: "sledge", siteVote: "SITE_DORMS", locked: "pulse", kills: 4, deaths: 2, assists: 1, rating: 1100, newRating: 1116 },
+        { id: 2, name: "Bo", team: 1, ready: false, connected: false, side: null, alive: false, safe: true, operator: null, spawn: "B_STREET", banVote: null, siteVote: null, locked: null, kills: 0, deaths: 3, assists: 0, rating: null, newRating: null },
       ],
       bans: [["thermite"], ["pulse"]],
       site: "SITE_LAUNDRY",
       siteRevealed: true,
       carrier: 2,
+      safeguardEnd: 70000,
       history: [{ round: 1, attackers: 0, winner: 1, reason: WinReason.Disabled, site: "SITE_DINING" }],
       winner: null,
       forfeit: false,

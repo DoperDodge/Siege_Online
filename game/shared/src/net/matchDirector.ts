@@ -6,6 +6,7 @@
 import { Cause } from "../combat/apply.js";
 import { DEG, type Vec3 } from "../core/math.js";
 import { DeployKind } from "../destruction/deploy.js";
+import type { PanelOp } from "../destruction/panel.js";
 import { QUERY_SIGHT } from "../physics/rapier.js";
 import { isDowned } from "../player/downed.js";
 import { eyePose } from "../player/hitboxes.js";
@@ -17,7 +18,8 @@ import { viewDir } from "../weapons/spread.js";
 import type { SimEvent } from "../weapons/step.js";
 import { ticks, ticksOrZero } from "../weapons/ticks.js";
 import { Match, matchMapOf, NO_END, Phase, type MatchEvent } from "../match/match.js";
-import { ATTACK, DEFENSE, isFormat, mvp, reinforcementPool, type FormatMode, type Side } from "../match/rules.js";
+import { preSetupOps } from "../match/preSetup.js";
+import { ATTACK, DEFENSE, isFormat, mvp, RATING_MAX, RATING_MIN, reinforcementPool, type FormatMode, type Side } from "../match/rules.js";
 import { encodeMatchState, type LobbyAction, type MatchAction, type MatchView, type RoomListEntry } from "./matchWire.js";
 
 /** What the director needs from its room (net/room.ts implements it). */
@@ -34,6 +36,8 @@ export interface DirectorHost {
   rosterChanged(): void;
   /** Every panel as the level built it, with these reinforcement pools ([attackers, defenders]). */
   resetPanels(pools: [number, number]): void;
+  /** A panel op applied and sent to everyone with the next tick's (Quick Match's pre-setups). */
+  queuePanelOp(panel: number, op: PanelOp): void;
   /** Kill a body now (it left, it fell out of the map). */
   killBody(pawnId: number, cause: Cause): void;
   /** The server changed this member's body outside their inputs: correct their client. */
@@ -67,6 +71,12 @@ export class MatchDirector {
   private hidden = false;
   /** The hatch the defuser was planted on (a panel index), or null: destroying it deactivates the defuser (research §4 case 8). */
   private plantHatch: number | null = null;
+  /**
+   * Quick Match's Attacker Safeguard (research/round_flow.md §8): the tick it ends this round (0: none), and the
+   * attackers (member ids) whose own safeguard ended early when they went into the building.
+   */
+  private safeguardEnd = 0;
+  private readonly safeguardOver = new Set<number>();
 
   constructor(
     private readonly host: DirectorHost,
@@ -157,13 +167,21 @@ export class MatchDirector {
         why = m.backToLobby(memberId);
         if (!why) this.toLobby();
         break;
+      case "end": {
+        const r = m.end(memberId, this.host.sim.tick);
+        if ("error" in r) why = r.error;
+        else this.apply(r);
+        break;
+      }
       case "private":
         if (memberId !== m.hostId) why = "Only the host can do that";
         else this.hidden = a.private;
         break;
       case "rating": {
+        // Ranked (D-124): in the lobby, or once on joining a match under way (a rating never changes mid-match).
         const p = m.players.get(memberId);
-        if (p && m.phase === Phase.Lobby && this.mode.match.stats === "rated") p.rating = Math.max(0, Math.min(5000, a.rating));
+        const open = m.phase === Phase.Lobby || (p?.rating === null && m.phase !== Phase.MatchEnd);
+        if (p && open && this.mode.match.stats === "rated") p.rating = Math.max(RATING_MIN, Math.min(RATING_MAX, a.rating));
         break;
       }
     }
@@ -207,6 +225,7 @@ export class MatchDirector {
     const live = m.phase === Phase.Action || m.phase === Phase.PostPlant;
     this.killBelowMap();
     if (live) this.runouts();
+    if (m.phase === Phase.Action && sim.tick < this.safeguardEnd) this.safeguardEntries();
     if ((m.phase === Phase.Prep || m.phase === Phase.Action) && !m.siteRevealed && this.mode.match.siteReveal === "sight" && this.siteInView()) {
       m.siteFound();
       this.changed(false);
@@ -218,15 +237,41 @@ export class MatchDirector {
     this.sendState();
   }
 
+  /** The member whose body has this controller id, or null. */
+  private memberOfCtrl(ctrl: number): number | null {
+    if (!ctrl) return null;
+    for (const id of this.match.players.keys()) if (this.host.bodyOf(id)?.id === ctrl) return id;
+    return null;
+  }
+
   /** A body died (the room's announceDeath): the match counts the death, the kill and the assist. */
   onDeath(victimCtrl: number, killerCtrl: number, assistCtrl: number, friendly: boolean) {
-    const member = (ctrl: number) => {
-      if (!ctrl) return null;
-      for (const id of this.match.players.keys()) if (this.host.bodyOf(id)?.id === ctrl) return id;
-      return null;
-    };
-    this.match.recordKill(member(victimCtrl), member(killerCtrl), member(assistCtrl), friendly);
+    this.match.recordKill(this.memberOfCtrl(victimCtrl), this.memberOfCtrl(killerCtrl), this.memberOfCtrl(assistCtrl), friendly);
     this.changed(false);
+  }
+
+  /**
+   * An attacker's body under the Attacker Safeguard (Quick Match, research/round_flow.md §8): early in action,
+   * until its player first goes into the building. The room deals it no damage (bullets and the knife).
+   */
+  safeguarded(pawn: Pawn): boolean {
+    if (this.match.phase !== Phase.Action || this.host.sim.tick >= this.safeguardEnd || pawn.team !== ATTACK || pawn.ownerId === null) return false;
+    const member = this.memberOfCtrl(pawn.ownerId);
+    return member !== null && !this.safeguardOver.has(member);
+  }
+
+  /** Attackers who go into the building end their own safeguard. */
+  private safeguardEntries() {
+    const sim = this.host.sim;
+    for (const id of this.match.sides[ATTACK]) {
+      if (this.safeguardOver.has(id)) continue;
+      const body = this.host.bodyOf(id);
+      const p = body ? sim.pawns.get(body.possessedPawnId) : undefined;
+      if (p && p.state.mode !== PawnMode.Dead && sim.insideBuilding(p.state.x, p.state.y, p.state.z)) {
+        this.safeguardOver.add(id);
+        this.changed(false);
+      }
+    }
   }
 
   /** The simulation's defuser events (the room's step): planted, disabled, picked up, dropped. */
@@ -396,19 +441,27 @@ export class MatchDirector {
     return this.host.sim.level.def.spawns.flatMap((s, i) => (s.group === group ? [i] : []));
   }
 
-  /** Prep: the panels as built with the round's pools, and the defenders at the site's spawns in slot order. */
+  /**
+   * Prep: the panels as built with the round's pools (and Quick Match's pre-setup for the site on top, DESIGN §9),
+   * and the defenders at the site's spawns in slot order.
+   */
   private startPrep() {
     const defenders = this.match.sides[DEFENSE];
+    const sim = this.host.sim;
     this.host.resetPanels([0, reinforcementPool(this.mode, defenders.length)]);
+    if (this.mode.match.preSetups && this.match.site) for (const o of preSetupOps(sim.level.def, sim.level.panels, sim.data.destruction, this.match.site)) this.host.queuePanelOp(o.panel, o.op);
     const spots = this.spawnsOf(this.match.site ?? "");
     defenders.forEach((id, k) => this.spawnOne(id, spots[k % Math.max(1, spots.length)] ?? 0, DEFENSE));
     const sec = this.mode.match.seconds;
-    this.host.sim.objective = { carrier: 0, dropped: null, planted: null, site: this.match.site, canPlant: false, plantTicks: ticks(sec.plant), disableTicks: ticks(sec.disable) };
+    sim.objective = { carrier: 0, dropped: null, planted: null, site: this.match.site, canPlant: false, plantTicks: ticks(sec.plant), disableTicks: ticks(sec.disable) };
     this.host.rosterChanged();
   }
 
-  /** Action: each attacker at their spawn group's next free point, in slot order. */
+  /** Action: each attacker at their spawn group's next free point, in slot order; the format's safeguard starts. */
   private startAction() {
+    const sec = this.mode.match.seconds.attackerSafeguard;
+    this.safeguardEnd = sec > 0 ? this.host.sim.tick + ticks(sec) : 0;
+    this.safeguardOver.clear();
     const used = new Map<string, number>();
     for (const id of this.match.sides[ATTACK]) {
       const group = this.match.players.get(id)?.spawn ?? this.match.map.spawnGroups[0] ?? "";
@@ -487,14 +540,17 @@ export class MatchDirector {
           connected: p.connected,
           side: m.sideOf(p.id),
           alive: pawn !== undefined && pawn.state.mode !== PawnMode.Dead,
+          safe: pawn !== undefined && this.safeguarded(pawn),
           operator: mate || enemiesShown ? p.operator : null,
           spawn: mate ? p.spawn : null,
           banVote: mate ? p.banVote : null,
           siteVote: mate ? p.siteVote : null,
+          locked: mate ? p.attritionLock : null,
           kills: p.kills,
           deaths: p.deaths,
           assists: p.assists,
           rating: p.rating,
+          newRating: p.newRating,
         };
       });
     const rulesFresh = this.rulesSent.get(you) === this.rulesVersion;
@@ -517,6 +573,7 @@ export class MatchDirector {
       site: attacker && !m.siteRevealed ? null : m.site,
       siteRevealed: m.siteRevealed,
       carrier: attacker ? this.carrierMember() : 0,
+      safeguardEnd: m.phase === Phase.Action && this.host.sim.tick < this.safeguardEnd ? this.safeguardEnd : 0,
       history: m.history.map((h) => ({ ...h })),
       winner: m.winner,
       forfeit: m.forfeit,

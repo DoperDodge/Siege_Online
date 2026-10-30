@@ -34,6 +34,10 @@
 .match-screen th, .match-screen td, .scoreboard th, .scoreboard td { text-align: left; padding: 3px 6px; border-bottom: 1px solid var(--line); }
 .match-screen td.team-0, .match-screen td.team-1 { color: var(--team); font-weight: 600; }
 .match-screen .mvp { font: 700 10px var(--mono); color: #111; background: var(--accent); border-radius: 3px; padding: 0 4px; }
+/* Local ranked (ui/rank.ts): the tier's shape, its name and the rating. */
+.rank { display: inline-flex; align-items: center; gap: 3px; font: 600 11px var(--mono); color: var(--muted); white-space: nowrap; }
+.rank svg { flex: none; }
+.rank b { color: var(--text); }
 
 .match-top { top: 10px; left: 50%; transform: translateX(-50%); display: flex; align-items: stretch; gap: 10px; }
 .match-top .score { display: flex; flex-direction: column; align-items: center; min-width: 74px; padding: 2px 8px; border-radius: 6px; background: rgba(0, 0, 0, 0.55); border-bottom: 3px solid var(--team); }

@@ -14,6 +14,7 @@ import {
   NO_END,
   PawnMode,
   Phase,
+  RATING_START,
   TEAM_NAMES,
   TICK_HZ,
   WinReason,
@@ -29,6 +30,7 @@ import {
 import { keyLabel, loadSettings } from "../input/settings.js";
 import { escapeHtml } from "../ui/dom.js";
 import { changedPick, loadoutRows, saveLoadout, savedLoadout, type Slot } from "../ui/loadout.js";
+import { rankBadge, ratingChange, saveRating, storedRating } from "../ui/rank.js";
 import type { LabApi, SpectateView } from "./common/lab.js";
 
 const PHASE_LABEL: Record<Phase, string> = {
@@ -75,19 +77,28 @@ export function rulesSummary(r: FormatMode): string {
     m.rounds === null ? "rounds without end" : `${m.rounds} rounds, first to ${m.rounds / 2 + 1}`,
     `sides swap every ${plural(m.swapEvery, "round")}`,
     m.overtime && m.rounds !== null ? `overtime at ${m.rounds / 2}–${m.rounds / 2}: ${m.overtime.rounds === 1 ? "one round" : `up to ${m.overtime.rounds} rounds`}` : "",
-    m.bans ? `${plural(m.bans.maxPerSide, "ban")} per side` : "no bans",
+    m.firstAttack === "random" ? "" : `${TEAM_NAMES[m.firstAttack === "blue" ? 0 : 1]} attacks first`,
+    m.bans && m.bans.maxPerSide > 0 ? `${plural(m.bans.maxPerSide, "ban")} per side` : "no bans",
+    m.attrition === "winnerLastOperator" ? "a round's winner can't pick the same operator next round" : "",
     m.site === "vote" ? "defenders vote for the site" : "random site",
     `pick ${s.pick} s, prep ${s.prep} s, action ${s.action} s`,
     `plant ${s.plant} s, fuse ${s.fuse} s, disable ${s.disable} s`,
+    m.preSetups ? "pre-setups" : "",
+    s.attackerSafeguard > 0 ? `${s.attackerSafeguard} s attacker safeguard` : "",
+    s.redWallExtension > 0 ? `red walls ${s.redWallExtension} s into action` : "",
     r.friendlyFire.actionPhase ? "friendly fire on" : "friendly fire off",
+    m.stats === "rated" ? "local ranked rating" : "",
   ]
     .filter(Boolean)
     .join(" · ");
 }
 
-/** The fields a Custom host edits here (the rest of the rules stay as they are; match/settings.ts checks them). */
-const RULE_FIELDS: { key: string; label: string; min: number; max: number; step: number }[] = [
-  { key: "rounds", label: "Rounds", min: 2, max: 24, step: 2 },
+/**
+ * The numbers a Custom or Practice host edits here (the rest of the rules stay as they are; match/settings.ts checks
+ * them). `rounds`: only where rounds end (not Practice).
+ */
+const RULE_FIELDS: { key: string; label: string; min: number; max: number; step: number; rounds?: true }[] = [
+  { key: "rounds", label: "Rounds", min: 2, max: 24, step: 2, rounds: true },
   { key: "swapEvery", label: "Swap every", min: 1, max: 12, step: 1 },
   { key: "seconds.pick", label: "Pick (s)", min: 5, max: 120, step: 1 },
   { key: "seconds.prep", label: "Prep (s)", min: 5, max: 180, step: 1 },
@@ -96,7 +107,63 @@ const RULE_FIELDS: { key: string; label: string; min: number; max: number; step:
   { key: "seconds.fuse", label: "Fuse (s)", min: 10, max: 120, step: 1 },
   { key: "seconds.disable", label: "Disable (s)", min: 1, max: 30, step: 1 },
   { key: "seconds.roundEnd", label: "Round end (s)", min: 2, max: 20, step: 1 },
+  { key: "seconds.attackerSafeguard", label: "Attacker safeguard (s)", min: 0, max: 30, step: 1 },
+  { key: "seconds.redWallExtension", label: "Red walls in action (s)", min: 0, max: 60, step: 1 },
 ];
+
+/** The choices a Custom or Practice host makes here, each a select of [value, label]; `rounds`: not in Practice. */
+const RULE_CHOICES: { key: string; label: string; options: [string, string][]; rounds?: true }[] = [
+  { key: "firstAttack", label: "Attacks first", options: [["random", "Drawn"], ["blue", "Blue"], ["orange", "Orange"]] },
+  { key: "site", label: "Site", options: [["vote", "Defenders vote"], ["random", "Drawn"]] },
+  { key: "siteReveal", label: "Attackers learn the site", options: [["sight", "When they see it"], ["roundStart", "As prep starts"]] },
+  { key: "overtime", label: "Overtime", options: [["none", "None"], ["1", "1 round"], ["3", "Up to 3 rounds"]], rounds: true },
+  { key: "bans", label: "Bans per side", options: [["0", "None"], ["1", "1"], ["2", "2"]] },
+  { key: "preSetups", label: "Pre-setups", options: [["off", "Off"], ["on", "On"]] },
+  { key: "friendlyFire", label: "Friendly fire", options: [["on", "On in action"], ["off", "Off"]] },
+  { key: "reverseFriendlyFire", label: "Reverse friendly fire", options: [["on", "On"], ["off", "Off"]] },
+];
+
+/** A choice's value in the rules (RULE_CHOICES). */
+function choiceValue(r: FormatMode, key: string): string {
+  const m = r.match;
+  switch (key) {
+    case "overtime":
+      return m.overtime === null ? "none" : m.overtime.rounds === 1 ? "1" : "3";
+    case "bans":
+      return String(m.bans?.maxPerSide ?? 0);
+    case "preSetups":
+      return m.preSetups ? "on" : "off";
+    case "friendlyFire":
+      return r.friendlyFire.actionPhase ? "on" : "off";
+    case "reverseFriendlyFire":
+      return r.reverseFriendlyFire.enabled ? "on" : "off";
+    default:
+      return String((m as unknown as Record<string, unknown>)[key]);
+  }
+}
+
+/** The rules change a choice makes (a host's `rules` change: the match block and the damage rules). */
+function choiceRules(r: FormatMode, key: string, value: string): Record<string, unknown> {
+  const match = structuredClone(r.match) as unknown as Record<string, unknown>;
+  switch (key) {
+    case "overtime":
+      match.overtime = value === "none" ? null : value === "1" ? { rounds: 1, winBy: 1, swapEvery: 1 } : { rounds: 3, winBy: 2, swapEvery: 1 };
+      return { match };
+    case "bans":
+      match.bans = value === "0" ? null : { maxPerSide: Number(value), voteSeconds: r.match.bans?.voteSeconds ?? 15 };
+      return { match };
+    case "preSetups":
+      match.preSetups = value === "on";
+      return { match };
+    case "friendlyFire":
+      return { match, friendlyFire: { ...r.friendlyFire, actionPhase: value === "on" } };
+    case "reverseFriendlyFire":
+      return { match, reverseFriendlyFire: { ...r.reverseFriendlyFire, enabled: value === "on" } };
+    default:
+      match[key] = value;
+      return { match };
+  }
+}
 
 export function matchFeatures(lab: LabApi): void {
   const net = lab.net!;
@@ -138,6 +205,8 @@ export function matchFeatures(lab: LabApi): void {
     return rules;
   };
   const formatName = (v: MatchView) => currentRules()?.match.name ?? data.modes.get(v.format)?.match?.name ?? v.format;
+  /** You host a Practice match under way: you may end it. */
+  const practiceHost = (v: MatchView) => v.host === v.you && currentRules()?.match.rounds === null && v.phase !== Phase.Lobby && v.phase !== Phase.MatchEnd;
   const meOf = (v: MatchView) => v.players.find((p) => p.id === v.you) ?? null;
   const siteName = (id: string | null) => (id ? (level.sites.find((s) => s.id === id)?.name ?? id) : "");
   const opName = (id: string | null) => (id ? (data.operators.get(id)?.name ?? id) : "—");
@@ -174,13 +243,17 @@ export function matchFeatures(lab: LabApi): void {
     }
   }
 
+  /** The format keeps a local ranked rating (D-124). */
+  const rated = () => currentRules()?.match.stats === "rated";
+
   function playerRow(v: MatchView, p: MatchViewPlayer, host: boolean): string {
     const t = p.team;
     const tools =
       host && p.id !== v.you
         ? `<button data-act="move" data-member="${p.id}" data-team="${1 - t}" title="Move to ${TEAM_NAMES[1 - t]}">⇄</button><button data-act="kick" data-member="${p.id}" title="Kick">✕</button>`
         : "";
-    return `<li class="${p.id === v.you ? "you" : ""}${p.connected ? "" : " gone"}"><span class="ready ${p.ready ? "on" : ""}">${p.ready ? "✓" : "·"}</span><span class="name">${escapeHtml(p.name)}${p.id === v.host ? ' <span class="host" title="Host">★</span>' : ""}${p.connected ? "" : " (left)"}</span>${tools}</li>`;
+    const rank = rated() ? rankBadge(p.rating ?? RATING_START) : "";
+    return `<li class="${p.id === v.you ? "you" : ""}${p.connected ? "" : " gone"}"><span class="ready ${p.ready ? "on" : ""}">${p.ready ? "✓" : "·"}</span><span class="name">${escapeHtml(p.name)}${p.id === v.host ? ' <span class="host" title="Host">★</span>' : ""}${p.connected ? "" : " (left)"}</span>${rank}${tools}</li>`;
   }
 
   function lobbyParts(v: MatchView): [string, string][] {
@@ -196,16 +269,21 @@ export function matchFeatures(lab: LabApi): void {
     const hostName = v.players.find((p) => p.id === v.host)?.name ?? "the host";
     const formats = [...data.modes.values()].filter((m) => m.match);
     const toggles = r ? r.match.host : [];
+    const all = host && toggles === "all";
     const can = (t: "bans" | "reinforcementScaling") => host && (toggles === "all" || toggles.includes(t));
+    // Where the format ends (not Practice's endless rounds), and the host's every setting (Custom, Practice).
+    const fits = (f: { rounds?: true }) => !f.rounds || r?.match.rounds !== null;
+    const choices = r && all ? RULE_CHOICES.filter(fits).map((c) => `<label>${c.label} <select data-act="choice" data-key="${c.key}">${c.options.map(([value, label]) => `<option value="${value}" ${value === choiceValue(r, c.key) ? "selected" : ""}>${label}</option>`).join("")}</select></label>`).join("") : "";
     const settings = r
       ? `<h3>Format</h3>
         ${host ? `<select data-act="format">${formats.map((m) => `<option value="${m.id}" ${m.id === v.format ? "selected" : ""}>${escapeHtml(m.match!.name)}</option>`).join("")}</select>` : `<p>${escapeHtml(formatName(v))}</p>`}
         <p class="note">${escapeHtml(rulesSummary(r))}</p>
+        ${rated() ? `<p class="note">Your local rating: ${rankBadge(storedRating())} (kept in this browser; a win against an equal team is worth 16).</p>` : ""}
         <div class="row">
-        ${can("bans") && r.match.bans ? `<label>Bans per side <select data-act="bans">${[0, 1, 2].map((n) => `<option value="${n}" ${n === r.match.bans!.maxPerSide ? "selected" : ""}>${n}</option>`).join("")}</select></label>` : ""}
+        ${can("bans") && !all && r.match.bans ? `<label>Bans per side <select data-act="bans">${[0, 1, 2].map((n) => `<option value="${n}" ${n === r.match.bans!.maxPerSide ? "selected" : ""}>${n}</option>`).join("")}</select></label>` : ""}
         ${can("reinforcementScaling") ? `<label>Reinforcements <select data-act="scaling">${(["scaled", "full", ...(toggles === "all" ? ["infinite"] : [])] as const).map((s) => `<option value="${s}" ${s === r.match.reinforcementScaling ? "selected" : ""}>${s === "scaled" ? "scaled to the team" : s === "full" ? `${r.reinforcements} each round` : "endless"}</option>`).join("")}</select></label>` : ""}
         </div>
-        ${host && toggles === "all" && r.match.rounds !== null ? `<div class="rules">${RULE_FIELDS.map((f) => `<label>${f.label} <input type="number" data-act="rule" data-key="${f.key}" min="${f.min}" max="${f.max}" step="${f.step}" value="${ruleValue(r, f.key)}"></label>`).join("")}</div>` : ""}`
+        ${all ? `<div class="rules">${choices}${RULE_FIELDS.filter(fits).map((f) => `<label>${f.label} <input type="number" data-act="rule" data-key="${f.key}" min="${f.min}" max="${f.max}" step="${f.step}" value="${ruleValue(r, f.key)}"></label>`).join("")}</div>` : ""}`
       : "";
     return [
       [
@@ -267,15 +345,19 @@ export function matchFeatures(lab: LabApi): void {
     const me = meOf(v);
     const side = me?.side ?? null;
     const phase = v.phase === Phase.Prep ? "Prep" : "Planning";
-    const head = `<h2>Round ${v.round}${v.overtime ? " (overtime)" : ""} · ${phase} · <span class="timer"></span></h2>`;
+    const endPractice = practiceHost(v) ? '<div class="row"><button data-act="end">End practice</button></div>' : "";
+    const head = `<h2>Round ${v.round}${v.overtime ? " (overtime)" : ""} · ${phase} · <span class="timer"></span></h2>${endPractice}`;
     if (!me || side === null) return [["head", `${head}<p class="note">Your team sits this round out.</p>`]];
     const mates = v.players.filter((p) => p.team === me.team);
     const banned = new Set(v.bans[side]);
     const ops = sideOps(side)
       .map((o) => {
         const holder = mates.find((p) => p.operator === o.id && p.id !== me.id);
-        const off = banned.has(o.id) || holder !== undefined;
-        return `<button data-act="op" data-op="${o.id}" class="op ${me.operator === o.id ? "mine" : ""}" ${off ? "disabled" : ""}>${escapeHtml(o.name)}${banned.has(o.id) ? " <small>banned</small>" : holder ? ` <small>${escapeHtml(holder.name)}</small>` : ""}</button>`;
+        // 1v1 attrition: the operator you won the last round with sits this one out.
+        const locked = me.locked === o.id;
+        const off = banned.has(o.id) || holder !== undefined || locked;
+        const why = banned.has(o.id) ? "banned" : holder ? escapeHtml(holder.name) : locked ? "won you the last round" : "";
+        return `<button data-act="op" data-op="${o.id}" class="op ${me.operator === o.id ? "mine" : ""}" ${off ? "disabled" : ""}>${escapeHtml(o.name)}${why ? ` <small>${why}</small>` : ""}</button>`;
       })
       .join("");
     const parts: [string, string][] = [
@@ -329,18 +411,23 @@ export function matchFeatures(lab: LabApi): void {
 
   function summaryParts(v: MatchView): [string, string][] {
     const host = v.host === v.you;
-    const title = v.winner === null ? "Draw" : `${TEAM_NAMES[v.winner]} wins`;
+    const title = v.winner === null ? (currentRules()?.match.rounds === null ? "Practice over" : "Draw") : `${TEAM_NAMES[v.winner]} wins`;
+    // Ranked: each player's rating before and after (D-124); yours is kept in this browser.
+    const ratings = rated() && v.players.some((p) => p.newRating !== null);
+    const ratingCell = (p: MatchViewPlayer) => (ratings ? `<td>${p.newRating === null ? "—" : `${rankBadge(p.newRating, false)} ${ratingChange(p.rating ?? RATING_START, p.newRating)}`}</td>` : "");
     const rows = v.history
       .map((h) => `<tr><td>${h.round}</td><td>${TEAM_NAMES[h.attackers]}</td><td class="team-${h.winner}">${TEAM_NAMES[h.winner]}</td><td>${reasonText(h)}</td><td>${escapeHtml(siteName(h.site))}</td></tr>`)
       .join("");
     const players = [...v.players]
       .sort((a, b) => a.team - b.team || b.kills - a.kills)
-      .map((p) => `<tr class="${p.id === v.you ? "you" : ""}"><td class="team-${p.team}">${TEAM_NAMES[p.team]}</td><td>${escapeHtml(p.name)}${p.id === v.mvp ? ' <span class="mvp" title="Most valuable player">MVP</span>' : ""}</td><td>${p.kills}</td><td>${p.assists}</td><td>${p.deaths}</td></tr>`)
+      .map((p) => `<tr class="${p.id === v.you ? "you" : ""}"><td class="team-${p.team}">${TEAM_NAMES[p.team]}</td><td>${escapeHtml(p.name)}${p.id === v.mvp ? ' <span class="mvp" title="Most valuable player">MVP</span>' : ""}</td><td>${p.kills}</td><td>${p.assists}</td><td>${p.deaths}</td>${ratingCell(p)}</tr>`)
       .join("");
+    const mine = meOf(v);
+    const yourRating = ratings && mine?.newRating != null ? `<p>Your local rating: ${rankBadge(mine.newRating)} ${ratingChange(mine.rating ?? RATING_START, mine.newRating)}</p>` : "";
     return [
-      ["head", `<h2>${title} ${v.score[0]}–${v.score[1]}${v.forfeit ? " (forfeit)" : ""}</h2>`],
+      ["head", `<h2>${title} ${v.score[0]}–${v.score[1]}${v.forfeit ? " (forfeit)" : ""}</h2>${yourRating}`],
       ["rounds", `<h3>Rounds</h3><table class="rounds"><tr><th>Round</th><th>Attackers</th><th>Won by</th><th>How</th><th>Site</th></tr>${rows}</table>`],
-      ["players", `<h3>Players</h3><table class="players"><tr><th>Team</th><th>Player</th><th>K</th><th>A</th><th>D</th></tr>${players}</table>`],
+      ["players", `<h3>Players</h3><table class="players"><tr><th>Team</th><th>Player</th><th>K</th><th>A</th><th>D</th>${ratings ? "<th>Rating</th>" : ""}</tr>${players}</table>`],
       ["foot", `<div class="row">${host ? '<button class="primary" data-act="backToLobby">Back to the lobby</button>' : '<span class="note">The host can take everyone back to the lobby.</span>'}<a href="/play.html">Leave</a></div>`],
     ];
   }
@@ -366,6 +453,8 @@ export function matchFeatures(lab: LabApi): void {
         return lobby({ kind: "start" });
       case "backToLobby":
         return lobby({ kind: "backToLobby" });
+      case "end":
+        return lobby({ kind: "end" });
       case "invite":
         void navigator.clipboard?.writeText(`${location.origin}${location.pathname}?room=${session.roomCode}`).then(() => (b.textContent = "Copied!"));
         return;
@@ -389,6 +478,7 @@ export function matchFeatures(lab: LabApi): void {
     else if (d.act === "private") lobby({ kind: "private", private: (t as HTMLInputElement).checked });
     else if (d.act === "bans") lobby({ kind: "change", change: { kind: "bans", maxPerSide: Number(t.value) } });
     else if (d.act === "scaling") lobby({ kind: "change", change: { kind: "reinforcementScaling", value: t.value as "scaled" | "full" | "infinite" } });
+    else if (d.act === "choice" && r) lobby({ kind: "change", change: { kind: "rules", rules: choiceRules(r, d.key!, t.value) } });
     else if (d.act === "rule" && r) {
       const match = structuredClone(r.match) as unknown as Record<string, unknown>;
       const [a, b] = d.key!.split(".");
@@ -429,6 +519,10 @@ export function matchFeatures(lab: LabApi): void {
       else if (v.carrier) lines.push(`Defuser: ${v.players.find((p) => p.id === v.carrier)?.name ?? "a teammate"}`);
       if (v.detected.length) lines.push(`Run-out detected: ${v.detected.length}`);
     }
+    // Quick Match's Attacker Safeguard: the attackers' own, and how long the defenders can't hurt them.
+    const safe = v.safeguardEnd ? Math.ceil(Math.max(0, v.safeguardEnd - session.serverTick()) / TICK_HZ) : 0;
+    if (safe > 0 && side === ATTACK && me!.safe) lines.push(`Safeguard: ${safe} s (it ends when you go into the building)`);
+    else if (safe > 0 && side === DEFENSE && v.players.some((p) => p.safe)) lines.push(`Attackers safeguarded: ${safe} s`);
     if (side === DEFENSE && v.phase === Phase.Prep) lines.push(`Reinforcements left: ${lab.sim.deployRules.pools[DEFENSE]}`);
     if (v.redWalls && side === DEFENSE) lines.push("Red walls: you can't leave the building yet");
     return lines;
@@ -551,11 +645,27 @@ export function matchFeatures(lab: LabApi): void {
 
   let lastPhase: Phase | null = null;
   let shown = "";
+  /** The rating last sent, with when (so a frame waiting for the server's answer doesn't send it again). */
+  let ratingSent = "";
+
+  /** Ranked (D-124): this browser's rating goes to the server in the lobby (or on joining a match under way), and the match end's new one is kept. */
+  function syncRating(v: MatchView, me: MatchViewPlayer | null) {
+    if (!me || !rated()) return;
+    const mine = storedRating();
+    if (v.phase === Phase.MatchEnd && me.newRating !== null && me.newRating !== mine) saveRating(me.newRating);
+    const lobbyOrNew = v.phase === Phase.Lobby ? me.rating !== mine : me.rating === null && v.phase !== Phase.MatchEnd;
+    const key = `${mine}:${v.phase === Phase.Lobby}:${v.rulesVersion}`;
+    if (lobbyOrNew && ratingSent !== key) {
+      ratingSent = key;
+      lobby({ kind: "rating", rating: mine });
+    }
+  }
 
   lab.onFrame((_now, renderTick) => {
     const v = session.match;
     if (!v) return;
     const me = meOf(v);
+    syncRating(v, me);
     // The operator the server has for you (your pick, or one it gave you when the timer ran out) carries the loadout you
     // keep for it, sent once; defenders are locked once they spawn.
     if (me?.operator && myPick?.operator !== me.operator && (v.phase === Phase.Planning || (v.phase === Phase.Prep && me.side === ATTACK))) pickOperator(me.operator);
@@ -638,6 +748,7 @@ export function matchFeatures(lab: LabApi): void {
     updateMarkers(v, renderTick);
   });
 
+  lab.addMatchTool(() => (session.match && practiceHost(session.match) ? "End practice" : null), () => lobby({ kind: "end" }));
   lab.addHelp("<kbd>Tab</kbd>", "Scoreboard (hold)");
   lab.addHelp(`<kbd>${keyLabel(keys.drop)}</kbd>`, "Drop the defuser (attackers)");
   lab.addHelp("Left mouse (dead)", "Look through the next teammate still alive");

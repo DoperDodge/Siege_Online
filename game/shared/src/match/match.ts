@@ -18,6 +18,8 @@ import {
   matchResult,
   other,
   pickSeconds,
+  RATING_START,
+  ratingChanges,
   tally,
   type FormatMode,
   type Side,
@@ -54,8 +56,12 @@ export interface MatchPlayer {
   kills: number;
   deaths: number;
   assists: number;
+  /** Rounds played this match (a player who joined late and never played isn't rated). */
+  rounds: number;
   /** Ranked: the local rating the player's browser sent (D-124), or null. */
   rating: number | null;
+  /** Ranked, once the match is over: the rating after it (back in the lobby it becomes `rating`). */
+  newRating: number | null;
 }
 
 export interface RoundRecord {
@@ -180,7 +186,9 @@ export class Match {
       kills: 0,
       deaths: 0,
       assists: 0,
+      rounds: 0,
       rating,
+      newRating: null,
     };
     this.players.set(id, p);
     if (!this.players.get(this.hostId)?.connected) this.hostId = id;
@@ -299,22 +307,32 @@ export class Match {
     return waiting.length ? `Waiting for ${waiting.join(", ")} to ready up` : null;
   }
 
-  /** The host starts the match: the first attacking team is drawn from the seed. */
+  /** The host starts the match: the first attacking team is the format's (Custom), or drawn from the seed. */
   start(host: number, tick: number): { error: string } | MatchEvent[] {
     const why = this.byHost(host) ?? this.canStart(host);
     if (why) return { error: why };
     for (const p of this.players.values()) if (!p.connected) this.players.delete(p.id);
-    this.firstAttackers = (hash4(this.seed, 0, ROLL.first, 0) & 1) as Team;
+    const first = this.m.firstAttack;
+    this.firstAttackers = first === "blue" ? 0 : first === "orange" ? 1 : ((hash4(this.seed, 0, ROLL.first, 0) & 1) as Team);
     this.score = [0, 0];
     this.history = [];
     this.halfBans.clear();
     this.winner = null;
     this.forfeit = false;
-    for (const p of this.players.values()) Object.assign(p, { operator: null, lastOperator: null, attritionLock: null, kills: 0, deaths: 0, assists: 0 });
+    for (const p of this.players.values()) Object.assign(p, { operator: null, lastOperator: null, attritionLock: null, kills: 0, deaths: 0, assists: 0, rounds: 0, newRating: null });
     return this.beginRound(1, tick);
   }
 
-  /** After the match: everyone back to the lobby on the same teams, not ready. */
+  /** The host ends a match whose rounds go on without end (Practice): no winner. */
+  end(host: number, tick: number): { error: string } | MatchEvent[] {
+    const why = this.byHost(host);
+    if (why) return { error: why };
+    if (this.m.rounds !== null) return { error: "Only a Practice match can be ended" };
+    if (this.phase === Phase.Lobby || this.phase === Phase.MatchEnd) return { error: "No match is being played" };
+    return this.endMatch(tick, null, false);
+  }
+
+  /** After the match: everyone back to the lobby on the same teams, not ready, a ranked player at the new rating. */
   backToLobby(host: number): string | null {
     const why = this.byHost(host);
     if (why) return why;
@@ -324,7 +342,11 @@ export class Match {
     this.phaseEnd = NO_END;
     this.round = 0;
     this.sides = [[], []];
-    for (const p of this.players.values()) p.ready = false;
+    for (const p of this.players.values()) {
+      p.ready = false;
+      p.rating = p.newRating ?? p.rating;
+      p.newRating = null;
+    }
     return null;
   }
 
@@ -382,7 +404,10 @@ export class Match {
     for (const p of this.players.values()) {
       const played = this.sideOf(p.id) !== null;
       p.attritionLock = this.m.attrition === "winnerLastOperator" && played && p.team === winner ? p.operator : null;
-      if (played) p.lastOperator = p.operator;
+      if (played) {
+        p.lastOperator = p.operator;
+        p.rounds++;
+      }
     }
     return [{ kind: "round", record }, this.enter(Phase.RoundEnd, tick, this.m.seconds.roundEnd)];
   }
@@ -390,7 +415,21 @@ export class Match {
   private endMatch(tick: number, winner: Team | null, forfeit: boolean): MatchEvent[] {
     this.winner = winner;
     this.forfeit = forfeit;
+    if (this.m.stats === "rated") this.rate(winner);
     return [this.enter(Phase.MatchEnd, tick, null), { kind: "match", winner, forfeit }];
+  }
+
+  /**
+   * Ranked (D-124): everyone who played a round gets a new rating, Elo on the teams' averages (one who never sent a
+   * rating counts as a new player); leavers too, though they aren't here to be told.
+   */
+  private rate(winner: Team | null) {
+    const rated = [...this.players.values()].filter((p) => p.rounds > 0);
+    const next = ratingChanges(
+      rated.map((p) => ({ id: p.id, team: p.team, rating: p.rating ?? RATING_START })),
+      winner,
+    );
+    for (const p of rated) p.newRating = next.get(p.id) ?? null;
   }
 
   /**

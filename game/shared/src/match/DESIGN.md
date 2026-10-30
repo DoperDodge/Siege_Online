@@ -121,8 +121,8 @@ ban.
 - **Runouts (action):** a defender whose feet stay outside the building zones for `runoutGraceS` (1 s) is Detected:
   every attacker sees a live marker on them until they are back inside or dead (research §8; the marker is our
   drawing).
-- **Spawn safeguard (Quick Match):** attackers take no damage for the first 10 s of action, or until they first enter
-  the building.
+- **Spawn safeguard (Quick Match):** attackers take no damage from bullets or the knife for the first 10 s of action,
+  each until they first enter the building (D-129; a fall still hurts).
 - **Out of the map:** in a match a body below the kill plane dies (labs keep putting it back at spawn).
 - **Leaving mid-match:** the body dies (the kill feed says "left"); the slot is kept, so a player who rejoins with the
   room code gets it back at the next round (reconnect proper, with the body kept, is a Phase 6 stretch, D-123). A
@@ -170,15 +170,21 @@ starts (prep), our reading of Siege's "at round start" (D-121).
 
 Siege pre-places reinforcements and rotation holes per site in Quick Match ("2 designed sets per bombsite", reduced
 in Y10S2); the sets themselves are not published (UNVERIFIED). Ours come from research/oregon/common_setups.md: the
-site's top-priority reinforcements (as many as the pool allows, up to 2) and its rotation holes, applied at prep start
-on top of the pool. Marked DER (our derivation) in the data.
+site's two top-priority reinforcements and its rotation holes, applied at prep start on top of the pool. Marked DER
+(our derivation) in the data.
+
+As built (D-128): each site's `preSetup` in layout.json, checked and compiled into level.json by the map generator,
+names the panels (a wall with the room its steel faces, or a hatch, reinforced from its top) and the holes (`vault` or
+`crouch`, sized in data/destruction.json `rotationHoles`). match/preSetup.ts turns them into panel ops; the room
+applies and sends them like any other, so every client has them.
 
 ## 10. Wire (protocol 11)
 
 Client → server:
 - `CreateMatch { format }`: a new match room on Oregon, in its lobby, with the sender as host.
 - `ListRooms` → `RoomList [{ code, format, players, phase }]` (listed rooms only).
-- `LobbyAction`: team, ready; host only: move, swap teams, kick, settings, start, back to lobby, private.
+- `LobbyAction`: team, ready, your local rating (Ranked); host only: move, swap teams, kick, settings, start, back to
+  lobby, private, end (Practice).
 - `MatchAction`: ban vote, site vote, spawn, take / give back the defuser. Operator and loadout ride the existing
   `PickLoadout`.
 - New input buttons: `Btn.Drop` (drop the defuser). Plant, disable and pick up are Use (`Btn.Interact`).
@@ -188,7 +194,9 @@ Server → client:
   joining: format and settings, phase and its end tick, round, score, which team attacks, each member (id, name,
   team, ready, host, connected, operator and loadout pick, spawn choice, alive, kills/deaths/assists), the bans,
   this player's team's votes, the site (attackers: only once revealed), the defuser (carrier visible to attackers
-  only), detected runouts (attackers only), each round's winner and how, and the match result.
+  only), detected runouts (attackers only), each round's winner and how, and the match result. M5 (protocol 12):
+  each player's attrition lock (to their team), whether they are safeguarded and until when, and the new ratings at a
+  Ranked match's end.
 - `matchRules` event: what the simulation needs to predict (red walls on, defuser state for plant/disable), like
   `deployRules`.
 
@@ -219,7 +227,10 @@ misprediction.
 - **Tab scoreboard:** both teams, operator, K/A/D, alive, dead or left; your ping.
 - **Round banner and match summary:** who won the round and how (research §4's icons, drawn our way: in words), the
   next round's sides on the top bar; at the end the score, each round's result, the players' K/A/D and the MVP, and
-  the host's Back to the lobby. The rating change comes with M5.
+  the host's Back to the lobby; in Ranked each player's rating change.
+- **M5 (D-129–D-131):** Ranked shows each player's tier and rating in the lobby; the planning screen greys out the
+  operator attrition locks; the HUD counts down the attacker safeguard; a Custom or Practice host sets every rule in
+  the lobby; a Practice host ends the match from the planning screen or the pause menu.
 
 ## 12. Ranked rating
 
@@ -227,6 +238,10 @@ There are no accounts, so the rating lives in each browser (localStorage) and is
 says "on the host"; in a browser game the host is a tab, D-124). The client sends its rating when it joins a Ranked
 room (clamped); at the match end the server computes Elo for each player (K = 32, team average vs team average, our
 choice) and sends the new rating back. Rank icons are our own (simple shapes, our tier names).
+
+As built (D-130): the rating goes in from the lobby, or once from a player who joins a match under way; those who
+played a round are rated (leavers too); the new rating is the player's back in the lobby. Tiers:
+data/presentation/ranks.json.
 
 MVP: most kills, then most assists, then fewest deaths (our rule; Siege's MVP is by score points, which we don't
 model).

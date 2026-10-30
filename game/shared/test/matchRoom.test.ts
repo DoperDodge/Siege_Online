@@ -6,6 +6,9 @@ import {
   applyDamage,
   ATTACK,
   Btn,
+  eyePose,
+  loadedOf,
+  poseHitboxes,
   ByteReader,
   Cause,
   ClientSession,
@@ -436,3 +439,192 @@ describe("the defuser's edge cases", () => {
     expect(t.match.history[0]).toMatchObject({ reason: WinReason.Deactivated, winner: t.match.players.get(def.id)!.team });
   }, 60_000);
 });
+
+describe("each format's details (Phase 6 M5)", () => {
+  /** The view from `shooter`'s eye to `target`'s head (the server's states). */
+  const aimAt = (shooter: { state: Parameters<typeof eyePose>[2] }, target: { state: Parameters<typeof eyePose>[2] }) => {
+    const head = poseHitboxes(data.movement, data.hitboxes, target.state).find((h) => h.part === "head")!;
+    const eye = eyePose(data.movement, data.hitboxes, shooter.state).pos;
+    const d = [0, 1, 2].map((i) => (head.a[i] + head.b[i]) / 2 - eye[i]);
+    return { yaw: Math.atan2(-d[0], -d[2]), pitch: Math.atan2(d[1], Math.hypot(d[0], d[2])) };
+  };
+
+  it("Quick Match: prep puts the site's pre-setup up on top of the pool (every client's walls the server's); in action the attackers are safe for 10 s unless they go in", async () => {
+    const t = await matchRoom("quick_match", 4);
+    const cs = [];
+    for (const name of ["a", "b", "c", "d"]) cs.push(await t.add(name));
+    t.tick();
+    for (const c of cs.slice(1)) t.lobby(c, { kind: "ready", ready: true });
+    t.tick();
+    t.lobby(cs[0], { kind: "start" });
+    t.tick();
+    expect(t.match.phase).toBe(Phase.Planning);
+    const [a1, a2] = cs.filter((c) => t.match.sideOf(c.id) === ATTACK);
+    const [d1] = cs.filter((c) => t.match.sideOf(c.id) === DEFENSE);
+
+    // Prep: the drawn site's walls are steel from its side and its holes are cut; the pool is the scaled 6 for two.
+    t.until(() => t.match.phase === Phase.Prep, 25, "prep");
+    for (let i = 0; i < 10; i++) t.tick();
+    const site = t.room.sim.level.def.sites.find((x) => x.id === t.match.site)!;
+    const panels = t.room.sim.level.panels;
+    for (const r of site.preSetup!.reinforce) expect(panels.byId.get(r.panel)!.panel.reinforced, r.panel).toBe((1 << panels.byId.get(r.panel)!.panel.sectionCount) - 1);
+    for (const h of site.preSetup!.holes) expect(panels.byId.get(h.panel)!.panel.modified, h.panel).toBe(true);
+    expect(t.room.sim.deployRules.pools[DEFENSE]).toBe(6);
+    for (const c of cs) expect(c.session.sim!.level.panels.hash(), c.name).toBe(panels.hash());
+
+    // Action: both attackers safe; one goes into the building, which ends their own safeguard.
+    t.until(() => t.match.phase === Phase.Action, 50, "action");
+    t.tick();
+    const start = t.room.sim.tick;
+    const v = a1.session.match!;
+    expect(v.safeguardEnd).toBe(start - 1 + 10 * 64);
+    expect(v.players.filter((p) => p.side === ATTACK).map((p) => p.safe)).toEqual([true, true]);
+    const lobby = t.room.sim.level.def.rooms.find((r) => r.id === "1F_LOBBY")!.anchor;
+    t.place(a2, lobby[0], lobby[1], lobby[2], 0);
+    expect(t.room.director!.safeguarded(t.bodyOf(a2)!)).toBe(false);
+    expect(a1.session.match!.players.find((p) => p.id === a2.id)!.safe).toBe(false);
+
+    // A defender outside, 4 m in front of the first attacker, shoots its head down the sights: no damage while it is safe.
+    const target = t.bodyOf(a1)!;
+    const yaw = target.state.yaw;
+    t.place(d1, target.state.x - Math.sin(yaw) * 4, target.state.y, target.state.z - Math.cos(yaw) * 4, (yaw / DEG + 180) % 360);
+    const shoot = () => {
+      const aim = aimAt(t.bodyOf(d1)!, target);
+      d1.cmd = { yaw: aim.yaw, pitch: aim.pitch, buttons: Btn.Ads };
+      for (let i = 0; i < 64; i++) t.tick();
+      d1.cmd = { yaw: aim.yaw, pitch: aim.pitch, buttons: Btn.Ads | Btn.Fire };
+      t.tick();
+      d1.cmd = { yaw: aim.yaw, pitch: aim.pitch, buttons: Btn.Ads };
+      for (let i = 0; i < 16; i++) t.tick();
+    };
+    const hp = target.state.hp;
+    const rounds = loadedOf(t.bodyOf(d1)!.state);
+    shoot();
+    expect(loadedOf(t.bodyOf(d1)!.state)).toBe(rounds - 1); // it fired
+    expect(t.room.sim.tick).toBeLessThan(v.safeguardEnd);
+    expect([target.state.mode, target.state.hp]).toEqual([PawnMode.Walk, hp]);
+    expect(d1.events.some((e) => e.kind === "hitConfirm")).toBe(false);
+    // Once the 10 s are over, the same shot kills.
+    t.until(() => t.room.sim.tick >= v.safeguardEnd, 12, "the safeguard's end");
+    expect(t.room.director!.safeguarded(target)).toBe(false);
+    shoot();
+    expect(target.state.mode).toBe(PawnMode.Dead);
+  }, 60_000);
+
+  /** End the current phase's timer on the next tick (the timers are the match logic's, tested on their own). */
+  const skip = (t: Awaited<ReturnType<typeof matchRoom>>) => {
+    t.match.phaseEnd = Math.min(t.match.phaseEnd, t.room.sim.tick + 1);
+    t.tick();
+    t.tick();
+  };
+  /** Through the timers to this round's action. */
+  const toAction = (t: Awaited<ReturnType<typeof matchRoom>>) => {
+    for (let i = 0; i < 10 && t.match.phase !== Phase.Action; i++) skip(t);
+    expect(t.match.phase).toBe(Phase.Action);
+  };
+
+  it("Ranked: each browser's rating goes in from the lobby (once mid-match for a joiner), and the match end sends everyone the new one, theirs back in the lobby", async () => {
+    const t = await matchRoom("ranked", 2);
+    const host = await t.add("host");
+    const guest = await t.add("guest");
+    t.tick();
+    t.lobby(host, { kind: "rating", rating: 1200 });
+    t.lobby(guest, { kind: "rating", rating: 1000 });
+    t.tick();
+    expect(host.session.match!.players.map((p) => [p.name, p.rating, p.newRating])).toEqual([["host", 1200, null], ["guest", 1000, null]]);
+    t.lobby(guest, { kind: "ready", ready: true });
+    t.tick();
+    t.lobby(host, { kind: "start" });
+    t.tick();
+    // Mid-match a rating no longer changes, but one who joins without one sends theirs once.
+    t.lobby(guest, { kind: "rating", rating: 3000 });
+    const late = await t.add("late");
+    t.lobby(late, { kind: "rating", rating: 1400 });
+    t.tick();
+    t.lobby(late, { kind: "rating", rating: 1500 });
+    t.tick();
+    expect(t.match.players.get(guest.id)!.rating).toBe(1000);
+    expect(t.match.players.get(late.id)!.rating).toBe(1400);
+    t.room.leave(late.id); // gone before playing a round: not rated
+    // Blue wins four rounds.
+    const blue = t.match.players.get(host.id)!.team === 0 ? host : guest;
+    for (let r = 1; r <= 4; r++) {
+      toAction(t);
+      const loser = [host, guest].find((c) => c !== blue)!;
+      t.room.killBody(t.bodyOf(loser)!.id, Cause.Lab);
+      t.tick();
+      expect(t.match.history.at(-1)!.winner).toBe(t.match.players.get(blue.id)!.team);
+      skip(t);
+    }
+    expect(t.match.phase).toBe(Phase.MatchEnd);
+    // 1200 against 1000 (Blue, the host, expected to win 76 %): +8 and −8.
+    const want = [["host", 1200, 1208], ["guest", 1000, 992]];
+    for (const c of [host, guest]) expect(c.session.match!.players.filter((p) => p.connected).map((p) => [p.name, p.rating, p.newRating])).toEqual(want);
+    t.lobby(host, { kind: "backToLobby" });
+    t.tick();
+    expect(guest.session.match!.players.filter((p) => p.connected).map((p) => [p.name, p.rating, p.newRating])).toEqual([["host", 1208, null], ["guest", 992, null]]);
+  }, 60_000);
+
+  it("1v1 attrition: the round's winner sees the operator they won with locked next round, and a pick of it is refused", async () => {
+    const t = await matchRoom("one_v_one", 6);
+    const host = await t.add("host");
+    const guest = await t.add("guest");
+    t.tick();
+    t.lobby(guest, { kind: "ready", ready: true });
+    t.tick();
+    t.lobby(host, { kind: "start" });
+    t.tick();
+    const atk = t.match.sideOf(host.id) === ATTACK ? host : guest;
+    const def = atk === host ? guest : host;
+    atk.toServer.push(encodePickLoadout(defaultLoadoutPick(data, "thermite")));
+    def.toServer.push(encodePickLoadout(defaultLoadoutPick(data, "pulse")));
+    toAction(t);
+    t.room.killBody(t.bodyOf(def)!.id, Cause.Lab);
+    t.tick();
+    skip(t);
+    // Round 2 (same sides): the winner can't take Thermite again; the loser keeps Pulse.
+    expect([t.match.round, t.match.phase, t.match.sideOf(atk.id)]).toEqual([2, Phase.Planning, ATTACK]);
+    const me = (c: typeof atk) => c.session.match!.players.find((p) => p.id === c.id)!;
+    expect([me(atk).locked, me(def).locked]).toEqual(["thermite", null]);
+    // The lock is the winner's own business (and their team's): the other side isn't sent it.
+    expect(def.session.match!.players.find((p) => p.id === atk.id)!.locked).toBeNull();
+    atk.toServer.push(encodePickLoadout(defaultLoadoutPick(data, "thermite")));
+    t.tick();
+    expect(atk.errors.at(-1)?.message).toBe("That operator isn't available");
+    def.toServer.push(encodePickLoadout(defaultLoadoutPick(data, "pulse")));
+    for (let i = 0; i < 10; i++) t.tick(); // a pick goes out with the next state, within 8 ticks
+    expect(me(def).operator).toBe("pulse");
+  }, 60_000);
+
+  it("Practice: one side may be empty, rounds go on swapping sides, and only the host ends it (no winner)", async () => {
+    const t = await matchRoom("practice", 8);
+    const host = await t.add("host");
+    t.tick();
+    t.lobby(host, { kind: "start" });
+    t.tick();
+    expect(t.match.phase).toBe(Phase.Planning);
+    const sides: (0 | 1 | null)[] = [];
+    for (let r = 1; r <= 3; r++) {
+      sides.push(t.match.sideOf(host.id));
+      toAction(t);
+      // Alone: nobody to fight, so the round runs to its timer.
+      skip(t);
+      skip(t);
+      expect(t.match.round).toBe(r + 1);
+    }
+    expect(sides).toEqual([sides[0], 1 - sides[0]!, sides[0]]);
+    // A guest can't end it; the host can, from any phase.
+    const guest = await t.add("guest");
+    t.lobby(guest, { kind: "end" });
+    t.tick();
+    expect(guest.errors.at(-1)?.message).toBe("Only the host can do that");
+    t.lobby(host, { kind: "end" });
+    t.tick();
+    expect([t.match.phase, t.match.winner, host.session.match!.phase]).toEqual([Phase.MatchEnd, null, Phase.MatchEnd]);
+    expect(t.bodyOf(host)).toBeNull();
+    t.lobby(host, { kind: "backToLobby" });
+    t.tick();
+    expect(host.session.match!.phase).toBe(Phase.Lobby);
+  }, 60_000);
+});
+

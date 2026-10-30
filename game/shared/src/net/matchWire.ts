@@ -77,9 +77,11 @@ export type LobbyAction =
   | { kind: "backToLobby" }
   | { kind: "private"; private: boolean }
   /** Ranked: this browser's local rating (D-124). */
-  | { kind: "rating"; rating: number };
+  | { kind: "rating"; rating: number }
+  /** The host ends a match whose rounds go on without end (Practice). */
+  | { kind: "end" };
 
-const LOBBY = { team: 0, ready: 1, move: 2, swapTeams: 3, kick: 4, format: 5, change: 6, start: 7, backToLobby: 8, private: 9, rating: 10 } as const;
+const LOBBY = { team: 0, ready: 1, move: 2, swapTeams: 3, kick: 4, format: 5, change: 6, start: 7, backToLobby: 8, private: 9, rating: 10, end: 11 } as const;
 const CHANGE = { bans: 0, reinforcementScaling: 1, rules: 2 } as const;
 const SCALINGS = ["scaled", "full", "infinite"] as const;
 
@@ -149,6 +151,8 @@ export function decodeLobbyAction(r: ByteReader): LobbyAction {
       return { kind: "private", private: bool() };
     case LOBBY.rating:
       return { kind: "rating", rating: r.u16() };
+    case LOBBY.end:
+      return { kind: "end" };
   }
   throw new ProtocolError("bad lobby action");
 }
@@ -199,16 +203,22 @@ export interface MatchViewPlayer {
   side: 0 | 1 | null;
   /** Their body is alive this round (alive and down both count; dead or none don't). */
   alive: boolean;
+  /** Their body takes no damage: Quick Match's Attacker Safeguard (until `MatchView.safeguardEnd`). */
+  safe: boolean;
   /** This round's operator: teammates' always, the other team's once action starts. */
   operator: string | null;
   spawn: string | null;
   banVote: string | null;
   siteVote: string | null;
+  /** 1v1 attrition: the operator they can't pick this round (they won the last one with it); teammates' only. */
+  locked: string | null;
   kills: number;
   deaths: number;
   assists: number;
   /** Ranked: the local rating (D-124), or null. */
   rating: number | null;
+  /** Ranked, at the match end: the rating after it (D-124), or null. */
+  newRating: number | null;
 }
 
 /** The match as one player may see it (MatchState). */
@@ -239,6 +249,8 @@ export interface MatchView {
   siteRevealed: boolean;
   /** Who carries (or will carry) the defuser: attackers only, else 0. */
   carrier: number;
+  /** The server tick Quick Match's Attacker Safeguard ends this round (players' `safe`), or 0: none. */
+  safeguardEnd: number;
   history: RoundRecord[];
   /** At the match end: the winner (null: a draw), whether by forfeit, and the MVP (0: none). */
   winner: Team | null;
@@ -259,7 +271,7 @@ export interface MatchView {
 }
 
 const F = { redWalls: 1, siteRevealed: 2, private: 4, overtime: 8, forfeit: 16, rules: 32 } as const;
-const PF = { ready: 1, connected: 2, alive: 4 } as const;
+const PF = { ready: 1, connected: 2, alive: 4, safe: 8 } as const;
 
 export function encodeMatchState(v: MatchView): Uint8Array {
   const w = new ByteWriter(512).u8(Msg.MatchState).str(v.format.slice(0, MAX_ID)).u8(v.phase).u32(v.phaseStart >>> 0).u32(v.phaseEnd >>> 0).u8(Math.min(255, v.round)).u8(v.attackers);
@@ -268,16 +280,16 @@ export function encodeMatchState(v: MatchView): Uint8Array {
   const players = v.players.slice(0, MAX_PLAYERS);
   w.u8(players.length);
   for (const p of players) {
-    w.varu(p.id).str(p.name).u8(p.team).u8((p.ready ? PF.ready : 0) | (p.connected ? PF.connected : 0) | (p.alive ? PF.alive : 0)).u8(p.side ?? 2);
-    for (const s of [p.operator, p.spawn, p.banVote, p.siteVote]) optStr(w, s);
-    w.u16(Math.min(0xffff, p.kills)).u16(Math.min(0xffff, p.deaths)).u16(Math.min(0xffff, p.assists)).u16(p.rating ?? NO_RATING);
+    w.varu(p.id).str(p.name).u8(p.team).u8((p.ready ? PF.ready : 0) | (p.connected ? PF.connected : 0) | (p.alive ? PF.alive : 0) | (p.safe ? PF.safe : 0)).u8(p.side ?? 2);
+    for (const s of [p.operator, p.spawn, p.banVote, p.siteVote, p.locked]) optStr(w, s);
+    w.u16(Math.min(0xffff, p.kills)).u16(Math.min(0xffff, p.deaths)).u16(Math.min(0xffff, p.assists)).u16(p.rating ?? NO_RATING).u16(p.newRating ?? NO_RATING);
   }
   for (const side of v.bans) {
     w.u8(Math.min(6, side.length));
     for (const op of side.slice(0, 6)) w.str(op);
   }
   optStr(w, v.site);
-  w.varu(v.carrier);
+  w.varu(v.carrier).u32(v.safeguardEnd >>> 0);
   const history = v.history.slice(-MAX_ROUNDS);
   w.u8(history.length);
   for (const h of history) w.u8(Math.min(255, h.round)).u8(h.attackers).u8(h.winner).u8(h.reason).str(h.site);
@@ -316,9 +328,9 @@ export function decodeMatchState(r: ByteReader): MatchView {
     const t = team(r.u8());
     const pf = r.u8();
     const side = r.u8();
-    if (pf > 7 || side > 2) throw new ProtocolError("bad player");
-    const [operator, spawn, banVote, siteVote] = [readOpt(r), readOpt(r), readOpt(r), readOpt(r)];
-    const [kills, deaths, assists, rating] = [r.u16(), r.u16(), r.u16(), r.u16()];
+    if (pf > 15 || side > 2) throw new ProtocolError("bad player");
+    const [operator, spawn, banVote, siteVote, locked] = [readOpt(r), readOpt(r), readOpt(r), readOpt(r), readOpt(r)];
+    const [kills, deaths, assists, rating, newRating] = [r.u16(), r.u16(), r.u16(), r.u16(), r.u16()];
     players.push({
       id,
       name,
@@ -326,15 +338,18 @@ export function decodeMatchState(r: ByteReader): MatchView {
       ready: (pf & PF.ready) !== 0,
       connected: (pf & PF.connected) !== 0,
       alive: (pf & PF.alive) !== 0,
+      safe: (pf & PF.safe) !== 0,
       side: side === 2 ? null : (side as 0 | 1),
       operator,
       spawn,
       banVote,
       siteVote,
+      locked,
       kills,
       deaths,
       assists,
       rating: rating === NO_RATING ? null : rating,
+      newRating: newRating === NO_RATING ? null : newRating,
     });
   }
   const bans: [string[], string[]] = [[], []];
@@ -345,6 +360,7 @@ export function decodeMatchState(r: ByteReader): MatchView {
   }
   const site = readOpt(r);
   const carrier = r.varu();
+  const safeguardEnd = r.u32();
   const h = r.u8();
   if (h > MAX_ROUNDS) throw new ProtocolError("history too long");
   const history: RoundRecord[] = Array.from({ length: h }, () => ({ round: r.u8(), attackers: team(r.u8()), winner: team(r.u8()), reason: reason(r.u8()), site: r.str(MAX_ID) }));
@@ -387,6 +403,7 @@ export function decodeMatchState(r: ByteReader): MatchView {
     site,
     siteRevealed: (f & F.siteRevealed) !== 0,
     carrier,
+    safeguardEnd,
     history,
     winner: wv === 2 ? null : (wv as Team),
     forfeit: (f & F.forfeit) !== 0,

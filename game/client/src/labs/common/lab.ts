@@ -164,6 +164,8 @@ export interface LabApi extends LabHandle {
   onKey(code: string, fn: () => void): void;
   /** A button under Lab tools in the pause menu, and a row in the help panel. */
   addLabTool(label: string, run: () => void): void;
+  /** Match pages: a button in the pause menu's room section while `label()` gives one (null: not now). */
+  addMatchTool(label: () => string | null, run: () => void): void;
   addHelp(keys: string, what: string): void;
   /** A short message in the middle of the screen. */
   flash(text: string, kind: "bad" | "info"): void;
@@ -269,6 +271,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     frame: [] as ((now: number, renderTick: number) => void)[],
     keys: new Map<string, () => void>(),
     tools: [] as { label: string; run: () => void }[],
+    matchTools: [] as { label: () => string | null; run: () => void }[],
     help: [] as [string, string][],
   };
   /** A match page's camera while you have no living body (LabApi.spectate). */
@@ -680,7 +683,11 @@ export async function startLab(o: LabOptions): Promise<void> {
         <label>Simulated loss <select data-net="lossPct">${[0, 0.5, 1, 2, 5].map((p) => `<option value="${p}" ${p === conditions.lossPct ? "selected" : ""}>${p ? `${p} % (a 200 ms stall each)` : "Off"}</option>`).join("")}</select></label>`;
     const room = o.match
       ? `<section><h3>Room ${net!.session.roomCode}</h3>
-        <div class="goto"><button class="invite">Copy invite link</button><button class="leave">Leave the match</button></div>${conditionSelects}</section>`
+        <div class="goto"><button class="invite">Copy invite link</button>${hooks.matchTools
+          .map((t, i) => [t.label(), i] as const)
+          .filter(([label]) => label !== null)
+          .map(([label, i]) => `<button data-match-tool="${i}">${label}</button>`)
+          .join("")}<button class="leave">Leave the match</button></div>${conditionSelects}</section>`
       : local
       ? `<section><h3>Offline room</h3>${conditionSelects}
         <p class="note">This page runs a room of its own (no server): hits, downs and the dummies work exactly as online, and the latency settings above try lag compensation alone. <a href="${o.page}?online">Play online</a> to bring friends.</p></section>`
@@ -735,6 +742,12 @@ export async function startLab(o: LabOptions): Promise<void> {
       resume(e);
     });
     pause.querySelectorAll<HTMLButtonElement>("[data-tool]").forEach((b) => b.addEventListener("click", () => hooks.tools[Number(b.dataset.tool)].run()));
+    pause.querySelectorAll<HTMLButtonElement>("[data-match-tool]").forEach((b) =>
+      b.addEventListener("click", () => {
+        hooks.matchTools[Number(b.dataset.matchTool)].run();
+        togglePause(false); // a match screen comes next: the mouse stays free
+      }),
+    );
     pause.querySelector(".hurt-me")?.addEventListener("click", () => labHurt(30));
     pause.querySelector(".down-me")?.addEventListener("click", () => labHurt(possessed().state.hp || 1));
     pause.querySelector<HTMLSelectElement>(".op-select")?.addEventListener("change", (e) => pickOperator((e.target as HTMLSelectElement).value));
@@ -869,6 +882,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     onFrame: (fn) => hooks.frame.push(fn),
     onKey: (code, fn) => hooks.keys.set(code, fn),
     addLabTool: (label, run) => hooks.tools.push({ label, run }),
+    addMatchTool: (label, run) => hooks.matchTools.push({ label, run }),
     addHelp: (keys, what) => hooks.help.push([keys, what]),
     flash,
     body: livingBody,

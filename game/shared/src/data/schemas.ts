@@ -537,6 +537,8 @@ export const matchRulesSchema = z
     rounds: z.number().int().min(2).max(24).multipleOf(2).nullable(),
     /** The sides swap every this many regulation rounds. */
     swapEvery: z.number().int().min(1).max(24),
+    /** The team that attacks first: drawn from the room's seed, or the host's choice (Custom, match/DESIGN.md §4). */
+    firstAttack: z.enum(["random", "blue", "orange"]).default("random"),
     /**
      * At a tie after regulation: up to `rounds` more (an odd number, or null for no limit) until a team leads by
      * `winBy`; after the last one the team ahead wins. The sides swap going in, then every `swapEvery` (D-121).
@@ -647,6 +649,10 @@ export const SURFACES = [
   "INGREDIENT",
 ] as const;
 export type Surface = (typeof SURFACES)[number];
+
+/** The kinds of rotation hole a pre-setup cuts (research/oregon/common_setups.md's sizes; data/destruction.json). */
+export const ROTATION_HOLES = ["vault", "crouch"] as const;
+export type RotationHole = (typeof ROTATION_HOLES)[number];
 
 const vec3 = z.tuple([z.number(), z.number(), z.number()]);
 /**
@@ -818,6 +824,17 @@ export const levelSchema = z.strictObject({
         rooms: z.array(z.string()).min(1),
         bombs: z.array(z.strictObject({ id: z.string(), pos: vec3, room: z.string() })),
         plantMarginM: z.number().nonnegative(),
+        /**
+         * Quick Match's pre-setup (Phase 6 M5, match/DESIGN.md §9), put up as prep starts on top of the pool:
+         * panels reinforced on every section (a wall from the side of `from`, a room beside it; a hatch from its
+         * top) and rotation holes cut (data/destruction.json `rotationHoles`).
+         */
+        preSetup: z
+          .strictObject({
+            reinforce: z.array(z.strictObject({ panel: z.string(), from: z.string().optional() })),
+            holes: z.array(z.strictObject({ panel: z.string(), size: z.enum(ROTATION_HOLES) })),
+          })
+          .optional(),
       }),
     )
     .default([]),
@@ -930,6 +947,15 @@ export const destructionSchema = z.strictObject({
     rappelKickDamage: z.number().positive(),
     rappelThroughHp: z.number().nonnegative(),
   }),
+  /**
+   * The openings Quick Match's pre-setups cut in a site's walls (Phase 6 M5, match/DESIGN.md §9), by the kind a
+   * level site's `preSetup` names: centred across the wall, from `bottomM` to `topM` up it, through every layer
+   * but steel.
+   */
+  rotationHoles: z.record(
+    z.enum(ROTATION_HOLES),
+    z.strictObject({ widthM: metres, bottomM: z.number().nonnegative(), topM: metres }).refine((h) => h.topM > h.bottomM, "topM must be above bottomM"),
+  ),
 });
 export type DestructionData = z.infer<typeof destructionSchema>;
 

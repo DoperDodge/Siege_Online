@@ -345,6 +345,59 @@ describe("whole matches", () => {
     expect([p.match.round, p.match.phase]).toEqual([5, Phase.Planning]);
   });
 
+  it("Ranked: whoever played gets a new rating at the end (Elo on the teams' averages, D-124), theirs back in the lobby; a late joiner who never played isn't rated", () => {
+    const { match, at } = started("ranked", 2, 2);
+    const [b0, b1] = match.team(0).map((p) => p.id);
+    const [o0, o1] = match.team(1).map((p) => p.id);
+    match.players.get(b0)!.rating = 1200;
+    match.players.get(b1)!.rating = 1000;
+    // o0 never sent one: a new player's; o1's is the same.
+    match.players.get(o1)!.rating = 1000;
+    for (let r = 0; r < 3; r++) winRound(match, at, 0);
+    // Joining during the last round: they would play from the next one.
+    const late = match.addPlayer(50, "late")!;
+    late.rating = 1500;
+    winRound(match, at, 0);
+    expect([match.phase, match.winner]).toEqual([Phase.MatchEnd, 0]);
+    // 1100 against 1000: Blue was expected to win 64 %, so it gains 12 and Orange loses 12.
+    expect([b0, b1, o0, o1].map((id) => match.players.get(id)!.newRating)).toEqual([1212, 1012, 988, 988]);
+    expect(match.players.get(50)!.newRating).toBeNull();
+    expect(match.backToLobby(match.hostId)).toBeNull();
+    expect([b0, o0, 50].map((id) => [match.players.get(id)!.rating, match.players.get(id)!.newRating])).toEqual([[1212, null], [988, null], [1500, null]]);
+    // Unranked keeps no rating.
+    const u = started("unranked", 1, 1);
+    for (let r = 0; r < 4; r++) winRound(u.match, u.at, 0);
+    expect([...u.match.players.values()].map((p) => p.newRating)).toEqual([null, null]);
+  });
+
+  it("Custom: the host may pick the team that attacks first; otherwise the seed draws it", () => {
+    for (const [first, team] of [["blue", 0], ["orange", 1]] as const) {
+      for (const seed of [1, 2, 3]) {
+        const match = lobby("custom", 1, 1, seed);
+        expect(match.change(match.hostId, { kind: "rules", rules: { match: { ...match.mode.match, firstAttack: first } } })).toBeNull();
+        for (const p of match.players.values()) match.setReady(p.id, true);
+        expect("error" in match.start(match.hostId, 10)).toBe(false);
+        expect([match.firstAttackers, match.attackers]).toEqual([team, team]);
+      }
+    }
+    // The fixed formats draw it.
+    expect(new Set([1, 2, 3, 4, 5, 6].map((seed) => started("unranked", 1, 1, seed).match.firstAttackers))).toEqual(new Set([0, 1]));
+    expect(format("quick_match").match.firstAttack).toBe("random");
+  });
+
+  it("Practice: only its host ends it, with no winner; a format whose rounds end can't be ended", () => {
+    const { match, at } = started("practice", 1, 1);
+    winRound(match, at, 0);
+    const guest = [...match.players.keys()].find((id) => id !== match.hostId)!;
+    expect(match.end(guest, at.tick)).toEqual({ error: "Only the host can do that" });
+    const r = match.end(match.hostId, at.tick);
+    expect("error" in r ? r.error : r.map((e) => e.kind)).toEqual(["phase", "match"]);
+    expect([match.phase, match.winner, match.forfeit, match.history.length]).toEqual([Phase.MatchEnd, null, false, 1]);
+    expect(match.end(match.hostId, at.tick)).toEqual({ error: "No match is being played" });
+    const q = started("quick_match", 1, 1);
+    expect(q.match.end(q.match.hostId, q.at.tick)).toEqual({ error: "Only a Practice match can be ended" });
+  });
+
   it("a player who left comes back on a new connection with the same team and stats", () => {
     const { match } = started("unranked", 2, 2);
     const [a, mate] = match.sides[ATTACK];

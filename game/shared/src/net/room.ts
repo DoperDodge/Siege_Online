@@ -836,6 +836,7 @@ export class Room implements DirectorHost {
         if (!victim || victim.state.mode === PawnMode.Dead || victim.life !== shot.lives.get(body.pawnId)) continue;
         const friendly = victim.team === shot.team;
         if (friendly && !this.friendlyFireOn()) continue; // team damage off: no damage, no marker
+        if (this.director?.safeguarded(victim)) continue; // Quick Match's Attacker Safeguard: the same
         const by = { cause: shot.cause, attacker: shot, headshot: body.headshot };
         if (friendly && shot.m.reflect) {
           // Reverse friendly fire: the shooter takes it instead.

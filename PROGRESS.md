@@ -16,8 +16,32 @@ known issues, and what's next.
 | M2 Match rooms on the server: lobby, rounds with spawns, red walls, run-outs, elimination and time wins | ✅ a room runs a match: lobby, bodies only in prep and action, defenders at the site behind red walls (predicted), attackers at their spawn, run-outs, the kill plane, leavers; protocol 11 and the room list; tested with a 1v1 and a 2v3 through the real messages |
 | M3 The defuser: carry, drop, pick up, plant, disable, every win condition | ✅ hold F to plant (7 s, predicted) or disable (7 s), F to pick up, G to drop, dropped where the carrier goes down, a plant under way past the timer, a hatch broken under it, the last attacker downed after the plant; finding the site by sight |
 | M4 In the browser: Play page, lobby, ban and planning screen, HUD, scoreboard, round and match summaries | ✅ the Play page (create in any format, join by code, the open matches, your loadouts); the match page: lobby, ban vote, planning (operator, weapons and attachments, site vote or spawn, the defuser), HUD and markers, Tab scoreboard, round banner, summary; with no body the camera circles the map, waits at an attacker's spawn in prep, or follows a teammate after you die; browser test of a 1v1 and a 2v3 |
-| M5 Each format's details: Quick Match, Ranked rating, 1v1 attrition, Custom, Practice | ⏳ |
+| M5 Each format's details: Quick Match, Ranked rating, 1v1 attrition, Custom, Practice | ✅ Quick Match's pre-setups and attacker safeguard; Ranked's local rating with our tiers; 1v1's attrition on the planning screen; Custom's every rule (who attacks first too); Practice ended by its host; protocol 12 |
 | M6 Checks: a 10-round netsim match, browser tests of a 1v1 and a 2v3 match, docs, report | ⏳ |
+
+### What's done (M5: each format's details)
+- **Quick Match's pre-setups (D-128):** as prep starts, the site has two walls (or a wall and a hatch) reinforced and
+  its rotation holes cut, on top of the defenders' pool: Laundry/Supply the Laundry–Freezer and Supply–Bunker walls, a
+  vault hole Supply Closet–Laundry and a crouch hole Supply–Laundry; Kitchen/Dining the Kitchen–Meeting and
+  Dining–Small Tower walls, a vault hole Kitchen–Dining; Meeting/Kitchen the Stage's wall to the 1F Tower and hatch H5;
+  Kids'/Dorms the Kids'–Low Attic and Game Room–Walk-In walls, a vault hole Kids'–Dorms. They are the research's top
+  two reinforcements and its rotation holes per site (our derivation: open question 9). A vault hole is vaulted
+  through (Space), a crouch hole walked through crouched. Custom and Practice can switch pre-setups on.
+- **Quick Match's attacker safeguard (D-129):** for the first 10 s of action an attacker takes no damage from bullets
+  or the knife until they go into the building. The attackers' HUD counts their own down; the defenders' says how long
+  the attackers are safeguarded.
+- **Ranked's local rating (D-130):** your browser keeps your rating (1000 to start) and sends it in the lobby; at the
+  end everyone who played is rated (a win against an equal team is worth 16) and the summary shows each change. Our
+  own tiers, from Cadet to Colonel, show in the lobby, the summary and on the Play page next to Ranked.
+- **1v1's attrition:** on the planning screen the operator you won the last round with is greyed out ("won you the
+  last round").
+- **Custom (D-131):** the host also sets who attacks first (drawn, Blue or Orange), how the site is chosen and when
+  attackers learn it, overtime, bans, pre-setups, the attacker safeguard, red walls into action, friendly fire and
+  reverse friendly fire. Practice has the same settings without rounds and overtime.
+- **Practice:** its host ends it with *End practice* (on the planning screen, or in the pause menu): the summary, then
+  *Back to the lobby*.
+- **The match browser test on CI:** its 2v3 teamkill fired from the hip, and most such shots at 3.6 m miss; on a slow
+  runner the tries ran out. It aims down the sights now, and the first shot kills.
 
 ### What's done (your requests, 2026-10-29)
 - **Planting crouches you:** a standing planter crouches for the 7 s plant and stands back up after it (prone stays
@@ -65,7 +89,17 @@ known issues, and what's next.
    the page: it stays. In a match the planning screen has the same rows for the operator you pick.
 4. Planting: as an attacker, take the defuser on the planning screen, find the site in action and hold F inside
    it: you crouch for the 7 s and stand back up after.
-5. Checks: `npm run typecheck`, `npm test`, and `npm run build && node tools/e2e/match.mjs` (a 1v1 and a 2v3
+5. Quick Match (M5): create one with a friend (or a second window). As prep starts, the site's two walls (or a wall
+   and the hatch) already have steel and its rotation holes are open: at the Laundry, vault through the Supply
+   Closet's hole and walk crouched through the Supply's. In action an attacker can't be hurt for 10 s unless they go
+   in (the HUD counts it down for both sides).
+6. Ranked: the lobby shows each player's tier and rating; play it to the end and the summary shows each change (a
+   win against an equal team: +16). Your rating is kept in this browser; the Play page shows it next to Ranked.
+7. 1v1: win a round, and the next planning screen greys out the operator you won it with.
+8. Custom: in the lobby, the host picks who attacks first, the site, overtime, bans, pre-setups, the safeguard and
+   friendly fire, as well as the rounds and timers. Practice: play a few rounds alone or with a side empty, then *End
+   practice* (planning screen or pause menu).
+9. Checks: `npm run typecheck`, `npm test`, and `npm run build && node tools/e2e/match.mjs` (a 1v1 and a 2v3
    played in browsers from start to finish). `npm run check` runs everything.
 
 ---

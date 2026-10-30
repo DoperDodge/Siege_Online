@@ -485,7 +485,8 @@ lists) and in game/shared/src/match/DESIGN.md. A quick look in a match answers m
 4. **Overtime sides (D-121):** in round 7 (Ranked) and round 5 (Quick Match), which side does each team play? We swap
    going in, then every round.
 5. **Quick Match:** "revealed to attackers at round start": as prep starts (ours) or as action starts? Is the 10 s
-   Attacker Safeguard still in the game?
+   Attacker Safeguard still in the game? Ours (D-129) stops bullets and the knife, not a fall, until the attacker
+   goes into the building: does Siege's also stop explosives and gadgets, and does anything show who has it?
 6. **The defuser (D-120):** our keys are F (plant, disable, pick up) and G (drop). How close must a defender be to
    disable it (1.5 m placeholder), and must they face it (60°)? Do the planter and the defender hold still (yes,
    ours)? If nobody takes it, which attacker gets it ("highest defuser priority": what is that)? Can defenders see
@@ -495,6 +496,10 @@ lists) and in game/shared/src/match/DESIGN.md. A quick look in a match answers m
    cameras?
 8. **Leaving (D-123):** a player who leaves mid-round dies there and can come back for the next round. In Siege, what
    happens to a disconnected player's operator: does it stand there, or die?
+9. **Pre-setups (D-128):** in Quick Match on Oregon, which walls and hatches are reinforced when prep starts, and which
+   rotation holes are open, at each site? Ours are each site's first two reinforcements and its rotation holes from
+   research/oregon/common_setups.md (our derivation), on top of the pool: a vault hole 1.0 m wide from 0.8 m to 2.0 m
+   up and a crouch hole 1.0 m wide up to 1.5 m. Are Siege's taken from the pool, and how big are its holes?
 
 ### [core_mechanics.md](core_mechanics.md) — 16
 

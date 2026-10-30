@@ -50,3 +50,4 @@ export * from "./match/outcome.js";
 export * from "./match/objective.js";
 export * from "./match/settings.js";
 export * from "./match/match.js";
+export * from "./match/preSetup.js";
