@@ -178,6 +178,26 @@ describe("drones (Phase 7 M1)", () => {
   });
 });
 
+describe("a drone and a door barricade (Phase 7 M1)", () => {
+  it("drives under one put up in a door: its 0.15 m gap opens 0.2 m for movement (no body is that low)", async () => {
+    const { sim, c, d1, step } = await attacker("oregon", "C_CONSTRUCTION");
+    const e = sim.level.panels.list.find((x) => x.panel.kind === "barricade" && x.frame.h > 1.5)!;
+    sim.level.panels.apply(e.panel.spec.index, { kind: "barricade", up: true });
+    expect(e.panel.empty).toBe(false);
+    const [nx, , nz] = e.frame.n;
+    const [cx, cy, cz] = e.frame.center;
+    const bottom = cy - e.frame.h / 2;
+    const yawDeg = (Math.atan2(-nx, -nz) * 180) / Math.PI; // facing along the normal
+    press(step, Btn.Observe);
+    step({}, 32);
+    sim.placeDrone(d1.id, cx - nx * 0.6, bottom + 0.02, cz - nz * 0.6, yawDeg);
+    c.drone = d1.id;
+    step({ yawDeg }, 8);
+    step({ forward: 1, yawDeg }, 64);
+    expect((d1.state.x - cx) * nx + (d1.state.z - cz) * nz).toBeGreaterThan(0.4);
+  });
+});
+
 describe("a drone's view (Phase 7 M1)", () => {
   it("is at its camera, low over the floor, tilting within its limits", async () => {
     const { sim, d1, step } = await attacker();

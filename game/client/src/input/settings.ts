@@ -27,6 +27,8 @@ export interface Keybinds {
   melee: string;
   /** Drop the defuser (Phase 6, match/DESIGN.md §8). */
   drop: string;
+  /** Drones (Phase 7, intel/DESIGN.md §2): throw one or go to one out; back to the body. */
+  observe: string;
 }
 
 export interface Settings {
@@ -80,6 +82,7 @@ export const DEFAULT_SETTINGS: Settings = {
     fireMode: "KeyB",
     melee: "KeyV",
     drop: "KeyG",
+    observe: "Digit5",
   },
 };
 

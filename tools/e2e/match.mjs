@@ -4,14 +4,14 @@
 // through its input, and Blue to attack first through its select), both ready up and the host starts. Each team bans
 // one of the other side's operators; on the planning screen the banned one is greyed out, each player picks an
 // operator (the defender one, then 160 ms later another, over a slow link: the second stays), the defender votes for
-// the Dining site and the attacker picks the B Street spawn and takes the defuser.
-// In prep the defender is at that site and the attacker waits at the spawn's view; in action the attacker is at B
-// Street carrying the defuser; the defenders win on time, the banner says so, the sides swap for round 2, and after
-// it the summary has both rounds; the host takes everyone back to the lobby. 2v3: five players (three on Blue, two on
-// Orange; some never pick and get an operator anyway, one per team each); in action a defender shoots a teammate down
-// the sights (friendly fire on, reverse friendly fire off), who then looks through a living teammate's eyes, and the
-// scoreboard counts the death; the match ends with the summary. Also: a loadout set on the Play page is kept, and a
-// sight fitted on the planning screen is carried into action.
+// the Dining site and the attacker picks the B Street spawn and takes the defuser. In prep the defender is at that
+// site and the attacker drives their first drone from the spawn (the defender's page has it); in action the attacker
+// is at B Street carrying the defuser; the defenders win on time, the banner says so, the sides swap for round 2, and
+// after it the summary has both rounds; the host takes everyone back to the lobby. 2v3: five players (three on Blue,
+// two on Orange; some never pick and get an operator anyway, one per team each); in action a defender shoots a
+// teammate down the sights (friendly fire on, reverse friendly fire off), who then looks through a living teammate's
+// eyes, and the scoreboard counts the death; the match ends with the summary. Also: a loadout set on the Play page is
+// kept, and a sight fitted on the planning screen is carried into action.
 // Requires `npm run build` first. Screenshots go to builds/e2e.
 import { spawn } from "node:child_process";
 import { mkdirSync, readFileSync } from "node:fs";
@@ -196,18 +196,32 @@ try {
   result.oneVsOne.planning = { attacker: [attMe.operator, attMe.spawn, v.carrier === attMe.id], defender: [me(defV).operator, me(defV).siteVote] };
   result.checks.planningChoicesTaken = attMe.operator !== null && attMe.spawn === SPAWN && v.carrier === attMe.id && me(defV).operator !== null && me(defV).siteVote === SITE;
 
-  // Prep: the defender at the voted site's spawn, the attacker without a body at the spawn's view (the planning screen up).
+  // Prep: the defender at the voted site's spawn; the attacker drives their first drone, out at their spawn (Phase 7),
+  // with the planning screen up while the mouse is free.
   await phase(a, P.Prep, 30000);
   await def1.waitForFunction(() => window.__lab.net.own !== null && !window.__match.spectating, null, { timeout: 20000 });
-  // Each page sees the phase change on its own next frame: wait on the attacker's own page for its prep camera.
-  await att1.waitForFunction(() => window.__match.view.phase === 3 && window.__match.camera?.kind === "spot", null, { timeout: 10000 }).catch(() => {});
+  // Each page sees the phase change on its own next frame: wait on the attacker's own page for its drone.
+  await att1.waitForFunction(() => window.__match.view.phase === 3 && window.__lab.net?.viewedKind === 1 && window.__lab.net.own !== null, null, { timeout: 10000 }).catch(() => {});
   const siteSpawns = lvl.spawns.filter((s) => s.group === SITE);
   const defAt = await own(def1);
-  result.oneVsOne.prep = { defenderAt: defAt && [defAt.x, defAt.y, defAt.z], attackerCamera: await att1.evaluate(() => window.__match.camera), screen: await att1.evaluate(() => window.__match.screen) };
+  const droneAt = await own(att1);
+  result.oneVsOne.prep = { defenderAt: defAt && [defAt.x, defAt.y, defAt.z], attackerDrone: droneAt && [droneAt.x, droneAt.y, droneAt.z], screen: await att1.evaluate(() => window.__match.screen) };
   result.checks.defenderAtTheSite = siteSpawns.some((s) => near(defAt, s.pos, 1));
-  const cam = result.oneVsOne.prep.attackerCamera;
   const spawnSpot = lvl.spawns.find((s) => s.group === SPAWN);
-  result.checks.attackerWaitsAtTheSpawn = cam?.kind === "spot" && Math.hypot(cam.pos[0] - spawnSpot.pos[0], cam.pos[2] - spawnSpot.pos[2]) < 0.01 && result.oneVsOne.prep.screen === "planning";
+  result.checks.attackerDronesFromTheSpawn =
+    droneAt !== null && (await att1.evaluate(() => window.__lab.net.viewedKind)) === 1 && Math.hypot(droneAt.x - spawnSpot.pos[0], droneAt.z - spawnSpot.pos[2]) < 0.5 && result.oneVsOne.prep.screen === "planning";
+  // Driving it online: a second of W moves it, and the defender's page has it.
+  const droneId = await att1.evaluate(() => window.__lab.net.pawnId);
+  await att1.evaluate((yaw) => (window.__lab.input = { yaw, forward: 1 }), (spawnSpot.yawDeg * Math.PI) / 180);
+  await sleep(1000);
+  await att1.evaluate(() => (window.__lab.input = null));
+  await sleep(300);
+  const droveTo = await own(att1);
+  result.oneVsOne.prep.droneDroveTo = droveTo && [droveTo.x, droveTo.y, droveTo.z];
+  result.checks.attackerDrivesTheDrone = droveTo !== null && droneAt !== null && Math.hypot(droveTo.x - droneAt.x, droveTo.z - droneAt.z) > 1;
+  result.checks.defenderSeesTheDrone = await def1
+    .waitForFunction((id) => window.__lab.net.remotes.some((r) => r.id === id && r.state !== null), droneId, { timeout: 5000 })
+    .then(() => true, () => false);
   result.checks.redWallsInPrep = (await view(def1)).redWalls === true;
   await att1.screenshot({ path: shot("match-prep-attacker.png") });
   await def1.screenshot({ path: shot("match-prep-defender.png") });

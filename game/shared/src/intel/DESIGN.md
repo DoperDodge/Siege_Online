@@ -43,7 +43,7 @@ the body stands at the chosen spawn and drone 1 stays where it was parked (I:45,
 
 **Controls (our keys, flagged; Siege's own PC keys are an open question):**
 - **Observe (5):** in the body with a drone held, throw it (it lands about a metre ahead, rolling) and drive it; with
-  none held, drive the last one out; in a drone, back to the body (the drone stays put). Downed: nothing (I:234,
+  none held, drive the first one out; in a drone, back to the body (the drone stays put). Downed: nothing (I:234,
   placeholder).
 - **Driving:** W/A/S/D at full speed in every direction (I:31), the mouse turns and tilts the view, Space jumps (once
   per `jumpCooldownS`), Shift boosts while the boost lasts. Lean left / right (Q / E) goes to the previous / next of

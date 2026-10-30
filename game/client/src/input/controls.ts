@@ -74,6 +74,12 @@ export class Controls {
   private fireModePulse = false;
   private meleePulse = false;
   private dropPulse = false;
+  private observePulse = false;
+  /**
+   * On a drone (Phase 7) the lean keys are held, whatever the lean setting: a new press goes to the previous / next
+   * drone out.
+   */
+  onDrone: () => boolean = () => false;
   /** The weapon slot asked for with 1 / 2 / the wheel, until the simulation is holding it. */
   private wantSlot: 0 | 1 | null = null;
   private sentSwap = false;
@@ -293,6 +299,9 @@ export class Controls {
       case "drop":
         this.dropPulse = true;
         break;
+      case "observe":
+        this.observePulse = true;
+        break;
       case "primary":
         this.wantSlot = 0;
         break;
@@ -347,6 +356,7 @@ export class Controls {
     if (this.fireModePulse) buttons |= Btn.FireMode;
     if (this.meleePulse) buttons |= Btn.Melee;
     if (this.dropPulse) buttons |= Btn.Drop;
+    if (this.observePulse) buttons |= Btn.Observe;
     // Weapon slot: one swap press, sent only while the slot differs and no swap is already under way
     // (a press then would be ignored); released for a tick in between so the next press is a new one.
     const ws = this.weaponState();
@@ -364,6 +374,7 @@ export class Controls {
     this.fireModePulse = false;
     this.meleePulse = false;
     this.dropPulse = false;
+    this.observePulse = false;
 
     const s = this.settings;
     let stance = this.stanceIntent;
@@ -371,7 +382,7 @@ export class Controls {
     else if (s.crouchMode === "hold" && this.held.has("crouch")) stance = Stance.Crouch;
 
     let lean: -1 | 0 | 1 = this.leanIntent;
-    if (s.leanMode === "hold") {
+    if (s.leanMode === "hold" || this.onDrone()) {
       const l = this.held.has("leanLeft");
       const r = this.held.has("leanRight");
       lean = l && r ? this.lastLeanHold : l ? -1 : r ? 1 : 0;

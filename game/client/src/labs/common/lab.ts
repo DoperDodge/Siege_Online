@@ -13,6 +13,7 @@ import {
   BARRELS,
   defaultLoadoutPick,
   encodePickLoadout,
+  droneEye,
   eyePose,
   GRIPS,
   isDowned,
@@ -24,6 +25,7 @@ import {
   lerp,
   loadedOf,
   loadGameData,
+  PawnKind,
   PawnMode,
   poseHitboxes,
   proneWeight,
@@ -216,6 +218,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     <div class="flash"></div>
     <div class="prompt hidden"></div>
     <div class="shellcam hidden"><div class="shellcam-title"></div><div class="swap-bar"><div></div></div></div>
+    <div class="dronecam hidden"><div class="dronecam-title"></div></div>
     <div class="down-ui hidden"><div class="down-title"></div><div class="down-bar"><div></div></div></div>
     <div class="revive-ui hidden"><div class="revive-title"></div><div class="revive-bar"><div></div></div></div>
     <div class="center-msg hidden"></div>
@@ -359,6 +362,7 @@ export async function startLab(o: LabOptions): Promise<void> {
   controls.setView(sim.pawns.get(ctrl.possessedPawnId)?.state.yaw ?? 0, 0);
   controls.attach(renderer.domElement);
   controls.isBlocked = () => !$(".pause").classList.contains("hidden") || !$(".help").classList.contains("hidden");
+  controls.onDrone = () => sim.pawns.get(sim.viewedPawnId(ctrl.id))?.kind === PawnKind.Drone;
   controls.stanceLocked = () => {
     const p = sim.pawns.get(ctrl.possessedPawnId);
     return ctrl.shellCam || ctrl.swapPhase !== 0 || (p !== undefined && isDowned(p.state)); // down: the body decides
@@ -978,6 +982,8 @@ export async function startLab(o: LabOptions): Promise<void> {
     controls.limits = proneView
       ? { pitchMin: mv.stance.pronePitchMinDeg * DEG, pitchMax: mv.stance.pronePitchMaxDeg * DEG, maxYawStep: mv.stance.proneTurnRateDeg * DEG * DT }
       : { pitchMin: mv.look.pitchMinDeg * DEG, pitchMax: mv.look.pitchMaxDeg * DEG, maxYawStep: null };
+    // A drone's camera tilts within its own limits (data/intel.json).
+    if (v.kind === PawnKind.Drone) controls.limits = { pitchMin: data.intel.drone.pitchMinDeg * DEG, pitchMax: data.intel.drone.pitchMaxDeg * DEG, maxYawStep: null };
     // On a rope the view turns only so far from the wall, and moving onto it, the move turns it.
     controls.limits.yawRange = ropeYawRange(sim.level, data, v.state);
     if (freeCam) controls.limits = { pitchMin: -89 * DEG, pitchMax: 89 * DEG, maxYawStep: null };
@@ -1082,8 +1088,15 @@ export async function startLab(o: LabOptions): Promise<void> {
       if (storeyView?.follow(vx, vy, vz, controls.yaw, elapsed)) renderer.shadowMap.needsUpdate = true;
       if (storeyView) viewmodel.setLight(storeyView.light());
       whereHud?.update(now, storeyView?.storey ?? 0, vx, vz);
-      aim(viewed!, rs);
-      const eye = eyePose(data.movement, data.hitboxes, { ...rs, yaw: controls.yaw });
+      // A drone's camera: low at its front, its own field of view (Phase 7).
+      const droneView = viewed!.kind === PawnKind.Drone;
+      if (droneView) {
+        if (Math.abs(camera.fov - data.intel.drone.fovDeg) > 1e-4) {
+          camera.fov = data.intel.drone.fovDeg;
+          camera.updateProjectionMatrix();
+        }
+      } else aim(viewed!, rs);
+      const eye = droneView ? { pos: droneEye(data.intel.drone, rs).pos, roll: 0 } : eyePose(data.movement, data.hitboxes, { ...rs, yaw: controls.yaw });
       // Only the first-person view turns over with the body (the third-person and plan views stay upright).
       controls.upsideDown = !freeCam && !thirdPerson && !storeyView?.plan && upsideDown(rs);
       if (freeCam) {
@@ -1177,6 +1190,8 @@ export async function startLab(o: LabOptions): Promise<void> {
   /** The spectator view for this frame, or null while you have a living body (or a fresh death) to look through. */
   function spectating(live: boolean): SpectateView | null {
     if (disconnected || !net?.session.match) return null;
+    // Driving a drone (dead or not): its camera.
+    if (live && ctrl.drone && sim.pawns.get(ctrl.drone)?.state.mode === PawnMode.Walk) return null;
     const p = live ? possessed() : undefined;
     if (p && p.state.mode !== PawnMode.Dead) {
       deadSince = null;
@@ -1271,7 +1286,7 @@ export async function startLab(o: LabOptions): Promise<void> {
   // ------------------------------------------------------------------ HUD
 
   const STANCE_NAMES = ["STAND", "CROUCH", "PRONE"];
-  const MODE_NAMES = ["", "VAULT", "LADDER", "DEAD", "", "RAPPEL"];
+  const MODE_NAMES = ["", "VAULT", "LADDER", "DEAD", "", "RAPPEL", ""];
   function updateHud(p: Pawn) {
     const s = p.state;
     $(".op-name").textContent = `${op.name} · ${op.side} · ${op.healthRating} health / ${op.speedRating} speed${op.pawns > 1 ? ` · shell ${ctrl.pawnIds.indexOf(p.id) + 1}/2` : ""}`;
@@ -1338,11 +1353,33 @@ export async function startLab(o: LabOptions): Promise<void> {
                         ? `Hold ${keyLabel(k.interact)} to disable the defuser`
                         : prompt === "pickUp"
                           ? `${keyLabel(k.interact)} to pick up the defuser`
+                          : prompt === "pickUpDrone"
+                            ? `${keyLabel(k.interact)} to pick up your drone`
                           : "";
     $(".prompt").textContent = promptText;
     $(".prompt").classList.toggle("hidden", !promptText || dead);
     const onCam = ctrl.shellCam || ctrl.swapPhase !== 0;
     $(".shellcam").classList.toggle("hidden", !onCam);
+    // On a drone (Phase 7): which one, its jump and boost, the keys.
+    const drone = sim.pawns.get(sim.viewedPawnId(ctrl.id));
+    const onDrone = drone?.kind === PawnKind.Drone;
+    $(".dronecam").classList.toggle("hidden", !onDrone);
+    if (onDrone) {
+      const drones = sim.dronesOf(ctrl);
+      const held = drones.filter((d) => d.state.mode === PawnMode.Held).length;
+      const ds = drone.state;
+      const secs = (t: number) => `${(t * DT).toFixed(1)} s`;
+      const bodyBack = drone.id !== ctrl.possessedPawnId;
+      $(".dronecam-title").textContent = [
+        `DRONE ${drones.indexOf(drone) + 1}/${drones.length}${held ? ` · ${held} held` : ""}`,
+        ds.mode === PawnMode.Dead ? "DESTROYED" : "",
+        `${keyLabel(k.vault)} jump ${ds.jumpCd ? secs(ds.jumpCd) : "ready"}`,
+        `${keyLabel(k.sprint)} boost ${ds.boostTicks ? "ON" : ds.boostCd ? secs(ds.boostCd) : "ready"}`,
+        bodyBack ? `${keyLabel(k.leanLeft)} / ${keyLabel(k.leanRight)} switch · ${keyLabel(k.observe)} back` : "",
+      ]
+        .filter(Boolean)
+        .join("  ·  ");
+    }
     if (onCam) {
       const params = op.ability.params;
       const dur = ctrl.swapPhase === 1 ? params.transferSeconds : params.activationSeconds;
@@ -1437,6 +1474,9 @@ export async function startLab(o: LabOptions): Promise<void> {
           /** What your body carries (operator, weapons and attachments). */
           loadout: possessed()?.loadout?.pick ?? null,
           pawnId: ctrl.possessedPawnId,
+          /** The drone driven (Phase 7; 0: none), and the kind of pawn the camera looks through (1: a drone). */
+          drone: ctrl.drone,
+          viewedKind: sim.pawns.get(sim.viewedPawnId(ctrl.id))?.kind ?? null,
           frames,
           lastShot,
           events: [...recentEvents],
@@ -1932,7 +1972,10 @@ export async function startLab(o: LabOptions): Promise<void> {
         drawnView.delete(id);
       }
     for (const pawn of sim.pawns.values())
-      if (!pawnViews.has(pawn.id)) pawnViews.set(pawn.id, pawn.proxy ? new PawnView(scene, 0xf97316, nameOfPawn(pawn.id) || undefined) : new PawnView(scene, 0x3b82f6));
+      if (!pawnViews.has(pawn.id)) {
+        const size = data.intel.drone.sizeM;
+        pawnViews.set(pawn.id, pawn.proxy ? new PawnView(scene, 0xf97316, nameOfPawn(pawn.id) || undefined, undefined, pawn.kind, size) : new PawnView(scene, 0x3b82f6, undefined, undefined, pawn.kind, size));
+      }
   }
 
   /** Remember which frame was on screen at a click: the next input claims it (lag compensation rewinds to it). */

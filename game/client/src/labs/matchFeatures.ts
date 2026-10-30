@@ -12,6 +12,7 @@ import {
   encodeMatchAction,
   encodePickLoadout,
   NO_END,
+  PawnKind,
   PawnMode,
   Phase,
   RATING_START,
@@ -687,7 +688,8 @@ export function matchFeatures(lab: LabApi): void {
     }
 
     // The screen: the lobby, the ban vote, the planning screen (and an attacker's prep, while the mouse is free), the summary.
-    const prepAttacker = v.phase === Phase.Prep && me?.side === ATTACK && lab.body() === null;
+    // An attacker in prep drives their first drone (Phase 7); with the mouse free the planning screen is up.
+    const prepAttacker = v.phase === Phase.Prep && me?.side === ATTACK && (lab.body() === null || lab.body()!.kind === PawnKind.Drone);
     const which =
       v.phase === Phase.Lobby
         ? "lobby"
@@ -762,6 +764,10 @@ export function matchFeatures(lab: LabApi): void {
   lab.addMatchTool(() => (session.match && practiceHost(session.match) ? "End practice" : null), () => lobby({ kind: "end" }));
   lab.addHelp("<kbd>Tab</kbd>", "Scoreboard (hold)");
   lab.addHelp(`<kbd>${keyLabel(keys.drop)}</kbd>`, "Drop the defuser (attackers)");
+  lab.addHelp(
+    `<kbd>${keyLabel(keys.observe)}</kbd>`,
+    `Drones (attackers): throw one, or go to one out, and back; on one ${keyLabel(keys.leanLeft)} / ${keyLabel(keys.leanRight)} switch, ${keyLabel(keys.vault)} jumps, ${keyLabel(keys.sprint)} boosts`,
+  );
   lab.addHelp("Left mouse (dead)", "Look through the next teammate still alive");
 
   // Browser tests drive the match through this as well as the screens' buttons (tools/e2e/match.mjs).

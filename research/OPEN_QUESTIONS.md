@@ -515,6 +515,8 @@ The intel questions above (drone numbers, camera limits, pings, the wheel) stay 
 5. **One camera, two viewers (D-134):** ours gives each viewer their own view. In Siege, when two defenders watch one
    camera, who turns it?
 6. **The comm wheel:** past Breach, Area Clear, Help, Danger and Thanks, which callouts are on it?
+7. **Drones and stairs:** ours climb only 5 cm ledges without a jump, so each stair step takes one. Does a Siege drone
+   drive up stairs?
 
 ### [core_mechanics.md](core_mechanics.md) — 16
 
