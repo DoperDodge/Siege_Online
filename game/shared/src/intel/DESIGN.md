@@ -91,6 +91,21 @@ it): a 0.75 m burst that disables drones
 (and later gadgets) for a while (placeholder), recharging (placeholder). Outdoors it loses its signal after 10 s.
 Reinforcing the wall it sits on breaks it (CSV:337). It joins the defenders' feed list.
 
+**Built (M5, D-136):** a loadout with it gets `count` in the body's `gadgets` at each spawn; holding the gadget key (3,
+ours; `Btn.Gadget`) `placeS` while looking at a wall or the floor within `reachM` places it (a hold like reinforcing,
+predicted, the body still; held, it starts once the view is on a spot). On a wall it faces out of it; on the floor
+it faces the placer's way and turns all the way round. The room keeps the round's in the match rules (`bpCams`,
+float32 so a client turns its view exactly as the server does), sent with the match state (protocol 14); defenders
+watch them after the level's cameras, in `bulletproofCamera.view`'s limits. A bullet within `frontDeg` of straight at
+its front meets the plate; from the side or the back it breaks it; a knife breaks it (Siege's only shatters the
+glass, but with no sound yet that is the same for us); steel going up on its panel breaks it. **Deviation
+(flagged):** like a default camera it doesn't stop the bullet. Outdoors (outside every room of the level) its feed
+ends `outdoorSignalS` after it's placed. The dart: the gadget key pressed while watching it, alive, when it's ready;
+it flies along the view up to `dartRangeM`, bursts on the first enemy drone on its way (or the level) and jams every
+enemy drone within `dartRadiusM` for `disableS` (the drone's `jammed`: it ignores its driver; its owner gets a
+correction); ready again `dartRechargeS` later, whoever fires it. The thermal view is the client's: bodies glow white,
+the world tinted green. Not built: picking it up again, sound, smoke (Phase 8).
+
 ## 5. The feed list
 
 Attackers: their own drones out (drivable), then teammates' drones (view only: turn the view, no driving, I:49).

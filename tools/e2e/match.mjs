@@ -7,12 +7,12 @@
 // and the attacker picks the B Street spawn and takes the defuser. In prep the defender is at that site and the
 // attacker drives their first drone from the spawn (the defender's page has it), and the defender goes round the
 // cameras; in action the attacker is at B Street carrying the defuser, and pings (their page marks it, the defender's
-// has nothing); the defenders win on time, the banner says so, the sides swap for round 2, and after it the summary has
-// both rounds; the host takes everyone back to the lobby. 2v3: five players (three on Blue, two on Orange; some never
-// pick and get an operator anyway, one per team each); in action a defender shoots a teammate down the sights (friendly
-// fire on, reverse friendly fire off), who then looks through a living teammate's eyes, and the scoreboard counts the
-// death; the match ends with the summary. Also: a loadout set on the Play page is kept, and a sight fitted on the
-// planning screen is carried into action.
+// has nothing); the defenders win on time, the banner says so, the sides swap for round 2 (where the new defender
+// places a Bulletproof Camera and watches it), and after it the summary has both rounds; the host takes everyone back
+// to the lobby. 2v3: five players (three on Blue, two on Orange; some never pick and get an operator anyway, one per
+// team each); in action a defender shoots a teammate down the sights (friendly fire on, reverse friendly fire off), who
+// then looks through a living teammate's eyes, and the scoreboard counts the death; the match ends with the summary.
+// Also: a loadout set on the Play page is kept, and a sight fitted on the planning screen is carried into action.
 // Requires `npm run build` first. Screenshots go to builds/e2e.
 import { spawn } from "node:child_process";
 import { mkdirSync, readFileSync } from "node:fs";
@@ -287,10 +287,27 @@ try {
   result.checks.defendersWinOnTime = r1 !== undefined && r1.reason === 1 && r1.winner !== r1.attackers && /WINS ROUND 1/.test(banner) && /Time ran out/.test(banner);
   await a.screenshot({ path: shot("match-round-end.png") });
 
-  // Round 2: the sides swap.
+  // Round 2: the sides swap. The new defender takes a Bulletproof Camera (Mute, or Sentry if Mute is banned: theirs is
+  // in the default kit), places it on the floor in front of them in action, and watches it after the level's cameras
+  // (Phase 7 M5).
   await a.waitForFunction(() => window.__match.view.round === 2 && window.__match.view.phase === 2, null, { timeout: 30000 });
   v = await view(a);
   result.checks.sidesSwap = v.attackers !== r1.attackers;
+  const def2 = att1;
+  const bpOp = await def2
+    .waitForFunction(() => ["mute", "sentry"].find((op) => document.querySelector(`.match-screen [data-act=op][data-op="${op}"]:not([disabled])`)) ?? false, null, { timeout: 10000 })
+    .then((h) => h.jsonValue(), () => null);
+  if (bpOp) await def2.click(`.match-screen [data-act=op][data-op="${bpOp}"]`);
+  await phase(a, P.Action, 60000);
+  await def2.waitForFunction(() => window.__lab.net.own !== null && !window.__match.spectating && window.__lab.net.gadgets > 0, null, { timeout: 20000 }).catch(() => {});
+  const placedBp = await holdUntil(def2, { buttons: 1 << 12, pitch: -1.05 }, () => window.__match.view.bpCams.length === 1);
+  const watchedBp =
+    placedBp &&
+    (await holdUntil(def2, { buttons: OBSERVE }, () => window.__lab.net.cam === 1)) &&
+    (await holdUntil(def2, { lean: -1 }, (n) => window.__lab.net.cam === n, lvl.cameras.length + 1));
+  await def2.screenshot({ path: shot("match-bulletproof-camera.png") });
+  result.oneVsOne.round2 = { operator: bpOp, placed: placedBp, watched: watchedBp };
+  result.checks.bulletproofCameraPlacedAndWatched = bpOp !== null && placedBp && watchedBp;
   await phase(a, P.MatchEnd, 120000);
   await a.waitForFunction(() => window.__match.screen === "summary", null, { timeout: 10000 });
   v = await view(a);

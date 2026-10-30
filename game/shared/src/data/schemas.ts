@@ -634,6 +634,15 @@ export const objectiveSchema = z.strictObject({
 });
 export type ObjectiveData = z.infer<typeof objectiveSchema>;
 
+/** A camera's view (Phase 7): how far it turns either side of its facing, how far it tilts, how fast, how wide it sees. */
+const cameraViewSchema = z.strictObject({
+  yawHalfRangeDeg: z.number().positive().max(180),
+  pitchMinDeg: z.number().min(-89).max(0),
+  pitchMaxDeg: z.number().min(0).max(89),
+  turnDegPerS: z.number().positive(),
+  fovDeg: z.number().positive().max(170),
+});
+
 /** Intel (data/intel.json; intel/DESIGN.md): drones, default cameras, scans, pings, the Bulletproof Camera. Metres, seconds, degrees. */
 export const intelSchema = z.strictObject({
   ...meta,
@@ -663,21 +672,28 @@ export const intelSchema = z.strictObject({
     /** Its owner picks it up from this close (F). */
     pickupReachM: z.number().positive(),
   }),
-  camera: z.strictObject({
-    yawHalfRangeDeg: z.number().positive().max(180),
-    pitchMinDeg: z.number().min(-89).max(0),
-    pitchMaxDeg: z.number().min(0).max(89),
-    turnDegPerS: z.number().positive(),
-    fovDeg: z.number().positive().max(170),
-  }),
+  camera: cameraViewSchema,
   /** Holding Fire on a drone or a camera spots an enemy this close and this near the crosshair, in sight. */
   scan: z.strictObject({ holdS: z.number().positive(), coneDeg: z.number().positive().max(90), rangeM: z.number().positive() }),
   /** A ping lasts `seconds`; pings closer than `cooldownS` are dropped; two within `doubleTapS` make a danger ping. */
   ping: z.strictObject({ seconds: z.number().positive(), cooldownS: z.number().min(0), perPlayer: z.number().int().positive(), doubleTapS: z.number().positive() }),
   /** The comm wheel's callouts, in order round the wheel (at most 16). */
   callouts: z.array(z.string().min(1).max(24)).min(1).max(16),
+  /**
+   * The Bulletproof Camera (Phase 7 M5): `count` each for a defender who picked it, placed by holding the gadget key
+   * `placeS` at a wall or the floor within `reachM`; a box `sizeM` (width, height, depth) whose front, `frontDeg` either
+   * side of its facing, is bulletproof; its view like a default camera's (on the floor it turns all the way round); its
+   * EMP dart flies up to `dartRangeM` and jams drones within `dartRadiusM` for `disableS`, again after `dartRechargeS`;
+   * outdoors it loses its signal after `outdoorSignalS`.
+   */
   bulletproofCamera: z.strictObject({
     count: z.number().int().min(0),
+    placeS: z.number().positive(),
+    reachM: z.number().positive(),
+    sizeM: z.tuple([z.number().positive(), z.number().positive(), z.number().positive()]),
+    frontDeg: z.number().min(0).max(90),
+    view: cameraViewSchema,
+    dartRangeM: z.number().positive(),
     dartRadiusM: z.number().positive(),
     dartRechargeS: z.number().min(0),
     disableS: z.number().positive(),

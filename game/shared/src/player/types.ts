@@ -54,7 +54,10 @@ export const Btn = {
   Melee: 1 << 10,
   /** Ping where the view is on (Phase 7, intel/DESIGN.md §6: the room shares it with the team). */
   Ping: 1 << 11,
-  /** Reserved: gadget (Phase 8), so the numbers never change. */
+  /**
+   * The gadget key: held, it places a Bulletproof Camera (Phase 7, intel/DESIGN.md §4); on one, it fires the camera's
+   * EMP dart. Phase 8 gives it every gadget.
+   */
   Gadget: 1 << 12,
   /** Drop the defuser (Phase 6, D-120). */
   Drop: 1 << 13,
@@ -222,6 +225,10 @@ export interface PawnState {
   jumpCd: number;
   boostTicks: number;
   boostCd: number;
+  /** A drone's ticks left jammed by a Bulletproof Camera's EMP dart (it doesn't move or turn meanwhile). */
+  jammed: number;
+  /** Gadgets left to place: Bulletproof Cameras (Phase 7, intel/DESIGN.md §4; Phase 8 brings the others). */
+  gadgets: number;
 }
 
 export const NEUTRAL_INPUT: Readonly<Omit<InputCmd, "seq" | "yaw" | "pitch">> = {

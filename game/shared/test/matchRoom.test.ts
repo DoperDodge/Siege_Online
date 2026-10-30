@@ -1015,3 +1015,176 @@ describe("pings, scans and callouts (Phase 7 M4)", () => {
   }, 60_000);
 });
 
+
+describe("the Bulletproof Camera in a match (Phase 7 M5)", () => {
+  /** In the Laundry, 1.4 m from its south wall (panel 97), facing it. */
+  const WALL: [number, number, number] = [39.345, -3.2, 31.805];
+  /** a attacks (Blue); b defends the Laundry as Mute (a Bulletproof Camera in the loadout). A long prep. */
+  const setup = async (prep = 60) => {
+    const t = await matchRoom("custom", 2);
+    const seconds = { ...custom.match.seconds, pick: 5, prep, action: 30, roundEnd: 2 };
+    const [a, b] = await t.start(["a", "b"], quick({ siteReveal: "roundStart", firstAttack: "blue", seconds }));
+    t.act(b, { kind: "siteVote", site: "SITE_LAUNDRY" });
+    b.toServer.push(encodePickLoadout(defaultLoadoutPick(data, "mute")));
+    t.until(() => t.match.phase === Phase.Prep, 15, "prep");
+    t.tick();
+    return { t, a, b };
+  };
+  type T = Awaited<ReturnType<typeof setup>>["t"];
+  type C = Awaited<ReturnType<typeof setup>>["b"];
+  const wait = (t: T, n: number) => {
+    for (let i = 0; i < n; i++) t.tick();
+  };
+  /** b holds the gadget key looking `yaw`, `pitch` from where they stand until the room has the camera. */
+  const placeCamera = (t: T, b: C, yaw = 0, pitch = 0) => {
+    b.cmd = { yaw, pitch, buttons: Btn.Gadget };
+    t.until(() => t.room.sim.matchRules.bpCams.length > 0, 2, "placed");
+    b.cmd = { yaw, pitch };
+    wait(t, 16);
+    return t.room.sim.matchRules.bpCams[0];
+  };
+  /** The yaw and pitch from b's eye to `at`. */
+  const aimAt = (t: T, b: C, at: readonly number[]) => {
+    const eye = eyePose(data.movement, data.hitboxes, t.bodyOf(b)!.state).pos;
+    const d = [0, 1, 2].map((k) => at[k] - eye[k]);
+    return { yaw: Math.atan2(-d[0], -d[2]), pitch: Math.atan2(d[1], Math.hypot(d[0], d[2])) };
+  };
+  /** One shot down the sights. */
+  const shoot = (t: T, b: C, aim: { yaw: number; pitch: number }) => {
+    b.cmd = { ...aim, buttons: Btn.Ads };
+    wait(t, 64);
+    b.cmd = { ...aim, buttons: Btn.Ads | Btn.Fire };
+    t.tick();
+    b.cmd = { ...aim };
+    wait(t, 8);
+  };
+
+  it("placed at a wall in prep (predicted: no correction): everyone has it; defenders watch it after the level's cameras", async () => {
+    const { t, a, b } = await setup();
+    t.place(b, ...WALL, 0);
+    wait(t, 8);
+    const missed = b.session.mispredictions.length;
+    const cam = placeCamera(t, b);
+    expect([cam.onFloor, cam.panel, cam.signalEnd, cam.broken, cam.owner]).toEqual([false, 97, 0, false, t.room.bodyOf(b.id)!.id]);
+    expect([a.session.match!.bpCams, b.session.match!.bpCams]).toEqual([[cam], [cam]]);
+    expect(t.bodyOf(b)!.state.gadgets).toBe(0);
+    const ctrl = t.room.bodyOf(b.id)!;
+    b.cmd = { yaw: 0, buttons: Btn.Observe };
+    t.tick();
+    b.cmd = { yaw: 0 };
+    t.until(() => ctrl.cam === 1, 0.5, "the first camera");
+    const n = t.room.sim.level.def.cameras.length;
+    b.cmd = { yaw: cam.yaw, lean: -1 };
+    t.until(() => ctrl.cam === n + 1, 0.5, "the Bulletproof Camera");
+    b.cmd = { yaw: cam.yaw };
+    wait(t, 32);
+    expect(b.session.ctrl!.cam).toBe(n + 1);
+    expect(b.session.mispredictions.length).toBe(missed);
+  }, 60_000);
+
+  it("a shot at its front meets the plate; one from the side breaks it, and everyone hears", async () => {
+    const { t, a, b } = await setup();
+    t.place(b, ...WALL, 0);
+    wait(t, 8);
+    const cam = placeCamera(t, b);
+    shoot(t, b, aimAt(t, b, cam.pos));
+    expect(cam.broken).toBe(false);
+    // 1.2 m along the wall from it, close to the wall: the shot comes at its side.
+    t.place(b, WALL[0] - 1.2, WALL[1], 30.75, -90);
+    wait(t, 8);
+    shoot(t, b, aimAt(t, b, cam.pos));
+    expect(cam.broken).toBe(true);
+    wait(t, 8);
+    expect([a.session.match!.bpCams[0].broken, b.session.match!.bpCams[0].broken]).toEqual([true, true]);
+  }, 60_000);
+
+  it("steel going up on its wall breaks it", async () => {
+    const { t, b } = await setup();
+    t.place(b, ...WALL, 0);
+    wait(t, 8);
+    const cam = placeCamera(t, b);
+    b.cmd = { yaw: 0, buttons: Btn.Interact };
+    t.until(() => cam.broken, 8, "reinforced");
+    expect(t.room.sim.level.panels.list[97].panel.kind).toBe("wall");
+  }, 60_000);
+
+  it("placed outdoors it loses its signal 10 s later: a defender watching it goes on to the next camera", async () => {
+    const { t, b } = await setup(5);
+    t.until(() => t.match.phase === Phase.Action, 10, "action"); // red walls keep defenders in during prep
+    t.tick();
+    const street = t.room.sim.level.def.spawns.find((s) => s.group === "B_STREET")!.pos;
+    t.place(b, street[0], street[1], street[2], 0);
+    wait(t, 8);
+    const cam = placeCamera(t, b, 0, -60 * DEG);
+    expect([cam.onFloor, cam.signalEnd > t.room.sim.tick]).toEqual([true, true]);
+    const ctrl = t.room.bodyOf(b.id)!;
+    b.cmd = { buttons: Btn.Observe };
+    t.tick();
+    b.cmd = {};
+    t.until(() => ctrl.cam === 1, 0.5, "the first camera");
+    b.cmd = { lean: -1 };
+    t.until(() => ctrl.cam === t.room.sim.level.def.cameras.length + 1, 0.5, "the Bulletproof Camera");
+    b.cmd = {};
+    t.until(() => ctrl.cam === 1, 10.5, "its signal gone");
+    expect(t.room.sim.tick).toBeGreaterThanOrEqual(cam.signalEnd);
+  }, 60_000);
+
+  it("its EMP dart jams the drone it bursts on (6 s, no driving); it's ready again 10 s later; the dead can't fire it", async () => {
+    const { t, a, b } = await setup();
+    t.place(b, ...WALL, 0);
+    wait(t, 8);
+    const cam = placeCamera(t, b);
+    // a's drone on the Laundry floor, 2 m out in front of the camera.
+    const [drone] = t.room.sim.dronesOf(t.room.bodyOf(a.id)!);
+    t.room.sim.placeDrone(drone.id, WALL[0], WALL[1] + 0.02, cam.pos[2] + 2, 0);
+    t.room.correct(a.id);
+    wait(t, 16);
+    // b on the camera, turned to the drone.
+    const ctrl = t.room.bodyOf(b.id)!;
+    b.cmd = { yaw: cam.yaw, buttons: Btn.Observe };
+    t.tick();
+    b.cmd = { yaw: cam.yaw, lean: -1 };
+    t.until(() => ctrl.cam === t.room.sim.level.def.cameras.length + 1, 1, "the Bulletproof Camera");
+    const lens = t.room.sim.camLens(ctrl.cam - 1, ctrl.camYaw);
+    const d = [drone.state.x - lens[0], drone.state.y + 0.06 - lens[1], drone.state.z - lens[2]];
+    const aim = { yaw: Math.atan2(-d[0], -d[2]), pitch: Math.atan2(d[1], Math.hypot(d[0], d[2])) };
+    b.cmd = { ...aim };
+    wait(t, 96);
+    const emps = (x: { events: GameEvent[] }) => x.events.filter((e) => e.kind === "emp").length;
+    const fire = () => {
+      b.cmd = { ...aim, buttons: Btn.Gadget };
+      t.tick();
+      b.cmd = { ...aim };
+      wait(t, 8);
+    };
+    fire();
+    expect([emps(a), emps(b)]).toEqual([1, 1]);
+    expect(drone.state.jammed).toBeGreaterThan(5 * 64);
+    // a drives: nothing for the jam's 6 s, then it moves.
+    const at = { x: drone.state.x, z: drone.state.z };
+    a.cmd = { forward: 1 };
+    wait(t, 4 * 64);
+    expect(Math.hypot(drone.state.x - at.x, drone.state.z - at.z)).toBeLessThan(0.02);
+    // Fired again before it's ready: nothing.
+    fire();
+    expect(emps(b)).toBe(1);
+    t.until(() => Math.hypot(drone.state.x - at.x, drone.state.z - at.z) > 0.5, 3, "the drone free again");
+    a.cmd = {};
+    // Ready again 10 s after the first (the dart flies on past the drone now gone).
+    t.until(() => t.room.sim.tick >= cam.dartReady, 6, "the dart ready");
+    fire();
+    expect(emps(b)).toBe(2);
+    // Dead, b still watches it, but can't fire.
+    t.until(() => t.room.sim.tick >= cam.dartReady, 11, "ready once more");
+    t.room.killBody(t.bodyOf(b)!.id, Cause.Lab);
+    wait(t, 8);
+    if (ctrl.cam === 0) {
+      b.cmd = { ...aim, buttons: Btn.Observe };
+      t.tick();
+      b.cmd = { ...aim, lean: -1 };
+      t.until(() => ctrl.cam === t.room.sim.level.def.cameras.length + 1, 1, "the Bulletproof Camera, dead");
+    }
+    fire();
+    expect(emps(b)).toBe(2);
+  }, 60_000);
+});

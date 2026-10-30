@@ -65,7 +65,7 @@ import { isTouchDevice, mountTouchControls, preventPageZoom } from "../../input/
 import { LocalSocket } from "../../net/local.js";
 import { OnlineConnection } from "../../net/online.js";
 import { createLabScene, createRenderer, PawnView, updateLabels, warmShaders } from "../../render/labScene.js";
-import { CameraModels } from "../../render/cameraModels.js";
+import { BpCameraModels, CameraModels } from "../../render/cameraModels.js";
 import { PanelView } from "../../render/panelView.js";
 import { StoreyView, type Palette } from "../../render/storeyView.js";
 import { MapMarkers } from "../../render/mapMarkers.js";
@@ -213,7 +213,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       <div class="hp"><div class="hp-fill"></div><span class="hp-text"></span></div>
     </div>
     <div class="hud hud-tr"><span class="fps"></span><div class="net"></div><div class="killfeed"></div></div>
-    <div class="hud hud-br"><div class="weapon-name"></div><div class="ammo"><span class="ammo-loaded"></span><span class="ammo-reserve"></span></div><div class="weapon-state"></div></div>
+    <div class="hud hud-br"><div class="weapon-name"></div><div class="ammo"><span class="ammo-loaded"></span><span class="ammo-reserve"></span></div><div class="weapon-state"></div><div class="gadget-line"></div></div>
     <div class="hud hud-bottom">
       <div class="stances"><span data-s="0">STAND</span><span data-s="1">CROUCH</span><span data-s="2">PRONE</span></div>
       <div class="stance-bar"><div></div></div>
@@ -362,8 +362,9 @@ export async function startLab(o: LabOptions): Promise<void> {
   const drawnView = new Map<number, [number, number]>();
 
   const pawnViews = new Map<number, PawnView>();
-  /** A match's default cameras (Phase 7), drawn whole or broken. */
+  /** A match's default cameras (Phase 7), drawn whole or broken, and the round's Bulletproof Cameras. */
   const cameraModels = o.match ? new CameraModels(scene, sim.level.def.cameras) : null;
+  const bpCameraModels = o.match ? new BpCameraModels(scene, data.intel.bulletproofCamera.sizeM) : null;
 
   let showHitboxes = false;
   let thirdPerson = false;
@@ -1011,11 +1012,11 @@ export async function startLab(o: LabOptions): Promise<void> {
     if (v.kind === PawnKind.Drone) controls.limits = { pitchMin: data.intel.drone.pitchMinDeg * DEG, pitchMax: data.intel.drone.pitchMaxDeg * DEG, maxYawStep: null };
     // On a rope the view turns only so far from the wall, and moving onto it, the move turns it.
     controls.limits.yawRange = ropeYawRange(sim.level, data, v.state);
-    // A default camera (Phase 7): so far either side of its facing, its own tilt.
+    // A camera (Phase 7): so far either side of its facing (a Bulletproof Camera on the floor: all the way round), its
+    // own tilt.
     if (ctrl.cam) {
-      const k = data.intel.camera;
-      const face = sim.level.def.cameras[ctrl.cam - 1].yawDeg * DEG;
-      controls.limits = { pitchMin: k.pitchMinDeg * DEG, pitchMax: k.pitchMaxDeg * DEG, maxYawStep: null, yawRange: { center: face, half: k.yawHalfRangeDeg * DEG } };
+      const l = sim.camLimits(ctrl.cam - 1);
+      controls.limits = { pitchMin: l.pitchMin, pitchMax: l.pitchMax, maxYawStep: null, yawRange: l.half < Math.PI ? { center: l.face, half: l.half } : null };
     }
     if (freeCam) controls.limits = { pitchMin: -89 * DEG, pitchMax: 89 * DEG, maxYawStep: null };
     if (p.state.lastFallDamage > 0) flash(`-${p.state.lastFallDamage} HP (fall)`, "bad");
@@ -1094,9 +1095,15 @@ export async function startLab(o: LabOptions): Promise<void> {
     /** Looking from outside your body: third person, or a map's plan view. */
     const outside = thirdPerson || storeyView?.plan === true || freeCam !== null;
     // On a default camera everyone is drawn, your body too (it stands where you left it).
-    const onCamera = !spec && ctrl.cam !== 0;
+    // (A Bulletproof Camera of a round just over is still yours until the next tick hands you on: not this frame.)
+    const onCamera = !spec && ctrl.cam !== 0 && ctrl.cam <= sim.camCount();
     drawBodies(alpha, renderTick, spec ? (spec.kind === "pawn" ? spec.pawnId : -1) : onCamera ? -1 : viewed!.id, spec ? spec.kind !== "pawn" : outside || onCamera);
     cameraModels?.update(sim.matchRules.camsBroken);
+    bpCameraModels?.update(sim.matchRules.bpCams);
+    // A Bulletproof Camera's thermal view: the world tinted, bodies glowing white.
+    const thermal = onCamera && sim.bpCamAt(ctrl.cam - 1) !== null;
+    app.classList.toggle("thermal", thermal);
+    for (const v of pawnViews.values()) v.heat(thermal);
     updateShots(now);
     fx.update(now, shownRenderTick, ctrl.pawnIds, ownMuzzle, remoteMuzzle);
     updateCombatHud(now);
@@ -1132,12 +1139,11 @@ export async function startLab(o: LabOptions): Promise<void> {
       } else aim(viewed!, rs);
       const eye = droneView ? { pos: droneEye(data.intel.drone, rs).pos, roll: 0 } : eyePose(data.movement, data.hitboxes, { ...rs, yaw: controls.yaw });
       if (onCamera) {
-        // A default camera: from just in front of its lens, where the camera looks (it follows the mouse at its rate).
-        const cam = sim.level.def.cameras[ctrl.cam - 1];
-        const [fx, fz] = [-Math.sin(ctrl.camYaw), -Math.cos(ctrl.camYaw)];
-        eye.pos = [cam.pos[0] + fx * 0.15, cam.pos[1], cam.pos[2] + fz * 0.15];
-        if (Math.abs(camera.fov - data.intel.camera.fovDeg) > 1e-4) {
-          camera.fov = data.intel.camera.fovDeg;
+        // A camera: from just in front of its lens, where the camera looks (it follows the mouse at its rate).
+        eye.pos = sim.camLens(ctrl.cam - 1, ctrl.camYaw);
+        const fov = sim.camLimits(ctrl.cam - 1).fovDeg;
+        if (Math.abs(camera.fov - fov) > 1e-4) {
+          camera.fov = fov;
           camera.updateProjectionMatrix();
         }
       }
@@ -1343,7 +1349,7 @@ export async function startLab(o: LabOptions): Promise<void> {
   function updateHud(p: Pawn) {
     const s = p.state;
     $(".op-name").textContent = `${op.name} · ${op.side} · ${op.healthRating} health / ${op.speedRating} speed${op.pawns > 1 ? ` · shell ${ctrl.pawnIds.indexOf(p.id) + 1}/2` : ""}`;
-    downedHud.update(s, data.combat, keyLabel(settings.keys.interact), nameOfPawn, data.destruction, data.movement, sim.objective);
+    downedHud.update(s, data.combat, keyLabel(settings.keys.interact), nameOfPawn, data.destruction, data.movement, sim.objective, ticks(data.intel.bulletproofCamera.placeS));
     app.querySelectorAll<HTMLElement>(".stances span").forEach((el) => el.classList.toggle("on", Number(el.dataset.s) === s.stance));
     $(".stance-bar div").style.width = `${s.stanceT * 100}%`;
     // On a rope the body is moved by position, not velocity: its speed from the last tick's move.
@@ -1417,15 +1423,23 @@ export async function startLab(o: LabOptions): Promise<void> {
     const drone = sim.pawns.get(sim.viewedPawnId(ctrl.id));
     const onDrone = drone?.kind === PawnKind.Drone;
     $(".dronecam").classList.toggle("hidden", !onDrone && ctrl.cam === 0);
+    $(".dronecam").classList.toggle("jammed", onDrone && drone.state.jammed > 0);
     if (ctrl.cam) {
+      // Which camera (a Bulletproof Camera: its dart, and outdoors how long its signal lasts), how many are broken.
       const cams = sim.level.def.cameras;
-      const cam = cams[ctrl.cam - 1];
-      const broken = cams.filter((_, i) => sim.matchRules.camsBroken & (1 << i)).length;
-      const room = cam.room ? (sim.level.def.rooms.find((r) => r.id === cam.room)?.callout ?? "") : "";
+      const bp = sim.bpCamAt(ctrl.cam - 1);
+      const cam = bp ? null : cams[ctrl.cam - 1];
+      const broken = cams.filter((_, i) => sim.matchRules.camsBroken & (1 << i)).length + sim.matchRules.bpCams.filter((c) => c.broken).length;
+      const room = cam?.room ? (sim.level.def.rooms.find((r) => r.id === cam.room)?.callout ?? "") : "";
+      const left = (t: number) => `${(Math.max(0, t - sim.tick) * DT).toFixed(1)} s`;
       $(".dronecam-title").textContent = [
-        `CAM ${ctrl.cam}/${cams.length}${room ? ` · ${room}` : ""}${broken ? ` · ${broken} broken` : ""}`,
+        `${bp ? "BULLETPROOF CAM" : "CAM"} ${ctrl.cam}/${sim.camCount()}${room ? ` · ${room}` : ""}${broken ? ` · ${broken} broken` : ""}`,
+        bp && !dead ? `${keyLabel(k.gadget)} EMP dart ${sim.tick >= bp.dartReady ? "ready" : left(bp.dartReady)}` : "",
+        bp?.signalEnd ? `signal lost in ${left(bp.signalEnd)}` : "",
         `${keyLabel(k.leanLeft)} / ${keyLabel(k.leanRight)} switch · ${keyLabel(k.observe)} back`,
-      ].join("  ·  ");
+      ]
+        .filter(Boolean)
+        .join("  ·  ");
     } else if (onDrone) {
       const drones = sim.dronesOf(ctrl);
       const held = drones.filter((d) => d.state.mode === PawnMode.Held).length;
@@ -1435,6 +1449,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       $(".dronecam-title").textContent = [
         `DRONE ${drones.indexOf(drone) + 1}/${drones.length}${held ? ` · ${held} held` : ""}`,
         ds.mode === PawnMode.Dead ? "DESTROYED" : "",
+        ds.jammed ? `JAMMED ${secs(ds.jammed)}` : "",
         `${keyLabel(k.vault)} jump ${ds.jumpCd ? secs(ds.jumpCd) : "ready"}`,
         `${keyLabel(k.sprint)} boost ${ds.boostTicks ? "ON" : ds.boostCd ? secs(ds.boostCd) : "ready"}`,
         bodyBack ? `${keyLabel(k.leanLeft)} / ${keyLabel(k.leanRight)} switch · ${keyLabel(k.observe)} back` : "",
@@ -1453,6 +1468,9 @@ export async function startLab(o: LabOptions): Promise<void> {
     $(".flash").classList.toggle("show", performance.now() < flashUntil);
 
     ammoHud.update(p.loadout?.weapons[s.slot], s, dead || onCam, keyLabel(k.fireMode));
+    // Gadgets left to place (Phase 7: Bulletproof Cameras).
+    const gadgetText = s.gadgets > 0 && !dead ? `BULLETPROOF CAMERA ×${s.gadgets} · hold ${keyLabel(k.gadget)}` : "";
+    if ($(".gadget-line").textContent !== gadgetText) $(".gadget-line").textContent = gadgetText;
   }
 
   function flash(text: string, kind: "bad" | "info") {
@@ -1543,6 +1561,8 @@ export async function startLab(o: LabOptions): Promise<void> {
           viewedKind: sim.pawns.get(sim.viewedPawnId(ctrl.id))?.kind ?? null,
           /** Pings and spotted enemies marked on the screen (Phase 7). */
           intel: intelHud.count,
+          /** Bulletproof Cameras left to place (Phase 7). */
+          gadgets: possessed()?.state.gadgets ?? 0,
           frames,
           lastShot,
           events: [...recentEvents],

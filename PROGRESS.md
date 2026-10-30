@@ -16,8 +16,22 @@ known issues, and what's next.
 | M2 Drones in the browser: the drone view and HUD, drawing drones, keys; dead attackers drive their drones | ✅ 5 throws / enters / leaves, Q / E switch, Space jumps, Shift boosts; the drone's camera and overlay; greybox drones; prep in your first drone; the match browser test drives one online |
 | M3 Default cameras: viewing within limits, shooting them, broken state, dead defenders on cameras | ✅ 5 opens Oregon's eight cameras (defenders, alive or dead), Q / E go round them; each viewer turns their own view within the camera's limits; any shot breaks one for the round; the match browser test watches them online |
 | M4 Pings, scans and the comm wheel | ✅ T pings where you look (from a drone or a camera too) for your team, through walls; a double tap is a danger ping; hold T for the comm wheel; Fire held 1 s on a drone or a camera spots enemies for your team; the match browser test pings online |
-| M5 Bulletproof Camera and its EMP dart | ⏳ |
+| M5 Bulletproof Camera and its EMP dart | ✅ hold 3 (ours) at a wall or the floor to place it; it joins the cameras after the level's (thermal: bodies glow); its front is bulletproof, its sides and back aren't; outdoors its signal goes after 10 s; its EMP dart jams drones for 6 s; protocol 14; the match browser test places and watches one |
 | M6 The feed list across everything, spectating; checks, docs, review, report | ⏳ |
+
+### What's done (M5: the Bulletproof Camera)
+- **Placing it:** a defender who took it (Mute by default, Sentry's default kit, Lesion's second gadget) holds 3 (ours)
+  for 1 s looking at a wall or the floor within 2 m: on a wall it faces out of it, on the floor the way you face. One a
+  round. The HUD says how many you have left.
+- **Watching it:** 5 opens the cameras; it comes after the level's eight (Q from the first). Its view is thermal:
+  bodies glow white in a green world. On a wall it turns 80° either way, on the floor all the way round.
+- **Its EMP dart:** watching it, 3 fires the dart where you look. It bursts on the first drone on its way (or a wall)
+  and jams every drone within 0.75 m for 6 s: it won't drive, and its feed shows static. Ready again 10 s later,
+  whoever fires it; the dead watch but can't fire.
+- **Breaking it:** its front is bulletproof (a bullet within 50° of straight on); a shot from the side or the back, a
+  knife, or steel going up on its wall breaks it. Placed outdoors it loses its signal after 10 s.
+- Protocol 14. D-136 has the details; every number but the dart's 0.75 m and the 10 s outdoors is ours (open
+  questions, Phase 7).
 
 ### What's done (M4: pings, scans and the comm wheel)
 - **Ping (T, ours):** a tap pings the spot you look at, from your body, a drone or a camera: a yellow mark for your
@@ -71,8 +85,10 @@ known issues, and what's next.
    of the screen when it's behind them. Tap twice quickly for a danger ping. Hold T, point the mouse at a callout and
    let go: it's in your teammate's feed. On a drone or a camera, hold the left mouse button on an enemy for a second:
    they're marked red for your team, and their screen says they've been spotted.
-7. Checks: `npm run typecheck`, `npm test`, `npm run build && node tools/e2e/match.mjs` (prep droning, the cameras
-   and a ping, online).
+7. Bulletproof Camera: pick Mute and, in prep, hold 3 looking at a wall. 5, then Q, watches it. With an attacker's
+   drone in front of it, press 3: the drone is jammed for 6 s. Shoot it from the front (nothing), then the side.
+8. Checks: `npm run typecheck`, `npm test`, `npm run build && node tools/e2e/match.mjs` (prep droning, the cameras,
+   a ping and a Bulletproof Camera, online).
 
 ### Known issues
 - Drones pass through operators (they only hit the level, walls and props), and climb only 5 cm without a jump, so
@@ -84,7 +100,9 @@ known issues, and what's next.
   jammers (Mute, Phase 8).
 - Pinging an enemy's gadget or a camera doesn't mark it with its icon yet (gadgets are Phase 8); pings show the
   pinger's name, not a number. On touch screens, Lean L / R don't switch drones or cameras yet.
-- Next: the Bulletproof Camera (M5), the feed list and spectating (M6).
+- The Bulletproof Camera doesn't stop the bullet that hits its plate, a knife breaks it outright (Siege's knife only
+  breaks the glass), and it can't be picked up again. The gadget key does nothing else until Phase 8.
+- Next: the feed list across everything and spectating (M6).
 
 ---
 

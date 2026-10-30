@@ -18,6 +18,7 @@ import type { SimEvent } from "../weapons/step.js";
 import { ticks, ticksOrZero } from "../weapons/ticks.js";
 import { Match, matchMapOf, NO_END, Phase, type MatchEvent } from "../match/match.js";
 import { inSite, siteArea } from "../match/objective.js";
+import { indoors } from "../intel/bpCamera.js";
 import { preSetupOps } from "../match/preSetup.js";
 import { ATTACK, DEFENSE, isFormat, mvp, RATING_MAX, RATING_MIN, reinforcementPool, type FormatMode, type Side } from "../match/rules.js";
 import { encodeMatchState, MAX_HISTORY, type LobbyAction, type MatchAction, type MatchView, type RoomListEntry } from "./matchWire.js";
@@ -88,7 +89,7 @@ export class MatchDirector {
     const data = host.sim.data;
     this.formats = new Map([...data.modes.values()].filter(isFormat).map((m) => [m.id, m]));
     this.match = new Match(format, matchMapOf(host.sim.level.def, data.operators.values()), seed);
-    host.sim.matchRules = { redWalls: false, killPlaneKills: true, cameras: true, camsBroken: 0 };
+    host.sim.matchRules = { redWalls: false, killPlaneKills: true, cameras: true, camsBroken: 0, bpCams: [] };
   }
 
   get mode(): FormatMode {
@@ -301,6 +302,49 @@ export class MatchDirector {
     this.changed(true);
   }
 
+  /**
+   * A Bulletproof Camera placed (Phase 7 M5, intel/bpCamera.ts): it joins the round's, float32 like the wire so every
+   * client turns its view exactly as the server does; placed outdoors, its signal ends `outdoorSignalS` later.
+   */
+  cameraPlaced(e: Extract<SimEvent, { kind: "camera" }>) {
+    const sim = this.host.sim;
+    const owner = sim.pawns.get(e.pawnId)?.ownerId;
+    if (owner === undefined || owner === null) return;
+    const pos: [number, number, number] = [Math.fround(e.pos[0]), Math.fround(e.pos[1]), Math.fround(e.pos[2])];
+    const signalEnd = indoors(sim.level.def, ...pos) ? 0 : sim.tick + ticks(sim.data.intel.bulletproofCamera.outdoorSignalS);
+    sim.matchRules.bpCams.push({ pos, yaw: Math.fround(e.yaw), onFloor: e.onFloor, owner, broken: false, signalEnd, dartReady: 0, panel: e.panel });
+    this.changed(true);
+  }
+
+  /** Bulletproof Cameras broken (a bit each, by their place in the round's list): shot, knifed, their wall reinforced. */
+  bpCamsBroken(bits: number) {
+    const cams = this.host.sim.matchRules.bpCams;
+    let changed = false;
+    cams.forEach((c, i) => {
+      if (i >= 32 || !(bits & (1 << i)) || c.broken) return;
+      c.broken = true;
+      changed = true;
+    });
+    if (changed) this.changed(true);
+  }
+
+  /** Steel went up on a panel: the Bulletproof Cameras on it break (research CSV:337). */
+  panelReinforced(panel: number) {
+    let bits = 0;
+    this.host.sim.matchRules.bpCams.forEach((c, i) => {
+      if (c.panel === panel && i < 32) bits |= 1 << i;
+    });
+    if (bits) this.bpCamsBroken(bits);
+  }
+
+  /** A Bulletproof Camera's EMP dart was fired (its place in the round's list): ready again at `readyTick`. */
+  dartFired(i: number, readyTick: number) {
+    const cam = this.host.sim.matchRules.bpCams[i];
+    if (!cam) return;
+    cam.dartReady = readyTick;
+    this.changed(true);
+  }
+
   /** A body went down or died: if it carried the defuser, it falls to the floor under it (research §5; off a rope too). */
   onBodyDown(pawn: Pawn) {
     const sim = this.host.sim;
@@ -487,7 +531,8 @@ export class MatchDirector {
   private startPrep() {
     const defenders = this.match.sides[DEFENSE];
     const sim = this.host.sim;
-    sim.matchRules.camsBroken = 0; // every camera works again (Phase 7)
+    sim.matchRules.camsBroken = 0; // every camera works again (Phase 7), and none of last round's Bulletproof Cameras
+    sim.matchRules.bpCams = [];
     this.host.resetPanels([0, reinforcementPool(this.mode, defenders.length)]);
     if (this.mode.match.preSetups && this.match.site) for (const o of preSetupOps(sim.level.def, sim.level.panels, sim.data.destruction, this.match.site)) this.host.queuePanelOp(o.panel, o.op);
     const spots = this.spawnsOf(this.match.site ?? "");
@@ -623,6 +668,7 @@ export class MatchDirector {
       carrier: attacker ? this.carrierMember() : 0,
       safeguardEnd: m.phase === Phase.Action && this.host.sim.tick < this.safeguardEnd ? this.safeguardEnd : 0,
       camsBroken: this.host.sim.matchRules.camsBroken,
+      bpCams: this.host.sim.matchRules.bpCams.map((c) => ({ ...c, pos: [c.pos[0], c.pos[1], c.pos[2]] })),
       history: m.history.slice(-MAX_HISTORY).map((h) => ({ ...h })),
       winner: m.winner,
       forfeit: m.forfeit,

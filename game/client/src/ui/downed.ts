@@ -1,7 +1,7 @@
 // Health and being down (Phase 3 M7, M9): the health bar (the 20 HP down pool while down), the down screen
 // (crawl, bleed, wait for a teammate) and, while you revive someone, the revive's progress (D-048, D-049);
-// the same gauge shows a reinforcement or barricade going up (Phase 4 M6), a rope being hooked on (Phase 5 M8), and
-// the defuser being planted or disabled (Phase 6, match/DESIGN.md §8).
+// the same gauge shows a reinforcement or barricade going up (Phase 4 M6), a rope being hooked on (Phase 5 M8), the
+// defuser being planted or disabled (Phase 6, match/DESIGN.md §8), and a Bulletproof Camera being placed (Phase 7).
 import { DeployKind, deployTicks, isDowned, PawnMode, ticks, TICK_HZ, type CombatData, type DestructionData, type MovementData, type PawnState } from "@redmond/shared";
 
 /** Seconds left on a revive `reviveTicks` in. */
@@ -17,7 +17,7 @@ export class DownedHud {
 
   /**
    * `interactKey` names the revive key; `nameOfPawn` the teammate being revived; `holds`, a match's plant and disable
-   * holds in ticks (the simulation's objective).
+   * holds in ticks (the simulation's objective); `placeTicks`, placing a Bulletproof Camera's.
    */
   update(
     s: PawnState,
@@ -27,6 +27,7 @@ export class DownedHud {
     destruction?: DestructionData,
     movement?: MovementData,
     holds?: { plantTicks: number; disableTicks: number } | null,
+    placeTicks = 1,
   ) {
     const $ = this.$;
     const pool = combat.dbno.hp;
@@ -52,9 +53,11 @@ export class DownedHud {
       $(".revive-bar div").style.width = `${Math.min(100, (100 * s.reviveTicks) / reviveTotalTicks(combat))}%`;
     } else if (deploying) {
       const defuser = s.deployKind === DeployKind.Plant || s.deployKind === DeployKind.Disable;
-      const total = Math.max(1, defuser ? ((s.deployKind === DeployKind.Plant ? holds?.plantTicks : holds?.disableTicks) ?? 1) : deployTicks(destruction, s.deployKind));
-      const what =
-        s.deployKind === DeployKind.Reinforce
+      const camera = s.deployKind === DeployKind.Camera;
+      const total = Math.max(1, defuser ? ((s.deployKind === DeployKind.Plant ? holds?.plantTicks : holds?.disableTicks) ?? 1) : camera ? placeTicks : deployTicks(destruction, s.deployKind));
+      const what = camera
+        ? "PLACING THE BULLETPROOF CAMERA"
+        : s.deployKind === DeployKind.Reinforce
           ? "REINFORCING"
           : s.deployKind === DeployKind.BarricadeUp
             ? "BARRICADING"

@@ -28,6 +28,7 @@ const BUTTONS: TouchButton[] = [
   { label: "Swap", action: "swap", kind: "tap" },
   { label: "Knife", action: "melee", kind: "tap" },
   { label: "Observe", action: "observe", kind: "tap" }, // drones and cameras (Phase 7)
+  { label: "Gadget", action: "gadget", kind: "hold" }, // held: a Bulletproof Camera takes 1 s to place
   { label: "Ping", action: "ping", kind: "tap" },
 ];
 

@@ -453,6 +453,9 @@ export class PawnView {
   private readonly wireParts: CapsuleParts[] = [];
   private readonly tag: THREE.Sprite | null;
   private readonly materials: THREE.Material[];
+  /** The body's own colours, which glow white in a Bulletproof Camera's thermal view (heat). */
+  private readonly skin: THREE.MeshStandardMaterial[];
+  private hot = false;
   private gun: GunModel | null = null;
   private gunLook = "";
   private gunVisible = false;
@@ -475,6 +478,7 @@ export class PawnView {
     const headMat = new THREE.MeshStandardMaterial({ color: 0x2b2f36, roughness: 0.5 });
     const wireMat = new THREE.MeshBasicMaterial({ color: wireColor, wireframe: true, depthTest: false, transparent: true, opacity: 0.75 });
     this.materials = [mat, headMat, wireMat];
+    this.skin = [mat, headMat];
     for (let i = 0; i < 8; i++) {
       this.bodyParts.push(new CapsuleParts(this.shape, i === 0 ? headMat : mat, true));
       this.wireParts.push(new CapsuleParts(this.wire, wireMat, false));
@@ -506,6 +510,13 @@ export class PawnView {
       this.drone = drone;
     }
     scene.add(this.body, this.wire);
+  }
+
+  /** Seen through a Bulletproof Camera's thermal view (Phase 7): the body (or drone) glows white. */
+  heat(on: boolean) {
+    if (on === this.hot) return;
+    this.hot = on;
+    for (const m of this.skin) m.emissive.setHex(on ? 0xffffff : 0x000000);
   }
 
   update(data: GameData, state: PawnState) {

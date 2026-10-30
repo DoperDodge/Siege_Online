@@ -521,6 +521,11 @@ The intel questions above (drone numbers, camera limits, pings, the wheel) stay 
    and the line of sight when the 1 s hold ends (not throughout it); a spotted enemy is marked for the ping's 5 s; the
    ping key held 0.25 s opens the comm wheel (ours). How quick is Siege's double tap, how far does a scan reach, does
    the enemy have to stay in the cone for the whole second, and how long does the wheel's hold take?
+9. **The Bulletproof Camera (M5):** placed with a 1 s hold of the gadget key (3) at a wall or the floor within 2 m; a
+   0.16 × 0.12 × 0.10 m box whose plate covers 50° either side of its front; its view turns 80° either way on a wall
+   (all the way round on the floor), tilts −50°…+50°, at 90°/s, 70° wide; the dart flies 8 m, jams a drone for 6 s
+   and is ready again 10 s later (all ours). What are Siege's numbers? Does a bullet at the plate stop there (ours goes
+   on), and how far does a Bulletproof Camera turn?
 
 ### [core_mechanics.md](core_mechanics.md) — 16
 

@@ -71,7 +71,9 @@ export type SimEvent =
   | { kind: "plant"; pawnId: number; pos: Vec3 }
   | { kind: "disable"; pawnId: number }
   /** The ping key (Phase 7): what a controller aimed at, from its body, its drone or its camera. */
-  | { kind: "ping"; ctrlId: number; pos: Vec3 };
+  | { kind: "ping"; ctrlId: number; pos: Vec3 }
+  /** A Bulletproof Camera placed (Phase 7, intel/bpCamera.ts): where, facing which way, on which panel (−1: none). */
+  | { kind: "camera"; pawnId: number; pos: Vec3; yaw: number; onFloor: boolean; panel: number };
 
 export type WeaponContext = MoveContext & { data: GameData; events: SimEvent[] };
 

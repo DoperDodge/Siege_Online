@@ -769,6 +769,10 @@ export function matchFeatures(lab: LabApi): void {
     `Drones (attackers): throw one, or go to one out, and back; on one ${keyLabel(keys.leanLeft)} / ${keyLabel(keys.leanRight)} switch, ${keyLabel(keys.vault)} jumps, ${keyLabel(keys.sprint)} boosts. Cameras (defenders): open them and back; ${keyLabel(keys.leanLeft)} / ${keyLabel(keys.leanRight)} switch`,
   );
   lab.addHelp(
+    `Hold <kbd>${keyLabel(keys.gadget)}</kbd>`,
+    `Bulletproof Camera (defenders who took it): place it on the wall or the floor in front of you (${lab.data.intel.bulletproofCamera.placeS} s); it joins the cameras (after the level's). Watching it, ${keyLabel(keys.gadget)} fires its EMP dart: drones in its burst are jammed for ${lab.data.intel.bulletproofCamera.disableS} s (ready again ${lab.data.intel.bulletproofCamera.dartRechargeS} s later). Its front is bulletproof; its sides and back aren't`,
+  );
+  lab.addHelp(
     "Hold left mouse (on a drone or a camera)",
     `Scan: an enemy within ${lab.data.intel.scan.coneDeg}° of the crosshair and in sight for ${lab.data.intel.scan.holdS} s is marked for your team for ${lab.data.intel.ping.seconds} s (they're told)`,
   );

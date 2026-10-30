@@ -11,6 +11,8 @@ import { initialPawnState, type Pawn, type PlayerController } from "./player/paw
 import { droneCollider, droneEye, stepDrone } from "./player/drone.js";
 import { insideAny, zoneBoxes, ZONE_TEST_HEIGHT, type ZoneBox } from "./level/zones.js";
 import { raycastLevel } from "./level/raycast.js";
+import { cameraSpot, type BpCam } from "./intel/bpCamera.js";
+import { CAMERA_HALF_M } from "./intel/cameras.js";
 import { canDisable, canPickUp, inSite, siteArea, type DefuserState, type SiteArea } from "./match/objective.js";
 import { eyePose, poseHitboxes } from "./player/hitboxes.js";
 import { capsuleDims, stanceDims } from "./player/stance.js";
@@ -33,7 +35,12 @@ export interface MatchSimRules {
   /** Defenders watch the level's default cameras (Phase 7, a match); `camsBroken`: a bit for each broken one. */
   cameras: boolean;
   camsBroken: number;
+  /** The round's Bulletproof Cameras (Phase 7 M5, intel/bpCamera.ts): after the level's in the defenders' list. */
+  bpCams: BpCam[];
 }
+
+/** A camera's lens sits this far out of the front of its box (metres). */
+const LENS_AHEAD_M = 0.03;
 
 /** A dropped thing's floor is looked for from this far over the point it was let go at, down to this far below it (metres). */
 const DROP_FROM_ABOVE = 0.1;
@@ -53,7 +60,7 @@ export class Sim {
    */
   deployRules: DeployRules = { anyone: false, rappel: false, pools: [0, 0] };
   /** A match room's rules for bodies (none in a lab). */
-  matchRules: MatchSimRules = { redWalls: false, killPlaneKills: false, cameras: false, camsBroken: 0 };
+  matchRules: MatchSimRules = { redWalls: false, killPlaneKills: false, cameras: false, camsBroken: 0, bpCams: [] };
   /**
    * The defuser in a match (null in a lab): who carries it, where it lies or is planted, the site and the holds
    * (match/objective.ts). The simulation moves it (pick up, drop, plant); the room sets the rest.
@@ -290,6 +297,7 @@ export class Sim {
     const t = collider.translation();
     const pawn: Pawn = { id: pawnId, kind, operatorId, ownerId, collider, loadout, team, life: 0, state: initialPawnState(t.x, Math.fround(y + 0.02), t.z, Math.fround(yaw), maxHp, loadout) };
     if (kind === PawnKind.Drone) pawn.state.mode = PawnMode.Held;
+    else pawn.state.gadgets = this.gadgetsOf(loadout);
     // Recoil randomness: any non-zero start works for xorshift; a server reseeds it from its room seed and
     // the client gets the value with the body's first correction.
     pawn.state.rng = Math.imul(pawnId, 0x9e3779b1) >>> 0 || 1;
@@ -441,6 +449,41 @@ export class Sim {
     return true; // still this tick
   }
 
+  /**
+   * Where holding the gadget key would place a Bulletproof Camera now (intel/bpCamera.ts): a defender's body in a match,
+   * with one left, on its feet, looking at a wall or the floor within reach. Null: nowhere.
+   */
+  cameraSpotFor(pawn: Pawn): ReturnType<typeof cameraSpot> {
+    const s = pawn.state;
+    if (!this.matchRules.cameras || s.gadgets === 0 || pawn.kind !== PawnKind.Body || pawn.team !== sideTeam("defender") || s.mode !== PawnMode.Walk || !s.grounded) return null;
+    const eye = eyePose(this.data.movement, this.data.hitboxes, s).pos;
+    return cameraSpot(this, this.data.intel.bulletproofCamera, eye, viewDir(s.yaw, s.pitch), s.yaw);
+  }
+
+  /**
+   * The gadget key's hold kept up, a spot still offered: after data/intel.json `bulletproofCamera.placeS` the camera
+   * goes where the view is then (a "camera" event: the room adds it to the round's), one fewer left.
+   */
+  private holdCamera(pawn: Pawn, held: boolean): boolean {
+    const s = pawn.state;
+    const spot = held && s.meleeTicks === 0 ? this.cameraSpotFor(pawn) : null;
+    if (!spot) {
+      endDeploy(pawn);
+      return false;
+    }
+    s.deployTicks = Math.min(0xffff, s.deployTicks + 1);
+    if (s.deployTicks < ticks(this.data.intel.bulletproofCamera.placeS)) return true;
+    s.gadgets--;
+    this.ctx.events.push({ kind: "camera", pawnId: pawn.id, ...spot });
+    endDeploy(pawn);
+    return true; // still this tick
+  }
+
+  /** Bulletproof Cameras to place for a loadout: data/intel.json's count when it has one (Phase 8 brings the other gadgets). */
+  private gadgetsOf(loadout: ResolvedLoadout | null): number {
+    return loadout?.gadgets.includes("bulletproof_camera") ? this.data.intel.bulletproofCamera.count : 0;
+  }
+
   /** The carrier's Drop key: the defuser falls to the floor under the body (off a rope or a ladder too). */
   private dropDefuser(pawn: Pawn, input: InputCmd) {
     const o = this.objective;
@@ -472,6 +515,7 @@ export class Sim {
   private updateDeploy(pawn: Pawn, input: InputCmd): boolean {
     const s = pawn.state;
     const held = (input.buttons & Btn.Interact) !== 0;
+    if (s.deployKind === DeployKind.Camera) return this.holdCamera(pawn, (input.buttons & Btn.Gadget) !== 0);
     if (s.deployKind === DeployKind.Plant || s.deployKind === DeployKind.Disable) return this.holdDefuser(pawn, held);
     if (s.deployKind !== DeployKind.None) {
       const a = held && s.meleeTicks === 0 ? this.deployActionFor(pawn) : null;
@@ -484,6 +528,14 @@ export class Sim {
       this.ctx.events.push({ kind: "deploy", pawnId: pawn.id, action: s.deployKind, panel: s.deployPanel, section: s.deploySection, side: a.side });
       endDeploy(pawn);
       return true; // still this tick
+    }
+    // The gadget key held (not only pressed) starts a camera once the view is on a spot for one.
+    if (input.buttons & Btn.Gadget && s.meleeTicks === 0 && this.cameraSpotFor(pawn)) {
+      s.deployKind = DeployKind.Camera;
+      s.deployPanel = 0;
+      s.deploySection = 0;
+      s.deployTicks = 1;
+      return true;
     }
     const pressed = input.buttons & ~s.prevButtons & Btn.Interact;
     if (!pressed || s.meleeTicks > 0) return false;
@@ -678,8 +730,7 @@ export class Sim {
    * one, or closes when none is left. Down, nothing; going down closes it.
    */
   private updateCams(c: PlayerController, input: InputCmd | undefined, heldBefore: number) {
-    const cams = this.level.def.cameras;
-    if (!this.matchRules.cameras || c.team !== sideTeam("defender") || !cams.length) {
+    if (!this.matchRules.cameras || c.team !== sideTeam("defender") || this.camCount() === 0) {
       c.cam = 0;
       return;
     }
@@ -705,15 +756,11 @@ export class Sim {
         if (next >= 0) this.openCam(c, next);
       }
       // Toward the mouse, within the camera's limits, at its turn rate.
-      const cam = cams[c.cam - 1];
-      const k = this.data.intel.camera;
-      const face = cam.yawDeg * DEG;
-      const half = k.yawHalfRangeDeg * DEG;
-      const yaw = face + clamp(wrapAngle(input.yaw - face), -half, half);
-      const pitch = clamp(input.pitch, k.pitchMinDeg * DEG, k.pitchMaxDeg * DEG);
-      const turn = k.turnDegPerS * DEG * DT;
-      c.camYaw = Math.fround(wrapAngle(c.camYaw + clamp(wrapAngle(yaw - c.camYaw), -turn, turn)));
-      c.camPitch = Math.fround(c.camPitch + clamp(pitch - c.camPitch, -turn, turn));
+      const l = this.camLimits(c.cam - 1);
+      const yaw = l.face + clamp(wrapAngle(input.yaw - l.face), -l.half, l.half);
+      const pitch = clamp(input.pitch, l.pitchMin, l.pitchMax);
+      c.camYaw = Math.fround(wrapAngle(c.camYaw + clamp(wrapAngle(yaw - c.camYaw), -l.turn, l.turn)));
+      c.camPitch = Math.fround(c.camPitch + clamp(pitch - c.camPitch, -l.turn, l.turn));
       return;
     }
     if (!(pressed & Btn.Observe) || downed) return;
@@ -723,11 +770,7 @@ export class Sim {
 
   /** Where a controller looks from now: a camera's lens, its drone's eye, or its body's; null for a dead body. */
   viewOf(c: PlayerController, input?: InputCmd): { pos: [number, number, number]; yaw: number; pitch: number } | null {
-    if (c.cam) {
-      const cam = this.level.def.cameras[c.cam - 1];
-      const [fx, fz] = forwardXZ(c.camYaw);
-      return { pos: [cam.pos[0] + fx * 0.15, cam.pos[1], cam.pos[2] + fz * 0.15], yaw: c.camYaw, pitch: c.camPitch };
-    }
+    if (c.cam) return { pos: this.camLens(c.cam - 1, c.camYaw), yaw: c.camYaw, pitch: c.camPitch };
     const p = this.pawns.get(this.viewedPawnId(c.id));
     if (!p || p.state.mode === PawnMode.Dead || p.state.mode === PawnMode.Held) return null;
     const eye = this.eyeOf(p);
@@ -744,25 +787,66 @@ export class Sim {
     this.ctx.events.push({ kind: "ping", ctrlId: c.id, pos: [v.pos[0] + dir[0] * hit.t, v.pos[1] + dir[1] * hit.t, v.pos[2] + dir[2] * hit.t] });
   }
 
-  private camWorks(i: number): boolean {
+  /** How many cameras defenders have: the level's, then the round's Bulletproof Cameras. */
+  camCount(): number {
+    return this.level.def.cameras.length + this.matchRules.bpCams.length;
+  }
+
+  /** A Bulletproof Camera by its place in the defenders' list (from 0); null for one of the level's. */
+  bpCamAt(i: number): BpCam | null {
+    return i < this.level.def.cameras.length ? null : (this.matchRules.bpCams[i - this.level.def.cameras.length] ?? null);
+  }
+
+  /** Whether camera i has a feed: not broken, and a Bulletproof Camera placed outdoors still has its signal. */
+  camWorks(i: number): boolean {
+    if (i >= this.camCount()) return false; // a Bulletproof Camera from a round that's over
+    const bp = this.bpCamAt(i);
+    if (bp) return !bp.broken && (bp.signalEnd === 0 || this.tick < bp.signalEnd);
     return i < 32 && (this.matchRules.camsBroken & (1 << i)) === 0;
   }
 
-  /** The next working camera from `from` going `dir` (±1), round the level's list; −1 when none works. */
+  /**
+   * How camera i's view turns: `face` its facing; within `half` of it (π: all the way round, a Bulletproof Camera on
+   * the floor), tilting from `pitchMin` to `pitchMax`, at most `turn` a tick; `fovDeg` how wide it sees.
+   */
+  camLimits(i: number): { face: number; half: number; pitchMin: number; pitchMax: number; turn: number; fovDeg: number } {
+    const bp = this.bpCamAt(i);
+    const k = bp ? this.data.intel.bulletproofCamera.view : this.data.intel.camera;
+    return {
+      face: bp ? bp.yaw : (this.level.def.cameras[i]?.yawDeg ?? 0) * DEG,
+      half: bp?.onFloor ? Math.PI : k.yawHalfRangeDeg * DEG,
+      pitchMin: k.pitchMinDeg * DEG,
+      pitchMax: k.pitchMaxDeg * DEG,
+      turn: k.turnDegPerS * DEG * DT,
+      fovDeg: k.fovDeg,
+    };
+  }
+
+  /** Camera i's lens, looking `yaw`: just out of the front of its box (the origin for no such camera). */
+  camLens(i: number, yaw: number): [number, number, number] {
+    const bp = this.bpCamAt(i);
+    const at = bp ? bp.pos : (this.level.def.cameras[i]?.pos ?? [0, 0, 0]);
+    const ahead = (bp ? this.data.intel.bulletproofCamera.sizeM[2] / 2 : CAMERA_HALF_M) + LENS_AHEAD_M;
+    const [fx, fz] = forwardXZ(yaw);
+    return [at[0] + fx * ahead, at[1], at[2] + fz * ahead];
+  }
+
+  /** The next working camera from `from` going `dir` (±1), round the defenders' list; −1 when none works. */
   private nextCam(from: number, dir: number): number {
-    const n = this.level.def.cameras.length;
+    const n = this.camCount();
+    const start = Math.min(from, n - 1); // from one no longer in the list (last round's): as if from the last
     for (let k = 1; k <= n; k++) {
-      const i = (((from + dir * k) % n) + n) % n;
+      const i = (((start + dir * k) % n) + n) % n;
       if (this.camWorks(i)) return i;
     }
     return -1;
   }
 
   private openCam(c: PlayerController, i: number) {
-    const cam = this.level.def.cameras[i];
+    const l = this.camLimits(i);
     c.cam = i + 1;
-    c.camYaw = Math.fround(wrapAngle(cam.yawDeg * DEG));
-    c.camPitch = Math.fround(clamp(cam.pitchDeg * DEG, this.data.intel.camera.pitchMinDeg * DEG, this.data.intel.camera.pitchMaxDeg * DEG));
+    c.camYaw = Math.fround(wrapAngle(l.face));
+    c.camPitch = Math.fround(clamp(this.bpCamAt(i) ? 0 : this.level.def.cameras[i].pitchDeg * DEG, l.pitchMin, l.pitchMax));
   }
 
   /** One of this body's own drones out within reach (data/intel.json `drone.pickupReachM`), to pick up with F. */
@@ -920,7 +1004,7 @@ export class Sim {
     pawn.collider.setRadius(r);
     pawn.collider.setHalfHeight(hh);
     pawn.collider.setTranslation({ x: spawn.pos[0], y: spawn.pos[1] + hh + r + 0.02, z: spawn.pos[2] });
-    pawn.state = { ...initialPawnState(spawn.pos[0], spawn.pos[1] + 0.02, spawn.pos[2], Math.fround(spawn.yawDeg * DEG), pawn.state.maxHp, pawn.loadout), rng: pawn.state.rng };
+    pawn.state = { ...initialPawnState(spawn.pos[0], spawn.pos[1] + 0.02, spawn.pos[2], Math.fround(spawn.yawDeg * DEG), pawn.state.maxHp, pawn.loadout), rng: pawn.state.rng, gadgets: this.gadgetsOf(pawn.loadout) };
     pawn.life++;
     poseCollider(this.ctx, pawn); // also makes a dead body solid again
     refreshBroadPhase(this.world);
@@ -1081,11 +1165,13 @@ export class Sim {
           const reviving = this.updateRevive(pawn, input);
           if (reviving || this.updateDeploy(pawn, input)) {
             // Reviving holds you in place, and so do reinforcing and barricading (reinforcement.locksReinforcer;
-            // both placeholders) and the defuser's holds (data/objective.json), through the tick a hold completes;
-            // the held key never reaches a ladder.
+            // both placeholders), the defuser's holds (data/objective.json) and placing a Bulletproof Camera (ours),
+            // through the tick a hold completes; the held key never reaches a ladder.
             const k = pawn.state.deployKind !== DeployKind.None ? pawn.state.deployKind : holding;
             const d = this.data.objective.defuser;
-            const still = reviving || (k === DeployKind.Plant ? d.plantLocksBody : k === DeployKind.Disable ? d.disableLocksBody : k !== DeployKind.None && this.data.destruction.reinforcement.locksReinforcer);
+            const still =
+              reviving ||
+              (k === DeployKind.Plant ? d.plantLocksBody : k === DeployKind.Disable ? d.disableLocksBody : k === DeployKind.Camera || (k !== DeployKind.None && this.data.destruction.reinforcement.locksReinforcer));
             // A standing body crouches for the defuser's holds where the data says so (prone stays prone); it stands
             // back up when the hold ends, as its stance key says.
             const kneel = !reviving && input.stance === Stance.Stand && (k === DeployKind.Plant ? d.plantCrouches : k === DeployKind.Disable && d.disableCrouches);

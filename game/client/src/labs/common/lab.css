@@ -100,6 +100,11 @@ html, body { overflow: hidden; overscroll-behavior: none; touch-action: none; us
 .scan-gauge div { height: 100%; width: 0; background: #fca5a5; }
 .scan-gauge.full div { background: #ef4444; }
 .killfeed div.callout { color: #fde047; }
+/* A Bulletproof Camera's thermal view (bodies glow white: PawnView.heat), a jammed drone's static, gadgets left. */
+.thermal #view canvas { filter: grayscale(1) sepia(1) hue-rotate(55deg) saturate(1.4) brightness(1.3) contrast(1.15); }
+.dronecam.jammed { background: repeating-linear-gradient(0deg, rgba(200, 210, 220, 0.14) 0 2px, rgba(0, 0, 0, 0.2) 2px 4px); animation: jam 0.12s steps(2) infinite; }
+@keyframes jam { 50% { background-position: 0 3px; } }
+.gadget-line { margin-top: 2px; font: 600 11px var(--mono); color: var(--muted); }
 .hidden { display: none !important; }
 
 .gear { position: fixed; z-index: 3; top: 44px; right: 12px; width: 40px; height: 40px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); font-size: 20px; cursor: pointer; }

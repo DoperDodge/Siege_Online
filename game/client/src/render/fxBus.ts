@@ -1,5 +1,5 @@
 // Effects in the world (Phase 3 M9): muzzle flashes and their light, tracers, bullet marks, debris from
-// broken panels (Phase 4), and a sound hook. Fed by our own fresh predictions (the session never reports replayed ticks, so a correction never
+// broken panels (Phase 4), EMP darts' bursts (Phase 7), and a sound hook. Fed by our own fresh predictions (the session never reports replayed ticks, so a correction never
 // repeats an effect) and by the server's events, which are drawn when the frame on screen reaches the tick
 // they happened at. A suppressor hides the flash and the tracer (weapons_notes.md §4.4). Placeholders.
 // Every effect object is made up front and reused, so the pools never grow and their shaders can be
@@ -29,6 +29,10 @@ const STALE_TICKS = 64;
 const DEBRIS = 96;
 const DEBRIS_PER_LAYER = 3;
 const DEBRIS_MS = 900;
+
+/** EMP darts' bursts (Phase 7): a pale blue ball the burst's size, shown this long; a few at once. */
+const EMPS = 4;
+const EMP_MS = 250;
 
 /** Objects reused oldest first, each shown until its time is up. */
 class Pool<T extends THREE.Object3D> {
@@ -63,6 +67,7 @@ export class FxBus {
   private readonly lights: { light: THREE.PointLight; until: number }[] = [];
   private nextLight = 0;
   private readonly debris: Pool<THREE.Mesh>;
+  private readonly emps: Pool<THREE.Mesh>;
   /** Each chunk's velocity (m/s), by its place in the pool. */
   private readonly debrisVel: THREE.Vector3[];
   private readonly debrisMat = { skin: new THREE.MeshBasicMaterial({ color: 0xd9d4c7 }), wood: new THREE.MeshBasicMaterial({ color: 0x8b6a43 }), steel: new THREE.MeshBasicMaterial({ color: 0x56606b }) };
@@ -122,6 +127,15 @@ export class FxBus {
       }),
     );
     this.debrisVel = this.debris.items.map(() => new THREE.Vector3());
+    const empGeo = new THREE.SphereGeometry(1, 16, 12);
+    const empMat = new THREE.MeshBasicMaterial({ color: 0x8fd3ff, transparent: true, opacity: 0.45, depthWrite: false });
+    this.emps = new Pool(
+      Array.from({ length: EMPS }, () => {
+        const m = new THREE.Mesh(empGeo, empMat);
+        scene.add(m);
+        return m;
+      }),
+    );
   }
 
   /** Panel ops just applied (from the server): a few chunks from the cells each one knocked out. */
@@ -169,6 +183,11 @@ export class FxBus {
         this.pending.push({ tick, e });
         if (this.pending.length > MAX_PENDING) this.pending.shift();
       } else if (e.kind === "hitConfirm") this.audio.play(e.killed ? "kill" : "hit");
+      else if (e.kind === "emp") {
+        const ball = this.emps.take(performance.now(), EMP_MS);
+        ball.position.set(e.pos[0], e.pos[1], e.pos[2]);
+        ball.scale.setScalar(this.sim.data.intel.bulletproofCamera.dartRadiusM);
+      }
     }
   }
 
@@ -197,6 +216,7 @@ export class FxBus {
     this.tracers.update(now);
     this.flashes.update(now);
     this.debris.update(now);
+    this.emps.update(now);
     const dt = Math.min(0.05, Math.max(0, now - this.lastFrameAt) / 1000);
     this.lastFrameAt = now;
     this.debris.items.forEach((m, i) => {

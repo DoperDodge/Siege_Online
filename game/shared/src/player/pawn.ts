@@ -138,5 +138,7 @@ export function initialPawnState(x: number, y: number, z: number, yaw: number, m
     jumpCd: 0,
     boostTicks: 0,
     boostCd: 0,
+    jammed: 0,
+    gadgets: 0,
   };
 }

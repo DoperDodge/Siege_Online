@@ -35,15 +35,19 @@ function readDrone(d: DroneData, pawn: Pawn): void {
 }
 
 /**
- * One tick of a drone out in the world (mode Walk; held and destroyed drones don't move). `input`: its driver's, or
- * null for a parked drone (it settles under gravity). Forward / strafe at `speedMps` whatever the mix, reached at
+ * One tick of a drone out in the world (mode Walk; held and destroyed drones don't move). `driver`: its driver's
+ * input, or null for a parked drone (it settles under gravity). Forward / strafe at `speedMps` whatever the mix, reached at
  * `accelMps2` on the ground (`airControl` of it in the air); the mouse turns it and tilts its camera; Space jumps
  * when grounded and the cooldown is over; a Shift press starts a boost when it's ready.
  */
-export function stepDrone(ctx: MoveContext, pawn: Pawn, input: InputCmd | null): void {
+export function stepDrone(ctx: MoveContext, pawn: Pawn, driver: InputCmd | null): void {
   const d = ctx.data.intel.drone;
   const s = pawn.state;
   if (s.mode !== PawnMode.Walk) return;
+  // Jammed by a Bulletproof Camera's EMP dart: deaf to its driver until it wears off (it settles where it is).
+  const jammed = s.jammed > 0;
+  if (jammed) s.jammed--;
+  const input = jammed ? null : driver;
   const pressed = input ? input.buttons & ~s.prevButtons : 0;
   if (s.jumpCd > 0) s.jumpCd--;
   if (s.boostTicks > 0) s.boostTicks--;
@@ -100,7 +104,7 @@ export function stepDrone(ctx: MoveContext, pawn: Pawn, input: InputCmd | null):
   if ((grounded && s.vy < 0) || (s.vy > 0 && got.y < want.y - 1e-6)) s.vy = 0;
   s.grounded = grounded;
   readDrone(d, pawn);
-  s.prevButtons = input ? input.buttons : s.prevButtons;
+  s.prevButtons = driver ? driver.buttons : s.prevButtons;
   s.vx = Math.fround(s.vx);
   s.vy = Math.fround(s.vy);
   s.vz = Math.fround(s.vz);

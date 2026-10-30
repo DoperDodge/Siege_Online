@@ -30,6 +30,7 @@ import { MatchDirector, type DirectorHost } from "./matchDirector.js";
 import type { LobbyAction, MatchAction, RoomListEntry } from "./matchWire.js";
 import { isFormat, type FormatMode, type Side } from "../match/rules.js";
 import { camerasOnRay } from "../intel/cameras.js";
+import { bpCamsOnRay, dartBurst } from "../intel/bpCamera.js";
 import { raycastLevel } from "../level/raycast.js";
 import { ticks, ticksOrZero } from "../weapons/ticks.js";
 import { encodeError, encodePong, encodeRoster, encodeShotResult, encodeWelcome, ErrorCode, unwrap16, type InputMsg, type LabTool, type RosterEntry, type ShotResult } from "./protocol.js";
@@ -136,10 +137,14 @@ interface Member {
   held: number;
   /** Stepped without input since the last input applied (one stall, however many ticks). */
   stalled: boolean;
-  /** Intel (Phase 7): the tick of the last ping and callout, and how long Fire has been held on a drone or camera. */
+  /**
+   * Intel (Phase 7): the tick of the last ping and callout, how long Fire has been held on a drone or camera, and
+   * whether the gadget key was down (a Bulletproof Camera's dart fires on its press).
+   */
   lastPing: number;
   lastCallout: number;
   scanTicks: number;
+  gadgetHeld: boolean;
   /** Arrival tick minus claimed snapshot tick, for the last LAG_WINDOW inputs (a ring). */
   lags: number[];
   lagAt: number;
@@ -380,6 +385,7 @@ export class Room implements DirectorHost {
       lastPing: -1e9,
       lastCallout: -1e9,
       scanTicks: 0,
+      gadgetHeld: false,
       lags: [],
       lagAt: 0,
       needCorrection: false,
@@ -734,11 +740,18 @@ export class Room implements DirectorHost {
     this.stats.shots++;
     if (rewoundTick > viewTick) this.stats.cappedShots++;
     const panelOps = paths.flatMap((p) => p.ops);
-    // Default cameras on a pellet's way, short of what stopped it, break (Phase 7: any hit, either side's).
+    // Default cameras on a pellet's way, short of what stopped it, break (Phase 7: any hit, either side's), and so do
+    // Bulletproof Cameras hit from the side or the back.
     if (this.director && this.sim.matchRules.cameras) {
       let broke = 0;
-      for (const p of paths) broke |= camerasOnRay(this.sim.level.def, origin, p.dir, Math.min(p.end, p.first?.t ?? Infinity), this.sim.matchRules.camsBroken);
+      let bp = 0;
+      for (const p of paths) {
+        const end = Math.min(p.end, p.first?.t ?? Infinity);
+        broke |= camerasOnRay(this.sim.level.def, origin, p.dir, end, this.sim.matchRules.camsBroken);
+        bp |= bpCamsOnRay(this.sim.matchRules.bpCams, this.sim.data.intel.bulletproofCamera, origin, p.dir, end);
+      }
       if (broke) this.director.camerasBroken(broke);
+      if (bp) this.director.bpCamsBroken(bp);
     }
     this.judged.push({ m, cause: Cause.Bullet, ctrlId: m.ctrl.id, team: shooter.team, seq: shot.seq, weaponId: w.id, receivedTick: now, rewoundTick, origin, bodies, lives: this.livesOf(bodies), panelOps });
     // Everyone sees and hears it (the shooter's own client draws its flash itself, but not where pellets went).
@@ -808,6 +821,12 @@ export class Room implements DirectorHost {
     const reach = this.sim.data.combat.melee.reach;
     const ray = new this.sim.R.Ray({ x: hit.origin[0], y: hit.origin[1], z: hit.origin[2] }, { x: dir[0], y: dir[1], z: dir[2] });
     const plain = this.sim.world.castRay(ray, reach, true, undefined, QUERY_SIGHT)?.timeOfImpact ?? reach;
+    // A Bulletproof Camera in reach: the knife breaks its glass, any face (Phase 7; for us its feed is gone, broken).
+    const knifed = this.director ? bpCamsOnRay(this.sim.matchRules.bpCams, this.sim.data.intel.bulletproofCamera, hit.origin, dir, plain, true) : 0;
+    if (knifed) {
+      this.director!.bpCamsBroken(knifed);
+      return;
+    }
     const onPanel = meleeOnPanels(this.sim.level.panels, this.sim.data.destruction, hit.origin, dir, reach, plain, { tick: panelTick, history: this.panelHistory });
     if (onPanel) this.judged.push({ ...base, bodies: [], lives: new Map(), panelOps: onPanel.ops.map(({ panel, op }) => ({ panel, op })) });
   }
@@ -849,6 +868,7 @@ export class Room implements DirectorHost {
     if (pools[pawn.team] <= 0) return;
     if (!this.applyPanelOp(e.panel, { kind: "reinforce", section: e.section, side: e.side })?.added[L_STEEL].length) return;
     pools[pawn.team]--;
+    this.director?.panelReinforced(e.panel);
     for (const m of this.members.values()) m.events.push(this.deployRulesEvent());
   }
 
@@ -988,6 +1008,8 @@ export class Room implements DirectorHost {
         if (p) this.announceDeath(p, 0, "", e.cause === "bleed" ? Cause.Bleed : Cause.Fall, false, false, e.life);
       } else if (e.kind === "deploy") {
         this.completeDeploy(e);
+      } else if (e.kind === "camera") {
+        this.director?.cameraPlaced(e);
       } else if (e.kind === "rappelBreach") {
         this.completeBreach(e);
       } else if (e.kind === "plant" || e.kind === "disable" || e.kind === "pickup" || e.kind === "drop") {
@@ -1135,6 +1157,40 @@ export class Room implements DirectorHost {
     }
   }
 
+  /**
+   * EMP darts (Phase 7 M5, intel/DESIGN.md §4): the gadget key pressed on a working Bulletproof Camera whose dart is
+   * ready, by a defender still alive (the dead watch but don't fire: research/intel.md §4), fires it along the view.
+   * It bursts on the first enemy drone or surface it meets (or at `dartRangeM`), jams every enemy drone within
+   * `dartRadiusM` for `disableS` (their owners get a correction), and is ready again `dartRechargeS` later. Everyone
+   * sees the burst.
+   */
+  private darts(applied: ReadonlyMap<number, { m: Member; input: QueuedInput }>) {
+    const k = this.sim.data.intel.bulletproofCamera;
+    const size = this.sim.data.intel.drone.sizeM;
+    for (const { m, input } of applied.values()) {
+      const down = (input.cmd.buttons & Btn.Gadget) !== 0;
+      const pressed = down && !m.gadgetHeld;
+      m.gadgetHeld = down;
+      const c = m.ctrl;
+      if (!pressed || !c?.cam || !this.director) continue;
+      const i = c.cam - 1;
+      const cam = this.sim.bpCamAt(i);
+      const body = this.sim.pawns.get(c.possessedPawnId);
+      if (!cam || !this.sim.camWorks(i) || this.sim.tick < cam.dartReady || !body || body.state.mode === PawnMode.Dead) continue;
+      const view = this.sim.viewOf(c)!;
+      const drones = [...this.sim.pawns.values()].filter((p) => p.kind === PawnKind.Drone && p.state.mode === PawnMode.Walk && p.team !== m.team);
+      const centre = (p: Pawn): Vec3 => [p.state.x, p.state.y + size[1] / 2, p.state.z];
+      const burst = dartBurst(this.sim, k, view.pos, viewDir(view.yaw, view.pitch), drones.map(centre), size[0] / 2);
+      for (const p of drones) {
+        const at = centre(p);
+        if (Math.hypot(at[0] - burst[0], at[1] - burst[1], at[2] - burst[2]) <= k.dartRadiusM) p.state.jammed = ticks(k.disableS);
+      }
+      this.director.dartFired(i - this.sim.level.def.cameras.length, this.sim.tick + ticksOrZero(k.dartRechargeS));
+      const e: GameEvent = { kind: "emp", pos: burst };
+      for (const o of this.members.values()) o.events.push(e);
+    }
+  }
+
   /** A callout off the comm wheel (Phase 7): to the caller's team, at most two a second. */
   onCallout(memberId: number, id: number): void {
     const m = this.members.get(memberId);
@@ -1147,6 +1203,7 @@ export class Room implements DirectorHost {
   /** Judge the shots of the step just taken; `applied` is each member's input in that step. */
   private judgeEvents(applied: ReadonlyMap<number, { m: Member; input: QueuedInput }>) {
     this.scans(applied);
+    this.darts(applied);
     for (const e of this.sim.events) {
       if (e.kind === "ping") this.ping(e.ctrlId, e.pos);
       if (e.kind !== "shot" && e.kind !== "meleeImpact") continue;

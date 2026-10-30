@@ -31,6 +31,8 @@ export interface Keybinds {
   observe: string;
   /** Ping where you look (Phase 7, intel/DESIGN.md §6); held, the comm wheel. */
   ping: string;
+  /** Gadgets (Phase 7, intel/DESIGN.md §4): held, place a Bulletproof Camera; on one, fire its EMP dart. */
+  gadget: string;
 }
 
 export interface Settings {
@@ -87,6 +89,7 @@ export const DEFAULT_SETTINGS: Settings = {
     observe: "Digit5",
     // Siege pings with Z, our ability key.
     ping: "KeyT",
+    gadget: "Digit3",
   },
 };
 
