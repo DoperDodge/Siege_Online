@@ -49,6 +49,7 @@ export * from "./destruction/explosives.js";
 export * from "./match/rules.js";
 export * from "./match/outcome.js";
 export * from "./match/objective.js";
+export * from "./intel/cameras.js";
 export * from "./match/settings.js";
 export * from "./match/match.js";
 export * from "./match/preSetup.js";

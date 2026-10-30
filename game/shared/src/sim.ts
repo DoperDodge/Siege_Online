@@ -1,7 +1,7 @@
 // A simulation instance: one physics world + level + pawns + controllers. The Node server runs one per
 // match room; the browser runs one for prediction and for offline Practice / Bot Training (PLAN §5).
 import { DT } from "./core/constants.js";
-import { clamp, forwardXZ, rotateXZ, DEG } from "./core/math.js";
+import { clamp, forwardXZ, rotateXZ, DEG, wrapAngle } from "./core/math.js";
 import { loadGameData, type GameData } from "./data/load.js";
 import { deployAction, deployTicks, DeployKind, type DeployAction, type DeployRules } from "./destruction/deploy.js";
 import { buildLevel, type BuiltLevel } from "./level/builder.js";
@@ -29,6 +29,9 @@ export interface MatchSimRules {
   redWalls: boolean;
   /** Below the kill plane a body dies (the room kills it) instead of going back to spawn 0 (labs). */
   killPlaneKills: boolean;
+  /** Defenders watch the level's default cameras (Phase 7, a match); `camsBroken`: a bit for each broken one. */
+  cameras: boolean;
+  camsBroken: number;
 }
 
 /** A dropped thing's floor is looked for from this far over the point it was let go at, down to this far below it (metres). */
@@ -49,7 +52,7 @@ export class Sim {
    */
   deployRules: DeployRules = { anyone: false, rappel: false, pools: [0, 0] };
   /** A match room's rules for bodies (none in a lab). */
-  matchRules: MatchSimRules = { redWalls: false, killPlaneKills: false };
+  matchRules: MatchSimRules = { redWalls: false, killPlaneKills: false, cameras: false, camsBroken: 0 };
   /**
    * The defuser in a match (null in a lab): who carries it, where it lies or is planted, the site and the holds
    * (match/objective.ts). The simulation moves it (pick up, drop, plant); the room sets the rest.
@@ -178,6 +181,9 @@ export class Sim {
       possessedPawnId: 0,
       drone: 0,
       prevLean: 0,
+      cam: 0,
+      camYaw: 0,
+      camPitch: 0,
       shellCam: false,
       swapPhase: 0,
       swapT: 0,
@@ -557,6 +563,9 @@ export class Sim {
       possessedPawnId: 0,
       drone: 0,
       prevLean: 0,
+      cam: 0,
+      camYaw: 0,
+      camPitch: 0,
       shellCam: false,
       swapPhase: 0,
       swapT: 0,
@@ -659,6 +668,77 @@ export class Sim {
     const thrown = body.state.mode === PawnMode.Walk ? this.throwDrone(c, body, input.buttons) : null;
     if (thrown) c.drone = thrown.id;
     else if (out.length) c.drone = out[0].id;
+  }
+
+  /**
+   * Default cameras (Phase 7, intel/DESIGN.md §3), for defenders in a match: Observe opens the first working camera and
+   * closes it; a new lean goes to the previous / next working one; the view turns toward the mouse within the camera's
+   * limits at its turn rate (data/intel.json `camera`). A camera broken while watched hands over to the next working
+   * one, or closes when none is left. Down, nothing; going down closes it.
+   */
+  private updateCams(c: PlayerController, input: InputCmd | undefined, heldBefore: number) {
+    const cams = this.level.def.cameras;
+    if (!this.matchRules.cameras || c.team !== sideTeam("defender") || !cams.length) {
+      c.cam = 0;
+      return;
+    }
+    const body = this.pawns.get(c.possessedPawnId);
+    const downed = body !== undefined && isDowned(body.state);
+    if (c.cam && (downed || !this.camWorks(c.cam - 1))) {
+      const next = downed ? -1 : this.nextCam(c.cam - 1, 1);
+      if (next < 0) c.cam = 0;
+      else this.openCam(c, next);
+    }
+    if (!input) return;
+    const lean = Math.sign(input.lean);
+    const newLean = lean !== 0 && lean !== c.prevLean ? lean : 0;
+    c.prevLean = lean;
+    const pressed = input.buttons & ~heldBefore;
+    if (c.cam) {
+      if (pressed & Btn.Observe) {
+        c.cam = 0;
+        return;
+      }
+      if (newLean) {
+        const next = this.nextCam(c.cam - 1, newLean);
+        if (next >= 0) this.openCam(c, next);
+      }
+      // Toward the mouse, within the camera's limits, at its turn rate.
+      const cam = cams[c.cam - 1];
+      const k = this.data.intel.camera;
+      const face = cam.yawDeg * DEG;
+      const half = k.yawHalfRangeDeg * DEG;
+      const yaw = face + clamp(wrapAngle(input.yaw - face), -half, half);
+      const pitch = clamp(input.pitch, k.pitchMinDeg * DEG, k.pitchMaxDeg * DEG);
+      const turn = k.turnDegPerS * DEG * DT;
+      c.camYaw = Math.fround(wrapAngle(c.camYaw + clamp(wrapAngle(yaw - c.camYaw), -turn, turn)));
+      c.camPitch = Math.fround(c.camPitch + clamp(pitch - c.camPitch, -turn, turn));
+      return;
+    }
+    if (!(pressed & Btn.Observe) || downed) return;
+    const first = this.nextCam(-1, 1);
+    if (first >= 0) this.openCam(c, first);
+  }
+
+  private camWorks(i: number): boolean {
+    return i < 32 && (this.matchRules.camsBroken & (1 << i)) === 0;
+  }
+
+  /** The next working camera from `from` going `dir` (±1), round the level's list; −1 when none works. */
+  private nextCam(from: number, dir: number): number {
+    const n = this.level.def.cameras.length;
+    for (let k = 1; k <= n; k++) {
+      const i = (((from + dir * k) % n) + n) % n;
+      if (this.camWorks(i)) return i;
+    }
+    return -1;
+  }
+
+  private openCam(c: PlayerController, i: number) {
+    const cam = this.level.def.cameras[i];
+    c.cam = i + 1;
+    c.camYaw = Math.fround(wrapAngle(cam.yawDeg * DEG));
+    c.camPitch = Math.fround(clamp(cam.pitchDeg * DEG, this.data.intel.camera.pitchMinDeg * DEG, this.data.intel.camera.pitchMaxDeg * DEG));
   }
 
   /** One of this body's own drones out within reach (data/intel.json `drone.pickupReachM`), to pick up with F. */
@@ -784,7 +864,7 @@ export class Sim {
   prompt(controllerId: number): Prompt {
     const c = this.controllers.get(controllerId);
     if (!c) return null;
-    if (c.swapPhase || c.drone) return null;
+    if (c.swapPhase || c.drone || c.cam) return null;
     if (c.shellCam) return "transfer";
     const pawn = this.pawns.get(c.possessedPawnId);
     if (!pawn || pawn.kind === PawnKind.Drone) return null;
@@ -910,13 +990,24 @@ export class Sim {
       const input = inputs.get(c.id);
       const heldBefore = c.prevButtons;
       const viewedBefore = this.viewedPawnId(c.id);
-      const onCamBefore = c.shellCam || c.swapPhase !== 0 || c.drone !== 0;
+      const onCamBefore = c.shellCam || c.swapPhase !== 0 || c.drone !== 0 || c.cam !== 0;
+      const camBefore = c.cam;
       this.updateShells(c, input);
       this.updateDrones(c, input, heldBefore);
+      this.updateCams(c, input, heldBefore);
+      if (c.cam) {
+        // Watching a camera (Phase 7): the body, if it stands, idles with its weapon parked.
+        const body = this.pawns.get(c.possessedPawnId);
+        if (body && body.kind === PawnKind.Body && body.state.mode !== PawnMode.Dead) {
+          drive.set(body.id, idleInput(body, body.state.stance));
+          idleDriven.add(body.id);
+        }
+        continue;
+      }
       // The view belongs to whichever body you were looking through: on the tick that changes (the camera
       // opens or closes, a drone is entered or left), the newly viewed one keeps its own facing instead of taking
       // the old view's.
-      const viewChanged = this.viewedPawnId(c.id) !== viewedBefore;
+      const viewChanged = this.viewedPawnId(c.id) !== viewedBefore || c.cam !== camBefore;
       const drone = c.drone ? this.pawns.get(c.drone) : undefined;
       if (drone) {
         // Driving a drone (Phase 7): it takes the input; the body, if it stands, idles with its weapon parked.

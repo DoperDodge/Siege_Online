@@ -854,3 +854,78 @@ describe("drones in a match (Phase 7 M1)", () => {
     expect(ctrl.drone).toBe(0);
   }, 60_000);
 });
+
+describe("default cameras in a match (Phase 7 M3)", () => {
+  const sidesOf = <C extends { id: number }>(t: Awaited<ReturnType<typeof matchRoom>>, cs: C[]) =>
+    [cs.find((c) => t.match.sideOf(c.id) === ATTACK)!, cs.find((c) => t.match.sideOf(c.id) === DEFENSE)!] as const;
+
+  it("a defender watches them in prep, predicted; a shot breaks one: every client hears, and its feed is skipped", async () => {
+    const t = await matchRoom("custom", 3);
+    const cs = await t.start(["a", "b"], quick({ siteReveal: "roundStart" }));
+    const [atk, def] = sidesOf(t, cs);
+    t.until(() => t.match.phase === Phase.Prep, 15, "prep");
+    t.tick();
+    const cams = t.room.sim.level.def.cameras;
+    const ctrl = t.room.bodyOf(def.id)!;
+    const missed = def.session.mispredictions.length;
+    def.cmd = { yaw: cams[0].yawDeg * DEG, buttons: Btn.Observe };
+    t.tick();
+    def.cmd = { yaw: cams[0].yawDeg * DEG };
+    t.until(() => ctrl.cam === 1, 0.5, "the first camera");
+    def.cmd = { yaw: cams[0].yawDeg * DEG, lean: 1 };
+    t.until(() => ctrl.cam === 2, 0.5, "the next camera");
+    def.cmd = { yaw: cams[1].yawDeg * DEG };
+    for (let i = 0; i < 32; i++) t.tick();
+    expect(def.session.ctrl!.cam).toBe(2);
+    expect(def.session.mispredictions.length).toBe(missed);
+    def.cmd = { yaw: cams[1].yawDeg * DEG, buttons: Btn.Observe };
+    t.tick();
+    def.cmd = {};
+    t.until(() => ctrl.cam === 0, 0.5, "closed");
+
+    // Under camera 4 (the basement's), 1.5 m out along its facing: one shot at it, down the sights.
+    const i = 3;
+    const cam = cams[i];
+    const [fx, fz] = [-Math.sin(cam.yawDeg * DEG), -Math.cos(cam.yawDeg * DEG)];
+    t.place(def, cam.pos[0] + fx * 1.5, cam.pos[1] - 2.7, cam.pos[2] + fz * 1.5, cam.yawDeg + 180);
+    const eye = eyePose(data.movement, data.hitboxes, t.bodyOf(def)!.state).pos;
+    const dv = [0, 1, 2].map((k) => cam.pos[k] - eye[k]);
+    const aim = { yaw: Math.atan2(-dv[0], -dv[2]), pitch: Math.atan2(dv[1], Math.hypot(dv[0], dv[2])) };
+    def.cmd = { ...aim, buttons: Btn.Ads };
+    for (let k = 0; k < 64; k++) t.tick();
+    def.cmd = { ...aim, buttons: Btn.Ads | Btn.Fire };
+    t.tick();
+    def.cmd = { ...aim };
+    for (let k = 0; k < 4; k++) t.tick();
+    expect(t.room.sim.matchRules.camsBroken).toBe(1 << i);
+    expect([def.session.match!.camsBroken, atk.session.match!.camsBroken]).toEqual([1 << i, 1 << i]);
+    // Going round, the broken one is skipped: 3 → 5.
+    def.cmd = { ...aim, buttons: Btn.Observe };
+    t.tick();
+    def.cmd = { ...aim };
+    t.until(() => ctrl.cam === 1, 0.5, "the first camera");
+    for (const want of [2, 3, 5]) {
+      def.cmd = { ...aim, lean: 0 };
+      t.tick();
+      def.cmd = { ...aim, lean: 1 };
+      t.until(() => ctrl.cam === want, 0.5, `camera ${want}`);
+    }
+  }, 60_000);
+
+  it("a dead defender watches them too; an attacker's Observe never opens them", async () => {
+    const t = await matchRoom("custom", 3);
+    const cs = await t.start(["a", "b"], quick({ siteReveal: "roundStart" }));
+    const [atk, def] = sidesOf(t, cs);
+    t.until(() => t.match.phase === Phase.Action, 25, "action");
+    t.tick();
+    const body = t.bodyOf(def)!;
+    t.room.killBody(body.id, Cause.Lab);
+    t.tick();
+    const ctrl = t.room.bodyOf(def.id)!;
+    def.cmd = { buttons: Btn.Observe };
+    t.tick();
+    def.cmd = {};
+    t.until(() => ctrl.cam === 1, 0.5, "the first camera");
+    expect(t.room.bodyOf(atk.id)!.cam).toBe(0);
+  }, 60_000);
+});

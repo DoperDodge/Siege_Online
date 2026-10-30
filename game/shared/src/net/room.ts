@@ -29,6 +29,7 @@ import { encodeEvents, type GameEvent } from "./events.js";
 import { MatchDirector, type DirectorHost } from "./matchDirector.js";
 import type { LobbyAction, MatchAction, RoomListEntry } from "./matchWire.js";
 import { isFormat, type FormatMode, type Side } from "../match/rules.js";
+import { camerasOnRay } from "../intel/cameras.js";
 import { encodeError, encodePong, encodeRoster, encodeShotResult, encodeWelcome, ErrorCode, unwrap16, type InputMsg, type LabTool, type RosterEntry, type ShotResult } from "./protocol.js";
 import { encodePanelOps, encodePanelState, wireOp } from "./panels.js";
 import { MAX_INTERP_MS, quantizeRemote, SNAPSHOT_EVERY, SnapshotEncoder, type RemoteQ } from "./snapshot.js";
@@ -724,6 +725,12 @@ export class Room implements DirectorHost {
     this.stats.shots++;
     if (rewoundTick > viewTick) this.stats.cappedShots++;
     const panelOps = paths.flatMap((p) => p.ops);
+    // Default cameras on a pellet's way, short of what stopped it, break (Phase 7: any hit, either side's).
+    if (this.director && this.sim.matchRules.cameras) {
+      let broke = 0;
+      for (const p of paths) broke |= camerasOnRay(this.sim.level.def, origin, p.dir, Math.min(p.end, p.first?.t ?? Infinity), this.sim.matchRules.camsBroken);
+      if (broke) this.director.camerasBroken(broke);
+    }
     this.judged.push({ m, cause: Cause.Bullet, ctrlId: m.ctrl.id, team: shooter.team, seq: shot.seq, weaponId: w.id, receivedTick: now, rewoundTick, origin, bodies, lives: this.livesOf(bodies), panelOps });
     // Everyone sees and hears it (the shooter's own client draws its flash itself, but not where pellets went).
     const ends = paths.map((p): [number, number, number] => [origin[0] + p.dir[0] * p.end, origin[1] + p.dir[1] * p.end, origin[2] + p.dir[2] * p.end]);

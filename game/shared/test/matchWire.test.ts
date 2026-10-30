@@ -81,7 +81,7 @@ describe("match messages", () => {
       site: "SITE_LAUNDRY",
       siteRevealed: true,
       carrier: 2,
-      safeguardEnd: 70000,
+      safeguardEnd: 70000, camsBroken: 0b101,
       history: [{ round: 1, attackers: 0, winner: 1, reason: WinReason.Disabled, site: "SITE_DINING" }],
       winner: null,
       forfeit: false,

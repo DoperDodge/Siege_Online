@@ -766,7 +766,7 @@ export function matchFeatures(lab: LabApi): void {
   lab.addHelp(`<kbd>${keyLabel(keys.drop)}</kbd>`, "Drop the defuser (attackers)");
   lab.addHelp(
     `<kbd>${keyLabel(keys.observe)}</kbd>`,
-    `Drones (attackers): throw one, or go to one out, and back; on one ${keyLabel(keys.leanLeft)} / ${keyLabel(keys.leanRight)} switch, ${keyLabel(keys.vault)} jumps, ${keyLabel(keys.sprint)} boosts`,
+    `Drones (attackers): throw one, or go to one out, and back; on one ${keyLabel(keys.leanLeft)} / ${keyLabel(keys.leanRight)} switch, ${keyLabel(keys.vault)} jumps, ${keyLabel(keys.sprint)} boosts. Cameras (defenders): open them and back; ${keyLabel(keys.leanLeft)} / ${keyLabel(keys.leanRight)} switch`,
   );
   lab.addHelp("Left mouse (dead)", "Look through the next teammate still alive");
 

@@ -37,8 +37,13 @@ export interface PlayerController {
   possessedPawnId: number;
   /** The drone being driven (Phase 7, intel/DESIGN.md §2): it takes the input and the body stands idle; 0: none. */
   drone: number;
-  /** The lean key last tick (−1, 0, 1): on a drone, a new lean goes to the previous / next drone out. */
+  /** The lean key last tick (−1, 0, 1): on a drone or a camera, a new lean goes to the previous / next one. */
   prevLean: number;
+  /** The default camera a defender watches (Phase 7, intel/DESIGN.md §3): its index in the level's cameras + 1; 0: none. */
+  cam: number;
+  /** Where that camera looks (radians), within its limits: each viewer has their own (D-134). */
+  camYaw: number;
+  camPitch: number;
   /** Skopós: looking through the idle shell's camera (the step before a swap). */
   shellCam: boolean;
   /** Skopós swap in progress: 0 none, 1 transfer (active shell idles), 2 activation (target shell wakes). */

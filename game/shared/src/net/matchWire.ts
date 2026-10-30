@@ -252,6 +252,8 @@ export interface MatchView {
   carrier: number;
   /** The server tick Quick Match's Attacker Safeguard ends this round (players' `safe`), or 0: none. */
   safeguardEnd: number;
+  /** The default cameras broken this round (Phase 7): a bit each, in the level's order. */
+  camsBroken: number;
   history: RoundRecord[];
   /** At the match end: the winner (null: a draw), whether by forfeit, and the MVP (0: none). */
   winner: Team | null;
@@ -290,7 +292,7 @@ export function encodeMatchState(v: MatchView): Uint8Array {
     for (const op of side.slice(0, 6)) w.str(op);
   }
   optStr(w, v.site);
-  w.varu(v.carrier).u32(v.safeguardEnd >>> 0);
+  w.varu(v.carrier).u32(v.safeguardEnd >>> 0).u32(v.camsBroken >>> 0);
   const history = v.history.slice(-MAX_HISTORY);
   w.u8(history.length);
   for (const h of history) w.u8(Math.min(255, h.round)).u8(h.attackers).u8(h.winner).u8(h.reason).str(h.site);
@@ -362,6 +364,7 @@ export function decodeMatchState(r: ByteReader): MatchView {
   const site = readOpt(r);
   const carrier = r.varu();
   const safeguardEnd = r.u32();
+  const camsBroken = r.u32();
   const h = r.u8();
   if (h > MAX_HISTORY) throw new ProtocolError("history too long");
   const history: RoundRecord[] = Array.from({ length: h }, () => ({ round: r.u8(), attackers: team(r.u8()), winner: team(r.u8()), reason: reason(r.u8()), site: r.str(MAX_ID) }));
@@ -405,6 +408,7 @@ export function decodeMatchState(r: ByteReader): MatchView {
     siteRevealed: (f & F.siteRevealed) !== 0,
     carrier,
     safeguardEnd,
+    camsBroken,
     history,
     winner: wv === 2 ? null : (wv as Team),
     forfeit: (f & F.forfeit) !== 0,

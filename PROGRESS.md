@@ -14,10 +14,20 @@ known issues, and what's next.
 |---|---|
 | M1 Drones in the simulation and rooms: drive, jump, boost, drone holes; throw, drive, leave, pick up; prep in drone 1; shots destroy drones; protocol 13 | ✅ drones are pawns of their attacker (predicted like walking), two a round, data/intel.json; through drone holes and under door barricades; a shot destroys one (no death); protocol 13 |
 | M2 Drones in the browser: the drone view and HUD, drawing drones, keys; dead attackers drive their drones | ✅ 5 throws / enters / leaves, Q / E switch, Space jumps, Shift boosts; the drone's camera and overlay; greybox drones; prep in your first drone; the match browser test drives one online |
-| M3 Default cameras: viewing within limits, shooting them, broken state, dead defenders on cameras | ⏳ |
+| M3 Default cameras: viewing within limits, shooting them, broken state, dead defenders on cameras | ✅ 5 opens Oregon's eight cameras (defenders, alive or dead), Q / E go round them; each viewer turns their own view within the camera's limits; any shot breaks one for the round; the match browser test watches them online |
 | M4 Pings, scans and the comm wheel | ⏳ |
 | M5 Bulletproof Camera and its EMP dart | ⏳ |
 | M6 The feed list across everything, spectating; checks, docs, review, report | ⏳ |
+
+### What's done (M3: default cameras)
+- **Watching (defenders, in prep and action, dead too):** 5 opens the first of Oregon's eight cameras; Q / E go to the
+  previous / next working one; 5 again takes you back to your body (it stands still meanwhile). Down, you can't.
+- **The view:** from the camera's lens, 70° wide; the mouse turns it up to 60° either side of where the camera faces and
+  tilts it from 60° down to 10° up, the camera following at 60°/s. Each viewer has their own view (D-134): two
+  defenders on one camera don't fight over it. The overlay says which camera, its room and how many are broken.
+- **Breaking them:** any bullet through one breaks it for the round, from either side (shooting your own costs nothing
+  yet); everyone sees it dark and askew, and defenders skip it (one broken while watched hands over to the next).
+- In a match the cameras are drawn as small boxes with a lens (greybox).
 
 ### What's done (M1–M2: drones)
 - **Two drones each attacker, every round (D-134).** In a match's prep you start in your first drone, out at the spawn
@@ -45,7 +55,10 @@ known issues, and what's next.
 3. Action: you're at the spawn. 5 throws your second drone; 5 again takes you back; Q / E (on a drone) switch between
    them. Walk up to one and press F to pick it up.
 4. As a defender, shoot a drone: one hit.
-5. Checks: `npm run typecheck`, `npm test`, `npm run build && node tools/e2e/match.mjs` (prep droning online).
+5. As a defender: 5 opens the cameras, Q / E go round them, the mouse turns the view; shoot one (outside, at the
+   Construction site or the Junkyard) and it's skipped from then on. Dead, 5 still opens them.
+6. Checks: `npm run typecheck`, `npm test`, `npm run build && node tools/e2e/match.mjs` (prep droning and the cameras,
+   online).
 
 ### Known issues
 - Drones pass through operators (they only hit the level, walls and props), and climb only 5 cm without a jump, so
@@ -53,8 +66,10 @@ known issues, and what's next.
 - At the Kitchen's drone hole to the Security corridor (1F.dt4) a prop stands 0.3 m behind it on the Kitchen side, so
   a
   drone can't get through from there (our placeholder props, Phase 5's open questions 26–31).
-- No drone sounds yet (Phase 11), and no static near jammers (Mute, Phase 8). The default cameras, pinging, the
-  Bulletproof Camera and the feed list are the next milestones.
+- Each camera's wall and facing are placeholders (r6calls' icons, Phase 5's open questions); a camera doesn't stop the
+  bullet that breaks it; attackers don't see a light on a watched camera yet; no sounds (Phase 11), no static near
+  jammers (Mute, Phase 8).
+- Next: pings, scans and the comm wheel (M4), the Bulletproof Camera (M5), the feed list and spectating (M6).
 
 ---
 

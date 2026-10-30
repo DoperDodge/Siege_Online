@@ -68,14 +68,17 @@ bodies (no thermal, I:88).
 
 The level's cameras (level.json `cameras`: id, position, facing, room; Oregon has 8 from research/oregon/
 map_features.md, their walls and facings placeholders). Each is a small box on its wall or post with 1 HP: any shot
-breaks it
-(I:156), for the rest of the round. Defenders view them any time (prep and action, alive or dead; not downed); each
-viewer turns their own view within the camera's limits (`yawHalfRangeDeg` around its facing, `pitchMinDeg`…
-`pitchMaxDeg`) at `turnDegPerS`. **Deviation (flagged):** in Siege a camera has one facing that its viewers share;
-ours is per viewer, so two defenders on one camera don't fight over it and each view is predicted. Which cameras are
-broken is room state sent to everyone (like the walls), so attackers see them broken and defenders can't open them.
-A camera being watched shows a red light to attackers (Y6S4: viewer-relative colours; whether a passive viewer
-lights it is an open question).
+breaks it (I:156), for the rest of the round. Defenders view them any time (prep and action, alive or dead; not
+downed); each viewer turns their own view within the camera's limits (`yawHalfRangeDeg` around its facing,
+`pitchMinDeg`… `pitchMaxDeg`) at `turnDegPerS`. **Deviation (flagged):** in Siege a camera has one facing that its
+viewers share; ours is per viewer, so two defenders on one camera don't fight over it and each view is predicted.
+Which cameras are broken is room state sent to everyone (the match state's `camsBroken`, a bit each), so attackers
+see them broken and defenders can't open them. Keys: Observe (5) opens the first working camera and closes it; a new
+lean goes to the previous / next working one. The view turns toward the mouse at `turnDegPerS` within
+`yawHalfRangeDeg` of the facing and `pitchMinDeg`…`pitchMaxDeg` (absolute). A bullet's path through a camera's box
+(0.24 m, ours), short of what stopped the bullet, breaks it; the camera doesn't stop the bullet (ours). A camera
+being watched will show a red light to attackers (Y6S4: viewer-relative colours; whether a passive viewer lights it
+is an open question; not built yet).
 
 ## 4. Bulletproof Camera
 

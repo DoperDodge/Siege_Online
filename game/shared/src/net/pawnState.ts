@@ -82,16 +82,16 @@ export function hashPawnState(s: PawnState): number {
 }
 
 /** The predicted part of a controller (Skopós' camera and swap state, the drone driven): exact, like PawnState. */
-export type ControllerState = Pick<PlayerController, "possessedPawnId" | "shellCam" | "swapPhase" | "swapT" | "swapCooldown" | "prevButtons" | "drone" | "prevLean">;
+export type ControllerState = Pick<PlayerController, "possessedPawnId" | "shellCam" | "swapPhase" | "swapT" | "swapCooldown" | "prevButtons" | "drone" | "prevLean" | "cam" | "camYaw" | "camPitch">;
 
 export function controllerState(c: PlayerController): ControllerState {
-  const { possessedPawnId, shellCam, swapPhase, swapT, swapCooldown, prevButtons, drone, prevLean } = c;
-  return { possessedPawnId, shellCam, swapPhase, swapT, swapCooldown, prevButtons, drone, prevLean };
+  const { possessedPawnId, shellCam, swapPhase, swapT, swapCooldown, prevButtons, drone, prevLean, cam, camYaw, camPitch } = c;
+  return { possessedPawnId, shellCam, swapPhase, swapT, swapCooldown, prevButtons, drone, prevLean, cam, camYaw, camPitch };
 }
 
 export function writeControllerState(w: ByteWriter, c: ControllerState): void {
   w.varu(c.possessedPawnId).u8((c.shellCam ? 1 : 0) | (c.swapPhase << 1)).f32(c.swapT).f32(c.swapCooldown).u16(c.prevButtons);
-  w.varu(c.drone).i8(c.prevLean);
+  w.varu(c.drone).i8(c.prevLean).u8(c.cam).f32(c.camYaw).f32(c.camPitch);
 }
 
 export function readControllerState(r: ByteReader): ControllerState {
@@ -103,5 +103,5 @@ export function readControllerState(r: ByteReader): ControllerState {
   const drone = r.varu();
   const prevLean = r.i8();
   if (prevLean < -1 || prevLean > 1) throw new ProtocolError("bad lean");
-  return { ...head, drone, prevLean };
+  return { ...head, drone, prevLean, cam: r.u8(), camYaw: r.finite(), camPitch: r.finite() };
 }

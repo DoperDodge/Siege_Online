@@ -88,7 +88,7 @@ export class MatchDirector {
     const data = host.sim.data;
     this.formats = new Map([...data.modes.values()].filter(isFormat).map((m) => [m.id, m]));
     this.match = new Match(format, matchMapOf(host.sim.level.def, data.operators.values()), seed);
-    host.sim.matchRules = { redWalls: false, killPlaneKills: true };
+    host.sim.matchRules = { redWalls: false, killPlaneKills: true, cameras: true, camsBroken: 0 };
   }
 
   get mode(): FormatMode {
@@ -293,6 +293,14 @@ export class MatchDirector {
     this.changed(true);
   }
 
+  /** Shots broke default cameras (Phase 7): everyone hears at once (defenders lose those feeds). */
+  camerasBroken(bits: number) {
+    const rules = this.host.sim.matchRules;
+    if ((rules.camsBroken | bits) === rules.camsBroken) return;
+    rules.camsBroken |= bits;
+    this.changed(true);
+  }
+
   /** A body went down or died: if it carried the defuser, it falls to the floor under it (research §5; off a rope too). */
   onBodyDown(pawn: Pawn) {
     const sim = this.host.sim;
@@ -479,6 +487,7 @@ export class MatchDirector {
   private startPrep() {
     const defenders = this.match.sides[DEFENSE];
     const sim = this.host.sim;
+    sim.matchRules.camsBroken = 0; // every camera works again (Phase 7)
     this.host.resetPanels([0, reinforcementPool(this.mode, defenders.length)]);
     if (this.mode.match.preSetups && this.match.site) for (const o of preSetupOps(sim.level.def, sim.level.panels, sim.data.destruction, this.match.site)) this.host.queuePanelOp(o.panel, o.op);
     const spots = this.spawnsOf(this.match.site ?? "");
@@ -613,6 +622,7 @@ export class MatchDirector {
       siteRevealed: m.siteRevealed,
       carrier: attacker ? this.carrierMember() : 0,
       safeguardEnd: m.phase === Phase.Action && this.host.sim.tick < this.safeguardEnd ? this.safeguardEnd : 0,
+      camsBroken: this.host.sim.matchRules.camsBroken,
       history: m.history.slice(-MAX_HISTORY).map((h) => ({ ...h })),
       winner: m.winner,
       forfeit: m.forfeit,
