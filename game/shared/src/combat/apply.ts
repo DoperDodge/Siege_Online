@@ -10,11 +10,13 @@ import { ticks } from "../weapons/ticks.js";
 import { parkWeapon } from "../weapons/step.js";
 
 /** Why a body took damage. */
-export const Cause = { Bullet: 0, Melee: 1, Fall: 2, Explosive: 3, Lab: 4, Reflect: 5, Bleed: 6 } as const;
+export const Cause = { Bullet: 0, Melee: 1, Fall: 2, Explosive: 3, Lab: 4, Reflect: 5, Bleed: 6, Left: 7 } as const;
 export type Cause = (typeof Cause)[keyof typeof Cause];
-export const CAUSE_MAX = 6;
-/** The names data/combat.json uses (`dbno.lethalCauses`). */
-const CAUSE_NAMES = ["bullet", "melee", "fall", "explosive", "lab", "reflect", "bleed"] as const;
+export const CAUSE_MAX = 7;
+/** The names data/combat.json uses (`dbno.lethalCauses`); "left": the player left the match (D-123). */
+const CAUSE_NAMES = ["bullet", "melee", "fall", "explosive", "lab", "reflect", "bleed", "left"] as const;
+/** Kills a just-downed body's moment of invulnerability doesn't stop: leaving, out of the map, a lab tool. */
+const ABSOLUTE_KILLS: readonly Cause[] = [Cause.Fall, Cause.Lab, Cause.Left];
 
 export type DamageOutcome = "ignored" | "hurt" | "downed" | "killed";
 
@@ -28,8 +30,8 @@ export interface Damage {
 /**
  * Apply damage to a body as it is now:
  * - dead: ignored (a second shot judged in the same tick);
- * - down: ignored for a moment after going down, else it comes out of the 20 HP pool (a headshot or melee
- *   finishes it);
+ * - down: ignored for a moment after going down (except a kill for leaving, falling out of the map or a lab
+ *   tool), else it comes out of the 20 HP pool (a headshot or melee finishes it);
  * - on its feet: a headshot or melee kills; otherwise health drops, and at 0 the body goes down if it can
  *   (operator allows it, first time this life, not a lethal cause, not overkill, not the last one up when
  *   the mode says so), else dies.
@@ -46,7 +48,7 @@ export function applyDamage(sim: Sim, pawn: Pawn, d: Damage, rules?: Pick<ModeDa
     d = v === "kill" ? { ...d, kill: true } : { ...d, amount: v };
   }
   if (isDowned(s)) {
-    if (s.invulnTicks > 0) return { outcome: "ignored", removed: 0 };
+    if (s.invulnTicks > 0 && !(d.kill && ABSOLUTE_KILLS.includes(cause))) return { outcome: "ignored", removed: 0 };
     // (The pool bleeds in fractions; what it loses is reported in whole points.)
     if (d.kill) return kill(sim, pawn, Math.ceil(s.downHp));
     if (d.amount <= 0) return { outcome: "ignored", removed: 0 };
@@ -70,7 +72,7 @@ export function applyDamage(sim: Sim, pawn: Pawn, d: Damage, rules?: Pick<ModeDa
     s.downs < combat.dbno.downsPerRound &&
     !(combat.dbno.lethalCauses as readonly string[]).includes(CAUSE_NAMES[cause]) &&
     d.amount - s.hp <= combat.dbno.overkillKillsAbove &&
-    !(rules?.lastAliveDies && !teammateUp(sim, pawn));
+    !(rules?.lastAliveDies && !teammateUp(sim, pawn) && !plantedAttacker(sim, pawn));
   if (!canDown) return kill(sim, pawn, removed);
   // Down but not out: the 20 HP pool, a moment of invulnerability, and whatever it was doing stops. A body
   // mid-vault finishes the vault first; one on a ladder lets go and falls.
@@ -113,6 +115,12 @@ function dropRevive(sim: Sim, pawn: Pawn) {
   pawn.state.reviveTarget = 0;
   pawn.state.reviveTicks = 0;
 }
+
+/**
+ * An attacker once the defuser is planted: the last one up going down isn't killed at once (core_mechanics.md §10.1,
+ * "an attacker on Bomb with the defuser planted").
+ */
+const plantedAttacker = (sim: Sim, pawn: Pawn) => pawn.team === 0 && (sim.objective?.planted ?? null) !== null;
 
 /** Another player on the same team is on their feet (the "last one up dies" rule). */
 function teammateUp(sim: Sim, pawn: Pawn): boolean {

@@ -2,7 +2,7 @@
 // simulator for testing (PLAN §16.9: latency, jitter and loss; PLAN §17 Phase 2: "two PCs with 100 ms
 // simulated latency"), and the shared ClientSession that predicts our own movement and interpolates
 // everyone else.
-import { ClientSession, encodeCreateRoom, encodeHello, encodeJoinRoom, loadGameData, type ClientSessionOptions } from "@redmond/shared";
+import { ClientSession, encodeCreateMatch, encodeCreateRoom, encodeHello, encodeJoinRoom, loadGameData, type ClientSessionOptions } from "@redmond/shared";
 import type { SocketLike } from "./local.js";
 
 /** The game server's WebSocket address: same host as the page (`?server=host:port` overrides it). */
@@ -67,6 +67,8 @@ export interface OnlineOptions {
   room: string | null;
   /** The level a room created here loads (a joined room has its own). */
   levelId: string;
+  /** Create a match room in this format (a mode id: data/modes) instead of a lab room (Phase 6; the server picks the map). */
+  format?: string;
   conditions: () => NetConditions;
   session: Omit<ClientSessionOptions, "send" | "now">;
   onClose(reason: string): void;
@@ -94,7 +96,7 @@ export class OnlineConnection {
     this.ws.binaryType = "arraybuffer";
     this.ws.onopen = () => {
       this.send(encodeHello(o.name, loadGameData().dataHash));
-      this.send(o.room ? encodeJoinRoom(o.room) : encodeCreateRoom(o.levelId));
+      this.send(o.room ? encodeJoinRoom(o.room) : o.format ? encodeCreateMatch(o.format) : encodeCreateRoom(o.levelId));
     };
     this.ws.onmessage = (e) => {
       if (!(e.data instanceof ArrayBuffer)) return;

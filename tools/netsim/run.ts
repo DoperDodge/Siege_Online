@@ -4,7 +4,9 @@
 //      npm run netsim -- --level oregon ...     (any of the above on Oregon: the street, or across the Kitchen's soft wall)
 //      npm run netsim -- --level oregon --rappel (each bot up, along and down an outside wall of its own on a rope)
 //      npm run netsim -- --hitreg [--seconds 30] [--one-way 50] [--jitter 10] [--cap 16] [--seed 1]
-import { runHitreg, runNetsim, type NetsimOptions } from "./netsim.js";
+//      npm run netsim -- --match [--clients 10] [--seed 1] [--script elimination,time,detonate,disable,...]
+//                                (a whole Custom match on Oregon, each round ending the scripted way; 10 rounds by default)
+import { runHitreg, runMatchNetsim, runNetsim, type MatchNetsimOptions, type NetsimOptions, type RoundScript } from "./netsim.js";
 
 const args = process.argv.slice(2);
 const opt = (name: string) => {
@@ -26,6 +28,24 @@ if (args.includes("--hitreg")) {
   });
   console.log(JSON.stringify(r, null, 2));
   process.exit(r.judged === r.shots && r.uncappedAgree >= 0.99 * (r.judged - r.capped) && r.headAgreeUncapped >= 0.99 * r.headSeenUncapped ? 0 : 1);
+}
+if (args.includes("--match")) {
+  const m: Partial<MatchNetsimOptions> = {};
+  for (const [flag, key] of [["clients", "clients"], ["one-way", "oneWayMs"], ["jitter", "jitterMs"], ["stall-ms", "stallMs"], ["stalls", "stallsPerSecond"], ["drift", "driftPct"], ["seed", "seed"]] as const) {
+    const v = opt(flag);
+    if (v !== undefined) (m as Record<string, number>)[key] = v;
+  }
+  if (args.includes("--script")) m.script = args[args.indexOf("--script") + 1].split(",") as RoundScript[];
+  const r = await runMatchNetsim(m);
+  console.table(r.rounds);
+  console.table(r.perClient.map((c) => ({ ...c, downKbps: +c.downKbps.toFixed(1), upKbps: +c.upKbps.toFixed(1), rttMs: +c.rttMs.toFixed(0) })));
+  console.log("score", r.score, "winner", r.winner ?? "none (a draw)", "over", r.over, "kills", r.kills, "server tick ms", r.serverTickMs);
+  console.log("panels", r.panels);
+  if (r.contactLate.length) console.log(`at rest in contact (expected, D-033):\n${r.contactLate.join("\n")}`);
+  for (const [what, list] of [["DESYNCS", r.desyncs], ["VIEWS DIFFER", r.viewsDiffer], ["PANELS DIFFER", r.panels.differ], ["ERRORS", r.errors]] as const) if (list.length) console.log(`${what}:\n${list.join("\n")}`);
+  const ok = r.over && r.rounds.length === r.options.script.length && r.rounds.every((x) => x.asScripted) && !r.desyncs.length && !r.viewsDiffer.length && !r.panels.differ.length && !r.errors.length;
+  console.log(ok ? "the match went as scripted: no desyncs, every client's walls and match the server's" : "FAILED");
+  process.exit(ok ? 0 : 1);
 }
 if (args.includes("--spread")) (o.spread = true), (o.crowd = false);
 if (args.includes("--combat")) o.combat = true;

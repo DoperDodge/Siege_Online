@@ -17,8 +17,10 @@ Rainbow Six Siege, played on a full recreation of **Oregon**. It runs **in the w
 
 ## Current status
 
-**Phase 1 — movement: built.** The Movement Lab is playable in the browser (see "Run it" below and
-`PROGRESS.md` for what to test). Phase 2 (online play) is next.
+**Phase 6 — matches: built on PR #7, waiting for your test.** Play a match on Oregon in any format (Quick Match,
+Unranked, Ranked, 1v1, Custom, Practice) with friends: the Play page creates a room, and the others join by its code.
+Phases 1–5 (movement, online play, gunplay, destruction, the Oregon greybox) are merged; the labs are still there for
+each. `PROGRESS.md` says what to test in each phase; Phase 7 (drones, cameras, pinging) is next.
 
 ## Repository layout
 
@@ -43,7 +45,7 @@ npm install
 npm run build
 npm start
 ```
-Open http://localhost:8080 and pick **Movement Lab**. For development, `npm run dev` gives hot reload at
+Open http://localhost:8080 and pick **Play a match** (or a lab). For development, `npm run dev` gives hot reload at
 http://localhost:5173. Checks: `npm run typecheck`, `npm test` (unit), and `npm run test:e2e` (headless
 browser; run `npm run e2e:setup` once to download Chromium, and `npm run build` first). `npm run check` runs
 all of them. The older multiplayer tech spike lives in `tools/spike/web_stack/`.

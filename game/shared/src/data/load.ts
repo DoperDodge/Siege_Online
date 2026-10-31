@@ -21,6 +21,13 @@ import mute from "../../../../data/operators/mute.json";
 import gunplayJson from "../../../../data/gunplay.json";
 import combatJson from "../../../../data/combat.json";
 import labModeJson from "../../../../data/modes/lab.json";
+import quickMatchJson from "../../../../data/modes/quick_match.json";
+import unrankedJson from "../../../../data/modes/unranked.json";
+import rankedJson from "../../../../data/modes/ranked.json";
+import oneVOneJson from "../../../../data/modes/one_v_one.json";
+import customJson from "../../../../data/modes/custom.json";
+import practiceJson from "../../../../data/modes/practice.json";
+import objectiveJson from "../../../../data/objective.json";
 import destructionJson from "../../../../data/destruction.json";
 import { weaponFiles } from "./weaponFiles.js";
 import { fnv1a, utf8Encode } from "../net/bytes.js";
@@ -35,6 +42,7 @@ import {
   offerId,
   operatorSchema,
   modeSchema,
+  objectiveSchema,
   weaponSchema,
   type CombatData,
   type Construction,
@@ -45,6 +53,7 @@ import {
   type MovementData,
   type OperatorData,
   type ModeData,
+  type ObjectiveData,
   type Surface,
   type WeaponData,
 } from "./schemas.js";
@@ -57,8 +66,10 @@ export interface GameData {
   weapons: Map<string, WeaponData>;
   gunplay: GunplayData;
   combat: CombatData;
-  /** Mode presets (data/modes/); Phase 3 has only "lab". */
+  /** Mode presets (data/modes/): "lab" for the lab rooms, and the match formats (Phase 6) in their lobby order. */
   modes: Map<string, ModeData>;
+  /** Bomb's objective rules every format shares (Phase 6: the defuser, finding the site). */
+  objective: ObjectiveData;
   /** Panels, holes, reinforcement, barricades and hatches (Phase 4). */
   destruction: DestructionData;
   /**
@@ -77,7 +88,8 @@ export const rawData = {
   weapons: weaponFiles,
   gunplay: gunplayJson as Record<string, unknown>,
   combat: combatJson as Record<string, unknown>,
-  modes: [labModeJson] as Record<string, unknown>[],
+  modes: [labModeJson, quickMatchJson, unrankedJson, rankedJson, oneVOneJson, customJson, practiceJson] as Record<string, unknown>[],
+  objective: objectiveJson as Record<string, unknown>,
   destruction: destructionJson as Record<string, unknown>,
 };
 
@@ -128,6 +140,7 @@ export function loadGameData(): GameData {
     gunplay: parse("data/gunplay.json", gunplaySchema, rawData.gunplay),
     combat: parse("data/combat.json", combatSchema, rawData.combat),
     modes,
+    objective: parse("data/objective.json", objectiveSchema, rawData.objective),
     destruction: parse("data/destruction.json", destructionSchema, rawData.destruction),
     dataHash: fnv1a(utf8Encode(JSON.stringify(rawData))),
   };

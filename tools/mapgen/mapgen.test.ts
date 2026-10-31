@@ -5,7 +5,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { Btn, bulletThroughPanels, crossFileProblems, DEG, levelSchema, loadGameData, missingUnverifiedPaths, PawnMode, pelletPath, QUERY_BULLET, QUERY_STATIC, raycastLevel, Sim, Stance, TICK_HZ, type InputCmd, type PanelOp, type Vec3 } from "../../game/shared/src/index.js";
+import { Btn, bulletThroughPanels, crossFileProblems, DEG, levelSchema, loadGameData, missingUnverifiedPaths, PawnMode, pelletPath, QUERY_BULLET, QUERY_STATIC, raycastLevel, Sim, Stance, TICK_HZ, type InputCmd, type LevelDef, type PanelOp, type Vec3 } from "../../game/shared/src/index.js";
 import { BUDGET, checkLevel, coplanarFaces } from "./checks.js";
 import { frames } from "./frames.js";
 import { compile, loadInputs } from "./compile.js";
@@ -1323,6 +1323,35 @@ describe("oregon sites, cameras and ingredients (M5, DESIGN §5.11)", () => {
     });
     expect(moved.report.errors).toContain("camera CAM6: no wall of 1F_MEETING_HALL within 2 m of its marker reaches 2.70 m");
     expect(moved.report.errors.join("\n")).toMatch(/site SITE_DINING: bomb 2A at \([\d.]+, [\d.]+\) isn't in 1F_DINING/);
+  });
+
+  it("compiles each site's Quick Match pre-setup, and reports one that names no reinforceable wall or hatch, a wall away from its room, or a hole in a hard wall", () => {
+    const sites = compiled.level.sites as LevelDef["sites"];
+    expect(sites.map((s) => [s.id, s.preSetup?.reinforce.map((r) => r.panel), s.preSetup?.holes.map((h) => `${h.panel} ${h.size}`)])).toEqual([
+      ["SITE_DORMS", ["SW-2F-02", "SW-2F-04"], ["SW-2F-01 vault"]],
+      ["SITE_DINING", ["SW-1F-08", "SW-1F-01"], ["SW-1F-05 vault"]],
+      ["SITE_MEETING", ["SW-1F-09", "H5"], []],
+      ["SITE_LAUNDRY", ["SW-B-01", "SW-B-02"], ["SW-B-05 vault", "SW-B-06 crouch"]],
+    ]);
+    const bad = compile({
+      ...inputs,
+      layout: {
+        ...inputs.layout,
+        sites: inputs.layout.sites.map((s) =>
+          s.id === "SITE_DINING"
+            ? { ...s, preSetup: { ...s.preSetup!, reinforce: [{ panel: "SW-1F-08", from: "1F_DINING" }, { panel: "H4", from: "1F_KITCHEN" }, { panel: "SW-1F-99", from: "1F_DINING" }], holes: [{ panel: "1F.w003", size: "vault" as const }] } }
+            : s,
+        ),
+      },
+    });
+    expect(bad.report.errors).toEqual(
+      expect.arrayContaining([
+        "site SITE_DINING: pre-setup wall SW-1F-08 doesn't stand beside 1F_DINING (1F_KITCHEN, 1F_MEETING_HALL)",
+        'site SITE_DINING: pre-setup hatch H4 is reinforced from its top, so it takes no "from"',
+        "site SITE_DINING: pre-setup SW-1F-99 is neither a reinforceable wall nor a hatch",
+        "site SITE_DINING: pre-setup hole in 1F.w003, which isn't a reinforceable wall",
+      ]),
+    );
   });
 
   it("puts an outside marker on the building's outer face, looking or facing out; reports one inside the building, and an inside one in no room", () => {

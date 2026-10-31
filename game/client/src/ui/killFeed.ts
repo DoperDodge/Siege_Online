@@ -39,7 +39,9 @@ export function feedLine(e: GameEvent, n: FeedNames, me: FeedViewer): { text: st
       ? `${killer ?? "?"}${how} destroyed ${victim}'s idle shell`
       : killer
         ? `${killer}${how} ${e.friendly ? "team-killed" : "eliminated"} ${victim}${e.assistCtrl ? ` (finished by ${n.ctrl(e.assistCtrl)})` : ""}${e.cause === Cause.Bleed ? " (bled out)" : ""}`
-        : `${victim} died${e.cause === Cause.Fall ? " (fall)" : e.cause === Cause.Bleed ? " (bled out)" : ""}`;
+        : e.cause === Cause.Left
+          ? `${victim} left the match`
+          : `${victim} died${e.cause === Cause.Fall ? " (fall)" : e.cause === Cause.Bleed ? " (bled out)" : ""}`;
   return { text, mine: victimCtrl === me.ctrl || e.killerCtrl === me.ctrl };
 }
 

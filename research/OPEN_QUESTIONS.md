@@ -469,6 +469,38 @@ you find is logged (walk #1's three are fixed: items 33 and 34 ask what's left t
 Later milestones add their placeholders here as they build them: the Meeting Hall's height (P23) and fall damage
 from the roofs (P37).
 
+### Placeholders added while building Phase 6 (not in the original research)
+
+These make matches playable; each is in `data/modes/*.json` or `data/objective.json` (the files' `_unverified`
+lists) and in game/shared/src/match/DESIGN.md. A quick look in a match answers most.
+
+1. **Planning screens (D-118):** we show one planning screen with one timer (30 s in Ranked, Unranked and 1v1) for
+   the site vote, the spawn, the operator and the defuser. Does Siege X show separate screens with their own timers?
+   How long is the operator pick in Ranked now? (Quick Match's 20 s / 15 s comes from Y8S3.)
+2. **Round end:** we show the result for 6 s and go on (no replay). How long is Siege's banner, the replay and the
+   break at the side swap?
+3. **1v1 (D-121):** we swap sides at round 4, because attrition ("winning players can no longer select the Operator
+   they used in the previous round") only matters when you keep your side; the Arcade's pattern is unknown. Who
+   picks the site in 1v1 (we let the defender), and when is it revealed: as prep starts (ours) or at action?
+4. **Overtime sides (D-121):** in round 7 (Ranked) and round 5 (Quick Match), which side does each team play? We swap
+   going in, then every round.
+5. **Quick Match:** "revealed to attackers at round start": as prep starts (ours) or as action starts? Is the 10 s
+   Attacker Safeguard still in the game? Ours (D-129) stops bullets and the knife, not a fall, until the attacker
+   goes into the building: does Siege's also stop explosives and gadgets, and does anything show who has it?
+6. **The defuser (D-120):** our keys are F (plant, disable, pick up) and G (drop). How close must a defender be to
+   disable it (1.5 m placeholder), and must they face it (60°)? Do the planter and the defender hold still (yes,
+   ours)? If nobody takes it, which attacker gets it ("highest defuser priority": what is that)? Can defenders see
+   who carries it, or a dropped one through walls?
+7. **Finding the site (D-120, D-133):** until drones (Phase 7), attackers find the site when one of them has a bomb in
+   view (within 25 m and 45° of the view, nothing in the way) or walks into one of its rooms. Does a body's own view
+   count in Siege, or only drones and cameras? Can the carrier plant in a site the attackers haven't found?
+8. **Leaving (D-123, D-133):** a player who leaves mid-round dies there and can come back, by the same name, for the
+   next round. In Siege, what happens to a disconnected player's operator: does it stand there, or die?
+9. **Pre-setups (D-128):** in Quick Match on Oregon, which walls and hatches are reinforced when prep starts, and which
+   rotation holes are open, at each site? Ours are each site's first two reinforcements and its rotation holes from
+   research/oregon/common_setups.md (our derivation), on top of the pool: a vault hole 1.0 m wide from 0.8 m to 2.0 m
+   up and a crouch hole 1.0 m wide up to 1.5 m. Are Siege's taken from the pool, and how big are its holes?
+
 ### [core_mechanics.md](core_mechanics.md) — 16
 
 Most of these can be answered in a Custom Game (Local), usually in minutes, with a stopwatch or a 60 fps recording and known map distances.

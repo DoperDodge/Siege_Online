@@ -1,0 +1,12 @@
+{
+  "_doc": "Local ranked tiers (Phase 6 M5, DECISIONS D-124): our own names, colours and shapes, none of Siege's, by the lowest local rating in each (a new player starts at 1000, game/shared/src/match/rules.ts RATING_START; a win against an equal team is worth 16). Shapes: circle, square, diamond, hexagon, star. Presentation only: the rating itself is game/shared/src/match/rules.ts ratingChanges.",
+  "tiers": [
+    { "name": "Cadet", "min": 0, "color": "#9aa3ad", "shape": "circle" },
+    { "name": "Trooper", "min": 900, "color": "#b98a5e", "shape": "square" },
+    { "name": "Sergeant", "min": 1050, "color": "#c8d0d8", "shape": "diamond" },
+    { "name": "Lieutenant", "min": 1200, "color": "#e3b341", "shape": "hexagon" },
+    { "name": "Captain", "min": 1350, "color": "#4fc3c7", "shape": "hexagon" },
+    { "name": "Major", "min": 1500, "color": "#8f7bea", "shape": "star" },
+    { "name": "Colonel", "min": 1650, "color": "#ef6f6c", "shape": "star" }
+  ]
+}

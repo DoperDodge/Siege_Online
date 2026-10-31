@@ -82,6 +82,14 @@ try {
    * storey, and gives where you are in world u and in the storey's own u (its frame, world = a·native + b).
    */
   const hudSaysWhereYouAre = async (page) => {
+    // The line is redrawn every 100 ms of the page's time, so it trails a body that only just stopped: read again
+    // (up to 3 s) until it agrees. A wrong line never does.
+    for (const until = Date.now() + 3000; ; await sleep(100)) {
+      const r = await hudCheck(page);
+      if (r.ok || Date.now() > until) return r;
+    }
+  };
+  const hudCheck = async (page) => {
     const v = await view(page);
     const me = await own(page);
     const line = await hudLine(page);
@@ -270,25 +278,31 @@ try {
   const calloutOf = (id) => lvl.rooms?.find((r) => r.id === id)?.callout;
   const prompt = (page) => page.evaluate(() => (document.querySelector(".prompt.hidden") ? "" : (document.querySelector(".prompt")?.textContent ?? "")));
   /**
-   * Steer along the points (yaw toward the next, forward held) until the last is reached; then let go, and wait
-   * for the body to stand. A flight takes about 2 s; the time allowed is generous for a slow software-rendered
-   * page, where the game runs in slow motion when frames are slow (seen once: stopped short, in the air).
+   * Walk through the points: the page steers toward each in turn (window.__lab.walk, tick by tick) and lets go after
+   * the last; then wait for the body to stand still on the ground. A flight takes about 2 s of game time. Budgets
+   * are game time (the page's ticks), not the clock's: a slow software-rendered page runs the game in slow motion
+   * (seen twice: the clock ran out mid-flight), so only a generous clock limit backs them up.
    */
-  const walkAlong = async (page, pts, timeoutMs = 60000) => {
-    const until = Date.now() + timeoutMs;
-    let k = 0;
-    while (k < pts.length && Date.now() < until) {
+  const gameTick = (page) => page.evaluate(() => window.__lab.tick);
+  /** Wait, in game time (a slow page runs fewer ticks a second), for the body to stand still on the ground: 2 s of it at most. */
+  const settle = async (page, until = Date.now() + 60000) => {
+    const from = await gameTick(page);
+    for (let t = 0; (t = (await gameTick(page)) - from) < 2 * 64 && Date.now() < until; await sleep(50)) {
       const me = await own(page);
-      const [dx, dz] = [pts[k][0] - me.x, pts[k][1] - me.z];
-      if (Math.hypot(dx, dz) < 0.25) k++;
-      else await input(page, { forward: 1, yaw: Math.atan2(-dx, -dz) });
-      await sleep(40);
+      if (t > 16 && me.grounded && Math.hypot(me.vx, me.vz) < 0.01) break;
     }
-    await input(page, null);
-    await sleep(300);
-    await page.waitForFunction(() => window.__lab.net.own.grounded, null, { timeout: 10000, polling: 50 }).catch(() => {});
-    await sleep(200);
-    return k >= pts.length;
+  };
+  const walkAlong = async (page, pts, gameSeconds = 20, wallMs = 300000) => {
+    const until = Date.now() + wallMs;
+    await page.evaluate((p) => window.__lab.walk(p), pts);
+    let w = await page.evaluate(() => window.__lab.walking);
+    while (!w.done && w.ticks < gameSeconds * 64 && Date.now() < until) {
+      await sleep(50);
+      w = await page.evaluate(() => window.__lab.walking);
+    }
+    await page.evaluate(() => window.__lab.walk(null));
+    await settle(page, until);
+    return w.done;
   };
   // The Armory Stairs' basement flight: before its first riser, along it, past its top (tools/mapgen's walk test).
   const flight = lvl.stairs?.find((f) => f.id === "S3:B>1F#0");
@@ -431,7 +445,7 @@ try {
     const second = await swingIn();
     const inside = await off.waitForFunction((k) => window.__lab.net.own.mode === k.walk && window.__lab.net.own.grounded && window.__lab.net.own.z > k.z, { walk: PawnMode.Walk, z: kids.center[2] + 0.3 }, { timeout: 10000, polling: 50 }).then(() => true, () => false);
     await input(off, null);
-    await sleep(500);
+    await settle(off);
     const me = await own(off);
     const hud = await hudSaysWhereYouAre(off);
     const after = await panel(off, "2F.o004.bar");

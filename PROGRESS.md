@@ -5,6 +5,159 @@ known issues, and what's next.
 
 ---
 
+## Phase 6 — Match flow + lobby · ✅ built, ⏳ waiting for your test (branch `claude/phase-6-match-flow`, PR #7)
+
+**Done when (PLAN §17):** full 1v1 and 2v3 matches play start to finish. The design is
+`game/shared/src/match/DESIGN.md` (D-118 to D-124).
+
+| Milestone | Status |
+|---|---|
+| M1 Format presets (Quick Match, Unranked, Ranked, 1v1, Custom, Practice) and the match logic, tested on its own | ✅ six formats in `data/modes`, the match logic in `game/shared/src/match/` (sides, overtime, bans, votes, picks, attrition, pools, rating, the nine win conditions) |
+| M2 Match rooms on the server: lobby, rounds with spawns, red walls, run-outs, elimination and time wins | ✅ a room runs a match: lobby, bodies only in prep and action, defenders at the site behind red walls (predicted), attackers at their spawn, run-outs, the kill plane, leavers; protocol 11 and the room list; tested with a 1v1 and a 2v3 through the real messages |
+| M3 The defuser: carry, drop, pick up, plant, disable, every win condition | ✅ hold F to plant (7 s, predicted) or disable (7 s), F to pick up, G to drop, dropped where the carrier goes down, a plant under way past the timer, a hatch broken under it, the last attacker downed after the plant; finding the site by sight |
+| M4 In the browser: Play page, lobby, ban and planning screen, HUD, scoreboard, round and match summaries | ✅ the Play page (create in any format, join by code, the open matches, your loadouts); the match page: lobby, ban vote, planning (operator, weapons and attachments, site vote or spawn, the defuser), HUD and markers, Tab scoreboard, round banner, summary; with no body the camera circles the map, waits at an attacker's spawn in prep, or follows a teammate after you die; browser test of a 1v1 and a 2v3 |
+| M5 Each format's details: Quick Match, Ranked rating, 1v1 attrition, Custom, Practice | ✅ Quick Match's pre-setups and attacker safeguard; Ranked's local rating with our tiers; 1v1's attrition on the planning screen; Custom's every rule (who attacks first too); Practice ended by its host; protocol 12 |
+| M6 Checks: a 10-round netsim match, browser tests of a 1v1 and a 2v3 match, docs, report | ✅ a whole 10-round match in the netsim, ten clients, no desyncs; the browser tests of a 1v1 and a 2v3; a review of the phase (ten problems, all fixed, each with a test); this report |
+
+### What's done (M6: checks and the review)
+- **A whole match in the netsim (D-132):** `npm run netsim -- --match` plays a 10-round Custom match on Oregon with
+  ten clients over a simulated bad network (100 ms round trip, jitter, stalls, clock drift): the lobby, a ban vote
+  every round, operator picks (two players taking the same operator: the second is refused), site votes and spawns,
+  prep behind red walls with the pre-setups, action with everyone moving and shooting, and the sides swapping every
+  round. The harness ends each round a different way (eliminations, on time, a plant that goes off, one disabled),
+  so each team wins five. At every round's end no client may need a correction, and every client's walls and view of
+  the match must be the server's. Three seeds: no desyncs, about 12 kbps down per player, the server's tick 0.5 ms on
+  average and 2.5 ms at the 99th percentile. A 4-round version with four clients runs with `npm test`.
+- **The review (D-133):** a review of the whole phase found ten problems. All are fixed, each with a test that fails
+  without its fix:
+  - picking a second operator on the planning screen could be undone by the server's answer to the first (over a
+    slow link the two kept swapping);
+  - a player who left couldn't get back into a full match, and elsewhere came back as a new player: now, back with the
+    room code under the same name, you get your slot, team and stats again;
+  - back in the lobby, players who had left during the match still held their slots;
+  - a defuser dropped off a rope or a ladder (or by a carrier killed in the air) hung where they were, out of reach:
+    it now falls to the floor under them;
+  - in prep, a defender held back by the red walls in mid-air kept gathering fall speed;
+  - the carrier could plant in a site the attackers hadn't found yet (Ranked, Unranked, Custom), and their own screen
+    didn't show the plant: an attacker who walks into the site now finds it;
+  - a player who had just gone down and then left (or fell out of the map) didn't die for it;
+  - smaller ones: the round history sent in a long Practice, the lobby's "first to N", a misplaced code comment.
+
+### What's done (M5: each format's details)
+- **Quick Match's pre-setups (D-128):** as prep starts, the site has two walls (or a wall and a hatch) reinforced and
+  its rotation holes cut, on top of the defenders' pool: Laundry/Supply the Laundry–Freezer and Supply–Bunker walls, a
+  vault hole Supply Closet–Laundry and a crouch hole Supply–Laundry; Kitchen/Dining the Kitchen–Meeting and
+  Dining–Small Tower walls, a vault hole Kitchen–Dining; Meeting/Kitchen the Stage's wall to the 1F Tower and hatch H5;
+  Kids'/Dorms the Kids'–Low Attic and Game Room–Walk-In walls, a vault hole Kids'–Dorms. They are the research's top
+  two reinforcements and its rotation holes per site (our derivation: open question 9). A vault hole is vaulted
+  through (Space), a crouch hole walked through crouched. Custom and Practice can switch pre-setups on.
+- **Quick Match's attacker safeguard (D-129):** for the first 10 s of action an attacker takes no damage from bullets
+  or the knife until they go into the building. The attackers' HUD counts their own down; the defenders' says how long
+  the attackers are safeguarded.
+- **Ranked's local rating (D-130):** your browser keeps your rating (1000 to start) and sends it in the lobby; at the
+  end everyone who played is rated (a win against an equal team is worth 16) and the summary shows each change. Our
+  own tiers, from Cadet to Colonel, show in the lobby, the summary and on the Play page next to Ranked.
+- **1v1's attrition:** on the planning screen the operator you won the last round with is greyed out ("won you the
+  last round").
+- **Custom (D-131):** the host also sets who attacks first (drawn, Blue or Orange), how the site is chosen and when
+  attackers learn it, overtime, bans, pre-setups, the attacker safeguard, red walls into action, friendly fire and
+  reverse friendly fire. Practice has the same settings without rounds and overtime.
+- **Practice:** its host ends it with *End practice* (on the planning screen, or in the pause menu): the summary, then
+  *Back to the lobby*.
+- **The match browser test on CI:** its 2v3 teamkill fired from the hip, and most such shots at 3.6 m miss; on a slow
+  runner the tries ran out. It aims down the sights now, and the first shot kills.
+
+### What's done (your requests, 2026-10-29)
+- **Planting crouches you:** a standing planter crouches for the 7 s plant and stands back up after it (prone stays
+  prone). It's in the shared simulation, so it's predicted and everyone sees it. Disabling doesn't crouch (yet): say
+  if it should (one switch in data/objective.json).
+- **Your loadouts:** the Play page has *Loadouts*: pick an operator and set both weapons and every attachment (sight,
+  barrel, grip, laser), with the numbers the game uses. The planning screen has the same rows for the operator you
+  pick, and the labs' pause menu too. Each operator keeps what you set, in this browser, and carries it into every
+  match and lab (D-126).
+- **Drones and default cameras** come with Phase 7 (Intel), after this phase: drones, the default cameras, the
+  bulletproof camera, pinging, spectating and the comm wheel.
+- **A crash the browser test found:** Skopós defending the Meeting Hall could stop the whole server (her second
+  shell's spot was inside a wall). The shell now stands on whichever side has room and never past a wall. A test
+  puts her at every spawn of every map. A room that hits a bug now closes on its own instead of stopping the
+  server (D-127).
+
+### What's done (M4: matches in the browser)
+- **Play** (home page → *Play a match*): your name, *Create* a match in any of the six formats, *Join* by code,
+  and the open matches (the server's list, every 3 s; private rooms aren't in it).
+- **Lobby:** Blue and Orange, 1–5 each (uneven is fine), ready marks, the host's star. Join a team, ready up; the
+  host moves (⇄) and kicks (✕) players, swaps the teams, picks the format, sets the bans and reinforcements (and
+  in Custom the rounds and every timer), makes the room private, and starts once everyone is ready.
+- **Ban** (Unranked, Ranked, Custom with bans): vote for one of the other side's operators; your team bans the
+  most-voted one.
+- **Planning** (one screen, one timer, D-118): your operator (banned and taken ones greyed out), your weapons, the
+  site vote (defenders) or your spawn (attackers), and an attacker takes the defuser. Attackers keep the screen in
+  prep, over their spawn's view (click the view to look around; Esc brings the screen back).
+- **The round:** the top bar has both scores with each team's side, the phase and its clock (the fuse once
+  planted), the round and overtime. Under it: the site (attackers: once found), who has the defuser (G drops it),
+  run-outs detected, the reinforcements left in prep, the red walls. Plant and disable show on the hold gauge; the
+  defuser, its carrier and detected defenders are marked in the world. F plants, disables and picks up.
+- **Tab:** the scoreboard (operator, K/A/D, alive, dead or left). **Dead:** after 3 s you look through a living
+  teammate's eyes (click for the next).
+- **Round end:** a banner with the winner and how. **Match end:** the score, every round and how it ended, each
+  player's K/A/D, the MVP, and the host's *Back to the lobby* (same teams).
+- In a match there are no lab tools, Go to, free camera, storey views, third person or hitboxes, and none of the
+  lab's labels, spawn discs or camera cones (the bombs stay) (D-125).
+
+### How to test (needs Node 22.12+)
+1. `npm ci`, then `npm run build && npm start`, and open http://localhost:8080 → *Play a match*. (Or `npm run dev`
+   with the server in a second terminal, as in Phase 5, and open http://localhost:5173.)
+2. *Create* a match in any format and send its code or invite link. Every browser window is a player, so a second
+   window lets you try it alone; friends need the server where they can reach it (your Railway deployment).
+3. Your loadouts: on the Play page, *Loadouts*: pick an operator, change a weapon or an attachment, and reload
+   the page: it stays. In a match the planning screen has the same rows for the operator you pick.
+4. Planting: as an attacker, take the defuser on the planning screen, find the site in action and hold F inside
+   it: you crouch for the 7 s and stand back up after.
+5. Quick Match (M5): create one with a friend (or a second window). As prep starts, the site's two walls (or a wall
+   and the hatch) already have steel and its rotation holes are open: at the Laundry, vault through the Supply
+   Closet's hole and walk crouched through the Supply's. In action an attacker can't be hurt for 10 s unless they go
+   in (the HUD counts it down for both sides).
+6. Ranked: the lobby shows each player's tier and rating; play it to the end and the summary shows each change (a
+   win against an equal team: +16). Your rating is kept in this browser; the Play page shows it next to Ranked.
+7. 1v1: win a round, and the next planning screen greys out the operator you won it with.
+8. Custom: in the lobby, the host picks who attacks first, the site, overtime, bans, pre-setups, the safeguard and
+   friendly fire, as well as the rounds and timers. Practice: play a few rounds alone or with a side empty, then *End
+   practice* (planning screen or pause menu).
+9. Coming back (M6): in a 1v1 with a friend (or a second window), close one window mid-match, then join again with
+   the room code under the same name: you're back on your team, with your kills and deaths, from the next round.
+10. The defuser off a rope (M6): as the carrier, hook onto an outside wall (rappel), climb a few metres and press G:
+    it lands at the wall's foot, where a teammate picks it up (F).
+11. Finding the site (M6): in Unranked (or Custom), walk into the site with your back to its bombs: the HUD names the
+    site at once, and holding F there plants.
+12. Checks: `npm run typecheck`, `npm test`, `npm run netsim -- --match` (the 10-round match, about 30 s), and
+    `npm run build && node tools/e2e/match.mjs` (a 1v1 and a 2v3 played in browsers from start to finish, about
+    6 minutes). `npm run check` runs everything but the netsim.
+
+### Known issues
+- Every Phase 6 timing and rule we couldn't confirm is a placeholder: the planning screen's one timer, the round-end
+  banner, 1v1's side swap, overtime sides, Quick Match's reveal and safeguard, the defuser's reach and keys, finding
+  the site by sight (25 m, 45°), what happens to a leaver's operator, the pre-setups (research/OPEN_QUESTIONS.md,
+  "Placeholders added while building Phase 6", 1–9).
+- Coming back is by name (there are no accounts): whoever joins a match under way with the name of a player who left
+  takes their slot. Your body isn't kept while you're away: you die where you left and play again from the next round
+  (D-123).
+- Your ranked rating lives in your browser, so it's only as honest as your friends (D-124).
+- With nobody's pick to go on, the defuser goes to the first attacker in slot order (Siege's "defuser priority" is
+  unknown), and an attacker idle all prep keeps it: dropping it at action start needs bodies in prep (drones,
+  Phase 7).
+- Until drones and cameras (Phase 7), attackers find the site only with their own eyes or by walking into it, and in
+  prep they wait at their spawn's view.
+- While playing, clients are still corrected now and then where bodies touch or brush a wall (sub-millimetre
+  differences, Phase 2's known issue); the netsim finds none from the match itself.
+- Everything from Phase 5's list below still holds (Oregon's sizes and markers are placeholders until your walks).
+
+### Next: Phase 7 — Intel
+Once you've played matches and signed off: drones (prep-phase droning, the drone holes), the default cameras and the
+bulletproof camera, pinging, spectating and the comm wheel (PLAN §17); done when prep-phase droning and watching the
+cameras work online.
+
+---
+
 ## Phase 5 — Oregon greybox · ✅ complete (PR #6)
 
 **Done when (PLAN §17):** you walk it and sign off on layout accuracy: ✅ signed off 2026-10-29, after rappel (M8),

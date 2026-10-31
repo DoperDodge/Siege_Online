@@ -8,6 +8,8 @@ import { buildLevel, type BuiltLevel } from "./level/builder.js";
 import { initRapier, PLAYER_GROUPS, QUERY_SIGHT, QUERY_SOLID, QUERY_STATIC as QUERY_STATIC_FILTER, refreshBroadPhase, type CharacterController, type Rapier, type World } from "./physics/rapier.js";
 import { cancelRappelHold, capsuleFree, movementPrompt, poseCollider, stepPawn, type MoveContext, type MovementPrompt } from "./player/movement.js";
 import { initialPawnState, type Pawn, type PlayerController } from "./player/pawn.js";
+import { insideAny, zoneBoxes, ZONE_TEST_HEIGHT, type ZoneBox } from "./level/zones.js";
+import { canDisable, canPickUp, inSite, siteArea, type DefuserState, type SiteArea } from "./match/objective.js";
 import { eyePose, poseHitboxes } from "./player/hitboxes.js";
 import { capsuleDims, stanceDims } from "./player/stance.js";
 import { Btn, PawnMode, ropeIdle, Stance, type InputCmd, type PawnState } from "./player/types.js";
@@ -16,8 +18,23 @@ import type { SimEvent } from "./weapons/step.js";
 import { viewDir } from "./weapons/spread.js";
 import { ticks } from "./weapons/ticks.js";
 
+/**
+ * What a match decides that the simulation must know, so a client predicts it the way the server applies it
+ * (match/DESIGN.md §6): set by the room, and on a client from the room's match state.
+ */
+export interface MatchSimRules {
+  /** Red walls (prep): a defender's move that would take its feet out of the building zones is undone. */
+  redWalls: boolean;
+  /** Below the kill plane a body dies (the room kills it) instead of going back to spawn 0 (labs). */
+  killPlaneKills: boolean;
+}
+
+/** A dropped thing's floor is looked for from this far over the point it was let go at, down to this far below it (metres). */
+const DROP_FROM_ABOVE = 0.1;
+const DROP_MAX_FALL = 60;
+
 /** Contextual hint for the HUD: "Space to mantle", "F to climb", "F to transfer" (Skopós camera), "Hold F to reinforce". */
-export type Prompt = MovementPrompt | "transfer" | "revive" | "reinforce" | "barricade" | "unbarricade";
+export type Prompt = MovementPrompt | "transfer" | "revive" | "reinforce" | "barricade" | "unbarricade" | "plant" | "disable" | "pickUp";
 
 export class Sim {
   readonly pawns = new Map<number, Pawn>();
@@ -29,6 +46,16 @@ export class Sim {
    * judges them.
    */
   deployRules: DeployRules = { anyone: false, rappel: false, pools: [0, 0] };
+  /** A match room's rules for bodies (none in a lab). */
+  matchRules: MatchSimRules = { redWalls: false, killPlaneKills: false };
+  /**
+   * The defuser in a match (null in a lab): who carries it, where it lies or is planted, the site and the holds
+   * (match/objective.ts). The simulation moves it (pick up, drop, plant); the room sets the rest.
+   */
+  objective: DefuserState | null = null;
+  private readonly siteAreas = new Map<string, SiteArea | null>();
+  /** The level's building zones (level.json, D-105): red walls and run-outs. */
+  readonly building: ZoneBox[];
   private nextId = 1;
   private readonly ctx: MoveContext;
 
@@ -41,6 +68,45 @@ export class Sim {
   ) {
     // Attackers rappel; in a lab room anyone does (deployRules.rappel, from the room's rules).
     this.ctx = { R, world, cc, data, level, events: [], canRappel: (pawn) => pawn.team === sideTeam("attacker") || this.deployRules.rappel };
+    this.building = zoneBoxes(level.def, "building");
+  }
+
+  /** Whether a body's feet (x, y, z) are inside the building (false on a level without building zones). */
+  insideBuilding(x: number, y: number, z: number): boolean {
+    return insideAny(this.building, x, y + ZONE_TEST_HEIGHT, z);
+  }
+
+  /** One body's step, with what the level and the match add: the kill plane and the red walls. */
+  private stepBody(pawn: Pawn, cmd: InputCmd, live: boolean, fresh: boolean) {
+    const s = pawn.state;
+    const confined = this.matchRules.redWalls && pawn.team === sideTeam("defender") && this.building.length > 0;
+    const before = confined ? { x: s.x, y: s.y, z: s.z, mode: s.mode } : null;
+    stepPawn(this.ctx, pawn, cmd, live, fresh);
+    if (before) this.keepInside(pawn, before);
+    this.belowKillPlane(pawn);
+  }
+
+  /**
+   * Red walls: a move that took a defender's feet out of the building is undone (back where it was, stopped),
+   * and a vault or climb that would land outside doesn't start. Inside the building nothing changes.
+   */
+  private keepInside(pawn: Pawn, before: { x: number; y: number; z: number; mode: PawnMode }) {
+    const s = pawn.state;
+    const started = s.mode === PawnMode.Vault && before.mode !== PawnMode.Vault;
+    if (this.insideBuilding(s.x, s.y, s.z) && !(started && !this.insideBuilding(s.toX, s.toY, s.toZ))) return;
+    s.x = before.x;
+    s.y = before.y;
+    s.z = before.z;
+    s.vx = 0;
+    s.vy = 0; // in the air too: a fall held back doesn't gather speed
+    s.vz = 0;
+    if (s.mode === PawnMode.Vault) {
+      s.mode = PawnMode.Walk;
+      s.moveT = 0;
+      s.moveDur = 0;
+      s.tuck = 0;
+    }
+    poseCollider(this.ctx, pawn);
   }
 
   /**
@@ -114,32 +180,54 @@ export class Sim {
     if (op.pawns > 1 && shellOffset < minOffset) {
       throw new Error(`${op.name}: ability.params.idleShellOffset (${shellOffset}) must be at least two body radii (${minOffset})`);
     }
-    const shellSpots = (bx: number, bz: number): [number, number][] =>
+    // The shells stand in a line from the first: to its right, or another way round when a wall or a prop is there.
+    const turns = op.pawns > 1 ? [0, 180, 90, -90, 45, -45, 135, -135].map((d) => d * DEG) : [0];
+    const shellSpots = (bx: number, bz: number, turn: number): [number, number][] =>
       Array.from({ length: op.pawns }, (_, i) => {
-        const [ox, oz] = rotateXZ(i * shellOffset, 0, yaw);
+        const [ox, oz] = rotateXZ(i * shellOffset, 0, yaw + turn);
         return [bx + ox, bz + oz];
       });
     // capsuleFree tests a slightly shrunken body (right for walls); between players, keep a full body gap.
     const clearOfPlayers = ([px, pz]: [number, number]) =>
       [...this.pawns.values()].every((p) => p.state.mode === PawnMode.Dead || Math.hypot(p.state.x - px, p.state.z - pz) >= minOffset);
-    const fits = (spots: [number, number][], filter: number) =>
-      spots.every(([px, pz]) => capsuleFree(this.ctx, null, px, spawn.pos[1] + 0.02, pz, m.stance.stand.height, filter) && (filter !== QUERY_SOLID || clearOfPlayers([px, pz])));
-    const home = shellSpots(spawn.pos[0], spawn.pos[2]);
-    if (!fits(home.slice(1), QUERY_STATIC_FILTER)) {
-      throw new Error(`${op.name}'s second shell would spawn inside level geometry at spawn "${spawn.id}"`);
-    }
-    // Other players already on the spawn: take the nearest free spot around it (rings 0.8 m apart).
-    let spots = home;
+    // Nothing static between two spots at chest height: a free spot behind a thin wall is in the next room.
+    const inSight = ([ax, az]: [number, number], [bx, bz]: [number, number]) => {
+      const len = Math.hypot(bx - ax, bz - az);
+      if (len < 1e-6) return true;
+      const ray = new this.R.Ray({ x: ax, y: spawn.pos[1] + 1, z: az }, { x: (bx - ax) / len, y: 0, z: (bz - az) / len });
+      return this.world.castRay(ray, len, true, undefined, QUERY_STATIC_FILTER) === null;
+    };
+    // Spots from `from` on (1: the shells only, the spawn itself trusted) are free, and in sight of the first.
+    const fits = (spots: [number, number][], filter: number, from = 0) =>
+      spots.every(
+        ([px, pz], i) =>
+          i < from ||
+          (capsuleFree(this.ctx, null, px, spawn.pos[1] + 0.02, pz, m.stance.stand.height, filter) &&
+            (filter !== QUERY_SOLID || clearOfPlayers([px, pz])) &&
+            inSight(spots[0], [px, pz])),
+      );
+    // The nearest arrangement around the spawn clear of the level and of other players (rings 0.8 m apart, each
+    // in sight of the spawn); with none, the first on the spawn itself clear of the level (players get pushed apart).
+    const at: [number, number] = [spawn.pos[0], spawn.pos[2]];
+    let spots: [number, number][] | null = null;
+    let crowded: [number, number][] | null = null;
     search: for (let ring = 0; ring <= 6; ring++) {
       for (let k = 0; k < (ring === 0 ? 1 : 8); k++) {
         const a = (k / 8) * 2 * Math.PI;
-        const cand = shellSpots(spawn.pos[0] + Math.cos(a) * ring * 0.8, spawn.pos[2] + Math.sin(a) * ring * 0.8);
-        if (fits(cand, QUERY_SOLID)) {
-          spots = cand;
-          break search;
+        const base: [number, number] = [at[0] + Math.cos(a) * ring * 0.8, at[1] + Math.sin(a) * ring * 0.8];
+        if (!inSight(at, base)) continue;
+        for (const turn of turns) {
+          const cand = shellSpots(base[0], base[1], turn);
+          if (fits(cand, QUERY_SOLID)) {
+            spots = cand;
+            break search;
+          }
+          if (ring === 0 && !crowded && fits(cand, QUERY_STATIC_FILTER, 1)) crowded = cand;
         }
       }
     }
+    spots ??= crowded;
+    if (!spots) throw new Error(`${op.name}'s second shell has no room at spawn "${spawn.id}": a wall or a prop on every side`);
     for (const [i, [px, pz]] of spots.entries()) {
       const pawn = this.spawnPawn(operatorId, px, spawn.pos[1], pz, yaw, controller.id, ids?.pawns[i], loadout, side);
       if (i > 0) pawn.state.stance = pawn.state.stanceFrom = Stance.Crouch; // idle shells crouch behind their shield
@@ -282,15 +370,83 @@ export class Sim {
     return deployAction(this.data.destruction, this.level.panels, eye, dir, [s.x, s.y, s.z], pawn.team, this.deployRules, plain);
   }
 
+  /** The plantable area of a site (cached; null: no such site). */
+  private areaOf(site: string): SiteArea | null {
+    if (!this.siteAreas.has(site)) this.siteAreas.set(site, siteArea(this.level.def, site));
+    return this.siteAreas.get(site) ?? null;
+  }
+
   /**
-   * Reinforcing and barricades (Phase 4 M6): a fresh press of Interact at a panel starts what deployAction
-   * offers; holding it, still offered the same, for its time completes it (a "deploy" event: the server puts
-   * the steel or planks up), and the body holds still meanwhile (reinforcement.locksReinforcer, also for
-   * barricades). Letting go, looking away or anything else cancels it. Returns true while one is under way.
+   * What the Use key would do with the defuser now (match/DESIGN.md §8, D-120): an attacker on foot picks a dropped
+   * one up from close by; its carrier plants it in the site's rooms while planting is open; a defender disables a
+   * planted one within reach, facing it. Null: nothing (no match, or none of these).
+   */
+  defuserActionFor(pawn: Pawn): "pickUp" | "plant" | "disable" | null {
+    const o = this.objective;
+    const s = pawn.state;
+    if (!o || s.mode !== PawnMode.Walk || !s.grounded) return null;
+    const attacker = pawn.team === sideTeam("attacker");
+    if (attacker && o.dropped && o.carrier === 0 && canPickUp(this.data.objective, o.dropped, s.x, s.y, s.z)) return "pickUp";
+    if (attacker && o.carrier === pawn.id && o.canPlant && o.site) {
+      const area = this.areaOf(o.site);
+      if (area && inSite(area, s.x, s.y, s.z)) return "plant";
+    }
+    if (!attacker && o.planted && canDisable(this.data.objective, o.planted, s.x, s.y, s.z, s.yaw)) return "disable";
+    return null;
+  }
+
+  /** The defuser's hold kept up: the same action still offered, Interact still held; done after the format's time. */
+  private holdDefuser(pawn: Pawn, held: boolean): boolean {
+    const s = pawn.state;
+    const o = this.objective;
+    const want = s.deployKind === DeployKind.Plant ? "plant" : "disable";
+    if (!o || !held || s.meleeTicks > 0 || this.defuserActionFor(pawn) !== want) {
+      endDeploy(pawn);
+      return false;
+    }
+    s.deployTicks = Math.min(0xffff, s.deployTicks + 1);
+    if (s.deployTicks < (want === "plant" ? o.plantTicks : o.disableTicks)) return true;
+    if (want === "plant") {
+      o.planted = [s.x, s.y, s.z];
+      o.carrier = 0;
+      this.ctx.events.push({ kind: "plant", pawnId: pawn.id, pos: [s.x, s.y, s.z] });
+    } else this.ctx.events.push({ kind: "disable", pawnId: pawn.id });
+    endDeploy(pawn);
+    return true; // still this tick
+  }
+
+  /** The carrier's Drop key: the defuser falls to the floor under the body (off a rope or a ladder too). */
+  private dropDefuser(pawn: Pawn, input: InputCmd) {
+    const o = this.objective;
+    if (!o || o.carrier !== pawn.id || !(input.buttons & ~pawn.state.prevButtons & Btn.Drop)) return;
+    const s = pawn.state;
+    o.carrier = 0;
+    o.dropped = this.dropSpot(s.x, s.y, s.z);
+    this.ctx.events.push({ kind: "drop", pawnId: pawn.id, pos: o.dropped });
+  }
+
+  /**
+   * Where something let go of at (x, y, z) comes to rest: on the first floor under it (the level, its panels and props;
+   * never a body), or where it is when nothing is under it. A defuser dropped from a rope lands at the wall's foot.
+   */
+  dropSpot(x: number, y: number, z: number): [number, number, number] {
+    const from = y + DROP_FROM_ABOVE;
+    const hit = this.world.castRay(new this.R.Ray({ x, y: from, z }, { x: 0, y: -1, z: 0 }), DROP_MAX_FALL, true, undefined, QUERY_STATIC_FILTER);
+    return [x, hit ? from - hit.timeOfImpact : y, z];
+  }
+
+  /**
+   * Holds of Interact: the defuser's first (pick up, plant, disable; D-120), then reinforcing and barricades (Phase
+   * 4 M6). A fresh press starts what is offered; holding it, still offered the same, for its time completes it (a
+   * "deploy", "plant" or "disable" event), and the body holds still meanwhile (reinforcement.locksReinforcer, also
+   * for barricades; the defuser's own data for plant and disable). Picking the defuser up is the press itself.
+   * Letting go, looking away or anything else cancels a hold. Returns true while one is under way, or the press
+   * was used.
    */
   private updateDeploy(pawn: Pawn, input: InputCmd): boolean {
     const s = pawn.state;
     const held = (input.buttons & Btn.Interact) !== 0;
+    if (s.deployKind === DeployKind.Plant || s.deployKind === DeployKind.Disable) return this.holdDefuser(pawn, held);
     if (s.deployKind !== DeployKind.None) {
       const a = held && s.meleeTicks === 0 ? this.deployActionFor(pawn) : null;
       if (!a || a.kind !== s.deployKind || a.panel !== s.deployPanel || a.section !== s.deploySection) {
@@ -305,6 +461,20 @@ export class Sim {
     }
     const pressed = input.buttons & ~s.prevButtons & Btn.Interact;
     if (!pressed || s.meleeTicks > 0) return false;
+    const d = this.defuserActionFor(pawn);
+    if (d === "pickUp") {
+      this.objective!.carrier = pawn.id;
+      this.objective!.dropped = null;
+      this.ctx.events.push({ kind: "pickup", pawnId: pawn.id });
+      return true;
+    }
+    if (d) {
+      s.deployKind = d === "plant" ? DeployKind.Plant : DeployKind.Disable;
+      s.deployPanel = 0;
+      s.deploySection = 0;
+      s.deployTicks = 1;
+      return true;
+    }
     const a = this.deployActionFor(pawn);
     if (!a) return false;
     s.deployKind = a.kind;
@@ -441,6 +611,8 @@ export class Sim {
     if (!pawn) return null;
     if (pawn.state.reviveTarget !== 0 || pawn.state.deployKind !== DeployKind.None || pawn.state.rappelTicks > 0) return null; // its gauge shows instead
     if (pawn.state.mode === PawnMode.Walk && this.reviveCandidate(pawn)) return "revive"; // before ladders (D-049)
+    const defuser = this.defuserActionFor(pawn);
+    if (defuser) return defuser; // before panels (D-120)
     const deploy = this.deployActionFor(pawn);
     const move = movementPrompt(this.ctx, pawn);
     // A lab room gives both sides both tools (on different keys): an attacker is shown the rope's prompt first, a
@@ -589,18 +761,25 @@ export class Sim {
         let cmd = input;
         if (idleDriven.has(pawn.id)) this.letGo(pawn, true);
         else {
+          this.dropDefuser(pawn, input);
+          const holding = pawn.state.deployKind;
           const reviving = this.updateRevive(pawn, input);
           if (reviving || this.updateDeploy(pawn, input)) {
             // Reviving holds you in place, and so do reinforcing and barricading (reinforcement.locksReinforcer;
-            // both placeholders); the held key never reaches a ladder.
-            const still = reviving || this.data.destruction.reinforcement.locksReinforcer;
-            cmd = { ...input, forward: still ? 0 : input.forward, strafe: still ? 0 : input.strafe, buttons: input.buttons & ~Btn.Interact };
+            // both placeholders) and the defuser's holds (data/objective.json), through the tick a hold completes;
+            // the held key never reaches a ladder.
+            const k = pawn.state.deployKind !== DeployKind.None ? pawn.state.deployKind : holding;
+            const d = this.data.objective.defuser;
+            const still = reviving || (k === DeployKind.Plant ? d.plantLocksBody : k === DeployKind.Disable ? d.disableLocksBody : k !== DeployKind.None && this.data.destruction.reinforcement.locksReinforcer);
+            // A standing body crouches for the defuser's holds where the data says so (prone stays prone); it stands
+            // back up when the hold ends, as its stance key says.
+            const kneel = !reviving && input.stance === Stance.Stand && (k === DeployKind.Plant ? d.plantCrouches : k === DeployKind.Disable && d.disableCrouches);
+            cmd = { ...input, forward: still ? 0 : input.forward, strafe: still ? 0 : input.strafe, buttons: input.buttons & ~Btn.Interact, stance: kneel ? Stance.Crouch : input.stance };
           }
         }
         // A body driven without its player's buttons (left behind on the camera, or being looked
         // through) has its weapon parked: nothing it was doing carries on unseen.
-        stepPawn(this.ctx, pawn, cmd, !idleDriven.has(pawn.id), !idleDriven.has(pawn.id));
-        this.belowKillPlane(pawn);
+        this.stepBody(pawn, cmd, !idleDriven.has(pawn.id), !idleDriven.has(pawn.id));
         refreshBroadPhase(this.world); // the next pawn must see this one where it now is
         if (idleDriven.has(pawn.id)) pawn.state.prevButtons = held;
         else if (cmd !== input) pawn.state.prevButtons |= input.buttons & Btn.Interact; // still held: not a fresh press later
@@ -613,8 +792,7 @@ export class Sim {
       // is in keeps its weapon running (a reload goes on through a lag spike); an idle shell's is parked.
       const held = pawn.state.prevButtons;
       this.letGo(pawn, idleShell);
-      stepPawn(this.ctx, pawn, idleInput(pawn, idleShell ? Stance.Crouch : pawn.state.stance), !idleShell, false);
-      this.belowKillPlane(pawn);
+      this.stepBody(pawn, idleInput(pawn, idleShell ? Stance.Crouch : pawn.state.stance), !idleShell, false);
       refreshBroadPhase(this.world);
       pawn.state.prevButtons = held;
     }
@@ -623,12 +801,12 @@ export class Sim {
 
   /**
    * A body whose feet fell below the level's kill plane (bounds.killY, DECISIONS D-076) is out of the level:
-   * it goes back to spawn 0 standing, with no fall damage (lab rooms; a match will kill it, Phase 6). Part of
-   * the step, so a client predicts it exactly as the server does.
+   * in a lab it goes back to spawn 0 standing, with no fall damage, as part of the step, so a client predicts it
+   * exactly as the server does; in a match it keeps falling and the room kills it (MatchSimRules.killPlaneKills).
    */
   private belowKillPlane(pawn: Pawn) {
     const killY = this.level.def.bounds?.killY;
-    if (killY === undefined || pawn.state.y >= killY) return;
+    if (killY === undefined || pawn.state.y >= killY || this.matchRules.killPlaneKills) return;
     const s = this.level.def.spawns[0];
     this.teleport(pawn.id, s.pos[0], s.pos[1], s.pos[2], s.yawDeg);
   }

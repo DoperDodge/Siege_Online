@@ -47,6 +47,8 @@ export const Btn = {
   /** Reserved: ping (Phase 7) and gadget (Phase 8), so the numbers never change. */
   Ping: 1 << 11,
   Gadget: 1 << 12,
+  /** Drop the defuser (Phase 6, D-120). */
+  Drop: 1 << 13,
 } as const;
 
 /** What the weapon in hand is doing (PawnState.wAct). */

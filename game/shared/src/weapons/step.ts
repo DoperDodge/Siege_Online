@@ -61,7 +61,15 @@ export type SimEvent =
    * A swing in from a rope ended at a window (rappel breach, Phase 5 M8): the server breaks the glass and
    * barricades in `panels` if the body went `through`, else breaks the glass and kicks the barricades.
    */
-  | { kind: "rappelBreach"; pawnId: number; panels: number[]; through: boolean };
+  | { kind: "rappelBreach"; pawnId: number; panels: number[]; through: boolean }
+  /**
+   * The defuser (Phase 6, match/objective.ts): picked up, dropped (where the body stood), planted (there), or a
+   * defender finished disabling it. The simulation moves it; the room tells the match.
+   */
+  | { kind: "pickup"; pawnId: number }
+  | { kind: "drop"; pawnId: number; pos: Vec3 }
+  | { kind: "plant"; pawnId: number; pos: Vec3 }
+  | { kind: "disable"; pawnId: number };
 
 export type WeaponContext = MoveContext & { data: GameData; events: SimEvent[] };
 

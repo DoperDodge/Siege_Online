@@ -1,0 +1,29 @@
+{
+  "_doc": "Quick Match (DECISIONS D-017; research/round_flow.md §2, §3, §7, §8, §10, §14): 4 rounds, first to 3, the sides swap after round 2, one sudden-death overtime round at 2–2; no bans; a random site the defenders know, revealed to attackers as the round starts; operator pick 20 s, 15 s when the sides didn't swap [Y8S3]; prep 45 s and action 180 s [Y10S2]; plant and disable 7 s [Y6S1]; the 10 s Attacker Safeguard and red walls up for the first 10 s of action [Y8S3]; pre-setups. Team damage is on in action, off in prep [Y7S4] (core_mechanics.md §11). The round count is Fandom's [Y6S1]; whether the safeguard is still in the game, the fuse in Quick Match, the overtime round's sides and when exactly the site is revealed are unverified, and the round-end banner (6 s, no replay) is ours. Reinforcements: Siege's pool of 10 scaled for small teams (D-015), plus the pre-setups (DESIGN §9). The host may switch the scaling off.",
+  "_season": "Y11S3",
+  "_unverified": ["reverseFriendlyFire.thresholdHp", "match.rounds", "match.overtime.swapEvery", "match.siteReveal", "match.seconds.fuse", "match.seconds.roundEnd", "match.seconds.attackerSafeguard"],
+  "id": "quick_match",
+  "friendlyFire": { "actionPhase": true, "prepPhase": false, "scale": 1.0 },
+  "reverseFriendlyFire": { "enabled": true, "thresholdHp": 100 },
+  "lastAliveDies": true,
+  "dummyRespawnS": 0,
+  "reinforcements": 10,
+  "defenderToolsForAll": false,
+  "attackerToolsForAll": false,
+  "match": {
+    "name": "Quick Match",
+    "teamSize": { "min": 1, "max": 5 },
+    "rounds": 4,
+    "swapEvery": 2,
+    "overtime": { "rounds": 1, "winBy": 1, "swapEvery": 1 },
+    "bans": null,
+    "site": "random",
+    "siteReveal": "roundStart",
+    "seconds": { "pick": 20, "pickSameSides": 15, "prep": 45, "action": 180, "plant": 7, "fuse": 45, "disable": 7, "roundEnd": 6, "runoutGrace": 1, "attackerSafeguard": 10, "redWallExtension": 10 },
+    "reinforcementScaling": "scaled",
+    "preSetups": true,
+    "attrition": "none",
+    "stats": "local",
+    "host": ["reinforcementScaling"]
+  }
+}

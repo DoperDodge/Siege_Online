@@ -1,0 +1,29 @@
+{
+  "_doc": "Unranked (DECISIONS D-014; research/round_flow.md §0–§8, §14): \"an exact copy of Ranked\" without the map ban [Y10S2]. 6 rounds, first to 4, the sides swap at round 4; at 3–3 up to 3 overtime rounds, first to 5, swapping every round; defenders vote for the site and attackers must find it; Pick & Ban with a 15 s vote (Fandom), capped at 1 ban per side per half for our six-operator roster (PLAN §6.2, D-119; the host may set 0–2); prep 45, action 180, plant 7, fuse 45, disable 7; a defender outside for 1 s is detected [Y5S4]. The operator-pick time is the research's best guess (30 s), the first overtime round's sides are unverified (D-121), and the round-end banner (6 s, no replay) is ours. Reinforcements: Siege's 10 scaled for small teams (D-015), the host may switch the scaling off.",
+  "_season": "Y11S3",
+  "_unverified": ["reverseFriendlyFire.thresholdHp", "match.overtime.swapEvery", "match.seconds.pick", "match.seconds.roundEnd"],
+  "id": "unranked",
+  "friendlyFire": { "actionPhase": true, "prepPhase": false, "scale": 1.0 },
+  "reverseFriendlyFire": { "enabled": true, "thresholdHp": 100 },
+  "lastAliveDies": true,
+  "dummyRespawnS": 0,
+  "reinforcements": 10,
+  "defenderToolsForAll": false,
+  "attackerToolsForAll": false,
+  "match": {
+    "name": "Unranked",
+    "teamSize": { "min": 1, "max": 5 },
+    "rounds": 6,
+    "swapEvery": 3,
+    "overtime": { "rounds": 3, "winBy": 2, "swapEvery": 1 },
+    "bans": { "maxPerSide": 1, "voteSeconds": 15 },
+    "site": "vote",
+    "siteReveal": "sight",
+    "seconds": { "pick": 30, "pickSameSides": null, "prep": 45, "action": 180, "plant": 7, "fuse": 45, "disable": 7, "roundEnd": 6, "runoutGrace": 1, "attackerSafeguard": 0, "redWallExtension": 0 },
+    "reinforcementScaling": "scaled",
+    "preSetups": false,
+    "attrition": "none",
+    "stats": "local",
+    "host": ["bans", "reinforcementScaling"]
+  }
+}

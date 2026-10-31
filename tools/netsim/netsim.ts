@@ -2,22 +2,35 @@
 // network with latency, jitter, TCP-style stalls and client clock drift, all in virtual time so a
 // 30-second match runs in about a second and is repeatable from its seed.
 import {
+  ATTACK,
   Btn,
   bulletDamage,
   ByteReader,
   Cause,
   ClientSession,
+  defaultLoadoutPick,
+  DEFENSE,
   DT,
+  encodeLobbyAction,
+  encodeMatchAction,
+  encodePickLoadout,
+  ErrorCode,
   eyePose,
   handleRoomMessage,
+  inSite,
+  isFormat,
   loadedOf,
   PawnMode,
   pelletPath,
+  Phase,
   poseHitboxes,
   rayCapsule,
   Room,
   ropeAt,
+  siteArea,
   Stance,
+  TEAM_NAMES,
+  TICK_HZ,
   type BodyEntry,
   type GameEvent,
   type InputCmd,
@@ -159,6 +172,8 @@ class Link {
   private stalledUntil = 0;
   /** No new stalls from this time on (the quiet end of a run). */
   calmAfter = Infinity;
+  /** No new stalls while this says so (a match's round end, checked at rest). */
+  calm: (() => boolean) | null = null;
   bytes = 0;
   constructor(
     private readonly clock: Clock,
@@ -173,7 +188,7 @@ class Link {
   send(b: Uint8Array) {
     this.bytes += b.length;
     const now = this.clock.now;
-    if (now >= this.stalledUntil && now < this.calmAfter && this.rng.next() < this.o.stallsPerSecond * DT) this.stalledUntil = now + this.o.stallMs;
+    if (now >= this.stalledUntil && now < this.calmAfter && !this.calm?.() && this.rng.next() < this.o.stallsPerSecond * DT) this.stalledUntil = now + this.o.stallMs;
     // During a stall nothing gets through until it ends; TCP then delivers everything in order.
     const from = now < this.stalledUntil ? this.stalledUntil : now;
     const arrive = Math.max(from + this.o.oneWayMs + this.rng.next() * this.o.jitterMs, this.lastDelivery);
@@ -900,4 +915,379 @@ export async function runHitreg(partial: Partial<HitregOptions> = {}): Promise<H
   report.over250 = claimed.filter((v) => v > 250 + 1e-6).length / Math.max(1, claimed.length);
   report.corrections = room.memberInfo(shooter.memberId)?.corrections ?? 0;
   return report;
+}
+
+// ---------------------------------------------------------------- a match (Phase 6 M6, PLAN §19)
+
+/** How a round of the scripted match ends: the harness sees to it, and the bots play the rest of the round. */
+export type RoundScript = "time" | "elimination" | "detonate" | "disable";
+
+/**
+ * Ten rounds, Blue attacking the odd ones (the sides swap every round): every way the harness makes a round end, each
+ * team winning five, so the match goes the distance and ends a 5–5 draw.
+ */
+export const MATCH_SCRIPT: readonly RoundScript[] = ["elimination", "time", "detonate", "elimination", "time", "detonate", "disable", "elimination", "elimination", "time"];
+
+export interface MatchNetsimOptions {
+  clients: number;
+  oneWayMs: number;
+  jitterMs: number;
+  stallsPerSecond: number;
+  stallMs: number;
+  driftPct: number;
+  seed: number;
+  /** One per round; an even number of them (a match's regulation rounds). */
+  script: readonly RoundScript[];
+}
+
+export const MATCH_DEFAULTS: MatchNetsimOptions = { clients: 10, oneWayMs: 50, jitterMs: 10, stallsPerSecond: 0.05, stallMs: 200, driftPct: 0.5, seed: 1, script: MATCH_SCRIPT };
+
+const REASONS = ["elimination", "time", "detonated", "disabled", "deactivated"] as const;
+/** How each scripted round should end, and which side wins it. */
+const SCRIPTED: Record<RoundScript, { reason: (typeof REASONS)[number]; attackersWin: boolean }> = {
+  time: { reason: "time", attackersWin: false },
+  elimination: { reason: "elimination", attackersWin: true },
+  detonate: { reason: "detonated", attackersWin: true },
+  disable: { reason: "disabled", attackersWin: false },
+};
+
+export interface MatchNetsimReport {
+  options: MatchNetsimOptions;
+  /** Each round as the server recorded it, against the script. */
+  rounds: { round: number; attackers: string; winner: string; reason: string; site: string; script: RoundScript; asScripted: boolean }[];
+  score: [number, number];
+  winner: string | null;
+  /** The match is over (its summary). */
+  over: boolean;
+  perClient: { name: string; corrections: number; forced: number; resyncs: number; refused: number; downKbps: number; upKbps: number; rttMs: number }[];
+  serverTickMs: { mean: number; p99: number; max: number };
+  /** A correction while standing still in the last second of a round's end: client and server disagree. */
+  desyncs: string[];
+  /** The same for a body left pressed against another (expected, D-033 addendum). */
+  contactLate: string[];
+  /** A client whose match (phase, round, score, the rounds so far) isn't the server's at a round's end or the match end. */
+  viewsDiffer: string[];
+  /** Panel ops sent, and clients whose panels aren't the server's at a round's end. */
+  panels: { ops: number; differ: string[]; mismatches: number; resyncs: number };
+  /** Deaths the first client heard of (the harness's eliminations among them). */
+  kills: number;
+  /** Errors other than a refused choice (any is a failure). */
+  errors: string[];
+}
+
+/**
+ * Ten clients through a whole Custom match on Oregon over the simulated network (PLAN §19): the lobby, ban votes,
+ * picks, site votes and spawns, defenders in prep behind red walls (and Quick Match's pre-setups), every round's
+ * action with the bots moving and firing, plants and disables held across the latency, the side swaps and the end.
+ * The harness makes each round end the scripted way (killing defenders, or putting the carrier and the last defender
+ * where they plant and disable); at each round's end everyone stands still, and in its last second no client may
+ * need a correction, every client's panels must be the server's, and so must its view of the match.
+ */
+export async function runMatchNetsim(partial: Partial<MatchNetsimOptions> = {}): Promise<MatchNetsimReport> {
+  const o: MatchNetsimOptions = { ...MATCH_DEFAULTS, ...partial };
+  if (o.script.length % 2 || o.script.length < 2) throw new Error("netsim: a match has an even number of rounds");
+  const rng = new Rng(o.seed);
+  const clock = new Clock();
+  const room = await Room.create("SIM00", "oregon", { format: "custom", seed: o.seed });
+  const match = room.director!.match;
+  const data = room.sim.data;
+  const level = room.sim.level.def;
+  const custom = data.modes.get("custom");
+  if (!custom || !isFormat(custom)) throw new Error("netsim: no Custom format");
+  const linkOpts: NetsimOptions = { ...DEFAULTS, oneWayMs: o.oneWayMs, jitterMs: o.jitterMs, stallsPerSecond: o.stallsPerSecond, stallMs: o.stallMs };
+  const tickMs = DT * 1000;
+  const spawnGroups = [...new Set(level.spawns.filter((s) => s.side === "attack" && s.group).map((s) => s.group!))];
+  const errors: string[] = [];
+  let kills = 0;
+  /** No new stalls while a round's end is checked at rest, nor after the match. */
+  const calm = () => match.phase === Phase.RoundEnd || match.phase === Phase.MatchEnd;
+
+  interface Bot {
+    i: number;
+    name: string;
+    session: ClientSession;
+    up: Link;
+    down: Link;
+    memberId: number;
+    drift: number;
+    nextTickAt: number;
+    ticks: number;
+    /** The body it drives, and its brain (made afresh for each new body: it keeps near where that spawned). */
+    pawn: number;
+    brain: ReturnType<typeof bot> | null;
+    /** The harness's input, when it scripts this bot (a plant, a disable, standing aside), and buttons it presses a little later. */
+    override: Omit<InputCmd, "seq"> | null;
+    press: { buttons: number; fromTick: number } | null;
+    /** The round and phase it made its choices in. */
+    chose: string;
+    refused: number;
+  }
+  const clients: Bot[] = await Promise.all(
+    Array.from({ length: o.clients }, async (_, i) => {
+      const b = { i, name: `bot${i}`, memberId: 0, drift: 1 + ((rng.next() * 2 - 1) * o.driftPct) / 100, nextTickAt: 0, ticks: 0, pawn: 0, brain: null, override: null, press: null, chose: "", refused: 0 } as Omit<Bot, "session" | "up" | "down"> as Bot;
+      b.down = new Link(clock, rng, linkOpts, (bytes) => b.session.handle(bytes));
+      b.up = new Link(clock, rng, linkOpts, (bytes) => {
+        if (!handleRoomMessage(room, b.memberId, bytes[0], new ByteReader(bytes.subarray(1)))) throw new Error(`netsim: unexpected message ${bytes[0]}`);
+      });
+      b.up.calm = b.down.calm = calm;
+      b.session = new ClientSession({
+        send: (bytes) => b.up.send(bytes),
+        now: () => clock.now,
+        onEvents: i === 0 ? (_t, evs) => (kills += evs.filter((e) => e.kind === "kill").length) : undefined,
+        onError: (code, message) => {
+          if (code === ErrorCode.Refused) b.refused++;
+          else errors.push(`${b.name}: ${message}`);
+        },
+      });
+      const id = room.join(b.name, { send: (bytes) => b.down.send(bytes), buffered: () => 0 });
+      if (id === null) throw new Error(`netsim: ${b.name} couldn't join`);
+      b.memberId = id;
+      return b;
+    }),
+  );
+  clock.runUntil(o.oneWayMs * 3 + o.jitterMs);
+  await Promise.all(clients.map((c) => c.session.loaded()));
+  const byMember = (id: number) => clients.find((c) => c.memberId === id)!;
+
+  // The lobby: the host sets short rules (the sides swap every round, Blue attacks first, no overtime; bans, the
+  // safeguard, red walls into action and pre-setups on; friendly fire off, so a stray bullet never ends a round), the
+  // others ready up, the host starts.
+  const host = clients[0];
+  const rules = {
+    match: {
+      ...custom.match,
+      rounds: o.script.length,
+      swapEvery: 1,
+      overtime: null,
+      firstAttack: "blue",
+      bans: { maxPerSide: 1, voteSeconds: 5 },
+      site: "vote",
+      siteReveal: "roundStart",
+      preSetups: true,
+      seconds: { ...custom.match.seconds, pick: 5, prep: 5, action: 30, plant: 7, fuse: 10, disable: 7, roundEnd: 4, attackerSafeguard: 3, redWallExtension: 3 },
+    },
+    friendlyFire: { actionPhase: false, prepPhase: false, scale: 1 },
+  };
+  const t0 = clock.now;
+  clock.at(t0 + 100, () => host.up.send(encodeLobbyAction({ kind: "change", change: { kind: "rules", rules } })));
+  clock.at(t0 + 600, () => clients.slice(1).forEach((c) => c.up.send(encodeLobbyAction({ kind: "ready", ready: true }))));
+  clock.at(t0 + 1100, () => host.up.send(encodeLobbyAction({ kind: "start" })));
+
+  /** A member's body on the server (null: none). */
+  const body = (id: number) => {
+    const c = room.bodyOf(id);
+    return c ? (room.sim.pawns.get(c.possessedPawnId) ?? null) : null;
+  };
+  const up = (p: { state: PawnState } | null) => p !== null && p.state.mode !== PawnMode.Dead;
+  const mismatches = (id: number) => {
+    const m = room.memberInfo(id);
+    return m ? m.corrections - m.forcedCorrections : 0;
+  };
+  const touching = (id: number) => {
+    const me = body(id);
+    if (!me) return false;
+    const reach = 2 * data.movement.stance.collisionRadius + 0.05;
+    return [...room.sim.pawns.values()].some((p) => p.id !== me.id && p.state.mode !== PawnMode.Dead && Math.hypot(p.state.x - me.state.x, p.state.z - me.state.z) < reach);
+  };
+  /**
+   * Put a member's body somewhere (the server's move: their client is corrected) and script their input there: still,
+   * facing `yaw`, pressing `buttons` half a second later, as a player who faces something before pressing Use (a press
+   * is judged against the facing the body had before its tick).
+   */
+  const put = (id: number, x: number, y: number, z: number, yaw: number, buttons: number) => {
+    const p = body(id);
+    if (!p) return;
+    room.sim.teleport(p.id, x, y, z, (yaw * 180) / Math.PI);
+    room.correct(id);
+    const c = byMember(id);
+    c.override = { forward: 0, strafe: 0, yaw, pitch: 0, buttons: 0, stance: Stance.Stand, lean: 0 };
+    c.press = buttons ? { buttons, fromTick: c.ticks + TICK_HZ / 2 } : null;
+  };
+
+  // ---- The harness's part of each round (after the server's step).
+  let action = { round: 0, tick: 0 };
+  let disabling = false;
+  const rounds: MatchNetsimReport["rounds"] = [];
+  function script() {
+    const r = match.round;
+    const s = o.script[r - 1];
+    if (match.phase === Phase.Action && action.round !== r) {
+      action = { round: r, tick: room.sim.tick };
+      disabling = false;
+    }
+    if (match.phase !== Phase.Action && match.phase !== Phase.PostPlant) return;
+    const since = room.sim.tick - action.tick;
+    const defenders = match.sides[DEFENSE];
+    if (s === "elimination" && since >= 2 * TICK_HZ && since % 16 === 0) {
+      // From 2 s in, a defender dies every quarter second.
+      const d = defenders.map(body).find(up);
+      if (d) room.killBody(d.id, Cause.Lab);
+    }
+    if ((s === "detonate" || s === "disable") && since === TICK_HZ) {
+      // 1 s in: every defender but the last dies, and the last stands aside on another storey; the carrier goes to the
+      // site and holds Use.
+      const alive = defenders.filter((id) => up(body(id)));
+      for (const id of alive.slice(0, -1)) room.killBody(body(id)!.id, Cause.Lab);
+      const site = level.sites.find((x) => x.id === match.site)!;
+      const siteStorey = level.rooms.find((x) => x.id === site.rooms[0])!.storey;
+      const aside = level.rooms.find((x) => x.storey !== siteStorey && !site.rooms.includes(x.id))!.anchor;
+      if (alive.length) put(alive.at(-1)!, aside[0], aside[1], aside[2], 0, 0);
+      const area = siteArea(level, site.id)!;
+      const spot = level.spawns.filter((x) => x.group === site.id).find((x) => inSite(area, x.pos[0], x.pos[1], x.pos[2]))!;
+      const carrier = match.sides[ATTACK].find((id) => room.bodyOf(id)?.pawnIds.includes(room.sim.objective?.carrier ?? -1));
+      if (carrier !== undefined) put(carrier, spot.pos[0], spot.pos[1], spot.pos[2], 0, Btn.Interact);
+    }
+    const planted = room.sim.objective?.planted;
+    if (planted && !disabling) {
+      disabling = true;
+      for (const id of match.sides[ATTACK]) Object.assign(byMember(id), { override: null, press: null });
+      // The last defender comes to the defuser, faces it and holds Use (disable), or keeps standing aside (detonate).
+      const last = defenders.find((id) => up(body(id)));
+      if (s === "disable" && last !== undefined) {
+        for (let k = 0; k < 8; k++) {
+          const a = (k / 8) * 2 * Math.PI;
+          const [x, z] = [planted[0] + Math.cos(a), planted[2] + Math.sin(a)];
+          if (!room.sim.standsFree(x, planted[1], z)) continue;
+          put(last, x, planted[1], z, Math.atan2(-(planted[0] - x), -(planted[2] - z)), Btn.Interact);
+          break;
+        }
+      }
+    }
+  }
+
+  // ---- Each bot's choices (once a phase) and input.
+  function choose(c: Bot, v: NonNullable<ClientSession["match"]>) {
+    const key = `${v.round}:${v.phase}`;
+    if (c.chose === key) return;
+    c.chose = key;
+    const me = v.players.find((p) => p.id === v.you);
+    if (!me || me.side === null) return;
+    const r = new Rng(o.seed * 7919 + c.i * 131 + v.round * 17 + v.phase);
+    const any = <T>(xs: T[]) => xs[Math.floor(r.next() * xs.length)];
+    const side = me.side;
+    const ops = (s: 0 | 1) => [...data.operators.values()].filter((op) => op.side === (s === ATTACK ? "attacker" : "defender")).map((op) => op.id);
+    if (v.phase === Phase.Ban) {
+      const target = ops((1 - side) as 0 | 1).filter((op) => !v.bans[1 - side].includes(op));
+      if (target.length) c.up.send(encodeMatchAction({ kind: "banVote", operator: any(target) }));
+    } else if (v.phase === Phase.Planning) {
+      const taken = new Set(v.players.filter((p) => p.team === me.team && p.id !== me.id).map((p) => p.operator));
+      const free = ops(side).filter((op) => !v.bans[side].includes(op) && !taken.has(op) && op !== me.locked);
+      // Most pick (two can take one operator at once: the second is refused); the timer picks for the rest.
+      if (free.length && r.next() < 0.7) c.up.send(encodePickLoadout(defaultLoadoutPick(data, any(free))));
+      if (side === DEFENSE) c.up.send(encodeMatchAction({ kind: "siteVote", site: any(level.sites.map((x) => x.id)) }));
+      else c.up.send(encodeMatchAction({ kind: "spawn", group: any(spawnGroups) }));
+    }
+  }
+  function inputOf(c: Bot): Omit<InputCmd, "seq"> {
+    const v = c.session.match;
+    const ctrl = c.session.ctrl;
+    const own = ctrl ? (c.session.sim?.pawns.get(ctrl.possessedPawnId)?.state ?? null) : null;
+    if (v) choose(c, v);
+    if (ctrl && own && ctrl.possessedPawnId !== c.pawn) {
+      c.pawn = ctrl.possessedPawnId;
+      c.override = null;
+      c.press = null;
+      c.brain = bot(new Rng(o.seed * 1000 + c.i * 97 + (v?.round ?? 0)), false, { x: own.x, z: own.z });
+    }
+    const still: Omit<InputCmd, "seq"> = { forward: 0, strafe: 0, yaw: own?.yaw ?? 0, pitch: 0, buttons: 0, stance: Stance.Stand, lean: 0 };
+    // At a round's end everyone stands still (it is checked at rest).
+    if (!v || !own || !c.brain || v.phase === Phase.RoundEnd || v.phase === Phase.MatchEnd) return still;
+    if (c.override) return c.press && c.ticks >= c.press.fromTick ? { ...c.override, buttons: c.press.buttons } : c.override;
+    const cmd = c.brain(c.ticks, own);
+    // Free to fire in the rounds the harness doesn't steer with a plant (friendly fire is off).
+    const s = o.script[v.round - 1];
+    return s === "detonate" || s === "disable" ? { ...cmd, buttons: cmd.buttons & ~Btn.Fire } : cmd;
+  }
+
+  // ---- The checks at each round's end and the match end.
+  const desyncs: string[] = [];
+  const contactLate: string[] = [];
+  const viewsDiffer: string[] = [];
+  const panelsDiffer: string[] = [];
+  let quiet: { round: number; before: number[] } | null = null;
+  let checked = 0;
+  const viewMatches = (c: Bot) => {
+    const v = c.session.match;
+    const same = (h: { round: number; attackers: number; winner: number; reason: number; site: string }[]) =>
+      h.length === match.history.length && h.every((x, k) => JSON.stringify([x.round, x.attackers, x.winner, x.reason, x.site]) === JSON.stringify(Object.values(match.history[k]).slice(0, 5)));
+    return v !== null && v.phase === match.phase && v.round === match.round && v.score[0] === match.score[0] && v.score[1] === match.score[1] && v.winner === match.winner && same(v.history);
+  };
+  function checkRoundEnd() {
+    if (match.phase !== Phase.RoundEnd) return;
+    const left = match.phaseEnd - room.sim.tick;
+    if (left <= TICK_HZ && quiet?.round !== match.round) quiet = { round: match.round, before: clients.map((c) => mismatches(c.memberId)) };
+    if (left > 1 || quiet?.round !== match.round || checked === match.round) return;
+    checked = match.round;
+    const panelHash = room.sim.level.panels.hash();
+    clients.forEach((c, i) => {
+      const late = mismatches(c.memberId) - quiet!.before[i];
+      if (late > 0) (touching(c.memberId) ? contactLate : desyncs).push(`round ${match.round}, ${c.name}: ${late} correction(s) at rest${touching(c.memberId) ? ", pressed against another body" : ""}`);
+      if (c.session.sim!.level.panels.hash() !== panelHash) panelsDiffer.push(`round ${match.round}, ${c.name}`);
+      if (!viewMatches(c)) viewsDiffer.push(`round ${match.round}, ${c.name}`);
+    });
+  }
+
+  // ---- The run: server ticks and each client's own (drifting) ticks, in virtual time.
+  const serverTimes: number[] = [];
+  let serverNext = clock.now;
+  let overAt: number | null = null;
+  const limit = clock.now + o.script.length * 120_000;
+  while (clock.now < limit && (overAt === null || clock.now < overAt + 2000)) {
+    const nextClient = Math.min(...clients.map((c) => c.nextTickAt));
+    const t = Math.min(serverNext, nextClient);
+    clock.runUntil(t);
+    if (t === serverNext) {
+      const t0s = performance.now();
+      room.step();
+      serverTimes.push(performance.now() - t0s);
+      serverNext += tickMs;
+      script();
+      checkRoundEnd();
+      if (match.phase === Phase.MatchEnd && overAt === null) overAt = clock.now;
+      for (const h of match.history.slice(rounds.length)) {
+        const s = o.script[h.round - 1];
+        const want = SCRIPTED[s];
+        const reason = REASONS[h.reason];
+        rounds.push({ round: h.round, attackers: TEAM_NAMES[h.attackers], winner: TEAM_NAMES[h.winner], reason, site: h.site, script: s, asScripted: reason === want.reason && (h.winner === h.attackers) === want.attackersWin });
+      }
+    }
+    for (const c of clients) {
+      if (c.nextTickAt > t) continue;
+      c.nextTickAt = t + tickMs * c.drift * c.session.tickScale();
+      if (c.session.ready) {
+        c.session.tick(inputOf(c));
+        c.ticks++;
+      }
+      if (c.ticks % 64 === 0) c.session.ping();
+      if (c.session.ready) c.session.frame();
+    }
+  }
+  // The match's end as everyone sees it.
+  for (const c of clients) if (!viewMatches(c)) viewsDiffer.push(`the end, ${c.name}`);
+  const secs = (clock.now - t0) / 1000;
+  const sorted = [...serverTimes].sort((a, b) => a - b);
+  return {
+    options: o,
+    rounds,
+    score: [match.score[0], match.score[1]],
+    winner: match.winner === null ? null : TEAM_NAMES[match.winner],
+    over: match.phase === Phase.MatchEnd,
+    perClient: clients.map((c) => ({
+      name: c.name,
+      corrections: room.memberInfo(c.memberId)?.corrections ?? 0,
+      forced: room.memberInfo(c.memberId)?.forcedCorrections ?? 0,
+      resyncs: c.session.stats.resyncs,
+      refused: c.refused,
+      downKbps: (c.down.bytes * 8) / secs / 1000,
+      upKbps: (c.up.bytes * 8) / secs / 1000,
+      rttMs: c.session.rttMs,
+    })),
+    serverTickMs: { mean: sorted.reduce((a, b) => a + b, 0) / sorted.length, p99: sorted[Math.floor(sorted.length * 0.99)], max: sorted[sorted.length - 1] },
+    desyncs,
+    contactLate,
+    viewsDiffer,
+    panels: { ops: room.stats.panelOps, differ: panelsDiffer, mismatches: clients.reduce((n, c) => n + c.session.stats.panelMismatches, 0), resyncs: room.stats.panelResyncs },
+    kills,
+    errors,
+  };
 }

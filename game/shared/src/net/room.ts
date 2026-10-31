@@ -26,6 +26,9 @@ import { hash4, pelletDirections, viewDir } from "../weapons/spread.js";
 import { QUERY_SIGHT } from "../physics/rapier.js";
 import { sideTeam } from "../sim.js";
 import { encodeEvents, type GameEvent } from "./events.js";
+import { MatchDirector, type DirectorHost } from "./matchDirector.js";
+import type { LobbyAction, MatchAction, RoomListEntry } from "./matchWire.js";
+import { isFormat, type FormatMode, type Side } from "../match/rules.js";
 import { encodeError, encodePong, encodeRoster, encodeShotResult, encodeWelcome, ErrorCode, unwrap16, type InputMsg, type LabTool, type RosterEntry, type ShotResult } from "./protocol.js";
 import { encodePanelOps, encodePanelState, wireOp } from "./panels.js";
 import { MAX_INTERP_MS, quantizeRemote, SNAPSHOT_EVERY, SnapshotEncoder, type RemoteQ } from "./snapshot.js";
@@ -200,7 +203,7 @@ export function predictionHash(sim: Sim, ctrl: PlayerController): number {
   return fnv1a(w.finish());
 }
 
-export class Room {
+export class Room implements DirectorHost {
   readonly history: HitboxHistory;
   /** Recent panel changes: shots are judged against the panels as their shooter had them (destruction/history.ts). */
   panelHistory = new PanelHistory();
@@ -210,6 +213,8 @@ export class Room {
   private unsentOps: IndexedOp[] = [];
   private readonly members = new Map<number, Member>();
   private nextMemberId = 1;
+  /** Its step threw, and it closed (fail()). */
+  private failed = false;
   /** Range Lab dummies (lab rooms on a level that has some). */
   private readonly dummies: Dummy[] = [];
   /** Performance counters for the /stats endpoint and the netsim. */
@@ -237,8 +242,10 @@ export class Room {
     /** Panel states sent because a client's panels disagreed. */
     panelResyncs: 0,
   };
-  /** Damage rules (friendly fire): the lab mode preset until match modes arrive (Phase 6). */
-  readonly rules: ModeData;
+  /** The lab preset: a lab room's damage rules. */
+  private readonly labRules: ModeData;
+  /** A match room's match (Phase 6); null in a lab room. */
+  readonly director: MatchDirector | null;
   /** Shots judged this tick, applied together at its end (DECISIONS D-044). */
   private judged: JudgedShot[] = [];
   /**
@@ -258,12 +265,15 @@ export class Room {
     readonly maxRewindTicks: number,
     /** Secret per room: spread and recoil randomness come from it (DECISIONS D-041). */
     private readonly seed: number,
+    format: FormatMode | null,
   ) {
     this.history = new HitboxHistory(sim, 32);
-    this.rules = sim.data.modes.get("lab")!;
+    this.labRules = sim.data.modes.get("lab")!;
+    this.director = format ? new MatchDirector(this, format, seed) : null;
     // Reinforcing and barricades (Phase 4 M6): each team's pool; lab rooms let attackers do it too, and let
-    // defenders rappel (Phase 5 M8).
-    sim.deployRules = { anyone: this.rules.defenderToolsForAll, rappel: this.rules.attackerToolsForAll, pools: [this.rules.reinforcements, this.rules.reinforcements] };
+    // defenders rappel (Phase 5 M8). A match sets its pools each round (prep).
+    const r = this.rules;
+    sim.deployRules = { anyone: r.defenderToolsForAll, rappel: r.attackerToolsForAll, pools: this.director ? [0, 0] : [r.reinforcements, r.reinforcements] };
     // A revive cut by what another body did (left, respawned, jumped, went down or died): the other side's
     // owner couldn't predict it.
     sim.onReviveCut = (p) => {
@@ -300,17 +310,45 @@ export class Room {
     this.placeDummy(d);
   }
 
-  /** `seed`: the server passes a cryptographic one; tests pass a fixed one. */
-  static async create(code: string, levelId: string, opts: { lab?: boolean; maxRewindTicks?: number; seed?: number } = {}): Promise<Room> {
+  /**
+   * `seed`: the server passes a cryptographic one; tests pass a fixed one. `format`: a match room running this
+   * format (a data/modes id with match rules), in its lobby.
+   */
+  static async create(code: string, levelId: string, opts: { lab?: boolean; maxRewindTicks?: number; seed?: number; format?: string } = {}): Promise<Room> {
     const seed = opts.seed ?? Math.floor(Math.random() * 2 ** 32);
-    return new Room(code, await Sim.create(levelId), levelId, opts.lab ?? false, opts.maxRewindTicks ?? DEFAULT_MAX_REWIND_TICKS, seed >>> 0);
+    const sim = await Sim.create(levelId);
+    let format: FormatMode | null = null;
+    if (opts.format !== undefined) {
+      const m = sim.data.modes.get(opts.format);
+      if (!m || !isFormat(m)) throw new Error(`"${opts.format}" is not a match format`);
+      format = m;
+    }
+    return new Room(code, sim, levelId, (opts.lab ?? false) && !format, opts.maxRewindTicks ?? DEFAULT_MAX_REWIND_TICKS, seed >>> 0, format);
+  }
+
+  /** The damage rules: the match's format (with the host's changes), or the lab preset. */
+  get rules(): ModeData {
+    return this.director?.mode ?? this.labRules;
+  }
+
+  /** Team damage now: the match's rule for the phase, or a lab's action-phase rule. */
+  private friendlyFireOn(): boolean {
+    return this.director ? this.director.friendlyFireOn() : this.rules.friendlyFire.actionPhase;
+  }
+
+  /** The room-list entry of a listed match room, else null. */
+  listing(): RoomListEntry | null {
+    return this.director?.listing() ?? null;
   }
 
   get size(): number {
     return this.members.size;
   }
 
-  /** Add a connection. Returns its member id, or null (with an error sent) if the room is full. */
+  /**
+   * Add a connection. Returns its member id, or null (with an error sent) if the room is full. In a lab room the
+   * member gets a body at once; in a match room they join the match (its lobby, or a team mid-match) with none.
+   */
   join(name: string, client: RoomClient, operatorId = "sledge"): number | null {
     if (this.members.size >= MAX_ROOM_PLAYERS) {
       client.send(encodeError(ErrorCode.RoomFull, `Room ${this.code} is full`));
@@ -351,9 +389,13 @@ export class Room {
       opsHad: this.unsentOps.length,
       opsHeld: [],
     };
+    if (this.director && !this.director.join(m.id, m.name)) {
+      client.send(encodeError(ErrorCode.RoomFull, `Room ${this.code}'s teams are full`));
+      return null;
+    }
     this.members.set(m.id, m);
-    this.spawn(m);
-    client.send(encodeWelcome({ roomCode: this.code, tick: this.sim.tick, levelId: this.levelId, controllerId: m.ctrl!.id }));
+    if (!this.director) this.spawn(m);
+    client.send(encodeWelcome({ roomCode: this.code, tick: this.sim.tick, levelId: this.levelId, controllerId: m.ctrl?.id ?? 0 }));
     client.send(encodePanelState(this.sim.level.panels)); // the walls as they are now (ops waiting to go included); every later op follows
     m.events.push(this.deployRulesEvent());
     this.broadcastRoster();
@@ -363,6 +405,8 @@ export class Room {
   leave(memberId: number): void {
     const m = this.members.get(memberId);
     if (!m) return;
+    if (this.failed) return void this.members.delete(memberId); // nothing more to tell anyone
+    this.director?.leave(memberId);
     if (m.ctrl) this.sim.removePlayer(m.ctrl.id);
     this.members.delete(memberId);
     this.broadcastRoster();
@@ -377,6 +421,8 @@ export class Room {
     const m = this.members.get(memberId);
     const op = this.sim.data.operators.get(pick.operator);
     if (!m || !op) return;
+    // A match room: this round's pick, which the body carries when it spawns.
+    if (this.director) return this.director.pick(memberId, pick);
     m.pick = resolveLoadout(this.sim.data, pick).loadout.pick;
     m.team = sideTeam(op.side);
     this.spawn(m);
@@ -388,9 +434,20 @@ export class Room {
     if (this.sim.data.operators.has(operatorId)) this.pickLoadout(memberId, defaultLoadoutPick(this.sim.data, operatorId));
   }
 
-  private spawn(m: Member) {
+  /** A lobby choice (match rooms; a lab room has no lobby). */
+  onLobby(memberId: number, a: LobbyAction): void {
+    if (this.members.has(memberId)) this.director?.lobby(memberId, a);
+  }
+
+  /** A round's choice (match rooms). */
+  onMatchAction(memberId: number, a: MatchAction): void {
+    if (this.members.has(memberId)) this.director?.action(memberId, a);
+  }
+
+  private spawn(m: Member, spawnIndex = 0) {
     if (m.ctrl) this.sim.removePlayer(m.ctrl.id);
-    m.ctrl = this.sim.addPlayer(m.name, m.pick.operator, 0, undefined, m.pick, m.team);
+    m.ctrl = null; // until the new body stands (addPlayer throws when there's no room for it)
+    m.ctrl = this.sim.addPlayer(m.name, m.pick.operator, spawnIndex, undefined, m.pick, m.team);
     for (const id of m.ctrl.pawnIds) this.sim.pawns.get(id)!.state.rng = hash4(this.seed, id, 0x5eed, 1) || 1;
     m.queue = [];
     this.force(m);
@@ -398,6 +455,75 @@ export class Room {
     m.credit = 0;
     m.held = 0;
     m.stalled = false;
+  }
+
+  // ------------------------------------------------------------------ for the match director (DirectorHost)
+
+  bodyOf(memberId: number): PlayerController | null | undefined {
+    return this.members.get(memberId)?.ctrl;
+  }
+
+  spawnBody(memberId: number, pick: LoadoutPick, spawnIndex: number, side: Side): void {
+    const m = this.members.get(memberId);
+    if (!m) return;
+    m.pick = resolveLoadout(this.sim.data, pick).loadout.pick;
+    m.team = side;
+    this.spawn(m, spawnIndex);
+  }
+
+  removeBody(memberId: number): void {
+    const m = this.members.get(memberId);
+    if (!m?.ctrl) return;
+    for (const id of m.ctrl.pawnIds) this.downedBy.delete(id);
+    this.sim.removePlayer(m.ctrl.id);
+    m.ctrl = null;
+    m.queue = [];
+    m.needCorrection = false;
+  }
+
+  rosterChanged(): void {
+    this.broadcastRoster();
+  }
+
+  killBody(pawnId: number, cause: Cause): void {
+    const p = this.sim.pawns.get(pawnId);
+    if (p && p.state.mode !== PawnMode.Dead) this.hurt(p, { amount: 0, kill: true }, { cause, attacker: null, headshot: false });
+  }
+
+  correct(memberId: number): void {
+    const m = this.members.get(memberId);
+    if (m?.ctrl) this.force(m);
+  }
+
+  send(memberId: number, bytes: Uint8Array): void {
+    this.members.get(memberId)?.client.send(bytes);
+  }
+
+  /**
+   * The room broke (its step threw: a bug). Everyone is told and dropped; the server has already let go of it.
+   * Nothing here touches the simulation, which may be half-way through a tick.
+   */
+  fail(): void {
+    this.failed = true;
+    for (const [id, m] of [...this.members]) {
+      m.client.send(encodeError(ErrorCode.RoomFailed, `Room ${this.code} hit a server error and was closed. Make a new room to play on.`));
+      // The server's connection leaves as its socket closes; an in-process one has no socket.
+      if (m.client.close) m.client.close(1011, "room failed");
+      else this.members.delete(id);
+    }
+  }
+
+  kick(memberId: number): void {
+    const m = this.members.get(memberId);
+    if (!m) return;
+    m.client.send(encodeError(ErrorCode.Kicked, "The host removed you from the room"));
+    // The server's connection leaves the room as its socket closes; an in-process one has no socket.
+    if (m.client.close) m.client.close(1000, "kicked");
+    else this.leave(memberId);
+  }
+
+  refuse(memberId: number, why: string): void {
+    this.send(memberId, encodeError(ErrorCode.Refused, why));
   }
 
   /** The server changed this member's bodies outside their inputs: correct them at the next snapshot. */
@@ -450,16 +576,16 @@ export class Room {
   }
 
   /**
-   * Lab tool: every panel as the level built it and the reinforcement pools full again. Everyone is sent the
-   * panels' state (with nothing changed, it puts theirs back too) and the pools. History before now is
-   * dropped: a shot judged across the reset sees the panels as they are.
+   * Every panel as the level built it and the reinforcement pools set (a lab tool: full again; a match's prep:
+   * the round's). Everyone is sent the panels' state (with nothing changed, it puts theirs back too) and the
+   * pools. History before now is dropped: a shot judged across the reset sees the panels as they are.
    */
-  private resetPanels() {
+  resetPanels(pools: [number, number] = [this.rules.reinforcements, this.rules.reinforcements]): void {
     const panels = this.sim.level.panels;
     for (const e of panels.list) if (e.panel.modified) panels.reset(e.panel.spec.index);
     this.queuedOps = [];
     this.panelHistory = new PanelHistory();
-    this.sim.deployRules.pools = [this.rules.reinforcements, this.rules.reinforcements];
+    this.sim.deployRules.pools = [pools[0], pools[1]];
     const state = encodePanelState(panels);
     for (const m of this.members.values()) {
       this.sendPanelState(m, state);
@@ -709,7 +835,8 @@ export class Room {
         const victim = this.sim.pawns.get(body.pawnId);
         if (!victim || victim.state.mode === PawnMode.Dead || victim.life !== shot.lives.get(body.pawnId)) continue;
         const friendly = victim.team === shot.team;
-        if (friendly && !this.rules.friendlyFire.actionPhase) continue; // team damage off: no damage, no marker
+        if (friendly && !this.friendlyFireOn()) continue; // team damage off: no damage, no marker
+        if (this.director?.safeguarded(victim)) continue; // Quick Match's Attacker Safeguard: the same
         const by = { cause: shot.cause, attacker: shot, headshot: body.headshot };
         if (friendly && shot.m.reflect) {
           // Reverse friendly fire: the shooter takes it instead.
@@ -758,6 +885,7 @@ export class Room {
     const weapon = by.attacker?.weaponId ?? "";
     const friendly = by.attacker !== null && victim.team === by.attacker.team;
     if (r.outcome === "downed") {
+      this.director?.onBodyDown(victim); // a carrier drops the defuser
       this.downedBy.set(victim.id, { ctrl, weapon, life: victim.life });
       const e: GameEvent = { kind: "down", victimPawn: victim.id, victimCtrl: victim.ownerId ?? 0, downerCtrl: ctrl, weapon, cause: by.cause, friendly };
       for (const m of this.members.values()) m.events.push(e);
@@ -780,10 +908,14 @@ export class Room {
     // Downed by nobody (a lab tool, reflected damage) or in an earlier life: the kill is the finisher's.
     const killerCtrl = downer?.ctrl || finisherCtrl;
     const assistCtrl = downer?.ctrl && finisherCtrl !== downer.ctrl ? finisherCtrl : 0;
-    const e: GameEvent = isIdleShell(this.sim, victim)
+    const idle = isIdleShell(this.sim, victim);
+    const e: GameEvent = idle
       ? { kind: "shellDestroyed", pawnId: victim.id, ownerCtrl, killerCtrl, weapon, headshot }
       : { kind: "kill", victimPawn: victim.id, victimCtrl: ownerCtrl, killerCtrl, assistCtrl, weapon: weapon || downer?.weapon || "", cause, headshot, friendly };
     for (const m of this.members.values()) m.events.push(e);
+    this.director?.onBodyDown(victim); // a carrier drops the defuser
+    // Skopós's idle shell isn't an elimination (research/operators/skopos.md): only a body's death counts.
+    if (!idle) this.director?.onDeath(ownerCtrl, killerCtrl, assistCtrl, friendly);
   }
 
   /**
@@ -800,6 +932,8 @@ export class Room {
         this.completeDeploy(e);
       } else if (e.kind === "rappelBreach") {
         this.completeBreach(e);
+      } else if (e.kind === "plant" || e.kind === "disable" || e.kind === "pickup" || e.kind === "drop") {
+        this.director?.onSimEvent(e);
       } else if (e.kind === "reviveStart" || e.kind === "reviveEnd") {
         const target = this.sim.pawns.get(e.targetPawn);
         const owner = target && target.ownerId !== null ? this.memberOf(target.ownerId) : null;
@@ -972,6 +1106,8 @@ export class Room {
     this.resolveShots();
     this.checkReviveLinks();
     this.reviveDummies();
+    // A match's clock and what its phases do with bodies; its state goes out before this tick's snapshot.
+    this.director?.step();
     this.history.record();
     this.stats.ticks++;
     if (this.sim.tick % SNAPSHOT_EVERY === 0) this.sendSnapshots();

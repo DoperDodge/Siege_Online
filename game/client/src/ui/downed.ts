@@ -1,6 +1,7 @@
 // Health and being down (Phase 3 M7, M9): the health bar (the 20 HP down pool while down), the down screen
 // (crawl, bleed, wait for a teammate) and, while you revive someone, the revive's progress (D-048, D-049);
-// the same gauge shows a reinforcement or barricade going up (Phase 4 M6), and a rope being hooked on (Phase 5 M8).
+// the same gauge shows a reinforcement or barricade going up (Phase 4 M6), a rope being hooked on (Phase 5 M8), and
+// the defuser being planted or disabled (Phase 6, match/DESIGN.md §8).
 import { DeployKind, deployTicks, isDowned, PawnMode, ticks, TICK_HZ, type CombatData, type DestructionData, type MovementData, type PawnState } from "@redmond/shared";
 
 /** Seconds left on a revive `reviveTicks` in. */
@@ -14,8 +15,19 @@ export class DownedHud {
     this.$ = (sel) => root.querySelector<HTMLElement>(sel)!;
   }
 
-  /** `interactKey` names the revive key; `nameOfPawn` the teammate being revived. */
-  update(s: PawnState, combat: CombatData, interactKey: string, nameOfPawn: (id: number) => string, destruction?: DestructionData, movement?: MovementData) {
+  /**
+   * `interactKey` names the revive key; `nameOfPawn` the teammate being revived; `holds`, a match's plant and disable
+   * holds in ticks (the simulation's objective).
+   */
+  update(
+    s: PawnState,
+    combat: CombatData,
+    interactKey: string,
+    nameOfPawn: (id: number) => string,
+    destruction?: DestructionData,
+    movement?: MovementData,
+    holds?: { plantTicks: number; disableTicks: number } | null,
+  ) {
     const $ = this.$;
     const pool = combat.dbno.hp;
     const down = isDowned(s);
@@ -39,8 +51,18 @@ export class DownedHud {
       $(".revive-title").textContent = `REVIVING ${nameOfPawn(s.reviveTarget) || "teammate"}… ${reviveSecondsLeft(combat, s.reviveTicks).toFixed(1)} s`;
       $(".revive-bar div").style.width = `${Math.min(100, (100 * s.reviveTicks) / reviveTotalTicks(combat))}%`;
     } else if (deploying) {
-      const total = deployTicks(destruction, s.deployKind);
-      const what = s.deployKind === DeployKind.Reinforce ? "REINFORCING" : s.deployKind === DeployKind.BarricadeUp ? "BARRICADING" : "REMOVING THE BARRICADE";
+      const defuser = s.deployKind === DeployKind.Plant || s.deployKind === DeployKind.Disable;
+      const total = Math.max(1, defuser ? ((s.deployKind === DeployKind.Plant ? holds?.plantTicks : holds?.disableTicks) ?? 1) : deployTicks(destruction, s.deployKind));
+      const what =
+        s.deployKind === DeployKind.Reinforce
+          ? "REINFORCING"
+          : s.deployKind === DeployKind.BarricadeUp
+            ? "BARRICADING"
+            : s.deployKind === DeployKind.Plant
+              ? "PLANTING THE DEFUSER"
+              : s.deployKind === DeployKind.Disable
+                ? "DISABLING THE DEFUSER"
+                : "REMOVING THE BARRICADE";
       $(".revive-title").textContent = `${what}… ${(Math.max(0, total - s.deployTicks) / TICK_HZ).toFixed(1)} s`;
       $(".revive-bar div").style.width = `${Math.min(100, (100 * s.deployTicks) / total)}%`;
     } else if (hooking) {

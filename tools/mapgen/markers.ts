@@ -19,11 +19,19 @@ const EDGE_M = 0.1;
 const ROOM_NEAR_M = 1.5;
 /** An exterior camera's post: a square this wide (metres). */
 const POST_W_M = 0.15;
+/** A pre-setup wall's rooms are looked for this far past each of its faces (metres). */
+const PROBE_M = 0.3;
 
 type V3 = [number, number, number];
 
+/** A site's Quick Match pre-setup as compiled (the layout's, checked against the walls, hatches and rooms built). */
+export interface CompiledPreSetup {
+  reinforce: { panel: string; from?: string }[];
+  holes: { panel: string; size: "vault" | "crouch" }[];
+}
+
 export interface MarkersResult {
-  sites: { id: string; name: string; rooms: string[]; bombs: { id: string; pos: V3; room: string }[]; plantMarginM: number }[];
+  sites: { id: string; name: string; rooms: string[]; bombs: { id: string; pos: V3; room: string }[]; plantMarginM: number; preSetup?: CompiledPreSetup }[];
   cameras: { id: string; pos: V3; yawDeg: number; pitchDeg: number; room?: string }[];
   ingredients: { id: string; kind: "fire_extinguisher" | "gas_pipe"; pos: V3; yawDeg: number; room?: string }[];
   /** Posts for the cameras outside with no building wall near. */
@@ -152,6 +160,38 @@ export function compileMarkers(layout: Layout, fr: Frames, wallSolids: Solid[], 
     return best;
   };
 
+  /** The rooms beside a wall: on its storey, under a point PROBE_M past either face. */
+  const besideWall = (b: Solid): string[] => {
+    const f = storeyOfBox(layout, b);
+    const a = b.size[0] >= b.size[2] ? 2 : 0; // the thickness axis
+    const out: string[] = [];
+    for (const sign of [-1, 1]) {
+      const p: V3 = [b.center[0], b.center[1], b.center[2]];
+      p[a] += sign * (b.size[a] / 2 + PROBE_M);
+      for (const r of rooms.rooms) if (r.storey === f && inRoom(r, p[0], p[2], 0)) out.push(r.id);
+    }
+    return out;
+  };
+  /**
+   * A site's pre-setup checked against what is built: each wall reinforced is a reinforceable wall with `from`
+   * beside it, each hatch one of the layout's (reinforced from its top: no `from`), each hole in a soft wall.
+   */
+  const compilePreSetup = (site: string, p: NonNullable<Layout["sites"][number]["preSetup"]>): CompiledPreSetup => {
+    const wall = (id: string) => wallSolids.find((b) => b.id === id && b.surface === "REINFORCEABLE" && !b.drawOnly);
+    for (const r of p.reinforce) {
+      if (layout.hatches.some((h) => h.id === r.panel)) {
+        if (r.from) out.errors.push(`site ${site}: pre-setup hatch ${r.panel} is reinforced from its top, so it takes no "from"`);
+        continue;
+      }
+      const b = wall(r.panel);
+      if (!b) out.errors.push(`site ${site}: pre-setup ${r.panel} is neither a reinforceable wall nor a hatch`);
+      else if (!r.from) out.errors.push(`site ${site}: pre-setup wall ${r.panel} needs "from", the room its steel faces`);
+      else if (!besideWall(b).includes(r.from)) out.errors.push(`site ${site}: pre-setup wall ${r.panel} doesn't stand beside ${r.from} (${besideWall(b).join(", ") || "no room"})`);
+    }
+    for (const h of p.holes) if (!wall(h.panel)) out.errors.push(`site ${site}: pre-setup hole in ${h.panel}, which isn't a reinforceable wall`);
+    return { reinforce: p.reinforce.map((r) => ({ panel: r.panel, ...(r.from && { from: r.from }) })), holes: p.holes.map((h) => ({ panel: h.panel, size: h.size })) };
+  };
+
   // ---- Sites: the bombs on their rooms' floors.
   for (const s of layout.sites) {
     const rs = s.rooms.map((id) => roomById.get(id));
@@ -167,7 +207,8 @@ export function compileMarkers(layout: Layout, fr: Frames, wallSolids: Solid[], 
       // On the room's floor (its anchor's height: a dropped floor's is lower).
       return { id: b.id, pos: [r4(x), room ? room.anchor[1] : 0, r4(z)] as V3, room: b.room };
     });
-    out.sites.push({ id: s.id, name: s.name, rooms: s.rooms, bombs, plantMarginM: d.site.plantMarginM });
+    const preSetup = s.preSetup && compilePreSetup(s.id, s.preSetup);
+    out.sites.push({ id: s.id, name: s.name, rooms: s.rooms, bombs, plantMarginM: d.site.plantMarginM, ...(preSetup && { preSetup }) });
   }
 
   // ---- Cameras: on a wall of their room, under the ceiling, looking at its middle.

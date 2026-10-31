@@ -29,12 +29,12 @@ export function nativeU(frame: Frame, wx: number, wy: number): [number, number] 
  * callout ("outside" where no room is, "—" on a level without rooms), the storey, and with a plan the position
  * in world u and in the storey's own u. For example "Kids' Dorms · 2F · world u 175.2, 182.0 · 2F u 179.3, 183.9".
  */
-export function whereText(level: MapInfo, storey: number, x: number, z: number): string {
+export function whereText(level: MapInfo, storey: number, x: number, z: number, plain = false): string {
   const s = level.storeys[storey];
   const room = s ? roomAt(level.rooms, s.id, x, z) : null;
   let text = `${room ? room.callout : level.rooms.length ? "outside" : "—"} · ${s?.id ?? "—"}`;
   const plan = level.plan;
-  if (!plan) return text;
+  if (!plan || plain) return text;
   const wx = x / plan.mPerU;
   const wy = z / plan.mPerU;
   text += ` · world u ${wx.toFixed(1)}, ${wy.toFixed(1)}`;
@@ -107,9 +107,11 @@ export class WhereHud {
   private readonly el: HTMLElement;
   private at = -Infinity;
 
+  /** `plain`: the room and storey only (a match), not where you are in the plan's units (the lab). */
   constructor(
     root: HTMLElement,
     private readonly level: MapInfo,
+    private readonly plain = false,
   ) {
     this.el = document.createElement("div");
     this.el.className = "hud where";
@@ -120,7 +122,7 @@ export class WhereHud {
   update(now: number, storey: number, x: number, z: number): void {
     if (now - this.at < WHERE_MS) return;
     this.at = now;
-    const text = whereText(this.level, storey, x, z);
+    const text = whereText(this.level, storey, x, z, this.plain);
     if (text === this.text) return;
     this.text = text;
     this.el.textContent = text;

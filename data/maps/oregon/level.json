@@ -1131,19 +1131,19 @@
   {"id": "3F_CATWALK", "callout": "Cat Walk", "storey": "3F", "rects": [[36.2, 7.6, 44.1, 9.1], [36.2, 9.1, 36.75, 14.65], [41.6, 9.1, 44.1, 14.65], [36.75, 12.9, 41.6, 14.65]], "anchor": [42.075, 6.2, 11.175]}
  ],
  "sites": [
-  {"id": "SITE_DORMS", "name": "2F Kids' Dorms / Dorms Main Hall", "rooms": ["2F_DORMS_MAIN_HALL", "2F_KIDS_DORMS"], "plantMarginM": 0.5, "bombs": [
+  {"id": "SITE_DORMS", "name": "2F Kids' Dorms / Dorms Main Hall", "rooms": ["2F_DORMS_MAIN_HALL", "2F_KIDS_DORMS"], "plantMarginM": 0.5, "preSetup": {"reinforce": [{"panel": "SW-2F-02", "from": "2F_KIDS_DORMS"}, {"panel": "SW-2F-04", "from": "2F_GAME_ROOM"}], "holes": [{"panel": "SW-2F-01", "size": "vault"}]}, "bombs": [
    {"id": "1A", "pos": [24.676, 3.2, 36.5418], "room": "2F_DORMS_MAIN_HALL"},
    {"id": "1B", "pos": [28.9886, 3.2, 27.243], "room": "2F_KIDS_DORMS"}
   ]},
-  {"id": "SITE_DINING", "name": "1F Kitchen / Dining Hall", "rooms": ["1F_DINING", "1F_KITCHEN"], "plantMarginM": 0.5, "bombs": [
+  {"id": "SITE_DINING", "name": "1F Kitchen / Dining Hall", "rooms": ["1F_DINING", "1F_KITCHEN"], "plantMarginM": 0.5, "preSetup": {"reinforce": [{"panel": "SW-1F-08", "from": "1F_KITCHEN"}, {"panel": "SW-1F-01", "from": "1F_DINING"}], "holes": [{"panel": "SW-1F-05", "size": "vault"}]}, "bombs": [
    {"id": "2A", "pos": [15.3555, 0, 24.015], "room": "1F_DINING"},
    {"id": "2B", "pos": [26.481, 0, 26.355], "room": "1F_KITCHEN"}
   ]},
-  {"id": "SITE_MEETING", "name": "1F Meeting Hall / Kitchen", "rooms": ["1F_MEETING_HALL", "1F_KITCHEN"], "plantMarginM": 0.5, "bombs": [
+  {"id": "SITE_MEETING", "name": "1F Meeting Hall / Kitchen", "rooms": ["1F_MEETING_HALL", "1F_KITCHEN"], "plantMarginM": 0.5, "preSetup": {"reinforce": [{"panel": "SW-1F-09", "from": "1F_STAGE"}, {"panel": "H5"}], "holes": []}, "bombs": [
    {"id": "3A", "pos": [35.247, 0, 19.0425], "room": "1F_MEETING_HALL"},
    {"id": "3B", "pos": [26.481, 0, 27.546], "room": "1F_KITCHEN"}
   ]},
-  {"id": "SITE_LAUNDRY", "name": "B Laundry / Supply", "rooms": ["B_LAUNDRY", "B_SUPPLY"], "plantMarginM": 0.5, "bombs": [
+  {"id": "SITE_LAUNDRY", "name": "B Laundry / Supply", "rooms": ["B_LAUNDRY", "B_SUPPLY"], "plantMarginM": 0.5, "preSetup": {"reinforce": [{"panel": "SW-B-01", "from": "B_LAUNDRY"}, {"panel": "SW-B-02", "from": "B_SUPPLY"}], "holes": [{"panel": "SW-B-05", "size": "vault"}, {"panel": "SW-B-06", "size": "crouch"}]}, "bombs": [
    {"id": "4A", "pos": [33.5592, -3.2, 34.7662], "room": "B_LAUNDRY"},
    {"id": "4B", "pos": [40.0887, -3.2, 25.0494], "room": "B_SUPPLY"}
   ]}
