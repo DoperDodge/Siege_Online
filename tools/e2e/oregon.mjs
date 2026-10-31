@@ -399,7 +399,10 @@ try {
     await input(off, { yaw: rad(facing), forward: -1 });
     const landed = await off.waitForFunction((walk) => window.__lab.net.own.mode === walk && window.__lab.net.own.y < 0.1, PawnMode.Walk, { timeout: 15000, polling: 50 }).then(() => true, () => false);
     await input(off, null);
-    await sleep(300);
+    // The tick the rope lets go on isn't grounded yet (the next walking step finds the floor): wait for the page to get
+    // there however slowly it steps, up to 10 s (a fixed 300 ms sleep read the let-go tick on CI). A body that never
+    // stands still fails the check.
+    await off.waitForFunction(() => window.__lab.net.own.grounded, null, { timeout: 10000, polling: 50 }).catch(() => {});
     const down = await own(off);
     result.offline.rappel = { promptAtFoot: atFoot, onRope, steps: { hooked, climbed, turned, upright, landed }, at: [down.x, down.y, down.z], hp: [hp0, down.hp] };
     result.checks.rappelUpTheBigTowerAndDown = /to rappel/.test(atFoot) && hooked && climbed && /RAPPEL/.test(onRope) && turned && upright && landed && down.grounded && down.hp === hp0;
