@@ -748,8 +748,13 @@ export const gadgetSchema = z
     id: z.string(),
     name: z.string(),
     side: z.enum(["attacker", "defender"]),
-    /** How many a loadout with it gets each round (Striker's and Sentry's kits too, research/operators/sentry.md §3.2). */
-    count: z.number().int().min(1).max(15),
+    /**
+     * An operator's own item (their ability, carried in slot 2, Phase 8 M4: Sledge's hammer), not one of the generic
+     * pools: the operator whose `ability.id` is this file's id.
+     */
+    operator: z.string().optional(),
+    /** How many a loadout with it gets each round (Striker's and Sentry's kits too, research/operators/sentry.md §3.2; a hammer's charges). */
+    count: z.number().int().min(1).max(30),
     /** Electronic gadgets are disabled by DSEG, jammed and hacked (§6); mechanical ones never are. */
     electronic: z.boolean(),
     use: z.discriminatedUnion("kind", [
@@ -773,6 +778,20 @@ export const gadgetSchema = z
         reachM: z.number().positive(),
         /** Goes off this long after it's placed (the Hard Breach Charge). */
         fuseS: z.number().positive().optional(),
+      }),
+      z.strictObject({
+        /**
+         * Swung (Sledge's hammer, M4): Fire held swings it, each swing `swingS` long, its blow landing `hitS` in and
+         * reaching `reachM` from the eye. Within `bothSkinsM` of a soft surface (across the floor) it breaks both faces (a `holeM` width ×
+         * height rectangle), further only the near one; a body it hits dies, costing `killCharges` charges in all.
+         */
+        kind: z.literal("swing"),
+        swingS: z.number().positive(),
+        hitS: z.number().positive(),
+        reachM: z.number().positive(),
+        bothSkinsM: z.number().min(0),
+        holeM: z.tuple([z.number().positive(), z.number().positive()]),
+        killCharges: z.number().int().min(1),
       }),
     ]),
     /** Waits for its owner's detonator once it's out. */
@@ -819,7 +838,8 @@ export const gadgetSchema = z
     if (u.kind === "throw" && u.flight === "bounce" && u.fuseS === undefined) ctx.addIssue({ code: "custom", path: ["use", "fuseS"], message: "a bouncing gadget needs a fuse" });
     if (u.kind === "throw" && u.afterHitS !== undefined && u.fuseS === undefined) ctx.addIssue({ code: "custom", path: ["use", "afterHitS"], message: "afterHitS cuts a fuse: give fuseS" });
     if (u.kind === "throw" && u.maxTravelM !== undefined && u.flight !== "impact") ctx.addIssue({ code: "custom", path: ["use", "maxTravelM"], message: "only an impact gadget goes off in the air" });
-    if (g.remote && u.fuseS !== undefined) ctx.addIssue({ code: "custom", path: ["remote"], message: "a remote gadget has no fuse" });
+    if (g.remote && u.kind !== "swing" && u.fuseS !== undefined) ctx.addIssue({ code: "custom", path: ["remote"], message: "a remote gadget has no fuse" });
+    if (u.kind === "swing" && u.hitS > u.swingS) ctx.addIssue({ code: "custom", path: ["use", "hitS"], message: "a swing's blow lands within it" });
   });
 export type GadgetData = z.infer<typeof gadgetSchema>;
 

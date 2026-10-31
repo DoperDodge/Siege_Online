@@ -34,6 +34,8 @@ export interface MoveContext {
   slowOf?(pawn: Pawn): number;
   /** Whether a body's detonator has a device of `gadget` out to set off (Phase 8 M3: not one an EMP disabled). */
   canDetonate?(pawn: Pawn, gadget: string): boolean;
+  /** Whether a swing's blow from this body's eye along its view meets something within `reachM` (Phase 8 M4: it costs a charge). */
+  swingMeets?(pawn: Pawn, reachM: number): boolean;
 }
 
 const IDENTITY = { x: 0, y: 0, z: 0, w: 1 };

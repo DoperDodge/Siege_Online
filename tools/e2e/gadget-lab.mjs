@@ -1,11 +1,12 @@
-// End-to-end check of the Gadget Lab (Phase 8 M1 and M2, game/shared/src/gadgets/DESIGN.md §11). Offline (the page's
+// End-to-end check of the Gadget Lab (Phase 8 M1 to M4, game/shared/src/gadgets/DESIGN.md §11). Offline (the page's
 // own room in a Web Worker): Sledge takes a frag out with 3 and throws it (it flies, comes to rest, and is gone at its
-// fuse); Fuze takes a Breach Charge out, holds Fire at a soft wall until it's on it (the detonator is then in hand)
-// and sets it off: the wall has a hole. Mute throws his Nitro Cell at the feet of the attacker dummy in the open, steps
-// well away and sets it off: the dummy is down, by the Nitro Cell. Online, two pages at 100 ms of simulated round trip:
-// what A throws, B has in its table too, A's prediction needed no corrections, and both see its blast. M3: Sledge's stun
-// thrown in front of him whites out his screen; Thermite's smoke grenade leaves its cloud in the table. (The level's
-// ingredients are in the table from the start: the checks look at the gadgets thrown.) Requires `npm run build` first.
+// fuse), then swings his hammer (Z) at a soft wall close by (both faces broken, a charge spent). Fuze takes a Breach
+// Charge out, holds Fire at a soft wall until it's on it (the detonator is then in hand) and sets it off: the wall has
+// a hole. Mute throws his Nitro Cell at the feet of the attacker dummy in the open, steps well away and sets it off:
+// the dummy is down, by the Nitro Cell. Sledge's stun thrown in front of him whites out his screen; Thermite's smoke
+// grenade leaves its cloud in the table. Online, two pages at 100 ms of simulated round trip: what A throws, B has in
+// its table too, A's prediction needed no corrections, and both see its blast. (The level's ingredients are in the
+// table from the start: the checks look at the gadgets thrown.) Requires `npm run build` first.
 import { spawn } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -82,6 +83,23 @@ try {
   await input(off, null);
   result.checks.fragThrownLandsAndGoesOff =
     /FRAG GRENADE ×2/.test(result.hud ?? "") && result.thrown.g1 === 1 && (result.thrown.table[0].flags & FLYING) === FLYING && result.landed.pos[1] < 0.2;
+
+  // ---- offline (M4): Sledge's hammer, Z then left mouse, at the soft wall with studs from 0.9 m: both faces broken
+  await off.evaluate(() => window.__lab.teleport(-12, 0, -5.0, 0));
+  await sleep(600);
+  await off.keyboard.press("KeyZ");
+  await until(off, () => window.__lab.net.hand === 3);
+  await sleep(600);
+  result.hammerBefore = await off.evaluate(() => ({ charges: window.__lab.net.gadgets2, holes: window.__lab.panel("soft_studs").holes }));
+  await input(off, { buttons: Btn.Fire, pitch: -0.1 });
+  await until(off, (n) => window.__lab.net.gadgets2 < n, result.hammerBefore.charges);
+  await input(off, { pitch: -0.1 });
+  await until(off, () => window.__lab.panel("soft_studs").holes[2] > 0, null, 5000);
+  result.hammer = await off.evaluate(() => ({ charges: window.__lab.net.gadgets2, holes: window.__lab.panel("soft_studs").holes }));
+  await off.screenshot({ path: shot("gadget-hammer.png") });
+  await input(off, null);
+  await off.keyboard.press("Digit1");
+  result.checks.hammerBreaksBothFaces = result.hammerBefore.charges === 25 && result.hammer.charges === 24 && result.hammer.holes[0] > 0 && result.hammer.holes[2] > 0;
 
   // ---- offline: Fuze's Breach Charge on the plain soft wall, then its detonator
   await off.evaluate(() => window.__lab.pickLoadout({ ...window.__lab.net.loadout, operator: "fuze", gadgets: ["breach_charge"] }));

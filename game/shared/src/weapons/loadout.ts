@@ -120,7 +120,8 @@ export interface ResolvedLoadout {
   gadgets: string[];
   /**
    * The gadgets in the hands' two slots (Phase 8, gadgets/DESIGN.md §2): slot 1 the secondary gadget, slot 2 a kit's
-   * second gadget (Striker, Sentry); null where there's none.
+   * second gadget (Striker, Sentry) or the operator's own item (their ability: Sledge's hammer, M4); null where
+   * there's none.
    */
   slots: [string | null, string | null];
   swapTicks: number;
@@ -206,6 +207,12 @@ export function loadoutPickProblem(data: GameData, pick: LoadoutPick): string | 
   );
 }
 
+/** The operator's own item in hand, their ability (Phase 8 M4: a gadget file whose `operator` is them), or null. */
+export function abilityItem(data: GameData, operatorId: string): string | null {
+  const id = data.operators.get(operatorId)?.ability.id;
+  return id !== undefined && data.gadgets.get(id)?.operator === operatorId ? id : null;
+}
+
 /**
  * Resolves a pick. An invalid pick quietly becomes the operator's default loadout (the roster tells the client
  * what it got); an unknown operator throws, since callers check operators first.
@@ -221,7 +228,7 @@ export function resolveLoadout(data: GameData, pick: LoadoutPick): { loadout: Re
       pick: normalized,
       weapons: [resolveWeapon(data, primary), resolveWeapon(data, secondary)],
       gadgets: normalized.gadgets,
-      slots: [normalized.gadgets[0] ?? null, data.operators.get(p.operator)?.loadout.gadgetKit ? (normalized.gadgets[1] ?? null) : null],
+      slots: [normalized.gadgets[0] ?? null, data.operators.get(p.operator)?.loadout.gadgetKit ? (normalized.gadgets[1] ?? null) : abilityItem(data, p.operator)],
       swapTicks: ticks(data.gunplay.rules.swapS),
     },
     problem,

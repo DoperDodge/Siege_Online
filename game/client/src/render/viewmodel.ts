@@ -168,7 +168,9 @@ export class Viewmodel {
         this.held = null;
       }
       if (gadget) {
-        const [w, h, d] = gadget.detonator ? [0.05, 0.09, 0.03] : gadget.data.sizeM.map((v) => Math.min(v, 0.25));
+        // A swung item (Sledge's hammer, Phase 8 M4) is drawn long; anything else no bigger than a hand holds.
+        const cap = gadget.data.use.kind === "swing" ? 0.6 : 0.25;
+        const [w, h, d] = gadget.detonator ? [0.05, 0.09, 0.03] : gadget.data.sizeM.map((v) => Math.min(v, cap));
         this.held = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color: gadget.detonator ? 0x1f2937 : 0x4b5563, roughness: 0.6, metalness: 0.3 }));
         this.camera.add(this.held);
       }
@@ -178,8 +180,16 @@ export class Viewmodel {
     const up = s.gAct === GadgetAct.Equip ? Math.min(1, s.gTicks / Math.max(1, equip)) : 1;
     const windup = s.gAct === GadgetAct.Throw || s.gAct === GadgetAct.Lob ? Math.min(1, s.gTicks / Math.max(1, this.data.gadgetRules.throw.windupS * 64)) : 0;
     const placing = s.gAct === GadgetAct.Place ? 1 : 0;
-    this.held.position.set(0.2 + windup * 0.06, -0.2 - (1 - smooth(up)) * 0.25 - placing * 0.12 + windup * 0.08, -0.45 + windup * 0.12);
-    this.held.rotation.set(-0.2 - windup * 0.8, -0.3, 0);
+    // A swing: brought down to its blow (`hitS` in), then back up.
+    const u = gadget?.data.use;
+    let strike = 0;
+    if (u?.kind === "swing" && s.gAct === GadgetAct.Swing) {
+      const p = Math.min(1, s.gTicks / Math.max(1, u.swingS * 64));
+      const hit = u.hitS / u.swingS;
+      strike = p < hit ? smooth(p / hit) : 1 - smooth((p - hit) / Math.max(1e-6, 1 - hit));
+    }
+    this.held.position.set(0.2 + windup * 0.06, -0.2 - (1 - smooth(up)) * 0.25 - placing * 0.12 + windup * 0.08 - strike * 0.1, -0.45 + windup * 0.12 - strike * 0.15);
+    this.held.rotation.set(-0.2 - windup * 0.8 + (u?.kind === "swing" ? 0.7 - strike * 1.8 : 0), -0.3, 0);
   }
 
   /** Light the gun as the world around it is lit: `k` of daylight (a map's basement is darker). */

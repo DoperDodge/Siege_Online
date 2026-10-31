@@ -60,9 +60,10 @@ describe("data files", () => {
     expect(rawData.gadgets.map((g) => String(g.id)).sort()).toEqual(onDisk);
     expect([...data.gadgets.keys()].sort()).toEqual(onDisk);
     for (const id of onDisk) expect(kindOf(id), id).toBeGreaterThanOrEqual(0);
-    // research/gadgets.md §1: seven a side.
-    expect([...data.gadgets.values()].map((g) => g.side).filter((s) => s === "attacker").length).toBe(7);
-    expect([...data.gadgets.values()].map((g) => g.side).filter((s) => s === "defender").length).toBe(7);
+    // research/gadgets.md §1: seven a side (operators' own items, Phase 8 M4, aren't in the pools).
+    const generic = [...data.gadgets.values()].filter((g) => !g.operator);
+    expect(generic.map((g) => g.side).filter((s) => s === "attacker").length).toBe(7);
+    expect(generic.map((g) => g.side).filter((s) => s === "defender").length).toBe(7);
   });
 
   it("mode files: one per file name, all imported", () => {

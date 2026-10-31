@@ -8,7 +8,8 @@ import { buildLevel, type BuiltLevel } from "./level/builder.js";
 import { GADGET_GROUPS, initRapier, PLAYER_GROUPS, QUERY_DRONE, QUERY_SIGHT, QUERY_SOLID, QUERY_STATIC as QUERY_STATIC_FILTER, refreshBroadPhase, type CharacterController, type Collider, type Rapier, type World } from "./physics/rapier.js";
 import { cancelRappelHold, capsuleFree, movementPrompt, poseCollider, stepPawn, type MoveContext, type MovementPrompt } from "./player/movement.js";
 import { initialPawnState, type Pawn, type PlayerController } from "./player/pawn.js";
-import { droneCollider, droneEye, stepDrone } from "./player/drone.js";
+import { droneCollider, droneEye, droneHitboxes, stepDrone } from "./player/drone.js";
+import { rayCapsule } from "./net/lagComp.js";
 import { insideAny, zoneBoxes, ZONE_TEST_HEIGHT, type ZoneBox } from "./level/zones.js";
 import { raycastLevel } from "./level/raycast.js";
 import { detonatable, GadgetTable, GFlag, type Gadget } from "./gadgets/table.js";
@@ -109,6 +110,7 @@ export class Sim {
       canRappel: (pawn) => pawn.team === sideTeam("attacker") || this.deployRules.rappel,
       slowOf: (pawn) => wireSlow(data, this.gadgets, pawn, pawn.kind === PawnKind.Drone),
       canDetonate: (pawn, gadget) => detonatable(this.gadgets.list, pawn.ownerId ?? 0, kindOf(gadget)) !== undefined,
+      swingMeets: (pawn, reachM) => this.swingMeets(pawn, reachM),
     };
     this.building = zoneBoxes(level.def, "building");
   }
@@ -931,6 +933,23 @@ export class Sim {
       changed = true;
     }
     if (changed) refreshBroadPhase(this.world);
+  }
+
+  /**
+   * Whether a swing's blow from a body's eye along its view meets anything within `reachM` (Phase 8 M4: it spends a
+   * charge): the level, a panel's material, a gadget, another body or drone.
+   */
+  private swingMeets(pawn: Pawn, reachM: number): boolean {
+    const s = pawn.state;
+    const eye = eyePose(this.data.movement, this.data.hitboxes, s).pos;
+    const dir = viewDir(s.yaw, s.pitch);
+    if (raycastLevel(this, eye, dir, reachM) || gadgetOnRay(this.gadgets, this.data, eye, dir, reachM, () => true)) return true;
+    for (const p of this.pawns.values()) {
+      if (p.id === pawn.id || p.state.mode === PawnMode.Dead || p.state.mode === PawnMode.Held) continue;
+      const boxes = p.kind === PawnKind.Drone ? droneHitboxes(this.data.intel.drone, p.state) : poseHitboxes(this.data.movement, this.data.hitboxes, p.state);
+      if (boxes.some((h) => (rayCapsule(eye, dir, h.a, h.b, h.radius) ?? Infinity) <= reachM)) return true;
+    }
+    return false;
   }
 
   /** A solid gadget's collider (Phase 8 M3), or undefined: a blast's line to the gadget itself leaves it out. */

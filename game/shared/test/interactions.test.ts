@@ -7,6 +7,7 @@ import { parseCsv } from "../../../tools/data/weaponsCsv.js";
 import "./interactions/built.js";
 import "./interactions/m2.js";
 import "./interactions/m3.js";
+import "./interactions/m4.js";
 import { registered, rowKey } from "./interactions/registry.js";
 
 const csv = parseCsv(readFileSync(new URL("../../../research/interactions.csv", import.meta.url), "utf8"));

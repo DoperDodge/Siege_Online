@@ -156,6 +156,14 @@ Each operator's ability is a module in `gadgets/abilities/`; its numbers are in 
 | **Dokkaebi** | The tablet: an identified defender (spotted by a scan, Phase 7) gets the Jegeo Payload: 1 charge at the start, +1 every 25 s up to 5; a 7 s upload broken by a jammer on him, an EMP on him, her death or his dismissal [1.5 s hold of F]; then his phone explodes: 40 hp, a fire for 5 s [its damage and size], no observation tools for him for the round (Skopós: no swap); 14 s before the same target again. A dead defender's phone (Skopós's circuit board) hacked from anywhere gives the attackers his team's cameras for 20 s [2 a round]. |
 | **Skopós** | Swapping is built (Phase 1, D-139). New: the idle shell's barrier (bulletproof, blast-breakable, a head-height window that shatters), the idle shell as a defenders' camera (in their feed list), Brava's overheat [8 s] with a warning (swapping in cancels it), EMP rules (§6), Jegeo blocks swaps, a destroyed shell drops a circuit board, a site spawn for the idle shell in prep [Oregon spots]. |
 
+**As built (M4, Sledge):** an operator's own item is a gadget file like the generics, marked with its `operator`
+(their `ability.id`), never in a pool; a loadout carries it in slot 2 (Z). Its numbers are in that file rather than
+the operator's (D-144). The hammer is `breaching_hammer.json` with a `swing` use: Fire held swings it, 0.8 s a swing,
+the blow landing `hitS` in; the simulation spends a charge when the blow meets anything within reach (the level, a
+panel's material, a gadget, a body), the room judges what (`judgeSwing`: bodies as the swinger saw them first, a kill
+costing a second charge; then an enemy gadget or an ingredient, as a blast would take it; then the first panel,
+`gadgets/hammer.ts`). It works on a rope.
+
 ## 8. The Ballistic Shield (Fuze)
 
 The shield as a primary (data/weapons/ballistic_shield.json, research/weapons_notes.md §5): a shield hit shape in

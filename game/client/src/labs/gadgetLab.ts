@@ -31,9 +31,10 @@ await startLab({
       "A stun blinds whoever faces it (fully within 11 m) for 5 s, and rings ears within 8 m; a smoke grenade leaves a cloud 5 m across for 10 s that cameras, drones and pings can't see through; an Impact EMP turns the defenders' electronics (and their sights' zoom, cameras, drones and detonators) off within 2 m for 9 s.",
       "Barbed wire halves an attacker's speed and bites 5 a second while he moves; the deployable shield stops bullets, blasts, bodies and drones (a knife makes its glass opaque); the proximity alarm sounds while an attacker is within 3 m; the observation blocker hides what's behind it from the attackers' drones.",
       "The fire extinguisher (west door wall) bursts into smoke and concusses those close by; the gas pipe (window wall) throws a flame jet for 15 s, then goes off; the metal detector (open floor) beeps while someone walks through. Shoot them or blow them up; Clear gadgets puts them back.",
+      "Sledge (M4): Z takes out his hammer, left mouse swings it (25 charges, one a swing that meets something). Close to a soft wall it breaks both faces and the studs (swing low and high for a hole to walk through), further only the near face; floors, hatches and barricades break, steel doesn't; it kills, and destroys defender gadgets.",
       "Refill ammo (pause menu) gives your gadgets back too; Clear gadgets takes every gadget out of the room; Reset walls puts them back.",
     ],
-    note: "Phase 8 M3: every generic gadget in both pools does what it should, and the ingredients too. Every number is in data/gadgets.json and data/gadgets/; most are placeholders listed in research/OPEN_QUESTIONS.md.",
+    note: "Phase 8 M4: every generic gadget in both pools, the ingredients and Sledge's hammer. Every number is in data/gadgets.json and data/gadgets/; most are placeholders listed in research/OPEN_QUESTIONS.md.",
   },
   extend: gadgetFeatures,
 });

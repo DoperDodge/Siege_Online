@@ -18,7 +18,7 @@ import { eyePose } from "../player/hitboxes.js";
 import { Btn, PawnKind, PawnMode, type InputCmd, type PawnState } from "../player/types.js";
 import { Sim } from "../sim.js";
 import { ByteWriter, fnv1a } from "./bytes.js";
-import { HitboxHistory, SentRing } from "./lagComp.js";
+import { HitboxHistory, rayCapsule, SentRing } from "./lagComp.js";
 import { controllerState, writeControllerState, writePawnState } from "./pawnState.js";
 import type { SimEvent } from "../weapons/step.js";
 import { defaultLoadoutPick, resolveLoadout, type LoadoutPick } from "../weapons/loadout.js";
@@ -34,7 +34,9 @@ import { camerasOnRay } from "../intel/cameras.js";
 import { dartBurst } from "../intel/bpCamera.js";
 import { bpCamsBroken, gadgetOnRay } from "../gadgets/hits.js";
 import { GadgetServer, type IngredientStage } from "../gadgets/serve.js";
-import { blastEffects, pawnDistance } from "../gadgets/blast.js";
+import { blastEffects, isCloud, pawnDistance } from "../gadgets/blast.js";
+import { hammerOps } from "../gadgets/hammer.js";
+import { zoneOf } from "../combat/damage.js";
 import { barrierOf, smokeOnSegment, crossesBarrier } from "../gadgets/areas.js";
 import { isIngredient, kindId, kindOf } from "../gadgets/kinds.js";
 import { GFlag, type Gadget } from "../gadgets/table.js";
@@ -902,6 +904,59 @@ export class Room implements DirectorHost {
     if (onPanel) this.judged.push({ ...base, bodies: [], lives: new Map(), panelOps: onPanel.ops.map(({ panel, op }) => ({ panel, op })) });
   }
 
+  /**
+   * A swing's blow (Phase 8 M4, Sledge's hammer; research/operators/sledge.md §3), judged like the knife against
+   * everyone as its swinger saw them: the first thing along the view within its reach that the level and panels
+   * don't hide. A body dies (a kill costs `killCharges` charges in all); an enemy gadget is destroyed as a blast
+   * destroys it, an ingredient set off; otherwise the first panel takes the blow (gadgets/hammer.ts).
+   */
+  private judgeSwing(m: Member, applied: QueuedInput, e: Extract<SimEvent, { kind: "swing" }>) {
+    const pawn = this.sim.pawns.get(e.pawnId);
+    const g = this.sim.data.gadgets.get(e.gadget);
+    if (!m.ctrl || !pawn || g?.use.kind !== "swing") return;
+    const u = g.use;
+    const { now, rewoundTick } = this.viewTimeFor(m, applied);
+    const origin = e.origin;
+    const dir = viewDir(e.yaw, e.pitch);
+    const ray = new this.sim.R.Ray({ x: origin[0], y: origin[1], z: origin[2] }, { x: dir[0], y: dir[1], z: dir[2] });
+    const plain = this.sim.world.castRay(ray, u.reachM, true, undefined, QUERY_SIGHT)?.timeOfImpact ?? u.reachM;
+    const wall = Math.min(plain, this.sim.level.panels.firstSolid(origin, dir, plain)?.crossing.face ?? plain);
+    const base = { m, cause: Cause.Gadget, ctrlId: m.ctrl.id, team: pawn.team, seq: e.seq, weaponId: g.id, receivedTick: now, rewoundTick, origin };
+    // Bodies first, as the swinger saw them (not their own, not the dead).
+    const ignore = new Set(m.ctrl.pawnIds);
+    for (const p of this.sim.pawns.values()) if (p.state.mode === PawnMode.Dead) ignore.add(p.id);
+    let hit: { id: number; t: number; zone: ReturnType<typeof zoneOf> } | null = null;
+    for (const [id, boxes] of this.history.at(rewoundTick, m.sent)) {
+      if (ignore.has(id)) continue;
+      for (const h of boxes) {
+        const t = rayCapsule(origin, dir, h.a, h.b, h.radius);
+        if (t !== null && t <= wall && (!hit || t < hit.t)) hit = { id, t, zone: zoneOf(h.part) };
+      }
+    }
+    if (hit) {
+      const body: ShotOnBody = { pawnId: hit.id, kill: true, amount: 0, headshot: false, zone: hit.zone, pellets: 1, distance: hit.t };
+      this.judged.push({ ...base, bodies: [body], lives: this.livesOf([body]), panelOps: [] });
+      const s = pawn.state;
+      const extra = u.killCharges - 1;
+      if (extra > 0) {
+        if (e.slot === 1) s.g1 = Math.max(0, s.g1 - extra);
+        else s.g2 = Math.max(0, s.g2 - extra);
+        this.force(m);
+      }
+      return;
+    }
+    // A gadget on the way: an enemy's (not a smoke cloud) or an ingredient.
+    const struck = gadgetOnRay(this.sim.gadgets, this.sim.data, origin, dir, wall + 0.02, (x) =>
+      isIngredient(x.kind) ? this.ignitable(x) : !(x.flags & GFlag.Flying) && x.team !== pawn.team && !isCloud(this.sim, x),
+    );
+    if (struck) {
+      this.gadgetServer.blastHit(struck.g);
+      return;
+    }
+    const ops = hammerOps(this.sim.level.panels, origin, dir, plain, u);
+    if (ops.length) this.judged.push({ ...base, bodies: [], lives: new Map(), panelOps: ops });
+  }
+
   /** The life each body hit is in now (Pawn.life), kept with a judged shot until it applies. */
   private livesOf(bodies: readonly ShotOnBody[]): Map<number, number> {
     return new Map(bodies.map((b) => [b.pawnId, this.sim.pawns.get(b.pawnId)?.life ?? -1]));
@@ -1465,9 +1520,10 @@ export class Room implements DirectorHost {
     return !(g.flags & GFlag.Flying) && (this.sim.data.gadgets.get(kindId(g.kind) ?? "")?.fragile ?? false);
   }
 
-  /** Whether a bullet sets this entry off: a level ingredient not yet going or spent (a metal detector: destroyed). */
+  /** Whether a bullet sets this entry off: a level ingredient not yet going or spent; a metal detector (destroyed), beeping or not. */
   private ignitable(g: Gadget): boolean {
-    return isIngredient(g.kind) && !(g.flags & (GFlag.Active | GFlag.Broken));
+    if (!isIngredient(g.kind)) return false;
+    return kindId(g.kind) === "metal_detector" || !(g.flags & (GFlag.Active | GFlag.Broken));
   }
 
   /** A bullet's (or a knife's) gadget: an ingredient set off, the rest destroyed. */
@@ -1510,7 +1566,7 @@ export class Room implements DirectorHost {
     this.darts(applied);
     for (const e of this.sim.events) {
       if (e.kind === "ping") this.ping(e.ctrlId, e.pos, e.gadget);
-      if (e.kind !== "shot" && e.kind !== "meleeImpact") continue;
+      if (e.kind !== "shot" && e.kind !== "meleeImpact" && e.kind !== "swing") continue;
       const owner = this.sim.pawns.get(e.pawnId)?.ownerId;
       if (owner === undefined || owner === null) continue;
       const a = applied.get(owner);
@@ -1521,7 +1577,8 @@ export class Room implements DirectorHost {
       } else {
         const m = a?.m ?? this.memberOf(owner);
         const input = a?.input ?? m?.lastApplied;
-        if (m && input) this.judgeMeleeImpact(m, input, e);
+        if (m && input && e.kind === "meleeImpact") this.judgeMeleeImpact(m, input, e);
+        else if (m && input && e.kind === "swing") this.judgeSwing(m, input, e);
       }
     }
   }

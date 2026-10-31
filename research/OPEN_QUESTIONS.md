@@ -589,6 +589,10 @@ The gadget questions in [gadgets.md](gadgets.md) and the operator files stay ope
     its concussion 2.5 m for 3 s; the gas pipe's jet 3 m × 0.4 m, 10 every 0.25 s for 15 s, its blast 60 within 1 m
     (none past 3 m), its fire 1.5 m round, 5 every 0.5 s for 2 s; the metal detector's frame 0.9 × 2.1 × 0.5 m, set
     off by anyone. All ours but the 5 s smoke and the 15 s + 2 s (siege.gg).
+24. **Sledge's hammer (M4):** its reach 1.8 m from the eye, the blow landing 0.35 s into the 0.8 s swing, a hole of
+    0.9 × 1.1 m round where it lands (two swings, one low and one high, to walk through), one charge for a swing
+    that meets anything and two for a kill, none for a swing at the air (all ours; Fandom's two pages disagree on
+    the costs). How big is one swing's hole, and does a swing at nothing spend a charge?
 
 ### [core_mechanics.md](core_mechanics.md) — 16
 

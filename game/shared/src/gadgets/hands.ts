@@ -21,6 +21,8 @@ export interface HandsContext extends LevelQuery {
   events: SimEvent[];
   /** Whether a body's detonator has a device of `gadget` out to set off (not one an EMP disabled); unset: yes. */
   canDetonate?(pawn: Pawn, gadget: string): boolean;
+  /** Whether a swing's blow from this body's eye along its view meets something within `reachM` (it costs a charge); unset: yes. */
+  swingMeets?(pawn: Pawn, reachM: number): boolean;
 }
 
 /** The gadget in a loadout's slot (1: the secondary gadget; 2: a kit's second gadget), or null. */
@@ -159,7 +161,8 @@ export function stepHands(ctx: HandsContext, pawn: Pawn, input: InputCmd, presse
     putAway(s);
     return;
   }
-  const walking = s.mode === PawnMode.Walk;
+  // A swung item (Sledge's hammer) works on a rope too (research/operators/sledge.md §3.1).
+  const walking = s.mode === PawnMode.Walk || (g.use.kind === "swing" && s.mode === PawnMode.Rappel);
   if (s.gAct === GadgetAct.Equip) {
     s.gTicks = Math.min(0xffff, s.gTicks + 1);
     if (s.gTicks >= ticks(ctx.data.gadgetRules.equipS)) {
@@ -186,6 +189,27 @@ export function stepHands(ctx: HandsContext, pawn: Pawn, input: InputCmd, presse
         if (left(s, slot) > 0) takeOut(s, deviceHand(slot));
         else putAway(s);
       }
+    }
+    return;
+  }
+  if (g.use.kind === "swing") {
+    // Fire held swings it, one swing after another; the blow lands `hitS` in, a charge spent if it meets something
+    // (the room judges what), and the next can start when the swing's over (Phase 8 M4).
+    const u = g.use;
+    if (s.gAct === GadgetAct.Ready) {
+      if (!(input.buttons & Btn.Fire) || left(s, slot) === 0) return;
+      s.gAct = GadgetAct.Swing;
+      s.gTicks = 0;
+    }
+    s.gTicks = Math.min(0xffff, s.gTicks + 1);
+    if (s.gTicks === Math.max(1, ticks(u.hitS)) && left(s, slot) > 0 && (ctx.swingMeets?.(pawn, u.reachM) ?? true)) {
+      if (slot === 1) s.g1--;
+      else s.g2--;
+      ctx.events.push({ kind: "swing", pawnId: pawn.id, seq: input.seq, slot, gadget: g.id, yaw: s.yaw, pitch: s.pitch, origin: eyePose(ctx.data.movement, ctx.data.hitboxes, s).pos });
+    }
+    if (s.gTicks >= ticks(u.swingS)) {
+      s.gAct = GadgetAct.Ready;
+      s.gTicks = 0;
     }
     return;
   }

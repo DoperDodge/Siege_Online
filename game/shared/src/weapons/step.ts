@@ -71,6 +71,11 @@ export type SimEvent =
   | { kind: "plant"; pawnId: number; pos: Vec3 }
   | { kind: "disable"; pawnId: number }
   /** The ping key (Phase 7): what a controller aimed at, from its body, its drone or its camera. */
+  /**
+   * A swing's blow landing (Phase 8 M4, Sledge's hammer) from the body's eye along its view: only one that met
+   * something within reach (it spent a charge); the room judges what.
+   */
+  | { kind: "swing"; pawnId: number; seq: number; slot: 1 | 2; gadget: string; yaw: number; pitch: number; origin: Vec3 }
   /** `gadget`: the kind of the enemy gadget pinged (Phase 8 M3), or −1. */
   | { kind: "ping"; ctrlId: number; pos: Vec3; gadget: number }
   /**

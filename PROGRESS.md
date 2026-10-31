@@ -16,8 +16,8 @@ targets `main`.
 | M1 The framework: gadget data, the hands and keys, the gadget table (protocol 15), throws, placing, detonators, picking up; the Bulletproof Camera moved onto it; the Gadget Lab; the interactions harness | ✅ (D-141) |
 | M2 Blasts and the lethal generics (frag, impact grenade, Breach and Hard Breach Charges, Nitro Cell, Claymore) | ✅ (D-142) |
 | M3 The other generics (stun, smoke, Impact EMP, barbed wire, deployable shield, proximity alarm, observation blocker), pinging gadgets, ingredients | ✅ (D-143) |
-| M4 Sledge; Striker and Sentry | next |
-| M5 Thermite; Fuze's Cluster Charge | |
+| M4 Sledge; Striker and Sentry | ✅ (D-144; Striker's and Sentry's kits were M1's) |
+| M5 Thermite; Fuze's Cluster Charge | next |
 | M6 Mute; Pulse | |
 | M7 Mira | |
 | M8 Brava | |
@@ -25,6 +25,17 @@ targets `main`.
 | M10 Skopós's remaining rules; Lesion | |
 | M11 The Ballistic Shield | |
 | M12 Every CSV row passing; netsim, browser tests, review, docs, report | |
+
+### What's done (M4: Sledge's hammer)
+- **Z takes out Sledge's hammer**, left mouse swings it (held: one swing after another, 0.8 s each). 25 charges: a
+  swing that meets something spends one, a kill two; a swing at the air spends none.
+- **Close to a soft wall** (within 1 m) a swing breaks both faces and the wooden studs, a hole to crouch or vault
+  through; a second swing lower or higher makes it one to walk through. Further away only the near face breaks.
+  Soft floors get see-through holes, barricades and unreinforced hatches break, steel and hard walls take nothing
+  (the swing is still spent).
+- **It kills** whoever it hits, destroys defender gadgets (wire, shield, cameras, alarms, blockers, Nitro Cells) and
+  sets off the gas pipe. It works on a rope, and an EMP on Sledge doesn't stop it.
+- **The interaction tests:** 17 more rows pass (146 of 343).
 
 ### What's done (M3: the other generics and the ingredients)
 - **Stun:** blinds whoever faces it (fully within 11 m) for 5 s, and rings ears within 8 m; it flashes through a
@@ -115,6 +126,8 @@ npm start
    his Bulletproof Camera. As Thermite, a smoke grenade. As Sentry, lay barbed wire, then switch teams in the pause
    menu and walk through it. Shoot the fire extinguisher and the gas pipe by the doors, and walk through the metal
    detector.
+6. **M4:** as Sledge, Z takes out the hammer: swing at the soft walls (close and from further away), the hatch from
+   the platform, the barricaded door, and a dummy.
 
 The automated checks: `npm run typecheck`, `npm test` (the interactions test lists every CSV row: built ones pass,
 the rest are todos), `npm run build`, `node tools/e2e/gadget-lab.mjs`.

@@ -186,15 +186,24 @@ export function crossFileProblems(data: Pick<GameData, "operators" | "weapons" |
     // A blast's cut is one of the explosives' shapes (data/destruction.json).
     for (const g of data.gadgets.values())
       if (g.blast?.cut && data.destruction && !Object.hasOwn(data.destruction.explosives, g.blast.cut)) out.push(`data/gadgets/${g.id}.json: blast.cut names "${g.blast.cut}", which isn't in data/destruction.json explosives`);
-    // Loadouts name real gadgets of the operator's own side (research/gadgets.md §1: one pool each).
+    // Loadouts name real gadgets of the operator's own side (research/gadgets.md §1: one pool each), never an
+    // operator's own item.
     for (const op of data.operators.values()) {
       for (const [where, ids] of [["loadout.gadgets", op.loadout.gadgets], ["loadout.gadgetKit.pool", op.loadout.gadgetKit?.pool ?? []]] as const) {
         for (const id of ids) {
           const g = data.gadgets.get(id);
           if (!g) out.push(`data/operators/${op.id}.json: ${where} names "${id}", which has no data/gadgets file`);
           else if (g.side !== op.side) out.push(`data/operators/${op.id}.json: ${where} names "${id}", a ${g.side}s' gadget`);
+          else if (g.operator) out.push(`data/operators/${op.id}.json: ${where} names "${id}", ${g.operator}'s own item`);
         }
       }
+    }
+    // An operator's own item (Phase 8 M4) is their ability, on their side.
+    for (const g of data.gadgets.values()) {
+      if (!g.operator) continue;
+      const op = data.operators.get(g.operator);
+      if (!op) out.push(`data/gadgets/${g.id}.json: operator "${g.operator}" doesn't exist`);
+      else if (op.ability.id !== g.id || op.side !== g.side) out.push(`data/gadgets/${g.id}.json: it isn't ${op.id}'s ability (${op.ability.id}) on their side`);
     }
   }
   for (const lvl of data.levels?.values() ?? []) {

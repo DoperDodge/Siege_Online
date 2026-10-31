@@ -53,7 +53,7 @@ async function lab(op: string, at: [number, number, number] = [0, 0, 10], yawDeg
 describe("taking a gadget out and putting it away (Phase 8 M1)", () => {
   it("the gadget key takes slot 1's out over its equip time and puts it away; the weapon fires only once it's back up", async () => {
     const { s, step, of, equip } = await lab("sledge");
-    expect([s.g1, s.g2, s.hand]).toEqual([2, 0, Hand.Weapon]); // two frags; no second slot
+    expect([s.g1, s.g2, s.hand]).toEqual([2, 25, Hand.Weapon]); // two frags; his hammer's 25 charges in slot 2 (M4)
     step({ buttons: Btn.Gadget });
     expect([s.hand, s.gAct]).toEqual([Hand.Gadget, GadgetAct.Equip]);
     step({}, equip - 1);
@@ -73,7 +73,8 @@ describe("taking a gadget out and putting it away (Phase 8 M1)", () => {
   });
 
   it("the other weapon's key puts the gadget away and swaps to it; the ability key does nothing without a second slot", async () => {
-    const { s, step, press } = await lab("sledge");
+    // (Skopós: her ability key is her shell camera, never an item in the hands.)
+    const { s, step, press } = await lab("skopos");
     press(Btn.Gadget);
     step({ buttons: Btn.Swap });
     expect([s.hand, s.slot, s.wAct]).toEqual([Hand.Weapon, 1, WeaponAct.Equip]);
@@ -239,5 +240,22 @@ describe("taking a gadget back (Phase 8 M1)", () => {
     sim.gadgets.add({ kind: kindOf("barbed_wire"), owner: other.id, team: 1, pos: of("place")[0].pos, yaw: 0, vel: [0, 0, 0], flags: GFlag.OnFloor, panel: -1, launchTick: 0, fuseEnd: 0, signalEnd: 0, readyAt: 0, offEnd: 0, seq: 0 });
     step({ pitch: -0.9 }, 4);
     expect(sim.prompt(c.id)).not.toBe("pickUpGadget");
+  });
+});
+
+describe("a swung item: Sledge's hammer (Phase 8 M4)", () => {
+  it("Z takes it out; Fire held swings it, one swing after another; a blow spends a charge only when it meets something", async () => {
+    // 1.4 m from the soft wall, facing it: within the hammer's reach.
+    const { sim, s, step, of, press } = await lab("sledge", SOFT);
+    const u = sim.data.gadgets.get("breaching_hammer")!.use;
+    if (u.kind !== "swing") throw new Error("the hammer is swung");
+    press(Btn.Ability);
+    expect([s.hand, s.g2]).toEqual([Hand.Ability, 25]);
+    step({ buttons: Btn.Fire }, 2 * ticks(u.swingS));
+    expect([of("swing").length, s.g2]).toEqual([2, 23]);
+    // Turned round, the open floor ahead: a swing at the air is no blow and spends nothing.
+    step({ yawDeg: 180 }, ticks(u.swingS));
+    step({ yawDeg: 180, buttons: Btn.Fire }, ticks(u.swingS));
+    expect([of("swing").length, s.g2]).toEqual([2, 23]);
   });
 });
