@@ -224,6 +224,25 @@ watch theirs, attackers the ones they hacked (Observe with no drone out, or a le
 and nobody fires a hacked camera's dart. A camera inside a jammer of the other side than its own has no feed, and a
 jammer of the other side by either of Skopós's shells stops her swap.
 
+**As built (M9, Dokkaebi, D-149):** her tablet is her slot 2 item (`jegeo`, a `hold` use as Pulse's sensor: no
+shooting with it up); the room runs her charges (1 at the start, +1 every 25 s up to 5) and her uploads (`jegeo` in
+net/room.ts). With it up and her view her own (on a camera or a drone Fire scans), Fire calls the spotted defender
+nearest her crosshair within 25°, through anything: spotted by a scan or by a ping that meets him (the red ping, new
+here), alive, not Skopós's idle shell, his phone whole, not called in the last 14 s, not inside a jammer of his side.
+That spends a charge and his phone rings (an event). The upload runs 7 s over a constant connection that follows the
+player (Skopós's swap keeps it): her tablet put away or her view on a feed, her going down, a jammer or an EMP (an
+Impact EMP, a dart) on either of them, or his dismissal (Interact held 1.5 s) cut it, nothing done, his 14 s started.
+Done: 40 explosive damage to him credited to her, a fire where he stood (5 s, 1.5 m, 5 every 0.5 s to anyone in it,
+nobody's), and his controller's `phoneLost` (in its state) closes his cameras, and Skopós's shell camera and swap, for
+the round; his jammers, sensor, mirrors and Nitro Cell aren't phone-run. An eliminated defender drops his phone
+(Skopós's circuit board is the same), an entry (`dropped_phone`, `dropped`: never carried) on the floor where he fell
+that any damage destroys. With no live target Fire hacks the oldest phone not yet hacked, from anywhere and through
+jammers, each once, 2 a round: `matchRules.camsLent` (sent with the match state) gives the attackers the defenders'
+cameras for 20 s, to watch only (no dart), and the defenders' observation blockers hide from them there as from
+their drones. Fixed with it: a placing under way waits through a tick the server steps without its player's input (a
+stall past the hold budget), as a panel hold does; it used to start again, so a 5 s mirror could never go in on a
+connection (or a CI browser) that stalls every few seconds.
+
 ## 8. The Ballistic Shield (Fuze)
 
 The shield as a primary (data/weapons/ballistic_shield.json, research/weapons_notes.md §5): a shield hit shape in

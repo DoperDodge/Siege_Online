@@ -63,12 +63,19 @@ export type GameEvent =
   /** To Skopós's client (Phase 8 M8): a Kludge's hack has her idle shell `pawnId` overheating for `ticks` unless she wakes it. */
   | { kind: "overheat"; pawnId: number; ticks: number }
   /**
+   * Dokkaebi's Jegeo Payload (Phase 8 M9). To her: an upload to `pawnId` started, taking `ticks` (stage 0), done (1) or
+   * cut (2); a dead defender's phone hacked (`pawnId`: its gadget entry's id), the cameras hers for `ticks` (4);
+   * `charges`: hers left. To its target: his phone ringing for `ticks` (3: hold Interact to dismiss it), then done (1)
+   * or cut (2).
+   */
+  | { kind: "jegeo"; stage: 0 | 1 | 2 | 3 | 4; pawnId: number; ticks: number; charges: number }
+  /**
    * To a joining player, and to everyone when it changes: who may reinforce and barricade, and the reinforcements
    * left (Phase 4 M6), and who may rappel (Phase 5 M8).
    */
   | { kind: "deployRules"; anyone: boolean; rappel: boolean; pools: [number, number] };
 
-const KIND = { shotFx: 1, hitConfirm: 2, damageTaken: 3, down: 4, kill: 5, shellDestroyed: 6, reviveStart: 7, reviveEnd: 8, deployRules: 10, droneDestroyed: 11, ping: 12, spotted: 13, callout: 14, emp: 15, blast: 16, stunned: 17, alarm: 18, hack: 19, overheat: 20 } as const;
+const KIND = { shotFx: 1, hitConfirm: 2, damageTaken: 3, down: 4, kill: 5, shellDestroyed: 6, reviveStart: 7, reviveEnd: 8, deployRules: 10, droneDestroyed: 11, ping: 12, spotted: 13, callout: 14, emp: 15, blast: 16, stunned: 17, alarm: 18, hack: 19, overheat: 20, jegeo: 21 } as const;
 // 9 Threat (Phase 11) is reserved.
 
 /** Pellet end points travel at 1/32 m in i16: ±1024 m, more than any level. */
@@ -144,6 +151,9 @@ export function encodeEvents(tick: number, events: readonly GameEvent[]): Uint8A
         break;
       case "overheat":
         w.varu(e.pawnId).u16(Math.min(0xffff, e.ticks));
+        break;
+      case "jegeo":
+        w.u8(e.stage).varu(e.pawnId).u16(Math.min(0xffff, e.ticks)).u8(Math.min(255, e.charges));
         break;
       case "deployRules":
         w.u8((e.anyone ? 1 : 0) | (e.rappel ? 2 : 0)).varu(e.pools[0]).varu(e.pools[1]);
@@ -263,6 +273,10 @@ export function decodeEvents(r: ByteReader): { tick: number; events: GameEvent[]
       events.push({ kind: "hack", stage: stage as 0 | 1 | 2, kludge: r.varu(), ticks: r.u16(), left: r.u8() });
     } else if (k === KIND.overheat) {
       events.push({ kind: "overheat", pawnId: r.varu(), ticks: r.u16() });
+    } else if (k === KIND.jegeo) {
+      const stage = r.u8();
+      if (stage > 4) throw new ProtocolError("bad jegeo");
+      events.push({ kind: "jegeo", stage: stage as 0 | 1 | 2 | 3 | 4, pawnId: r.varu(), ticks: r.u16(), charges: r.u8() });
     } else if (k === KIND.droneDestroyed) {
       events.push({ kind: "droneDestroyed", pawnId: r.varu(), ownerCtrl: r.varu(), killerCtrl: r.varu() });
     } else if (k === KIND.deployRules) {

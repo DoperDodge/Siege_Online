@@ -206,6 +206,7 @@ export function crossFileProblems(data: Pick<GameData, "operators" | "weapons" |
           if (!g) out.push(`data/operators/${op.id}.json: ${where} names "${id}", which has no data/gadgets file`);
           else if (g.side !== op.side) out.push(`data/operators/${op.id}.json: ${where} names "${id}", a ${g.side}s' gadget`);
           else if (g.operator) out.push(`data/operators/${op.id}.json: ${where} names "${id}", ${g.operator}'s own item`);
+          else if (g.dropped) out.push(`data/operators/${op.id}.json: ${where} names "${id}", which is never carried (the server drops it)`);
         }
       }
     }

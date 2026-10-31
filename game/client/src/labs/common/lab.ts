@@ -241,6 +241,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     <div class="stun-white"></div><div class="emp-static hidden"></div>
     <div class="sensor hidden"><div class="sensor-fan"></div><div class="sensor-blips"></div><div class="sensor-title"></div></div>
     <div class="prompt hidden"></div>
+    <div class="jegeo-bar hidden"><div class="jegeo-title"></div><div class="jegeo-fill"><div></div></div></div>
     <div class="shellcam hidden"><div class="shellcam-title"></div><div class="swap-bar"><div></div></div></div>
     <div class="dronecam hidden"><div class="dronecam-title"></div><div class="feeds"></div><div class="hack-bar hidden"><div></div></div></div>
     <div class="down-ui hidden"><div class="down-title"></div><div class="down-bar"><div></div></div></div>
@@ -1495,6 +1496,15 @@ export async function startLab(o: LabOptions): Promise<void> {
     const inJam = onDrone && pawnJammed(sim, drone);
     $(".dronecam").classList.toggle("jammed", onDrone && (drone.state.jammed > 0 || inJam));
     $(".dronecam").classList.toggle("warned", onDrone && !inJam && pawnJammed(sim, drone, true));
+    // Dokkaebi's upload under way, or a call ringing on our phone (Phase 8 M9): its bar filling.
+    const jegeoBar = $(".jegeo-bar");
+    if (jegeoRun && performance.now() - jegeoRun.start > jegeoRun.ms + 500) jegeoRun = null;
+    jegeoBar.classList.toggle("hidden", jegeoRun === null);
+    if (jegeoRun) {
+      jegeoBar.classList.toggle("ringing", jegeoRun.ringing);
+      $(".jegeo-title").textContent = jegeoRun.ringing ? `Phone ringing: hold ${keyLabel(settings.keys.interact)} to dismiss` : "Uploading the payload";
+      ($(".jegeo-fill").firstElementChild as HTMLElement).style.width = `${Math.min(100, ((performance.now() - jegeoRun.start) / jegeoRun.ms) * 100).toFixed(0)}%`;
+    }
     // A Kludge's hack under way (Phase 8 M8): its bar filling.
     const hackBar = $(".hack-bar");
     hackBar.classList.toggle("hidden", !(onDrone && hackRun));
@@ -2330,6 +2340,17 @@ export async function startLab(o: LabOptions): Promise<void> {
           hackRun = e.stage === 0 ? { start: now, ms: e.ticks * DT * 1000 } : null;
           if (e.stage === 1) flash(`Hacked · ${e.left} hack${e.left === 1 ? "" : "s"} left on this Kludge`, "info");
         } else if (e.kind === "overheat") flash(`A Kludge is overheating your idle shell: swap into it within ${(e.ticks * DT).toFixed(0)} s or lose it`, "bad");
+        // Dokkaebi's Jegeo Payload (Phase 8 M9): her upload and phone hacks; its target's ringing phone.
+        else if (e.kind === "jegeo") {
+          const secs = (e.ticks * DT).toFixed(0);
+          jegeoRun = e.stage === 0 || e.stage === 3 ? { start: now, ms: e.ticks * DT * 1000, ringing: e.stage === 3 } : e.stage === 4 ? jegeoRun : null;
+          const who = nameOfPawn(e.pawnId) || "the defender";
+          if (e.stage === 0) flash(`Uploading to ${who}: keep the tablet up (${secs} s) · ${e.charges} left`, "info");
+          else if (e.stage === 1) flash(ctrl.pawnIds.includes(e.pawnId) ? "Your phone exploded: no cameras for the rest of the round" : `Payload delivered to ${who}`, ctrl.pawnIds.includes(e.pawnId) ? "bad" : "info");
+          else if (e.stage === 2) flash(ctrl.pawnIds.includes(e.pawnId) ? "The call's gone" : "Upload cut", "info");
+          else if (e.stage === 3) flash(`Your phone's ringing: hold ${keyLabel(settings.keys.interact)} to dismiss it within ${secs} s`, "bad");
+          else flash(`Phone hacked: your team watches the defenders' cameras for ${secs} s`, "info");
+        }
         if (e.kind === "ping") {
           // An enemy gadget pinged (Phase 8 M3) is named with it, a heartbeat on Pulse's sensor (M6) too.
           const what = e.heart ? " · heartbeat" : e.gadget >= 0 ? ` · ${data.gadgets.get(kindId(e.gadget) ?? "")?.name ?? kindId(e.gadget)}` : "";
@@ -2351,6 +2372,8 @@ export async function startLab(o: LabOptions): Promise<void> {
   /** Brava's Kludge drones (Phase 8 M8): each one's hacks left, as the server last said; the hack under way's bar. */
   const kludgeLeft = new Map<number, number>();
   let hackRun: { start: number; ms: number } | null = null;
+  /** Dokkaebi's upload under way (Phase 8 M9), or the call ringing on our phone: its bar. */
+  let jegeoRun: { start: number; ms: number; ringing: boolean } | null = null;
 
   /** The heartbeats Pulse's sensor last showed (Phase 8 M6): kept, frozen, while an EMP has him. */
   let heartsShown: { x: number; y: number }[] = [];

@@ -92,7 +92,7 @@ export class MatchDirector {
     const data = host.sim.data;
     this.formats = new Map([...data.modes.values()].filter(isFormat).map((m) => [m.id, m]));
     this.match = new Match(format, matchMapOf(host.sim.level.def, data.operators.values()), seed);
-    host.sim.matchRules = { redWalls: false, killPlaneKills: true, cameras: true, camsBroken: 0, camsOff: 0, camsHacked: 0 };
+    host.sim.matchRules = { redWalls: false, killPlaneKills: true, cameras: true, camsBroken: 0, camsOff: 0, camsHacked: 0, camsLent: false };
   }
 
   get mode(): FormatMode {
@@ -316,6 +316,14 @@ export class MatchDirector {
     this.changed(true);
   }
 
+  /** Dokkaebi has the attackers watching the defenders' cameras, or no longer (Phase 8 M9): everyone hears at once. */
+  camerasLent(on: boolean) {
+    const rules = this.host.sim.matchRules;
+    if (rules.camsLent === on) return;
+    rules.camsLent = on;
+    this.changed(true);
+  }
+
   /** A Kludge drone hacked default cameras (Phase 8 M8): everyone hears at once (the feeds are the attackers' now). */
   camerasHacked(bits: number) {
     const rules = this.host.sim.matchRules;
@@ -522,6 +530,7 @@ export class MatchDirector {
     sim.matchRules.camsBroken = 0;
     sim.matchRules.camsOff = 0;
     sim.matchRules.camsHacked = 0;
+    sim.matchRules.camsLent = false;
     this.host.resetGadgets();
     this.host.resetPanels([0, reinforcementPool(this.mode, defenders.length)]);
     if (this.mode.match.preSetups && this.match.site) for (const o of preSetupOps(sim.level.def, sim.level.panels, sim.data.destruction, this.match.site)) this.host.queuePanelOp(o.panel, o.op);
@@ -660,6 +669,7 @@ export class MatchDirector {
       camsBroken: this.host.sim.matchRules.camsBroken,
       camsOff: this.host.sim.matchRules.camsOff,
       camsHacked: this.host.sim.matchRules.camsHacked,
+      camsLent: this.host.sim.matchRules.camsLent,
       camsWatched: this.watched >>> 0,
       history: m.history.slice(-MAX_HISTORY).map((h) => ({ ...h })),
       winner: m.winner,

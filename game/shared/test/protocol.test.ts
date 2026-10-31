@@ -157,6 +157,8 @@ describe("lobby, clock, error and debug messages round-trip", () => {
       { kind: "hack", stage: 0, kludge: 9, ticks: 192, left: 3 },
       { kind: "hack", stage: 1, kludge: 9, ticks: 0, left: 2 },
       { kind: "overheat", pawnId: 4, ticks: 512 },
+      { kind: "jegeo", stage: 3, pawnId: 4, ticks: 448, charges: 0 },
+      { kind: "jegeo", stage: 4, pawnId: 7, ticks: 1280, charges: 2 },
       { kind: "alarm", gadget: 41, pos: [2, 0.05, 15], on: false, pawnId: 0 },
       { kind: "kill", victimPawn: 8, victimCtrl: 5, killerCtrl: 4, assistCtrl: 0, weapon: "barbed_wire", cause: 8, headshot: false, friendly: false },
     ];

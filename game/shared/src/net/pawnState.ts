@@ -83,24 +83,24 @@ export function hashPawnState(s: PawnState): number {
 }
 
 /** The predicted part of a controller (Skopós' camera and swap state, the drone driven): exact, like PawnState. */
-export type ControllerState = Pick<PlayerController, "possessedPawnId" | "shellCam" | "swapPhase" | "swapT" | "swapCooldown" | "prevButtons" | "drone" | "prevLean" | "cam" | "camYaw" | "camPitch">;
+export type ControllerState = Pick<PlayerController, "possessedPawnId" | "shellCam" | "swapPhase" | "swapT" | "swapCooldown" | "prevButtons" | "drone" | "prevLean" | "cam" | "camYaw" | "camPitch"> & { phoneLost: boolean };
 
 export function controllerState(c: PlayerController): ControllerState {
   const { possessedPawnId, shellCam, swapPhase, swapT, swapCooldown, prevButtons, drone, prevLean, cam, camYaw, camPitch } = c;
-  return { possessedPawnId, shellCam, swapPhase, swapT, swapCooldown, prevButtons, drone, prevLean, cam, camYaw, camPitch };
+  return { possessedPawnId, shellCam, swapPhase, swapT, swapCooldown, prevButtons, drone, prevLean, cam, camYaw, camPitch, phoneLost: c.phoneLost ?? false };
 }
 
 export function writeControllerState(w: ByteWriter, c: ControllerState): void {
-  w.varu(c.possessedPawnId).u8((c.shellCam ? 1 : 0) | (c.swapPhase << 1)).f32(c.swapT).f32(c.swapCooldown).u16(c.prevButtons);
+  w.varu(c.possessedPawnId).u8((c.shellCam ? 1 : 0) | (c.swapPhase << 1) | (c.phoneLost ? 8 : 0)).f32(c.swapT).f32(c.swapCooldown).u16(c.prevButtons);
   w.varu(c.drone).i8(c.prevLean).u8(c.cam).f32(c.camYaw).f32(c.camPitch);
 }
 
 export function readControllerState(r: ByteReader): ControllerState {
   const possessedPawnId = r.varu();
   const flags = r.u8();
-  const swapPhase = flags >> 1;
-  if (swapPhase > 2) throw new ProtocolError("bad swap phase");
-  const head = { possessedPawnId, shellCam: (flags & 1) !== 0, swapPhase: swapPhase as 0 | 1 | 2, swapT: r.finite(), swapCooldown: r.finite(), prevButtons: r.u16() };
+  const swapPhase = (flags >> 1) & 3;
+  if (swapPhase > 2 || flags >> 4) throw new ProtocolError("bad swap phase");
+  const head = { possessedPawnId, shellCam: (flags & 1) !== 0, swapPhase: swapPhase as 0 | 1 | 2, swapT: r.finite(), swapCooldown: r.finite(), prevButtons: r.u16(), phoneLost: (flags & 8) !== 0 };
   const drone = r.varu();
   const prevLean = r.i8();
   if (prevLean < -1 || prevLean > 1) throw new ProtocolError("bad lean");

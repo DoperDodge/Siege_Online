@@ -50,6 +50,8 @@ export interface MatchSimRules {
   camsOff: number;
   /** A bit for each default camera a Kludge drone has hacked (Phase 8 M8): the attackers' now, not the defenders'. */
   camsHacked: number;
+  /** Dokkaebi hacked a dead defender's phone (Phase 8 M9): the attackers watch the defenders' cameras too, for now. */
+  camsLent: boolean;
 }
 
 /** A camera's lens sits this far out of the front of its box (metres). */
@@ -73,7 +75,7 @@ export class Sim {
    */
   deployRules: DeployRules = { anyone: false, rappel: false, pools: [0, 0] };
   /** A match room's rules for bodies (none in a lab). */
-  matchRules: MatchSimRules = { redWalls: false, killPlaneKills: false, cameras: false, camsBroken: 0, camsOff: 0, camsHacked: 0 };
+  matchRules: MatchSimRules = { redWalls: false, killPlaneKills: false, cameras: false, camsBroken: 0, camsOff: 0, camsHacked: 0, camsLent: false };
   /**
    * Everything placed, thrown or dropped this round (Phase 8, gadgets/table.ts): the server's room changes it, a client
    * applies the server's ops. The simulation reads entries' flags and places (never their ticks).
@@ -845,7 +847,8 @@ export class Sim {
    * one, or closes when none is left. Down, nothing; going down closes it.
    */
   private updateCams(c: PlayerController, input: InputCmd | undefined, heldBefore: number) {
-    if (!this.matchRules.cameras || this.camCount() === 0) {
+    // A phone Dokkaebi blew up (Phase 8 M9): no cameras for the rest of the round.
+    if (!this.matchRules.cameras || this.camCount() === 0 || c.phoneLost) {
       c.cam = 0;
       return;
     }
@@ -1049,9 +1052,14 @@ export class Sim {
     return i < 32 && this.matchRules.camsHacked & (1 << i) ? sideTeam("attacker") : sideTeam("defender");
   }
 
-  /** Whether camera i is one `team` can watch now: theirs, and working. */
+  /**
+   * Whether camera i is one `team` can watch now: working, and theirs, or the defenders' while Dokkaebi has the
+   * attackers watching them (Phase 8 M9, `camsLent`).
+   */
   private camFor(team: number, i: number): boolean {
-    return this.camWorks(i) && this.camTeam(i) === team;
+    if (!this.camWorks(i)) return false;
+    const owner = this.camTeam(i);
+    return owner === team || (this.matchRules.camsLent && team === sideTeam("attacker") && owner === sideTeam("defender"));
   }
 
   /**
@@ -1519,7 +1527,8 @@ export class Sim {
     // An EMP on either shell (DSEG, Phase 8 M3): her shell camera is an observation tool, the idle shell a device.
     const other = this.otherPawn(c.id);
     // A jammer of the other side on either shell too (Phase 8 M8: one Brava converted; Mute's own don't mind her).
-    if (!other || !ready || active.state.jammed > 0 || other.state.jammed > 0 || pawnJammed(this, active) || pawnJammed(this, other)) {
+    // Her phone blown up by Dokkaebi (Phase 8 M9): no swapping for the rest of the round.
+    if (!other || !ready || active.state.jammed > 0 || other.state.jammed > 0 || pawnJammed(this, active) || pawnJammed(this, other) || c.phoneLost) {
       c.shellCam = false; // nothing to look through, busy (climbing, vaulting, dead), or EMP'd
       return;
     }

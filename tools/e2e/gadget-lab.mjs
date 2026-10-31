@@ -1,11 +1,12 @@
-// End-to-end check of the Gadget Lab (Phase 8 M1 to M8, game/shared/src/gadgets/DESIGN.md §11). Offline (the page's
+// End-to-end check of the Gadget Lab (Phase 8 M1 to M9, game/shared/src/gadgets/DESIGN.md §11). Offline (the page's
 // own room in a Web Worker): Sledge takes a frag out with 3 and throws it (it flies, comes to rest, and is gone at its
 // fuse), then swings his hammer (Z) at a soft wall close by (both faces broken, a charge spent). Fuze takes a Breach
 // Charge out, holds Fire at a soft wall until it's on it (the detonator is then in hand) and sets it off: the wall has
 // a hole. Then his Cluster Charge (Z) on the reinforced wall: it drills, its grenades come out on the far side, the
 // steel has a hole; and Thermite's Exothermic Charge there: it burns, then a large hole goes through the steel. Mute
 // puts a Signal Disruptor down (Z); Pulse's sensor (Z) shows the attacker dummy's heartbeat; Mira's Black Mirror (Z)
-// cuts its window into the reinforceable wall; Brava throws a Kludge drone (Z) and drives it. Mute throws his Nitro Cell at the feet of the attacker dummy in the open, steps well away and sets it off:
+// cuts its window into the reinforceable wall; Brava throws a Kludge drone (Z) and drives it; Dokkaebi pings the defender
+// dummy in the open (spotting it) and calls it with her tablet (Z): 7 s later its phone goes off. Mute throws his Nitro Cell at the feet of the attacker dummy in the open, steps well away and sets it off:
 // the dummy is down, by the Nitro Cell. Sledge's stun thrown in front of him whites out his screen; Thermite's smoke
 // grenade leaves its cloud in the table. Online, two pages at 100 ms of simulated round trip: what A throws, B has in
 // its table too, A's prediction needed no corrections, and both see its blast. (The level's ingredients are in the
@@ -24,13 +25,13 @@ const shot = (name) => join(OUT, name);
 mkdirSync(OUT, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const LAG = 100;
-const Btn = { Fire: 64 };
+const Btn = { Fire: 64, Ping: 1 << 11 };
 /** What the hands hold (PawnState.hand). */
 const Hand = { Weapon: 0, Gadget: 1, Detonator: 2 };
 const FLYING = 1;
 const ACTIVE = 64;
-/** The level's ingredients (Phase 8 M3), in every table from the start. */
-const INGREDIENTS = ["fire_extinguisher", "gas_pipe", "metal_detector"];
+/** The level's ingredients (Phase 8 M3), in every table from the start, and dead defender dummies' phones (M9). */
+const INGREDIENTS = ["fire_extinguisher", "gas_pipe", "metal_detector", "dropped_phone"];
 
 const server = spawn(process.execPath, [SERVER], { env: { ...process.env, PORT: String(PORT) }, stdio: ["ignore", "ignore", "inherit"] });
 const result = { checks: {} };
@@ -285,6 +286,34 @@ try {
   await bra.screenshot({ path: shot("gadget-kludge.png") });
   result.checks.kludgeThrownAndDriven = /KLUDGE DRONE ×2/.test(result.kludgeBefore ?? "") && /KLUDGE · 3 hacks · /.test(result.kludge.title);
   await bra.close();
+
+  // ---- offline (M9): Dokkaebi 5 m in front of the defender dummy in the open: a ping (T) on it spots it; her tablet (Z)
+  // and left mouse call it (the upload's bar shows); 7 s later its phone goes off (the payload's blast)
+  const dok = await open(`${BASE}/labs/gadget_lab.html?autotest=1&lowgfx&op=dokkaebi`, { width: 960, height: 540 });
+  await dok.evaluate(() => window.__lab.teleport(3, 0, 7, 0));
+  await sleep(600);
+  await input(dok, { yaw: 0, pitch: -0.12 });
+  await sleep(300);
+  await input(dok, { yaw: 0, pitch: -0.12, buttons: Btn.Ping });
+  await until(dok, () => window.__lab.net.events.some((e) => e.kind === "spotted"), null, 10000);
+  await input(dok, { yaw: 0, pitch: -0.12 });
+  await dok.keyboard.press("KeyZ");
+  await until(dok, () => window.__lab.net.hand === 3);
+  await sleep(1000);
+  await input(dok, { yaw: 0, pitch: -0.12, buttons: Btn.Fire });
+  await sleep(150);
+  await input(dok, { yaw: 0, pitch: -0.12 });
+  await until(dok, () => window.__lab.net.events.some((e) => e.kind === "jegeo" && e.stage === 0), null, 10000);
+  await sleep(2000);
+  result.jegeoBar = await dok.evaluate(() => ({ hidden: document.querySelector(".jegeo-bar")?.classList.contains("hidden") ?? true, title: document.querySelector(".jegeo-title")?.textContent ?? "" }));
+  await dok.screenshot({ path: shot("gadget-jegeo-upload.png") });
+  await until(dok, () => window.__lab.net.events.some((e) => e.kind === "jegeo" && e.stage === 1), null, 15000);
+  await sleep(300);
+  result.jegeoEvents = await dok.evaluate(() => window.__lab.net.events.filter((e) => e.kind === "jegeo" || e.kind === "spotted" || e.kind === "blast").map((e) => (e.kind === "jegeo" ? `jegeo${e.stage}` : e.kind)));
+  await input(dok, null);
+  result.checks.jegeoCallsASpottedDummy =
+    !result.jegeoBar.hidden && /Uploading/.test(result.jegeoBar.title) && ["spotted", "jegeo0", "jegeo1", "blast"].every((k) => result.jegeoEvents.includes(k));
+  await dok.close();
 
   // ---- offline (M3): Sledge's stun at his feet, facing it: his screen goes white
   const stun = await open(`${BASE}/labs/gadget_lab.html?autotest=1&lowgfx&op=sledge&gadgets=stun`, { width: 960, height: 540 });

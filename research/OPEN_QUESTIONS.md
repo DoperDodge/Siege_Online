@@ -622,6 +622,16 @@ The gadget questions in [gadgets.md](gadgets.md) and the operator files stay ope
     a Nitro Cell fizzling 2 s after the hack (all ours); an idle shell burning out 8 s after the hack (siege.gg's
     test-server value). What are its hacks, range and hack time; does she have Kludges in prep? A converted jammer
     turns off the defenders' cameras inside it and stops Skopós swapping (the CSV's placeholders): does it?
+31. **Dokkaebi's tablet (M9):** a defender is "identified" when a scan or a ping on him has spotted him in the last
+    5 s; she calls the one nearest her crosshair within 25°, through walls; he dismisses it by holding F for 1.5 s;
+    her tablet must stay up (no shooting) for the whole 7 s; his 14 s starts when a call ends either way; her own
+    jammer or EMP cuts it as one on him does; the fire is 1.5 m across, 5 damage every 0.5 s for 5 s, hurting anyone;
+    the 40 is explosive damage (armour counts as for any blast, and it can down or kill); after it his jammers, sensor,
+    mirrors and Nitro Cell work on; a dead defender's phone is 8 × 16 cm on the floor where he fell, destroyed by any
+    damage, ignoring EMPs; she hacks the oldest from anywhere (jammers don't matter), each once, 2 a round, the
+    Bulletproof Cameras included, view only (all ours unless research/operators/dokkaebi.md says otherwise). How is a
+    defender identified, how long is the dismissal, does a teammate's EMP cut it, and which feeds does a hacked phone
+    give?
 
 ### [core_mechanics.md](core_mechanics.md) — 16
 

@@ -21,10 +21,29 @@ targets `main`.
 | M6 Mute; Pulse | ✅ (D-146) |
 | M7 Mira | ✅ (D-147) |
 | M8 Brava | ✅ (D-148) |
-| M9 Dokkaebi | next |
-| M10 Skopós's remaining rules; Lesion | |
+| M9 Dokkaebi | ✅ (D-149) |
+| M10 Skopós's remaining rules; Lesion | next |
 | M11 The Ballistic Shield | |
 | M12 Every CSV row passing; netsim, browser tests, review, docs, report | |
+
+### What's done (M9: Dokkaebi)
+- **Spotting with a ping:** ping (T) an enemy you can see (from your body, a drone or a camera) and he's spotted, a
+  red mark for your team (he's told), as a drone's scan does. It used to drop a yellow ping behind him.
+- **Dokkaebi's tablet:** Z takes it out (no shooting while it's up). Aim near a spotted defender (through walls) and
+  press left mouse: his phone rings, and after 7 s it explodes in his hands for 40 damage, sets a small fire where he
+  stood for 5 s (it hurts anyone, attackers too), and he has no cameras for the rest of the round (Skopós can't swap
+  shells or look through her other one). She needs to keep the tablet up the whole time; her going down, a Mute
+  jammer by either of them, an EMP on either (an Impact EMP, a Bulletproof Camera's dart) or him holding F for 1.5 s
+  cuts the call and nothing happens. A defender standing in a jammer can't be called; the same one can't be called
+  again for 14 s. 1 charge to start, +1 every 25 s (5 at most). His jammers, sensor, mirrors and Nitro Cell work on.
+- **Phones:** a dead defender drops his phone where he fell (Skopós: his circuit board), a small blue-screened box on
+  the floor. With nobody to call in her aim, her left mouse hacks one from anywhere: for 20 s the attackers watch the
+  defenders' cameras (Observe), to look only (no dart). Each phone once, 2 a round. Shoot, knife or blow up a dead
+  teammate's phone to stop her; observation blockers hide from her on their cameras.
+- **A lag spike no longer restarts a gadget you're placing:** the server now holds the placing where it was until
+  your input arrives again, as it does for reinforcing (on a slow connection Mira's 5 s mirror could fail to go in).
+- **The interaction tests:** 19 more rows pass (289 of 343). Her hack of Skopós's idle shell's feed comes with M10,
+  where the idle shell becomes a camera.
 
 ### What's done (M8: Brava)
 - **Brava's Kludge drones:** her two Kludge drones come with her body (in a match, from the action phase; in prep she
@@ -183,6 +202,10 @@ npm start
    detector.
 6. **M4:** as Sledge, Z takes out the hammer: swing at the soft walls (close and from further away), the hatch from
    the platform, the barricaded door, and a dummy.
+11. **M9:** as Dokkaebi, ping (T) the defender dummy in the open: a red mark. Z, aim near it, left mouse: 7 s later
+    it takes 40 and burns. Shoot it dead and press left mouse again: its phone is hacked (in a match, Observe then
+    shows the defenders' cameras for 20 s). Online with a friend as Mute: let her call you, hold F to dismiss it, or
+    let it go off and try your cameras.
 10. **M8:** as Brava, Z throws a Kludge drone: drive it with WASD. In a match, hold left mouse on a defenders' camera,
     alarm, jammer or Nitro Cell for 3 s; then lean past your last drone to watch a camera you hacked.
 9. **M7:** as Mira, go to *Reinforceable walls*, Z and hold left mouse at the wall for 5 s: look through it, then
@@ -204,7 +227,7 @@ the rest are todos), `npm run build`, `node tools/e2e/gadget-lab.mjs`.
 - The impact grenade's hole is never big enough to walk through (our size, research/OPEN_QUESTIONS.md).
 - Fuze's grenades also destroy his own waiting charges close to them (ours).
 - Every gadget is a greybox in its kind's colour; the gadget in your hands is a box.
-- You can't watch a Bulletproof Camera in a lab (cameras are a match's).
+- You can't watch a Bulletproof Camera in a lab (cameras are a match's), so Dokkaebi's phone hack shows nothing there.
 
 ---
 

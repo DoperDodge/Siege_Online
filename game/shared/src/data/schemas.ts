@@ -755,6 +755,11 @@ export const gadgetSchema = z
      * pools: the operator whose `ability.id` is this file's id.
      */
     operator: z.string().optional(),
+    /**
+     * Never carried nor in a pool: the server drops it (Phase 8 M9: a dead defender's phone, data/gadgets/dropped_phone.json);
+     * its `count` and `use` are unused.
+     */
+    dropped: z.literal(true).optional(),
     /** How many a loadout with it gets each round (Striker's and Sentry's kits too, research/operators/sentry.md §3.2; a hammer's charges). */
     count: z.number().int().min(1).max(30),
     /** Electronic gadgets are disabled by DSEG, jammed and hacked (§6); mechanical ones never are. */
@@ -909,6 +914,30 @@ export const gadgetSchema = z
      * controlled switches sides, a Nitro Cell fizzles `destroyS` later, an idle shell overheats `overheatS` later
      * unless Skopós wakes it. It sees the device within `coneDeg` of its view.
      */
+    /**
+     * Dokkaebi's tablet (Phase 8 M9, net/room.ts jegeo): held up (Z), Fire sends the Jegeo Payload to the identified
+     * (spotted) defender nearest her crosshair within `aimDeg`, through anything: one of her charges (`startCharges`,
+     * one more every `regenS` up to `maxCharges`); `uploadS` later his phone explodes (`damage`, a `fire` where he
+     * stood) and he loses his observation tools for the round, unless the upload is cut (her tablet put away, her death,
+     * a jammer or an EMP on either, his dismissal: Interact held `dismissS`). Not the same defender again for
+     * `cooldownS`. With no live target, Fire hacks a dead defender's phone instead (`camHacks` a round): the attackers
+     * watch the defenders' cameras for `camS`.
+     */
+    jegeo: z
+      .strictObject({
+        startCharges: z.number().int().min(0),
+        maxCharges: z.number().int().min(1),
+        regenS: z.number().positive(),
+        uploadS: z.number().positive(),
+        cooldownS: z.number().min(0),
+        dismissS: z.number().positive(),
+        damage: z.number().min(0),
+        aimDeg: z.number().positive().max(90),
+        fire: z.strictObject({ radiusM: z.number().positive(), seconds: z.number().positive(), damage: z.number().min(0), everyS: z.number().positive() }),
+        camHacks: z.number().int().min(0),
+        camS: z.number().positive(),
+      })
+      .optional(),
     kludge: z
       .strictObject({
         charges: z.number().int().min(1),
@@ -941,7 +970,7 @@ export const gadgetSchema = z
       if (g[k] !== undefined && !g.remote) ctx.addIssue({ code: "custom", path: [k], message: "only a remote device has this" });
     if (g.cluster && (g.blast || g.burnS !== undefined)) ctx.addIssue({ code: "custom", path: ["cluster"], message: "a cluster charge's grenades blast, not the charge" });
     if (u.kind === "place" && u.on.includes("shield") && !g.cluster) ctx.addIssue({ code: "custom", path: ["use", "on"], message: "only a cluster charge drills through a shield" });
-    if ((u.kind === "hold") !== (g.sensor !== undefined)) ctx.addIssue({ code: "custom", path: ["use"], message: "a held item is a sensor, and a sensor is held" });
+    if ((u.kind === "hold") !== (g.sensor !== undefined || g.jegeo !== undefined)) ctx.addIssue({ code: "custom", path: ["use"], message: "a held item is a sensor or a tablet, and they're held" });
     if (g.jammer && (u.kind !== "place" || g.jammer.warnM < g.jammer.radiusM)) ctx.addIssue({ code: "custom", path: ["jammer"], message: "a jammer is placed, and warns beyond its reach" });
     if (g.mirror && (u.kind !== "place" || !u.on.includes("reinforceable") || !g.solid)) ctx.addIssue({ code: "custom", path: ["mirror"], message: "a mirror is solid and placed on a reinforceable wall" });
     if ((u.kind === "drone") !== (g.kludge !== undefined)) ctx.addIssue({ code: "custom", path: ["kludge"], message: "a drone item is a Kludge, and a Kludge is a drone item" });

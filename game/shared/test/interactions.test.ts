@@ -12,6 +12,7 @@ import "./interactions/m5.js";
 import "./interactions/m6.js";
 import "./interactions/m7.js";
 import "./interactions/m8.js";
+import "./interactions/m9.js";
 import { registered, rowKey } from "./interactions/registry.js";
 
 const csv = parseCsv(readFileSync(new URL("../../../research/interactions.csv", import.meta.url), "utf8"));

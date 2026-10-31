@@ -91,6 +91,12 @@ html, body { overflow: hidden; overscroll-behavior: none; touch-action: none; us
 /* A Kludge drone's hack (Phase 8 M8). */
 .hack-bar { position: absolute; top: 64px; left: 50%; width: 240px; height: 5px; transform: translateX(-50%); background: rgba(0, 0, 0, 0.5); border-radius: 2px; overflow: hidden; }
 .hack-bar div { height: 100%; width: 0; background: #84cc16; }
+/* Dokkaebi's upload (Phase 8 M9), green; the call ringing on the target's phone, red. */
+.jegeo-bar { position: absolute; top: 58%; left: 50%; width: 260px; transform: translateX(-50%); text-align: center; font-size: 12px; text-shadow: 0 1px 2px #000; pointer-events: none; }
+.jegeo-fill { margin-top: 4px; height: 5px; background: rgba(0, 0, 0, 0.5); border-radius: 2px; overflow: hidden; }
+.jegeo-fill div { height: 100%; width: 0; background: #22c55e; }
+.jegeo-bar.ringing .jegeo-title { color: #f87171; }
+.jegeo-bar.ringing .jegeo-fill div { background: #ef4444; }
 /* Intel (Phase 7): your team's pings (yellow; danger orange), enemies spotted by a scan (red), the comm wheel, the scan's gauge. */
 .intel-marks { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
 .intel-mark { position: absolute; left: 0; top: 0; --c: #facc15; }

@@ -61,6 +61,7 @@ const COLOURS: Record<string, number> = {
   signal_disruptor: 0x1e293b,
   black_mirror: 0x134e4a,
   mirror_canister: 0xdc2626,
+  dropped_phone: 0x0f172a,
 };
 
 /**
@@ -162,6 +163,13 @@ export class GadgetModels {
     const mesh = new THREE.Mesh(geo, mat);
     mesh.name = "body";
     group.add(mesh);
+    if (id === "dropped_phone") {
+      // A dead defender's phone (M9): its screen lit, face up.
+      const screen = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.8, depth * 0.85), new THREE.MeshBasicMaterial({ color: 0x38bdf8 }));
+      screen.rotation.x = -Math.PI / 2;
+      screen.position.y = h / 2 + 0.002;
+      group.add(screen);
+    }
     if (d?.electronic) {
       // A small red light on its front.
       const led = new THREE.Mesh(new THREE.SphereGeometry(0.01, 6, 4), new THREE.MeshBasicMaterial({ color: 0xff3030 }));

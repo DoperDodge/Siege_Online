@@ -15,7 +15,8 @@ import type { BlastData, DummyDef, GadgetData, ModeData } from "../data/schemas.
 import { DUMMY_STANCE, dummyInput } from "../lab/dummies.js";
 import { spawnAmmo, type Pawn, type PlayerController } from "../player/pawn.js";
 import { eyePose } from "../player/hitboxes.js";
-import { Btn, PawnKind, PawnMode, type InputCmd, type PawnState } from "../player/types.js";
+import { currentHeight } from "../player/stance.js";
+import { Btn, GadgetAct, Hand, PawnKind, PawnMode, type InputCmd, type PawnState } from "../player/types.js";
 import { Sim } from "../sim.js";
 import { ByteWriter, fnv1a } from "./bytes.js";
 import { HitboxHistory, rayCapsule, SentRing } from "./lagComp.js";
@@ -31,11 +32,13 @@ import type { LobbyAction, MatchAction, RoomListEntry } from "./matchWire.js";
 import { DEFENSE, isFormat, type FormatMode, type Side } from "../match/rules.js";
 import { Phase } from "../match/match.js";
 import { camerasOnRay } from "../intel/cameras.js";
+import { raycastLevel } from "../level/raycast.js";
 import { dartBurst } from "../intel/bpCamera.js";
 import { bpCamsBroken, gadgetOnRay } from "../gadgets/hits.js";
 import { mirrorOf, sightPast } from "../gadgets/mirror.js";
 import { hackTargetFor, hackTargetPos, kludgeOf, type HackTarget, type KludgeData } from "../gadgets/hack.js";
-import { pawnJammed } from "../gadgets/jammers.js";
+import { pawnJammed, pointJammed } from "../gadgets/jammers.js";
+import { heartOf } from "../gadgets/sensor.js";
 import { GadgetServer, type IngredientStage } from "../gadgets/serve.js";
 import { blastEffects, isCloud, pawnDistance } from "../gadgets/blast.js";
 import { hammerOps } from "../gadgets/hammer.js";
@@ -225,6 +228,7 @@ type Attacker = Pick<JudgedShot, "ctrlId" | "team" | "weaponId" | "origin">;
 /** The team of what belongs to nobody (the level's ingredients, Phase 8 M3): never friendly to anyone. */
 const NEUTRAL = 2;
 type StunData = NonNullable<GadgetData["stun"]>;
+type JegeoData = NonNullable<GadgetData["jegeo"]>;
 
 /** A Range Lab target: a body with no client, stepped from its script (lab/dummies.ts). */
 interface Dummy {
@@ -1141,6 +1145,8 @@ export class Room implements DirectorHost {
       if (owner) this.force(owner);
     }
     const idle = leftBehind || isIdleShell(this.sim, victim);
+    // An eliminated defender drops his phone (Phase 8 M9; Skopós: his circuit board), for Dokkaebi to hack.
+    if (!idle && victim.team === DEFENSE) this.dropPhone(victim);
     const e: GameEvent = idle
       ? { kind: "shellDestroyed", pawnId: victim.id, ownerCtrl, killerCtrl, weapon, headshot }
       : { kind: "kill", victimPawn: victim.id, victimCtrl: ownerCtrl, killerCtrl, assistCtrl, weapon: weapon || downer?.weapon || "", cause, headshot, friendly };
@@ -1278,9 +1284,42 @@ export class Room implements DirectorHost {
     if (!danger && since < ticksOrZero(k.cooldownS)) return;
     m.lastPing = this.sim.tick;
     m.lastPingDanger = danger;
-    const e: GameEvent = { kind: "ping", ctrl: ctrlId, pos, danger, ticks: ticks(k.seconds), gadget, heart };
     const team = this.teamOf(m);
+    // On an enemy body (the first thing the view's ray meets), it spots him: a red ping (Phase 8 M9; research/intel.md §2).
+    const body = gadget < 0 && !heart && m.ctrl ? this.pingedBody(m.ctrl, team, pos) : null;
+    if (body) {
+      this.spotted(body, ctrlId, team);
+      return;
+    }
+    const e: GameEvent = { kind: "ping", ctrl: ctrlId, pos, danger, ticks: ticks(k.seconds), gadget, heart };
     for (const o of this.members.values()) if (this.teamOf(o) === team) o.events.push(e);
+  }
+
+  /** The enemy body (of the other team than `team`) a ping's ray from the view meets before where it landed, or null. */
+  private pingedBody(c: PlayerController, team: number, landed: Vec3): Pawn | null {
+    const view = this.sim.viewOf(c);
+    if (!view) return null;
+    const d: Vec3 = [landed[0] - view.pos[0], landed[1] - view.pos[1], landed[2] - view.pos[2]];
+    const len = Math.hypot(d[0], d[1], d[2]);
+    if (len < 1e-3) return null;
+    const dir: Vec3 = [d[0] / len, d[1] / len, d[2] / len];
+    const r = this.sim.data.movement.stance.collisionRadius;
+    let best: { p: Pawn; t: number } | null = null;
+    for (const p of this.sim.pawns.values()) {
+      const s = p.state;
+      if (p.kind !== PawnKind.Body || p.team === team || p.proxy || s.mode === PawnMode.Dead || s.mode === PawnMode.Held) continue;
+      const top = s.y + Math.max(2 * r, currentHeight(this.sim.data.movement, s)) - r;
+      const t = rayCapsule(view.pos, dir, [s.x, s.y + r, s.z], [s.x, top, s.z], r);
+      if (t !== null && t <= len + 0.05 && (!best || t < best.t)) best = { p, t };
+    }
+    return best?.p ?? null;
+  }
+
+  /** An enemy body spotted (a scan, a red ping): a red mark for the spotter's team, and he's told. */
+  private spotted(p: Pawn, byCtrl: number, team: number) {
+    const e: GameEvent = { kind: "spotted", pawnId: p.id, by: byCtrl, ticks: ticks(this.sim.data.intel.ping.seconds) };
+    this.spot(p.id, this.sim.data.intel.ping.seconds);
+    for (const o of this.members.values()) if (this.teamOf(o) === team || o.ctrl?.id === p.ownerId) o.events.push(e);
   }
 
   /**
@@ -1326,9 +1365,194 @@ export class Room implements DirectorHost {
         // Smoke hides them (a Bulletproof Camera sees through it), and so does the other side's observation blocker (Phase 8 M3).
         if (!thermal && smokeOnSegment(this.sim.data, this.sim.gadgets, view.pos, at) !== null) continue;
         if (this.barrierBetween(team, view.pos, at)) continue;
-        const e: GameEvent = { kind: "spotted", pawnId: p.id, by: c!.id, ticks: ticks(this.sim.data.intel.ping.seconds) };
-        for (const o of this.members.values()) if (this.teamOf(o) === team || o.ctrl?.id === p.ownerId) o.events.push(e);
+        this.spotted(p, c!.id, team);
       }
+    }
+  }
+
+  /** Who has been spotted (identified: a scan, a red ping), until when (Phase 8 M9: Dokkaebi's payload targets them). */
+  private readonly spottedUntil = new Map<number, number>();
+
+  /** A body spotted (identified) for `seconds` (a scan's or a red ping's mark; Phase 8 M9). */
+  spot(pawnId: number, seconds: number): void {
+    this.spottedUntil.set(pawnId, Math.max(this.spottedUntil.get(pawnId) ?? 0, this.sim.tick + ticks(seconds)));
+  }
+
+  /** Dokkaebi's tablet (Phase 8 M9), by her body's pawn id: her charges, when the next comes, the upload under way, her phone hacks. */
+  private readonly jegeoState = new Map<number, { charges: number; next: number; upload: { target: number; ticks: number; dismiss: number } | null; held: boolean; hacks: number }>();
+  /** Each defender's next tick Dokkaebi may send to him again. */
+  private readonly jegeoCooldown = new Map<number, number>();
+  /** Dead defenders' phones (and Skopós's circuit boards) hacked already, by their entries' ids. */
+  private readonly phonesHacked = new Set<number>();
+  /** The tick the attackers' look at the defenders' cameras ends (0: none). */
+  private camsLentUntil = 0;
+  /** Phones' fires burning: where, until when, its next bite, its numbers. */
+  private fires: { pos: Vec3; end: number; next: number; k: JegeoData["fire"] }[] = [];
+
+  /**
+   * Dokkaebi's tablet (Phase 8 M9; research/operators/dokkaebi.md §3): her charges come back over time; with it up,
+   * Fire sends the payload to the identified defender nearest her crosshair (one of her charges), or with none, hacks a
+   * dead defender's phone (the attackers watch the defenders' cameras for a while). An upload runs over a constant
+   * connection: her tablet put away, her going down, a jammer or an EMP on either of them, or his dismissal cut it;
+   * done, his phone explodes (jegeoDone). The phones' fires burn whoever's in them.
+   */
+  private jegeo(applied: ReadonlyMap<number, { m: Member; input: QueuedInput }>) {
+    const tick = this.sim.tick;
+    for (const m of this.members.values()) {
+      const c = m.ctrl;
+      const body = c ? this.sim.pawns.get(c.possessedPawnId) : undefined;
+      const t = body && body.kind === PawnKind.Body ? slotGadget(this.sim.data, body.loadout, 2)?.jegeo : undefined;
+      if (!c || !body || !t) continue;
+      let st = this.jegeoState.get(body.id);
+      if (!st) {
+        st = { charges: t.startCharges, next: tick + ticks(t.regenS), upload: null, held: false, hacks: 0 };
+        this.jegeoState.set(body.id, st);
+      }
+      if (st.charges >= t.maxCharges) st.next = tick + ticks(t.regenS);
+      else if (tick >= st.next) {
+        st.charges++;
+        st.next = tick + ticks(t.regenS);
+      }
+      const s = body.state;
+      const alive = s.mode !== PawnMode.Dead && s.mode !== PawnMode.Held && s.mode !== PawnMode.Downed;
+      // Up: in her hands and ready, and her view her own (on a camera or a drone, Fire scans).
+      const up = alive && s.hand === Hand.Ability && s.gAct !== GadgetAct.Equip && c.cam === 0 && c.drone === 0;
+      const tell = (stage: 0 | 1 | 2 | 3 | 4, pawnId: number, n: number) => m.events.push({ kind: "jegeo", stage, pawnId, ticks: n, charges: st!.charges });
+      if (st.upload) {
+        const u = st.upload;
+        const called = this.sim.pawns.get(u.target);
+        const tm = called && called.ownerId !== null ? this.memberOf(called.ownerId) : null;
+        // The phone is the player's: on Skopós, in whichever shell he is now.
+        const target = tm?.ctrl ? this.sim.pawns.get(tm.ctrl.possessedPawnId) : called;
+        const ti = tm?.ctrl ? applied.get(tm.ctrl.id)?.input : undefined;
+        if (ti) u.dismiss = ti.cmd.buttons & Btn.Interact ? u.dismiss + 1 : 0;
+        const heart = target ? heartOf(this.sim, target) : null;
+        const cut =
+          !up ||
+          s.jammed > 0 ||
+          pawnJammed(this.sim, body) ||
+          !target ||
+          !heart ||
+          target.state.mode === PawnMode.Dead ||
+          target.state.jammed > 0 ||
+          (tm?.ctrl?.phoneLost ?? false) ||
+          pointJammed(this.sim, body.team, heart) ||
+          u.dismiss >= ticks(t.dismissS);
+        if (cut) {
+          st.upload = null;
+          this.jegeoCooldown.set(u.target, tick + ticks(t.cooldownS));
+          tell(2, u.target, 0);
+          tm?.events.push({ kind: "jegeo", stage: 2, pawnId: u.target, ticks: 0, charges: 0 });
+          continue;
+        }
+        if (++u.ticks < ticks(t.uploadS)) continue;
+        st.upload = null;
+        this.jegeoCooldown.set(u.target, tick + ticks(t.cooldownS));
+        this.jegeoDone(c, body, target!, tm ?? null, t);
+        tell(1, u.target, 0);
+        continue;
+      }
+      const input = applied.get(c.id)?.input;
+      const fire = input !== undefined && (input.cmd.buttons & Btn.Fire) !== 0;
+      if (!fire) st.held = false;
+      if (!fire || st.held || !up) continue;
+      st.held = true;
+      const target = this.jegeoTarget(body, t);
+      if (target) {
+        // Not while she's jammed or EMP'd herself (the connection would be cut at once).
+        if (st.charges <= 0 || s.jammed > 0 || pawnJammed(this.sim, body)) continue;
+        st.charges--;
+        st.upload = { target: target.id, ticks: 0, dismiss: 0 };
+        tell(0, target.id, ticks(t.uploadS));
+        const tm = target.ownerId !== null ? this.memberOf(target.ownerId) : null;
+        tm?.events.push({ kind: "jegeo", stage: 3, pawnId: target.id, ticks: ticks(t.uploadS), charges: 0 });
+        continue;
+      }
+      // No live target: a dead defender's phone (Skopós's circuit board), the oldest not hacked yet, from anywhere (a
+      // jammer doesn't stop it: research/interactions.csv, ours).
+      if (st.hacks >= t.camHacks) continue;
+      const phoneKind = kindOf("dropped_phone");
+      const phone = this.sim.gadgets.list.find((g) => g.kind === phoneKind && g.team !== body.team && !this.phonesHacked.has(g.id));
+      if (!phone) continue;
+      this.phonesHacked.add(phone.id);
+      st.hacks++;
+      this.camsLentUntil = tick + ticks(t.camS);
+      if (this.director) this.director.camerasLent(true);
+      else this.sim.matchRules.camsLent = true;
+      tell(4, phone.id, ticks(t.camS));
+    }
+    if (this.camsLentUntil && tick >= this.camsLentUntil) {
+      this.camsLentUntil = 0;
+      if (this.director) this.director.camerasLent(false);
+      else this.sim.matchRules.camsLent = false;
+    }
+    // The phones' fires (team-neutral, as the level's are): a bite every `everyS` for whoever stands in one.
+    this.fires = this.fires.filter((f) => tick < f.end);
+    for (const f of this.fires) {
+      if (tick < f.next) continue;
+      f.next = tick + ticks(f.k.everyS);
+      const attacker: Attacker = { ctrlId: 0, team: NEUTRAL, weaponId: "jegeo_payload", origin: [f.pos[0], f.pos[1], f.pos[2]] };
+      for (const p of [...this.sim.pawns.values()]) {
+        const ps = p.state;
+        if (p.kind !== PawnKind.Body || ps.mode === PawnMode.Dead || ps.mode === PawnMode.Held) continue;
+        if (Math.hypot(ps.x - f.pos[0], ps.z - f.pos[2]) <= f.k.radiusM && Math.abs(ps.y - f.pos[1]) <= 1.0) this.hurt(p, { amount: f.k.damage, kill: false }, { cause: Cause.Gadget, attacker, headshot: false });
+      }
+    }
+  }
+
+  /**
+   * An eliminated defender's phone (Phase 8 M9; gadgets/DESIGN.md §9; Skopós's circuit board): an entry on the floor
+   * under where his body fell, his side's, until any damage destroys it (data/gadgets/dropped_phone.json).
+   */
+  private dropPhone(victim: Pawn) {
+    const d = this.sim.data.gadgets.get("dropped_phone");
+    if (!d) return;
+    const s = victim.state;
+    const down = raycastLevel(this.sim, [s.x, s.y + 0.3, s.z], [0, -1, 0], 4);
+    const floor = down ? s.y + 0.3 - down.t : s.y;
+    this.sim.gadgets.add({ kind: kindOf(d.id), owner: victim.ownerId ?? 0, team: victim.team, pos: [s.x, floor + d.sizeM[1] / 2, s.z], yaw: s.yaw, vel: [0, 0, 0], flags: GFlag.OnFloor, panel: -1, launchTick: 0, fuseEnd: 0, signalEnd: 0, readyAt: 0, offEnd: 0, seq: 0 });
+  }
+
+  /**
+   * The identified defender Dokkaebi's tablet sends to: the one nearest her crosshair within `aimDeg`, through anything
+   * (spotted by her team's scans, alive and not Skopós's idle shell, his phone whole, not on his cooldown, not inside a
+   * jammer of his side's), or null.
+   */
+  private jegeoTarget(body: Pawn, t: JegeoData): Pawn | null {
+    const eye = eyePose(this.sim.data.movement, this.sim.data.hitboxes, body.state).pos;
+    const look = viewDir(body.state.yaw, body.state.pitch);
+    const cone = Math.cos(t.aimDeg * DEG);
+    let best: { p: Pawn; cos: number } | null = null;
+    for (const p of this.sim.pawns.values()) {
+      if (p.kind !== PawnKind.Body || p.team === body.team || p.state.mode === PawnMode.Dead || isIdleShell(this.sim, p)) continue;
+      if ((this.spottedUntil.get(p.id) ?? 0) <= this.sim.tick || (this.jegeoCooldown.get(p.id) ?? 0) > this.sim.tick) continue;
+      // No phone left to call (another payload blew it up).
+      if (p.ownerId !== null && this.sim.controllers.get(p.ownerId)?.phoneLost) continue;
+      const h = heartOf(this.sim, p);
+      if (pointJammed(this.sim, body.team, h)) continue;
+      const d = [h[0] - eye[0], h[1] - eye[1], h[2] - eye[2]];
+      const len = Math.hypot(d[0], d[1], d[2]);
+      const cos = len < 1e-6 ? 1 : (d[0] * look[0] + d[1] * look[1] + d[2] * look[2]) / len;
+      if (cos >= cone && (!best || cos > best.cos)) best = { p, cos };
+    }
+    return best?.p ?? null;
+  }
+
+  /**
+   * A payload's upload done (Phase 8 M9): his phone explodes in his hands (its damage, credited to Dokkaebi), a fire
+   * burns where he stood for its seconds, and he has no observation tools for the rest of the round (corrected now).
+   */
+  private jegeoDone(c: PlayerController, body: Pawn, target: Pawn, tm: Member | null, t: JegeoData) {
+    const at = heartOf(this.sim, target);
+    this.hurt(target, { amount: t.damage, kill: false }, { cause: Cause.Explosive, attacker: { ctrlId: c.id, team: body.team, weaponId: "jegeo_payload", origin: at }, headshot: false });
+    this.fires.push({ pos: [target.state.x, target.state.y, target.state.z], end: this.sim.tick + ticks(t.fire.seconds), next: this.sim.tick + ticks(t.fire.everyS), k: t.fire });
+    this.tellBlast(kindOf("jegeo_payload"), at);
+    if (tm?.ctrl) {
+      tm.ctrl.phoneLost = true;
+      tm.ctrl.cam = 0;
+      tm.ctrl.shellCam = false;
+      tm.events.push({ kind: "jegeo", stage: 1, pawnId: target.id, ticks: 0, charges: 0 });
+      this.force(tm);
     }
   }
 
@@ -1630,6 +1854,14 @@ export class Room implements DirectorHost {
     this.camOffEnd = [];
     this.camsOffNow();
     this.placeIngredients();
+    // Dokkaebi's (Phase 8 M9): no call or phone hack left over, no fire burning (a match's director lends no cameras now).
+    this.jegeoState.clear();
+    this.jegeoCooldown.clear();
+    this.spottedUntil.clear();
+    this.phonesHacked.clear();
+    this.fires = [];
+    this.camsLentUntil = 0;
+    if (!this.director) this.sim.matchRules.camsLent = false;
   }
 
   /** The level's ingredients (Phase 8 M3) into the table, each owned by nobody (a metal detector is the defenders' to an EMP). */
@@ -1692,6 +1924,7 @@ export class Room implements DirectorHost {
     this.darts(applied);
     this.hacks(applied);
     this.overheating();
+    this.jegeo(applied);
     for (const e of this.sim.events) {
       if (e.kind === "ping") this.ping(e.ctrlId, e.pos, e.gadget, e.heart ?? false);
       if (e.kind !== "shot" && e.kind !== "meleeImpact" && e.kind !== "swing") continue;

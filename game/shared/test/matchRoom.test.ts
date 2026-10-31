@@ -7,6 +7,7 @@ import {
   ATTACK,
   Btn,
   eyePose,
+  heartOf,
   loadedOf,
   poseHitboxes,
   ByteReader,
@@ -1007,6 +1008,31 @@ describe("pings, scans and callouts (Phase 7 M4)", () => {
     press(t, a, Btn.Fire, 72);
     for (let i = 0; i < 4; i++) t.tick();
     expect(spotted(c)).toBe(1);
+  }, 60_000);
+
+  it("a ping on an enemy in view spots him, a red ping (Phase 8 M9); with a wall between, it lands on the wall", async () => {
+    const { t, a, b, c } = await three();
+    t.place(b, ...LAUNDRY, 90);
+    const [drone] = t.room.sim.dronesOf(t.room.bodyOf(a.id)!);
+    const aimFrom = (x: number, z: number) => {
+      t.room.sim.placeDrone(drone.id, x, LAUNDRY[1] + 0.02, z, 0);
+      t.room.correct(a.id);
+      const eye = t.room.sim.eyeOf(drone).pos;
+      const chest = heartOf(t.room.sim, t.bodyOf(b)!);
+      const d = [0, 1, 2].map((i) => chest[i] - eye[i]);
+      a.cmd = { yaw: Math.atan2(-d[0], -d[2]), pitch: Math.atan2(d[1], Math.hypot(d[0], d[2])) };
+      for (let i = 0; i < 16; i++) t.tick();
+    };
+    const count = (x: { events: GameEvent[] }, kind: GameEvent["kind"]) => x.events.filter((e) => e.kind === kind).length;
+    aimFrom(LAUNDRY[0], LAUNDRY[2] + 2);
+    press(t, a, Btn.Ping);
+    for (let i = 0; i < 4; i++) t.tick();
+    expect([count(a, "spotted"), count(c, "spotted"), count(b, "spotted"), count(c, "ping")]).toEqual([1, 1, 1, 0]);
+    for (let i = 0; i < 64; i++) t.tick();
+    aimFrom(40.375, 24.625);
+    press(t, a, Btn.Ping);
+    for (let i = 0; i < 4; i++) t.tick();
+    expect([count(c, "spotted"), count(c, "ping")]).toEqual([1, 1]);
   }, 60_000);
 
   it("a ping key hammered every other tick sends a few a second at most", async () => {

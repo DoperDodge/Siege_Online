@@ -53,6 +53,11 @@ export interface PlayerController {
   swapT: number;
   swapCooldown: number;
   prevButtons: number;
+  /**
+   * Dokkaebi's Jegeo Payload blew up this player's phone (Phase 8 M9): no observation tools (cameras, Skopós's swap and
+   * shell camera) for the rest of the round (the next body is a new controller).
+   */
+  phoneLost?: boolean;
   /** 0 attackers, 1 defenders (static: changing team means a new body). */
   team: number;
 }
