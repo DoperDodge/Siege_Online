@@ -1,7 +1,7 @@
 // The interaction tests' scene (Phase 8, gadgets/DESIGN.md §10): a lab room on the Destruction Lab level with
 // in-process clients (roomHarness.ts), and what a row needs to set up: an entry put straight into the gadget table, a
 // body moved, a gadget set off through the room's own path, a shot down the sights, a panel's cell looked at, ticks run.
-import { Btn, eyePose, GFlag, Hand, kindOf, slotGadget, ticks, type Gadget, type InputCmd, type Pawn, type PanelEntry, type Vec3 } from "../../src/index.js";
+import { Btn, eyePose, GadgetAct, GFlag, Hand, handSlot, kindOf, slotGadget, ticks, type Gadget, type InputCmd, type Pawn, type PanelEntry, type Vec3 } from "../../src/index.js";
 import { roomWith } from "../roomHarness.js";
 
 /** Places on the Destruction Lab level (data/maps/destruction_lab/layout.json). */
@@ -122,6 +122,43 @@ export async function scene(ops: string[] = ["sledge", "mute"], level = "destruc
     wait(2);
     return sim.gadgets.list.find((e) => !before.has(e.id));
   };
+  /**
+   * Client i's hand `want` out (a slot's item or its detonator), pressing that slot's key (3 or Z) as a player does,
+   * and ready (its equip time over). Phase 8 M5.
+   */
+  const handOut = (i: number, want: Hand, look: Partial<InputCmd> = {}) => {
+    const key = handSlot(want) === 1 ? Btn.Gadget : Btn.Ability;
+    const equip = ticks(sim.data.gadgetRules.equipS) + 2;
+    for (let k = 0; k < 3 && body(i).state.hand !== want; k++) {
+      press(i, key, look);
+      wait(equip);
+    }
+    if (body(i).state.gAct === GadgetAct.Equip) wait(equip);
+    if (body(i).state.hand !== want) throw new Error(`client ${i} couldn't take out hand ${want} (has ${body(i).state.hand})`);
+  };
+  /**
+   * Client i places its slot 2 item (its ability's: Z) looking at `at` from where it stands (or as `hold` says), Fire
+   * held for its placing time, as a player does: the entry, or undefined (it can't go there). Phase 8 M5.
+   */
+  const plant = (i: number, at: Vec3, hold: Partial<InputCmd> = {}): Gadget | undefined => {
+    const g = slotGadget(sim.data, body(i).loadout, 2)!;
+    const before = new Set(sim.gadgets.list.map((e) => e.id));
+    const c = h.clients[i];
+    c.cmd = { ...hold };
+    wait(hold.stance ? 32 : 2);
+    const aim = { ...hold, ...aimAt(i, at) };
+    handOut(i, Hand.Ability, aim);
+    c.cmd = { ...aim, buttons: Btn.Fire };
+    wait(ticks(g.use.kind === "place" ? g.use.placeS : 0) + 8);
+    c.cmd = { ...aim };
+    wait(2);
+    return sim.gadgets.list.find((e) => !before.has(e.id) && e.kind === kindOf(g.id));
+  };
+  /** Client i presses the detonator of its slot `slot` (taking it out first). Phase 8 M5. */
+  const detonate = (i: number, slot: 1 | 2 = 2) => {
+    handOut(i, slot === 1 ? Hand.Detonator : Hand.AbilityDetonator);
+    press(i, Btn.Fire);
+  };
   /** Client i's controller on the server (its bodies, its drones, the camera it watches). */
   const ctrlOf = (i: number) => h.room.bodyOf(h.clients[i].id)!;
   /** Client i presses buttons once (down a tick, then up), looking `look`. */
@@ -154,7 +191,7 @@ export async function scene(ops: string[] = ["sledge", "mute"], level = "destruc
     wait(2);
     return c.events.slice(before).some((e) => e.kind === "spotted" && e.pawnId === target.id);
   };
-  return { ...h, sim, wait, body, teleport, park, put, panel, onPanel, setOff, solidAt, aimAt, shootAt, knife, place, ctrlOf, press, look, scan };
+  return { ...h, sim, wait, body, teleport, park, put, panel, onPanel, setOff, solidAt, aimAt, shootAt, knife, place, ctrlOf, press, look, scan, handOut, plant, detonate };
 }
 
 export type Scene = Awaited<ReturnType<typeof scene>>;

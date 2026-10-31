@@ -5,7 +5,8 @@
 // M3 adds what an entry's flags show: smoke clouds (not in a Bulletproof Camera's thermal view), a gas pipe's jet and
 // fire, an alarm sounding, an EMP's sparks, and an observation blocker's barrier to the other side's drones and cameras;
 // the level's ingredients are entries too. M5: Thermite's charge burning shows sparks on both sides of its surface,
-// Fuze's set off shows its tube through it (its grenades are thrown entries).
+// Fuze's set off shows its tube through it (its grenades are thrown entries). M6: Mute's jammer lights up while it
+// works, and its reach shows for a moment once it's placed.
 import * as THREE from "three";
 import {
   barrierOf,
@@ -56,6 +57,7 @@ const COLOURS: Record<string, number> = {
   exothermic_charge: 0x7c2d12,
   cluster_charge: 0x3f3f46,
   cluster_grenade: 0x3f4a1f,
+  signal_disruptor: 0x1e293b,
 };
 
 /**
@@ -82,7 +84,7 @@ interface Ghost {
 }
 
 export class GadgetModels {
-  private readonly items = new Map<number, { obj: THREE.Object3D; key: string; lasers: THREE.Line[]; extra: THREE.Object3D | null; extraKey: string }>();
+  private readonly items = new Map<number, { obj: THREE.Object3D; key: string; lasers: THREE.Line[]; extra: THREE.Object3D | null; extraKey: string; born: number; reach: THREE.Object3D | null }>();
   /** What the page looks through now (set each frame before update). */
   view: GadgetView = { thermal: false, team: 0, tool: false };
   private readonly fxMat = {
@@ -92,6 +94,8 @@ export class GadgetModels {
     off: new THREE.MeshBasicMaterial({ color: 0x60a5fa }),
     barrier: new THREE.MeshBasicMaterial({ color: 0x0b1220, transparent: true, opacity: 0.92, side: THREE.DoubleSide, depthWrite: false }),
     sparks: new THREE.MeshBasicMaterial({ color: 0xffb347, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false }),
+    jamOn: new THREE.MeshBasicMaterial({ color: 0x38bdf8 }),
+    reach: new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.12, wireframe: true, depthWrite: false }),
     tube: new THREE.MeshStandardMaterial({ color: 0x52525b, roughness: 0.5, metalness: 0.6 }),
   };
   /** A Claymore's lasers (Phase 8 M2): red, once it's armed. */
@@ -177,7 +181,7 @@ export class GadgetModels {
       seen.add(g.id);
       let it = this.items.get(g.id);
       if (!it) {
-        it = { obj: this.model(g.kind), key: "", lasers: [], extra: null, extraKey: "" };
+        it = { obj: this.model(g.kind), key: "", lasers: [], extra: null, extraKey: "", born: performance.now(), reach: null };
         this.scene.add(it.obj);
         this.items.set(g.id, it);
         // Ours, predicted: the ghost hands over (its flight goes on from the same start).
@@ -196,6 +200,7 @@ export class GadgetModels {
         continue;
       }
       this.ownStart.delete(g.id);
+      this.showReach(it, g);
       // A tripwire's lasers show from the moment it's armed (its `readyAt`, a server tick), and not while it's off.
       for (const l of it.lasers) l.visible = now >= g.readyAt && !(g.flags & GFlag.Off);
       const key = `${g.pos.join(",")},${g.yaw},${g.flags}`;
@@ -214,6 +219,7 @@ export class GadgetModels {
       if (!seen.has(id)) {
         this.scene.remove(it.obj);
         if (it.extra) this.scene.remove(it.extra);
+        if (it.reach) this.scene.remove(it.reach);
         for (const l of it.lasers) {
           this.scene.remove(l);
           l.geometry.dispose();
@@ -277,6 +283,12 @@ export class GadgetModels {
       glow.position.set(...g.pos);
       group.add(glow);
     }
+    // A jammer working (M6): its light on top.
+    if (this.dataOf(g.kind)?.jammer && !(g.flags & (GFlag.Off | GFlag.Flying))) {
+      const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6), this.fxMat.jamOn);
+      lamp.position.set(g.pos[0], g.pos[1] + (this.dataOf(g.kind)!.sizeM[1] / 2) + 0.02, g.pos[2]);
+      group.add(lamp);
+    }
     if (g.flags & GFlag.Off) {
       const spark = new THREE.Mesh(new THREE.SphereGeometry(0.04, 6, 4), this.fxMat.off);
       spark.position.set(g.pos[0], g.pos[1] + 0.1, g.pos[2]);
@@ -318,6 +330,20 @@ export class GadgetModels {
     it.extra = group;
   }
 
+  /** A jammer's reach (Phase 8 M6): a sphere for its `showS` after it first shows here. */
+  private showReach(it: { born: number; reach: THREE.Object3D | null }, g: Gadget) {
+    const j = this.dataOf(g.kind)?.jammer;
+    const on = j !== undefined && performance.now() - it.born < j.showS * 1000;
+    if (on && !it.reach) {
+      it.reach = new THREE.Mesh(new THREE.SphereGeometry(j.radiusM, 24, 16), this.fxMat.reach);
+      it.reach.position.set(g.pos[0], g.pos[1], g.pos[2]);
+      this.scene.add(it.reach);
+    } else if (!on && it.reach) {
+      this.scene.remove(it.reach);
+      it.reach = null;
+    }
+  }
+
   /** A tripwire's lasers where the entry stands: along its facing turned by each angle, up to what stops sight. */
   private setLasers(it: { lasers: THREE.Line[] }, g: Gadget) {
     for (const l of it.lasers) {
@@ -354,6 +380,7 @@ export class GadgetModels {
     for (const it of this.items.values()) {
       this.scene.remove(it.obj);
       if (it.extra) this.scene.remove(it.extra);
+      if (it.reach) this.scene.remove(it.reach);
       for (const l of it.lasers) {
         this.scene.remove(l);
         l.geometry.dispose();

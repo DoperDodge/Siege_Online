@@ -218,6 +218,8 @@ export function stepHands(ctx: HandsContext, pawn: Pawn, input: InputCmd, presse
     }
     return;
   }
+  // Held up (Pulse's sensor, Phase 8 M6): it works while it's out (gadgets/sensor.ts); Fire does nothing with it.
+  if (g.use.kind === "hold") return;
   if (g.use.kind === "throw") {
     if (s.gAct === GadgetAct.Ready) {
       if (pressed & Btn.Fire) s.gAct = GadgetAct.Throw;

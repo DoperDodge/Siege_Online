@@ -39,7 +39,7 @@ export type GameEvent =
    * To the pinger's team (Phase 7, intel/DESIGN.md §6): a ping where they aimed, yellow or danger, for `ticks`;
    * `gadget`: the kind of the enemy gadget it marks (Phase 8 M3), or −1.
    */
-  | { kind: "ping"; ctrl: number; pos: Vec3; danger: boolean; ticks: number; gadget: number }
+  | { kind: "ping"; ctrl: number; pos: Vec3; danger: boolean; ticks: number; gadget: number; /** A heartbeat on Pulse's sensor (Phase 8 M6). */ heart: boolean }
   /** To the scanner's team and the one scanned: an enemy spotted by a drone or a camera, marked for `ticks`. */
   | { kind: "spotted"; pawnId: number; by: number; ticks: number }
   /** To the caller's team: a callout off the comm wheel (data/intel.json `callouts`). */
@@ -112,7 +112,7 @@ export function encodeEvents(tick: number, events: readonly GameEvent[]): Uint8A
         w.varu(e.pawnId).varu(e.ownerCtrl).varu(e.killerCtrl);
         break;
       case "ping":
-        w.varu(e.ctrl).f32(e.pos[0]).f32(e.pos[1]).f32(e.pos[2]).u8(e.danger ? 1 : 0).u16(e.ticks).u8(e.gadget + 1);
+        w.varu(e.ctrl).f32(e.pos[0]).f32(e.pos[1]).f32(e.pos[2]).u8((e.danger ? 1 : 0) | (e.heart ? 2 : 0)).u16(e.ticks).u8(e.gadget + 1);
         break;
       case "spotted":
         w.varu(e.pawnId).varu(e.by).u16(e.ticks);
@@ -214,11 +214,11 @@ export function decodeEvents(r: ByteReader): { tick: number; events: GameEvent[]
       const ctrl = r.varu();
       const pos: Vec3 = [r.finite(), r.finite(), r.finite()];
       const f = r.u8();
-      if (f > 1) throw new ProtocolError("bad ping");
+      if (f > 3) throw new ProtocolError("bad ping");
       const ticks = r.u16();
       const gadget = r.u8() - 1;
       if (gadget >= GADGET_KINDS.length) throw new ProtocolError("bad ping");
-      events.push({ kind: "ping", ctrl, pos, danger: f === 1, ticks, gadget });
+      events.push({ kind: "ping", ctrl, pos, danger: (f & 1) === 1, ticks, gadget, heart: (f & 2) === 2 });
     } else if (k === KIND.spotted) {
       events.push({ kind: "spotted", pawnId: r.varu(), by: r.varu(), ticks: r.u16() });
     } else if (k === KIND.callout) {

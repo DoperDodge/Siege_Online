@@ -796,6 +796,8 @@ export const gadgetSchema = z
         holeM: z.tuple([z.number().positive(), z.number().positive()]),
         killCharges: z.number().int().min(1),
       }),
+      /** Held up in the hands while it's out, never placed or thrown (Pulse's sensor, Phase 8 M6: `sensor`). */
+      z.strictObject({ kind: z.literal("hold") }),
     ]),
     /** Waits for its owner's detonator once it's out. */
     remote: z.boolean(),
@@ -868,18 +870,33 @@ export const gadgetSchema = z
     tripwire: z.strictObject({ anglesDeg: z.array(z.number().min(-180).max(180)).min(1), lengthM: z.number().positive(), armS: z.number().min(0) }).optional(),
     /** One bullet (or any damage) destroys it, without its blast. */
     fragile: z.boolean().default(false),
+    /**
+     * Mute's Signal Disruptor (Phase 8 M6, gadgets/jammers.ts): while it stands (not in the air, not disabled by an
+     * EMP) it jams the other side's wireless signals within `radiusM` (a sphere): no remote device of theirs in it, or
+     * whose owner is in it, can be set off, and their drones in it lose their drivers; inside `warnM` their drones'
+     * feeds show static. Its reach shows for `showS` once it's placed.
+     */
+    jammer: z.strictObject({ radiusM: z.number().positive(), warnM: z.number().positive(), showS: z.number().min(0) }).optional(),
+    /**
+     * Pulse's Cardiac Sensor (Phase 8 M6, gadgets/sensor.ts): held up, it shows its holder the other side's heartbeats
+     * within `rangeM` of him, through anything, within `fanDeg` of his facing across the floor; a ping while it's up
+     * marks the heartbeat nearest his crosshair within `pingDeg` for his team.
+     */
+    sensor: z.strictObject({ rangeM: z.number().positive(), fanDeg: z.number().gt(0).max(360), pingDeg: z.number().gt(0).max(90) }).optional(),
   })
   .superRefine((g, ctx) => {
     const u = g.use;
     if (u.kind === "throw" && u.flight === "bounce" && u.fuseS === undefined) ctx.addIssue({ code: "custom", path: ["use", "fuseS"], message: "a bouncing gadget needs a fuse" });
     if (u.kind === "throw" && u.afterHitS !== undefined && u.fuseS === undefined) ctx.addIssue({ code: "custom", path: ["use", "afterHitS"], message: "afterHitS cuts a fuse: give fuseS" });
     if (u.kind === "throw" && u.maxTravelM !== undefined && u.flight !== "impact") ctx.addIssue({ code: "custom", path: ["use", "maxTravelM"], message: "only an impact gadget goes off in the air" });
-    if (g.remote && u.kind !== "swing" && u.fuseS !== undefined) ctx.addIssue({ code: "custom", path: ["remote"], message: "a remote gadget has no fuse" });
+    if (g.remote && (u.kind === "throw" || u.kind === "place") && u.fuseS !== undefined) ctx.addIssue({ code: "custom", path: ["remote"], message: "a remote gadget has no fuse" });
     if (u.kind === "swing" && u.hitS > u.swingS) ctx.addIssue({ code: "custom", path: ["use", "hitS"], message: "a swing's blow lands within it" });
     for (const k of ["maxOut", "burnS", "cluster"] as const)
       if (g[k] !== undefined && !g.remote) ctx.addIssue({ code: "custom", path: [k], message: "only a remote device has this" });
     if (g.cluster && (g.blast || g.burnS !== undefined)) ctx.addIssue({ code: "custom", path: ["cluster"], message: "a cluster charge's grenades blast, not the charge" });
     if (u.kind === "place" && u.on.includes("shield") && !g.cluster) ctx.addIssue({ code: "custom", path: ["use", "on"], message: "only a cluster charge drills through a shield" });
+    if ((u.kind === "hold") !== (g.sensor !== undefined)) ctx.addIssue({ code: "custom", path: ["use"], message: "a held item is a sensor, and a sensor is held" });
+    if (g.jammer && (u.kind !== "place" || g.jammer.warnM < g.jammer.radiusM)) ctx.addIssue({ code: "custom", path: ["jammer"], message: "a jammer is placed, and warns beyond its reach" });
   });
 export type GadgetData = z.infer<typeof gadgetSchema>;
 

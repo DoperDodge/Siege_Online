@@ -38,6 +38,8 @@ export interface MoveContext {
   swingMeets?(pawn: Pawn, reachM: number): boolean;
   /** How far along a ray the first solid gadget is (Phase 8 M5: a deployable shield Fuze's charge goes on), or null. */
   solidOnRay?(origin: Vec3, dir: Vec3, maxT: number): number | null;
+  /** Whether a drone is inside an enemy jammer (Phase 8 M6, Mute's): it loses its driver. */
+  droneJammed?(pawn: Pawn): boolean;
 }
 
 const IDENTITY = { x: 0, y: 0, z: 0, w: 1 };

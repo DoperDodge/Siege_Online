@@ -606,6 +606,13 @@ The gadget questions in [gadgets.md](gadgets.md) and the operator files stay ope
     also destroy his own charges near them. Placing a second sets the first off; if nothing could set it off then
     (an EMP), ours lets it fall. How long does the release take, how wide is the fan, and how long is a grenade's
     fuse? What happens to a jammed first charge when Fuze places a second?
+27. **Mute's jammer (M6):** an operator counts as inside it by the part of his body nearest it; it's placed within
+    2.5 m on a floor; a drone inside it stops dead (its driver's input is ignored); a wall reinforced over one crushes
+    it within 0.35 m of the wall, under 0.4 m up (all ours). Does a body count as inside by its feet, its centre or
+    any part? How close to a wall must a jammer be for the steel to crush it?
+28. **Pulse's sensor (M6):** a 120° fan in front of him, as far up and down as across (10.5 m), downed attackers
+    shown, and a ping with it up marking the heartbeat within 20° of his crosshair (all ours). What shape does it
+    scan, do downed attackers show, and what does his ping put on his team's screens?
 
 ### [core_mechanics.md](core_mechanics.md) — 16
 

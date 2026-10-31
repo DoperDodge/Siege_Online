@@ -1,9 +1,10 @@
-// End-to-end check of the Gadget Lab (Phase 8 M1 to M5, game/shared/src/gadgets/DESIGN.md §11). Offline (the page's
+// End-to-end check of the Gadget Lab (Phase 8 M1 to M6, game/shared/src/gadgets/DESIGN.md §11). Offline (the page's
 // own room in a Web Worker): Sledge takes a frag out with 3 and throws it (it flies, comes to rest, and is gone at its
 // fuse), then swings his hammer (Z) at a soft wall close by (both faces broken, a charge spent). Fuze takes a Breach
 // Charge out, holds Fire at a soft wall until it's on it (the detonator is then in hand) and sets it off: the wall has
 // a hole. Then his Cluster Charge (Z) on the reinforced wall: it drills, its grenades come out on the far side, the
-// steel has a hole; and Thermite's Exothermic Charge there: it burns, then a large hole goes through the steel. Mute throws his Nitro Cell at the feet of the attacker dummy in the open, steps well away and sets it off:
+// steel has a hole; and Thermite's Exothermic Charge there: it burns, then a large hole goes through the steel. Mute
+// puts a Signal Disruptor down (Z); Pulse's sensor (Z) shows the attacker dummy's heartbeat. Mute throws his Nitro Cell at the feet of the attacker dummy in the open, steps well away and sets it off:
 // the dummy is down, by the Nitro Cell. Sledge's stun thrown in front of him whites out his screen; Thermite's smoke
 // grenade leaves its cloud in the table. Online, two pages at 100 ms of simulated round trip: what A throws, B has in
 // its table too, A's prediction needed no corrections, and both see its blast. (The level's ingredients are in the
@@ -219,7 +220,31 @@ try {
   result.nitroBlast = downed;
   await nit.screenshot({ path: shot("gadget-nitro-downed.png") });
   result.checks.nitroCellDownsTheDummy = Math.hypot(result.nitro.pos[0] + 3, result.nitro.pos[2] - 12) < 2 && [3, 4].includes(downed.mode) && downed.weapon === "nitro_cell" && downed.unhurt;
+
+  // ---- offline (M6): Mute's Signal Disruptor (Z) at his feet: held 3 s, it stands on the floor (its reach shown)
+  await nit.keyboard.press("KeyZ");
+  await until(nit, () => window.__lab.net.hand === 3);
+  await sleep(1000);
+  await input(nit, { buttons: Btn.Fire, pitch: -1.2 });
+  await until(nit, () => window.__lab.net.table.some((g) => g.kind === "signal_disruptor"));
+  await input(nit, { pitch: -0.4 });
+  await sleep(300);
+  await nit.screenshot({ path: shot("gadget-jammer.png") });
+  result.jammer = (await state(nit)).table.find((g) => g.kind === "signal_disruptor") ?? null;
+  result.checks.jammerStandsOnTheFloor = result.jammer !== null && result.jammer.pos[1] < 0.2 && (result.jammer.flags & 2) === 2;
   await nit.close();
+
+  // ---- offline (M6): Pulse's Cardiac Sensor (Z) facing the attacker dummy 3.5 m away: one heartbeat on it
+  const pul = await open(`${BASE}/labs/gadget_lab.html?autotest=1&lowgfx&op=pulse`, { width: 960, height: 540 });
+  await pul.evaluate(() => window.__lab.teleport(-3, 0, 15.5, 0));
+  await sleep(600);
+  await pul.keyboard.press("KeyZ");
+  await until(pul, () => window.__lab.net.hand === 3);
+  await until(pul, () => document.querySelectorAll(".sensor:not(.hidden) .sensor-blips i").length > 0, null, 10000);
+  result.sensor = await pul.evaluate(() => ({ blips: document.querySelectorAll(".sensor-blips i").length, title: document.querySelector(".sensor-title")?.textContent ?? "" }));
+  await pul.screenshot({ path: shot("gadget-sensor.png") });
+  result.checks.sensorShowsTheAttackerDummy = result.sensor.blips === 1 && /1 heartbeat\b/.test(result.sensor.title);
+  await pul.close();
 
   // ---- offline (M3): Sledge's stun at his feet, facing it: his screen goes white
   const stun = await open(`${BASE}/labs/gadget_lab.html?autotest=1&lowgfx&op=sledge&gadgets=stun`, { width: 960, height: 540 });

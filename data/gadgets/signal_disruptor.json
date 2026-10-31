@@ -1,0 +1,17 @@
+{
+  "_doc": "Mute's Signal Disruptor (research/operators/mute.md; Phase 8 M6): his ability, the item in his slot 2 (Z). Placed on a floor in `use.placeS` (Fandom: 3 s), it jams the attackers' wireless signals within `jammer.radiusM` (a sphere, through floors: 2.6 m, Y11S2.3): a remote device can't be set off while it or its owner's body is inside (Y10S4: Breach, Exothermic and Cluster Charges), and a drone inside loses its driver, its feed static; inside `jammer.warnM` (4.875 m) a drone's feed shows static as a warning. It lights up while it works, and its reach shows for `jammer.showS` after it's placed (Y6S3). Not while an EMP has it (DSEG). Automated devices (the Claymore, the Hard Breach Charge), grenades, optics and the defenders' own devices don't mind it, nor does a device already set off. Mute picks them up again; any damage destroys one (1 hp, the CSV's placeholder); a wall reinforced over one crushes it. 4 a round (Fandom). Its size and reach are placeholders.",
+  "_season": "Y11S3",
+  "_unverified": ["use.reachM", "sizeM"],
+  "id": "signal_disruptor",
+  "name": "Signal Disruptor",
+  "side": "defender",
+  "operator": "mute",
+  "count": 4,
+  "electronic": true,
+  "use": {"kind": "place", "on": ["floor"], "placeS": 3.0, "reachM": 2.5},
+  "remote": false,
+  "pickUp": true,
+  "sizeM": [0.25, 0.12, 0.25],
+  "jammer": {"radiusM": 2.6, "warnM": 4.875, "showS": 2.5},
+  "fragile": true
+}

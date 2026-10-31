@@ -147,8 +147,9 @@ describe("lobby, clock, error and debug messages round-trip", () => {
       { kind: "reviveEnd", reviverPawn: 11, targetPawn: 7, completed: false },
       { kind: "shellDestroyed", pawnId: 9, ownerCtrl: 5, killerCtrl: 4, weapon: "mp5k", headshot: false },
       // Phase 8: a ping on nothing and on an enemy gadget, a blast, a stun and a concussion, an alarm, a kill by wire.
-      { kind: "ping", ctrl: 3, pos: [1.5, 0.25, -7], danger: false, ticks: 320, gadget: -1 },
-      { kind: "ping", ctrl: 3, pos: [1.5, 0.25, -7], danger: true, ticks: 320, gadget: 13 },
+      { kind: "ping", ctrl: 3, pos: [1.5, 0.25, -7], danger: false, ticks: 320, gadget: -1, heart: false },
+      { kind: "ping", ctrl: 3, pos: [1.5, 0.25, -7], danger: true, ticks: 320, gadget: 13, heart: false },
+      { kind: "ping", ctrl: 3, pos: [1.5, 1.05, -7], danger: false, ticks: 320, gadget: -1, heart: true },
       { kind: "blast", gadget: 3, pos: [0, 0.03125, 12] },
       { kind: "stunned", seconds: 5, blind: 1, ring: true, concuss: false },
       { kind: "stunned", seconds: 3, blind: 0, ring: true, concuss: true },

@@ -68,10 +68,11 @@ export type GadgetOp = { kind: "put"; g: Gadget } | { kind: "remove"; id: number
 
 /**
  * The oldest of `kind` that `owner` has out and can set off (not disabled by an EMP: GFlag.Off; not one already set
- * off and burning or drilling: GFlag.Active, Phase 8 M5), or undefined.
+ * off and burning or drilling: GFlag.Active, Phase 8 M5; and, M6, one `ok` takes: not inside an enemy jammer), or
+ * undefined.
  */
-export function detonatable(list: readonly Gadget[], owner: number, kind: number): Gadget | undefined {
-  return list.find((x) => x.owner === owner && x.kind === kind && !(x.flags & (GFlag.Off | GFlag.Active)));
+export function detonatable(list: readonly Gadget[], owner: number, kind: number, ok: (g: Gadget) => boolean = () => true): Gadget | undefined {
+  return list.find((x) => x.owner === owner && x.kind === kind && !(x.flags & (GFlag.Off | GFlag.Active)) && ok(x));
 }
 
 const f32 = Math.fround;

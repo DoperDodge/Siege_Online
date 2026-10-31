@@ -77,7 +77,7 @@ export type SimEvent =
    */
   | { kind: "swing"; pawnId: number; seq: number; slot: 1 | 2; gadget: string; yaw: number; pitch: number; origin: Vec3 }
   /** `gadget`: the kind of the enemy gadget pinged (Phase 8 M3), or −1. */
-  | { kind: "ping"; ctrlId: number; pos: Vec3; gadget: number }
+  | { kind: "ping"; ctrlId: number; pos: Vec3; gadget: number; heart?: boolean }
   /**
    * Gadgets (Phase 8, gadgets/hands.ts): one thrown from `pos` at `vel`, or placed at `pos` facing `yaw` (on the floor,
    * lying flat, on a panel: −1 none), out of slot 1 or 2; the server adds it to the gadget table. A detonator pressed:

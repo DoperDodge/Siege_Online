@@ -11,7 +11,6 @@ import {
   Btn,
   DEFENSE,
   eyePose,
-  GadgetAct,
   GFlag,
   Hand,
   kindOf,
@@ -21,7 +20,6 @@ import {
   L_STEEL,
   PawnKind,
   PawnMode,
-  slotGadget,
   Stance,
   ticks,
   type Gadget,
@@ -59,40 +57,11 @@ function fell(s: Scene, id: number) {
 /** Whether a panel has no material in any of `layers` at the world point. */
 const holeAt = (s: Scene, id: string, layers: number[], p: Vec3) => layers.every((l) => !s.solidAt(id, l, p));
 
-/** Client 0's hand out of his slot 2: `want` (his charge, or its detonator), pressing Z as a player does, and ready. */
-function handOut(s: Scene, want: Hand, look: Partial<InputCmd> = {}) {
-  const equip = ticks(s.sim.data.gadgetRules.equipS) + 2;
-  for (let k = 0; k < 3 && s.body(0).state.hand !== want; k++) {
-    s.press(0, Btn.Ability, look);
-    s.wait(equip);
-  }
-  if (s.body(0).state.gAct === GadgetAct.Equip) s.wait(equip);
-  expect(s.body(0).state.hand).toBe(want);
-}
-
-/**
- * Client 0 places his charge looking at `at` from where he stands (or as `hold` says), as a player does: Z, then Fire
- * held for its placing time. The entry, or undefined (it can't go there).
- */
-function plant(s: Scene, at: Vec3, hold: Partial<InputCmd> = {}): Gadget | undefined {
-  const g = slotGadget(s.sim.data, s.body(0).loadout, 2)!;
-  const before = new Set(s.sim.gadgets.list.map((e) => e.id));
-  s.clients[0].cmd = { ...hold };
-  s.wait(hold.stance ? 32 : 2);
-  const aim = { ...hold, ...s.aimAt(0, at) };
-  handOut(s, Hand.Ability, aim);
-  s.clients[0].cmd = { ...aim, buttons: Btn.Fire };
-  s.wait(ticks(g.use.kind === "place" ? g.use.placeS : 0) + 8);
-  s.clients[0].cmd = { ...aim };
-  s.wait(2);
-  return s.sim.gadgets.list.find((e) => !before.has(e.id) && e.kind === kindOf(g.id));
-}
+/** Client 0 places his charge looking at `at` (the harness's `plant`): the entry, or undefined. */
+const plant = (s: Scene, at: Vec3, hold: Partial<InputCmd> = {}) => s.plant(0, at, hold);
 
 /** Client 0 presses his detonator (Z first if it isn't in hand). */
-function detonate(s: Scene) {
-  handOut(s, Hand.AbilityDetonator);
-  s.press(0, Btn.Fire);
-}
+const detonate = (s: Scene) => s.detonate(0);
 
 /** An entry of `kind` (client 0's) on a panel's face toward +z at (x, y), standing off it as one placed there does. */
 function onWall(s: Scene, kind: string, id: string, x: number, y: number, faceZ = -5.9): Gadget {

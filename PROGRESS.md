@@ -18,13 +18,27 @@ targets `main`.
 | M3 The other generics (stun, smoke, Impact EMP, barbed wire, deployable shield, proximity alarm, observation blocker), pinging gadgets, ingredients | ✅ (D-143) |
 | M4 Sledge; Striker and Sentry | ✅ (D-144; Striker's and Sentry's kits were M1's) |
 | M5 Thermite; Fuze's Cluster Charge | ✅ (D-145) |
-| M6 Mute; Pulse | next |
-| M7 Mira | |
+| M6 Mute; Pulse | ✅ (D-146) |
+| M7 Mira | next |
 | M8 Brava | |
 | M9 Dokkaebi | |
 | M10 Skopós's remaining rules; Lesion | |
 | M11 The Ballistic Shield | |
 | M12 Every CSV row passing; netsim, browser tests, review, docs, report | |
+
+### What's done (M6: Mute and Pulse)
+- **Mute's Signal Disruptor:** Z, then left mouse held 3 s at the floor puts one down (4 a round; hold F on it to
+  take it back). Within 2.6 m (through floors too), attackers can't set off their charges (Breach, Exothermic,
+  Cluster), nor can an attacker standing inside one; an attacker's drone inside one stops answering (static), and
+  shows lighter static within 4.875 m. Hard Breach Charges, Claymores, grenades, the hammer and sights don't mind it,
+  nor do the defenders' own gadgets. Any damage destroys it; an Impact EMP turns it off for 9 s; reinforcing the
+  wall it stands against crushes it. Its reach shows for 2.5 s when it lands.
+- **Pulse's Cardiac Sensor:** Z holds it up (no shooting meanwhile): a fan at the bottom of the screen shows the
+  attackers' heartbeats within 10.5 m in front of him, through walls and floors (downed attackers too, never drones
+  or defenders). Ping (T) while it's up to mark the heartbeat you're looking at for your team. An Impact EMP freezes
+  it.
+- **The interaction tests:** 32 more rows pass (218 of 343). The Gadget Lab's browser test puts a jammer down and
+  sees the attacker dummy's heartbeat.
 
 ### What's done (M5: Thermite and Fuze)
 - **Thermite's Exothermic Charge:** Z takes it out, left mouse held for 3 s puts it on any breakable surface,
@@ -146,6 +160,8 @@ npm start
    detector.
 6. **M4:** as Sledge, Z takes out the hammer: swing at the soft walls (close and from further away), the hatch from
    the platform, the barricaded door, and a dummy.
+8. **M6:** as Mute, Z and hold left mouse at the floor; switch to the attackers (pause menu) and drive a drone at it,
+   or put a Breach Charge near it and try the detonator. As Pulse, Z and face the attacker dummy in the open.
 7. **M5:** as Thermite, Z, hold left mouse at the reinforced wall for 3 s, step back and press left mouse: sparks,
    then a hole you can walk through, and the dummy behind it is down. As Fuze, Z at the same wall (or a soft one, or
    the hatch from the platform): it drills, then its grenades come out on the far side. Place a second one: the

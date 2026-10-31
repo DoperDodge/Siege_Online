@@ -998,7 +998,7 @@ export class Room implements DirectorHost {
     if (pools[pawn.team] <= 0) return;
     if (!this.applyPanelOp(e.panel, { kind: "reinforce", section: e.section, side: e.side })?.added[L_STEEL].length) return;
     pools[pawn.team]--;
-    this.gadgetServer.reinforced(e.panel);
+    this.gadgetServer.reinforced(e.panel, e.section);
     for (const m of this.members.values()) m.events.push(this.deployRulesEvent());
   }
 
@@ -1252,7 +1252,7 @@ export class Room implements DirectorHost {
    * when it follows their last (a yellow one) within `doubleTapS` (a double tap, in place of that one); otherwise none
    * within `cooldownS` of the last, so a held or hammered key sends a few a second at most.
    */
-  private ping(ctrlId: number, pos: Vec3, gadget: number) {
+  private ping(ctrlId: number, pos: Vec3, gadget: number, heart: boolean) {
     const m = this.memberOf(ctrlId);
     if (!m) return;
     const k = this.sim.data.intel.ping;
@@ -1261,7 +1261,7 @@ export class Room implements DirectorHost {
     if (!danger && since < ticksOrZero(k.cooldownS)) return;
     m.lastPing = this.sim.tick;
     m.lastPingDanger = danger;
-    const e: GameEvent = { kind: "ping", ctrl: ctrlId, pos, danger, ticks: ticks(k.seconds), gadget };
+    const e: GameEvent = { kind: "ping", ctrl: ctrlId, pos, danger, ticks: ticks(k.seconds), gadget, heart };
     const team = this.teamOf(m);
     for (const o of this.members.values()) if (this.teamOf(o) === team) o.events.push(e);
   }
@@ -1575,7 +1575,7 @@ export class Room implements DirectorHost {
     this.scans(applied);
     this.darts(applied);
     for (const e of this.sim.events) {
-      if (e.kind === "ping") this.ping(e.ctrlId, e.pos, e.gadget);
+      if (e.kind === "ping") this.ping(e.ctrlId, e.pos, e.gadget, e.heart ?? false);
       if (e.kind !== "shot" && e.kind !== "meleeImpact" && e.kind !== "swing") continue;
       const owner = this.sim.pawns.get(e.pawnId)?.ownerId;
       if (owner === undefined || owner === null) continue;

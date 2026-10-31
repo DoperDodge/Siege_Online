@@ -14,6 +14,8 @@ import { insideAny, zoneBoxes, ZONE_TEST_HEIGHT, type ZoneBox } from "./level/zo
 import { raycastLevel } from "./level/raycast.js";
 import { detonatable, GadgetTable, GFlag, type Gadget } from "./gadgets/table.js";
 import { isIngredient, KIND_BP_CAMERA, kindId, kindOf } from "./gadgets/kinds.js";
+import { pawnJammed, pointJammed } from "./gadgets/jammers.js";
+import { heartbeats, heartOf, sensorUp } from "./gadgets/sensor.js";
 import { barrierOf, crossesBarrier, smokeOnSegment, wireSlow } from "./gadgets/areas.js";
 import { gadgetOnRay } from "./gadgets/hits.js";
 import { placeSpotFor, slotCounts, slotGadget } from "./gadgets/hands.js";
@@ -109,7 +111,9 @@ export class Sim {
       events: [],
       canRappel: (pawn) => pawn.team === sideTeam("attacker") || this.deployRules.rappel,
       slowOf: (pawn) => wireSlow(data, this.gadgets, pawn, pawn.kind === PawnKind.Drone),
-      canDetonate: (pawn, gadget) => detonatable(this.gadgets.list, pawn.ownerId ?? 0, kindOf(gadget)) !== undefined,
+      // Phase 8 M6: not while the body, or the device, is inside an enemy jammer.
+      canDetonate: (pawn, gadget) => !pawnJammed(this, pawn) && detonatable(this.gadgets.list, pawn.ownerId ?? 0, kindOf(gadget), (g) => !pointJammed(this, g.team, g.pos)) !== undefined,
+      droneJammed: (pawn) => pawnJammed(this, pawn),
       swingMeets: (pawn, reachM) => this.swingMeets(pawn, reachM),
       solidOnRay: (origin, dir, maxT) => this.solidOnRay(origin, dir, maxT),
     };
@@ -881,6 +885,22 @@ export class Sim {
     const v = this.viewOf(c, input);
     if (!v) return;
     const dir = viewDir(v.yaw, v.pitch);
+    // Pulse's sensor up (Phase 8 M6): the heartbeat nearest the crosshair, within its `pingDeg`, is what's pinged.
+    const body = c.cam ? undefined : this.pawns.get(this.viewedPawnId(c.id));
+    const sensor = body && c.pawnIds.includes(body.id) ? sensorUp(this.data, body) : null;
+    if (body && sensor) {
+      let best: { at: Vec3; cos: number } | null = null;
+      for (const p of heartbeats(this, body)) {
+        const h = heartOf(this, p);
+        const w = [h[0] - v.pos[0], h[1] - v.pos[1], h[2] - v.pos[2]];
+        const cos = (w[0] * dir[0] + w[1] * dir[1] + w[2] * dir[2]) / Math.max(1e-6, Math.hypot(w[0], w[1], w[2]));
+        if (cos >= Math.cos(sensor.pingDeg * DEG) && (!best || cos > best.cos)) best = { at: h, cos };
+      }
+      if (best) {
+        this.ctx.events.push({ kind: "ping", ctrlId: c.id, pos: best.at, gadget: -1, heart: true });
+        return;
+      }
+    }
     const at = (t: number): [number, number, number] => [v.pos[0] + dir[0] * t, v.pos[1] + dir[1] * t, v.pos[2] + dir[2] * t];
     let t = raycastLevel(this, v.pos, dir, 200)?.t ?? null;
     const thermal = c.cam !== 0 && this.bpCamAt(c.cam - 1) !== null;

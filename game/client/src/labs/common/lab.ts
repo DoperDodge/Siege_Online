@@ -65,6 +65,11 @@ import {
   kindId,
   handSlot,
   isDetonator,
+  forwardXZ,
+  heartbeats,
+  pawnJammed,
+  rightXZ,
+  sensorUp,
   placeSpotFor,
   slotGadget,
   type GadgetData,
@@ -233,6 +238,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     <div class="lean-ind lean-l">◀</div><div class="lean-ind lean-r">▶</div>
     <div class="flash"></div>
     <div class="stun-white"></div><div class="emp-static hidden"></div>
+    <div class="sensor hidden"><div class="sensor-fan"></div><div class="sensor-blips"></div><div class="sensor-title"></div></div>
     <div class="prompt hidden"></div>
     <div class="shellcam hidden"><div class="shellcam-title"></div><div class="swap-bar"><div></div></div></div>
     <div class="dronecam hidden"><div class="dronecam-title"></div><div class="feeds"></div></div>
@@ -1150,6 +1156,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     fx.update(now, shownRenderTick, ctrl.pawnIds, ownMuzzle, remoteMuzzle);
     updateCombatHud(now);
     updateStunHud(now);
+    updateSensorHud();
     updateLasers();
 
     let rs: PawnState | null = null;
@@ -1483,7 +1490,10 @@ export async function startLab(o: LabOptions): Promise<void> {
     const drone = sim.pawns.get(sim.viewedPawnId(ctrl.id));
     const onDrone = drone?.kind === PawnKind.Drone;
     $(".dronecam").classList.toggle("hidden", !onDrone && ctrl.cam === 0);
-    $(".dronecam").classList.toggle("jammed", onDrone && drone.state.jammed > 0);
+    // Jammed by an EMP, or inside an enemy Signal Disruptor (Phase 8 M6; static as a warning near one).
+    const inJam = onDrone && pawnJammed(sim, drone);
+    $(".dronecam").classList.toggle("jammed", onDrone && (drone.state.jammed > 0 || inJam));
+    $(".dronecam").classList.toggle("warned", onDrone && !inJam && pawnJammed(sim, drone, true));
     if (onDrone || ctrl.cam) {
       const html = feedRow();
       const row = $(".dronecam .feeds");
@@ -1511,7 +1521,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       // A teammate's drone (Phase 7, intel/DESIGN.md §5): watched, not driven.
       $(".dronecam-title").textContent = [
         `${(ownerName(drone.id) || "A TEAMMATE").toUpperCase()}'S DRONE · watching`,
-        drone.state.jammed ? "JAMMED" : "",
+        drone.state.jammed || inJam ? "JAMMED" : "",
         `${keyLabel(k.leanLeft)} / ${keyLabel(k.leanRight)} switch · ${keyLabel(k.observe)} back`,
       ]
         .filter(Boolean)
@@ -1528,7 +1538,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       $(".dronecam-title").textContent = [
         `DRONE ${drones.indexOf(drone) + 1}/${drones.length}${held ? ` · ${held} held` : ""}`,
         ds.mode === PawnMode.Dead ? "DESTROYED" : "",
-        ds.jammed ? `JAMMED ${secs(ds.jammed)}` : "",
+        ds.jammed ? `JAMMED ${secs(ds.jammed)}` : inJam ? "JAMMED (signal disruptor)" : "",
         `${keyLabel(k.vault)} jump ${ds.jumpCd ? secs(ds.jumpCd) : "ready"}`,
         `${keyLabel(k.sprint)} boost ${ds.boostTicks ? "ON" : ds.boostCd ? secs(ds.boostCd) : "ready"}`,
         keys,
@@ -1553,7 +1563,9 @@ export async function startLab(o: LabOptions): Promise<void> {
       if (!g) return "";
       const left = slot === 1 ? s.g1 : s.g2;
       const out = slot === 1 ? s.w1 : s.w2;
-      return `${g.name.toUpperCase()} ×${left}${out ? ` · ${out} out (detonator)` : ""} · ${keyLabel(key)}`;
+      // A held item (Pulse's sensor, Phase 8 M6) is never used up: no count.
+      const count = g.use.kind === "hold" ? "" : ` ×${left}`;
+      return `${g.name.toUpperCase()}${count}${out ? ` · ${out} out (detonator)` : ""} · ${keyLabel(key)}`;
     };
     const gadgetText = dead ? "" : [slotText(1, k.gadget), slotText(2, k.ability)].filter(Boolean).join("   ");
     if ($(".gadget-line").textContent !== gadgetText) $(".gadget-line").textContent = gadgetText;
@@ -2301,8 +2313,8 @@ export async function startLab(o: LabOptions): Promise<void> {
         if (e.kind === "kill" && e.victimCtrl === me) death = { pawnId: e.victimPawn, life: sim.pawns.get(e.victimPawn)?.life ?? 0, text: deathLine(e, feedNames) };
         // Intel (Phase 7): pings, scans and callouts from your team (and word that you were spotted).
         if (e.kind === "ping") {
-          // An enemy gadget pinged (Phase 8 M3) is named with it.
-          const what = e.gadget >= 0 ? ` · ${data.gadgets.get(kindId(e.gadget) ?? "")?.name ?? kindId(e.gadget)}` : "";
+          // An enemy gadget pinged (Phase 8 M3) is named with it, a heartbeat on Pulse's sensor (M6) too.
+          const what = e.heart ? " · heartbeat" : e.gadget >= 0 ? ` · ${data.gadgets.get(kindId(e.gadget) ?? "")?.name ?? kindId(e.gadget)}` : "";
           intelHud.ping(e, `${e.ctrl === me ? "you" : nameOfCtrl(e.ctrl)}${what}`, now);
         } else if (e.kind === "stunned") {
           if (e.blind > 0) stunned = { blind: e.blind, start: now, end: now + e.seconds * 1000 };
@@ -2316,6 +2328,40 @@ export async function startLab(o: LabOptions): Promise<void> {
         } else if (e.kind === "callout") killFeed.push({ text: `${e.name}: ${data.intel.callouts[e.id] ?? "?"}`, mine: false, callout: true }, now);
       }
     }
+  }
+
+  /** The heartbeats Pulse's sensor last showed (Phase 8 M6): kept, frozen, while an EMP has him. */
+  let heartsShown: { x: number; y: number }[] = [];
+  let heartsKey = "";
+
+  /**
+   * Pulse's sensor up (Phase 8 M6): the attackers' heartbeats in front of him as blips on a fan, nearer the bottom the
+   * closer (only he sees them); an EMP on him freezes it.
+   */
+  function updateSensorHud() {
+    const body = livingBody();
+    const k = body ? sensorUp(data, body) : null;
+    $(".sensor").classList.toggle("hidden", !k);
+    if (!k || !body) return;
+    const frozen = body.state.jammed > 0;
+    if (!frozen) {
+      const eye = body.state;
+      heartsShown = heartbeats(sim, body).map((p) => {
+        const dx = p.state.x - eye.x;
+        const dz = p.state.z - eye.z;
+        const [fx, fz] = forwardXZ(eye.yaw);
+        const [rx, rz] = rightXZ(eye.yaw);
+        const r = Math.min(1, Math.hypot(dx, dz, p.state.y - eye.y) / k.rangeM);
+        const a = Math.atan2(dx * rx + dz * rz, dx * fx + dz * fz);
+        return { x: 50 + Math.sin(a) * r * 50, y: 100 - Math.cos(a) * r * 100 };
+      });
+    }
+    const key = heartsShown.map((h) => `${h.x.toFixed(0)},${h.y.toFixed(0)}`).join(";") + (frozen ? "f" : "");
+    if (key === heartsKey) return;
+    heartsKey = key;
+    $(".sensor-blips").innerHTML = heartsShown.map((h) => `<i style="left:${h.x.toFixed(1)}%;top:${h.y.toFixed(1)}%"></i>`).join("");
+    $(".sensor-title").textContent = frozen ? "CARDIAC SENSOR · EMP: frozen" : `CARDIAC SENSOR · ${heartsShown.length} heartbeat${heartsShown.length === 1 ? "" : "s"} within ${k.rangeM} m · ping to share`;
+    $(".sensor").classList.toggle("frozen", frozen);
   }
 
   /**

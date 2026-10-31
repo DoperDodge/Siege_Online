@@ -27,10 +27,15 @@ import { isCloud, pawnDistance } from "./blast.js";
 import { behindOf, fanVelocity, tubeTip, type ClusterData } from "./cluster.js";
 import { empReach } from "./electronics.js";
 import { gadgetOnRay } from "./hits.js";
+import { pawnJammed, pointJammed } from "./jammers.js";
 import { isIngredient, KIND_BP_CAMERA, kindId, kindOf } from "./kinds.js";
 import { detonatable, GFlag, type Gadget } from "./table.js";
 
 const KIND_WIRE = kindOf("barbed_wire");
+/** A reinforced wall's bar crushes what stands this close to either face of it (Phase 8 M6; ours)... */
+const FOOT_OUT_M = 0.35;
+/** ...with its box's centre this low off the wall's bottom (ours). */
+const FOOT_UP_M = 0.4;
 /** A body moving this fast or more is moving through barbed wire (it bites). */
 const MOVING_MPS = 0.3;
 /** What a set-off ingredient is doing, for the room: a fire extinguisher's burst, a gas pipe's jet or its blast, a metal detector destroyed. */
@@ -154,8 +159,9 @@ export class GadgetServer {
     }
     if (e.kind === "detonate") {
       const pawn = sim.pawns.get(e.pawnId);
-      // Its owner's oldest working one of that kind out (the controller's: Skopós's shells share theirs).
-      const g = pawn && detonatable(sim.gadgets.list, pawn.ownerId ?? 0, kindOf(e.gadget));
+      // Its owner's oldest working one of that kind out (the controller's: Skopós's shells share theirs), not one inside
+      // an enemy jammer (Phase 8 M6).
+      const g = pawn && detonatable(sim.gadgets.list, pawn.ownerId ?? 0, kindOf(e.gadget), (x) => !pointJammed(sim, x.team, x.pos));
       if (g) this.detonated(g);
       return;
     }
@@ -188,10 +194,10 @@ export class GadgetServer {
 
   /**
    * Whether `owner`'s detonator could set this device off now (for one set off by placing another, `maxOut`): not
-   * while an EMP has it or its owner's body (DSEG).
+   * while an EMP has it or its owner's body (DSEG), nor while either is inside an enemy jammer (M6).
    */
   private canSetOff(g: Gadget, owner: Pawn): boolean {
-    return !(g.flags & GFlag.Off) && owner.state.jammed === 0;
+    return !(g.flags & GFlag.Off) && owner.state.jammed === 0 && !pawnJammed(this.sim, owner) && !pointJammed(this.sim, g.team, g.pos);
   }
 
   /**
@@ -530,10 +536,29 @@ export class GadgetServer {
     for (const e of [...sim.gadgets.list]) if (e.id !== g.id && !isIngredient(e.kind) && !isFlying(e) && !isCloud(sim, e) && inside(e.pos)) this.blastHit(e);
   }
 
-  /** Steel went up on a panel: what's on it breaks (a camera's glass) or is destroyed (research CSV `action.reinforce`). */
-  reinforced(panel: number): void {
+  /**
+   * Steel went up on a panel (its `section`, or −1 for none named): what's on it breaks (a camera's glass) or is
+   * destroyed, and what stands on the floor at a wall's foot along that section is crushed by its bar (Phase 8 M6;
+   * research CSV `action.reinforce`: a jammer, a Gu mine; ours: within FOOT_OUT_M of either face, its box's centre
+   * under FOOT_UP_M off the wall's bottom).
+   */
+  reinforced(panel: number, section = -1): void {
+    const entry = this.sim.level.panels.list[panel];
+    const foot = entry && entry.panel.kind === "wall" && section >= 0 ? entry : null;
     for (const g of [...this.sim.gadgets.list]) {
-      if (g.panel !== panel) continue;
+      if (g.panel === panel) {
+        if (g.kind === KIND_BP_CAMERA) this.sim.gadgets.update(g.id, { flags: g.flags | GFlag.Broken });
+        else this.destroy(g);
+        continue;
+      }
+      if (!foot || isIngredient(g.kind) || isFlying(g) || g.panel >= 0) continue;
+      const f = foot.frame;
+      const rel = [g.pos[0] - f.center[0], g.pos[1] - f.center[1], g.pos[2] - f.center[2]];
+      const dot = (a: Vec3) => rel[0] * a[0] + rel[1] * a[1] + rel[2] * a[2];
+      const p = foot.panel;
+      const [c0, c1] = p.sectionRange(section);
+      const u = dot(f.u) + f.w / 2;
+      if (u < c0 * p.cellU || u > c1 * p.cellU || dot(f.v) + f.h / 2 > FOOT_UP_M || Math.abs(dot(f.n)) > f.t / 2 + FOOT_OUT_M) continue;
       if (g.kind === KIND_BP_CAMERA) this.sim.gadgets.update(g.id, { flags: g.flags | GFlag.Broken });
       else this.destroy(g);
     }

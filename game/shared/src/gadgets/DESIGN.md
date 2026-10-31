@@ -182,6 +182,19 @@ first. One at a time (`maxOut` 1): the hands never count more than one waiting, 
 off as the detonator would (or lets it fall if an EMP would stop that). A blast now destroys drones of either side
 whatever the friendly fire rules (a drone is a gadget to it).
 
+**As built (M6, Mute and Pulse, D-146):** Mute's Signal Disruptor is a placed operator item (on the floor, 3 s,
+picked up again, fragile, electronic) with a `jammer` (`gadgets/jammers.ts`): while it stands and no EMP has it, it
+jams the other side within 2.6 m, a sphere. Jamming is computed from the table and the pawns' states, so the
+simulation predicts it: the detonator (`canDetonate`, the server's `detonatable` filter) skips a device inside one
+and does nothing while its owner's body is inside one (by the body's nearest hitbox point); a drone inside one gets
+no input from its driver (`MoveContext.droneJammed`), and its feed shows static there, a lighter static out to 4.875 m.
+Fuses, tripwires, grenades, sights and the jammer's own side don't mind it, nor a device already set off. A
+reinforced wall section's bar crushes what stands at its foot (within 0.35 m of a face, its box's centre under 0.4 m
+up). Pulse's Cardiac Sensor is a `hold` item (`sensor`, `gadgets/sensor.ts`): out of slot 2 and ready, it lists the
+other side's living bodies (downed too) within 10.5 m of his eye through anything, within a 120° fan of his facing;
+an EMP on him empties it (his HUD keeps the last blips, frozen). Only his client draws them; a ping while it's up
+marks the heartbeat nearest his crosshair (within 20°) for his team (a ping event with `heart`).
+
 ## 8. The Ballistic Shield (Fuze)
 
 The shield as a primary (data/weapons/ballistic_shield.json, research/weapons_notes.md §5): a shield hit shape in

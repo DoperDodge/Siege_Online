@@ -32,9 +32,11 @@ await startLab({
       "Barbed wire halves an attacker's speed and bites 5 a second while he moves; the deployable shield stops bullets, blasts, bodies and drones (a knife makes its glass opaque); the proximity alarm sounds while an attacker is within 3 m; the observation blocker hides what's behind it from the attackers' drones.",
       "The fire extinguisher (west door wall) bursts into smoke and concusses those close by; the gas pipe (window wall) throws a flame jet for 15 s, then goes off; the metal detector (open floor) beeps while someone walks through. Shoot them or blow them up; Clear gadgets puts them back.",
       "Sledge (M4): Z takes out his hammer, left mouse swings it (25 charges, one a swing that meets something). Close to a soft wall it breaks both faces and the studs (swing low and high for a hole to walk through), further only the near face; floors, hatches and barricades break, steel doesn't; it kills, and destroys defender gadgets.",
+      "Thermite (M5): Z, then hold left mouse 3 s on any breakable wall, floor or hatch, the reinforced wall too: on a wall it stands on the floor. Left mouse sets it burning; 3 s later a hole you can walk through, through steel. Fuze: Z, 2 s on a wall, floor, hatch or a deployable shield; set off, it goes through soft surfaces at once and drills steel for 1.75 s, then 5 grenades come out on the far side. A second one sets the first off.",
+      "Mute (M6): Z, 3 s on the floor: a Signal Disruptor. Within 2.6 m no attacker charge can be set off (nor by an attacker standing in it) and drones lose control; F takes it back. Pulse: Z holds his sensor up: the attackers' heartbeats within 10.5 m in front of him, through walls; ping (T) to mark one for the team.",
       "Refill ammo (pause menu) gives your gadgets back too; Clear gadgets takes every gadget out of the room; Reset walls puts them back.",
     ],
-    note: "Phase 8 M4: every generic gadget in both pools, the ingredients and Sledge's hammer. Every number is in data/gadgets.json and data/gadgets/; most are placeholders listed in research/OPEN_QUESTIONS.md.",
+    note: "Phase 8 M6: every generic gadget in both pools, the ingredients, and Sledge's, Thermite's, Fuze's, Mute's and Pulse's abilities. Every number is in data/gadgets.json and data/gadgets/; most are placeholders listed in research/OPEN_QUESTIONS.md.",
   },
   extend: gadgetFeatures,
 });
