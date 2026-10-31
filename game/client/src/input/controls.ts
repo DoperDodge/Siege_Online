@@ -12,6 +12,18 @@ export type UiAction = "respawn" | "hitboxes" | "thirdPerson" | "help" | "settin
 /** F2 is left to the pages (the Range Lab's overlay); F5–F7 and F9–F12 are browser shortcuts. */
 const UI_KEYS: Record<string, UiAction> = { F1: "help", F3: "hitboxes", F4: "thirdPerson", F8: "stats", Escape: "settings" };
 
+/** The ping key held this many ticks opens the comm wheel (a shorter press pings on its release). */
+const WHEEL_TICKS = 16;
+/** The comm wheel: the mouse's travel (counts) that picks a callout, and how far it is kept from the middle. */
+const WHEEL_DEAD = 30;
+const WHEEL_REACH = 120;
+
+/**
+ * Keys that, on a drone or a camera (Phase 7), would flip a toggle or ask for a weapon the body standing idle would
+ * then take back: they don't (a lean switches the feed instead).
+ */
+const FEED_IGNORES = new Set<Action>(["crouch", "prone", "leanLeft", "leanRight", "ads", "primary", "secondary", "swap"]);
+
 /** Keys that change the body's pose; ignored while stanceLocked() (see there). */
 const STANCE_ACTIONS = new Set<Action>(["crouch", "prone", "leanLeft", "leanRight", "ads"]);
 
@@ -74,6 +86,30 @@ export class Controls {
   private fireModePulse = false;
   private meleePulse = false;
   private dropPulse = false;
+  private observePulse = false;
+  /** The gadget key is held to place a camera (Phase 7); a tap shorter than a tick still goes out once (its dart). */
+  private gadgetPulse = false;
+  private throwPulse = false;
+  /**
+   * On a drone or a camera (Phase 7) the lean keys are held, whatever the lean setting: a new press goes to the previous
+   * / next feed.
+   */
+  onDrone: () => boolean = () => false;
+  /** A lean pressed on a feed, sent for the next tick even if let go before it (−1 / 1; 0: none). */
+  private leanPulse: -1 | 0 | 1 = 0;
+  /**
+   * The ping key (Phase 7, intel/DESIGN.md §6): a tap pings where you look (sent for one tick when it's let go); held
+   * for WHEEL_TICKS it opens the comm wheel instead, where the mouse points at a callout and letting go sends it.
+   */
+  private pingDown = false;
+  private pingTicks = 0;
+  private pingPulse = false;
+  /** The comm wheel while it's open: the mouse's travel since it opened (counts), which picks the callout. */
+  private wheel: { x: number; y: number } | null = null;
+  /** How many callouts the comm wheel holds (0: none here, and a held ping key pings when let go). */
+  wheelSize: () => number = () => 0;
+  /** A callout picked off the comm wheel (its number in data/intel.json `callouts`). */
+  onCallout: (id: number) => void = () => {};
   /** The weapon slot asked for with 1 / 2 / the wheel, until the simulation is holding it. */
   private wantSlot: 0 | 1 | null = null;
   private sentSwap = false;
@@ -209,6 +245,18 @@ export class Controls {
    * the turn rate doesn't depend on the frame rate.
    */
   look(dx: number, dy: number, scale = 1) {
+    if (this.wheel) {
+      // The comm wheel is open: the mouse points at a callout instead of turning the view.
+      const w = this.wheel;
+      w.x += dx;
+      w.y += dy;
+      const l = Math.hypot(w.x, w.y);
+      if (l > WHEEL_REACH) {
+        w.x *= WHEEL_REACH / l;
+        w.y *= WHEEL_REACH / l;
+      }
+      return;
+    }
     // Upside down on a rope the view is turned over: a move turns it the way it goes on the screen.
     const sens = this.settings.sensitivity * (this.adsActive ? adsSensitivity(this.settings, this.weaponState()?.zoom ?? 1) : 1) * scale * DEG * (this.upsideDown ? -1 : 1);
     this.yaw = inRange(wrapAngle(this.yaw - dx * sens), this.limits.yawRange);
@@ -241,6 +289,12 @@ export class Controls {
     if (STANCE_ACTIONS.has(action) && this.stanceLocked()) return;
     const s = this.settings;
     this.held.add(action);
+    if (this.onDrone() && FEED_IGNORES.has(action)) {
+      // On a drone or a camera (Phase 7) the body's toggles and weapons stay as they were (it stands idle), and a lean
+      // goes to the previous / next feed: for one tick at least, so a tap between ticks (or a touch button's) counts.
+      if (action === "leanLeft" || action === "leanRight") this.leanPulse = this.lastLeanHold = action === "leanLeft" ? -1 : 1;
+      return;
+    }
     switch (action) {
       case "crouch":
         if (s.crouchMode === "toggle") this.stanceIntent = this.stanceIntent === Stance.Crouch ? Stance.Stand : Stance.Crouch;
@@ -293,6 +347,19 @@ export class Controls {
       case "drop":
         this.dropPulse = true;
         break;
+      case "observe":
+        this.observePulse = true;
+        break;
+      case "gadget":
+        this.gadgetPulse = true;
+        break;
+      case "throwDrone":
+        this.throwPulse = true;
+        break;
+      case "ping":
+        this.pingDown = true;
+        this.pingTicks = 0;
+        break;
       case "primary":
         this.wantSlot = 0;
         break;
@@ -310,11 +377,31 @@ export class Controls {
 
   release(action: Action) {
     this.held.delete(action);
+    if (action === "ping" && this.pingDown) {
+      this.pingDown = false;
+      if (this.wheel) {
+        const pick = this.wheelPick;
+        this.wheel = null;
+        if (pick !== null && pick !== undefined) this.onCallout(pick);
+      } else this.pingPulse = true;
+    }
   }
 
   releaseAll() {
     this.held.clear();
     this.touchMove.x = this.touchMove.y = 0;
+    // A ping key let go with the page (a menu, another window): nothing is sent.
+    this.pingDown = false;
+    this.wheel = null;
+  }
+
+  /** The comm wheel: undefined while it's closed; the callout the mouse points at, or null in its middle. */
+  get wheelPick(): number | null | undefined {
+    if (!this.wheel) return undefined;
+    const n = this.wheelSize();
+    if (n === 0 || Math.hypot(this.wheel.x, this.wheel.y) < WHEEL_DEAD) return null;
+    const a = Math.atan2(this.wheel.x, -this.wheel.y); // 0 up, clockwise
+    return ((Math.round(a / ((2 * Math.PI) / n)) % n) + n) % n;
   }
 
   /** Touch has no comfortable "hold Shift": the sprint button latches until you stop moving forward. */
@@ -347,6 +434,11 @@ export class Controls {
     if (this.fireModePulse) buttons |= Btn.FireMode;
     if (this.meleePulse) buttons |= Btn.Melee;
     if (this.dropPulse) buttons |= Btn.Drop;
+    if (this.observePulse) buttons |= Btn.Observe;
+    if (this.held.has("gadget") || this.gadgetPulse) buttons |= Btn.Gadget;
+    if (this.throwPulse) buttons |= Btn.Throw;
+    if (this.pingDown && !this.wheel && ++this.pingTicks >= WHEEL_TICKS && this.wheelSize() > 0) this.wheel = { x: 0, y: 0 };
+    if (this.pingPulse) buttons |= Btn.Ping;
     // Weapon slot: one swap press, sent only while the slot differs and no swap is already under way
     // (a press then would be ignored); released for a tick in between so the next press is a new one.
     const ws = this.weaponState();
@@ -364,6 +456,10 @@ export class Controls {
     this.fireModePulse = false;
     this.meleePulse = false;
     this.dropPulse = false;
+    this.observePulse = false;
+    this.gadgetPulse = false;
+    this.throwPulse = false;
+    this.pingPulse = false;
 
     const s = this.settings;
     let stance = this.stanceIntent;
@@ -371,11 +467,13 @@ export class Controls {
     else if (s.crouchMode === "hold" && this.held.has("crouch")) stance = Stance.Crouch;
 
     let lean: -1 | 0 | 1 = this.leanIntent;
-    if (s.leanMode === "hold") {
+    if (s.leanMode === "hold" || this.onDrone()) {
       const l = this.held.has("leanLeft");
       const r = this.held.has("leanRight");
       lean = l && r ? this.lastLeanHold : l ? -1 : r ? 1 : 0;
     }
+    if (this.onDrone() && lean === 0) lean = this.leanPulse;
+    this.leanPulse = 0;
     // Prone: turn toward the view by at most one step from where the body is (re-anchored in syncView).
     const step = this.limits.maxYawStep;
     const yaw = step === null ? this.yaw : wrapAngle(this.sampledYaw + clamp(wrapAngle(this.yaw - this.sampledYaw), -step, step));

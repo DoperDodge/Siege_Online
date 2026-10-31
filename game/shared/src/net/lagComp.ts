@@ -6,8 +6,9 @@
 import type { Vec3 } from "../core/math.js";
 import type { BodyEntry } from "../combat/damage.js";
 import type { Hitbox } from "../player/hitboxes.js";
+import { droneHitboxes } from "../player/drone.js";
 import { poseHitboxes } from "../player/hitboxes.js";
-import { PawnMode } from "../player/types.js";
+import { PawnKind, PawnMode } from "../player/types.js";
 import type { Sim } from "../sim.js";
 import { interpolateRemote, quantizeRemote, remoteState, SNAPSHOT_EVERY, type RemoteQ } from "./snapshot.js";
 
@@ -66,7 +67,7 @@ export class HitboxHistory {
     if (tick % SNAPSHOT_EVERY !== 0) return;
     const pawns = new Map<number, { q: RemoteQ; maxHp: number; life: number }>();
     for (const p of this.sim.pawns.values()) {
-      if (p.state.mode === PawnMode.Dead) continue;
+      if (p.state.mode === PawnMode.Dead || p.state.mode === PawnMode.Held) continue;
       pawns.set(p.id, { q: quantizeRemote(p.state), maxHp: p.state.maxHp, life: p.life });
     }
     this.frames[(tick / SNAPSHOT_EVERY) % this.capacity] = { tick, pawns };
@@ -131,7 +132,7 @@ export class HitboxHistory {
       const sa = pa && remoteState(pa.q, pa.maxHp);
       const sb = pb && remoteState(pb.q, pb.maxHp);
       const s = sa && sb ? interpolateRemote(sa, sb, u) : (sa ?? sb)!;
-      out.set(id, poseHitboxes(m, hb, s));
+      out.set(id, this.sim.pawns.get(id)?.kind === PawnKind.Drone ? droneHitboxes(this.sim.data.intel.drone, s) : poseHitboxes(m, hb, s));
     }
     this.memo.set(key, { lives, boxes: out });
     return out;

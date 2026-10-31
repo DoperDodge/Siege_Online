@@ -9,8 +9,11 @@ import { ticks } from "../weapons/ticks.js";
 import { L_STEEL } from "./panel.js";
 import type { PanelSet } from "./panels.js";
 
-/** What a hold of Interact is doing (PawnState.deployKind): a panel's (Phase 4 M6), or the defuser's (Phase 6, match/objective.ts). */
-export const DeployKind = { None: 0, Reinforce: 1, BarricadeUp: 2, BarricadeOff: 3, Plant: 4, Disable: 5 } as const;
+/**
+ * What a hold is doing (PawnState.deployKind): Interact at a panel (Phase 4 M6) or with the defuser (Phase 6,
+ * match/objective.ts), or the gadget key placing a Bulletproof Camera (Phase 7, intel/bpCamera.ts).
+ */
+export const DeployKind = { None: 0, Reinforce: 1, BarricadeUp: 2, BarricadeOff: 3, Plant: 4, Disable: 5, Camera: 6 } as const;
 
 export interface DeployAction {
   kind: number;

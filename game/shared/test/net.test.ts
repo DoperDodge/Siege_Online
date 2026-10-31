@@ -91,7 +91,7 @@ describe("PawnState codec", () => {
   });
 
   it("controller state round-trips", () => {
-    const c = { possessedPawnId: 300, shellCam: true, swapPhase: 2 as const, swapT: 0.625, swapCooldown: 0.25, prevButtons: Btn.Ability | Btn.Interact };
+    const c = { possessedPawnId: 300, shellCam: true, swapPhase: 2 as const, swapT: 0.625, swapCooldown: 0.25, prevButtons: Btn.Ability | Btn.Interact, drone: 302, prevLean: -1, cam: 3, camYaw: 1.5, camPitch: -0.25 };
     const w = new ByteWriter();
     writeControllerState(w, c);
     expect(readControllerState(new ByteReader(w.finish()))).toEqual(c);

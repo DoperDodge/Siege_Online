@@ -1,17 +1,19 @@
-// End-to-end check of a match (Phase 6, match/DESIGN.md §13): a 1v1 and a 2v3 played in browsers from start to
-// finish, with short Custom timers. 1v1: the host creates a Custom match on the Play page, which lists it; the other
-// player joins by its code. In the lobby the joiner lands on the other team, the host sets the rules (one field
-// through its input, and Blue to attack first through its select), both ready up and the host starts. Each team bans
-// one of the other side's operators; on the planning screen the banned one is greyed out, each player picks an
-// operator (the defender one, then 160 ms later another, over a slow link: the second stays), the defender votes for
-// the Dining site and the attacker picks the B Street spawn and takes the defuser.
-// In prep the defender is at that site and the attacker waits at the spawn's view; in action the attacker is at B
-// Street carrying the defuser; the defenders win on time, the banner says so, the sides swap for round 2, and after
-// it the summary has both rounds; the host takes everyone back to the lobby. 2v3: five players (three on Blue, two on
-// Orange; some never pick and get an operator anyway, one per team each); in action a defender shoots a teammate down
-// the sights (friendly fire on, reverse friendly fire off), who then looks through a living teammate's eyes, and the
-// scoreboard counts the death; the match ends with the summary. Also: a loadout set on the Play page is kept, and a
-// sight fitted on the planning screen is carried into action.
+// End-to-end check of a match (Phase 6, match/DESIGN.md §13): a 1v1 and a 2v3 played in browsers from start to finish,
+// with short Custom timers. 1v1: the host creates a Custom match on the Play page, which lists it; the other player
+// joins by its code. In the lobby the joiner lands on the other team, the host sets the rules (one field through its
+// input, and Blue to attack first through its select), both ready up and the host starts. Each team bans one of the
+// other side's operators; on the planning screen the banned one is greyed out, each player picks an operator (the
+// defender one, then 160 ms later another, over a slow link: the second stays), the defender votes for the Dining site
+// and the attacker picks the B Street spawn and takes the defuser. In prep the defender is at that site and the
+// attacker drives their first drone from the spawn (the defender's page has it), and the defender goes round the
+// cameras; in action the attacker is at B Street carrying the defuser, pings (their page marks it, the defender's has
+// nothing) and throws their second drone (6); the defenders win on time, the banner says so, the sides swap for round 2
+// (where the new defender places a Bulletproof Camera and watches it), and after it the summary has both rounds; the
+// host takes everyone back to the lobby. 2v3: five players (three on Blue, two on Orange; some never pick and get an
+// operator anyway, one per team each); in action an attacker goes from their drone to a teammate's (the feed list), and
+// a defender shoots a teammate down the sights (friendly fire on, reverse friendly fire off), who then looks through a
+// living teammate's eyes, and the scoreboard counts the death; the match ends with the summary. Also: a loadout set on
+// the Play page is kept, and a sight fitted on the planning screen is carried into action.
 // Requires `npm run build` first. Screenshots go to builds/e2e.
 import { spawn } from "node:child_process";
 import { mkdirSync, readFileSync } from "node:fs";
@@ -82,7 +84,7 @@ try {
     page.evaluate(
       ([extra, damage]) => {
         const r = window.__match.rules;
-        const match = { ...structuredClone(r.match), rounds: 2, swapEvery: 1, overtime: null, seconds: { ...r.match.seconds, pick: 12, prep: 5, action: 30, roundEnd: 3 }, ...extra };
+        const match = { ...structuredClone(r.match), rounds: 2, swapEvery: 1, overtime: null, seconds: { ...r.match.seconds, pick: 12, prep: 12, action: 30, roundEnd: 3 }, ...extra };
         window.__match.lobby({ kind: "change", change: { kind: "rules", rules: { match, ...damage } } });
       },
       [extra, damage],
@@ -196,25 +198,71 @@ try {
   result.oneVsOne.planning = { attacker: [attMe.operator, attMe.spawn, v.carrier === attMe.id], defender: [me(defV).operator, me(defV).siteVote] };
   result.checks.planningChoicesTaken = attMe.operator !== null && attMe.spawn === SPAWN && v.carrier === attMe.id && me(defV).operator !== null && me(defV).siteVote === SITE;
 
-  // Prep: the defender at the voted site's spawn, the attacker without a body at the spawn's view (the planning screen up).
+  // Prep: the defender at the voted site's spawn; the attacker drives their first drone, out at their spawn (Phase 7),
+  // with the planning screen up while the mouse is free.
   await phase(a, P.Prep, 30000);
   await def1.waitForFunction(() => window.__lab.net.own !== null && !window.__match.spectating, null, { timeout: 20000 });
-  // Each page sees the phase change on its own next frame: wait on the attacker's own page for its prep camera.
-  await att1.waitForFunction(() => window.__match.view.phase === 3 && window.__match.camera?.kind === "spot", null, { timeout: 10000 }).catch(() => {});
+  // Each page sees the phase change on its own next frame: wait on the attacker's own page for its drone.
+  await att1.waitForFunction(() => window.__match.view.phase === 3 && window.__lab.net?.viewedKind === 1 && window.__lab.net.own !== null, null, { timeout: 10000 }).catch(() => {});
   const siteSpawns = lvl.spawns.filter((s) => s.group === SITE);
   const defAt = await own(def1);
-  result.oneVsOne.prep = { defenderAt: defAt && [defAt.x, defAt.y, defAt.z], attackerCamera: await att1.evaluate(() => window.__match.camera), screen: await att1.evaluate(() => window.__match.screen) };
+  const droneAt = await own(att1);
+  result.oneVsOne.prep = { defenderAt: defAt && [defAt.x, defAt.y, defAt.z], attackerDrone: droneAt && [droneAt.x, droneAt.y, droneAt.z], screen: await att1.evaluate(() => window.__match.screen) };
   result.checks.defenderAtTheSite = siteSpawns.some((s) => near(defAt, s.pos, 1));
-  const cam = result.oneVsOne.prep.attackerCamera;
+  result.checks.redWallsInPrep = (await view(def1)).redWalls === true; // before the 12 s of prep are over
   const spawnSpot = lvl.spawns.find((s) => s.group === SPAWN);
-  result.checks.attackerWaitsAtTheSpawn = cam?.kind === "spot" && Math.hypot(cam.pos[0] - spawnSpot.pos[0], cam.pos[2] - spawnSpot.pos[2]) < 0.01 && result.oneVsOne.prep.screen === "planning";
-  result.checks.redWallsInPrep = (await view(def1)).redWalls === true;
+  result.checks.attackerDronesFromTheSpawn =
+    droneAt !== null && (await att1.evaluate(() => window.__lab.net.viewedKind)) === 1 && Math.hypot(droneAt.x - spawnSpot.pos[0], droneAt.z - spawnSpot.pos[2]) < 0.5 && result.oneVsOne.prep.screen === "planning";
+  // On a touch screen there's no mouse to lock (Ulo's test): the screen's own button puts it away, Plan brings it back.
+  await att1.click(".match-screen [data-act=closePlan]");
+  const putAway = await att1.waitForFunction(() => window.__match.screen === "", null, { timeout: 5000 }).then(() => true, () => false);
+  await att1.click(".plan-btn");
+  const brought = await att1.waitForFunction(() => window.__match.screen === "planning", null, { timeout: 5000 }).then(() => true, () => false);
+  result.oneVsOne.prep.planningScreen = { putAway, brought };
+  result.checks.planningScreenPutAwayInPrep = putAway && brought;
+  // Driving it online: W moves it more than a metre (the page's game time, not the wall clock's: a slow runner's page
+  // plays fewer ticks a second), and the defender's page has it.
+  const droneId = await att1.evaluate(() => window.__lab.net.pawnId);
+  await att1.evaluate((yaw) => (window.__lab.input = { yaw, forward: 1 }), (spawnSpot.yawDeg * Math.PI) / 180);
+  result.checks.attackerDrivesTheDrone =
+    droneAt !== null &&
+    (await att1
+      .waitForFunction(([x, z]) => window.__lab.net.viewedKind === 1 && Math.hypot(window.__lab.net.own.x - x, window.__lab.net.own.z - z) > 1, [droneAt.x, droneAt.z], { timeout: 10000, polling: 50 })
+      .then(() => true, () => false));
+  await att1.evaluate(() => (window.__lab.input = null));
+  const droveTo = await own(att1);
+  result.oneVsOne.prep.droneDroveTo = droveTo && [droveTo.x, droveTo.y, droveTo.z];
+  result.checks.defenderSeesTheDrone = await def1
+    .waitForFunction((id) => window.__lab.net.remotes.some((r) => r.id === id && r.state !== null), droneId, { timeout: 5000 })
+    .then(() => true, () => false);
+  // The defender watches the cameras (Phase 7): 5 opens the first, Q goes round to the last, 5 closes them. Each key is
+  // held until the page shows what it did (its game ticks run in its frames, slow on a busy runner), then let go for
+  // two of its ticks so the next press is a new one.
+  const OBSERVE = 1 << 14;
+  const holdUntil = async (page, input, done, arg) => {
+    await page.evaluate((i) => (window.__lab.input = i), input);
+    const ok = await page.waitForFunction(done, arg, { timeout: 10000, polling: 50 }).then(() => true, () => false);
+    const t0 = await page.evaluate(() => {
+      window.__lab.input = null;
+      return window.__lab.tick;
+    });
+    await page.waitForFunction((t) => window.__lab.tick >= t + 2, t0, { timeout: 10000, polling: 50 }).catch(() => {});
+    return ok;
+  };
+  const opened = await holdUntil(def1, { buttons: OBSERVE }, () => window.__lab.net.cam === 1);
+  const wentRound = await holdUntil(def1, { lean: -1 }, (n) => window.__lab.net.cam === n, lvl.cameras.length);
+  await def1.screenshot({ path: shot("match-prep-defender-camera.png") });
+  const closed = await holdUntil(def1, { buttons: OBSERVE }, () => window.__lab.net.cam === 0);
+  result.oneVsOne.prep.cameras = { opened, wentRound, closed };
+  result.checks.defenderWatchesTheCameras = opened && wentRound && closed;
   await att1.screenshot({ path: shot("match-prep-attacker.png") });
   await def1.screenshot({ path: shot("match-prep-defender.png") });
 
   // Action: the attacker at B Street, carrying the defuser, told so on the HUD.
   await phase(a, P.Action, 30000);
-  await att1.waitForFunction(() => window.__lab.net.own !== null && !window.__match.spectating, null, { timeout: 20000 });
+  // Their body (in prep they were their drone, which has no loadout: a wait on any pawn of theirs reads it on a page
+  // the body hasn't reached yet).
+  await att1.waitForFunction(() => window.__lab.net.own !== null && window.__lab.net.loadout !== null && !window.__match.spectating, null, { timeout: 20000 });
   const attAt = await own(att1);
   result.oneVsOne.action = { attackerAt: attAt && [attAt.x, attAt.y, attAt.z] };
   result.checks.attackerAtTheirSpawn = lvl.spawns.filter((s) => s.group === SPAWN).some((s) => near(attAt, s.pos, 1));
@@ -230,6 +278,20 @@ try {
   result.checks.scoreboardOnTab = await b.waitForFunction(() => !document.querySelector(".scoreboard").classList.contains("hidden"), null, { timeout: 5000 }).then(() => true, () => false);
   await b.screenshot({ path: shot("match-scoreboard.png") });
   await b.keyboard.up("Tab");
+  // A ping (Phase 7): the attacker pings the ground ahead; their page marks it, and the defender's (the other team) has
+  // no ping by the time it has played half a second more.
+  const pinged = await holdUntil(att1, { buttons: 1 << 11, pitch: -0.3 }, () => window.__lab.net.intel.pings > 0);
+  await att1.screenshot({ path: shot("match-ping.png") });
+  const defTick = await def1.evaluate(() => window.__lab.tick);
+  await def1.waitForFunction((t) => window.__lab.tick >= t + 32, defTick, { timeout: 10000, polling: 50 }).catch(() => {});
+  const defPings = await def1.evaluate(() => window.__lab.net.events.filter((e) => e.kind === "ping").length);
+  result.oneVsOne.action.ping = { pinged, defenderPings: defPings };
+  result.checks.pingForTheTeamOnly = pinged && defPings === 0;
+  // The attacker throws their second drone (6, its own key since Ulo's test) and drives it; 5 takes them back.
+  const thrown = await holdUntil(att1, { buttons: 1 << 15 }, () => window.__lab.net.drone !== 0 && window.__lab.net.viewedKind === 1);
+  const backFromIt = thrown && (await holdUntil(att1, { buttons: OBSERVE }, () => window.__lab.net.drone === 0));
+  result.oneVsOne.action.throw = { thrown, backFromIt };
+  result.checks.attackerThrowsADrone = thrown && backFromIt;
 
   // The defenders win on time; the banner says so.
   await phase(a, P.RoundEnd, 60000);
@@ -240,10 +302,27 @@ try {
   result.checks.defendersWinOnTime = r1 !== undefined && r1.reason === 1 && r1.winner !== r1.attackers && /WINS ROUND 1/.test(banner) && /Time ran out/.test(banner);
   await a.screenshot({ path: shot("match-round-end.png") });
 
-  // Round 2: the sides swap.
+  // Round 2: the sides swap. The new defender takes a Bulletproof Camera (Mute, or Sentry if Mute is banned: theirs is
+  // in the default kit), places it on the floor in front of them in action, and watches it after the level's cameras
+  // (Phase 7 M5).
   await a.waitForFunction(() => window.__match.view.round === 2 && window.__match.view.phase === 2, null, { timeout: 30000 });
   v = await view(a);
   result.checks.sidesSwap = v.attackers !== r1.attackers;
+  const def2 = att1;
+  const bpOp = await def2
+    .waitForFunction(() => ["mute", "sentry"].find((op) => document.querySelector(`.match-screen [data-act=op][data-op="${op}"]:not([disabled])`)) ?? false, null, { timeout: 10000 })
+    .then((h) => h.jsonValue(), () => null);
+  if (bpOp) await def2.click(`.match-screen [data-act=op][data-op="${bpOp}"]`);
+  await phase(a, P.Action, 60000);
+  await def2.waitForFunction(() => window.__lab.net.own !== null && !window.__match.spectating && window.__lab.net.gadgets > 0, null, { timeout: 20000 }).catch(() => {});
+  const placedBp = await holdUntil(def2, { buttons: 1 << 12, pitch: -1.05 }, () => window.__match.view.bpCams.length === 1);
+  const watchedBp =
+    placedBp &&
+    (await holdUntil(def2, { buttons: OBSERVE }, () => window.__lab.net.cam === 1)) &&
+    (await holdUntil(def2, { lean: -1 }, (n) => window.__lab.net.cam === n, lvl.cameras.length + 1));
+  await def2.screenshot({ path: shot("match-bulletproof-camera.png") });
+  result.oneVsOne.round2 = { operator: bpOp, placed: placedBp, watched: watchedBp };
+  result.checks.bulletproofCameraPlacedAndWatched = bpOp !== null && placedBp && watchedBp;
   await phase(a, P.MatchEnd, 120000);
   await a.waitForFunction(() => window.__match.screen === "summary", null, { timeout: 10000 });
   v = await view(a);
@@ -291,6 +370,21 @@ try {
   const byTeam = [0, 1].map((t) => v.players.filter((p) => p.team === t).map((p) => p.operator));
   result.twoVsThree.operators = byTeam;
   result.checks.everyoneHasAnOperator = byTeam.flat().every((o) => o !== null) && byTeam.every((ops) => new Set(ops).size === ops.length);
+  // The feed list (Phase 7 M6): an attacker goes to their first drone (5; it's been out since prep), then a new lean
+  // goes on to a teammate's, which they watch.
+  const watcher = pages.find((_, i) => sides[i] === 0);
+  await watcher.waitForFunction(() => window.__lab.net.own !== null && window.__lab.net.loadout !== null && !window.__match.spectating, null, { timeout: 20000 }).catch(() => {});
+  const mateDrones = await watcher.evaluate(() => {
+    const n = window.__lab.net;
+    const mine = n.roster.find((e) => e.controllerId === n.you);
+    return n.roster.filter((e) => e.team === mine.team && e !== mine).flatMap((e) => e.drones);
+  });
+  const onOwn = await holdUntil(watcher, { buttons: OBSERVE }, () => window.__lab.net.viewedKind === 1);
+  const onMates = onOwn && (await holdUntil(watcher, { lean: 1 }, (ids) => ids.includes(window.__lab.net.drone), mateDrones));
+  await watcher.screenshot({ path: shot("match-teammate-drone.png") });
+  await holdUntil(watcher, { buttons: OBSERVE }, () => window.__lab.net.drone === 0);
+  result.twoVsThree.feedList = { mateDrones, onOwn, onMates };
+  result.checks.attackerWatchesATeammatesDrone = onMates;
   // A defender shoots a teammate in the head: the two first defender spawns at the Dining site share the room. Down the
   // sights, once they are fully up: a bullet then goes where the view points (from the hip, more than half the shots at
   // 3.6 m miss, and on a slow runner the tries ran out before one landed).

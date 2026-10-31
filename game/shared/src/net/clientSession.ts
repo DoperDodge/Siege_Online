@@ -3,7 +3,7 @@
 // and the headless netsim clients run the same code.
 import { TICK_HZ } from "../core/constants.js";
 import type { PlayerController } from "../player/pawn.js";
-import { quantizeInput, type InputCmd, type PawnState } from "../player/types.js";
+import { PawnKind, quantizeInput, type InputCmd, type PawnState } from "../player/types.js";
 import { Sim } from "../sim.js";
 import type { SimEvent } from "../weapons/step.js";
 import { resolveLoadout, type ResolvedLoadout } from "../weapons/loadout.js";
@@ -97,7 +97,7 @@ export class ClientSession {
   private seq = 0;
   private readonly remotes = new Map<number, Sample[]>();
   /** Each remote pawn's operator, loadout and team, from the roster (for its proxy). */
-  private readonly rosterOf = new Map<number, { operatorId: string; loadout: ResolvedLoadout; team: number }>();
+  private readonly rosterOf = new Map<number, { operatorId: string; loadout: ResolvedLoadout | null; team: number; kind: PawnKind }>();
   private lastSnapTick = 0;
   private lastSnapAt = 0;
   private lastArrival = 0;
@@ -215,7 +215,7 @@ export class ClientSession {
         this.match = v;
         // What the room's simulation applies, applied by our prediction too (red walls; out of the map is death; the
         // defuser, for our own holds).
-        this.sim!.matchRules = { redWalls: v.redWalls, killPlaneKills: true };
+        this.sim!.matchRules = { redWalls: v.redWalls, killPlaneKills: true, cameras: true, camsBroken: v.camsBroken, bpCams: v.bpCams };
         const d = v.defuser;
         this.sim!.objective = d && { carrier: d.carrier, dropped: d.dropped, planted: d.planted, site: v.site, canPlant: d.canPlant, plantTicks: d.plantTicks, disableTicks: d.disableTicks };
         this.opts.onMatch?.(v);
@@ -246,15 +246,17 @@ export class ClientSession {
     this.rosterOf.clear();
     for (const e of entries) {
       const loadout = resolveLoadout(sim.data, e.loadout).loadout;
-      for (const id of e.pawnIds) this.rosterOf.set(id, { operatorId: e.operatorId, loadout, team: e.team });
+      for (const id of e.pawnIds) this.rosterOf.set(id, { operatorId: e.operatorId, loadout, team: e.team, kind: PawnKind.Body });
+      for (const id of e.drones) this.rosterOf.set(id, { operatorId: e.operatorId, loadout: null, team: e.team, kind: PawnKind.Drone });
     }
     const mine = entries.find((e) => e.controllerId === you);
+    const mineIds = mine ? [...mine.pawnIds, ...mine.drones] : [];
     const current = this.ctrl;
-    if (!mine || !current || current.id !== you || current.pawnIds.join() !== mine.pawnIds.join()) {
+    if (!mine || !current || current.id !== you || current.pawnIds.join() !== mineIds.join()) {
       // A new body (join, operator pick, respawn): rebuild ours with the server's ids, then wait for its
       // exact state (the server always sends a correction for a new body) before predicting again.
       if (this.you && sim.controllers.has(this.you)) sim.removePlayer(this.you);
-      for (const id of mine?.pawnIds ?? []) {
+      for (const id of mineIds) {
         sim.removePawn(id); // in case it was a proxy
         this.remotes.delete(id);
       }
@@ -262,7 +264,13 @@ export class ClientSession {
       this.corrected = false;
       this.pending = [];
       // The same loadout and team as the server's body, so prediction starts from the same numbers.
-      if (mine) sim.addPlayer(mine.name, mine.operatorId, 0, { controller: mine.controllerId, pawns: mine.pawnIds }, mine.loadout, mine.team);
+      if (mine) {
+        // An attacker in prep has no body yet, only drones (Phase 7): a pilot possessing the first.
+        const ctrl = mine.pawnIds.length
+          ? sim.addPlayer(mine.name, mine.operatorId, 0, { controller: mine.controllerId, pawns: mine.pawnIds }, mine.loadout, mine.team)
+          : sim.addPilot(mine.name, mine.operatorId, mine.team, { controller: mine.controllerId });
+        for (const id of mine.drones) sim.addDrone(ctrl.id, id);
+      }
     }
     this.opts.onRoster?.(entries, you);
   }
@@ -331,7 +339,7 @@ export class ClientSession {
         if (sim.pawns.get(id)?.proxy) sim.setPawnState(id, state);
         else if (!sim.pawns.has(id)) {
           const r = this.rosterOf.get(id);
-          sim.addProxy(id, r?.operatorId ?? "sledge", state, r?.loadout ?? null, r?.team ?? 0);
+          sim.addProxy(id, r?.operatorId ?? "sledge", state, r?.loadout ?? null, r?.team ?? 0, r?.kind ?? PawnKind.Body);
         }
       }
       if (!this.decoder.verify(snap)) {

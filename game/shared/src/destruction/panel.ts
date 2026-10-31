@@ -515,8 +515,9 @@ export class Panel {
     if (p === "never" && !this.broken) return m.fill(1);
     if (p === "whenBroken") {
       if (this.broken || this.empty || (this.kind === "barricade" && this.hp < this.spec.passableBelowHp)) return m;
-      // The whole face, less a door barricade's gap at the bottom.
-      for (let cv = 0; cv < ch; cv++) if ((cv + 1) * MOVE_CELLS > this.gapRows) m.fill(1, cv * cw, cv * cw + cw);
+      // The whole face, less a door barricade's gap at the bottom: every coarse row the gap reaches into is open, so
+      // a 0.15 m gap opens 0.2 m and a drone fits under it (Phase 7; no body is that low).
+      for (let cv = 0; cv < ch; cv++) if (cv * MOVE_CELLS >= this.gapRows) m.fill(1, cv * cw, cv * cw + cw);
       return m;
     }
     for (let cv = 0; cv < ch; cv++) for (let cu = 0; cu < cw; cu++) m[cv * cw + cu] = this.coarseSolid(cu, cv);

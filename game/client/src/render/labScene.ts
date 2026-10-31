@@ -2,7 +2,7 @@
 // drawn instanced per material and storey (tools/mapgen/DESIGN.md E4), labels and a map's room callouts by
 // storey (E9), pawn bodies built from hitbox capsules, and an F3 hitbox visualizer.
 import * as THREE from "three";
-import { eyePose, isDowned, PawnMode, poseHitboxes, type BuiltLevel, type GameData, type Hitbox, type PanelSpec, type PawnState, type Renderable } from "@redmond/shared";
+import { droneHitboxes, eyePose, isDowned, PawnKind, PawnMode, poseHitboxes, type BuiltLevel, type GameData, type Hitbox, type PanelSpec, type PawnState, type Renderable } from "@redmond/shared";
 import { buildGun, gunKey, type GunLook, type GunModel } from "./gunKit.js";
 
 export const SURFACE_COLORS: Record<Renderable["surface"], number> = {
@@ -453,11 +453,17 @@ export class PawnView {
   private readonly wireParts: CapsuleParts[] = [];
   private readonly tag: THREE.Sprite | null;
   private readonly materials: THREE.Material[];
+  /** The body's own colours, which glow white in a Bulletproof Camera's thermal view (heat). */
+  private readonly skin: THREE.MeshStandardMaterial[];
+  private hot = false;
   private gun: GunModel | null = null;
   private gunLook = "";
   private gunVisible = false;
   /** The rope a body on one hangs from (Phase 5 M8): from over its body up to the rope's top. */
   private readonly rope: THREE.Line;
+  /** A drone (Phase 7): a box on two wheels, in place of the capsules (greybox until the art pass). */
+  private readonly drone: THREE.Group | null = null;
+  private firstPerson = false;
 
   /** `name` puts a name tag over the head (other players online); `wireColor` colours the hitbox view. */
   constructor(
@@ -465,11 +471,14 @@ export class PawnView {
     color: number,
     name?: string,
     wireColor = 0xff3b3b,
+    kind = PawnKind.Body,
+    droneSize: readonly [number, number, number] = [0.22, 0.12, 0.18],
   ) {
     const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.6 });
     const headMat = new THREE.MeshStandardMaterial({ color: 0x2b2f36, roughness: 0.5 });
     const wireMat = new THREE.MeshBasicMaterial({ color: wireColor, wireframe: true, depthTest: false, transparent: true, opacity: 0.75 });
     this.materials = [mat, headMat, wireMat];
+    this.skin = [mat, headMat];
     for (let i = 0; i < 8; i++) {
       this.bodyParts.push(new CapsuleParts(this.shape, i === 0 ? headMat : mat, true));
       this.wireParts.push(new CapsuleParts(this.wire, wireMat, false));
@@ -483,13 +492,35 @@ export class PawnView {
     this.body.add(this.rope);
     this.tag = name ? labelSprite(name, 0, 0, 0) : null;
     if (this.tag) {
-      this.tag.scale.multiplyScalar(0.7);
+      this.tag.scale.multiplyScalar(kind === PawnKind.Drone ? 0.4 : 0.7);
       this.body.add(this.tag);
+    }
+    if (kind === PawnKind.Drone) {
+      const [w, h, l] = droneSize;
+      const drone = new THREE.Group();
+      drone.add(new THREE.Mesh(new THREE.BoxGeometry(w * 0.55, h * 0.7, l), mat));
+      for (const side of [-1, 1]) {
+        const wheel = new THREE.Mesh(new THREE.CylinderGeometry(h / 2, h / 2, w * 0.2, 12), headMat);
+        wheel.rotation.z = Math.PI / 2;
+        wheel.position.x = (side * (w - w * 0.2)) / 2;
+        drone.add(wheel);
+      }
+      this.shape.visible = false;
+      this.body.add(drone);
+      this.drone = drone;
     }
     scene.add(this.body, this.wire);
   }
 
+  /** Seen through a Bulletproof Camera's thermal view (Phase 7): the body (or drone) glows white. */
+  heat(on: boolean) {
+    if (on === this.hot) return;
+    this.hot = on;
+    for (const m of this.skin) m.emissive.setHex(on ? 0xffffff : 0x000000);
+  }
+
   update(data: GameData, state: PawnState) {
+    if (this.drone) return this.updateDrone(data, state);
     const parts = poseHitboxes(data.movement, data.hitboxes, state);
     parts.forEach((hb, i) => {
       this.bodyParts[i].place(hb, 1);
@@ -509,6 +540,18 @@ export class PawnView {
       this.gun.group.position.set(...eye).add(new THREE.Vector3(0.16, -0.22, -0.2).applyEuler(rot));
       this.gun.group.rotation.copy(rot);
     }
+  }
+
+  /** A drone: its box where it is, turned to its yaw; a destroyed one lies tipped over; a held one isn't drawn. */
+  private updateDrone(data: GameData, state: PawnState) {
+    const d = data.intel.drone;
+    const drone = this.drone!;
+    drone.visible = state.mode !== PawnMode.Held && !this.firstPerson;
+    drone.position.set(state.x, state.y + d.sizeM[1] / 2, state.z);
+    drone.rotation.set(0, state.yaw, state.mode === PawnMode.Dead ? 1.2 : 0, "YXZ");
+    const boxes = droneHitboxes(d, state);
+    this.wireParts.forEach((w, i) => (i < boxes.length ? w.place(boxes[i], 1.02) : w.hide()));
+    if (this.tag) this.tag.position.set(state.x, state.y + d.sizeM[1] + 0.2, state.z);
   }
 
   /** Draw a rope from (x, y0, z) up to where it's fixed (a swing angles it out), or none (null). */
@@ -543,6 +586,12 @@ export class PawnView {
    * viewmodel instead. The body itself stays visible, so its laser still leaves from its gun.
    */
   setFirstPerson(on: boolean) {
+    this.firstPerson = on;
+    if (this.drone) {
+      // Looking through it: not drawn (its own camera would see its insides).
+      if (on) this.drone.visible = false;
+      return;
+    }
     this.shape.visible = !on;
     if (this.gun) this.gun.group.visible = this.gunVisible && !on;
   }
@@ -551,6 +600,7 @@ export class PawnView {
   dispose() {
     this.gun?.dispose();
     this.rope.geometry.dispose();
+    this.drone?.traverse((o) => (o as THREE.Mesh).geometry?.dispose());
     this.scene.remove(this.body, this.wire);
     for (const m of this.materials) m.dispose();
     if (this.tag) {
@@ -582,7 +632,13 @@ export class CapsuleParts {
     }
   }
 
+  /** Not drawn (a drone uses one of a body's eight). */
+  hide() {
+    this.cyl.visible = this.capA.visible = this.capB.visible = false;
+  }
+
   place(hb: Hitbox, grow: number) {
+    this.capA.visible = this.capB.visible = true;
     const a = new THREE.Vector3(...hb.a);
     const b = new THREE.Vector3(...hb.b);
     const r = hb.radius * grow;

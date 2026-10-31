@@ -6,7 +6,8 @@ import type { HitboxData, MovementData } from "../data/schemas.js";
 import { currentEyeHeight, currentHeight, proneWeight } from "./stance.js";
 import { PawnMode, type PawnState } from "./types.js";
 
-export type BodyPart = "head" | "neck" | "torso" | "pelvis" | "arm_l" | "arm_r" | "leg_l" | "leg_r";
+/** "drone": the one box of an attacker's drone (Phase 7, player/drone.ts). */
+export type BodyPart = "head" | "neck" | "torso" | "pelvis" | "arm_l" | "arm_r" | "leg_l" | "leg_r" | "drone";
 
 /** A capsule from `a` to `b` (a sphere when a === b). */
 export interface Hitbox {

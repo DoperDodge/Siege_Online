@@ -72,7 +72,7 @@ describe("snapshot codec", () => {
     expect(snap.records).toHaveLength(0);
   });
 
-  it("a downed body's mode and its being-revived mark make the trip, and a body upside down on a rope; a mode past Rappel is refused", () => {
+  it("a downed body's mode and its being-revived mark make the trip, and a body upside down on a rope; a mode past Held is refused", () => {
     const s = remoteState(quantizeRemote(initialPawnState(1, 0, 2, 0, 100)));
     Object.assign(s, { mode: PawnMode.Downed, stance: Stance.Prone, stanceFrom: Stance.Crouch, stanceT: 1, revivedBy: 7, sprinting: true, grounded: true });
     const enc = new SnapshotEncoder();
@@ -81,6 +81,8 @@ describe("snapshot codec", () => {
     const back = remoteState(dec.have.get(5)!);
     expect([back.mode, back.stance, back.stanceFrom, back.sprinting, back.grounded]).toEqual([PawnMode.Downed, Stance.Prone, Stance.Crouch, true, true]);
     expect(back.revivedBy).toBe(REVIVER_UNKNOWN); // someone is reviving it (who isn't sent)
+    // A drone jammed by an EMP dart (Phase 7): those watching it are told, not for how long.
+    expect([remoteState(quantizeRemote({ ...s, jammed: 300 })).jammed, back.jammed]).toEqual([1, 0]);
     // On a rope, turning over (Phase 5 M8): others see how far it has turned (to 1/255), and only on a rope.
     const turning = { ...initialPawnState(1, 4, 2, 0, 100), mode: PawnMode.Rappel, rappel: 3, ropeTurn: 0.4 };
     const roped = new SnapshotDecoder();
@@ -89,7 +91,7 @@ describe("snapshot codec", () => {
     expect(seen.mode).toBe(PawnMode.Rappel);
     expect(seen.ropeTurn).toBeCloseTo(0.4, 2);
     expect(remoteState(quantizeRemote({ ...turning, mode: PawnMode.Walk })).ropeTurn).toBe(0);
-    for (const flags of [(quantizeRemote(s).flags & ~(7 << 4)) | (6 << 4), quantizeRemote(s).flags | 512]) {
+    for (const flags of [(quantizeRemote(s).flags & ~(7 << 4)) | (7 << 4), quantizeRemote(s).flags | 512]) {
       const bad = { ...quantizeRemote(s), flags };
       expect(() => new SnapshotDecoder().decode(new SnapshotEncoder().encode({ tick: 2, ackSeq: 0, idled: false, queueDepth: 2 }, null, new Map([[5, bad]])))).toThrow(ProtocolError);
     }

@@ -14,6 +14,14 @@ export enum PawnMode {
   Downed = 4,
   /** On a rope down an outside wall (Phase 5 M8, PawnState.rappel). */
   Rappel = 5,
+  /** A drone in its owner's hand (Phase 7, intel/DESIGN.md §2): no collider, not stepped, not sent to others. */
+  Held = 6,
+}
+
+/** What a pawn is (Phase 7): an operator's body (Skopós's shells too), or an attacker's drone. */
+export enum PawnKind {
+  Body = 0,
+  Drone = 1,
 }
 
 /** PawnState.rappelFlags bits. */
@@ -44,11 +52,22 @@ export const Btn = {
   Swap: 1 << 8,
   FireMode: 1 << 9,
   Melee: 1 << 10,
-  /** Reserved: ping (Phase 7) and gadget (Phase 8), so the numbers never change. */
+  /** Ping where the view is on (Phase 7, intel/DESIGN.md §6: the room shares it with the team). */
   Ping: 1 << 11,
+  /**
+   * The gadget key: held, it places a Bulletproof Camera (Phase 7, intel/DESIGN.md §4); on one, it fires the camera's
+   * EMP dart. Phase 8 gives it every gadget.
+   */
   Gadget: 1 << 12,
   /** Drop the defuser (Phase 6, D-120). */
   Drop: 1 << 13,
+  /**
+   * Drones and cameras (Phase 7, intel/DESIGN.md §2, §3): from the body, go to a drone out (yours, then your
+   * teammates'); from a drone, back to the body. A defender's opens and closes the cameras.
+   */
+  Observe: 1 << 14,
+  /** Throw a drone in hand and drive it (Phase 7; its own key since Ulo's test: entering one is Observe's). */
+  Throw: 1 << 15,
 } as const;
 
 /** What the weapon in hand is doing (PawnState.wAct). */
@@ -203,6 +222,15 @@ export interface PawnState {
   deployPanel: number;
   deploySection: number;
   deployTicks: number;
+  // a drone (Phase 7, intel/DESIGN.md §2): ticks until it may jump again, ticks of boost left, and ticks until a
+  // boost may start again (counted from the last one's start)
+  jumpCd: number;
+  boostTicks: number;
+  boostCd: number;
+  /** A drone's ticks left jammed by a Bulletproof Camera's EMP dart (it doesn't move or turn meanwhile). */
+  jammed: number;
+  /** Gadgets left to place: Bulletproof Cameras (Phase 7, intel/DESIGN.md §4; Phase 8 brings the others). */
+  gadgets: number;
 }
 
 export const NEUTRAL_INPUT: Readonly<Omit<InputCmd, "seq" | "yaw" | "pitch">> = {

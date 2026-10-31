@@ -634,6 +634,74 @@ export const objectiveSchema = z.strictObject({
 });
 export type ObjectiveData = z.infer<typeof objectiveSchema>;
 
+/** A camera's view (Phase 7): how far it turns either side of its facing, how far it tilts, how fast, how wide it sees. */
+const cameraViewSchema = z.strictObject({
+  yawHalfRangeDeg: z.number().positive().max(180),
+  pitchMinDeg: z.number().min(-89).max(0),
+  pitchMaxDeg: z.number().min(0).max(89),
+  turnDegPerS: z.number().positive(),
+  fovDeg: z.number().positive().max(170),
+});
+
+/** Intel (data/intel.json; intel/DESIGN.md): drones, default cameras, scans, pings, the Bulletproof Camera. Metres, seconds, degrees. */
+export const intelSchema = z.strictObject({
+  ...meta,
+  drone: z.strictObject({
+    /** Drones each attacker has a round (both can be out at once). */
+    perAttacker: z.number().int().min(0).max(2),
+    jumpCooldownS: z.number().positive(),
+    jumpHeightM: z.number().positive(),
+    /** Top speed on the ground, the same in every direction. */
+    speedMps: z.number().positive(),
+    /** How fast it gets to (or off) that speed on the ground; in the air `airControl` of it. */
+    accelMps2: z.number().positive(),
+    airControl: z.number().min(0).max(1),
+    /** Shift: `mult` times the speed for `seconds`, then `rechargeS` before the next. */
+    boost: z.strictObject({ mult: z.number().min(1), seconds: z.number().positive(), rechargeS: z.number().min(0) }),
+    /** Width, height, length: its collider is an upright cylinder as wide as it is and as tall. */
+    sizeM: z.tuple([z.number().positive(), z.number().positive(), z.number().positive()]),
+    /** The highest ledge it drives up onto without a jump. */
+    stepM: z.number().min(0),
+    fovDeg: z.number().positive().max(170),
+    pitchMinDeg: z.number().min(-89).max(0),
+    pitchMaxDeg: z.number().min(0).max(89),
+    /** Its camera over the bottom of the box. */
+    eyeM: z.number().min(0),
+    /** Thrown from a body: this far ahead of the feet and this high, moving forward and up this fast. */
+    throw: z.strictObject({ aheadM: z.number().min(0), heightM: z.number().min(0), forwardMps: z.number().min(0), upMps: z.number().min(0) }),
+    /** Its owner picks it up from this close (F). */
+    pickupReachM: z.number().positive(),
+  }),
+  camera: cameraViewSchema,
+  /** Holding Fire on a drone or a camera spots an enemy this close and this near the crosshair, in sight. */
+  scan: z.strictObject({ holdS: z.number().positive(), coneDeg: z.number().positive().max(90), rangeM: z.number().positive() }),
+  /** A ping lasts `seconds`; pings closer than `cooldownS` are dropped; two within `doubleTapS` make a danger ping. */
+  ping: z.strictObject({ seconds: z.number().positive(), cooldownS: z.number().min(0), perPlayer: z.number().int().positive(), doubleTapS: z.number().positive() }),
+  /** The comm wheel's callouts, in order round the wheel (at most 16). */
+  callouts: z.array(z.string().min(1).max(24)).min(1).max(16),
+  /**
+   * The Bulletproof Camera (Phase 7 M5): `count` each for a defender who picked it, placed by holding the gadget key
+   * `placeS` at a wall or the floor within `reachM`; a box `sizeM` (width, height, depth) whose front, `frontDeg` either
+   * side of its facing, is bulletproof; its view like a default camera's (on the floor it turns all the way round); its
+   * EMP dart flies up to `dartRangeM` and jams drones within `dartRadiusM` for `disableS`, again after `dartRechargeS`;
+   * outdoors it loses its signal after `outdoorSignalS`.
+   */
+  bulletproofCamera: z.strictObject({
+    count: z.number().int().min(0),
+    placeS: z.number().positive(),
+    reachM: z.number().positive(),
+    sizeM: z.tuple([z.number().positive(), z.number().positive(), z.number().positive()]),
+    frontDeg: z.number().min(0).max(90),
+    view: cameraViewSchema,
+    dartRangeM: z.number().positive(),
+    dartRadiusM: z.number().positive(),
+    dartRechargeS: z.number().min(0),
+    disableS: z.number().positive(),
+    outdoorSignalS: z.number().positive(),
+  }),
+});
+export type IntelData = z.infer<typeof intelSchema>;
+
 
 export const SURFACES = [
   "SOFT_WALL",

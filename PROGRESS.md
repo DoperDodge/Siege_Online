@@ -5,6 +5,148 @@ known issues, and what's next.
 
 ---
 
+## Phase 7 — Intel · ✅ done, waiting for your test (branch `claude/phase-7-intel`, PR #8)
+
+**Done when (PLAN §17):** prep-phase droning and watching the cameras work online. The design is
+`game/shared/src/intel/DESIGN.md` (D-134). It builds on Phase 6 (PR #7), which waits for your test.
+
+| Milestone | Status |
+|---|---|
+| M1 Drones in the simulation and rooms: drive, jump, boost, drone holes; throw, drive, leave, pick up; prep in drone 1; shots destroy drones; protocol 13 | ✅ drones are pawns of their attacker (predicted like walking), two a round, data/intel.json; through drone holes and under door barricades; a shot destroys one (no death); protocol 13 |
+| M2 Drones in the browser: the drone view and HUD, drawing drones, keys; dead attackers drive their drones | ✅ 6 throws, 5 enters and leaves (two keys since your test), Q / E switch, Space jumps, Shift boosts; the drone's camera and overlay; greybox drones; prep in your first drone; the match browser test drives one online |
+| M3 Default cameras: viewing within limits, shooting them, broken state, dead defenders on cameras | ✅ 5 opens Oregon's eight cameras (defenders, alive or dead), Q / E go round them; each viewer turns their own view within the camera's limits; any shot breaks one for the round; the match browser test watches them online |
+| M4 Pings, scans and the comm wheel | ✅ T pings where you look (from a drone or a camera too) for your team, through walls; a double tap is a danger ping; hold T for the comm wheel; Fire held 1 s on a drone or a camera spots enemies for your team; the match browser test pings online |
+| M5 Bulletproof Camera and its EMP dart | ✅ hold 3 (ours) at a wall or the floor to place it; it joins the cameras after the level's (thermal: bodies glow); its front is bulletproof, its sides and back aren't; outdoors its signal goes after 10 s; its EMP dart jams drones for 6 s; protocol 14; the match browser test places and watches one |
+| M6 The feed list across everything, spectating; checks, docs, review, report | ✅ attackers' feed list: their drones, then their teammates' (watched); a row of feeds over the view; watched cameras lit (blue to defenders, red to attackers); spectating when dead covers cameras, drones and teammates' eyes; the netsim measures prep droning (454 m over 10 preps, no misprediction); a review |
+
+### What's done (your test, 2026-10-30; D-139)
+- **Skopós's inactive shell no longer ends the round.** From the moment she starts a transfer, the shell she's leaving
+  crouches and stands still, so it looks like her inactive shell, but it still counted as her body: killing it ended
+  the round. Now a shell killed while she transfers out of it is her inactive one: she lands in the other at once.
+  (Killing her idle shell at any other time already didn't eliminate her; that is now tested with real shots.)
+- **Drones go up the stairs.** They drive up a staircase like bodies walk up it (its invisible ramp), at full speed;
+  they still roll under railings.
+- **Two drone keys:** 6 throws a drone you have in hand and drives it; 5 goes to a drone you have out (or a
+  teammate's) and back to your body, and opens the cameras for defenders. Touch screens have a Throw button.
+- **The planning screen on a touch screen in prep:** it now has a *Drive your drone* button, a tap outside it puts it
+  away too, and the *Plan* button (top right) brings it back. With a mouse, Esc still does.
+
+### What's done (M6: the feed list, spectating, checks)
+- **The feed list (D-137):** on a drone, Q / E go round your drones out and then your teammates' out. On a
+  teammate's drone you watch: your mouse turns your own view, its driver drives it. In prep (you are your first
+  drone), Q / E go from it to your teammates' drones and back. 5 takes you back to your body.
+- **The row of feeds** over a drone's or a camera's view: every one in the list (camera numbers, BP for a
+  Bulletproof Camera, D1 / D2 for your drones, a teammate's name for theirs), the one you're on lit, broken ones
+  struck out, teammates' drones in italics.
+- **Lit cameras:** a camera someone watches shows a light by its lens, blue to defenders and red to attackers
+  (Siege's colours since Y6S4).
+- **Spectating when dead** (§7): dead defenders watch the cameras, dead attackers their drones and their teammates',
+  and both can follow a living teammate's eyes (Phase 6).
+- **Checks:** the match netsim now measures prep droning. In the 10-round match the attackers' drones covered 454 m
+  over the 10 preps with no misprediction (`npm run netsim -- --match`); its 4-round unit test checks the same. The
+  match browser test has an attacker go from their own drone to a teammate's in the 2v3 (38 checks in all), and there
+  are 679 unit tests.
+- **Review (D-138):** two reviewers read the phase (the shared code, the client); fourteen findings held up and all
+  are fixed, each with a test where one can be written. The ones you'd notice: an outdoor Bulletproof Camera's lost
+  signal and its dart's timer were wrong online; a ping key held down spammed danger pings; Q / E or C on a drone or
+  a camera left your body leaning or crouched when you came back (the touch Lean buttons now switch feeds); a
+  teammate's jammed drone never said so; on a camera, the storey and the where line followed your body; dead on a
+  camera, the death message stayed over the feed; picking up a drone whose boost was recharging cost a correction;
+  drones were covered by Quick Match's Attacker Safeguard.
+
+### What's done (M5: the Bulletproof Camera)
+- **Placing it:** a defender who took it (Mute by default, Sentry's default kit, Lesion's second gadget) holds 3 (ours)
+  for 1 s looking at a wall or the floor within 2 m: on a wall it faces out of it, on the floor the way you face. One a
+  round. The HUD says how many you have left.
+- **Watching it:** 5 opens the cameras; it comes after the level's eight (Q from the first). Its view is thermal:
+  bodies glow white in a green world. On a wall it turns 80° either way, on the floor all the way round.
+- **Its EMP dart:** watching it, 3 fires the dart where you look. It bursts on the first drone on its way (or a wall)
+  and jams every drone within 0.75 m for 6 s: it won't drive, and its feed shows static. Ready again 10 s later,
+  whoever fires it; the dead watch but can't fire.
+- **Breaking it:** its front is bulletproof (a bullet within 50° of straight on); a shot from the side or the back, a
+  knife, or steel going up on its wall breaks it. Placed outdoors it loses its signal after 10 s.
+- Protocol 14. D-136 has the details; every number but the dart's 0.75 m and the 10 s outdoors is ours (open
+  questions, Phase 7).
+
+### What's done (M4: pings, scans and the comm wheel)
+- **Ping (T, ours):** a tap pings the spot you look at, from your body, a drone or a camera: a yellow mark for your
+  team only, seen through walls and held at the screen's edge when it's off screen, with whose it is and how far, for
+  5 s. Two quick taps make it a danger ping (orange). One each at a time: a new ping replaces yours.
+- **Comm wheel:** hold T a quarter of a second and the wheel opens; point the mouse at a callout (Breach, Area clear,
+  Help, Danger, Thanks, Defuser, Rotate, Push) and let go: your team's feed shows it. Let go in the middle to cancel.
+- **Scan:** on a drone or a camera, hold Fire for 1 s (a gauge under the crosshair fills): every enemy within 10° of
+  the crosshair and in sight is marked red over their head for your team for 5 s, and they're told they've been
+  spotted. Let go of Fire before the next scan.
+- Touch screens have Observe and Ping buttons. Pings and the wheel work in the labs' rooms too, for the players on
+  your operator's side. D-135 has the details.
+
+### What's done (M3: default cameras)
+- **Watching (defenders, in prep and action, dead too):** 5 opens the first of Oregon's eight cameras; Q / E go to the
+  previous / next working one; 5 again takes you back to your body (it stands still meanwhile). Down, you can't.
+- **The view:** from the camera's lens, 70° wide; the mouse turns it up to 60° either side of where the camera faces and
+  tilts it from 60° down to 10° up, the camera following at 60°/s. Each viewer has their own view (D-134): two
+  defenders on one camera don't fight over it. The overlay says which camera, its room and how many are broken.
+- **Breaking them:** any bullet through one breaks it for the round, from either side (shooting your own costs nothing
+  yet); everyone sees it dark and askew, and defenders skip it (one broken while watched hands over to the next).
+- In a match the cameras are drawn as small boxes with a lens (greybox).
+
+### What's done (M1–M2: drones)
+- **Two drones each attacker, every round (D-134).** In a match's prep you start in your first drone, out at the spawn
+  you chose; your second is in hand. When action starts you stand at the spawn and the first drone stays where you
+  left it. With the mouse free (Esc) the planning screen is up, as before; click the view to drive again.
+- **Driving:** W/A/S/D at 4 m/s in every direction, the mouse turns and tilts the camera, Space jumps (1 m, once
+  every 3 s), Shift boosts (6 m/s for 2 s, then 10 s to recharge). It fits through Oregon's drone holes and under a
+  door barricade, not through walls; a fall doesn't hurt it. Its camera sits low and wide (90°).
+- **Keys:** 6 (ours) throws the drone in your hand and drives it; 5 goes to one you have out, and 5 again goes back to
+  your body (it stands still meanwhile). On a drone, Q / E go to your previous / next one out. F next to one of your
+  own drones picks it up. Dead, 5 still drives the drones you have out. Down, you can't.
+- **Shooting a drone:** any hit destroys it (defenders can, in prep too); it isn't a kill or anyone's death.
+- **Online:** driving a drone is predicted like walking (no corrections in the tests); others see it as a small box on
+  wheels; one in hand isn't sent to anyone. Protocol 13.
+- Every number the research couldn't confirm is a placeholder in data/intel.json (open questions, Phase 7).
+
+### How to test (needs Node 22.12+)
+1. `npm ci`, then `npm run build && npm start`, and open http://localhost:8080 → *Play a match*. *Create* a Custom (or
+   Practice) match and join it from a second window (or a friend).
+2. Prep, as an attacker: you're in your first drone at your spawn. Click the view and drive it (W/A/S/D, the mouse,
+   Space to jump, Shift to boost); drive through a drone hole: the basement corridor's to the Freezer hall, the
+   Kitchen corridor's to the Meeting Hall, the Game Room's to the Master Bedroom, and up a staircase. Esc brings the
+   planning screen back (on a touch screen, its Drive your drone button puts it away and Plan brings it back).
+3. Action: you're at the spawn. 6 throws your second drone; 5 takes you back, and 5 again goes to a drone out; Q / E
+   (on a drone) switch between them. Walk up to one and press F to pick it up.
+   As Skopós, start a transfer (Z, then F) and have someone shoot the shell you're leaving: you land in the other.
+4. As a defender, shoot a drone: one hit.
+5. As a defender: 5 opens the cameras, Q / E go round them, the mouse turns the view; shoot one (outside, at the
+   Construction site or the Junkyard) and it's skipped from then on. Dead, 5 still opens them.
+6. Pings (with a teammate in a second window): tap T at a wall; your teammate sees the mark through walls, at the edge
+   of the screen when it's behind them. Tap twice quickly for a danger ping. Hold T, point the mouse at a callout and
+   let go: it's in your teammate's feed. On a drone or a camera, hold the left mouse button on an enemy for a second:
+   they're marked red for your team, and their screen says they've been spotted.
+7. Bulletproof Camera: pick Mute and, in prep, hold 3 looking at a wall. 5, then Q, watches it. With an attacker's
+   drone in front of it, press 3: the drone is jammed for 6 s. Shoot it from the front (nothing), then the side.
+8. With two attackers (a third window): on a drone, Q / E go on past your drones to your teammate's, which you watch
+   while they drive it. When a defender watches a camera, the attackers see a red light by its lens.
+9. Checks: `npm run typecheck`, `npm test`, `npm run netsim -- --match` (prep droning: metres driven, no
+   misprediction), `npm run build && node tools/e2e/match.mjs` (prep droning, the cameras, a ping, a Bulletproof
+   Camera and a teammate's drone, online).
+
+### Known issues
+- Drones pass through operators (they only hit the level, walls, props and the stairs' ramps), and away from the
+  stairs climb only 5 cm without a jump (open questions, Phase 7).
+- At the Kitchen's drone hole to the Security corridor (1F.dt4) a prop stands 0.3 m behind it on the Kitchen side, so a
+  drone can't get through from there (our placeholder props, Phase 5's open questions 26–31).
+- Each camera's wall and facing are placeholders (r6calls' icons, Phase 5's open questions); a camera doesn't stop the
+  bullet that breaks it; attackers don't see a light on a watched camera yet; no sounds (Phase 11), no static near
+  jammers (Mute, Phase 8).
+- Pinging an enemy's gadget or a camera doesn't mark it with its icon yet (gadgets are Phase 8); pings show the
+  pinger's name, not a number.
+- The Bulletproof Camera doesn't stop the bullet that hits its plate, a knife breaks it outright (Siege's knife only
+  breaks the glass), and it can't be picked up again. The gadget key does nothing else until Phase 8.
+- Drones in use show no light yet, and a camera's light is on whenever anyone watches it (whether a passive viewer
+  lights it in Siege is an open question). A teammate's drone is seen about 100 ms late, like every other player.
+
+---
+
 ## Phase 6 — Match flow + lobby · ✅ built, ⏳ waiting for your test (branch `claude/phase-6-match-flow`, PR #7)
 
 **Done when (PLAN §17):** full 1v1 and 2v3 matches play start to finish. The design is

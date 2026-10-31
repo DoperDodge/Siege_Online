@@ -1,12 +1,14 @@
 // Player/pawn separation (PLAN §11.2, Phase 1): a PlayerController is the human or bot; a Pawn is a
 // body in the world. Most operators own one pawn. Skopós owns two shells and possesses one at a time;
 // the idle one stays in the world (it can be seen, shot, and later acts as a camera).
-import { PawnMode, ReloadKind, Stance, WeaponAct, type PawnState } from "./types.js";
+import { PawnKind, PawnMode, ReloadKind, Stance, WeaponAct, type PawnState } from "./types.js";
 import type { Collider } from "../physics/rapier.js";
 import type { ResolvedLoadout, ResolvedWeapon } from "../weapons/loadout.js";
 
 export interface Pawn {
   id: number;
+  /** A body, or an attacker's drone (Phase 7); fixed for the pawn's life. */
+  kind: PawnKind;
   operatorId: string;
   /** Controller that owns this pawn (null for dummies). */
   ownerId: number | null;
@@ -29,9 +31,19 @@ export interface PlayerController {
   id: number;
   name: string;
   operatorId: string;
+  /** Its bodies, then its drones (Phase 7: an attacker in a match; in prep, the drones alone). */
   pawnIds: number[];
-  /** The pawn currently receiving this controller's input. */
+  /** The body receiving this controller's input; an attacker in prep, with no body yet, possesses their first drone. */
   possessedPawnId: number;
+  /** The drone being driven (Phase 7, intel/DESIGN.md §2): it takes the input and the body stands idle; 0: none. */
+  drone: number;
+  /** The lean key last tick (−1, 0, 1): on a drone or a camera, a new lean goes to the previous / next one. */
+  prevLean: number;
+  /** The default camera a defender watches (Phase 7, intel/DESIGN.md §3): its index in the level's cameras + 1; 0: none. */
+  cam: number;
+  /** Where that camera looks (radians), within its limits: each viewer has their own (D-134). */
+  camYaw: number;
+  camPitch: number;
   /** Skopós: looking through the idle shell's camera (the step before a swap). */
   shellCam: boolean;
   /** Skopós swap in progress: 0 none, 1 transfer (active shell idles), 2 activation (target shell wakes). */
@@ -123,5 +135,10 @@ export function initialPawnState(x: number, y: number, z: number, yaw: number, m
     deployPanel: 0,
     deploySection: 0,
     deployTicks: 0,
+    jumpCd: 0,
+    boostTicks: 0,
+    boostCd: 0,
+    jammed: 0,
+    gadgets: 0,
   };
 }

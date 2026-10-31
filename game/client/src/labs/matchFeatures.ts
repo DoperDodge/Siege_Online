@@ -12,6 +12,7 @@ import {
   encodeMatchAction,
   encodePickLoadout,
   NO_END,
+  PawnKind,
   PawnMode,
   Phase,
   RATING_START,
@@ -353,7 +354,9 @@ export function matchFeatures(lab: LabApi): void {
     const side = me?.side ?? null;
     const phase = v.phase === Phase.Prep ? "Prep" : "Planning";
     const endPractice = practiceHost(v) ? '<div class="row"><button data-act="end">End practice</button></div>' : "";
-    const head = `<h2>Round ${v.round}${v.overtime ? " (overtime)" : ""} · ${phase} · <span class="timer"></span></h2>${endPractice}`;
+    // An attacker in prep can put the screen away and drive (on a touch screen there's no mouse to lock: Ulo's test).
+    const drive = v.phase === Phase.Prep && me?.side === ATTACK ? '<div class="row"><button class="primary" data-act="closePlan">Drive your drone</button></div>' : "";
+    const head = `<h2>Round ${v.round}${v.overtime ? " (overtime)" : ""} · ${phase} · <span class="timer"></span></h2>${drive}${endPractice}`;
     if (!me || side === null) return [["head", `${head}<p class="note">Your team sits this round out.</p>`]];
     const mates = v.players.filter((p) => p.team === me.team);
     const banned = new Set(v.bans[side]);
@@ -462,6 +465,9 @@ export function matchFeatures(lab: LabApi): void {
         return lobby({ kind: "backToLobby" });
       case "end":
         return lobby({ kind: "end" });
+      case "closePlan":
+        planClosed = true;
+        return;
       case "invite":
         void navigator.clipboard?.writeText(`${location.origin}${location.pathname}?room=${session.roomCode}`).then(() => (b.textContent = "Copied!"));
         return;
@@ -562,7 +568,8 @@ export function matchFeatures(lab: LabApi): void {
   /** Which living teammate the dead look through (a click moves on to the next). */
   let follow = 0;
   lab.app.addEventListener("mousedown", (e) => {
-    if (e.button === 0 && lab.body() === null && (e.target as Element).tagName === "CANVAS") follow++;
+    // (Not while watching a camera or a drone, where the button scans.)
+    if (e.button === 0 && lab.body() === null && lab.ctrl.cam === 0 && lab.ctrl.drone === 0 && (e.target as Element).tagName === "CANVAS") follow++;
   });
   /** Living teammates' bodies (the side you play this round), yours left out. */
   const livingMates = (side: 0 | 1): number[] =>
@@ -652,6 +659,24 @@ export function matchFeatures(lab: LabApi): void {
 
   let lastPhase: Phase | null = null;
   let shown = "";
+  /**
+   * An attacker in prep put the planning screen away (its button, or a tap outside it): it stays away until the mouse
+   * is let go (Esc), the Plan button is pressed, or the phase changes. With a mouse, locking it puts the screen away too.
+   */
+  let planClosed = false;
+  let prepPlanning = false;
+  const planBtn = document.createElement("button");
+  planBtn.className = "plan-btn hidden";
+  planBtn.textContent = "Plan";
+  planBtn.title = "The planning screen: operator, loadout, spawn, the defuser";
+  lab.app.append(planBtn);
+  planBtn.addEventListener("click", () => (planClosed = false));
+  document.addEventListener("pointerlockchange", () => {
+    if (!document.pointerLockElement) planClosed = false;
+  });
+  lab.app.addEventListener("pointerdown", (e) => {
+    if (prepPlanning && !(e.target as Element).closest(".match-screen, .plan-btn, .gear, .panel")) planClosed = true;
+  });
   /** The rating last sent, with when (so a frame waiting for the server's answer doesn't send it again). */
   let ratingSent = "";
 
@@ -682,18 +707,20 @@ export function matchFeatures(lab: LabApi): void {
     if (me?.operator && !asked.ops.has(me.operator) && (v.phase === Phase.Planning || (v.phase === Phase.Prep && me.side === ATTACK))) pickOperator(me.operator);
     // A new phase with a screen to click lets go of the mouse.
     if (v.phase !== lastPhase) {
+      planClosed = false;
       if (v.phase === Phase.Lobby || v.phase === Phase.Ban || v.phase === Phase.Planning || v.phase === Phase.MatchEnd) lab.releasePointer();
       lastPhase = v.phase;
     }
 
     // The screen: the lobby, the ban vote, the planning screen (and an attacker's prep, while the mouse is free), the summary.
-    const prepAttacker = v.phase === Phase.Prep && me?.side === ATTACK && lab.body() === null;
+    // An attacker in prep drives their first drone (Phase 7); with the mouse free the planning screen is up.
+    const prepAttacker = v.phase === Phase.Prep && me?.side === ATTACK && (lab.body() === null || lab.body()!.kind === PawnKind.Drone);
     const which =
       v.phase === Phase.Lobby
         ? "lobby"
         : v.phase === Phase.Ban
           ? "ban"
-          : v.phase === Phase.Planning || (prepAttacker && !document.pointerLockElement)
+          : v.phase === Phase.Planning || (prepAttacker && !document.pointerLockElement && !planClosed)
             ? "planning"
             : v.phase === Phase.MatchEnd
               ? "summary"
@@ -702,6 +729,8 @@ export function matchFeatures(lab: LabApi): void {
       shown = which;
       screen.dataset.parts = "";
     }
+    prepPlanning = prepAttacker && which === "planning";
+    planBtn.classList.toggle("hidden", !(prepAttacker && planClosed && !document.pointerLockElement));
     screen.classList.toggle("hidden", which === "");
     screen.dataset.screen = which;
     if (which) setParts(which === "lobby" ? lobbyParts(v) : which === "ban" ? banParts(v) : which === "planning" ? planningParts(v) : summaryParts(v));
@@ -762,6 +791,19 @@ export function matchFeatures(lab: LabApi): void {
   lab.addMatchTool(() => (session.match && practiceHost(session.match) ? "End practice" : null), () => lobby({ kind: "end" }));
   lab.addHelp("<kbd>Tab</kbd>", "Scoreboard (hold)");
   lab.addHelp(`<kbd>${keyLabel(keys.drop)}</kbd>`, "Drop the defuser (attackers)");
+  lab.addHelp(
+    `<kbd>${keyLabel(keys.observe)}</kbd>`,
+    `Drones (attackers): go to one of yours out (or a teammate's), and back; on one ${keyLabel(keys.leanLeft)} / ${keyLabel(keys.leanRight)} switch, ${keyLabel(keys.vault)} jumps, ${keyLabel(keys.sprint)} boosts. Cameras (defenders): open them and back; ${keyLabel(keys.leanLeft)} / ${keyLabel(keys.leanRight)} switch`,
+  );
+  lab.addHelp(`<kbd>${keyLabel(keys.throwDrone)}</kbd>`, "Throw a drone you have in hand, and drive it (attackers)");
+  lab.addHelp(
+    `Hold <kbd>${keyLabel(keys.gadget)}</kbd>`,
+    `Bulletproof Camera (defenders who took it): place it on the wall or the floor in front of you (${lab.data.intel.bulletproofCamera.placeS} s); it joins the cameras (after the level's). Watching it, ${keyLabel(keys.gadget)} fires its EMP dart: drones in its burst are jammed for ${lab.data.intel.bulletproofCamera.disableS} s (ready again ${lab.data.intel.bulletproofCamera.dartRechargeS} s later). Its front is bulletproof; its sides and back aren't`,
+  );
+  lab.addHelp(
+    "Hold left mouse (on a drone or a camera)",
+    `Scan: an enemy within ${lab.data.intel.scan.coneDeg}° of the crosshair and in sight for ${lab.data.intel.scan.holdS} s is marked for your team for ${lab.data.intel.ping.seconds} s (they're told)`,
+  );
   lab.addHelp("Left mouse (dead)", "Look through the next teammate still alive");
 
   // Browser tests drive the match through this as well as the screens' buttons (tools/e2e/match.mjs).

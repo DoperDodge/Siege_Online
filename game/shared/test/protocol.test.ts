@@ -98,8 +98,11 @@ describe("lobby, clock, error and debug messages round-trip", () => {
     const w = { roomCode: "QX7PA", tick: 123456, levelId: "movement_lab", controllerId: 9 };
     expect(decodeWelcome(body(encodeWelcome(w), Msg.Welcome))).toEqual({ version: PROTOCOL_VERSION, ...w });
     const roster = [
-      { controllerId: 1, name: "Ulo", operatorId: "skopos", pawnIds: [2, 3], team: 1, kind: 0, loadout: defaultLoadoutPick(loadGameData(), "skopos") },
-      { controllerId: 4, name: "Bot ✓", operatorId: "brava", pawnIds: [5], team: 0, kind: 1, loadout: pick },
+      { controllerId: 1, name: "Ulo", operatorId: "skopos", pawnIds: [2, 3], drones: [], team: 1, kind: 0, loadout: defaultLoadoutPick(loadGameData(), "skopos") },
+      { controllerId: 4, name: "Bot ✓", operatorId: "brava", pawnIds: [5], drones: [], team: 0, kind: 1, loadout: pick },
+      // An attacker in a match: a body and two drones; in prep, the drones alone (Phase 7).
+      { controllerId: 6, name: "Ash", operatorId: "thermite", pawnIds: [7], drones: [8, 9], team: 0, kind: 0, loadout: defaultLoadoutPick(loadGameData(), "thermite") },
+      { controllerId: 10, name: "Bo", operatorId: "sledge", pawnIds: [], drones: [11, 12], team: 0, kind: 0, loadout: defaultLoadoutPick(loadGameData(), "sledge") },
     ];
     expect(decodeRoster(body(encodeRoster(roster, 4), Msg.Roster))).toEqual({ you: 4, entries: roster });
   });

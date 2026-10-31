@@ -153,6 +153,10 @@ describe("a whole match (Phase 6 M6)", () => {
     expect(r.panels.differ).toEqual([]);
     expect(r.errors).toEqual([]);
     expect(r.panels.ops).toBeGreaterThan(0); // the pre-setups, at least
+    // Prep droning (Phase 7): the attackers drove their drones through each prep.
+    expect(r.prepDroning.preps).toBe(4);
+    expect(r.prepDroning.metres / r.prepDroning.preps).toBeGreaterThan(5);
+    expect(r.prepDroning.corrections).toBe(0); // predicted: no mispredictions while droning
     expect(r.serverTickMs.mean).toBeLessThan(5); // PLAN §18 budget (the 99th percentile swings with the runner's load)
   }, 120000);
 });

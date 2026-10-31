@@ -20,6 +20,7 @@ import {
   inSite,
   isFormat,
   loadedOf,
+  PawnKind,
   PawnMode,
   pelletPath,
   Phase,
@@ -971,6 +972,12 @@ export interface MatchNetsimReport {
   panels: { ops: number; differ: string[]; mismatches: number; resyncs: number };
   /** Deaths the first client heard of (the harness's eliminations among them). */
   kills: number;
+  /**
+   * Prep droning (Phase 7): the preps played, the metres the attackers' drones covered in them (the bots drive what they
+   * are, a drone in prep), and the corrections attackers took during them that the server didn't force (a new pawn's
+   * first state is one it does): mispredictions.
+   */
+  prepDroning: { preps: number; metres: number; corrections: number };
   /** Errors other than a refused choice (any is a failure). */
   errors: string[];
 }
@@ -1199,6 +1206,34 @@ export async function runMatchNetsim(partial: Partial<MatchNetsimOptions> = {}):
     return s === "detonate" || s === "disable" ? { ...cmd, buttons: cmd.buttons & ~Btn.Fire } : cmd;
   }
 
+  // ---- Prep droning (Phase 7): how far the attackers' drones went, and the corrections attackers took meanwhile.
+  const prepDroning = { preps: 0, metres: 0, corrections: 0 };
+  const droneAt = new Map<number, [number, number]>();
+  let prepFrom: Map<number, number> | null = null;
+  const unforced = (id: number) => (room.memberInfo(id)?.corrections ?? 0) - (room.memberInfo(id)?.forcedCorrections ?? 0);
+  function countPrepCorrections() {
+    for (const [id, n] of prepFrom!) prepDroning.corrections += unforced(id) - n;
+    prepFrom = null;
+  }
+  function watchPrep() {
+    if (match.phase !== Phase.Prep) {
+      if (prepFrom) countPrepCorrections();
+      return;
+    }
+    if (!prepFrom) {
+      prepFrom = new Map(match.sides[ATTACK].map((id) => [id, unforced(id)]));
+      prepDroning.preps++;
+      droneAt.clear();
+    }
+    for (const id of match.sides[ATTACK]) {
+      const p = room.sim.pawns.get(room.bodyOf(id)?.possessedPawnId ?? -1);
+      if (p?.kind !== PawnKind.Drone) continue;
+      const last = droneAt.get(p.id);
+      if (last) prepDroning.metres += Math.hypot(p.state.x - last[0], p.state.z - last[1]);
+      droneAt.set(p.id, [p.state.x, p.state.z]);
+    }
+  }
+
   // ---- The checks at each round's end and the match end.
   const desyncs: string[] = [];
   const contactLate: string[] = [];
@@ -1243,6 +1278,7 @@ export async function runMatchNetsim(partial: Partial<MatchNetsimOptions> = {}):
       serverNext += tickMs;
       script();
       checkRoundEnd();
+      watchPrep();
       if (match.phase === Phase.MatchEnd && overAt === null) overAt = clock.now;
       for (const h of match.history.slice(rounds.length)) {
         const s = o.script[h.round - 1];
@@ -1264,6 +1300,7 @@ export async function runMatchNetsim(partial: Partial<MatchNetsimOptions> = {}):
   }
   // The match's end as everyone sees it.
   for (const c of clients) if (!viewMatches(c)) viewsDiffer.push(`the end, ${c.name}`);
+  if (prepFrom) countPrepCorrections();
   const secs = (clock.now - t0) / 1000;
   const sorted = [...serverTimes].sort((a, b) => a - b);
   return {
@@ -1288,6 +1325,7 @@ export async function runMatchNetsim(partial: Partial<MatchNetsimOptions> = {}):
     viewsDiffer,
     panels: { ops: room.stats.panelOps, differ: panelsDiffer, mismatches: clients.reduce((n, c) => n + c.session.stats.panelMismatches, 0), resyncs: room.stats.panelResyncs },
     kills,
+    prepDroning,
     errors,
   };
 }

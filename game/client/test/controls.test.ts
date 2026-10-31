@@ -169,3 +169,91 @@ describe("Mouse look and the pointer lock", () => {
     expect(c.sample(4).yaw).toBeCloseTo(1 - 10 * count, 3);
   });
 });
+
+describe("the ping key and the comm wheel (Phase 7, intel/DESIGN.md §6)", () => {
+  /** Controls with a comm wheel of `n` callouts; `picked` collects what it sends. */
+  const wheel = (n = 8) => {
+    const c = make({});
+    const picked: number[] = [];
+    c.wheelSize = () => n;
+    c.onCallout = (id) => picked.push(id);
+    return { c, picked };
+  };
+
+  it("a tap pings for one tick when it's let go; a press held under a quarter second too", () => {
+    const { c, picked } = wheel();
+    c.press("ping");
+    expect(c.sample(1).buttons & Btn.Ping).toBe(0); // not while it's down: it may become the wheel
+    c.release("ping");
+    expect(c.sample(2).buttons & Btn.Ping).toBe(Btn.Ping);
+    expect(c.sample(3).buttons & Btn.Ping).toBe(0);
+    c.press("ping");
+    for (let i = 0; i < 14; i++) c.sample(4 + i);
+    c.release("ping");
+    expect(c.sample(20).buttons & Btn.Ping).toBe(Btn.Ping);
+    expect(picked).toEqual([]);
+  });
+
+  it("held a quarter second it opens the wheel: the mouse points at a callout instead of turning the view, and letting go sends it", () => {
+    const { c, picked } = wheel();
+    c.pointerLock(true, 0);
+    c.setView(1, 0);
+    c.press("ping");
+    for (let i = 1; i <= 16; i++) c.sample(i);
+    expect(c.wheelPick).toBeNull(); // open, nothing picked yet
+    c.mouseMove(200, 0, 1); // right: the third of eight (0 is up, clockwise)
+    expect(c.wheelPick).toBe(2);
+    c.mouseMove(-320, 120, 2); // to left of the middle and down: down-left, the sixth
+    expect(c.wheelPick).toBe(5);
+    expect(c.sample(17).yaw).toBeCloseTo(1, 5);
+    c.release("ping");
+    expect([c.wheelPick, picked]).toEqual([undefined, [5]]);
+    expect(c.sample(18).buttons & Btn.Ping).toBe(0);
+    // Let go in the middle: nothing sent.
+    c.press("ping");
+    for (let i = 0; i < 16; i++) c.sample(19 + i);
+    c.release("ping");
+    expect(picked).toEqual([5]);
+    expect(c.sample(40).buttons & Btn.Ping).toBe(0);
+  });
+
+  it("with no wheel (no room to send to) a long press still pings; a key let go with the page sends nothing", () => {
+    const { c } = wheel(0);
+    c.press("ping");
+    for (let i = 1; i <= 32; i++) c.sample(i);
+    expect(c.wheelPick).toBeUndefined();
+    c.release("ping");
+    expect(c.sample(33).buttons & Btn.Ping).toBe(Btn.Ping);
+    const w = wheel();
+    w.c.press("ping");
+    for (let i = 1; i <= 16; i++) w.c.sample(i);
+    w.c.releaseAll();
+    w.c.release("ping");
+    expect([w.c.wheelPick, w.picked, w.c.sample(17).buttons & Btn.Ping]).toEqual([undefined, [], 0]);
+  });
+});
+
+describe("on a drone or a camera (Phase 7)", () => {
+  it("the body's toggles and weapon keys stay as they were; a lean tap goes out for a tick (it switches the feed)", () => {
+    const c = make({}); // crouch and lean toggle by default
+    let feed = true;
+    c.onDrone = () => feed;
+    c.weaponState = () => ({ slot: 0, equipping: false });
+    c.press("crouch");
+    c.release("crouch");
+    c.press("leanLeft");
+    c.release("leanLeft"); // a tap between two ticks (a touch button's is one)
+    c.press("secondary");
+    c.press("swap");
+    let cmd = c.sample(1);
+    expect([cmd.stance, cmd.lean, cmd.buttons & Btn.Swap]).toEqual([Stance.Stand, -1, 0]);
+    expect(c.sample(2).lean).toBe(0);
+    c.press("leanRight"); // held: every tick while held
+    expect([c.sample(3).lean, c.sample(4).lean]).toEqual([1, 1]);
+    c.release("leanRight");
+    // Back in the body: nothing was left toggled or asked for.
+    feed = false;
+    cmd = c.sample(5);
+    expect([cmd.stance, cmd.lean, cmd.buttons & Btn.Swap]).toEqual([Stance.Stand, 0, 0]);
+  });
+});

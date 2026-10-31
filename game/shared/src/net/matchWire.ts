@@ -7,6 +7,7 @@ import { Phase, type RoundRecord } from "../match/match.js";
 import { WinReason } from "../match/outcome.js";
 import type { HostChange } from "../match/settings.js";
 import type { Team } from "../match/rules.js";
+import type { BpCam } from "../intel/bpCamera.js";
 
 /** Operator, site, spawn-group and format ids. */
 const MAX_ID = 32;
@@ -15,6 +16,8 @@ const MAX_RULES_JSON = 8192;
 const MAX_PLAYERS = 16;
 /** The last rounds a match state carries (Practice's go on without end). */
 export const MAX_HISTORY = 64;
+/** At most this many Bulletproof Cameras a round (a bit each where shots break them). */
+const MAX_BP_CAMS = 32;
 const MAX_ROOMS = 100;
 const NO_RATING = 0xffff;
 
@@ -252,6 +255,12 @@ export interface MatchView {
   carrier: number;
   /** The server tick Quick Match's Attacker Safeguard ends this round (players' `safe`), or 0: none. */
   safeguardEnd: number;
+  /** The default cameras broken this round (Phase 7): a bit each, in the level's order. */
+  camsBroken: number;
+  /** The round's Bulletproof Cameras (Phase 7 M5), in the order they were placed. */
+  bpCams: BpCam[];
+  /** The cameras someone is watching (Phase 7): a bit each, the level's then the Bulletproof Cameras. */
+  camsWatched: number;
   history: RoundRecord[];
   /** At the match end: the winner (null: a draw), whether by forfeit, and the MVP (0: none). */
   winner: Team | null;
@@ -290,7 +299,12 @@ export function encodeMatchState(v: MatchView): Uint8Array {
     for (const op of side.slice(0, 6)) w.str(op);
   }
   optStr(w, v.site);
-  w.varu(v.carrier).u32(v.safeguardEnd >>> 0);
+  w.varu(v.carrier).u32(v.safeguardEnd >>> 0).u32(v.camsBroken >>> 0).u32(v.camsWatched >>> 0);
+  w.u8(Math.min(MAX_BP_CAMS, v.bpCams.length));
+  for (const c of v.bpCams.slice(0, MAX_BP_CAMS)) {
+    w.f32(c.pos[0]).f32(c.pos[1]).f32(c.pos[2]).f32(c.yaw).u8((c.onFloor ? 1 : 0) | (c.broken ? 2 : 0) | (c.lost ? 4 : 0));
+    w.varu(c.owner).u32(c.signalEnd >>> 0).u32(c.dartReady >>> 0).varu(c.panel + 1);
+  }
   const history = v.history.slice(-MAX_HISTORY);
   w.u8(history.length);
   for (const h of history) w.u8(Math.min(255, h.round)).u8(h.attackers).u8(h.winner).u8(h.reason).str(h.site);
@@ -362,6 +376,17 @@ export function decodeMatchState(r: ByteReader): MatchView {
   const site = readOpt(r);
   const carrier = r.varu();
   const safeguardEnd = r.u32();
+  const camsBroken = r.u32();
+  const camsWatched = r.u32();
+  const nb = r.u8();
+  if (nb > MAX_BP_CAMS) throw new ProtocolError("too many cameras");
+  const bpCams = Array.from({ length: nb }, (): BpCam => {
+    const pos: [number, number, number] = [r.finite(), r.finite(), r.finite()];
+    const yaw = r.finite();
+    const fl = r.u8();
+    if (fl > 7) throw new ProtocolError("bad camera");
+    return { pos, yaw, onFloor: (fl & 1) !== 0, broken: (fl & 2) !== 0, lost: (fl & 4) !== 0, owner: r.varu(), signalEnd: r.u32(), dartReady: r.u32(), panel: r.varu() - 1 };
+  });
   const h = r.u8();
   if (h > MAX_HISTORY) throw new ProtocolError("history too long");
   const history: RoundRecord[] = Array.from({ length: h }, () => ({ round: r.u8(), attackers: team(r.u8()), winner: team(r.u8()), reason: reason(r.u8()), site: r.str(MAX_ID) }));
@@ -405,6 +430,9 @@ export function decodeMatchState(r: ByteReader): MatchView {
     siteRevealed: (f & F.siteRevealed) !== 0,
     carrier,
     safeguardEnd,
+    camsBroken,
+    bpCams,
+    camsWatched,
     history,
     winner: wv === 2 ? null : (wv as Team),
     forfeit: (f & F.forfeit) !== 0,

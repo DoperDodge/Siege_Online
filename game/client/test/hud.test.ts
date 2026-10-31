@@ -1,13 +1,15 @@
 // The HUD's maths and wording (Phase 3 M9): the zoomed field of view, where the spread ticks sit, which
 // way the damage arc points, and what the hit marker, ammo readout and kill feed say; the stats overlay's
-// 1% low (Phase 5).
+// 1% low (Phase 5); where a ping's mark goes on the screen (Phase 7).
 import { describe, expect, it } from "vitest";
+import * as THREE from "three";
 import { Cause, DEG, defaultLoadoutPick, initialPawnState, loadGameData, resolveLoadout, WeaponAct, type GameEvent } from "@redmond/shared";
 import { ammoLow, fireModeText } from "../src/ui/ammo.js";
 import { adsFov, spreadGapPx } from "../src/ui/crosshair.js";
 import { damageArcDeg } from "../src/ui/damage.js";
 import { reviveSecondsLeft } from "../src/ui/downed.js";
 import { hitText } from "../src/ui/hitMarkers.js";
+import { EDGE_PX, markOnScreen } from "../src/ui/intel.js";
 import { deathLine, feedLine, type FeedNames } from "../src/ui/killFeed.js";
 import { onePercentLowFps, slowestOnePercentMs } from "../src/ui/stats.js";
 
@@ -153,5 +155,28 @@ describe("stats overlay", () => {
     // Under a hundred frames it is the slowest one; none, none.
     expect(slowestOnePercentMs([3, 9, 4])).toBe(9);
     expect(slowestOnePercentMs([])).toBe(0);
+  });
+});
+
+describe("a ping's mark on the screen (Phase 7)", () => {
+  // A camera at the origin looking down −z, 70° high, on an 800 × 600 screen.
+  const camera = new THREE.PerspectiveCamera(70, 800 / 600, 0.05, 300);
+  camera.updateMatrixWorld();
+  const at = (x: number, y: number, z: number) => markOnScreen(new THREE.Vector3(x, y, z), camera, 800, 600);
+
+  it("is over the point when it's in view", () => {
+    expect(at(0, 0, -5)).toEqual({ x: 400, y: 300, off: false });
+    const up = at(0, 1, -5);
+    expect([up.x, up.off]).toEqual([400, false]);
+    expect(up.y).toBeLessThan(300);
+  });
+
+  it("off the screen or behind, it's at the edge the way to turn", () => {
+    expect(at(50, 0, -5)).toMatchObject({ x: 800 - EDGE_PX, off: true }); // far right
+    expect(at(50, 0, -5).y).toBeCloseTo(300, 6);
+    expect(at(-1, 0, 5)).toMatchObject({ x: EDGE_PX, off: true }); // behind, to the left: the left edge
+    expect(at(0, 0, 5)).toEqual({ x: 400, y: 600 - EDGE_PX, off: true }); // right behind: the bottom
+    const below = at(0, -50, -1);
+    expect([below.y, below.off]).toEqual([600 - EDGE_PX, true]);
   });
 });

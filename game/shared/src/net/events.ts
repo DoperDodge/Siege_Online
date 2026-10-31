@@ -5,7 +5,7 @@ import type { Vec3 } from "../core/math.js";
 import { Cause, CAUSE_MAX } from "../combat/apply.js";
 import type { Zone } from "../combat/damage.js";
 import { ByteReader, ByteWriter, ProtocolError } from "./bytes.js";
-import { Msg } from "./protocol.js";
+import { MAX_NAME, Msg } from "./protocol.js";
 
 
 export const ZONES: readonly Zone[] = ["head", "neck", "torso", "pelvis", "arm", "leg"];
@@ -32,13 +32,23 @@ export type GameEvent =
   | { kind: "reviveEnd"; reviverPawn: number; targetPawn: number; completed: boolean }
   /** To everyone: Skopós's idle shell was destroyed (not an elimination; she can't swap any more). */
   | { kind: "shellDestroyed"; pawnId: number; ownerCtrl: number; killerCtrl: number; weapon: string; headshot: boolean }
+  /** To everyone: an attacker's drone was destroyed (Phase 7; not a death: defenders count the drones they destroy). */
+  | { kind: "droneDestroyed"; pawnId: number; ownerCtrl: number; killerCtrl: number }
+  /** To the pinger's team (Phase 7, intel/DESIGN.md §6): a ping where they aimed, yellow or danger, for `ticks`. */
+  | { kind: "ping"; ctrl: number; pos: Vec3; danger: boolean; ticks: number }
+  /** To the scanner's team and the one scanned: an enemy spotted by a drone or a camera, marked for `ticks`. */
+  | { kind: "spotted"; pawnId: number; by: number; ticks: number }
+  /** To the caller's team: a callout off the comm wheel (data/intel.json `callouts`). */
+  | { kind: "callout"; name: string; id: number }
+  /** To everyone: a Bulletproof Camera's EMP dart burst there (Phase 7 M5). */
+  | { kind: "emp"; pos: Vec3 }
   /**
    * To a joining player, and to everyone when it changes: who may reinforce and barricade, and the reinforcements
    * left (Phase 4 M6), and who may rappel (Phase 5 M8).
    */
   | { kind: "deployRules"; anyone: boolean; rappel: boolean; pools: [number, number] };
 
-const KIND = { shotFx: 1, hitConfirm: 2, damageTaken: 3, down: 4, kill: 5, shellDestroyed: 6, reviveStart: 7, reviveEnd: 8, deployRules: 10 } as const;
+const KIND = { shotFx: 1, hitConfirm: 2, damageTaken: 3, down: 4, kill: 5, shellDestroyed: 6, reviveStart: 7, reviveEnd: 8, deployRules: 10, droneDestroyed: 11, ping: 12, spotted: 13, callout: 14, emp: 15 } as const;
 // 9 Threat (Phase 11) is reserved.
 
 /** Pellet end points travel at 1/32 m in i16: ±1024 m, more than any level. */
@@ -84,6 +94,21 @@ export function encodeEvents(tick: number, events: readonly GameEvent[]): Uint8A
         break;
       case "shellDestroyed":
         w.varu(e.pawnId).varu(e.ownerCtrl).varu(e.killerCtrl).str(e.weapon).u8(e.headshot ? 1 : 0);
+        break;
+      case "droneDestroyed":
+        w.varu(e.pawnId).varu(e.ownerCtrl).varu(e.killerCtrl);
+        break;
+      case "ping":
+        w.varu(e.ctrl).f32(e.pos[0]).f32(e.pos[1]).f32(e.pos[2]).u8(e.danger ? 1 : 0).u16(e.ticks);
+        break;
+      case "spotted":
+        w.varu(e.pawnId).varu(e.by).u16(e.ticks);
+        break;
+      case "callout":
+        w.str(e.name).u8(e.id);
+        break;
+      case "emp":
+        w.f32(e.pos[0]).f32(e.pos[1]).f32(e.pos[2]);
         break;
       case "deployRules":
         w.u8((e.anyone ? 1 : 0) | (e.rappel ? 2 : 0)).varu(e.pools[0]).varu(e.pools[1]);
@@ -163,6 +188,23 @@ export function decodeEvents(r: ByteReader): { tick: number; events: GameEvent[]
       const f = r.u8();
       if (f > 1) throw new ProtocolError("bad shell event");
       events.push({ kind: "shellDestroyed", pawnId, ownerCtrl, killerCtrl, weapon, headshot: f === 1 });
+    } else if (k === KIND.ping) {
+      const ctrl = r.varu();
+      const pos: Vec3 = [r.finite(), r.finite(), r.finite()];
+      const f = r.u8();
+      if (f > 1) throw new ProtocolError("bad ping");
+      events.push({ kind: "ping", ctrl, pos, danger: f === 1, ticks: r.u16() });
+    } else if (k === KIND.spotted) {
+      events.push({ kind: "spotted", pawnId: r.varu(), by: r.varu(), ticks: r.u16() });
+    } else if (k === KIND.callout) {
+      const name = r.str(MAX_NAME * 4);
+      const id = r.u8();
+      if (id > 15) throw new ProtocolError("bad callout");
+      events.push({ kind: "callout", name, id });
+    } else if (k === KIND.emp) {
+      events.push({ kind: "emp", pos: [r.finite(), r.finite(), r.finite()] });
+    } else if (k === KIND.droneDestroyed) {
+      events.push({ kind: "droneDestroyed", pawnId: r.varu(), ownerCtrl: r.varu(), killerCtrl: r.varu() });
     } else if (k === KIND.deployRules) {
       const f = r.u8();
       if (f > 3) throw new ProtocolError("bad deploy rules");
