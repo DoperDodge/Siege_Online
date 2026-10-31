@@ -31,8 +31,11 @@ import type { LobbyAction, MatchAction, RoomListEntry } from "./matchWire.js";
 import { isFormat, type FormatMode, type Side } from "../match/rules.js";
 import { camerasOnRay } from "../intel/cameras.js";
 import { dartBurst } from "../intel/bpCamera.js";
-import { bpCamsBroken } from "../gadgets/hits.js";
+import { bpCamsBroken, gadgetOnRay } from "../gadgets/hits.js";
 import { GadgetServer } from "../gadgets/serve.js";
+import { blastEffects } from "../gadgets/blast.js";
+import { kindId } from "../gadgets/kinds.js";
+import { GFlag, type Gadget } from "../gadgets/table.js";
 import { deviceLost, slotCounts } from "../gadgets/hands.js";
 import { encodeGadgetOps, encodeGadgetState } from "./gadgetWire.js";
 import { raycastLevel } from "../level/raycast.js";
@@ -207,6 +210,9 @@ interface JudgedShot {
   panelOps: IndexedOp[];
 }
 
+/** Who hurt a body, as the kill feed and the damage indicator tell it: a shot, the knife, or a gadget's blast. */
+type Attacker = Pick<JudgedShot, "ctrlId" | "team" | "weaponId" | "origin">;
+
 /** A Range Lab target: a body with no client, stepped from its script (lab/dummies.ts). */
 interface Dummy {
   def: DummyDef;
@@ -294,7 +300,7 @@ export class Room implements DirectorHost {
     format: FormatMode | null,
   ) {
     this.history = new HitboxHistory(sim, 32);
-    this.gadgetServer = new GadgetServer(sim);
+    this.gadgetServer = new GadgetServer(sim, (g, at) => this.explode(g, at));
     // A remote device gone without its detonator (destroyed, cleared): its owner has one fewer waiting; told at once.
     this.gadgetServer.onLost = (g, d) => {
       const c = sim.controllers.get(g.owner);
@@ -795,6 +801,9 @@ export class Room implements DirectorHost {
         if (broke) this.director.camerasBroken(broke);
       }
       if (cams.length) this.gadgetServer.breakCams(bpCamsBroken(this.sim.bpCams(), this.sim.data, origin, p.dir, end));
+      // The first fragile gadget on its way (one bullet destroys it, research/gadgets.md; no blast) is gone.
+      const fragile = gadgetOnRay(this.sim.gadgets, this.sim.data, origin, p.dir, end, (g) => this.fragile(g));
+      if (fragile) this.gadgetServer.destroy(fragile.g);
     }
     this.judged.push({ m, cause: Cause.Bullet, ctrlId: m.ctrl.id, team: shooter.team, seq: shot.seq, weaponId: w.id, receivedTick: now, rewoundTick, origin, bodies, lives: this.livesOf(bodies), panelOps });
     // Everyone sees and hears it (the shooter's own client draws its flash itself, but not where pellets went).
@@ -868,6 +877,12 @@ export class Room implements DirectorHost {
     const knifed = bpCamsBroken(this.sim.bpCams(), this.sim.data, hit.origin, dir, plain, true);
     if (knifed.length) {
       this.gadgetServer.breakCams(knifed);
+      return;
+    }
+    // A fragile gadget in reach (any damage destroys it).
+    const struck = gadgetOnRay(this.sim.gadgets, this.sim.data, hit.origin, dir, plain, (g) => this.fragile(g));
+    if (struck) {
+      this.gadgetServer.destroy(struck.g);
       return;
     }
     const onPanel = meleeOnPanels(this.sim.level.panels, this.sim.data.destruction, hit.origin, dir, reach, plain, { tick: panelTick, history: this.panelHistory });
@@ -988,7 +1003,7 @@ export class Room implements DirectorHost {
    * the damage indicator) and, if it died, everyone (the kill feed; Skopós's idle shell is "destroyed", not
    * an elimination).
    */
-  private hurt(victim: Pawn, d: Damage, by: { cause: Cause; attacker: JudgedShot | null; headshot: boolean }) {
+  private hurt(victim: Pawn, d: Damage, by: { cause: Cause; attacker: Attacker | null; headshot: boolean }) {
     const r = applyDamage(this.sim, victim, { ...d, cause: by.cause }, this.rules);
     if (r.outcome === "ignored") return r;
     const owner = victim.ownerId !== null ? this.memberOf(victim.ownerId) : null;
@@ -1254,6 +1269,46 @@ export class Room implements DirectorHost {
       const e: GameEvent = { kind: "emp", pos: burst };
       for (const o of this.members.values()) o.events.push(e);
     }
+  }
+
+  /**
+   * A gadget went off where it is (Phase 8 M2, gadgets/blast.ts): its damage now, credited to its owner (their own
+   * bodies always; teammates by the friendly fire rules, as bullets: off, scaled, or reflected on its owner), its cuts
+   * with this tick's panel ops, and what it destroys. Everyone sees and hears it.
+   */
+  private explode(g: Gadget, at: Vec3) {
+    const data = this.sim.data.gadgets.get(kindId(g.kind) ?? "");
+    if (!data?.blast) return;
+    const fx = blastEffects(this.sim, g, data, at);
+    const owner = this.memberOf(g.owner);
+    const attacker: Attacker = { ctrlId: g.owner, team: g.team, weaponId: data.id, origin: [at[0], at[1], at[2]] };
+    for (const { pawn, damage } of fx.bodies) {
+      const own = pawn.ownerId === g.owner;
+      const friendly = !own && pawn.team === g.team;
+      if (friendly && !this.friendlyFireOn()) continue;
+      if (this.director?.safeguarded(pawn)) continue;
+      const amount = friendly ? Math.round(damage * this.rules.friendlyFire.scale) : damage;
+      if (amount <= 0) continue;
+      if (friendly && owner?.reflect) {
+        const body = owner.ctrl && this.sim.pawns.get(owner.ctrl.possessedPawnId);
+        if (body) this.hurt(body, { amount, kill: false }, { cause: Cause.Reflect, attacker: null, headshot: false });
+        continue;
+      }
+      const r = this.hurt(pawn, { amount, kill: false }, { cause: Cause.Explosive, attacker, headshot: false });
+      if (friendly && owner && r.outcome !== "ignored") {
+        owner.teamDamage += r.removed;
+        if (this.rules.reverseFriendlyFire.enabled && owner.teamDamage >= this.rules.reverseFriendlyFire.thresholdHp) owner.reflect = true;
+      }
+    }
+    for (const o of fx.panelOps) this.queuePanelOp(o.panel, o.op);
+    for (const e of fx.gadgets) this.gadgetServer.blastHit(e);
+    const ev: GameEvent = { kind: "blast", gadget: g.kind, pos: [at[0], at[1], at[2]] };
+    for (const m of this.members.values()) m.events.push(ev);
+  }
+
+  /** Whether one bullet or a knife destroys this entry (its data's `fragile`; not in the air). */
+  private fragile(g: Gadget): boolean {
+    return !(g.flags & GFlag.Flying) && (this.sim.data.gadgets.get(kindId(g.kind) ?? "")?.fragile ?? false);
   }
 
   /** A callout off the comm wheel (Phase 7): to the caller's team, at most two a second. */

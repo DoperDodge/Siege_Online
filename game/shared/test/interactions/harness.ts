@@ -1,22 +1,34 @@
 // The interaction tests' scene (Phase 8, gadgets/DESIGN.md §10): a lab room on the Destruction Lab level with
 // in-process clients (roomHarness.ts), and what a row needs to set up: an entry put straight into the gadget table, a
-// body moved, ticks run.
-import { GFlag, kindOf, type Gadget, type Vec3 } from "../../src/index.js";
+// body moved, a gadget set off through the room's own path, a shot down the sights, a panel's cell looked at, ticks run.
+import { Btn, eyePose, GFlag, Hand, kindOf, slotGadget, ticks, type Gadget, type InputCmd, type Pawn, type PanelEntry, type Vec3 } from "../../src/index.js";
 import { roomWith } from "../roomHarness.js";
 
-export async function scene(ops: string[] = ["sledge", "mute"]) {
-  const h = await roomWith("destruction_lab", ops);
+/** Places on the Destruction Lab level (data/maps/destruction_lab/layout.json). */
+export const LAB = {
+  /** The open floor between the spawn and the walls, clear of the platform's stairs. */
+  open: [0, 0.05, 12] as Vec3,
+  /** The plain soft wall's front face (toward +z) and the reinforced wall's, at z −5.9; the barricaded door's (+z) at 6.05. */
+  softFace: -5.9,
+  /** Out of the way of any blast. */
+  away: [[-25, 0, 25], [25, 0, 25], [-25, 0, -25], [25, 0, -25]] as Vec3[],
+};
+
+export async function scene(ops: string[] = ["sledge", "mute"], level = "destruction_lab") {
+  const h = await roomWith(level, ops);
   const sim = h.room.sim;
   const wait = (n: number) => {
     for (let i = 0; i < n; i++) h.tick();
   };
   wait(8);
   /** Client i's body. */
-  const body = (i: number) => sim.pawns.get(h.clients[i].session.ctrl!.possessedPawnId)!;
+  const body = (i: number): Pawn => sim.pawns.get(h.clients[i].session.ctrl!.possessedPawnId)!;
   const teleport = (i: number, x: number, y: number, z: number, yawDeg = 0) => {
     h.room.onLabTool(h.clients[i].id, { kind: "teleport", x, y, z, yawDeg });
     wait(2);
   };
+  /** Every body out of the way of blasts (each to its own corner). */
+  const park = () => h.clients.forEach((_, i) => teleport(i, ...LAB.away[i % LAB.away.length]));
   /** An entry of `kind` straight into the table, client i's (its team), standing at `pos` facing `yaw`. */
   const put = (kind: string, i: number, pos: Vec3, over: Partial<Gadget> = {}): Gadget =>
     sim.gadgets.add({
@@ -35,5 +47,81 @@ export async function scene(ops: string[] = ["sledge", "mute"]) {
       seq: 0,
       ...over,
     });
-  return { ...h, sim, wait, body, teleport, put };
+  /** The panel entry of a level solid. */
+  const panel = (id: string): PanelEntry => sim.level.panels.byId.get(id)!;
+  /** On a panel's face toward +z (or on top of a floor, `flat`): a charge's entry fields there. */
+  const onPanel = (id: string, at: Vec3, flat = false): Partial<Gadget> => ({ pos: at, yaw: flat ? 0 : Math.PI, flags: flat ? GFlag.OnFloor | GFlag.Flat : 0, panel: panel(id).panel.spec.index });
+  /** Set an entry off the way the room does (its fuse, its detonator or its tripwire), and let the tick's ops apply. */
+  const setOff = (g: Gadget) => {
+    h.room.gadgetServer.trigger(sim.gadgets.get(g.id)!, null);
+    wait(3);
+  };
+  /** Whether a panel has material in `layer` at the world point (the cell its face is at there). */
+  const solidAt = (id: string, layer: number, p: Vec3): boolean => {
+    const e = panel(id);
+    const f = e.frame;
+    const rel = [p[0] - f.center[0], p[1] - f.center[1], p[2] - f.center[2]];
+    const u = rel[0] * f.u[0] + rel[1] * f.u[1] + rel[2] * f.u[2] + f.w / 2;
+    const v = rel[0] * f.v[0] + rel[1] * f.v[1] + rel[2] * f.v[2] + f.h / 2;
+    const pn = e.panel;
+    const cells = pn.layers[layer];
+    if (!cells) return false;
+    const cu = Math.max(0, Math.min(pn.w - 1, Math.floor(u / pn.cellU)));
+    const cv = Math.max(0, Math.min(pn.h - 1, Math.floor(v / pn.cellV)));
+    return cells[cv * pn.w + cu] !== 0;
+  };
+  /** Client i's view from its eye toward `at`. */
+  const aimAt = (i: number, at: Vec3) => {
+    const eye = eyePose(sim.data.movement, sim.data.hitboxes, body(i).state).pos;
+    const v = [at[0] - eye[0], at[1] - eye[1], at[2] - eye[2]];
+    return { yaw: Math.atan2(-v[0], -v[2]), pitch: Math.atan2(v[1], Math.hypot(v[0], v[2])) };
+  };
+  /** Client i aims down the sights at `at` from where it stands, and fires once. */
+  const shootAt = (i: number, at: Vec3) => {
+    const aim = aimAt(i, at);
+    const c = h.clients[i];
+    c.cmd = { ...aim, buttons: Btn.Ads };
+    wait(64);
+    c.cmd = { ...aim, buttons: Btn.Ads | Btn.Fire };
+    h.tick();
+    c.cmd = { ...aim };
+    wait(8);
+  };
+  /** Client i knifes what's at `at` (in reach), looking at it; `hold`: what else it holds meanwhile (a crouch). */
+  const knife = (i: number, at: Vec3, hold: Partial<InputCmd> = {}) => {
+    const c = h.clients[i];
+    c.cmd = { ...hold };
+    wait(hold.stance ? 32 : 0); // down to its eye height first
+    const aim = { ...hold, ...aimAt(i, at) };
+    c.cmd = aim;
+    wait(4);
+    c.cmd = { ...aim, buttons: Btn.Melee };
+    h.tick();
+    c.cmd = aim;
+    wait(48);
+  };
+  /**
+   * Client i takes its first gadget out (unless it's in hand) and holds Fire looking at `at` for its placing time (and a
+   * little more), as a player places one: the entry it put in the table, or undefined (it can't go there).
+   */
+  const place = (i: number, at: Vec3): Gadget | undefined => {
+    const c = h.clients[i];
+    const g = slotGadget(sim.data, body(i).loadout, 1)!;
+    const before = new Set(sim.gadgets.list.map((e) => e.id));
+    const aim = aimAt(i, at);
+    if (body(i).state.hand !== Hand.Gadget) {
+      c.cmd = { ...aim, buttons: Btn.Gadget };
+      h.tick();
+    }
+    c.cmd = { ...aim };
+    wait(ticks(sim.data.gadgetRules.equipS) + 2);
+    c.cmd = { ...aim, buttons: Btn.Fire };
+    wait(ticks(g.use.kind === "place" ? g.use.placeS : 0) + 8);
+    c.cmd = { ...aim };
+    wait(2);
+    return sim.gadgets.list.find((e) => !before.has(e.id));
+  };
+  return { ...h, sim, wait, body, teleport, park, put, panel, onPanel, setOff, solidAt, aimAt, shootAt, knife, place };
 }
+
+export type Scene = Awaited<ReturnType<typeof scene>>;

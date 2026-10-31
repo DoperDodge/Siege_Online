@@ -3,7 +3,7 @@
 // server steps it with). Your own throws and placings are drawn at once from your prediction, until the server's entry
 // takes over. Bulletproof Cameras are drawn by BpCameraModels (render/cameraModels.ts). Greybox until the art pass.
 import * as THREE from "three";
-import { Flights, GFlag, isFlying, KIND_BP_CAMERA, kindId, kindOf, type Gadget, type GadgetData, type SimEvent, type Sim, type Vec3 } from "@redmond/shared";
+import { DEG, Flights, forwardXZ, GFlag, isFlying, KIND_BP_CAMERA, kindId, kindOf, raycastLevel, type Gadget, type GadgetData, type SimEvent, type Sim, type Vec3 } from "@redmond/shared";
 
 type ThrowUse = Extract<GadgetData["use"], { kind: "throw" }>;
 
@@ -38,7 +38,9 @@ interface Ghost {
 }
 
 export class GadgetModels {
-  private readonly items = new Map<number, { obj: THREE.Object3D; key: string }>();
+  private readonly items = new Map<number, { obj: THREE.Object3D; key: string; lasers: THREE.Line[] }>();
+  /** A Claymore's lasers (Phase 8 M2): red, once it's armed. */
+  private readonly laserMat = new THREE.LineBasicMaterial({ color: 0xff2020, transparent: true, opacity: 0.7 });
   private readonly ghosts: Ghost[] = [];
   /** Our own throws, by entry id: the server tick their flight is drawn from (the ghost's, so it doesn't jump back). */
   private readonly ownStart = new Map<number, number>();
@@ -117,7 +119,7 @@ export class GadgetModels {
       seen.add(g.id);
       let it = this.items.get(g.id);
       if (!it) {
-        it = { obj: this.model(g.kind), key: "" };
+        it = { obj: this.model(g.kind), key: "", lasers: [] };
         this.scene.add(it.obj);
         this.items.set(g.id, it);
         // Ours, predicted: the ghost hands over (its flight goes on from the same start).
@@ -136,14 +138,21 @@ export class GadgetModels {
         continue;
       }
       this.ownStart.delete(g.id);
+      // A tripwire's lasers show from the moment it's armed (its `readyAt`, a server tick).
+      for (const l of it.lasers) l.visible = now >= g.readyAt;
       const key = `${g.pos.join(",")},${g.yaw},${g.flags}`;
       if (key === it.key) continue;
       it.key = key;
       this.pose(it.obj, g.pos, g.yaw, g.flags);
+      this.setLasers(it, g);
     }
     for (const [id, it] of this.items)
       if (!seen.has(id)) {
         this.scene.remove(it.obj);
+        for (const l of it.lasers) {
+          this.scene.remove(l);
+          l.geometry.dispose();
+        }
         this.items.delete(id);
         this.ownStart.delete(id);
       }
@@ -163,6 +172,26 @@ export class GadgetModels {
     }
   }
 
+  /** A tripwire's lasers where the entry stands: along its facing turned by each angle, up to what stops sight. */
+  private setLasers(it: { lasers: THREE.Line[] }, g: Gadget) {
+    for (const l of it.lasers) {
+      this.scene.remove(l);
+      l.geometry.dispose();
+    }
+    it.lasers = [];
+    const t = this.dataOf(g.kind)?.tripwire;
+    if (!t) return;
+    for (const deg of t.anglesDeg) {
+      const [fx, fz] = forwardXZ(g.yaw + deg * DEG);
+      const len = raycastLevel(this.sim, g.pos, [fx, 0, fz], t.lengthM)?.t ?? t.lengthM;
+      const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(...g.pos), new THREE.Vector3(g.pos[0] + fx * len, g.pos[1], g.pos[2] + fz * len)]);
+      const line = new THREE.Line(geo, this.laserMat);
+      line.visible = false;
+      this.scene.add(line);
+      it.lasers.push(line);
+    }
+  }
+
   /** Where a flight is `after` ticks (fractional) from its start: between the two ticks around it. */
   private flightAt(g: Gadget, use: ThrowUse, after: number): Vec3 {
     const t = Math.max(0, after);
@@ -176,7 +205,14 @@ export class GadgetModels {
   }
 
   dispose() {
-    for (const it of this.items.values()) this.scene.remove(it.obj);
+    for (const it of this.items.values()) {
+      this.scene.remove(it.obj);
+      for (const l of it.lasers) {
+        this.scene.remove(l);
+        l.geometry.dispose();
+      }
+    }
+    this.laserMat.dispose();
     for (const x of this.ghosts) this.scene.remove(x.obj);
     this.items.clear();
     this.ghosts.length = 0;

@@ -93,10 +93,18 @@ path with credit and friendly-fire rules, wall ops, table ops, drone deaths). A 
 | `destroyM` | Gadgets (any team), barricades and drones within it are destroyed. |
 | `cut` | The panel cut: a charge's rectangle on its own panel; a grenade's disc on panels within `cutM`, its size shrinking with distance. Floors only ever get see-through holes (Phase 4); hatches take `hatchDamage`. |
 
-**Occlusion** (RealBlast, research/destruction.md §5): a body is hurt if a ray from the blast reaches its chest or
-head without meeting the level's solid geometry, steel or something that blocks explosions (the deployable shield,
-the mirror); soft panels let it through (Nitro and grenades hurt through drywall). A Ballistic Shield in front takes
-66 % (§8). Stun and smoke direct hits do 5 hp. Tinnitus is the client's (within `concussM`).
+**Occlusion** (RealBlast, research/destruction.md §5): a body is hurt by its hitbox point nearest the blast that a
+line from the blast reaches without meeting the level's solid geometry, steel or something that blocks explosions
+(the deployable shield, the mirror); each soft panel on the way lets `throughSoft` through (Nitro and grenades hurt
+through drywall). The panel a charge is on neither stops nor dims its own blast (it's blowing a hole in it: a Hard
+Breach Charge's 5 hp reaches the far side of steel). A Ballistic Shield in front takes 66 % (§8). Stun and smoke direct
+hits do 5 hp. Tinnitus is the client's (within `concussM`).
+
+**What it destroys** (M2): gadgets within `destroyM` that the same line reaches (the Claymore: only in its arc, for
+gadgets and barricades too); a Bulletproof Camera's glass breaks instead (it stays in the feed list, broken, as a
+default camera does). A remote device destroyed tells its owner (one fewer waiting on the detonator). One bullet or a
+knife destroys a gadget whose data says `fragile` (charges, the Claymore, the Nitro Cell, the alarm and the blocker),
+without a blast; nothing in flight can be shot.
 
 ## 6. Electronics: DSEG, jamming, hacking
 

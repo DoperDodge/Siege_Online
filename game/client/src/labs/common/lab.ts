@@ -2264,7 +2264,8 @@ export async function startLab(o: LabOptions): Promise<void> {
 
   // ------------------------------------------------------------------ what the server judged (Phase 3 M6)
 
-  const weaponName = (id: string) => data.weapons.get(id)?.name ?? id;
+  // A weapon's name, or a gadget's (Phase 8: a blast's kill names it).
+  const weaponName = (id: string) => data.weapons.get(id)?.name ?? data.gadgets.get(id)?.name ?? id;
   const nameOfCtrl = (id: number) => net?.session.roster.find((e) => e.controllerId === id)?.name ?? "someone";
   /** Recent server events for the e2e scripts. */
   const recentEvents: GameEvent[] = [];

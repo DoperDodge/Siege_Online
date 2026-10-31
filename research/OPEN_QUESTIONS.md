@@ -551,6 +551,25 @@ The gadget questions in [gadgets.md](gadgets.md) and the operator files stay ope
 7. **Sizes:** every gadget's box (data/gadgets/<id>.json `sizeM`) is ours: what bullets meet and what's drawn.
 8. **Counts:** the Breach Charge's 3 (Fandom) and Striker's stuns (3 on Fandom's Striker page, 2 on the generic one):
    what does the loadout screen show?
+9. **How blast damage falls off (M2):** full within a distance, then a straight line down to nothing at the blast's
+   edge, measured to the nearest part of a body the blast can reach; 70 % gets through each soft wall on the way (all
+   of it for the Nitro Cell, Fandom). The frag's 150 within 1.5 m and the Breach Charge's 150 within 0.5 m of the far
+   side, gone at 3 m, are ours. Does Siege's damage drop in a straight line, and how much does a drywall take off?
+10. **The Breach Charge on its placer's side:** 50 right at it, falling to nothing at 1 m (Fandom gives the 50 and the
+    1 m, not the shape). Is it 50 anywhere within 1 m?
+11. **What a blast destroys:** gadgets within 3.6 m of a frag (Y7S3), 1.5 m of a Breach Charge, 2 m of a Claymore, a
+    Nitro Cell or an impact grenade, 0.5 m of a Hard Breach Charge (ours), the Claymore's only in front of it.
+    Barricades in that range break, the Claymore's too (CSV: UNVERIFIED). Does a Claymore break a barricade?
+12. **Grenades' holes:** a grenade cuts every soft wall within 1 m, a disc smaller the further it is (ours). Our
+    impact grenade's 1 m disc is never a walk-through hole, though the CSV says one at the right height is: how big
+    is an impact grenade's hole?
+13. **The Hard Breach Charge on a reinforced hatch:** one charge takes the whole hatch (ours; the Y5S3 rule wants three
+    of its cones on the hatch, which one charge laid flat on it has). Its own steel doesn't stop its 5 hp reaching
+    someone right behind it (ours).
+14. **Shooting gadgets:** one bullet or a knife hit destroys a charge, a Claymore, a Nitro Cell, the proximity alarm
+    and the observation blocker (the charges' 1 hp is the CSV's placeholder). Can a bullet or a knife destroy a Hard
+    Breach Charge?
+15. **The Claymore's lasers:** at its own height (7 cm) and from its centre (ours). How high are they?
 
 ### [core_mechanics.md](core_mechanics.md) — 16
 

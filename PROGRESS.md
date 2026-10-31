@@ -8,13 +8,14 @@ known issues, and what's next.
 ## Phase 8 — Operators · 🚧 in progress (branch `claude/phase-8-operators`, PR #9)
 
 **Done when (PLAN §17):** every row of research/interactions.csv (343) has a passing test. The design is
-`game/shared/src/gadgets/DESIGN.md` (D-140). It builds on Phase 7 (PR #8), which waits for your test.
+`game/shared/src/gadgets/DESIGN.md` (D-140). Phases 6 and 7 are merged into `main` (PRs #7 and #8), so this PR
+targets `main`.
 
 | Milestone | Status |
 |---|---|
 | M1 The framework: gadget data, the hands and keys, the gadget table (protocol 15), throws, placing, detonators, picking up; the Bulletproof Camera moved onto it; the Gadget Lab; the interactions harness | ✅ (D-141) |
-| M2 Blasts and the lethal generics (frag, impact grenade, Breach and Hard Breach Charges, Nitro Cell, Claymore) | next |
-| M3 The other generics (stun, smoke, Impact EMP, barbed wire, deployable shield, proximity alarm, observation blocker), pinging gadgets, ingredients | |
+| M2 Blasts and the lethal generics (frag, impact grenade, Breach and Hard Breach Charges, Nitro Cell, Claymore) | ✅ (D-142) |
+| M3 The other generics (stun, smoke, Impact EMP, barbed wire, deployable shield, proximity alarm, observation blocker), pinging gadgets, ingredients | next |
 | M4 Sledge; Striker and Sentry | |
 | M5 Thermite; Fuze's Cluster Charge | |
 | M6 Mute; Pulse | |
@@ -24,6 +25,29 @@ known issues, and what's next.
 | M10 Skopós's remaining rules; Lesion | |
 | M11 The Ballistic Shield | |
 | M12 Every CSV row passing; netsim, browser tests, review, docs, report | |
+
+### What's done (M2: blasts and the lethal generics)
+- **Every explosive goes off:** the frag at its fuse, the impact grenade on the first body or surface it hits, the
+  Breach Charge and the Nitro Cell when you press their detonator, the Hard Breach Charge 4 s after it's on, the
+  Claymore when a defender crosses one of its lasers.
+- **Damage:** full close by, less further out, none past its edge; 70 % of it gets through each soft wall on the way
+  (the Nitro Cell's all of it); steel and the level stop it. The frag does 150 (to 3.6 m), the Claymore 155 (in front,
+  to 6 m), the Nitro Cell 171 (to 6 m), the impact grenade 40 (to 2 m); the Breach Charge is lethal close behind its
+  wall and does up to 50 on your side of it; the Hard Breach Charge does 5 right at it. Your own blasts hurt you,
+  teammates by the friendly-fire rules, and the kill feed names the gadget.
+- **Destruction:** the Breach Charge opens a walk-through hole in a soft wall (studs too); the Hard Breach Charge a
+  small square through anything breakable, steel included; grenades cut the soft walls close by. Hatches open, soft
+  floors get holes you can see and shoot through (never fall through), barricades break, and gadgets close by are
+  destroyed (a Bulletproof Camera's glass breaks).
+- **The Claymore:** armed 1 s after it's down; three 2 m lasers (ahead and 30° either side) that pass under
+  barricades and through holes; attackers walk through them; Skopós's idle shell doesn't set it off until she wakes
+  that shell.
+- **Shooting gadgets:** one bullet or a knife hit destroys a charge, a Claymore, a Nitro Cell, an alarm or a blocker,
+  without a blast. Barbed wire, and anything in flight, can't be shot.
+- **Everyone sees and hears it:** a fireball, smoke, a flash of light and a bang.
+- **The Gadget Lab has dummies:** behind the plain soft wall, behind the steel, behind the barricaded door, and one of
+  each team in the open.
+- **The interaction tests:** 69 more rows of research/interactions.csv pass (78 of 343).
 
 ### What's done (M1: the framework)
 - **Every gadget in both pools has its data:** data/gadgets/<id>.json (count, side, electronic, how it's thrown or
@@ -58,18 +82,26 @@ npm start
    left mouse sets it off. Pick Sentry: his gadgets are two selects in the loadout; Z takes out the second.
 2. **Gadget Lab online** → *Copy invite link* in the pause menu, open it in a second window: what one throws, the
    other sees.
+3. **Blasts (M2):** as Sledge, throw a frag at the defender dummy in the open: it's down, and the kill feed names the
+   frag. As Fuze, a Breach Charge on the plain soft wall: the dummy behind it is down and the wall has a door-sized
+   hole. As Mute, throw the Nitro Cell, walk well away and press left mouse.
+4. **The Claymore:** as Striker (Claymore in his kit) or Brava, put one down, switch to the defenders in the pause
+   menu and walk into a laser. As Fuze with the Hard Breach Charge, put it on the reinforced wall and wait 4 s.
 
 The automated checks: `npm run typecheck`, `npm test` (the interactions test lists every CSV row: built ones pass,
 the rest are todos), `npm run build`, `node tools/e2e/gadget-lab.mjs`.
 
 ### Known issues
-- Gadgets don't do anything yet (M2, M3); the Gadget Lab has no dummies yet (M2: blasts need someone to hurt).
+- Smoke, stuns, EMPs, barbed wire, shields, alarms and blockers don't do their own thing yet (M3); blasts and bullets
+  already destroy them.
+- No ringing ears or shake from a blast yet (with the stun, M3). The impact grenade's hole is never big enough to walk
+  through (our size, research/OPEN_QUESTIONS.md).
 - Every gadget is a greybox in its kind's colour; the gadget in your hands is a box.
 - You can't watch a Bulletproof Camera in a lab (cameras are a match's).
 
 ---
 
-## Phase 7 — Intel · ✅ done, waiting for your test (branch `claude/phase-7-intel`, PR #8)
+## Phase 7 — Intel · ✅ complete (merged into `main`, PR #8)
 
 **Done when (PLAN §17):** prep-phase droning and watching the cameras work online. The design is
 `game/shared/src/intel/DESIGN.md` (D-134). It builds on Phase 6 (PR #7), which waits for your test.
@@ -211,7 +243,7 @@ the rest are todos), `npm run build`, `node tools/e2e/gadget-lab.mjs`.
 
 ---
 
-## Phase 6 — Match flow + lobby · ✅ built, ⏳ waiting for your test (branch `claude/phase-6-match-flow`, PR #7)
+## Phase 6 — Match flow + lobby · ✅ complete (merged into `main`, PR #7)
 
 **Done when (PLAN §17):** full 1v1 and 2v3 matches play start to finish. The design is
 `game/shared/src/match/DESIGN.md` (D-118 to D-124).

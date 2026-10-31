@@ -7,7 +7,6 @@ import {
   Btn,
   DEFENSE,
   defaultLoadoutPick,
-  eyePose,
   GadgetServer,
   GFlag,
   loadoutPickProblem,
@@ -51,40 +50,23 @@ async function camOnWall() {
   const d = s.sim.data.gadgets.get("bulletproof_camera")!;
   const cam = s.put("bulletproof_camera", 1, [-8, 1.5, -5.9 + d.sizeM[2] / 2], { yaw: Math.PI, flags: 0, panel });
   const now = () => s.sim.gadgets.get(cam.id)!;
-  /** Client 0 aims down the sights at `at` from where it stands, and fires once. */
-  const shootAt = (at: Vec3) => {
-    const eye = eyePose(s.sim.data.movement, s.sim.data.hitboxes, s.body(0).state).pos;
-    const v = [at[0] - eye[0], at[1] - eye[1], at[2] - eye[2]];
-    const aim = { yaw: Math.atan2(-v[0], -v[2]), pitch: Math.atan2(v[1], Math.hypot(v[0], v[2])) };
-    s.clients[0].cmd = { ...aim, buttons: Btn.Ads };
-    s.wait(64);
-    s.clients[0].cmd = { ...aim, buttons: Btn.Ads | Btn.Fire };
-    s.tick();
-    s.clients[0].cmd = { ...aim };
-    s.wait(8);
-  };
-  return { ...s, cam, now, shootAt };
+  return { ...s, cam, now };
 }
 
 row("weapon.bullet", "generic.bulletproof_camera", async () => {
   const s = await camOnWall();
   s.teleport(0, -8, 0, -3.5, 0); // in front of it: its plate
-  s.shootAt(s.cam.pos);
+  s.shootAt(0, s.cam.pos);
   expect(s.now().flags & GFlag.Broken).toBe(0);
   s.teleport(0, -9.3, 0, -5.4, -90); // beside it along the wall: its weak side
-  s.shootAt(s.cam.pos);
+  s.shootAt(0, s.cam.pos);
   expect(s.now().flags & GFlag.Broken).toBe(GFlag.Broken);
 });
 
 row("player.melee", "generic.bulletproof_camera", async () => {
   const s = await camOnWall();
   s.teleport(0, -8, 0, -5.0, 0); // knife range, at its bulletproof front
-  const eye = eyePose(s.sim.data.movement, s.sim.data.hitboxes, s.body(0).state).pos;
-  const pitch = Math.atan2(s.cam.pos[1] - eye[1], Math.abs(s.cam.pos[2] - eye[2]));
-  s.clients[0].cmd = { pitch, buttons: Btn.Melee };
-  s.tick();
-  s.clients[0].cmd = { pitch };
-  s.wait(48);
+  s.knife(0, s.cam.pos);
   expect(s.now().flags & GFlag.Broken).toBe(GFlag.Broken); // shattered: no feed for the rest of the round
 });
 

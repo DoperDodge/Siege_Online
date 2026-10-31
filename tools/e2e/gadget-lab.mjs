@@ -1,8 +1,10 @@
-// End-to-end check of the Gadget Lab (Phase 8 M1, game/shared/src/gadgets/DESIGN.md §11). Offline (the page's own
-// room in a Web Worker): Sledge takes a frag out with 3 and throws it (it flies, comes to rest, and is gone at its
+// End-to-end check of the Gadget Lab (Phase 8 M1 and M2, game/shared/src/gadgets/DESIGN.md §11). Offline (the page's
+// own room in a Web Worker): Sledge takes a frag out with 3 and throws it (it flies, comes to rest, and is gone at its
 // fuse); Fuze takes a Breach Charge out, holds Fire at a soft wall until it's on it (the detonator is then in hand)
-// and sets it off. Online, two pages at 100 ms of simulated round trip: what A throws, B has in its table too, and
-// A's prediction needed no corrections. Requires `npm run build` first.
+// and sets it off: the wall has a hole. Mute throws his Nitro Cell at the feet of the attacker dummy in the open, steps
+// well away and sets it off: the dummy is down, by the Nitro Cell. Online, two pages at 100 ms of simulated round trip:
+// what A throws, B has in its table too, A's prediction needed no corrections, and both see its blast. Requires
+// `npm run build` first.
 import { spawn } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -95,9 +97,44 @@ try {
   await input(off, { buttons: Btn.Fire });
   await until(off, () => window.__lab.net.table.length === 0);
   await input(off, null);
+  await sleep(120);
+  await off.screenshot({ path: shot("gadget-breach-blast.png") });
+  await until(off, () => window.__lab.panel("soft_plain").holes[0] > 0, null, 5000);
+  result.breachHoles = (await off.evaluate(() => window.__lab.panel("soft_plain"))).holes;
   result.checks.breachChargePlacedThenDetonated =
     /PLACING THE BREACH CHARGE… \d/.test(result.placingBar ?? "") && result.placed.hand === Hand.Detonator && result.placed.table.length === 1 && Math.abs(result.placed.table[0].pos[2] + 5.9) < 0.1;
+  result.checks.breachChargeCutsTheWall = result.breachHoles[0] > 0 && result.breachHoles[2] > 0;
+
   await off.close();
+
+  // ---- offline: Mute's Nitro Cell at the feet of the attacker dummy in the open (−3, 0, 12), set off from afar
+  const nit = await open(`${BASE}/labs/gadget_lab.html?autotest=1&lowgfx&op=mute&gadgets=nitro_cell`, { width: 960, height: 540 });
+  await nit.evaluate(() => window.__lab.teleport(-3, 0, 15, 0));
+  await sleep(600);
+  await nit.keyboard.press("Digit3");
+  await until(nit, () => window.__lab.net.hand === 1);
+  await sleep(1000);
+  await input(nit, { buttons: Btn.Fire, pitch: -0.7 });
+  await until(nit, () => window.__lab.net.table.some((g) => g.kind === "nitro_cell" && !(g.flags & 1)));
+  await input(nit, { pitch: -0.7 });
+  result.nitro = (await state(nit)).table[0];
+  // Out of its 6 m before setting it off (its owner is hurt by it too).
+  await nit.evaluate(() => window.__lab.teleport(-3, 0, 22, 0));
+  await sleep(800);
+  await input(nit, { buttons: Btn.Fire });
+  await until(nit, () => window.__lab.net.events.some((e) => e.kind === "blast"));
+  await input(nit, null);
+  await sleep(400);
+  const downed = await nit.evaluate(() => {
+    const dummy = window.__lab.net.remotes.find((r) => r.state && Math.hypot(r.state.x + 3, r.state.z - 12) < 0.6);
+    const fell = window.__lab.net.events.find((e) => (e.kind === "down" || e.kind === "kill") && e.victimPawn === dummy?.id);
+    const own = window.__lab.net.own;
+    return { mode: dummy?.state.mode ?? null, weapon: fell?.weapon ?? null, unhurt: own.hp === own.maxHp };
+  });
+  result.nitroBlast = downed;
+  await nit.screenshot({ path: shot("gadget-nitro-downed.png") });
+  result.checks.nitroCellDownsTheDummy = Math.hypot(result.nitro.pos[0] + 3, result.nitro.pos[2] - 12) < 2 && [3, 4].includes(downed.mode) && downed.weapon === "nitro_cell" && downed.unhurt;
+  await nit.close();
 
   // ---- online: what A throws, B has too; A predicted it all
   const a = await open(`${BASE}/labs/gadget_lab.html?online&autotest=1&lowgfx&op=sledge&gadgets=frag&lag=${LAG}`);
@@ -121,6 +158,11 @@ try {
   result.checks.onlineBothTablesAgree = JSON.stringify(ta.table) === JSON.stringify(tb.table) && ta.table.length === 1;
   result.checks.thrownWithoutCorrections = result.online.corrections === 0;
   await input(a, null);
+  // Its fuse runs out: both pages hear the blast, and the tables empty.
+  const blast = () => window.__lab.net.events.some((e) => e.kind === "blast") && window.__lab.net.table.length === 0;
+  await until(a, blast, null, 10000);
+  await until(b, blast, null, 10000);
+  result.checks.onlineBlastSeenByBoth = true;
 
   result.errors = errors;
   ok = Object.values(result.checks).every(Boolean) && errors.length === 0;
