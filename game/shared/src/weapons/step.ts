@@ -11,7 +11,7 @@ import type { GameData } from "../data/load.js";
 import { eyePose } from "../player/hitboxes.js";
 import { turnView, type MoveContext } from "../player/movement.js";
 import type { Pawn } from "../player/pawn.js";
-import { Btn, PawnMode, ReloadKind, ropeIdle, WeaponAct, WFlag, type InputCmd, type PawnState } from "../player/types.js";
+import { Btn, GadgetAct, Hand, PawnMode, ReloadKind, ropeIdle, WeaponAct, WFlag, type InputCmd, type PawnState } from "../player/types.js";
 import { STANCE_NAMES } from "../data/schemas.js";
 import type { ResolvedWeapon } from "./loadout.js";
 import { ticks } from "./ticks.js";
@@ -72,8 +72,16 @@ export type SimEvent =
   | { kind: "disable"; pawnId: number }
   /** The ping key (Phase 7): what a controller aimed at, from its body, its drone or its camera. */
   | { kind: "ping"; ctrlId: number; pos: Vec3 }
-  /** A Bulletproof Camera placed (Phase 7, intel/bpCamera.ts): where, facing which way, on which panel (−1: none). */
-  | { kind: "camera"; pawnId: number; pos: Vec3; yaw: number; onFloor: boolean; panel: number };
+  /**
+   * Gadgets (Phase 8, gadgets/hands.ts): one thrown from `pos` at `vel`, or placed at `pos` facing `yaw` (on the floor,
+   * lying flat, on a panel: −1 none), out of slot 1 or 2; the server adds it to the gadget table. A detonator pressed:
+   * the oldest of that slot's devices out goes off.
+   */
+  | { kind: "throw"; pawnId: number; seq: number; slot: 1 | 2; gadget: string; pos: Vec3; vel: Vec3; yaw: number }
+  | { kind: "place"; pawnId: number; seq: number; slot: 1 | 2; gadget: string; pos: Vec3; yaw: number; onFloor: boolean; flat: boolean; panel: number }
+  | { kind: "detonate"; pawnId: number; seq: number; slot: 1 | 2; gadget: string }
+  /** An Interact hold took a gadget back (its id in the gadget table). */
+  | { kind: "pickUpGadget"; pawnId: number; gadgetId: number };
 
 export type WeaponContext = MoveContext & { data: GameData; events: SimEvent[] };
 
@@ -94,7 +102,10 @@ export const modeIndex = (s: PawnState, slot = s.slot) => (s.modes >> (slot * 4)
 export const fireModeOf = (w: ResolvedWeapon, s: PawnState, slot = s.slot) => w.fire.modes[Math.min(modeIndex(s, slot), w.fire.modes.length - 1)];
 
 /** Hands busy with a hold: reviving someone, or putting up steel or a barricade (no fire, aim, knife or sprint). */
-const handsBusy = (s: PawnState) => s.reviveTarget !== 0 || s.deployKind !== DeployKind.None;
+const handsBusy = (s: PawnState) => s.reviveTarget !== 0 || s.deployKind !== DeployKind.None || s.gAct === GadgetAct.Place;
+
+/** A gadget is in the hands (Phase 8, gadgets/hands.ts): the weapon is away (no aim, fire, reload or fire mode). */
+const gadgetOut = (s: PawnState) => s.hand !== Hand.Weapon;
 
 /** Holding fire (or melee, or reviving later) stops a sprint (research/core_mechanics.md §14). */
 export function blocksSprint(s: PawnState, input: InputCmd): boolean {
@@ -110,7 +121,7 @@ const onRope = ropeIdle;
  * Decides ADS walk speed too.
  */
 export function wantsAim(ctx: { data: GameData }, s: PawnState, input: InputCmd): boolean {
-  if (!(input.buttons & Btn.Ads) || (s.mode !== PawnMode.Walk && !onRope(s)) || s.wAct === WeaponAct.Equip || s.meleeTicks > 0 || handsBusy(s)) return false;
+  if (!(input.buttons & Btn.Ads) || (s.mode !== PawnMode.Walk && !onRope(s)) || s.wAct === WeaponAct.Equip || s.meleeTicks > 0 || handsBusy(s) || gadgetOut(s)) return false;
   return s.grounded || s.airPeakY - s.y <= ctx.data.gunplay.rules.adsDropCancelM;
 }
 
@@ -298,12 +309,12 @@ export function stepWeapon(ctx: WeaponContext, pawn: Pawn, input: InputCmd, pres
     s.wflags &= ~WFlag.FireQueued;
     w = lo.weapons[s.slot];
   }
-  if (pressed & Btn.FireMode && w.fire.modes.length > 1) {
+  if (pressed & Btn.FireMode && w.fire.modes.length > 1 && !gadgetOut(s)) {
     const next = (modeIndex(s) + 1) % w.fire.modes.length;
     s.modes = (s.modes & ~(15 << (s.slot * 4))) | (next << (s.slot * 4));
     s.burstLeft = 0;
   }
-  if (pressed & Btn.Reload && s.wAct === WeaponAct.Ready && walking && !s.sprinting && s.meleeTicks === 0) startReload(ctx, pawn, w);
+  if (pressed & Btn.Reload && s.wAct === WeaponAct.Ready && walking && !s.sprinting && s.meleeTicks === 0 && !gadgetOut(s)) startReload(ctx, pawn, w);
   // The knife: from any allowed stance, even mid-sprint (it ends the sprint) or mid-reload (it cancels it).
   if (pressed & Btn.Melee && s.meleeTicks === 0 && (s.mode === PawnMode.Walk || onRope(s)) && s.wAct !== WeaponAct.Equip && !handsBusy(s) && melee.allowInStances.includes(STANCE_NAMES[s.stance])) {
     if (s.wAct === WeaponAct.Reload) endReload(s);
@@ -341,7 +352,7 @@ export function stepWeapon(ctx: WeaponContext, pawn: Pawn, input: InputCmd, pres
   const sprintGate = !s.sprinting && s.sinceSprint >= exitToFire - 1e-6;
   const loaded = loadedOf(s);
   const ready = s.wAct === WeaponAct.Ready || (s.wAct === WeaponAct.Reload && loaded > 0 && rules.reload.fireCancels);
-  const gate = walking && sprintGate && ready && s.meleeTicks === 0 && !handsBusy(s) && w.fire.kind === "hitscan";
+  const gate = walking && sprintGate && ready && s.meleeTicks === 0 && !handsBusy(s) && !gadgetOut(s) && w.fire.kind === "hitscan";
   // A press during the sprint exit fires once it ends, but only on a tick with real input (its view and seq).
   if (press && !sprintGate) s.wflags |= WFlag.FireQueued;
   let queued = false;

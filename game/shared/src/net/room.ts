@@ -30,7 +30,11 @@ import { MatchDirector, type DirectorHost } from "./matchDirector.js";
 import type { LobbyAction, MatchAction, RoomListEntry } from "./matchWire.js";
 import { isFormat, type FormatMode, type Side } from "../match/rules.js";
 import { camerasOnRay } from "../intel/cameras.js";
-import { bpCamsOnRay, dartBurst } from "../intel/bpCamera.js";
+import { dartBurst } from "../intel/bpCamera.js";
+import { bpCamsBroken } from "../gadgets/hits.js";
+import { GadgetServer } from "../gadgets/serve.js";
+import { deviceLost, slotCounts } from "../gadgets/hands.js";
+import { encodeGadgetOps, encodeGadgetState } from "./gadgetWire.js";
 import { raycastLevel } from "../level/raycast.js";
 import { ticks, ticksOrZero } from "../weapons/ticks.js";
 import { encodeError, encodePong, encodeRoster, encodeShotResult, encodeWelcome, ErrorCode, unwrap16, type InputMsg, type LabTool, type RosterEntry, type ShotResult } from "./protocol.js";
@@ -173,6 +177,12 @@ interface Member {
    */
   opsHad: number;
   opsHeld: IndexedOp[] | null;
+  /**
+   * The gadget table (Phase 8): when we last sent it whole because it asked, and whether it missed ops with a snapshot
+   * it wasn't sent (it gets the whole table with its next one).
+   */
+  gadgetStateAt: number;
+  gadgetsStale: boolean;
 }
 
 /** More ops than this held back for one client: send it the panels' state instead (a message carries at most 4096). */
@@ -254,11 +264,14 @@ export class Room implements DirectorHost {
     panelOps: 0,
     /** Panel states sent because a client's panels disagreed. */
     panelResyncs: 0,
+    gadgetResyncs: 0,
   };
   /** The lab preset: a lab room's damage rules. */
   private readonly labRules: ModeData;
   /** A match room's match (Phase 6); null in a lab room. */
   readonly director: MatchDirector | null;
+  /** The gadget table's server side (Phase 8, gadgets/serve.ts): events into entries, flights, fuses. */
+  readonly gadgetServer: GadgetServer;
   /** Shots judged this tick, applied together at its end (DECISIONS D-044). */
   private judged: JudgedShot[] = [];
   /**
@@ -281,6 +294,19 @@ export class Room implements DirectorHost {
     format: FormatMode | null,
   ) {
     this.history = new HitboxHistory(sim, 32);
+    this.gadgetServer = new GadgetServer(sim);
+    // A remote device gone without its detonator (destroyed, cleared): its owner has one fewer waiting; told at once.
+    this.gadgetServer.onLost = (g, d) => {
+      const c = sim.controllers.get(g.owner);
+      const owner = c ? this.memberOf(c.id) : null;
+      for (const id of c?.pawnIds ?? []) {
+        const p = sim.pawns.get(id);
+        if (p && deviceLost(sim.data, p, d.id)) {
+          if (owner) this.force(owner);
+          return;
+        }
+      }
+    };
     this.labRules = sim.data.modes.get("lab")!;
     this.director = format ? new MatchDirector(this, format, seed) : null;
     // Reinforcing and barricades (Phase 4 M6): each team's pool; lab rooms let attackers do it too, and let
@@ -406,6 +432,8 @@ export class Room implements DirectorHost {
       panelStateAt: -Infinity,
       opsHad: this.unsentOps.length,
       opsHeld: [],
+      gadgetStateAt: -Infinity,
+      gadgetsStale: false,
     };
     if (this.director && !this.director.join(m.id, m.name)) {
       client.send(encodeError(ErrorCode.RoomFull, `Room ${this.code}'s teams are full`));
@@ -415,6 +443,7 @@ export class Room implements DirectorHost {
     if (!this.director) this.spawn(m);
     client.send(encodeWelcome({ roomCode: this.code, tick: this.sim.tick, levelId: this.levelId, controllerId: m.ctrl?.id ?? 0 }));
     client.send(encodePanelState(this.sim.level.panels)); // the walls as they are now (ops waiting to go included); every later op follows
+    client.send(encodeGadgetState(this.sim.gadgets.list)); // the gadgets too (the ops waiting to go are already in it, and redo nothing)
     m.events.push(this.deployRulesEvent());
     this.broadcastRoster();
     return m.id;
@@ -623,6 +652,15 @@ export class Room implements DirectorHost {
     this.sendPanelState(m, encodePanelState(this.sim.level.panels));
   }
 
+  /** A client's gadget table disagrees with ours (its hash): send it the whole table (at most once a second). */
+  onGadgetResync(memberId: number): void {
+    const m = this.members.get(memberId);
+    if (!m || this.sim.tick - m.gadgetStateAt < TICK_HZ) return;
+    m.gadgetStateAt = this.sim.tick;
+    this.stats.gadgetResyncs++;
+    m.client.send(encodeGadgetState(this.sim.gadgets.list));
+  }
+
   /** Every changed panel's state, which covers every op this member was still to be sent. */
   private sendPanelState(m: Member, state: Uint8Array) {
     m.client.send(state);
@@ -668,13 +706,17 @@ export class Room implements DirectorHost {
     } else if (tool.kind === "resetDummies") {
       for (const d of this.dummies) this.respawnDummy(d);
     } else if (tool.kind === "refill") {
+      // Ammo, and the gadgets in both slots (Phase 8).
       for (const id of m.ctrl.pawnIds) {
         const p = this.sim.pawns.get(id);
         if (!p?.loadout || p.state.mode === PawnMode.Dead) continue;
         const [a, b] = p.loadout.weapons.map(spawnAmmo);
-        Object.assign(p.state, { loaded0: a.loaded, reserve0: a.reserve, loaded1: b.loaded, reserve1: b.reserve });
+        const [g1, g2] = slotCounts(this.sim.data, p.loadout);
+        Object.assign(p.state, { loaded0: a.loaded, reserve0: a.reserve, loaded1: b.loaded, reserve1: b.reserve, g1, g2 });
       }
       this.force(m);
+    } else if (tool.kind === "clearGadgets") {
+      this.gadgetServer.clear();
     } else if (tool.kind === "explosive") {
       // Its cut where your body looks along the view you sent, applied with the next tick's ops. The id is the
       // client's: only the data's own keys name an explosive (not "constructor" or "__proto__").
@@ -744,17 +786,15 @@ export class Room implements DirectorHost {
     if (rewoundTick > viewTick) this.stats.cappedShots++;
     const panelOps = paths.flatMap((p) => p.ops);
     // Default cameras on a pellet's way, short of what stopped it, break (Phase 7: any hit, either side's), and so do
-    // Bulletproof Cameras hit from the side or the back.
-    if (this.director && this.sim.matchRules.cameras) {
-      let broke = 0;
-      let bp = 0;
-      for (const p of paths) {
-        const end = Math.min(p.end, p.first?.t ?? Infinity);
-        broke |= camerasOnRay(this.sim.level.def, origin, p.dir, end, this.sim.matchRules.camsBroken);
-        bp |= bpCamsOnRay(this.sim.matchRules.bpCams, this.sim.data.intel.bulletproofCamera, origin, p.dir, end);
+    // Bulletproof Cameras hit from the side or the back (the gadget table's, in any room).
+    const cams = this.sim.bpCams();
+    for (const p of paths) {
+      const end = Math.min(p.end, p.first?.t ?? Infinity);
+      if (this.director && this.sim.matchRules.cameras) {
+        const broke = camerasOnRay(this.sim.level.def, origin, p.dir, end, this.sim.matchRules.camsBroken);
+        if (broke) this.director.camerasBroken(broke);
       }
-      if (broke) this.director.camerasBroken(broke);
-      if (bp) this.director.bpCamsBroken(bp);
+      if (cams.length) this.gadgetServer.breakCams(bpCamsBroken(this.sim.bpCams(), this.sim.data, origin, p.dir, end));
     }
     this.judged.push({ m, cause: Cause.Bullet, ctrlId: m.ctrl.id, team: shooter.team, seq: shot.seq, weaponId: w.id, receivedTick: now, rewoundTick, origin, bodies, lives: this.livesOf(bodies), panelOps });
     // Everyone sees and hears it (the shooter's own client draws its flash itself, but not where pellets went).
@@ -825,9 +865,9 @@ export class Room implements DirectorHost {
     const ray = new this.sim.R.Ray({ x: hit.origin[0], y: hit.origin[1], z: hit.origin[2] }, { x: dir[0], y: dir[1], z: dir[2] });
     const plain = this.sim.world.castRay(ray, reach, true, undefined, QUERY_SIGHT)?.timeOfImpact ?? reach;
     // A Bulletproof Camera in reach: the knife breaks its glass, any face (Phase 7; for us its feed is gone, broken).
-    const knifed = this.director ? bpCamsOnRay(this.sim.matchRules.bpCams, this.sim.data.intel.bulletproofCamera, hit.origin, dir, plain, true) : 0;
-    if (knifed) {
-      this.director!.bpCamsBroken(knifed);
+    const knifed = bpCamsBroken(this.sim.bpCams(), this.sim.data, hit.origin, dir, plain, true);
+    if (knifed.length) {
+      this.gadgetServer.breakCams(knifed);
       return;
     }
     const onPanel = meleeOnPanels(this.sim.level.panels, this.sim.data.destruction, hit.origin, dir, reach, plain, { tick: panelTick, history: this.panelHistory });
@@ -871,7 +911,7 @@ export class Room implements DirectorHost {
     if (pools[pawn.team] <= 0) return;
     if (!this.applyPanelOp(e.panel, { kind: "reinforce", section: e.section, side: e.side })?.added[L_STEEL].length) return;
     pools[pawn.team]--;
-    this.director?.panelReinforced(e.panel);
+    this.gadgetServer.reinforced(e.panel);
     for (const m of this.members.values()) m.events.push(this.deployRulesEvent());
   }
 
@@ -1020,8 +1060,8 @@ export class Room implements DirectorHost {
         if (p) this.announceDeath(p, 0, "", e.cause === "bleed" ? Cause.Bleed : Cause.Fall, false, false, e.life);
       } else if (e.kind === "deploy") {
         this.completeDeploy(e);
-      } else if (e.kind === "camera") {
-        this.director?.cameraPlaced(e);
+      } else if (e.kind === "throw" || e.kind === "place" || e.kind === "detonate" || e.kind === "pickUpGadget") {
+        this.gadgetServer.onEvent(e);
       } else if (e.kind === "rappelBreach") {
         this.completeBreach(e);
       } else if (e.kind === "plant" || e.kind === "disable" || e.kind === "pickup" || e.kind === "drop") {
@@ -1196,11 +1236,11 @@ export class Room implements DirectorHost {
       const pressed = down && !m.gadgetHeld;
       m.gadgetHeld = down;
       const c = m.ctrl;
-      if (!pressed || !c?.cam || !this.director) continue;
+      if (!pressed || !c?.cam) continue;
       const i = c.cam - 1;
       const cam = this.sim.bpCamAt(i);
       const body = this.sim.pawns.get(c.possessedPawnId);
-      if (!cam || !this.sim.camWorks(i) || this.sim.tick < cam.dartReady || !body || body.state.mode === PawnMode.Dead) continue;
+      if (!cam || !this.sim.camWorks(i) || this.sim.tick < cam.readyAt || !body || body.state.mode === PawnMode.Dead) continue;
       const view = this.sim.viewOf(c)!;
       const team = this.teamOf(m);
       const drones = [...this.sim.pawns.values()].filter((p) => p.kind === PawnKind.Drone && p.state.mode === PawnMode.Walk && p.team !== team);
@@ -1210,7 +1250,7 @@ export class Room implements DirectorHost {
         const at = centre(p);
         if (Math.hypot(at[0] - burst[0], at[1] - burst[1], at[2] - burst[2]) <= k.dartRadiusM) p.state.jammed = ticks(k.disableS);
       }
-      this.director.dartFired(i - this.sim.level.def.cameras.length, this.sim.tick + ticksOrZero(k.dartRechargeS));
+      this.sim.gadgets.update(cam.id, { readyAt: this.sim.tick + ticksOrZero(k.dartRechargeS) });
       const e: GameEvent = { kind: "emp", pos: burst };
       for (const o of this.members.values()) o.events.push(e);
     }
@@ -1317,7 +1357,9 @@ export class Room implements DirectorHost {
     this.resolveShots();
     this.checkReviveLinks();
     this.reviveDummies();
-    // A match's clock and what its phases do with bodies; its state goes out before this tick's snapshot.
+    // Gadgets in flight, fuses and outdoor signals (Phase 8), then a match's clock and what its phases do with bodies;
+    // its state goes out before this tick's snapshot.
+    this.gadgetServer.step();
     this.director?.step();
     this.history.record();
     this.stats.ticks++;
@@ -1364,6 +1406,9 @@ export class Room implements DirectorHost {
     let shared: Uint8Array | null = null;
     const ops = this.unsentOps;
     this.unsentOps = [];
+    // The gadget table's ops since the last snapshot (Phase 8), the same message for everyone who had every op before.
+    const gadgetOps = this.sim.gadgets.takeOps();
+    let gadgetMsg: Uint8Array | null = null;
     for (const m of this.members.values()) {
       const fresh = m.opsHad ? ops.slice(m.opsHad) : ops;
       const mine = m.opsHeld === null ? null : m.opsHeld.length ? m.opsHeld.concat(fresh) : fresh;
@@ -1371,12 +1416,17 @@ export class Room implements DirectorHost {
       if (m.client.buffered() > MAX_BUFFERED) {
         this.stats.skippedSnapshots++;
         m.opsHeld = mine && mine.length <= MAX_HELD_OPS ? mine : null;
+        if (gadgetOps.length) m.gadgetsStale = true;
         continue; // never encode a snapshot that isn't sent: deltas are against what was sent
       }
       m.opsHeld = [];
       if (mine === null) m.client.send(encodePanelState(this.sim.level.panels));
       else if (mine === ops && ops.length) m.client.send((shared ??= encodePanelOps({ tick, ops, hash })));
       else if (mine.length) m.client.send(encodePanelOps({ tick, ops: mine, hash: this.sim.level.panels.hash() }));
+      if (m.gadgetsStale) {
+        m.gadgetsStale = false;
+        m.client.send(encodeGadgetState(this.sim.gadgets.list));
+      } else if (gadgetOps.length) m.client.send((gadgetMsg ??= encodeGadgetOps({ tick, ops: gadgetOps, hash: this.sim.gadgets.hash() })));
       const own = new Set(m.ctrl?.pawnIds ?? []);
       const remotes = new Map([...all].filter(([id]) => !own.has(id)));
       let correction = null;

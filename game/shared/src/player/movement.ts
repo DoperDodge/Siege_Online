@@ -15,6 +15,8 @@ import { poseDrone } from "./drone.js";
 import { blocksSprint, parkWeapon, stepWeapon, wantsAim, type SimEvent } from "../weapons/step.js";
 import { bleedTick, isDowned } from "./downed.js";
 import { ticks } from "../weapons/ticks.js";
+import { DeployKind } from "../destruction/deploy.js";
+import { parkHands, putAway, stepHands } from "../gadgets/hands.js";
 
 export interface MoveContext {
   R: Rapier;
@@ -62,10 +64,17 @@ export function stepPawn(ctx: MoveContext, pawn: Pawn, input: InputCmd, weapons 
     stepWalk(ctx, pawn, input, pressed, live);
   }
   const down = isDowned(s);
-  if (weapons && !down) stepWeapon(ctx, pawn, input, pressed);
-  else {
+  if (weapons && !down) {
+    // The gadget in hand first (Phase 8): a key that takes one out puts the weapon away this same tick.
+    stepHands(ctx, pawn, input, pressed, s.meleeTicks === 0 && s.reviveTarget === 0 && s.deployKind === DeployKind.None);
+    stepWeapon(ctx, pawn, input, pressed);
+  } else {
     parkWeapon(s);
-    if (down) s.adsQ = 0; // no weapons while down
+    parkHands(s);
+    if (down) {
+      s.adsQ = 0; // no weapons while down, nor gadgets
+      putAway(s, false);
+    }
   }
   roundState(s);
   // The collider is placed from the state, exactly as a client places it from a correction (which carries

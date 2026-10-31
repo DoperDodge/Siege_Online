@@ -118,6 +118,11 @@ export interface ResolvedLoadout {
   pick: LoadoutPick;
   weapons: [ResolvedWeapon, ResolvedWeapon];
   gadgets: string[];
+  /**
+   * The gadgets in the hands' two slots (Phase 8, gadgets/DESIGN.md §2): slot 1 the secondary gadget, slot 2 a kit's
+   * second gadget (Striker, Sentry); null where there's none.
+   */
+  slots: [string | null, string | null];
   swapTicks: number;
 }
 
@@ -216,6 +221,7 @@ export function resolveLoadout(data: GameData, pick: LoadoutPick): { loadout: Re
       pick: normalized,
       weapons: [resolveWeapon(data, primary), resolveWeapon(data, secondary)],
       gadgets: normalized.gadgets,
+      slots: [normalized.gadgets[0] ?? null, data.operators.get(p.operator)?.loadout.gadgetKit ? (normalized.gadgets[1] ?? null) : null],
       swapTicks: ticks(data.gunplay.rules.swapS),
     },
     problem,

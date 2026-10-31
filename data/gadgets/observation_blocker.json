@@ -1,0 +1,15 @@
+{
+  "_doc": "Observation Blocker (defender pool; research/gadgets.md §4.7). Three each; placed (not thrown) in 1 s (Y11S1); electronic. Its reach, picking it up again and its size are placeholders. One bullet destroys it (1 hp, Y8S2).",
+  "_season": "Y11S3",
+  "_unverified": ["use.reachM", "pickUp", "sizeM"],
+  "id": "observation_blocker",
+  "name": "Observation Blocker",
+  "side": "defender",
+  "count": 3,
+  "electronic": true,
+  "use": {"kind": "place", "on": ["floor"], "placeS": 1.0, "reachM": 2.5},
+  "remote": false,
+  "pickUp": true,
+  "sizeM": [0.12, 0.25, 0.12],
+  "fragile": true
+}

@@ -58,9 +58,10 @@ export class Controls {
   stanceLocked: () => boolean = () => false;
   /**
    * The predicted weapon state (slot in hand, and whether a swap is still bringing it up), so 1 / 2 / the
-   * wheel turn into a single swap press only when the slot would change (C16 in the Phase 3 plan).
+   * wheel turn into a single swap press only when the slot would change (C16 in the Phase 3 plan). `gadget`: the
+   * gadget slot in the hands (Phase 8: 1 or 2; 0 the weapon), which 1 / 2 put away.
    */
-  weaponState: () => { slot: number; equipping: boolean; zoom?: number } | null = () => null;
+  weaponState: () => { slot: number; equipping: boolean; zoom?: number; gadget?: number } | null = () => null;
   /** When this returns true (a map's plan view zooms with it), the mouse wheel doesn't switch weapons. */
   wheelTaken: () => boolean = () => false;
   /**
@@ -87,7 +88,7 @@ export class Controls {
   private meleePulse = false;
   private dropPulse = false;
   private observePulse = false;
-  /** The gadget key is held to place a camera (Phase 7); a tap shorter than a tick still goes out once (its dart). */
+  /** The gadget key (Phase 8): a press takes the gadget out or puts it away (on a Bulletproof Camera, fires its dart). */
   private gadgetPulse = false;
   private throwPulse = false;
   /**
@@ -435,13 +436,19 @@ export class Controls {
     if (this.meleePulse) buttons |= Btn.Melee;
     if (this.dropPulse) buttons |= Btn.Drop;
     if (this.observePulse) buttons |= Btn.Observe;
-    if (this.held.has("gadget") || this.gadgetPulse) buttons |= Btn.Gadget;
+    if (this.gadgetPulse) buttons |= Btn.Gadget;
     if (this.throwPulse) buttons |= Btn.Throw;
     if (this.pingDown && !this.wheel && ++this.pingTicks >= WHEEL_TICKS && this.wheelSize() > 0) this.wheel = { x: 0, y: 0 };
     if (this.pingPulse) buttons |= Btn.Ping;
     // Weapon slot: one swap press, sent only while the slot differs and no swap is already under way
     // (a press then would be ignored); released for a tick in between so the next press is a new one.
     const ws = this.weaponState();
+    if (ws?.gadget && this.wantSlot !== null) {
+      // A gadget in hand (Phase 8): the weapon already out comes back with the gadget's own key (it puts it away), the
+      // other with a swap (which puts it away too).
+      buttons |= this.wantSlot === ws.slot ? (ws.gadget === 1 ? Btn.Gadget : Btn.Ability) : Btn.Swap;
+      this.wantSlot = null;
+    }
     // No weapon to switch (down, dead, between bodies): a request made now is dropped, not kept for later.
     if (!ws || ws.slot === this.wantSlot) this.wantSlot = null;
     if (this.wantSlot !== null && ws && !ws.equipping && !this.sentSwap) {

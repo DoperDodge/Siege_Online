@@ -1,0 +1,15 @@
+{
+  "_doc": "Impact Grenade (defender pool; research/gadgets.md §4.4). Two each; it goes off where it first hits, or in the air after 20 m. Its size is a placeholder. Its blast: 40 hp, none past 2 m (Y9S1.3), full within 0.5 m (ours); it cuts soft surfaces within 1 m (ours).",
+  "_season": "Y11S3",
+  "_unverified": ["sizeM", "blast.damage.fullM", "blast.cutM", "blast.throughSoft", "blast.concussM"],
+  "id": "impact_grenade",
+  "name": "Impact Grenade",
+  "side": "defender",
+  "count": 2,
+  "electronic": false,
+  "use": {"kind": "throw", "flight": "impact", "maxTravelM": 20},
+  "remote": false,
+  "pickUp": false,
+  "sizeM": [0.06, 0.1, 0.06],
+  "blast": {"damage": {"max": 40, "fullM": 0.5, "zeroM": 2.0}, "destroyM": 2.0, "cut": "impact_grenade", "cutM": 1.0, "throughSoft": 0.7, "concussM": 2.0}
+}

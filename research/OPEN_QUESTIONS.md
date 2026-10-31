@@ -527,6 +527,31 @@ The intel questions above (drone numbers, camera limits, pings, the wheel) stay 
    and is ready again 10 s later (all ours). What are Siege's numbers? Does a bullet at the plate stop there (ours goes
    on), and how far does a Bulletproof Camera turn?
 
+### Placeholders added while building Phase 8 (not in the original research)
+
+The gadget questions in [gadgets.md](gadgets.md) and the operator files stay open; these are ours, each in
+`data/gadgets.json` or `data/gadgets/<id>.json` (their `_unverified` lists) and game/shared/src/gadgets/DESIGN.md.
+
+1. **Keys (D-140):** 3 takes the secondary gadget out and puts it away, Z the ability's item (Striker's and Sentry's
+   second gadget); left mouse throws, places (held) or sets a charge off; right mouse lobs; F held takes a gadget back.
+   What are Siege's PC defaults for the gadget, the ability, throwing and lobbing?
+2. **Taking a gadget out:** 0.4 s (ours). How long does Siege take to bring a grenade or a charge up?
+3. **Throws:** a 0.25 s windup; overhand 15 m/s, 8° over the view; a lob 6 m/s, 15° over; the Nitro Cell's heavy throw
+   9 m/s, 8° over; it leaves 20 cm right, 15 cm down and 35 cm ahead of the eye; a 4 cm ball that keeps 35 % of its
+   speed into a surface and loses 60 % along it, at rest under 0.3 m/s (all ours). Roughly how far does an overhand frag
+   go on flat ground, and how far a lob? How far does a Nitro Cell go?
+4. **Placing:** a Breach Charge in 1.5 s; a Claymore, barbed wire and a deployable shield in 1 s (Siege's are unknown;
+   the Hard Breach Charge's 2 s and the observation blocker's 1 s are researched); within 2 m (charges) or 2.5 m (what
+   goes on the floor), where you look. Siege lays barbed wire and shields at your feet toward the crosshair: how far
+   ahead, at most? Does the body have to stand still while placing (ours does)?
+5. **Picking up:** a 1 s hold within 2 m; barbed wire, the deployable shield, the proximity alarm and the observation
+   blocker can be picked up; charges, Claymores, Nitro Cells and the Bulletproof Camera can't (ours). Which can be in
+   Siege, and how long does it take?
+6. **Detonators:** with several charges out, ours sets off the oldest first. Which goes first in Siege?
+7. **Sizes:** every gadget's box (data/gadgets/<id>.json `sizeM`) is ours: what bullets meet and what's drawn.
+8. **Counts:** the Breach Charge's 3 (Fandom) and Striker's stuns (3 on Fandom's Striker page, 2 on the generic one):
+   what does the loadout screen show?
+
 ### [core_mechanics.md](core_mechanics.md) — 16
 
 Most of these can be answered in a Custom Game (Local), usually in minutes, with a stopwatch or a 60 fps recording and known map distances.

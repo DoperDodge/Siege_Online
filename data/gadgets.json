@@ -1,0 +1,9 @@
+{
+  "_doc": "What every gadget shares (Phase 8; game/shared/src/gadgets/DESIGN.md §1-§4). Taking a gadget out of its slot takes `equipS`; a throw winds up for `throw.windupS`, then leaves from `throw.fromM` (right, down and ahead of the eye) at the profile's speed, `upDeg` over the view: Fire throws overhand, ADS lobs underhand, the Nitro Cell has the heavy throw (research/gadgets.md: Y3S4's throw curves, numbers unknown). In flight it is a ball of `radiusM` under gravity (data/movement.json); a bounce keeps `restitution` of the speed into the surface and loses `friction` of the speed along it, and below `restMps` on something flat it comes to rest; after `maxS` anything still flying stops where it is. The owner takes back a gadget that can be picked up by holding Interact for `pickUpS` within `pickUpReachM`. Every number here is ours (placeholders). Metres, seconds, degrees.",
+  "_season": "Y11S3",
+  "_unverified": ["equipS", "throw", "pickUpS", "pickUpReachM"],
+  "equipS": 0.4,
+  "throw": {"windupS": 0.25, "overhand": {"speedMps": 15, "upDeg": 8}, "underhand": {"speedMps": 6, "upDeg": 15}, "heavy": {"speedMps": 9, "upDeg": 8}, "fromM": {"right": 0.2, "down": 0.15, "ahead": 0.35}, "radiusM": 0.04, "restitution": 0.35, "friction": 0.6, "restMps": 0.3, "maxS": 30},
+  "pickUpS": 1.0,
+  "pickUpReachM": 2.0
+}

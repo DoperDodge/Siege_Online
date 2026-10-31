@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { isUnverified, leadingNumber, leadingWord, listTokens, parseCsv, SIGHT_TOKENS } from "../../../tools/data/weaponsCsv.js";
 import {
   combatSchema,
+  kindOf,
   crossFileProblems,
   fnv1a,
   gunplaySchema,
@@ -44,10 +45,24 @@ describe("data files", () => {
       ...rawData.operators.map((o): [string, Record<string, unknown>] => [`operators/${String(o.id)}`, o]),
       ...rawData.weapons.map((w): [string, Record<string, unknown>] => [`weapons/${String(w.id)}`, w]),
       ...rawData.modes.map((r): [string, Record<string, unknown>] => [`modes/${String(r.id)}`, r]),
+      ["intel", rawData.intel],
+      ["gadgets", rawData.gadgetRules],
+      ...rawData.gadgets.map((g): [string, Record<string, unknown>] => [`gadgets/${String(g.id)}`, g]),
     ];
     for (const [name, raw] of files) {
       expect(missingUnverifiedPaths(raw, (raw._unverified as string[] | undefined) ?? []), name).toEqual([]);
     }
+  });
+
+  it("gadget files (Phase 8): one per file name, all imported, each a kind of the gadget table, in both pools", () => {
+    const dir = new URL("../../../data/gadgets/", import.meta.url);
+    const onDisk = readdirSync(dir).filter((f) => f.endsWith(".json")).map((f) => f.slice(0, -5)).sort();
+    expect(rawData.gadgets.map((g) => String(g.id)).sort()).toEqual(onDisk);
+    expect([...data.gadgets.keys()].sort()).toEqual(onDisk);
+    for (const id of onDisk) expect(kindOf(id), id).toBeGreaterThanOrEqual(0);
+    // research/gadgets.md §1: seven a side.
+    expect([...data.gadgets.values()].map((g) => g.side).filter((s) => s === "attacker").length).toBe(7);
+    expect([...data.gadgets.values()].map((g) => g.side).filter((s) => s === "defender").length).toBe(7);
   });
 
   it("mode files: one per file name, all imported", () => {

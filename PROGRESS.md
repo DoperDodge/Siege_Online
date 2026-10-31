@@ -5,6 +5,70 @@ known issues, and what's next.
 
 ---
 
+## Phase 8 — Operators · 🚧 in progress (branch `claude/phase-8-operators`, PR #9)
+
+**Done when (PLAN §17):** every row of research/interactions.csv (343) has a passing test. The design is
+`game/shared/src/gadgets/DESIGN.md` (D-140). It builds on Phase 7 (PR #8), which waits for your test.
+
+| Milestone | Status |
+|---|---|
+| M1 The framework: gadget data, the hands and keys, the gadget table (protocol 15), throws, placing, detonators, picking up; the Bulletproof Camera moved onto it; the Gadget Lab; the interactions harness | ✅ (D-141) |
+| M2 Blasts and the lethal generics (frag, impact grenade, Breach and Hard Breach Charges, Nitro Cell, Claymore) | next |
+| M3 The other generics (stun, smoke, Impact EMP, barbed wire, deployable shield, proximity alarm, observation blocker), pinging gadgets, ingredients | |
+| M4 Sledge; Striker and Sentry | |
+| M5 Thermite; Fuze's Cluster Charge | |
+| M6 Mute; Pulse | |
+| M7 Mira | |
+| M8 Brava | |
+| M9 Dokkaebi | |
+| M10 Skopós's remaining rules; Lesion | |
+| M11 The Ballistic Shield | |
+| M12 Every CSV row passing; netsim, browser tests, review, docs, report | |
+
+### What's done (M1: the framework)
+- **Every gadget in both pools has its data:** data/gadgets/<id>.json (count, side, electronic, how it's thrown or
+  placed, its size) and data/gadgets.json (taking one out, throws, picking up). Most numbers are placeholders, listed
+  in research/OPEN_QUESTIONS.md ("Placeholders added while building Phase 8").
+- **Your gadgets in your hands:** 3 takes your gadget out (Z: Striker's and Sentry's second one) and puts it away; 1 or 2
+  brings a weapon back. Left mouse throws it (right mouse lobs it) or, held, places it where a green outline shows.
+  With a charge out, the detonator is in your hand: left mouse sets the oldest off (3 takes out the next charge). Hold
+  F on one of yours (wire, shield, alarm, blocker) to take it back. Others see what you hold.
+- **Throws fly:** grenades bounce and roll to rest, impact grenades go off where they hit (or after 20 m), the Nitro
+  Cell and the proximity alarm stick. A frag's fuse runs 4 s, cut to 2 s at its first bounce. Your own throw shows at
+  once; everyone else sees it a moment later, on the same path.
+- **They don't do anything yet:** a frag disappears at its fuse, a charge when you set it off. Blasts, smoke, stuns
+  and EMPs come with M2 and M3.
+- **Online:** every gadget is in one table the server sends with each snapshot; every player ends with exactly the
+  server's (a checksum makes sure).
+- **The Bulletproof Camera** works as before, but placing it is now 3, then left mouse held (it was a 1 s hold of 3).
+  Sentry takes it out with Z when it's his second gadget.
+- **Pick your gadget:** the loadout (Play page, planning screen, the labs' pause menu) has your gadget, or your two
+  (Striker, Sentry: two different ones).
+- **The Gadget Lab** (start page): the Destruction Lab's walls to try every operator's gadgets on, offline or online.
+  Refill ammo also gives your gadgets back; Clear gadgets empties the room.
+
+### How to test (needs Node 22.12+)
+```
+npm install
+npm run build
+npm start
+```
+1. Open http://localhost:8080 → **Gadget Lab**. Esc → pick Sledge: 3, then left mouse throws a frag; right mouse lobs
+   the second. Pick Fuze (Breach Charge): go to *Soft walls*, 3, hold left mouse at the wall until it's on it, then
+   left mouse sets it off. Pick Sentry: his gadgets are two selects in the loadout; Z takes out the second.
+2. **Gadget Lab online** → *Copy invite link* in the pause menu, open it in a second window: what one throws, the
+   other sees.
+
+The automated checks: `npm run typecheck`, `npm test` (the interactions test lists every CSV row: built ones pass,
+the rest are todos), `npm run build`, `node tools/e2e/gadget-lab.mjs`.
+
+### Known issues
+- Gadgets don't do anything yet (M2, M3); the Gadget Lab has no dummies yet (M2: blasts need someone to hurt).
+- Every gadget is a greybox in its kind's colour; the gadget in your hands is a box.
+- You can't watch a Bulletproof Camera in a lab (cameras are a match's).
+
+---
+
 ## Phase 7 — Intel · ✅ done, waiting for your test (branch `claude/phase-7-intel`, PR #8)
 
 **Done when (PLAN §17):** prep-phase droning and watching the cameras work online. The design is

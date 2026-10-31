@@ -3,7 +3,7 @@
 // A camera someone watches shows a light by its lens (research/intel.md §3, Y6S4's colours: blue to its own team, red
 // to the other). Greybox until the art pass.
 import * as THREE from "three";
-import { DEG, type BpCam } from "@redmond/shared";
+import { DEG, GFlag, type Gadget } from "@redmond/shared";
 
 /** A watched camera's light: a small bright dot, blue for the viewer's own team's camera, red for the other's. */
 const LIGHT_GEO = new THREE.SphereGeometry(0.012, 8, 6);
@@ -81,8 +81,8 @@ export class BpCameraModels {
   }
 
   /** `watched`: a bit for each camera someone watches, in the round's order; `ours`: the viewer is a defender. */
-  update(cams: readonly BpCam[], watched = 0, ours = true) {
-    const key = `${cams.map((c) => `${c.pos.join(",")},${c.yaw},${c.broken}`).join("|")}:${watched}:${ours}`;
+  update(cams: readonly Gadget[], watched = 0, ours = true) {
+    const key = `${cams.map((c) => `${c.pos.join(",")},${c.yaw},${c.flags}`).join("|")}:${watched}:${ours}`;
     if (key === this.shown) return;
     this.shown = key;
     while (this.items.length > cams.length) this.scene.remove(this.items.pop()!.group);
@@ -101,10 +101,11 @@ export class BpCameraModels {
     }
     cams.forEach((c, i) => {
       const it = this.items[i];
+      const broken = (c.flags & GFlag.Broken) !== 0;
       it.group.position.set(c.pos[0], c.pos[1], c.pos[2]);
-      it.group.rotation.set(0, c.yaw, c.broken ? 0.5 : 0, "YXZ");
-      for (const m of it.shell) m.material = c.broken ? this.dead : this.whole;
-      it.light.visible = !c.broken && (watched & (1 << i)) !== 0;
+      it.group.rotation.set(0, c.yaw, broken ? 0.5 : 0, "YXZ");
+      for (const m of it.shell) m.material = broken ? this.dead : this.whole;
+      it.light.visible = !broken && (watched & (1 << i)) !== 0;
       it.light.material = ours ? LIGHTS.ours : LIGHTS.theirs;
     });
   }

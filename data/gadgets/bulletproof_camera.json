@@ -1,0 +1,14 @@
+{
+  "_doc": "Bulletproof Camera (defender pool; research/gadgets.md §4.6; its view, plate, dart and signal are in data/intel.json `bulletproofCamera`, Phase 7). One each; placed on a wall or the floor (Siege throws it; ours is placed, D-136) and not picked up again (ours). How long it takes to place, its reach and its size are placeholders.",
+  "_season": "Y11S3",
+  "_unverified": ["use.placeS", "use.reachM", "sizeM"],
+  "id": "bulletproof_camera",
+  "name": "Bulletproof Camera",
+  "side": "defender",
+  "count": 1,
+  "electronic": true,
+  "use": {"kind": "place", "on": ["wall", "floor"], "placeS": 1.0, "reachM": 2.0},
+  "remote": false,
+  "pickUp": false,
+  "sizeM": [0.16, 0.12, 0.1]
+}

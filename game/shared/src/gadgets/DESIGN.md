@@ -44,7 +44,7 @@ out, placing, winding up a throw, a swing), the count left per slot, and an abil
 
 Weapons are put away while a gadget is out (no firing; the weapon's equip time when it comes back). The Phase 7
 Bulletproof Camera moves onto this: 3 takes it out, Fire held places it (it was a 1 s hold of 3; D-140). On a
-camera, Fire fires its dart (3 still does). Others see what's in a body's hands (a new remote field, §11).
+camera, 3 still fires its dart (Fire scans, Phase 7). Others see what's in a body's hands (a new remote field, §11).
 
 ## 3. The gadget table
 

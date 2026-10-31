@@ -22,14 +22,14 @@ const BUTTONS: TouchButton[] = [
   { label: "Lean R", action: "leanRight", kind: "mode" },
   { label: "Use", action: "interact", kind: "hold" }, // held: a revive takes 4 s
   { label: "ADS", action: "ads", kind: "mode" },
-  { label: "Cam", action: "ability", kind: "tap" },
+  { label: "Ability", action: "ability", kind: "tap" }, // Skopós: her shell camera
   { label: "Fire", action: "fire", kind: "hold" },
   { label: "Reload", action: "reload", kind: "tap" },
   { label: "Swap", action: "swap", kind: "tap" },
   { label: "Knife", action: "melee", kind: "tap" },
   { label: "Observe", action: "observe", kind: "tap" }, // drones and cameras (Phase 7)
   { label: "Throw", action: "throwDrone", kind: "tap" },
-  { label: "Gadget", action: "gadget", kind: "hold" }, // held: a Bulletproof Camera takes 1 s to place
+  { label: "Gadget", action: "gadget", kind: "tap" }, // out and away; Fire throws or (held) places it
   { label: "Ping", action: "ping", kind: "tap" },
 ];
 

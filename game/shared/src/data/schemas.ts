@@ -680,17 +680,12 @@ export const intelSchema = z.strictObject({
   /** The comm wheel's callouts, in order round the wheel (at most 16). */
   callouts: z.array(z.string().min(1).max(24)).min(1).max(16),
   /**
-   * The Bulletproof Camera (Phase 7 M5): `count` each for a defender who picked it, placed by holding the gadget key
-   * `placeS` at a wall or the floor within `reachM`; a box `sizeM` (width, height, depth) whose front, `frontDeg` either
-   * side of its facing, is bulletproof; its view like a default camera's (on the floor it turns all the way round); its
-   * EMP dart flies up to `dartRangeM` and jams drones within `dartRadiusM` for `disableS`, again after `dartRechargeS`;
-   * outdoors it loses its signal after `outdoorSignalS`.
+   * The Bulletproof Camera (Phase 7 M5; its count, placing and size are a gadget's, data/gadgets/bulletproof_camera.json):
+   * its front, `frontDeg` either side of its facing, is bulletproof; its view like a default camera's (on the floor it
+   * turns all the way round); its EMP dart flies up to `dartRangeM` and jams drones within `dartRadiusM` for
+   * `disableS`, again after `dartRechargeS`; outdoors it loses its signal after `outdoorSignalS`.
    */
   bulletproofCamera: z.strictObject({
-    count: z.number().int().min(0),
-    placeS: z.number().positive(),
-    reachM: z.number().positive(),
-    sizeM: z.tuple([z.number().positive(), z.number().positive(), z.number().positive()]),
     frontDeg: z.number().min(0).max(90),
     view: cameraViewSchema,
     dartRangeM: z.number().positive(),
@@ -701,6 +696,123 @@ export const intelSchema = z.strictObject({
   }),
 });
 export type IntelData = z.infer<typeof intelSchema>;
+
+// ---- Gadgets (Phase 8; game/shared/src/gadgets/DESIGN.md §1) ----
+
+/**
+ * Where a placed gadget may go (gadgets/place.ts): something flat enough to stand on, a wall, a breakable surface
+ * that isn't reinforced where it goes (a soft wall, a floor, a hatch, a barricade), or a reinforced section.
+ */
+export const PLACE_ON = ["floor", "wall", "soft", "steel"] as const;
+export type PlaceOn = (typeof PLACE_ON)[number];
+
+const sizeM = z.tuple([z.number().positive(), z.number().positive(), z.number().positive()]);
+
+/** Damage by distance (gadgets/blast.ts): `max` within `fullM`, falling in a straight line to 0 at `zeroM`. */
+const falloffSchema = z
+  .strictObject({ max: z.number().min(0), fullM: z.number().min(0), zeroM: z.number().min(0) })
+  .refine((f) => f.zeroM >= f.fullM, { message: "zeroM must be at least fullM" });
+export type BlastFalloff = z.infer<typeof falloffSchema>;
+
+/** A secondary gadget (data/gadgets/<id>.json; research/gadgets.md). Metres, seconds. */
+export const gadgetSchema = z
+  .strictObject({
+    ...meta,
+    id: z.string(),
+    name: z.string(),
+    side: z.enum(["attacker", "defender"]),
+    /** How many a loadout with it gets each round (Striker's and Sentry's kits too, research/operators/sentry.md §3.2). */
+    count: z.number().int().min(1).max(15),
+    /** Electronic gadgets are disabled by DSEG, jammed and hacked (§6); mechanical ones never are. */
+    electronic: z.boolean(),
+    use: z.discriminatedUnion("kind", [
+      z.strictObject({
+        kind: z.literal("throw"),
+        /** What it does when it meets something: bounces on, goes off (`impact`), sticks, or settles on something flat. */
+        flight: z.enum(["bounce", "impact", "stick", "settle"]),
+        /** The Nitro Cell's heavy throw (data/gadgets.json `throw.heavy`) for both Fire and ADS. */
+        heavy: z.boolean().default(false),
+        /** Goes off this long after the throw; at its first hit, if more than `afterHitS` is left, it's cut to that. */
+        fuseS: z.number().positive().optional(),
+        afterHitS: z.number().positive().optional(),
+        /** An impact gadget that meets nothing goes off in the air after this far. */
+        maxTravelM: z.number().positive().optional(),
+      }),
+      z.strictObject({
+        kind: z.literal("place"),
+        on: z.array(z.enum(PLACE_ON)).min(1),
+        /** Fire held this long, the view on a spot for it within `reachM`. */
+        placeS: z.number().positive(),
+        reachM: z.number().positive(),
+        /** Goes off this long after it's placed (the Hard Breach Charge). */
+        fuseS: z.number().positive().optional(),
+      }),
+    ]),
+    /** Waits for its owner's detonator once it's out. */
+    remote: z.boolean(),
+    /** Its owner takes it back (Interact held, data/gadgets.json `pickUpS`). */
+    pickUp: z.boolean(),
+    /** Its box (width, height, depth): what bullets meet and what's drawn. */
+    sizeM,
+    /**
+     * What it does when it goes off (gadgets/blast.ts, RealBlast: research/destruction.md §5). `damage` to bodies (a
+     * charge's far side), `near` its placer's side when it's on a wall; the Claymore only within `arcDeg` of its facing
+     * and `behindM` behind it. Gadgets, barricades and drones within `destroyM` are destroyed. `cut`: the hole it
+     * makes (data/destruction.json `explosives`), on its own panel for a charge, on every panel within `cutM` for a
+     * grenade. `throughSoft` of its damage gets through each soft surface on the way (shrapnel); steel and the level
+     * stop it. Tinnitus within `concussM` (the client's).
+     */
+    blast: z
+      .strictObject({
+        damage: falloffSchema,
+        near: falloffSchema.optional(),
+        arcDeg: z.number().gt(0).max(360).default(360),
+        behindM: z.number().min(0).default(0),
+        destroyM: z.number().min(0),
+        cut: z.string().optional(),
+        cutM: z.number().min(0).default(0),
+        throughSoft: z.number().min(0).max(1),
+        concussM: z.number().min(0).default(0),
+      })
+      .optional(),
+    /** The Claymore's lasers (yaws from its facing), how far they reach, and when it's armed after it's placed. */
+    tripwire: z.strictObject({ anglesDeg: z.array(z.number().min(-180).max(180)).min(1), lengthM: z.number().positive(), armS: z.number().min(0) }).optional(),
+    /** One bullet (or any damage) destroys it, without its blast. */
+    fragile: z.boolean().default(false),
+  })
+  .superRefine((g, ctx) => {
+    const u = g.use;
+    if (u.kind === "throw" && u.flight === "bounce" && u.fuseS === undefined) ctx.addIssue({ code: "custom", path: ["use", "fuseS"], message: "a bouncing gadget needs a fuse" });
+    if (u.kind === "throw" && u.afterHitS !== undefined && u.fuseS === undefined) ctx.addIssue({ code: "custom", path: ["use", "afterHitS"], message: "afterHitS cuts a fuse: give fuseS" });
+    if (u.kind === "throw" && u.maxTravelM !== undefined && u.flight !== "impact") ctx.addIssue({ code: "custom", path: ["use", "maxTravelM"], message: "only an impact gadget goes off in the air" });
+    if (g.remote && u.fuseS !== undefined) ctx.addIssue({ code: "custom", path: ["remote"], message: "a remote gadget has no fuse" });
+  });
+export type GadgetData = z.infer<typeof gadgetSchema>;
+
+const throwProfile = z.strictObject({ speedMps: z.number().positive(), upDeg: z.number().min(-45).max(80) });
+
+/** What every gadget shares (data/gadgets.json; gadgets/DESIGN.md §2–§4). Metres, seconds, degrees. */
+export const gadgetRulesSchema = z.strictObject({
+  ...meta,
+  /** Taking a gadget out of its slot (the weapon's own equip time brings the weapon back). */
+  equipS: z.number().positive(),
+  throw: z.strictObject({
+    windupS: z.number().min(0),
+    overhand: throwProfile,
+    underhand: throwProfile,
+    heavy: throwProfile,
+    /** Where a throw leaves from: right, down and ahead of the eye. */
+    fromM: z.strictObject({ right: z.number(), down: z.number(), ahead: z.number().min(0) }),
+    radiusM: z.number().positive().max(0.2),
+    restitution: z.number().min(0).max(1),
+    friction: z.number().min(0).max(1),
+    restMps: z.number().positive(),
+    maxS: z.number().positive(),
+  }),
+  pickUpS: z.number().positive(),
+  pickUpReachM: z.number().positive(),
+});
+export type GadgetRules = z.infer<typeof gadgetRulesSchema>;
 
 
 export const SURFACES = [

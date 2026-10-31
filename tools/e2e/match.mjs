@@ -315,7 +315,12 @@ try {
   if (bpOp) await def2.click(`.match-screen [data-act=op][data-op="${bpOp}"]`);
   await phase(a, P.Action, 60000);
   await def2.waitForFunction(() => window.__lab.net.own !== null && !window.__match.spectating && window.__lab.net.gadgets > 0, null, { timeout: 20000 }).catch(() => {});
-  const placedBp = await holdUntil(def2, { buttons: 1 << 12, pitch: -1.05 }, () => window.__match.view.bpCams.length === 1);
+  // Phase 8's hands: its slot's key takes it out (Mute: the gadget key; Sentry: the ability key, its kit's second), then Fire
+  // held places it.
+  const slotKey = bpOp === "sentry" ? 1 << 5 : 1 << 12;
+  const tookOut = await holdUntil(def2, { buttons: slotKey, pitch: -1.05 }, () => window.__lab.net.hand !== 0);
+  await sleep(800); // its equip time
+  const placedBp = tookOut && (await holdUntil(def2, { buttons: 1 << 6, pitch: -1.05 }, () => window.__lab.net.table.filter((g) => g.kind === "bulletproof_camera").length === 1));
   const watchedBp =
     placedBp &&
     (await holdUntil(def2, { buttons: OBSERVE }, () => window.__lab.net.cam === 1)) &&

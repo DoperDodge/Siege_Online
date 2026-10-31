@@ -1,0 +1,14 @@
+{
+  "_doc": "Barbed Wire (defender pool; research/gadgets.md §4.1). Two each; laid on the floor in front of the placer, picked up again. How long it takes to lay, its reach and its size are placeholders.",
+  "_season": "Y11S3",
+  "_unverified": ["use.placeS", "use.reachM", "sizeM"],
+  "id": "barbed_wire",
+  "name": "Barbed Wire",
+  "side": "defender",
+  "count": 2,
+  "electronic": false,
+  "use": {"kind": "place", "on": ["floor"], "placeS": 1.0, "reachM": 2.5},
+  "remote": false,
+  "pickUp": true,
+  "sizeM": [2.4, 0.45, 0.6]
+}

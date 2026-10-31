@@ -1,0 +1,15 @@
+{
+  "_doc": "Proximity Alarm (defender pool; research/gadgets.md §4.5). Two each; thrown, it sticks where it hits (Y5S2); electronic. Picking it up again and its size are placeholders. One bullet destroys it (siege.gg).",
+  "_season": "Y11S3",
+  "_unverified": ["pickUp", "sizeM"],
+  "id": "proximity_alarm",
+  "name": "Proximity Alarm",
+  "side": "defender",
+  "count": 2,
+  "electronic": true,
+  "use": {"kind": "throw", "flight": "stick"},
+  "remote": false,
+  "pickUp": true,
+  "sizeM": [0.08, 0.08, 0.04],
+  "fragile": true
+}

@@ -26,6 +26,9 @@ export function handleRoomMessage(room: Room, memberId: number, type: number, r:
     case Msg.PanelResync:
       room.onPanelResync(memberId); // at most once a second per player (the room limits it)
       return true;
+    case Msg.GadgetResync:
+      room.onGadgetResync(memberId); // the same limit
+      return true;
     case Msg.PickLoadout:
       room.pickLoadout(memberId, decodePickLoadout(r));
       return true;

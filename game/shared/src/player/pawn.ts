@@ -139,6 +139,13 @@ export function initialPawnState(x: number, y: number, z: number, yaw: number, m
     boostTicks: 0,
     boostCd: 0,
     jammed: 0,
-    gadgets: 0,
+    hand: 0,
+    gAct: 0,
+    gTicks: 0,
+    g1: 0,
+    g2: 0,
+    w1: 0,
+    w2: 0,
+    gTarget: 0,
   };
 }

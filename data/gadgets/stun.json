@@ -1,0 +1,14 @@
+{
+  "_doc": "Stun Grenade (attacker pool; research/gadgets.md §3.5). Thrown; it bounces and goes off 2 s after the first bounce (siege.gg), 3 s after the throw when it never bounces (Fandom). Its count for Striker (3 on Fandom's Striker page, 2 on the generic one) and its size are placeholders.",
+  "_season": "Y11S3",
+  "_unverified": ["count", "use.fuseS", "sizeM"],
+  "id": "stun",
+  "name": "Stun Grenade",
+  "side": "attacker",
+  "count": 2,
+  "electronic": false,
+  "use": {"kind": "throw", "flight": "bounce", "fuseS": 3, "afterHitS": 2},
+  "remote": false,
+  "pickUp": false,
+  "sizeM": [0.07, 0.12, 0.07]
+}

@@ -110,6 +110,23 @@ describe("weapon buttons (DECISIONS D-055)", () => {
     expect(c.sample(5).buttons & Btn.Swap).toBe(Btn.Swap);
   });
 
+  it("with a gadget in hand (Phase 8): the weapon out comes back with the gadget's own key, the other with a swap; the gadget key is a press", () => {
+    const c = make({});
+    let state = { slot: 0, equipping: false, gadget: 1 };
+    c.weaponState = () => state;
+    c.press("primary");
+    expect(c.sample(1).buttons & (Btn.Gadget | Btn.Swap)).toBe(Btn.Gadget);
+    expect(c.sample(2).buttons & (Btn.Gadget | Btn.Swap)).toBe(0); // once
+    state = { slot: 0, equipping: false, gadget: 2 };
+    c.press("primary");
+    expect(c.sample(3).buttons & (Btn.Ability | Btn.Swap)).toBe(Btn.Ability);
+    c.press("secondary");
+    expect(c.sample(4).buttons & (Btn.Ability | Btn.Gadget | Btn.Swap)).toBe(Btn.Swap);
+    // The gadget key held goes out once, not every tick (taking it out and putting it away are presses).
+    c.press("gadget");
+    expect([5, 6, 7].map((n) => c.sample(n).buttons & Btn.Gadget)).toEqual([Btn.Gadget, 0, 0]);
+  });
+
   it("a weapon key pressed with no weapon to switch (down, dead, between bodies) is dropped, not sent after the revive", () => {
     const c = make({});
     let state: { slot: number; equipping: boolean } | null = null; // down

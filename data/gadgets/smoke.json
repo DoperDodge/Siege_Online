@@ -1,0 +1,14 @@
+{
+  "_doc": "Smoke Grenade (attacker pool; research/gadgets.md §3.6). Thrown; it releases its smoke 3 s after the throw, or 2 s after it first meets a surface (Fandom). Its size is a placeholder.",
+  "_season": "Y11S3",
+  "_unverified": ["use.fuseS", "use.afterHitS", "sizeM"],
+  "id": "smoke",
+  "name": "Smoke Grenade",
+  "side": "attacker",
+  "count": 2,
+  "electronic": false,
+  "use": {"kind": "throw", "flight": "bounce", "fuseS": 3, "afterHitS": 2},
+  "remote": false,
+  "pickUp": false,
+  "sizeM": [0.07, 0.15, 0.07]
+}
