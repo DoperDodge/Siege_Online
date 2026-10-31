@@ -17,14 +17,32 @@ targets `main`.
 | M2 Blasts and the lethal generics (frag, impact grenade, Breach and Hard Breach Charges, Nitro Cell, Claymore) | ✅ (D-142) |
 | M3 The other generics (stun, smoke, Impact EMP, barbed wire, deployable shield, proximity alarm, observation blocker), pinging gadgets, ingredients | ✅ (D-143) |
 | M4 Sledge; Striker and Sentry | ✅ (D-144; Striker's and Sentry's kits were M1's) |
-| M5 Thermite; Fuze's Cluster Charge | next |
-| M6 Mute; Pulse | |
+| M5 Thermite; Fuze's Cluster Charge | ✅ (D-145) |
+| M6 Mute; Pulse | next |
 | M7 Mira | |
 | M8 Brava | |
 | M9 Dokkaebi | |
 | M10 Skopós's remaining rules; Lesion | |
 | M11 The Ballistic Shield | |
 | M12 Every CSV row passing; netsim, browser tests, review, docs, report | |
+
+### What's done (M5: Thermite and Fuze)
+- **Thermite's Exothermic Charge:** Z takes it out, left mouse held for 3 s puts it on any breakable surface,
+  reinforced walls and hatches included (not hard walls); on a wall it stands on the floor, wherever you look. Left mouse again sets it off: it burns for 3 s with sparks
+  on both sides of the wall, then blows a large hole (1.5 × 2.0 m) through every layer, steel too; a reinforced hatch
+  opens whole, and walls or hatches right next to it are cut as well. 220 damage on the far side, falling off to
+  nothing at 3.5 m; on Thermite's own side only point blank. 3 a round.
+- **Fuze's Cluster Charge:** Z, then 2 s held, on soft or reinforced walls, floors, hatches, barricades, or a
+  deployable shield's front. Set off, it goes through soft surfaces at once and drills steel or a shield for 1.75 s
+  (the shield's glass shatters); then 5 grenades come out on the far side one after another, left to right, each
+  bouncing and going off a second later (lethal within 1.2 m). Only one can wait at a time: placing a second sets off
+  the first. While it drills, defenders can shoot or blow up its tube on their side, but at least one grenade always
+  comes out. 4 a round.
+- **What stops them:** an EMP (the Impact EMP, a Bulletproof Camera's dart) on the charge or on its owner stops the
+  detonator; once set off nothing stops it but destroying it (any damage does). Their blasts destroy gadgets, and
+  drones of both teams.
+- **The interaction tests:** 40 more rows pass (186 of 343). The Gadget Lab's browser test drills and burns
+  through the reinforced wall.
 
 ### What's done (M4: Sledge's hammer)
 - **Z takes out Sledge's hammer**, left mouse swings it (held: one swing after another, 0.8 s each). 25 charges: a
@@ -128,6 +146,10 @@ npm start
    detector.
 6. **M4:** as Sledge, Z takes out the hammer: swing at the soft walls (close and from further away), the hatch from
    the platform, the barricaded door, and a dummy.
+7. **M5:** as Thermite, Z, hold left mouse at the reinforced wall for 3 s, step back and press left mouse: sparks,
+   then a hole you can walk through, and the dummy behind it is down. As Fuze, Z at the same wall (or a soft one, or
+   the hatch from the platform): it drills, then its grenades come out on the far side. Place a second one: the
+   first goes off.
 
 The automated checks: `npm run typecheck`, `npm test` (the interactions test lists every CSV row: built ones pass,
 the rest are todos), `npm run build`, `node tools/e2e/gadget-lab.mjs`.
@@ -137,6 +159,7 @@ the rest are todos), `npm run build`, `node tools/e2e/gadget-lab.mjs`.
   shake the view.
 - Direct hits by a thrown grenade (5 hp) aren't in. Standing on a deployable shield doesn't destroy it.
 - The impact grenade's hole is never big enough to walk through (our size, research/OPEN_QUESTIONS.md).
+- Fuze's grenades also destroy his own waiting charges close to them (ours).
 - Every gadget is a greybox in its kind's colour; the gadget in your hands is a box.
 - You can't watch a Bulletproof Camera in a lab (cameras are a match's).
 

@@ -701,9 +701,10 @@ export type IntelData = z.infer<typeof intelSchema>;
 
 /**
  * Where a placed gadget may go (gadgets/place.ts): something flat enough to stand on, a wall, a breakable surface
- * that isn't reinforced where it goes (a soft wall, a floor, a hatch, a barricade), or a reinforced section.
+ * that isn't reinforced where it goes (a soft wall, a floor, a hatch, a barricade), a reinforced section, or a
+ * deployable shield's front (Fuze's Cluster Charge, Phase 8 M5).
  */
-export const PLACE_ON = ["floor", "wall", "soft", "steel"] as const;
+export const PLACE_ON = ["floor", "wall", "soft", "steel", "shield"] as const;
 export type PlaceOn = (typeof PLACE_ON)[number];
 
 const sizeM = z.tuple([z.number().positive(), z.number().positive(), z.number().positive()]);
@@ -778,6 +779,8 @@ export const gadgetSchema = z
         reachM: z.number().positive(),
         /** Goes off this long after it's placed (the Hard Breach Charge). */
         fuseS: z.number().positive().optional(),
+        /** On a wall it stands on the floor under where the view met it, if that surface goes down so far (Thermite's: its hole from the floor up). */
+        toFloor: z.boolean().default(false),
       }),
       z.strictObject({
         /**
@@ -796,6 +799,39 @@ export const gadgetSchema = z
     ]),
     /** Waits for its owner's detonator once it's out. */
     remote: z.boolean(),
+    /**
+     * At most this many of its owner's wait for the detonator at once (Fuze's Cluster Charge: one): placing another
+     * sets the oldest off as the detonator would, or, if nothing could set it off now (DSEG, a jammer), it falls.
+     */
+    maxOut: z.number().int().min(1).optional(),
+    /**
+     * Once its detonator sets it off it burns this long before it goes off (Thermite's Exothermic Charge, Phase 8 M5:
+     * sparks on both sides); nothing stops it then but its destruction.
+     */
+    burnS: z.number().positive().optional(),
+    /**
+     * Fuze's Cluster Charge (Phase 8 M5): set off, its tube goes through the surface it's on, at once through a soft one
+     * (a wall, a floor, a hatch, a barricade), after `drillS` through steel or a deployable shield (whose glass
+     * shatters), reaching `tubeM` behind it (shot or blown up there from the far side, it's destroyed; at least one
+     * grenade has come out by then). It drills `cut` (data/destruction.json explosives) and lets `count` of `grenade`
+     * (a gadget file of their own, thrown with a fuse) out on the far side, one every `everyS`, in a fan `fanDeg`
+     * wide from its placer's left to right, at `speedMps`, `upDeg` above level out of a wall and `downDeg` below it
+     * out of a floor. Then it's gone, its hole left.
+     */
+    cluster: z
+      .strictObject({
+        grenade: z.string(),
+        count: z.number().int().min(1),
+        everyS: z.number().positive(),
+        fanDeg: z.number().min(0).max(180),
+        speedMps: z.number().positive(),
+        upDeg: z.number().min(-45).max(80),
+        downDeg: z.number().min(0).max(90),
+        drillS: z.number().positive(),
+        tubeM: z.number().positive(),
+        cut: z.string(),
+      })
+      .optional(),
     /** Its owner takes it back (Interact held, data/gadgets.json `pickUpS`). */
     pickUp: z.boolean(),
     /** Its box (width, height, depth): what bullets meet and what's drawn. */
@@ -840,6 +876,10 @@ export const gadgetSchema = z
     if (u.kind === "throw" && u.maxTravelM !== undefined && u.flight !== "impact") ctx.addIssue({ code: "custom", path: ["use", "maxTravelM"], message: "only an impact gadget goes off in the air" });
     if (g.remote && u.kind !== "swing" && u.fuseS !== undefined) ctx.addIssue({ code: "custom", path: ["remote"], message: "a remote gadget has no fuse" });
     if (u.kind === "swing" && u.hitS > u.swingS) ctx.addIssue({ code: "custom", path: ["use", "hitS"], message: "a swing's blow lands within it" });
+    for (const k of ["maxOut", "burnS", "cluster"] as const)
+      if (g[k] !== undefined && !g.remote) ctx.addIssue({ code: "custom", path: [k], message: "only a remote device has this" });
+    if (g.cluster && (g.blast || g.burnS !== undefined)) ctx.addIssue({ code: "custom", path: ["cluster"], message: "a cluster charge's grenades blast, not the charge" });
+    if (u.kind === "place" && u.on.includes("shield") && !g.cluster) ctx.addIssue({ code: "custom", path: ["use", "on"], message: "only a cluster charge drills through a shield" });
   });
 export type GadgetData = z.infer<typeof gadgetSchema>;
 

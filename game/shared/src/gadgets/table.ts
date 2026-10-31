@@ -23,7 +23,10 @@ export const GFlag = {
   Flat: 1 << 4,
   /** Disabled by an EMP (DSEG, gadgets/electronics.ts) until `offEnd`: no feed, trigger, laser, alarm or barrier. */
   Off: 1 << 5,
-  /** Going: a smoke cloud, an alarm sounding, an ingredient set off (its cloud, a gas pipe's jet or its fire). */
+  /**
+   * Going: a smoke cloud, an alarm sounding, an ingredient set off (its cloud, a gas pipe's jet or its fire), a charge
+   * set off and burning (Thermite's) or drilling and letting its grenades out (Fuze's).
+   */
   Active: 1 << 6,
   /** Hit once by a knife (barbed wire: the next hit destroys it; a deployable shield: its glass is opaque); a gas pipe that's spent. */
   Hit: 1 << 7,
@@ -63,9 +66,12 @@ export interface Gadget {
 
 export type GadgetOp = { kind: "put"; g: Gadget } | { kind: "remove"; id: number } | { kind: "clear" };
 
-/** The oldest of `kind` that `owner` has out and can set off (not disabled by an EMP: GFlag.Off), or undefined. */
+/**
+ * The oldest of `kind` that `owner` has out and can set off (not disabled by an EMP: GFlag.Off; not one already set
+ * off and burning or drilling: GFlag.Active, Phase 8 M5), or undefined.
+ */
 export function detonatable(list: readonly Gadget[], owner: number, kind: number): Gadget | undefined {
-  return list.find((x) => x.owner === owner && x.kind === kind && !(x.flags & GFlag.Off));
+  return list.find((x) => x.owner === owner && x.kind === kind && !(x.flags & (GFlag.Off | GFlag.Active)));
 }
 
 const f32 = Math.fround;

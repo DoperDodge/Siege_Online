@@ -183,9 +183,16 @@ export function crossFileProblems(data: Pick<GameData, "operators" | "weapons" |
   const out: string[] = [];
   if (data.destruction) out.push(...destructionProblems(data.destruction, data.weapons, data.levels));
   if (data.gadgets) {
-    // A blast's cut is one of the explosives' shapes (data/destruction.json).
-    for (const g of data.gadgets.values())
-      if (g.blast?.cut && data.destruction && !Object.hasOwn(data.destruction.explosives, g.blast.cut)) out.push(`data/gadgets/${g.id}.json: blast.cut names "${g.blast.cut}", which isn't in data/destruction.json explosives`);
+    // A blast's cut (and a cluster charge's hole) is one of the explosives' shapes (data/destruction.json); a cluster
+    // charge's grenade is a thrown gadget with a fuse and a blast (Phase 8 M5).
+    for (const g of data.gadgets.values()) {
+      for (const [where, cut] of [["blast.cut", g.blast?.cut], ["cluster.cut", g.cluster?.cut]] as const)
+        if (cut && data.destruction && !Object.hasOwn(data.destruction.explosives, cut)) out.push(`data/gadgets/${g.id}.json: ${where} names "${cut}", which isn't in data/destruction.json explosives`);
+      if (!g.cluster) continue;
+      const k = data.gadgets.get(g.cluster.grenade);
+      if (!k || k.use.kind !== "throw" || k.use.fuseS === undefined || !k.blast || k.side !== g.side || k.operator !== g.operator)
+        out.push(`data/gadgets/${g.id}.json: cluster.grenade names "${g.cluster.grenade}", which isn't a gadget of its own thrown with a fuse and a blast, on its side and its operator's`);
+    }
     // Loadouts name real gadgets of the operator's own side (research/gadgets.md §1: one pool each), never an
     // operator's own item.
     for (const op of data.operators.values()) {
@@ -198,12 +205,13 @@ export function crossFileProblems(data: Pick<GameData, "operators" | "weapons" |
         }
       }
     }
-    // An operator's own item (Phase 8 M4) is their ability, on their side.
+    // An operator's own item (Phase 8 M4) is their ability, or what it lets out (Fuze's grenades, M5), on their side.
     for (const g of data.gadgets.values()) {
       if (!g.operator) continue;
       const op = data.operators.get(g.operator);
+      const part = op !== undefined && data.gadgets.get(op.ability.id)?.cluster?.grenade === g.id;
       if (!op) out.push(`data/gadgets/${g.id}.json: operator "${g.operator}" doesn't exist`);
-      else if (op.ability.id !== g.id || op.side !== g.side) out.push(`data/gadgets/${g.id}.json: it isn't ${op.id}'s ability (${op.ability.id}) on their side`);
+      else if ((op.ability.id !== g.id && !part) || op.side !== g.side) out.push(`data/gadgets/${g.id}.json: it isn't ${op.id}'s ability (${op.ability.id}) or part of it, on their side`);
     }
   }
   for (const lvl of data.levels?.values() ?? []) {

@@ -3,6 +3,7 @@
 // knife and the pick-up hold ask this; the Bulletproof Camera's bulletproof front is the shot judge's (bpCamsShot).
 import { DEG, forwardXZ, rightXZ, type Vec3 } from "../core/math.js";
 import type { GameData } from "../data/load.js";
+import { tubeBox } from "./cluster.js";
 import { isIngredient, kindId } from "./kinds.js";
 import { GFlag, type Gadget, type GadgetTable } from "./table.js";
 
@@ -45,11 +46,20 @@ export function sizeOf(data: GameData, kind: number): readonly [number, number, 
   return data.gadgets.get(id)?.sizeM ?? null;
 }
 
-/** Metres along a ray from `origin` (unit `dir`) to where it meets an entry's box, or null. */
+/**
+ * Metres along a ray from `origin` (unit `dir`) to where it meets an entry's box, or null. A set-off cluster charge's
+ * tube (Phase 8 M5, gadgets/cluster.ts) is part of it: it can be shot from the surface's far side.
+ */
 export function rayToGadget(data: GameData, g: Gadget, origin: Vec3, dir: Vec3, maxT: number): number | null {
   const size = sizeOf(data, g.kind);
   if (!size || g.flags & GFlag.Flying) return null;
-  return enterBox(localOf(g, origin, true), localOf(g, dir, false), halfSize(g, size), maxT);
+  const o = localOf(g, origin, true);
+  const d = localOf(g, dir, false);
+  const t = enterBox(o, d, halfSize(g, size), maxT);
+  const tube = tubeBox(data, g);
+  if (!tube) return t;
+  const tt = enterBox([o[0] - tube.center[0], o[1] - tube.center[1], o[2] - tube.center[2]], d, tube.half, t ?? maxT);
+  return tt !== null && (t === null || tt < t) ? tt : t;
 }
 
 /** The nearest entry along a ray (before `maxT`) that `keep` accepts, and how far it is, or null. */

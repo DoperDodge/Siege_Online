@@ -14,9 +14,9 @@ import type { ResolvedLoadout } from "../weapons/loadout.js";
 import { viewDir } from "../weapons/spread.js";
 import type { SimEvent } from "../weapons/step.js";
 import { ticks } from "../weapons/ticks.js";
-import { isPlaced, placeSpot, type PlaceSpot } from "./place.js";
+import { isPlaced, placeSpot, type PlaceQuery, type PlaceSpot } from "./place.js";
 
-export interface HandsContext extends LevelQuery {
+export interface HandsContext extends PlaceQuery {
   data: GameData;
   events: SimEvent[];
   /** Whether a body's detonator has a device of `gadget` out to set off (not one an EMP disabled); unset: yes. */
@@ -67,13 +67,18 @@ export function parkHands(s: PawnState): void {
   }
 }
 
-/** After a device left the hands: the detonator if it waits for one, the next device, or the weapon. */
+/**
+ * After a device left the hands: the detonator if it waits for one, the next device, or the weapon. One at a time
+ * (`maxOut`, Fuze's Cluster Charge): placing another sets the oldest off (the server does), so no more wait.
+ */
 function afterUse(s: PawnState, slot: 1 | 2, g: GadgetData) {
   if (slot === 1) s.g1--;
   else s.g2--;
   if (g.remote) {
-    if (slot === 1) s.w1++;
-    else s.w2++;
+    if (waiting(s, slot) < (g.maxOut ?? Infinity)) {
+      if (slot === 1) s.w1++;
+      else s.w2++;
+    }
     s.hand = detonatorHand(slot);
     s.gAct = GadgetAct.Ready;
     s.gTicks = 0;
@@ -129,7 +134,7 @@ export function throwStart(q: LevelQuery, data: GameData, s: PawnState, eye: Vec
 }
 
 /** Where holding Fire would put the placed gadget in hand now, or null (on its feet only). */
-export function placeSpotFor(q: LevelQuery & { data: GameData }, pawn: Pawn): PlaceSpot | null {
+export function placeSpotFor(q: PlaceQuery & { data: GameData }, pawn: Pawn): PlaceSpot | null {
   const s = pawn.state;
   const slot = handSlot(s.hand);
   if (slot === 0 || isDetonator(s.hand) || s.mode !== PawnMode.Walk || !s.grounded) return null;

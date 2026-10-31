@@ -1,7 +1,7 @@
 // The per-tick movement step. Pure function of (pawn state, input, static level, data), shared by the
 // server (authority) and the browser (prediction). Values come from data/movement.json (PLAN §7).
 import { DT } from "../core/constants.js";
-import { approach, clamp, DEG, forwardXZ, lerp, quatYawPitchRoll, rightXZ, rotateXZ, smoothstep, wrapAngle } from "../core/math.js";
+import { approach, clamp, DEG, forwardXZ, lerp, quatYawPitchRoll, rightXZ, rotateXZ, smoothstep, wrapAngle, type Vec3 } from "../core/math.js";
 import type { GameData } from "../data/load.js";
 import type { Panel } from "../destruction/panel.js";
 import type { BuiltLevel } from "../level/builder.js";
@@ -36,6 +36,8 @@ export interface MoveContext {
   canDetonate?(pawn: Pawn, gadget: string): boolean;
   /** Whether a swing's blow from this body's eye along its view meets something within `reachM` (Phase 8 M4: it costs a charge). */
   swingMeets?(pawn: Pawn, reachM: number): boolean;
+  /** How far along a ray the first solid gadget is (Phase 8 M5: a deployable shield Fuze's charge goes on), or null. */
+  solidOnRay?(origin: Vec3, dir: Vec3, maxT: number): number | null;
 }
 
 const IDENTITY = { x: 0, y: 0, z: 0, w: 1 };

@@ -21,6 +21,9 @@ export const GADGET_KINDS = [
   "gas_pipe",
   "metal_detector",
   "breaching_hammer",
+  "exothermic_charge",
+  "cluster_charge",
+  "cluster_grenade",
 ] as const;
 
 const index = new Map<string, number>(GADGET_KINDS.map((k, i) => [k, i]));

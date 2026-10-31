@@ -593,6 +593,19 @@ The gadget questions in [gadgets.md](gadgets.md) and the operator files stay ope
     0.9 × 1.1 m round where it lands (two swings, one low and one high, to walk through), one charge for a swing
     that meets anything and two for a kill, none for a swing at the air (all ours; Fandom's two pages disagree on
     the costs). How big is one swing's hole, and does a swing at nothing spend a charge?
+25. **Thermite's Exothermic Charge (M5):** 3 s to place and a 3 s burn (Fandom: "within three seconds"); its box
+    1.2 × 1.7 m, standing on the floor below where you look on a wall; its hole 1.5 × 2.0 m (Phase 4's placeholder);
+    220 to 1 m on the far side, none past 3.5 m; on Thermite's side 220 to 0.3 m, none past 1 m; it destroys gadgets
+    within 3 m and cuts the panels within 1 m of it too (Fandom: "adjacent" walls, hatches and floors). It goes on
+    a barricade (the CSV's placeholder). How far does "adjacent" reach, and how far behind the wall is it lethal?
+26. **Fuze's Cluster Charge (M5):** 2 s to place; once set off, 5 grenades one every 0.35 s in a 100° fan, 5 m/s,
+    10° up out of a wall (60° down through a floor), each going off 1 s after it leaves; its tube 0.6 m long, its
+    hole 0.5 m across; a hatch keeps its hp (only the tube goes through); a grenade's damage 140 to 1.2 m, none past
+    4.2 m (lethal to 125 hp within 1.2 m and to 100 hp within 2 m, as Fandom says), and it destroys gadgets of both
+    teams (drones too, whatever the friendly fire rules) within its 4.2 m, a frag's convention: so Fuze's grenades
+    also destroy his own charges near them. Placing a second sets the first off; if nothing could set it off then
+    (an EMP), ours lets it fall. How long does the release take, how wide is the fan, and how long is a grenade's
+    fuse? What happens to a jammed first charge when Fuze places a second?
 
 ### [core_mechanics.md](core_mechanics.md) — 16
 

@@ -164,6 +164,24 @@ panel's material, a gadget, a body), the room judges what (`judgeSwing`: bodies 
 costing a second charge; then an enemy gadget or an ingredient, as a blast would take it; then the first panel,
 `gadgets/hammer.ts`). It works on a rope.
 
+**As built (M5, Thermite and Fuze, D-145):** both charges are operator items placed like the Breach Charge, on any
+breakable surface (`soft` and `steel`; Fuze's also on a deployable shield's face, `shield`; Thermite's on a wall
+stands on the floor below where you look, `toFloor`, so its hole starts at the floor), set off by the detonator
+(electronic: DSEG stops the press). The detonator now calls `GadgetServer.detonated`: a gadget with `burnS`
+(Thermite's) starts burning (`GFlag.Active`, sparks drawn on both sides of its surface) and goes off when its fuse
+runs out; nothing but its destruction stops it then, and a set-off device is no longer waiting (the detonator skips
+it, and destroying it tells nobody). Its blast cuts 1.5 × 2.0 m through every layer and steel (a reinforced hatch
+whole), and with `cutM` also the panels within 1 m of it (its "adjacent" surfaces); 220 on the far side, its own
+side's curve now also for a charge lying on a floor (up is its placer's side). Fuze's (`cluster`, `gadgets/cluster.ts`)
+drills: at once through a soft surface, `drillS` (1.75 s) through steel or a shield (whose glass shatters); then its
+tube is through (its hole cut, a 0.5 m disc; a hatch keeps its hp) and its grenades leave the tube's end one every
+0.35 s across a 100° fan from its placer's left to right, each a thrown entry of its own kind (`cluster_grenade.json`,
+bouncing with a 1 s fuse, its blast credited to the Cluster Charge); after the last it falls. While set off its tube
+sticks out of the far side (`tubeM`): bullets and blasts meet it there, and destroyed then it has let one grenade out
+first. One at a time (`maxOut` 1): the hands never count more than one waiting, and the server sets the older one
+off as the detonator would (or lets it fall if an EMP would stop that). A blast now destroys drones of either side
+whatever the friendly fire rules (a drone is a gadget to it).
+
 ## 8. The Ballistic Shield (Fuze)
 
 The shield as a primary (data/weapons/ballistic_shield.json, research/weapons_notes.md §5): a shield hit shape in

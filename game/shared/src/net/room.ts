@@ -313,6 +313,10 @@ export class Room implements DirectorHost {
     this.gadgetServer.onAlarm = (g, by) => this.alarm(g, by);
     this.gadgetServer.onIngredient = (g, stage) => this.ingredientStage(g, stage);
     this.gadgetServer.inPrep = () => this.director?.match.phase === Phase.Prep;
+    // Phase 8 M5: a cluster charge's hole goes in with this tick's panel ops.
+    this.gadgetServer.cut = (ops) => {
+      for (const o of ops) this.queuePanelOp(o.panel, o.op);
+    };
     // A remote device gone without its detonator (destroyed, cleared): its owner has one fewer waiting; told at once.
     this.gadgetServer.onLost = (g, d) => {
       const c = sim.controllers.get(g.owner);
@@ -1348,10 +1352,16 @@ export class Room implements DirectorHost {
   private goOff(g: Gadget, at: Vec3) {
     const data = this.sim.data.gadgets.get(kindId(g.kind) ?? "");
     if (!data) return;
-    if (data.blast) this.explode(g, data.blast, data.id, at);
+    if (data.blast) this.explode(g, data.blast, this.creditOf(data), at);
     if (data.stun) this.flash(data.stun, at);
     if (data.emp) this.dseg(g.team, at, data.emp.radiusM, data.emp.seconds);
     this.tellBlast(g.kind, at);
+  }
+
+  /** The weapon a gadget's blast is credited to: a cluster charge's grenade's to the charge (Phase 8 M5). */
+  private creditOf(data: GadgetData): string {
+    for (const d of this.sim.data.gadgets.values()) if (d.cluster?.grenade === data.id) return d.id;
+    return data.id;
   }
 
   /** Everyone sees and hears a gadget (or an ingredient) go off there (the client's effects, by its kind). */
@@ -1362,8 +1372,8 @@ export class Room implements DirectorHost {
 
   /**
    * A blast (gadgets/blast.ts): its damage now, credited to its gadget's owner (their own bodies always; teammates by
-   * the friendly fire rules, as bullets: off, scaled, or reflected on its owner; an ingredient's belongs to nobody), its
-   * cuts with this tick's panel ops, and what it destroys.
+   * the friendly fire rules, as bullets: off, scaled, or reflected on its owner; an ingredient's belongs to nobody; a
+   * drone is a gadget to it, either side's, Phase 8 M5), its cuts with this tick's panel ops, and what it destroys.
    */
   private explode(g: Gadget, blast: BlastData, weaponId: string, at: Vec3) {
     const fx = blastEffects(this.sim, g, blast, at);
@@ -1371,7 +1381,7 @@ export class Room implements DirectorHost {
     const attacker: Attacker = { ctrlId: g.owner, team: g.owner ? g.team : NEUTRAL, weaponId, origin: [at[0], at[1], at[2]] };
     for (const { pawn, damage } of fx.bodies) {
       const own = g.owner !== 0 && pawn.ownerId === g.owner;
-      const friendly = !own && pawn.team === attacker.team;
+      const friendly = !own && pawn.team === attacker.team && pawn.kind !== PawnKind.Drone;
       if (friendly && !this.friendlyFireOn()) continue;
       if (this.director?.safeguarded(pawn)) continue;
       const amount = friendly ? Math.round(damage * this.rules.friendlyFire.scale) : damage;

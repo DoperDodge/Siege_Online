@@ -1,7 +1,7 @@
 // A simulation instance: one physics world + level + pawns + controllers. The Node server runs one per
 // match room; the browser runs one for prediction and for offline Practice / Bot Training (PLAN §5).
 import { DT } from "./core/constants.js";
-import { clamp, forwardXZ, rotateXZ, DEG, wrapAngle } from "./core/math.js";
+import { clamp, forwardXZ, rotateXZ, DEG, wrapAngle, type Vec3 } from "./core/math.js";
 import { loadGameData, type GameData } from "./data/load.js";
 import { deployAction, deployTicks, DeployKind, type DeployAction, type DeployRules } from "./destruction/deploy.js";
 import { buildLevel, type BuiltLevel } from "./level/builder.js";
@@ -111,6 +111,7 @@ export class Sim {
       slowOf: (pawn) => wireSlow(data, this.gadgets, pawn, pawn.kind === PawnKind.Drone),
       canDetonate: (pawn, gadget) => detonatable(this.gadgets.list, pawn.ownerId ?? 0, kindOf(gadget)) !== undefined,
       swingMeets: (pawn, reachM) => this.swingMeets(pawn, reachM),
+      solidOnRay: (origin, dir, maxT) => this.solidOnRay(origin, dir, maxT),
     };
     this.building = zoneBoxes(level.def, "building");
   }
@@ -950,6 +951,14 @@ export class Sim {
       if (boxes.some((h) => (rayCapsule(eye, dir, h.a, h.b, h.radius) ?? Infinity) <= reachM)) return true;
     }
     return false;
+  }
+
+  /**
+   * How far along a ray the first solid gadget's box is (a deployable shield, within `maxT`), or null (Phase 8 M5:
+   * Fuze's Cluster Charge goes on one).
+   */
+  solidOnRay(origin: Vec3, dir: Vec3, maxT: number): number | null {
+    return gadgetOnRay(this.gadgets, this.data, origin, dir, maxT, (g) => !(g.flags & GFlag.Flying) && this.data.gadgets.get(kindId(g.kind) ?? "")?.solid === true)?.t ?? null;
   }
 
   /** A solid gadget's collider (Phase 8 M3), or undefined: a blast's line to the gadget itself leaves it out. */

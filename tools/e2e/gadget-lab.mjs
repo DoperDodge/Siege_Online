@@ -1,8 +1,9 @@
-// End-to-end check of the Gadget Lab (Phase 8 M1 to M4, game/shared/src/gadgets/DESIGN.md §11). Offline (the page's
+// End-to-end check of the Gadget Lab (Phase 8 M1 to M5, game/shared/src/gadgets/DESIGN.md §11). Offline (the page's
 // own room in a Web Worker): Sledge takes a frag out with 3 and throws it (it flies, comes to rest, and is gone at its
 // fuse), then swings his hammer (Z) at a soft wall close by (both faces broken, a charge spent). Fuze takes a Breach
 // Charge out, holds Fire at a soft wall until it's on it (the detonator is then in hand) and sets it off: the wall has
-// a hole. Mute throws his Nitro Cell at the feet of the attacker dummy in the open, steps well away and sets it off:
+// a hole. Then his Cluster Charge (Z) on the reinforced wall: it drills, its grenades come out on the far side, the
+// steel has a hole; and Thermite's Exothermic Charge there: it burns, then a large hole goes through the steel. Mute throws his Nitro Cell at the feet of the attacker dummy in the open, steps well away and sets it off:
 // the dummy is down, by the Nitro Cell. Sledge's stun thrown in front of him whites out his screen; Thermite's smoke
 // grenade leaves its cloud in the table. Online, two pages at 100 ms of simulated round trip: what A throws, B has in
 // its table too, A's prediction needed no corrections, and both see its blast. (The level's ingredients are in the
@@ -130,6 +131,64 @@ try {
   result.checks.breachChargePlacedThenDetonated =
     /PLACING THE BREACH CHARGE… \d/.test(result.placingBar ?? "") && result.placed.hand === Hand.Detonator && result.placed.table.length === 1 && Math.abs(result.placed.table[0].pos[2] + 5.9) < 0.1;
   result.checks.breachChargeCutsTheWall = result.breachHoles[0] > 0 && result.breachHoles[2] > 0;
+
+  // ---- offline (M5): Fuze's Cluster Charge (Z) on the reinforced wall, then its detonator: it drills the steel for
+  // 1.75 s, then its grenades come out on the far side one after another (and go off), and it falls, its hole left
+  await off.evaluate(() => window.__lab.teleport(11.5, 0, -4.6, 0));
+  await sleep(600);
+  const steelBefore = (await off.evaluate(() => window.__lab.panel("reinforced"))).holes[3];
+  await off.keyboard.press("KeyZ");
+  await until(off, () => window.__lab.net.hand === 3);
+  await sleep(1000);
+  await input(off, { buttons: Btn.Fire, pitch: 0 });
+  await until(off, () => window.__lab.net.table.some((g) => g.kind === "cluster_charge"));
+  await input(off, { pitch: 0 });
+  await sleep(300);
+  result.cluster = await state(off);
+  await off.evaluate(() => window.__lab.teleport(11.5, 0, -1.0, 0));
+  await sleep(600);
+  await input(off, { buttons: Btn.Fire });
+  await until(off, (a) => window.__lab.net.table.some((g) => g.kind === "cluster_charge" && g.flags & a), ACTIVE);
+  await input(off, null);
+  const drillFrom = Date.now();
+  await until(off, () => window.__lab.net.table.some((g) => g.kind === "cluster_grenade"));
+  result.clusterDrillMs = Date.now() - drillFrom;
+  await off.screenshot({ path: shot("gadget-cluster-grenades.png") });
+  await until(off, () => !window.__lab.net.table.some((g) => g.kind === "cluster_charge" || g.kind === "cluster_grenade"));
+  result.clusterHoles = (await off.evaluate(() => window.__lab.panel("reinforced"))).holes;
+  result.checks.clusterDrillsSteelThenReleases = result.cluster.hand === 4 && result.clusterDrillMs > 1200 && result.clusterHoles[3] > steelBefore;
+
+  // ---- offline (M5): Thermite's Exothermic Charge on the reinforced wall (looking below Fuze's hole; it stands on
+  // the floor): it burns 3 s once set off, then a large hole goes through the steel
+  await off.evaluate(() => window.__lab.pickLoadout({ ...window.__lab.net.loadout, operator: "thermite", gadgets: ["smoke"] }));
+  await off.waitForURL(/op=thermite/, { timeout: 30000 });
+  await off.waitForFunction(() => window.__lab?.net?.ready && window.__lab.net.own && window.__lab.net.loadout?.operator === "thermite", null, { timeout: 30000 });
+  await off.evaluate(() => window.__lab.teleport(11.5, 0, -4.6, 0));
+  await sleep(600);
+  const exoBefore = (await off.evaluate(() => window.__lab.panel("reinforced"))).holes[3];
+  await off.keyboard.press("KeyZ");
+  await until(off, () => window.__lab.net.hand === 3);
+  await sleep(1000);
+  await input(off, { buttons: Btn.Fire, pitch: -0.3 });
+  await until(off, () => window.__lab.net.table.some((g) => g.kind === "exothermic_charge"));
+  await input(off, { pitch: -0.3 });
+  await sleep(300);
+  result.exo = await state(off);
+  await off.evaluate(() => window.__lab.teleport(11.5, 0, -1.0, 0));
+  await sleep(600);
+  await input(off, { buttons: Btn.Fire });
+  await until(off, (a) => window.__lab.net.table.some((g) => g.kind === "exothermic_charge" && g.flags & a), ACTIVE);
+  await input(off, null);
+  const burnFrom = Date.now();
+  await sleep(1200);
+  await off.screenshot({ path: shot("gadget-exothermic-burning.png") });
+  await until(off, () => !window.__lab.net.table.some((g) => g.kind === "exothermic_charge"));
+  result.exoBurnMs = Date.now() - burnFrom;
+  await sleep(300);
+  await off.screenshot({ path: shot("gadget-exothermic-breach.png") });
+  result.exoHoles = (await off.evaluate(() => window.__lab.panel("reinforced"))).holes;
+  // Its 1.5 × 2.0 m through 5 cm cells: some 1,200 of them out of the steel.
+  result.checks.exothermicBurnsThenBreachesSteel = result.exo.hand === 4 && result.exoBurnMs > 2200 && result.exoHoles[3] - exoBefore > 1000;
 
   await off.close();
 

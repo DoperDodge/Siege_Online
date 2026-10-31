@@ -4,10 +4,12 @@
 // takes over. Bulletproof Cameras are drawn by BpCameraModels (render/cameraModels.ts). Greybox until the art pass.
 // M3 adds what an entry's flags show: smoke clouds (not in a Bulletproof Camera's thermal view), a gas pipe's jet and
 // fire, an alarm sounding, an EMP's sparks, and an observation blocker's barrier to the other side's drones and cameras;
-// the level's ingredients are entries too.
+// the level's ingredients are entries too. M5: Thermite's charge burning shows sparks on both sides of its surface,
+// Fuze's set off shows its tube through it (its grenades are thrown entries).
 import * as THREE from "three";
 import {
   barrierOf,
+  behindOf,
   cloudRadius,
   DEG,
   Flights,
@@ -21,6 +23,9 @@ import {
   kindOf,
   raycastLevel,
   sizeOf,
+  TUBE_HALF_M,
+  tubeBox,
+  tubeTip,
   type Gadget,
   type GadgetData,
   type SimEvent,
@@ -48,6 +53,9 @@ const COLOURS: Record<string, number> = {
   fire_extinguisher: 0xb91c1c,
   gas_pipe: 0xb45309,
   metal_detector: 0x9ca3af,
+  exothermic_charge: 0x7c2d12,
+  cluster_charge: 0x3f3f46,
+  cluster_grenade: 0x3f4a1f,
 };
 
 /**
@@ -83,6 +91,8 @@ export class GadgetModels {
     alarm: new THREE.MeshBasicMaterial({ color: 0xff2020, transparent: true, opacity: 0.25, depthWrite: false }),
     off: new THREE.MeshBasicMaterial({ color: 0x60a5fa }),
     barrier: new THREE.MeshBasicMaterial({ color: 0x0b1220, transparent: true, opacity: 0.92, side: THREE.DoubleSide, depthWrite: false }),
+    sparks: new THREE.MeshBasicMaterial({ color: 0xffb347, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false }),
+    tube: new THREE.MeshStandardMaterial({ color: 0x52525b, roughness: 0.5, metalness: 0.6 }),
   };
   /** A Claymore's lasers (Phase 8 M2): red, once it's armed. */
   private readonly laserMat = new THREE.LineBasicMaterial({ color: 0xff2020, transparent: true, opacity: 0.7 });
@@ -271,6 +281,29 @@ export class GadgetModels {
       const spark = new THREE.Mesh(new THREE.SphereGeometry(0.04, 6, 4), this.fxMat.off);
       spark.position.set(g.pos[0], g.pos[1] + 0.1, g.pos[2]);
       group.add(spark);
+    }
+    // Thermite's charge burning (M5): sparks over its face on its side and on the surface's far side.
+    if (id === "exothermic_charge" && g.flags & GFlag.Active) {
+      const size = this.dataOf(g.kind)!.sizeM;
+      const back = behindOf(g);
+      const through = (g.panel >= 0 ? this.sim.level.panels.list[g.panel]?.frame.t : undefined) ?? 0.2;
+      for (const k of [-(size[2] / 2 + 0.02), size[2] / 2 + through + 0.02]) {
+        const glow = new THREE.Mesh(new THREE.PlaneGeometry(size[0] * 0.8, size[1] * 0.8), this.fxMat.sparks);
+        glow.position.set(g.pos[0] + back[0] * k, g.pos[1] + back[1] * k, g.pos[2] + back[2] * k);
+        glow.rotation.set(g.flags & GFlag.Flat ? -Math.PI / 2 : 0, g.yaw, 0, "YXZ");
+        group.add(glow);
+      }
+    }
+    // Fuze's charge set off (M5): its tube through the surface, out on the far side.
+    const tube = tubeBox(data, g);
+    const tip = tubeTip(data, g);
+    if (tube && tip) {
+      const len = 2 * tube.half[g.flags & GFlag.Flat ? 1 : 2];
+      const back = behindOf(g);
+      const pipe = new THREE.Mesh(new THREE.CylinderGeometry(TUBE_HALF_M, TUBE_HALF_M, len, 8), this.fxMat.tube);
+      pipe.position.set(tip[0] - (back[0] * len) / 2, tip[1] - (back[1] * len) / 2, tip[2] - (back[2] * len) / 2);
+      pipe.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(back[0], back[1], back[2]));
+      group.add(pipe);
     }
     const barrier = this.dataOf(g.kind)?.barrier;
     if (barrier && this.view.tool && g.team !== this.view.team && !(g.flags & (GFlag.Off | GFlag.Flying))) {

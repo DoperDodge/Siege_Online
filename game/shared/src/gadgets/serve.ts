@@ -3,10 +3,14 @@
 // away), throws are stepped to where they rest, stick or go off, fuses and outdoor signals run out on the server's
 // ticks, and steel going up breaks what's on its wall. M3: smoke stays as a cloud for its time, EMPs disable (DSEG)
 // until a tick, alarms and the metal detector sound while someone's in reach, barbed wire bites who moves in it, and
-// the level's ingredients go through their stages. Every change is a table op the room sends with the next snapshot.
+// the level's ingredients go through their stages. M5: a detonator sets Thermite's charge burning (it goes off after
+// its burn) and Fuze's drilling (its grenades come out on the far side one after another, then it falls); Fuze's are
+// one at a time. Every change is a table op the room sends with the next snapshot.
 import { isIdleShell } from "../combat/apply.js";
 import { DEG, forwardXZ, type Vec3 } from "../core/math.js";
 import type { GadgetData } from "../data/schemas.js";
+import { explosiveOps } from "../destruction/explosives.js";
+import type { IndexedOp } from "../destruction/panels.js";
 import { indoors } from "../intel/bpCamera.js";
 import { raycastLevel } from "../level/raycast.js";
 import { droneHitboxes } from "../player/drone.js";
@@ -20,7 +24,9 @@ import { ticks, ticksOrZero } from "../weapons/ticks.js";
 import { FLOOR_NY, Flights, isFlying, type FlightEnd } from "./flight.js";
 import { inFrame, inWireBox, jetOf } from "./areas.js";
 import { isCloud, pawnDistance } from "./blast.js";
+import { behindOf, fanVelocity, tubeTip, type ClusterData } from "./cluster.js";
 import { empReach } from "./electronics.js";
+import { gadgetOnRay } from "./hits.js";
 import { isIngredient, KIND_BP_CAMERA, kindId, kindOf } from "./kinds.js";
 import { detonatable, GFlag, type Gadget } from "./table.js";
 
@@ -67,6 +73,27 @@ function segSeg(a: Vec3, b: Vec3, c: Vec3, d: Vec3): { dist: number; at: Vec3 } 
 /** What a gadget going off does (the room's: blasts, stuns, EMPs; smoke stays as a cloud here). */
 export type GoOff = (g: Gadget, at: Vec3, end: FlightEnd | null) => void;
 
+/**
+ * What a set-off cluster charge drills through before its grenades come out (Phase 8 M5): steel where it sits (a
+ * reinforced section or a reinforced hatch), a solid gadget behind it (a deployable shield, `shield`), or neither (a
+ * soft surface: at once).
+ */
+export function drillOf(sim: Sim, g: Gadget): { steel: boolean; shield: Gadget | null } {
+  const entry = g.panel >= 0 ? sim.level.panels.list[g.panel] : undefined;
+  if (entry) {
+    const p = entry.panel;
+    if (p.kind === "hatch") return { steel: p.reinforced !== 0, shield: null };
+    if (p.kind !== "wall") return { steel: false, shield: null };
+    const f = entry.frame;
+    const u = (g.pos[0] - f.center[0]) * f.u[0] + (g.pos[1] - f.center[1]) * f.u[1] + (g.pos[2] - f.center[2]) * f.u[2] + f.w / 2;
+    const col = Math.max(0, Math.min(p.w - 1, Math.floor(u / p.cellU)));
+    return { steel: (p.reinforced & (1 << p.sectionOf(col))) !== 0, shield: null };
+  }
+  const depth = sim.data.gadgets.get(kindId(g.kind) ?? "")?.sizeM[2] ?? 0;
+  const hit = gadgetOnRay(sim.gadgets, sim.data, g.pos, behindOf(g), depth / 2 + 0.1, (e) => e.id !== g.id && !isFlying(e) && sim.data.gadgets.get(kindId(e.kind) ?? "")?.solid === true);
+  return { steel: false, shield: hit?.g ?? null };
+}
+
 
 export class GadgetServer {
   private readonly flights: Flights;
@@ -84,6 +111,10 @@ export class GadgetServer {
   onIngredient: (g: Gadget, stage: IngredientStage) => void = () => {};
   /** Whether a match is in its prep phase (an alarm can't go outdoors then). */
   inPrep: () => boolean = () => false;
+  /** The room: panel ops made here (a cluster charge's hole, Phase 8 M5), applied with this tick's. */
+  cut: (ops: IndexedOp[]) => void = () => {};
+  /** How many grenades each set-off cluster charge has let out (by entry id; the server's alone). */
+  private readonly released = new Map<number, number>();
 
   constructor(
     private readonly sim: Sim,
@@ -117,14 +148,15 @@ export class GadgetServer {
       const flags = (e.onFloor ? GFlag.OnFloor : 0) | (e.flat ? GFlag.Flat : 0);
       // A tripwire arms its time after it's placed (the Claymore: `readyAt`).
       const armed = g.tripwire ? sim.tick + ticksOrZero(g.tripwire.armS) : 0;
-      sim.gadgets.add({ ...base, pos: e.pos, vel: [0, 0, 0], flags, panel: e.panel, fuseEnd: fuse, signalEnd: out ? sim.tick + ticks(sim.data.intel.bulletproofCamera.outdoorSignalS) : 0, readyAt: armed });
+      const put = sim.gadgets.add({ ...base, pos: e.pos, vel: [0, 0, 0], flags, panel: e.panel, fuseEnd: fuse, signalEnd: out ? sim.tick + ticks(sim.data.intel.bulletproofCamera.outdoorSignalS) : 0, readyAt: armed });
+      if (g.maxOut !== undefined) this.overMax(put, g.maxOut, pawn);
       return;
     }
     if (e.kind === "detonate") {
       const pawn = sim.pawns.get(e.pawnId);
       // Its owner's oldest working one of that kind out (the controller's: Skopós's shells share theirs).
       const g = pawn && detonatable(sim.gadgets.list, pawn.ownerId ?? 0, kindOf(e.gadget));
-      if (g) this.trigger(g, null);
+      if (g) this.detonated(g);
       return;
     }
     if (e.kind === "pickUpGadget") {
@@ -132,6 +164,91 @@ export class GadgetServer {
       const g = sim.gadgets.get(e.gadgetId);
       if (pawn && g && g.owner === pawn.ownerId) sim.gadgets.remove(g.id);
     }
+  }
+
+  /**
+   * Its owner's detonator set a remote device off (or Fuze placed another, `maxOut`): Thermite's charge starts burning
+   * (it goes off `burnS` later, gadgets/DESIGN.md §7), Fuze's starts drilling; the rest go off now.
+   */
+  detonated(g: Gadget): void {
+    const d = this.dataOf(g);
+    if (d?.burnS !== undefined) {
+      this.sim.gadgets.update(g.id, { flags: g.flags | GFlag.Active, fuseEnd: this.sim.tick + ticks(d.burnS) });
+      return;
+    }
+    if (d?.cluster) {
+      // Through steel or a shield it drills first; through a soft surface its grenades come out at once (this tick's step).
+      const drill = drillOf(this.sim, g);
+      this.sim.gadgets.update(g.id, { flags: g.flags | GFlag.Active, launchTick: this.sim.tick, fuseEnd: this.sim.tick + (drill.steel || drill.shield ? ticks(d.cluster.drillS) : 0) });
+      this.released.set(g.id, 0);
+      return;
+    }
+    this.trigger(g, null);
+  }
+
+  /**
+   * Whether `owner`'s detonator could set this device off now (for one set off by placing another, `maxOut`): not
+   * while an EMP has it or its owner's body (DSEG).
+   */
+  private canSetOff(g: Gadget, owner: Pawn): boolean {
+    return !(g.flags & GFlag.Off) && owner.state.jammed === 0;
+  }
+
+  /**
+   * One placed over its owner's `max` waiting at once (Fuze's Cluster Charge): the oldest others are set off as the
+   * detonator would, or fall (gone, nothing more) if nothing could set them off now. Its owner's hands already count
+   * no more than `max` waiting (gadgets/hands.ts), so nobody's told.
+   */
+  private overMax(e: Gadget, max: number, owner: Pawn) {
+    const waiting = this.sim.gadgets.list.filter((x) => x.owner === e.owner && x.kind === e.kind && x.id !== e.id && !(x.flags & GFlag.Active));
+    for (const x of waiting.slice(0, Math.max(0, waiting.length - (max - 1)))) {
+      if (this.canSetOff(x, owner)) this.detonated(x);
+      else this.sim.gadgets.remove(x.id);
+    }
+  }
+
+  /**
+   * A set-off cluster charge's tick (Phase 8 M5): drilling until `fuseEnd`; then its tube is through (its hole cut, a
+   * shield's glass shattered) and one grenade comes out every `everyS` from the tube's end, across the fan; after the
+   * last it falls (gone).
+   */
+  private cluster(g: Gadget, c: ClusterData) {
+    const tick = this.sim.tick;
+    if (tick < g.fuseEnd) return;
+    const n = this.released.get(g.id) ?? 0;
+    if (tick - g.fuseEnd < n * ticks(c.everyS)) return;
+    if (n === 0) this.breakThrough(g, c);
+    this.release(g, c, n);
+    if (n + 1 >= c.count) {
+      this.released.delete(g.id);
+      this.sim.gadgets.remove(g.id);
+    }
+  }
+
+  /** A cluster charge's tube gets through: its hole in the panel it's on (data/destruction.json), or a shield's glass shattered. */
+  private breakThrough(g: Gadget, c: ClusterData) {
+    const ex = this.sim.data.destruction.explosives[c.cut];
+    if (g.panel >= 0 && ex) {
+      const b = behindOf(g);
+      const from: Vec3 = [g.pos[0] - b[0] * 0.3, g.pos[1] - b[1] * 0.3, g.pos[2] - b[2] * 0.3];
+      // A hatch keeps its hp (the tube only goes through it).
+      const ops = explosiveOps(this.sim.level.panels, this.sim.data.destruction, ex, from, b, 1).filter((o) => o.op.kind !== "damage" || o.op.amount > 0);
+      if (ops.length) this.cut(ops);
+      return;
+    }
+    const shield = drillOf(this.sim, g).shield;
+    if (shield) this.sim.gadgets.update(shield.id, { flags: shield.flags | GFlag.Hit });
+  }
+
+  /** Grenade `i` of a set-off cluster charge out of its tube's end, thrown across the fan with its own fuse. */
+  private release(g: Gadget, c: ClusterData, i: number) {
+    const k = this.sim.data.gadgets.get(c.grenade);
+    const tip = tubeTip(this.sim.data, g);
+    this.released.set(g.id, i + 1);
+    if (!k || k.use.kind !== "throw" || !tip) return;
+    const tick = this.sim.tick;
+    const fuse = k.use.fuseS !== undefined ? tick + ticks(k.use.fuseS) : 0;
+    this.sim.gadgets.add({ kind: kindOf(c.grenade), owner: g.owner, team: g.team, pos: tip, yaw: g.yaw, vel: fanVelocity(g, c, i), flags: GFlag.Flying, panel: -1, launchTick: tick, fuseEnd: fuse, signalEnd: 0, readyAt: 0, offEnd: 0, seq: 0 });
   }
 
   /** A gadget goes off where it is: what it does, then it's gone (smoke: its cloud stays there for its time). */
@@ -176,6 +293,10 @@ export class GadgetServer {
         if (tick >= now.fuseEnd) sim.gadgets.remove(now.id);
         continue;
       }
+      if (d.cluster && now.flags & GFlag.Active) {
+        this.cluster(now, d.cluster);
+        continue;
+      }
       const off = (now.flags & GFlag.Off) !== 0;
       if (now.fuseEnd !== 0 && tick >= now.fuseEnd) this.trigger(now, null);
       else if (d.tripwire && !off && !isFlying(now) && tick >= now.readyAt && this.tripped(now, d.tripwire)) this.trigger(now, null);
@@ -190,6 +311,7 @@ export class GadgetServer {
       return g !== undefined && isFlying(g);
     });
     for (const id of this.checkedTo.keys()) if (!sim.gadgets.get(id)) this.checkedTo.delete(id);
+    for (const id of this.released.keys()) if (!sim.gadgets.get(id)) this.released.delete(id);
   }
 
   /** A pawn's hitboxes now (a body's or a drone's). */
@@ -417,11 +539,17 @@ export class GadgetServer {
     }
   }
 
-  /** An entry destroyed (not set off): gone, and a remote device's owner told. */
+  /**
+   * An entry destroyed (not set off): gone, and the owner of a remote device still waiting for its detonator told (one
+   * already set off, burning or drilling, isn't waiting). A cluster charge destroyed once set off has let one grenade
+   * out first, however quick (Y6S3 DN).
+   */
   destroy(g: Gadget): void {
     const d = this.dataOf(g);
+    if (d?.cluster && g.flags & GFlag.Active && (this.released.get(g.id) ?? 0) === 0) this.release(g, d.cluster, 0);
+    this.released.delete(g.id);
     this.sim.gadgets.remove(g.id);
-    if (d?.remote) this.onLost(g, d);
+    if (d?.remote && !(g.flags & GFlag.Active)) this.onLost(g, d);
   }
 
   /**
@@ -441,8 +569,9 @@ export class GadgetServer {
 
   /** Everything gone (a lab tool; a new round clears the table itself): remote devices' owners told. */
   clear(): void {
-    const lost = this.sim.gadgets.list.filter((g) => this.dataOf(g)?.remote);
+    const lost = this.sim.gadgets.list.filter((g) => this.dataOf(g)?.remote && !(g.flags & GFlag.Active));
     this.flights.clear();
+    this.released.clear();
     this.sim.gadgets.clear();
     for (const g of lost) this.onLost(g, this.dataOf(g)!);
   }

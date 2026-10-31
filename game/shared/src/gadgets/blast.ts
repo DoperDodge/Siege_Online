@@ -15,6 +15,7 @@ import { poseHitboxes, type Hitbox } from "../player/hitboxes.js";
 import type { Pawn } from "../player/pawn.js";
 import { PawnKind, PawnMode } from "../player/types.js";
 import type { Sim } from "../sim.js";
+import { activeCluster, tubeTip } from "./cluster.js";
 import { isIngredient, kindId } from "./kinds.js";
 import { GFlag, type Gadget } from "./table.js";
 
@@ -97,6 +98,12 @@ function wallFacing(g: Pick<Gadget, "yaw" | "flags">): Vec3 | null {
   return [fx, 0, fz];
 }
 
+/** A charge's placer's side: out of its wall, or up from the floor it lies flat on (Phase 8 M5); null otherwise. */
+function placerSide(g: Pick<Gadget, "yaw" | "flags">): Vec3 | null {
+  if (g.flags & GFlag.Flying) return null;
+  return g.flags & GFlag.Flat ? [0, 1, 0] : wallFacing(g);
+}
+
 /** Whether a point is in the Claymore's arc: within `arcDeg` of its facing, or within `behindM` behind it. */
 function inArc(b: BlastData, g: Pick<Gadget, "yaw">, at: Vec3, p: Vec3): boolean {
   if (b.arcDeg >= 360) return true;
@@ -131,9 +138,12 @@ function panelsNear(sim: Sim, p: Vec3, r: number): { entry: PanelEntry; at: Vec3
  * What blast `b` of entry `g` going off at `at` does now (a gadget's data's `blast`, a gas pipe's). `g.panel` is the
  * panel a charge is on (its cut goes there, and that panel doesn't dim its damage).
  */
-export function blastEffects(sim: Sim, g: Pick<Gadget, "id" | "kind" | "yaw" | "flags" | "panel">, b: BlastData, at: Vec3): BlastEffects {
+export function blastEffects(sim: Sim, g: Pick<Gadget, "id" | "kind" | "owner" | "yaw" | "flags" | "panel">, b: BlastData, at: Vec3): BlastEffects {
   const out: BlastEffects = { bodies: [], gadgets: [], panelOps: [] };
   const facing = wallFacing(g);
+  const side = placerSide(g);
+  // The placer's side reaches back to the surface the charge is on (a body standing on a floor beside one is on it).
+  const back = -((sim.data.gadgets.get(kindId(g.kind) ?? "")?.sizeM[2] ?? 0) / 2 + 0.02);
   // Bodies and drones (not one in its owner's hand), each by its hitbox point nearest the blast.
   for (const pawn of sim.pawns.values()) {
     const s = pawn.state;
@@ -143,8 +153,8 @@ export function blastEffects(sim: Sim, g: Pick<Gadget, "id" | "kind" | "yaw" | "
       const p = nearestOn(h, at);
       if (!inArc(b, g, at, p)) continue;
       const d = Math.hypot(p[0] - at[0], p[1] - at[1], p[2] - at[2]);
-      // A charge on a wall: its placer's side (the side it faces) by `near`, the far side by `damage`.
-      const curve = facing && b.near && (p[0] - at[0]) * facing[0] + (p[2] - at[2]) * facing[2] > 0 ? b.near : b.damage;
+      // A charge on a wall or a floor: its placer's side (the side it faces) by `near`, the far side by `damage`.
+      const curve = side && b.near && (p[0] - at[0]) * side[0] + (p[1] - at[1]) * side[1] + (p[2] - at[2]) * side[2] > back ? b.near : b.damage;
       if (d >= curve.zeroM && curve.zeroM > 0) continue;
       const line = blastLine(sim, at, p, g.panel);
       if (line.blocked) continue;
@@ -153,24 +163,33 @@ export function blastEffects(sim: Sim, g: Pick<Gadget, "id" | "kind" | "yaw" | "
     if (best > 0) out.bodies.push({ pawn, damage: Math.max(1, Math.round(best)) });
   }
   // Gadgets in its destruction range (and the Claymore's arc), in sight of it (the level and steel shelter them); the
-  // level's ingredients there are set off. A smoke cloud isn't blown away.
+  // level's ingredients there are set off. A smoke cloud isn't blown away. A set-off cluster charge is reached at its
+  // tube's end too (on the far side of its surface), but not by its own grenades (Phase 8 M5).
+  const kind = kindId(g.kind);
   for (const e of sim.gadgets.list) {
     if (e.id === g.id || e.flags & GFlag.Flying || isCloud(sim, e)) continue;
-    const d = Math.hypot(e.pos[0] - at[0], e.pos[1] - at[1], e.pos[2] - at[2]);
-    if (d > b.destroyM || !inArc(b, g, at, e.pos) || blastLine(sim, at, e.pos, e.panel === g.panel ? g.panel : -1, sim.solidOf(e.id)).blocked) continue;
     if (!isIngredient(e.kind) && !sim.data.gadgets.get(kindId(e.kind) ?? "")) continue;
-    out.gadgets.push(e);
+    if (e.owner === g.owner && activeCluster(sim.data, e)?.c.grenade === kind) continue;
+    const tip = tubeTip(sim.data, e);
+    const reached = (p: Vec3) =>
+      Math.hypot(p[0] - at[0], p[1] - at[1], p[2] - at[2]) <= b.destroyM && inArc(b, g, at, p) && !blastLine(sim, at, p, e.panel === g.panel ? g.panel : -1, sim.solidOf(e.id)).blocked;
+    if (reached(e.pos) || (tip && reached(tip))) out.gadgets.push(e);
   }
-  // Panels: a charge cuts its shape into the panel it's on; a grenade cuts every panel within `cutM` (smaller with
-  // distance), breaks barricades and wears hatches; barricades within its destruction range break too.
+  // Panels: a charge cuts its shape into the panel it's on, and (Thermite's, `cutM`) into the panels next to it; a
+  // grenade cuts every panel within `cutM` (smaller with distance), breaks barricades and wears hatches; barricades
+  // within its destruction range break too.
   const ex = b.cut ? sim.data.destruction.explosives[b.cut] : undefined;
+  // A charge on its panel (else a grenade, or something off any panel).
+  let charge = ex !== undefined;
   if (ex && g.panel >= 0 && facing) {
     const from: Vec3 = [at[0] + facing[0] * 0.3, at[1], at[2] + facing[2] * 0.3];
     out.panelOps.push(...explosiveOps(sim.level.panels, sim.data.destruction, ex, from, [-facing[0], 0, -facing[2]], 1));
   } else if (ex && g.panel >= 0 && g.flags & GFlag.Flat) {
     out.panelOps.push(...explosiveOps(sim.level.panels, sim.data.destruction, ex, [at[0], at[1] + 0.3, at[2]], [0, -1, 0], 1));
-  } else if (ex) {
+  } else charge = false;
+  if (ex && (!charge || b.cutM > 0)) {
     for (const { entry, at: near, d } of panelsNear(sim, at, b.cutM)) {
+      if (charge && entry.panel.spec.index === g.panel) continue;
       if (blastLine(sim, at, near, entry.panel.spec.index).blocked && d > 0.05) continue;
       const scale = ex.shape === "disc" ? Math.max(0.2, 1 - d / Math.max(b.cutM, 1e-6)) : 1;
       const v: Vec3 = [near[0] - at[0], near[1] - at[1], near[2] - at[2]];
