@@ -6,7 +6,8 @@
 // fire, an alarm sounding, an EMP's sparks, and an observation blocker's barrier to the other side's drones and cameras;
 // the level's ingredients are entries too. M5: Thermite's charge burning shows sparks on both sides of its surface,
 // Fuze's set off shows its tube through it (its grenades are thrown entries). M6: Mute's jammer lights up while it
-// works, and its reach shows for a moment once it's placed.
+// works, and its reach shows for a moment once it's placed. M7: Mira's Black Mirror is its frame and its glass, clear from
+// her side and black from the other (two one-sided sheets), grey once shattered, gone once ejected.
 import * as THREE from "three";
 import {
   barrierOf,
@@ -58,6 +59,8 @@ const COLOURS: Record<string, number> = {
   cluster_charge: 0x3f3f46,
   cluster_grenade: 0x3f4a1f,
   signal_disruptor: 0x1e293b,
+  black_mirror: 0x134e4a,
+  mirror_canister: 0xdc2626,
 };
 
 /**
@@ -95,6 +98,9 @@ export class GadgetModels {
     barrier: new THREE.MeshBasicMaterial({ color: 0x0b1220, transparent: true, opacity: 0.92, side: THREE.DoubleSide, depthWrite: false }),
     sparks: new THREE.MeshBasicMaterial({ color: 0xffb347, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false }),
     jamOn: new THREE.MeshBasicMaterial({ color: 0x38bdf8 }),
+    glassClear: new THREE.MeshBasicMaterial({ color: 0x99f6e4, transparent: true, opacity: 0.12, side: THREE.FrontSide, depthWrite: false }),
+    glassBlack: new THREE.MeshBasicMaterial({ color: 0x050607, side: THREE.FrontSide }),
+    glassShattered: new THREE.MeshBasicMaterial({ color: 0xcbd5e1, side: THREE.DoubleSide }),
     reach: new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.12, wireframe: true, depthWrite: false }),
     tube: new THREE.MeshStandardMaterial({ color: 0x52525b, roughness: 0.5, metalness: 0.6 }),
   };
@@ -126,7 +132,7 @@ export class GadgetModels {
     let geo = this.geometry.get(id);
     if (!geo) {
       // Grenades and fire extinguishers are round; a gas pipe lies along its width; everything else is its box.
-      const round = (d?.use.kind === "throw" && !d.remote && id !== "proximity_alarm") || id === "fire_extinguisher";
+      const round = (d?.use.kind === "throw" && !d.remote && id !== "proximity_alarm") || id === "fire_extinguisher" || id === "mirror_canister";
       if (round) geo = new THREE.CylinderGeometry(w / 2, w / 2, h, 12);
       else if (id === "gas_pipe") geo = new THREE.CylinderGeometry(h / 2, h / 2, w, 10).rotateZ(Math.PI / 2);
       else geo = new THREE.BoxGeometry(w, h, depth);
@@ -138,6 +144,20 @@ export class GadgetModels {
       this.materials.set(id, mat);
     }
     const group = new THREE.Group();
+    if (d?.mirror) {
+      // A Black Mirror (M7): its frame round the window, through the wall (its glass is drawn by its state).
+      const f = d.mirror.frameM;
+      const deep = 0.24;
+      const frame = new THREE.Group();
+      frame.name = "body";
+      for (const [bw, bh, x, y] of [[w + 2 * f, f, 0, (h + f) / 2], [w + 2 * f, f, 0, -(h + f) / 2], [f, h, (w + f) / 2, 0], [f, h, -(w + f) / 2, 0]]) {
+        const bar = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, deep), mat);
+        bar.position.set(x, y, 0);
+        frame.add(bar);
+      }
+      group.add(frame);
+      return group;
+    }
     const mesh = new THREE.Mesh(geo, mat);
     mesh.name = "body";
     group.add(mesh);
@@ -282,6 +302,18 @@ export class GadgetModels {
       const glow = new THREE.Mesh(new THREE.SphereGeometry(alarm ? 0.3 : 0.6, 10, 8), this.fxMat.alarm);
       glow.position.set(...g.pos);
       group.add(glow);
+    }
+    // A Black Mirror's glass (M7): one-way while whole (clear toward its facing, black the other way), grey when shattered.
+    const mirror = this.dataOf(g.kind)?.mirror;
+    if (mirror && !(g.flags & GFlag.Broken)) {
+      const [w, h] = this.dataOf(g.kind)!.sizeM;
+      const sheets: [THREE.Material, number][] = g.flags & GFlag.Hit ? [[this.fxMat.glassShattered, g.yaw]] : [[this.fxMat.glassClear, g.yaw + Math.PI], [this.fxMat.glassBlack, g.yaw]];
+      for (const [mat, yaw] of sheets) {
+        const sheet = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+        sheet.position.set(g.pos[0], g.pos[1], g.pos[2]);
+        sheet.rotation.set(0, yaw, 0);
+        group.add(sheet);
+      }
     }
     // A jammer working (M6): its light on top.
     if (this.dataOf(g.kind)?.jammer && !(g.flags & (GFlag.Off | GFlag.Flying))) {

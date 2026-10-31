@@ -8,7 +8,7 @@ import type { GameData } from "../data/load.js";
 import type { GadgetData } from "../data/schemas.js";
 import { raycastLevel, type LevelQuery } from "../level/raycast.js";
 import type { Pawn } from "../player/pawn.js";
-import { Btn, GadgetAct, Hand, handSlot, isDetonator, PawnMode, WeaponAct, type InputCmd, type PawnState } from "../player/types.js";
+import { Btn, GadgetAct, Hand, handSlot, isDetonator, PawnMode, Stance, WeaponAct, type InputCmd, type PawnState } from "../player/types.js";
 import { eyePose } from "../player/hitboxes.js";
 import type { ResolvedLoadout } from "../weapons/loadout.js";
 import { viewDir } from "../weapons/spread.js";
@@ -140,7 +140,9 @@ export function placeSpotFor(q: PlaceQuery & { data: GameData }, pawn: Pawn): Pl
   if (slot === 0 || isDetonator(s.hand) || s.mode !== PawnMode.Walk || !s.grounded) return null;
   const g = slotGadget(q.data, pawn.loadout, slot);
   if (!g || !isPlaced(g)) return null;
-  return placeSpot(q, g, eyePose(q.data.movement, q.data.hitboxes, s).pos, viewDir(s.yaw, s.pitch), s.yaw);
+  // Mira's mirror goes at her head height standing or crouched, never prone (Phase 8 M7).
+  if (g.mirror && s.stance === Stance.Prone) return null;
+  return placeSpot(q, g, eyePose(q.data.movement, q.data.hitboxes, s).pos, viewDir(s.yaw, s.pitch), s.yaw, s.stance === Stance.Crouch);
 }
 
 /**

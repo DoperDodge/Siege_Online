@@ -195,6 +195,20 @@ other side's living bodies (downed too) within 10.5 m of his eye through anythin
 an EMP on him empties it (his HUD keeps the last blips, frozen). Only his client draws them; a ping while it's up
 marks the heartbeat nearest his crosshair (within 20°) for his team (a ping event with `heart`).
 
+**As built (M7, Mira, D-147):** the Black Mirror (`mirror`, `gadgets/mirror.ts`) is placed (`reinforceable`) on a
+reinforceable wall, from its steel's side if it's reinforced, at her head height over the floor on her side (standing
+1.5 m, crouched 1.0 m; never prone), its entry in the middle of the wall's thickness facing her. Placed, it burns its
+window (1.0 × 0.35 m) out of every layer, steel too (the room applies the cut), and the server adds its canister, a
+fragile entry of its own on her side under the glass. The glass is a solid (a collider from the table, as the
+deployable shield's), so bullets, blasts, bodies, sight and throws stop at it both ways; `sightPast` (scans, pings)
+sees through it from her side while it's whole; a client draws it clear from her side and black from the other (two
+one-sided sheets). Blasts don't touch the glass; a knife or Sledge's hammer shatters it (`GFlag.Hit`: opaque both
+ways, still bulletproof); Fuze's Cluster Charge drills it as it drills a shield. The canister destroyed (any damage,
+either team), the mirror is ejecting (`GFlag.Active`) and 4 s later ejected (`GFlag.Broken`: no glass, no collider,
+an open hole in its frame). After any panel op on its wall the server checks the band 0.1 m wide round its window:
+more than a fifth gone through every layer, the mirror falls, its canister with it. A wall with a mirror in it can't be
+reinforced.
+
 ## 8. The Ballistic Shield (Fuze)
 
 The shield as a primary (data/weapons/ballistic_shield.json, research/weapons_notes.md §5): a shield hit shape in

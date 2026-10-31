@@ -19,12 +19,23 @@ targets `main`.
 | M4 Sledge; Striker and Sentry | ✅ (D-144; Striker's and Sentry's kits were M1's) |
 | M5 Thermite; Fuze's Cluster Charge | ✅ (D-145) |
 | M6 Mute; Pulse | ✅ (D-146) |
-| M7 Mira | next |
-| M8 Brava | |
+| M7 Mira | ✅ (D-147) |
+| M8 Brava | next |
 | M9 Dokkaebi | |
 | M10 Skopós's remaining rules; Lesion | |
 | M11 The Ballistic Shield | |
 | M12 Every CSV row passing; netsim, browser tests, review, docs, report | |
+
+### What's done (M7: Mira)
+- **Mira's Black Mirror:** Z, then left mouse held 5 s at a reinforceable wall (reinforced or not; on steel only from
+  the side it went up from), standing or crouched (not prone). It cuts a window through the wall at your head height
+  and fills it with glass you see through from your side only (black from the other). Bulletproof and blast-proof
+  both ways; a knife (or Sledge's hammer) shatters it so nobody sees through. Its red canister sits under the glass
+  on your side: shoot, knife or blow it up and the glass pops out 4 s later, leaving an open hole. It falls if the
+  wall around it is blown away (a breach on a soft wall, Thermite's or a Hard Breach Charge over its frame). 2 a
+  round; a wall with one can't be reinforced afterwards.
+- **The interaction tests:** 23 more rows pass (241 of 343). The Gadget Lab's browser test puts one in and looks at
+  it from both sides.
 
 ### What's done (M6: Mute and Pulse)
 - **Mute's Signal Disruptor:** Z, then left mouse held 3 s at the floor puts one down (4 a round; hold F on it to
@@ -160,6 +171,8 @@ npm start
    detector.
 6. **M4:** as Sledge, Z takes out the hammer: swing at the soft walls (close and from further away), the hatch from
    the platform, the barricaded door, and a dummy.
+9. **M7:** as Mira, go to *Reinforceable walls*, Z and hold left mouse at the wall for 5 s: look through it, then
+   walk round to the other side (black). Shoot its red canister from your side and watch the glass go.
 8. **M6:** as Mute, Z and hold left mouse at the floor; switch to the attackers (pause menu) and drive a drone at it,
    or put a Breach Charge near it and try the detonator. As Pulse, Z and face the attacker dummy in the open.
 7. **M5:** as Thermite, Z, hold left mouse at the reinforced wall for 3 s, step back and press left mouse: sparks,

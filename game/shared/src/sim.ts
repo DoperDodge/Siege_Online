@@ -16,6 +16,7 @@ import { detonatable, GadgetTable, GFlag, type Gadget } from "./gadgets/table.js
 import { isIngredient, KIND_BP_CAMERA, kindId, kindOf } from "./gadgets/kinds.js";
 import { pawnJammed, pointJammed } from "./gadgets/jammers.js";
 import { heartbeats, heartOf, sensorUp } from "./gadgets/sensor.js";
+import { mirrorOf, sightPast } from "./gadgets/mirror.js";
 import { barrierOf, crossesBarrier, smokeOnSegment, wireSlow } from "./gadgets/areas.js";
 import { gadgetOnRay } from "./gadgets/hits.js";
 import { placeSpotFor, slotCounts, slotGadget } from "./gadgets/hands.js";
@@ -436,7 +437,10 @@ export class Sim {
     const ray = new this.R.Ray({ x: eye[0], y: eye[1], z: eye[2] }, { x: dir[0], y: dir[1], z: dir[2] });
     const limit = this.data.destruction.reinforcement.reach + 1.5;
     const plain = this.world.castRay(ray, limit, true, undefined, QUERY_SIGHT)?.timeOfImpact ?? limit;
-    return deployAction(this.data.destruction, this.level.panels, eye, dir, [s.x, s.y, s.z], pawn.team, this.deployRules, plain);
+    const a = deployAction(this.data.destruction, this.level.panels, eye, dir, [s.x, s.y, s.z], pawn.team, this.deployRules, plain);
+    // A wall holding a Black Mirror can't be reinforced afterwards (Phase 8 M7; research CSV action.reinforce).
+    if (a?.kind === DeployKind.Reinforce && this.gadgets.list.some((g) => g.panel === a.panel && mirrorOf(this.data, g))) return null;
+    return a;
   }
 
   /** The plantable area of a site (cached; null: no such site). */
@@ -902,7 +906,8 @@ export class Sim {
       }
     }
     const at = (t: number): [number, number, number] => [v.pos[0] + dir[0] * t, v.pos[1] + dir[1] * t, v.pos[2] + dir[2] * t];
-    let t = raycastLevel(this, v.pos, dir, 200)?.t ?? null;
+    // Through a Black Mirror from its placer's side (Phase 8 M7).
+    let t = sightPast(this, v.pos, dir, 200)?.t ?? null;
     const thermal = c.cam !== 0 && this.bpCamAt(c.cam - 1) !== null;
     const smoke = thermal ? null : smokeOnSegment(this.data, this.gadgets, v.pos, at(t ?? 200));
     if (smoke !== null && (t === null || smoke < t)) t = smoke;
@@ -933,7 +938,8 @@ export class Sim {
     const want = new Map<number, { g: Gadget; size: readonly [number, number, number]; key: string }>();
     for (const g of this.gadgets.list) {
       const d = this.data.gadgets.get(kindId(g.kind) ?? "");
-      if (d?.solid && !(g.flags & GFlag.Flying)) want.set(g.id, { g, size: d.sizeM, key: `${g.pos.join(",")},${g.yaw}` });
+      // Not one in the air, nor a Black Mirror whose glass is ejected (Phase 8 M7).
+      if (d?.solid && !(g.flags & (GFlag.Flying | GFlag.Broken))) want.set(g.id, { g, size: d.sizeM, key: `${g.pos.join(",")},${g.yaw}` });
     }
     let changed = false;
     for (const [id, s] of this.solids)

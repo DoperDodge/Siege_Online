@@ -33,6 +33,7 @@ import { Phase } from "../match/match.js";
 import { camerasOnRay } from "../intel/cameras.js";
 import { dartBurst } from "../intel/bpCamera.js";
 import { bpCamsBroken, gadgetOnRay } from "../gadgets/hits.js";
+import { mirrorOf, sightPast } from "../gadgets/mirror.js";
 import { GadgetServer, type IngredientStage } from "../gadgets/serve.js";
 import { blastEffects, isCloud, pawnDistance } from "../gadgets/blast.js";
 import { hammerOps } from "../gadgets/hammer.js";
@@ -42,7 +43,6 @@ import { isIngredient, kindId, kindOf } from "../gadgets/kinds.js";
 import { GFlag, type Gadget } from "../gadgets/table.js";
 import { deviceLost, slotCounts } from "../gadgets/hands.js";
 import { encodeGadgetOps, encodeGadgetState } from "./gadgetWire.js";
-import { raycastLevel } from "../level/raycast.js";
 import { ticks, ticksOrZero } from "../weapons/ticks.js";
 import { encodeError, encodePong, encodeRoster, encodeShotResult, encodeWelcome, ErrorCode, unwrap16, type InputMsg, type LabTool, type RosterEntry, type ShotResult } from "./protocol.js";
 import { encodePanelOps, encodePanelState, wireOp } from "./panels.js";
@@ -954,7 +954,9 @@ export class Room implements DirectorHost {
       isIngredient(x.kind) ? this.ignitable(x) : !(x.flags & GFlag.Flying) && x.team !== pawn.team && !isCloud(this.sim, x),
     );
     if (struck) {
-      this.gadgetServer.blastHit(struck.g);
+      // A Black Mirror's glass shatters as to a knife (Phase 8 M7; UNVERIFIED for the hammer); the rest as to a blast.
+      if (mirrorOf(this.sim.data, struck.g)) this.sim.gadgets.update(struck.g.id, { flags: struck.g.flags | GFlag.Hit });
+      else this.gadgetServer.blastHit(struck.g);
       return;
     }
     const ops = hammerOps(this.sim.level.panels, origin, dir, plain, u);
@@ -980,6 +982,8 @@ export class Room implements DirectorHost {
     this.panelHistory.record(this.sim.tick, index, e.panel.w * e.panel.h, change);
     this.unsentOps.push({ panel: index, op: wire });
     this.stats.panelOps++;
+    // A Black Mirror falls with its wall (Phase 8 M7).
+    this.gadgetServer.panelChanged(index);
     return change;
   }
 
@@ -1301,7 +1305,8 @@ export class Room implements DirectorHost {
         const d: Vec3 = [at[0] - view.pos[0], at[1] - view.pos[1], at[2] - view.pos[2]];
         const dist = Math.hypot(d[0], d[1], d[2]);
         if (dist > k.rangeM || dist < 1e-3 || (d[0] * look[0] + d[1] * look[1] + d[2] * look[2]) / dist < cos) continue;
-        const wall = raycastLevel(this.sim, view.pos, [d[0] / dist, d[1] / dist, d[2] / dist], dist);
+        // A Black Mirror is seen through from its placer's side (Phase 8 M7).
+        const wall = sightPast(this.sim, view.pos, [d[0] / dist, d[1] / dist, d[2] / dist], dist);
         if (wall && wall.t < dist - 0.05) continue;
         // Smoke hides them (a Bulletproof Camera sees through it), and so does the other side's observation blocker (Phase 8 M3).
         if (!thermal && smokeOnSegment(this.sim.data, this.sim.gadgets, view.pos, at) !== null) continue;
@@ -1546,7 +1551,7 @@ export class Room implements DirectorHost {
   private knifeable(g: Gadget): boolean {
     if (g.flags & GFlag.Flying) return false;
     const d = this.sim.data.gadgets.get(kindId(g.kind) ?? "");
-    if (d) return d.fragile || d.wire !== undefined || (d.solid && !(g.flags & GFlag.Hit));
+    if (d) return d.fragile || d.wire !== undefined || (d.solid && !(g.flags & (GFlag.Hit | GFlag.Broken)));
     return this.ignitable(g) && kindId(g.kind) !== "gas_pipe";
   }
 

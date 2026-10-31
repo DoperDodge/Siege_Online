@@ -68,3 +68,4 @@ export * from "./gadgets/electronics.js";
 export * from "./gadgets/cluster.js";
 export * from "./gadgets/jammers.js";
 export * from "./gadgets/sensor.js";
+export * from "./gadgets/mirror.js";

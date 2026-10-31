@@ -613,6 +613,10 @@ The gadget questions in [gadgets.md](gadgets.md) and the operator files stay ope
 28. **Pulse's sensor (M6):** a 120° fan in front of him, as far up and down as across (10.5 m), downed attackers
     shown, and a ping with it up marking the heartbeat within 20° of his crosshair (all ours). What shape does it
     scan, do downed attackers show, and what does his ping put on his team's screens?
+29. **Mira's Black Mirror (M7):** its glass 1.0 × 0.35 m with a 0.1 m frame, centred 1.5 m over the floor standing
+    and 1.0 m crouched, placed within 1.5 m; it falls when more than a fifth of the frame's band is gone through every
+    layer; Sledge's hammer shatters it as a knife does (all ours). How big is the glass, how high does it sit, and
+    how much of its wall must go before it falls (Fandom speaks of its anchors)?
 
 ### [core_mechanics.md](core_mechanics.md) — 16
 

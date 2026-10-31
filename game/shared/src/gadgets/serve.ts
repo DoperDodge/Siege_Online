@@ -5,7 +5,9 @@
 // until a tick, alarms and the metal detector sound while someone's in reach, barbed wire bites who moves in it, and
 // the level's ingredients go through their stages. M5: a detonator sets Thermite's charge burning (it goes off after
 // its burn) and Fuze's drilling (its grenades come out on the far side one after another, then it falls); Fuze's are
-// one at a time. Every change is a table op the room sends with the next snapshot.
+// one at a time. M7: a Black Mirror burns its window out of its wall as it's placed and gets its canister; the
+// canister destroyed, the glass is ejected 4 s later; it falls with its wall. Every change is a table op the room sends
+// with the next snapshot.
 import { isIdleShell } from "../combat/apply.js";
 import { DEG, forwardXZ, type Vec3 } from "../core/math.js";
 import type { GadgetData } from "../data/schemas.js";
@@ -28,6 +30,7 @@ import { behindOf, fanVelocity, tubeTip, type ClusterData } from "./cluster.js";
 import { empReach } from "./electronics.js";
 import { gadgetOnRay } from "./hits.js";
 import { pawnJammed, pointJammed } from "./jammers.js";
+import { canisterSpot, mirrorHeld, mirrorOf, windowOps } from "./mirror.js";
 import { isIngredient, KIND_BP_CAMERA, kindId, kindOf } from "./kinds.js";
 import { detonatable, GFlag, type Gadget } from "./table.js";
 
@@ -120,6 +123,8 @@ export class GadgetServer {
   cut: (ops: IndexedOp[]) => void = () => {};
   /** How many grenades each set-off cluster charge has let out (by entry id; the server's alone). */
   private readonly released = new Map<number, number>();
+  /** Each Black Mirror's canister's entry id: its mirror's (the server's alone; M7). */
+  private readonly canisters = new Map<number, number>();
 
   constructor(
     private readonly sim: Sim,
@@ -155,6 +160,7 @@ export class GadgetServer {
       const armed = g.tripwire ? sim.tick + ticksOrZero(g.tripwire.armS) : 0;
       const put = sim.gadgets.add({ ...base, pos: e.pos, vel: [0, 0, 0], flags, panel: e.panel, fuseEnd: fuse, signalEnd: out ? sim.tick + ticks(sim.data.intel.bulletproofCamera.outdoorSignalS) : 0, readyAt: armed });
       if (g.maxOut !== undefined) this.overMax(put, g.maxOut, pawn);
+      if (g.mirror) this.mirrorIn(put, g, g.mirror.canister);
       return;
     }
     if (e.kind === "detonate") {
@@ -231,6 +237,41 @@ export class GadgetServer {
     }
   }
 
+  /**
+   * A Black Mirror just placed (M7): its window burnt out of every layer of its wall (applied with this tick's ops), and
+   * its canister put on its placer's side under the glass.
+   */
+  private mirrorIn(g: Gadget, d: GadgetData, canister: string) {
+    const ops = windowOps(this.sim.level.panels, g, d);
+    if (ops.length) this.cut(ops);
+    const at = canisterSpot(this.sim.data, g, this.sim.level.panels.list[g.panel]?.frame.t ?? 0.2);
+    if (!at) return;
+    const c = this.sim.gadgets.add({ kind: kindOf(canister), owner: g.owner, team: g.team, pos: at, yaw: g.yaw, vel: [0, 0, 0], flags: 0, panel: -1, launchTick: 0, fuseEnd: 0, signalEnd: 0, readyAt: 0, offEnd: 0, seq: 0 });
+    this.canisters.set(c.id, g.id);
+  }
+
+  /** A Black Mirror goes (its wall gave way round it): its canister with it. */
+  private mirrorOut(g: Gadget) {
+    for (const [c, m] of this.canisters)
+      if (m === g.id) {
+        this.canisters.delete(c);
+        this.sim.gadgets.remove(c);
+      }
+    this.sim.gadgets.remove(g.id);
+  }
+
+  /**
+   * Panel ops changed a panel (the room's, after it applied them; M7): a Black Mirror in it whose wall no longer holds
+   * it falls (data/gadgets/black_mirror.json `mirror.lossMax`).
+   */
+  panelChanged(panel: number): void {
+    for (const g of [...this.sim.gadgets.list]) {
+      if (g.panel !== panel) continue;
+      const a = mirrorOf(this.sim.data, g);
+      if (a && !mirrorHeld(this.sim.level.panels, g, a.d, a.m)) this.mirrorOut(g);
+    }
+  }
+
   /** A cluster charge's tube gets through: its hole in the panel it's on (data/destruction.json), or a shield's glass shattered. */
   private breakThrough(g: Gadget, c: ClusterData) {
     const ex = this.sim.data.destruction.explosives[c.cut];
@@ -301,6 +342,11 @@ export class GadgetServer {
       }
       if (d.cluster && now.flags & GFlag.Active) {
         this.cluster(now, d.cluster);
+        continue;
+      }
+      // A Black Mirror whose canister went: its glass is ejected at the end of its time (an open hole, its frame left).
+      if (d.mirror) {
+        if (now.flags & GFlag.Active && tick >= now.fuseEnd) sim.gadgets.update(now.id, { flags: (now.flags & ~GFlag.Active) | GFlag.Broken, fuseEnd: 0 });
         continue;
       }
       const off = (now.flags & GFlag.Off) !== 0;
@@ -573,8 +619,19 @@ export class GadgetServer {
     const d = this.dataOf(g);
     if (d?.cluster && g.flags & GFlag.Active && (this.released.get(g.id) ?? 0) === 0) this.release(g, d.cluster, 0);
     this.released.delete(g.id);
+    if (d?.mirror) {
+      this.mirrorOut(g);
+      return;
+    }
     this.sim.gadgets.remove(g.id);
     if (d?.remote && !(g.flags & GFlag.Active)) this.onLost(g, d);
+    // A Black Mirror's canister (M7): its glass is ejected `ejectS` later (unless it's going already).
+    const mirror = this.canisters.get(g.id);
+    if (mirror === undefined) return;
+    this.canisters.delete(g.id);
+    const m = this.sim.gadgets.get(mirror);
+    const a = m && mirrorOf(this.sim.data, m);
+    if (m && a && !(m.flags & (GFlag.Active | GFlag.Broken))) this.sim.gadgets.update(m.id, { flags: m.flags | GFlag.Active, fuseEnd: this.sim.tick + ticks(a.m.ejectS) });
   }
 
   /**
@@ -582,6 +639,8 @@ export class GadgetServer {
    * list), an ingredient is set off, the rest are destroyed.
    */
   blastHit(g: Gadget): void {
+    // A Black Mirror's glass is blast-proof (M7): only its wall giving way takes it.
+    if (mirrorOf(this.sim.data, g)) return;
     if (isIngredient(g.kind)) this.ignite(g);
     else if (g.kind === KIND_BP_CAMERA) this.sim.gadgets.update(g.id, { flags: g.flags | GFlag.Broken });
     else this.destroy(g);
@@ -597,6 +656,7 @@ export class GadgetServer {
     const lost = this.sim.gadgets.list.filter((g) => this.dataOf(g)?.remote && !(g.flags & GFlag.Active));
     this.flights.clear();
     this.released.clear();
+    this.canisters.clear();
     this.sim.gadgets.clear();
     for (const g of lost) this.onLost(g, this.dataOf(g)!);
   }

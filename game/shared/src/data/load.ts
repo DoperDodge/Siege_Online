@@ -188,6 +188,10 @@ export function crossFileProblems(data: Pick<GameData, "operators" | "weapons" |
     for (const g of data.gadgets.values()) {
       for (const [where, cut] of [["blast.cut", g.blast?.cut], ["cluster.cut", g.cluster?.cut]] as const)
         if (cut && data.destruction && !Object.hasOwn(data.destruction.explosives, cut)) out.push(`data/gadgets/${g.id}.json: ${where} names "${cut}", which isn't in data/destruction.json explosives`);
+      if (g.mirror) {
+        const c = data.gadgets.get(g.mirror.canister);
+        if (!c || !c.fragile || c.side !== g.side || c.operator !== g.operator) out.push(`data/gadgets/${g.id}.json: mirror.canister names "${g.mirror.canister}", which isn't a fragile gadget of its own on its side and its operator's`);
+      }
       if (!g.cluster) continue;
       const k = data.gadgets.get(g.cluster.grenade);
       if (!k || k.use.kind !== "throw" || k.use.fuseS === undefined || !k.blast || k.side !== g.side || k.operator !== g.operator)
@@ -209,7 +213,8 @@ export function crossFileProblems(data: Pick<GameData, "operators" | "weapons" |
     for (const g of data.gadgets.values()) {
       if (!g.operator) continue;
       const op = data.operators.get(g.operator);
-      const part = op !== undefined && data.gadgets.get(op.ability.id)?.cluster?.grenade === g.id;
+      const ability = op && data.gadgets.get(op.ability.id);
+      const part = ability !== undefined && (ability.cluster?.grenade === g.id || ability.mirror?.canister === g.id);
       if (!op) out.push(`data/gadgets/${g.id}.json: operator "${g.operator}" doesn't exist`);
       else if ((op.ability.id !== g.id && !part) || op.side !== g.side) out.push(`data/gadgets/${g.id}.json: it isn't ${op.id}'s ability (${op.ability.id}) or part of it, on their side`);
     }

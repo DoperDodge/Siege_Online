@@ -701,10 +701,11 @@ export type IntelData = z.infer<typeof intelSchema>;
 
 /**
  * Where a placed gadget may go (gadgets/place.ts): something flat enough to stand on, a wall, a breakable surface
- * that isn't reinforced where it goes (a soft wall, a floor, a hatch, a barricade), a reinforced section, or a
- * deployable shield's front (Fuze's Cluster Charge, Phase 8 M5).
+ * that isn't reinforced where it goes (a soft wall, a floor, a hatch, a barricade), a reinforced section, a
+ * deployable shield's front (Fuze's Cluster Charge, Phase 8 M5), or a reinforceable wall, from its steel's side if
+ * it's reinforced (Mira's Black Mirror, M7).
  */
-export const PLACE_ON = ["floor", "wall", "soft", "steel", "shield"] as const;
+export const PLACE_ON = ["floor", "wall", "soft", "steel", "shield", "reinforceable"] as const;
 export type PlaceOn = (typeof PLACE_ON)[number];
 
 const sizeM = z.tuple([z.number().positive(), z.number().positive(), z.number().positive()]);
@@ -883,6 +884,24 @@ export const gadgetSchema = z
      * marks the heartbeat nearest his crosshair within `pingDeg` for his team.
      */
     sensor: z.strictObject({ rangeM: z.number().positive(), fanDeg: z.number().gt(0).max(360), pingDeg: z.number().gt(0).max(90) }).optional(),
+    /**
+     * Mira's Black Mirror (Phase 8 M7, gadgets/mirror.ts): placed on a reinforceable wall at standing (`standY`) or
+     * crouched (`crouchY`) height above the floor, it cuts its glass's window (`sizeM`'s width and height) through
+     * every layer and fills it: bulletproof and blast-proof both ways, seen through from its placer's side only; a
+     * knife shatters it (opaque both ways). Its `canister` (a gadget of its own) sits on its placer's side under the
+     * glass: destroyed, it ejects the glass `ejectS` later (an open hole, its frame left). It falls with its wall: when
+     * more than `lossMax` of a band `frameM` wide round its window is gone through every layer.
+     */
+    mirror: z
+      .strictObject({
+        standY: z.number().positive(),
+        crouchY: z.number().positive(),
+        frameM: z.number().positive(),
+        lossMax: z.number().gt(0).max(1),
+        ejectS: z.number().positive(),
+        canister: z.string(),
+      })
+      .optional(),
   })
   .superRefine((g, ctx) => {
     const u = g.use;
@@ -897,6 +916,7 @@ export const gadgetSchema = z
     if (u.kind === "place" && u.on.includes("shield") && !g.cluster) ctx.addIssue({ code: "custom", path: ["use", "on"], message: "only a cluster charge drills through a shield" });
     if ((u.kind === "hold") !== (g.sensor !== undefined)) ctx.addIssue({ code: "custom", path: ["use"], message: "a held item is a sensor, and a sensor is held" });
     if (g.jammer && (u.kind !== "place" || g.jammer.warnM < g.jammer.radiusM)) ctx.addIssue({ code: "custom", path: ["jammer"], message: "a jammer is placed, and warns beyond its reach" });
+    if (g.mirror && (u.kind !== "place" || !u.on.includes("reinforceable") || !g.solid)) ctx.addIssue({ code: "custom", path: ["mirror"], message: "a mirror is solid and placed on a reinforceable wall" });
   });
 export type GadgetData = z.infer<typeof gadgetSchema>;
 

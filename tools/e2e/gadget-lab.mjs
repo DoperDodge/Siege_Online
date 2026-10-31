@@ -1,10 +1,11 @@
-// End-to-end check of the Gadget Lab (Phase 8 M1 to M6, game/shared/src/gadgets/DESIGN.md §11). Offline (the page's
+// End-to-end check of the Gadget Lab (Phase 8 M1 to M7, game/shared/src/gadgets/DESIGN.md §11). Offline (the page's
 // own room in a Web Worker): Sledge takes a frag out with 3 and throws it (it flies, comes to rest, and is gone at its
 // fuse), then swings his hammer (Z) at a soft wall close by (both faces broken, a charge spent). Fuze takes a Breach
 // Charge out, holds Fire at a soft wall until it's on it (the detonator is then in hand) and sets it off: the wall has
 // a hole. Then his Cluster Charge (Z) on the reinforced wall: it drills, its grenades come out on the far side, the
 // steel has a hole; and Thermite's Exothermic Charge there: it burns, then a large hole goes through the steel. Mute
-// puts a Signal Disruptor down (Z); Pulse's sensor (Z) shows the attacker dummy's heartbeat. Mute throws his Nitro Cell at the feet of the attacker dummy in the open, steps well away and sets it off:
+// puts a Signal Disruptor down (Z); Pulse's sensor (Z) shows the attacker dummy's heartbeat; Mira's Black Mirror (Z)
+// cuts its window into the reinforceable wall. Mute throws his Nitro Cell at the feet of the attacker dummy in the open, steps well away and sets it off:
 // the dummy is down, by the Nitro Cell. Sledge's stun thrown in front of him whites out his screen; Thermite's smoke
 // grenade leaves its cloud in the table. Online, two pages at 100 ms of simulated round trip: what A throws, B has in
 // its table too, A's prediction needed no corrections, and both see its blast. (The level's ingredients are in the
@@ -245,6 +246,30 @@ try {
   await pul.screenshot({ path: shot("gadget-sensor.png") });
   result.checks.sensorShowsTheAttackerDummy = result.sensor.blips === 1 && /1 heartbeat\b/.test(result.sensor.title);
   await pul.close();
+
+  // ---- offline (M7): Mira's Black Mirror (Z) in the reinforceable wall: 5 s held, its window cut and its canister on
+  // her side; clear from her side, black from the other (screenshots)
+  const mir = await open(`${BASE}/labs/gadget_lab.html?autotest=1&lowgfx&op=mira`, { width: 960, height: 540 });
+  await mir.evaluate(() => window.__lab.teleport(1.6, 0, -5.0, 0));
+  await sleep(600);
+  await mir.keyboard.press("KeyZ");
+  await until(mir, () => window.__lab.net.hand === 3);
+  await sleep(1000);
+  await input(mir, { buttons: Btn.Fire, pitch: 0 });
+  await until(mir, () => window.__lab.net.table.some((g) => g.kind === "black_mirror"));
+  await input(mir, { pitch: 0 });
+  await sleep(500);
+  result.mirror = await mir.evaluate(() => ({ table: window.__lab.net.table.map((g) => g.kind), holes: window.__lab.panel("reinforce_2").holes }));
+  await mir.keyboard.press("KeyZ");
+  await mir.evaluate(() => window.__lab.teleport(1.6, 0, -3.8, 0));
+  await sleep(800);
+  await mir.screenshot({ path: shot("gadget-mirror-clear.png") });
+  await mir.evaluate(() => window.__lab.teleport(1.6, 0, -8.2, 180));
+  await sleep(800);
+  await mir.screenshot({ path: shot("gadget-mirror-black.png") });
+  await input(mir, null);
+  result.checks.mirrorCutsItsWindow = result.mirror.table.includes("black_mirror") && result.mirror.table.includes("mirror_canister") && result.mirror.holes[0] > 0 && result.mirror.holes[2] > 0;
+  await mir.close();
 
   // ---- offline (M3): Sledge's stun at his feet, facing it: his screen goes white
   const stun = await open(`${BASE}/labs/gadget_lab.html?autotest=1&lowgfx&op=sledge&gadgets=stun`, { width: 960, height: 540 });
