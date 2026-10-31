@@ -12,6 +12,8 @@ import type { IndexedOp } from "../destruction/panels.js";
 import { ByteReader, ProtocolError } from "./bytes.js";
 import { decodeEvents, type GameEvent } from "./events.js";
 import { applyPanelState, decodePanelOps } from "./panels.js";
+import { decodeGadgetOps, decodeGadgetState, encodeGadgetResync } from "./gadgetWire.js";
+import type { GadgetOp } from "../gadgets/table.js";
 import { decodeMatchState, type MatchView } from "./matchWire.js";
 import {
   decodeError,
@@ -51,6 +53,8 @@ export interface ClientSessionOptions {
   onLocalEvents?(events: readonly SimEvent[]): void;
   /** Panel ops the server applied, now applied here too, and what each changed (debris, sounds). */
   onPanels?(tick: number, ops: readonly IndexedOp[], changes: readonly PanelChange[]): void;
+  /** The gadget table changed (Phase 8): ops at a snapshot tick, or (null, null) the whole table replaced. */
+  onGadgets?(tick: number | null, ops: readonly GadgetOp[] | null): void;
   onError?(code: number, message: string): void;
   /** A match room's state, as this player may see it (Phase 6, net/matchWire.ts). */
   onMatch?(view: MatchView): void;
@@ -87,7 +91,7 @@ export class ClientSession {
   rttMs = 0;
   /** Current remote interpolation delay. */
   interpDelayMs = 100;
-  readonly stats = { snapshots: 0, corrections: 0, resyncs: 0, bytesIn: 0, bytesOut: 0, replayedTicks: 0, panelOps: 0, panelStates: 0, panelMismatches: 0 };
+  readonly stats = { snapshots: 0, corrections: 0, resyncs: 0, bytesIn: 0, bytesOut: 0, replayedTicks: 0, panelOps: 0, panelStates: 0, panelMismatches: 0, gadgetOps: 0, gadgetStates: 0, gadgetMismatches: 0 };
   /** With `trackMispredictions`: corrections that disagreed with our prediction, and how (most recent last). */
   readonly mispredictions: { seq: number; diffs: string[] }[] = [];
   private readonly predicted = new Map<number, PawnState[]>();
@@ -109,6 +113,7 @@ export class ClientSession {
   private queueEwma = TARGET_QUEUE;
   private awaitingReset = false;
   private resyncSentAt = 0;
+  private gadgetResyncAt = -Infinity;
   private panelResyncAt = -Infinity;
   private backlog: Uint8Array[] = [];
   private creating: Promise<void> | null = null;
@@ -204,6 +209,22 @@ export class ClientSession {
         if (applyPanelState(r, panels) !== panels.hash()) this.panelsDisagree();
         return;
       }
+      case Msg.GadgetOps: {
+        // The gadget table (Phase 8): applied as they arrive, like the walls.
+        const table = this.sim!.gadgets;
+        const m = decodeGadgetOps(r);
+        for (const op of m.ops) table.apply(op);
+        this.stats.gadgetOps += m.ops.length;
+        this.opts.onGadgets?.(m.tick, m.ops);
+        if (table.hash() !== m.hash) this.gadgetsDisagree();
+        return;
+      }
+      case Msg.GadgetState: {
+        this.sim!.gadgets.replace(decodeGadgetState(r));
+        this.stats.gadgetStates++;
+        this.opts.onGadgets?.(null, null);
+        return;
+      }
       case Msg.Error: {
         const e = decodeError(r);
         this.opts.onError?.(e.code, e.message);
@@ -215,7 +236,7 @@ export class ClientSession {
         this.match = v;
         // What the room's simulation applies, applied by our prediction too (red walls; out of the map is death; the
         // defuser, for our own holds).
-        this.sim!.matchRules = { redWalls: v.redWalls, killPlaneKills: true, cameras: true, camsBroken: v.camsBroken, bpCams: v.bpCams };
+        this.sim!.matchRules = { redWalls: v.redWalls, killPlaneKills: true, cameras: true, camsBroken: v.camsBroken, camsOff: v.camsOff };
         const d = v.defuser;
         this.sim!.objective = d && { carrier: d.carrier, dropped: d.dropped, planted: d.planted, site: v.site, canPlant: d.canPlant, plantTicks: d.plantTicks, disableTicks: d.disableTicks };
         this.opts.onMatch?.(v);
@@ -233,6 +254,15 @@ export class ClientSession {
     if (now - this.panelResyncAt < 1000) return;
     this.panelResyncAt = now;
     this.send(encodePanelResync());
+  }
+
+  /** Our gadget table doesn't match the server's: ask for its table (at most once a second). */
+  private gadgetsDisagree() {
+    this.stats.gadgetMismatches++;
+    const now = this.opts.now();
+    if (now - this.gadgetResyncAt < 1000) return;
+    this.gadgetResyncAt = now;
+    this.send(encodeGadgetResync());
   }
 
   /** Resolves once the level from Welcome is loaded and any queued messages are applied. */

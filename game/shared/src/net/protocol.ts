@@ -7,9 +7,10 @@ import type { LoadoutPick, WeaponPick } from "../weapons/loadout.js";
 import { ByteReader, ByteWriter, ProtocolError } from "./bytes.js";
 import { MSG_PANEL_OPS, MSG_PANEL_RESYNC, MSG_PANEL_STATE } from "./panels.js";
 import { MSG_SNAPSHOT } from "./snapshot.js";
+import { MSG_GADGET_OPS, MSG_GADGET_RESYNC, MSG_GADGET_STATE } from "./gadgetWire.js";
 
 /** Bump when the wire format changes; client and server must match. */
-export const PROTOCOL_VERSION = 14;
+export const PROTOCOL_VERSION = 15;
 
 export const Msg = {
   // client → server
@@ -21,7 +22,8 @@ export const Msg = {
   PickLoadout: 0x05,
   Ping: 0x06,
   Resync: 0x07,
-  // 0x08 unused (test shots ride on inputs: Btn.Fire)
+  /** Our gadget table disagrees with the server's hash: send it again (Phase 8, net/gadgetWire.ts). */
+  GadgetResync: MSG_GADGET_RESYNC,
   LabTool: 0x09,
   /** Our panels disagree with the server's hash: send their state again (net/panels.ts). */
   PanelResync: MSG_PANEL_RESYNC,
@@ -49,6 +51,9 @@ export const Msg = {
   RoomList: 0x19,
   /** The match as this player may see it (net/matchWire.ts). */
   MatchState: 0x1a,
+  /** The gadget table's ops since the last snapshot and its hash after them; the whole table (net/gadgetWire.ts). */
+  GadgetOps: MSG_GADGET_OPS,
+  GadgetState: MSG_GADGET_STATE,
 } as const;
 
 export const MAX_NAME = 24;
@@ -131,7 +136,7 @@ export function decodeHelloRest(r: ByteReader): { name: string; dataHash: number
 }
 
 /** Levels a client may ask a new room to load (the lab pages'). */
-export const ROOM_LEVELS = ["movement_lab", "range_lab", "destruction_lab", "oregon"] as const;
+export const ROOM_LEVELS = ["movement_lab", "range_lab", "destruction_lab", "oregon", "gadget_lab"] as const;
 export const encodeCreateRoom = (levelId: string = "movement_lab") => new ByteWriter().u8(Msg.CreateRoom).str(levelId).finish();
 /** Throws ProtocolError for a level that isn't in ROOM_LEVELS. */
 export function decodeCreateRoom(r: ByteReader): { levelId: string } {
@@ -366,9 +371,11 @@ export type LabTool =
   /** Every Range Lab dummy back to its spot, alive (or down, for the one that starts down). */
   | { kind: "resetDummies" }
   | { kind: "explosive"; id: string; yaw: number; pitch: number }
-  | { kind: "resetPanels" };
+  | { kind: "resetPanels" }
+  /** Every gadget gone from the room's table (Phase 8, the Gadget Lab). */
+  | { kind: "clearGadgets" };
 
-const LAB_KIND = { respawn: 0, teleport: 1, team: 3, damage: 4, refill: 5, resetDummies: 6, explosive: 7, resetPanels: 8 } as const;
+const LAB_KIND = { respawn: 0, teleport: 1, team: 3, damage: 4, refill: 5, resetDummies: 6, explosive: 7, resetPanels: 8, clearGadgets: 9 } as const;
 
 export function encodeLabTool(t: LabTool): Uint8Array {
   const w = new ByteWriter().u8(Msg.LabTool).u8(LAB_KIND[t.kind]);
@@ -398,6 +405,7 @@ export function decodeLabTool(r: ByteReader): LabTool {
   if (k === LAB_KIND.resetDummies) return { kind: "resetDummies" };
   if (k === LAB_KIND.explosive) return { kind: "explosive", id: r.str(32), yaw: r.finite(), pitch: r.finite() };
   if (k === LAB_KIND.resetPanels) return { kind: "resetPanels" };
+  if (k === LAB_KIND.clearGadgets) return { kind: "clearGadgets" };
   throw new ProtocolError("bad lab tool");
 }
 

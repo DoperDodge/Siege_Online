@@ -1,0 +1,14 @@
+{
+  "_doc": "What every gadget shares (Phase 8; game/shared/src/gadgets/DESIGN.md §1-§4). Taking a gadget out of its slot takes `equipS`; a throw winds up for `throw.windupS`, then leaves from `throw.fromM` (right, down and ahead of the eye) at the profile's speed, `upDeg` over the view: Fire throws overhand, ADS lobs underhand, the Nitro Cell has the heavy throw (research/gadgets.md: Y3S4's throw curves, numbers unknown). In flight it is a ball of `radiusM` under gravity (data/movement.json); a bounce keeps `restitution` of the speed into the surface and loses `friction` of the speed along it, and below `restMps` on something flat it comes to rest; after `maxS` anything still flying stops where it is. The owner takes back a gadget that can be picked up by holding Interact for `pickUpS` within `pickUpReachM`. Every number here is ours (placeholders). Metres, seconds, degrees. The level's ingredients (M3, DESIGN.md §9; research/destruction.md §13): a fire extinguisher shot, knifed or in a blast bursts into a smoke `cloud` (5 s, siege.gg) and concusses bodies close by; a gas pipe shot or in a blast throws a flame `jet` along its facing for 15 s (siege.gg: 10 s full, 5 s shrinking; ours keeps it full), burning bodies in it and destroying drones and gadgets it touches, then goes off and leaves a 2 s `fire` (siege.gg's article 2); a metal detector (the Gadget Lab's; Oregon has none) beeps while a body is in its frame, an EMP turns it off, any damage destroys it. Their sizes, radii and damage are ours.",
+  "_season": "Y11S3",
+  "_unverified": ["equipS", "throw", "pickUpS", "pickUpReachM", "ingredients"],
+  "equipS": 0.4,
+  "throw": {"windupS": 0.25, "overhand": {"speedMps": 15, "upDeg": 8}, "underhand": {"speedMps": 6, "upDeg": 15}, "heavy": {"speedMps": 9, "upDeg": 8}, "fromM": {"right": 0.2, "down": 0.15, "ahead": 0.35}, "radiusM": 0.04, "restitution": 0.35, "friction": 0.6, "restMps": 0.3, "maxS": 30},
+  "pickUpS": 1.0,
+  "pickUpReachM": 2.0,
+  "ingredients": {
+    "fire_extinguisher": {"sizeM": [0.18, 0.5, 0.18], "cloud": {"radiusM": 2.0, "seconds": 5}, "concuss": {"radiusM": 2.5, "seconds": 3}},
+    "gas_pipe": {"sizeM": [0.6, 0.12, 0.12], "jet": {"lengthM": 3.0, "radiusM": 0.4, "seconds": 15, "damage": 10, "everyS": 0.25}, "blast": {"damage": {"max": 60, "fullM": 1.0, "zeroM": 3.0}, "destroyM": 1.5, "throughSoft": 0.7, "concussM": 3.0}, "fire": {"radiusM": 1.5, "seconds": 2, "damage": 5, "everyS": 0.5}},
+    "metal_detector": {"sizeM": [0.9, 2.1, 0.5]}
+  }
+}

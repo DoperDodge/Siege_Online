@@ -37,6 +37,8 @@
     "explosives.hard_breach_charge.wM",
     "explosives.hard_breach_charge.hM",
     "explosives.hard_breach_charge.reinforcedHatchDamage",
+    "explosives.cluster_charge.diameterM",
+    "explosives.cluster_charge.hatchDamage",
     "reinforcement.reach",
     "reinforcement.facingDeg",
     "reinforcement.steelHeightM",
@@ -100,7 +102,8 @@
     "frag_grenade": { "name": "Frag Grenade", "shape": "disc", "diameterM": 0.8, "studs": true, "hard": false, "hatchDamage": 100, "reinforcedHatchDamage": 0 },
     "nitro_cell": { "name": "Nitro Cell", "shape": "disc", "diameterM": 1.0, "studs": true, "hard": false, "hatchDamage": 100, "reinforcedHatchDamage": 0 },
     "exothermic_charge": { "name": "Exothermic Charge", "shape": "rect", "wM": 1.5, "hM": 2.0, "studs": true, "hard": true, "hatchDamage": 100, "reinforcedHatchDamage": 1000000 },
-    "hard_breach_charge": { "name": "Hard Breach Charge", "shape": "rect", "wM": 0.8, "hM": 0.8, "studs": true, "hard": true, "hatchDamage": 100, "reinforcedHatchDamage": 1000000 }
+    "hard_breach_charge": { "name": "Hard Breach Charge", "shape": "rect", "wM": 0.8, "hM": 0.8, "studs": true, "hard": true, "hatchDamage": 100, "reinforcedHatchDamage": 1000000 },
+    "cluster_charge": { "name": "Cluster Charge", "shape": "disc", "diameterM": 0.5, "studs": true, "hard": true, "hatchDamage": 0, "reinforcedHatchDamage": 0 }
   },
   "reinforcement": {
     "deploySeconds": 4.5,

@@ -20,7 +20,8 @@
 //   bit4 flags             : u16 stance | stanceFrom<<2 | mode<<4 (3 bits) | sprinting<<7 | grounded<<8
 //   bit6 lean (i8 ·127)   bit7 stanceT (u8 ·255)   bit8 tilts (3 × i8 ·128)   bit9 tuck (u8 ·255)
 //   bit10 aux              : u8, bit0 = aiming, bit1 = secondary weapon in hand, bit2 = a drone jammed, bit4 = being
-//                            revived (3, 5–7 free)
+//                            revived, bits 5–7 = what the hands hold (PawnState.hand, Phase 8: a gadget or its
+//                            detonator; 0 the weapon) (3 free)
 //   bit11 turn (u8 ·255)   : on a rope, how far turned upside down (PawnState.ropeTurn)
 // TCP delivers every snapshot in order, so deltas are against the last one *sent*, never lost ones.
 import { lerp, wrapAngle } from "../core/math.js";
@@ -48,6 +49,8 @@ const AUX_SECONDARY = 2;
 /** A drone jammed by an EMP dart (Phase 7): a teammate watching it is told (how long, they don't need). */
 const AUX_JAMMED = 4;
 const AUX_REVIVED = 16;
+/** What the hands hold (PawnState.hand, Phase 8), in aux bits 5–7: others draw the gadget out instead of the weapon. */
+const AUX_HAND_SHIFT = 5;
 /** `revivedBy` of a remote body someone is reviving (the reviver's id isn't sent). */
 export const REVIVER_UNKNOWN = 0xffffffff;
 
@@ -89,7 +92,7 @@ export function quantizeRemote(s: PawnState): RemoteQ {
     tiltSide: i8(s.tiltSide, 128),
     tuck: round(s.tuck * 255),
     flags: s.stance | (s.stanceFrom << 2) | (s.mode << 4) | (s.sprinting ? 128 : 0) | (s.grounded ? 256 : 0),
-    aux: (s.prevButtons & Btn.Ads ? 1 : 0) | (s.slot === 1 ? AUX_SECONDARY : 0) | (s.jammed > 0 ? AUX_JAMMED : 0) | (s.revivedBy !== 0 ? AUX_REVIVED : 0),
+    aux: (s.prevButtons & Btn.Ads ? 1 : 0) | (s.slot === 1 ? AUX_SECONDARY : 0) | (s.jammed > 0 ? AUX_JAMMED : 0) | (s.revivedBy !== 0 ? AUX_REVIVED : 0) | ((s.hand & 7) << AUX_HAND_SHIFT),
     turn: s.mode === PawnMode.Rappel ? round(s.ropeTurn * 255) : 0,
   };
 }
@@ -115,6 +118,7 @@ export function remoteState(q: RemoteQ, maxHp = 100): PawnState {
   s.jammed = q.aux & AUX_JAMMED ? 1 : 0;
   // Someone is reviving this body (who, a remote client doesn't need: it can't start a second revive).
   s.revivedBy = q.aux & AUX_REVIVED ? REVIVER_UNKNOWN : 0;
+  s.hand = Math.min(4, (q.aux >> AUX_HAND_SHIFT) & 7);
   return s;
 }
 

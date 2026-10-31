@@ -4,6 +4,7 @@
 import type { Vec3 } from "../core/math.js";
 import { Cause, CAUSE_MAX } from "../combat/apply.js";
 import type { Zone } from "../combat/damage.js";
+import { GADGET_KINDS } from "../gadgets/kinds.js";
 import { ByteReader, ByteWriter, ProtocolError } from "./bytes.js";
 import { MAX_NAME, Msg } from "./protocol.js";
 
@@ -34,21 +35,33 @@ export type GameEvent =
   | { kind: "shellDestroyed"; pawnId: number; ownerCtrl: number; killerCtrl: number; weapon: string; headshot: boolean }
   /** To everyone: an attacker's drone was destroyed (Phase 7; not a death: defenders count the drones they destroy). */
   | { kind: "droneDestroyed"; pawnId: number; ownerCtrl: number; killerCtrl: number }
-  /** To the pinger's team (Phase 7, intel/DESIGN.md §6): a ping where they aimed, yellow or danger, for `ticks`. */
-  | { kind: "ping"; ctrl: number; pos: Vec3; danger: boolean; ticks: number }
+  /**
+   * To the pinger's team (Phase 7, intel/DESIGN.md §6): a ping where they aimed, yellow or danger, for `ticks`;
+   * `gadget`: the kind of the enemy gadget it marks (Phase 8 M3), or −1.
+   */
+  | { kind: "ping"; ctrl: number; pos: Vec3; danger: boolean; ticks: number; gadget: number; /** A heartbeat on Pulse's sensor (Phase 8 M6). */ heart: boolean }
   /** To the scanner's team and the one scanned: an enemy spotted by a drone or a camera, marked for `ticks`. */
   | { kind: "spotted"; pawnId: number; by: number; ticks: number }
   /** To the caller's team: a callout off the comm wheel (data/intel.json `callouts`). */
   | { kind: "callout"; name: string; id: number }
   /** To everyone: a Bulletproof Camera's EMP dart burst there (Phase 7 M5). */
   | { kind: "emp"; pos: Vec3 }
+  /** A gadget went off (Phase 8 M2, gadgets/blast.ts): its kind (GADGET_KINDS) and where; everyone sees and hears it. */
+  | { kind: "blast"; gadget: number; pos: Vec3 }
+  /**
+   * To a body's client (Phase 8 M3): a stun's flash blinded it (`blind`, 0 to 1: how much), made its ears ring, or a
+   * fire extinguisher's burst concussed it (`concuss`), for `seconds`.
+   */
+  | { kind: "stunned"; seconds: number; blind: number; ring: boolean; concuss: boolean }
+  /** To everyone (Phase 8 M3): an alarm or a metal detector started (`on`) or stopped sounding; `pawnId`: the body that set it off. */
+  | { kind: "alarm"; gadget: number; pos: Vec3; on: boolean; pawnId: number }
   /**
    * To a joining player, and to everyone when it changes: who may reinforce and barricade, and the reinforcements
    * left (Phase 4 M6), and who may rappel (Phase 5 M8).
    */
   | { kind: "deployRules"; anyone: boolean; rappel: boolean; pools: [number, number] };
 
-const KIND = { shotFx: 1, hitConfirm: 2, damageTaken: 3, down: 4, kill: 5, shellDestroyed: 6, reviveStart: 7, reviveEnd: 8, deployRules: 10, droneDestroyed: 11, ping: 12, spotted: 13, callout: 14, emp: 15 } as const;
+const KIND = { shotFx: 1, hitConfirm: 2, damageTaken: 3, down: 4, kill: 5, shellDestroyed: 6, reviveStart: 7, reviveEnd: 8, deployRules: 10, droneDestroyed: 11, ping: 12, spotted: 13, callout: 14, emp: 15, blast: 16, stunned: 17, alarm: 18 } as const;
 // 9 Threat (Phase 11) is reserved.
 
 /** Pellet end points travel at 1/32 m in i16: ±1024 m, more than any level. */
@@ -99,7 +112,7 @@ export function encodeEvents(tick: number, events: readonly GameEvent[]): Uint8A
         w.varu(e.pawnId).varu(e.ownerCtrl).varu(e.killerCtrl);
         break;
       case "ping":
-        w.varu(e.ctrl).f32(e.pos[0]).f32(e.pos[1]).f32(e.pos[2]).u8(e.danger ? 1 : 0).u16(e.ticks);
+        w.varu(e.ctrl).f32(e.pos[0]).f32(e.pos[1]).f32(e.pos[2]).u8((e.danger ? 1 : 0) | (e.heart ? 2 : 0)).u16(e.ticks).u8(e.gadget + 1);
         break;
       case "spotted":
         w.varu(e.pawnId).varu(e.by).u16(e.ticks);
@@ -109,6 +122,15 @@ export function encodeEvents(tick: number, events: readonly GameEvent[]): Uint8A
         break;
       case "emp":
         w.f32(e.pos[0]).f32(e.pos[1]).f32(e.pos[2]);
+        break;
+      case "blast":
+        w.u8(e.gadget).f32(e.pos[0]).f32(e.pos[1]).f32(e.pos[2]);
+        break;
+      case "stunned":
+        w.u16(Math.round(e.seconds * 100)).u8(Math.round(Math.max(0, Math.min(1, e.blind)) * 255)).u8((e.ring ? 1 : 0) | (e.concuss ? 2 : 0));
+        break;
+      case "alarm":
+        w.varu(e.gadget).f32(e.pos[0]).f32(e.pos[1]).f32(e.pos[2]).u8(e.on ? 1 : 0).varu(e.pawnId);
         break;
       case "deployRules":
         w.u8((e.anyone ? 1 : 0) | (e.rappel ? 2 : 0)).varu(e.pools[0]).varu(e.pools[1]);
@@ -192,8 +214,11 @@ export function decodeEvents(r: ByteReader): { tick: number; events: GameEvent[]
       const ctrl = r.varu();
       const pos: Vec3 = [r.finite(), r.finite(), r.finite()];
       const f = r.u8();
-      if (f > 1) throw new ProtocolError("bad ping");
-      events.push({ kind: "ping", ctrl, pos, danger: f === 1, ticks: r.u16() });
+      if (f > 3) throw new ProtocolError("bad ping");
+      const ticks = r.u16();
+      const gadget = r.u8() - 1;
+      if (gadget >= GADGET_KINDS.length) throw new ProtocolError("bad ping");
+      events.push({ kind: "ping", ctrl, pos, danger: (f & 1) === 1, ticks, gadget, heart: (f & 2) === 2 });
     } else if (k === KIND.spotted) {
       events.push({ kind: "spotted", pawnId: r.varu(), by: r.varu(), ticks: r.u16() });
     } else if (k === KIND.callout) {
@@ -203,6 +228,22 @@ export function decodeEvents(r: ByteReader): { tick: number; events: GameEvent[]
       events.push({ kind: "callout", name, id });
     } else if (k === KIND.emp) {
       events.push({ kind: "emp", pos: [r.finite(), r.finite(), r.finite()] });
+    } else if (k === KIND.blast) {
+      const gadget = r.u8();
+      if (gadget >= GADGET_KINDS.length) throw new ProtocolError("bad blast");
+      events.push({ kind: "blast", gadget, pos: [r.finite(), r.finite(), r.finite()] });
+    } else if (k === KIND.stunned) {
+      const seconds = r.u16() / 100;
+      const blind = r.u8() / 255;
+      const f = r.u8();
+      if (f > 3) throw new ProtocolError("bad stun");
+      events.push({ kind: "stunned", seconds, blind, ring: (f & 1) !== 0, concuss: (f & 2) !== 0 });
+    } else if (k === KIND.alarm) {
+      const gadget = r.varu();
+      const pos: Vec3 = [r.finite(), r.finite(), r.finite()];
+      const on = r.u8();
+      if (on > 1) throw new ProtocolError("bad alarm");
+      events.push({ kind: "alarm", gadget, pos, on: on === 1, pawnId: r.varu() });
     } else if (k === KIND.droneDestroyed) {
       events.push({ kind: "droneDestroyed", pawnId: r.varu(), ownerCtrl: r.varu(), killerCtrl: r.varu() });
     } else if (k === KIND.deployRules) {

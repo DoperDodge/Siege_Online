@@ -457,6 +457,9 @@ export class PawnView {
   private readonly skin: THREE.MeshStandardMaterial[];
   private hot = false;
   private gun: GunModel | null = null;
+  /** A gadget in its hands (Phase 8): a box of its size (at most a hand's), drawn instead of the gun. */
+  private held: THREE.Mesh | null = null;
+  private heldKey = "";
   private gunLook = "";
   private gunVisible = false;
   /** The rope a body on one hangs from (Phase 5 M8): from over its body up to the rope's top. */
@@ -532,14 +535,37 @@ export class PawnView {
     }
     // The gun it holds: in front of the chest along the view (placeholder until the art pass); none while
     // down or dead.
-    this.gunVisible = this.gun !== null && state.mode !== PawnMode.Dead && !isDowned(state);
+    const armed = state.mode !== PawnMode.Dead && !isDowned(state);
+    this.gunVisible = this.gun !== null && armed && this.held === null;
+    const eye = eyePose(data.movement, data.hitboxes, state).pos;
+    const rot = new THREE.Euler(state.pitch, state.yaw, 0, "YXZ");
     if (this.gun) {
-      this.gun.group.visible = this.gunVisible;
-      const eye = eyePose(data.movement, data.hitboxes, state).pos;
-      const rot = new THREE.Euler(state.pitch, state.yaw, 0, "YXZ");
+      this.gun.group.visible = this.gunVisible && !this.firstPerson;
       this.gun.group.position.set(...eye).add(new THREE.Vector3(0.16, -0.22, -0.2).applyEuler(rot));
       this.gun.group.rotation.copy(rot);
     }
+    if (this.held) {
+      this.held.visible = armed && !this.firstPerson;
+      this.held.position.set(...eye).add(new THREE.Vector3(0.2, -0.3, -0.3).applyEuler(rot));
+      this.held.rotation.copy(rot);
+    }
+  }
+
+  /** The gadget in its hands (its box size), or none: the gun shows again. */
+  setHeld(size: readonly number[] | null) {
+    const key = size ? size.join(",") : "";
+    if (key === this.heldKey) return;
+    this.heldKey = key;
+    if (this.held) {
+      this.body.remove(this.held);
+      this.held.geometry.dispose();
+      (this.held.material as THREE.Material).dispose();
+      this.held = null;
+    }
+    if (!size) return;
+    const [w, h, d] = size.map((v) => Math.min(v, 0.25));
+    this.held = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color: 0x4b5563, roughness: 0.6, metalness: 0.3 }));
+    this.body.add(this.held);
   }
 
   /** A drone: its box where it is, turned to its yaw; a destroyed one lies tipped over; a held one isn't drawn. */
@@ -594,11 +620,13 @@ export class PawnView {
     }
     this.shape.visible = !on;
     if (this.gun) this.gun.group.visible = this.gunVisible && !on;
+    if (this.held) this.held.visible = !on;
   }
 
   /** Remove from the scene and free the GPU resources it owns. */
   dispose() {
     this.gun?.dispose();
+    this.setHeld(null);
     this.rope.geometry.dispose();
     this.drone?.traverse((o) => (o as THREE.Mesh).geometry?.dispose());
     this.scene.remove(this.body, this.wire);

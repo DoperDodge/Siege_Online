@@ -1,0 +1,16 @@
+{
+  "_doc": "Pulse's HB-5 Cardiac Sensor (research/operators/pulse.md; Phase 8 M6): his ability, held in his slot 2 (Z). While it's up he can't shoot or use another gadget, and it shows him alone the attackers' heartbeats within `sensor.rangeM` (10.5 m, Y11S2) through walls and floors, in front of him within `sensor.fanDeg` across the floor (ours: its shape is unknown), downed attackers too (ours). A ping while it's up marks the heartbeat nearest his crosshair within `sensor.pingDeg` for his team (ours). An EMP on him (DSEG) freezes it: no new heartbeats until it wears off (Fandom). It's never used up (its `count` is unused). Its fan, the ping's angle and its size are placeholders.",
+  "_season": "Y11S3",
+  "_unverified": ["sensor.fanDeg", "sensor.pingDeg", "sizeM"],
+  "id": "cardiac_sensor",
+  "name": "Cardiac Sensor",
+  "side": "defender",
+  "operator": "pulse",
+  "count": 1,
+  "electronic": true,
+  "use": {"kind": "hold"},
+  "remote": false,
+  "pickUp": false,
+  "sizeM": [0.12, 0.2, 0.04],
+  "sensor": {"rangeM": 10.5, "fanDeg": 120, "pingDeg": 20}
+}

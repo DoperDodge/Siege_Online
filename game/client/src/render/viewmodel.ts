@@ -3,7 +3,7 @@
 // predicted body state each frame (hip, aiming, sprinting, swapping, reloading, the knife) plus cosmetic
 // kick and sway; none of it feeds back into the simulation. Shapes are placeholders (gun_kit.json).
 import * as THREE from "three";
-import { DEG, isDowned, lerp, loadPresentationData, PawnMode, ReloadKind, ticks, WeaponAct, WFlag, type GameData, type GunKit, type PawnState, type ResolvedWeapon } from "@redmond/shared";
+import { DEG, GadgetAct, isDowned, lerp, loadPresentationData, PawnMode, ReloadKind, ticks, WeaponAct, WFlag, type GadgetData, type GameData, type GunKit, type PawnState, type ResolvedWeapon } from "@redmond/shared";
 import { buildGun, gunKey, type GunModel } from "./gunKit.js";
 import { warmShaders } from "./labScene.js";
 
@@ -20,6 +20,9 @@ export class Viewmodel {
   private gun: GunModel | null = null;
   private key = "";
   private readonly knife: THREE.Mesh;
+  /** A gadget in hand (Phase 8): its box, or a detonator; rebuilt when what's held changes. */
+  private held: THREE.Mesh | null = null;
+  private heldKey = "";
   private readonly flash: THREE.Sprite;
   private readonly fill: THREE.HemisphereLight;
   private readonly keyLight: THREE.DirectionalLight;
@@ -79,12 +82,13 @@ export class Viewmodel {
    * Pose for this frame. `w` is the weapon in hand (null: nothing to hold), `s` the body's state,
    * `swapTicks` the loadout's swap time; `dt` seconds since the last frame.
    */
-  update(now: number, dt: number, w: ResolvedWeapon | null, s: PawnState, swapTicks: number) {
+  update(now: number, dt: number, w: ResolvedWeapon | null, s: PawnState, swapTicks: number, gadget: { data: GadgetData; detonator: boolean } | null = null) {
     const vm = this.kit.viewmodel;
     const show = w !== null && s.mode !== PawnMode.Dead && !isDowned(s);
-    this.rig.visible = show;
     this.knife.visible = false;
-    if (!show || !w) {
+    this.poseHeld(show ? gadget : null, s);
+    this.rig.visible = show && !gadget;
+    if (!show || !w || gadget) {
       this.aim = 0;
       return;
     }
@@ -149,6 +153,45 @@ export class Viewmodel {
     if (this.flash.visible) this.flash.position.copy(gun.muzzle).applyEuler(rot).add(pos);
   }
 
+  /**
+   * A gadget in hand (Phase 8, gadgets/hands.ts), greybox: its box at most a hand's size, low on the right; it comes
+   * up as it's taken out, draws back for a throw and goes down while it's being placed. A detonator is a small dark box.
+   */
+  private poseHeld(gadget: { data: GadgetData; detonator: boolean } | null, s: PawnState) {
+    const key = gadget ? `${gadget.data.id}:${gadget.detonator}` : "";
+    if (key !== this.heldKey) {
+      this.heldKey = key;
+      if (this.held) {
+        this.camera.remove(this.held);
+        this.held.geometry.dispose();
+        (this.held.material as THREE.Material).dispose();
+        this.held = null;
+      }
+      if (gadget) {
+        // A swung item (Sledge's hammer, Phase 8 M4) is drawn long; anything else no bigger than a hand holds.
+        const cap = gadget.data.use.kind === "swing" ? 0.6 : 0.25;
+        const [w, h, d] = gadget.detonator ? [0.05, 0.09, 0.03] : gadget.data.sizeM.map((v) => Math.min(v, cap));
+        this.held = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color: gadget.detonator ? 0x1f2937 : 0x4b5563, roughness: 0.6, metalness: 0.3 }));
+        this.camera.add(this.held);
+      }
+    }
+    if (!this.held) return;
+    const equip = this.data.gadgetRules.equipS * 64;
+    const up = s.gAct === GadgetAct.Equip ? Math.min(1, s.gTicks / Math.max(1, equip)) : 1;
+    const windup = s.gAct === GadgetAct.Throw || s.gAct === GadgetAct.Lob ? Math.min(1, s.gTicks / Math.max(1, this.data.gadgetRules.throw.windupS * 64)) : 0;
+    const placing = s.gAct === GadgetAct.Place ? 1 : 0;
+    // A swing: brought down to its blow (`hitS` in), then back up.
+    const u = gadget?.data.use;
+    let strike = 0;
+    if (u?.kind === "swing" && s.gAct === GadgetAct.Swing) {
+      const p = Math.min(1, s.gTicks / Math.max(1, u.swingS * 64));
+      const hit = u.hitS / u.swingS;
+      strike = p < hit ? smooth(p / hit) : 1 - smooth((p - hit) / Math.max(1e-6, 1 - hit));
+    }
+    this.held.position.set(0.2 + windup * 0.06, -0.2 - (1 - smooth(up)) * 0.25 - placing * 0.12 + windup * 0.08 - strike * 0.1, -0.45 + windup * 0.12 - strike * 0.15);
+    this.held.rotation.set(-0.2 - windup * 0.8 + (u?.kind === "swing" ? 0.7 - strike * 1.8 : 0), -0.3, 0);
+  }
+
   /** Light the gun as the world around it is lit: `k` of daylight (a map's basement is darker). */
   setLight(k: number) {
     this.fill.intensity = VIEWMODEL_FILL * k;
@@ -157,7 +200,7 @@ export class Viewmodel {
 
   /** Draw over the world (call after rendering the world scene; clears depth first). */
   render(renderer: THREE.WebGLRenderer) {
-    if (!this.rig.visible && !this.knife.visible) return;
+    if (!this.rig.visible && !this.knife.visible && !this.held) return;
     const auto = renderer.autoClear;
     renderer.autoClear = false;
     renderer.clearDepth();

@@ -5,6 +5,7 @@ import hitboxJson from "../../../../data/hitboxes.json";
 import movementLabJson from "../../../../data/maps/movement_lab/layout.json";
 import rangeLabJson from "../../../../data/maps/range_lab/layout.json";
 import destructionLabJson from "../../../../data/maps/destruction_lab/layout.json";
+import gadgetLabJson from "../../../../data/maps/gadget_lab/layout.json";
 import oregonJson from "../../../../data/maps/oregon/level.json";
 import brava from "../../../../data/operators/brava.json";
 import fuze from "../../../../data/operators/fuze.json";
@@ -30,11 +31,15 @@ import practiceJson from "../../../../data/modes/practice.json";
 import objectiveJson from "../../../../data/objective.json";
 import intelJson from "../../../../data/intel.json";
 import destructionJson from "../../../../data/destruction.json";
+import gadgetRulesJson from "../../../../data/gadgets.json";
 import { weaponFiles } from "./weaponFiles.js";
+import { gadgetFiles } from "./gadgetFiles.js";
 import { fnv1a, utf8Encode } from "../net/bytes.js";
 import {
   combatSchema,
   destructionSchema,
+  gadgetRulesSchema,
+  gadgetSchema,
   gunplaySchema,
   hitboxSchema,
   isGun,
@@ -49,6 +54,8 @@ import {
   type CombatData,
   type Construction,
   type DestructionData,
+  type GadgetData,
+  type GadgetRules,
   type GunplayData,
   type HitboxData,
   type LevelDef,
@@ -77,6 +84,10 @@ export interface GameData {
   intel: IntelData;
   /** Panels, holes, reinforcement, barricades and hatches (Phase 4). */
   destruction: DestructionData;
+  /** The secondary gadgets (Phase 8, data/gadgets/), by id: the attackers' pool, then the defenders'. */
+  gadgets: Map<string, GadgetData>;
+  /** What every gadget shares (data/gadgets.json): taking one out, throws, picking up. */
+  gadgetRules: GadgetRules;
   /**
    * fnv1a of every simulation data file as bundled. The client sends it in Hello; a server built from other
    * data refuses the connection, so a stale tab never predicts with old numbers (DECISIONS D-042).
@@ -89,7 +100,7 @@ export const rawData = {
   movement: movementJson as Record<string, unknown>,
   hitboxes: hitboxJson as Record<string, unknown>,
   operators: [brava, fuze, thermite, striker, dokkaebi, sledge, sentry, skopos, mira, lesion, pulse, mute] as Record<string, unknown>[],
-  levels: [movementLabJson, rangeLabJson, destructionLabJson, oregonJson] as Record<string, unknown>[],
+  levels: [movementLabJson, rangeLabJson, destructionLabJson, gadgetLabJson, oregonJson] as Record<string, unknown>[],
   weapons: weaponFiles,
   gunplay: gunplayJson as Record<string, unknown>,
   combat: combatJson as Record<string, unknown>,
@@ -97,6 +108,8 @@ export const rawData = {
   objective: objectiveJson as Record<string, unknown>,
   intel: intelJson as Record<string, unknown>,
   destruction: destructionJson as Record<string, unknown>,
+  gadgets: gadgetFiles,
+  gadgetRules: gadgetRulesJson as Record<string, unknown>,
 };
 
 /** Maps that tools/mapgen compiles (DECISIONS D-070): their LevelDef is level.json, generated from the authoring layout.json. */
@@ -132,6 +145,12 @@ export function loadGameData(): GameData {
     if (weapons.has(w.id)) throw new Error(`Invalid data: two weapon files have the id "${w.id}"`);
     weapons.set(w.id, w);
   }
+  const gadgets = new Map<string, GadgetData>();
+  for (const raw of rawData.gadgets) {
+    const g = parse(`data/gadgets/${String(raw.id)}.json`, gadgetSchema, raw);
+    if (gadgets.has(g.id)) throw new Error(`Invalid data: two gadget files have the id "${g.id}"`);
+    gadgets.set(g.id, g);
+  }
   const modes = new Map<string, ModeData>();
   for (const raw of rawData.modes) {
     const m = parse(`data/modes/${String(raw.id)}.json`, modeSchema, raw);
@@ -149,6 +168,8 @@ export function loadGameData(): GameData {
     objective: parse("data/objective.json", objectiveSchema, rawData.objective),
     intel: parse("data/intel.json", intelSchema, rawData.intel),
     destruction: parse("data/destruction.json", destructionSchema, rawData.destruction),
+    gadgets,
+    gadgetRules: parse("data/gadgets.json", gadgetRulesSchema, rawData.gadgetRules),
     dataHash: fnv1a(utf8Encode(JSON.stringify(rawData))),
   };
   const problems = crossFileProblems(data);
@@ -158,9 +179,41 @@ export function loadGameData(): GameData {
 }
 
 /** Checks that span files: loadouts name real weapons, restrictions name real carriers, templates exist. */
-export function crossFileProblems(data: Pick<GameData, "operators" | "weapons" | "gunplay"> & Partial<Pick<GameData, "levels" | "destruction">>): string[] {
+export function crossFileProblems(data: Pick<GameData, "operators" | "weapons" | "gunplay"> & Partial<Pick<GameData, "levels" | "destruction" | "gadgets">>): string[] {
   const out: string[] = [];
   if (data.destruction) out.push(...destructionProblems(data.destruction, data.weapons, data.levels));
+  if (data.gadgets) {
+    // A blast's cut (and a cluster charge's hole) is one of the explosives' shapes (data/destruction.json); a cluster
+    // charge's grenade is a thrown gadget with a fuse and a blast (Phase 8 M5).
+    for (const g of data.gadgets.values()) {
+      for (const [where, cut] of [["blast.cut", g.blast?.cut], ["cluster.cut", g.cluster?.cut]] as const)
+        if (cut && data.destruction && !Object.hasOwn(data.destruction.explosives, cut)) out.push(`data/gadgets/${g.id}.json: ${where} names "${cut}", which isn't in data/destruction.json explosives`);
+      if (!g.cluster) continue;
+      const k = data.gadgets.get(g.cluster.grenade);
+      if (!k || k.use.kind !== "throw" || k.use.fuseS === undefined || !k.blast || k.side !== g.side || k.operator !== g.operator)
+        out.push(`data/gadgets/${g.id}.json: cluster.grenade names "${g.cluster.grenade}", which isn't a gadget of its own thrown with a fuse and a blast, on its side and its operator's`);
+    }
+    // Loadouts name real gadgets of the operator's own side (research/gadgets.md §1: one pool each), never an
+    // operator's own item.
+    for (const op of data.operators.values()) {
+      for (const [where, ids] of [["loadout.gadgets", op.loadout.gadgets], ["loadout.gadgetKit.pool", op.loadout.gadgetKit?.pool ?? []]] as const) {
+        for (const id of ids) {
+          const g = data.gadgets.get(id);
+          if (!g) out.push(`data/operators/${op.id}.json: ${where} names "${id}", which has no data/gadgets file`);
+          else if (g.side !== op.side) out.push(`data/operators/${op.id}.json: ${where} names "${id}", a ${g.side}s' gadget`);
+          else if (g.operator) out.push(`data/operators/${op.id}.json: ${where} names "${id}", ${g.operator}'s own item`);
+        }
+      }
+    }
+    // An operator's own item (Phase 8 M4) is their ability, or what it lets out (Fuze's grenades, M5), on their side.
+    for (const g of data.gadgets.values()) {
+      if (!g.operator) continue;
+      const op = data.operators.get(g.operator);
+      const part = op !== undefined && data.gadgets.get(op.ability.id)?.cluster?.grenade === g.id;
+      if (!op) out.push(`data/gadgets/${g.id}.json: operator "${g.operator}" doesn't exist`);
+      else if ((op.ability.id !== g.id && !part) || op.side !== g.side) out.push(`data/gadgets/${g.id}.json: it isn't ${op.id}'s ability (${op.ability.id}) or part of it, on their side`);
+    }
+  }
   for (const lvl of data.levels?.values() ?? []) {
     const file = levelFile(lvl.id);
     for (const d of lvl.dummies) if (!data.operators.has(d.operator)) out.push(`${file}: dummy "${d.id}" is operator "${d.operator}", who has no data/operators file`);

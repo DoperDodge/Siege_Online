@@ -1,0 +1,16 @@
+{
+  "_doc": "Breach Charge (attacker pool; research/gadgets.md §3.1). Placed by hand on a breakable surface: a soft wall, a floor, a hatch or a barricade (not a reinforced one: a red light); its owner's detonator sets it off; it's electronic (a Bulletproof Camera's dart stops its trigger, Y10S4). Its count (3, Fandom), how long it takes to place, its reach and its size (a frame the size of its hole, data/destruction.json `explosives`) are placeholders. Its blast: on its placer's side 50 hp, none past 1 m (Fandom, Y4S1); on the far side lethal close (150 hp within 0.5 m, none past 3 m: placeholders); tinnitus within 3 m; it cuts its frame's opening (data/destruction.json `explosives`). One bullet destroys it (Fandom).",
+  "_season": "Y11S3",
+  "_unverified": ["count", "use.placeS", "use.reachM", "sizeM", "blast.damage", "blast.destroyM", "blast.throughSoft"],
+  "id": "breach_charge",
+  "name": "Breach Charge",
+  "side": "attacker",
+  "count": 3,
+  "electronic": true,
+  "use": {"kind": "place", "on": ["soft"], "placeS": 1.5, "reachM": 2.0},
+  "remote": true,
+  "pickUp": false,
+  "sizeM": [0.9, 1.6, 0.04],
+  "blast": {"damage": {"max": 150, "fullM": 0.5, "zeroM": 3.0}, "near": {"max": 50, "fullM": 0, "zeroM": 1.0}, "destroyM": 1.5, "cut": "breach_charge", "throughSoft": 0.7, "concussM": 3.0},
+  "fragile": true
+}

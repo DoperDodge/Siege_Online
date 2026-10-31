@@ -1,7 +1,7 @@
 // The per-tick movement step. Pure function of (pawn state, input, static level, data), shared by the
 // server (authority) and the browser (prediction). Values come from data/movement.json (PLAN §7).
 import { DT } from "../core/constants.js";
-import { approach, clamp, DEG, forwardXZ, lerp, quatYawPitchRoll, rightXZ, rotateXZ, smoothstep, wrapAngle } from "../core/math.js";
+import { approach, clamp, DEG, forwardXZ, lerp, quatYawPitchRoll, rightXZ, rotateXZ, smoothstep, wrapAngle, type Vec3 } from "../core/math.js";
 import type { GameData } from "../data/load.js";
 import type { Panel } from "../destruction/panel.js";
 import type { BuiltLevel } from "../level/builder.js";
@@ -15,6 +15,8 @@ import { poseDrone } from "./drone.js";
 import { blocksSprint, parkWeapon, stepWeapon, wantsAim, type SimEvent } from "../weapons/step.js";
 import { bleedTick, isDowned } from "./downed.js";
 import { ticks } from "../weapons/ticks.js";
+import { DeployKind } from "../destruction/deploy.js";
+import { parkHands, putAway, stepHands } from "../gadgets/hands.js";
 
 export interface MoveContext {
   R: Rapier;
@@ -28,6 +30,16 @@ export interface MoveContext {
   events: SimEvent[];
   /** Whether this body may rappel: an attacker, or anyone in a lab room (the room's rules, Phase 5 M8). */
   canRappel(pawn: Pawn): boolean;
+  /** How fast a pawn may move where it is now (Phase 8 M3: an enemy's barbed wire slows it; 1: nothing does). */
+  slowOf?(pawn: Pawn): number;
+  /** Whether a body's detonator has a device of `gadget` out to set off (Phase 8 M3: not one an EMP disabled). */
+  canDetonate?(pawn: Pawn, gadget: string): boolean;
+  /** Whether a swing's blow from this body's eye along its view meets something within `reachM` (Phase 8 M4: it costs a charge). */
+  swingMeets?(pawn: Pawn, reachM: number): boolean;
+  /** How far along a ray the first solid gadget is (Phase 8 M5: a deployable shield Fuze's charge goes on), or null. */
+  solidOnRay?(origin: Vec3, dir: Vec3, maxT: number): number | null;
+  /** Whether a drone is inside an enemy jammer (Phase 8 M6, Mute's): it loses its driver. */
+  droneJammed?(pawn: Pawn): boolean;
 }
 
 const IDENTITY = { x: 0, y: 0, z: 0, w: 1 };
@@ -46,6 +58,8 @@ export function stepPawn(ctx: MoveContext, pawn: Pawn, input: InputCmd, weapons 
   const pressed = input.buttons & ~s.prevButtons;
   s.prevButtons = input.buttons;
   s.lastFallDamage = 0;
+  // An EMP on the body (DSEG, Phase 8 M3) wears off.
+  if (s.jammed > 0) s.jammed--;
   if (s.mode === PawnMode.Dead) return;
 
   updateLook(ctx, pawn, input);
@@ -62,10 +76,17 @@ export function stepPawn(ctx: MoveContext, pawn: Pawn, input: InputCmd, weapons 
     stepWalk(ctx, pawn, input, pressed, live);
   }
   const down = isDowned(s);
-  if (weapons && !down) stepWeapon(ctx, pawn, input, pressed);
-  else {
+  if (weapons && !down) {
+    // The gadget in hand first (Phase 8): a key that takes one out puts the weapon away this same tick.
+    stepHands(ctx, pawn, input, pressed, s.meleeTicks === 0 && s.reviveTarget === 0 && s.deployKind === DeployKind.None);
+    stepWeapon(ctx, pawn, input, pressed);
+  } else {
     parkWeapon(s);
-    if (down) s.adsQ = 0; // no weapons while down
+    parkHands(s);
+    if (down) {
+      s.adsQ = 0; // no weapons while down, nor gadgets
+      putAway(s, false);
+    }
   }
   roundState(s);
   // The collider is placed from the state, exactly as a client places it from a correction (which carries
@@ -184,6 +205,8 @@ function stepWalk(ctx: MoveContext, pawn: Pawn, input: InputCmd, pressed: number
   // Down but not out: a slow crawl, and none at all while a teammate revives you (placeholders).
   if (s.mode === PawnMode.Downed) speed = s.revivedBy !== 0 && ctx.data.combat.revive.targetLocked ? 0 : ctx.data.combat.dbno.crawlSpeed;
 
+  // In an enemy's barbed wire (Phase 8 M3): slower, and no sprinting.
+  const slow = ctx.slowOf?.(pawn) ?? 1;
   const sprinting =
     (input.buttons & Btn.Sprint) !== 0 &&
     input.forward > m.sprint.forwardThreshold &&
@@ -191,8 +214,10 @@ function stepWalk(ctx: MoveContext, pawn: Pawn, input: InputCmd, pressed: number
     !blocksSprint(s, input) &&
     s.stance === Stance.Stand &&
     s.stanceT >= 1 &&
-    s.grounded;
+    s.grounded &&
+    slow >= 1;
   if (sprinting) speed = m.speed.sprintByRating[rating] * mult("sprint");
+  speed *= slow;
   s.sinceSprint = sprinting ? 0 : s.sinceSprint + DT;
   s.sprinting = sprinting;
 

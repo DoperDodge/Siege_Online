@@ -1,0 +1,16 @@
+{
+  "_doc": "Proximity Alarm (defender pool; research/gadgets.md §4.5). Two each; thrown, it sticks where it hits (Y5S2); electronic. Picking it up again and its size are placeholders. One bullet destroys it (siege.gg). Its alarm (M3): it sounds, for both teams, while an attacker's body is within 3 m (Fandom, siege.gg), from 1 s after it sticks (ours: \"a short delay\"); drones don't set it off. In a match's prep it can't go outdoors (one that comes to rest outdoors then is destroyed: ours).",
+  "_season": "Y11S3",
+  "_unverified": ["pickUp", "sizeM", "alarm.armS"],
+  "id": "proximity_alarm",
+  "name": "Proximity Alarm",
+  "side": "defender",
+  "count": 2,
+  "electronic": true,
+  "use": {"kind": "throw", "flight": "stick"},
+  "remote": false,
+  "pickUp": true,
+  "sizeM": [0.08, 0.08, 0.04],
+  "fragile": true,
+  "alarm": {"radiusM": 3, "armS": 1}
+}

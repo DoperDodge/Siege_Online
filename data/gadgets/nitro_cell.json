@@ -1,0 +1,16 @@
+{
+  "_doc": "Nitro Cell (defender pool; research/gadgets.md §4.3). One each; the heavy throw (Y3S4); it sticks to whatever it hits; its owner's phone sets it off; electronic. Its size is a placeholder. Its blast: 171 hp within 2 m, none past 6 m (Fandom, maybe from before Y6S3), through breakable surfaces undimmed (Fandom); it cuts soft surfaces within 1 m (ours). One bullet destroys it without a blast (Fandom).",
+  "_season": "Y11S3",
+  "_unverified": ["sizeM", "blast.damage", "blast.destroyM", "blast.cutM", "blast.concussM"],
+  "id": "nitro_cell",
+  "name": "Nitro Cell",
+  "side": "defender",
+  "count": 1,
+  "electronic": true,
+  "use": {"kind": "throw", "flight": "stick", "heavy": true},
+  "remote": true,
+  "pickUp": false,
+  "sizeM": [0.12, 0.08, 0.05],
+  "blast": {"damage": {"max": 171, "fullM": 2.0, "zeroM": 6.0}, "destroyM": 2.0, "cut": "nitro_cell", "cutM": 1.0, "throughSoft": 1.0, "concussM": 4.0},
+  "fragile": true
+}

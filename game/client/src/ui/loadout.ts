@@ -68,11 +68,37 @@ export function weaponRow(data: GameData, op: OperatorData, slot: Slot, pick: Lo
       ${resolved && w && isGun(w) ? `<p class="note stats">${weaponStats(resolved, w)}</p>` : ""}</div>`;
 }
 
-/** Both slots' rows for a loadout, with each weapon's numbers. */
+/** Both slots' rows for a loadout, with each weapon's numbers, and its gadgets. */
 export function loadoutRows(data: GameData, pick: LoadoutPick): string {
   const op = data.operators.get(pick.operator)!;
   const lo = resolveLoadout(data, pick).loadout;
-  return SLOTS.map((slot, i) => weaponRow(data, op, slot, pick, lo.weapons[i] ?? null)).join("");
+  return SLOTS.map((slot, i) => weaponRow(data, op, slot, pick, lo.weapons[i] ?? null)).join("") + gadgetRow(data, op, pick);
+}
+
+/**
+ * The gadget row (Phase 8): one of the operator's gadgets, or a kit's two (Striker, Sentry: two different ones), as
+ * selects with `data-gadget` (their place in the pick); nothing for an operator without gadgets.
+ */
+export function gadgetRow(data: GameData, op: OperatorData, pick: LoadoutPick): string {
+  const kit = op.loadout.gadgetKit;
+  const pool = kit ? kit.pool : op.loadout.gadgets;
+  if (pool.length === 0) return "";
+  const name = (id: string) => data.gadgets.get(id)?.name ?? id;
+  const count = (id: string) => data.gadgets.get(id)?.count ?? 0;
+  const select = (i: number) =>
+    `<select data-gadget="${i}">${pool.map((id) => `<option value="${id}" ${pick.gadgets[i] === id ? "selected" : ""}>${name(id)} ×${count(id)}</option>`).join("")}</select>`;
+  const picks = kit ? kit.picks : 1;
+  return `<div class="loadout-row"><label>${picks > 1 ? "Gadgets" : "Gadget"} ${Array.from({ length: picks }, (_, i) => select(i)).join(" ")}</label></div>`;
+}
+
+/** The pick with gadget `i` changed; a kit's two stay different (the other takes the old one's place). */
+export function changedGadget(data: GameData, pick: LoadoutPick, i: number, value: string): LoadoutPick {
+  const next: LoadoutPick = structuredClone(pick);
+  const kit = data.operators.get(pick.operator)?.loadout.gadgetKit;
+  const was = next.gadgets[i];
+  next.gadgets[i] = value;
+  if (kit?.distinct) next.gadgets.forEach((g, k) => k !== i && g === value && was !== undefined && (next.gadgets[k] = was));
+  return next;
 }
 
 /** The numbers the simulation uses for this weapon, with a "?" on placeholders. */

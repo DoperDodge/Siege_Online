@@ -37,6 +37,11 @@ export const G_PROP = 0x0010;
 export const G_DRONE = 0x0020;
 /** A staircase's ramp (a movement helper too): drones drive up it as bodies walk up it (Ulo: drones climb stairs). */
 export const G_STAIR_RAMP = 0x0040;
+/**
+ * Solid gadgets (Phase 8 M3: the deployable shield, sim.ts syncs them with the gadget table): bodies, drones, bullets,
+ * blasts, throws and sight meet them like level geometry; a stun's flash doesn't (the shield's slits, QUERY_FLASH).
+ */
+export const G_GADGET = 0x0080;
 const groups = (membership: number, filter: number) => ((membership << 16) | filter) >>> 0;
 
 /** Level geometry: collides with players and other statics. */
@@ -49,21 +54,25 @@ export const STAIR_RAMP_GROUPS = groups(G_MOVE_HELPER | G_STAIR_RAMP, G_STATIC |
 export const PANEL_GROUPS = groups(G_PANEL, G_STATIC | G_PLAYER);
 /** Props: like level geometry for movement and sight, but the bullet query doesn't see them. */
 export const PROP_GROUPS = groups(G_PROP, G_STATIC | G_PLAYER);
+/** Solid gadgets: like level geometry for every query that sees them. */
+export const GADGET_GROUPS = groups(G_GADGET, G_STATIC | G_PLAYER);
 /** Player movement bodies: blocked by the level and by each other (Skopós' two shells included). */
-export const PLAYER_GROUPS = groups(G_PLAYER, G_STATIC | G_PLAYER | G_PANEL | G_PROP);
+export const PLAYER_GROUPS = groups(G_PLAYER, G_STATIC | G_PLAYER | G_PANEL | G_PROP | G_GADGET);
 /** Dead bodies: invisible to every query. Takes effect at once (setEnabled(false) waits for a refresh). */
 export const NONSOLID_PLAYER_GROUPS = groups(G_PLAYER, 0);
 /** Query filter that only sees static geometry (ground, walls, panels, props, the prone body, lean). */
-export const QUERY_STATIC = groups(G_PLAYER, G_STATIC | G_MOVE_HELPER | G_PANEL | G_PROP);
+export const QUERY_STATIC = groups(G_PLAYER, G_STATIC | G_MOVE_HELPER | G_PANEL | G_PROP | G_GADGET);
 /** Query filter that sees the level and players (walking, vault landings, choosing spawn spots). */
-export const QUERY_SOLID = groups(G_PLAYER, G_STATIC | G_PLAYER | G_MOVE_HELPER | G_PANEL | G_PROP);
+export const QUERY_SOLID = groups(G_PLAYER, G_STATIC | G_PLAYER | G_MOVE_HELPER | G_PANEL | G_PROP | G_GADGET);
 /**
  * Query filter for bullets: the level you can see that isn't a panel or a prop with a class (each decided on
  * its own), not movement helpers (DECISIONS D-046).
  */
-export const QUERY_BULLET = groups(G_PLAYER, G_STATIC);
+export const QUERY_BULLET = groups(G_PLAYER, G_STATIC | G_GADGET);
 /** Query filter for sight (marks, lasers, the knife's line, a tool's reach): the level you can see that isn't a panel, props included. */
-export const QUERY_SIGHT = groups(G_PLAYER, G_STATIC | G_PROP);
+export const QUERY_SIGHT = groups(G_PLAYER, G_STATIC | G_PROP | G_GADGET);
+/** Query filter for a stun's flash: sight's, through a deployable shield's slits (Fandom). */
+export const QUERY_FLASH = groups(G_PLAYER, G_STATIC | G_PROP);
 /** Query filter that only sees props with a class. */
 export const QUERY_PROPS = groups(G_PLAYER, G_PROP);
 /** Query filter that only sees players. */
@@ -74,7 +83,7 @@ export const DRONE_GROUPS = groups(G_DRONE, 0);
  * A drone's own movement: the level, panels, props and the stairs' ramps (it drives up a staircase), but no other
  * movement helper (it rolls under railings that stop bodies).
  */
-export const QUERY_DRONE = groups(G_PLAYER, G_STATIC | G_PANEL | G_PROP | G_STAIR_RAMP);
+export const QUERY_DRONE = groups(G_PLAYER, G_STATIC | G_PANEL | G_PROP | G_STAIR_RAMP | G_GADGET);
 
 /**
  * Rebuild the broad phase so queries see colliders moved, resized, added or removed since the last call.

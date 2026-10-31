@@ -77,17 +77,18 @@ try {
     return page;
   };
   /**
-   * Host: short Custom rules (two rounds, a swap after each, no overtime, the shortest prep and action the rules allow:
-   * match/settings.ts) with `extra`, and the damage rules in `damage`, sent as one change.
+   * Host: short Custom rules (two rounds, a swap after each, no overtime, the shortest prep the rules allow and an
+   * action of `action` seconds, at least the rules' 30: match/settings.ts) with `extra`, and the damage rules in
+   * `damage`, sent as one change.
    */
-  const setRules = (page, extra, damage = {}) =>
+  const setRules = (page, extra, damage = {}, action = 30) =>
     page.evaluate(
-      ([extra, damage]) => {
+      ([extra, damage, action]) => {
         const r = window.__match.rules;
-        const match = { ...structuredClone(r.match), rounds: 2, swapEvery: 1, overtime: null, seconds: { ...r.match.seconds, pick: 12, prep: 12, action: 30, roundEnd: 3 }, ...extra };
+        const match = { ...structuredClone(r.match), rounds: 2, swapEvery: 1, overtime: null, seconds: { ...r.match.seconds, pick: 12, prep: 12, action, roundEnd: 3 }, ...extra };
         window.__match.lobby({ kind: "change", change: { kind: "rules", rules: { match, ...damage } } });
       },
-      [extra, damage],
+      [extra, damage, action],
     );
 
   // ---------------------------------------------------------------- 1v1
@@ -315,7 +316,12 @@ try {
   if (bpOp) await def2.click(`.match-screen [data-act=op][data-op="${bpOp}"]`);
   await phase(a, P.Action, 60000);
   await def2.waitForFunction(() => window.__lab.net.own !== null && !window.__match.spectating && window.__lab.net.gadgets > 0, null, { timeout: 20000 }).catch(() => {});
-  const placedBp = await holdUntil(def2, { buttons: 1 << 12, pitch: -1.05 }, () => window.__match.view.bpCams.length === 1);
+  // Phase 8's hands: its slot's key takes it out (Mute: the gadget key; Sentry: the ability key, its kit's second), then Fire
+  // held places it.
+  const slotKey = bpOp === "sentry" ? 1 << 5 : 1 << 12;
+  const tookOut = await holdUntil(def2, { buttons: slotKey, pitch: -1.05 }, () => window.__lab.net.hand !== 0);
+  await sleep(800); // its equip time
+  const placedBp = tookOut && (await holdUntil(def2, { buttons: 1 << 6, pitch: -1.05 }, () => window.__lab.net.table.filter((g) => g.kind === "bulletproof_camera").length === 1));
   const watchedBp =
     placedBp &&
     (await holdUntil(def2, { buttons: OBSERVE }, () => window.__lab.net.cam === 1)) &&
@@ -351,8 +357,10 @@ try {
   v = await view(host);
   result.twoVsThree.lobby = v.players.map((p) => [p.name, p.team]);
   result.checks.unevenTeams = v.players.filter((p) => p.team === 0).length === 3 && v.players.filter((p) => p.team === 1).length === 2;
-  // No bans; friendly fire stays on in action, reverse friendly fire off (a teammate's shot kills).
-  await setRules(host, { bans: null }, { reverseFriendlyFire: { enabled: false, thresholdHp: 100 } });
+  // No bans; friendly fire stays on in action, reverse friendly fire off (a teammate's shot kills). A minute of action:
+  // its feed list, a teamkill and the dead player's view all happen in round 1's (CI run 41167705307: a slow runner's
+  // teamkill came so late in a 30 s action that the dead view wasn't up before the round was over).
+  await setRules(host, { bans: null }, { reverseFriendlyFire: { enabled: false, thresholdHp: 100 } }, 60);
   await host.waitForFunction(() => window.__match.rules?.match.bans === null && window.__match.rules.reverseFriendlyFire.enabled === false, null, { timeout: 10000 });
   for (const p of pages) await p.evaluate(() => window.__match.lobby({ kind: "ready", ready: true }));
   await host.waitForFunction(() => window.__match.view.players.every((p) => p.ready), null, { timeout: 10000 });
@@ -411,13 +419,15 @@ try {
   result.checks.deadLookThroughATeammate = await victim
     .waitForFunction((ids) => window.__match.camera?.kind === "pawn" && ids.includes(window.__match.camera.pawnId), mates, { timeout: 10000 })
     .then(() => true, () => false);
+  // What the dead page had, should it not have been a teammate's eyes.
+  result.twoVsThree.teamKill.view = await victim.evaluate(() => ({ phase: window.__match.view.phase, camera: window.__match.camera }));
   await victim.screenshot({ path: shot("match-spectating.png") });
   v = await view(host);
   const victimName = me(await view(victim)).name;
   const shooterName = me(await view(shooter)).name;
   result.twoVsThree.stats = v.players.map((p) => [p.name, p.kills, p.deaths, p.alive]);
   result.checks.teamkillCounted = v.players.find((p) => p.name === victimName)?.deaths === 1 && v.players.find((p) => p.name === shooterName)?.kills === 0;
-  await phase(host, P.MatchEnd, 150000);
+  await phase(host, P.MatchEnd, 240000);
   v = await view(host);
   result.twoVsThree.end = { score: v.score, winner: v.winner, history: v.history.map((h) => [h.round, h.attackers, h.winner, h.reason]) };
   result.checks.twoVsThreeToTheEnd = v.history.length === 2 && v.history[0].attackers !== v.history[1].attackers;

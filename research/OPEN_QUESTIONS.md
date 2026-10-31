@@ -527,6 +527,93 @@ The intel questions above (drone numbers, camera limits, pings, the wheel) stay 
    and is ready again 10 s later (all ours). What are Siege's numbers? Does a bullet at the plate stop there (ours goes
    on), and how far does a Bulletproof Camera turn?
 
+### Placeholders added while building Phase 8 (not in the original research)
+
+The gadget questions in [gadgets.md](gadgets.md) and the operator files stay open; these are ours, each in
+`data/gadgets.json` or `data/gadgets/<id>.json` (their `_unverified` lists) and game/shared/src/gadgets/DESIGN.md.
+
+1. **Keys (D-140):** 3 takes the secondary gadget out and puts it away, Z the ability's item (Striker's and Sentry's
+   second gadget); left mouse throws, places (held) or sets a charge off; right mouse lobs; F held takes a gadget back.
+   What are Siege's PC defaults for the gadget, the ability, throwing and lobbing?
+2. **Taking a gadget out:** 0.4 s (ours). How long does Siege take to bring a grenade or a charge up?
+3. **Throws:** a 0.25 s windup; overhand 15 m/s, 8° over the view; a lob 6 m/s, 15° over; the Nitro Cell's heavy throw
+   9 m/s, 8° over; it leaves 20 cm right, 15 cm down and 35 cm ahead of the eye; a 4 cm ball that keeps 35 % of its
+   speed into a surface and loses 60 % along it, at rest under 0.3 m/s (all ours). Roughly how far does an overhand frag
+   go on flat ground, and how far a lob? How far does a Nitro Cell go?
+4. **Placing:** a Breach Charge in 1.5 s; a Claymore, barbed wire and a deployable shield in 1 s (Siege's are unknown;
+   the Hard Breach Charge's 2 s and the observation blocker's 1 s are researched); within 2 m (charges) or 2.5 m (what
+   goes on the floor), where you look. Siege lays barbed wire and shields at your feet toward the crosshair: how far
+   ahead, at most? Does the body have to stand still while placing (ours does)?
+5. **Picking up:** a 1 s hold within 2 m; barbed wire, the deployable shield, the proximity alarm and the observation
+   blocker can be picked up; charges, Claymores, Nitro Cells and the Bulletproof Camera can't (ours). Which can be in
+   Siege, and how long does it take?
+6. **Detonators:** with several charges out, ours sets off the oldest first. Which goes first in Siege?
+7. **Sizes:** every gadget's box (data/gadgets/<id>.json `sizeM`) is ours: what bullets meet and what's drawn.
+8. **Counts:** the Breach Charge's 3 (Fandom) and Striker's stuns (3 on Fandom's Striker page, 2 on the generic one):
+   what does the loadout screen show?
+9. **How blast damage falls off (M2):** full within a distance, then a straight line down to nothing at the blast's
+   edge, measured to the nearest part of a body the blast can reach; 70 % gets through each soft wall on the way (all
+   of it for the Nitro Cell, Fandom). The frag's 150 within 1.5 m and the Breach Charge's 150 within 0.5 m of the far
+   side, gone at 3 m, are ours. Does Siege's damage drop in a straight line, and how much does a drywall take off?
+10. **The Breach Charge on its placer's side:** 50 right at it, falling to nothing at 1 m (Fandom gives the 50 and the
+    1 m, not the shape). Is it 50 anywhere within 1 m?
+11. **What a blast destroys:** gadgets within 3.6 m of a frag (Y7S3), 1.5 m of a Breach Charge, 2 m of a Claymore, a
+    Nitro Cell or an impact grenade, 0.5 m of a Hard Breach Charge (ours), the Claymore's only in front of it.
+    Barricades in that range break, the Claymore's too (CSV: UNVERIFIED). Does a Claymore break a barricade?
+12. **Grenades' holes:** a grenade cuts every soft wall within 1 m, a disc smaller the further it is (ours). Our
+    impact grenade's 1 m disc is never a walk-through hole, though the CSV says one at the right height is: how big
+    is an impact grenade's hole?
+13. **The Hard Breach Charge on a reinforced hatch:** one charge takes the whole hatch (ours; the Y5S3 rule wants three
+    of its cones on the hatch, which one charge laid flat on it has). Its own steel doesn't stop its 5 hp reaching
+    someone right behind it (ours).
+14. **Shooting gadgets:** one bullet or a knife hit destroys a charge, a Claymore, a Nitro Cell, the proximity alarm
+    and the observation blocker (the charges' 1 hp is the CSV's placeholder). Can a bullet or a knife destroy a Hard
+    Breach Charge?
+15. **The Claymore's lasers:** at its own height (7 cm) and from its centre (ours). How high are they?
+16. **The stun (M3):** "facing" it is ours: within 90° of the view (fully blinded within 11 m, less out to 15 m), and
+    facing away half-blinded within 3 m (Fandom says "visual effect only"). How bright is it from behind, and do
+    walls you can see through (a soft wall's hole, smoke) let it through? Is a defender's 5 s the same?
+17. **Smoke:** pings land on the cloud (Fandom); ours stops scans too, and a Bulletproof Camera sees through it.
+    Does a cloud stop a scan from a drone in Siege?
+18. **The EMP's reach:** ours goes through walls and floors. Does an Impact EMP's 2 m pass through a wall?
+19. **Barbed wire:** its box is 2.5 × 0.6 m (Fandom's 1.25 m radius as a width); drones at 90 % ("minimally"); the
+    5 every second (Y9S2) only for attackers moving faster than walking slowly (ours: 0.3 m/s). Does it hurt
+    defenders, and does slow-walking through it hurt?
+20. **The deployable shield:** standing on top of it doesn't destroy it yet (Fandom's anti-exploit rule), and a
+    placed one doesn't snap to doorways. What decides how it snaps?
+21. **The proximity alarm:** it arms 1 s after it comes to rest, senses through walls, and one that rests outdoors
+    in prep is destroyed (all ours). Does it sense through walls, and what happens to one thrown outside in prep?
+22. **The observation blocker's barrier:** as wide as walls allow up to 5 m, standing on the floor under it, facing
+    its placer's way (ours). Does it follow the placer's facing or the wall it's against?
+23. **The ingredients' numbers** (data/gadgets.json `ingredients`): the extinguisher's cloud 2 m round for 5 s and
+    its concussion 2.5 m for 3 s; the gas pipe's jet 3 m × 0.4 m, 10 every 0.25 s for 15 s, its blast 60 within 1 m
+    (none past 3 m), its fire 1.5 m round, 5 every 0.5 s for 2 s; the metal detector's frame 0.9 × 2.1 × 0.5 m, set
+    off by anyone. All ours but the 5 s smoke and the 15 s + 2 s (siege.gg).
+24. **Sledge's hammer (M4):** its reach 1.8 m from the eye, the blow landing 0.35 s into the 0.8 s swing, a hole of
+    0.9 × 1.1 m round where it lands (two swings, one low and one high, to walk through), one charge for a swing
+    that meets anything and two for a kill, none for a swing at the air (all ours; Fandom's two pages disagree on
+    the costs). How big is one swing's hole, and does a swing at nothing spend a charge?
+25. **Thermite's Exothermic Charge (M5):** 3 s to place and a 3 s burn (Fandom: "within three seconds"); its box
+    1.2 × 1.7 m, standing on the floor below where you look on a wall; its hole 1.5 × 2.0 m (Phase 4's placeholder);
+    220 to 1 m on the far side, none past 3.5 m; on Thermite's side 220 to 0.3 m, none past 1 m; it destroys gadgets
+    within 3 m and cuts the panels within 1 m of it too (Fandom: "adjacent" walls, hatches and floors). It goes on
+    a barricade (the CSV's placeholder). How far does "adjacent" reach, and how far behind the wall is it lethal?
+26. **Fuze's Cluster Charge (M5):** 2 s to place; once set off, 5 grenades one every 0.35 s in a 100° fan, 5 m/s,
+    10° up out of a wall (60° down through a floor), each going off 1 s after it leaves; its tube 0.6 m long, its
+    hole 0.5 m across; a hatch keeps its hp (only the tube goes through); a grenade's damage 140 to 1.2 m, none past
+    4.2 m (lethal to 125 hp within 1.2 m and to 100 hp within 2 m, as Fandom says), and it destroys gadgets of both
+    teams (drones too, whatever the friendly fire rules) within its 4.2 m, a frag's convention: so Fuze's grenades
+    also destroy his own charges near them. Placing a second sets the first off; if nothing could set it off then
+    (an EMP), ours lets it fall. How long does the release take, how wide is the fan, and how long is a grenade's
+    fuse? What happens to a jammed first charge when Fuze places a second?
+27. **Mute's jammer (M6):** an operator counts as inside it by the part of his body nearest it; it's placed within
+    2.5 m on a floor; a drone inside it stops dead (its driver's input is ignored); a wall reinforced over one crushes
+    it within 0.35 m of the wall, under 0.4 m up (all ours). Does a body count as inside by its feet, its centre or
+    any part? How close to a wall must a jammer be for the steel to crush it?
+28. **Pulse's sensor (M6):** a 120° fan in front of him, as far up and down as across (10.5 m), downed attackers
+    shown, and a ping with it up marking the heartbeat within 20° of his crosshair (all ours). What shape does it
+    scan, do downed attackers show, and what does his ping put on his team's screens?
+
 ### [core_mechanics.md](core_mechanics.md) — 16
 
 Most of these can be answered in a Custom Game (Local), usually in minutes, with a stopwatch or a 60 fps recording and known map distances.

@@ -1,0 +1,18 @@
+{
+  "_doc": "Fuze's APM-6 Cluster Charge (research/operators/fuze.md §3; Phase 8 M5): his ability, the item in his slot 2 (Z). Placed by hand in `use.placeS` on a soft wall, a floor, a hatch, a barricade, a reinforced wall or hatch (Y6S3) or a deployable shield's front (Y8S3), not a hard wall; one at a time (`maxOut`: placing a second sets the first off, Fandom). Its owner's detonator sets it off (electronic: an EMP on it or on him stops the trigger, Y10S4); its tube goes through at once on a soft surface, after `cluster.drillS` through steel or a shield (1.75 s, Y11S2.3; a shield's glass shatters, Y8S3), and lets `cluster.count` grenades (data/gadgets/cluster_grenade.json) out on the far side one after another in a fan from left to right (the official tip), then falls, its hole left. Its tube can be shot from the far side once it's through (on steel during the drill, Y6S3); however quick, at least one grenade comes out. Four a round (Y5S2.3). Its placing time, size, reach, the release's pace, fan and speeds, the tube's length and the hole are placeholders.",
+  "_season": "Y11S3",
+  "_unverified": ["use.placeS", "use.reachM", "sizeM", "cluster.count", "cluster.everyS", "cluster.fanDeg", "cluster.speedMps", "cluster.upDeg", "cluster.downDeg", "cluster.tubeM"],
+  "id": "cluster_charge",
+  "name": "Cluster Charge",
+  "side": "attacker",
+  "operator": "fuze",
+  "count": 4,
+  "electronic": true,
+  "use": {"kind": "place", "on": ["soft", "steel", "shield"], "placeS": 2.0, "reachM": 2.0},
+  "remote": true,
+  "maxOut": 1,
+  "cluster": {"grenade": "cluster_grenade", "count": 5, "everyS": 0.35, "fanDeg": 100, "speedMps": 5.0, "upDeg": 10, "downDeg": 60, "drillS": 1.75, "tubeM": 0.6, "cut": "cluster_charge"},
+  "pickUp": false,
+  "sizeM": [0.3, 0.3, 0.2],
+  "fragile": true
+}

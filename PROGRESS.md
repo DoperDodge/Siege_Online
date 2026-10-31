@@ -5,7 +5,183 @@ known issues, and what's next.
 
 ---
 
-## Phase 7 — Intel · ✅ done, waiting for your test (branch `claude/phase-7-intel`, PR #8)
+## Phase 8 — Operators · 🚧 in progress (branch `claude/phase-8-operators`, PR #9)
+
+**Done when (PLAN §17):** every row of research/interactions.csv (343) has a passing test. The design is
+`game/shared/src/gadgets/DESIGN.md` (D-140). Phases 6 and 7 are merged into `main` (PRs #7 and #8), so this PR
+targets `main`.
+
+| Milestone | Status |
+|---|---|
+| M1 The framework: gadget data, the hands and keys, the gadget table (protocol 15), throws, placing, detonators, picking up; the Bulletproof Camera moved onto it; the Gadget Lab; the interactions harness | ✅ (D-141) |
+| M2 Blasts and the lethal generics (frag, impact grenade, Breach and Hard Breach Charges, Nitro Cell, Claymore) | ✅ (D-142) |
+| M3 The other generics (stun, smoke, Impact EMP, barbed wire, deployable shield, proximity alarm, observation blocker), pinging gadgets, ingredients | ✅ (D-143) |
+| M4 Sledge; Striker and Sentry | ✅ (D-144; Striker's and Sentry's kits were M1's) |
+| M5 Thermite; Fuze's Cluster Charge | ✅ (D-145) |
+| M6 Mute; Pulse | ✅ (D-146) |
+| M7 Mira | next |
+| M8 Brava | |
+| M9 Dokkaebi | |
+| M10 Skopós's remaining rules; Lesion | |
+| M11 The Ballistic Shield | |
+| M12 Every CSV row passing; netsim, browser tests, review, docs, report | |
+
+### What's done (M6: Mute and Pulse)
+- **Mute's Signal Disruptor:** Z, then left mouse held 3 s at the floor puts one down (4 a round; hold F on it to
+  take it back). Within 2.6 m (through floors too), attackers can't set off their charges (Breach, Exothermic,
+  Cluster), nor can an attacker standing inside one; an attacker's drone inside one stops answering (static), and
+  shows lighter static within 4.875 m. Hard Breach Charges, Claymores, grenades, the hammer and sights don't mind it,
+  nor do the defenders' own gadgets. Any damage destroys it; an Impact EMP turns it off for 9 s; reinforcing the
+  wall it stands against crushes it. Its reach shows for 2.5 s when it lands.
+- **Pulse's Cardiac Sensor:** Z holds it up (no shooting meanwhile): a fan at the bottom of the screen shows the
+  attackers' heartbeats within 10.5 m in front of him, through walls and floors (downed attackers too, never drones
+  or defenders). Ping (T) while it's up to mark the heartbeat you're looking at for your team. An Impact EMP freezes
+  it.
+- **The interaction tests:** 32 more rows pass (218 of 343). The Gadget Lab's browser test puts a jammer down and
+  sees the attacker dummy's heartbeat.
+
+### What's done (M5: Thermite and Fuze)
+- **Thermite's Exothermic Charge:** Z takes it out, left mouse held for 3 s puts it on any breakable surface,
+  reinforced walls and hatches included (not hard walls); on a wall it stands on the floor, wherever you look. Left mouse again sets it off: it burns for 3 s with sparks
+  on both sides of the wall, then blows a large hole (1.5 × 2.0 m) through every layer, steel too; a reinforced hatch
+  opens whole, and walls or hatches right next to it are cut as well. 220 damage on the far side, falling off to
+  nothing at 3.5 m; on Thermite's own side only point blank. 3 a round.
+- **Fuze's Cluster Charge:** Z, then 2 s held, on soft or reinforced walls, floors, hatches, barricades, or a
+  deployable shield's front. Set off, it goes through soft surfaces at once and drills steel or a shield for 1.75 s
+  (the shield's glass shatters); then 5 grenades come out on the far side one after another, left to right, each
+  bouncing and going off a second later (lethal within 1.2 m). Only one can wait at a time: placing a second sets off
+  the first. While it drills, defenders can shoot or blow up its tube on their side, but at least one grenade always
+  comes out. 4 a round.
+- **What stops them:** an EMP (the Impact EMP, a Bulletproof Camera's dart) on the charge or on its owner stops the
+  detonator; once set off nothing stops it but destroying it (any damage does). Their blasts destroy gadgets, and
+  drones of both teams.
+- **The interaction tests:** 40 more rows pass (186 of 343). The Gadget Lab's browser test drills and burns
+  through the reinforced wall.
+
+### What's done (M4: Sledge's hammer)
+- **Z takes out Sledge's hammer**, left mouse swings it (held: one swing after another, 0.8 s each). 25 charges: a
+  swing that meets something spends one, a kill two; a swing at the air spends none.
+- **Close to a soft wall** (within 1 m) a swing breaks both faces and the wooden studs, a hole to crouch or vault
+  through; a second swing lower or higher makes it one to walk through. Further away only the near face breaks.
+  Soft floors get see-through holes, barricades and unreinforced hatches break, steel and hard walls take nothing
+  (the swing is still spent).
+- **It kills** whoever it hits, destroys defender gadgets (wire, shield, cameras, alarms, blockers, Nitro Cells) and
+  sets off the gas pipe. It works on a rope, and an EMP on Sledge doesn't stop it.
+- **The interaction tests:** 17 more rows pass (146 of 343).
+
+### What's done (M3: the other generics and the ingredients)
+- **Stun:** blinds whoever faces it (fully within 11 m) for 5 s, and rings ears within 8 m; it flashes through a
+  deployable shield's slits; cameras and drones (and whoever's watching them) aren't affected.
+- **Smoke:** a cloud 5 m across for 10 s. Cameras, drones and pings can't see through it (a ping lands on the
+  cloud); a Bulletproof Camera can.
+- **Impact EMP:** within 2 m the defenders' electronics (Bulletproof Cameras, alarms, Nitro Cells, blockers, the
+  level's cameras, the metal detector) are off for 9 s, and a defender in it loses his sights' zoom, cameras,
+  drones and detonator. Skopós can't swap into an EMP'd shell. A Bulletproof Camera's dart is now the same EMP
+  (0.75 m).
+- **Barbed wire:** an attacker in it walks at half speed, can't sprint and loses 5 a second while he moves; drones
+  slow a little, defenders not at all; two knife hits destroy it.
+- **Deployable shield:** solid. Bullets, blasts, bodies and drones stop at it (attackers vault it); any blast close
+  by destroys it; a knife hit makes its glass opaque and then it can't be picked up.
+- **Proximity alarm:** sounds for everyone while an attacker is within 3 m (he's told he set it off); drones don't
+  set it off. In a match's prep one that lands outdoors is destroyed.
+- **Observation blocker:** the attackers' drones can't see through its barrier (up to 5 m wide); players and the
+  defenders' cameras can.
+- **Pinging a gadget:** a ping on an enemy gadget marks it, with its name.
+- **Ingredients:** the fire extinguisher (shot, knifed or in a blast) bursts into smoke and concusses those close
+  by; the gas pipe (shot or in a blast) throws a flame jet for 15 s, then goes off and burns the floor under it;
+  the metal detector beeps while someone walks through it, and an EMP turns it off. They're live on Oregon too.
+- **The Gadget Lab** has a fire extinguisher, a gas pipe and a metal detector (and a camera for the tests).
+- **The interaction tests:** 51 more rows pass (129 of 343).
+
+### What's done (M2: blasts and the lethal generics)
+- **Every explosive goes off:** the frag at its fuse, the impact grenade on the first body or surface it hits, the
+  Breach Charge and the Nitro Cell when you press their detonator, the Hard Breach Charge 4 s after it's on, the
+  Claymore when a defender crosses one of its lasers.
+- **Damage:** full close by, less further out, none past its edge; 70 % of it gets through each soft wall on the way
+  (the Nitro Cell's all of it); steel and the level stop it. The frag does 150 (to 3.6 m), the Claymore 155 (in front,
+  to 6 m), the Nitro Cell 171 (to 6 m), the impact grenade 40 (to 2 m); the Breach Charge is lethal close behind its
+  wall and does up to 50 on your side of it; the Hard Breach Charge does 5 right at it. Your own blasts hurt you,
+  teammates by the friendly-fire rules, and the kill feed names the gadget.
+- **Destruction:** the Breach Charge opens a walk-through hole in a soft wall (studs too); the Hard Breach Charge a
+  small square through anything breakable, steel included; grenades cut the soft walls close by. Hatches open, soft
+  floors get holes you can see and shoot through (never fall through), barricades break, and gadgets close by are
+  destroyed (a Bulletproof Camera's glass breaks).
+- **The Claymore:** armed 1 s after it's down; three 2 m lasers (ahead and 30° either side) that pass under
+  barricades and through holes; attackers walk through them; Skopós's idle shell doesn't set it off until she wakes
+  that shell.
+- **Shooting gadgets:** one bullet or a knife hit destroys a charge, a Claymore, a Nitro Cell, an alarm or a blocker,
+  without a blast. Barbed wire, and anything in flight, can't be shot.
+- **Everyone sees and hears it:** a fireball, smoke, a flash of light and a bang.
+- **The Gadget Lab has dummies:** behind the plain soft wall, behind the steel, behind the barricaded door, and one of
+  each team in the open.
+- **The interaction tests:** 69 more rows of research/interactions.csv pass (78 of 343).
+
+### What's done (M1: the framework)
+- **Every gadget in both pools has its data:** data/gadgets/<id>.json (count, side, electronic, how it's thrown or
+  placed, its size) and data/gadgets.json (taking one out, throws, picking up). Most numbers are placeholders, listed
+  in research/OPEN_QUESTIONS.md ("Placeholders added while building Phase 8").
+- **Your gadgets in your hands:** 3 takes your gadget out (Z: Striker's and Sentry's second one) and puts it away; 1 or 2
+  brings a weapon back. Left mouse throws it (right mouse lobs it) or, held, places it where a green outline shows.
+  With a charge out, the detonator is in your hand: left mouse sets the oldest off (3 takes out the next charge). Hold
+  F on one of yours (wire, shield, alarm, blocker) to take it back. Others see what you hold.
+- **Throws fly:** grenades bounce and roll to rest, impact grenades go off where they hit (or after 20 m), the Nitro
+  Cell and the proximity alarm stick. A frag's fuse runs 4 s, cut to 2 s at its first bounce. Your own throw shows at
+  once; everyone else sees it a moment later, on the same path.
+- **They don't do anything yet:** a frag disappears at its fuse, a charge when you set it off. Blasts, smoke, stuns
+  and EMPs come with M2 and M3.
+- **Online:** every gadget is in one table the server sends with each snapshot; every player ends with exactly the
+  server's (a checksum makes sure).
+- **The Bulletproof Camera** works as before, but placing it is now 3, then left mouse held (it was a 1 s hold of 3).
+  Sentry takes it out with Z when it's his second gadget.
+- **Pick your gadget:** the loadout (Play page, planning screen, the labs' pause menu) has your gadget, or your two
+  (Striker, Sentry: two different ones).
+- **The Gadget Lab** (start page): the Destruction Lab's walls to try every operator's gadgets on, offline or online.
+  Refill ammo also gives your gadgets back; Clear gadgets empties the room.
+
+### How to test (needs Node 22.12+)
+```
+npm install
+npm run build
+npm start
+```
+1. Open http://localhost:8080 → **Gadget Lab**. Esc → pick Sledge: 3, then left mouse throws a frag; right mouse lobs
+   the second. Pick Fuze (Breach Charge): go to *Soft walls*, 3, hold left mouse at the wall until it's on it, then
+   left mouse sets it off. Pick Sentry: his gadgets are two selects in the loadout; Z takes out the second.
+2. **Gadget Lab online** → *Copy invite link* in the pause menu, open it in a second window: what one throws, the
+   other sees.
+3. **Blasts (M2):** as Sledge, throw a frag at the defender dummy in the open: it's down, and the kill feed names the
+   frag. As Fuze, a Breach Charge on the plain soft wall: the dummy behind it is down and the wall has a door-sized
+   hole. As Mute, throw the Nitro Cell, walk well away and press left mouse.
+4. **The Claymore:** as Striker (Claymore in his kit) or Brava, put one down, switch to the defenders in the pause
+   menu and walk into a laser. As Fuze with the Hard Breach Charge, put it on the reinforced wall and wait 4 s.
+5. **M3:** as Sledge, throw a stun at your feet (white for 5 s), and online with a friend as Mute, an Impact EMP at
+   his Bulletproof Camera. As Thermite, a smoke grenade. As Sentry, lay barbed wire, then switch teams in the pause
+   menu and walk through it. Shoot the fire extinguisher and the gas pipe by the doors, and walk through the metal
+   detector.
+6. **M4:** as Sledge, Z takes out the hammer: swing at the soft walls (close and from further away), the hatch from
+   the platform, the barricaded door, and a dummy.
+8. **M6:** as Mute, Z and hold left mouse at the floor; switch to the attackers (pause menu) and drive a drone at it,
+   or put a Breach Charge near it and try the detonator. As Pulse, Z and face the attacker dummy in the open.
+7. **M5:** as Thermite, Z, hold left mouse at the reinforced wall for 3 s, step back and press left mouse: sparks,
+   then a hole you can walk through, and the dummy behind it is down. As Fuze, Z at the same wall (or a soft one, or
+   the hatch from the platform): it drills, then its grenades come out on the far side. Place a second one: the
+   first goes off.
+
+The automated checks: `npm run typecheck`, `npm test` (the interactions test lists every CSV row: built ones pass,
+the rest are todos), `npm run build`, `node tools/e2e/gadget-lab.mjs`.
+
+### Known issues
+- No sounds yet (Phase 11): the stun's ringing, the alarm's beeping, the wire's rustle are silent. A blast doesn't
+  shake the view.
+- Direct hits by a thrown grenade (5 hp) aren't in. Standing on a deployable shield doesn't destroy it.
+- The impact grenade's hole is never big enough to walk through (our size, research/OPEN_QUESTIONS.md).
+- Fuze's grenades also destroy his own waiting charges close to them (ours).
+- Every gadget is a greybox in its kind's colour; the gadget in your hands is a box.
+- You can't watch a Bulletproof Camera in a lab (cameras are a match's).
+
+---
+
+## Phase 7 — Intel · ✅ complete (merged into `main`, PR #8)
 
 **Done when (PLAN §17):** prep-phase droning and watching the cameras work online. The design is
 `game/shared/src/intel/DESIGN.md` (D-134). It builds on Phase 6 (PR #7), which waits for your test.
@@ -147,7 +323,7 @@ known issues, and what's next.
 
 ---
 
-## Phase 6 — Match flow + lobby · ✅ built, ⏳ waiting for your test (branch `claude/phase-6-match-flow`, PR #7)
+## Phase 6 — Match flow + lobby · ✅ complete (merged into `main`, PR #7)
 
 **Done when (PLAN §17):** full 1v1 and 2v3 matches play start to finish. The design is
 `game/shared/src/match/DESIGN.md` (D-118 to D-124).

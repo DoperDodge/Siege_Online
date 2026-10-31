@@ -6,7 +6,7 @@
 // compiled at load (renderer.compile also prepares hidden objects): a shader first compiled at a shot
 // stalls that frame, and with it the shot's input.
 import * as THREE from "three";
-import { cellWorld, L_CORE, L_STEEL, raycastLevel, STEEL_PLATE_M, type GameEvent, type IndexedOp, type PanelChange, type Sim, type SimEvent, type Vec3 } from "@redmond/shared";
+import { cellWorld, kindId, L_CORE, L_STEEL, raycastLevel, STEEL_PLATE_M, type GameEvent, type IndexedOp, type PanelChange, type Sim, type SimEvent, type Vec3 } from "@redmond/shared";
 
 /** Where sounds will go (Phase 11 adds audio); a no-op until then. */
 export interface AudioSink {
@@ -33,6 +33,10 @@ const DEBRIS_MS = 900;
 /** EMP darts' bursts (Phase 7): a pale blue ball the burst's size, shown this long; a few at once. */
 const EMPS = 4;
 const EMP_MS = 250;
+/** A gadget's blast (Phase 8): a fireball for a moment, then a puff of smoke (greybox until the art pass). */
+const BLASTS = 6;
+const FIREBALL_MS = 220;
+const PUFF_MS = 1400;
 
 /** Objects reused oldest first, each shown until its time is up. */
 class Pool<T extends THREE.Object3D> {
@@ -68,6 +72,10 @@ export class FxBus {
   private nextLight = 0;
   private readonly debris: Pool<THREE.Mesh>;
   private readonly emps: Pool<THREE.Mesh>;
+  private readonly fireballs: Pool<THREE.Mesh>;
+  private readonly puffs: Pool<THREE.Mesh>;
+  /** A stun's flash, an extinguisher's burst (Phase 8 M3). */
+  private readonly whites: Pool<THREE.Mesh>;
   /** Each chunk's velocity (m/s), by its place in the pool. */
   private readonly debrisVel: THREE.Vector3[];
   private readonly debrisMat = { skin: new THREE.MeshBasicMaterial({ color: 0xd9d4c7 }), wood: new THREE.MeshBasicMaterial({ color: 0x8b6a43 }), steel: new THREE.MeshBasicMaterial({ color: 0x56606b }) };
@@ -136,6 +144,49 @@ export class FxBus {
         return m;
       }),
     );
+    const fireMat = new THREE.MeshBasicMaterial({ color: 0xffa040, transparent: true, opacity: 0.8, depthWrite: false });
+    const puffMat = new THREE.MeshBasicMaterial({ color: 0x6b6b6b, transparent: true, opacity: 0.45, depthWrite: false });
+    const ball = (mat: THREE.Material) =>
+      Array.from({ length: BLASTS }, () => {
+        const m = new THREE.Mesh(empGeo, mat);
+        scene.add(m);
+        return m;
+      });
+    this.fireballs = new Pool(ball(fireMat));
+    this.puffs = new Pool(ball(puffMat));
+    this.whites = new Pool(ball(new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthWrite: false })));
+  }
+
+  /**
+   * A gadget (or an ingredient) went off (Phase 8), by what it does: a blast is a fireball as big as its full-damage
+   * reach (at least 0.3 m) and a puff of smoke; a stun a white flash; an EMP a pale blue ball its size; a fire
+   * extinguisher a white burst; a metal detector destroyed, sparks. Smoke draws nothing here (its cloud is the table's).
+   */
+  private blast(kind: number, pos: Vec3, now: number) {
+    const id = kindId(kind) ?? "";
+    const d = this.sim.data.gadgets.get(id);
+    const at = new THREE.Vector3(pos[0], pos[1], pos[2]);
+    const blast = d?.blast ?? (id === "gas_pipe" ? this.sim.data.gadgetRules.ingredients.gas_pipe.blast : undefined);
+    if (blast) {
+      const r = Math.max(0.3, Math.min(2.5, blast.damage.fullM));
+      const fire = this.fireballs.take(now, FIREBALL_MS);
+      fire.position.copy(at);
+      fire.scale.setScalar(r);
+      const puff = this.puffs.take(now, PUFF_MS);
+      puff.position.copy(at);
+      puff.scale.setScalar(r * 1.4);
+      this.light(at, now);
+    } else if (d?.stun || id === "fire_extinguisher") {
+      const white = this.whites.take(now, d?.stun ? FIREBALL_MS : PUFF_MS);
+      white.position.copy(at);
+      white.scale.setScalar(d?.stun ? 0.8 : 1.2);
+      if (d?.stun) this.light(at, now);
+    } else if (d?.emp || id === "metal_detector") {
+      const ball = this.emps.take(now, EMP_MS);
+      ball.position.copy(at);
+      ball.scale.setScalar(d?.emp?.radiusM ?? 0.3);
+    } else return;
+    this.audio.play("shot", pos);
   }
 
   /** Panel ops just applied (from the server): a few chunks from the cells each one knocked out. */
@@ -187,7 +238,7 @@ export class FxBus {
         const ball = this.emps.take(performance.now(), EMP_MS);
         ball.position.set(e.pos[0], e.pos[1], e.pos[2]);
         ball.scale.setScalar(this.sim.data.intel.bulletproofCamera.dartRadiusM);
-      }
+      } else if (e.kind === "blast") this.blast(e.gadget, e.pos, performance.now());
     }
   }
 
@@ -217,6 +268,9 @@ export class FxBus {
     this.flashes.update(now);
     this.debris.update(now);
     this.emps.update(now);
+    this.fireballs.update(now);
+    this.puffs.update(now);
+    this.whites.update(now);
     const dt = Math.min(0.05, Math.max(0, now - this.lastFrameAt) / 1000);
     this.lastFrameAt = now;
     this.debris.items.forEach((m, i) => {

@@ -1,0 +1,15 @@
+{
+  "_doc": "Frag Grenade (attacker pool; research/gadgets.md §3.4). Thrown; it bounces; a 4 s fuse that drops to 2 s at the first bounce when more is left; it can't be cooked (Y8S4). Its size is a placeholder. Its blast: 150 hp (a placeholder: Fandom's numbers are from before Y6S3) within 1.5 m (ours), none past 3.6 m (Y7S3's non-lethal and destruction radius); it cuts soft surfaces within 1 m (ours); 70 % of its damage gets through each soft surface on the way (ours, RealBlast's shrapnel).",
+  "_season": "Y11S3",
+  "_unverified": ["sizeM", "blast.damage.max", "blast.damage.fullM", "blast.cutM", "blast.throughSoft", "blast.concussM"],
+  "id": "frag",
+  "name": "Frag Grenade",
+  "side": "attacker",
+  "count": 2,
+  "electronic": false,
+  "use": {"kind": "throw", "flight": "bounce", "fuseS": 4, "afterHitS": 2},
+  "remote": false,
+  "pickUp": false,
+  "sizeM": [0.07, 0.09, 0.07],
+  "blast": {"damage": {"max": 150, "fullM": 1.5, "zeroM": 3.6}, "destroyM": 3.6, "cut": "frag_grenade", "cutM": 1.0, "throughSoft": 0.7, "concussM": 3.6}
+}

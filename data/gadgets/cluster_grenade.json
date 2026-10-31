@@ -1,0 +1,16 @@
+{
+  "_doc": "One of the grenades Fuze's Cluster Charge lets out (research/operators/fuze.md §3.1; Phase 8 M5): never carried (its `count` is unused), thrown by the charge (data/gadgets/cluster_charge.json `cluster`), bouncing until its fuse ends, the grenades going off in the order they came out. Each: none past 4.2 m, lethal to everyone within 1.2 m and to the 100 hp (1-health) operators within 2 m (Fandom; our curve: 140 to 1.2 m, falling to 0 at 4.2 m, so 103 at 2 m). It destroys gadgets of both teams within its reach (as a frag's reach is its destruction range: the official tip's \"all gadgets placed in a defensive stronghold\") and drones (any explosion does), and cuts a frag's disc into panels close to it. Its fuse, damage value, destruction range, cut and size are placeholders.",
+  "_season": "Y11S3",
+  "_unverified": ["count", "use.fuseS", "sizeM", "blast.damage.max", "blast.destroyM", "blast.cut", "blast.cutM", "blast.throughSoft", "blast.concussM"],
+  "id": "cluster_grenade",
+  "name": "Cluster Charge",
+  "side": "attacker",
+  "operator": "fuze",
+  "count": 5,
+  "electronic": false,
+  "use": {"kind": "throw", "flight": "bounce", "fuseS": 1.0},
+  "remote": false,
+  "pickUp": false,
+  "sizeM": [0.07, 0.07, 0.07],
+  "blast": {"damage": {"max": 140, "fullM": 1.2, "zeroM": 4.2}, "destroyM": 4.2, "cut": "frag_grenade", "cutM": 0.8, "throughSoft": 0.7, "concussM": 4.2}
+}

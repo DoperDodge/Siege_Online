@@ -1,0 +1,15 @@
+{
+  "_doc": "Impact EMP Grenade (attacker pool; research/gadgets.md §3.7). Thrown; it goes off where it first hits, without rolling (Fandom). Its size is a placeholder. Its EMP (M3, DSEG): the defenders' electronics and bodies within 2 m (Y11S2.3) are disabled for 9 s (Y7S3; the Y10S4 overhaul may have changed it).",
+  "_season": "Y11S3",
+  "_unverified": ["sizeM", "emp.seconds"],
+  "id": "impact_emp",
+  "name": "Impact EMP Grenade",
+  "side": "attacker",
+  "count": 2,
+  "electronic": false,
+  "use": {"kind": "throw", "flight": "impact"},
+  "remote": false,
+  "pickUp": false,
+  "sizeM": [0.07, 0.1, 0.07],
+  "emp": {"radiusM": 2.0, "seconds": 9}
+}
