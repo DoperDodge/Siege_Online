@@ -1,7 +1,9 @@
 // The server's side of the gadget table (Phase 8, gadgets/DESIGN.md §3–§4): the simulation's gadget events become
-// entries (a throw flies, a placed gadget stands, a detonator sets its oldest device off, a pick-up takes one away),
-// throws are stepped to where they rest, stick or go off, fuses and outdoor signals run out on the server's ticks,
-// and steel going up breaks what's on its wall. Every change is a table op the room sends with the next snapshot.
+// entries (a throw flies, a placed gadget stands, a detonator sets its oldest working device off, a pick-up takes one
+// away), throws are stepped to where they rest, stick or go off, fuses and outdoor signals run out on the server's
+// ticks, and steel going up breaks what's on its wall. M3: smoke stays as a cloud for its time, EMPs disable (DSEG)
+// until a tick, alarms and the metal detector sound while someone's in reach, barbed wire bites who moves in it, and
+// the level's ingredients go through their stages. Every change is a table op the room sends with the next snapshot.
 import { isIdleShell } from "../combat/apply.js";
 import { DEG, forwardXZ, type Vec3 } from "../core/math.js";
 import type { GadgetData } from "../data/schemas.js";
@@ -16,8 +18,17 @@ import type { Sim } from "../sim.js";
 import type { SimEvent } from "../weapons/step.js";
 import { ticks, ticksOrZero } from "../weapons/ticks.js";
 import { FLOOR_NY, Flights, isFlying, type FlightEnd } from "./flight.js";
-import { KIND_BP_CAMERA, kindId, kindOf } from "./kinds.js";
-import { GFlag, type Gadget } from "./table.js";
+import { inFrame, inWireBox, jetOf } from "./areas.js";
+import { isCloud, pawnDistance } from "./blast.js";
+import { empReach } from "./electronics.js";
+import { isIngredient, KIND_BP_CAMERA, kindId, kindOf } from "./kinds.js";
+import { detonatable, GFlag, type Gadget } from "./table.js";
+
+const KIND_WIRE = kindOf("barbed_wire");
+/** A body moving this fast or more is moving through barbed wire (it bites). */
+const MOVING_MPS = 0.3;
+/** What a set-off ingredient is doing, for the room: a fire extinguisher's burst, a gas pipe's jet or its blast, a metal detector destroyed. */
+export type IngredientStage = "burst" | "jet" | "blast" | "destroyed";
 
 type ThrowUse = Extract<GadgetData["use"], { kind: "throw" }>;
 type Tripwire = NonNullable<GadgetData["tripwire"]>;
@@ -34,19 +45,28 @@ function segSeg(a: Vec3, b: Vec3, c: Vec3, d: Vec3): { dist: number; at: Vec3 } 
   const D = dot(u, w);
   const E = dot(v, w);
   const den = A * C - B * B;
-  let s = den > 1e-12 ? Math.max(0, Math.min(1, (B * E - C * D) / den)) : 0;
-  let t = C > 1e-12 ? (B * s + E) / C : 0;
-  if (t < 0 || t > 1) {
-    t = Math.max(0, Math.min(1, t));
-    s = A > 1e-12 ? Math.max(0, Math.min(1, (B * t - D) / A)) : 0;
+  let s: number;
+  let t: number;
+  if (C <= 1e-12) {
+    // cd is a point: the point of ab nearest it.
+    s = A > 1e-12 ? Math.max(0, Math.min(1, -D / A)) : 0;
+    t = 0;
+  } else {
+    s = den > 1e-12 ? Math.max(0, Math.min(1, (B * E - C * D) / den)) : 0;
+    t = (B * s + E) / C;
+    if (t < 0 || t > 1) {
+      t = Math.max(0, Math.min(1, t));
+      s = A > 1e-12 ? Math.max(0, Math.min(1, (B * t - D) / A)) : 0;
+    }
   }
   const p: Vec3 = [a[0] + u[0] * s, a[1] + u[1] * s, a[2] + u[2] * s];
   const q = [c[0] + v[0] * t, c[1] + v[1] * t, c[2] + v[2] * t];
   return { dist: Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]), at: p };
 }
 
-/** What a gadget going off does (M1: it's gone; the blasts, smoke, stuns and EMPs come with M2 and M3). */
+/** What a gadget going off does (the room's: blasts, stuns, EMPs; smoke stays as a cloud here). */
 export type GoOff = (g: Gadget, at: Vec3, end: FlightEnd | null) => void;
+
 
 export class GadgetServer {
   private readonly flights: Flights;
@@ -56,6 +76,14 @@ export class GadgetServer {
    * owner has one fewer waiting (the room takes it off their body and corrects them).
    */
   onLost: (g: Gadget, data: GadgetData) => void = () => {};
+  /** The room: a body or drone hurt by a gadget over time (barbed wire, a gas pipe's jet or fire), by `amount` now. */
+  hurt: (g: Gadget, pawn: Pawn, amount: number) => void = () => {};
+  /** The room: an alarm or a metal detector started sounding (`by`, the body in reach) or went quiet (null). */
+  onAlarm: (g: Gadget, by: Pawn | null) => void = () => {};
+  /** The room: an ingredient set off reached a stage (its effects: smoke and concussion, a jet, a blast). */
+  onIngredient: (g: Gadget, stage: IngredientStage) => void = () => {};
+  /** Whether a match is in its prep phase (an alarm can't go outdoors then). */
+  inPrep: () => boolean = () => false;
 
   constructor(
     private readonly sim: Sim,
@@ -77,7 +105,7 @@ export class GadgetServer {
       const g = sim.data.gadgets.get(e.gadget);
       const kind = kindOf(e.gadget);
       if (!pawn || pawn.ownerId === null || !g || kind < 0) return;
-      const base = { kind, owner: pawn.ownerId, team: pawn.team, yaw: e.yaw, panel: -1, launchTick: 0, fuseEnd: 0, signalEnd: 0, readyAt: 0, seq: e.seq };
+      const base = { kind, owner: pawn.ownerId, team: pawn.team, yaw: e.yaw, panel: -1, launchTick: 0, fuseEnd: 0, signalEnd: 0, readyAt: 0, offEnd: 0, seq: e.seq };
       if (e.kind === "throw") {
         const fuse = g.use.kind === "throw" && g.use.fuseS !== undefined ? sim.tick + ticks(g.use.fuseS) : 0;
         sim.gadgets.add({ ...base, pos: e.pos, vel: e.vel, flags: GFlag.Flying, launchTick: sim.tick, fuseEnd: fuse });
@@ -94,9 +122,8 @@ export class GadgetServer {
     }
     if (e.kind === "detonate") {
       const pawn = sim.pawns.get(e.pawnId);
-      const kind = kindOf(e.gadget);
-      // Its owner's oldest of that kind out (the controller's: Skopós's shells share theirs).
-      const g = pawn && sim.gadgets.list.find((x) => x.owner === pawn.ownerId && x.kind === kind);
+      // Its owner's oldest working one of that kind out (the controller's: Skopós's shells share theirs).
+      const g = pawn && detonatable(sim.gadgets.list, pawn.ownerId ?? 0, kindOf(e.gadget));
       if (g) this.trigger(g, null);
       return;
     }
@@ -107,10 +134,15 @@ export class GadgetServer {
     }
   }
 
-  /** A gadget goes off where it is: what it does, then it's gone. */
+  /** A gadget goes off where it is: what it does, then it's gone (smoke: its cloud stays there for its time). */
   trigger(g: Gadget, end: FlightEnd | null): void {
     const at: Vec3 = end ? end.pos : this.whereNow(g);
     this.goOff(g, at, end);
+    const cloud = this.dataOf(g)?.cloud;
+    if (cloud && this.sim.gadgets.get(g.id)) {
+      this.sim.gadgets.update(g.id, { pos: at, vel: [0, 0, 0], flags: (g.flags & ~GFlag.Flying) | GFlag.OnFloor | GFlag.Active, fuseEnd: this.sim.tick + ticks(cloud.seconds) });
+      return;
+    }
     this.sim.gadgets.remove(g.id);
   }
 
@@ -122,20 +154,37 @@ export class GadgetServer {
     return [f.pos[0], f.pos[1], f.pos[2]];
   }
 
-  /** Once a tick, after the room handled the step's events: flights, fuses, tripwires, outdoor signals. */
+  /**
+   * Once a tick, after the room handled the step's events: flights, DSEG wearing off, clouds' time, fuses, tripwires
+   * and alarms (not while disabled), outdoor signals, barbed wire, the ingredients.
+   */
   step(): void {
     const sim = this.sim;
     const tick = sim.tick;
     for (const g of [...sim.gadgets.list]) {
+      if (isIngredient(g.kind)) {
+        this.ingredient(this.wakeUp(g));
+        continue;
+      }
       const d = this.dataOf(g);
       if (!d) continue;
-      if (isFlying(g) && d.use.kind === "throw") this.fly(g, d.use);
-      const now = sim.gadgets.get(g.id);
+      if (isFlying(g) && d.use.kind === "throw") this.fly(g, d);
+      let now = sim.gadgets.get(g.id);
       if (!now) continue;
+      now = this.wakeUp(now);
+      if (d.cloud && now.flags & GFlag.Active) {
+        if (tick >= now.fuseEnd) sim.gadgets.remove(now.id);
+        continue;
+      }
+      const off = (now.flags & GFlag.Off) !== 0;
       if (now.fuseEnd !== 0 && tick >= now.fuseEnd) this.trigger(now, null);
-      else if (d.tripwire && !isFlying(now) && tick >= now.readyAt && this.tripped(now, d.tripwire)) this.trigger(now, null);
-      else if (now.signalEnd !== 0 && tick >= now.signalEnd && !(now.flags & GFlag.Lost)) sim.gadgets.update(now.id, { flags: now.flags | GFlag.Lost });
+      else if (d.tripwire && !off && !isFlying(now) && tick >= now.readyAt && this.tripped(now, d.tripwire)) this.trigger(now, null);
+      else if (d.alarm && !isFlying(now)) {
+        const r = d.alarm.radiusM;
+        this.sound(now, off || tick < now.readyAt ? null : this.bodyNear(now, (p) => pawnDistance(sim, p, now!.pos) <= r, true));
+      } else if (now.signalEnd !== 0 && tick >= now.signalEnd && !(now.flags & GFlag.Lost)) sim.gadgets.update(now.id, { flags: now.flags | GFlag.Lost });
     }
+    this.wires();
     this.flights.prune((id) => {
       const g = sim.gadgets.get(id);
       return g !== undefined && isFlying(g);
@@ -197,8 +246,12 @@ export class GadgetServer {
   /** How far along its path each impact flight has been checked against bodies (by entry id). */
   private readonly checkedTo = new Map<number, number>();
 
-  /** One tick of a throw: its first hit cuts its fuse; at its end it goes off, or rests, sticks or settles there. */
-  private fly(g: Gadget, use: ThrowUse) {
+  /**
+   * One tick of a throw: its first hit cuts its fuse; at its end it goes off, or rests, sticks or settles there (an
+   * alarm arms `armS` later; in a match's prep one that ends outdoors is destroyed).
+   */
+  private fly(g: Gadget, d: GadgetData) {
+    const use = d.use as ThrowUse;
     const f = this.flights.at(g, use, Math.max(0, this.sim.tick - g.launchTick));
     if (use.flight === "impact") {
       // Bodies and drones on the way first: it goes off on the first it meets.
@@ -226,7 +279,133 @@ export class GadgetServer {
     const onFloor = n !== null && n[1] >= FLOOR_NY;
     // Stuck on a wall it faces out of it; on a floor it keeps the thrower's way.
     const yaw = n && !onFloor && end.how === "stick" ? Math.atan2(-n[0], -n[2]) : g.yaw;
-    this.sim.gadgets.update(g.id, { pos: end.pos, yaw, flags: (g.flags & ~GFlag.Flying) | (onFloor || end.how !== "stick" ? GFlag.OnFloor : 0), panel: end.panel, vel: [0, 0, 0] });
+    if (d.alarm && this.inPrep() && !indoors(this.sim.level.def, ...end.pos)) {
+      this.destroy(g);
+      return;
+    }
+    const readyAt = d.alarm ? this.sim.tick + ticksOrZero(d.alarm.armS) : g.readyAt;
+    this.sim.gadgets.update(g.id, { pos: end.pos, yaw, flags: (g.flags & ~GFlag.Flying) | (onFloor || end.how !== "stick" ? GFlag.OnFloor : 0), panel: end.panel, vel: [0, 0, 0], readyAt });
+  }
+
+  /** An entry whose DSEG has worn off is on again. */
+  private wakeUp(g: Gadget): Gadget {
+    if (!(g.flags & GFlag.Off) || this.sim.tick < g.offEnd) return g;
+    return this.sim.gadgets.update(g.id, { flags: g.flags & ~GFlag.Off, offEnd: 0 })!;
+  }
+
+  /**
+   * An EMP of `team`'s (an Impact EMP grenade, a Bulletproof Camera's dart; gadgets/electronics.ts): the other side's
+   * electronics within `radiusM` disabled for `seconds` (it refreshes), its bodies and drones jammed as long. What it
+   * jammed (their owners need a correction) and the default cameras it reached, for the room.
+   */
+  emp(team: number, at: Vec3, radiusM: number, seconds: number): { pawns: Pawn[]; cams: number } {
+    const r = empReach(this.sim, team, at, radiusM);
+    const end = this.sim.tick + ticks(seconds);
+    for (const g of r.gadgets) this.sim.gadgets.update(g.id, { flags: g.flags | GFlag.Off, offEnd: Math.max(g.offEnd, end) });
+    for (const p of r.pawns) p.state.jammed = Math.max(p.state.jammed, ticks(seconds));
+    return { pawns: r.pawns, cams: r.cams };
+  }
+
+  /** A living body (Skopós's idle shell left out) that `near` accepts: of the other side than `g`'s (`enemies`), or anyone's. */
+  private bodyNear(g: Gadget, near: (p: Pawn) => boolean, enemies: boolean): Pawn | null {
+    for (const p of this.sim.pawns.values()) {
+      if (p.kind !== PawnKind.Body || (enemies && p.team === g.team) || p.state.mode === PawnMode.Dead || p.state.mode === PawnMode.Held) continue;
+      if (!isIdleShell(this.sim, p) && near(p)) return p;
+    }
+    return null;
+  }
+
+  /** An alarm (or a metal detector) sounds while `by` is in reach: the room is told as it starts and stops. */
+  private sound(g: Gadget, by: Pawn | null) {
+    const on = by !== null;
+    if (on === ((g.flags & GFlag.Active) !== 0)) return;
+    this.sim.gadgets.update(g.id, { flags: on ? g.flags | GFlag.Active : g.flags & ~GFlag.Active });
+    this.onAlarm(g, by);
+  }
+
+  /** Barbed wire's bite: every `everyS`, an enemy body moving in a wire takes its damage (once, however many it's in). */
+  private wires() {
+    const w = this.sim.data.gadgets.get("barbed_wire");
+    if (!w?.wire || this.sim.tick % ticks(w.wire.everyS) !== 0) return;
+    const r = this.sim.data.movement.stance.collisionRadius;
+    for (const p of this.sim.pawns.values()) {
+      const s = p.state;
+      if (p.kind !== PawnKind.Body || s.mode === PawnMode.Dead || s.mode === PawnMode.Held || Math.hypot(s.vx, s.vz) < MOVING_MPS) continue;
+      const g = this.sim.gadgets.list.find((e) => e.kind === KIND_WIRE && e.team !== p.team && !isFlying(e) && inWireBox(e, w.sizeM, s.x, s.y, s.z, r));
+      if (g) this.hurt(g, p, w.wire.damage);
+    }
+  }
+
+  /**
+   * An ingredient set off (shot, knifed, in a blast): a fire extinguisher bursts into its cloud, a gas pipe starts its
+   * jet, a metal detector is destroyed. Once going or spent, nothing more.
+   */
+  ignite(g: Gadget): void {
+    if (g.flags & (GFlag.Active | GFlag.Broken) && kindId(g.kind) !== "metal_detector") return;
+    const k = this.sim.data.gadgetRules.ingredients;
+    const kind = kindId(g.kind);
+    if (kind === "metal_detector") {
+      this.sim.gadgets.remove(g.id);
+      this.onIngredient(g, "destroyed");
+      return;
+    }
+    const seconds = kind === "fire_extinguisher" ? k.fire_extinguisher.cloud.seconds : k.gas_pipe.jet.seconds;
+    const e = this.sim.gadgets.update(g.id, { flags: g.flags | GFlag.Active, fuseEnd: this.sim.tick + ticks(seconds) })!;
+    this.onIngredient(e, kind === "fire_extinguisher" ? "burst" : "jet");
+  }
+
+  /**
+   * An ingredient's tick: a metal detector sounds while any body is in its frame (not while disabled); a fire
+   * extinguisher's cloud runs out (it's spent); a gas pipe burns what's in its jet, then goes off, then burns what's in
+   * its fire on the floor under it, then it's spent.
+   */
+  private ingredient(g: Gadget) {
+    const sim = this.sim;
+    const tick = sim.tick;
+    const k = sim.data.gadgetRules.ingredients;
+    const kind = kindId(g.kind);
+    if (kind === "metal_detector") {
+      const size = k.metal_detector.sizeM;
+      this.sound(g, g.flags & GFlag.Off ? null : this.bodyNear(g, (p) => inFrame(g, size, [p.state.x, p.state.y + 0.9, p.state.z]), false));
+      return;
+    }
+    if (!(g.flags & GFlag.Active)) return;
+    if (kind === "fire_extinguisher") {
+      if (tick >= g.fuseEnd) sim.gadgets.update(g.id, { flags: (g.flags & ~GFlag.Active) | GFlag.Broken, fuseEnd: 0 });
+      return;
+    }
+    const pipe = k.gas_pipe;
+    const fire = (g.flags & GFlag.Hit) !== 0;
+    const stage = fire ? pipe.fire : pipe.jet;
+    const since = tick - (g.fuseEnd - ticks(stage.seconds));
+    if (since % ticks(stage.everyS) === 0) this.burn(g, fire);
+    if (tick < g.fuseEnd) return;
+    if (!fire) {
+      this.onIngredient(g, "blast");
+      sim.gadgets.update(g.id, { flags: g.flags | GFlag.Hit, fuseEnd: tick + ticks(pipe.fire.seconds) });
+    } else sim.gadgets.update(g.id, { flags: (g.flags & ~(GFlag.Active | GFlag.Hit)) | GFlag.Broken, fuseEnd: 0 });
+  }
+
+  /** A gas pipe's jet or fire burns: bodies and drones in it are hurt (a drone dies of it), gadgets in it destroyed. */
+  private burn(g: Gadget, fire: boolean) {
+    const sim = this.sim;
+    const pipe = sim.data.gadgetRules.ingredients.gas_pipe;
+    let inside: (p: Vec3) => boolean;
+    if (fire) {
+      // On the floor under the pipe, `radiusM` round, up to waist height.
+      const floor = raycastLevel(sim, g.pos, [0, -1, 0], 6);
+      const y = floor ? g.pos[1] - floor.t : g.pos[1];
+      inside = (p) => Math.hypot(p[0] - g.pos[0], p[2] - g.pos[2]) <= pipe.fire.radiusM && p[1] >= y - 0.2 && p[1] <= y + 1.0;
+    } else {
+      const jet = jetOf(sim, pipe, g);
+      inside = (p) => segSeg(jet.a, jet.b, p, p).dist <= jet.r;
+    }
+    for (const p of [...sim.pawns.values()]) {
+      if (p.state.mode === PawnMode.Dead || p.state.mode === PawnMode.Held) continue;
+      const pts = this.hitboxes(p).map((h): Vec3 => [(h.a[0] + h.b[0]) / 2, (h.a[1] + h.b[1]) / 2, (h.a[2] + h.b[2]) / 2]);
+      if (pts.some(inside)) this.hurt(g, p, fire ? pipe.fire.damage : pipe.jet.damage);
+    }
+    for (const e of [...sim.gadgets.list]) if (e.id !== g.id && !isIngredient(e.kind) && !isFlying(e) && !isCloud(sim, e) && inside(e.pos)) this.blastHit(e);
   }
 
   /** Steel went up on a panel: what's on it breaks (a camera's glass) or is destroyed (research CSV `action.reinforce`). */
@@ -245,9 +424,13 @@ export class GadgetServer {
     if (d?.remote) this.onLost(g, d);
   }
 
-  /** An entry in a blast's destruction range: a Bulletproof Camera's glass breaks (it keeps its place in the list); the rest are destroyed. */
+  /**
+   * An entry in a blast's destruction range (or a fire): a Bulletproof Camera's glass breaks (it keeps its place in the
+   * list), an ingredient is set off, the rest are destroyed.
+   */
   blastHit(g: Gadget): void {
-    if (g.kind === KIND_BP_CAMERA) this.sim.gadgets.update(g.id, { flags: g.flags | GFlag.Broken });
+    if (isIngredient(g.kind)) this.ignite(g);
+    else if (g.kind === KIND_BP_CAMERA) this.sim.gadgets.update(g.id, { flags: g.flags | GFlag.Broken });
     else this.destroy(g);
   }
 

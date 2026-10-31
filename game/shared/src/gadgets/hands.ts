@@ -19,6 +19,8 @@ import { isPlaced, placeSpot, type PlaceSpot } from "./place.js";
 export interface HandsContext extends LevelQuery {
   data: GameData;
   events: SimEvent[];
+  /** Whether a body's detonator has a device of `gadget` out to set off (not one an EMP disabled); unset: yes. */
+  canDetonate?(pawn: Pawn, gadget: string): boolean;
 }
 
 /** The gadget in a loadout's slot (1: the secondary gadget; 2: a kit's second gadget), or null. */
@@ -175,7 +177,8 @@ export function stepHands(ctx: HandsContext, pawn: Pawn, input: InputCmd, presse
     return;
   }
   if (isDetonator(s.hand)) {
-    if (pressed & Btn.Fire && waiting(s, slot) > 0) {
+    // An EMP on the body (DSEG), or on every device of it out: the press does nothing (Phase 8 M3).
+    if (pressed & Btn.Fire && waiting(s, slot) > 0 && s.jammed === 0 && (ctx.canDetonate?.(pawn, g.id) ?? true)) {
       if (slot === 1) s.w1--;
       else s.w2--;
       ctx.events.push({ kind: "detonate", pawnId: pawn.id, seq: input.seq, slot, gadget: g.id });

@@ -232,6 +232,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     </div>
     <div class="lean-ind lean-l">◀</div><div class="lean-ind lean-r">▶</div>
     <div class="flash"></div>
+    <div class="stun-white"></div><div class="emp-static hidden"></div>
     <div class="prompt hidden"></div>
     <div class="shellcam hidden"><div class="shellcam-title"></div><div class="swap-bar"><div></div></div></div>
     <div class="dronecam hidden"><div class="dronecam-title"></div><div class="feeds"></div></div>
@@ -300,6 +301,11 @@ export async function startLab(o: LabOptions): Promise<void> {
   /** Recoil the viewed body's view took this tick (added to the mouse view so the next input includes it). */
   const tickKick = { yaw: 0, pitch: 0 };
   let flashUntil = 0;
+  /** A stun's flash and a fire extinguisher's concussion on us (Phase 8 M3): how white, until when (ms, performance.now()). */
+  let stunned: { blind: number; start: number; end: number } | null = null;
+  let concussed: { start: number; end: number } | null = null;
+  /** Whether our body was EMP'd last frame (the warning shows as it starts). */
+  let wasJammed = false;
 
   // Online: the lobby connects (create or join a room) and the session builds the simulation from the
   // server's Welcome; our controller arrives with the roster. Offline: a local simulation and player.
@@ -1131,6 +1137,9 @@ export async function startLab(o: LabOptions): Promise<void> {
     cameraModels?.update(sim.matchRules.camsBroken, watched, ctrl.team === sideTeam("defender"));
     bpCameraModels.update(sim.bpCams(), watched >>> levelCams, ctrl.team === sideTeam("defender"));
     const serverNow = net ? net.session.serverTick() : sim.tick + alpha;
+    // What we look through (Phase 8 M3): smoke isn't drawn in a Bulletproof Camera's thermal view; the other side's
+    // observation blocker shows on our drones and cameras.
+    gadgetModels.view = { thermal: onCamera && sim.bpCamAt(ctrl.cam - 1) !== null, team: ctrl.team, tool: onCamera || sim.pawns.get(sim.viewedPawnId(ctrl.id))?.kind === PawnKind.Drone };
     gadgetModels.update(net ? renderTick : sim.tick + alpha, serverNow, ctrl.id);
     poseOutline();
     // A Bulletproof Camera's thermal view: the world tinted, bodies glowing white.
@@ -1140,6 +1149,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     updateShots(now);
     fx.update(now, shownRenderTick, ctrl.pawnIds, ownMuzzle, remoteMuzzle);
     updateCombatHud(now);
+    updateStunHud(now);
     updateLasers();
 
     let rs: PawnState | null = null;
@@ -1372,7 +1382,8 @@ export async function startLab(o: LabOptions): Promise<void> {
   /** Aiming, drawn from the body you look through: a magnified sight narrows the field of view as ADS comes in. Returns the field of view. */
   function aim(p: Pawn, rs: PawnState): number {
     const w = p.loadout?.weapons[rs.slot];
-    const fov = w ? adsFov(settings.fovVertical, w.ads.zoom, rs.adsQ / 65535) : settings.fovVertical;
+    // An EMP on the body (DSEG, Phase 8 M3): its optics are static, no magnification.
+    const fov = w ? adsFov(settings.fovVertical, rs.jammed > 0 ? 1 : w.ads.zoom, rs.adsQ / 65535) : settings.fovVertical;
     if (Math.abs(camera.fov - fov) > 1e-4) {
       camera.fov = fov;
       camera.updateProjectionMatrix();
@@ -2264,8 +2275,8 @@ export async function startLab(o: LabOptions): Promise<void> {
 
   // ------------------------------------------------------------------ what the server judged (Phase 3 M6)
 
-  // A weapon's name, or a gadget's (Phase 8: a blast's kill names it).
-  const weaponName = (id: string) => data.weapons.get(id)?.name ?? data.gadgets.get(id)?.name ?? id;
+  // A weapon's name, or a gadget's (Phase 8: a blast's kill names it), or a level ingredient's ("gas_pipe": Gas pipe).
+  const weaponName = (id: string) => data.weapons.get(id)?.name ?? data.gadgets.get(id)?.name ?? id.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
   const nameOfCtrl = (id: number) => net?.session.roster.find((e) => e.controllerId === id)?.name ?? "someone";
   /** Recent server events for the e2e scripts. */
   const recentEvents: GameEvent[] = [];
@@ -2289,13 +2300,49 @@ export async function startLab(o: LabOptions): Promise<void> {
         if (line) killFeed.push(line, now);
         if (e.kind === "kill" && e.victimCtrl === me) death = { pawnId: e.victimPawn, life: sim.pawns.get(e.victimPawn)?.life ?? 0, text: deathLine(e, feedNames) };
         // Intel (Phase 7): pings, scans and callouts from your team (and word that you were spotted).
-        if (e.kind === "ping") intelHud.ping(e, e.ctrl === me ? "you" : nameOfCtrl(e.ctrl), now);
+        if (e.kind === "ping") {
+          // An enemy gadget pinged (Phase 8 M3) is named with it.
+          const what = e.gadget >= 0 ? ` · ${data.gadgets.get(kindId(e.gadget) ?? "")?.name ?? kindId(e.gadget)}` : "";
+          intelHud.ping(e, `${e.ctrl === me ? "you" : nameOfCtrl(e.ctrl)}${what}`, now);
+        } else if (e.kind === "stunned") {
+          if (e.blind > 0) stunned = { blind: e.blind, start: now, end: now + e.seconds * 1000 };
+          if (e.concuss) concussed = { start: now, end: now + e.seconds * 1000 };
+        } else if (e.kind === "alarm") {
+          if (e.on && ctrl.pawnIds.includes(e.pawnId)) flash(kindId(sim.gadgets.get(e.gadget)?.kind ?? -1) === "metal_detector" ? "Metal detector: you set it off" : "Proximity alarm: you set it off", "bad");
+        }
         else if (e.kind === "spotted") {
           if (ctrl.pawnIds.includes(e.pawnId)) flash("You've been spotted", "bad");
           else intelHud.spotted(e, now);
         } else if (e.kind === "callout") killFeed.push({ text: `${e.name}: ${data.intel.callouts[e.id] ?? "?"}`, mine: false, callout: true }, now);
       }
     }
+  }
+
+  /**
+   * A stun's flash (Phase 8 M3): white over everything, held for the first half of it and fading over the rest; a
+   * concussion: a blur that fades. An EMP on our body (DSEG): static over the sights while aiming, and a warning as it
+   * starts.
+   */
+  function updateStunHud(now: number) {
+    let white = 0;
+    if (stunned && now < stunned.end) {
+      const mid = (stunned.start + stunned.end) / 2;
+      white = stunned.blind * (now < mid ? 1 : (stunned.end - now) / (stunned.end - mid));
+    } else stunned = null;
+    // (Written only when they change: a style set every frame costs a style recalculation every frame.)
+    const opacity = white.toFixed(2);
+    const whiteEl = $(".stun-white");
+    if (whiteEl.style.opacity !== opacity) whiteEl.style.opacity = opacity;
+    const blur = concussed && now < concussed.end ? (4 * (concussed.end - now)) / (concussed.end - concussed.start) : 0;
+    if (!blur) concussed = null;
+    const filter = blur > 0 ? `blur(${blur.toFixed(1)}px)` : "";
+    const canvas = view.querySelector("canvas")!;
+    if (canvas.style.filter !== filter) canvas.style.filter = filter;
+    const body = livingBody();
+    const jammed = body !== null && body.state.jammed > 0;
+    if (jammed && !wasJammed) flash("EMP: your sights, cameras, drones and detonator are off for a while", "bad");
+    wasJammed = jammed;
+    $(".emp-static").classList.toggle("hidden", !(jammed && body!.state.adsQ > 32768));
   }
 
   /** Hit marker, damage indicator and kill feed fade on their own timers. */

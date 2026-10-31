@@ -21,8 +21,14 @@ export const GFlag = {
   Lost: 1 << 3,
   /** Lying flat on a floor or a hatch (a charge on one): its box's depth is up (gadgets/hits.ts). */
   Flat: 1 << 4,
+  /** Disabled by an EMP (DSEG, gadgets/electronics.ts) until `offEnd`: no feed, trigger, laser, alarm or barrier. */
+  Off: 1 << 5,
+  /** Going: a smoke cloud, an alarm sounding, an ingredient set off (its cloud, a gas pipe's jet or its fire). */
+  Active: 1 << 6,
+  /** Hit once by a knife (barbed wire: the next hit destroys it; a deployable shield: its glass is opaque); a gas pipe that's spent. */
+  Hit: 1 << 7,
 } as const;
-const FLAG_BITS = 0x1f;
+const FLAG_BITS = 0xff;
 
 export interface Gadget {
   /** Unique in the round, from 1, in the order the server made them. */
@@ -42,16 +48,25 @@ export interface Gadget {
   flags: number;
   /** The panel it's on (its index), or −1. */
   panel: number;
-  /** Server ticks (0: none): when it was thrown, when its fuse ends, when its outdoor signal ends, when it's ready again. */
+  /**
+   * Server ticks (0: none): when it was thrown, when its fuse ends (or its cloud, an ingredient's stage), when its
+   * outdoor signal ends, when it's ready again (armed), when an EMP's DSEG on it ends.
+   */
   launchTick: number;
   fuseEnd: number;
   signalEnd: number;
   readyAt: number;
+  offEnd: number;
   /** The input that threw or placed it (its thrower's client stops drawing its own copy once this entry is in). */
   seq: number;
 }
 
 export type GadgetOp = { kind: "put"; g: Gadget } | { kind: "remove"; id: number } | { kind: "clear" };
+
+/** The oldest of `kind` that `owner` has out and can set off (not disabled by an EMP: GFlag.Off), or undefined. */
+export function detonatable(list: readonly Gadget[], owner: number, kind: number): Gadget | undefined {
+  return list.find((x) => x.owner === owner && x.kind === kind && !(x.flags & GFlag.Off));
+}
 
 const f32 = Math.fround;
 const MAX_TICK = 0xffffffff;
@@ -73,13 +88,14 @@ export function exactGadget(g: Gadget): Gadget {
     fuseEnd: tick(g.fuseEnd),
     signalEnd: tick(g.signalEnd),
     readyAt: tick(g.readyAt),
+    offEnd: tick(g.offEnd),
     seq: g.seq & 0xffff,
   };
 }
 
 export function writeGadget(w: ByteWriter, g: Gadget): void {
   w.varu(g.id).u8(g.kind).varu(g.owner).u8(g.team).f32(g.pos[0]).f32(g.pos[1]).f32(g.pos[2]).f32(g.yaw).u8(g.flags).varu(g.panel + 1);
-  w.varu(g.launchTick).varu(g.fuseEnd).varu(g.signalEnd).varu(g.readyAt).u16(g.seq);
+  w.varu(g.launchTick).varu(g.fuseEnd).varu(g.signalEnd).varu(g.readyAt).varu(g.offEnd).u16(g.seq);
   if (g.flags & GFlag.Flying) w.f32(g.vel[0]).f32(g.vel[1]).f32(g.vel[2]);
 }
 
@@ -94,7 +110,7 @@ export function readGadget(r: ByteReader): Gadget {
   const flags = r.u8();
   if (team > 1 || flags & ~FLAG_BITS) throw new ProtocolError("bad gadget");
   const panel = r.varu() - 1;
-  const g: Gadget = { id, kind, owner, team, pos, yaw, vel: [0, 0, 0], flags, panel, launchTick: r.varu(), fuseEnd: r.varu(), signalEnd: r.varu(), readyAt: r.varu(), seq: r.u16() };
+  const g: Gadget = { id, kind, owner, team, pos, yaw, vel: [0, 0, 0], flags, panel, launchTick: r.varu(), fuseEnd: r.varu(), signalEnd: r.varu(), readyAt: r.varu(), offEnd: r.varu(), seq: r.u16() };
   if (flags & GFlag.Flying) g.vel = [r.finite(), r.finite(), r.finite()];
   return g;
 }

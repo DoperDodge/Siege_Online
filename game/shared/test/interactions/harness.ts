@@ -44,6 +44,7 @@ export async function scene(ops: string[] = ["sledge", "mute"], level = "destruc
       fuseEnd: 0,
       signalEnd: 0,
       readyAt: 0,
+      offEnd: 0,
       seq: 0,
       ...over,
     });
@@ -121,7 +122,39 @@ export async function scene(ops: string[] = ["sledge", "mute"], level = "destruc
     wait(2);
     return sim.gadgets.list.find((e) => !before.has(e.id));
   };
-  return { ...h, sim, wait, body, teleport, park, put, panel, onPanel, setOff, solidAt, aimAt, shootAt, knife, place };
+  /** Client i's controller on the server (its bodies, its drones, the camera it watches). */
+  const ctrlOf = (i: number) => h.room.bodyOf(h.clients[i].id)!;
+  /** Client i presses buttons once (down a tick, then up), looking `look`. */
+  const press = (i: number, buttons: number, look: Partial<InputCmd> = {}) => {
+    const c = h.clients[i];
+    c.cmd = { ...look, buttons };
+    h.tick();
+    c.cmd = { ...look };
+    h.tick();
+  };
+  /** The view from `from` toward `at`. */
+  const look = (from: Vec3, at: Vec3) => {
+    const v = [at[0] - from[0], at[1] - from[1], at[2] - from[2]];
+    return { yaw: Math.atan2(-v[0], -v[2]), pitch: Math.atan2(v[1], Math.hypot(v[0], v[2])) };
+  };
+  /**
+   * Client i scans (Phase 7: Fire held on a drone or a camera for data/intel.json `scan.holdS`) looking at pawn
+   * `target`'s eye from wherever it looks through: whether its client was told it spotted that pawn.
+   */
+  const scan = (i: number, target: Pawn) => {
+    const c = h.clients[i];
+    const eye = eyePose(sim.data.movement, sim.data.hitboxes, target.state).pos;
+    const view = look(sim.viewOf(ctrlOf(i))!.pos, eye);
+    const before = c.events.length;
+    c.cmd = { ...view };
+    wait(40); // a camera turns toward the view first
+    c.cmd = { ...view, buttons: Btn.Fire };
+    wait(ticks(sim.data.intel.scan.holdS) + 4);
+    c.cmd = { ...view };
+    wait(2);
+    return c.events.slice(before).some((e) => e.kind === "spotted" && e.pawnId === target.id);
+  };
+  return { ...h, sim, wait, body, teleport, park, put, panel, onPanel, setOff, solidAt, aimAt, shootAt, knife, place, ctrlOf, press, look, scan };
 }
 
 export type Scene = Awaited<ReturnType<typeof scene>>;

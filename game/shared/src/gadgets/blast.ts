@@ -5,20 +5,18 @@
 // drones in its destruction range are destroyed; its cut goes into the panel it's on (a charge) or every panel close by (a grenade). This computes
 // it; the room applies it (net/room.ts: damage with credit, panel ops, the gadget table).
 import { DEG, forwardXZ, type Vec3 } from "../core/math.js";
-import type { BlastFalloff, GadgetData } from "../data/schemas.js";
+import type { BlastData, BlastFalloff } from "../data/schemas.js";
 import { explosiveOps } from "../destruction/explosives.js";
 import { L_STEEL } from "../destruction/panel.js";
 import type { IndexedOp, PanelEntry } from "../destruction/panels.js";
-import { QUERY_BULLET } from "../physics/rapier.js";
+import { QUERY_BULLET, type Collider } from "../physics/rapier.js";
 import { droneHitboxes } from "../player/drone.js";
 import { poseHitboxes, type Hitbox } from "../player/hitboxes.js";
 import type { Pawn } from "../player/pawn.js";
 import { PawnKind, PawnMode } from "../player/types.js";
 import type { Sim } from "../sim.js";
-import { kindId } from "./kinds.js";
+import { isIngredient, kindId } from "./kinds.js";
 import { GFlag, type Gadget } from "./table.js";
-
-type Blast = NonNullable<GadgetData["blast"]>;
 
 export interface BlastEffects {
   /** Each body or drone it reaches, and the damage (whole points, at least 1). */
@@ -37,17 +35,18 @@ export function blastFalloff(f: BlastFalloff, d: number): number {
 }
 
 /**
- * What a blast's line from `from` to `to` meets: the level or steel stop it; each soft panel it passes (by its solid
- * material) lets `throughSoft` through. `skip`: the panel the charge itself is on, which neither stops nor dims its own
- * blast (it's blowing a hole in it: a Hard Breach Charge's steel too).
+ * What a blast's line from `from` to `to` meets: the level, solid gadgets (a deployable shield) or steel stop it; each
+ * soft panel it passes (by its solid material) lets `throughSoft` through. `skip`: the panel the charge itself is on,
+ * which neither stops nor dims its own blast (it's blowing a hole in it: a Hard Breach Charge's steel too); `exclude`:
+ * the collider of the solid gadget the line goes to (its own box doesn't shelter it).
  */
-export function blastLine(sim: Sim, from: Vec3, to: Vec3, skip: number): { blocked: boolean; soft: number } {
+export function blastLine(sim: Sim, from: Vec3, to: Vec3, skip: number, exclude?: Collider): { blocked: boolean; soft: number } {
   const d: Vec3 = [to[0] - from[0], to[1] - from[1], to[2] - from[2]];
   const len = Math.hypot(d[0], d[1], d[2]);
   if (len < 1e-6) return { blocked: false, soft: 0 };
   const dir: Vec3 = [d[0] / len, d[1] / len, d[2] / len];
   const ray = new sim.R.Ray({ x: from[0], y: from[1], z: from[2] }, { x: dir[0], y: dir[1], z: dir[2] });
-  if (sim.world.castRay(ray, len, true, undefined, QUERY_BULLET)) return { blocked: true, soft: 0 };
+  if (sim.world.castRay(ray, len, true, undefined, QUERY_BULLET, exclude)) return { blocked: true, soft: 0 };
   const passed = new Set<number>();
   for (const { entry, crossing } of sim.level.panels.crossings(from, dir, len)) {
     const index = entry.panel.spec.index;
@@ -76,6 +75,21 @@ function hitboxesOf(sim: Sim, pawn: Pawn): Hitbox[] {
   return pawn.kind === PawnKind.Drone ? droneHitboxes(sim.data.intel.drone, pawn.state) : poseHitboxes(sim.data.movement, sim.data.hitboxes, pawn.state);
 }
 
+/** Whether an entry is a smoke grenade's cloud (Phase 8 M3): nothing destroys it before its time. */
+export function isCloud(sim: Sim, e: Gadget): boolean {
+  return (e.flags & GFlag.Active) !== 0 && sim.data.gadgets.get(kindId(e.kind) ?? "")?.cloud !== undefined;
+}
+
+/** How far a pawn's nearest hitbox is from a point (0 inside one). */
+export function pawnDistance(sim: Sim, pawn: Pawn, p: Vec3): number {
+  let best = Infinity;
+  for (const h of hitboxesOf(sim, pawn)) {
+    const q = nearestOn(h, p);
+    best = Math.min(best, Math.hypot(q[0] - p[0], q[1] - p[1], q[2] - p[2]));
+  }
+  return best;
+}
+
 /** The way a gadget on a wall faces (out of it, toward its placer's side), or null off a wall. */
 function wallFacing(g: Pick<Gadget, "yaw" | "flags">): Vec3 | null {
   if (g.flags & (GFlag.OnFloor | GFlag.Flat | GFlag.Flying)) return null;
@@ -84,7 +98,7 @@ function wallFacing(g: Pick<Gadget, "yaw" | "flags">): Vec3 | null {
 }
 
 /** Whether a point is in the Claymore's arc: within `arcDeg` of its facing, or within `behindM` behind it. */
-function inArc(b: Blast, g: Pick<Gadget, "yaw">, at: Vec3, p: Vec3): boolean {
+function inArc(b: BlastData, g: Pick<Gadget, "yaw">, at: Vec3, p: Vec3): boolean {
   if (b.arcDeg >= 360) return true;
   const [fx, fz] = forwardXZ(g.yaw);
   const vx = p[0] - at[0];
@@ -114,13 +128,11 @@ function panelsNear(sim: Sim, p: Vec3, r: number): { entry: PanelEntry; at: Vec3
 }
 
 /**
- * What the blast of entry `g` (kind and data `data`) going off at `at` does now. `g.panel` is the panel a charge is
- * on (its cut goes there, and that panel doesn't dim its damage).
+ * What blast `b` of entry `g` going off at `at` does now (a gadget's data's `blast`, a gas pipe's). `g.panel` is the
+ * panel a charge is on (its cut goes there, and that panel doesn't dim its damage).
  */
-export function blastEffects(sim: Sim, g: Pick<Gadget, "id" | "kind" | "yaw" | "flags" | "panel">, data: GadgetData, at: Vec3): BlastEffects {
-  const b = data.blast;
+export function blastEffects(sim: Sim, g: Pick<Gadget, "id" | "kind" | "yaw" | "flags" | "panel">, b: BlastData, at: Vec3): BlastEffects {
   const out: BlastEffects = { bodies: [], gadgets: [], panelOps: [] };
-  if (!b) return out;
   const facing = wallFacing(g);
   // Bodies and drones (not one in its owner's hand), each by its hitbox point nearest the blast.
   for (const pawn of sim.pawns.values()) {
@@ -140,12 +152,13 @@ export function blastEffects(sim: Sim, g: Pick<Gadget, "id" | "kind" | "yaw" | "
     }
     if (best > 0) out.bodies.push({ pawn, damage: Math.max(1, Math.round(best)) });
   }
-  // Gadgets in its destruction range (and the Claymore's arc), in sight of it (the level and steel shelter them).
+  // Gadgets in its destruction range (and the Claymore's arc), in sight of it (the level and steel shelter them); the
+  // level's ingredients there are set off. A smoke cloud isn't blown away.
   for (const e of sim.gadgets.list) {
-    if (e.id === g.id || e.flags & GFlag.Flying) continue;
+    if (e.id === g.id || e.flags & GFlag.Flying || isCloud(sim, e)) continue;
     const d = Math.hypot(e.pos[0] - at[0], e.pos[1] - at[1], e.pos[2] - at[2]);
-    if (d > b.destroyM || !inArc(b, g, at, e.pos) || blastLine(sim, at, e.pos, e.panel === g.panel ? g.panel : -1).blocked) continue;
-    if (!sim.data.gadgets.get(kindId(e.kind) ?? "")) continue;
+    if (d > b.destroyM || !inArc(b, g, at, e.pos) || blastLine(sim, at, e.pos, e.panel === g.panel ? g.panel : -1, sim.solidOf(e.id)).blocked) continue;
+    if (!isIngredient(e.kind) && !sim.data.gadgets.get(kindId(e.kind) ?? "")) continue;
     out.gadgets.push(e);
   }
   // Panels: a charge cuts its shape into the panel it's on; a grenade cuts every panel within `cutM` (smaller with

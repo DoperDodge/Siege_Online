@@ -236,7 +236,7 @@ export class ClientSession {
         this.match = v;
         // What the room's simulation applies, applied by our prediction too (red walls; out of the map is death; the
         // defuser, for our own holds).
-        this.sim!.matchRules = { redWalls: v.redWalls, killPlaneKills: true, cameras: true, camsBroken: v.camsBroken };
+        this.sim!.matchRules = { redWalls: v.redWalls, killPlaneKills: true, cameras: true, camsBroken: v.camsBroken, camsOff: v.camsOff };
         const d = v.defuser;
         this.sim!.objective = d && { carrier: d.carrier, dropped: d.dropped, planted: d.planted, site: v.site, canPlant: d.canPlant, plantTicks: d.plantTicks, disableTicks: d.disableTicks };
         this.opts.onMatch?.(v);

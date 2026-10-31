@@ -1,7 +1,7 @@
 {
-  "_doc": "Barbed Wire (defender pool; research/gadgets.md §4.1). Two each; laid on the floor in front of the placer, picked up again. How long it takes to lay, its reach and its size are placeholders.",
+  "_doc": "Barbed Wire (defender pool; research/gadgets.md §4.1). Two each; laid on the floor in front of the placer, picked up again. How long it takes to lay, its reach and its size are placeholders. In it (M3): attackers move at half speed and can't sprint (Y3S2.2), drones a little slower (\"minimally\": ours 90 %), defenders not at all; an attacker moving in it takes 5 every second (Y9S2's New Blood page). Its box is 2.5 m across (Fandom's 1.25 m radius). Two knife hits from either side destroy it; bullets don't (Fandom).",
   "_season": "Y11S3",
-  "_unverified": ["use.placeS", "use.reachM", "sizeM"],
+  "_unverified": ["use.placeS", "use.reachM", "sizeM", "wire.droneSlow"],
   "id": "barbed_wire",
   "name": "Barbed Wire",
   "side": "defender",
@@ -10,5 +10,6 @@
   "use": {"kind": "place", "on": ["floor"], "placeS": 1.0, "reachM": 2.5},
   "remote": false,
   "pickUp": true,
-  "sizeM": [2.4, 0.45, 0.6]
+  "sizeM": [2.5, 0.45, 0.6],
+  "wire": {"slow": 0.5, "droneSlow": 0.9, "damage": 5, "everyS": 1, "knifeHits": 2}
 }

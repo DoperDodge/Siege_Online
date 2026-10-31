@@ -5,14 +5,15 @@ import { clamp, forwardXZ, rotateXZ, DEG, wrapAngle } from "./core/math.js";
 import { loadGameData, type GameData } from "./data/load.js";
 import { deployAction, deployTicks, DeployKind, type DeployAction, type DeployRules } from "./destruction/deploy.js";
 import { buildLevel, type BuiltLevel } from "./level/builder.js";
-import { initRapier, PLAYER_GROUPS, QUERY_DRONE, QUERY_SIGHT, QUERY_SOLID, QUERY_STATIC as QUERY_STATIC_FILTER, refreshBroadPhase, type CharacterController, type Rapier, type World } from "./physics/rapier.js";
+import { GADGET_GROUPS, initRapier, PLAYER_GROUPS, QUERY_DRONE, QUERY_SIGHT, QUERY_SOLID, QUERY_STATIC as QUERY_STATIC_FILTER, refreshBroadPhase, type CharacterController, type Collider, type Rapier, type World } from "./physics/rapier.js";
 import { cancelRappelHold, capsuleFree, movementPrompt, poseCollider, stepPawn, type MoveContext, type MovementPrompt } from "./player/movement.js";
 import { initialPawnState, type Pawn, type PlayerController } from "./player/pawn.js";
 import { droneCollider, droneEye, stepDrone } from "./player/drone.js";
 import { insideAny, zoneBoxes, ZONE_TEST_HEIGHT, type ZoneBox } from "./level/zones.js";
 import { raycastLevel } from "./level/raycast.js";
-import { GadgetTable, GFlag, type Gadget } from "./gadgets/table.js";
-import { KIND_BP_CAMERA, kindId } from "./gadgets/kinds.js";
+import { detonatable, GadgetTable, GFlag, type Gadget } from "./gadgets/table.js";
+import { isIngredient, KIND_BP_CAMERA, kindId, kindOf } from "./gadgets/kinds.js";
+import { barrierOf, crossesBarrier, smokeOnSegment, wireSlow } from "./gadgets/areas.js";
 import { gadgetOnRay } from "./gadgets/hits.js";
 import { placeSpotFor, slotCounts, slotGadget } from "./gadgets/hands.js";
 import { CAMERA_HALF_M } from "./intel/cameras.js";
@@ -41,6 +42,8 @@ export interface MatchSimRules {
    */
   cameras: boolean;
   camsBroken: number;
+  /** A bit for each default camera an EMP has off for now (Phase 8 M3, DSEG: its feed is static; the room says when). */
+  camsOff: number;
 }
 
 /** A camera's lens sits this far out of the front of its box (metres). */
@@ -64,12 +67,15 @@ export class Sim {
    */
   deployRules: DeployRules = { anyone: false, rappel: false, pools: [0, 0] };
   /** A match room's rules for bodies (none in a lab). */
-  matchRules: MatchSimRules = { redWalls: false, killPlaneKills: false, cameras: false, camsBroken: 0 };
+  matchRules: MatchSimRules = { redWalls: false, killPlaneKills: false, cameras: false, camsBroken: 0, camsOff: 0 };
   /**
    * Everything placed, thrown or dropped this round (Phase 8, gadgets/table.ts): the server's room changes it, a client
    * applies the server's ops. The simulation reads entries' flags and places (never their ticks).
    */
   readonly gadgets = new GadgetTable();
+  /** Solid gadgets' colliders (the deployable shield, Phase 8 M3), by entry id, as the table had them at `solidsAt`. */
+  private readonly solids = new Map<number, { c: Collider; key: string }>();
+  private solidsAt = -1;
   private bpCache: { version: number; list: Gadget[] } = { version: -1, list: [] };
   /**
    * The defuser in a match (null in a lab): who carries it, where it lies or is planted, the site and the holds
@@ -90,8 +96,20 @@ export class Sim {
     readonly data: GameData,
     readonly level: BuiltLevel,
   ) {
-    // Attackers rappel; in a lab room anyone does (deployRules.rappel, from the room's rules).
-    this.ctx = { R, world, cc, dcc, data, level, events: [], canRappel: (pawn) => pawn.team === sideTeam("attacker") || this.deployRules.rappel };
+    // Attackers rappel; in a lab room anyone does (deployRules.rappel, from the room's rules). An enemy's barbed wire
+    // slows a pawn in it; a detonator sets off the oldest of its devices an EMP hasn't disabled (Phase 8 M3).
+    this.ctx = {
+      R,
+      world,
+      cc,
+      dcc,
+      data,
+      level,
+      events: [],
+      canRappel: (pawn) => pawn.team === sideTeam("attacker") || this.deployRules.rappel,
+      slowOf: (pawn) => wireSlow(data, this.gadgets, pawn, pawn.kind === PawnKind.Drone),
+      canDetonate: (pawn, gadget) => detonatable(this.gadgets.list, pawn.ownerId ?? 0, kindOf(gadget)) !== undefined,
+    };
     this.building = zoneBoxes(level.def, "building");
   }
 
@@ -461,7 +479,8 @@ export class Sim {
 
   /**
    * One of this body's own gadgets that can be picked up (data/gadgets/<id>.json `pickUp`), first along its view within
-   * data/gadgets.json `pickUpReachM` and in sight, of a kind one of its slots holds: Interact held takes it back.
+   * data/gadgets.json `pickUpReachM` and in sight, of a kind one of its slots holds: Interact held takes it back. A
+   * deployable shield whose glass a knife made opaque can't be (Phase 8 M3: GFlag.Hit on a solid gadget).
    */
   gadgetToPickUp(pawn: Pawn): Gadget | null {
     const s = pawn.state;
@@ -473,7 +492,7 @@ export class Sim {
     const plain = raycastLevel(this, eye, dir, reach)?.t ?? reach;
     const hit = gadgetOnRay(this.gadgets, this.data, eye, dir, plain + 0.05, (g) => {
       const id = this.data.gadgets.get(kindId(g.kind) ?? "");
-      return g.owner === pawn.ownerId && !(g.flags & GFlag.Flying) && id !== undefined && id.pickUp && slots.includes(id.id);
+      return g.owner === pawn.ownerId && !(g.flags & GFlag.Flying) && id !== undefined && id.pickUp && slots.includes(id.id) && !(id.solid && g.flags & GFlag.Hit);
     });
     return hit?.g ?? null;
   }
@@ -739,12 +758,14 @@ export class Sim {
     const out = this.feedDrones(c);
     const body = this.pawns.get(c.possessedPawnId);
     const downed = body !== undefined && body.kind === PawnKind.Body && isDowned(body.state);
-    if (c.drone && (downed || !out.some((p) => p.id === c.drone))) c.drone = 0;
+    // An EMP on the body (DSEG, Phase 8 M3): no observation tools.
+    const jammed = body !== undefined && body.kind === PawnKind.Body && body.state.jammed > 0;
+    if (c.drone && (downed || jammed || !out.some((p) => p.id === c.drone))) c.drone = 0;
     if ((!drones.length && !out.length) || !input) return;
     const lean = Math.sign(input.lean);
     const newLean = lean !== 0 && lean !== c.prevLean ? lean : 0;
     c.prevLean = lean;
-    if (!body || downed) return;
+    if (!body || downed || jammed) return;
     const pressed = input.buttons & ~heldBefore;
     if (body.kind === PawnKind.Drone) {
       // In prep the pawn you are is your first drone: a new lean goes round it and your teammates' drones out.
@@ -804,8 +825,10 @@ export class Sim {
     }
     const body = this.pawns.get(c.possessedPawnId);
     const downed = body !== undefined && isDowned(body.state);
-    if (c.cam && (downed || !this.camWorks(c.cam - 1))) {
-      const next = downed ? -1 : this.nextCam(c.cam - 1, 1);
+    // An EMP on the body (DSEG, Phase 8 M3): no observation tools.
+    const jammed = body !== undefined && body.kind === PawnKind.Body && body.state.jammed > 0;
+    if (c.cam && (downed || jammed || !this.camWorks(c.cam - 1))) {
+      const next = downed || jammed ? -1 : this.nextCam(c.cam - 1, 1);
       if (next < 0) c.cam = 0;
       else this.openCam(c, next);
     }
@@ -831,7 +854,7 @@ export class Sim {
       c.camPitch = Math.fround(c.camPitch + clamp(pitch - c.camPitch, -l.turn, l.turn));
       return;
     }
-    if (!(pressed & Btn.Observe) || downed) return;
+    if (!(pressed & Btn.Observe) || downed || jammed) return;
     const first = this.nextCam(-1, 1);
     if (first >= 0) this.openCam(c, first);
   }
@@ -846,14 +869,74 @@ export class Sim {
     return input ? { ...eye, yaw: input.yaw, pitch: input.pitch } : eye;
   }
 
-  /** The ping key (Phase 7, intel/DESIGN.md §6): the point the view is on, a "ping" event for the room to share. */
+  /**
+   * The ping key (Phase 7, intel/DESIGN.md §6): the point the view is on, a "ping" event for the room to share. Smoke
+   * stops the view (the ping lands on the cloud; a Bulletproof Camera sees through it), and an enemy gadget on the way
+   * is what's pinged (its kind goes with the ping; Phase 8 M3).
+   */
   private ping(c: PlayerController, input: InputCmd) {
     const v = this.viewOf(c, input);
     if (!v) return;
     const dir = viewDir(v.yaw, v.pitch);
-    const hit = raycastLevel(this, v.pos, dir, 200);
-    if (!hit) return;
-    this.ctx.events.push({ kind: "ping", ctrlId: c.id, pos: [v.pos[0] + dir[0] * hit.t, v.pos[1] + dir[1] * hit.t, v.pos[2] + dir[2] * hit.t] });
+    const at = (t: number): [number, number, number] => [v.pos[0] + dir[0] * t, v.pos[1] + dir[1] * t, v.pos[2] + dir[2] * t];
+    let t = raycastLevel(this, v.pos, dir, 200)?.t ?? null;
+    const thermal = c.cam !== 0 && this.bpCamAt(c.cam - 1) !== null;
+    const smoke = thermal ? null : smokeOnSegment(this.data, this.gadgets, v.pos, at(t ?? 200));
+    if (smoke !== null && (t === null || smoke < t)) t = smoke;
+    // From a drone or a camera, the other side's observation blocker stops it too.
+    if (c.cam !== 0 || this.pawns.get(this.viewedPawnId(c.id))?.kind === PawnKind.Drone)
+      for (const e of this.gadgets.list) {
+        const d = this.data.gadgets.get(kindId(e.kind) ?? "");
+        if (!d?.barrier || e.team === c.team || e.flags & (GFlag.Flying | GFlag.Off)) continue;
+        const b = crossesBarrier(barrierOf(this, d.barrier, e, d.sizeM), v.pos, at(t ?? 200));
+        if (b !== null && (t === null || b < t)) t = b;
+      }
+    const g = gadgetOnRay(this.gadgets, this.data, v.pos, dir, t ?? 200, (e) => e.team !== c.team && !isIngredient(e.kind));
+    if (g) {
+      this.ctx.events.push({ kind: "ping", ctrlId: c.id, pos: [g.g.pos[0], g.g.pos[1], g.g.pos[2]], gadget: g.g.kind });
+      return;
+    }
+    if (t !== null) this.ctx.events.push({ kind: "ping", ctrlId: c.id, pos: at(t), gadget: -1 });
+  }
+
+  /**
+   * Solid gadgets (the deployable shield, Phase 8 M3) stand in the world as boxes the table says (the server's and
+   * every client's alike), checked at the start of each step: one per entry not in flight, its data's `sizeM` turned
+   * to its facing; gone with its entry.
+   */
+  private syncSolids() {
+    if (this.solidsAt === this.gadgets.version) return;
+    this.solidsAt = this.gadgets.version;
+    const want = new Map<number, { g: Gadget; size: readonly [number, number, number]; key: string }>();
+    for (const g of this.gadgets.list) {
+      const d = this.data.gadgets.get(kindId(g.kind) ?? "");
+      if (d?.solid && !(g.flags & GFlag.Flying)) want.set(g.id, { g, size: d.sizeM, key: `${g.pos.join(",")},${g.yaw}` });
+    }
+    let changed = false;
+    for (const [id, s] of this.solids)
+      if (want.get(id)?.key !== s.key) {
+        this.world.removeCollider(s.c, false);
+        this.solids.delete(id);
+        changed = true;
+      }
+    for (const [id, w] of want) {
+      if (this.solids.has(id)) continue;
+      const [x, y, z] = w.g.pos;
+      const half = w.g.yaw / 2;
+      const desc = this.R.ColliderDesc.cuboid(w.size[0] / 2, w.size[1] / 2, w.size[2] / 2)
+        .setTranslation(x, y, z)
+        .setRotation({ x: 0, y: Math.sin(half), z: 0, w: Math.cos(half) })
+        .setCollisionGroups(GADGET_GROUPS);
+      this.solids.set(id, { c: this.world.createCollider(desc), key: w.key });
+      changed = true;
+    }
+    if (changed) refreshBroadPhase(this.world);
+  }
+
+  /** A solid gadget's collider (Phase 8 M3), or undefined: a blast's line to the gadget itself leaves it out. */
+  solidOf(id: number): Collider | undefined {
+    if (this.solidsAt !== this.gadgets.version) this.syncSolids();
+    return this.solids.get(id)?.c;
   }
 
   /** The round's Bulletproof Cameras (the gadget table's, in the order they were placed). */
@@ -879,8 +962,8 @@ export class Sim {
   camWorks(i: number): boolean {
     if (i >= this.camCount()) return false; // a Bulletproof Camera from a round that's over
     const bp = this.bpCamAt(i);
-    if (bp) return !(bp.flags & (GFlag.Broken | GFlag.Lost));
-    return i < 32 && (this.matchRules.camsBroken & (1 << i)) === 0;
+    if (bp) return !(bp.flags & (GFlag.Broken | GFlag.Lost | GFlag.Off));
+    return i < 32 && ((this.matchRules.camsBroken | this.matchRules.camsOff) & (1 << i)) === 0;
   }
 
   /**
@@ -1169,6 +1252,7 @@ export class Sim {
     // to hold a player still while their next input hasn't arrived, and for an extra catch-up step
     // (a second queued input after a network stall, which doesn't advance the tick counter).
     this.ctx.events.length = 0;
+    this.syncSolids();
     const drive = new Map<number, InputCmd>();
     // Pawns driven without real buttons this tick (the body left behind on the shell camera, the shell
     // being looked through): like the no-input case below, their held-button memory is kept.
@@ -1341,8 +1425,10 @@ export class Sim {
     const active = this.pawns.get(c.possessedPawnId);
     // On her feet, or hanging on a rope (Ulo: cameras work on the rope; a lab room lets her rappel).
     const ready = active !== undefined && ((active.state.mode === PawnMode.Walk && active.state.grounded) || ropeIdle(active.state));
-    if (!this.otherPawn(c.id) || !ready) {
-      c.shellCam = false; // nothing to look through, or busy (climbing, vaulting, dead)
+    // An EMP on either shell (DSEG, Phase 8 M3): her shell camera is an observation tool, the idle shell a device.
+    const other = this.otherPawn(c.id);
+    if (!other || !ready || active.state.jammed > 0 || other.state.jammed > 0) {
+      c.shellCam = false; // nothing to look through, busy (climbing, vaulting, dead), or EMP'd
       return;
     }
     if (pressed & Btn.Ability) {

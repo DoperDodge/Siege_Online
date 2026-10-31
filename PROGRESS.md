@@ -15,8 +15,8 @@ targets `main`.
 |---|---|
 | M1 The framework: gadget data, the hands and keys, the gadget table (protocol 15), throws, placing, detonators, picking up; the Bulletproof Camera moved onto it; the Gadget Lab; the interactions harness | ✅ (D-141) |
 | M2 Blasts and the lethal generics (frag, impact grenade, Breach and Hard Breach Charges, Nitro Cell, Claymore) | ✅ (D-142) |
-| M3 The other generics (stun, smoke, Impact EMP, barbed wire, deployable shield, proximity alarm, observation blocker), pinging gadgets, ingredients | next |
-| M4 Sledge; Striker and Sentry | |
+| M3 The other generics (stun, smoke, Impact EMP, barbed wire, deployable shield, proximity alarm, observation blocker), pinging gadgets, ingredients | ✅ (D-143) |
+| M4 Sledge; Striker and Sentry | next |
 | M5 Thermite; Fuze's Cluster Charge | |
 | M6 Mute; Pulse | |
 | M7 Mira | |
@@ -25,6 +25,30 @@ targets `main`.
 | M10 Skopós's remaining rules; Lesion | |
 | M11 The Ballistic Shield | |
 | M12 Every CSV row passing; netsim, browser tests, review, docs, report | |
+
+### What's done (M3: the other generics and the ingredients)
+- **Stun:** blinds whoever faces it (fully within 11 m) for 5 s, and rings ears within 8 m; it flashes through a
+  deployable shield's slits; cameras and drones (and whoever's watching them) aren't affected.
+- **Smoke:** a cloud 5 m across for 10 s. Cameras, drones and pings can't see through it (a ping lands on the
+  cloud); a Bulletproof Camera can.
+- **Impact EMP:** within 2 m the defenders' electronics (Bulletproof Cameras, alarms, Nitro Cells, blockers, the
+  level's cameras, the metal detector) are off for 9 s, and a defender in it loses his sights' zoom, cameras,
+  drones and detonator. Skopós can't swap into an EMP'd shell. A Bulletproof Camera's dart is now the same EMP
+  (0.75 m).
+- **Barbed wire:** an attacker in it walks at half speed, can't sprint and loses 5 a second while he moves; drones
+  slow a little, defenders not at all; two knife hits destroy it.
+- **Deployable shield:** solid. Bullets, blasts, bodies and drones stop at it (attackers vault it); any blast close
+  by destroys it; a knife hit makes its glass opaque and then it can't be picked up.
+- **Proximity alarm:** sounds for everyone while an attacker is within 3 m (he's told he set it off); drones don't
+  set it off. In a match's prep one that lands outdoors is destroyed.
+- **Observation blocker:** the attackers' drones can't see through its barrier (up to 5 m wide); players and the
+  defenders' cameras can.
+- **Pinging a gadget:** a ping on an enemy gadget marks it, with its name.
+- **Ingredients:** the fire extinguisher (shot, knifed or in a blast) bursts into smoke and concusses those close
+  by; the gas pipe (shot or in a blast) throws a flame jet for 15 s, then goes off and burns the floor under it;
+  the metal detector beeps while someone walks through it, and an EMP turns it off. They're live on Oregon too.
+- **The Gadget Lab** has a fire extinguisher, a gas pipe and a metal detector (and a camera for the tests).
+- **The interaction tests:** 51 more rows pass (129 of 343).
 
 ### What's done (M2: blasts and the lethal generics)
 - **Every explosive goes off:** the frag at its fuse, the impact grenade on the first body or surface it hits, the
@@ -87,15 +111,19 @@ npm start
    hole. As Mute, throw the Nitro Cell, walk well away and press left mouse.
 4. **The Claymore:** as Striker (Claymore in his kit) or Brava, put one down, switch to the defenders in the pause
    menu and walk into a laser. As Fuze with the Hard Breach Charge, put it on the reinforced wall and wait 4 s.
+5. **M3:** as Sledge, throw a stun at your feet (white for 5 s), and online with a friend as Mute, an Impact EMP at
+   his Bulletproof Camera. As Thermite, a smoke grenade. As Sentry, lay barbed wire, then switch teams in the pause
+   menu and walk through it. Shoot the fire extinguisher and the gas pipe by the doors, and walk through the metal
+   detector.
 
 The automated checks: `npm run typecheck`, `npm test` (the interactions test lists every CSV row: built ones pass,
 the rest are todos), `npm run build`, `node tools/e2e/gadget-lab.mjs`.
 
 ### Known issues
-- Smoke, stuns, EMPs, barbed wire, shields, alarms and blockers don't do their own thing yet (M3); blasts and bullets
-  already destroy them.
-- No ringing ears or shake from a blast yet (with the stun, M3). The impact grenade's hole is never big enough to walk
-  through (our size, research/OPEN_QUESTIONS.md).
+- No sounds yet (Phase 11): the stun's ringing, the alarm's beeping, the wire's rustle are silent. A blast doesn't
+  shake the view.
+- Direct hits by a thrown grenade (5 hp) aren't in. Standing on a deployable shield doesn't destroy it.
+- The impact grenade's hole is never big enough to walk through (our size, research/OPEN_QUESTIONS.md).
 - Every gadget is a greybox in its kind's colour; the gadget in your hands is a box.
 - You can't watch a Bulletproof Camera in a lab (cameras are a match's).
 

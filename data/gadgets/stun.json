@@ -1,7 +1,7 @@
 {
-  "_doc": "Stun Grenade (attacker pool; research/gadgets.md §3.5). Thrown; it bounces and goes off 2 s after the first bounce (siege.gg), 3 s after the throw when it never bounces (Fandom). Its count for Striker (3 on Fandom's Striker page, 2 on the generic one) and its size are placeholders.",
+  "_doc": "Stun Grenade (attacker pool; research/gadgets.md §3.5). Thrown; it bounces and goes off 2 s after the first bounce (siege.gg), 3 s after the throw when it never bounces (Fandom). Its count for Striker (3 on Fandom's Striker page, 2 on the generic one) and its size are placeholders. Its flash (M3): blind and deaf for 5 s; facing it, fully blinded within 11 m and less out to 15 m; facing away, only within 3 m; ringing ears within 8 m whatever the facing (Fandom, last changed in Y1). Cameras and drones aren't affected, nor those watching them; a deployable shield's slits let it through (Fandom).",
   "_season": "Y11S3",
-  "_unverified": ["count", "use.fuseS", "sizeM"],
+  "_unverified": ["count", "use.fuseS", "sizeM", "stun.fullM", "stun.maxM", "stun.behindM"],
   "id": "stun",
   "name": "Stun Grenade",
   "side": "attacker",
@@ -10,5 +10,6 @@
   "use": {"kind": "throw", "flight": "bounce", "fuseS": 3, "afterHitS": 2},
   "remote": false,
   "pickUp": false,
-  "sizeM": [0.07, 0.12, 0.07]
+  "sizeM": [0.07, 0.12, 0.07],
+  "stun": {"seconds": 5, "fullM": 11, "maxM": 15, "behindM": 3, "ringM": 8}
 }

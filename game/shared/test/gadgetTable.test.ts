@@ -33,6 +33,7 @@ const entry = (over: Partial<Gadget> = {}): Omit<Gadget, "id"> => ({
   fuseEnd: 356,
   signalEnd: 0,
   readyAt: 0,
+  offEnd: 0,
   seq: 70001,
   ...over,
 });

@@ -3,7 +3,7 @@
 // knife and the pick-up hold ask this; the Bulletproof Camera's bulletproof front is the shot judge's (bpCamsShot).
 import { DEG, forwardXZ, rightXZ, type Vec3 } from "../core/math.js";
 import type { GameData } from "../data/load.js";
-import { kindId } from "./kinds.js";
+import { isIngredient, kindId } from "./kinds.js";
 import { GFlag, type Gadget, type GadgetTable } from "./table.js";
 
 /** A point or a direction in an entry's own frame: x to its right, y up, z out of its front. */
@@ -38,11 +38,18 @@ export function enterBox(o: Vec3, d: Vec3, half: Vec3, maxT: number): number | n
   return t0;
 }
 
+/** An entry's box (width, height, depth): its gadget data's, or an ingredient's (data/gadgets.json `ingredients`). */
+export function sizeOf(data: GameData, kind: number): readonly [number, number, number] | null {
+  const id = kindId(kind) ?? "";
+  if (isIngredient(kind)) return data.gadgetRules.ingredients[id as keyof GameData["gadgetRules"]["ingredients"]].sizeM;
+  return data.gadgets.get(id)?.sizeM ?? null;
+}
+
 /** Metres along a ray from `origin` (unit `dir`) to where it meets an entry's box, or null. */
 export function rayToGadget(data: GameData, g: Gadget, origin: Vec3, dir: Vec3, maxT: number): number | null {
-  const gd = data.gadgets.get(kindId(g.kind) ?? "");
-  if (!gd || g.flags & GFlag.Flying) return null;
-  return enterBox(localOf(g, origin, true), localOf(g, dir, false), halfSize(g, gd.sizeM), maxT);
+  const size = sizeOf(data, g.kind);
+  if (!size || g.flags & GFlag.Flying) return null;
+  return enterBox(localOf(g, origin, true), localOf(g, dir, false), halfSize(g, size), maxT);
 }
 
 /** The nearest entry along a ray (before `maxT`) that `keep` accepts, and how far it is, or null. */

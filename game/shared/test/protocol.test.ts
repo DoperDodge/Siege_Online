@@ -146,7 +146,18 @@ describe("lobby, clock, error and debug messages round-trip", () => {
       { kind: "reviveEnd", reviverPawn: 11, targetPawn: 7, completed: true },
       { kind: "reviveEnd", reviverPawn: 11, targetPawn: 7, completed: false },
       { kind: "shellDestroyed", pawnId: 9, ownerCtrl: 5, killerCtrl: 4, weapon: "mp5k", headshot: false },
+      // Phase 8: a ping on nothing and on an enemy gadget, a blast, a stun and a concussion, an alarm, a kill by wire.
+      { kind: "ping", ctrl: 3, pos: [1.5, 0.25, -7], danger: false, ticks: 320, gadget: -1 },
+      { kind: "ping", ctrl: 3, pos: [1.5, 0.25, -7], danger: true, ticks: 320, gadget: 13 },
+      { kind: "blast", gadget: 3, pos: [0, 0.03125, 12] },
+      { kind: "stunned", seconds: 5, blind: 1, ring: true, concuss: false },
+      { kind: "stunned", seconds: 3, blind: 0, ring: true, concuss: true },
+      { kind: "alarm", gadget: 41, pos: [2, 0.05, 15], on: true, pawnId: 6 },
+      { kind: "alarm", gadget: 41, pos: [2, 0.05, 15], on: false, pawnId: 0 },
+      { kind: "kill", victimPawn: 8, victimCtrl: 5, killerCtrl: 4, assistCtrl: 0, weapon: "barbed_wire", cause: 8, headshot: false, friendly: false },
     ];
+    // (Float32 positions; a stun's blindness in 255ths.)
+    for (const e of events) if (e.kind === "ping" || e.kind === "blast" || e.kind === "alarm") e.pos = [Math.fround(e.pos[0]), Math.fround(e.pos[1]), Math.fround(e.pos[2])];
     expect(decodeEvents(body(encodeEvents(123456, events), Msg.Events))).toEqual({ tick: 123456, events });
     const ok = encodeEvents(5, [events[3]]);
     const bad = (bytes: number[]) => () => decodeEvents(new ByteReader(Uint8Array.from(bytes)));

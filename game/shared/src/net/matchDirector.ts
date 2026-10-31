@@ -38,6 +38,8 @@ export interface DirectorHost {
   rosterChanged(): void;
   /** Every panel as the level built it, with these reinforcement pools ([attackers, defenders]). */
   resetPanels(pools: [number, number]): void;
+  /** No gadget left in the table but the level's ingredients, put back as new (Phase 8 M3). */
+  resetGadgets(): void;
   /** A panel op applied and sent to everyone with the next tick's (Quick Match's pre-setups). */
   queuePanelOp(panel: number, op: PanelOp): void;
   /** Kill a body now (it left, it fell out of the map). */
@@ -90,7 +92,7 @@ export class MatchDirector {
     const data = host.sim.data;
     this.formats = new Map([...data.modes.values()].filter(isFormat).map((m) => [m.id, m]));
     this.match = new Match(format, matchMapOf(host.sim.level.def, data.operators.values()), seed);
-    host.sim.matchRules = { redWalls: false, killPlaneKills: true, cameras: true, camsBroken: 0 };
+    host.sim.matchRules = { redWalls: false, killPlaneKills: true, cameras: true, camsBroken: 0, camsOff: 0 };
   }
 
   get mode(): FormatMode {
@@ -306,6 +308,14 @@ export class MatchDirector {
     this.changed(true);
   }
 
+  /** EMPs have these default cameras off now (Phase 8 M3, DSEG): everyone hears when that changes. */
+  camerasOff(bits: number) {
+    const rules = this.host.sim.matchRules;
+    if (rules.camsOff === bits) return;
+    rules.camsOff = bits;
+    this.changed(true);
+  }
+
   /** Shots broke default cameras (Phase 7): everyone hears at once (defenders lose those feeds). */
   camerasBroken(bits: number) {
     const rules = this.host.sim.matchRules;
@@ -500,8 +510,10 @@ export class MatchDirector {
   private startPrep() {
     const defenders = this.match.sides[DEFENSE];
     const sim = this.host.sim;
-    sim.matchRules.camsBroken = 0; // every camera works again (Phase 7), and none of last round's gadgets is left (Phase 8)
-    sim.gadgets.clear();
+    // Every camera works again (Phase 7), and none of last round's gadgets is left, the level's ingredients new (Phase 8).
+    sim.matchRules.camsBroken = 0;
+    sim.matchRules.camsOff = 0;
+    this.host.resetGadgets();
     this.host.resetPanels([0, reinforcementPool(this.mode, defenders.length)]);
     if (this.mode.match.preSetups && this.match.site) for (const o of preSetupOps(sim.level.def, sim.level.panels, sim.data.destruction, this.match.site)) this.host.queuePanelOp(o.panel, o.op);
     const spots = this.spawnsOf(this.match.site ?? "");
@@ -637,6 +649,7 @@ export class MatchDirector {
       carrier: attacker ? this.carrierMember() : 0,
       safeguardEnd: m.phase === Phase.Action && this.host.sim.tick < this.safeguardEnd ? this.safeguardEnd : 0,
       camsBroken: this.host.sim.matchRules.camsBroken,
+      camsOff: this.host.sim.matchRules.camsOff,
       camsWatched: this.watched >>> 0,
       history: m.history.slice(-MAX_HISTORY).map((h) => ({ ...h })),
       winner: m.winner,

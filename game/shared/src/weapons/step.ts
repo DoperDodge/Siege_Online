@@ -71,7 +71,8 @@ export type SimEvent =
   | { kind: "plant"; pawnId: number; pos: Vec3 }
   | { kind: "disable"; pawnId: number }
   /** The ping key (Phase 7): what a controller aimed at, from its body, its drone or its camera. */
-  | { kind: "ping"; ctrlId: number; pos: Vec3 }
+  /** `gadget`: the kind of the enemy gadget pinged (Phase 8 M3), or −1. */
+  | { kind: "ping"; ctrlId: number; pos: Vec3; gadget: number }
   /**
    * Gadgets (Phase 8, gadgets/hands.ts): one thrown from `pos` at `vel`, or placed at `pos` facing `yaw` (on the floor,
    * lying flat, on a panel: −1 none), out of slot 1 or 2; the server adds it to the gadget table. A detonator pressed:

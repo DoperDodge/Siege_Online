@@ -68,7 +68,8 @@ export function stepDrone(ctx: MoveContext, pawn: Pawn, driver: InputCmd | null)
     f /= len;
     st /= len;
   }
-  const speed = d.speedMps * (s.boostTicks > 0 ? d.boost.mult : 1);
+  // An enemy's barbed wire slows it a little (Phase 8 M3).
+  const speed = d.speedMps * (s.boostTicks > 0 ? d.boost.mult : 1) * (ctx.slowOf?.(pawn) ?? 1);
   const [fx, fz] = forwardXZ(s.yaw);
   const [rx, rz] = rightXZ(s.yaw);
   const wx = (fx * f + rx * st) * speed;

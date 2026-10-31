@@ -125,6 +125,19 @@ Rules from interactions_notes.md §4, implemented once (`gadgets/electronics.ts`
   defenders; an observation blocker hides from defenders' cameras; a jammer jams defenders' devices, mostly
   placeholders), or it's destroyed after a delay (Nitro Cell; Skopós's idle shell overheats).
 
+**As built (M3, `gadgets/electronics.ts`):** an EMP reaches through walls (ours). On a gadget it sets `GFlag.Off` until
+`offEnd` (the server's tick; the simulation reads only the flag): no feed, laser, alarm or barrier, and the detonator
+skips it (the oldest working device goes; none working, the press does nothing and nothing is counted). On a body or a
+drone it's `PawnState.jammed` (ticks, predicted, wearing off in its own step), Phase 7's drone jam with a wider use:
+the body loses its sights' zoom (static over them), cameras, drones, Skopós's shell camera and its detonator. Default
+cameras get a bit in `matchRules.camsOff` (sent with the match state). The Bulletproof Camera's dart is this EMP at
+its 0.75 m. Other M3 rules: a smoke grenade's entry stays after its fuse as a cloud (`GFlag.Active` for its seconds);
+scans and pings stop at clouds (a Bulletproof Camera sees through) and at the other side's observation barrier (from
+a drone or a camera); barbed wire's slow is predicted (MoveContext `slowOf`), its bite the server's (`Cause.Gadget`);
+a deployable shield is a box collider the simulation keeps in step with the table (`G_GADGET`: bodies, drones,
+bullets, blasts, throws and sight meet it; a stun's flash doesn't); a proximity alarm sounds while an enemy body is
+within its radius (`GFlag.Active`; an `alarm` event as it starts and stops).
+
 ## 7. The operators
 
 Each operator's ability is a module in `gadgets/abilities/`; its numbers are in its operator file.
@@ -159,6 +172,13 @@ off for placing gadgets and on ropes, kept on the back when away (covers the bac
   [all numbers]; fire destroys drones and gadgets it touches.
 - **Metal detectors** aren't on Oregon; the Gadget Lab has one (an alarm when an attacker walks through).
 - **Phones**: an eliminated defender drops one (§7); any damage destroys it.
+
+**As built (M3):** the level's ingredients are gadget-table entries owned by nobody, put there as a room starts, at
+each round's prep and by the lab's Clear gadgets (their numbers: data/gadgets.json `ingredients`). Set off, an
+extinguisher is `Active` (its cloud) then `Broken` (spent); a gas pipe is `Active` (its jet), then `Active | Hit`
+(its blast went off; the fire under it), then `Broken`. A metal detector sounds while any body is in its frame, an EMP
+turns it off, a bullet, a knife or a blast destroys it. A stun's flash and an extinguisher's concussion are told only
+to the bodies they reach (`stunned`).
 
 ## 10. Interaction tests
 

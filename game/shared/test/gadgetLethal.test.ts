@@ -2,7 +2,7 @@
 // placed, three lasers, enemies only, not Skopós's idle shell), impact grenades going off on the first body they meet,
 // and in a room a frag's blast: damage credited to its thrower, everyone told, what it destroys.
 import { describe, expect, it } from "vitest";
-import { ATTACK, Btn, DEFENSE, GadgetServer, GFlag, kindOf, Sim, ticks, type Gadget, type GameEvent, type Vec3 } from "../src/index.js";
+import { ATTACK, Btn, DEFENSE, GadgetServer, GFlag, isIngredient, kindOf, Sim, ticks, type Gadget, type GameEvent, type Vec3 } from "../src/index.js";
 import { roomWith } from "./roomHarness.js";
 
 /** A sim on the Gadget Lab with a server side whose blasts are only recorded. */
@@ -125,7 +125,8 @@ describe("a frag in a room (Phase 8 M2)", () => {
     expect(dummy.state.hp < hp || dummy.state.mode !== 0).toBe(true);
     const feed = [...a.events, ...b.events].find((e) => (e.kind === "kill" || e.kind === "down") && (e.kind === "kill" ? e.victimPawn : e.victimPawn) === dummy.id);
     if (feed && (feed.kind === "kill" || feed.kind === "down")) expect(feed.weapon).toBe("frag");
-    expect(h.room.sim.gadgets.list).toEqual([]);
+    // The frag is gone (the level's ingredients stay in the table).
+    expect(h.room.sim.gadgets.list.filter((g) => !isIngredient(g.kind))).toEqual([]);
     void GFlag;
   }, 60_000);
 });

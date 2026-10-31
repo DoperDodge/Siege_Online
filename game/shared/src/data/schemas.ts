@@ -714,6 +714,33 @@ const falloffSchema = z
   .refine((f) => f.zeroM >= f.fullM, { message: "zeroM must be at least fullM" });
 export type BlastFalloff = z.infer<typeof falloffSchema>;
 
+/**
+ * What a blast does (gadgets/blast.ts, RealBlast: research/destruction.md §5). `damage` to bodies (a charge's far
+ * side), `near` its placer's side when it's on a wall; the Claymore only within `arcDeg` of its facing and `behindM`
+ * behind it. Gadgets, barricades and drones within `destroyM` are destroyed. `cut`: the hole it makes
+ * (data/destruction.json `explosives`), on its own panel for a charge, on every panel within `cutM` for a grenade.
+ * `throughSoft` of its damage gets through each soft surface on the way (shrapnel); steel and the level stop it.
+ * Tinnitus within `concussM` (the client's).
+ */
+const blastSchema = z.strictObject({
+  damage: falloffSchema,
+  near: falloffSchema.optional(),
+  arcDeg: z.number().gt(0).max(360).default(360),
+  behindM: z.number().min(0).default(0),
+  destroyM: z.number().min(0),
+  cut: z.string().optional(),
+  cutM: z.number().min(0).default(0),
+  throughSoft: z.number().min(0).max(1),
+  concussM: z.number().min(0).default(0),
+});
+export type BlastData = z.infer<typeof blastSchema>;
+
+/** A sphere of smoke for a while (a smoke grenade's cloud, a fire extinguisher's). */
+const cloudSchema = z.strictObject({ radiusM: z.number().positive(), seconds: z.number().positive() });
+
+/** Damage over time where something burns or cuts: `damage` every `everyS` to a body in it. */
+const dotSchema = z.strictObject({ damage: z.number().min(0), everyS: z.number().positive() });
+
 /** A secondary gadget (data/gadgets/<id>.json; research/gadgets.md). Metres, seconds. */
 export const gadgetSchema = z
   .strictObject({
@@ -754,27 +781,34 @@ export const gadgetSchema = z
     pickUp: z.boolean(),
     /** Its box (width, height, depth): what bullets meet and what's drawn. */
     sizeM,
+    /** What it does when it goes off (blastSchema). */
+    blast: blastSchema.optional(),
     /**
-     * What it does when it goes off (gadgets/blast.ts, RealBlast: research/destruction.md §5). `damage` to bodies (a
-     * charge's far side), `near` its placer's side when it's on a wall; the Claymore only within `arcDeg` of its facing
-     * and `behindM` behind it. Gadgets, barricades and drones within `destroyM` are destroyed. `cut`: the hole it
-     * makes (data/destruction.json `explosives`), on its own panel for a charge, on every panel within `cutM` for a
-     * grenade. `throughSoft` of its damage gets through each soft surface on the way (shrapnel); steel and the level
-     * stop it. Tinnitus within `concussM` (the client's).
+     * A stun's flash where it goes off (gadgets/effects.ts): those facing it are blinded for `seconds` within `fullM`
+     * (less, out to `maxM`), those facing away within `behindM`; ears ring within `ringM` whatever the facing. Only in
+     * sight of it (a deployable shield's slits let it through); not those watching a camera or a drone.
      */
-    blast: z
-      .strictObject({
-        damage: falloffSchema,
-        near: falloffSchema.optional(),
-        arcDeg: z.number().gt(0).max(360).default(360),
-        behindM: z.number().min(0).default(0),
-        destroyM: z.number().min(0),
-        cut: z.string().optional(),
-        cutM: z.number().min(0).default(0),
-        throughSoft: z.number().min(0).max(1),
-        concussM: z.number().min(0).default(0),
-      })
+    stun: z
+      .strictObject({ seconds: z.number().positive(), fullM: z.number().positive(), maxM: z.number().positive(), behindM: z.number().min(0), ringM: z.number().min(0) })
+      .refine((k) => k.maxM >= k.fullM, { message: "maxM must be at least fullM" })
       .optional(),
+    /** Its smoke where it goes off: it blocks sight (scans, pings), not bullets; a Bulletproof Camera sees through. */
+    cloud: cloudSchema.optional(),
+    /** An EMP where it goes off (DSEG, gadgets/electronics.ts): the other side's electronics and bodies within `radiusM`, for `seconds`. */
+    emp: z.strictObject({ radiusM: z.number().positive(), seconds: z.number().positive() }).optional(),
+    /**
+     * Barbed wire: an enemy body standing in its box moves at `slow` of its speed and can't sprint (an enemy drone at
+     * `droneSlow`), and takes `damage` every `everyS` while it moves; `knifeHits` knife hits destroy it.
+     */
+    wire: z
+      .strictObject({ slow: z.number().gt(0).max(1), droneSlow: z.number().gt(0).max(1), damage: z.number().min(0), everyS: z.number().positive(), knifeHits: z.number().int().min(1) })
+      .optional(),
+    /** A solid box (the deployable shield): bodies, drones, bullets, blasts and throws meet it; a knife hit makes its glass opaque (then it can't be picked up). */
+    solid: z.boolean().default(false),
+    /** A proximity alarm: it sounds while an enemy body is within `radiusM`, from `armS` after it comes to rest. */
+    alarm: z.strictObject({ radiusM: z.number().positive(), armS: z.number().min(0) }).optional(),
+    /** An observation blocker's barrier, facing its placer's way: up to `widthM` wide (less where walls are closer), `heightM` tall; the other side's observation tools can't see through it. */
+    barrier: z.strictObject({ widthM: z.number().positive(), heightM: z.number().positive() }).optional(),
     /** The Claymore's lasers (yaws from its facing), how far they reach, and when it's armed after it's placed. */
     tripwire: z.strictObject({ anglesDeg: z.array(z.number().min(-180).max(180)).min(1), lengthM: z.number().positive(), armS: z.number().min(0) }).optional(),
     /** One bullet (or any damage) destroys it, without its blast. */
@@ -811,8 +845,28 @@ export const gadgetRulesSchema = z.strictObject({
   }),
   pickUpS: z.number().positive(),
   pickUpReachM: z.number().positive(),
+  /**
+   * The level's ingredients (gadgets/DESIGN.md §9), each a box (`sizeM`). A fire extinguisher shot, knifed or in a
+   * blast bursts into a `cloud` and concusses bodies within `concuss.radiusM` for `concuss.seconds`. A gas pipe shot
+   * or in a blast throws a flame `jet` along its facing (a cylinder `lengthM` long, `radiusM` round) for its
+   * `seconds`, burning bodies in it and destroying drones and gadgets it touches, then goes off (`blast`) and leaves a
+   * `fire` on the floor round it. A metal detector sounds while an enemy body walks through its frame; any damage
+   * destroys it; it's electronic.
+   */
+  ingredients: z.strictObject({
+    fire_extinguisher: z.strictObject({ sizeM, cloud: cloudSchema, concuss: z.strictObject({ radiusM: z.number().positive(), seconds: z.number().positive() }) }),
+    gas_pipe: z.strictObject({
+      sizeM,
+      jet: dotSchema.extend({ lengthM: z.number().positive(), radiusM: z.number().positive(), seconds: z.number().positive() }),
+      blast: blastSchema,
+      fire: dotSchema.extend({ radiusM: z.number().positive(), seconds: z.number().positive() }),
+    }),
+    metal_detector: z.strictObject({ sizeM }),
+  }),
 });
 export type GadgetRules = z.infer<typeof gadgetRulesSchema>;
+export const INGREDIENTS = ["fire_extinguisher", "gas_pipe", "metal_detector"] as const;
+export type IngredientKind = (typeof INGREDIENTS)[number];
 
 
 export const SURFACES = [
@@ -1020,12 +1074,16 @@ export const levelSchema = z.strictObject({
     .default([]),
   /** Default cameras (Phase 7 uses them): mount point and view. */
   cameras: z.array(z.strictObject({ id: z.string(), pos: vec3, yawDeg: z.number(), pitchDeg: z.number(), room: z.string().optional() })).default([]),
-  /** Destructible ingredients (Phase 8 gives them behaviour): fire extinguishers and gas pipes. */
+  /**
+   * Destructible ingredients (Phase 8 M3, gadgets/DESIGN.md §9; data/gadgets.json `ingredients`): fire extinguishers,
+   * gas pipes, and the Gadget Lab's metal detector. Each is an entry in the gadget table from the round's start; `pos`
+   * is its box's centre, facing `yawDeg` (a gas pipe's jet goes that way).
+   */
   ingredients: z
     .array(
       z.strictObject({
         id: z.string(),
-        kind: z.enum(["fire_extinguisher", "gas_pipe"]),
+        kind: z.enum(INGREDIENTS),
         pos: vec3,
         yawDeg: z.number(),
         room: z.string().optional(),

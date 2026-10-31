@@ -570,6 +570,25 @@ The gadget questions in [gadgets.md](gadgets.md) and the operator files stay ope
     and the observation blocker (the charges' 1 hp is the CSV's placeholder). Can a bullet or a knife destroy a Hard
     Breach Charge?
 15. **The Claymore's lasers:** at its own height (7 cm) and from its centre (ours). How high are they?
+16. **The stun (M3):** "facing" it is ours: within 90° of the view (fully blinded within 11 m, less out to 15 m), and
+    facing away half-blinded within 3 m (Fandom says "visual effect only"). How bright is it from behind, and do
+    walls you can see through (a soft wall's hole, smoke) let it through? Is a defender's 5 s the same?
+17. **Smoke:** pings land on the cloud (Fandom); ours stops scans too, and a Bulletproof Camera sees through it.
+    Does a cloud stop a scan from a drone in Siege?
+18. **The EMP's reach:** ours goes through walls and floors. Does an Impact EMP's 2 m pass through a wall?
+19. **Barbed wire:** its box is 2.5 × 0.6 m (Fandom's 1.25 m radius as a width); drones at 90 % ("minimally"); the
+    5 every second (Y9S2) only for attackers moving faster than walking slowly (ours: 0.3 m/s). Does it hurt
+    defenders, and does slow-walking through it hurt?
+20. **The deployable shield:** standing on top of it doesn't destroy it yet (Fandom's anti-exploit rule), and a
+    placed one doesn't snap to doorways. What decides how it snaps?
+21. **The proximity alarm:** it arms 1 s after it comes to rest, senses through walls, and one that rests outdoors
+    in prep is destroyed (all ours). Does it sense through walls, and what happens to one thrown outside in prep?
+22. **The observation blocker's barrier:** as wide as walls allow up to 5 m, standing on the floor under it, facing
+    its placer's way (ours). Does it follow the placer's facing or the wall it's against?
+23. **The ingredients' numbers** (data/gadgets.json `ingredients`): the extinguisher's cloud 2 m round for 5 s and
+    its concussion 2.5 m for 3 s; the gas pipe's jet 3 m × 0.4 m, 10 every 0.25 s for 15 s, its blast 60 within 1 m
+    (none past 3 m), its fire 1.5 m round, 5 every 0.5 s for 2 s; the metal detector's frame 0.9 × 2.1 × 0.5 m, set
+    off by anyone. All ours but the 5 s smoke and the 15 s + 2 s (siege.gg).
 
 ### [core_mechanics.md](core_mechanics.md) — 16
 

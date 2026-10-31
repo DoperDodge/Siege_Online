@@ -74,6 +74,8 @@ export class FxBus {
   private readonly emps: Pool<THREE.Mesh>;
   private readonly fireballs: Pool<THREE.Mesh>;
   private readonly puffs: Pool<THREE.Mesh>;
+  /** A stun's flash, an extinguisher's burst (Phase 8 M3). */
+  private readonly whites: Pool<THREE.Mesh>;
   /** Each chunk's velocity (m/s), by its place in the pool. */
   private readonly debrisVel: THREE.Vector3[];
   private readonly debrisMat = { skin: new THREE.MeshBasicMaterial({ color: 0xd9d4c7 }), wood: new THREE.MeshBasicMaterial({ color: 0x8b6a43 }), steel: new THREE.MeshBasicMaterial({ color: 0x56606b }) };
@@ -152,20 +154,38 @@ export class FxBus {
       });
     this.fireballs = new Pool(ball(fireMat));
     this.puffs = new Pool(ball(puffMat));
+    this.whites = new Pool(ball(new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthWrite: false })));
   }
 
-  /** A gadget went off (Phase 8): a fireball as big as its full-damage reach (at least 0.3 m), a flash of light, a puff of smoke. */
+  /**
+   * A gadget (or an ingredient) went off (Phase 8), by what it does: a blast is a fireball as big as its full-damage
+   * reach (at least 0.3 m) and a puff of smoke; a stun a white flash; an EMP a pale blue ball its size; a fire
+   * extinguisher a white burst; a metal detector destroyed, sparks. Smoke draws nothing here (its cloud is the table's).
+   */
   private blast(kind: number, pos: Vec3, now: number) {
-    const d = this.sim.data.gadgets.get(kindId(kind) ?? "");
-    const r = Math.max(0.3, Math.min(2.5, d?.blast?.damage.fullM ?? 0.5));
+    const id = kindId(kind) ?? "";
+    const d = this.sim.data.gadgets.get(id);
     const at = new THREE.Vector3(pos[0], pos[1], pos[2]);
-    const fire = this.fireballs.take(now, FIREBALL_MS);
-    fire.position.copy(at);
-    fire.scale.setScalar(r);
-    const puff = this.puffs.take(now, PUFF_MS);
-    puff.position.copy(at);
-    puff.scale.setScalar(r * 1.4);
-    this.light(at, now);
+    const blast = d?.blast ?? (id === "gas_pipe" ? this.sim.data.gadgetRules.ingredients.gas_pipe.blast : undefined);
+    if (blast) {
+      const r = Math.max(0.3, Math.min(2.5, blast.damage.fullM));
+      const fire = this.fireballs.take(now, FIREBALL_MS);
+      fire.position.copy(at);
+      fire.scale.setScalar(r);
+      const puff = this.puffs.take(now, PUFF_MS);
+      puff.position.copy(at);
+      puff.scale.setScalar(r * 1.4);
+      this.light(at, now);
+    } else if (d?.stun || id === "fire_extinguisher") {
+      const white = this.whites.take(now, d?.stun ? FIREBALL_MS : PUFF_MS);
+      white.position.copy(at);
+      white.scale.setScalar(d?.stun ? 0.8 : 1.2);
+      if (d?.stun) this.light(at, now);
+    } else if (d?.emp || id === "metal_detector") {
+      const ball = this.emps.take(now, EMP_MS);
+      ball.position.copy(at);
+      ball.scale.setScalar(d?.emp?.radiusM ?? 0.3);
+    } else return;
     this.audio.play("shot", pos);
   }
 
@@ -250,6 +270,7 @@ export class FxBus {
     this.emps.update(now);
     this.fireballs.update(now);
     this.puffs.update(now);
+    this.whites.update(now);
     const dt = Math.min(0.05, Math.max(0, now - this.lastFrameAt) / 1000);
     this.lastFrameAt = now;
     this.debris.items.forEach((m, i) => {

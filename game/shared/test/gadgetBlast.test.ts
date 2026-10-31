@@ -25,10 +25,11 @@ async function setup() {
     fuseEnd: 0,
     signalEnd: 0,
     readyAt: 0,
+    offEnd: 0,
     seq: 0,
     ...over,
   });
-  const fx = (e: Gadget, at: Vec3 = e.pos) => blastEffects(sim, e, sim.data.gadgets.get(kindId(e.kind)!)!, at);
+  const fx = (e: Gadget, at: Vec3 = e.pos) => blastEffects(sim, e, sim.data.gadgets.get(kindId(e.kind)!)!.blast!, at);
   const dmg = (e: Gadget, pawn = def) => fx(e).bodies.find((b) => b.pawn === pawn)?.damage ?? 0;
   return { sim, a, d, atk, def, g, fx, dmg };
 }
@@ -120,6 +121,14 @@ describe("blast damage (Phase 8 M2)", () => {
     // 1.2 m from the barricaded door: facing it, it breaks it; facing away (the door 1.2 m behind it), it doesn't.
     expect(fx(g("claymore", { pos: [-10, 0.07, 7.25], yaw: 0 })).panelOps.some((o) => o.panel === door)).toBe(true);
     expect(fx(g("claymore", { pos: [-10, 0.07, 7.25], yaw: Math.PI })).panelOps.some((o) => o.panel === door)).toBe(false);
+  });
+
+  it("doesn't blow a smoke cloud away (Phase 8 M3)", async () => {
+    const { sim, g, fx } = await setup();
+    const cloud = sim.gadgets.add({ ...g("smoke", { pos: [0, 0.05, 13], flags: GFlag.OnFloor | GFlag.Active, fuseEnd: 9999 }) });
+    const grenade = sim.gadgets.add({ ...g("smoke", { pos: [1, 0.05, 13] }) }); // one not gone off yet is a gadget like any
+    expect(fx(g("frag", { pos: [0, 0.04, 12] })).gadgets.map((e) => e.id)).toEqual([grenade.id]);
+    expect(cloud.id).toBeGreaterThan(0);
   });
 
   it("a charge's own panel neither stops nor dims its blast: a Hard Breach Charge on steel reaches a defender right behind", async () => {

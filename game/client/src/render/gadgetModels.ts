@@ -2,8 +2,31 @@
 // kind's colour, standing, on its wall or lying flat; a thrown one along its flight (stepped here by the same code the
 // server steps it with). Your own throws and placings are drawn at once from your prediction, until the server's entry
 // takes over. Bulletproof Cameras are drawn by BpCameraModels (render/cameraModels.ts). Greybox until the art pass.
+// M3 adds what an entry's flags show: smoke clouds (not in a Bulletproof Camera's thermal view), a gas pipe's jet and
+// fire, an alarm sounding, an EMP's sparks, and an observation blocker's barrier to the other side's drones and cameras;
+// the level's ingredients are entries too.
 import * as THREE from "three";
-import { DEG, Flights, forwardXZ, GFlag, isFlying, KIND_BP_CAMERA, kindId, kindOf, raycastLevel, type Gadget, type GadgetData, type SimEvent, type Sim, type Vec3 } from "@redmond/shared";
+import {
+  barrierOf,
+  cloudRadius,
+  DEG,
+  Flights,
+  forwardXZ,
+  GFlag,
+  isFlying,
+  isIngredient,
+  jetOf,
+  KIND_BP_CAMERA,
+  kindId,
+  kindOf,
+  raycastLevel,
+  sizeOf,
+  type Gadget,
+  type GadgetData,
+  type SimEvent,
+  type Sim,
+  type Vec3,
+} from "@redmond/shared";
 
 type ThrowUse = Extract<GadgetData["use"], { kind: "throw" }>;
 
@@ -22,7 +45,20 @@ const COLOURS: Record<string, number> = {
   impact_grenade: 0x7f1d1d,
   nitro_cell: 0x111827,
   proximity_alarm: 0x1f2937,
+  fire_extinguisher: 0xb91c1c,
+  gas_pipe: 0xb45309,
+  metal_detector: 0x9ca3af,
 };
+
+/**
+ * What the page looks through (Phase 8 M3): a Bulletproof Camera's thermal view sees through smoke; an observation
+ * blocker's barrier shows (and blocks) to the other side's observation tools, a drone or a camera.
+ */
+export interface GadgetView {
+  thermal: boolean;
+  team: number;
+  tool: boolean;
+}
 
 /** A predicted throw or placing of ours, drawn until the server's entry arrives (or for a second, if it never does). */
 interface Ghost {
@@ -38,7 +74,16 @@ interface Ghost {
 }
 
 export class GadgetModels {
-  private readonly items = new Map<number, { obj: THREE.Object3D; key: string; lasers: THREE.Line[] }>();
+  private readonly items = new Map<number, { obj: THREE.Object3D; key: string; lasers: THREE.Line[]; extra: THREE.Object3D | null; extraKey: string }>();
+  /** What the page looks through now (set each frame before update). */
+  view: GadgetView = { thermal: false, team: 0, tool: false };
+  private readonly fxMat = {
+    smoke: new THREE.MeshBasicMaterial({ color: 0x9a9a9a, transparent: true, opacity: 0.96, side: THREE.DoubleSide, depthWrite: false }),
+    fire: new THREE.MeshBasicMaterial({ color: 0xff7a1a, transparent: true, opacity: 0.7, depthWrite: false }),
+    alarm: new THREE.MeshBasicMaterial({ color: 0xff2020, transparent: true, opacity: 0.25, depthWrite: false }),
+    off: new THREE.MeshBasicMaterial({ color: 0x60a5fa }),
+    barrier: new THREE.MeshBasicMaterial({ color: 0x0b1220, transparent: true, opacity: 0.92, side: THREE.DoubleSide, depthWrite: false }),
+  };
   /** A Claymore's lasers (Phase 8 M2): red, once it's armed. */
   private readonly laserMat = new THREE.LineBasicMaterial({ color: 0xff2020, transparent: true, opacity: 0.7 });
   private readonly ghosts: Ghost[] = [];
@@ -63,16 +108,19 @@ export class GadgetModels {
   private model(kind: number): THREE.Object3D {
     const id = kindId(kind) ?? "";
     const d = this.dataOf(kind);
-    const [w, h, depth] = d?.sizeM ?? [0.1, 0.1, 0.1];
+    const [w, h, depth] = sizeOf(this.sim.data, kind) ?? [0.1, 0.1, 0.1];
     let geo = this.geometry.get(id);
     if (!geo) {
-      // Grenades are round; everything else is its box.
-      geo = d?.use.kind === "throw" && !d.remote && id !== "proximity_alarm" ? new THREE.CylinderGeometry(w / 2, w / 2, h, 12) : new THREE.BoxGeometry(w, h, depth);
+      // Grenades and fire extinguishers are round; a gas pipe lies along its width; everything else is its box.
+      const round = (d?.use.kind === "throw" && !d.remote && id !== "proximity_alarm") || id === "fire_extinguisher";
+      if (round) geo = new THREE.CylinderGeometry(w / 2, w / 2, h, 12);
+      else if (id === "gas_pipe") geo = new THREE.CylinderGeometry(h / 2, h / 2, w, 10).rotateZ(Math.PI / 2);
+      else geo = new THREE.BoxGeometry(w, h, depth);
       this.geometry.set(id, geo);
     }
     let mat = this.materials.get(id);
     if (!mat) {
-      mat = new THREE.MeshStandardMaterial({ color: COLOURS[id] ?? 0x888888, roughness: 0.7, metalness: 0.2, wireframe: id === "barbed_wire" });
+      mat = new THREE.MeshStandardMaterial({ color: COLOURS[id] ?? 0x888888, roughness: 0.7, metalness: 0.2, wireframe: id === "barbed_wire" || id === "metal_detector" });
       this.materials.set(id, mat);
     }
     const group = new THREE.Group();
@@ -119,7 +167,7 @@ export class GadgetModels {
       seen.add(g.id);
       let it = this.items.get(g.id);
       if (!it) {
-        it = { obj: this.model(g.kind), key: "", lasers: [] };
+        it = { obj: this.model(g.kind), key: "", lasers: [], extra: null, extraKey: "" };
         this.scene.add(it.obj);
         this.items.set(g.id, it);
         // Ours, predicted: the ghost hands over (its flight goes on from the same start).
@@ -138,17 +186,24 @@ export class GadgetModels {
         continue;
       }
       this.ownStart.delete(g.id);
-      // A tripwire's lasers show from the moment it's armed (its `readyAt`, a server tick).
-      for (const l of it.lasers) l.visible = now >= g.readyAt;
+      // A tripwire's lasers show from the moment it's armed (its `readyAt`, a server tick), and not while it's off.
+      for (const l of it.lasers) l.visible = now >= g.readyAt && !(g.flags & GFlag.Off);
       const key = `${g.pos.join(",")},${g.yaw},${g.flags}`;
+      const extraKey = `${key},${this.view.thermal},${this.view.team},${this.view.tool}`;
+      if (extraKey !== it.extraKey) {
+        it.extraKey = extraKey;
+        this.setExtra(it, g);
+      }
       if (key === it.key) continue;
       it.key = key;
       this.pose(it.obj, g.pos, g.yaw, g.flags);
+      (it.obj.getObjectByName("body") as THREE.Mesh | undefined)?.scale.setScalar(isIngredient(g.kind) && g.flags & GFlag.Broken ? 0.7 : 1);
       this.setLasers(it, g);
     }
     for (const [id, it] of this.items)
       if (!seen.has(id)) {
         this.scene.remove(it.obj);
+        if (it.extra) this.scene.remove(it.extra);
         for (const l of it.lasers) {
           this.scene.remove(l);
           l.geometry.dispose();
@@ -167,9 +222,67 @@ export class GadgetModels {
         continue;
       }
       const use = this.dataOf(x.kind)?.use;
-      const g = { id: -1 - x.seq, kind: x.kind, owner: me, team: 0, pos: x.pos, yaw: x.yaw, vel: x.vel, flags: x.flags, panel: -1, launchTick: 0, fuseEnd: 0, signalEnd: 0, readyAt: 0, seq: x.seq };
+      const g = { id: -1 - x.seq, kind: x.kind, owner: me, team: 0, pos: x.pos, yaw: x.yaw, vel: x.vel, flags: x.flags, panel: -1, launchTick: 0, fuseEnd: 0, signalEnd: 0, readyAt: 0, offEnd: 0, seq: x.seq };
       this.pose(x.obj, x.flags & GFlag.Flying && use?.kind === "throw" ? this.flightAt(g, use, now - x.at) : x.pos, x.yaw, x.flags);
     }
+  }
+
+  /**
+   * What an entry's flags show besides its box (Phase 8 M3): its smoke (a grenade's cloud, a fire extinguisher's), a
+   * gas pipe's jet or the fire under it, an alarm or a metal detector sounding, an EMP's sparks on it, an observation
+   * blocker's barrier to the other side's observation tools.
+   */
+  private setExtra(it: { extra: THREE.Object3D | null }, g: Gadget) {
+    if (it.extra) this.scene.remove(it.extra);
+    it.extra = null;
+    const data = this.sim.data;
+    const group = new THREE.Group();
+    const r = cloudRadius(data, g);
+    if (r > 0 && !this.view.thermal) {
+      const cloud = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 12), this.fxMat.smoke);
+      cloud.position.set(g.pos[0], g.pos[1] + r * 0.4, g.pos[2]);
+      group.add(cloud);
+    }
+    const id = kindId(g.kind);
+    if (id === "gas_pipe" && g.flags & GFlag.Active) {
+      const pipe = data.gadgetRules.ingredients.gas_pipe;
+      if (g.flags & GFlag.Hit) {
+        const floor = raycastLevel(this.sim, g.pos, [0, -1, 0], 6);
+        const fire = new THREE.Mesh(new THREE.CylinderGeometry(pipe.fire.radiusM, pipe.fire.radiusM, 0.3, 16), this.fxMat.fire);
+        fire.position.set(g.pos[0], g.pos[1] - (floor?.t ?? 1) + 0.15, g.pos[2]);
+        group.add(fire);
+      } else {
+        const jet = jetOf(this.sim, pipe, g);
+        const a = new THREE.Vector3(...jet.a);
+        const b = new THREE.Vector3(...jet.b);
+        const flame = new THREE.Mesh(new THREE.CylinderGeometry(jet.r * 0.4, jet.r, a.distanceTo(b), 10), this.fxMat.fire);
+        flame.position.copy(a).lerp(b, 0.5);
+        flame.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
+        group.add(flame);
+      }
+    }
+    const alarm = this.dataOf(g.kind)?.alarm;
+    if ((alarm || id === "metal_detector") && g.flags & GFlag.Active) {
+      const glow = new THREE.Mesh(new THREE.SphereGeometry(alarm ? 0.3 : 0.6, 10, 8), this.fxMat.alarm);
+      glow.position.set(...g.pos);
+      group.add(glow);
+    }
+    if (g.flags & GFlag.Off) {
+      const spark = new THREE.Mesh(new THREE.SphereGeometry(0.04, 6, 4), this.fxMat.off);
+      spark.position.set(g.pos[0], g.pos[1] + 0.1, g.pos[2]);
+      group.add(spark);
+    }
+    const barrier = this.dataOf(g.kind)?.barrier;
+    if (barrier && this.view.tool && g.team !== this.view.team && !(g.flags & (GFlag.Off | GFlag.Flying))) {
+      const b = barrierOf(this.sim, barrier, g, this.dataOf(g.kind)!.sizeM);
+      const sheet = new THREE.Mesh(new THREE.PlaneGeometry(b.half * 2, b.top - b.floor), this.fxMat.barrier);
+      sheet.position.set(b.centre[0], (b.floor + b.top) / 2, b.centre[2]);
+      sheet.rotation.y = g.yaw;
+      group.add(sheet);
+    }
+    if (group.children.length === 0) return;
+    this.scene.add(group);
+    it.extra = group;
   }
 
   /** A tripwire's lasers where the entry stands: along its facing turned by each angle, up to what stops sight. */
@@ -207,6 +320,7 @@ export class GadgetModels {
   dispose() {
     for (const it of this.items.values()) {
       this.scene.remove(it.obj);
+      if (it.extra) this.scene.remove(it.extra);
       for (const l of it.lasers) {
         this.scene.remove(l);
         l.geometry.dispose();

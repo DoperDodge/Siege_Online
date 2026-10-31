@@ -63,3 +63,5 @@ export * from "./gadgets/hands.js";
 export * from "./gadgets/serve.js";
 export * from "./net/gadgetWire.js";
 export * from "./gadgets/blast.js";
+export * from "./gadgets/areas.js";
+export * from "./gadgets/electronics.js";

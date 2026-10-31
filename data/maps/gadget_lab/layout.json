@@ -1,5 +1,5 @@
 {
-  "_doc": "Gadget Lab (Phase 8; game/shared/src/gadgets/DESIGN.md \u00a711): the Destruction Lab's walls, doors, hatch and floors (data/maps/destruction_lab/layout.json, copied) with dummies to take every gadget to: defenders behind the plain soft wall, behind the reinforced wall, inside the barricaded door and in the open, and an attacker in the open. Metres, Y up, yawDeg 0 faces -Z.",
+  "_doc": "Gadget Lab (Phase 8; game/shared/src/gadgets/DESIGN.md \u00a711): the Destruction Lab's walls, doors, hatch and floors (data/maps/destruction_lab/layout.json, copied) with dummies to take every gadget to: defenders behind the plain soft wall, behind the reinforced wall, inside the barricaded door and in the open, and an attacker in the open. Phase 8 M3 adds the ingredients (a fire extinguisher on the west door wall, a gas pipe on the window wall whose jet goes south, a metal detector to walk through on the open floor) and a default camera over the door wall looking north at the soft walls (labs don't open cameras; tests turn them on). Metres, Y up, yawDeg 0 faces -Z.",
   "id": "gadget_lab",
   "name": "Gadget Lab",
   "spawns": [
@@ -659,6 +659,14 @@
       "width": 1.2,
       "surface": "HARD_FLOOR"
     }
+  ],
+  "cameras": [
+    {"id": "CAM_LAB", "pos": [-8, 2.3, 5.8], "yawDeg": 0, "pitchDeg": -15}
+  ],
+  "ingredients": [
+    {"id": "ING_EXTINGUISHER", "kind": "fire_extinguisher", "pos": [-14.5, 1.0, 6.19], "yawDeg": 180},
+    {"id": "ING_PIPE", "kind": "gas_pipe", "pos": [-1.0, 1.2, 6.16], "yawDeg": 180},
+    {"id": "ING_DETECTOR", "kind": "metal_detector", "pos": [8, 1.05, 14], "yawDeg": 0}
   ],
   "dummies": [
     {

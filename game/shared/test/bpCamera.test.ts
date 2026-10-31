@@ -154,7 +154,7 @@ describe("a round's Bulletproof Cameras gone (Phase 7 M5)", () => {
 
 describe("a Bulletproof Camera's plate and its dart (Phase 7 M5)", () => {
   // Facing −z (yaw 0) at (0, 1, 0).
-  const cam: Gadget = { id: 1, kind: KIND_BP_CAMERA, owner: 1, team: DEFENSE, pos: [0, 1, 0], yaw: 0, vel: [0, 0, 0], flags: 0, panel: -1, launchTick: 0, fuseEnd: 0, signalEnd: 0, readyAt: 0, seq: 0 };
+  const cam: Gadget = { id: 1, kind: KIND_BP_CAMERA, owner: 1, team: DEFENSE, pos: [0, 1, 0], yaw: 0, vel: [0, 0, 0], flags: 0, panel: -1, launchTick: 0, fuseEnd: 0, signalEnd: 0, readyAt: 0, offEnd: 0, seq: 0 };
 
   it("a bullet at its front within 50° of straight on meets the plate; from the side or the back it breaks it; a knife, any face", async () => {
     const data = (await Sim.create("range_lab")).data;

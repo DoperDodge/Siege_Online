@@ -3,8 +3,9 @@
 // fuse); Fuze takes a Breach Charge out, holds Fire at a soft wall until it's on it (the detonator is then in hand)
 // and sets it off: the wall has a hole. Mute throws his Nitro Cell at the feet of the attacker dummy in the open, steps
 // well away and sets it off: the dummy is down, by the Nitro Cell. Online, two pages at 100 ms of simulated round trip:
-// what A throws, B has in its table too, A's prediction needed no corrections, and both see its blast. Requires
-// `npm run build` first.
+// what A throws, B has in its table too, A's prediction needed no corrections, and both see its blast. M3: Sledge's stun
+// thrown in front of him whites out his screen; Thermite's smoke grenade leaves its cloud in the table. (The level's
+// ingredients are in the table from the start: the checks look at the gadgets thrown.) Requires `npm run build` first.
 import { spawn } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -23,6 +24,9 @@ const Btn = { Fire: 64 };
 /** What the hands hold (PawnState.hand). */
 const Hand = { Weapon: 0, Gadget: 1, Detonator: 2 };
 const FLYING = 1;
+const ACTIVE = 64;
+/** The level's ingredients (Phase 8 M3), in every table from the start. */
+const INGREDIENTS = ["fire_extinguisher", "gas_pipe", "metal_detector"];
 
 const server = spawn(process.execPath, [SERVER], { env: { ...process.env, PORT: String(PORT) }, stdio: ["ignore", "ignore", "inherit"] });
 const result = { checks: {} };
@@ -51,7 +55,11 @@ try {
     return page;
   };
   const input = (page, v) => page.evaluate((v) => (window.__lab.input = v), v);
-  const state = (page) => page.evaluate(() => ({ hand: window.__lab.net.hand, g1: window.__lab.net.gadgets, table: window.__lab.net.table }));
+  /** What's in the hands and the gadgets in the table (the level's ingredients left out). */
+  const state = (page) =>
+    page.evaluate((ing) => ({ hand: window.__lab.net.hand, g1: window.__lab.net.gadgets, table: window.__lab.net.table.filter((g) => !ing.includes(g.kind)) }), INGREDIENTS);
+  /** Until the page's table has no gadget but the level's ingredients. */
+  const noGadgets = (page) => page.waitForFunction((ing) => window.__lab.net.table.every((g) => ing.includes(g.kind)), INGREDIENTS, { timeout: 60000, polling: 100 });
   const until = (page, fn, arg, ms = 60000) => page.waitForFunction(fn, arg, { timeout: ms, polling: 100 });
 
   // ---- offline: Sledge's frag
@@ -70,7 +78,7 @@ try {
   await until(off, () => window.__lab.net.table.some((g) => g.kind === "frag" && !(g.flags & 1)));
   result.landed = (await state(off)).table[0];
   await off.screenshot({ path: shot("gadget-frag-resting.png") });
-  await until(off, () => window.__lab.net.table.length === 0);
+  await noGadgets(off);
   await input(off, null);
   result.checks.fragThrownLandsAndGoesOff =
     /FRAG GRENADE ×2/.test(result.hud ?? "") && result.thrown.g1 === 1 && (result.thrown.table[0].flags & FLYING) === FLYING && result.landed.pos[1] < 0.2;
@@ -95,7 +103,7 @@ try {
   await sleep(800);
   await off.screenshot({ path: shot("gadget-breach-charge.png") });
   await input(off, { buttons: Btn.Fire });
-  await until(off, () => window.__lab.net.table.length === 0);
+  await noGadgets(off);
   await input(off, null);
   await sleep(120);
   await off.screenshot({ path: shot("gadget-breach-blast.png") });
@@ -136,6 +144,38 @@ try {
   result.checks.nitroCellDownsTheDummy = Math.hypot(result.nitro.pos[0] + 3, result.nitro.pos[2] - 12) < 2 && [3, 4].includes(downed.mode) && downed.weapon === "nitro_cell" && downed.unhurt;
   await nit.close();
 
+  // ---- offline (M3): Sledge's stun at his feet, facing it: his screen goes white
+  const stun = await open(`${BASE}/labs/gadget_lab.html?autotest=1&lowgfx&op=sledge&gadgets=stun`, { width: 960, height: 540 });
+  await stun.evaluate(() => window.__lab.teleport(0, 0, 18, 0));
+  await sleep(600);
+  await stun.keyboard.press("Digit3");
+  await until(stun, () => window.__lab.net.hand === 1);
+  await sleep(1000);
+  await input(stun, { buttons: Btn.Fire, pitch: -0.9 });
+  await until(stun, () => window.__lab.net.events.some((e) => e.kind === "stunned"));
+  await input(stun, { pitch: -0.9 });
+  await sleep(200);
+  result.stun = await stun.evaluate(() => ({ event: window.__lab.net.events.find((e) => e.kind === "stunned"), white: Number(document.querySelector(".stun-white").style.opacity) }));
+  await stun.screenshot({ path: shot("gadget-stun.png") });
+  result.checks.stunWhitesOutTheScreen = result.stun.event.blind > 0.9 && result.stun.white > 0.5;
+  await stun.close();
+
+  // ---- offline (M3): Thermite's smoke grenade: its cloud stays in the table for its time
+  const smoke = await open(`${BASE}/labs/gadget_lab.html?autotest=1&lowgfx&op=thermite&gadgets=smoke`, { width: 960, height: 540 });
+  await smoke.evaluate(() => window.__lab.teleport(0, 0, 18, 0));
+  await sleep(600);
+  await smoke.keyboard.press("Digit3");
+  await until(smoke, () => window.__lab.net.hand === 1);
+  await sleep(1000);
+  await input(smoke, { buttons: Btn.Fire, pitch: -0.3 });
+  await until(smoke, (a) => window.__lab.net.table.some((g) => g.kind === "smoke" && g.flags & a), ACTIVE);
+  await input(smoke, null);
+  await sleep(500);
+  await smoke.screenshot({ path: shot("gadget-smoke.png") });
+  result.smoke = (await state(smoke)).table;
+  result.checks.smokeLeavesItsCloud = result.smoke.length === 1 && (result.smoke[0].flags & ACTIVE) === ACTIVE;
+  await smoke.close();
+
   // ---- online: what A throws, B has too; A predicted it all
   const a = await open(`${BASE}/labs/gadget_lab.html?online&autotest=1&lowgfx&op=sledge&gadgets=frag&lag=${LAG}`);
   const room = await a.evaluate(() => window.__lab.net.room);
@@ -158,10 +198,10 @@ try {
   result.checks.onlineBothTablesAgree = JSON.stringify(ta.table) === JSON.stringify(tb.table) && ta.table.length === 1;
   result.checks.thrownWithoutCorrections = result.online.corrections === 0;
   await input(a, null);
-  // Its fuse runs out: both pages hear the blast, and the tables empty.
-  const blast = () => window.__lab.net.events.some((e) => e.kind === "blast") && window.__lab.net.table.length === 0;
-  await until(a, blast, null, 10000);
-  await until(b, blast, null, 10000);
+  // Its fuse runs out: both pages hear the blast, and the frag leaves the tables.
+  const blast = (ing) => window.__lab.net.events.some((e) => e.kind === "blast") && window.__lab.net.table.every((g) => ing.includes(g.kind));
+  await until(a, blast, INGREDIENTS, 10000);
+  await until(b, blast, INGREDIENTS, 10000);
   result.checks.onlineBlastSeenByBoth = true;
 
   result.errors = errors;

@@ -30,6 +30,10 @@ export interface MoveContext {
   events: SimEvent[];
   /** Whether this body may rappel: an attacker, or anyone in a lab room (the room's rules, Phase 5 M8). */
   canRappel(pawn: Pawn): boolean;
+  /** How fast a pawn may move where it is now (Phase 8 M3: an enemy's barbed wire slows it; 1: nothing does). */
+  slowOf?(pawn: Pawn): number;
+  /** Whether a body's detonator has a device of `gadget` out to set off (Phase 8 M3: not one an EMP disabled). */
+  canDetonate?(pawn: Pawn, gadget: string): boolean;
 }
 
 const IDENTITY = { x: 0, y: 0, z: 0, w: 1 };
@@ -48,6 +52,8 @@ export function stepPawn(ctx: MoveContext, pawn: Pawn, input: InputCmd, weapons 
   const pressed = input.buttons & ~s.prevButtons;
   s.prevButtons = input.buttons;
   s.lastFallDamage = 0;
+  // An EMP on the body (DSEG, Phase 8 M3) wears off.
+  if (s.jammed > 0) s.jammed--;
   if (s.mode === PawnMode.Dead) return;
 
   updateLook(ctx, pawn, input);
@@ -193,6 +199,8 @@ function stepWalk(ctx: MoveContext, pawn: Pawn, input: InputCmd, pressed: number
   // Down but not out: a slow crawl, and none at all while a teammate revives you (placeholders).
   if (s.mode === PawnMode.Downed) speed = s.revivedBy !== 0 && ctx.data.combat.revive.targetLocked ? 0 : ctx.data.combat.dbno.crawlSpeed;
 
+  // In an enemy's barbed wire (Phase 8 M3): slower, and no sprinting.
+  const slow = ctx.slowOf?.(pawn) ?? 1;
   const sprinting =
     (input.buttons & Btn.Sprint) !== 0 &&
     input.forward > m.sprint.forwardThreshold &&
@@ -200,8 +208,10 @@ function stepWalk(ctx: MoveContext, pawn: Pawn, input: InputCmd, pressed: number
     !blocksSprint(s, input) &&
     s.stance === Stance.Stand &&
     s.stanceT >= 1 &&
-    s.grounded;
+    s.grounded &&
+    slow >= 1;
   if (sprinting) speed = m.speed.sprintByRating[rating] * mult("sprint");
+  speed *= slow;
   s.sinceSprint = sprinting ? 0 : s.sinceSprint + DT;
   s.sprinting = sprinting;
 

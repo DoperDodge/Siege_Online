@@ -48,7 +48,7 @@ function onTop(s: Scene, kind: string, id: string, x: number, z: number): Gadget
 
 /** The damage the blast of `g` going off now does to client i's body (as the room computes it, before it does). */
 function damageOf(s: Scene, g: Gadget): (i: number) => number {
-  const fx = blastEffects(s.sim, g, s.sim.data.gadgets.get(kindId(g.kind)!)!, g.pos);
+  const fx = blastEffects(s.sim, g, s.sim.data.gadgets.get(kindId(g.kind)!)!.blast!, g.pos);
   const bodies = fx.bodies.map((b) => ({ id: b.pawn.id, damage: b.damage }));
   return (i) => bodies.find((b) => b.id === s.body(i).id)?.damage ?? 0;
 }
@@ -222,7 +222,7 @@ row("generic.frag", "skopos.shell_idle", async () => {
   const ctrl = s.sim.controllers.get(s.clients[1].session.ctrl!.id)!;
   const idle = s.sim.pawns.get(ctrl.pawnIds.find((id) => id !== ctrl.possessedPawnId)!)!;
   const g = s.put("frag", 0, [idle.state.x, 0.04, idle.state.z - 3]);
-  const fx = blastEffects(s.sim, g, s.sim.data.gadgets.get("frag")!, g.pos);
+  const fx = blastEffects(s.sim, g, s.sim.data.gadgets.get("frag")!.blast!, g.pos);
   const want = fx.bodies.find((b) => b.pawn === idle)?.damage ?? 0;
   expect(want).toBeGreaterThan(0);
   expect(want).toBeLessThan(100);

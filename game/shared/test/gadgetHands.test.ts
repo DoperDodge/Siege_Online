@@ -236,7 +236,7 @@ describe("taking a gadget back (Phase 8 M1)", () => {
     const other = sim.addPlayer("q", "sentry", 1, undefined, { ...defaultLoadoutPick(sim.data, "sentry"), gadgets: ["barbed_wire", "bulletproof_camera"] });
     const { id: _, ...entry } = { ...of("place")[0], id: 0 };
     void entry;
-    sim.gadgets.add({ kind: kindOf("barbed_wire"), owner: other.id, team: 1, pos: of("place")[0].pos, yaw: 0, vel: [0, 0, 0], flags: GFlag.OnFloor, panel: -1, launchTick: 0, fuseEnd: 0, signalEnd: 0, readyAt: 0, seq: 0 });
+    sim.gadgets.add({ kind: kindOf("barbed_wire"), owner: other.id, team: 1, pos: of("place")[0].pos, yaw: 0, vel: [0, 0, 0], flags: GFlag.OnFloor, panel: -1, launchTick: 0, fuseEnd: 0, signalEnd: 0, readyAt: 0, offEnd: 0, seq: 0 });
     step({ pitch: -0.9 }, 4);
     expect(sim.prompt(c.id)).not.toBe("pickUpGadget");
   });
