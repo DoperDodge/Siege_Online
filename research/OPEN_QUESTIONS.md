@@ -617,6 +617,11 @@ The gadget questions in [gadgets.md](gadgets.md) and the operator files stay ope
     and 1.0 m crouched, placed within 1.5 m; it falls when more than a fifth of the frame's band is gone through every
     layer; Sledge's hammer shatters it as a knife does (all ours). How big is the glass, how high does it sit, and
     how much of its wall must go before it falls (Fandom speaks of its anchors)?
+30. **Brava's Kludge drone (M8):** 3 hacks each (dualshockers), 10 m (dualshockers), 3 s a hack, a device within 8°
+    of its crosshair, the same size, speed and collider as a drone (drawn bigger), its hacks only in the action phase,
+    a Nitro Cell fizzling 2 s after the hack (all ours); an idle shell burning out 8 s after the hack (siege.gg's
+    test-server value). What are its hacks, range and hack time; does she have Kludges in prep? A converted jammer
+    turns off the defenders' cameras inside it and stops Skopós swapping (the CSV's placeholders): does it?
 
 ### [core_mechanics.md](core_mechanics.md) — 16
 

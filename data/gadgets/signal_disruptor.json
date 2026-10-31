@@ -13,5 +13,6 @@
   "pickUp": true,
   "sizeM": [0.25, 0.12, 0.25],
   "jammer": {"radiusM": 2.6, "warnM": 4.875, "showS": 2.5},
-  "fragile": true
+  "fragile": true,
+  "hack": "convert"
 }

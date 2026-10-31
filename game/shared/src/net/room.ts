@@ -34,6 +34,8 @@ import { camerasOnRay } from "../intel/cameras.js";
 import { dartBurst } from "../intel/bpCamera.js";
 import { bpCamsBroken, gadgetOnRay } from "../gadgets/hits.js";
 import { mirrorOf, sightPast } from "../gadgets/mirror.js";
+import { hackTargetFor, hackTargetPos, kludgeOf, type HackTarget, type KludgeData } from "../gadgets/hack.js";
+import { pawnJammed } from "../gadgets/jammers.js";
 import { GadgetServer, type IngredientStage } from "../gadgets/serve.js";
 import { blastEffects, isCloud, pawnDistance } from "../gadgets/blast.js";
 import { hammerOps } from "../gadgets/hammer.js";
@@ -41,7 +43,7 @@ import { zoneOf } from "../combat/damage.js";
 import { barrierOf, smokeOnSegment, crossesBarrier } from "../gadgets/areas.js";
 import { isIngredient, kindId, kindOf } from "../gadgets/kinds.js";
 import { GFlag, type Gadget } from "../gadgets/table.js";
-import { deviceLost, slotCounts } from "../gadgets/hands.js";
+import { deviceLost, slotCounts, slotGadget } from "../gadgets/hands.js";
 import { encodeGadgetOps, encodeGadgetState } from "./gadgetWire.js";
 import { ticks, ticksOrZero } from "../weapons/ticks.js";
 import { encodeError, encodePong, encodeRoster, encodeShotResult, encodeWelcome, ErrorCode, unwrap16, type InputMsg, type LabTool, type RosterEntry, type ShotResult } from "./protocol.js";
@@ -157,6 +159,10 @@ interface Member {
   lastCallout: number;
   scanTicks: number;
   gadgetHeld: boolean;
+  /** A Kludge drone's hack under way (Phase 8 M8): which Kludge, on what, how many ticks it has run. */
+  hack: { kludge: number; target: HackTarget; ticks: number } | null;
+  /** Fire held since a hack ended: it's let go before the next starts. */
+  hackHeld: boolean;
   /** Arrival tick minus claimed snapshot tick, for the last LAG_WINDOW inputs (a ring). */
   lags: number[];
   lagAt: number;
@@ -437,6 +443,8 @@ export class Room implements DirectorHost {
       lastCallout: -1e9,
       scanTicks: 0,
       gadgetHeld: false,
+      hack: null,
+      hackHeld: false,
       lags: [],
       lagAt: 0,
       needCorrection: false,
@@ -533,6 +541,9 @@ export class Room implements DirectorHost {
       d.ownerId = m.ctrl.id;
       m.ctrl.pawnIds.push(d.id);
     }
+    // Brava's Kludge drones (Phase 8 M8) come with her body (prep's pilot has only her drones).
+    const kludge = slotGadget(this.sim.data, this.sim.pawns.get(m.ctrl.possessedPawnId)?.loadout ?? null, 2);
+    if (kludge?.kludge && !drones.some((d) => d.kludge)) for (let i = 0; i < kludge.count; i++) this.sim.addDrone(m.ctrl.id, undefined, true);
     m.queue = [];
     this.force(m);
     m.newBody = true;
@@ -1205,6 +1216,7 @@ export class Room implements DirectorHost {
         operatorId: m.ctrl!.operatorId,
         pawnIds: this.sim.bodyIds(m.ctrl!),
         drones: this.sim.dronesOf(m.ctrl!).map((d) => d.id),
+        kludges: this.sim.dronesOf(m.ctrl!).filter((d) => d.kludge).map((d) => d.id),
         team: m.team,
         kind: 0,
         loadout: m.pick,
@@ -1215,6 +1227,7 @@ export class Room implements DirectorHost {
       operatorId: d.ctrl.operatorId,
       pawnIds: [...d.ctrl.pawnIds],
       drones: [],
+      kludges: [],
       team: d.def.team,
       kind: 1,
       loadout: defaultLoadoutPick(this.sim.data, d.def.operator),
@@ -1287,7 +1300,9 @@ export class Room implements DirectorHost {
     const k = this.sim.data.intel.scan;
     for (const { m, input } of applied.values()) {
       const c = m.ctrl;
-      const onFeed = c !== null && (c.cam !== 0 || this.sim.pawns.get(this.sim.viewedPawnId(c.id))?.kind === PawnKind.Drone);
+      // Not from a Kludge drone (Phase 8 M8): its Fire hacks.
+      const viewed = c ? this.sim.pawns.get(this.sim.viewedPawnId(c.id)) : undefined;
+      const onFeed = c !== null && (c.cam !== 0 || (viewed?.kind === PawnKind.Drone && !viewed.kludge));
       if (!onFeed || !(input.cmd.buttons & Btn.Fire)) {
         m.scanTicks = 0;
         continue;
@@ -1317,6 +1332,101 @@ export class Room implements DirectorHost {
     }
   }
 
+  /** Each Kludge drone's hacks left (Phase 8 M8; by its pawn id, from its data's `charges`). */
+  private readonly kludgeCharges = new Map<number, number>();
+  /** Skopós's idle shells a Kludge's hack has overheating (Phase 8 M8): the tick each burns out, and who did it. */
+  private readonly overheats = new Map<number, { end: number; by: Attacker }>();
+
+  /**
+   * Kludge drones' hacks (Phase 8 M8; research/operators/brava.md §3; gadgets/hack.ts): driving her own Kludge, Fire held
+   * on the other side's device in view within range starts one (not while it's jammed or EMP'd, nor with no hacks
+   * left); it runs while Fire is held, the Kludge stays within range of it (it needn't see it), and isn't jammed,
+   * EMP'd or destroyed; done after `hackS`, its result (hackDone) and one hack spent. Fire is let go before the next.
+   */
+  private hacks(applied: ReadonlyMap<number, { m: Member; input: QueuedInput }>) {
+    for (const { m, input } of applied.values()) {
+      const c = m.ctrl;
+      const fire = (input.cmd.buttons & Btn.Fire) !== 0;
+      const kludge = c && c.drone && c.pawnIds.includes(c.drone) ? this.sim.pawns.get(c.drone) : undefined;
+      const k = kludge ? kludgeOf(this.sim.data, kludge) : null;
+      const working = kludge !== undefined && k !== null && kludge.state.mode === PawnMode.Walk && kludge.state.jammed === 0 && !pawnJammed(this.sim, kludge);
+      const left = (id: number) => this.kludgeCharges.get(id) ?? k?.charges ?? 0;
+      const tell = (stage: 0 | 1 | 2, id: number, n: number) => m.events.push({ kind: "hack", stage, kludge: id, ticks: n, left: left(id) });
+      if (m.hack) {
+        const h = m.hack;
+        const at = working && kludge.id === h.kludge ? hackTargetPos(this.sim, h.target, kludge.team) : null;
+        const s = kludge?.state;
+        const near = at !== null && s !== undefined && Math.hypot(at[0] - s.x, at[1] - s.y, at[2] - s.z) <= k!.rangeM;
+        if (!fire || !near) {
+          m.hack = null;
+          m.hackHeld = fire;
+          tell(2, h.kludge, 0);
+          continue;
+        }
+        if (++h.ticks < ticks(k!.hackS)) continue;
+        m.hack = null;
+        m.hackHeld = true;
+        this.kludgeCharges.set(kludge!.id, left(kludge!.id) - 1);
+        this.hackDone(kludge!, k!, h.target, { ctrlId: c!.id, team: kludge!.team, weaponId: "kludge_drone", origin: [s!.x, s!.y, s!.z] });
+        tell(1, kludge!.id, 0);
+        continue;
+      }
+      if (!fire) m.hackHeld = false;
+      if (!fire || m.hackHeld || !working || left(kludge.id) <= 0) continue;
+      const view = this.sim.viewOf(c!);
+      if (!view) continue;
+      const team = kludge.team;
+      const target = hackTargetFor(this.sim, kludge, k, view, (from, to) => smokeOnSegment(this.sim.data, this.sim.gadgets, from, to) !== null || this.barrierBetween(team, from, to));
+      if (!target) continue;
+      m.hack = { kludge: kludge.id, target, ticks: 0 };
+      tell(0, kludge.id, ticks(k.hackS));
+    }
+  }
+
+  /**
+   * A Kludge's hack done (Phase 8 M8; research/operators/brava.md §4): a device of the other side's that can be controlled
+   * switches sides (a default camera's bit in `matchRules.camsHacked`, an entry's team); one that can't (a Nitro Cell)
+   * is disabled and fizzles `destroyS` later; Skopós's idle shell overheats, `overheatS` from now unless she wakes it.
+   */
+  private hackDone(kludge: Pawn, k: KludgeData, t: HackTarget, by: Attacker) {
+    if (t.kind === "camera") {
+      const bits = 1 << t.index;
+      if (this.director) this.director.camerasHacked(bits);
+      else this.sim.matchRules.camsHacked |= bits;
+      return;
+    }
+    if (t.kind === "shell") {
+      const shell = this.sim.pawns.get(t.pawnId);
+      if (!shell) return;
+      this.overheats.set(shell.id, { end: this.sim.tick + ticks(k.overheatS), by });
+      const owner = shell.ownerId !== null ? this.memberOf(shell.ownerId) : null;
+      owner?.events.push({ kind: "overheat", pawnId: shell.id, ticks: ticks(k.overheatS) });
+      return;
+    }
+    const g = this.sim.gadgets.get(t.id);
+    const how = g && this.sim.data.gadgets.get(kindId(g.kind) ?? "")?.hack;
+    if (!g || !how) return;
+    if (how === "convert") this.sim.gadgets.update(g.id, { team: kludge.team, flags: g.flags & ~GFlag.Active });
+    else this.gadgetServer.fizzle(g, ticks(k.destroyS));
+  }
+
+  /**
+   * Skopós's idle shells overheating (Phase 8 M8): woken (she swapped into it) the overheat's over; still idle when it
+   * burns out, it's destroyed (she lives on in the other, but can't swap any more).
+   */
+  private overheating() {
+    for (const [id, o] of this.overheats) {
+      const shell = this.sim.pawns.get(id);
+      if (!shell || shell.state.mode === PawnMode.Dead || !isIdleShell(this.sim, shell)) {
+        this.overheats.delete(id);
+        continue;
+      }
+      if (this.sim.tick < o.end) continue;
+      this.overheats.delete(id);
+      this.hurt(shell, { amount: shell.state.hp, kill: true }, { cause: Cause.Gadget, attacker: o.by, headshot: false });
+    }
+  }
+
   /**
    * EMP darts (Phase 7 M5, intel/DESIGN.md §4): the gadget key pressed on a working Bulletproof Camera whose dart is
    * ready, by a defender still alive (the dead watch but don't fire: research/intel.md §4), fires it along the view.
@@ -1336,7 +1446,8 @@ export class Room implements DirectorHost {
       const i = c.cam - 1;
       const cam = this.sim.bpCamAt(i);
       const body = this.sim.pawns.get(c.possessedPawnId);
-      if (!cam || !this.sim.camWorks(i) || this.sim.tick < cam.readyAt || !body || body.state.mode === PawnMode.Dead) continue;
+      // Only a defender's own: attackers watching one a Kludge hacked can't fire it (Phase 8 M8; Fandom's BP camera page).
+      if (!cam || !this.sim.camWorks(i) || this.sim.tick < cam.readyAt || !body || body.state.mode === PawnMode.Dead || cam.team !== DEFENSE || body.team !== DEFENSE) continue;
       const view = this.sim.viewOf(c)!;
       const team = this.teamOf(m);
       const drones = [...this.sim.pawns.values()].filter((p) => p.kind === PawnKind.Drone && p.state.mode === PawnMode.Walk && p.team !== team);
@@ -1579,6 +1690,8 @@ export class Room implements DirectorHost {
   private judgeEvents(applied: ReadonlyMap<number, { m: Member; input: QueuedInput }>) {
     this.scans(applied);
     this.darts(applied);
+    this.hacks(applied);
+    this.overheating();
     for (const e of this.sim.events) {
       if (e.kind === "ping") this.ping(e.ctrlId, e.pos, e.gadget, e.heart ?? false);
       if (e.kind !== "shot" && e.kind !== "meleeImpact" && e.kind !== "swing") continue;

@@ -9,6 +9,8 @@ export interface Pawn {
   id: number;
   /** A body, or an attacker's drone (Phase 7); fixed for the pawn's life. */
   kind: PawnKind;
+  /** A drone that's one of Brava's Kludge drones (Phase 8 M8; the roster says which); fixed for its life. */
+  kludge?: boolean;
   operatorId: string;
   /** Controller that owns this pawn (null for dummies). */
   ownerId: number | null;

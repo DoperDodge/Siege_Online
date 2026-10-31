@@ -98,11 +98,11 @@ describe("lobby, clock, error and debug messages round-trip", () => {
     const w = { roomCode: "QX7PA", tick: 123456, levelId: "movement_lab", controllerId: 9 };
     expect(decodeWelcome(body(encodeWelcome(w), Msg.Welcome))).toEqual({ version: PROTOCOL_VERSION, ...w });
     const roster = [
-      { controllerId: 1, name: "Ulo", operatorId: "skopos", pawnIds: [2, 3], drones: [], team: 1, kind: 0, loadout: defaultLoadoutPick(loadGameData(), "skopos") },
-      { controllerId: 4, name: "Bot ✓", operatorId: "brava", pawnIds: [5], drones: [], team: 0, kind: 1, loadout: pick },
+      { controllerId: 1, name: "Ulo", operatorId: "skopos", pawnIds: [2, 3], drones: [], kludges: [], team: 1, kind: 0, loadout: defaultLoadoutPick(loadGameData(), "skopos") },
+      { controllerId: 4, name: "Bot ✓", operatorId: "brava", pawnIds: [5], drones: [6, 7, 8, 9], kludges: [8, 9], team: 0, kind: 1, loadout: pick },
       // An attacker in a match: a body and two drones; in prep, the drones alone (Phase 7).
-      { controllerId: 6, name: "Ash", operatorId: "thermite", pawnIds: [7], drones: [8, 9], team: 0, kind: 0, loadout: defaultLoadoutPick(loadGameData(), "thermite") },
-      { controllerId: 10, name: "Bo", operatorId: "sledge", pawnIds: [], drones: [11, 12], team: 0, kind: 0, loadout: defaultLoadoutPick(loadGameData(), "sledge") },
+      { controllerId: 6, name: "Ash", operatorId: "thermite", pawnIds: [7], drones: [8, 9], kludges: [], team: 0, kind: 0, loadout: defaultLoadoutPick(loadGameData(), "thermite") },
+      { controllerId: 10, name: "Bo", operatorId: "sledge", pawnIds: [], drones: [11, 12], kludges: [], team: 0, kind: 0, loadout: defaultLoadoutPick(loadGameData(), "sledge") },
     ];
     expect(decodeRoster(body(encodeRoster(roster, 4), Msg.Roster))).toEqual({ you: 4, entries: roster });
   });
@@ -154,6 +154,9 @@ describe("lobby, clock, error and debug messages round-trip", () => {
       { kind: "stunned", seconds: 5, blind: 1, ring: true, concuss: false },
       { kind: "stunned", seconds: 3, blind: 0, ring: true, concuss: true },
       { kind: "alarm", gadget: 41, pos: [2, 0.05, 15], on: true, pawnId: 6 },
+      { kind: "hack", stage: 0, kludge: 9, ticks: 192, left: 3 },
+      { kind: "hack", stage: 1, kludge: 9, ticks: 0, left: 2 },
+      { kind: "overheat", pawnId: 4, ticks: 512 },
       { kind: "alarm", gadget: 41, pos: [2, 0.05, 15], on: false, pawnId: 0 },
       { kind: "kill", victimPawn: 8, victimCtrl: 5, killerCtrl: 4, assistCtrl: 0, weapon: "barbed_wire", cause: 8, headshot: false, friendly: false },
     ];

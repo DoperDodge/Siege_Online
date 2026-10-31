@@ -155,7 +155,9 @@ export function stepHands(ctx: HandsContext, pawn: Pawn, input: InputCmd, presse
   if (!lo) return;
   const before = s.hand;
   if (pressed & Btn.Gadget && slotGadget(ctx.data, lo, 1)) toggle(s, 1);
-  if (pressed & Btn.Ability && slotGadget(ctx.data, lo, 2)) toggle(s, 2);
+  // Brava's Kludge drones (Phase 8 M8, a `drone` item) are thrown by the drone code, never taken in hand.
+  const two = slotGadget(ctx.data, lo, 2);
+  if (pressed & Btn.Ability && two && two.use.kind !== "drone") toggle(s, 2);
   // Taken out this tick: its equip time starts next tick (as a weapon swap's does, weapons/step.ts).
   if (s.hand !== before && s.hand !== Hand.Weapon) return;
   // The other weapon's key puts the gadget away; the weapon's step swaps to it and brings it up. (The key of the

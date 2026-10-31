@@ -67,6 +67,7 @@ import {
   isDetonator,
   forwardXZ,
   heartbeats,
+  kludgeOf,
   pawnJammed,
   rightXZ,
   sensorUp,
@@ -241,7 +242,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     <div class="sensor hidden"><div class="sensor-fan"></div><div class="sensor-blips"></div><div class="sensor-title"></div></div>
     <div class="prompt hidden"></div>
     <div class="shellcam hidden"><div class="shellcam-title"></div><div class="swap-bar"><div></div></div></div>
-    <div class="dronecam hidden"><div class="dronecam-title"></div><div class="feeds"></div></div>
+    <div class="dronecam hidden"><div class="dronecam-title"></div><div class="feeds"></div><div class="hack-bar hidden"><div></div></div></div>
     <div class="down-ui hidden"><div class="down-title"></div><div class="down-bar"><div></div></div></div>
     <div class="revive-ui hidden"><div class="revive-title"></div><div class="revive-bar"><div></div></div></div>
     <div class="center-msg hidden"></div>
@@ -1494,6 +1495,10 @@ export async function startLab(o: LabOptions): Promise<void> {
     const inJam = onDrone && pawnJammed(sim, drone);
     $(".dronecam").classList.toggle("jammed", onDrone && (drone.state.jammed > 0 || inJam));
     $(".dronecam").classList.toggle("warned", onDrone && !inJam && pawnJammed(sim, drone, true));
+    // A Kludge's hack under way (Phase 8 M8): its bar filling.
+    const hackBar = $(".hack-bar");
+    hackBar.classList.toggle("hidden", !(onDrone && hackRun));
+    if (hackRun) (hackBar.firstElementChild as HTMLElement).style.width = `${Math.min(100, ((performance.now() - hackRun.start) / hackRun.ms) * 100).toFixed(0)}%`;
     if (onDrone || ctrl.cam) {
       const html = feedRow();
       const row = $(".dronecam .feeds");
@@ -1535,8 +1540,12 @@ export async function startLab(o: LabOptions): Promise<void> {
       const prep = drone.id === ctrl.possessedPawnId;
       const others = prep ? sim.feedDrones(ctrl).filter((p) => !ctrl.pawnIds.includes(p.id)).length : sim.feedDrones(ctrl).length - 1;
       const keys = [others > 0 ? `${keyLabel(k.leanLeft)} / ${keyLabel(k.leanRight)} switch` : "", prep ? "" : `${keyLabel(k.observe)} back`].filter(Boolean).join(" · ");
+      const kludge = drone.kludge ? kludgeOf(data, drone) : null;
+      const hacksLeft = kludge ? (kludgeLeft.get(drone.id) ?? kludge.charges) : 0;
       $(".dronecam-title").textContent = [
-        `DRONE ${drones.indexOf(drone) + 1}/${drones.length}${held ? ` · ${held} held` : ""}`,
+        kludge
+          ? `KLUDGE · ${hacksLeft} hack${hacksLeft === 1 ? "" : "s"} · hold left mouse on a device (${kludge.rangeM} m)`
+          : `DRONE ${drones.indexOf(drone) + 1}/${drones.length}${held ? ` · ${held} held` : ""}`,
         ds.mode === PawnMode.Dead ? "DESTROYED" : "",
         ds.jammed ? `JAMMED ${secs(ds.jammed)}` : inJam ? "JAMMED (signal disruptor)" : "",
         `${keyLabel(k.vault)} jump ${ds.jumpCd ? secs(ds.jumpCd) : "ready"}`,
@@ -1563,8 +1572,9 @@ export async function startLab(o: LabOptions): Promise<void> {
       if (!g) return "";
       const left = slot === 1 ? s.g1 : s.g2;
       const out = slot === 1 ? s.w1 : s.w2;
-      // A held item (Pulse's sensor, Phase 8 M6) is never used up: no count.
-      const count = g.use.kind === "hold" ? "" : ` ×${left}`;
+      // A held item (Pulse's sensor, Phase 8 M6) is never used up: no count. Brava's Kludges (M8): how many she holds.
+      const kludges = g.use.kind === "drone" ? sim.dronesOf(ctrl).filter((d) => d.kludge && d.state.mode === PawnMode.Held).length : 0;
+      const count = g.use.kind === "hold" ? "" : ` ×${g.use.kind === "drone" ? kludges : left}`;
       return `${g.name.toUpperCase()}${count}${out ? ` · ${out} out (detonator)` : ""} · ${keyLabel(key)}`;
     };
     const gadgetText = dead ? "" : [slotText(1, k.gadget), slotText(2, k.ability)].filter(Boolean).join("   ");
@@ -2189,8 +2199,10 @@ export async function startLab(o: LabOptions): Promise<void> {
       }
     for (const pawn of sim.pawns.values())
       if (!pawnViews.has(pawn.id)) {
-        const size = data.intel.drone.sizeM;
-        pawnViews.set(pawn.id, pawn.proxy ? new PawnView(scene, 0xf97316, nameOfPawn(pawn.id) || undefined, undefined, pawn.kind, size) : new PawnView(scene, 0x3b82f6, undefined, undefined, pawn.kind, size));
+        // Brava's Kludge drones (Phase 8 M8) are bigger, and greener.
+        const size = pawn.kludge ? (data.gadgets.get("kludge_drone")?.sizeM ?? data.intel.drone.sizeM) : data.intel.drone.sizeM;
+        const color = pawn.kludge ? 0x65a30d : pawn.proxy ? 0xf97316 : 0x3b82f6;
+        pawnViews.set(pawn.id, pawn.proxy ? new PawnView(scene, color, nameOfPawn(pawn.id) || undefined, undefined, pawn.kind, size) : new PawnView(scene, color, undefined, undefined, pawn.kind, size));
       }
   }
 
@@ -2312,6 +2324,12 @@ export async function startLab(o: LabOptions): Promise<void> {
         if (line) killFeed.push(line, now);
         if (e.kind === "kill" && e.victimCtrl === me) death = { pawnId: e.victimPawn, life: sim.pawns.get(e.victimPawn)?.life ?? 0, text: deathLine(e, feedNames) };
         // Intel (Phase 7): pings, scans and callouts from your team (and word that you were spotted).
+        // Brava's Kludge drone (Phase 8 M8): its hack's progress and the hacks it has left; Skopós told her shell's overheating.
+        if (e.kind === "hack") {
+          kludgeLeft.set(e.kludge, e.left);
+          hackRun = e.stage === 0 ? { start: now, ms: e.ticks * DT * 1000 } : null;
+          if (e.stage === 1) flash(`Hacked · ${e.left} hack${e.left === 1 ? "" : "s"} left on this Kludge`, "info");
+        } else if (e.kind === "overheat") flash(`A Kludge is overheating your idle shell: swap into it within ${(e.ticks * DT).toFixed(0)} s or lose it`, "bad");
         if (e.kind === "ping") {
           // An enemy gadget pinged (Phase 8 M3) is named with it, a heartbeat on Pulse's sensor (M6) too.
           const what = e.heart ? " · heartbeat" : e.gadget >= 0 ? ` · ${data.gadgets.get(kindId(e.gadget) ?? "")?.name ?? kindId(e.gadget)}` : "";
@@ -2329,6 +2347,10 @@ export async function startLab(o: LabOptions): Promise<void> {
       }
     }
   }
+
+  /** Brava's Kludge drones (Phase 8 M8): each one's hacks left, as the server last said; the hack under way's bar. */
+  const kludgeLeft = new Map<number, number>();
+  let hackRun: { start: number; ms: number } | null = null;
 
   /** The heartbeats Pulse's sensor last showed (Phase 8 M6): kept, frozen, while an EMP has him. */
   let heartsShown: { x: number; y: number }[] = [];

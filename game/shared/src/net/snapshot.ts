@@ -30,8 +30,11 @@ import { Btn, PawnMode, Stance, type PawnState } from "../player/types.js";
 import { ByteReader, ByteWriter, fnv1a, ProtocolError } from "./bytes.js";
 import { readControllerState, readPawnState, writeControllerState, writePawnState, type ControllerState } from "./pawnState.js";
 
-/** The most pawns a correction carries: a body and its drones (Phase 7), or Skopós's two shells. */
-export const MAX_OWN_PAWNS = 4;
+/**
+ * The most pawns a correction carries: a body and its drones (Phase 7; Brava's two Kludge drones too, Phase 8 M8), or
+ * Skopós's two shells.
+ */
+export const MAX_OWN_PAWNS = 6;
 
 export const MSG_SNAPSHOT = 0x10;
 /** Snapshots go out on every SNAPSHOT_EVERY-th tick. */

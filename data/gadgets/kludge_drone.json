@@ -1,0 +1,16 @@
+{
+  "_doc": "Brava's Kludge Drone (research/operators/brava.md §3; Phase 8 M8): her ability. Her body carries `count` of them besides her drones (in a match from the action phase; in prep she has her drones), and Z throws one out and drives it as the drone key does a drone (a drone pawn: jammed, EMP'd and shot as one). Driving one, Fire held on an enemy electronic device in view within `kludge.rangeM` (within `kludge.coneDeg` of the view) hacks it in `kludge.hackS`: it must stay within range, but once started it needn't see it; letting go, going out of range, being jammed, EMP'd or destroyed stops it, and a charge is only spent when it's done (Y8S1.1). Of `kludge.charges` each. Cameras (default and Bulletproof), proximity alarms, observation blockers and Mute's jammers switch sides; a Nitro Cell fizzles `kludge.destroyS` later; Skopós's idle shell overheats `kludge.overheatS` after the hack starts unless she wakes it. Not her side's devices, not the Black Mirror, Gu mines, Pulse's sensor, shields, wire, or Skopós's active shell. Its size (drawn bigger; it moves and collides as a drone), charges (3, dualshockers), range (10 m, dualshockers), hack time (3 s), fizzle delay and cone are placeholders; the overheat's 8 s is siege.gg's test-server value.",
+  "_season": "Y11S3",
+  "_unverified": ["sizeM", "kludge.charges", "kludge.rangeM", "kludge.hackS", "kludge.destroyS", "kludge.overheatS", "kludge.coneDeg"],
+  "id": "kludge_drone",
+  "name": "Kludge Drone",
+  "side": "attacker",
+  "operator": "brava",
+  "count": 2,
+  "electronic": true,
+  "use": {"kind": "drone"},
+  "remote": false,
+  "pickUp": false,
+  "sizeM": [0.32, 0.16, 0.26],
+  "kludge": {"charges": 3, "rangeM": 10, "hackS": 3, "destroyS": 2, "overheatS": 8, "coneDeg": 8}
+}

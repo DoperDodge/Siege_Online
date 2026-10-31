@@ -85,14 +85,17 @@ export function barrierOf(q: LevelQuery, b: NonNullable<GadgetData["barrier"]>, 
   return { centre: [g.pos[0] + rx * shift, floor, g.pos[2] + rz * shift], n: [fx, 0, fz], t: [rx, 0, rz], half: (right + left) / 2, floor, top: floor + b.heightM };
 }
 
-/** Where a segment first crosses a barrier rectangle (metres along it), or null. */
+/**
+ * Where a segment first crosses a barrier rectangle (metres along it), or null. A segment ending on the barrier (the
+ * blocker itself stands in it) isn't hidden by it (Phase 8 M8: a Kludge can see the device to hack it).
+ */
 export function crossesBarrier(bar: ReturnType<typeof barrierOf>, from: Vec3, to: Vec3): number | null {
   const d = [to[0] - from[0], to[1] - from[1], to[2] - from[2]];
   const len = Math.hypot(d[0], d[1], d[2]);
   const dn = d[0] * bar.n[0] + d[2] * bar.n[2];
   if (len < 1e-9 || Math.abs(dn) < 1e-9) return null;
   const s = ((bar.centre[0] - from[0]) * bar.n[0] + (bar.centre[2] - from[2]) * bar.n[2]) / dn;
-  if (s < 0 || s > 1) return null;
+  if (s < 0 || s > 1 - 1e-4) return null;
   const p = [from[0] + d[0] * s, from[1] + d[1] * s, from[2] + d[2] * s];
   const along = (p[0] - bar.centre[0]) * bar.t[0] + (p[2] - bar.centre[2]) * bar.t[2];
   if (Math.abs(along) > bar.half || p[1] < bar.floor || p[1] > bar.top) return null;

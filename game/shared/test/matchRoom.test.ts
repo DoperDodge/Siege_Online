@@ -779,7 +779,11 @@ describe("drones in a match (Phase 7 M1)", () => {
     t.tick();
     const ctrl = t.room.bodyOf(atk.id)!;
     expect(t.room.sim.pawns.get(ctrl.possessedPawnId)!.kind).toBe(PawnKind.Body);
-    expect(ctrl.pawnIds.slice(1)).toEqual([d1.id, d2.id]);
+    expect(ctrl.pawnIds.slice(1, 3)).toEqual([d1.id, d2.id]);
+    // Brava's body comes with her two Kludge drones as well (Phase 8 M8); anyone else's with nothing more.
+    const more = ctrl.pawnIds.slice(3).map((id) => t.room.sim.pawns.get(id)!);
+    expect(more.length).toBe(ctrl.operatorId === "brava" ? 2 : 0);
+    expect(more.every((p) => p.kind === PawnKind.Drone && p.kludge)).toBe(true);
     expect(dist(d1, parked)).toBeLessThan(0.01);
     expect(atk.session.ctrl!.pawnIds).toEqual(ctrl.pawnIds);
     for (let i = 0; i < 16; i++) t.tick();

@@ -1,11 +1,11 @@
-// End-to-end check of the Gadget Lab (Phase 8 M1 to M7, game/shared/src/gadgets/DESIGN.md §11). Offline (the page's
+// End-to-end check of the Gadget Lab (Phase 8 M1 to M8, game/shared/src/gadgets/DESIGN.md §11). Offline (the page's
 // own room in a Web Worker): Sledge takes a frag out with 3 and throws it (it flies, comes to rest, and is gone at its
 // fuse), then swings his hammer (Z) at a soft wall close by (both faces broken, a charge spent). Fuze takes a Breach
 // Charge out, holds Fire at a soft wall until it's on it (the detonator is then in hand) and sets it off: the wall has
 // a hole. Then his Cluster Charge (Z) on the reinforced wall: it drills, its grenades come out on the far side, the
 // steel has a hole; and Thermite's Exothermic Charge there: it burns, then a large hole goes through the steel. Mute
 // puts a Signal Disruptor down (Z); Pulse's sensor (Z) shows the attacker dummy's heartbeat; Mira's Black Mirror (Z)
-// cuts its window into the reinforceable wall. Mute throws his Nitro Cell at the feet of the attacker dummy in the open, steps well away and sets it off:
+// cuts its window into the reinforceable wall; Brava throws a Kludge drone (Z) and drives it. Mute throws his Nitro Cell at the feet of the attacker dummy in the open, steps well away and sets it off:
 // the dummy is down, by the Nitro Cell. Sledge's stun thrown in front of him whites out his screen; Thermite's smoke
 // grenade leaves its cloud in the table. Online, two pages at 100 ms of simulated round trip: what A throws, B has in
 // its table too, A's prediction needed no corrections, and both see its blast. (The level's ingredients are in the
@@ -270,6 +270,21 @@ try {
   await input(mir, null);
   result.checks.mirrorCutsItsWindow = result.mirror.table.includes("black_mirror") && result.mirror.table.includes("mirror_canister") && result.mirror.holes[0] > 0 && result.mirror.holes[2] > 0;
   await mir.close();
+
+  // ---- offline (M8): Brava's Kludge drone: Z throws one out and she drives it (its HUD: hacks left)
+  const bra = await open(`${BASE}/labs/gadget_lab.html?autotest=1&lowgfx&op=brava`, { width: 960, height: 540 });
+  await bra.evaluate(() => window.__lab.teleport(0, 0, 16, 0));
+  await sleep(600);
+  result.kludgeBefore = await bra.locator(".gadget-line").textContent();
+  await bra.keyboard.press("KeyZ");
+  await until(bra, () => /KLUDGE/.test(document.querySelector(".dronecam-title")?.textContent ?? ""), null, 10000);
+  await input(bra, { forward: 1 });
+  await sleep(800);
+  await input(bra, null);
+  result.kludge = await bra.evaluate(() => ({ title: document.querySelector(".dronecam-title")?.textContent ?? "", line: document.querySelector(".gadget-line")?.textContent ?? "" }));
+  await bra.screenshot({ path: shot("gadget-kludge.png") });
+  result.checks.kludgeThrownAndDriven = /KLUDGE DRONE ×2/.test(result.kludgeBefore ?? "") && /KLUDGE · 3 hacks · /.test(result.kludge.title);
+  await bra.close();
 
   // ---- offline (M3): Sledge's stun at his feet, facing it: his screen goes white
   const stun = await open(`${BASE}/labs/gadget_lab.html?autotest=1&lowgfx&op=sledge&gadgets=stun`, { width: 960, height: 540 });

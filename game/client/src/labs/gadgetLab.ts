@@ -34,10 +34,11 @@ await startLab({
       "Sledge (M4): Z takes out his hammer, left mouse swings it (25 charges, one a swing that meets something). Close to a soft wall it breaks both faces and the studs (swing low and high for a hole to walk through), further only the near face; floors, hatches and barricades break, steel doesn't; it kills, and destroys defender gadgets.",
       "Thermite (M5): Z, then hold left mouse 3 s on any breakable wall, floor or hatch, the reinforced wall too: on a wall it stands on the floor. Left mouse sets it burning; 3 s later a hole you can walk through, through steel. Fuze: Z, 2 s on a wall, floor, hatch or a deployable shield; set off, it goes through soft surfaces at once and drills steel for 1.75 s, then 5 grenades come out on the far side. A second one sets the first off.",
       "Mira (M7): Z, then 5 s at a reinforceable wall (steel only from its own side), standing or crouched: a Black Mirror, clear from your side and black from the other, bulletproof both ways. A knife shatters it; its red canister (your side, under it) shot or blown up ejects the glass 4 s later.",
+      "Brava (M8): Z throws a Kludge drone (2, besides her drones); driving it, hold left mouse on a defenders' device within 10 m for 3 s to hack it: cameras, alarms, blockers and jammers switch sides, a Nitro Cell fizzles, Skopós's idle shell overheats. 3 hacks each.",
       "Mute (M6): Z, 3 s on the floor: a Signal Disruptor. Within 2.6 m no attacker charge can be set off (nor by an attacker standing in it) and drones lose control; F takes it back. Pulse: Z holds his sensor up: the attackers' heartbeats within 10.5 m in front of him, through walls; ping (T) to mark one for the team.",
       "Refill ammo (pause menu) gives your gadgets back too; Clear gadgets takes every gadget out of the room; Reset walls puts them back.",
     ],
-    note: "Phase 8 M7: every generic gadget in both pools, the ingredients, and Sledge's, Thermite's, Fuze's, Mute's, Pulse's and Mira's abilities. Every number is in data/gadgets.json and data/gadgets/; most are placeholders listed in research/OPEN_QUESTIONS.md.",
+    note: "Phase 8 M8: every generic gadget in both pools, the ingredients, and Sledge's, Thermite's, Fuze's, Mute's, Pulse's, Mira's and Brava's abilities. Every number is in data/gadgets.json and data/gadgets/; most are placeholders listed in research/OPEN_QUESTIONS.md.",
   },
   extend: gadgetFeatures,
 });

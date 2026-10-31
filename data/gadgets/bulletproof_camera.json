@@ -10,5 +10,6 @@
   "use": {"kind": "place", "on": ["wall", "floor"], "placeS": 1.0, "reachM": 2.0},
   "remote": false,
   "pickUp": false,
-  "sizeM": [0.16, 0.12, 0.1]
+  "sizeM": [0.16, 0.12, 0.1],
+  "hack": "convert"
 }

@@ -20,11 +20,23 @@ targets `main`.
 | M5 Thermite; Fuze's Cluster Charge | ✅ (D-145) |
 | M6 Mute; Pulse | ✅ (D-146) |
 | M7 Mira | ✅ (D-147) |
-| M8 Brava | next |
-| M9 Dokkaebi | |
+| M8 Brava | ✅ (D-148) |
+| M9 Dokkaebi | next |
 | M10 Skopós's remaining rules; Lesion | |
 | M11 The Ballistic Shield | |
 | M12 Every CSV row passing; netsim, browser tests, review, docs, report | |
+
+### What's done (M8: Brava)
+- **Brava's Kludge drones:** her two Kludge drones come with her body (in a match, from the action phase; in prep she
+  has her two drones). Z throws one out and you drive it like a drone (it's bigger and green).
+- **Hacking:** driving one, hold left mouse on a defenders' device within 10 m: after 3 s it's hacked (3 hacks per
+  Kludge, spent only when one finishes). Let go, drive out of range, get jammed or EMP'd, and the hack stops. Cameras
+  (the level's and Bulletproof ones), proximity alarms, observation blockers and Mute's jammers switch sides: hacked
+  cameras are the attackers' to watch (Observe, or lean past your last drone), and a hacked jammer jams the defenders.
+  A Nitro Cell fizzles out 2 s later. Skopós's idle shell overheats and burns out 8 s later unless she swaps into it.
+  Mirrors, Gu mines, shields, wire and Pulse's sensor can't be hacked.
+- **The interaction tests:** 30 more rows pass (271 of 343). The Gadget Lab's browser test throws a Kludge and drives
+  it.
 
 ### What's done (M7: Mira)
 - **Mira's Black Mirror:** Z, then left mouse held 5 s at a reinforceable wall (reinforced or not; on steel only from
@@ -171,6 +183,8 @@ npm start
    detector.
 6. **M4:** as Sledge, Z takes out the hammer: swing at the soft walls (close and from further away), the hatch from
    the platform, the barricaded door, and a dummy.
+10. **M8:** as Brava, Z throws a Kludge drone: drive it with WASD. In a match, hold left mouse on a defenders' camera,
+    alarm, jammer or Nitro Cell for 3 s; then lean past your last drone to watch a camera you hacked.
 9. **M7:** as Mira, go to *Reinforceable walls*, Z and hold left mouse at the wall for 5 s: look through it, then
    walk round to the other side (black). Shoot its red canister from your side and watch the glass go.
 8. **M6:** as Mute, Z and hold left mouse at the floor; switch to the attackers (pause menu) and drive a drone at it,

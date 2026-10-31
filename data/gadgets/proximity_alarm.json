@@ -12,5 +12,6 @@
   "pickUp": true,
   "sizeM": [0.08, 0.08, 0.04],
   "fragile": true,
-  "alarm": {"radiusM": 3, "armS": 1}
+  "alarm": {"radiusM": 3, "armS": 1},
+  "hack": "convert"
 }

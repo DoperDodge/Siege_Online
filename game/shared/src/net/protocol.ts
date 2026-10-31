@@ -200,8 +200,10 @@ export interface RosterEntry {
   operatorId: string;
   /** The bodies (Skopós: her two shells), none for an attacker in prep. */
   pawnIds: number[];
-  /** An attacker's drones in a match (Phase 7, intel/DESIGN.md §2), held or out. */
+  /** An attacker's drones in a match (Phase 7, intel/DESIGN.md §2), held or out; Brava's Kludge drones too (Phase 8 M8). */
   drones: number[];
+  /** Which of `drones` are Brava's Kludge drones (Phase 8 M8). */
+  kludges: number[];
   /** 0 attackers, 1 defenders (from the operator's side unless a lab tool moved them). */
   team: number;
   /** 0 a player; 1 a range-lab dummy (Phase 3 M10). */
@@ -218,6 +220,8 @@ export function encodeRoster(entries: RosterEntry[], you: number): Uint8Array {
     for (const id of e.pawnIds) w.varu(id);
     w.u8(e.drones.length);
     for (const id of e.drones) w.varu(id);
+    // Which of them are Kludges: a bit per drone, in order (Phase 8 M8).
+    w.u8(e.drones.reduce((bits, id, i) => (e.kludges.includes(id) ? bits | (1 << i) : bits), 0));
     w.u8(e.team).u8(e.kind);
     writeLoadoutPick(w, e.loadout);
   }
@@ -236,12 +240,15 @@ export function decodeRoster(r: ByteReader): { you: number; entries: RosterEntry
     if (k > 2) throw new ProtocolError("too many pawns");
     const pawnIds = Array.from({ length: k }, () => r.varu());
     const nd = r.u8();
-    if (nd > 2 || k + nd === 0) throw new ProtocolError("bad drones");
+    if (nd > 4 || k + nd === 0) throw new ProtocolError("bad drones");
     const drones = Array.from({ length: nd }, () => r.varu());
+    const bits = r.u8();
+    if (bits >> nd) throw new ProtocolError("bad drones");
+    const kludges = drones.filter((_, i) => bits & (1 << i));
     const team = r.u8();
     const kind = r.u8();
     if (team > 1 || kind > 1) throw new ProtocolError("bad roster entry");
-    out.push({ controllerId, name, operatorId, pawnIds, drones, team, kind, loadout: readLoadoutPick(r) });
+    out.push({ controllerId, name, operatorId, pawnIds, drones, kludges, team, kind, loadout: readLoadoutPick(r) });
   }
   return { you, entries: out };
 }

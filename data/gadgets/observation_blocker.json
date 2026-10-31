@@ -12,5 +12,6 @@
   "pickUp": true,
   "sizeM": [0.12, 0.25, 0.12],
   "fragile": true,
-  "barrier": {"widthM": 5, "heightM": 2.2}
+  "barrier": {"widthM": 5, "heightM": 2.2},
+  "hack": "convert"
 }

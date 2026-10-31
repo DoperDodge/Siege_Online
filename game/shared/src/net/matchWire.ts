@@ -257,6 +257,8 @@ export interface MatchView {
   camsBroken: number;
   /** The default cameras an EMP has off for now (Phase 8 M3, DSEG): a bit each. */
   camsOff: number;
+  /** The default cameras a Kludge drone hacked this round (Phase 8 M8): the attackers' feeds now, a bit each. */
+  camsHacked: number;
   /** The cameras someone is watching (Phase 7): a bit each, the level's then the Bulletproof Cameras. */
   camsWatched: number;
   history: RoundRecord[];
@@ -297,7 +299,7 @@ export function encodeMatchState(v: MatchView): Uint8Array {
     for (const op of side.slice(0, 6)) w.str(op);
   }
   optStr(w, v.site);
-  w.varu(v.carrier).u32(v.safeguardEnd >>> 0).u32(v.camsBroken >>> 0).u32(v.camsOff >>> 0).u32(v.camsWatched >>> 0);
+  w.varu(v.carrier).u32(v.safeguardEnd >>> 0).u32(v.camsBroken >>> 0).u32(v.camsOff >>> 0).u32(v.camsHacked >>> 0).u32(v.camsWatched >>> 0);
   const history = v.history.slice(-MAX_HISTORY);
   w.u8(history.length);
   for (const h of history) w.u8(Math.min(255, h.round)).u8(h.attackers).u8(h.winner).u8(h.reason).str(h.site);
@@ -371,6 +373,7 @@ export function decodeMatchState(r: ByteReader): MatchView {
   const safeguardEnd = r.u32();
   const camsBroken = r.u32();
   const camsOff = r.u32();
+  const camsHacked = r.u32();
   const camsWatched = r.u32();
   const h = r.u8();
   if (h > MAX_HISTORY) throw new ProtocolError("history too long");
@@ -417,6 +420,7 @@ export function decodeMatchState(r: ByteReader): MatchView {
     safeguardEnd,
     camsBroken,
     camsOff,
+    camsHacked,
     camsWatched,
     history,
     winner: wv === 2 ? null : (wv as Team),

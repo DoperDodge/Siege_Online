@@ -125,6 +125,8 @@ export class GadgetServer {
   private readonly released = new Map<number, number>();
   /** Each Black Mirror's canister's entry id: its mirror's (the server's alone; M7). */
   private readonly canisters = new Map<number, number>();
+  /** Entries a Kludge's hack has fizzling out (M8): the tick each is destroyed. */
+  private readonly fizzles = new Map<number, number>();
 
   constructor(
     private readonly sim: Sim,
@@ -250,6 +252,16 @@ export class GadgetServer {
     this.canisters.set(c.id, g.id);
   }
 
+  /**
+   * A device a Kludge's hack can't control (a Nitro Cell, M8): disabled at once (its detonator skips it) and destroyed
+   * `after` ticks later, without its blast.
+   */
+  fizzle(g: Gadget, after: number): void {
+    const end = this.sim.tick + Math.max(1, after);
+    this.sim.gadgets.update(g.id, { flags: g.flags | GFlag.Off, offEnd: Math.max(g.offEnd, end) });
+    this.fizzles.set(g.id, end);
+  }
+
   /** A Black Mirror goes (its wall gave way round it): its canister with it. */
   private mirrorOut(g: Gadget) {
     for (const [c, m] of this.canisters)
@@ -325,6 +337,14 @@ export class GadgetServer {
   step(): void {
     const sim = this.sim;
     const tick = sim.tick;
+    for (const [id, end] of this.fizzles) {
+      const g = sim.gadgets.get(id);
+      if (!g) this.fizzles.delete(id);
+      else if (tick >= end) {
+        this.fizzles.delete(id);
+        this.destroy(g);
+      }
+    }
     for (const g of [...sim.gadgets.list]) {
       if (isIngredient(g.kind)) {
         this.ingredient(this.wakeUp(g));
@@ -657,6 +677,7 @@ export class GadgetServer {
     this.flights.clear();
     this.released.clear();
     this.canisters.clear();
+    this.fizzles.clear();
     this.sim.gadgets.clear();
     for (const g of lost) this.onLost(g, this.dataOf(g)!);
   }

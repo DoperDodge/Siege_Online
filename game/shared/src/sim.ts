@@ -48,6 +48,8 @@ export interface MatchSimRules {
   camsBroken: number;
   /** A bit for each default camera an EMP has off for now (Phase 8 M3, DSEG: its feed is static; the room says when). */
   camsOff: number;
+  /** A bit for each default camera a Kludge drone has hacked (Phase 8 M8): the attackers' now, not the defenders'. */
+  camsHacked: number;
 }
 
 /** A camera's lens sits this far out of the front of its box (metres). */
@@ -71,7 +73,7 @@ export class Sim {
    */
   deployRules: DeployRules = { anyone: false, rappel: false, pools: [0, 0] };
   /** A match room's rules for bodies (none in a lab). */
-  matchRules: MatchSimRules = { redWalls: false, killPlaneKills: false, cameras: false, camsBroken: 0, camsOff: 0 };
+  matchRules: MatchSimRules = { redWalls: false, killPlaneKills: false, cameras: false, camsBroken: 0, camsOff: 0, camsHacked: 0 };
   /**
    * Everything placed, thrown or dropped this round (Phase 8, gadgets/table.ts): the server's room changes it, a client
    * applies the server's ops. The simulation reads entries' flags and places (never their ticks).
@@ -503,7 +505,8 @@ export class Sim {
     const plain = raycastLevel(this, eye, dir, reach)?.t ?? reach;
     const hit = gadgetOnRay(this.gadgets, this.data, eye, dir, plain + 0.05, (g) => {
       const id = this.data.gadgets.get(kindId(g.kind) ?? "");
-      return g.owner === pawn.ownerId && !(g.flags & GFlag.Flying) && id !== undefined && id.pickUp && slots.includes(id.id) && !(id.solid && g.flags & GFlag.Hit);
+      // Not one a Kludge hacked over to the other side (Phase 8 M8).
+      return g.owner === pawn.ownerId && g.team === pawn.team && !(g.flags & GFlag.Flying) && id !== undefined && id.pickUp && slots.includes(id.id) && !(id.solid && g.flags & GFlag.Hit);
     });
     return hit?.g ?? null;
   }
@@ -692,12 +695,16 @@ export class Sim {
     return c;
   }
 
-  /** A held drone for a controller (Phase 7); one with no body possesses its first. `id`: a client mirroring the server's. */
-  addDrone(controllerId: number, id?: number): Pawn {
+  /**
+   * A held drone for a controller (Phase 7); one with no body possesses its first. `id`: a client mirroring the
+   * server's. `kludge`: one of Brava's Kludge drones (Phase 8 M8).
+   */
+  addDrone(controllerId: number, id?: number, kludge = false): Pawn {
     const c = this.controllers.get(controllerId);
     if (!c) throw new Error(`no controller ${controllerId}`);
     const at = this.pawns.get(c.possessedPawnId)?.state ?? { x: 0, y: 0, z: 0 };
     const pawn = this.spawnPawn(c.operatorId, at.x, at.y, at.z, 0, c.id, id, null, c.team, PawnKind.Drone);
+    if (kludge) pawn.kludge = true;
     c.pawnIds.push(pawn.id);
     if (!c.possessedPawnId) c.possessedPawnId = pawn.id;
     return pawn;
@@ -721,10 +728,11 @@ export class Sim {
 
   /**
    * A body throws a held drone (data/intel.json `drone.throw`): it appears ahead of the body, or in its place when a
-   * wall is that close, moving forward and up. Null when none is held.
+   * wall is that close, moving forward and up. `kludge`: one of Brava's Kludge drones (Phase 8 M8), else a drone. Null
+   * when none is held.
    */
-  private throwDrone(c: PlayerController, body: Pawn, buttons: number): Pawn | null {
-    const held = this.dronesOf(c).find((p) => p.state.mode === PawnMode.Held);
+  private throwDrone(c: PlayerController, body: Pawn, buttons: number, kludge = false): Pawn | null {
+    const held = this.dronesOf(c).find((p) => p.state.mode === PawnMode.Held && (p.kludge ?? false) === kludge);
     if (!held) return null;
     const t = this.data.intel.drone.throw;
     const b = body.state;
@@ -789,14 +797,21 @@ export class Sim {
     }
     if (c.drone) {
       if (pressed & Btn.Observe) c.drone = 0;
-      else if (newLean && out.length > 1) {
+      else if (newLean) {
         const i = out.findIndex((p) => p.id === c.drone);
-        c.drone = out[(i + newLean + out.length) % out.length].id;
+        // Past the end of the list, an attacker goes on to the cameras a Kludge hacked (Phase 8 M8), if any.
+        const cam = (i + newLean < 0 || i + newLean >= out.length) && this.matchRules.cameras ? this.nextCam(c.team, -1, 1) : -1;
+        if (cam >= 0) {
+          c.drone = 0;
+          this.openCam(c, cam);
+        } else if (out.length > 1) c.drone = out[(i + newLean + out.length) % out.length].id;
       }
       return;
     }
-    if (pressed & Btn.Throw) {
-      const thrown = body.state.mode === PawnMode.Walk ? this.throwDrone(c, body, input.buttons) : null;
+    // The ability key throws a Kludge drone for Brava (Phase 8 M8: her slot 2 item is a `drone` one).
+    const kludge = pressed & Btn.Ability && slotGadget(this.data, body.loadout, 2)?.use.kind === "drone";
+    if (pressed & Btn.Throw || kludge) {
+      const thrown = body.state.mode === PawnMode.Walk ? this.throwDrone(c, body, input.buttons, !!kludge) : null;
       if (thrown) c.drone = thrown.id;
     } else if (pressed & Btn.Observe && out.length) c.drone = out[0].id;
   }
@@ -830,7 +845,7 @@ export class Sim {
    * one, or closes when none is left. Down, nothing; going down closes it.
    */
   private updateCams(c: PlayerController, input: InputCmd | undefined, heldBefore: number) {
-    if (!this.matchRules.cameras || c.team !== sideTeam("defender") || this.camCount() === 0) {
+    if (!this.matchRules.cameras || this.camCount() === 0) {
       c.cam = 0;
       return;
     }
@@ -838,8 +853,8 @@ export class Sim {
     const downed = body !== undefined && isDowned(body.state);
     // An EMP on the body (DSEG, Phase 8 M3): no observation tools.
     const jammed = body !== undefined && body.kind === PawnKind.Body && body.state.jammed > 0;
-    if (c.cam && (downed || jammed || !this.camWorks(c.cam - 1))) {
-      const next = downed || jammed ? -1 : this.nextCam(c.cam - 1, 1);
+    if (c.cam && (downed || jammed || !this.camFor(c.team, c.cam - 1))) {
+      const next = downed || jammed ? -1 : this.nextCam(c.team, c.cam - 1, 1);
       if (next < 0) c.cam = 0;
       else this.openCam(c, next);
     }
@@ -854,7 +869,7 @@ export class Sim {
         return;
       }
       if (newLean) {
-        const next = this.nextCam(c.cam - 1, newLean);
+        const next = this.nextCam(c.team, c.cam - 1, newLean);
         if (next >= 0) this.openCam(c, next);
       }
       // Toward the mouse, within the camera's limits, at its turn rate.
@@ -866,7 +881,9 @@ export class Sim {
       return;
     }
     if (!(pressed & Btn.Observe) || downed || jammed) return;
-    const first = this.nextCam(-1, 1);
+    // An attacker's hacked cameras (Phase 8 M8): Observe opens their drones first while any are out (switchDrones).
+    if (c.team !== sideTeam("defender") && (c.drone !== 0 || this.feedDrones(c).length > 0)) return;
+    const first = this.nextCam(c.team, -1, 1);
     if (first >= 0) this.openCam(c, first);
   }
 
@@ -1016,8 +1033,25 @@ export class Sim {
   camWorks(i: number): boolean {
     if (i >= this.camCount()) return false; // a Bulletproof Camera from a round that's over
     const bp = this.bpCamAt(i);
-    if (bp) return !(bp.flags & (GFlag.Broken | GFlag.Lost | GFlag.Off));
-    return i < 32 && ((this.matchRules.camsBroken | this.matchRules.camsOff) & (1 << i)) === 0;
+    if (bp && bp.flags & (GFlag.Broken | GFlag.Lost | GFlag.Off)) return false;
+    if (!bp && (i >= 32 || ((this.matchRules.camsBroken | this.matchRules.camsOff) & (1 << i)) !== 0)) return false;
+    // Inside a jammer of the other side than its own (Phase 8 M8: one Brava's Kludge converted, or Mute's on a hacked one).
+    return !pointJammed(this, this.camTeam(i), bp ? bp.pos : this.level.def.cameras[i].pos);
+  }
+
+  /**
+   * Whose camera i is (Phase 8 M8): the defenders', unless a Kludge drone hacked it (a default camera's bit in
+   * `matchRules.camsHacked`, a Bulletproof Camera's team).
+   */
+  camTeam(i: number): number {
+    const bp = this.bpCamAt(i);
+    if (bp) return bp.team;
+    return i < 32 && this.matchRules.camsHacked & (1 << i) ? sideTeam("attacker") : sideTeam("defender");
+  }
+
+  /** Whether camera i is one `team` can watch now: theirs, and working. */
+  private camFor(team: number, i: number): boolean {
+    return this.camWorks(i) && this.camTeam(i) === team;
   }
 
   /**
@@ -1046,13 +1080,16 @@ export class Sim {
     return [at[0] + fx * ahead, at[1], at[2] + fz * ahead];
   }
 
-  /** The next working camera from `from` going `dir` (±1), round the defenders' list; −1 when none works. */
-  private nextCam(from: number, dir: number): number {
+  /**
+   * The next working camera of `team`'s from `from` going `dir` (±1), round the list (the defenders' cameras, the ones
+   * a Kludge hacked the attackers', Phase 8 M8); −1 when none works.
+   */
+  private nextCam(team: number, from: number, dir: number): number {
     const n = this.camCount();
     const start = Math.min(from, n - 1); // from one no longer in the list (last round's): as if from the last
     for (let k = 1; k <= n; k++) {
       const i = (((start + dir * k) % n) + n) % n;
-      if (this.camWorks(i)) return i;
+      if (this.camFor(team, i)) return i;
     }
     return -1;
   }
@@ -1481,7 +1518,8 @@ export class Sim {
     const ready = active !== undefined && ((active.state.mode === PawnMode.Walk && active.state.grounded) || ropeIdle(active.state));
     // An EMP on either shell (DSEG, Phase 8 M3): her shell camera is an observation tool, the idle shell a device.
     const other = this.otherPawn(c.id);
-    if (!other || !ready || active.state.jammed > 0 || other.state.jammed > 0) {
+    // A jammer of the other side on either shell too (Phase 8 M8: one Brava converted; Mute's own don't mind her).
+    if (!other || !ready || active.state.jammed > 0 || other.state.jammed > 0 || pawnJammed(this, active) || pawnJammed(this, other)) {
       c.shellCam = false; // nothing to look through, busy (climbing, vaulting, dead), or EMP'd
       return;
     }

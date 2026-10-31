@@ -88,6 +88,9 @@ html, body { overflow: hidden; overscroll-behavior: none; touch-action: none; us
 .dronecam .feeds span.view { font-style: italic; opacity: 0.7; }
 .swap-bar { position: absolute; top: 88px; left: 50%; width: 240px; height: 4px; transform: translateX(-50%); background: rgba(0, 0, 0, 0.5); border-radius: 2px; overflow: hidden; }
 .swap-bar div { height: 100%; background: var(--accent); }
+/* A Kludge drone's hack (Phase 8 M8). */
+.hack-bar { position: absolute; top: 64px; left: 50%; width: 240px; height: 5px; transform: translateX(-50%); background: rgba(0, 0, 0, 0.5); border-radius: 2px; overflow: hidden; }
+.hack-bar div { height: 100%; width: 0; background: #84cc16; }
 /* Intel (Phase 7): your team's pings (yellow; danger orange), enemies spotted by a scan (red), the comm wheel, the scan's gauge. */
 .intel-marks { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
 .intel-mark { position: absolute; left: 0; top: 0; --c: #facc15; }

@@ -98,6 +98,7 @@ export class GadgetModels {
     barrier: new THREE.MeshBasicMaterial({ color: 0x0b1220, transparent: true, opacity: 0.92, side: THREE.DoubleSide, depthWrite: false }),
     sparks: new THREE.MeshBasicMaterial({ color: 0xffb347, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false }),
     jamOn: new THREE.MeshBasicMaterial({ color: 0x38bdf8 }),
+    hacked: new THREE.MeshBasicMaterial({ color: 0xf97316, transparent: true, opacity: 0.22, depthWrite: false }),
     glassClear: new THREE.MeshBasicMaterial({ color: 0x99f6e4, transparent: true, opacity: 0.12, side: THREE.FrontSide, depthWrite: false }),
     glassBlack: new THREE.MeshBasicMaterial({ color: 0x050607, side: THREE.FrontSide }),
     glassShattered: new THREE.MeshBasicMaterial({ color: 0xcbd5e1, side: THREE.DoubleSide }),
@@ -314,6 +315,12 @@ export class GadgetModels {
         sheet.rotation.set(0, yaw, 0);
         group.add(sheet);
       }
+    }
+    // A defenders' device a Kludge hacked over to the attackers (M8): it glows in their colour.
+    if (this.dataOf(g.kind)?.side === "defender" && g.team !== 1 && !(g.flags & GFlag.Flying)) {
+      const glow = new THREE.Mesh(new THREE.SphereGeometry(Math.max(0.12, Math.max(...this.dataOf(g.kind)!.sizeM) * 0.6), 12, 8), this.fxMat.hacked);
+      glow.position.set(g.pos[0], g.pos[1], g.pos[2]);
+      group.add(glow);
     }
     // A jammer working (M6): its light on top.
     if (this.dataOf(g.kind)?.jammer && !(g.flags & (GFlag.Off | GFlag.Flying))) {

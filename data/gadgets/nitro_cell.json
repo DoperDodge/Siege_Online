@@ -12,5 +12,6 @@
   "pickUp": false,
   "sizeM": [0.12, 0.08, 0.05],
   "blast": {"damage": {"max": 171, "fullM": 2.0, "zeroM": 6.0}, "destroyM": 2.0, "cut": "nitro_cell", "cutM": 1.0, "throughSoft": 1.0, "concussM": 4.0},
-  "fragile": true
+  "fragile": true,
+  "hack": "destroy"
 }

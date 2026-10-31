@@ -101,7 +101,7 @@ export class ClientSession {
   private seq = 0;
   private readonly remotes = new Map<number, Sample[]>();
   /** Each remote pawn's operator, loadout and team, from the roster (for its proxy). */
-  private readonly rosterOf = new Map<number, { operatorId: string; loadout: ResolvedLoadout | null; team: number; kind: PawnKind }>();
+  private readonly rosterOf = new Map<number, { operatorId: string; loadout: ResolvedLoadout | null; team: number; kind: PawnKind; kludge?: boolean }>();
   private lastSnapTick = 0;
   private lastSnapAt = 0;
   private lastArrival = 0;
@@ -236,7 +236,7 @@ export class ClientSession {
         this.match = v;
         // What the room's simulation applies, applied by our prediction too (red walls; out of the map is death; the
         // defuser, for our own holds).
-        this.sim!.matchRules = { redWalls: v.redWalls, killPlaneKills: true, cameras: true, camsBroken: v.camsBroken, camsOff: v.camsOff };
+        this.sim!.matchRules = { redWalls: v.redWalls, killPlaneKills: true, cameras: true, camsBroken: v.camsBroken, camsOff: v.camsOff, camsHacked: v.camsHacked };
         const d = v.defuser;
         this.sim!.objective = d && { carrier: d.carrier, dropped: d.dropped, planted: d.planted, site: v.site, canPlant: d.canPlant, plantTicks: d.plantTicks, disableTicks: d.disableTicks };
         this.opts.onMatch?.(v);
@@ -277,7 +277,7 @@ export class ClientSession {
     for (const e of entries) {
       const loadout = resolveLoadout(sim.data, e.loadout).loadout;
       for (const id of e.pawnIds) this.rosterOf.set(id, { operatorId: e.operatorId, loadout, team: e.team, kind: PawnKind.Body });
-      for (const id of e.drones) this.rosterOf.set(id, { operatorId: e.operatorId, loadout: null, team: e.team, kind: PawnKind.Drone });
+      for (const id of e.drones) this.rosterOf.set(id, { operatorId: e.operatorId, loadout: null, team: e.team, kind: PawnKind.Drone, kludge: e.kludges.includes(id) });
     }
     const mine = entries.find((e) => e.controllerId === you);
     const mineIds = mine ? [...mine.pawnIds, ...mine.drones] : [];
@@ -299,7 +299,7 @@ export class ClientSession {
         const ctrl = mine.pawnIds.length
           ? sim.addPlayer(mine.name, mine.operatorId, 0, { controller: mine.controllerId, pawns: mine.pawnIds }, mine.loadout, mine.team)
           : sim.addPilot(mine.name, mine.operatorId, mine.team, { controller: mine.controllerId });
-        for (const id of mine.drones) sim.addDrone(ctrl.id, id);
+        for (const id of mine.drones) sim.addDrone(ctrl.id, id, mine.kludges.includes(id));
       }
     }
     this.opts.onRoster?.(entries, you);
@@ -369,7 +369,8 @@ export class ClientSession {
         if (sim.pawns.get(id)?.proxy) sim.setPawnState(id, state);
         else if (!sim.pawns.has(id)) {
           const r = this.rosterOf.get(id);
-          sim.addProxy(id, r?.operatorId ?? "sledge", state, r?.loadout ?? null, r?.team ?? 0, r?.kind ?? PawnKind.Body);
+          const proxy = sim.addProxy(id, r?.operatorId ?? "sledge", state, r?.loadout ?? null, r?.team ?? 0, r?.kind ?? PawnKind.Body);
+          if (r?.kludge) proxy.kludge = true;
         }
       }
       if (!this.decoder.verify(snap)) {

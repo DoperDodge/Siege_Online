@@ -209,6 +209,21 @@ an open hole in its frame). After any panel op on its wall the server checks the
 more than a fifth gone through every layer, the mirror falls, its canister with it. A wall with a mirror in it can't be
 reinforced.
 
+**As built (M8, Brava, D-148):** a Kludge drone is a drone pawn marked `kludge` (the roster lists them; it moves and
+collides as a drone, drawn bigger and green); Brava's body carries `count` (2) besides her drones, from the action
+phase, and Z throws one as the drone key throws a drone (her slot 2 item has a `drone` use: never in her hands). The
+room runs a hack (`hacks`, `gadgets/hack.ts`) while she drives one and holds Fire: it starts on the other side's device
+nearest her crosshair within 8° and 10 m that she can see (smoke and observation blockers hide; a blocker isn't hidden
+by its own screen), not while the Kludge is jammed or EMP'd or has no hacks left (3); it runs 3 s while Fire is held
+and the Kludge stays within range (it needn't see the device); then one hack is spent. Each gadget's data says what a
+hack does (`hack`): `convert` flips its entry's team (Bulletproof Cameras, alarms, blockers, jammers: their rules all
+go by team, so a converted jammer jams the defenders), `destroy` disables it at once and destroys it 2 s later without
+its blast (a Nitro Cell); a default camera's bit goes in `matchRules.camsHacked` (sent with the match state); Skopós's
+idle shell overheats, destroyed 8 s later unless she wakes it. Cameras now belong to a team (`camTeam`): defenders
+watch theirs, attackers the ones they hacked (Observe with no drone out, or a lean past the end of their drone feeds),
+and nobody fires a hacked camera's dart. A camera inside a jammer of the other side than its own has no feed, and a
+jammer of the other side by either of Skopós's shells stops her swap.
+
 ## 8. The Ballistic Shield (Fuze)
 
 The shield as a primary (data/weapons/ballistic_shield.json, research/weapons_notes.md §5): a shield hit shape in

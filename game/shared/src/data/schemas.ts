@@ -799,6 +799,11 @@ export const gadgetSchema = z
       }),
       /** Held up in the hands while it's out, never placed or thrown (Pulse's sensor, Phase 8 M6: `sensor`). */
       z.strictObject({ kind: z.literal("hold") }),
+      /**
+       * Drones of her own (Brava's Kludge drones, Phase 8 M8: `kludge`): her body carries `count` of them besides her
+       * drones; Z throws one out and drives it, as the drone key does a drone. Never in the hands.
+       */
+      z.strictObject({ kind: z.literal("drone") }),
     ]),
     /** Waits for its owner's detonator once it's out. */
     remote: z.boolean(),
@@ -872,6 +877,11 @@ export const gadgetSchema = z
     /** One bullet (or any damage) destroys it, without its blast. */
     fragile: z.boolean().default(false),
     /**
+     * What Brava's Kludge drone's hack does to it (Phase 8 M8; research/operators/brava.md §3.2): `convert` it switches
+     * sides (it works for the hacker's side), `destroy` it fizzles out a little later (a device it can't control).
+     */
+    hack: z.enum(["convert", "destroy"]).optional(),
+    /**
      * Mute's Signal Disruptor (Phase 8 M6, gadgets/jammers.ts): while it stands (not in the air, not disabled by an
      * EMP) it jams the other side's wireless signals within `radiusM` (a sphere): no remote device of theirs in it, or
      * whose owner is in it, can be set off, and their drones in it lose their drivers; inside `warnM` their drones'
@@ -892,6 +902,23 @@ export const gadgetSchema = z
      * glass: destroyed, it ejects the glass `ejectS` later (an open hole, its frame left). It falls with its wall: when
      * more than `lossMax` of a band `frameM` wide round its window is gone through every layer.
      */
+    /**
+     * Brava's Kludge drone (Phase 8 M8, gadgets/hack.ts): driving one, Fire held on an enemy electronic device in view
+     * within `rangeM` (a camera, an alarm, a blocker, a jammer, a Nitro Cell, Skopós's idle shell) hacks it in `hackS`
+     * (it must stay within range; once started it needn't see it), one of its `charges`: a device that can be
+     * controlled switches sides, a Nitro Cell fizzles `destroyS` later, an idle shell overheats `overheatS` later
+     * unless Skopós wakes it. It sees the device within `coneDeg` of its view.
+     */
+    kludge: z
+      .strictObject({
+        charges: z.number().int().min(1),
+        rangeM: z.number().positive(),
+        hackS: z.number().positive(),
+        destroyS: z.number().positive(),
+        overheatS: z.number().positive(),
+        coneDeg: z.number().positive().max(45),
+      })
+      .optional(),
     mirror: z
       .strictObject({
         standY: z.number().positive(),
@@ -917,6 +944,7 @@ export const gadgetSchema = z
     if ((u.kind === "hold") !== (g.sensor !== undefined)) ctx.addIssue({ code: "custom", path: ["use"], message: "a held item is a sensor, and a sensor is held" });
     if (g.jammer && (u.kind !== "place" || g.jammer.warnM < g.jammer.radiusM)) ctx.addIssue({ code: "custom", path: ["jammer"], message: "a jammer is placed, and warns beyond its reach" });
     if (g.mirror && (u.kind !== "place" || !u.on.includes("reinforceable") || !g.solid)) ctx.addIssue({ code: "custom", path: ["mirror"], message: "a mirror is solid and placed on a reinforceable wall" });
+    if ((u.kind === "drone") !== (g.kludge !== undefined)) ctx.addIssue({ code: "custom", path: ["kludge"], message: "a drone item is a Kludge, and a Kludge is a drone item" });
   });
 export type GadgetData = z.infer<typeof gadgetSchema>;
 
