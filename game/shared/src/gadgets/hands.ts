@@ -147,9 +147,11 @@ export function placeSpotFor(q: PlaceQuery & { data: GameData }, pawn: Pawn): Pl
 
 /**
  * One tick of the hands, before the weapon's (player/movement.ts). `free`: the body is on its feet with nothing else
- * in its hands (no knife swing, revive or Interact hold): only then does a gadget wind up, place or detonate.
+ * in its hands (no knife swing, revive or Interact hold): only then does a gadget wind up, place or detonate. `live`:
+ * false when the input isn't its player's this tick (a stall): a placing under way waits, neither going on nor ending,
+ * as a panel hold does, so the player's next input carries on where the client predicted.
  */
-export function stepHands(ctx: HandsContext, pawn: Pawn, input: InputCmd, pressed: number, free: boolean): void {
+export function stepHands(ctx: HandsContext, pawn: Pawn, input: InputCmd, pressed: number, free: boolean, live = true): void {
   const s = pawn.state;
   const lo = pawn.loadout;
   if (!lo) return;
@@ -240,6 +242,7 @@ export function stepHands(ctx: HandsContext, pawn: Pawn, input: InputCmd, presse
     return;
   }
   // A placed gadget: Fire held with the view on a spot for it, for its placing time (let go, or look away: nothing).
+  if (!live && s.gAct === GadgetAct.Place) return;
   const spot = input.buttons & Btn.Fire ? placeSpotFor(ctx, pawn) : null;
   if (!spot) {
     s.gAct = GadgetAct.Ready;

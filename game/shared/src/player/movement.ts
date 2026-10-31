@@ -78,7 +78,7 @@ export function stepPawn(ctx: MoveContext, pawn: Pawn, input: InputCmd, weapons 
   const down = isDowned(s);
   if (weapons && !down) {
     // The gadget in hand first (Phase 8): a key that takes one out puts the weapon away this same tick.
-    stepHands(ctx, pawn, input, pressed, s.meleeTicks === 0 && s.reviveTarget === 0 && s.deployKind === DeployKind.None);
+    stepHands(ctx, pawn, input, pressed, s.meleeTicks === 0 && s.reviveTarget === 0 && s.deployKind === DeployKind.None, live);
     stepWeapon(ctx, pawn, input, pressed);
   } else {
     parkWeapon(s);

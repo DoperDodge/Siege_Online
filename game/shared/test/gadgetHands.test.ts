@@ -205,6 +205,21 @@ describe("placing and detonators (Phase 8 M1)", () => {
     void sim;
   });
 
+  it("a stall mid-placing (ticks stepped without the player's input) holds the placing where it was; it then goes on", async () => {
+    const { sim, c, s, step, of, press } = await lab("fuze", SOFT, 0, ["breach_charge"]);
+    press(Btn.Gadget);
+    const place = ticks((sim.data.gadgets.get("breach_charge")!.use as { placeS: number }).placeS);
+    step({ buttons: Btn.Fire }, place - 10);
+    expect([s.gAct, s.gTicks]).toEqual([GadgetAct.Place, place - 10]);
+    // 30 ticks with no input from the player (the server steps the body without it, past its hold budget).
+    for (let i = 0; i < 30; i++) sim.step(new Map(), new Set([c.id]), true);
+    expect([s.gAct, s.gTicks, of("place").length]).toEqual([GadgetAct.Place, place - 10, 0]);
+    step({ buttons: Btn.Fire }, 9);
+    expect(of("place")).toEqual([]);
+    step({ buttons: Btn.Fire });
+    expect(of("place").length).toBe(1);
+  });
+
   it("a Nitro Cell is thrown and sticks to the wall it hits, facing out of it; its detonator sets it off", async () => {
     const { sim, s, step, of, press } = await lab("pulse", SOFT, 0, ["nitro_cell"]);
     press(Btn.Gadget);
