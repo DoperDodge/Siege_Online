@@ -430,6 +430,29 @@ try {
   await until(b, blast, INGREDIENTS, 10000);
   result.checks.onlineBlastSeenByBoth = true;
 
+  // ---- online (M11): Fuze's Ballistic Shield as the other page sees him: up in front, then on his back with a gadget
+  // out (the place travels in the remote record)
+  // (Fuze first, so the pick keeps his own secondary: Sledge's isn't one of his.)
+  await a.evaluate(() => window.__lab.pickOperator("fuze"));
+  await a.waitForFunction(() => window.__lab?.net?.ready && window.__lab.net.own && window.__lab.net.loadout?.operator === "fuze", null, { timeout: 30000 });
+  await a.evaluate(() =>
+    window.__lab.pickLoadout({ ...window.__lab.net.loadout, primary: { weapon: "ballistic_shield", sight: null, barrel: null, grip: null, underbarrel: null }, gadgets: ["breach_charge"] }),
+  );
+  await a.waitForFunction(() => window.__lab?.net?.ready && window.__lab.net.own && window.__lab.net.loadout?.primary.weapon === "ballistic_shield", null, { timeout: 30000 });
+  const fuzeId = await a.evaluate(() => window.__lab.net.pawnId);
+  // Fuze at z 8 facing +z, the other page 4 m in front of him looking back at him.
+  await a.evaluate(() => window.__lab.teleport(0, 0, 8, 180));
+  await b.evaluate(() => window.__lab.teleport(0, 0, 12, 0));
+  await input(b, { yaw: 0, pitch: -0.05 });
+  const seenAt = (arg) => window.__lab.net.remotes.some((r) => r.id === arg[0] && r.state?.shieldAt === arg[1]);
+  await until(b, seenAt, [fuzeId, 1], 15000);
+  await sleep(600);
+  await b.screenshot({ path: shot("gadget-online-shield.png") });
+  await a.keyboard.press("Digit3");
+  await until(b, seenAt, [fuzeId, 2], 15000);
+  await input(b, null);
+  result.checks.onlineShieldSeenByTheOther = true;
+
   result.errors = errors;
   ok = Object.values(result.checks).every(Boolean) && errors.length === 0;
 } catch (e) {

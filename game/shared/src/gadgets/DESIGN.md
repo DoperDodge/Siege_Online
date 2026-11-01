@@ -319,6 +319,16 @@ has one registered test named after it (`source > target: result`; UNVERIFIED ro
 placeholder). A coverage test reads `research/interactions.csv` and fails on a row with no test or a test with no
 row; rows a later milestone builds are `it.todo` until then, and the phase is done at zero.
 
+**As built (M12):** zero todos: all 343 rows pass (`interactions/built.ts`, `m2.ts` … `m12.ts`). The last eleven were
+Phase 7's observation tools seen through the CSV (the dart fired from a Bulletproof Camera with the gadget key, as a
+player does; scans from a drone, the level's camera and a Bulletproof Camera; a bullet or a knife on a drone or the
+level's camera). A lab room breaks the level's cameras on a shot only when a test turns its cameras on, as it already
+turned them off for an EMP. The network check is the netsim's `--gadgets` run (tools/netsim): on the Gadget Lab, the
+attackers' line (Sledge, Thermite, Fuze, Dokkaebi, Brava) faces the defenders' (Mute, Pulse, Lesion, Mira, Skopós), and
+every few seconds each bot takes out its gadget or ability, holds Fire 2.5 s and presses it again, over 100 ms round
+trip with jitter, stalls and drift; once the last snapshot has reached everyone, every client's gadget table must hash
+as the server's, with no desync. Its 20 s run is a unit test.
+
 ## 11. Wire and client
 
 - **Protocol 15:** the new pawn fields (exact in corrections); a remote field for what's in the hands; gadget ops

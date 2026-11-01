@@ -3,6 +3,7 @@
 //      npm run netsim -- --combat --walls       (the fight across the sample walls: holes synced to everyone)
 //      npm run netsim -- --level oregon ...     (any of the above on Oregon: the street, or across the Kitchen's soft wall)
 //      npm run netsim -- --level oregon --rappel (each bot up, along and down an outside wall of its own on a rope)
+//      npm run netsim -- --gadgets               (the Gadget Lab: two lines of every operator using their gadgets)
 //      npm run netsim -- --hitreg [--seconds 30] [--one-way 50] [--jitter 10] [--cap 16] [--seed 1]
 //      npm run netsim -- --match [--clients 10] [--seed 1] [--script elimination,time,detonate,disable,...]
 //                                (a whole Custom match on Oregon, each round ending the scripted way; 10 rounds by default)
@@ -53,13 +54,16 @@ if (args.includes("--combat")) o.combat = true;
 if (args.includes("--walls")) o.walls = true;
 if (args.includes("--level")) o.level = args[args.indexOf("--level") + 1];
 if (args.includes("--rappel")) (o.rappel = true), (o.crowd = false);
+if (args.includes("--gadgets")) (o.gadgets = true), (o.crowd = false);
 const r = await runNetsim(o);
 console.table(r.perClient.map((c) => ({ ...c, downKbps: +c.downKbps.toFixed(1), upKbps: +c.upKbps.toFixed(1), rttMs: +c.rttMs.toFixed(0), interpDelayMs: +c.interpDelayMs.toFixed(0) })));
 console.log("room", r.room, "server tick ms", r.serverTickMs, "after the first second", r.serverTickMsWarm, "starved remote frames", r.starvedRemoteFrames);
 if (o.combat) console.log("combat", r.combat);
 if (r.rappel) console.log("rappel", r.rappel);
+if (r.gadgets) console.log("gadgets", r.gadgets);
 console.log("panels", r.panels);
 if (r.contactLate.length) console.log(`at rest in contact (expected, D-033):\n${r.contactLate.join("\n")}`);
 console.log(r.desyncs.length ? `DESYNCS:\n${r.desyncs.join("\n")}` : "no desyncs");
 if (r.panels.differ.length) console.log(`PANELS DIFFER: ${r.panels.differ.join(", ")}`);
-process.exit(r.desyncs.length || r.panels.differ.length ? 1 : 0);
+if (r.gadgets?.differ.length) console.log(`GADGET TABLES DIFFER: ${r.gadgets.differ.join(", ")}`);
+process.exit(r.desyncs.length || r.panels.differ.length || r.gadgets?.differ.length ? 1 : 0);
