@@ -91,8 +91,8 @@ describe("snapshot codec", () => {
     expect(seen.mode).toBe(PawnMode.Rappel);
     expect(seen.ropeTurn).toBeCloseTo(0.4, 2);
     expect(remoteState(quantizeRemote({ ...turning, mode: PawnMode.Walk })).ropeTurn).toBe(0);
-    // (Bits 9–10 are Fuze's shield's place, Phase 8 M11: 3 isn't one; nothing past them.)
-    for (const flags of [(quantizeRemote(s).flags & ~(7 << 4)) | (7 << 4), quantizeRemote(s).flags | (3 << 9), quantizeRemote(s).flags | 2048]) {
+    // (Bits 9–10 are Fuze's shield's place, Phase 8 M11: 3 isn't one; 11–13 how far it's slid down; nothing past them.)
+    for (const flags of [(quantizeRemote(s).flags & ~(7 << 4)) | (7 << 4), quantizeRemote(s).flags | (3 << 9), quantizeRemote(s).flags | 16384]) {
       const bad = { ...quantizeRemote(s), flags };
       expect(() => new SnapshotDecoder().decode(new SnapshotEncoder().encode({ tick: 2, ackSeq: 0, idled: false, queueDepth: 2 }, null, new Map([[5, bad]])))).toThrow(ProtocolError);
     }

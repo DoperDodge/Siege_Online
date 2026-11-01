@@ -2,6 +2,7 @@
 // drawn instanced per material and storey (tools/mapgen/DESIGN.md E4), labels and a map's room callouts by
 // storey (E9), pawn bodies built from hitbox capsules, and an F3 hitbox visualizer.
 import * as THREE from "three";
+import { ShieldModel } from "./shieldModel.js";
 import {
   droneHitboxes,
   eyePose,
@@ -9,7 +10,6 @@ import {
   PawnKind,
   PawnMode,
   poseHitboxes,
-  shieldHitboxes,
   shieldPlace,
   type BuiltLevel,
   type GameData,
@@ -475,8 +475,8 @@ export class PawnView {
   private gun: GunModel | null = null;
   /** A gadget in its hands (Phase 8): a box of its size (at most a hand's), drawn instead of the gun. */
   private held: THREE.Mesh | null = null;
-  /** Fuze's Ballistic Shield (Phase 8 M11): its plate where its state says (see-through in your own first person). */
-  private shield: THREE.Mesh | null = null;
+  /** Fuze's Ballistic Shield (Phase 8 M11): its curved plate and window where its state says (your own too). */
+  private shield: ShieldModel | null = null;
   private plate: ShieldPlate | null = null;
   private heldKey = "";
   private gunLook = "";
@@ -568,42 +568,22 @@ export class PawnView {
       this.held.position.set(...eye).add(new THREE.Vector3(0.2, -0.3, -0.3).applyEuler(rot));
       this.held.rotation.copy(rot);
     }
-    if (this.shield && this.plate) {
-      // The plate spans the capsules its hitboxes are made of (player/shield.ts): their outer edges, top to bottom.
-      const place = shieldPlace(state);
-      this.shield.visible = place !== null;
-      if (place) {
-        const caps = shieldHitboxes(data.movement, data.hitboxes, state, this.plate, place);
-        const [first, last] = [caps[0], caps[caps.length - 1]];
-        const r = first.radius;
-        const width = Math.hypot(last.a[0] - first.a[0], last.a[2] - first.a[2]) + 2 * r;
-        const height = Math.abs(first.b[1] - first.a[1]) + 2 * r;
-        this.shield.position.set((first.a[0] + last.b[0]) / 2, (first.a[1] + first.b[1]) / 2, (first.a[2] + last.b[2]) / 2);
-        this.shield.rotation.set(0, state.yaw, 0);
-        this.shield.scale.set(width, height, 0.05);
-        // See-through from behind it in first person (a changed `transparent` needs the material rebuilt).
-        const m = this.shield.material as THREE.MeshStandardMaterial;
-        if (m.transparent !== this.firstPerson) {
-          m.transparent = this.firstPerson;
-          m.opacity = this.firstPerson ? 0.28 : 1;
-          m.depthWrite = !this.firstPerson;
-          m.needsUpdate = true;
-        }
-      }
-    }
+    // Fuze's shield (Phase 8 M11): in your own first person too, where you look through its window.
+    this.shield?.update(data, state, shieldPlace(state));
   }
 
   /** Fuze's Ballistic Shield's plate on this body (its loadout's), or none (Phase 8 M11). */
   setShield(plate: ShieldPlate | null) {
+    if (plate === this.plate) return;
     this.plate = plate;
-    if (plate && !this.shield) {
-      this.shield = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.5, metalness: 0.4 }));
-      this.body.add(this.shield);
-    } else if (!plate && this.shield) {
-      this.body.remove(this.shield);
-      this.shield.geometry.dispose();
-      (this.shield.material as THREE.Material).dispose();
+    if (this.shield) {
+      this.body.remove(this.shield.mesh);
+      this.shield.dispose();
       this.shield = null;
+    }
+    if (plate) {
+      this.shield = new ShieldModel(plate);
+      this.body.add(this.shield.mesh);
     }
   }
 
@@ -683,6 +663,7 @@ export class PawnView {
   dispose() {
     this.gun?.dispose();
     this.setHeld(null);
+    this.setShield(null);
     this.rope.geometry.dispose();
     this.drone?.traverse((o) => (o as THREE.Mesh).geometry?.dispose());
     this.scene.remove(this.body, this.wire);

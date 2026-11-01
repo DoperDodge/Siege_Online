@@ -4,7 +4,7 @@
 import { DEG, lerp, rotateXZ, type Vec3 } from "../core/math.js";
 import type { HitboxData, MovementData } from "../data/schemas.js";
 import { currentEyeHeight, currentHeight, proneWeight } from "./stance.js";
-import { Btn, PawnMode, Stance, type PawnState } from "./types.js";
+import { PawnMode, Stance, type PawnState } from "./types.js";
 
 /**
  * "drone": the one box of an attacker's drone (Phase 7, player/drone.ts). "shield": Fuze's Ballistic Shield's plate
@@ -179,33 +179,71 @@ export type ShieldPlace = "front" | "back";
 /** The plate's numbers (data/weapons/ballistic_shield.json `shield.plate`). */
 export interface ShieldPlate {
   widthM: number;
+  curveM: number;
   frontM: number;
   bottomM: { stand: number; crouch: number };
   aboveEyeM: number;
   adsBelowEyeM: number;
+  window: { widthM: number; heightM: number };
+}
+
+/** How far Fuze's raised shield has slid down for aiming (0 up … 1 down): the body's aiming progress (`adsQ`). */
+export const shieldLowered = (s: PawnState) => Math.min(1, Math.max(0, s.adsQ / 65535));
+
+/** Where the plate is on a body now: its bottom and top heights over the feet, and a point on it (see shieldFrame). */
+export interface ShieldFrame {
+  y0: number;
+  y1: number;
+  /** The plate's own height (drawn rigid: as it slides down for aiming its bottom may dip under the floor, y0 doesn't). */
+  tall: number;
+  /** Half its width. */
+  half: number;
+  /** The world point `u` across it (−1 its left edge … 1 its right) at height `y` over the feet. */
+  at(u: number, y: number): Vec3;
 }
 
 /**
- * Fuze's Ballistic Shield as hitboxes (Phase 8 M11): six vertical capsules side by side across its plate, each part
- * "shield". In front: `frontM` ahead of the body, from `bottomM` (standing or crouched) up to `aboveEyeM` over the eyes,
- * or `adsBelowEyeM` under them while aiming (the head over it). On the back: just behind the torso, hips to shoulders.
+ * Fuze's Ballistic Shield's plate on a body (Phase 8 M11, reworked after Ulo's test). In front: its middle `frontM`
+ * ahead, curving round him (its edges `curveM` nearer); from `bottomM` (standing or crouched) to `aboveEyeM` over the
+ * eyes, slid down as he aims (`aboveEyeM + adsBelowEyeM` when fully aimed: the head over it; its bottom stops at the
+ * floor). On the back: across his back from the hips to the shoulders. It bends with his spine when he leans, as the
+ * upper body does (uprightPose). Null while prone (it's on his back then, and a prone body's isn't modelled).
  */
-export function shieldHitboxes(m: MovementData, hb: HitboxData, s: PawnState, k: ShieldPlate, place: ShieldPlace): Hitbox[] {
+export function shieldFrame(m: MovementData, hb: HitboxData, s: PawnState, k: ShieldPlate, place: ShieldPlace): ShieldFrame | null {
+  if (proneWeight(s) > 0) return null;
   const height = currentHeight(m, s);
   const eye = currentEyeHeight(m, s);
   const st = hb.standing;
+  const hip = height * st.hipHeight;
   const front = place === "front";
-  const y0 = front ? (s.stance === Stance.Crouch ? k.bottomM.crouch : k.bottomM.stand) : height * st.hipHeight;
-  // (Aiming as others see it: the remote record's aiming bit, so a rewind lowers it just the same.)
-  const y1 = front ? (s.prevButtons & Btn.Ads ? eye - k.adsBelowEyeM : eye + k.aboveEyeM) : height * st.chestHeight + 0.15;
-  const z = front ? -k.frontM : 0.22;
-  const w = front ? k.widthM : k.widthM * 0.85;
-  const n = 6;
-  const r = w / (2 * n);
+  const drop = front ? (k.aboveEyeM + k.adsBelowEyeM) * shieldLowered(s) : 0;
+  const bottom = s.stance === Stance.Crouch ? k.bottomM.crouch : k.bottomM.stand;
+  const y0 = front ? Math.max(0.02, bottom - drop) : hip;
+  const y1 = front ? eye + k.aboveEyeM - drop : height * st.chestHeight + 0.15;
+  const tall = front ? eye + k.aboveEyeM - bottom : y1 - y0;
+  const half = (front ? k.widthM : k.widthM * 0.85) / 2;
+  const lean = s.lean * m.lean.offset;
+  const at = (u: number, y: number): Vec3 => {
+    const bend = eye > hip ? lean * Math.max(0, (y - hip) / (eye - hip)) : 0;
+    const z = front ? -k.frontM + k.curveM * u * u : 0.22 - k.curveM * u * u;
+    return toWorld(s, [u * half + bend, y, z], height);
+  };
+  return { y0, y1, tall, half, at };
+}
+
+/**
+ * Fuze's Ballistic Shield as hitboxes (Phase 8 M11): seven vertical capsules side by side along its curved plate (see
+ * shieldFrame), each part "shield"; none while prone.
+ */
+export function shieldHitboxes(m: MovementData, hb: HitboxData, s: PawnState, k: ShieldPlate, place: ShieldPlace): Hitbox[] {
+  const f = shieldFrame(m, hb, s, k, place);
+  if (!f) return [];
+  const n = 7;
+  const r = f.half / n;
   const out: Hitbox[] = [];
   for (let i = 0; i < n; i++) {
-    const x = -w / 2 + r + i * 2 * r;
-    out.push({ part: "shield", a: toWorld(s, [x, y0 + r, z], height), b: toWorld(s, [x, Math.max(y0 + r, y1 - r), z], height), radius: r });
+    const u = -1 + (2 * i + 1) / n;
+    out.push({ part: "shield", a: f.at(u, f.y0 + r), b: f.at(u, Math.max(f.y0 + r, f.y1 - r)), radius: r });
   }
   return out;
 }

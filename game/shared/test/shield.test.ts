@@ -98,30 +98,53 @@ describe("where the plate is", () => {
 });
 
 describe("the plate's hitboxes", () => {
-  it("in front by frontM, its top over the eyes (under them aimed), its bottom by stance; on the back behind the torso", async () => {
+  it("curve round him in front (frontM at the middle, curveM nearer at the edges), shins to over the eyes; slide down as he aims; bend with a lean; on the back behind the torso; none prone", async () => {
     const { sim, pawn } = await fuze();
     const k = pawn.loadout!.shield!;
     const m = sim.data.movement;
     const hb = sim.data.hitboxes;
-    const s = { ...pawn.state, yaw: 0, x: 0, z: 0 };
+    const s = { ...pawn.state, yaw: 0, x: 0, y: 0, z: 0, lean: 0, adsQ: 0 };
     const eye = eyePose(m, hb, s).pos[1];
-    const top = (boxes: ReturnType<typeof shieldHitboxes>) => Math.max(...boxes.map((b) => Math.max(b.a[1], b.b[1]) + b.radius));
-    const bottom = (boxes: ReturnType<typeof shieldHitboxes>) => Math.min(...boxes.map((b) => Math.min(b.a[1], b.b[1]) - b.radius));
+    type Boxes = ReturnType<typeof shieldHitboxes>;
+    const top = (boxes: Boxes) => Math.max(...boxes.map((b) => Math.max(b.a[1], b.b[1]) + b.radius));
+    const bottom = (boxes: Boxes) => Math.min(...boxes.map((b) => Math.min(b.a[1], b.b[1]) - b.radius));
     const front = shieldHitboxes(m, hb, s, k.plate, "front");
-    expect(front).toHaveLength(6);
-    expect(front.every((b) => b.part === "shield" && Math.abs(b.a[2] + k.plate.frontM) < 1e-4)).toBe(true);
+    expect(front).toHaveLength(7);
+    expect(front.every((b) => b.part === "shield")).toBe(true);
+    // The middle capsule frontM ahead; the outer ones nearer him by the curve (u = ±6/7 across).
+    expect(front[3].a[2]).toBeCloseTo(-k.plate.frontM, 4);
+    expect(front[0].a[2]).toBeCloseTo(-k.plate.frontM + k.plate.curveM * (6 / 7) ** 2, 4);
+    expect(front[6].a[2]).toBeCloseTo(front[0].a[2], 6);
     const width = Math.max(...front.map((b) => b.a[0] + b.radius)) - Math.min(...front.map((b) => b.a[0] - b.radius));
     expect(width).toBeCloseTo(k.plate.widthM, 4);
-    expect(top(front) - s.y).toBeCloseTo(eye - s.y + k.plate.aboveEyeM, 3);
-    expect(bottom(front) - s.y).toBeCloseTo(k.plate.bottomM.stand, 3);
-    const aimed = shieldHitboxes(m, hb, { ...s, prevButtons: Btn.Ads }, k.plate, "front");
-    expect(top(aimed) - s.y).toBeCloseTo(eye - s.y - k.plate.adsBelowEyeM, 3);
-    // Facing +x (yaw −90°), the plate is at +x.
+    expect(top(front)).toBeCloseTo(eye + k.plate.aboveEyeM, 3);
+    expect(bottom(front)).toBeCloseTo(k.plate.bottomM.stand, 3);
+    // Fully aimed it has slid down by aboveEye + adsBelowEye (the head over it), its bottom stopping at the floor; half
+    // aimed, half as far.
+    const slide = k.plate.aboveEyeM + k.plate.adsBelowEyeM;
+    const aimed = shieldHitboxes(m, hb, { ...s, adsQ: 65535 }, k.plate, "front");
+    expect(top(aimed)).toBeCloseTo(eye - k.plate.adsBelowEyeM, 3);
+    expect(bottom(aimed)).toBeCloseTo(0.02, 3);
+    expect(top(shieldHitboxes(m, hb, { ...s, adsQ: 32768 }, k.plate, "front"))).toBeCloseTo(eye + k.plate.aboveEyeM - slide * (32768 / 65535), 3);
+    // Leaning right, it bends with his spine: its top goes right by about the lean's offset (a little more, being over
+    // the eyes), its bottom (under the hips) not at all.
+    const leaning = shieldHitboxes(m, hb, { ...s, lean: 1 }, k.plate, "front");
+    expect(leaning[3].b[0] - front[3].b[0]).toBeGreaterThan(m.lean.offset);
+    expect(leaning[3].a[0] - front[3].a[0]).toBeCloseTo(0, 6);
+    // Facing +x (yaw −90°), its middle is frontM out along +x.
     const turned = shieldHitboxes(m, hb, { ...s, yaw: -90 * DEG }, k.plate, "front");
-    expect(turned.every((b) => Math.abs(b.a[0] - k.plate.frontM) < 1e-4)).toBe(true);
+    expect(turned[3].a[0]).toBeCloseTo(k.plate.frontM, 4);
     const back = shieldHitboxes(m, hb, s, k.plate, "back");
     expect(back.every((b) => b.a[2] > 0.1)).toBe(true);
+    expect(shieldHitboxes(m, hb, { ...s, stance: Stance.Prone, stanceFrom: Stance.Prone, stanceT: 1 }, k.plate, "back")).toEqual([]);
     expect(shieldPlace({ ...s, shieldAt: ShieldAt.None })).toBeNull();
+  });
+
+  it("how far it has slid down goes to others in the remote record (8 steps), with the shield up only", async () => {
+    const { pawn } = await fuze();
+    const sent = (adsQ: number, shieldAt: number) => remoteState(quantizeRemote({ ...pawn.state, adsQ, shieldAt })).adsQ;
+    expect([sent(0, ShieldAt.Front), sent(65535, ShieldAt.Front), sent(65535, ShieldAt.Back), sent(65535, ShieldAt.None)]).toEqual([0, 65535, 0, 0]);
+    expect(sent(30000, ShieldAt.Front)).toBe(Math.round((3 / 7) * 65535));
   });
 });
 

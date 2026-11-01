@@ -82,7 +82,7 @@ export class Viewmodel {
    * Pose for this frame. `w` is the weapon in hand (null: nothing to hold), `s` the body's state,
    * `swapTicks` the loadout's swap time; `dt` seconds since the last frame.
    */
-  update(now: number, dt: number, w: ResolvedWeapon | null, s: PawnState, swapTicks: number, gadget: { data: GadgetData; detonator: boolean } | null = null) {
+  update(now: number, dt: number, w: ResolvedWeapon | null, s: PawnState, swapTicks: number, gadget: { data: GadgetData; detonator: boolean } | null = null, behindShield = false) {
     const vm = this.kit.viewmodel;
     const show = w !== null && s.mode !== PawnMode.Dead && !isDowned(s);
     this.knife.visible = false;
@@ -103,6 +103,8 @@ export class Viewmodel {
     const gun = this.gun!;
     // Aiming: the sight line comes onto the view axis, adsDistance in front of the eye.
     this.aim = smooth(s.adsQ / 65535);
+    // Fuze's pistol is behind his raised shield until it's slid down far enough to aim over (Phase 8 M11).
+    if (behindShield && this.aim < 0.6) this.rig.visible = false;
     const hip = new THREE.Vector3(...vm.hip);
     const ads = new THREE.Vector3(0, 0, -vm.adsDistance).sub(gun.sight);
     const pos = hip.lerp(ads, this.aim);

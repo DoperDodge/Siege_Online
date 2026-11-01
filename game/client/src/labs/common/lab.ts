@@ -489,6 +489,25 @@ export async function startLab(o: LabOptions): Promise<void> {
    * In the free camera your body gets no input: it stands as it was, and the view it gives (Skopós' other
    * shell's, on its camera) looks where it looked.
    */
+  /**
+   * Fuze's free look (Phase 8 M11, Ulo's test): Fire held with his shield up and not aiming turns the view (the mouse)
+   * and not the body. The input keeps the body facing where it did, without Fire; letting go turns the view back.
+   */
+  let freeLookFrom: { yaw: number; pitch: number } | null = null;
+  function freeLook(input: InputCmd): InputCmd {
+    const p = sim.pawns.get(ctrl.possessedPawnId);
+    const on = !!p?.loadout?.shield && p.state.shieldAt === 1 && !ctrl.cam && !ctrl.drone && !ctrl.shellCam && !freeCam && (input.buttons & Btn.Fire) !== 0 && !(input.buttons & Btn.Ads);
+    if (on) {
+      freeLookFrom ??= { yaw: p!.state.yaw, pitch: p!.state.pitch };
+      return { ...input, yaw: freeLookFrom.yaw, pitch: freeLookFrom.pitch, buttons: input.buttons & ~Btn.Fire };
+    }
+    if (!freeLookFrom) return input;
+    const back = freeLookFrom;
+    freeLookFrom = null;
+    controls.setView(back.yaw, back.pitch);
+    return { ...input, yaw: back.yaw, pitch: back.pitch };
+  }
+
   function still(input: InputCmd): InputCmd {
     const p = sim.pawns.get(ctrl.possessedPawnId);
     if (!freeCam || !p) return input;
@@ -999,7 +1018,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     if (net) {
       const sampled = controls.sample(++seq);
       // Test scripts add buttons to what the controls sample (a click still fires while a script holds ADS).
-      const input = still(scripted ? { ...sampled, ...scripted, buttons: sampled.buttons | (scripted.buttons ?? 0) } : sampled);
+      const input = freeLook(still(scripted ? { ...sampled, ...scripted, buttons: sampled.buttons | (scripted.buttons ?? 0) } : sampled));
       // Predicts locally and sends the input; a shot claims the frame that was on screen when you clicked.
       const sent = net.session.tick(input, clickViewTick ?? undefined);
       if (sent) claims.set(sent.seq & 0xffff, { viewTick: net.session.lastViewTick, weapon: heldWeapon() });
@@ -1007,7 +1026,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       clickViewTick = null;
       scanTicks = input.buttons & Btn.Fire && controls.onDrone() ? scanTicks + 1 : 0;
     } else {
-      const input = still(script ? autoInput(++seq) : controls.sample(++seq));
+      const input = freeLook(still(script ? autoInput(++seq) : controls.sample(++seq)));
       sim.step(new Map([[ctrl.id, input]]));
       onWeaponEvents(sim.events);
       // Offline the page is the server for gadgets too (Phase 8): the step's gadget events into the table.
@@ -1029,8 +1048,9 @@ export async function startLab(o: LabOptions): Promise<void> {
     } else if (nowViewed !== viewedId) {
       viewedId = nowViewed;
       if (!freeCam) controls.setView(v.state.yaw, v.state.pitch);
-    } else if (!freeCam && !(v.kind === PawnKind.Drone && !ctrl.pawnIds.includes(v.id))) {
-      // (On a teammate's drone the view is yours alone: the drone's own facing is its driver's.)
+    } else if (!freeCam && !freeLookFrom && !(v.kind === PawnKind.Drone && !ctrl.pawnIds.includes(v.id))) {
+      // (On a teammate's drone the view is yours alone: the drone's own facing is its driver's. In Fuze's free look the
+      // view leaves the body's facing on purpose.)
       controls.syncView(v.state.yaw, v.state.pitch, tickKick);
     }
     prompt = sim.prompt(ctrl.id);
@@ -1236,7 +1256,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     drawWorld();
     if (rs && viewed && me) {
       const inHand = viewed.id === me.id && !outside && !onCamera && !ctrl.shellCam && ctrl.swapPhase === 0 ? (viewed.loadout?.weapons[rs.slot] ?? null) : null;
-      viewmodel.update(now, elapsed, inHand, rs, viewed.loadout?.swapTicks ?? 1, inHand ? heldGadget(viewed, rs) : null);
+      viewmodel.update(now, elapsed, inHand, rs, viewed.loadout?.swapTicks ?? 1, inHand ? heldGadget(viewed, rs) : null, !!viewed.loadout?.shield && rs.shieldAt === 1);
       viewmodel.render(renderer);
       const held = viewed.loadout?.weapons[rs.slot];
       const aimed = inHand !== null && viewmodel.aim > 0.9;
@@ -1582,7 +1602,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     }
     $(".flash").classList.toggle("show", performance.now() < flashUntil);
 
-    ammoHud.update(p.loadout?.weapons[s.slot], s, dead || onCam, keyLabel(k.fireMode), p.loadout?.shield ? (s.shieldAt === 1 ? "SHIELD UP · aim to fire" : s.shieldAt === 2 ? "SHIELD ON YOUR BACK" : "SHIELD KNOCKED ASIDE") : "");
+    ammoHud.update(p.loadout?.weapons[s.slot], s, dead || onCam, keyLabel(k.fireMode), p.loadout?.shield ? (s.shieldAt === 1 ? (freeLookFrom ? "SHIELD UP · FREE LOOK" : "SHIELD UP · aim to fire, hold fire to look round") : s.shieldAt === 2 ? "SHIELD ON YOUR BACK" : "SHIELD KNOCKED ASIDE") : "");
     // Fuze's shield suppressed (Phase 8 M11): the edges of the view blur, and no sprinting.
     app.classList.toggle("suppressed", suppressed(p.loadout ?? null, s));
     // The gadgets in the two slots (Phase 8): how many are left, on which key; a detonator's devices waiting.

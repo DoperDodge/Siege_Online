@@ -375,12 +375,19 @@ const shieldSchema = z.strictObject({
     suppression: z.strictObject({ hitsToTrigger: z.number().int().positive(), hitsToMax: z.number().int().positive(), falloffS: secs }),
     bashDamage: z.number().nonnegative(),
     bashPushMps: z.number().nonnegative(),
+    /**
+     * Its plate (Phase 8 M11, reworked after Ulo's test): `widthM` across, curving round its carrier (its edges `curveM`
+     * nearer him than its middle, `frontM` ahead); from `bottomM` up to `aboveEyeM` over the eyes, slid down by
+     * `aboveEyeM + adsBelowEyeM` as he aims; a viewport `window` at eye height (bulletproof glass: drawn see-through).
+     */
     plate: z.strictObject({
       widthM: z.number().positive(),
+      curveM: z.number().min(0),
       frontM: z.number().positive(),
       bottomM: z.strictObject({ stand: z.number().min(0), crouch: z.number().min(0) }),
       aboveEyeM: z.number().min(0),
       adsBelowEyeM: z.number().min(0),
+      window: z.strictObject({ widthM: z.number().positive(), heightM: z.number().positive() }),
     }),
     absorb: z.number().min(0).max(1),
     guardBreak: z.strictObject({ blastHp: z.number().positive(), seconds: secs }),
