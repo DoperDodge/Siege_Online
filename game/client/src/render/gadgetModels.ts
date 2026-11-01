@@ -21,6 +21,7 @@ import {
   isIngredient,
   jetOf,
   KIND_BP_CAMERA,
+  KIND_SHELL_SHIELD,
   kindId,
   kindOf,
   raycastLevel,
@@ -62,6 +63,8 @@ const COLOURS: Record<string, number> = {
   black_mirror: 0x134e4a,
   mirror_canister: 0xdc2626,
   dropped_phone: 0x0f172a,
+  gu_mine: 0x65a30d,
+  shell_shield: 0x475569,
 };
 
 /**
@@ -242,6 +245,8 @@ export class GadgetModels {
       it.key = key;
       this.pose(it.obj, g.pos, g.yaw, g.flags);
       (it.obj.getObjectByName("body") as THREE.Mesh | undefined)?.scale.setScalar(isIngredient(g.kind) && g.flags & GFlag.Broken ? 0.7 : 1);
+      // Skopós's idle shell's barrier broken by a blast (M10): gone (its entry stays as the shell's camera).
+      it.obj.visible = !(g.kind === KIND_SHELL_SHIELD && g.flags & GFlag.Broken);
       this.setLasers(it, g);
     }
     for (const [id, it] of this.items)

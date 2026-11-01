@@ -67,6 +67,7 @@ import {
   isDetonator,
   forwardXZ,
   heartbeats,
+  guData,
   kludgeOf,
   pawnJammed,
   rightXZ,
@@ -241,6 +242,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     <div class="stun-white"></div><div class="emp-static hidden"></div>
     <div class="sensor hidden"><div class="sensor-fan"></div><div class="sensor-blips"></div><div class="sensor-title"></div></div>
     <div class="prompt hidden"></div>
+    <div class="needle-ui hidden"></div>
     <div class="jegeo-bar hidden"><div class="jegeo-title"></div><div class="jegeo-fill"><div></div></div></div>
     <div class="shellcam hidden"><div class="shellcam-title"></div><div class="swap-bar"><div></div></div></div>
     <div class="dronecam hidden"><div class="dronecam-title"></div><div class="feeds"></div><div class="hack-bar hidden"><div></div></div></div>
@@ -1415,6 +1417,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       placeTicks: inHand?.use.kind === "place" ? ticks(inHand.use.placeS) : 1,
       takeBack: backData?.name ?? "gadget",
       takeBackTicks: ticks(data.gadgetRules.pickUpS),
+      needleTicks: ticks(guData(data)?.pullS ?? 1),
     });
     app.querySelectorAll<HTMLElement>(".stances span").forEach((el) => el.classList.toggle("on", Number(el.dataset.s) === s.stance));
     $(".stance-bar div").style.width = `${s.stanceT * 100}%`;
@@ -1518,14 +1521,16 @@ export async function startLab(o: LabOptions): Promise<void> {
       // Which camera (a Bulletproof Camera: its dart, and outdoors how long its signal lasts), how many are broken.
       const cams = sim.level.def.cameras;
       const bp = sim.bpCamAt(ctrl.cam - 1);
-      const cam = bp ? null : cams[ctrl.cam - 1];
+      // Skopós's idle shell's camera (Phase 8 M10): its barrier's entry.
+      const shell = sim.shellCamAt(ctrl.cam - 1);
+      const cam = bp || shell ? null : cams[ctrl.cam - 1];
       const broken = cams.filter((_, i) => sim.matchRules.camsBroken & (1 << i)).length + sim.bpCams().filter((c) => c.flags & GFlag.Broken).length;
       const room = cam?.room ? (sim.level.def.rooms.find((r) => r.id === cam.room)?.callout ?? "") : "";
       // The dart's and the signal's times are the server's ticks (the simulation here counts its own).
       const now = net ? net.session.serverTick() : sim.tick;
       const left = (t: number) => `${(Math.max(0, t - now) * DT).toFixed(1)} s`;
       $(".dronecam-title").textContent = [
-        `${bp ? "BULLETPROOF CAM" : "CAM"} ${ctrl.cam}/${sim.camCount()}${room ? ` · ${room}` : ""}${broken ? ` · ${broken} broken` : ""}`,
+        `${bp ? "BULLETPROOF CAM" : shell ? "SKOPÓS SHELL" : "CAM"} ${ctrl.cam}/${sim.camCount()}${room ? ` · ${room}` : ""}${broken ? ` · ${broken} broken` : ""}`,
         bp && !dead ? `${keyLabel(k.gadget)} EMP dart ${now >= bp.readyAt ? "ready" : left(bp.readyAt)}` : "",
         bp?.signalEnd && !(bp.flags & GFlag.Lost) ? `signal lost in ${left(bp.signalEnd)}` : "",
         `${keyLabel(k.leanLeft)} / ${keyLabel(k.leanRight)} switch · ${keyLabel(k.observe)} back`,
@@ -2183,7 +2188,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     if (ctrl.cam) {
       return Array.from({ length: sim.camCount() }, (_, i) => {
         const cls = [i === ctrl.cam - 1 ? "on" : "", sim.camWorks(i) ? "" : "broken"].filter(Boolean).join(" ");
-        return `<span class="${cls}">${sim.bpCamAt(i) ? "BP" : i + 1}</span>`;
+        return `<span class="${cls}">${sim.bpCamAt(i) ? "BP" : sim.shellCamAt(i) ? "SH" : i + 1}</span>`;
       }).join("");
     }
     const viewed = sim.viewedPawnId(ctrl.id);

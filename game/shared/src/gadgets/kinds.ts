@@ -31,6 +31,8 @@ export const GADGET_KINDS = [
   "kludge_drone",
   "jegeo_payload",
   "dropped_phone",
+  "gu_mine",
+  "shell_shield",
 ] as const;
 
 const index = new Map<string, number>(GADGET_KINDS.map((k, i) => [k, i]));
@@ -46,6 +48,8 @@ export function kindId(kind: number): string | undefined {
 }
 
 export const KIND_BP_CAMERA = kindOf("bulletproof_camera");
+/** Skopós's idle shell's barrier (Phase 8 M10): also that shell's camera. */
+export const KIND_SHELL_SHIELD = kindOf("shell_shield");
 
 /** The level's ingredients' kinds (M3): what they are is data/gadgets.json `ingredients`, not a gadget file. */
 export const INGREDIENT_KINDS = new Set(["fire_extinguisher", "gas_pipe", "metal_detector"].map(kindOf));

@@ -8,6 +8,7 @@ import {
   Btn,
   eyePose,
   heartOf,
+  rightXZ,
   loadedOf,
   poseHitboxes,
   ByteReader,
@@ -1361,9 +1362,11 @@ describe("Skopós's idle shell in a match", () => {
     expect(ctrl.operatorId).toBe("skopos");
     const idle = t.room.sim.bodyIds(ctrl).find((id) => id !== ctrl.possessedPawnId)!;
     const shell = t.room.sim.pawns.get(idle)!;
-    // The attacker, 3 m from the idle shell, shoots it down the sights until it's gone.
+    // The attacker, 3 m to the idle shell's side (clear of its barrier in front, Phase 8 M10), shoots it down the sights
+    // until it's gone.
     const at = shell.state;
-    t.place(a, at.x + 3, at.y, at.z, 90);
+    const [rx, rz] = rightXZ(at.yaw);
+    t.place(a, at.x + rx * 3, at.y, at.z + rz * 3, 0);
     for (let i = 0; i < 16; i++) t.tick();
     for (let shot = 0; shot < 30 && shell.state.mode !== PawnMode.Dead; shot++) {
       const eye = eyePose(data.movement, data.hitboxes, t.bodyOf(a)!.state).pos;

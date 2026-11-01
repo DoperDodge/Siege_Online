@@ -70,3 +70,4 @@ export * from "./gadgets/jammers.js";
 export * from "./gadgets/sensor.js";
 export * from "./gadgets/mirror.js";
 export * from "./gadgets/hack.js";
+export * from "./gadgets/gu.js";

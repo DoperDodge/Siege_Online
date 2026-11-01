@@ -92,6 +92,7 @@ export function applyDamage(sim: Sim, pawn: Pawn, d: Damage, rules?: Pick<ModeDa
   if (s.mode !== PawnMode.Vault) s.mode = PawnMode.Downed;
   s.lean = 0;
   s.sprinting = false;
+  s.needled = false; // a Gu's poison stops when he's down (lesion.md)
   s.meleeTicks = 0;
   parkWeapon(s);
   s.adsQ = 0;
@@ -105,6 +106,7 @@ function kill(sim: Sim, pawn: Pawn, removed: number): { outcome: DamageOutcome; 
   s.downHp = 0;
   s.mode = PawnMode.Dead;
   s.sprinting = false;
+  s.needled = false;
   dropRevive(sim, pawn);
   sim.refreshPawn(pawn.id); // a dead body stops blocking at once
   return { outcome: "killed", removed };

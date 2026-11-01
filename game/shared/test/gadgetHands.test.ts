@@ -205,6 +205,22 @@ describe("placing and detonators (Phase 8 M1)", () => {
     void sim;
   });
 
+  it("Thermite's charges go one at a time (Ulo): placed, his detonator's out, and Z gives no second until it's set off", async () => {
+    const { sim, s, step, of, press } = await lab("thermite", SOFT, 0);
+    press(Btn.Ability);
+    const place = ticks((sim.data.gadgets.get("exothermic_charge")!.use as { placeS: number }).placeS);
+    step({ buttons: Btn.Fire }, place + 2);
+    step({}, 2);
+    expect([of("place").length, s.hand, s.w2, s.g2]).toEqual([1, Hand.AbilityDetonator, 1, 2]);
+    press(Btn.Ability);
+    expect(s.hand).toBe(Hand.Weapon);
+    press(Btn.Ability);
+    expect(s.hand).toBe(Hand.AbilityDetonator);
+    step({ buttons: Btn.Fire });
+    step({}, 2);
+    expect([of("detonate").length, s.w2, s.hand]).toEqual([1, 0, Hand.Ability]);
+  });
+
   it("a stall mid-placing (ticks stepped without the player's input) holds the placing where it was; it then goes on", async () => {
     const { sim, c, s, step, of, press } = await lab("fuze", SOFT, 0, ["breach_charge"]);
     press(Btn.Gadget);

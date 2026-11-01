@@ -145,8 +145,8 @@ Each operator's ability is a module in `gadgets/abilities/`; its numbers are in 
 | Operator | What gets built (research file; placeholders in brackets) |
 |---|---|
 | **Sledge** | The hammer: 25 charges, 0.8 s swing; within reach [1 m both skins, 2 m one] a rectangular hole one swing makes crouch-and-vault sized and two make standing sized [sizes], barricades and unreinforced hatches go in one; reinforced and hard surfaces don't, the swing still costs [1 per swing]. Gadgets in front break as to an explosion; a body takes [a kill, 2 charges]; a shield is knocked down. Works on a rope. |
-| **Thermite** | 3 Exothermic Charges, [3 s] to place on any destructible surface, reinforced included, not hard walls or the mirror's glass; detonator; [3 s] burn with sparks on both sides; a large hole through steel; a reinforced hatch whole; adjacent surfaces within [the radius] cut; 220 hp on the far side. |
-| **Fuze** | 4 Cluster Charges, [2 s] to place, one at a time (a second sets the first off); soft surfaces at once, reinforced ones, the mirror and a deployable shield after 1.75 s (its tube can be shot then); [5] sub-grenades in a fan from left to right on the far side, each [4.2 m, lethal within 1.2 m]; at least one always comes out. The Ballistic Shield (§8). |
+| **Thermite** | 3 Exothermic Charges, [3 s] to place on any destructible surface, reinforced included, not hard walls or the mirror's glass; one at a time (Ulo: placed, then its detonator; no second until it's set off); detonator; [3 s] burn with sparks on both sides; a large hole through steel; a reinforced hatch whole; adjacent surfaces within [the radius] cut; 220 hp on the far side. |
+| **Fuze** | 4 Cluster Charges, [2 s] to place, one at a time (Ulo: placed, then its detonator; no second until it's set off); soft surfaces at once, reinforced ones, the mirror and a deployable shield after 1.75 s (its tube can be shot then); [5] sub-grenades in a fan from left to right on the far side, each [4.2 m, lethal within 1.2 m]; at least one always comes out. The Ballistic Shield (§8). |
 | **Striker / Sentry** | Two different gadgets from their side's pool: the first in slot 1, the second on the ability key; counts as generic. The loadout pick (§11) offers the 21 pairs. |
 | **Mute** | 4 Signal Disruptors, placed on the floor [3 s], jam (§6), picked up again, 1 hp, electronic; shown radius for 2.5 s after placing. |
 | **Pulse** | The sensor: out on Z (no shooting while up), attackers' heartbeats within 10.5 m [in a forward fan] through walls as blips only he sees; a ping while it's up marks a heartbeat for the team [placeholder]; frozen by DSEG. |
@@ -180,7 +180,9 @@ bouncing with a 1 s fuse, its blast credited to the Cluster Charge); after the l
 sticks out of the far side (`tubeM`): bullets and blasts meet it there, and destroyed then it has let one grenade out
 first. One at a time (`maxOut` 1): the hands never count more than one waiting, and the server sets the older one
 off as the detonator would (or lets it fall if an EMP would stop that). A blast now destroys drones of either side
-whatever the friendly fire rules (a drone is a gadget to it).
+whatever the friendly fire rules (a drone is a gadget to it). **Changed (Ulo, D-150):** Thermite's and Fuze's charges
+both go one at a time (`maxOut` 1) and nothing is set off by placing: with one waiting, Z gives only its detonator (or
+puts it away) until it's set off or lost, so the order is always place, then detonator.
 
 **As built (M6, Mute and Pulse, D-146):** Mute's Signal Disruptor is a placed operator item (on the floor, 3 s,
 picked up again, fragile, electronic) with a `jammer` (`gadgets/jammers.ts`): while it stands and no EMP has it, it
@@ -242,6 +244,25 @@ cameras for 20 s, to watch only (no dart), and the defenders' observation blocke
 their drones. Fixed with it: a placing under way waits through a tick the server steps without its player's input (a
 stall past the hold budget), as a panel hold does; it used to start again, so a 5 s mirror could never go in on a
 connection (or a CI browser) that stalls every few seconds.
+
+**As built (M10, Lesion and Skopós, D-151):** Lesion's Gu mine is his slot 2 item, thrown like a grenade (`settle`),
+mechanical and fragile; it comes back over time (`regen`: 1 at a life's start, one more every 25 s, until `count` 8
+have been given; `PawnState.regenMade` and `regenTicks`, predicted). At rest, an enemy body within 1 m of it (a downed
+one too) sets it off (`GadgetServer.sting`, the server's): it's gone, and every enemy body within that metre and not
+down is needled (`PawnState.needled`, its owner corrected): 3 damage, then 12 every 2 s (`bites`, credited to Lesion)
+until he pulls it or goes down; a second needle deals its hit and a bite at once and restarts the timer. Needled, a
+body can't sprint (predicted), plant or drop the defuser; Interact held 2 s standing pulls it (`DeployKind.Needle`, a
+hold that lowers the weapon but lets him walk, before every other Interact action). A knife or the hammer on a mine
+sets it off; a bullet or a blast destroys it; reinforcing over it crushes it; drones never set one off. Skopós's idle
+shell gets a barrier (`shell_shield`, `dropped`, a solid, electronic) the room keeps in front of every living shell she
+isn't in (`shellShields`: it goes up as she leaves a shell and comes down as she wakes it or it dies, and follows a
+shell that's moved). Bullets stop at it; a blast or the hammer breaks it (`GFlag.Broken`: no collider) and a blast's
+line goes through it to the shell (`Sim.blastMeets`); reinforcing beside it doesn't crush it. Its entry is the idle
+shell's camera, after the Bulletproof Cameras in the defenders' list (`shellCams`, `shellCamAt`): the lens just in
+front of the barrier at the crouched shell's eyes, the default camera's limits, off while an EMP has it; every client
+lists it from the table (who's in which shell is each player's own), the defence watches it, and so do the attackers
+on a hacked phone's lend. Her knife (`combat.meleeHole: large`) uses `destruction.meleeLarge`: a 0.6 m hole through
+the studs, a barricade in one hit, a hatch in one. The idle shell starts beside her at the site's defender spawn.
 
 ## 8. The Ballistic Shield (Fuze)
 

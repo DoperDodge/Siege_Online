@@ -22,9 +22,26 @@ targets `main`.
 | M7 Mira | ✅ (D-147) |
 | M8 Brava | ✅ (D-148) |
 | M9 Dokkaebi | ✅ (D-149) |
-| M10 Skopós's remaining rules; Lesion | next |
-| M11 The Ballistic Shield | |
+| M10 Skopós's remaining rules; Lesion | ✅ (D-151) |
+| M11 The Ballistic Shield | next |
 | M12 Every CSV row passing; netsim, browser tests, review, docs, report | |
+
+### What's done (M10: Lesion and Skopós)
+- **Your rule for Thermite and Fuze (D-150):** one charge at a time. Once one is on, Z gives only its detonator (or
+  puts it away) until it's set off; then the next comes out. Placing never sets one off any more.
+- **Lesion's Gu mines:** Z throws one (1 to start, one more every 25 s, 8 in all); it settles on the floor and anyone
+  can see it. An attacker walking within 1 m sets it off: 3 damage, then 12 every 2 s, no sprinting, and no planting
+  or dropping the defuser, until he stands and holds F for 2 s to pull the needle (or goes down). A second mine while
+  needled: its 3 and a bite at once. A downed attacker sets one off but isn't needled; defenders and drones never set
+  one off. A knife or Sledge's hammer on one sets it off on you; a bullet or a blast destroys it; reinforcing over it
+  crushes it. EMPs, jammers, Brava and Dokkaebi don't touch them. Lesion picks his own back up (F).
+- **Skopós's idle shell:** it crouches behind a barrier: bulletproof (its window too), but a blast or the hammer breaks
+  it, and a blast reaches the shell through it. The idle shell is a camera for the defence (in the camera list after
+  the Bulletproof Cameras: "SH"), off while an EMP has it, and the attackers see it too on a phone Dokkaebi hacked.
+  Teammates can reinforce right beside it.
+- **Skopós's knife:** a bigger hole than anyone's, through the studs, and a barricade or a hatch in one hit.
+- **The interaction tests:** 34 more rows pass (323 of 343). Lesion's needle against the Ballistic Shield comes with
+  M11.
 
 ### What's done (M9: Dokkaebi)
 - **Spotting with a ping:** ping (T) an enemy you can see (from your body, a drone or a camera) and he's spotted, a
@@ -91,8 +108,8 @@ targets `main`.
 - **Fuze's Cluster Charge:** Z, then 2 s held, on soft or reinforced walls, floors, hatches, barricades, or a
   deployable shield's front. Set off, it goes through soft surfaces at once and drills steel or a shield for 1.75 s
   (the shield's glass shatters); then 5 grenades come out on the far side one after another, left to right, each
-  bouncing and going off a second later (lethal within 1.2 m). Only one can wait at a time: placing a second sets off
-  the first. While it drills, defenders can shoot or blow up its tube on their side, but at least one grenade always
+  bouncing and going off a second later (lethal within 1.2 m). Only one can wait at a time (since M10, Ulo's rule for
+  both Thermite and Fuze: once it's placed, Z gives only its detonator until it's set off). While it drills, defenders can shoot or blow up its tube on their side, but at least one grenade always
   comes out. 4 a round.
 - **What stops them:** an EMP (the Impact EMP, a Bulletproof Camera's dart) on the charge or on its owner stops the
   detonator; once set off nothing stops it but destroying it (any damage does). Their blasts destroy gadgets, and
@@ -202,6 +219,10 @@ npm start
    detector.
 6. **M4:** as Sledge, Z takes out the hammer: swing at the soft walls (close and from further away), the hatch from
    the platform, the barricaded door, and a dummy.
+12. **M10:** as Lesion, Z and throw a mine at your feet, then switch to the attackers (pause menu) and walk onto it:
+    the screen goes green at its edges, you can't sprint, and standing still holding F for 2 s pulls the needle. As
+    Thermite or Fuze, put a charge on: Z now only gives its detonator until you set it off. As Skopós, look at your idle
+    shell's barrier (shoot it: nothing; a frag next to it: gone), and knife a soft wall or the barricaded door.
 11. **M9:** as Dokkaebi, ping (T) the defender dummy in the open: a red mark. Z, aim near it, left mouse: 7 s later
     it takes 40 and burns. Shoot it dead and press left mouse again: its phone is hacked (in a match, Observe then
     shows the defenders' cameras for 20 s). Online with a friend as Mute: let her call you, hold F to dismiss it, or

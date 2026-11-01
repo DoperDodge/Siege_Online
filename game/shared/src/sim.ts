@@ -13,13 +13,14 @@ import { rayCapsule } from "./net/lagComp.js";
 import { insideAny, zoneBoxes, ZONE_TEST_HEIGHT, type ZoneBox } from "./level/zones.js";
 import { raycastLevel } from "./level/raycast.js";
 import { detonatable, GadgetTable, GFlag, type Gadget } from "./gadgets/table.js";
-import { isIngredient, KIND_BP_CAMERA, kindId, kindOf } from "./gadgets/kinds.js";
+import { isIngredient, KIND_BP_CAMERA, KIND_SHELL_SHIELD, kindId, kindOf } from "./gadgets/kinds.js";
 import { pawnJammed, pointJammed } from "./gadgets/jammers.js";
 import { heartbeats, heartOf, sensorUp } from "./gadgets/sensor.js";
 import { mirrorOf, sightPast } from "./gadgets/mirror.js";
 import { barrierOf, crossesBarrier, smokeOnSegment, wireSlow } from "./gadgets/areas.js";
 import { gadgetOnRay } from "./gadgets/hits.js";
-import { placeSpotFor, slotCounts, slotGadget } from "./gadgets/hands.js";
+import { placeSpotFor, slotGadget, stockSlots } from "./gadgets/hands.js";
+import { guData } from "./gadgets/gu.js";
 import { CAMERA_HALF_M } from "./intel/cameras.js";
 import { canDisable, canPickUp, inSite, siteArea, type DefuserState, type SiteArea } from "./match/objective.js";
 import { eyePose, poseHitboxes } from "./player/hitboxes.js";
@@ -85,6 +86,7 @@ export class Sim {
   private readonly solids = new Map<number, { c: Collider; key: string }>();
   private solidsAt = -1;
   private bpCache: { version: number; list: Gadget[] } = { version: -1, list: [] };
+  private shellCache: { version: number; list: Gadget[] } = { version: -1, list: [] };
   /**
    * The defuser in a match (null in a lab): who carries it, where it lies or is planted, the site and the holds
    * (match/objective.ts). The simulation moves it (pick up, drop, plant); the room sets the rest.
@@ -337,7 +339,7 @@ export class Sim {
     const t = collider.translation();
     const pawn: Pawn = { id: pawnId, kind, operatorId, ownerId, collider, loadout, team, life: 0, state: initialPawnState(t.x, Math.fround(y + 0.02), t.z, Math.fround(yaw), maxHp, loadout) };
     if (kind === PawnKind.Drone) pawn.state.mode = PawnMode.Held;
-    else [pawn.state.g1, pawn.state.g2] = slotCounts(this.data, loadout);
+    else stockSlots(this.data, pawn.state, loadout);
     // Recoil randomness: any non-zero start works for xorshift; a server reseeds it from its room seed and
     // the client gets the value with the body's first correction.
     pawn.state.rng = Math.imul(pawnId, 0x9e3779b1) >>> 0 || 1;
@@ -464,7 +466,8 @@ export class Sim {
     if (!o || s.mode !== PawnMode.Walk || !s.grounded) return null;
     const attacker = pawn.team === sideTeam("attacker");
     if (attacker && o.dropped && o.carrier === 0 && canPickUp(this.data.objective, o.dropped, s.x, s.y, s.z)) return "pickUp";
-    if (attacker && o.carrier === pawn.id && o.canPlant && o.site) {
+    // A Gu needle in the carrier (Phase 8 M10): no planting until it's pulled (lesion.md).
+    if (attacker && o.carrier === pawn.id && o.canPlant && o.site && !s.needled) {
       const area = this.areaOf(o.site);
       if (area && inSite(area, s.x, s.y, s.z)) return "plant";
     }
@@ -531,10 +534,35 @@ export class Sim {
     return true; // still this tick
   }
 
+  /** Whether a body can pull its Gu needle now: needled, on its feet, standing (Phase 8 M10). */
+  private canPullNeedle(pawn: Pawn): boolean {
+    const s = pawn.state;
+    return s.needled && s.mode === PawnMode.Walk && s.stance === Stance.Stand && s.meleeTicks === 0;
+  }
+
+  /**
+   * Pulling a Gu needle (Phase 8 M10; lesion.md): Interact held, standing, for the mine's `pullS` (the weapon lowered
+   * meanwhile, the body free to walk); then it's out: no more bites (the server's), sprinting again.
+   */
+  private holdNeedle(pawn: Pawn, held: boolean): boolean {
+    const s = pawn.state;
+    const k = guData(this.data);
+    if (!k || !held || !this.canPullNeedle(pawn)) {
+      endDeploy(pawn);
+      return false;
+    }
+    s.deployTicks = Math.min(0xffff, s.deployTicks + 1);
+    if (s.deployTicks < ticks(k.pullS)) return true;
+    s.needled = false;
+    endDeploy(pawn);
+    return true; // still this tick
+  }
+
   /** The carrier's Drop key: the defuser falls to the floor under the body (off a rope or a ladder too). */
   private dropDefuser(pawn: Pawn, input: InputCmd) {
     const o = this.objective;
-    if (!o || o.carrier !== pawn.id || !(input.buttons & ~pawn.state.prevButtons & Btn.Drop)) return;
+    // Nor dropping it with a Gu needle in him (Phase 8 M10).
+    if (!o || o.carrier !== pawn.id || pawn.state.needled || !(input.buttons & ~pawn.state.prevButtons & Btn.Drop)) return;
     const s = pawn.state;
     o.carrier = 0;
     o.dropped = this.dropSpot(s.x, s.y, s.z);
@@ -562,6 +590,7 @@ export class Sim {
   private updateDeploy(pawn: Pawn, input: InputCmd): boolean {
     const s = pawn.state;
     const held = (input.buttons & Btn.Interact) !== 0;
+    if (s.deployKind === DeployKind.Needle) return this.holdNeedle(pawn, held);
     if (s.deployKind === DeployKind.PickUp) return this.holdPickUp(pawn, held);
     if (s.deployKind === DeployKind.Plant || s.deployKind === DeployKind.Disable) return this.holdDefuser(pawn, held);
     if (s.deployKind !== DeployKind.None) {
@@ -578,6 +607,15 @@ export class Sim {
     }
     const pressed = input.buttons & ~s.prevButtons & Btn.Interact;
     if (!pressed || s.meleeTicks > 0) return false;
+    // A Gu needle in him (Phase 8 M10): pulling it comes first, standing (lesion.md).
+    if (s.needled) {
+      if (!this.canPullNeedle(pawn)) return false;
+      s.deployKind = DeployKind.Needle;
+      s.deployPanel = 0;
+      s.deploySection = 0;
+      s.deployTicks = 1;
+      return true;
+    }
     const d = this.defuserActionFor(pawn);
     if (d === "pickUp") {
       this.objective!.carrier = pawn.id;
@@ -964,6 +1002,7 @@ export class Sim {
     let changed = false;
     for (const [id, s] of this.solids)
       if (want.get(id)?.key !== s.key) {
+        this.blastless.delete(s.c.handle);
         this.world.removeCollider(s.c, false);
         this.solids.delete(id);
         changed = true;
@@ -976,11 +1015,19 @@ export class Sim {
         .setTranslation(x, y, z)
         .setRotation({ x: 0, y: Math.sin(half), z: 0, w: Math.cos(half) })
         .setCollisionGroups(GADGET_GROUPS);
-      this.solids.set(id, { c: this.world.createCollider(desc), key: w.key });
+      const c = this.world.createCollider(desc);
+      this.solids.set(id, { c, key: w.key });
+      if (w.g.kind === KIND_SHELL_SHIELD) this.blastless.add(c.handle);
       changed = true;
     }
     if (changed) refreshBroadPhase(this.world);
   }
+
+  /** The colliders a blast goes through (Phase 8 M10: Skopós's idle shells' barriers, bulletproof but not blast-proof). */
+  private readonly blastless = new Set<number>();
+
+  /** Whether a blast's line meets this collider: everything solid but an idle shell's barrier (gadgets/blast.ts). */
+  readonly blastMeets = (c: Collider): boolean => !this.blastless.has(c.handle);
 
   /**
    * Whether a swing's blow from a body's eye along its view meets anything within `reachM` (Phase 8 M4: it spends a
@@ -1019,14 +1066,31 @@ export class Sim {
     return this.bpCache.list;
   }
 
-  /** How many cameras defenders have: the level's, then the round's Bulletproof Cameras. */
-  camCount(): number {
-    return this.level.def.cameras.length + this.bpCams().length;
+  /**
+   * Skopós's idle shells' barriers (Phase 8 M10; the table's, in the order they went up): each is its shell's camera,
+   * the defence's. Every client has the table, while who's in which shell is each player's own (no client could list
+   * another's idle shell).
+   */
+  shellCams(): readonly Gadget[] {
+    if (this.shellCache.version !== this.gadgets.version) this.shellCache = { version: this.gadgets.version, list: this.gadgets.list.filter((g) => g.kind === KIND_SHELL_SHIELD) };
+    return this.shellCache.list;
   }
 
-  /** A Bulletproof Camera by its place in the defenders' list (from 0); null for one of the level's. */
+  /** How many cameras defenders have: the level's, then the round's Bulletproof Cameras, then the idle shells' (M10). */
+  camCount(): number {
+    return this.level.def.cameras.length + this.bpCams().length + this.shellCams().length;
+  }
+
+  /** A Bulletproof Camera by its place in the defenders' list (from 0); null for any other. */
   bpCamAt(i: number): Gadget | null {
-    return i < this.level.def.cameras.length ? null : (this.bpCams()[i - this.level.def.cameras.length] ?? null);
+    const n = this.level.def.cameras.length;
+    return i < n ? null : (this.bpCams()[i - n] ?? null);
+  }
+
+  /** An idle shell's camera (its barrier's entry, Phase 8 M10) by its place in the defenders' list; null for any other. */
+  shellCamAt(i: number): Gadget | null {
+    const n = this.level.def.cameras.length + this.bpCams().length;
+    return i < n ? null : (this.shellCams()[i - n] ?? null);
   }
 
   /**
@@ -1035,6 +1099,9 @@ export class Sim {
    */
   camWorks(i: number): boolean {
     if (i >= this.camCount()) return false; // a Bulletproof Camera from a round that's over
+    // An idle shell's (M10): off while an EMP has it, or inside a jammer of the other side.
+    const shell = this.shellCamAt(i);
+    if (shell) return !(shell.flags & GFlag.Off) && !pointJammed(this, shell.team, this.camLens(i, shell.yaw));
     const bp = this.bpCamAt(i);
     if (bp && bp.flags & (GFlag.Broken | GFlag.Lost | GFlag.Off)) return false;
     if (!bp && (i >= 32 || ((this.matchRules.camsBroken | this.matchRules.camsOff) & (1 << i)) !== 0)) return false;
@@ -1047,7 +1114,7 @@ export class Sim {
    * `matchRules.camsHacked`, a Bulletproof Camera's team).
    */
   camTeam(i: number): number {
-    const bp = this.bpCamAt(i);
+    const bp = this.bpCamAt(i) ?? this.shellCamAt(i);
     if (bp) return bp.team;
     return i < 32 && this.matchRules.camsHacked & (1 << i) ? sideTeam("attacker") : sideTeam("defender");
   }
@@ -1068,9 +1135,10 @@ export class Sim {
    */
   camLimits(i: number): { face: number; half: number; pitchMin: number; pitchMax: number; turn: number; fovDeg: number } {
     const bp = this.bpCamAt(i);
+    const shell = this.shellCamAt(i);
     const k = bp ? this.data.intel.bulletproofCamera.view : this.data.intel.camera;
     return {
-      face: bp ? bp.yaw : (this.level.def.cameras[i]?.yawDeg ?? 0) * DEG,
+      face: bp ? bp.yaw : shell ? shell.yaw : (this.level.def.cameras[i]?.yawDeg ?? 0) * DEG,
       half: bp && bp.flags & GFlag.OnFloor ? Math.PI : k.yawHalfRangeDeg * DEG,
       pitchMin: k.pitchMinDeg * DEG,
       pitchMax: k.pitchMaxDeg * DEG,
@@ -1079,8 +1147,18 @@ export class Sim {
     };
   }
 
-  /** Camera i's lens, looking `yaw`: just out of the front of its box (the origin for no such camera). */
+  /**
+   * Camera i's lens, looking `yaw`: just out of the front of its box (the origin for no such camera). An idle shell's
+   * (M10) is just in front of its barrier, at the crouched shell's eyes, whichever way it looks.
+   */
   camLens(i: number, yaw: number): [number, number, number] {
+    const shell = this.shellCamAt(i);
+    if (shell) {
+      const size = this.data.gadgets.get("shell_shield")!.sizeM;
+      const [fx, fz] = forwardXZ(shell.yaw);
+      const out = size[2] / 2 + LENS_AHEAD_M;
+      return [shell.pos[0] + fx * out, shell.pos[1] - size[1] / 2 + this.data.movement.stance.crouch.eye, shell.pos[2] + fz * out];
+    }
     const bp = this.bpCamAt(i);
     const at = bp ? bp.pos : (this.level.def.cameras[i]?.pos ?? [0, 0, 0]);
     const ahead = (bp ? this.data.gadgets.get("bulletproof_camera")!.sizeM[2] / 2 : CAMERA_HALF_M) + LENS_AHEAD_M;
@@ -1106,7 +1184,7 @@ export class Sim {
     const l = this.camLimits(i);
     c.cam = i + 1;
     c.camYaw = Math.fround(wrapAngle(l.face));
-    c.camPitch = Math.fround(clamp(this.bpCamAt(i) ? 0 : this.level.def.cameras[i].pitchDeg * DEG, l.pitchMin, l.pitchMax));
+    c.camPitch = Math.fround(clamp(this.bpCamAt(i) || this.shellCamAt(i) ? 0 : this.level.def.cameras[i].pitchDeg * DEG, l.pitchMin, l.pitchMax));
   }
 
   /** One of this body's own drones out within reach (data/intel.json `drone.pickupReachM`), to pick up with F. */
@@ -1266,7 +1344,7 @@ export class Sim {
     pawn.collider.setHalfHeight(hh);
     pawn.collider.setTranslation({ x: spawn.pos[0], y: spawn.pos[1] + hh + r + 0.02, z: spawn.pos[2] });
     pawn.state = { ...initialPawnState(spawn.pos[0], spawn.pos[1] + 0.02, spawn.pos[2], Math.fround(spawn.yawDeg * DEG), pawn.state.maxHp, pawn.loadout), rng: pawn.state.rng };
-    [pawn.state.g1, pawn.state.g2] = slotCounts(this.data, pawn.loadout);
+    stockSlots(this.data, pawn.state, pawn.loadout);
     pawn.life++;
     poseCollider(this.ctx, pawn); // also makes a dead body solid again
     refreshBroadPhase(this.world);
@@ -1429,7 +1507,11 @@ export class Sim {
             const d = this.data.objective.defuser;
             const still =
               reviving ||
-              (k === DeployKind.Plant ? d.plantLocksBody : k === DeployKind.Disable ? d.disableLocksBody : k === DeployKind.PickUp || (k !== DeployKind.None && this.data.destruction.reinforcement.locksReinforcer));
+              (k === DeployKind.Plant
+                ? d.plantLocksBody
+                : k === DeployKind.Disable
+                  ? d.disableLocksBody
+                  : k === DeployKind.PickUp || (k !== DeployKind.None && k !== DeployKind.Needle && this.data.destruction.reinforcement.locksReinforcer));
             // A standing body crouches for the defuser's holds where the data says so (prone stays prone); it stands
             // back up when the hold ends, as its stance key says.
             const kneel = !reviving && input.stance === Stance.Stand && (k === DeployKind.Plant ? d.plantCrouches : k === DeployKind.Disable && d.disableCrouches);

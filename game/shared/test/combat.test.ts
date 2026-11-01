@@ -201,8 +201,9 @@ describe("damage and death through the room", () => {
     const [a, b] = h.clients;
     const ctrl = h.room.sim.controllers.get(b.session.ctrl!.id)!;
     const [active, idle] = [ctrl.possessedPawnId, ctrl.pawnIds.find((id) => id !== ctrl.possessedPawnId)!];
-    // Put the idle shell 8 m in front of A, the active one off to the side.
-    h.room.sim.teleport(idle, 0, 0, 12, 0);
+    // Put the idle shell 8 m in front of A, facing away from A (its barrier in front of it is bulletproof, Phase 8 M10),
+    // the active one off to the side.
+    h.room.sim.teleport(idle, 0, 0, 12, 180);
     h.room.sim.teleport(active, 6, 0, 12, 0);
     a.lab({ kind: "teleport", x: 0, y: 0, z: 4, yawDeg: 180 });
     h.ticks(40, [A_TORSO]);

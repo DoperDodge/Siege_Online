@@ -1,4 +1,4 @@
-// End-to-end check of the Gadget Lab (Phase 8 M1 to M9, game/shared/src/gadgets/DESIGN.md §11). Offline (the page's
+// End-to-end check of the Gadget Lab (Phase 8 M1 to M10, game/shared/src/gadgets/DESIGN.md §11). Offline (the page's
 // own room in a Web Worker): Sledge takes a frag out with 3 and throws it (it flies, comes to rest, and is gone at its
 // fuse), then swings his hammer (Z) at a soft wall close by (both faces broken, a charge spent). Fuze takes a Breach
 // Charge out, holds Fire at a soft wall until it's on it (the detonator is then in hand) and sets it off: the wall has
@@ -6,7 +6,8 @@
 // steel has a hole; and Thermite's Exothermic Charge there: it burns, then a large hole goes through the steel. Mute
 // puts a Signal Disruptor down (Z); Pulse's sensor (Z) shows the attacker dummy's heartbeat; Mira's Black Mirror (Z)
 // cuts its window into the reinforceable wall; Brava throws a Kludge drone (Z) and drives it; Dokkaebi pings the defender
-// dummy in the open (spotting it) and calls it with her tablet (Z): 7 s later its phone goes off. Mute throws his Nitro Cell at the feet of the attacker dummy in the open, steps well away and sets it off:
+// dummy in the open (spotting it) and calls it with her tablet (Z): 7 s later its phone goes off; Lesion throws a Gu
+// mine (Z) at the attacker dummy's feet and it goes off; Skopós's idle shell stands behind its barrier. Mute throws his Nitro Cell at the feet of the attacker dummy in the open, steps well away and sets it off:
 // the dummy is down, by the Nitro Cell. Sledge's stun thrown in front of him whites out his screen; Thermite's smoke
 // grenade leaves its cloud in the table. Online, two pages at 100 ms of simulated round trip: what A throws, B has in
 // its table too, A's prediction needed no corrections, and both see its blast. (The level's ingredients are in the
@@ -314,6 +315,31 @@ try {
   result.checks.jegeoCallsASpottedDummy =
     !result.jegeoBar.hidden && /Uploading/.test(result.jegeoBar.title) && ["spotted", "jegeo0", "jegeo1", "blast"].every((k) => result.jegeoEvents.includes(k));
   await dok.close();
+
+  // ---- offline (M10): Lesion throws a Gu mine (Z) at the attacker dummy's feet: it lands, and the dummy sets it off
+  const les = await open(`${BASE}/labs/gadget_lab.html?autotest=1&lowgfx&op=lesion`, { width: 960, height: 540 });
+  await les.evaluate(() => window.__lab.teleport(-3, 0, 13.6, 0));
+  await sleep(600);
+  await les.keyboard.press("KeyZ");
+  await until(les, () => window.__lab.net.hand === 3);
+  await sleep(1000);
+  await input(les, { buttons: Btn.Fire, yaw: 0, pitch: -1.0 });
+  await until(les, () => window.__lab.net.table.some((g) => g.kind === "gu_mine"), null, 10000);
+  await input(les, { yaw: 0, pitch: -1.0 });
+  result.guThrown = (await state(les)).table.find((g) => g.kind === "gu_mine") ?? null;
+  await until(les, () => !window.__lab.net.table.some((g) => g.kind === "gu_mine"), null, 10000);
+  result.guLeft = await les.evaluate(() => window.__lab.net.gadgets2);
+  await input(les, null);
+  result.checks.guMineStingsTheAttackerDummy = result.guThrown !== null && result.guLeft === 0;
+  await les.close();
+
+  // ---- offline (M10): Skopós's idle shell crouches behind its barrier (a solid entry in the table; screenshot)
+  const sko = await open(`${BASE}/labs/gadget_lab.html?autotest=1&lowgfx&op=skopos`, { width: 960, height: 540 });
+  await until(sko, () => window.__lab.net.table.some((g) => g.kind === "shell_shield"), null, 10000);
+  result.shellBarrier = (await sko.evaluate(() => window.__lab.net.table.filter((g) => g.kind === "shell_shield"))).length;
+  await sko.screenshot({ path: shot("gadget-shell-barrier.png") });
+  result.checks.idleShellBehindItsBarrier = result.shellBarrier === 1;
+  await sko.close();
 
   // ---- offline (M3): Sledge's stun at his feet, facing it: his screen goes white
   const stun = await open(`${BASE}/labs/gadget_lab.html?autotest=1&lowgfx&op=sledge&gadgets=stun`, { width: 960, height: 540 });

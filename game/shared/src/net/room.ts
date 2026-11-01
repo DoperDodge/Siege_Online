@@ -1,7 +1,7 @@
 // A match room: the authoritative simulation plus everyone connected to it (PLAN §5). Transport-free, so
 // the Node server, the netsim harness and (later) offline Practice in a Web Worker all run this same code.
 import { DT, TICK_HZ } from "../core/constants.js";
-import { DEG, type Vec3 } from "../core/math.js";
+import { DEG, forwardXZ, wrapAngle, type Vec3 } from "../core/math.js";
 import { applyDamage, Cause, isIdleShell, type Damage } from "../combat/apply.js";
 import { shotOnBodies, tracePellets, type ShotOnBody } from "../combat/hitreg.js";
 import { judgeMelee } from "../combat/melee.js";
@@ -46,7 +46,7 @@ import { zoneOf } from "../combat/damage.js";
 import { barrierOf, smokeOnSegment, crossesBarrier } from "../gadgets/areas.js";
 import { isIngredient, kindId, kindOf } from "../gadgets/kinds.js";
 import { GFlag, type Gadget } from "../gadgets/table.js";
-import { deviceLost, slotCounts, slotGadget } from "../gadgets/hands.js";
+import { deviceLost, slotGadget, stockSlots } from "../gadgets/hands.js";
 import { encodeGadgetOps, encodeGadgetState } from "./gadgetWire.js";
 import { ticks, ticksOrZero } from "../weapons/ticks.js";
 import { encodeError, encodePong, encodeRoster, encodeShotResult, encodeWelcome, ErrorCode, unwrap16, type InputMsg, type LabTool, type RosterEntry, type ShotResult } from "./protocol.js";
@@ -321,6 +321,11 @@ export class Room implements DirectorHost {
     // Phase 8 M3: wire and fire hurt over time, alarms sound, ingredients go through their stages; no alarm outdoors in prep.
     this.gadgetServer.hurt = (g, pawn, amount) => this.gadgetHurt(g, pawn, amount);
     this.gadgetServer.onAlarm = (g, by) => this.alarm(g, by);
+    // A Gu needle (Phase 8 M10) changes the body: its owner's next correction carries it.
+    this.gadgetServer.onNeedle = (pawn) => {
+      const owner = pawn.ownerId !== null ? this.memberOf(pawn.ownerId) : null;
+      if (owner) this.force(owner);
+    };
     this.gadgetServer.onIngredient = (g, stage) => this.ingredientStage(g, stage);
     this.gadgetServer.inPrep = () => this.director?.match.phase === Phase.Prep;
     // Phase 8 M5: a cluster charge's hole goes in with this tick's panel ops.
@@ -749,8 +754,8 @@ export class Room implements DirectorHost {
         const p = this.sim.pawns.get(id);
         if (!p?.loadout || p.state.mode === PawnMode.Dead) continue;
         const [a, b] = p.loadout.weapons.map(spawnAmmo);
-        const [g1, g2] = slotCounts(this.sim.data, p.loadout);
-        Object.assign(p.state, { loaded0: a.loaded, reserve0: a.reserve, loaded1: b.loaded, reserve1: b.reserve, g1, g2 });
+        Object.assign(p.state, { loaded0: a.loaded, reserve0: a.reserve, loaded1: b.loaded, reserve1: b.reserve });
+        stockSlots(this.sim.data, p.state, p.loadout);
       }
       this.force(m);
     } else if (tool.kind === "clearGadgets") {
@@ -919,7 +924,10 @@ export class Room implements DirectorHost {
       this.knifed(struck.g);
       return;
     }
-    const onPanel = meleeOnPanels(this.sim.level.panels, this.sim.data.destruction, hit.origin, dir, reach, plain, { tick: panelTick, history: this.panelHistory });
+    // Skopós's knife makes a bigger hole, through the studs, and breaks a barricade at once (Phase 8 M10: `meleeHole`).
+    const large = this.sim.data.operators.get(attacker.operatorId)?.combat.meleeHole === "large";
+    const d = this.sim.data.destruction;
+    const onPanel = meleeOnPanels(this.sim.level.panels, d, hit.origin, dir, reach, plain, { tick: panelTick, history: this.panelHistory }, large ? d.meleeLarge : d.melee);
     if (onPanel) this.judged.push({ ...base, bodies: [], lives: new Map(), panelOps: onPanel.ops.map(({ panel, op }) => ({ panel, op })) });
   }
 
@@ -971,6 +979,8 @@ export class Room implements DirectorHost {
     if (struck) {
       // A Black Mirror's glass shatters as to a knife (Phase 8 M7; UNVERIFIED for the hammer); the rest as to a blast.
       if (mirrorOf(this.sim.data, struck.g)) this.sim.gadgets.update(struck.g.id, { flags: struck.g.flags | GFlag.Hit });
+      // A Gu mine goes off under the hammer, as under a knife (Phase 8 M10; the CSV's trigger_sting).
+      else if (this.sim.data.gadgets.get(kindId(struck.g.kind) ?? "")?.gu) this.gadgetServer.sting(struck.g);
       else this.gadgetServer.blastHit(struck.g);
       return;
     }
@@ -1556,6 +1566,65 @@ export class Room implements DirectorHost {
     }
   }
 
+  /** Skopós's idle shells' barriers (Phase 8 M10): the entry standing in front of each, by the shell's pawn id. */
+  private readonly barriers = new Map<number, number>();
+
+  /**
+   * Skopós's idle shells' barriers (Phase 8 M10; skopos.md §3.3; data/gadgets/shell_shield.json): every living shell she
+   * isn't in has one standing in front of it (its camera for the defence too); the one she wakes loses it, the one she
+   * leaves gets one, and a dead shell's goes. One a blast broke stays (broken: the shell's camera still).
+   */
+  private shellShields() {
+    const d = this.sim.data.gadgets.get("shell_shield");
+    if (!d) return;
+    const idle = new Set<number>();
+    for (const c of this.sim.controllers.values()) {
+      const bodies = this.sim.bodyIds(c);
+      if (bodies.length < 2) continue;
+      for (const id of bodies) if (id !== c.possessedPawnId && this.sim.pawns.get(id)?.state.mode !== PawnMode.Dead) idle.add(id);
+    }
+    // In front of the crouched shell, just clear of its body (data/movement.json `collisionRadius`).
+    const out = this.sim.data.movement.stance.collisionRadius + 0.15 + d.sizeM[2] / 2;
+    const spot = (p: Pawn): Vec3 => {
+      const [fx, fz] = forwardXZ(p.state.yaw);
+      return [p.state.x + fx * out, p.state.y + d.sizeM[1] / 2, p.state.z + fz * out];
+    };
+    for (const [shell, entry] of this.barriers) {
+      const g = this.sim.gadgets.get(entry);
+      if (idle.has(shell) && g) {
+        // A shell moved (a lab tool, a test) takes its barrier with it.
+        const p = this.sim.pawns.get(shell)!;
+        const at = spot(p);
+        if (Math.hypot(at[0] - g.pos[0], at[1] - g.pos[1], at[2] - g.pos[2]) > 0.05 || Math.abs(wrapAngle(p.state.yaw - g.yaw)) > 0.01) this.sim.gadgets.update(entry, { pos: at, yaw: p.state.yaw });
+        continue;
+      }
+      if (!idle.has(shell)) this.sim.gadgets.remove(entry);
+      this.barriers.delete(shell);
+    }
+    for (const id of idle) {
+      if (this.barriers.has(id)) continue;
+      const p = this.sim.pawns.get(id)!;
+      const s = p.state;
+      const g = this.sim.gadgets.add({
+        kind: kindOf(d.id),
+        owner: p.ownerId ?? 0,
+        team: p.team,
+        pos: spot(p),
+        yaw: s.yaw,
+        vel: [0, 0, 0],
+        flags: GFlag.OnFloor,
+        panel: -1,
+        launchTick: 0,
+        fuseEnd: 0,
+        signalEnd: 0,
+        readyAt: 0,
+        offEnd: 0,
+        seq: 0,
+      });
+      this.barriers.set(id, g.id);
+    }
+  }
+
   /** Each Kludge drone's hacks left (Phase 8 M8; by its pawn id, from its data's `charges`). */
   private readonly kludgeCharges = new Map<number, number>();
   /** Skopós's idle shells a Kludge's hack has overheating (Phase 8 M8): the tick each burns out, and who did it. */
@@ -1901,7 +1970,9 @@ export class Room implements DirectorHost {
   /** A knife hit on a gadget (research/gadgets.md §4): wire takes `knifeHits` of them; a shield's glass goes opaque. */
   private knifed(g: Gadget) {
     const d = this.sim.data.gadgets.get(kindId(g.kind) ?? "");
-    if (d?.wire) {
+    // A Gu mine knifed goes off: whoever's close (the knifer, surely) is needled (Phase 8 M10; lesion.md).
+    if (d?.gu) this.gadgetServer.sting(g);
+    else if (d?.wire) {
       if (d.wire.knifeHits <= 1 || g.flags & GFlag.Hit) this.gadgetServer.destroy(g);
       else this.sim.gadgets.update(g.id, { flags: g.flags | GFlag.Hit });
     } else if (d?.solid) this.sim.gadgets.update(g.id, { flags: g.flags | GFlag.Hit });
@@ -1925,6 +1996,7 @@ export class Room implements DirectorHost {
     this.hacks(applied);
     this.overheating();
     this.jegeo(applied);
+    this.shellShields();
     for (const e of this.sim.events) {
       if (e.kind === "ping") this.ping(e.ctrlId, e.pos, e.gadget, e.heart ?? false);
       if (e.kind !== "shot" && e.kind !== "meleeImpact" && e.kind !== "swing") continue;

@@ -216,7 +216,8 @@ row("generic.frag", "player.attacker", async () => {
 });
 
 row("generic.frag", "skopos.shell_idle", async () => {
-  // Her idle shell is a body to a blast (its barrier comes in M10): hurt by its curve; the shell she's in isn't.
+  // Her idle shell is a body to a blast, its barrier (M10) bulletproof but not blast-proof: hurt by its curve through it;
+  // the shell she's in isn't.
   const s = await scene(["sledge", "skopos"]);
   s.park();
   const ctrl = s.sim.controllers.get(s.clients[1].session.ctrl!.id)!;

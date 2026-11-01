@@ -17,6 +17,7 @@ import { indoors } from "../intel/bpCamera.js";
 import { raycastLevel } from "../level/raycast.js";
 import { droneHitboxes } from "../player/drone.js";
 import { poseHitboxes, type Hitbox } from "../player/hitboxes.js";
+import { isDowned } from "../player/downed.js";
 import { currentHeight } from "../player/stance.js";
 import type { Pawn } from "../player/pawn.js";
 import { PawnKind, PawnMode } from "../player/types.js";
@@ -29,9 +30,9 @@ import { isCloud, pawnDistance } from "./blast.js";
 import { behindOf, fanVelocity, tubeTip, type ClusterData } from "./cluster.js";
 import { empReach } from "./electronics.js";
 import { gadgetOnRay } from "./hits.js";
-import { pawnJammed, pointJammed } from "./jammers.js";
+import { pointJammed } from "./jammers.js";
 import { canisterSpot, mirrorHeld, mirrorOf, windowOps } from "./mirror.js";
-import { isIngredient, KIND_BP_CAMERA, kindId, kindOf } from "./kinds.js";
+import { isIngredient, KIND_BP_CAMERA, KIND_SHELL_SHIELD, kindId, kindOf } from "./kinds.js";
 import { detonatable, GFlag, type Gadget } from "./table.js";
 
 const KIND_WIRE = kindOf("barbed_wire");
@@ -115,6 +116,10 @@ export class GadgetServer {
   hurt: (g: Gadget, pawn: Pawn, amount: number) => void = () => {};
   /** The room: an alarm or a metal detector started sounding (`by`, the body in reach) or went quiet (null). */
   onAlarm: (g: Gadget, by: Pawn | null) => void = () => {};
+  /** The room: a Gu mine needled this body (Phase 8 M10; its `needled` changed: its owner needs a correction). */
+  onNeedle: (pawn: Pawn, g: Gadget) => void = () => {};
+  /** Gu needles in bodies (Phase 8 M10; by pawn id): the tick of the next bite, and the mine (for its owner and numbers). */
+  private readonly needles = new Map<number, { next: number; g: Gadget }>();
   /** The room: an ingredient set off reached a stage (its effects: smoke and concussion, a jet, a blast). */
   onIngredient: (g: Gadget, stage: IngredientStage) => void = () => {};
   /** Whether a match is in its prep phase (an alarm can't go outdoors then). */
@@ -161,7 +166,6 @@ export class GadgetServer {
       // A tripwire arms its time after it's placed (the Claymore: `readyAt`).
       const armed = g.tripwire ? sim.tick + ticksOrZero(g.tripwire.armS) : 0;
       const put = sim.gadgets.add({ ...base, pos: e.pos, vel: [0, 0, 0], flags, panel: e.panel, fuseEnd: fuse, signalEnd: out ? sim.tick + ticks(sim.data.intel.bulletproofCamera.outdoorSignalS) : 0, readyAt: armed });
-      if (g.maxOut !== undefined) this.overMax(put, g.maxOut, pawn);
       if (g.mirror) this.mirrorIn(put, g, g.mirror.canister);
       return;
     }
@@ -181,8 +185,8 @@ export class GadgetServer {
   }
 
   /**
-   * Its owner's detonator set a remote device off (or Fuze placed another, `maxOut`): Thermite's charge starts burning
-   * (it goes off `burnS` later, gadgets/DESIGN.md §7), Fuze's starts drilling; the rest go off now.
+   * Its owner's detonator set a remote device off: Thermite's charge starts burning (it goes off `burnS` later,
+   * gadgets/DESIGN.md §7), Fuze's starts drilling; the rest go off now.
    */
   detonated(g: Gadget): void {
     const d = this.dataOf(g);
@@ -198,27 +202,6 @@ export class GadgetServer {
       return;
     }
     this.trigger(g, null);
-  }
-
-  /**
-   * Whether `owner`'s detonator could set this device off now (for one set off by placing another, `maxOut`): not
-   * while an EMP has it or its owner's body (DSEG), nor while either is inside an enemy jammer (M6).
-   */
-  private canSetOff(g: Gadget, owner: Pawn): boolean {
-    return !(g.flags & GFlag.Off) && owner.state.jammed === 0 && !pawnJammed(this.sim, owner) && !pointJammed(this.sim, g.team, g.pos);
-  }
-
-  /**
-   * One placed over its owner's `max` waiting at once (Fuze's Cluster Charge): the oldest others are set off as the
-   * detonator would, or fall (gone, nothing more) if nothing could set them off now. Its owner's hands already count
-   * no more than `max` waiting (gadgets/hands.ts), so nobody's told.
-   */
-  private overMax(e: Gadget, max: number, owner: Pawn) {
-    const waiting = this.sim.gadgets.list.filter((x) => x.owner === e.owner && x.kind === e.kind && x.id !== e.id && !(x.flags & GFlag.Active));
-    for (const x of waiting.slice(0, Math.max(0, waiting.length - (max - 1)))) {
-      if (this.canSetOff(x, owner)) this.detonated(x);
-      else this.sim.gadgets.remove(x.id);
-    }
   }
 
   /**
@@ -372,12 +355,17 @@ export class GadgetServer {
       const off = (now.flags & GFlag.Off) !== 0;
       if (now.fuseEnd !== 0 && tick >= now.fuseEnd) this.trigger(now, null);
       else if (d.tripwire && !off && !isFlying(now) && tick >= now.readyAt && this.tripped(now, d.tripwire)) this.trigger(now, null);
-      else if (d.alarm && !isFlying(now)) {
+      else if (d.gu && !isFlying(now)) {
+        // A Gu mine at rest (Phase 8 M10): an enemy body within reach (a downed one too) sets it off.
+        const r = d.gu.radiusM;
+        if (this.bodyNear(now, (p) => pawnDistance(sim, p, now!.pos) <= r, true)) this.sting(now);
+      } else if (d.alarm && !isFlying(now)) {
         const r = d.alarm.radiusM;
         this.sound(now, off || tick < now.readyAt ? null : this.bodyNear(now, (p) => pawnDistance(sim, p, now!.pos) <= r, true));
       } else if (now.signalEnd !== 0 && tick >= now.signalEnd && !(now.flags & GFlag.Lost)) sim.gadgets.update(now.id, { flags: now.flags | GFlag.Lost });
     }
     this.wires();
+    this.bites();
     this.flights.prune((id) => {
       const g = sim.gadgets.get(id);
       return g !== undefined && isFlying(g);
@@ -517,6 +505,43 @@ export class GadgetServer {
     this.onAlarm(g, by);
   }
 
+  /**
+   * A Gu mine set off (Phase 8 M10; lesion.md): an enemy body within its reach, a knife or a hammer on it. It's gone, and
+   * every enemy body within its reach that isn't down (nor Skopós's idle shell) is needled: its hit, then a bite every
+   * `everyS`; one already needled takes the hit and a bite at once, and its timer starts again (Y8S3).
+   */
+  sting(g: Gadget): void {
+    const k = this.dataOf(g)?.gu;
+    if (!k) return;
+    this.sim.gadgets.remove(g.id);
+    for (const p of [...this.sim.pawns.values()]) {
+      const s = p.state;
+      if (p.kind !== PawnKind.Body || p.team === g.team || s.mode === PawnMode.Dead || s.mode === PawnMode.Held || isDowned(s) || isIdleShell(this.sim, p)) continue;
+      if (pawnDistance(this.sim, p, g.pos) > k.radiusM) continue;
+      const again = s.needled;
+      s.needled = true;
+      this.needles.set(p.id, { next: this.sim.tick + ticks(k.everyS), g });
+      this.onNeedle(p, g);
+      this.hurt(g, p, k.hit + (again ? k.damage : 0));
+    }
+  }
+
+  /** The needled bitten (Phase 8 M10): a Gu's `damage` every `everyS` until the needle's pulled or the body is down or dead. */
+  private bites() {
+    const tick = this.sim.tick;
+    for (const [id, n] of this.needles) {
+      const p = this.sim.pawns.get(id);
+      const k = this.dataOf(n.g)?.gu;
+      if (!p || !k || !p.state.needled || p.state.mode === PawnMode.Dead || isDowned(p.state)) {
+        this.needles.delete(id);
+        continue;
+      }
+      if (tick < n.next) continue;
+      n.next = tick + ticks(k.everyS);
+      this.hurt(n.g, p, k.damage);
+    }
+  }
+
   /** Barbed wire's bite: every `everyS`, an enemy body moving in a wire takes its damage (once, however many it's in). */
   private wires() {
     const w = this.sim.data.gadgets.get("barbed_wire");
@@ -617,7 +642,8 @@ export class GadgetServer {
         else this.destroy(g);
         continue;
       }
-      if (!foot || isIngredient(g.kind) || isFlying(g) || g.panel >= 0) continue;
+      // (Skopós's idle shell's barrier isn't crushed: the shell doesn't stop a teammate reinforcing beside it, M10.)
+      if (!foot || isIngredient(g.kind) || isFlying(g) || g.panel >= 0 || g.kind === KIND_SHELL_SHIELD) continue;
       const f = foot.frame;
       const rel = [g.pos[0] - f.center[0], g.pos[1] - f.center[1], g.pos[2] - f.center[2]];
       const dot = (a: Vec3) => rel[0] * a[0] + rel[1] * a[1] + rel[2] * a[2];
@@ -662,7 +688,8 @@ export class GadgetServer {
     // A Black Mirror's glass is blast-proof (M7): only its wall giving way takes it.
     if (mirrorOf(this.sim.data, g)) return;
     if (isIngredient(g.kind)) this.ignite(g);
-    else if (g.kind === KIND_BP_CAMERA) this.sim.gadgets.update(g.id, { flags: g.flags | GFlag.Broken });
+    // A Bulletproof Camera's glass breaks; so does an idle shell's barrier (M10), its entry left as the shell's camera.
+    else if (g.kind === KIND_BP_CAMERA || g.kind === KIND_SHELL_SHIELD) this.sim.gadgets.update(g.id, { flags: g.flags | GFlag.Broken });
     else this.destroy(g);
   }
 

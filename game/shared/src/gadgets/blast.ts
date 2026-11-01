@@ -47,7 +47,8 @@ export function blastLine(sim: Sim, from: Vec3, to: Vec3, skip: number, exclude?
   if (len < 1e-6) return { blocked: false, soft: 0 };
   const dir: Vec3 = [d[0] / len, d[1] / len, d[2] / len];
   const ray = new sim.R.Ray({ x: from[0], y: from[1], z: from[2] }, { x: dir[0], y: dir[1], z: dir[2] });
-  if (sim.world.castRay(ray, len, true, undefined, QUERY_BULLET, exclude)) return { blocked: true, soft: 0 };
+  // (Skopós's idle shell's barrier doesn't stop it, M10: the blast breaks it and goes on to the shell.)
+  if (sim.world.castRay(ray, len, true, undefined, QUERY_BULLET, exclude, undefined, sim.blastMeets)) return { blocked: true, soft: 0 };
   const passed = new Set<number>();
   for (const { entry, crossing } of sim.level.panels.crossings(from, dir, len)) {
     const index = entry.panel.spec.index;

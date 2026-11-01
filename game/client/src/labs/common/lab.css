@@ -29,6 +29,10 @@ html, body { overflow: hidden; overscroll-behavior: none; touch-action: none; us
 .hurt-dir.on.show { opacity: 1; }
 /* Down but not out: darkened, blurred vision (core_mechanics.md §10.2), the bleed bar and the revive gauge. */
 .downed #view { filter: grayscale(0.7) brightness(0.55) blur(1.5px); }
+/* A Gu needle in you (Phase 8 M10): a sickly green at the edges of the view, and how to pull it. */
+.needled #view { filter: saturate(0.75) hue-rotate(-12deg); }
+.needled::after { content: ""; position: fixed; inset: 0; pointer-events: none; box-shadow: inset 0 0 140px 40px rgba(101, 163, 13, 0.45); }
+.needle-ui { position: absolute; top: 62%; left: 50%; transform: translateX(-50%); font-size: 13px; color: #bef264; text-shadow: 0 1px 2px #000; pointer-events: none; white-space: nowrap; }
 .hp.down .hp-fill { background: linear-gradient(90deg, #b91c1c, #ef4444); }
 .down-ui, .revive-ui { position: fixed; left: 50%; top: 58%; transform: translateX(-50%); width: min(420px, calc(100vw - 32px)); padding: 8px 12px; border-radius: 8px; background: rgba(0, 0, 0, 0.6); text-align: center; font: 600 13px system-ui, sans-serif; pointer-events: none; }
 .revive-ui { top: 62%; }

@@ -756,8 +756,8 @@ export const gadgetSchema = z
      */
     operator: z.string().optional(),
     /**
-     * Never carried nor in a pool: the server drops it (Phase 8 M9: a dead defender's phone, data/gadgets/dropped_phone.json);
-     * its `count` and `use` are unused.
+     * Never carried nor in a pool: the server puts it in the world (Phase 8 M9: a dead defender's phone; M10: Skopós's
+     * idle shell's barrier); its `count` and `use` are unused.
      */
     dropped: z.literal(true).optional(),
     /** How many a loadout with it gets each round (Striker's and Sentry's kits too, research/operators/sentry.md §3.2; a hammer's charges). */
@@ -813,8 +813,8 @@ export const gadgetSchema = z
     /** Waits for its owner's detonator once it's out. */
     remote: z.boolean(),
     /**
-     * At most this many of its owner's wait for the detonator at once (Fuze's Cluster Charge: one): placing another
-     * sets the oldest off as the detonator would, or, if nothing could set it off now (DSEG, a jammer), it falls.
+     * At most this many of its owner's wait for the detonator at once (Thermite's and Fuze's charges: one, Ulo): with
+     * that many out, its slot's key gives the detonator, not another, until one is set off or lost (gadgets/hands.ts).
      */
     maxOut: z.number().int().min(1).optional(),
     /**
@@ -948,6 +948,20 @@ export const gadgetSchema = z
         coneDeg: z.number().positive().max(45),
       })
       .optional(),
+    /**
+     * Lesion's Gu mines (Phase 8 M10, gadgets/serve.ts sting): an enemy body within `radiusM` of one at rest sets it off:
+     * it's gone, and every enemy body within that reach not down is needled: `hit` damage, then `damage` every `everyS`
+     * until he pulls the needle (Interact held `pullS`, standing) or goes down; needled, he can't sprint. A second
+     * needle restarts the timer with its hit and one bite.
+     */
+    gu: z
+      .strictObject({ radiusM: z.number().positive(), hit: z.number().min(0), damage: z.number().min(0), everyS: z.number().positive(), pullS: z.number().positive() })
+      .optional(),
+    /**
+     * A slot 2 item that comes back over time (Phase 8 M10: Lesion's mines): `start` at a life's start, one more every
+     * `everyS`, until `count` have been given (gadgets/hands.ts regenSlot).
+     */
+    regen: z.strictObject({ start: z.number().int().min(0), everyS: z.number().positive() }).optional(),
     mirror: z
       .strictObject({
         standY: z.number().positive(),
@@ -973,6 +987,8 @@ export const gadgetSchema = z
     if ((u.kind === "hold") !== (g.sensor !== undefined || g.jegeo !== undefined)) ctx.addIssue({ code: "custom", path: ["use"], message: "a held item is a sensor or a tablet, and they're held" });
     if (g.jammer && (u.kind !== "place" || g.jammer.warnM < g.jammer.radiusM)) ctx.addIssue({ code: "custom", path: ["jammer"], message: "a jammer is placed, and warns beyond its reach" });
     if (g.mirror && (u.kind !== "place" || !u.on.includes("reinforceable") || !g.solid)) ctx.addIssue({ code: "custom", path: ["mirror"], message: "a mirror is solid and placed on a reinforceable wall" });
+    if (g.gu && (u.kind !== "throw" || u.flight !== "settle" || g.remote || g.electronic)) ctx.addIssue({ code: "custom", path: ["gu"], message: "a Gu mine is thrown, settles, and is mechanical" });
+    if (g.regen && g.regen.start > g.count) ctx.addIssue({ code: "custom", path: ["regen", "start"], message: "more at the start than it ever gives" });
     if ((u.kind === "drone") !== (g.kludge !== undefined)) ctx.addIssue({ code: "custom", path: ["kludge"], message: "a drone item is a Kludge, and a Kludge is a drone item" });
   });
 export type GadgetData = z.infer<typeof gadgetSchema>;
@@ -1314,6 +1330,8 @@ export const destructionSchema = z.strictObject({
   /** Props by class (a level PROP's `prop`): which stop bullets; the rest a bullet goes through like a panel, without holes. */
   props: z.strictObject({ classes: z.record(z.string(), z.strictObject({ stopsBullets: z.boolean() })) }),
   melee: z.strictObject({ holeDiameterM: metres, bothSkins: z.boolean(), studs: z.boolean(), hatchDamage: z.number().nonnegative(), barricadeDamage: z.number().nonnegative() }),
+  /** The knife of an operator whose `combat.meleeHole` is `large` (Phase 8 M10: Skopós, as Aruni's). */
+  meleeLarge: z.strictObject({ holeDiameterM: metres, bothSkins: z.boolean(), studs: z.boolean(), hatchDamage: z.number().nonnegative(), barricadeDamage: z.number().nonnegative() }),
   explosives: z.record(z.string(), explosiveSchema),
   reinforcement: z.strictObject({
     deploySeconds: secs,

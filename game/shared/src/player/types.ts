@@ -240,6 +240,12 @@ export interface PawnState {
   w1: number;
   w2: number;
   gTarget: number;
+  // Lesion's Gu (Phase 8 M10): a needle in this body (no sprinting; the server's bites until it's pulled or the body is
+  // down), and a slot 2 item that comes back over time (his mines, gadgets/hands.ts regenSlot): how many it has given
+  // this life, and the ticks into the next
+  needled: boolean;
+  regenMade: number;
+  regenTicks: number;
 }
 
 /** What a body's hands hold (PawnState.hand). */

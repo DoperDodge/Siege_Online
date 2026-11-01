@@ -1,5 +1,5 @@
 {
-  "_doc": "Thermite's Exothermic Charge (research/operators/thermite.md §3; Phase 8 M5): his ability, the item in his slot 2 (Z). Placed by hand in `use.placeS` on any breakable surface, reinforced ones included (a soft or reinforced wall, a floor, a hatch, a barricade), not a hard wall; on a wall it stands on the floor below where you look (`use.toFloor`), so its hole starts at the floor; its owner's detonator sets it off (electronic: an EMP on it or on him stops the trigger, Y10S4), then it burns `burnS` with sparks on both sides before it goes off, and nothing stops it then but its destruction (any damage destroys it once placed, Fandom). Its blast cuts a large hole through every layer, steel included (data/destruction.json `explosives.exothermic_charge`: a reinforced hatch whole), and the panels within `blast.cutM` of it too (Fandom: adjacent walls, hatches and floors); 220 hp on the far side (Y11S3.1), lethal close and none past `blast.damage.zeroM`; on his own side only at point blank. Three a round (Y10S4). Its placing time, size, reach, the damage curves, destruction range and the adjacent reach are placeholders.",
+  "_doc": "Thermite's Exothermic Charge (research/operators/thermite.md §3; Phase 8 M5): his ability, the item in his slot 2 (Z). Placed by hand in `use.placeS` on any breakable surface, reinforced ones included (a soft or reinforced wall, a floor, a hatch, a barricade), not a hard wall; on a wall it stands on the floor below where you look (`use.toFloor`), so its hole starts at the floor; one at a time (`maxOut`; Ulo: place it, then its detonator, and no second until it's set off or lost); its owner's detonator sets it off (electronic: an EMP on it or on him stops the trigger, Y10S4), then it burns `burnS` with sparks on both sides before it goes off, and nothing stops it then but its destruction (any damage destroys it once placed, Fandom). Its blast cuts a large hole through every layer, steel included (data/destruction.json `explosives.exothermic_charge`: a reinforced hatch whole), and the panels within `blast.cutM` of it too (Fandom: adjacent walls, hatches and floors); 220 hp on the far side (Y11S3.1), lethal close and none past `blast.damage.zeroM`; on his own side only at point blank. Three a round (Y10S4). Its placing time, size, reach, the damage curves, destruction range and the adjacent reach are placeholders.",
   "_season": "Y11S3",
   "_unverified": ["use.placeS", "use.reachM", "sizeM", "burnS", "blast.damage.fullM", "blast.damage.zeroM", "blast.near", "blast.destroyM", "blast.cutM", "blast.throughSoft", "blast.concussM"],
   "id": "exothermic_charge",
@@ -10,6 +10,7 @@
   "electronic": true,
   "use": {"kind": "place", "on": ["soft", "steel"], "placeS": 3.0, "reachM": 2.0, "toFloor": true},
   "remote": true,
+  "maxOut": 1,
   "burnS": 3.0,
   "pickUp": false,
   "sizeM": [1.2, 1.7, 0.08],

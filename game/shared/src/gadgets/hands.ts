@@ -33,7 +33,29 @@ export function slotGadget(data: GameData, lo: ResolvedLoadout | null, slot: 1 |
 
 /** How many of slot 1's and slot 2's devices a body with this loadout starts a round with. */
 export function slotCounts(data: GameData, lo: ResolvedLoadout | null): [number, number] {
-  return [slotGadget(data, lo, 1)?.count ?? 0, slotGadget(data, lo, 2)?.count ?? 0];
+  const start = (g: GadgetData | null | undefined) => (g ? (g.regen?.start ?? g.count) : 0);
+  return [start(slotGadget(data, lo, 1)), start(slotGadget(data, lo, 2))];
+}
+
+/** A body's gadgets as a life starts (or a lab's refill): each slot's count, and none of a slot 2 item's regen yet. */
+export function stockSlots(data: GameData, s: PawnState, lo: ResolvedLoadout | null): void {
+  [s.g1, s.g2] = slotCounts(data, lo);
+  s.regenMade = s.g2;
+  s.regenTicks = 0;
+}
+
+/**
+ * A slot 2 item that comes back over time (Phase 8 M10, Lesion's mines: data `regen`): one more every `regen.everyS`
+ * until its `count` have been given this life (a mine picked up again is back in hand, not given anew).
+ */
+export function regenSlot(data: GameData, pawn: Pawn): void {
+  const g = slotGadget(data, pawn.loadout, 2);
+  const s = pawn.state;
+  if (!g?.regen || s.regenMade >= g.count) return;
+  if (++s.regenTicks < ticks(g.regen.everyS)) return;
+  s.regenTicks = 0;
+  s.regenMade++;
+  s.g2++;
 }
 
 const left = (s: PawnState, slot: 1 | 2) => (slot === 1 ? s.g1 : s.g2);
@@ -67,18 +89,13 @@ export function parkHands(s: PawnState): void {
   }
 }
 
-/**
- * After a device left the hands: the detonator if it waits for one, the next device, or the weapon. One at a time
- * (`maxOut`, Fuze's Cluster Charge): placing another sets the oldest off (the server does), so no more wait.
- */
+/** After a device left the hands: the detonator if it waits for one, the next device, or the weapon. */
 function afterUse(s: PawnState, slot: 1 | 2, g: GadgetData) {
   if (slot === 1) s.g1--;
   else s.g2--;
   if (g.remote) {
-    if (waiting(s, slot) < (g.maxOut ?? Infinity)) {
-      if (slot === 1) s.w1++;
-      else s.w2++;
-    }
+    if (slot === 1) s.w1++;
+    else s.w2++;
     s.hand = detonatorHand(slot);
     s.gAct = GadgetAct.Ready;
     s.gTicks = 0;
@@ -104,10 +121,13 @@ export function deviceLost(data: GameData, pawn: Pawn, gadget: string): boolean 
   return true;
 }
 
-/** The key of a slot pressed: its detonator or device out, swapped, or put away. */
-function toggle(s: PawnState, slot: 1 | 2) {
+/**
+ * The key of a slot pressed: its detonator or device out, swapped, or put away. With `maxOut` of it waiting (Thermite's
+ * and Fuze's charges, one at a time: Ulo, Phase 8), only its detonator comes out until one is set off or lost.
+ */
+function toggle(s: PawnState, slot: 1 | 2, g: GadgetData) {
   if (handSlot(s.hand) === slot) {
-    if (isDetonator(s.hand) && left(s, slot) > 0) takeOut(s, deviceHand(slot));
+    if (isDetonator(s.hand) && left(s, slot) > 0 && waiting(s, slot) < (g.maxOut ?? Infinity)) takeOut(s, deviceHand(slot));
     else putAway(s);
     return;
   }
@@ -156,10 +176,11 @@ export function stepHands(ctx: HandsContext, pawn: Pawn, input: InputCmd, presse
   const lo = pawn.loadout;
   if (!lo) return;
   const before = s.hand;
-  if (pressed & Btn.Gadget && slotGadget(ctx.data, lo, 1)) toggle(s, 1);
+  const one = slotGadget(ctx.data, lo, 1);
+  if (pressed & Btn.Gadget && one) toggle(s, 1, one);
   // Brava's Kludge drones (Phase 8 M8, a `drone` item) are thrown by the drone code, never taken in hand.
   const two = slotGadget(ctx.data, lo, 2);
-  if (pressed & Btn.Ability && two && two.use.kind !== "drone") toggle(s, 2);
+  if (pressed & Btn.Ability && two && two.use.kind !== "drone") toggle(s, 2, two);
   // Taken out this tick: its equip time starts next tick (as a weapon swap's does, weapons/step.ts).
   if (s.hand !== before && s.hand !== Hand.Weapon) return;
   // The other weapon's key puts the gadget away; the weapon's step swaps to it and brings it up. (The key of the

@@ -16,7 +16,7 @@ import { blocksSprint, parkWeapon, stepWeapon, wantsAim, type SimEvent } from ".
 import { bleedTick, isDowned } from "./downed.js";
 import { ticks } from "../weapons/ticks.js";
 import { DeployKind } from "../destruction/deploy.js";
-import { parkHands, putAway, stepHands } from "../gadgets/hands.js";
+import { parkHands, putAway, regenSlot, stepHands } from "../gadgets/hands.js";
 
 export interface MoveContext {
   R: Rapier;
@@ -61,6 +61,8 @@ export function stepPawn(ctx: MoveContext, pawn: Pawn, input: InputCmd, weapons 
   // An EMP on the body (DSEG, Phase 8 M3) wears off.
   if (s.jammed > 0) s.jammed--;
   if (s.mode === PawnMode.Dead) return;
+  // Lesion's next mine comes (Phase 8 M10).
+  regenSlot(ctx.data, pawn);
 
   updateLook(ctx, pawn, input);
 
@@ -215,7 +217,9 @@ function stepWalk(ctx: MoveContext, pawn: Pawn, input: InputCmd, pressed: number
     s.stance === Stance.Stand &&
     s.stanceT >= 1 &&
     s.grounded &&
-    slow >= 1;
+    slow >= 1 &&
+    // A Gu needle in him (Phase 8 M10): no sprinting until it's pulled.
+    !s.needled;
   if (sprinting) speed = m.speed.sprintByRating[rating] * mult("sprint");
   speed *= slow;
   s.sinceSprint = sprinting ? 0 : s.sinceSprint + DT;

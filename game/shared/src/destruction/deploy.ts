@@ -13,7 +13,7 @@ import type { PanelSet } from "./panels.js";
  * What a hold is doing (PawnState.deployKind): Interact at a panel (Phase 4 M6), with the defuser (Phase 6,
  * match/objective.ts), or taking a gadget back (Phase 8, gadgets/hands.ts: the gadget in `PawnState.gTarget`).
  */
-export const DeployKind = { None: 0, Reinforce: 1, BarricadeUp: 2, BarricadeOff: 3, Plant: 4, Disable: 5, PickUp: 6 } as const;
+export const DeployKind = { None: 0, Reinforce: 1, BarricadeUp: 2, BarricadeOff: 3, Plant: 4, Disable: 5, PickUp: 6, Needle: 7 } as const;
 
 export interface DeployAction {
   kind: number;

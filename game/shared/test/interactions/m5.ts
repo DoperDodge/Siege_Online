@@ -274,18 +274,28 @@ row("thermite.exothermic_charge", "player.attacker", async () => {
 
 row("fuze.cluster_charge", "surface.soft_wall", async () => {
   // Through a soft wall at once: its hole, and 5 grenades out on the far side one after another, from his left to his
-  // right (he faces −z: −x first), each going off in the order they came out; then it falls. One at a time: placing a
-  // second (on the next wall but two, out of the grenades' reach: they'd destroy it) sets the first off, the second waiting.
+  // right (he faces −z: −x first), each going off in the order they came out; then it falls. One at a time (Ulo): once
+  // it's placed his detonator is out, and Z gives no second charge (only the detonator, or puts it away) until it's
+  // set off; then the next comes out.
   const s = await lab(["fuze", "mute"]);
   const n = left(s);
   s.teleport(0, -8.6, 0, -5.0);
   const first = plant(s, [-8.6, 1.0, -5.9])!;
-  expect([waiting(s), s.sim.gadgets.list.filter((g) => g.kind === KIND_GRENADE).length]).toEqual([1, 0]);
+  expect([waiting(s), s.body(0).state.hand, s.sim.gadgets.list.filter((g) => g.kind === KIND_GRENADE).length]).toEqual([1, Hand.AbilityDetonator, 0]);
+  const hands: number[] = [];
+  for (let k = 0; k < 3; k++) {
+    s.press(0, Btn.Ability);
+    s.wait(ticks(s.sim.data.gadgetRules.equipS) + 2);
+    hands.push(s.body(0).state.hand);
+  }
+  expect(hands).toEqual([Hand.Weapon, Hand.AbilityDetonator, Hand.Weapon]);
   s.teleport(0, 6, 0, -5.0);
-  const second = plant(s, [6, 1.0, -5.9])!;
+  expect(() => plant(s, [6, 1.0, -5.9])).toThrow(/couldn't take out/);
+  expect([left(s), waiting(s), s.sim.gadgets.list.filter((g) => g.kind === kindOf("cluster_charge")).length]).toEqual([n - 1, 1, 1]);
   s.teleport(0, -8, 0, 4.0); // out of the grenades' way
+  detonate(s);
   const seen = watch(s, ticks(clusterS(s, false)), watch(s, 0));
-  expect([left(s), waiting(s), s.sim.gadgets.get(first.id), s.sim.gadgets.get(second.id)?.flags ?? -1]).toEqual([n - 2, 1, undefined, second.flags]);
+  expect([left(s), waiting(s), s.sim.gadgets.get(first.id), s.body(0).state.hand]).toEqual([n - 1, 0, undefined, Hand.Ability]);
   expect(holeAt(s, "soft_plain", [L_FRONT, L_BACK], [-8.6, 1.0, -6])).toBe(true);
   const out = [...seen.values()];
   const c = data(s, "cluster_charge").cluster!;
@@ -296,7 +306,11 @@ row("fuze.cluster_charge", "surface.soft_wall", async () => {
   expect(out[0].vel[0]).toBeLessThan(0);
   expect(out[out.length - 1].vel[0]).toBeGreaterThan(0);
   expect(blasts(s, "cluster_grenade")).toBe(c.count);
-  // The second goes when he presses his detonator, wherever he is.
+  // Set off, the next one comes out: a second goes up, and goes when he presses his detonator, wherever he is.
+  s.teleport(0, 6, 0, -5.0);
+  const second = plant(s, [6, 1.0, -5.9])!;
+  expect([left(s), waiting(s)]).toEqual([n - 2, 1]);
+  s.teleport(0, -8, 0, 4.0);
   detonate(s);
   watch(s, ticks(clusterS(s, false)));
   expect([s.sim.gadgets.get(second.id), blasts(s, "cluster_grenade"), waiting(s)]).toEqual([undefined, 2 * c.count, 0]);

@@ -603,9 +603,10 @@ The gadget questions in [gadgets.md](gadgets.md) and the operator files stay ope
     hole 0.5 m across; a hatch keeps its hp (only the tube goes through); a grenade's damage 140 to 1.2 m, none past
     4.2 m (lethal to 125 hp within 1.2 m and to 100 hp within 2 m, as Fandom says), and it destroys gadgets of both
     teams (drones too, whatever the friendly fire rules) within its 4.2 m, a frag's convention: so Fuze's grenades
-    also destroy his own charges near them. Placing a second sets the first off; if nothing could set it off then
-    (an EMP), ours lets it fall. How long does the release take, how wide is the fan, and how long is a grenade's
-    fuse? What happens to a jammed first charge when Fuze places a second?
+    also destroy his own charges near them. How long does the release take, how wide is the fan, and how long is a
+    grenade's fuse?
+    > Ulo (2026-11-01): Thermite's and Fuze's charges go one at a time: place it, then pull out the remote that sets it
+    > off; no second until then (built: D-150). Fandom's "a second sets the first off" is gone.
 27. **Mute's jammer (M6):** an operator counts as inside it by the part of his body nearest it; it's placed within
     2.5 m on a floor; a drone inside it stops dead (its driver's input is ignored); a wall reinforced over one crushes
     it within 0.35 m of the wall, under 0.4 m up (all ours). Does a body count as inside by its feet, its centre or
@@ -632,6 +633,17 @@ The gadget questions in [gadgets.md](gadgets.md) and the operator files stay ope
     Bulletproof Cameras included, view only (all ours unless research/operators/dokkaebi.md says otherwise). How is a
     defender identified, how long is the dismissal, does a teammate's EMP cut it, and which feeds does a hacked phone
     give?
+32. **Lesion's Gu mines (M10):** a mine at rest goes off when any part of an attacker's body is within 1 m of it (a
+    downed one too, untouched); its first bite comes 2 s after the needle; pulling it takes 2 s standing (he can walk
+    meanwhile, his weapon lowered); needled, he can't sprint, plant or drop the defuser; a knife or Sledge's hammer on
+    a mine sets it off (it stings whoever's within 1 m); a bullet or a blast destroys it without a sting; reinforcing
+    the wall it lies at crushes it; it's 10 × 6 × 10 cm and thrown like a grenade (all ours unless lesion.md says
+    otherwise). How long does the pull take, when does the first bite land, and does the knife really set one off?
+33. **Skopós's idle shell (M10):** its barrier is 0.8 m wide, 1.3 m high, 0.5 m in front of the shell, bulletproof
+    window and all; a blast or the hammer breaks it and a blast reaches the shell through it; its camera looks out from
+    just in front of the barrier at a crouched body's eyes, turning as a default camera does, off while an EMP has it;
+    her knife's hole is 0.6 m across, through the studs, and it breaks a barricade and a hatch in one hit (all ours).
+    Her shells start together at the site's defender spawn: where are Oregon's dedicated Skopós spots?
 
 ### [core_mechanics.md](core_mechanics.md) — 16
 
