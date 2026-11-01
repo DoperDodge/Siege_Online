@@ -120,6 +120,11 @@ describe("lobby, clock, error and debug messages round-trip", () => {
     const shot = { seq: 65000, viewTick: 988.25, origin: [1, 2, 3] as V3, dir: dirs[0], dirs, ends: [12.5, 30], rewoundTick: 990.5, serverTick: 1000, hit: { pawnId: 7, part: "head", distance: 12.5 }, wallDistance: 30, target };
     expect(decodeShotResult(body(encodeShotResult(shot), Msg.ShotResult))).toEqual(shot);
     expect(decodeShotResult(body(encodeShotResult({ ...shot, hit: null, wallDistance: null, target: null }), Msg.ShotResult))).toEqual({ ...shot, hit: null, wallDistance: null, target: null });
+    // A body behind Fuze's shield (Phase 8 M11): its nine boxes and the plate's six, the first pellet on the plate. (A
+    // shot result naming "shield" once disconnected the shooter: the part wasn't in the list, and 15 boxes were too many.)
+    const plate = Array.from({ length: 6 }, (_, i) => ({ part: "shield" as const, a: [i * 0.125, 0.625, -9.5] as V3, b: [i * 0.125, 1.75, -9.5] as V3, radius: 0.0625 }));
+    const shielded = { ...shot, hit: { pawnId: 7, part: "shield", distance: 9.5 }, target: { pawnId: 7, boxes: [...Array.from({ length: 9 }, () => target.boxes[0]), ...plate] } };
+    expect(decodeShotResult(body(encodeShotResult(shielded), Msg.ShotResult))).toEqual(shielded);
     expect(decodeCreateRoom(body(encodeCreateRoom("range_lab"), Msg.CreateRoom))).toEqual({ levelId: "range_lab" });
     expect(() => decodeCreateRoom(body(encodeCreateRoom("oregon_secret"), Msg.CreateRoom))).toThrow(ProtocolError);
     expect(decodeLabTool(body(encodeLabTool({ kind: "resetDummies" }), Msg.LabTool))).toEqual({ kind: "resetDummies" });

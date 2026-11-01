@@ -279,7 +279,10 @@ export interface ShotBox {
   radius: number;
 }
 
-const BOX_PARTS: readonly BodyPart[] = ["head", "neck", "torso", "pelvis", "arm_l", "arm_r", "leg_l", "leg_r", "drone"];
+/** Every body part a shot result's boxes can name ("shield": Fuze's plate, Phase 8 M11), by index. Append only. */
+const BOX_PARTS: readonly BodyPart[] = ["head", "neck", "torso", "pelvis", "arm_l", "arm_r", "leg_l", "leg_r", "drone", "shield"];
+/** A shot result's boxes at most: a body's (nine) and Fuze's shield's plate (six) with room to spare. */
+const MAX_SHOT_BOXES = 24;
 const MAX_SHOT_PELLETS = 16;
 
 /**
@@ -322,8 +325,9 @@ export function encodeShotResult(s: ShotResult): Uint8Array {
   if (s.hit) w.varu(s.hit.pawnId).str(s.hit.part).f32(s.hit.distance);
   if (s.wallDistance !== null) w.f32(s.wallDistance);
   if (s.target) {
-    w.varu(s.target.pawnId).u8(s.target.boxes.length);
-    for (const b of s.target.boxes) {
+    const boxes = s.target.boxes.slice(0, MAX_SHOT_BOXES);
+    w.varu(s.target.pawnId).u8(boxes.length);
+    for (const b of boxes) {
       w.u8(BOX_PARTS.indexOf(b.part));
       for (const v of [...b.a, ...b.b, b.radius]) w.f32(v);
     }
@@ -352,7 +356,7 @@ export function decodeShotResult(r: ByteReader): ShotResult {
   if (f & 4) {
     const pawnId = r.varu();
     const k = r.u8();
-    if (k > BOX_PARTS.length) throw new ProtocolError("too many boxes");
+    if (k > MAX_SHOT_BOXES) throw new ProtocolError("too many boxes");
     const boxes = Array.from({ length: k }, (): ShotBox => {
       const part = BOX_PARTS[r.u8()];
       if (!part) throw new ProtocolError("bad body part");

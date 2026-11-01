@@ -330,9 +330,14 @@ try {
   await dok.keyboard.press("KeyZ");
   await until(dok, () => window.__lab.net.hand === 3);
   await sleep(1000);
-  await input(dok, { yaw: 0, pitch: -0.12, buttons: Btn.Fire });
-  await sleep(150);
-  await input(dok, { yaw: 0, pitch: -0.12 });
+  // (Pressed again if a slow page lets a press go by: CI run 41260952777 missed the only one.)
+  const calling = () => dok.evaluate(() => window.__lab.net.events.some((e) => e.kind === "jegeo" && e.stage === 0));
+  for (let k = 0; k < 4 && !(await calling()); k++) {
+    await input(dok, { yaw: 0, pitch: -0.12, buttons: Btn.Fire });
+    await sleep(400);
+    await input(dok, { yaw: 0, pitch: -0.12 });
+    await sleep(1500);
+  }
   await until(dok, () => window.__lab.net.events.some((e) => e.kind === "jegeo" && e.stage === 0), null, 10000);
   await sleep(2000);
   result.jegeoBar = await dok.evaluate(() => ({ hidden: document.querySelector(".jegeo-bar")?.classList.contains("hidden") ?? true, title: document.querySelector(".jegeo-title")?.textContent ?? "" }));
