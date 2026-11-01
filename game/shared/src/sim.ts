@@ -835,17 +835,13 @@ export class Sim {
       c.drone = next.id === body.id ? 0 : next.id;
       return;
     }
-    if (c.drone) {
-      if (pressed & Btn.Observe) c.drone = 0;
-      else if (newLean) {
-        const i = out.findIndex((p) => p.id === c.drone);
-        // Past the end of the list, an attacker goes on to the cameras a Kludge hacked (Phase 8 M8), if any.
-        const cam = (i + newLean < 0 || i + newLean >= out.length) && this.matchRules.cameras ? this.nextCam(c.team, -1, 1) : -1;
-        if (cam >= 0) {
-          c.drone = 0;
-          this.openCam(c, cam);
-        } else if (out.length > 1) c.drone = out[(i + newLean + out.length) % out.length].id;
-      }
+    // On a feed: a drone, or a camera the attackers may watch (one a Kludge hacked, or Dokkaebi's lend, Phase 8). A
+    // new lean goes round drones then cameras, wrapping. (Ulo's test: on a hacked camera this function took the lean
+    // before the cameras' code saw it, so a second camera was never reached and there was no way back to a drone.)
+    // Observe from a drone goes back to the body, from a camera too (updateCams).
+    if (c.drone || c.cam) {
+      if (c.drone && pressed & Btn.Observe) c.drone = 0;
+      else if (newLean) this.nextFeed(c, out, newLean);
       return;
     }
     // The ability key throws a Kludge drone for Brava (Phase 8 M8: her slot 2 item is a `drone` one).
@@ -854,6 +850,27 @@ export class Sim {
       const thrown = body.state.mode === PawnMode.Walk ? this.throwDrone(c, body, input.buttons, !!kludge) : null;
       if (thrown) c.drone = thrown.id;
     } else if (pressed & Btn.Observe && out.length) c.drone = out[0].id;
+  }
+
+  /**
+   * The feed after (or before, `dir` −1) the one a controller is on, round its list: the drones out (`drones`, the feed
+   * list's), then the cameras its team may watch in order (Phase 8: those a Kludge hacked, the defenders' on Dokkaebi's
+   * lend). Going to the camera it's already on does nothing (its view stays where it is).
+   */
+  private nextFeed(c: PlayerController, drones: readonly Pawn[], dir: number) {
+    const cams: number[] = [];
+    if (this.matchRules.cameras) for (let i = 0; i < this.camCount(); i++) if (this.camFor(c.team, i)) cams.push(i);
+    const list = [...drones.map((p) => ({ drone: p.id, cam: -1 })), ...cams.map((i) => ({ drone: 0, cam: i }))];
+    if (list.length === 0) return;
+    const at = list.findIndex((e) => (c.cam ? e.cam === c.cam - 1 : e.drone === c.drone));
+    const next = list[(((at < 0 ? 0 : at) + dir) % list.length + list.length) % list.length];
+    if (next.cam < 0) {
+      c.cam = 0;
+      c.drone = next.drone;
+    } else if (next.cam !== c.cam - 1) {
+      c.drone = 0;
+      this.openCam(c, next.cam);
+    }
   }
 
   /**
