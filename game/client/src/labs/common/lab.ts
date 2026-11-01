@@ -1681,6 +1681,8 @@ export async function startLab(o: LabOptions): Promise<void> {
           drone: ctrl.drone,
           /** The default camera watched (Phase 7): its number in the level's list, 0: none. */
           cam: ctrl.cam,
+          /** How many cameras the defenders' list holds now (the level's, Bulletproof Cameras, idle shells: Phase 8 M10). */
+          cams: sim.camCount(),
           viewedKind: sim.pawns.get(sim.viewedPawnId(ctrl.id))?.kind ?? null,
           /** Pings and spotted enemies marked on the screen (Phase 7). */
           intel: intelHud.count,

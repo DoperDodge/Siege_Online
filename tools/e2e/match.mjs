@@ -236,9 +236,9 @@ try {
   result.checks.defenderSeesTheDrone = await def1
     .waitForFunction((id) => window.__lab.net.remotes.some((r) => r.id === id && r.state !== null), droneId, { timeout: 5000 })
     .then(() => true, () => false);
-  // The defender watches the cameras (Phase 7): 5 opens the first, Q goes round to the last, 5 closes them. Each key is
-  // held until the page shows what it did (its game ticks run in its frames, slow on a busy runner), then let go for
-  // two of its ticks so the next press is a new one.
+  // The defender watches the cameras (Phase 7): 5 opens the first, Q goes round to the last (the level's, or Skopós's
+  // idle shell's after them, Phase 8 M10), 5 closes them. Each key is held until the page shows what it did (its game
+  // ticks run in its frames, slow on a busy runner), then let go for two of its ticks so the next press is a new one.
   const OBSERVE = 1 << 14;
   const holdUntil = async (page, input, done, arg) => {
     await page.evaluate((i) => (window.__lab.input = i), input);
@@ -251,10 +251,10 @@ try {
     return ok;
   };
   const opened = await holdUntil(def1, { buttons: OBSERVE }, () => window.__lab.net.cam === 1);
-  const wentRound = await holdUntil(def1, { lean: -1 }, (n) => window.__lab.net.cam === n, lvl.cameras.length);
+  const wentRound = await holdUntil(def1, { lean: -1 }, () => window.__lab.net.cam === window.__lab.net.cams && window.__lab.net.cams > 0);
   await def1.screenshot({ path: shot("match-prep-defender-camera.png") });
   const closed = await holdUntil(def1, { buttons: OBSERVE }, () => window.__lab.net.cam === 0);
-  result.oneVsOne.prep.cameras = { opened, wentRound, closed };
+  result.oneVsOne.prep.cameras = { opened, wentRound, closed, level: lvl.cameras.length };
   result.checks.defenderWatchesTheCameras = opened && wentRound && closed;
   await att1.screenshot({ path: shot("match-prep-attacker.png") });
   await def1.screenshot({ path: shot("match-prep-defender.png") });
