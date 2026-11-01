@@ -263,6 +263,11 @@ front of the barrier at the crouched shell's eyes, the default camera's limits, 
 lists it from the table (who's in which shell is each player's own), the defence watches it, and so do the attackers
 on a hacked phone's lend. Her knife (`combat.meleeHole: large`) uses `destruction.meleeLarge`: a 0.6 m hole through
 the studs, a barricade in one hit, a hatch in one. The idle shell starts beside her at the site's defender spawn.
+Reshaped after Ulo's test (D-153): the barrier curves round the crouched shell (data `arc`: seven segments 0.5 m out,
+220° round its front and sides; gadgets/hits.ts `arcBoxes` gives the same segments to its colliders, ray tests and
+model), its entry at the shell's centre and its camera's lens out past its front. A shell in a corner is covered all
+round: an attacker has to come up to the barrier and shoot down over it. Held-up items (Pulse's sensor, Dokkaebi's
+tablet) come up to the face like a scope as they're taken out.
 
 ## 8. The Ballistic Shield (Fuze)
 
@@ -271,6 +276,18 @@ front of the body (head and chest; legs exposed standing), no hip fire, ADS tilt
 walking], Fire alone looks around (free look), a melee bash [0 hp since Y9S4 in our data] with pushback, suppression
 after [5 hits], guard break from blasts of 30 hp or more, melee and stuns, a Sledge swing knocks it down, ×0.9 speed,
 off for placing gadgets and on ropes, kept on the back when away (covers the back).
+
+**Reworked after Ulo's test (D-153):** the plate is 0.75 m wide and curves round him (its edges 0.1 m nearer than its
+middle, 0.42 m ahead), from 0.3 m up (0.05 m crouched) to 0.15 m over the eyes: seven capsules along the curve
+(`shieldFrame`). It bends with the spine when he leans, as the upper body does. Aiming slides it down over the aim
+time (`adsQ`; 0.37 m when fully aimed, its bottom stopping at the floor) instead of jumping; how far it has slid goes
+to others in the remote record (flags bits 11–13, only with the shield up), so the rewind and every client agree. It
+is drawn as a solid curved plate with a small window of bulletproof glass at eye height (client/src/render/
+shieldModel.ts), the same mesh in his own first person, where he sees the world through the window; his pistol stays
+behind it until it has slid far enough to aim over. Free look is the client's: Fire held with it up and not aiming
+turns the view and not the body (the input keeps the body's facing, without Fire), and letting go turns the view
+back. Prone, the plate on his back has no hitboxes. (The text below is M11's first build; where they differ, this
+paragraph holds.)
 
 **As built (M11, D-152; player/shield.ts):** the shield is a pickable primary (`ResolvedLoadout.shield`); its loadout
 holds Fuze's secondary pistol in both slots (Swap does nothing), aimed in `pistolAdsS` (0.5 s walking, 0.55 s from a
@@ -300,7 +317,8 @@ gadget or a detonator in hand puts it on his back), and the knockdown's fall (on
 - **Fire extinguishers** (Oregon's six markers): shot, knifed or in a blast, they burst into a smoke cloud [5 s] and
   concuss those close by [radius, seconds].
 - **Gas pipes**: shot or in a blast, a flame jet [12 s] then an explosion then a ground fire, hurting both teams
-  [all numbers]; fire destroys drones and gadgets it touches.
+  [all numbers]; fire destroys drones and gadgets it touches. Upright from the floor (Ulo's test, D-153): a 3 m box
+  from the floor up, drawn to the ceiling, its entry 1.2 m up it where the jet comes out and the blast goes off.
 - **Metal detectors** aren't on Oregon; the Gadget Lab has one (an alarm when an attacker walks through).
 - **Phones**: an eliminated defender drops one (§7); any damage destroys it.
 

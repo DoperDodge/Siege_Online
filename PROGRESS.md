@@ -26,6 +26,21 @@ targets `main`.
 | M11 The Ballistic Shield | ✅ (D-152) |
 | M12 Every CSV row passing; netsim, browser tests, review, docs, report | next |
 
+### What's done (your test of M11, 2026-11-01; D-153)
+- **Shooting Fuze's shield no longer drops the shooter.** The server's reply to a shot lists the hitboxes of the body
+  it met, and the shield's weren't something the page could read, so the shooter got "the server sent something this
+  page can't read". Skopós's barrier and the deployable shield were fine (checked in the browser).
+- **Brava's hacked cameras:** on a camera she hacked, Q / E now go on to her next hacked camera, and past the last one
+  back to her drone (and round again); Observe goes back to her body. Before, Q / E did nothing on a camera.
+- **The Ballistic Shield, reshaped:** a wider plate that curves round Fuze, from his shins to over his head, with a
+  small window of bulletproof glass to look through (that's your view with it up). It moves with you when you lean,
+  and slides down smoothly as you aim (your pistol comes up over it). Hold left mouse with it up to look round
+  (free look) without turning the shield; let go and the view comes back.
+- **Skopós's barrier curves round her idle shell** (front and sides, open at the back). Put the shell in a corner and
+  it can only be shot by walking up to the barrier and shooting down over it.
+- **Pulse's Cardiac Sensor** comes up to your face like a scope when you take it out (Dokkaebi's tablet too).
+- **Gas pipes** stand upright, from the floor to the ceiling.
+
 ### What's done (M11: the Ballistic Shield)
 - **Fuze's Ballistic Shield:** pick it as his primary in the loadout. He holds it in front with his pistol, and
   bullets stop at it (his shins show standing, his head when he aims). Right mouse raises the pistol (0.5 s), and only
@@ -235,8 +250,8 @@ npm start
    detector.
 6. **M4:** as Sledge, Z takes out the hammer: swing at the soft walls (close and from further away), the hatch from
    the platform, the barricaded door, and a dummy.
-13. **M11:** as Fuze, pick the Ballistic Shield as his primary (Esc → loadout). Left mouse alone does nothing; hold
-    right mouse, then fire. Online with a friend as Mute: he shoots your shield (no damage; 5 hits and you can't
+13. **M11:** as Fuze, pick the Ballistic Shield as his primary (Esc → loadout). Look through its window; hold left
+    mouse to look round (the shield stays put); hold right mouse and it slides down, then fire; lean with Q / E. Online with a friend as Mute: he shoots your shield (no damage; 5 hits and you can't
     sprint), knifes it (it swings aside), throws a Nitro Cell at it; as Sledge, he hits it with the hammer. Sprint into
     the barricaded door: it holds; bash it once (your melee) and sprint again: you go through.
 12. **M10:** as Lesion, Z and throw a mine at your feet, then switch to the attackers (pause menu) and walk onto it:
