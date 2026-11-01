@@ -565,7 +565,8 @@ export class PawnView {
     }
     if (this.held) {
       this.held.visible = armed && !this.firstPerson;
-      this.held.position.set(...eye).add(new THREE.Vector3(0.2, -0.3, -0.3).applyEuler(rot));
+      // A held-up item (Pulse's sensor, Dokkaebi's tablet) is at the face, as the viewmodel has it; the rest at the hip.
+      this.held.position.set(...eye).add((this.heldUp ? new THREE.Vector3(0, -0.06, -0.24) : new THREE.Vector3(0.2, -0.3, -0.3)).applyEuler(rot));
       this.held.rotation.copy(rot);
     }
     // Fuze's shield (Phase 8 M11): in your own first person too, where you look through its window.
@@ -587,8 +588,12 @@ export class PawnView {
     }
   }
 
-  /** The gadget in its hands (its box size), or none: the gun shows again. */
-  setHeld(size: readonly number[] | null) {
+  /** Whether the gadget in its hands is held up to the face (a `hold` item). */
+  private heldUp = false;
+
+  /** The gadget in its hands (its box size; `up`: held up to the face), or none: the gun shows again. */
+  setHeld(size: readonly number[] | null, up = false) {
+    this.heldUp = up;
     const key = size ? size.join(",") : "";
     if (key === this.heldKey) return;
     this.heldKey = key;

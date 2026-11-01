@@ -8,7 +8,7 @@ import {
   Btn,
   eyePose,
   heartOf,
-  rightXZ,
+  forwardXZ,
   loadedOf,
   poseHitboxes,
   ByteReader,
@@ -1362,17 +1362,19 @@ describe("Skopós's idle shell in a match", () => {
     expect(ctrl.operatorId).toBe("skopos");
     const idle = t.room.sim.bodyIds(ctrl).find((id) => id !== ctrl.possessedPawnId)!;
     const shell = t.room.sim.pawns.get(idle)!;
-    // The attacker, 3 m to the idle shell's side (clear of its barrier in front, Phase 8 M10), shoots it down the sights
-    // until it's gone.
+    // Its barrier curves round its front and sides (Phase 8 M10; Ulo's test): the attacker comes right up against the
+    // barrier's front and shoots down over it at the crouched shell's head, down the sights, until it's gone.
     const at = shell.state;
-    const [rx, rz] = rightXZ(at.yaw);
-    t.place(a, at.x + rx * 3, at.y, at.z + rz * 3, 0);
+    const [fx, fz] = forwardXZ(at.yaw);
+    const arc = data.gadgets.get("shell_shield")!.arc!;
+    const out = arc.radiusM + data.gadgets.get("shell_shield")!.sizeM[2] / 2 + data.movement.stance.collisionRadius + 0.08;
+    t.place(a, at.x + fx * out, at.y, at.z + fz * out, 0);
     for (let i = 0; i < 16; i++) t.tick();
     for (let shot = 0; shot < 30 && shell.state.mode !== PawnMode.Dead; shot++) {
       const eye = eyePose(data.movement, data.hitboxes, t.bodyOf(a)!.state).pos;
       const head = eyePose(data.movement, data.hitboxes, shell.state).pos;
       const d = [0, 1, 2].map((k) => head[k] - eye[k]);
-      const aim = { yaw: Math.atan2(-d[0], -d[2]), pitch: Math.atan2(d[1] - 0.3, Math.hypot(d[0], d[2])) };
+      const aim = { yaw: Math.atan2(-d[0], -d[2]), pitch: Math.atan2(d[1], Math.hypot(d[0], d[2])) };
       a.cmd = { ...aim, buttons: Btn.Ads };
       for (let i = 0; i < 40; i++) t.tick();
       a.cmd = { ...aim, buttons: Btn.Ads | Btn.Fire };

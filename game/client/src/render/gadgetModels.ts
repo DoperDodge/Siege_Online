@@ -139,7 +139,8 @@ export class GadgetModels {
       // Grenades and fire extinguishers are round; a gas pipe lies along its width; everything else is its box.
       const round = (d?.use.kind === "throw" && !d.remote && id !== "proximity_alarm") || id === "fire_extinguisher" || id === "mirror_canister";
       if (round) geo = new THREE.CylinderGeometry(w / 2, w / 2, h, 12);
-      else if (id === "gas_pipe") geo = new THREE.CylinderGeometry(h / 2, h / 2, w, 10).rotateZ(Math.PI / 2);
+      // A gas pipe stands upright (Ulo's test): a unit-tall cylinder, set to its floor-to-ceiling run per entry (pipeRun).
+      else if (id === "gas_pipe") geo = new THREE.CylinderGeometry(w / 2, w / 2, 1, 10);
       else geo = new THREE.BoxGeometry(w, h, depth);
       this.geometry.set(id, geo);
     }
@@ -149,6 +150,31 @@ export class GadgetModels {
       this.materials.set(id, mat);
     }
     const group = new THREE.Group();
+    if (d?.arc) {
+      // Curving round its centre (Skopós's idle shell's barrier, Ulo's test): its segments as gadgets/hits.ts arcBoxes
+      // has them, in its own frame (forward is −z).
+      const { radiusM: r, degrees, segments } = d.arc;
+      const span = (degrees * Math.PI) / 180;
+      const step = span / segments;
+      const body = new THREE.Group();
+      body.name = "body";
+      const seg = new THREE.BoxGeometry(2 * (r * Math.sin(step / 2) + 0.01), h, depth);
+      for (let i = 0; i < segments; i++) {
+        const a = -span / 2 + step * (i + 0.5);
+        const m = new THREE.Mesh(seg, mat);
+        m.position.set(-Math.sin(a) * r, 0, -Math.cos(a) * r);
+        m.rotation.y = a;
+        m.castShadow = true;
+        body.add(m);
+      }
+      group.add(body);
+      if (d.electronic) {
+        const led = new THREE.Mesh(new THREE.SphereGeometry(0.01, 6, 4), new THREE.MeshBasicMaterial({ color: 0xff3030 }));
+        led.position.set(0, h / 4, -r - depth / 2 - 0.005);
+        group.add(led);
+      }
+      return group;
+    }
     if (d?.mirror) {
       // A Black Mirror (M7): its frame round the window, through the wall (its glass is drawn by its state).
       const f = d.mirror.frameM;
@@ -180,6 +206,18 @@ export class GadgetModels {
       group.add(led);
     }
     return group;
+  }
+
+  /**
+   * A gas pipe's run (Ulo's test: "from the ground to the roof"): its unit cylinder stretched from the floor under its
+   * entry to the ceiling over it (the level's, within 6 m; else its data's height from the floor).
+   */
+  private pipeRun(body: THREE.Object3D, g: Gadget) {
+    const k = this.sim.data.gadgetRules.ingredients.gas_pipe;
+    const down = raycastLevel(this.sim, g.pos, [0, -1, 0], 6)?.t ?? k.pointM;
+    const up = raycastLevel(this.sim, g.pos, [0, 1, 0], 6)?.t ?? k.sizeM[1] - k.pointM;
+    body.scale.set(1, down + up, 1);
+    body.position.set(0, (up - down) / 2, 0);
   }
 
   /** Pose an object as an entry stands: at its centre, facing its way, a charge lying flat on its floor. */
@@ -244,7 +282,9 @@ export class GadgetModels {
       if (key === it.key) continue;
       it.key = key;
       this.pose(it.obj, g.pos, g.yaw, g.flags);
-      (it.obj.getObjectByName("body") as THREE.Mesh | undefined)?.scale.setScalar(isIngredient(g.kind) && g.flags & GFlag.Broken ? 0.7 : 1);
+      const body = it.obj.getObjectByName("body") as THREE.Mesh | undefined;
+      if (kindId(g.kind) === "gas_pipe" && body) this.pipeRun(body, g);
+      else body?.scale.setScalar(isIngredient(g.kind) && g.flags & GFlag.Broken ? 0.7 : 1);
       // Skopós's idle shell's barrier broken by a blast (M10): gone (its entry stays as the shell's camera).
       it.obj.visible = !(g.kind === KIND_SHELL_SHIELD && g.flags & GFlag.Broken);
       this.setLasers(it, g);

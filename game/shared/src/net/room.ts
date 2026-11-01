@@ -1669,8 +1669,8 @@ export class Room implements DirectorHost {
       if (bodies.length < 2) continue;
       for (const id of bodies) if (id !== c.possessedPawnId && this.sim.pawns.get(id)?.state.mode !== PawnMode.Dead) idle.add(id);
     }
-    // In front of the crouched shell, just clear of its body (data/movement.json `collisionRadius`).
-    const out = this.sim.data.movement.stance.collisionRadius + 0.15 + d.sizeM[2] / 2;
+    // Round the crouched shell (its entry at the shell's centre, data `arc`); a plain one in front, just clear of its body.
+    const out = d.arc ? 0 : this.sim.data.movement.stance.collisionRadius + 0.15 + d.sizeM[2] / 2;
     const spot = (p: Pawn): Vec3 => {
       const [fx, fz] = forwardXZ(p.state.yaw);
       return [p.state.x + fx * out, p.state.y + d.sizeM[1] / 2, p.state.z + fz * out];

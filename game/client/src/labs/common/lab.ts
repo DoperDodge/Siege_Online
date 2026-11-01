@@ -1302,7 +1302,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       v.setWeapon(w ? { class: w.class, pick: w.pick } : null);
       // A gadget in its hands instead (Phase 8): drawn as its greybox; a detonator small and dark.
       const held = heldGadget(pawn, rs);
-      v.setHeld(held ? (held.detonator ? [0.05, 0.09, 0.03] : held.data.sizeM) : null);
+      v.setHeld(held ? (held.detonator ? [0.05, 0.09, 0.03] : held.data.sizeM) : null, !!held && !held.detonator && held.data.use.kind === "hold");
       v.setShield(pawn.loadout?.shield?.plate ?? null);
       v.update(sim.data, rs.mode === PawnMode.Dead ? corpse(rs) : rs);
       // On a rope: drawn from the body's middle (its harness) up to where the rope is fixed (a swing takes the body

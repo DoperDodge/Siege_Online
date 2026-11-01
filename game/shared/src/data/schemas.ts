@@ -898,6 +898,12 @@ export const gadgetSchema = z
       .optional(),
     /** A solid box (the deployable shield): bodies, drones, bullets, blasts and throws meet it; a knife hit makes its glass opaque (then it can't be picked up). */
     solid: z.boolean().default(false),
+    /**
+     * Its box curves round its centre instead (Skopós's idle shell's barrier, Ulo's test): `segments` boxes, each `sizeM`
+     * tall and deep and as wide as its share of the arc, `radiusM` out from the entry's position, spanning `degrees`
+     * centred on its facing (gadgets/hits.ts gadgetBoxes).
+     */
+    arc: z.strictObject({ radiusM: z.number().positive(), degrees: z.number().positive().max(360), segments: z.number().int().min(1).max(16) }).optional(),
     /** A proximity alarm: it sounds while an enemy body is within `radiusM`, from `armS` after it comes to rest. */
     alarm: z.strictObject({ radiusM: z.number().positive(), armS: z.number().min(0) }).optional(),
     /** An observation blocker's barrier, facing its placer's way: up to `widthM` wide (less where walls are closer), `heightM` tall; the other side's observation tools can't see through it. */
@@ -1050,8 +1056,13 @@ export const gadgetRulesSchema = z.strictObject({
    */
   ingredients: z.strictObject({
     fire_extinguisher: z.strictObject({ sizeM, cloud: cloudSchema, concuss: z.strictObject({ radiusM: z.number().positive(), seconds: z.number().positive() }) }),
+    /**
+     * A gas pipe (Ulo's test): upright, `sizeM` tall from the floor up (drawn to the ceiling), its entry `pointM` up it
+     * where the jet comes out and the blast goes off.
+     */
     gas_pipe: z.strictObject({
       sizeM,
+      pointM: z.number().min(0),
       jet: dotSchema.extend({ lengthM: z.number().positive(), radiusM: z.number().positive(), seconds: z.number().positive() }),
       blast: blastSchema,
       fire: dotSchema.extend({ radiusM: z.number().positive(), seconds: z.number().positive() }),

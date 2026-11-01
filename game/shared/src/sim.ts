@@ -18,7 +18,7 @@ import { pawnJammed, pointJammed } from "./gadgets/jammers.js";
 import { heartbeats, heartOf, sensorUp } from "./gadgets/sensor.js";
 import { mirrorOf, sightPast } from "./gadgets/mirror.js";
 import { barrierOf, crossesBarrier, smokeOnSegment, wireSlow } from "./gadgets/areas.js";
-import { gadgetOnRay } from "./gadgets/hits.js";
+import { arcBoxes, gadgetOnRay } from "./gadgets/hits.js";
 import { placeSpotFor, slotGadget, stockSlots } from "./gadgets/hands.js";
 import { guData } from "./gadgets/gu.js";
 import { CAMERA_HALF_M } from "./intel/cameras.js";
@@ -82,8 +82,11 @@ export class Sim {
    * applies the server's ops. The simulation reads entries' flags and places (never their ticks).
    */
   readonly gadgets = new GadgetTable();
-  /** Solid gadgets' colliders (the deployable shield, Phase 8 M3), by entry id, as the table had them at `solidsAt`. */
-  private readonly solids = new Map<number, { c: Collider; key: string }>();
+  /**
+   * Solid gadgets' colliders (the deployable shield, Phase 8 M3; an idle shell's barrier's segments), by entry id, as the
+   * table had them at `solidsAt`.
+   */
+  private readonly solids = new Map<number, { cs: Collider[]; key: string }>();
   private solidsAt = -1;
   private bpCache: { version: number; list: Gadget[] } = { version: -1, list: [] };
   private shellCache: { version: number; list: Gadget[] } = { version: -1, list: [] };
@@ -1019,22 +1022,28 @@ export class Sim {
     let changed = false;
     for (const [id, s] of this.solids)
       if (want.get(id)?.key !== s.key) {
-        this.blastless.delete(s.c.handle);
-        this.world.removeCollider(s.c, false);
+        for (const c of s.cs) {
+          this.blastless.delete(c.handle);
+          this.world.removeCollider(c, false);
+        }
         this.solids.delete(id);
         changed = true;
       }
     for (const [id, w] of want) {
       if (this.solids.has(id)) continue;
-      const [x, y, z] = w.g.pos;
-      const half = w.g.yaw / 2;
-      const desc = this.R.ColliderDesc.cuboid(w.size[0] / 2, w.size[1] / 2, w.size[2] / 2)
-        .setTranslation(x, y, z)
-        .setRotation({ x: 0, y: Math.sin(half), z: 0, w: Math.cos(half) })
-        .setCollisionGroups(GADGET_GROUPS);
-      const c = this.world.createCollider(desc);
-      this.solids.set(id, { c, key: w.key });
-      if (w.g.kind === KIND_SHELL_SHIELD) this.blastless.add(c.handle);
+      // One box, or the segments of one that curves round its centre (Skopós's idle shell's barrier).
+      const boxes = arcBoxes(this.data, w.g) ?? [{ pos: w.g.pos, yaw: w.g.yaw, half: [w.size[0] / 2, w.size[1] / 2, w.size[2] / 2] as Vec3 }];
+      const cs = boxes.map((b) => {
+        const half = b.yaw / 2;
+        const desc = this.R.ColliderDesc.cuboid(b.half[0], b.half[1], b.half[2])
+          .setTranslation(b.pos[0], b.pos[1], b.pos[2])
+          .setRotation({ x: 0, y: Math.sin(half), z: 0, w: Math.cos(half) })
+          .setCollisionGroups(GADGET_GROUPS);
+        const c = this.world.createCollider(desc);
+        if (w.g.kind === KIND_SHELL_SHIELD) this.blastless.add(c.handle);
+        return c;
+      });
+      this.solids.set(id, { cs, key: w.key });
       changed = true;
     }
     if (changed) refreshBroadPhase(this.world);
@@ -1074,7 +1083,7 @@ export class Sim {
   /** A solid gadget's collider (Phase 8 M3), or undefined: a blast's line to the gadget itself leaves it out. */
   solidOf(id: number): Collider | undefined {
     if (this.solidsAt !== this.gadgets.version) this.syncSolids();
-    return this.solids.get(id)?.c;
+    return this.solids.get(id)?.cs[0];
   }
 
   /** The round's Bulletproof Cameras (the gadget table's, in the order they were placed). */
@@ -1171,9 +1180,11 @@ export class Sim {
   camLens(i: number, yaw: number): [number, number, number] {
     const shell = this.shellCamAt(i);
     if (shell) {
-      const size = this.data.gadgets.get("shell_shield")!.sizeM;
+      const d = this.data.gadgets.get("shell_shield")!;
+      const size = d.sizeM;
       const [fx, fz] = forwardXZ(shell.yaw);
-      const out = size[2] / 2 + LENS_AHEAD_M;
+      // (Its entry stands at the shell's centre, the barrier curving round it: the lens is out past its front.)
+      const out = (d.arc?.radiusM ?? 0) + size[2] / 2 + LENS_AHEAD_M;
       return [shell.pos[0] + fx * out, shell.pos[1] - size[1] / 2 + this.data.movement.stance.crouch.eye, shell.pos[2] + fz * out];
     }
     const bp = this.bpCamAt(i);
