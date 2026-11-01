@@ -40,7 +40,7 @@ out, placing, winding up a throw, a swing), the count left per slot, and an abil
 | Fire | A throwable: throw it overhand. A placeable: hold to place it where the outline shows (let go early: nothing; the body stands still meanwhile, like reinforcing). A detonator: set the oldest device off. The hammer: swing. The tablet: send the payload or hack a phone. |
 | ADS | A throwable: lob it underhand. |
 | Interact (hold) | Pick up your own jammer, alarm, wire, shield, mine or camera; pull a Gu needle; dismiss Dokkaebi's call. These come before reinforcing when both are offered. |
-| 1 / 2 | Back to a weapon. |
+| 1 / 2 | Back to a weapon. (The other weapon's key is sent as Swap; the key of the weapon already out as the gadget's slot key and Swap together, so a detonator in hand is put away rather than swapped for the next charge: the review, M12.) |
 
 Weapons are put away while a gadget is out (no firing; the weapon's equip time when it comes back). The Phase 7
 Bulletproof Camera moves onto this: 3 takes it out, Fire held places it (it was a 1 s hold of 3; D-140). On a

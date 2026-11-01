@@ -21,7 +21,10 @@ export interface HandsContext extends PlaceQuery {
   events: SimEvent[];
   /** Whether a body's detonator has a device of `gadget` out to set off (not one an EMP disabled); unset: yes. */
   canDetonate?(pawn: Pawn, gadget: string): boolean;
-  /** Whether a swing's blow from this body's eye along its view meets something within `reachM` (it costs a charge); unset: yes. */
+  /**
+   * Whether a swing's blow from this body's eye along its view meets the level, a panel or a gadget within `reachM` (it
+   * costs a charge here; a body or a drone it meets is the room's to judge and charge, rewound); unset: yes.
+   */
   swingMeets?(pawn: Pawn, reachM: number): boolean;
 }
 
@@ -42,6 +45,20 @@ export function stockSlots(data: GameData, s: PawnState, lo: ResolvedLoadout | n
   [s.g1, s.g2] = slotCounts(data, lo);
   s.regenMade = s.g2;
   s.regenTicks = 0;
+}
+
+/**
+ * Skopós's gadgets are one pool for both shells (research/operators/skopos.md; the review, Phase 8 M12): only the shell
+ * she's in holds them. `from`'s counts (left, waiting, the slot 2 refill) go to `to`, and `from` is left with none.
+ */
+export function moveStock(from: PawnState, to: PawnState): void {
+  [to.g1, to.g2, to.w1, to.w2, to.regenMade, to.regenTicks] = [from.g1, from.g2, from.w1, from.w2, from.regenMade, from.regenTicks];
+  [from.g1, from.g2, from.w1, from.w2, from.regenMade, from.regenTicks] = [0, 0, 0, 0, 0, 0];
+}
+
+/** No gadgets on a body (Skopós's idle shell: the pool is the other's). */
+export function emptySlots(s: PawnState): void {
+  [s.g1, s.g2, s.w1, s.w2, s.regenMade, s.regenTicks] = [0, 0, 0, 0, 0, 0];
 }
 
 /**
@@ -176,6 +193,13 @@ export function stepHands(ctx: HandsContext, pawn: Pawn, input: InputCmd, presse
   const lo = pawn.loadout;
   if (!lo) return;
   const before = s.hand;
+  // The key of the weapon already out, with a gadget or a detonator in hand: the client sends its slot's key and Swap
+  // together (gadgets/DESIGN.md §2). It's put away and that weapon comes back up (equipping, the weapon's step lets
+  // the Swap go by). Alone, the slot's key with a detonator out would take out the next charge instead.
+  if (s.hand !== Hand.Weapon && pressed & Btn.Swap && pressed & (handSlot(s.hand) === 1 ? Btn.Gadget : Btn.Ability)) {
+    putAway(s);
+    return;
+  }
   const one = slotGadget(ctx.data, lo, 1);
   if (pressed & Btn.Gadget && one) toggle(s, 1, one);
   // Brava's Kludge drones (Phase 8 M8, a `drone` item) are thrown by the drone code, never taken in hand.
@@ -234,10 +258,14 @@ export function stepHands(ctx: HandsContext, pawn: Pawn, input: InputCmd, presse
       s.gTicks = 0;
     }
     s.gTicks = Math.min(0xffff, s.gTicks + 1);
-    if (s.gTicks === Math.max(1, ticks(u.hitS)) && left(s, slot) > 0 && (ctx.swingMeets?.(pawn, u.reachM) ?? true)) {
-      if (slot === 1) s.g1--;
-      else s.g2--;
-      ctx.events.push({ kind: "swing", pawnId: pawn.id, seq: input.seq, slot, gadget: g.id, yaw: s.yaw, pitch: s.pitch, origin: eyePose(ctx.data.movement, ctx.data.hitboxes, s).pos });
+    // Every blow goes to the room, which judges bodies as the swinger saw them (lag-compensated); the charge for the
+    // level, a panel or a gadget is spent here, predicted, and the room adds a body's (the review, M12: bodies checked
+    // here, where they are now, lost blows the swinger had seen land).
+    if (s.gTicks === Math.max(1, ticks(u.hitS)) && left(s, slot) > 0) {
+      const spent = ctx.swingMeets?.(pawn, u.reachM) ?? true;
+      if (spent && slot === 1) s.g1--;
+      else if (spent) s.g2--;
+      ctx.events.push({ kind: "swing", pawnId: pawn.id, seq: input.seq, slot, gadget: g.id, yaw: s.yaw, pitch: s.pitch, origin: eyePose(ctx.data.movement, ctx.data.hitboxes, s).pos, spent });
     }
     if (s.gTicks >= ticks(u.swingS)) {
       s.gAct = GadgetAct.Ready;

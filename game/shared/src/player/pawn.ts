@@ -46,6 +46,11 @@ export interface PlayerController {
   /** Where that camera looks (radians), within its limits: each viewer has their own (D-134). */
   camYaw: number;
   camPitch: number;
+  /**
+   * The gadget table entry of the camera watched (a Bulletproof Camera's, an idle shell's barrier's), 0 for one of the
+   * level's: the list's numbers shift as such cameras come and go, and the view stays on its camera (the review, M12).
+   */
+  camEntry: number;
   /** Skopós: looking through the idle shell's camera (the step before a swap). */
   shellCam: boolean;
   /** Skopós swap in progress: 0 none, 1 transfer (active shell idles), 2 activation (target shell wakes). */
@@ -155,6 +160,7 @@ export function initialPawnState(x: number, y: number, z: number, yaw: number, m
     w2: 0,
     gTarget: 0,
     needled: false,
+    ringing: false,
     regenMade: 0,
     regenTicks: 0,
     guard: 0,

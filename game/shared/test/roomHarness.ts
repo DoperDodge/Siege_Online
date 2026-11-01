@@ -6,8 +6,11 @@ import { ByteReader, ClientSession, DT, handleRoomMessage, Room, Stance, type Ga
 export async function roomWith(levelId: string, ops: string[]) {
   const room = await Room.create("WALLS", levelId, { lab: true, seed: 11 });
   const clock = { t: 0 };
-  /** `buffered`: bytes the room is told are still waiting to reach this client (a client not reading). */
-  type Client = { session: ClientSession; id: number; toServer: Uint8Array[]; events: GameEvent[]; cmd: Partial<Omit<InputCmd, "seq">>; buffered: number };
+  /**
+   * `buffered`: bytes the room is told are still waiting to reach this client (a client not reading). `hold`: what it
+   * sends waits until it's false again (an uplink hiccup: the room then has a backlog to catch up on).
+   */
+  type Client = { session: ClientSession; id: number; toServer: Uint8Array[]; events: GameEvent[]; cmd: Partial<Omit<InputCmd, "seq">>; buffered: number; hold?: boolean };
   const clients: Client[] = [];
   const add = async (op: string) => {
     const toServer: Uint8Array[] = [];
@@ -24,7 +27,7 @@ export async function roomWith(levelId: string, ops: string[]) {
     clock.t += DT * 1000;
     for (const c of clients) if (c.session.ready) c.session.tick({ forward: 0, strafe: 0, yaw: 0, pitch: 0, buttons: 0, stance: Stance.Stand, lean: 0, ...c.cmd });
     for (const c of clients)
-      for (const b of c.toServer.splice(0)) {
+      for (const b of c.hold ? [] : c.toServer.splice(0)) {
         const r = new ByteReader(b.subarray(1));
         if (!handleRoomMessage(room, c.id, b[0], r)) throw new Error(`unexpected message ${b[0]}`);
       }

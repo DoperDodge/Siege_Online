@@ -8,8 +8,7 @@ import { buildLevel, type BuiltLevel } from "./level/builder.js";
 import { GADGET_GROUPS, initRapier, PLAYER_GROUPS, QUERY_DRONE, QUERY_SIGHT, QUERY_SOLID, QUERY_STATIC as QUERY_STATIC_FILTER, refreshBroadPhase, type CharacterController, type Collider, type Rapier, type World } from "./physics/rapier.js";
 import { cancelRappelHold, capsuleFree, movementPrompt, poseCollider, stepPawn, type MoveContext, type MovementPrompt } from "./player/movement.js";
 import { initialPawnState, type Pawn, type PlayerController } from "./player/pawn.js";
-import { droneCollider, droneEye, droneHitboxes, stepDrone } from "./player/drone.js";
-import { rayCapsule } from "./net/lagComp.js";
+import { droneCollider, droneEye, stepDrone } from "./player/drone.js";
 import { insideAny, zoneBoxes, ZONE_TEST_HEIGHT, type ZoneBox } from "./level/zones.js";
 import { raycastLevel } from "./level/raycast.js";
 import { detonatable, GadgetTable, GFlag, type Gadget } from "./gadgets/table.js";
@@ -19,7 +18,7 @@ import { heartbeats, heartOf, sensorUp } from "./gadgets/sensor.js";
 import { mirrorOf, sightPast } from "./gadgets/mirror.js";
 import { barrierOf, crossesBarrier, smokeOnSegment, wireSlow } from "./gadgets/areas.js";
 import { arcBoxes, gadgetOnRay } from "./gadgets/hits.js";
-import { placeSpotFor, slotGadget, stockSlots } from "./gadgets/hands.js";
+import { emptySlots, moveStock, placeSpotFor, slotGadget, stockSlots } from "./gadgets/hands.js";
 import { guData } from "./gadgets/gu.js";
 import { CAMERA_HALF_M } from "./intel/cameras.js";
 import { canDisable, canPickUp, inSite, siteArea, type DefuserState, type SiteArea } from "./match/objective.js";
@@ -237,6 +236,7 @@ export class Sim {
       cam: 0,
       camYaw: 0,
       camPitch: 0,
+      camEntry: 0,
       shellCam: false,
       swapPhase: 0,
       swapT: 0,
@@ -302,6 +302,7 @@ export class Sim {
     for (const [i, [px, pz]] of spots.entries()) {
       const pawn = this.spawnPawn(operatorId, px, spawn.pos[1], pz, yaw, controller.id, ids?.pawns[i], loadout, side);
       if (i > 0) pawn.state.stance = pawn.state.stanceFrom = Stance.Crouch; // idle shells crouch behind their shield
+      if (i > 0) emptySlots(pawn.state); // one pool of gadgets for both shells: the one she's in holds it
       controller.pawnIds.push(pawn.id);
     }
     controller.possessedPawnId = controller.pawnIds[0];
@@ -615,10 +616,12 @@ export class Sim {
       if (!this.canPullNeedle(pawn)) return false;
       s.deployKind = DeployKind.Needle;
       s.deployPanel = 0;
-      s.deploySection = 0;
       s.deployTicks = 1;
+      s.deploySection = 0;
       return true;
     }
+    // Dokkaebi's call ringing: the press is the dismissal's (the room counts it held), before anything else on F.
+    if (s.ringing) return false;
     const d = this.defuserActionFor(pawn);
     if (d === "pickUp") {
       this.objective!.carrier = pawn.id;
@@ -727,6 +730,7 @@ export class Sim {
       cam: 0,
       camYaw: 0,
       camPitch: 0,
+      camEntry: 0,
       shellCam: false,
       swapPhase: 0,
       swapT: 0,
@@ -914,6 +918,17 @@ export class Sim {
     const downed = body !== undefined && isDowned(body.state);
     // An EMP on the body (DSEG, Phase 8 M3): no observation tools.
     const jammed = body !== undefined && body.kind === PawnKind.Body && body.state.jammed > 0;
+    // A camera watched that's an entry (a Bulletproof Camera, an idle shell's) keeps the view as the list's numbers
+    // shift round it (one placed or gone before it: the review, M12).
+    if (c.cam && c.camEntry && this.camEntryAt(c.cam - 1) !== c.camEntry) {
+      let at = -1;
+      for (let i = 0; i < this.camCount() && at < 0; i++) if (this.camEntryAt(i) === c.camEntry) at = i;
+      // Gone from the list altogether: on to the next working one, as from a broken camera.
+      const next = at >= 0 ? at : this.nextCam(c.team, c.cam - 1, 1);
+      if (next < 0) c.cam = 0;
+      else if (at >= 0) c.cam = at + 1;
+      else this.openCam(c, next);
+    }
     if (c.cam && (downed || jammed || !this.camFor(c.team, c.cam - 1))) {
       const next = downed || jammed ? -1 : this.nextCam(c.team, c.cam - 1, 1);
       if (next < 0) c.cam = 0;
@@ -1056,20 +1071,15 @@ export class Sim {
   readonly blastMeets = (c: Collider): boolean => !this.blastless.has(c.handle);
 
   /**
-   * Whether a swing's blow from a body's eye along its view meets anything within `reachM` (Phase 8 M4: it spends a
-   * charge): the level, a panel's material, a gadget, another body or drone.
+   * Whether a swing's blow from a body's eye along its view meets the level, a panel's material or a gadget within
+   * `reachM` (Phase 8 M4: it spends a charge, predicted). Bodies and drones aren't asked here: where they are now isn't
+   * where the swinger saw them, so the room judges and charges those, rewound (net/room.ts judgeSwing).
    */
   private swingMeets(pawn: Pawn, reachM: number): boolean {
     const s = pawn.state;
     const eye = eyePose(this.data.movement, this.data.hitboxes, s).pos;
     const dir = viewDir(s.yaw, s.pitch);
-    if (raycastLevel(this, eye, dir, reachM) || gadgetOnRay(this.gadgets, this.data, eye, dir, reachM, () => true)) return true;
-    for (const p of this.pawns.values()) {
-      if (p.id === pawn.id || p.state.mode === PawnMode.Dead || p.state.mode === PawnMode.Held) continue;
-      const boxes = p.kind === PawnKind.Drone ? droneHitboxes(this.data.intel.drone, p.state) : poseHitboxes(this.data.movement, this.data.hitboxes, p.state);
-      if (boxes.some((h) => (rayCapsule(eye, dir, h.a, h.b, h.radius) ?? Infinity) <= reachM)) return true;
-    }
-    return false;
+    return raycastLevel(this, eye, dir, reachM) !== null || gadgetOnRay(this.gadgets, this.data, eye, dir, reachM, () => true) !== null;
   }
 
   /**
@@ -1208,9 +1218,15 @@ export class Sim {
     return -1;
   }
 
+  /** The gadget table entry camera i is (a Bulletproof Camera, an idle shell's barrier), or 0 (one of the level's). */
+  private camEntryAt(i: number): number {
+    return this.bpCamAt(i)?.id ?? this.shellCamAt(i)?.id ?? 0;
+  }
+
   private openCam(c: PlayerController, i: number) {
     const l = this.camLimits(i);
     c.cam = i + 1;
+    c.camEntry = this.camEntryAt(i);
     c.camYaw = Math.fround(wrapAngle(l.face));
     c.camPitch = Math.fround(clamp(this.bpCamAt(i) || this.shellCamAt(i) ? 0 : this.level.def.cameras[i].pitchDeg * DEG, l.pitchMin, l.pitchMax));
   }
@@ -1373,6 +1389,9 @@ export class Sim {
     pawn.collider.setTranslation({ x: spawn.pos[0], y: spawn.pos[1] + hh + r + 0.02, z: spawn.pos[2] });
     pawn.state = { ...initialPawnState(spawn.pos[0], spawn.pos[1] + 0.02, spawn.pos[2], Math.fround(spawn.yawDeg * DEG), pawn.state.maxHp, pawn.loadout), rng: pawn.state.rng };
     stockSlots(this.data, pawn.state, pawn.loadout);
+    // Skopós's shell she isn't in holds none of her gadgets (one pool, in the shell she's in).
+    const owner = pawn.ownerId !== null ? this.controllers.get(pawn.ownerId) : undefined;
+    if (owner && owner.possessedPawnId !== pawn.id && this.bodyIds(owner).length > 1) emptySlots(pawn.state);
     pawn.life++;
     poseCollider(this.ctx, pawn); // also makes a dead body solid again
     refreshBroadPhase(this.world);
@@ -1622,6 +1641,9 @@ export class Sim {
       c.swapT += DT;
       if (c.swapT >= activation - 1e-9) {
         const target = this.otherPawn(c.id);
+        const from = this.pawns.get(c.possessedPawnId);
+        // Her gadgets go with her: one pool for both shells (the review, M12).
+        if (target && from) moveStock(from.state, target.state);
         if (target) c.possessedPawnId = target.id;
         c.swapPhase = 0;
         c.swapT = 0;

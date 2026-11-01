@@ -636,21 +636,32 @@ export class GadgetServer {
   reinforced(panel: number, section = -1): void {
     const entry = this.sim.level.panels.list[panel];
     const foot = entry && entry.panel.kind === "wall" && section >= 0 ? entry : null;
+    /** Where an entry is across the wall's frame (along it, up it, out of it), and whether that's the section's span. */
+    const across = (g: Gadget) => {
+      const f = foot!.frame;
+      const rel = [g.pos[0] - f.center[0], g.pos[1] - f.center[1], g.pos[2] - f.center[2]];
+      const dot = (a: Vec3) => rel[0] * a[0] + rel[1] * a[1] + rel[2] * a[2];
+      const p = foot!.panel;
+      const [c0, c1] = p.sectionRange(section);
+      const u = dot(f.u) + f.w / 2;
+      return { inSection: u >= c0 * p.cellU && u <= c1 * p.cellU, up: dot(f.v) + f.h / 2, out: Math.abs(dot(f.n)) - f.t / 2 };
+    };
     for (const g of [...this.sim.gadgets.list]) {
       if (g.panel === panel) {
+        // On that section of the wall only (the CSV's "on that wall section"; the review, M12); a hatch is one piece.
+        if (foot && !across(g).inSection) continue;
         if (g.kind === KIND_BP_CAMERA) this.sim.gadgets.update(g.id, { flags: g.flags | GFlag.Broken });
         else this.destroy(g);
         continue;
       }
       // (Skopós's idle shell's barrier isn't crushed: the shell doesn't stop a teammate reinforcing beside it, M10.)
       if (!foot || isIngredient(g.kind) || isFlying(g) || g.panel >= 0 || g.kind === KIND_SHELL_SHIELD) continue;
-      const f = foot.frame;
-      const rel = [g.pos[0] - f.center[0], g.pos[1] - f.center[1], g.pos[2] - f.center[2]];
-      const dot = (a: Vec3) => rel[0] * a[0] + rel[1] * a[1] + rel[2] * a[2];
-      const p = foot.panel;
-      const [c0, c1] = p.sectionRange(section);
-      const u = dot(f.u) + f.w / 2;
-      if (u < c0 * p.cellU || u > c1 * p.cellU || dot(f.v) + f.h / 2 > FOOT_UP_M || Math.abs(dot(f.n)) > f.t / 2 + FOOT_OUT_M) continue;
+      // Nor a grenade resting there, its fuse running, or its cloud (as a blast spares a cloud): devices are crushed
+      // (a jammer, an alarm, a camera, a Gu mine, a Nitro Cell), not a frag or a smoke (the review, M12).
+      const d = this.dataOf(g);
+      if (d?.use.kind === "throw" && !d.remote && !d.gu) continue;
+      const at = across(g);
+      if (!at.inSection || at.up > FOOT_UP_M || at.out > FOOT_OUT_M) continue;
       if (g.kind === KIND_BP_CAMERA) this.sim.gadgets.update(g.id, { flags: g.flags | GFlag.Broken });
       else this.destroy(g);
     }

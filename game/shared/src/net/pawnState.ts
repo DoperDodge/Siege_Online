@@ -25,7 +25,7 @@ export const PAWN_U32_FIELDS = ["rng", "reviveTarget", "revivedBy", "gTarget"] a
 
 /** Every non-float field (the hash test changes each one). */
 export const PAWN_INT_FIELDS = [
-  "grounded", "sprinting", "needled", "stance", "stanceFrom", "mode", "prevButtons", "ladder", "rappel", ...PAWN_U8_FIELDS, ...PAWN_U16_FIELDS, ...PAWN_U32_FIELDS,
+  "grounded", "sprinting", "needled", "ringing", "stance", "stanceFrom", "mode", "prevButtons", "ladder", "rappel", ...PAWN_U8_FIELDS, ...PAWN_U16_FIELDS, ...PAWN_U32_FIELDS,
 ] as const satisfies readonly (keyof PawnState)[];
 
 /** Bytes of one full state on the wire: the floats, flags, 3 enums, buttons (u16), ladder (i8), rappel (i16), then the u8/u16/u32 fields. */
@@ -34,7 +34,7 @@ export const PAWN_STATE_BYTES =
 
 export function writePawnState(w: ByteWriter, s: PawnState): void {
   for (const k of PAWN_F32_FIELDS) w.f32(s[k]);
-  w.u8((s.grounded ? 1 : 0) | (s.sprinting ? 2 : 0) | (s.needled ? 4 : 0));
+  w.u8((s.grounded ? 1 : 0) | (s.sprinting ? 2 : 0) | (s.needled ? 4 : 0) | (s.ringing ? 8 : 0));
   w.u8(s.stance).u8(s.stanceFrom).u8(s.mode);
   w.u16(s.prevButtons);
   w.i8(s.ladder);
@@ -67,6 +67,7 @@ export function readPawnState(r: ByteReader): PawnState {
     grounded: (flags & 1) !== 0,
     sprinting: (flags & 2) !== 0,
     needled: (flags & 4) !== 0,
+    ringing: (flags & 8) !== 0,
     stance,
     stanceFrom,
     mode,
@@ -84,16 +85,18 @@ export function hashPawnState(s: PawnState): number {
 }
 
 /** The predicted part of a controller (Skopós' camera and swap state, the drone driven): exact, like PawnState. */
-export type ControllerState = Pick<PlayerController, "possessedPawnId" | "shellCam" | "swapPhase" | "swapT" | "swapCooldown" | "prevButtons" | "drone" | "prevLean" | "cam" | "camYaw" | "camPitch"> & { phoneLost: boolean };
+export type ControllerState = Pick<PlayerController, "possessedPawnId" | "shellCam" | "swapPhase" | "swapT" | "swapCooldown" | "prevButtons" | "drone" | "prevLean" | "cam" | "camYaw" | "camPitch" | "camEntry"> & {
+  phoneLost: boolean;
+};
 
 export function controllerState(c: PlayerController): ControllerState {
-  const { possessedPawnId, shellCam, swapPhase, swapT, swapCooldown, prevButtons, drone, prevLean, cam, camYaw, camPitch } = c;
-  return { possessedPawnId, shellCam, swapPhase, swapT, swapCooldown, prevButtons, drone, prevLean, cam, camYaw, camPitch, phoneLost: c.phoneLost ?? false };
+  const { possessedPawnId, shellCam, swapPhase, swapT, swapCooldown, prevButtons, drone, prevLean, cam, camYaw, camPitch, camEntry } = c;
+  return { possessedPawnId, shellCam, swapPhase, swapT, swapCooldown, prevButtons, drone, prevLean, cam, camYaw, camPitch, camEntry: camEntry ?? 0, phoneLost: c.phoneLost ?? false };
 }
 
 export function writeControllerState(w: ByteWriter, c: ControllerState): void {
   w.varu(c.possessedPawnId).u8((c.shellCam ? 1 : 0) | (c.swapPhase << 1) | (c.phoneLost ? 8 : 0)).f32(c.swapT).f32(c.swapCooldown).u16(c.prevButtons);
-  w.varu(c.drone).i8(c.prevLean).u8(c.cam).f32(c.camYaw).f32(c.camPitch);
+  w.varu(c.drone).i8(c.prevLean).u8(c.cam).f32(c.camYaw).f32(c.camPitch).varu(c.camEntry);
 }
 
 export function readControllerState(r: ByteReader): ControllerState {
@@ -105,5 +108,5 @@ export function readControllerState(r: ByteReader): ControllerState {
   const drone = r.varu();
   const prevLean = r.i8();
   if (prevLean < -1 || prevLean > 1) throw new ProtocolError("bad lean");
-  return { ...head, drone, prevLean, cam: r.u8(), camYaw: r.finite(), camPitch: r.finite() };
+  return { ...head, drone, prevLean, cam: r.u8(), camYaw: r.finite(), camPitch: r.finite(), camEntry: r.varu() };
 }

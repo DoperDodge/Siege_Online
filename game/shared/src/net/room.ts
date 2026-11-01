@@ -47,7 +47,7 @@ import { zoneOf } from "../combat/damage.js";
 import { barrierOf, smokeOnSegment, crossesBarrier } from "../gadgets/areas.js";
 import { isIngredient, kindId, kindOf } from "../gadgets/kinds.js";
 import { GFlag, type Gadget } from "../gadgets/table.js";
-import { deviceLost, slotGadget, stockSlots } from "../gadgets/hands.js";
+import { deviceLost, emptySlots, slotGadget, stockSlots } from "../gadgets/hands.js";
 import { encodeGadgetOps, encodeGadgetState } from "./gadgetWire.js";
 import { ticks, ticksOrZero } from "../weapons/ticks.js";
 import { encodeError, encodePong, encodeRoster, encodeShotResult, encodeWelcome, ErrorCode, unwrap16, type InputMsg, type LabTool, type RosterEntry, type ShotResult } from "./protocol.js";
@@ -756,7 +756,9 @@ export class Room implements DirectorHost {
         if (!p?.loadout || p.state.mode === PawnMode.Dead) continue;
         const [a, b] = p.loadout.weapons.map(spawnAmmo);
         Object.assign(p.state, { loaded0: a.loaded, reserve0: a.reserve, loaded1: b.loaded, reserve1: b.reserve });
-        stockSlots(this.sim.data, p.state, p.loadout);
+        // (Skopós's gadgets are one pool, in the shell she's in.)
+        if (m.ctrl.pawnIds.length > 1 && id !== m.ctrl.possessedPawnId) emptySlots(p.state);
+        else stockSlots(this.sim.data, p.state, p.loadout);
       }
       this.force(m);
     } else if (tool.kind === "clearGadgets") {
@@ -845,9 +847,10 @@ export class Room implements DirectorHost {
       // ingredient, Phase 8 M3).
       const struck = gadgetOnRay(this.sim.gadgets, this.sim.data, origin, p.dir, end, (g) => this.fragile(g) || this.ignitable(g));
       if (struck) this.strike(struck.g);
-      // A pellet Fuze's shield stopped (Phase 8 M11): no damage, one more toward its bearer's suppression.
+      // A pellet Fuze's shield stopped (Phase 8 M11): no damage, one more toward its bearer's suppression (not a
+      // teammate's with friendly fire off, as a blow wouldn't do anything: the review, M12).
       const bearer = p.shield ? this.sim.pawns.get(p.shield.pawnId) : undefined;
-      if (bearer) {
+      if (bearer && (bearer.team !== shooter.team || this.friendlyFireOn())) {
         shieldHit(bearer);
         const owner = bearer.ownerId !== null ? this.memberOf(bearer.ownerId) : null;
         if (owner) this.force(owner);
@@ -982,22 +985,27 @@ export class Room implements DirectorHost {
         if (t !== null && t <= wall && (!hit || t < hit.t)) hit = { id, t, zone: h.part === "shield" ? "torso" : zoneOf(h.part), shield: h.part === "shield" };
       }
     }
+    // What a blow on a body or a drone costs (the room's to charge: the simulation only charged the level, a panel or a
+    // gadget in reach, `e.spent`): `killCharges` in all for a body, one for a drone or a shield's plate.
+    const charge = (total: number) => {
+      const extra = total - (e.spent ? 1 : 0);
+      if (extra <= 0) return;
+      const s = pawn.state;
+      if (e.slot === 1) s.g1 = Math.max(0, s.g1 - extra);
+      else s.g2 = Math.max(0, s.g2 - extra);
+      this.force(m);
+    };
     // A blow on Fuze's shield's plate knocks it down, and its carrier unhurt (Phase 8 M11; Y10S2).
     const knocked = hit?.shield ? this.sim.pawns.get(hit.id) : undefined;
     if (knocked?.loadout?.shield) {
+      charge(1);
       if (this.blowLands(pawn, knocked)) this.knockAside(knocked, knocked.loadout.shield.knockdownS);
       return;
     }
     if (hit) {
       const body: ShotOnBody = { pawnId: hit.id, kill: true, amount: 0, headshot: false, zone: hit.zone, pellets: 1, distance: hit.t };
       this.judged.push({ ...base, bodies: [body], lives: this.livesOf([body]), panelOps: [] });
-      const s = pawn.state;
-      const extra = u.killCharges - 1;
-      if (extra > 0) {
-        if (e.slot === 1) s.g1 = Math.max(0, s.g1 - extra);
-        else s.g2 = Math.max(0, s.g2 - extra);
-        this.force(m);
-      }
+      charge(this.sim.pawns.get(hit.id)?.kind === PawnKind.Drone ? 1 : u.killCharges);
       return;
     }
     // A gadget on the way: an enemy's (not a smoke cloud) or an ingredient.
@@ -1416,8 +1424,25 @@ export class Room implements DirectorHost {
     this.spottedUntil.set(pawnId, Math.max(this.spottedUntil.get(pawnId) ?? 0, this.sim.tick + ticks(seconds)));
   }
 
+  /**
+   * Dokkaebi's call ringing on a player's phone (Phase 8 M9; the review, M12): `ringing` on the body he's in, so his
+   * simulation leaves a fresh Interact press to the dismissal, and off on his others; his owner corrected on a change.
+   */
+  private ringing(tm: Member | null, called: Pawn | undefined, on: boolean) {
+    const ids = tm?.ctrl ? tm.ctrl.pawnIds : called ? [called.id] : [];
+    let changed = false;
+    for (const id of ids) {
+      const p = this.sim.pawns.get(id);
+      const want = on && (!tm?.ctrl || id === tm.ctrl.possessedPawnId);
+      if (!p || p.state.ringing === want) continue;
+      p.state.ringing = want;
+      changed = true;
+    }
+    if (changed && tm) this.force(tm);
+  }
+
   /** Dokkaebi's tablet (Phase 8 M9), by her body's pawn id: her charges, when the next comes, the upload under way, her phone hacks. */
-  private readonly jegeoState = new Map<number, { charges: number; next: number; upload: { target: number; ticks: number; dismiss: number } | null; held: boolean; hacks: number }>();
+  private readonly jegeoState = new Map<number, { charges: number; next: number; upload: { target: number; start: number; dismiss: number } | null; held: boolean; hacks: number }>();
   /** Each defender's next tick Dokkaebi may send to him again. */
   private readonly jegeoCooldown = new Map<number, number>();
   /** Dead defenders' phones (and Skopós's circuit boards) hacked already, by their entries' ids. */
@@ -1478,20 +1503,25 @@ export class Room implements DirectorHost {
           u.dismiss >= ticks(t.dismissS);
         if (cut) {
           st.upload = null;
+          this.ringing(tm ?? null, called, false);
           this.jegeoCooldown.set(u.target, tick + ticks(t.cooldownS));
           tell(2, u.target, 0);
           tm?.events.push({ kind: "jegeo", stage: 2, pawnId: u.target, ticks: 0, charges: 0 });
           continue;
         }
-        if (++u.ticks < ticks(t.uploadS)) continue;
+        // (By the tick it started: this runs again for every catch-up step, the review found, M12.)
+        this.ringing(tm ?? null, called, tick - u.start < ticks(t.uploadS));
+        if (tick - u.start < ticks(t.uploadS)) continue;
         st.upload = null;
         this.jegeoCooldown.set(u.target, tick + ticks(t.cooldownS));
         this.jegeoDone(c, body, target!, tm ?? null, t);
         tell(1, u.target, 0);
         continue;
       }
+      // Her Fire as of an input of hers this step (a catch-up step for someone else has none: that's not a let-go).
       const input = applied.get(c.id)?.input;
-      const fire = input !== undefined && (input.cmd.buttons & Btn.Fire) !== 0;
+      if (!input) continue;
+      const fire = (input.cmd.buttons & Btn.Fire) !== 0;
       if (!fire) st.held = false;
       if (!fire || st.held || !up) continue;
       st.held = true;
@@ -1500,9 +1530,10 @@ export class Room implements DirectorHost {
         // Not while she's jammed or EMP'd herself (the connection would be cut at once).
         if (st.charges <= 0 || s.jammed > 0 || pawnJammed(this.sim, body)) continue;
         st.charges--;
-        st.upload = { target: target.id, ticks: 0, dismiss: 0 };
+        st.upload = { target: target.id, start: tick, dismiss: 0 };
         tell(0, target.id, ticks(t.uploadS));
         const tm = target.ownerId !== null ? this.memberOf(target.ownerId) : null;
+        this.ringing(tm, target, true);
         tm?.events.push({ kind: "jegeo", stage: 3, pawnId: target.id, ticks: ticks(t.uploadS), charges: 0 });
         continue;
       }
@@ -2016,6 +2047,10 @@ export class Room implements DirectorHost {
     this.camsOffNow();
     this.placeIngredients();
     // Dokkaebi's (Phase 8 M9): no call or phone hack left over, no fire burning (a match's director lends no cameras now).
+    for (const st of this.jegeoState.values()) {
+      const called = st.upload ? this.sim.pawns.get(st.upload.target) : undefined;
+      if (called) this.ringing(called.ownerId !== null ? this.memberOf(called.ownerId) : null, called, false);
+    }
     this.jegeoState.clear();
     this.jegeoCooldown.clear();
     this.spottedUntil.clear();

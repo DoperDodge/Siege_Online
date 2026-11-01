@@ -244,6 +244,11 @@ export interface PawnState {
   // down), and a slot 2 item that comes back over time (his mines, gadgets/hands.ts regenSlot): how many it has given
   // this life, and the ticks into the next
   needled: boolean;
+  /**
+   * Dokkaebi's call ringing on this body's player's phone (Phase 8 M9; the server's, its owner corrected): a fresh
+   * Interact press is the dismissal's, so nothing else starts on it (the review, M12).
+   */
+  ringing: boolean;
   regenMade: number;
   regenTicks: number;
   // Fuze's Ballistic Shield (Phase 8 M11, player/shield.ts): ticks it's knocked aside (a guard break, or Sledge's

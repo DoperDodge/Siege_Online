@@ -205,3 +205,24 @@ describe("a stun", () => {
     expect(body.state.shieldAt).toBe(ShieldAt.Front);
   });
 });
+
+describe("a teammate's bullets on the shield", () => {
+  it("suppress its carrier only with friendly fire on (as a teammate's blow does nothing with it off: the review, M12)", async () => {
+    const s = await scene(["fuze", "sledge"], "gadget_lab");
+    s.room.pickLoadout(s.clients[0].id, shieldPick());
+    s.wait(8);
+    s.park();
+    s.teleport(0, 0, 0, 12);
+    s.clients[0].cmd = { yaw: Math.PI };
+    s.teleport(1, 0, 0, 18);
+    s.wait(4);
+    // (The lab's preset, this room's own copy: friendly fire off, then on again.)
+    const room = s.room as unknown as { labRules: { friendlyFire: { actionPhase: boolean } } };
+    room.labRules = { ...room.labRules, friendlyFire: { ...room.labRules.friendlyFire, actionPhase: false } };
+    s.shootAt(1, [0, 1.3, 12]);
+    expect(s.body(0).state.suppress).toBe(0);
+    room.labRules = { ...room.labRules, friendlyFire: { ...room.labRules.friendlyFire, actionPhase: true } };
+    s.shootAt(1, [0, 1.3, 12]);
+    expect(s.body(0).state.suppress).toBeGreaterThan(0);
+  });
+});

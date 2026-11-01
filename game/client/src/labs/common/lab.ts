@@ -204,7 +204,7 @@ export interface LabApi extends LabHandle {
 }
 
 /** A match page's stand-in controller while you have no body: it controls no pawns, so nothing of yours is ever found. */
-const NO_BODY: PlayerController = { id: 0, name: "", operatorId: "sledge", pawnIds: [], possessedPawnId: 0, drone: 0, prevLean: 0, cam: 0, camYaw: 0, camPitch: 0, shellCam: false, swapPhase: 0, swapT: 0, swapCooldown: 0, prevButtons: 0, team: 0 };
+const NO_BODY: PlayerController = { id: 0, name: "", operatorId: "sledge", pawnIds: [], possessedPawnId: 0, drone: 0, prevLean: 0, cam: 0, camYaw: 0, camPitch: 0, camEntry: 0, shellCam: false, swapPhase: 0, swapT: 0, swapCooldown: 0, prevButtons: 0, team: 0 };
 
 export async function startLab(o: LabOptions): Promise<void> {
   // ------------------------------------------------------------------ setup
@@ -420,7 +420,9 @@ export async function startLab(o: LabOptions): Promise<void> {
     const p = sim.pawns.get(ctrl.possessedPawnId);
     // Down or dead there's no weapon to switch (a request then would fire on its own after a revive).
     const armed = p !== undefined && !isDowned(p.state) && p.state.mode !== PawnMode.Dead;
-    return armed && (!net || net.session.ready) ? { slot: p.state.slot, equipping: p.state.wAct === WeaponAct.Equip, zoom: p.loadout?.weapons[p.state.slot].ads.zoom ?? 1, gadget: handSlot(p.state.hand) } : null;
+    return armed && (!net || net.session.ready)
+      ? { slot: p.state.slot, equipping: p.state.wAct === WeaponAct.Equip, zoom: p.loadout?.weapons[p.state.slot].ads.zoom ?? 1, gadget: handSlot(p.state.hand), fixed: !!p.loadout?.shield }
+      : null;
   };
 
   // ------------------------------------------------------------------ free camera (a lab tool, DESIGN E10)

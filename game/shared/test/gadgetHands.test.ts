@@ -176,6 +176,25 @@ describe("placing and detonators (Phase 8 M1)", () => {
     expect(sim.gadgets.list).toEqual([]);
   });
 
+  it("the key of the weapon already out (sent as the slot's key and Swap together) puts the detonator away, not the next charge out (the review, M12)", async () => {
+    const { sim, s, step, of, press } = await lab("fuze", SOFT, 0, ["breach_charge"]);
+    press(Btn.Gadget);
+    step({ buttons: Btn.Fire }, ticks((sim.data.gadgets.get("breach_charge")!.use as { placeS: number }).placeS));
+    expect(of("place").length).toBe(1);
+    step({});
+    expect([s.hand, s.g1, s.slot]).toEqual([Hand.Detonator, 2, 0]);
+    step({ buttons: Btn.Gadget | Btn.Swap });
+    expect([s.hand, s.wAct, s.slot]).toEqual([Hand.Weapon, WeaponAct.Equip, 0]);
+    // A Swap alone (the other weapon's key) still puts it away and swaps.
+    step({}, 80);
+    step({ buttons: Btn.Gadget });
+    expect(s.hand).toBe(Hand.Detonator);
+    step({});
+    step({ buttons: Btn.Swap });
+    step({});
+    expect([s.hand, s.slot]).toEqual([Hand.Weapon, 1]);
+  });
+
   it("a Breach Charge can't go on reinforced steel, a hard wall or the floor in the open; a Hard Breach Charge goes on steel", async () => {
     const reinforced: [number, number, number] = [11.5, 0, -4.5];
     const a = await lab("fuze", reinforced, 0, ["breach_charge"]);
@@ -284,9 +303,11 @@ describe("a swung item: Sledge's hammer (Phase 8 M4)", () => {
     expect([s.hand, s.g2]).toEqual([Hand.Ability, 25]);
     step({ buttons: Btn.Fire }, 2 * ticks(u.swingS));
     expect([of("swing").length, s.g2]).toEqual([2, 23]);
-    // Turned round, the open floor ahead: a swing at the air is no blow and spends nothing.
+    expect(of("swing").map((e) => e.spent)).toEqual([true, true]);
+    // Turned round, the open floor ahead: a swing at the air spends nothing here (its blow still goes to the room, which
+    // judges bodies as he saw them and charges for one it meets: the review, M12).
     step({ yawDeg: 180 }, ticks(u.swingS));
     step({ yawDeg: 180, buttons: Btn.Fire }, ticks(u.swingS));
-    expect([of("swing").length, s.g2]).toEqual([2, 23]);
+    expect([of("swing").length, of("swing")[2].spent, s.g2]).toEqual([3, false, 23]);
   });
 });

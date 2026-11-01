@@ -75,7 +75,8 @@ export type SimEvent =
    * A swing's blow landing (Phase 8 M4, Sledge's hammer) from the body's eye along its view: only one that met
    * something within reach (it spent a charge); the room judges what.
    */
-  | { kind: "swing"; pawnId: number; seq: number; slot: 1 | 2; gadget: string; yaw: number; pitch: number; origin: Vec3 }
+  /** (`spent`: the simulation spent a charge on it, for the level, a panel or a gadget in reach; bodies are the room's.) */
+  | { kind: "swing"; pawnId: number; seq: number; slot: 1 | 2; gadget: string; yaw: number; pitch: number; origin: Vec3; spent: boolean }
   /** `gadget`: the kind of the enemy gadget pinged (Phase 8 M3), or −1. */
   | { kind: "ping"; ctrlId: number; pos: Vec3; gadget: number; heart?: boolean }
   /**
