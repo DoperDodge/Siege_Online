@@ -834,9 +834,11 @@ export class Room implements DirectorHost {
     const cams = this.sim.bpCams();
     for (const p of paths) {
       const end = Math.min(p.end, p.first?.t ?? Infinity);
-      if (this.director && this.sim.matchRules.cameras) {
+      if (this.sim.matchRules.cameras) {
         const broke = camerasOnRay(this.sim.level.def, origin, p.dir, end, this.sim.matchRules.camsBroken);
-        if (broke) this.director.camerasBroken(broke);
+        // (A lab has its cameras on only in tests: there they break as an EMP turns them off, camsOffNow.)
+        if (broke && this.director) this.director.camerasBroken(broke);
+        else if (broke) this.sim.matchRules.camsBroken |= broke;
       }
       if (cams.length) this.gadgetServer.breakCams(bpCamsBroken(this.sim.bpCams(), this.sim.data, origin, p.dir, end));
       // The first gadget on its way a bullet destroys (a fragile one: research/gadgets.md; no blast) or sets off (an
