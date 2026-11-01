@@ -12,6 +12,7 @@ import type { IndexedOp, PanelEntry } from "../destruction/panels.js";
 import { QUERY_BULLET, type Collider } from "../physics/rapier.js";
 import { droneHitboxes } from "../player/drone.js";
 import { poseHitboxes, type Hitbox } from "../player/hitboxes.js";
+import { shieldUp } from "../player/shield.js";
 import type { Pawn } from "../player/pawn.js";
 import { PawnKind, PawnMode } from "../player/types.js";
 import type { Sim } from "../sim.js";
@@ -21,7 +22,8 @@ import { GFlag, type Gadget } from "./table.js";
 
 export interface BlastEffects {
   /** Each body or drone it reaches, and the damage (whole points, at least 1). */
-  bodies: { pawn: Pawn; damage: number }[];
+  /** `guard`: a body's Fuze shield up, knocked aside by it (Phase 8 M11: a blast of `guardBreak.blastHp` or more). */
+  bodies: { pawn: Pawn; damage: number; guard?: boolean }[];
   /** Entries it destroys (not the one that went off). */
   gadgets: Gadget[];
   /** What it does to panels, in order. */
@@ -161,7 +163,18 @@ export function blastEffects(sim: Sim, g: Pick<Gadget, "id" | "kind" | "owner" |
       if (line.blocked) continue;
       best = Math.max(best, blastFalloff(curve, d) * b.throughSoft ** line.soft);
     }
-    if (best > 0) out.bodies.push({ pawn, damage: Math.max(1, Math.round(best)) });
+    if (best <= 0) continue;
+    const damage = Math.max(1, Math.round(best));
+    // Fuze's shield up (Phase 8 M11): a blast in front of it loses `absorb` of its damage (Y9S1.3); one of `blastHp`
+    // or more knocks it aside (a guard break), whichever side it's on.
+    const k = pawn.loadout?.shield;
+    if (!k || !shieldUp(s)) {
+      out.bodies.push({ pawn, damage });
+      continue;
+    }
+    const [fx, fz] = forwardXZ(s.yaw);
+    const ahead = (at[0] - s.x) * fx + (at[2] - s.z) * fz > 0;
+    out.bodies.push({ pawn, damage: ahead ? Math.max(1, Math.round(damage * (1 - k.absorb))) : damage, guard: damage >= k.guardBreak.blastHp });
   }
   // Gadgets in its destruction range (and the Claymore's arc), in sight of it (the level and steel shelter them); the
   // level's ingredients there are set off. A smoke cloud isn't blown away. A set-off cluster charge is reached at its

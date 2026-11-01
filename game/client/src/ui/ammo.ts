@@ -1,5 +1,6 @@
 // The weapon readout (Phase 3 M3, M9), bottom right: weapon, rounds loaded / in reserve (red when the
-// magazine is nearly empty), fire mode, and whether it's reloading or being switched to.
+// magazine is nearly empty), fire mode, and whether it's reloading or being switched to; with Fuze's Ballistic Shield
+// (Phase 8 M11), where the shield is.
 import { fireModeOf, loadedOf, reserveOf, WeaponAct, type PawnState, type ResolvedWeapon } from "@redmond/shared";
 
 /** "AUTO", "BURST 3", "SINGLE"…, with the key that changes it when the weapon has more than one mode. */
@@ -30,13 +31,13 @@ export class AmmoHud {
   }
 
   /** `w` the weapon in hand (none, or `hidden`: nothing shown). */
-  update(w: ResolvedWeapon | undefined, s: PawnState, hidden: boolean, fireModeKey: string) {
+  update(w: ResolvedWeapon | undefined, s: PawnState, hidden: boolean, fireModeKey: string, note = "") {
     this.box.classList.toggle("hidden", !w || hidden);
     if (!w || hidden) return;
     this.name.textContent = `${w.name}${w.suppressed ? " · suppressed" : ""}`;
     this.loaded.textContent = String(loadedOf(s));
     this.reserve.textContent = ` / ${reserveOf(s)}`;
     this.ammo.classList.toggle("low", ammoLow(w, loadedOf(s)));
-    this.state.textContent = [fireModeText(w, s, fireModeKey), s.wAct === WeaponAct.Reload ? "RELOADING" : s.wAct === WeaponAct.Equip ? "SWITCHING" : ""].filter(Boolean).join("  ·  ");
+    this.state.textContent = [note, fireModeText(w, s, fireModeKey), s.wAct === WeaponAct.Reload ? "RELOADING" : s.wAct === WeaponAct.Equip ? "SWITCHING" : ""].filter(Boolean).join("  ·  ");
   }
 }

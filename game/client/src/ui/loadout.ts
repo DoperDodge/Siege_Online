@@ -48,7 +48,7 @@ export function weaponRow(data: GameData, op: OperatorData, slot: Slot, pick: Lo
   const select = (part: string, options: [string, string, boolean?][], current: string) =>
     `<select data-slot="${slot}" data-part="${part}">${options.map(([v, label, off]) => `<option value="${v}" ${v === current ? "selected" : ""} ${off ? "disabled" : ""}>${label}</option>`).join("")}</select>`;
   const ids = op.loadout[slot === "primary" ? "primaries" : "secondaries"];
-  const weapons: [string, string, boolean][] = ids.map((id) => [id, isPickable(data, id) ? data.weapons.get(id)!.name : `${data.weapons.get(id)!.name} (Phase 8)`, !isPickable(data, id)]);
+  const weapons: [string, string, boolean][] = ids.map((id) => [id, isPickable(data, id) ? data.weapons.get(id)!.name : `${data.weapons.get(id)!.name} (not yet)`, !isPickable(data, id)]);
   let atts = "";
   if (w && isGun(w)) {
     const named = (v: string): [string, string] => [v, ATTACHMENT_NAMES[v] ?? v];
@@ -65,7 +65,8 @@ export function weaponRow(data: GameData, op: OperatorData, slot: Slot, pick: Lo
   }
   return `<div class="loadout-row"><label>${slot === "primary" ? "Primary" : "Secondary"} ${select("weapon", weapons, wp.weapon)}</label>
       <div class="atts">${atts}</div>
-      ${resolved && w && isGun(w) ? `<p class="note stats">${weaponStats(resolved, w)}</p>` : ""}</div>`;
+      ${resolved && w && isGun(w) ? `<p class="note stats">${weaponStats(resolved, w)}</p>` : ""}
+      ${w && !isGun(w) ? `<p class="note stats">Held with your secondary pistol: aim to fire it (no hip fire), ×${w.shield.moveSpeedMult} speed. Bullets stop at it; a strong blast, a knife or a stun knocks it aside, Sledge's hammer knocks it down; your melee is a bash.</p>` : ""}</div>`;
 }
 
 /** Both slots' rows for a loadout, with each weapon's numbers, and its gadgets. */

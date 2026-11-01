@@ -15,11 +15,11 @@ export const PAWN_F32_FIELDS = [
 /** Integer fields by wire width (after the flags, enums, buttons and ladder written by hand below). */
 export const PAWN_U8_FIELDS = [
   "slot", "wAct", "reloadKind", "wflags", "loaded0", "loaded1", "modes", "burstLeft", "downs", "invulnTicks", "meleeTicks",
-  "deployKind", "deploySection", "rappelFlags", "hand", "gAct", "g1", "g2", "w1", "w2", "regenMade",
+  "deployKind", "deploySection", "rappelFlags", "hand", "gAct", "g1", "g2", "w1", "w2", "regenMade", "suppress", "shieldAt",
 ] as const satisfies readonly (keyof PawnState)[];
 export const PAWN_U16_FIELDS = [
   "hp", "maxHp", "lastFallDamage", "actTicks", "reserve0", "reserve1", "cycle", "adsQ", "shotIdx", "sinceShot", "reviveTicks",
-  "deployPanel", "deployTicks", "rappelTicks", "jumpCd", "boostTicks", "boostCd", "jammed", "gTicks", "regenTicks",
+  "deployPanel", "deployTicks", "rappelTicks", "jumpCd", "boostTicks", "boostCd", "jammed", "gTicks", "regenTicks", "guard", "suppressT",
 ] as const satisfies readonly (keyof PawnState)[];
 export const PAWN_U32_FIELDS = ["rng", "reviveTarget", "revivedBy", "gTarget"] as const satisfies readonly (keyof PawnState)[];
 

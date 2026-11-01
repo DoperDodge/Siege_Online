@@ -157,5 +157,9 @@ export function initialPawnState(x: number, y: number, z: number, yaw: number, m
     needled: false,
     regenMade: 0,
     regenTicks: 0,
+    guard: 0,
+    suppress: 0,
+    suppressT: 0,
+    shieldAt: 0,
   };
 }

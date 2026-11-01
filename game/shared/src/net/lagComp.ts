@@ -8,6 +8,7 @@ import type { BodyEntry } from "../combat/damage.js";
 import type { Hitbox } from "../player/hitboxes.js";
 import { droneHitboxes } from "../player/drone.js";
 import { poseHitboxes } from "../player/hitboxes.js";
+import { pawnHitboxes } from "../player/shield.js";
 import { PawnKind, PawnMode } from "../player/types.js";
 import type { Sim } from "../sim.js";
 import { interpolateRemote, quantizeRemote, remoteState, SNAPSHOT_EVERY, type RemoteQ } from "./snapshot.js";
@@ -132,7 +133,9 @@ export class HitboxHistory {
       const sa = pa && remoteState(pa.q, pa.maxHp);
       const sb = pb && remoteState(pb.q, pb.maxHp);
       const s = sa && sb ? interpolateRemote(sa, sb, u) : (sa ?? sb)!;
-      out.set(id, this.sim.pawns.get(id)?.kind === PawnKind.Drone ? droneHitboxes(this.sim.data.intel.drone, s) : poseHitboxes(m, hb, s));
+      const pawn = this.sim.pawns.get(id);
+      // A body's shield's plate too (Phase 8 M11): rewound with it.
+      out.set(id, pawn?.kind === PawnKind.Drone ? droneHitboxes(this.sim.data.intel.drone, s) : pawn ? pawnHitboxes(m, hb, { ...pawn, state: s }) : poseHitboxes(m, hb, s));
     }
     this.memo.set(key, { lives, boxes: out });
     return out;

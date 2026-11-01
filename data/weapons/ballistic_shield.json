@@ -1,7 +1,7 @@
 {
-  "_doc": "Ballistic Shield (Fuze). research/weapons.csv row ballistic_shield; rules research/weapons_notes.md §5. Used with the secondary; not pickable until Phase 8 (DECISIONS D-054). Bash damage 0 (Y9S4) supersedes fuze.md's 65 (Y9S1).",
+  "_doc": "Ballistic Shield (Fuze). research/weapons.csv row ballistic_shield; rules research/weapons_notes.md §5; built in Phase 8 M11 (gadgets/DESIGN.md §8). Held with the secondary pistol: no hip fire; aiming takes `pistolAdsS` and lowers the plate's top under the eyes. Bash damage 0 (Y9S4, the official Collision Point page) supersedes fuze.md's 65 (Y9S1); it pushes its target back. Bullets stop at its plate (hits suppress the carrier: 5 to start, 20 at most, ~7 s to fade). A blast from in front loses 66% (Y9S1.3); one of 30 hp or more, a knife or a stun knocks it aside (guard break, ~1 s); Sledge's hammer knocks it down (Y10S2). The plate's size and place, the push's speed, the guard break's and knockdown's lengths are ours.",
   "_season": "Y11S3.1",
-  "_unverified": ["shield.moveSpeedMult", "shield.suppression.falloffS", "shield.bashDamage"],
+  "_unverified": ["shield.moveSpeedMult", "shield.suppression.falloffS", "shield.bashDamage", "shield.bashPushMps", "shield.plate", "shield.guardBreak.seconds", "shield.knockdownS"],
   "id": "ballistic_shield",
   "name": "Ballistic Shield",
   "class": "shield",
@@ -10,6 +10,11 @@
     "hipFire": false,
     "moveSpeedMult": 0.9,
     "suppression": { "hitsToTrigger": 5, "hitsToMax": 20, "falloffS": 7 },
-    "bashDamage": 0
+    "bashDamage": 0,
+    "bashPushMps": 6,
+    "plate": { "widthM": 0.6, "frontM": 0.38, "bottomM": { "stand": 0.55, "crouch": 0.15 }, "aboveEyeM": 0.12, "adsBelowEyeM": 0.2 },
+    "absorb": 0.66,
+    "guardBreak": { "blastHp": 30, "seconds": 1.0 },
+    "knockdownS": 2.5
   }
 }

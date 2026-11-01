@@ -355,7 +355,14 @@ const gunSchema = z
     if (starts && (starts[0] !== 0 || starts.some((v, i) => i > 0 && v <= starts[i - 1]))) issue(["recoil", "stageStarts"], "stage starts begin at 0 and increase");
   });
 
-/** The Ballistic Shield (weapons_notes.md §5). Validated now; usable from Phase 8 (DECISIONS D-054). */
+/**
+ * The Ballistic Shield (weapons_notes.md §5; Phase 8 M11, gadgets/DESIGN.md §8): a primary held with the secondary
+ * pistol. Its `plate` is where it stands (player/shield.ts): `frontM` ahead of the body, `widthM` across, from
+ * `bottomM` (standing, crouched) up to `aboveEyeM` over the eyes, its top `adsBelowEyeM` under them while aiming; on
+ * the back it covers the torso. A blast from in front loses `absorb` of its damage; one of `guardBreak.blastHp` or
+ * more, a knife or a stun knocks it aside for `guardBreak.seconds`; Sledge's hammer knocks it down for `knockdownS`.
+ * The bash (melee) does `bashDamage` and pushes its target back at `bashPushMps`.
+ */
 const shieldSchema = z.strictObject({
   ...meta,
   id: z.string().regex(/^[a-z0-9_]+$/),
@@ -367,6 +374,17 @@ const shieldSchema = z.strictObject({
     moveSpeedMult: z.number().positive(),
     suppression: z.strictObject({ hitsToTrigger: z.number().int().positive(), hitsToMax: z.number().int().positive(), falloffS: secs }),
     bashDamage: z.number().nonnegative(),
+    bashPushMps: z.number().nonnegative(),
+    plate: z.strictObject({
+      widthM: z.number().positive(),
+      frontM: z.number().positive(),
+      bottomM: z.strictObject({ stand: z.number().min(0), crouch: z.number().min(0) }),
+      aboveEyeM: z.number().min(0),
+      adsBelowEyeM: z.number().min(0),
+    }),
+    absorb: z.number().min(0).max(1),
+    guardBreak: z.strictObject({ blastHp: z.number().positive(), seconds: secs }),
+    knockdownS: secs,
   }),
 });
 

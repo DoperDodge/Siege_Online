@@ -28,9 +28,9 @@ describe("loadout picks (DECISIONS D-042)", () => {
       const { loadout } = resolveLoadout(data, p);
       expect(loadout.weapons.map((w) => w.id)).toEqual([p.primary.weapon, p.secondary.weapon]);
     }
-    // The shield and the GONNE-6 are skipped until Phase 8 (D-054).
+    // The GONNE-6 is skipped (D-054); the shield can be picked since Phase 8 M11, but isn't Fuze's default.
     expect(defaultLoadoutPick(data, "fuze").primary.weapon).toBe("ak_12");
-    expect(isPickable(data, "ballistic_shield") || isPickable(data, "gonne_6")).toBe(false);
+    expect([isPickable(data, "ballistic_shield"), isPickable(data, "gonne_6")]).toEqual([true, false]);
     expect(problem(pick("dokkaebi", wp("mk_14_ebr"), wp("gonne_6")))).toMatch(/can't be picked yet/);
   });
 

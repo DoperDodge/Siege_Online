@@ -304,8 +304,8 @@ export function stepWeapon(ctx: WeaponContext, pawn: Pawn, input: InputCmd, pres
   // 2. Interrupts: sprinting, a vault or a ladder cancel a reload.
   if (s.wAct === WeaponAct.Reload && ((rules.reload.sprintInterrupts && s.sprinting) || !walking)) endReload(s);
 
-  // 3. Presses.
-  if (pressed & Btn.Swap && s.wAct !== WeaponAct.Equip) {
+  // 3. Presses. (Fuze's shield loadout has its one pistol: nothing to swap to, Phase 8 M11.)
+  if (pressed & Btn.Swap && s.wAct !== WeaponAct.Equip && !lo.shield) {
     if (s.wAct === WeaponAct.Reload) endReload(s);
     s.slot ^= 1;
     s.wAct = WeaponAct.Equip;
@@ -358,7 +358,9 @@ export function stepWeapon(ctx: WeaponContext, pawn: Pawn, input: InputCmd, pres
   const sprintGate = !s.sprinting && s.sinceSprint >= exitToFire - 1e-6;
   const loaded = loadedOf(s);
   const ready = s.wAct === WeaponAct.Ready || (s.wAct === WeaponAct.Reload && loaded > 0 && rules.reload.fireCancels);
-  const gate = walking && sprintGate && ready && s.meleeTicks === 0 && !handsBusy(s) && !gadgetOut(s) && w.fire.kind === "hitscan";
+  // With Fuze's shield up, the pistol fires only aimed, once the aim is done (no hip fire, Y9S1; Phase 8 M11).
+  const shieldHip = lo.shield !== null && !lo.shield.hipFire && s.shieldAt === 1 && s.adsQ < 65535;
+  const gate = walking && sprintGate && ready && s.meleeTicks === 0 && !handsBusy(s) && !gadgetOut(s) && w.fire.kind === "hitscan" && !shieldHip;
   // A press during the sprint exit fires once it ends, but only on a tick with real input (its view and seq).
   if (press && !sprintGate) s.wflags |= WFlag.FireQueued;
   let queued = false;

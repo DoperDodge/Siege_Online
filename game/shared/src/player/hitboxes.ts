@@ -4,10 +4,13 @@
 import { DEG, lerp, rotateXZ, type Vec3 } from "../core/math.js";
 import type { HitboxData, MovementData } from "../data/schemas.js";
 import { currentEyeHeight, currentHeight, proneWeight } from "./stance.js";
-import { PawnMode, type PawnState } from "./types.js";
+import { Btn, PawnMode, Stance, type PawnState } from "./types.js";
 
-/** "drone": the one box of an attacker's drone (Phase 7, player/drone.ts). */
-export type BodyPart = "head" | "neck" | "torso" | "pelvis" | "arm_l" | "arm_r" | "leg_l" | "leg_r" | "drone";
+/**
+ * "drone": the one box of an attacker's drone (Phase 7, player/drone.ts). "shield": Fuze's Ballistic Shield's plate
+ * (Phase 8 M11, player/shield.ts): it takes no damage; what meets it first stops there.
+ */
+export type BodyPart = "head" | "neck" | "torso" | "pelvis" | "arm_l" | "arm_r" | "leg_l" | "leg_r" | "drone" | "shield";
 
 /** A capsule from `a` to `b` (a sphere when a === b). */
 export interface Hitbox {
@@ -168,6 +171,43 @@ export function poseHitboxes(m: MovementData, hb: HitboxData, s: PawnState): Hit
     }
     return { part, a: toWorld(s, la, height), b: toWorld(s, lb, height), radius: partRadius(hb, part) };
   });
+}
+
+/** Where Fuze's Ballistic Shield's plate is on a body (Phase 8 M11, player/shield.ts shieldPlace). */
+export type ShieldPlace = "front" | "back";
+
+/** The plate's numbers (data/weapons/ballistic_shield.json `shield.plate`). */
+export interface ShieldPlate {
+  widthM: number;
+  frontM: number;
+  bottomM: { stand: number; crouch: number };
+  aboveEyeM: number;
+  adsBelowEyeM: number;
+}
+
+/**
+ * Fuze's Ballistic Shield as hitboxes (Phase 8 M11): six vertical capsules side by side across its plate, each part
+ * "shield". In front: `frontM` ahead of the body, from `bottomM` (standing or crouched) up to `aboveEyeM` over the eyes,
+ * or `adsBelowEyeM` under them while aiming (the head over it). On the back: just behind the torso, hips to shoulders.
+ */
+export function shieldHitboxes(m: MovementData, hb: HitboxData, s: PawnState, k: ShieldPlate, place: ShieldPlace): Hitbox[] {
+  const height = currentHeight(m, s);
+  const eye = currentEyeHeight(m, s);
+  const st = hb.standing;
+  const front = place === "front";
+  const y0 = front ? (s.stance === Stance.Crouch ? k.bottomM.crouch : k.bottomM.stand) : height * st.hipHeight;
+  // (Aiming as others see it: the remote record's aiming bit, so a rewind lowers it just the same.)
+  const y1 = front ? (s.prevButtons & Btn.Ads ? eye - k.adsBelowEyeM : eye + k.aboveEyeM) : height * st.chestHeight + 0.15;
+  const z = front ? -k.frontM : 0.22;
+  const w = front ? k.widthM : k.widthM * 0.85;
+  const n = 6;
+  const r = w / (2 * n);
+  const out: Hitbox[] = [];
+  for (let i = 0; i < n; i++) {
+    const x = -w / 2 + r + i * 2 * r;
+    out.push({ part: "shield", a: toWorld(s, [x, y0 + r, z], height), b: toWorld(s, [x, Math.max(y0 + r, y1 - r), z], height), radius: r });
+  }
+  return out;
 }
 
 /** Camera position (world) and roll for a pawn state (upside down, half a turn more); `leanOverride` evaluates a different lean amount. */

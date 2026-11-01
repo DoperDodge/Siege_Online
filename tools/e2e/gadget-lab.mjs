@@ -26,7 +26,7 @@ const shot = (name) => join(OUT, name);
 mkdirSync(OUT, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const LAG = 100;
-const Btn = { Fire: 64, Ping: 1 << 11 };
+const Btn = { Fire: 64, Ads: 8, Ping: 1 << 11 };
 /** What the hands hold (PawnState.hand). */
 const Hand = { Weapon: 0, Gadget: 1, Detonator: 2 };
 const FLYING = 1;
@@ -161,6 +161,35 @@ try {
   await until(off, () => !window.__lab.net.table.some((g) => g.kind === "cluster_charge" || g.kind === "cluster_grenade"));
   result.clusterHoles = (await off.evaluate(() => window.__lab.panel("reinforced"))).holes;
   result.checks.clusterDrillsSteelThenReleases = result.cluster.hand === 4 && result.clusterDrillMs > 1200 && result.clusterHoles[3] > steelBefore;
+
+  // ---- offline (M11): Fuze's Ballistic Shield: up in front, the HUD says so; Fire alone doesn't fire his pistol, aimed
+  // (once the aim is done) it does; his gadget out puts the shield on his back
+  await off.evaluate(() =>
+    window.__lab.pickLoadout({ ...window.__lab.net.loadout, operator: "fuze", primary: { weapon: "ballistic_shield", sight: null, barrel: null, grip: null, underbarrel: null }, gadgets: ["breach_charge"] }),
+  );
+  await off.waitForFunction(() => window.__lab?.net?.ready && window.__lab.net.own && window.__lab.net.loadout?.primary.weapon === "ballistic_shield", null, { timeout: 30000 });
+  await off.evaluate(() => window.__lab.teleport(0, 0, 8, 0));
+  await sleep(800);
+  const shieldNow = () => ({ at: window.__lab.net.own.shieldAt, note: document.querySelector(".weapon-state")?.textContent ?? "", loaded: window.__lab.net.weapon.loaded });
+  result.shield = { up: await off.evaluate(shieldNow) };
+  await input(off, { buttons: Btn.Fire });
+  await sleep(500);
+  await input(off, null);
+  result.shield.hip = (await off.evaluate(shieldNow)).loaded;
+  await input(off, { buttons: Btn.Ads });
+  await sleep(900);
+  await off.screenshot({ path: shot("gadget-shield-aimed.png") });
+  await input(off, { buttons: Btn.Ads | Btn.Fire });
+  await sleep(150);
+  await input(off, null);
+  result.shield.aimed = (await off.evaluate(shieldNow)).loaded;
+  await off.keyboard.press("Digit3");
+  await until(off, () => window.__lab.net.hand === 1);
+  await sleep(300);
+  result.shield.back = await off.evaluate(shieldNow);
+  await off.keyboard.press("Digit1");
+  result.checks.shieldUpAimedFireOnlyOnTheBackForAGadget =
+    result.shield.up.at === 1 && /SHIELD UP/.test(result.shield.up.note) && result.shield.hip === result.shield.up.loaded && result.shield.aimed === result.shield.hip - 1 && result.shield.back.at === 2;
 
   // ---- offline (M5): Thermite's Exothermic Charge on the reinforced wall (looking below Fuze's hole; it stands on
   // the floor): it burns 3 s once set off, then a large hole goes through the steel

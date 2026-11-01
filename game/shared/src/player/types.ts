@@ -246,6 +246,13 @@ export interface PawnState {
   needled: boolean;
   regenMade: number;
   regenTicks: number;
+  // Fuze's Ballistic Shield (Phase 8 M11, player/shield.ts): ticks it's knocked aside (a guard break, or Sledge's
+  // knockdown) and nowhere; the bullets it has stopped lately (its suppression), and the ticks since the last
+  guard: number;
+  suppress: number;
+  suppressT: number;
+  /** Where its plate is (player/shield.ts ShieldAt: none, front, back), set at the end of each step. */
+  shieldAt: number;
 }
 
 /** What a body's hands hold (PawnState.hand). */

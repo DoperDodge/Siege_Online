@@ -817,10 +817,10 @@ All of these can be checked in a Custom Game (friendly fire on where needed). Ea
 - **Sub-grenades per charge = 5?** Ulo can count them in a custom game.
 - **Plant time** (~2 s?) and how much extra drill time applies on **Mira's Black Mirror** (the same 1.75 s as reinforced?).
 - Release direction: **left → right or right → left** from Fuze's point of view? (Official tip vs Fandom.)
-- **Shield bash damage:** 65 HP (official Y9S1) or 0 (current Fandom)? And the current **suppression thresholds** (10/40 hits vs 5/20).
+- ~~**Shield bash damage:** 65 HP (official Y9S1) or 0 (current Fandom)? And the current **suppression thresholds** (10/40 hits vs 5/20).~~ *Answered by the official Y9S4 Collision Point page (weapons_notes.md §5): 0 damage, 5/20 hits. Built that way in Phase 8 M11.*
 - **Shield speed penalty** (−10 %?).
 - After Y10S4, does Mute's jammer still stop a **Hard Breach Charge** (it is fuse-based, not remote)? What exactly did the **Y10S4.1 fix** ("disruptor can deactivate Cluster Charge") change?
-- Can Fuze plant a charge on **Skopós' idle-shell shield**? Can he pull a Gu needle with the shield equipped?
+- Can Fuze plant a charge on **Skopós' idle-shell shield**? Can he pull a Gu needle with the shield equipped? *(Phase 8 M11 follows the Y5S1.1 fix note: pulling a needle puts the shield on his back for the pull.)*
 - Hole size left by a Cluster Charge on soft and reinforced surfaces.
 
 ### [operators/thermite.md](operators/thermite.md) — 7

@@ -34,6 +34,8 @@ export interface PelletPath {
   end: number;
   /** What it did to panels before it ended (holes, wear), in order along it. */
   ops: IndexedOp[];
+  /** Fuze's shield it stopped at (Phase 8 M11): the body holding it, and where along the ray; null if none. */
+  shield: { pawnId: number; t: number } | null;
   /** Surfaces it went into before it ended: panels, and props it went through. */
   surfaces: number;
 }
@@ -94,15 +96,22 @@ export function pelletPath(
     passProps(passage, props, 0, passage.stop ?? plain ?? max, d.wallbang.maxSurfaces);
   }
   const wall = passage.stop ?? plain;
-  const bodies = bodiesAlong(wall ?? max);
+  const found = bodiesAlong(wall ?? max);
+  // Fuze's shield (Phase 8 M11): the first plate on the way stops it; nobody past it is reached.
+  let plate: { pawnId: number; t: number } | null = null;
+  for (const b of found) for (const p of b.parts) if (p.part === "shield" && (!plate || p.t < plate.t)) plate = { pawnId: b.id, t: p.t };
+  const bodies = plate ? found.map((b) => ({ id: b.id, parts: b.parts.filter((p) => p.part !== "shield" && p.t < plate!.t) })).filter((b) => b.parts.length > 0) : found;
   const hits = penetrationChain(sim.data.combat, penetration, bodies);
   for (const h of hits) for (const e of passage.enters) if (e < h.t) h.mult *= d.wallbang.damageMult;
   const stopped = hits.length > 0 && penetration !== "full";
-  const first = bodies[0] ? { pawnId: bodies[0].id, part: bodies[0].parts[0].part, t: bodies[0].parts[0].t } : null;
-  const end = stopped ? hits[hits.length - 1].t : (wall ?? max);
-  // A body that stopped it kept it from the panels behind.
-  const ops = passage.ops.filter((o) => !stopped || o.t <= end).map(({ panel, op }) => ({ panel, op }));
-  return { dir, wall, hits, first, end, ops, surfaces: passage.enters.filter((e) => !stopped || e <= end).length };
+  // It reached the plate unless a body stopped it first.
+  const shield = plate && !stopped ? plate : null;
+  const first = found[0] ? { pawnId: found[0].id, part: found[0].parts[0].part, t: found[0].parts[0].t } : null;
+  const end = stopped ? hits[hits.length - 1].t : shield ? shield.t : (wall ?? max);
+  // A body or a shield that stopped it kept it from the panels behind.
+  const ended = stopped || shield !== null;
+  const ops = passage.ops.filter((o) => !ended || o.t <= end).map(({ panel, op }) => ({ panel, op }));
+  return { dir, wall, hits, first, end, ops, surfaces: passage.enters.filter((e) => !ended || e <= end).length, shield };
 }
 
 /**

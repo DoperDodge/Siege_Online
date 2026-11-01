@@ -23,8 +23,24 @@ targets `main`.
 | M8 Brava | ✅ (D-148) |
 | M9 Dokkaebi | ✅ (D-149) |
 | M10 Skopós's remaining rules; Lesion | ✅ (D-151) |
-| M11 The Ballistic Shield | next |
-| M12 Every CSV row passing; netsim, browser tests, review, docs, report | |
+| M11 The Ballistic Shield | ✅ (D-152) |
+| M12 Every CSV row passing; netsim, browser tests, review, docs, report | next |
+
+### What's done (M11: the Ballistic Shield)
+- **Fuze's Ballistic Shield:** pick it as his primary in the loadout. He holds it in front with his pistol, and
+  bullets stop at it (his shins show standing, his head when he aims). Right mouse raises the pistol (0.5 s), and only
+  then does left mouse fire it: no hip fire. He's 10% slower with it.
+- **What gets through:** 5 bullets on the shield in a short time suppress him (the edges of the view blur, no
+  sprinting) until 7 s pass without one. A blast in front of it does a third of its damage; one of 30 or more, a knife
+  on the shield or a stun knocks it aside for a second; Sledge's hammer knocks it down for 2.5 s. He's hurt by none of
+  these blows.
+- **What it does:** his melee with it up is a bash: no damage, it shoves the other player back (and knocks a shield
+  aside). Sprinting into a barricade breaks through only once it's been damaged (a bash or a knife first).
+- **On his back:** it goes there while he holds a gadget or a detonator, plants, pulls a Gu needle, rappels, climbs a
+  ladder or lies prone, and covers his back. Others see it on him; in first person it's see-through.
+- **Two research rows corrected:** the bash does no damage (the official Y9S4 page; the CSV had Y9S1's 65), and
+  suppression starts at 5 hits, not 10.
+- **The interaction tests:** 8 more rows pass (331 of 343).
 
 ### What's done (M10: Lesion and Skopós)
 - **Your rule for Thermite and Fuze (D-150):** one charge at a time. Once one is on, Z gives only its detonator (or
@@ -219,6 +235,10 @@ npm start
    detector.
 6. **M4:** as Sledge, Z takes out the hammer: swing at the soft walls (close and from further away), the hatch from
    the platform, the barricaded door, and a dummy.
+13. **M11:** as Fuze, pick the Ballistic Shield as his primary (Esc → loadout). Left mouse alone does nothing; hold
+    right mouse, then fire. Online with a friend as Mute: he shoots your shield (no damage; 5 hits and you can't
+    sprint), knifes it (it swings aside), throws a Nitro Cell at it; as Sledge, he hits it with the hammer. Sprint into
+    the barricaded door: it holds; bash it once (your melee) and sprint again: you go through.
 12. **M10:** as Lesion, Z and throw a mine at your feet, then switch to the attackers (pause menu) and walk onto it:
     the screen goes green at its edges, you can't sprint, and standing still holding F for 2 s pulls the needle. As
     Thermite or Fuze, put a charge on: Z now only gives its detonator until you set it off. As Skopós, look at your idle
@@ -235,8 +255,8 @@ npm start
    or put a Breach Charge near it and try the detonator. As Pulse, Z and face the attacker dummy in the open.
 7. **M5:** as Thermite, Z, hold left mouse at the reinforced wall for 3 s, step back and press left mouse: sparks,
    then a hole you can walk through, and the dummy behind it is down. As Fuze, Z at the same wall (or a soft one, or
-   the hatch from the platform): it drills, then its grenades come out on the far side. Place a second one: the
-   first goes off.
+   the hatch from the platform): it drills, then its grenades come out on the far side. One at a time: once it's on,
+   Z gives its detonator until it's set off.
 
 The automated checks: `npm run typecheck`, `npm test` (the interactions test lists every CSV row: built ones pass,
 the rest are todos), `npm run build`, `node tools/e2e/gadget-lab.mjs`.

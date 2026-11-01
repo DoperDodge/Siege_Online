@@ -272,6 +272,29 @@ walking], Fire alone looks around (free look), a melee bash [0 hp since Y9S4 in 
 after [5 hits], guard break from blasts of 30 hp or more, melee and stuns, a Sledge swing knocks it down, ×0.9 speed,
 off for placing gadgets and on ropes, kept on the back when away (covers the back).
 
+**As built (M11, D-152; player/shield.ts):** the shield is a pickable primary (`ResolvedLoadout.shield`); its loadout
+holds Fuze's secondary pistol in both slots (Swap does nothing), aimed in `pistolAdsS` (0.5 s walking, 0.55 s from a
+sprint). Where its plate is, `PawnState.shieldAt`, is set at the end of every step from the state, so it's predicted
+and replayed like the stance: up in front with the pistol in hand; on the back while a gadget or a detonator is out,
+during a hold (a plant; a Gu needle pulled: Y5S1.1's rule that the shield comes off for that), on a rope or a ladder,
+or prone; nowhere while knocked aside (`guard` ticks), down or dead. Others get it in the remote record (flags bits
+9–10), so the lag-compensated history and every client have it where it was. Its hitboxes (`shieldHitboxes`, part
+`shield`) are six vertical capsules across a 0.6 m plate 0.38 m ahead of the body, from 0.55 m up standing (0.15 m
+crouched: the shins show standing) to 0.12 m over the eyes, or 0.2 m under them while aiming (the head shows); on the
+back, hips to shoulders. A pellet stops at the first plate capsule it meets (no damage, nothing past it) and counts
+toward its carrier's suppression (`suppress`: 5 hits suppress him, 20 at most, gone after 7 s without one; the server
+counts, the client predicts the rest): no sprinting, the view's edges blurred. With it up the pistol fires only once
+fully aimed (no hip fire), and he moves at ×0.9. A blast in front of a raised plate loses 66% (Y9S1.3); one of 30 hp
+or more knocks it aside (`guard` for 1 s, ours), from either side; so do a knife on the raised plate (no damage) and
+any stun that reaches him (blinded or ringing; an extinguisher's concussion too). A knife on a plate on his back just
+stops there. Sledge's hammer on the plate knocks it down for 2.5 s (ours), him unhurt (Y10S2). His melee with it up is
+a bash: no damage (Y9S4), the body it meets pushed straight back (6 m/s, ours) and its own shield knocked aside; with
+no body in reach it's the knife (a barricade still takes 3). Sprinting with it up into a barricade worn below its hit
+points breaks through; a fresh one stops him (Y11S1). A teammate's blow (a knife, the bash, the hammer) does nothing
+with friendly fire off, as its damage wouldn't; blasts and stuns knock a shield aside whoever's they are. Left out:
+free look (Fire alone does nothing), the cracked viewport, throwing or setting charges off from behind the shield (a
+gadget or a detonator in hand puts it on his back), and the knockdown's fall (only the shield goes down).
+
 ## 9. Ingredients and the rest
 
 - **Fire extinguishers** (Oregon's six markers): shot, knifed or in a blast, they burst into a smoke cloud [5 s] and

@@ -68,6 +68,7 @@ import {
   forwardXZ,
   heartbeats,
   guData,
+  suppressed,
   kludgeOf,
   pawnJammed,
   rightXZ,
@@ -1282,6 +1283,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       // A gadget in its hands instead (Phase 8): drawn as its greybox; a detonator small and dark.
       const held = heldGadget(pawn, rs);
       v.setHeld(held ? (held.detonator ? [0.05, 0.09, 0.03] : held.data.sizeM) : null);
+      v.setShield(pawn.loadout?.shield?.plate ?? null);
       v.update(sim.data, rs.mode === PawnMode.Dead ? corpse(rs) : rs);
       // On a rope: drawn from the body's middle (its harness) up to where the rope is fixed (a swing takes the body
       // out from under it).
@@ -1580,7 +1582,9 @@ export async function startLab(o: LabOptions): Promise<void> {
     }
     $(".flash").classList.toggle("show", performance.now() < flashUntil);
 
-    ammoHud.update(p.loadout?.weapons[s.slot], s, dead || onCam, keyLabel(k.fireMode));
+    ammoHud.update(p.loadout?.weapons[s.slot], s, dead || onCam, keyLabel(k.fireMode), p.loadout?.shield ? (s.shieldAt === 1 ? "SHIELD UP · aim to fire" : s.shieldAt === 2 ? "SHIELD ON YOUR BACK" : "SHIELD KNOCKED ASIDE") : "");
+    // Fuze's shield suppressed (Phase 8 M11): the edges of the view blur, and no sprinting.
+    app.classList.toggle("suppressed", suppressed(p.loadout ?? null, s));
     // The gadgets in the two slots (Phase 8): how many are left, on which key; a detonator's devices waiting.
     const slotText = (slot: 1 | 2, key: string) => {
       const g = slotGadget(data, p.loadout, slot);

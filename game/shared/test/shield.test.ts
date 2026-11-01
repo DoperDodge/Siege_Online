@@ -1,0 +1,184 @@
+// Fuze's Ballistic Shield (Phase 8 M11, player/shield.ts, gadgets/DESIGN.md §8): its loadout, where its plate is,
+// the plate's hitboxes, aimed-only fire, its speed, and what knocks it aside that no CSV row covers (a stun).
+import { describe, expect, it } from "vitest";
+import {
+  Btn,
+  DEG,
+  defaultLoadoutPick,
+  DeployKind,
+  eyePose,
+  Hand,
+  isPickable,
+  loadGameData,
+  PawnMode,
+  placeShield,
+  quantizeRemote,
+  remoteState,
+  resolveLoadout,
+  ShieldAt,
+  shieldHitboxes,
+  shieldPlace,
+  Sim,
+  Stance,
+  ticks,
+  type LoadoutPick,
+  type Pawn,
+} from "../src/index.js";
+import { input, run, teleport } from "./helpers.js";
+import { scene } from "./interactions/harness.js";
+
+const data = loadGameData();
+const SHIELD = { weapon: "ballistic_shield", sight: null, barrel: null, grip: null, underbarrel: null };
+const shieldPick = (): LoadoutPick => ({ ...defaultLoadoutPick(data, "fuze"), primary: SHIELD });
+
+/** Fuze on the Movement Lab, with the shield (or his default AK-12), settled and facing −z. */
+async function fuze(withShield = true) {
+  const sim = await Sim.create("movement_lab");
+  const ctrl = sim.addPlayer("fuze", "fuze", 0, undefined, withShield ? shieldPick() : undefined);
+  const pawn = sim.pawns.get(ctrl.possessedPawnId)!;
+  teleport(sim, ctrl, 0, 0, 0);
+  return { sim, ctrl, pawn };
+}
+
+describe("the Ballistic Shield's loadout", () => {
+  it("can be picked (the GONNE-6 still can't), and holds the secondary pistol, aimed in the shield's time", () => {
+    expect([isPickable(data, "ballistic_shield"), isPickable(data, "gonne_6")]).toEqual([true, false]);
+    const { loadout, problem } = resolveLoadout(data, shieldPick());
+    expect(problem).toBeNull();
+    const k = loadout.shield!;
+    expect(k).not.toBeNull();
+    const pistol = defaultLoadoutPick(data, "fuze").secondary.weapon;
+    expect(loadout.weapons.map((w) => w.id)).toEqual([pistol, pistol]);
+    expect([loadout.weapons[0].ads.ticks, loadout.weapons[0].ads.fromSprintTicks]).toEqual([ticks(k.pistolAdsS.walk), ticks(k.pistolAdsS.sprint)]);
+    expect(resolveLoadout(data, defaultLoadoutPick(data, "fuze")).loadout.shield).toBeNull();
+  });
+});
+
+describe("where the plate is", () => {
+  it("up in front with the pistol, on the back for a gadget, prone or a hold, and gone while knocked aside, down or dead", async () => {
+    const { sim, ctrl, pawn } = await fuze();
+    const s = pawn.state;
+    expect([s.hand, s.shieldAt]).toEqual([Hand.Weapon, ShieldAt.Front]);
+    // His gadget in hand (3): on his back.
+    sim.step(new Map([[ctrl.id, input({ buttons: Btn.Gadget })]]));
+    run(sim, ctrl, {}, 0.5);
+    expect([s.hand !== Hand.Weapon, s.shieldAt]).toEqual([true, ShieldAt.Back]);
+    sim.step(new Map([[ctrl.id, input({ buttons: Btn.Gadget })]]));
+    run(sim, ctrl, {}, 0.5);
+    expect([s.hand, s.shieldAt]).toEqual([Hand.Weapon, ShieldAt.Front]);
+    // Prone: on his back.
+    run(sim, ctrl, { stance: Stance.Prone }, 1.5);
+    expect(s.shieldAt).toBe(ShieldAt.Back);
+    run(sim, ctrl, { stance: Stance.Stand }, 1.5);
+    expect(s.shieldAt).toBe(ShieldAt.Front);
+    // A hold (a needle pulled, a plant): on his back.
+    s.deployKind = DeployKind.Needle;
+    placeShield(pawn);
+    expect(s.shieldAt).toBe(ShieldAt.Back);
+    s.deployKind = DeployKind.None;
+    // Knocked aside: gone until its time is out.
+    s.guard = 3;
+    placeShield(pawn);
+    expect(s.shieldAt).toBe(ShieldAt.None);
+    run(sim, ctrl, {}, 4 / 64);
+    expect([s.guard, s.shieldAt]).toEqual([0, ShieldAt.Front]);
+    // Dead: gone.
+    s.mode = PawnMode.Dead;
+    placeShield(pawn);
+    expect(s.shieldAt).toBe(ShieldAt.None);
+  });
+
+  it("goes to others in the remote record, so a rewind puts it where it was", async () => {
+    const { pawn } = await fuze();
+    for (const at of [ShieldAt.None, ShieldAt.Front, ShieldAt.Back]) {
+      pawn.state.shieldAt = at;
+      expect(remoteState(quantizeRemote(pawn.state)).shieldAt).toBe(at);
+    }
+  });
+});
+
+describe("the plate's hitboxes", () => {
+  it("in front by frontM, its top over the eyes (under them aimed), its bottom by stance; on the back behind the torso", async () => {
+    const { sim, pawn } = await fuze();
+    const k = pawn.loadout!.shield!;
+    const m = sim.data.movement;
+    const hb = sim.data.hitboxes;
+    const s = { ...pawn.state, yaw: 0, x: 0, z: 0 };
+    const eye = eyePose(m, hb, s).pos[1];
+    const top = (boxes: ReturnType<typeof shieldHitboxes>) => Math.max(...boxes.map((b) => Math.max(b.a[1], b.b[1]) + b.radius));
+    const bottom = (boxes: ReturnType<typeof shieldHitboxes>) => Math.min(...boxes.map((b) => Math.min(b.a[1], b.b[1]) - b.radius));
+    const front = shieldHitboxes(m, hb, s, k.plate, "front");
+    expect(front).toHaveLength(6);
+    expect(front.every((b) => b.part === "shield" && Math.abs(b.a[2] + k.plate.frontM) < 1e-4)).toBe(true);
+    const width = Math.max(...front.map((b) => b.a[0] + b.radius)) - Math.min(...front.map((b) => b.a[0] - b.radius));
+    expect(width).toBeCloseTo(k.plate.widthM, 4);
+    expect(top(front) - s.y).toBeCloseTo(eye - s.y + k.plate.aboveEyeM, 3);
+    expect(bottom(front) - s.y).toBeCloseTo(k.plate.bottomM.stand, 3);
+    const aimed = shieldHitboxes(m, hb, { ...s, prevButtons: Btn.Ads }, k.plate, "front");
+    expect(top(aimed) - s.y).toBeCloseTo(eye - s.y - k.plate.adsBelowEyeM, 3);
+    // Facing +x (yaw −90°), the plate is at +x.
+    const turned = shieldHitboxes(m, hb, { ...s, yaw: -90 * DEG }, k.plate, "front");
+    expect(turned.every((b) => Math.abs(b.a[0] - k.plate.frontM) < 1e-4)).toBe(true);
+    const back = shieldHitboxes(m, hb, s, k.plate, "back");
+    expect(back.every((b) => b.a[2] > 0.1)).toBe(true);
+    expect(shieldPlace({ ...s, shieldAt: ShieldAt.None })).toBeNull();
+  });
+});
+
+describe("holding the shield", () => {
+  /** Shots fired over `seconds` holding `buttons`. */
+  const shots = (w: { sim: Sim; ctrl: { id: number } }, buttons: number, seconds: number) => {
+    let n = 0;
+    for (let i = 0; i < ticks(seconds); i++) {
+      w.sim.step(new Map([[w.ctrl.id, input({ buttons })]]));
+      n += w.sim.events.filter((e) => e.kind === "shot").length;
+    }
+    return n;
+  };
+
+  it("fires the pistol only aimed, once the aim is done (no hip fire); Swap does nothing", async () => {
+    const w = await fuze();
+    const s = w.pawn.state;
+    expect(shots(w, Btn.Fire, 0.5)).toBe(0);
+    run(w.sim, w.ctrl, {}, 0.5);
+    // Aiming: nothing until the shield's aim time is over, then it fires.
+    const k = w.pawn.loadout!.shield!;
+    expect(shots(w, Btn.Ads, k.pistolAdsS.walk - 0.1)).toBe(0);
+    expect(shots(w, Btn.Ads | Btn.Fire, 0.05)).toBe(0);
+    run(w.sim, w.ctrl, { buttons: Btn.Ads }, 0.2);
+    expect(shots(w, Btn.Ads | Btn.Fire, 0.05)).toBe(1);
+    run(w.sim, w.ctrl, {}, 1);
+    w.sim.step(new Map([[w.ctrl.id, input({ buttons: Btn.Swap })]]));
+    run(w.sim, w.ctrl, {}, 1);
+    expect(s.slot).toBe(0);
+  });
+
+  it("walks at moveSpeedMult of Fuze's speed with his AK-12", async () => {
+    const speedOf = async (withShield: boolean) => {
+      const w = await fuze(withShield);
+      run(w.sim, w.ctrl, { forward: 1 }, 1.5);
+      return Math.hypot(w.pawn.state.vx, w.pawn.state.vz);
+    };
+    const [shielded, plain] = [await speedOf(true), await speedOf(false)];
+    const k = resolveLoadout(data, shieldPick()).loadout.shield!;
+    expect(shielded / plain).toBeCloseTo(k.moveSpeedMult, 2);
+  });
+});
+
+describe("a stun", () => {
+  it("knocks a raised shield aside (a concussion's guard break is always whole), whoever's it is", async () => {
+    const s = await scene(["fuze", "mute"], "gadget_lab");
+    s.room.pickLoadout(s.clients[0].id, shieldPick());
+    s.wait(8);
+    s.park();
+    s.teleport(0, 0, 0, 12);
+    s.wait(4);
+    const body: Pawn = s.body(0);
+    expect(body.state.shieldAt).toBe(ShieldAt.Front);
+    const g = s.put("stun", 1, [0, 0.05, 10.5]);
+    s.setOff(g);
+    expect(body.state.shieldAt).toBe(ShieldAt.None);
+    s.wait(ticks(body.loadout!.shield!.guardBreak.seconds) + 2);
+    expect(body.state.shieldAt).toBe(ShieldAt.Front);
+  });
+});

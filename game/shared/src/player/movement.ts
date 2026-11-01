@@ -17,6 +17,7 @@ import { bleedTick, isDowned } from "./downed.js";
 import { ticks } from "../weapons/ticks.js";
 import { DeployKind } from "../destruction/deploy.js";
 import { parkHands, putAway, regenSlot, stepHands } from "../gadgets/hands.js";
+import { placeShield, shieldUp, stepShield, suppressed } from "./shield.js";
 
 export interface MoveContext {
   R: Rapier;
@@ -61,8 +62,9 @@ export function stepPawn(ctx: MoveContext, pawn: Pawn, input: InputCmd, weapons 
   // An EMP on the body (DSEG, Phase 8 M3) wears off.
   if (s.jammed > 0) s.jammed--;
   if (s.mode === PawnMode.Dead) return;
-  // Lesion's next mine comes (Phase 8 M10).
+  // Lesion's next mine comes (Phase 8 M10); Fuze's shield's guard break and suppression wear off (M11).
   regenSlot(ctx.data, pawn);
+  stepShield(pawn);
 
   updateLook(ctx, pawn, input);
 
@@ -90,6 +92,8 @@ export function stepPawn(ctx: MoveContext, pawn: Pawn, input: InputCmd, weapons 
       putAway(s, false);
     }
   }
+  // Where Fuze's shield's plate is, now the hands and holds are settled for the tick (Phase 8 M11).
+  placeShield(pawn);
   roundState(s);
   // The collider is placed from the state, exactly as a client places it from a correction (which carries
   // only the state): otherwise the two could differ by a float32 step and part ways a tick later.
@@ -204,6 +208,8 @@ function stepWalk(ctx: MoveContext, pawn: Pawn, input: InputCmd, pressed: number
   const ads = (input.buttons & Btn.Ads) !== 0;
   if (wantsAim(ctx, s, input) && s.stance !== Stance.Prone) speed = Math.min(speed, m.speed.adsWalkSpeed * mult("adsWalk"));
   if (input.buttons & Btn.SlowWalk) speed *= m.speed.slowWalkFactor;
+  // Fuze's shield up in front (Phase 8 M11): slower.
+  if (pawn.loadout?.shield && shieldUp(s)) speed *= pawn.loadout.shield.moveSpeedMult;
   // Down but not out: a slow crawl, and none at all while a teammate revives you (placeholders).
   if (s.mode === PawnMode.Downed) speed = s.revivedBy !== 0 && ctx.data.combat.revive.targetLocked ? 0 : ctx.data.combat.dbno.crawlSpeed;
 
@@ -218,8 +224,9 @@ function stepWalk(ctx: MoveContext, pawn: Pawn, input: InputCmd, pressed: number
     s.stanceT >= 1 &&
     s.grounded &&
     slow >= 1 &&
-    // A Gu needle in him (Phase 8 M10): no sprinting until it's pulled.
-    !s.needled;
+    // A Gu needle in him (Phase 8 M10), or his shield suppressed (M11): no sprinting.
+    !s.needled &&
+    !suppressed(pawn.loadout, s);
   if (sprinting) speed = m.speed.sprintByRating[rating] * mult("sprint");
   speed *= slow;
   s.sinceSprint = sprinting ? 0 : s.sinceSprint + DT;

@@ -16,6 +16,7 @@ import { DUMMY_STANCE, dummyInput } from "../lab/dummies.js";
 import { spawnAmmo, type Pawn, type PlayerController } from "../player/pawn.js";
 import { eyePose } from "../player/hitboxes.js";
 import { currentHeight } from "../player/stance.js";
+import { knockShield, shieldHit, shieldUp } from "../player/shield.js";
 import { Btn, GadgetAct, Hand, PawnKind, PawnMode, type InputCmd, type PawnState } from "../player/types.js";
 import { Sim } from "../sim.js";
 import { ByteWriter, fnv1a } from "./bytes.js";
@@ -842,6 +843,13 @@ export class Room implements DirectorHost {
       // ingredient, Phase 8 M3).
       const struck = gadgetOnRay(this.sim.gadgets, this.sim.data, origin, p.dir, end, (g) => this.fragile(g) || this.ignitable(g));
       if (struck) this.strike(struck.g);
+      // A pellet Fuze's shield stopped (Phase 8 M11): no damage, one more toward its bearer's suppression.
+      const bearer = p.shield ? this.sim.pawns.get(p.shield.pawnId) : undefined;
+      if (bearer) {
+        shieldHit(bearer);
+        const owner = bearer.ownerId !== null ? this.memberOf(bearer.ownerId) : null;
+        if (owner) this.force(owner);
+      }
     }
     this.judged.push({ m, cause: Cause.Bullet, ctrlId: m.ctrl.id, team: shooter.team, seq: shot.seq, weaponId: w.id, receivedTick: now, rewoundTick, origin, bodies, lives: this.livesOf(bodies), panelOps });
     // Everyone sees and hears it (the shooter's own client draws its flash itself, but not where pellets went).
@@ -902,6 +910,18 @@ export class Room implements DirectorHost {
     for (const p of this.sim.pawns.values()) if (p.state.mode === PawnMode.Dead) ignore.add(p.id);
     const target = judgeMelee(this.sim, hit.origin, attacker.state, hit.yaw, this.history.at(rewoundTick, m.sent), ignore);
     const base = { m, cause: Cause.Melee, ctrlId: m.ctrl.id, team: attacker.team, seq: hit.seq, weaponId: "knife", receivedTick: now, rewoundTick, origin: hit.origin };
+    // Fuze's melee with his shield up is a bash (Phase 8 M11): no damage (Y9S4), the body it meets pushed back.
+    const bash = attacker.loadout?.shield && shieldUp(attacker.state) ? attacker.loadout.shield : null;
+    const struckBody = target ? this.sim.pawns.get(target.pawnId) : undefined;
+    if (target && struckBody && bash) {
+      if (this.blowLands(attacker, struckBody)) this.bashed(attacker, struckBody, bash);
+      return;
+    }
+    // A knife meeting a shield's plate stops there: held up, it's knocked aside (a guard break, Y9S1).
+    if (target?.shield && struckBody?.loadout?.shield) {
+      if (this.blowLands(attacker, struckBody)) this.guardBreak(struckBody);
+      return;
+    }
     if (target) {
       const body: ShotOnBody = { pawnId: target.pawnId, kill: false, amount: 0, headshot: false, zone: target.zone, pellets: 1, distance: target.reach };
       this.judged.push({ ...base, bodies: [body], lives: this.livesOf([body]), panelOps: [] });
@@ -952,13 +972,19 @@ export class Room implements DirectorHost {
     // Bodies first, as the swinger saw them (not their own, not the dead).
     const ignore = new Set(m.ctrl.pawnIds);
     for (const p of this.sim.pawns.values()) if (p.state.mode === PawnMode.Dead) ignore.add(p.id);
-    let hit: { id: number; t: number; zone: ReturnType<typeof zoneOf> } | null = null;
+    let hit: { id: number; t: number; zone: ReturnType<typeof zoneOf>; shield: boolean } | null = null;
     for (const [id, boxes] of this.history.at(rewoundTick, m.sent)) {
       if (ignore.has(id)) continue;
       for (const h of boxes) {
         const t = rayCapsule(origin, dir, h.a, h.b, h.radius);
-        if (t !== null && t <= wall && (!hit || t < hit.t)) hit = { id, t, zone: zoneOf(h.part) };
+        if (t !== null && t <= wall && (!hit || t < hit.t)) hit = { id, t, zone: h.part === "shield" ? "torso" : zoneOf(h.part), shield: h.part === "shield" };
       }
+    }
+    // A blow on Fuze's shield's plate knocks it down, and its carrier unhurt (Phase 8 M11; Y10S2).
+    const knocked = hit?.shield ? this.sim.pawns.get(hit.id) : undefined;
+    if (knocked?.loadout?.shield) {
+      if (this.blowLands(pawn, knocked)) this.knockAside(knocked, knocked.loadout.shield.knockdownS);
+      return;
     }
     if (hit) {
       const body: ShotOnBody = { pawnId: hit.id, kill: true, amount: 0, headshot: false, zone: hit.zone, pellets: 1, distance: hit.t };
@@ -1566,6 +1592,64 @@ export class Room implements DirectorHost {
     }
   }
 
+  /**
+   * Fuze's bash (Phase 8 M11; weapons_notes.md §5): its `bashDamage` (none since Y9S4), and the body it meets pushed
+   * straight back from him at `bashPushMps` (its own shield knocked aside too).
+   */
+  private bashed(by: Pawn, target: Pawn, k: NonNullable<Pawn["loadout"]>["shield"] & object) {
+    const s = target.state;
+    const dx = s.x - by.state.x;
+    const dz = s.z - by.state.z;
+    const len = Math.hypot(dx, dz) || 1;
+    s.vx = Math.fround(s.vx + (dx / len) * k.bashPushMps);
+    s.vz = Math.fround(s.vz + (dz / len) * k.bashPushMps);
+    if (k.bashDamage > 0) this.hurt(target, { amount: k.bashDamage, kill: false }, { cause: Cause.Melee, attacker: { ctrlId: by.ownerId ?? 0, team: by.team, weaponId: "ballistic_shield", origin: [by.state.x, by.state.y, by.state.z] }, headshot: false });
+    this.guardBreak(target);
+    const owner = target.ownerId !== null ? this.memberOf(target.ownerId) : null;
+    if (owner) this.force(owner);
+  }
+
+  /**
+   * Whether a blow (a knife, a bash, the hammer) does anything to a body: not to a teammate while friendly fire is off,
+   * as its damage wouldn't (Phase 8 M11). A blast or a stun knocks a shield aside whoever's it is, as a stun flashes
+   * either side.
+   */
+  private blowLands(by: Pawn, target: Pawn): boolean {
+    return target.team !== by.team || this.friendlyFireOn();
+  }
+
+  /** A guard break (Phase 8 M11): a body's shield held up is knocked aside for `guardBreak.seconds`. */
+  private guardBreak(pawn: Pawn) {
+    const k = pawn.loadout?.shield;
+    if (k && shieldUp(pawn.state)) this.knockAside(pawn, k.guardBreak.seconds);
+  }
+
+  /** Fuze's shield knocked aside (a guard break) or down (the hammer) for `seconds` (Phase 8 M11): its owner corrected. */
+  private knockAside(pawn: Pawn, seconds: number) {
+    knockShield(pawn, seconds);
+    const owner = pawn.ownerId !== null ? this.memberOf(pawn.ownerId) : null;
+    if (owner) this.force(owner);
+  }
+
+  /**
+   * Fuze's shield dash (Phase 8 M11; weapons_notes.md §5): a body sprinting with its shield up into a barricade already
+   * worn below its full hit points breaks through it; a fresh one stops it (Y11S1: no dashing through undamaged ones).
+   */
+  private shieldDashes() {
+    for (const pawn of this.sim.pawns.values()) {
+      const s = pawn.state;
+      const k = pawn.loadout?.shield;
+      if (pawn.kind !== PawnKind.Body || !k || !s.sprinting || !shieldUp(s)) continue;
+      const eye = eyePose(this.sim.data.movement, this.sim.data.hitboxes, s).pos;
+      const [fx, fz] = forwardXZ(s.yaw);
+      // (Any crossing of it, a hole's too: a worn barricade is still one.)
+      const along = this.sim.level.panels.crossings([s.x, eye[1] - 0.6, s.z], [fx, 0, fz], k.plate.frontM + 0.25);
+      const p = along.find((c) => c.entry.panel.kind === "barricade")?.entry.panel;
+      if (!p || p.kind !== "barricade" || p.broken || p.hp >= p.spec.hp) continue;
+      this.applyPanelOp(p.spec.index, { kind: "damage", amount: Math.max(1, p.hp), hard: false });
+    }
+  }
+
   /** Skopós's idle shells' barriers (Phase 8 M10): the entry standing in front of each, by the shell's pawn id. */
   private readonly barriers = new Map<number, number>();
 
@@ -1788,7 +1872,9 @@ export class Room implements DirectorHost {
     const fx = blastEffects(this.sim, g, blast, at);
     const owner = g.owner ? this.memberOf(g.owner) : null;
     const attacker: Attacker = { ctrlId: g.owner, team: g.owner ? g.team : NEUTRAL, weaponId, origin: [at[0], at[1], at[2]] };
-    for (const { pawn, damage } of fx.bodies) {
+    for (const { pawn, damage, guard } of fx.bodies) {
+      // Fuze's shield knocked aside by it (Phase 8 M11), whoever's blast it is.
+      if (guard) this.guardBreak(pawn);
       const own = g.owner !== 0 && pawn.ownerId === g.owner;
       const friendly = !own && pawn.team === attacker.team && pawn.kind !== PawnKind.Drone;
       if (friendly && !this.friendlyFireOn()) continue;
@@ -1833,6 +1919,8 @@ export class Room implements DirectorHost {
       }
       const ring = dist <= k.ringM;
       if (blind > 0 || ring) m.events.push({ kind: "stunned", seconds: k.seconds, blind, ring, concuss: false });
+      // A stun always knocks Fuze's shield aside (a concussion's guard break is 100%, weapons_notes.md §5; Phase 8 M11).
+      if (blind > 0 || ring) this.guardBreak(body);
     }
   }
 
@@ -1913,7 +2001,9 @@ export class Room implements DirectorHost {
     for (const m of this.members.values()) {
       const body = m.ctrl ? this.sim.pawns.get(m.ctrl.possessedPawnId) : undefined;
       if (!body || body.kind !== PawnKind.Body || body.state.mode === PawnMode.Dead || pawnDistance(this.sim, body, at) > radiusM) continue;
-      if (this.flashSeen(eyePose(this.sim.data.movement, this.sim.data.hitboxes, body.state).pos, at)) m.events.push({ kind: "stunned", seconds, blind: 0, ring: true, concuss: true });
+      if (!this.flashSeen(eyePose(this.sim.data.movement, this.sim.data.hitboxes, body.state).pos, at)) continue;
+      m.events.push({ kind: "stunned", seconds, blind: 0, ring: true, concuss: true });
+      this.guardBreak(body);
     }
   }
 
@@ -2073,6 +2163,7 @@ export class Room implements DirectorHost {
       applied.set(m.ctrl.id, { m, input: m.applied });
     }
     this.judgeEvents(applied);
+    this.shieldDashes();
     // Catch up after a stall: one extra input for a client that has a backlog and banked credit.
     for (const m of this.members.values()) {
       if (!m.ctrl || m.queue.length <= TARGET_QUEUE || m.credit < 1) continue;
