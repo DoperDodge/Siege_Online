@@ -400,21 +400,22 @@ row("weapon.bullet", "skopos.idle_shell_shield", async () => {
 });
 
 row("weapon.bullet", "skopos.shell_idle", async () => {
-  // Bullets that reach the idle shell hurt it as a body. Its barrier curves round its front and sides (Ulo's test), so
-  // from the side they stop at it; from behind, or from right up at the barrier looking down over it, they hurt it.
+  // Bullets that reach the idle shell hurt it as a body. Its barrier is the game's (D-157): armour in front with wings
+  // angled back, a glass canopy over its head, its sides and back open. From in front, even right up at the barrier
+  // aiming down at its head, they stop at the armour or the glass; from beside it or behind, they hurt it.
   const { s, idle } = await shells(["sledge", "skopos"], 0, 13, 180);
   const hp = idle.state.hp;
+  // Standing against its front (the shell faces +z), at the crouched shell's head under the canopy.
+  s.teleport(0, 0, 0, 14.2);
+  s.shootAt(0, eyePose(s.sim.data.movement, s.sim.data.hitboxes, idle.state).pos);
+  expect(idle.state.hp).toBe(hp);
   s.teleport(0, 4, 0, 13);
   s.shootAt(0, heartOf(s.sim, idle));
-  expect(idle.state.hp).toBe(hp);
+  const beside = idle.state.hp;
+  expect(beside).toBeLessThan(hp);
   s.teleport(0, 0, 0, 9);
   s.shootAt(0, heartOf(s.sim, idle));
-  const behind = idle.state.hp;
-  expect(behind).toBeLessThan(hp);
-  // Standing against its front (the shell faces +z), at the crouched shell's head over the barrier's top.
-  s.teleport(0, 0, 0, 13.9);
-  s.shootAt(0, eyePose(s.sim.data.movement, s.sim.data.hitboxes, idle.state).pos);
-  expect(idle.state.hp).toBeLessThan(behind);
+  expect(idle.state.hp).toBeLessThan(beside);
 });
 
 row("weapon.bullet", "skopos.shell_active", async () => {

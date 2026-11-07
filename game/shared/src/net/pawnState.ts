@@ -2,14 +2,14 @@
 // simulation (roundState in movement.ts), so float32 on the wire restores the state bit-for-bit — what
 // reconciliation needs to replay a client's prediction from the server's state.
 import { MAX_CAM_VIEWS, type CamView, type PlayerController } from "../player/pawn.js";
-import type { PawnState } from "../player/types.js";
+import { PawnMode, type PawnState } from "../player/types.js";
 import { ByteReader, ByteWriter, fnv1a, ProtocolError } from "./bytes.js";
 
 /** Continuous fields, in wire order. */
 export const PAWN_F32_FIELDS = [
   "x", "y", "z", "vx", "vy", "vz", "yaw", "pitch", "stanceT", "lean", "tiltF", "tiltB", "tiltSide",
   "sinceSprint", "moveT", "moveDur", "fromX", "fromY", "fromZ", "toX", "toY", "toZ", "apexY", "tuck", "airPeakY",
-  "recoilPendP", "recoilPendY", "recoilRecP", "recoilRecY", "downHp", "ropeTurn",
+  "recoilPendP", "recoilPendY", "recoilRecP", "recoilRecY", "downHp", "ropeTurn", "knockLie",
 ] as const satisfies readonly (keyof PawnState)[];
 
 /** Integer fields by wire width (after the flags, enums, buttons and ladder written by hand below). */
@@ -19,7 +19,7 @@ export const PAWN_U8_FIELDS = [
 ] as const satisfies readonly (keyof PawnState)[];
 export const PAWN_U16_FIELDS = [
   "hp", "maxHp", "lastFallDamage", "actTicks", "reserve0", "reserve1", "cycle", "adsQ", "shotIdx", "sinceShot", "reviveTicks",
-  "deployPanel", "deployTicks", "rappelTicks", "jumpCd", "boostTicks", "boostCd", "jammed", "gTicks", "regenTicks", "guard", "suppressT",
+  "deployPanel", "deployTicks", "rappelTicks", "jumpCd", "boostTicks", "boostCd", "jammed", "gTicks", "regenTicks", "guard", "suppressT", "knockTicks",
 ] as const satisfies readonly (keyof PawnState)[];
 export const PAWN_U32_FIELDS = ["rng", "reviveTarget", "revivedBy", "gTarget"] as const satisfies readonly (keyof PawnState)[];
 
@@ -51,7 +51,7 @@ export function readPawnState(r: ByteReader): PawnState {
   const stance = r.u8();
   const stanceFrom = r.u8();
   const mode = r.u8();
-  if (stance > 2 || stanceFrom > 2 || mode > 6) throw new ProtocolError("bad pawn state enum");
+  if (stance > 2 || stanceFrom > 2 || mode > PawnMode.Knocked) throw new ProtocolError("bad pawn state enum");
   const prevButtons = r.u16();
   const ladder = r.i8();
   const rappel = r.i16();

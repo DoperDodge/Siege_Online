@@ -49,45 +49,56 @@ export function sizeOf(data: GameData, kind: number): readonly [number, number, 
 /** One box of an entry: its centre, its facing and its half sizes in its own frame. */
 export interface GadgetBox {
   pos: Vec3;
+  /** Its facing (radians, as an entry's), and how far it leans back (radians: its top toward its back). */
   yaw: number;
+  pitch: number;
   half: Vec3;
+  /** Drawn see-through (Skopós's barrier's canopy): it stops what the rest does. */
+  glass: boolean;
 }
 
 /**
- * The boxes of an entry whose data curves round it (`arc`: Skopós's idle shell's barrier), or null for a plain one: its
- * segments `radiusM` out from its position, each facing out, side by side across `degrees` centred on its facing (each
- * as wide as its share of the arc and a little more, so no bullet gets between two).
+ * The boxes of an entry built of `parts` (Skopós's idle shell's barrier, the game's model: D-157), or null for a plain
+ * one: each centred `at` (across, up from the entry's bottom, forward from its position), turned with the entry and by
+ * its own `yawDeg`, leaning back `pitchDeg`.
  */
-export function arcBoxes(data: GameData, g: Pick<Gadget, "kind" | "pos" | "yaw">): GadgetBox[] | null {
+export function partBoxes(data: GameData, g: Pick<Gadget, "kind" | "pos" | "yaw">): GadgetBox[] | null {
   const d = data.gadgets.get(kindId(g.kind) ?? "");
-  const arc = d?.arc;
-  if (!d || !arc) return null;
-  const span = arc.degrees * DEG;
-  const step = span / arc.segments;
-  const half: Vec3 = [arc.radiusM * Math.sin(step / 2) + 0.01, d.sizeM[1] / 2, d.sizeM[2] / 2];
-  const out: GadgetBox[] = [];
-  for (let i = 0; i < arc.segments; i++) {
-    const yaw = g.yaw - span / 2 + step * (i + 0.5);
-    const [fx, fz] = forwardXZ(yaw);
-    out.push({ pos: [g.pos[0] + fx * arc.radiusM, g.pos[1], g.pos[2] + fz * arc.radiusM], yaw, half });
-  }
-  return out;
+  if (!d?.parts) return null;
+  const [fx, fz] = forwardXZ(g.yaw);
+  const [rx, rz] = rightXZ(g.yaw);
+  const base = g.pos[1] - d.sizeM[1] / 2;
+  return d.parts.map((p) => ({
+    pos: [g.pos[0] + rx * p.at[0] + fx * p.at[2], base + p.at[1], g.pos[2] + rz * p.at[0] + fz * p.at[2]] as Vec3,
+    yaw: g.yaw + p.yawDeg * DEG,
+    pitch: p.pitchDeg * DEG,
+    half: [p.sizeM[0] / 2, p.sizeM[1] / 2, p.sizeM[2] / 2] as Vec3,
+    glass: p.glass,
+  }));
+}
+
+/** A ray's point (or direction) in a part's own frame: across, up and forward of it, its lean back undone. */
+function partLocal(b: GadgetBox, v: readonly number[], point: boolean): Vec3 {
+  const [x, y, z] = localOf({ pos: b.pos, yaw: b.yaw, flags: 0 } as unknown as Gadget, v, point);
+  const c = Math.cos(b.pitch);
+  const n = Math.sin(b.pitch);
+  // Leaning back turns its up toward its back (−forward) and its forward up.
+  return [x, y * c - z * n, y * n + z * c];
 }
 
 /**
  * Metres along a ray from `origin` (unit `dir`) to where it meets an entry's box, or null. A set-off cluster charge's
- * tube (Phase 8 M5, gadgets/cluster.ts) is part of it: it can be shot from the surface's far side. One that curves
- * round its centre (arcBoxes) is met where the ray meets its first segment.
+ * tube (Phase 8 M5, gadgets/cluster.ts) is part of it: it can be shot from the surface's far side. One built of parts
+ * (partBoxes) is met where the ray meets its first part.
  */
 export function rayToGadget(data: GameData, g: Gadget, origin: Vec3, dir: Vec3, maxT: number): number | null {
   const size = sizeOf(data, g.kind);
   if (!size || g.flags & GFlag.Flying) return null;
-  const arc = arcBoxes(data, g);
-  if (arc) {
+  const parts = partBoxes(data, g);
+  if (parts) {
     let best: number | null = null;
-    for (const b of arc) {
-      const seg = { pos: b.pos, yaw: b.yaw, flags: 0 } as Gadget;
-      const t = enterBox(localOf(seg, origin, true), localOf(seg, dir, false), b.half, best ?? maxT);
+    for (const b of parts) {
+      const t = enterBox(partLocal(b, origin, true), partLocal(b, dir, false), b.half, best ?? maxT);
       if (t !== null && (best === null || t < best)) best = t;
     }
     return best;

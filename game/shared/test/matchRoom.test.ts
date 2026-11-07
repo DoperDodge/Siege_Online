@@ -1362,13 +1362,11 @@ describe("Skopós's idle shell in a match", () => {
     expect(ctrl.operatorId).toBe("skopos");
     const idle = t.room.sim.bodyIds(ctrl).find((id) => id !== ctrl.possessedPawnId)!;
     const shell = t.room.sim.pawns.get(idle)!;
-    // Its barrier curves round its front and sides (Phase 8 M10; Ulo's test): the attacker comes right up against the
-    // barrier's front and shoots down over it at the crouched shell's head, down the sights, until it's gone.
+    // Its barrier covers its front, a glass canopy over its head (the game's, D-157): the attacker goes round behind it
+    // and shoots the crouched shell's head, down the sights, until it's gone.
     const at = shell.state;
     const [fx, fz] = forwardXZ(at.yaw);
-    const arc = data.gadgets.get("shell_shield")!.arc!;
-    const out = arc.radiusM + data.gadgets.get("shell_shield")!.sizeM[2] / 2 + data.movement.stance.collisionRadius + 0.08;
-    t.place(a, at.x + fx * out, at.y, at.z + fz * out, 0);
+    t.place(a, at.x - fx * 2, at.y, at.z - fz * 2, 0);
     for (let i = 0; i < 16; i++) t.tick();
     for (let shot = 0; shot < 30 && shell.state.mode !== PawnMode.Dead; shot++) {
       const eye = eyePose(data.movement, data.hitboxes, t.bodyOf(a)!.state).pos;

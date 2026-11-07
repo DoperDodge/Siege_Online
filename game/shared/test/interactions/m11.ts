@@ -108,21 +108,23 @@ row("player.melee", "fuze.ballistic_shield", async () => {
 });
 
 row("sledge.breaching_hammer", "fuze.ballistic_shield", async () => {
-  // Sledge's blow on Fuze's raised shield knocks it down (Y10S2), Fuze unhurt; it comes back up after `knockdownS`
-  // (ours: 2.5 s). Fuze is his teammate here, as he always is in our roster: friendly fire is on in the lab
+  // Sledge's blow on Fuze's raised shield knocks him to the ground (Y10S2: "the shield aside and the operator to the
+  // ground", D-156), unhurt: he goes over onto his back, his shield nowhere, and gets up once the knockdown's time is
+  // out, the shield back up. Fuze is his teammate here, as he always is in our roster: friendly fire is on in the lab
   // (UNVERIFIED vs a friendly shield; ours: a teammate's blow does what its damage would, nothing with it off).
   const s = await lab(["sledge", "fuze"], 1);
   stand(s, 1, 0, 13, Math.PI);
   stand(s, 0, 0, 14.2);
-  const k = shield(s, 1);
+  const kd = s.sim.data.combat.knockdown;
   const hp = s.body(1).state.hp;
   swing(s, [0, 1.2, 13]);
-  expect(until(s, () => s.body(1).state.shieldAt === ShieldAt.None, 128)).toBe(true);
-  expect([s.body(1).state.mode, s.body(1).state.hp]).toEqual([PawnMode.Walk, hp]);
-  s.wait(ticks(k.knockdownS) - ticks(k.guardBreak.seconds));
-  expect(s.body(1).state.shieldAt).toBe(ShieldAt.None);
-  s.wait(ticks(k.guardBreak.seconds) + 8);
-  expect(s.body(1).state.shieldAt).toBe(ShieldAt.Front);
+  expect(until(s, () => s.body(1).state.mode === PawnMode.Knocked, 128)).toBe(true);
+  expect([s.body(1).state.shieldAt, s.body(1).state.hp]).toEqual([ShieldAt.None, hp]);
+  s.wait(ticks(kd.fallS) + ticks(kd.downS));
+  expect(s.body(1).state.knockLie).toBeGreaterThan(0.9);
+  expect(until(s, () => s.body(1).state.mode === PawnMode.Walk, ticks(kd.getUpS) + 8)).toBe(true);
+  s.wait(2);
+  expect([s.body(1).state.shieldAt, s.body(1).state.hp]).toEqual([ShieldAt.Front, hp]);
 });
 
 row("generic.nitro_cell", "fuze.ballistic_shield", async () => {
@@ -187,16 +189,21 @@ row("lesion.gu_mine", "fuze.ballistic_shield", async () => {
 // ================================================================ what the shield does
 
 row("fuze.ballistic_shield", "player.defender", async () => {
-  // Fuze's melee with his shield up is a bash: no damage since Y9S4 (it was 65), Mute in front of him pushed back.
+  // Fuze's melee with his shield up is a bash: no damage since Y9S4 (it was 65); Mute in front of him is knocked down
+  // (D-156; Fandom: shoved back onto his back, like Oryx's dash and Nomad's Airjab), facing Fuze, and gets up later.
   const s = await lab(["fuze", "mute"]);
   stand(s, 0, 0, 12);
-  stand(s, 1, 0, 10.9, Math.PI);
+  stand(s, 1, 0, 10.9);
+  const kd = s.sim.data.combat.knockdown;
   const hp = s.body(1).state.hp;
   const z = s.body(1).state.z;
   s.press(0, Btn.Melee);
-  s.wait(48);
+  expect(until(s, () => s.body(1).state.mode === PawnMode.Knocked, 48)).toBe(true);
+  expect(Math.abs(s.body(1).state.yaw - Math.PI) < 0.05 || Math.abs(s.body(1).state.yaw + Math.PI) < 0.05).toBe(true); // he faces Fuze
+  s.wait(ticks(kd.fallS) + 2);
   expect(s.body(1).state.hp).toBe(hp);
-  expect(s.body(1).state.z).toBeLessThan(z - 0.3);
+  expect(s.body(1).state.z).toBeLessThan(z - kd.pushM + 0.15);
+  expect(until(s, () => s.body(1).state.mode === PawnMode.Walk, ticks(kd.downS) + ticks(kd.getUpS) + 8)).toBe(true);
 });
 
 row("fuze.ballistic_shield", "surface.barricade", async () => {

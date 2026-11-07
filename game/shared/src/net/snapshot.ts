@@ -24,7 +24,8 @@
 //   bit10 aux              : u8, bit0 = aiming, bit1 = secondary weapon in hand, bit2 = a drone jammed, bit4 = being
 //                            revived, bits 5–7 = what the hands hold (PawnState.hand, Phase 8: a gadget or its
 //                            detonator; 0 the weapon) (3 free)
-//   bit11 turn (u8 ·255)   : on a rope, how far turned upside down (PawnState.ropeTurn)
+//   bit11 turn (u8 ·255)   : on a rope, how far turned upside down (PawnState.ropeTurn); knocked down (mode 7, D-156),
+//                            how far over on its back (PawnState.knockLie)
 // TCP delivers every snapshot in order, so deltas are against the last one *sent*, never lost ones.
 import { lerp, wrapAngle } from "../core/math.js";
 import { initialPawnState } from "../player/pawn.js";
@@ -100,7 +101,7 @@ export function quantizeRemote(s: PawnState): RemoteQ {
     // and a rewind puts it where they saw it.
     flags: s.stance | (s.stanceFrom << 2) | (s.mode << 4) | (s.sprinting ? 128 : 0) | (s.grounded ? 256 : 0) | ((s.shieldAt & 3) << 9) | (s.shieldAt === 1 ? round((s.adsQ / 65535) * 7) << 11 : 0),
     aux: (s.prevButtons & Btn.Ads ? 1 : 0) | (s.slot === 1 ? AUX_SECONDARY : 0) | (s.jammed > 0 ? AUX_JAMMED : 0) | (s.revivedBy !== 0 ? AUX_REVIVED : 0) | ((s.hand & 7) << AUX_HAND_SHIFT),
-    turn: s.mode === PawnMode.Rappel ? round(s.ropeTurn * 255) : 0,
+    turn: s.mode === PawnMode.Rappel ? round(s.ropeTurn * 255) : s.mode === PawnMode.Knocked ? round(s.knockLie * 255) : 0,
   };
 }
 
@@ -122,7 +123,9 @@ export function remoteState(q: RemoteQ, maxHp = 100): PawnState {
   s.shieldAt = (q.flags >> 9) & 3;
   // (Its aiming progress as far as the shield shows it: the plate slides down with it.)
   s.adsQ = round((((q.flags >> 11) & 7) / 7) * 65535);
-  s.ropeTurn = q.turn / 255;
+  // The one byte serves a body on a rope and a knocked-down one (D-156): they're never both.
+  s.ropeTurn = s.mode === PawnMode.Rappel ? q.turn / 255 : 0;
+  s.knockLie = s.mode === PawnMode.Knocked ? q.turn / 255 : 0;
   s.prevButtons = q.aux & 1 ? Btn.Ads : 0;
   s.slot = q.aux & AUX_SECONDARY ? 1 : 0; // (others see which weapon is out)
   s.jammed = q.aux & AUX_JAMMED ? 1 : 0;
@@ -152,6 +155,7 @@ export function interpolateRemote(a: PawnState, b: PawnState, u: number): PawnSt
     tiltSide: lerp(a.tiltSide, b.tiltSide, u),
     tuck: lerp(a.tuck, b.tuck, u),
     ropeTurn: lerp(a.ropeTurn, b.ropeTurn, u),
+    knockLie: a.mode === b.mode ? lerp(a.knockLie, b.knockLie, u) : b.knockLie,
     adsQ: lerp(a.adsQ, b.adsQ, u),
   };
 }
@@ -207,7 +211,7 @@ function readRecord(r: ByteReader, baseOf: (id: number) => RemoteQ): [number, Re
   if (m & 8) q.pitch += unzz(r.varu());
   if (m & 16) {
     q.flags = r.u16();
-    if ((q.flags & 3) > Stance.Prone || ((q.flags >> 2) & 3) > Stance.Prone || ((q.flags >> 4) & 7) > PawnMode.Held || ((q.flags >> 9) & 3) > 2 || q.flags >= 16384) throw new ProtocolError("bad flags");
+    if ((q.flags & 3) > Stance.Prone || ((q.flags >> 2) & 3) > Stance.Prone || ((q.flags >> 4) & 7) > PawnMode.Knocked || ((q.flags >> 9) & 3) > 2 || q.flags >= 16384) throw new ProtocolError("bad flags");
   }
   if (m & 32) q.y += unzz(r.varu());
   if (m & 64) q.lean = r.i8();

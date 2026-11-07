@@ -264,21 +264,40 @@ lists it from the table (who's in which shell is each player's own), the defence
 on a hacked phone's lend (Skopós herself goes round to the shell's own view instead, from which she swaps: her list
 leaves her barrier's camera out, D-155, intel/DESIGN.md §5). Her knife (`combat.meleeHole: large`) uses `destruction.meleeLarge`: a 0.6 m hole through
 the studs, a barricade in one hit, a hatch in one. The idle shell starts beside her at the site's defender spawn.
-Reshaped after Ulo's test (D-153): the barrier curves round the crouched shell (data `arc`: seven segments 0.5 m out,
-220° round its front and sides; gadgets/hits.ts `arcBoxes` gives the same segments to its colliders, ray tests and
-model), its entry at the shell's centre and its camera's lens out past its front. A shell in a corner is covered all
-round: an attacker has to come up to the barrier and shoot down over it. Held-up items (Pulse's sensor, Dokkaebi's
-tablet) come up to the face like a scope as they're taken out.
+Reshaped after Ulo's test (D-153): the barrier curved round the crouched shell (data `arc`: seven segments, 220° round
+its front and sides). Held-up items (Pulse's sensor, Dokkaebi's tablet) come up to the face like a scope as they're
+taken out. **The game's model (D-157, from its renders), replacing that wrap:** the barrier is built of box `parts`
+(data, placed from its entry at the shell's centre: across, up from its bottom, forward; each turned `yawDeg` and
+leaning back `pitchDeg`; gadgets/hits.ts `partBoxes` gives the same boxes to its colliders, ray tests and model): a
+flat front of armour (two columns, two rows of panels, yellow seam stripes) with wings angled back 40°, up to the
+crouched shell's chest; a canopy of tinted bulletproof glass at its head, the front pane leaning back 22°, a pane over
+each wing and a roof over the head; sides and back open. Every part stops bullets, bodies and throws (the glass too:
+drawn see-through); blasts and the hammer break the whole barrier. Its camera's lens is the data's `lensM` (the
+crouched shell's eyes, just out past the glass). Skopós's own shells move through her own barriers (`MoveContext.passes`):
+a shell she wakes stands up under its canopy, and one moved by a lab tool stands for a moment, which with the barrier
+following it pushed it away for good.
 
 ## 8. The Ballistic Shield (Fuze)
 
 The shield as a primary (data/weapons/ballistic_shield.json, research/weapons_notes.md §5): a shield hit shape in
 front of the body (head and chest; legs exposed standing), no hip fire, ADS tilts it and fires the secondary [0.5 s
-walking], Fire alone looks around (free look), a melee bash [0 hp since Y9S4 in our data] with pushback, suppression
-after [5 hits], guard break from blasts of 30 hp or more, melee and stuns, a Sledge swing knocks it down, ×0.9 speed,
-off for placing gadgets and on ropes, kept on the back when away (covers the back).
+walking], Fire alone looks around (free look), a melee bash [0 hp since Y9S4 in our data] that knocks its target
+down (D-156), suppression after [5 hits], guard break from blasts of 30 hp or more, melee and stuns, a Sledge swing
+knocks him down (D-156), ×0.9 speed, off for placing gadgets and on ropes, kept on the back when away (covers the
+back).
 
-**Reworked after Ulo's test (D-153):** the plate is 0.75 m wide and curves round him (its edges 0.1 m nearer than its
+**The game's model and the knockdown (D-156, D-157):** the plate is now the game's as its renders show it: rigid,
+0.58 × 1.1 m (`heightM`), all but flat (`curveM` 0.02), its top corners cut (`chamferM`: the edge capsules stop short),
+0.45 m ahead (in front of the hands), its top 0.13 m over the eyes: head and torso covered, the legs out under it
+standing; aiming slides it down by up to 0.38 m, but never through the floor (crouched it rests on it and he aims over
+its top). Drawn (client/src/render/shieldModel.ts) green with a dark rim, a viewport across its upper part at eye
+level in a frame standing out of the plate, bolts across the handle mount and a dark inside. His bash on a body on its
+feet knocks it down (`Sim.knockDown`, `PawnMode.Knocked`: shoved `knockdown.pushM` back onto its back, lying, up again;
+no input meanwhile; player/movement.ts stepKnocked; its pose tipped back about its feet, player/hitboxes.ts knockTip);
+on a raised plate it's still a guard break. Sledge's hammer on a raised plate knocks Fuze himself down; off his feet
+(a rope, a ladder) it only knocks the shield aside. Knocked down, he has no shield up until he's up.
+
+**Reworked after Ulo's test (D-153; its shape since superseded by D-157, above):** the plate was 0.75 m wide and curved round him (its edges 0.1 m nearer than its
 middle, 0.42 m ahead), from 0.3 m up (0.05 m crouched) to 0.15 m over the eyes: seven capsules along the curve
 (`shieldFrame`). It bends with the spine when he leans, as the upper body does. Aiming slides it down over the aim
 time (`adsQ`; 0.37 m when fully aimed, its bottom stopping at the floor) instead of jumping; how far it has slid goes

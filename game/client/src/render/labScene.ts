@@ -553,8 +553,8 @@ export class PawnView {
       this.tag.position.set(head.b[0], Math.max(head.a[1], head.b[1]) + head.radius + 0.3, head.b[2]);
     }
     // The gun it holds: in front of the chest along the view (placeholder until the art pass); none while
-    // down or dead.
-    const armed = state.mode !== PawnMode.Dead && !isDowned(state);
+    // down, knocked down (D-156) or dead.
+    const armed = state.mode !== PawnMode.Dead && state.mode !== PawnMode.Knocked && !isDowned(state);
     this.armed = armed;
     this.gunVisible = this.gun !== null && armed && this.held === null;
     const eye = eyePose(data.movement, data.hitboxes, state).pos;

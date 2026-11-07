@@ -357,11 +357,10 @@ const gunSchema = z
 
 /**
  * The Ballistic Shield (weapons_notes.md §5; Phase 8 M11, gadgets/DESIGN.md §8): a primary held with the secondary
- * pistol. Its `plate` is where it stands (player/shield.ts): `frontM` ahead of the body, `widthM` across, from
- * `bottomM` (standing, crouched) up to `aboveEyeM` over the eyes, its top `adsBelowEyeM` under them while aiming; on
- * the back it covers the torso. A blast from in front loses `absorb` of its damage; one of `guardBreak.blastHp` or
- * more, a knife or a stun knocks it aside for `guardBreak.seconds`; Sledge's hammer knocks it down for `knockdownS`.
- * The bash (melee) does `bashDamage` and pushes its target back at `bashPushMps`.
+ * pistol. Its `plate` is where it stands (player/shield.ts). A blast from in front loses `absorb` of its damage; one of
+ * `guardBreak.blastHp` or more, a knife or a stun knocks it aside for `guardBreak.seconds`; Sledge's hammer on it knocks
+ * its carrier to the ground (D-156, data/combat.json `knockdown`). The bash (melee) does `bashDamage` and knocks a body
+ * down (the same knockdown).
  */
 const shieldSchema = z.strictObject({
   ...meta,
@@ -374,24 +373,25 @@ const shieldSchema = z.strictObject({
     moveSpeedMult: z.number().positive(),
     suppression: z.strictObject({ hitsToTrigger: z.number().int().positive(), hitsToMax: z.number().int().positive(), falloffS: secs }),
     bashDamage: z.number().nonnegative(),
-    bashPushMps: z.number().nonnegative(),
     /**
-     * Its plate (Phase 8 M11, reworked after Ulo's test): `widthM` across, curving round its carrier (its edges `curveM`
-     * nearer him than its middle, `frontM` ahead); from `bottomM` up to `aboveEyeM` over the eyes, slid down by
-     * `aboveEyeM + adsBelowEyeM` as he aims; a viewport `window` at eye height (bulletproof glass: drawn see-through).
+     * Its plate (Phase 8 M11; matched to the game's model after Ulo's second look, D-157): a rigid plate `widthM` across
+     * and `heightM` tall, its top corners cut `chamferM`, all but flat (its edges `curveM` nearer him than its middle),
+     * `frontM` ahead; held with its top `aboveEyeM` over the eyes, slid down by up to `aboveEyeM + adsBelowEyeM` as he
+     * aims (no further than the floor: crouched, it rests on it); a viewport `window` at eye height (bulletproof glass:
+     * drawn see-through, in a frame that stands out of the plate).
      */
     plate: z.strictObject({
       widthM: z.number().positive(),
+      heightM: z.number().positive(),
+      chamferM: z.number().min(0),
       curveM: z.number().min(0),
       frontM: z.number().positive(),
-      bottomM: z.strictObject({ stand: z.number().min(0), crouch: z.number().min(0) }),
       aboveEyeM: z.number().min(0),
       adsBelowEyeM: z.number().min(0),
       window: z.strictObject({ widthM: z.number().positive(), heightM: z.number().positive() }),
     }),
     absorb: z.number().min(0).max(1),
     guardBreak: z.strictObject({ blastHp: z.number().positive(), seconds: secs }),
-    knockdownS: secs,
   }),
 });
 
@@ -538,6 +538,12 @@ export const combatSchema = z.strictObject({
     allowInStances: z.array(z.enum(STANCE_NAMES)),
     endsSprint: z.boolean(),
   }),
+  /**
+   * A knockdown (D-156: a shield's bash, Sledge's hammer on a raised shield; Fandom: like Oryx's dash and Nomad's
+   * Airjab): over `fallS` the body is shoved `pushM` back and tips onto its back; it lies `downS`; it gets up over
+   * `getUpS`. Its player's input does nothing until it's up.
+   */
+  knockdown: z.strictObject({ pushM: z.number().nonnegative(), fallS: secs, downS: z.number().nonnegative(), getUpS: secs }),
 }).superRefine((c, ctx) => {
   if (c.melee.impactSeconds > c.melee.cycleSeconds) ctx.addIssue({ code: "custom", path: ["melee", "impactSeconds"], message: "the melee hit must land before the swing ends" });
 });
@@ -899,11 +905,26 @@ export const gadgetSchema = z
     /** A solid box (the deployable shield): bodies, drones, bullets, blasts and throws meet it; a knife hit makes its glass opaque (then it can't be picked up). */
     solid: z.boolean().default(false),
     /**
-     * Its box curves round its centre instead (Skopós's idle shell's barrier, Ulo's test): `segments` boxes, each `sizeM`
-     * tall and deep and as wide as its share of the arc, `radiusM` out from the entry's position, spanning `degrees`
-     * centred on its facing (gadgets/hits.ts gadgetBoxes).
+     * Built of boxes instead of its one (Skopós's idle shell's barrier, the game's model: D-157): each `sizeM` (width,
+     * height, depth), centred `at` (across, up from its bottom, forward from its position), turned `yawDeg` about the
+     * vertical (its right end forward for positive) and leaning back `pitchDeg`; `glass` ones are drawn see-through (all
+     * stop bullets, bodies and throws alike). gadgets/hits.ts partBoxes.
      */
-    arc: z.strictObject({ radiusM: z.number().positive(), degrees: z.number().positive().max(360), segments: z.number().int().min(1).max(16) }).optional(),
+    parts: z
+      .array(
+        z.strictObject({
+          at: z.tuple([z.number(), z.number(), z.number()]),
+          sizeM: z.tuple([z.number().positive(), z.number().positive(), z.number().positive()]),
+          yawDeg: z.number().min(-180).max(180).default(0),
+          pitchDeg: z.number().min(-90).max(90).default(0),
+          glass: z.boolean().default(false),
+        }),
+      )
+      .min(1)
+      .max(16)
+      .optional(),
+    /** Its camera's lens (Skopós's idle shell's barrier): across, up from its bottom, forward from its position (metres). */
+    lensM: z.tuple([z.number(), z.number(), z.number()]).optional(),
     /** A proximity alarm: it sounds while an enemy body is within `radiusM`, from `armS` after it comes to rest. */
     alarm: z.strictObject({ radiusM: z.number().positive(), armS: z.number().min(0) }).optional(),
     /** An observation blocker's barrier, facing its placer's way: up to `widthM` wide (less where walls are closer), `heightM` tall; the other side's observation tools can't see through it. */

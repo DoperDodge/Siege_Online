@@ -4,7 +4,7 @@
 import { DEG, lerp, rotateXZ, type Vec3 } from "../core/math.js";
 import type { HitboxData, MovementData } from "../data/schemas.js";
 import { currentEyeHeight, currentHeight, proneWeight } from "./stance.js";
-import { PawnMode, Stance, type PawnState } from "./types.js";
+import { PawnMode, type PawnState } from "./types.js";
 
 /**
  * "drone": the one box of an attacker's drone (Phase 7, player/drone.ts). "shield": Fuze's Ballistic Shield's plate
@@ -137,11 +137,27 @@ export const ropeRoll = (s: PawnState) => (s.mode === PawnMode.Rappel ? Math.PI 
 export const upsideDown = (s: PawnState) => s.mode === PawnMode.Rappel && s.ropeTurn > 0.5;
 
 /**
+ * A knocked-down body (D-156, PawnMode.Knocked) tipped back `knockLie` of the way onto its back: turned about the line
+ * across its feet `lift` up (a torso's thickness, so it comes to rest on its back, not through the floor), its front
+ * turning up. Its facing stays what it faces (what knocked it down).
+ */
+function knockTip(s: PawnState, v: Vec3, lift: number): Vec3 {
+  if (s.mode !== PawnMode.Knocked || s.knockLie <= 0) return v;
+  const t = (s.knockLie * Math.PI) / 2;
+  const c = Math.cos(t);
+  const n = Math.sin(t);
+  const up = v[1] - lift;
+  // (The local frame's z is backward: up turns toward it, and the front, at −z, turns up.)
+  return [v[0], lift + up * c - v[2] * n, up * n + v[2] * c];
+}
+
+/**
  * A local point on the body to the world. On a rope the body turns over about its view's forward axis through the
  * middle of the same capsule `height` tall: halfway, it lies on its side; upside down, right is left and the head
- * hangs at the bottom.
+ * hangs at the bottom. Knocked down, it tips back onto its back (knockTip, about `lift` over its feet).
  */
-function toWorld(s: PawnState, v: Vec3, height: number): Vec3 {
+function toWorld(s: PawnState, p: Vec3, height: number, lift: number): Vec3 {
+  const v = knockTip(s, p, lift);
   const roll = ropeRoll(s);
   let [lx, ly] = [v[0], v[1]];
   if (roll !== 0) {
@@ -169,7 +185,7 @@ export function poseHitboxes(m: MovementData, hb: HitboxData, s: PawnState): Hit
       la = [lerp(a[0], pa[0], w), lerp(a[1], pa[1], w), lerp(a[2], pa[2], w)];
       lb = [lerp(b[0], pb[0], w), lerp(b[1], pb[1], w), lerp(b[2], pb[2], w)];
     }
-    return { part, a: toWorld(s, la, height), b: toWorld(s, lb, height), radius: partRadius(hb, part) };
+    return { part, a: toWorld(s, la, height, hb.parts.torso.radius), b: toWorld(s, lb, height, hb.parts.torso.radius), radius: partRadius(hb, part) };
   });
 }
 
@@ -179,9 +195,10 @@ export type ShieldPlace = "front" | "back";
 /** The plate's numbers (data/weapons/ballistic_shield.json `shield.plate`). */
 export interface ShieldPlate {
   widthM: number;
+  heightM: number;
+  chamferM: number;
   curveM: number;
   frontM: number;
-  bottomM: { stand: number; crouch: number };
   aboveEyeM: number;
   adsBelowEyeM: number;
   window: { widthM: number; heightM: number };
@@ -198,16 +215,20 @@ export interface ShieldFrame {
   tall: number;
   /** Half its width. */
   half: number;
-  /** The world point `u` across it (−1 its left edge … 1 its right) at height `y` over the feet. */
-  at(u: number, y: number): Vec3;
+  /**
+   * The world point `u` across it (−1 its left edge … 1 its right) at height `y` over the feet, `out` metres out of its
+   * face (its window's frame stands out of it).
+   */
+  at(u: number, y: number, out?: number): Vec3;
 }
 
 /**
- * Fuze's Ballistic Shield's plate on a body (Phase 8 M11, reworked after Ulo's test). In front: its middle `frontM`
- * ahead, curving round him (its edges `curveM` nearer); from `bottomM` (standing or crouched) to `aboveEyeM` over the
- * eyes, slid down as he aims (`aboveEyeM + adsBelowEyeM` when fully aimed: the head over it; its bottom stops at the
- * floor). On the back: across his back from the hips to the shoulders. It bends with his spine when he leans, as the
- * upper body does (uprightPose). Null while prone (it's on his back then, and a prone body's isn't modelled).
+ * Fuze's Ballistic Shield's plate on a body (Phase 8 M11; the game's model, D-157). In front: a rigid plate `heightM`
+ * tall, its middle `frontM` ahead, all but flat (its edges `curveM` nearer him); its top `aboveEyeM` over the eyes,
+ * slid down as he aims (`aboveEyeM + adsBelowEyeM` when fully aimed: the head over it), never through the floor (crouched
+ * it comes to rest on it, and he aims over its top). On the back: across his back from the hips to the shoulders. It
+ * bends with his spine when he leans, as the upper body does (uprightPose). Null while prone (it's on his back then, and
+ * a prone body's isn't modelled).
  */
 export function shieldFrame(m: MovementData, hb: HitboxData, s: PawnState, k: ShieldPlate, place: ShieldPlace): ShieldFrame | null {
   if (proneWeight(s) > 0) return null;
@@ -216,24 +237,27 @@ export function shieldFrame(m: MovementData, hb: HitboxData, s: PawnState, k: Sh
   const st = hb.standing;
   const hip = height * st.hipHeight;
   const front = place === "front";
-  const drop = front ? (k.aboveEyeM + k.adsBelowEyeM) * shieldLowered(s) : 0;
-  const bottom = s.stance === Stance.Crouch ? k.bottomM.crouch : k.bottomM.stand;
-  const y0 = front ? Math.max(0.02, bottom - drop) : hip;
-  const y1 = front ? eye + k.aboveEyeM - drop : height * st.chestHeight + 0.15;
-  const tall = front ? eye + k.aboveEyeM - bottom : y1 - y0;
+  const top = eye + k.aboveEyeM;
+  const drop = front ? Math.min((k.aboveEyeM + k.adsBelowEyeM) * shieldLowered(s), Math.max(0, top - k.heightM - FLOOR_GAP_M)) : 0;
+  const y1 = front ? top - drop : height * st.chestHeight + 0.15;
+  const y0 = front ? Math.max(FLOOR_GAP_M, y1 - k.heightM) : hip;
+  const tall = y1 - y0;
   const half = (front ? k.widthM : k.widthM * 0.85) / 2;
   const lean = s.lean * m.lean.offset;
-  const at = (u: number, y: number): Vec3 => {
+  const at = (u: number, y: number, out = 0): Vec3 => {
     const bend = eye > hip ? lean * Math.max(0, (y - hip) / (eye - hip)) : 0;
-    const z = front ? -k.frontM + k.curveM * u * u : 0.22 - k.curveM * u * u;
-    return toWorld(s, [u * half + bend, y, z], height);
+    const z = front ? -k.frontM + k.curveM * u * u - out : 0.22 - k.curveM * u * u + out;
+    return toWorld(s, [u * half + bend, y, z], height, hb.parts.torso.radius);
   };
   return { y0, y1, tall, half, at };
 }
 
+/** How far over the floor Fuze's plate's bottom stays (it never goes through it). */
+const FLOOR_GAP_M = 0.02;
+
 /**
- * Fuze's Ballistic Shield as hitboxes (Phase 8 M11): seven vertical capsules side by side along its curved plate (see
- * shieldFrame), each part "shield"; none while prone.
+ * Fuze's Ballistic Shield as hitboxes (Phase 8 M11): seven vertical capsules side by side along its plate (see
+ * shieldFrame), each part "shield", the two at its edges short of its cut top corners; none while prone.
  */
 export function shieldHitboxes(m: MovementData, hb: HitboxData, s: PawnState, k: ShieldPlate, place: ShieldPlace): Hitbox[] {
   const f = shieldFrame(m, hb, s, k, place);
@@ -243,7 +267,8 @@ export function shieldHitboxes(m: MovementData, hb: HitboxData, s: PawnState, k:
   const out: Hitbox[] = [];
   for (let i = 0; i < n; i++) {
     const u = -1 + (2 * i + 1) / n;
-    out.push({ part: "shield", a: f.at(u, f.y0 + r), b: f.at(u, Math.max(f.y0 + r, f.y1 - r)), radius: r });
+    const top = f.y1 - (i === 0 || i === n - 1 ? k.chamferM : 0) - r;
+    out.push({ part: "shield", a: f.at(u, f.y0 + r), b: f.at(u, Math.max(f.y0 + r, top)), radius: r });
   }
   return out;
 }
@@ -257,5 +282,5 @@ export function eyePose(m: MovementData, hb: HitboxData, s: PawnState, leanOverr
   const prone = w > 0 ? proneLocal(hb, [0, m.stance.prone.eye, -hb.prone.headForward], shift, s.tiltF, s.tiltB, s.tiltSide, proneBendLift(hb, s.tiltF, s.tiltB)) : upright;
   const local: Vec3 = [lerp(upright[0], prone[0], w), lerp(upright[1], prone[1], w), lerp(upright[2], prone[2], w)];
   const rollScale = lerp(1, m.lean.proneRollScale, w);
-  return { pos: toWorld(s, local, currentHeight(m, s)), roll: -lean * m.lean.rollDeg * DEG * rollScale + ropeRoll(s) };
+  return { pos: toWorld(s, local, currentHeight(m, s), hb.parts.torso.radius), roll: -lean * m.lean.rollDeg * DEG * rollScale + ropeRoll(s) };
 }

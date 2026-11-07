@@ -1,5 +1,5 @@
 {
-  "_doc": "Damage zones, penetration, DBNO, revive and melee (Phase 3). Sources: research/core_mechanics.md §9–§12, research/weapons_notes.md §4.3 and §4.8, research/operators/skopos.md §3.3. Times in seconds, distances in meters, speeds in m/s. Zone values multiply a bullet's range-adjusted damage; \"kill\" is an instant kill. Per-weapon headshot rules (\"kill\" or \"pellet\") are in each weapon file's damage.head. `maxRangeM` is an engine limit, not a Siege value.",
+  "_doc": "Damage zones, penetration, DBNO, revive and melee (Phase 3). Sources: research/core_mechanics.md §9–§12, research/weapons_notes.md §4.3 and §4.8, research/operators/skopos.md §3.3. Times in seconds, distances in meters, speeds in m/s. Zone values multiply a bullet's range-adjusted damage; \"kill\" is an instant kill. Per-weapon headshot rules (\"kill\" or \"pellet\") are in each weapon file's damage.head. `maxRangeM` is an engine limit, not a Siege value. A knockdown (D-156: Fuze's shield bash, Sledge's hammer on a raised shield) shoves the body back as it tips onto its back, lies, and gets up, its player's input ignored until it's up (Fandom's Ballistic Shield, Nomad and Oryx pages: knocked back about 2 m and down for a few seconds); the feet's push and the three times are ours.",
   "_season": "Y11S3",
   "_unverified": [
     "zones.pelvis",
@@ -28,7 +28,11 @@
     "melee.impactSeconds",
     "melee.cycleSeconds",
     "melee.allowInStances",
-    "melee.endsSprint"
+    "melee.endsSprint",
+    "knockdown.pushM",
+    "knockdown.fallS",
+    "knockdown.downS",
+    "knockdown.getUpS"
   ],
   "zones": { "head": "kill", "neck": "kill", "torso": 1.0, "pelvis": 1.0, "arm": 0.75, "leg": 0.75 },
   "pellet": { "headMultiplier": 1.5, "neckCountsAsHead": true },
@@ -67,5 +71,11 @@
     "vsDowned": "kill",
     "allowInStances": ["stand", "crouch", "prone"],
     "endsSprint": true
+  },
+  "knockdown": {
+    "pushM": 1.2,
+    "fallS": 0.45,
+    "downS": 0.6,
+    "getUpS": 0.9
   }
 }

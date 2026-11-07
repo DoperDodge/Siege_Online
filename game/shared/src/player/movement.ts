@@ -41,6 +41,11 @@ export interface MoveContext {
   solidOnRay?(origin: Vec3, dir: Vec3, maxT: number): number | null;
   /** Whether a drone is inside an enemy jammer (Phase 8 M6, Mute's): it loses its driver. */
   droneJammed?(pawn: Pawn): boolean;
+  /**
+   * Whether a body moves through this collider (D-157: Skopós's shells through her own barriers, whose canopy is just
+   * over a crouched shell's head: one waking stands up under it).
+   */
+  passes?(pawn: Pawn, c: Collider): boolean;
 }
 
 const IDENTITY = { x: 0, y: 0, z: 0, w: 1 };
@@ -66,9 +71,14 @@ export function stepPawn(ctx: MoveContext, pawn: Pawn, input: InputCmd, weapons 
   regenSlot(ctx.data, pawn);
   stepShield(pawn);
 
-  updateLook(ctx, pawn, input);
+  // Knocked down (D-156), nothing of its player's input counts, the view's way included, until it's up (the tick it
+  // gets up on included).
+  const knocked = s.mode === PawnMode.Knocked;
+  if (!knocked) updateLook(ctx, pawn, input);
 
-  if (s.mode === PawnMode.Ladder) {
+  if (knocked) {
+    stepKnocked(ctx, pawn);
+  } else if (s.mode === PawnMode.Ladder) {
     stepLadder(ctx, pawn, input, pressed);
   } else if (s.mode === PawnMode.Rappel) {
     stepRappel(ctx, pawn, input, pressed, live);
@@ -79,7 +89,8 @@ export function stepPawn(ctx: MoveContext, pawn: Pawn, input: InputCmd, weapons 
   } else {
     stepWalk(ctx, pawn, input, pressed, live);
   }
-  const down = isDowned(s);
+  // Down, or knocked down (D-156): no weapon and no gadget.
+  const down = isDowned(s) || knocked;
   if (weapons && !down) {
     // The gadget in hand first (Phase 8): a key that takes one out puts the weapon away this same tick.
     stepHands(ctx, pawn, input, pressed, s.meleeTicks === 0 && s.reviveTarget === 0 && s.deployKind === DeployKind.None, live);
@@ -389,11 +400,14 @@ function moveCollider(ctx: MoveContext, pawn: Pawn, dx: number, dy: number, dz: 
   // Rapier's snap-to-ground can drop a body into the floor when it starts inside the controller's contact
   // offset of both a wall and the floor (sprinting diagonally into a wall: 0.29 m in one tick, found by the
   // netsim). A step that ends inside level geometry it started clear of is redone without the snap.
-  const startClear = !insideStatic(ctx, pawn, t);
+  // Skopós's shells move through her own barriers (D-157: ctx.passes).
+  const passes = ctx.passes;
+  const own = passes ? (c: Collider) => !passes(pawn, c) : undefined;
+  const startClear = !insideStatic(ctx, pawn, t, own);
   const compute = (desired: { x: number; y: number; z: number }, filter?: (c: Collider) => boolean) => {
     ctx.cc.computeColliderMovement(pawn.collider, desired, undefined, QUERY_SOLID, filter);
     let out = ctx.cc.computedMovement();
-    if (out.y < desired.y - 1e-6 && startClear && insideStatic(ctx, pawn, { x: t.x + out.x, y: t.y + out.y, z: t.z + out.z })) {
+    if (out.y < desired.y - 1e-6 && startClear && insideStatic(ctx, pawn, { x: t.x + out.x, y: t.y + out.y, z: t.z + out.z }, own)) {
       ctx.cc.disableSnapToGround();
       ctx.cc.computeColliderMovement(pawn.collider, desired, undefined, QUERY_SOLID, filter);
       ctx.cc.enableSnapToGround(ctx.data.movement.step.snapToGround);
@@ -401,7 +415,7 @@ function moveCollider(ctx: MoveContext, pawn: Pawn, dx: number, dy: number, dz: 
     }
     return out;
   };
-  let mv = compute({ x: dx + px, y: dy, z: dz + pz }, notIgnored);
+  let mv = compute({ x: dx + px, y: dy, z: dz + pz }, notIgnored && own ? (c) => notIgnored(c) && own(c) : (notIgnored ?? own));
   // Rapier's controller can let a step through a player it rests exactly against (its sweep starts at
   // the contact offset and sometimes reports no hit). A player the step would end up inside is handled
   // like one we already overlap: the motion toward them is dropped and the step is redone.
@@ -421,16 +435,16 @@ function moveCollider(ctx: MoveContext, pawn: Pawn, dx: number, dy: number, dz: 
         ez -= az * toward;
       }
     }
-    mv = compute({ x: ex, y: dy, z: ez }, (c) => !ignored.has(c.handle));
+    mv = compute({ x: ex, y: dy, z: ez }, (c) => !ignored.has(c.handle) && (!own || own(c)));
   }
   return { x: mv.x, y: mv.y, z: mv.z, perched };
 }
 
-/** The collider, shrunk by the contact skin, overlaps level geometry with its centre at `c`. */
-function insideStatic(ctx: MoveContext, pawn: Pawn, c: { x: number; y: number; z: number }): boolean {
+/** The collider, shrunk by the contact skin, overlaps level geometry with its centre at `c` (`keep`: only these count). */
+function insideStatic(ctx: MoveContext, pawn: Pawn, c: { x: number; y: number; z: number }, keep?: (c: Collider) => boolean): boolean {
   const r = pawn.collider.radius() - SKIN;
   const hh = Math.max(0, pawn.collider.halfHeight() - SKIN);
-  return ctx.world.intersectionWithShape(c, IDENTITY, new ctx.R.Capsule(hh, r), undefined, QUERY_STATIC, pawn.collider) !== null;
+  return ctx.world.intersectionWithShape(c, IDENTITY, new ctx.R.Capsule(hh, r), undefined, QUERY_STATIC, pawn.collider, undefined, keep) !== null;
 }
 
 function updateStance(ctx: MoveContext, pawn: Pawn, input: InputCmd) {
@@ -562,6 +576,73 @@ function stepDowned(ctx: MoveContext, pawn: Pawn, input: InputCmd) {
   if (s.invulnTicks > 0) s.invulnTicks--;
   if (s.revivedBy === 0 && bleedTick(ctx.data.combat, s, Math.hypot(s.vx, s.vz) > ctx.data.combat.dbno.movingSpeed)) {
     ctx.events.push({ kind: "death", pawnId: pawn.id, cause: "bleed", life: pawn.life });
+  }
+}
+
+// ---------------------------------------------------------------- knocked down
+
+/** A knocked-down body's movement capsule (D-156): from its standing one to its prone one as it tips onto its back. */
+export function knockedHeight(m: GameData["movement"], s: PawnState): number {
+  return lerp(m.stance.stand.height, m.stance.prone.height, s.knockLie);
+}
+
+/**
+ * How far over a knocked-down body may tip (0 … 1, its `knockLie`): all the way unless something stands within its
+ * length behind it (D-156: knocked into a wall, it slumps against it, its head short of the wall).
+ */
+function knockRoom(ctx: MoveContext, pawn: Pawn): number {
+  const s = pawn.state;
+  const len = ctx.data.movement.stance.stand.height;
+  // (Its head a hand short of what's there.)
+  const gap = 0.1;
+  const [fx, fz] = forwardXZ(s.yaw);
+  let room = Infinity;
+  for (const h of [0.35, 1.0]) {
+    const hit = ctx.world.castRay(new ctx.R.Ray({ x: s.x, y: s.y + h, z: s.z }, { x: -fx, y: 0, z: -fz }), len + gap, true, undefined, QUERY_STATIC, pawn.collider);
+    if (hit) room = Math.min(room, hit.timeOfImpact - gap);
+  }
+  return room >= len ? 1 : room <= 0 ? 0 : Math.asin(room / len) / (Math.PI / 2);
+}
+
+/**
+ * Knocked down (D-156; Fandom: a shield's bash shoves its target back onto its back, like Oryx's dash and Nomad's
+ * Airjab): no input at all. Over `fallS` it's shoved `pushM` back (away from what knocked it down, which it faces) as it
+ * tips onto its back, as far as the room behind lets it; it lies `downS`; it gets up over `getUpS`, and its player has
+ * it back once it's up.
+ */
+function stepKnocked(ctx: MoveContext, pawn: Pawn) {
+  const m = ctx.data.movement;
+  const k = ctx.data.combat.knockdown;
+  const s = pawn.state;
+  const fall = ticks(k.fallS);
+  const lie = fall + ticks(k.downS);
+  const total = lie + ticks(k.getUpS);
+  s.knockTicks = Math.min(0xffff, s.knockTicks + 1);
+  const t = s.knockTicks;
+  const [fx, fz] = forwardXZ(s.yaw);
+  const push = t <= fall ? k.pushM / k.fallS : 0;
+  s.vx = -fx * push;
+  s.vz = -fz * push;
+  s.vy = s.grounded ? m.gravity * DT : s.vy + m.gravity * DT;
+  s.sprinting = false;
+  s.sinceSprint += DT;
+  const height = knockedHeight(m, s);
+  placeCollider(ctx, pawn, height);
+  const mv = moveCollider(ctx, pawn, s.vx * DT, s.vy * DT, s.vz * DT);
+  const c = pawn.collider.translation();
+  pawn.collider.setTranslation({ x: c.x + mv.x, y: c.y + mv.y, z: c.z + mv.z });
+  readFeet(ctx, pawn, height);
+  s.grounded = !mv.perched && ctx.cc.computedGrounded();
+  if (s.grounded) s.vy = 0;
+  // Falling (faster as it goes), lying, then up again; never further over than the room behind it.
+  const room = knockRoom(ctx, pawn);
+  if (t <= fall) s.knockLie = Math.min(room, (t / fall) ** 2);
+  else if (t <= lie) s.knockLie = Math.min(room, s.knockLie);
+  else s.knockLie = Math.min(s.knockLie, 1 - (t - lie) / (total - lie));
+  if (t >= total) {
+    s.mode = PawnMode.Walk;
+    s.knockTicks = 0;
+    s.knockLie = 0;
   }
 }
 
@@ -1403,7 +1484,8 @@ function placeCollider(ctx: MoveContext, pawn: Pawn, height: number) {
 export function poseCollider(ctx: MoveContext, pawn: Pawn): void {
   if (pawn.kind === PawnKind.Drone) return poseDrone(ctx.data.intel.drone, pawn);
   const s = pawn.state;
-  const { r, hh } = capsuleDims(currentHeight(ctx.data.movement, s), ctx.data.movement.stance.collisionRadius);
+  const m = ctx.data.movement;
+  const { r, hh } = capsuleDims(s.mode === PawnMode.Knocked ? knockedHeight(m, s) : currentHeight(m, s), m.stance.collisionRadius);
   pawn.collider.setRadius(r);
   pawn.collider.setHalfHeight(hh);
   pawn.collider.setTranslation({ x: s.x, y: s.y + hh + r, z: s.z });
@@ -1704,4 +1786,5 @@ function roundState(s: PawnState) {
   s.recoilRecP = Math.fround(s.recoilRecP);
   s.recoilRecY = Math.fround(s.recoilRecY);
   s.downHp = Math.fround(s.downHp);
+  s.knockLie = Math.fround(s.knockLie);
 }

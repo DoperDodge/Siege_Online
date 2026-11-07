@@ -204,6 +204,9 @@ export interface LabApi extends LabHandle {
   releasePointer(): void;
 }
 
+/** How far up a knocked-down view tips flat on its back (radians; D-156): toward the ceiling. */
+const KNOCK_LOOK_UP = 1.2;
+
 /** A match page's stand-in controller while you have no body: it controls no pawns, so nothing of yours is ever found. */
 const NO_BODY: PlayerController = { id: 0, name: "", operatorId: "sledge", pawnIds: [], possessedPawnId: 0, drone: 0, prevLean: 0, cam: 0, camYaw: 0, camPitch: 0, camEntry: 0, lastCam: 0, camViews: [], shellCam: false, swapPhase: 0, swapT: 0, swapCooldown: 0, prevButtons: 0, team: 0 };
 
@@ -993,6 +996,8 @@ export async function startLab(o: LabOptions): Promise<void> {
   let viewedId = sim.viewedPawnId(ctrl.id);
   /** The default camera watched (Phase 7): ctrl.cam as of the last tick. */
   let camId = 0;
+  /** Your body knocked down as of the last tick (D-156). */
+  let wasKnocked = false;
   /** Ticks Fire has been held on a drone or a camera (Phase 7: a scan when it reaches data/intel.json `scan.holdS`). */
   let scanTicks = 0;
   let possessedId = ctrl.possessedPawnId;
@@ -1055,6 +1060,9 @@ export async function startLab(o: LabOptions): Promise<void> {
     } else if (nowViewed !== viewedId) {
       viewedId = nowViewed;
       if (!freeCam) controls.setView(v.state.yaw, v.state.pitch);
+    } else if (v.state.mode === PawnMode.Knocked) {
+      // Knocked down (D-156): the mouse does nothing until you're up, and you're up looking where you went down.
+      if (!freeCam) controls.setView(v.state.yaw, v.state.pitch);
     } else if (!freeCam && !freeLookFrom && !(v.kind === PawnKind.Drone && !ctrl.pawnIds.includes(v.id))) {
       // (On a teammate's drone the view is yours alone: the drone's own facing is its driver's. In Fuze's free look the
       // view leaves the body's facing on purpose.)
@@ -1091,6 +1099,10 @@ export async function startLab(o: LabOptions): Promise<void> {
     }
     if (freeCam) controls.limits = { pitchMin: -89 * DEG, pitchMax: 89 * DEG, maxYawStep: null };
     if (p.state.lastFallDamage > 0) flash(`-${p.state.lastFallDamage} HP (fall)`, "bad");
+    // Knocked down (D-156): said once as it starts.
+    const knockedNow = p.state.mode === PawnMode.Knocked;
+    if (knockedNow && !wasKnocked) flash("Knocked down", "bad");
+    wasKnocked = knockedNow;
     observe(p);
     if (net) notePredicted();
   }
@@ -1221,7 +1233,9 @@ export async function startLab(o: LabOptions): Promise<void> {
           camera.updateProjectionMatrix();
         }
       } else aim(viewed!, rs);
-      const eye = droneView ? { pos: droneEye(data.intel.drone, rs).pos, roll: 0 } : eyePose(data.movement, data.hitboxes, { ...rs, yaw: controls.yaw });
+      // Knocked down (D-156): the view is the body's as it goes over, the mouse doing nothing until it's up.
+      const knocked = !droneView && rs.mode === PawnMode.Knocked;
+      const eye = droneView ? { pos: droneEye(data.intel.drone, rs).pos, roll: 0 } : eyePose(data.movement, data.hitboxes, knocked ? rs : { ...rs, yaw: controls.yaw });
       if (onCamera) {
         // A camera: from just in front of its lens, where the camera looks (it follows the mouse at its rate).
         eye.pos = lens!;
@@ -1243,6 +1257,10 @@ export async function startLab(o: LabOptions): Promise<void> {
       } else if (onCamera) {
         camera.position.set(eye.pos[0], eye.pos[1], eye.pos[2]);
         camera.rotation.set(ctrl.camPitch, ctrl.camYaw, 0, "YXZ");
+      } else if (knocked) {
+        // Going over onto your back, the view tips up with you (up to the ceiling flat on the floor).
+        camera.position.set(eye.pos[0], eye.pos[1], eye.pos[2]);
+        camera.rotation.set(rs.pitch + rs.knockLie * KNOCK_LOOK_UP, rs.yaw, 0, "YXZ");
       } else {
         camera.position.set(eye.pos[0], eye.pos[1], eye.pos[2]);
         camera.rotation.set(controls.pitch, controls.yaw, eye.roll);
@@ -1262,7 +1280,8 @@ export async function startLab(o: LabOptions): Promise<void> {
     intelHud.showScan(scanTicks && !spec ? Math.min(1, scanTicks / ticks(data.intel.scan.holdS)) : null);
     drawWorld();
     if (rs && viewed && me) {
-      const inHand = viewed.id === me.id && !outside && !onCamera && !ctrl.shellCam && ctrl.swapPhase === 0 ? (viewed.loadout?.weapons[rs.slot] ?? null) : null;
+      // (Knocked down, D-156: nothing in hand until you're up.)
+      const inHand = viewed.id === me.id && !outside && !onCamera && !ctrl.shellCam && ctrl.swapPhase === 0 && rs.mode !== PawnMode.Knocked ? (viewed.loadout?.weapons[rs.slot] ?? null) : null;
       viewmodel.update(now, elapsed, inHand, rs, viewed.loadout?.swapTicks ?? 1, inHand ? heldGadget(viewed, rs) : null, !!viewed.loadout?.shield && rs.shieldAt === 1);
       viewmodel.render(renderer);
       const held = viewed.loadout?.weapons[rs.slot];
@@ -1314,7 +1333,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       // The body whose eyes we see through, in first person, faces the view itself (the mouse's, as the camera does), so
       // Fuze's shield doesn't trail the view by a tick when he turns (the review, M12); in free look the body keeps its
       // own facing (that's the point of it).
-      const fpYaw = pawn.id === eyesId && !outside && !freeLookFrom && !pawn.proxy && rs.mode !== PawnMode.Dead;
+      const fpYaw = pawn.id === eyesId && !outside && !freeLookFrom && !pawn.proxy && rs.mode !== PawnMode.Dead && rs.mode !== PawnMode.Knocked;
       v.update(sim.data, rs.mode === PawnMode.Dead ? corpse(rs) : fpYaw ? { ...rs, yaw: controls.yaw } : rs);
       // On a rope: drawn from the body's middle (its harness) up to where the rope is fixed (a swing takes the body
       // out from under it).

@@ -1,7 +1,7 @@
 // A simulation instance: one physics world + level + pawns + controllers. The Node server runs one per
 // match room; the browser runs one for prediction and for offline Practice / Bot Training (PLAN §5).
 import { DT } from "./core/constants.js";
-import { clamp, forwardXZ, rotateXZ, DEG, wrapAngle, type Vec3 } from "./core/math.js";
+import { clamp, forwardXZ, quatYawPitchRoll, rightXZ, rotateXZ, DEG, wrapAngle, type Vec3 } from "./core/math.js";
 import { loadGameData, type GameData } from "./data/load.js";
 import { deployAction, deployTicks, DeployKind, type DeployAction, type DeployRules } from "./destruction/deploy.js";
 import { buildLevel, type BuiltLevel } from "./level/builder.js";
@@ -17,7 +17,7 @@ import { pawnJammed, pointJammed } from "./gadgets/jammers.js";
 import { heartbeats, heartOf, sensorUp } from "./gadgets/sensor.js";
 import { mirrorOf, sightPast } from "./gadgets/mirror.js";
 import { barrierOf, crossesBarrier, smokeOnSegment, wireSlow } from "./gadgets/areas.js";
-import { arcBoxes, gadgetOnRay } from "./gadgets/hits.js";
+import { gadgetOnRay, partBoxes } from "./gadgets/hits.js";
 import { emptySlots, moveStock, placeSpotFor, slotGadget, stockSlots } from "./gadgets/hands.js";
 import { guData } from "./gadgets/gu.js";
 import { CAMERA_HALF_M } from "./intel/cameras.js";
@@ -25,6 +25,7 @@ import { canDisable, canPickUp, inSite, siteArea, type DefuserState, type SiteAr
 import { eyePose, poseHitboxes } from "./player/hitboxes.js";
 import { capsuleDims, stanceDims } from "./player/stance.js";
 import { Btn, GadgetAct, PawnKind, PawnMode, ropeIdle, Stance, type InputCmd, type PawnState } from "./player/types.js";
+import { placeShield } from "./player/shield.js";
 import { isDowned } from "./player/downed.js";
 import { defaultLoadoutPick, resolveLoadout, type LoadoutPick, type ResolvedLoadout } from "./weapons/loadout.js";
 import type { SimEvent } from "./weapons/step.js";
@@ -120,6 +121,8 @@ export class Sim {
       events: [],
       canRappel: (pawn) => pawn.team === sideTeam("attacker") || this.deployRules.rappel,
       slowOf: (pawn) => wireSlow(data, this.gadgets, pawn, pawn.kind === PawnKind.Drone),
+      // Skopós's shells through her own barriers (D-157): a shell waking stands up under its canopy.
+      passes: (pawn, c) => pawn.ownerId !== null && this.barrierOwner.get(c.handle) === pawn.ownerId,
       // Phase 8 M6: not while the body, or the device, is inside an enemy jammer.
       canDetonate: (pawn, gadget) => !pawnJammed(this, pawn) && detonatable(this.gadgets.list, pawn.ownerId ?? 0, kindOf(gadget), (g) => !pointJammed(this, g.team, g.pos)) !== undefined,
       droneJammed: (pawn) => pawnJammed(this, pawn),
@@ -429,6 +432,33 @@ export class Sim {
    * idle on the shell camera, `idle`); through a stall it just waits, and goes on if the key is still held when
    * inputs come back (it takes a fresh press to start, so a hold ended by a stall could never restart while held).
    */
+  /**
+   * Knock a body down (D-156: a shield's bash, Sledge's hammer on a raised shield; the server's, its player corrected):
+   * it turns to face what hit it (from `from`), lets go of whatever it was doing (a revive, a hold), stands for the fall
+   * and goes over onto its back, its player's input ignored until it's up again (player/movement.ts stepKnocked). Only
+   * a body on its feet: one on a rope or a ladder, vaulting, down or dead isn't. False when it wasn't.
+   */
+  knockDown(pawn: Pawn, from: Vec3): boolean {
+    const s = pawn.state;
+    if (pawn.kind !== PawnKind.Body || s.mode !== PawnMode.Walk) return false;
+    this.letGo(pawn, true);
+    const dx = from[0] - s.x;
+    const dz = from[2] - s.z;
+    if (Math.hypot(dx, dz) > 1e-6) s.yaw = Math.fround(Math.atan2(-dx, -dz));
+    s.pitch = 0;
+    s.mode = PawnMode.Knocked;
+    s.knockTicks = 0;
+    s.knockLie = 0;
+    s.stance = s.stanceFrom = Stance.Stand;
+    s.stanceT = 1;
+    s.lean = 0;
+    s.sprinting = false;
+    s.vx = 0;
+    s.vz = 0;
+    placeShield(pawn);
+    return true;
+  }
+
   private letGo(pawn: Pawn, idle: boolean) {
     if (pawn.state.reviveTarget !== 0) this.endRevive(pawn, this.pawns.get(pawn.state.reviveTarget), false);
     if (idle) {
@@ -827,7 +857,8 @@ export class Sim {
     const drones = this.dronesOf(c);
     const out = this.feedDrones(c);
     const body = this.pawns.get(c.possessedPawnId);
-    const downed = body !== undefined && body.kind === PawnKind.Body && isDowned(body.state);
+    // Down, or knocked down (D-156): back in the body, nothing to do with drones.
+    const downed = body !== undefined && body.kind === PawnKind.Body && (isDowned(body.state) || body.state.mode === PawnMode.Knocked);
     // An EMP on the body (DSEG, Phase 8 M3): no observation tools.
     const jammed = body !== undefined && body.kind === PawnKind.Body && body.state.jammed > 0;
     if (c.drone && (downed || jammed || !out.some((p) => p.id === c.drone))) c.drone = 0;
@@ -919,7 +950,8 @@ export class Sim {
     // A phone Dokkaebi blew up (Phase 8 M9): no cameras for the rest of the round.
     if (!this.camsOn(c)) c.cam = 0;
     const body = this.pawns.get(c.possessedPawnId);
-    const downed = body !== undefined && isDowned(body.state);
+    // Down, or knocked down (D-156: nothing of its player's input counts until it's up).
+    const downed = body !== undefined && (isDowned(body.state) || body.state.mode === PawnMode.Knocked);
     // An EMP on the body (DSEG, Phase 8 M3): no observation tools.
     const jammed = body !== undefined && body.kind === PawnKind.Body && body.state.jammed > 0;
     // A camera watched that's an entry (a Bulletproof Camera, an idle shell's) keeps the view as the list's numbers
@@ -1154,6 +1186,7 @@ export class Sim {
       if (want.get(id)?.key !== s.key) {
         for (const c of s.cs) {
           this.blastless.delete(c.handle);
+          this.barrierOwner.delete(c.handle);
           this.world.removeCollider(c, false);
         }
         this.solids.delete(id);
@@ -1161,16 +1194,19 @@ export class Sim {
       }
     for (const [id, w] of want) {
       if (this.solids.has(id)) continue;
-      // One box, or the segments of one that curves round its centre (Skopós's idle shell's barrier).
-      const boxes = arcBoxes(this.data, w.g) ?? [{ pos: w.g.pos, yaw: w.g.yaw, half: [w.size[0] / 2, w.size[1] / 2, w.size[2] / 2] as Vec3 }];
+      // One box, or the parts of one built of them (Skopós's idle shell's barrier, D-157), each turned and leaning back.
+      const boxes = partBoxes(this.data, w.g) ?? [{ pos: w.g.pos, yaw: w.g.yaw, pitch: 0, half: [w.size[0] / 2, w.size[1] / 2, w.size[2] / 2] as Vec3, glass: false }];
       const cs = boxes.map((b) => {
-        const half = b.yaw / 2;
+        const [qx, qy, qz, qw] = quatYawPitchRoll(b.yaw, b.pitch, 0);
         const desc = this.R.ColliderDesc.cuboid(b.half[0], b.half[1], b.half[2])
           .setTranslation(b.pos[0], b.pos[1], b.pos[2])
-          .setRotation({ x: 0, y: Math.sin(half), z: 0, w: Math.cos(half) })
+          .setRotation({ x: qx, y: qy, z: qz, w: qw })
           .setCollisionGroups(GADGET_GROUPS);
         const c = this.world.createCollider(desc);
-        if (w.g.kind === KIND_SHELL_SHIELD) this.blastless.add(c.handle);
+        if (w.g.kind === KIND_SHELL_SHIELD) {
+          this.blastless.add(c.handle);
+          this.barrierOwner.set(c.handle, w.g.owner);
+        }
         return c;
       });
       this.solids.set(id, { cs, key: w.key });
@@ -1181,6 +1217,8 @@ export class Sim {
 
   /** The colliders a blast goes through (Phase 8 M10: Skopós's idle shells' barriers, bulletproof but not blast-proof). */
   private readonly blastless = new Set<number>();
+  /** Skopós's barriers' colliders and whose they are (D-157): her own shells move through them. */
+  private readonly barrierOwner = new Map<number, number>();
 
   /** Whether a blast's line meets this collider: everything solid but an idle shell's barrier (gadgets/blast.ts). */
   readonly blastMeets = (c: Collider): boolean => !this.blastless.has(c.handle);
@@ -1300,17 +1338,16 @@ export class Sim {
 
   /**
    * Camera i's lens, looking `yaw`: just out of the front of its box (the origin for no such camera). An idle shell's
-   * (M10) is just in front of its barrier, at the crouched shell's eyes, whichever way it looks.
+   * (M10) is its barrier's `lensM` (D-157: at the crouched shell's eyes, just out past its glass), whichever way it looks.
    */
   camLens(i: number, yaw: number): [number, number, number] {
     const shell = this.shellCamAt(i);
     if (shell) {
       const d = this.data.gadgets.get("shell_shield")!;
-      const size = d.sizeM;
+      const [lx, ly, lz] = d.lensM ?? [0, this.data.movement.stance.crouch.eye, d.sizeM[2] / 2 + LENS_AHEAD_M];
       const [fx, fz] = forwardXZ(shell.yaw);
-      // (Its entry stands at the shell's centre, the barrier curving round it: the lens is out past its front.)
-      const out = (d.arc?.radiusM ?? 0) + size[2] / 2 + LENS_AHEAD_M;
-      return [shell.pos[0] + fx * out, shell.pos[1] - size[1] / 2 + this.data.movement.stance.crouch.eye, shell.pos[2] + fz * out];
+      const [rx, rz] = rightXZ(shell.yaw);
+      return [shell.pos[0] + rx * lx + fx * lz, shell.pos[1] - d.sizeM[1] / 2 + ly, shell.pos[2] + rz * lx + fz * lz];
     }
     const bp = this.bpCamAt(i);
     const at = bp ? bp.pos : (this.level.def.cameras[i]?.pos ?? [0, 0, 0]);
@@ -1604,7 +1641,7 @@ export class Sim {
       this.updateShells(c, input);
       this.updateDrones(c, input, heldBefore);
       this.updateCams(c, input, heldBefore, watchedBefore);
-      if (input && input.buttons & ~heldBefore & Btn.Ping) this.ping(c, input);
+      if (input && input.buttons & ~heldBefore & Btn.Ping && this.pawns.get(c.possessedPawnId)?.state.mode !== PawnMode.Knocked) this.ping(c, input);
       if (c.cam) {
         // Watching a camera (Phase 7): the body, if it stands, idles with its weapon parked.
         const body = this.pawns.get(c.possessedPawnId);
@@ -1655,7 +1692,8 @@ export class Sim {
         const held = pawn.state.prevButtons;
         let cmd = input;
         if (idleDriven.has(pawn.id)) this.letGo(pawn, true);
-        else {
+        // Knocked down (D-156): its player's keys do nothing until it's up (the step ignores the rest of the input).
+        else if (pawn.state.mode !== PawnMode.Knocked) {
           this.dropDefuser(pawn, input);
           const holding = pawn.state.deployKind;
           const reviving = this.updateRevive(pawn, input);

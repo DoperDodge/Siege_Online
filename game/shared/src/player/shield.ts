@@ -15,9 +15,12 @@ import type { ResolvedLoadout } from "../weapons/loadout.js";
 /** `PawnState.shieldAt`: where the plate is (sent to others in a remote record's flags, so a rewind puts it there). */
 export const ShieldAt = { None: 0, Front: 1, Back: 2 } as const;
 
-/** Where a body's shield's plate should be now (`shieldAt`): none (no shield, knocked aside, down or dead), front, back. */
+/**
+ * Where a body's shield's plate should be now (`shieldAt`): none (no shield, knocked aside, down or dead, or knocked to
+ * the ground: D-156, Fandom: a knockdown unequips it), front, back.
+ */
 function placeFor(lo: ResolvedLoadout | null, s: PawnState): number {
-  if (!lo?.shield || s.mode === PawnMode.Dead || isDowned(s) || s.guard > 0) return ShieldAt.None;
+  if (!lo?.shield || s.mode === PawnMode.Dead || s.mode === PawnMode.Knocked || isDowned(s) || s.guard > 0) return ShieldAt.None;
   if (s.hand !== Hand.Weapon || s.deployKind !== DeployKind.None || s.mode === PawnMode.Rappel || s.mode === PawnMode.Ladder || s.stance === Stance.Prone) return ShieldAt.Back;
   return ShieldAt.Front;
 }

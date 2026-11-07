@@ -79,6 +79,7 @@ Fuze uses the standard Ballistic Shield. Blitz, Montagne, Blackbeard and Clash h
 | Mechanic | Current value / rule | Source / status |
 |---|---|---|
 | Coverage | Head and torso from the front. Legs are exposed while standing (crouching reduces this). Shoulders, sides and back are exposed while it is held. Bulletproof glass viewport at eye level that **cracks** under fire and reduces visibility. | Fandom Ballistic Shield |
+| Look | Fuze's is green (the Recruits' were black): an all but flat plate about 0.58 × 1.1 m (measured off the renders, ours), its top corners cut, a dark rim, a viewport of glass across its upper part in a frame that stands out of the plate, bolts across the middle where the handle is mounted. | Fuze's operator renders (Fandom gallery: "Fuze armed with Ballistic Shield"); Fandom Ballistic Shield |
 | Shield durability | Indestructible to bullets (no shield HP). Only the viewport cracks. | Fandom. No official shield HP found. |
 | Stowed | Carried on the back when unequipped: protects the back, not the head | Fandom |
 | Weapon use | **No hip-fire** (removed in Y9S1). Pressing **aim** tilts the shield and fires the handgun, exposing the head. It can't shoot until the weapon points forward. **ADS time 0.5 s walking / 0.55 s sprinting.** | Official Y9S1 DN |
