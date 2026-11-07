@@ -24,6 +24,6 @@
     "preSetups": false,
     "attrition": "winnerLastOperator",
     "stats": "local",
-    "host": ["reinforcementScaling"]
+    "host": ["reinforcementScaling", "bots"]
   }
 }

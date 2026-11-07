@@ -55,6 +55,8 @@ try {
   const open = async (url, size = { width: 640, height: 360 }) => {
     const ctx = await browser.newContext({ viewport: size });
     const page = await ctx.newPage();
+    // A slow runner by hand (THROTTLE=8: the page's CPU 8 times slower), to reproduce what CI's sees.
+    if (process.env.THROTTLE) await (await ctx.newCDPSession(page)).send("Emulation.setCPUThrottlingRate", { rate: Number(process.env.THROTTLE) });
     page.on("pageerror", (e) => errors.push(String(e)));
     page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
     await page.goto(url);
@@ -173,15 +175,19 @@ try {
   await sleep(800);
   const shieldNow = () => ({ at: window.__lab.net.own.shieldAt, note: document.querySelector(".weapon-state")?.textContent ?? "", loaded: window.__lab.net.weapon.loaded });
   result.shield = { up: await off.evaluate(shieldNow) };
+  // Held for the page's own ticks, not the wall clock's: a slow runner's page draws a few frames a second, and a press
+  // shorter than a frame is never seen at all (CI run 42412334019; THROTTLE=8 by hand). Fire alone, 40 ticks: no shot.
+  const t0 = await off.evaluate(() => window.__lab.tick);
   await input(off, { buttons: Btn.Fire });
-  await sleep(500);
+  await until(off, (t) => window.__lab.tick >= t, t0 + 40);
   await input(off, null);
   result.shield.hip = (await off.evaluate(shieldNow)).loaded;
+  // Aimed: once the aim is done (the plate swung aside), Fire held until the pistol fires.
   await input(off, { buttons: Btn.Ads });
-  await sleep(900);
+  await until(off, () => window.__lab.net.own.adsQ >= 65535, null, 15000).catch(() => {});
   await off.screenshot({ path: shot("gadget-shield-aimed.png") });
   await input(off, { buttons: Btn.Ads | Btn.Fire });
-  await sleep(150);
+  await until(off, (n) => window.__lab.net.weapon.loaded < n, result.shield.hip, 10000).catch(() => {});
   await input(off, null);
   result.shield.aimed = (await off.evaluate(shieldNow)).loaded;
   await off.keyboard.press("Digit3");
@@ -359,10 +365,11 @@ try {
   await until(les, () => window.__lab.net.hand === 3);
   await sleep(1000);
   await input(les, { buttons: Btn.Fire, yaw: 0, pitch: -1.0 });
-  await until(les, () => window.__lab.net.table.some((g) => g.kind === "gu_mine"), null, 10000);
+  // (Waits long enough for a slow page's game time: THROTTLE=8 took over 10 s. The mine is read in the same look that
+  // finds it: a slow page can have it go off before a second look.)
+  result.guThrown = await until(les, () => window.__lab.net.table.find((g) => g.kind === "gu_mine") ?? null, null, 30000).then((h) => h.jsonValue());
   await input(les, { yaw: 0, pitch: -1.0 });
-  result.guThrown = (await state(les)).table.find((g) => g.kind === "gu_mine") ?? null;
-  await until(les, () => !window.__lab.net.table.some((g) => g.kind === "gu_mine"), null, 10000);
+  await until(les, () => !window.__lab.net.table.some((g) => g.kind === "gu_mine"), null, 30000);
   result.guLeft = await les.evaluate(() => window.__lab.net.gadgets2);
   await input(les, null);
   result.checks.guMineStingsTheAttackerDummy = result.guThrown !== null && result.guLeft === 0;
@@ -416,6 +423,10 @@ try {
   await a.evaluate(() => window.__lab.teleport(0, 0, 8, 0));
   await sleep(800);
   const corrections = await a.evaluate(() => window.__lab.net.corrections);
+  // The server's own count of mispredictions (a correction that isn't its doing: joins, teleports, a slow page's late
+  // inputs it had to idle through are; DECISIONS D-043), as the online lab test counts them.
+  const serverStats = async () => (await (await fetch(`${BASE}/stats`)).json()).totals;
+  const statsBefore = await serverStats();
   await a.keyboard.press("Digit3");
   await until(a, () => window.__lab.net.hand === 1);
   await sleep(1000);
@@ -423,12 +434,22 @@ try {
   await until(a, () => window.__lab.net.table.some((g) => g.kind === "frag"));
   await input(a, { pitch: -0.15 });
   await until(b, () => window.__lab.net.table.some((g) => g.kind === "frag"));
+  // Landed on both pages (each its own time: a slow one may not have it down yet when the other has).
   await until(b, () => window.__lab.net.table.some((g) => g.kind === "frag" && !(g.flags & 1)));
+  await until(a, () => window.__lab.net.table.some((g) => g.kind === "frag" && !(g.flags & 1)));
   const [ta, tb] = [await state(a), await state(b)];
-  result.online = { a: ta.table, b: tb.table, corrections: (await a.evaluate(() => window.__lab.net.corrections)) - corrections };
+  const statsAfter = await serverStats();
+  result.online = {
+    a: ta.table,
+    b: tb.table,
+    corrections: (await a.evaluate(() => window.__lab.net.corrections)) - corrections,
+    mispredicted: statsAfter.mismatchCorrections - statsBefore.mismatchCorrections,
+    forced: statsAfter.forcedCorrections - statsBefore.forcedCorrections,
+  };
   await b.screenshot({ path: shot("gadget-online-b.png") });
   result.checks.onlineBothTablesAgree = JSON.stringify(ta.table) === JSON.stringify(tb.table) && ta.table.length === 1;
-  result.checks.thrownWithoutCorrections = result.online.corrections === 0;
+  // A predicted the throw (CI run 42412334019 had 3 corrections, all forced by its slow page's late inputs).
+  result.checks.thrownWithoutMispredictions = result.online.mispredicted === 0;
   await input(a, null);
   // Its fuse runs out: both pages hear the blast, and the frag leaves the tables.
   const blast = (ing) => window.__lab.net.events.some((e) => e.kind === "blast") && window.__lab.net.table.every((g) => ing.includes(g.kind));
@@ -473,22 +494,30 @@ try {
       await input(a, { yaw: Math.PI, pitch: 0, buttons: MELEE });
       await sleep(200);
       await input(a, { yaw: Math.PI, pitch: 0 });
-      const hit = await b.waitForFunction(() => window.__lab.net.own?.mode === 7, null, { timeout: 3000, polling: 25 }).then(() => true, () => false);
+      const hit = await b.waitForFunction(() => window.__lab.net.own?.mode === 7, null, { timeout: 6000, polling: 25 }).then(() => true, () => false);
       if (hit) return true;
     }
     return false;
   })();
   // Down: its player holds forward (it mustn't walk off while it lies there).
   await input(b, { forward: 1, yaw: Math.PI / 2, pitch: 0 });
-  const flat = bashed && (await b.waitForFunction(() => window.__lab.net.own?.mode === 7 && window.__lab.net.own.knockLie > 0.95, null, { timeout: 10000, polling: 25 }).then(() => true, () => false));
+  const flat = bashed && (await b.waitForFunction(() => window.__lab.net.own?.mode === 7 && window.__lab.net.own.knockLie > 0.95, null, { timeout: 30000, polling: 25 }).then(() => true, () => false));
+  // Where it lies, and where it still lies 20 of the page's ticks later (it's down 0.6 s), holding forward all the while:
+  // read while it's still down (after it's up, a slow page has walked it on before anything here can read it), and the
+  // screenshot only after (one takes a second or two on CI: run 42414523946 found it up by then).
+  const lying = flat ? await b.evaluate(() => ({ at: [window.__lab.net.own.x, window.__lab.net.own.z], tick: window.__lab.tick })) : null;
+  const stillAt = lying
+    ? await b
+        .waitForFunction((t) => window.__lab.tick >= t && (window.__lab.net.own?.mode === 7 ? [window.__lab.net.own.x, window.__lab.net.own.z] : "up"), lying.tick + 20, { timeout: 30000, polling: 25 })
+        .then((h) => h.jsonValue(), () => null)
+    : null;
   await b.screenshot({ path: shot("gadget-knocked-down.png") });
-  const lyingAt = await b.evaluate(() => [window.__lab.net.own.x, window.__lab.net.own.z]);
-  const up = flat && (await b.waitForFunction(() => window.__lab.net.own?.mode === 0, null, { timeout: 10000, polling: 25 }).then(() => true, () => false));
-  const upAt = await b.evaluate(() => [window.__lab.net.own.x, window.__lab.net.own.z]);
+  const up = flat && (await b.waitForFunction(() => window.__lab.net.own?.mode === 0, null, { timeout: 30000, polling: 25 }).then(() => true, () => false));
   await input(b, null);
-  result.knockdown = { bashed, flat, up, lyingAt, upAt };
+  const lyingAt = lying?.at ?? null;
+  result.knockdown = { bashed, flat, up, lyingAt, stillAt };
   // (Holding forward from when it went down: it didn't walk off while it lay there.)
-  result.checks.bashKnocksTheOtherDown = bashed && flat && up && Math.hypot(upAt[0] - lyingAt[0], upAt[1] - lyingAt[1]) < 0.05;
+  result.checks.bashKnocksTheOtherDown = bashed && flat && up && Array.isArray(stillAt) && Math.hypot(stillAt[0] - lyingAt[0], stillAt[1] - lyingAt[1]) < 0.05;
 
   result.errors = errors;
   ok = Object.values(result.checks).every(Boolean) && errors.length === 0;

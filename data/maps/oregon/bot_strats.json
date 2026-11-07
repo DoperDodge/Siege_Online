@@ -1,0 +1,189 @@
+{
+  "_doc": "Bots' plans for Oregon's four sites (PLAN §15.4; game/shared/src/bots/DESIGN.md §6), from research/oregon/common_setups.md §1–§5 with its ids turned into the level's: soft walls SW-*, hatches H1–H6, rooms as level.json names them. Nearly all of it is the research's DER (its own derivation from the blueprints and standard Siege practice, not observed common play): `ev` says so on each site; where an entry differs from the research, `note` says why. Defense: `reinforce` is spent top-down from the team's pool (each wall from the room named, its steel facing the site; a hatch from above), `holes` are made from the room named (rotation holes: the research's leave_soft walls), `anchors` are the rooms anchors hold, `roam` the roamers' areas. Attack: per spawn group the rooms the way in goes through, the walls and hatches to breach (from the room named, by whom), where to plant (the site's rooms), where to hold after the plant and the flanks to watch. Barricades: every empty door frame between a site room and another room is barricaded in prep (the research's barricade lists name exactly those doors), so they aren't listed. `gadgets` places each operator's devices (used from M7).",
+  "_season": "Y11S3",
+  "_unverified": ["sites"],
+  "sites": {
+    "SITE_LAUNDRY": {
+      "research": "common_setups §1 (B Laundry / B Supply)",
+      "ev": "DER",
+      "defense": {
+        "reinforce": [
+          { "panel": "SW-B-01", "from": "B_LAUNDRY", "why": "Freezer hard breach and sightline" },
+          { "panel": "SW-B-02", "from": "B_SUPPLY", "why": "Bunker hard breach" },
+          { "panel": "H3", "why": "Lobby hatch drops by the Laundry door" },
+          { "panel": "H1", "why": "Meeting Hall hatch drops into Electric, next to Supply" },
+          { "panel": "SW-B-07", "from": "B_SUPPLY", "why": "Boiler side" },
+          { "panel": "SW-B-03", "from": "B_ELECTRIC", "why": "Electric sealed from the Bunker" },
+          { "panel": "SW-B-04", "from": "B_ELECTRIC", "why": "Electric sealed from Boiler" },
+          { "panel": "H2", "why": "only if Freezer is held" }
+        ],
+        "holes": [
+          { "panel": "SW-B-05", "size": "vault", "from": "B_LAUNDRY", "why": "rotation and crossfire Laundry–Supply Closet" },
+          { "panel": "SW-B-06", "size": "crouch", "from": "B_LAUNDRY", "why": "rotation Laundry–Supply" }
+        ],
+        "anchors": ["B_LAUNDRY", "B_SUPPLY"],
+        "roam": ["1F_SECURITY", "1F_LOBBY", "1F_TOWER", "B_FREEZER"],
+        "gadgets": {
+          "mira": [{ "panel": "SW-B-01", "from": "B_LAUNDRY" }, { "panel": "SW-B-02", "from": "B_SUPPLY" }],
+          "mute": [{ "near": "SW-B-01", "room": "B_LAUNDRY" }, { "near": "SW-B-02", "room": "B_SUPPLY" }, { "near": "H3", "room": "B_LAUNDRY_STORAGE" }, { "room": "B_CORRIDOR" }],
+          "lesion": [{ "room": "B_FREEZER_STAIRS" }, { "room": "B_FREEZER" }, { "room": "B_BOILER" }, { "room": "B_BUNKER_ENTRANCE" }, { "room": "B_LAUNDRY_STORAGE" }, { "room": "B_LAUNDRY_STAIRS" }],
+          "sentry": [{ "gadget": "barbed_wire", "room": "B_FREEZER_STAIRS" }, { "gadget": "barbed_wire", "room": "B_LAUNDRY_STAIRS" }, { "gadget": "deployable_shield", "room": "B_LAUNDRY" }],
+          "skopos": [{ "room": "B_SUPPLY" }, { "room": "B_LAUNDRY" }],
+          "pulse": [{ "room": "1F_SECURITY" }, { "room": "1F_LOBBY" }]
+        }
+      },
+      "attack": {
+        "spawns": {
+          "C_CONSTRUCTION": { "via": ["B_BUNKER_ENTRANCE"], "alt": [["1F_TOWER", "B_TOWER_STAIRS", "B_BOILER"], ["1F_MEETING_HALL"]] },
+          "A_JUNKYARD": { "via": ["1F_SECURITY_CORRIDOR", "B_FREEZER_STAIRS", "B_FREEZER"], "alt": [["1F_SECURITY"]] },
+          "B_STREET": { "via": ["1F_LOBBY", "B_LAUNDRY_STAIRS"], "alt": [["1F_LOBBY"]] }
+        },
+        "hardBreach": [
+          { "panel": "SW-B-01", "from": "B_FREEZER", "ops": ["thermite", "striker", "fuze"] },
+          { "panel": "SW-B-02", "from": "B_BUNKER_ENTRANCE", "ops": ["thermite", "striker", "fuze"] }
+        ],
+        "softBreach": [
+          { "panel": "H3", "from": "1F_LOBBY", "ops": ["sledge", "fuze"] },
+          { "panel": "H1", "from": "1F_MEETING_HALL", "ops": ["sledge"] },
+          { "panel": "SW-B-07", "from": "B_BOILER", "ops": ["sledge"] }
+        ],
+        "plant": ["B_LAUNDRY", "B_SUPPLY"],
+        "postPlant": ["B_FREEZER", "B_BUNKER_ENTRANCE", "B_LAUNDRY_STORAGE"],
+        "flank": ["1F_WHITE_STAIRS", "1F_LOBBY", "1F_TOWER"]
+      }
+    },
+    "SITE_DINING": {
+      "research": "common_setups §2 (1F Kitchen / 1F Dining Hall)",
+      "ev": "DER",
+      "defense": {
+        "reinforce": [
+          { "panel": "SW-1F-08", "from": "1F_KITCHEN", "why": "Meeting Hall breach into Kitchen" },
+          { "panel": "SW-1F-01", "from": "1F_DINING", "why": "Small Tower breach into Dining" },
+          { "panel": "SW-1F-06", "from": "1F_KITCHEN", "why": "Security side" },
+          { "panel": "SW-1F-07", "from": "1F_KITCHEN", "why": "Security side" },
+          { "panel": "H4", "why": "Kids' hatch into Kitchen" },
+          { "panel": "SW-1F-03", "from": "1F_DINING", "why": "Showers side" }
+        ],
+        "holes": [{ "panel": "SW-1F-05", "size": "vault", "from": "1F_DINING", "why": "rotation Kitchen–Dining" }],
+        "anchors": ["1F_KITCHEN", "1F_DINING"],
+        "roam": ["2F_KIDS_DORMS", "2F_SMALL_TOWER", "1F_KITCHEN_CORRIDOR", "1F_SHOWERS"],
+        "gadgets": {
+          "mira": [{ "panel": "SW-1F-08", "from": "1F_KITCHEN" }, { "panel": "SW-1F-01", "from": "1F_DINING" }],
+          "mute": [{ "near": "SW-1F-01", "room": "1F_DINING" }, { "near": "SW-1F-08", "room": "1F_KITCHEN" }, { "near": "SW-1F-06", "room": "1F_KITCHEN" }, { "room": "1F_KITCHEN_CORRIDOR" }],
+          "lesion": [{ "room": "1F_KITCHEN_CORRIDOR" }, { "room": "1F_SMALL_TOWER" }, { "room": "1F_SHOWER_CORRIDOR" }, { "room": "1F_SECURITY_CORRIDOR" }],
+          "sentry": [{ "gadget": "barbed_wire", "room": "1F_KITCHEN_CORRIDOR" }, { "gadget": "deployable_shield", "room": "1F_DINING" }],
+          "skopos": [{ "room": "1F_KITCHEN" }, { "room": "1F_DINING" }],
+          "pulse": [{ "room": "2F_KIDS_DORMS" }, { "room": "2F_DORMS_MAIN_HALL" }]
+        }
+      },
+      "attack": {
+        "spawns": {
+          "A_JUNKYARD": { "via": ["1F_SMALL_TOWER"], "alt": [["2F_SMALL_TOWER"]] },
+          "B_STREET": { "via": ["1F_SECURITY_CORRIDOR", "1F_SECURITY"], "alt": [["1F_SHOWER_CORRIDOR", "1F_SHOWERS"]] },
+          "C_CONSTRUCTION": { "via": ["1F_TOWER", "1F_KITCHEN_CORRIDOR"], "alt": [["1F_MEETING_HALL"]] }
+        },
+        "hardBreach": [
+          { "panel": "SW-1F-01", "from": "1F_SMALL_TOWER", "ops": ["thermite", "striker", "fuze"] },
+          { "panel": "SW-1F-06", "from": "1F_SECURITY", "ops": ["striker", "fuze", "thermite"] },
+          { "panel": "SW-1F-08", "from": "1F_MEETING_HALL", "ops": ["thermite"] }
+        ],
+        "softBreach": [
+          { "panel": "H4", "from": "2F_KIDS_DORMS", "ops": ["sledge", "fuze"] },
+          { "panel": "SW-1F-03", "from": "1F_SHOWERS", "ops": ["sledge"] }
+        ],
+        "plant": ["1F_KITCHEN", "1F_DINING"],
+        "postPlant": ["2F_KIDS_DORMS", "1F_SMALL_TOWER", "1F_KITCHEN_CORRIDOR"],
+        "flank": ["1F_WHITE_STAIRS", "1F_KITCHEN_CORRIDOR", "2F_SMALL_TOWER"]
+      }
+    },
+    "SITE_MEETING": {
+      "research": "common_setups §3 (1F Meeting Hall / 1F Kitchen)",
+      "ev": "DER",
+      "note": "The research's Rear Stage (Big Tower 1F) is the level's 1F_TOWER; its wall into Meeting is SW-1F-09, reinforced from 1F_STAGE (the level's pre-setup, D-128).",
+      "defense": {
+        "reinforce": [
+          { "panel": "SW-1F-09", "from": "1F_STAGE", "why": "Big Tower hard breach into Meeting" },
+          { "panel": "H5", "why": "Attic hatch into Meeting" },
+          { "panel": "SW-1F-06", "from": "1F_KITCHEN", "why": "Security push on Kitchen" },
+          { "panel": "SW-1F-07", "from": "1F_KITCHEN", "why": "same" },
+          { "panel": "SW-1F-11", "from": "1F_MEETING_HALL", "why": "Street attackers via the Lobby" },
+          { "panel": "SW-1F-10", "from": "1F_MEETING_HALL", "why": "same, via White Hall" },
+          { "panel": "H4", "why": "Kids' hatch into Kitchen" }
+        ],
+        "holes": [{ "panel": "SW-1F-08", "size": "vault", "from": "1F_KITCHEN", "why": "rotation and crossfire Meeting–Kitchen" }],
+        "anchors": ["1F_MEETING_HALL", "1F_KITCHEN"],
+        "roam": ["1F_TOWER", "2F_ATTIC", "2F_KIDS_DORMS", "1F_LOBBY", "1F_DINING"],
+        "gadgets": {
+          "mira": [{ "panel": "SW-1F-09", "from": "1F_STAGE" }, { "panel": "SW-1F-06", "from": "1F_KITCHEN" }],
+          "mute": [{ "near": "SW-1F-09", "room": "1F_STAGE" }, { "near": "SW-1F-06", "room": "1F_KITCHEN" }, { "near": "SW-1F-11", "room": "1F_MEETING_HALL" }, { "room": "1F_KITCHEN_CORRIDOR" }],
+          "lesion": [{ "room": "1F_KITCHEN_CORRIDOR" }, { "room": "1F_SPLIT" }, { "room": "1F_TOWER_STAIRS" }, { "room": "2F_ATTIC" }],
+          "sentry": [{ "gadget": "barbed_wire", "room": "1F_KITCHEN_CORRIDOR" }, { "gadget": "deployable_shield", "room": "1F_MEETING_HALL" }],
+          "skopos": [{ "room": "1F_MEETING_HALL" }, { "room": "1F_KITCHEN" }],
+          "pulse": [{ "room": "2F_ATTIC" }, { "room": "2F_KIDS_DORMS" }]
+        }
+      },
+      "attack": {
+        "spawns": {
+          "C_CONSTRUCTION": { "via": ["1F_TOWER"], "alt": [["1F_KITCHEN_CORRIDOR"]] },
+          "B_STREET": { "via": ["1F_LOBBY", "1F_SPLIT"], "alt": [["1F_SECURITY_CORRIDOR", "1F_SECURITY"]] },
+          "A_JUNKYARD": { "via": ["1F_SMALL_TOWER", "1F_DINING"], "alt": [["1F_SECURITY"]] }
+        },
+        "hardBreach": [
+          { "panel": "SW-1F-09", "from": "1F_TOWER", "ops": ["thermite", "striker", "fuze"] },
+          { "panel": "SW-1F-06", "from": "1F_SECURITY", "ops": ["striker", "fuze", "thermite"] },
+          { "panel": "H5", "from": "2F_ATTIC", "ops": ["thermite", "fuze"] }
+        ],
+        "softBreach": [
+          { "panel": "H5", "from": "2F_ATTIC", "ops": ["sledge", "fuze"] },
+          { "panel": "H4", "from": "2F_KIDS_DORMS", "ops": ["sledge"] }
+        ],
+        "plant": ["1F_MEETING_HALL", "1F_KITCHEN"],
+        "postPlant": ["2F_ATTIC", "1F_TOWER", "1F_KITCHEN_CORRIDOR"],
+        "flank": ["1F_TOWER_STAIRS", "1F_WHITE_STAIRS", "1F_LOBBY"]
+      }
+    },
+    "SITE_DORMS": {
+      "research": "common_setups §4 (2F Kids' Dorms / 2F Dorms Main Hall)",
+      "ev": "DER",
+      "note": "The research's Attic wall of the Kids' room is SW-2F-02 (the level's Low Attic); Walk-In–Game Room is SW-2F-04: both the level's pre-setup (D-128).",
+      "defense": {
+        "reinforce": [
+          { "panel": "SW-2F-02", "from": "2F_KIDS_DORMS", "why": "Attic hard breach into Kids'" },
+          { "panel": "SW-2F-04", "from": "2F_GAME_ROOM", "why": "Walk-In and Master attackers" },
+          { "panel": "H4", "why": "Kitchen attackers opening the site's floor hatch" },
+          { "panel": "SW-2F-05", "from": "2F_TROPHY", "why": "Attic–Trophy flank" },
+          { "panel": "SW-2F-08", "from": "2F_ATTIC", "why": "Big Tower push into the Attic (with pool to spare)" }
+        ],
+        "holes": [{ "panel": "SW-2F-01", "size": "vault", "from": "2F_DORMS_MAIN_HALL", "why": "rotation Kids'–Dorm" }],
+        "anchors": ["2F_KIDS_DORMS", "2F_DORMS_MAIN_HALL"],
+        "roam": ["2F_TOWER", "2F_SMALL_TOWER", "2F_MASTER_BEDROOM", "1F_KITCHEN"],
+        "gadgets": {
+          "mira": [{ "panel": "SW-2F-02", "from": "2F_KIDS_DORMS" }, { "panel": "SW-2F-04", "from": "2F_GAME_ROOM" }],
+          "mute": [{ "near": "SW-2F-02", "room": "2F_KIDS_DORMS" }, { "near": "SW-2F-04", "room": "2F_GAME_ROOM" }, { "room": "2F_DORMS_MAIN_HALL" }, { "room": "2F_WHITE_STAIRS" }],
+          "lesion": [{ "room": "2F_WHITE_STAIRS" }, { "room": "2F_LOW_ATTIC" }, { "room": "2F_TROPHY" }, { "room": "2F_ATTIC" }],
+          "sentry": [{ "gadget": "barbed_wire", "room": "2F_WHITE_STAIRS" }, { "gadget": "deployable_shield", "room": "2F_DORMS_MAIN_HALL" }],
+          "skopos": [{ "room": "2F_KIDS_DORMS" }, { "room": "2F_DORMS_MAIN_HALL" }],
+          "pulse": [{ "room": "1F_KITCHEN" }, { "room": "2F_TOWER" }]
+        }
+      },
+      "attack": {
+        "spawns": {
+          "C_CONSTRUCTION": { "via": ["1F_TOWER", "2F_TOWER", "2F_ATTIC", "2F_LOW_ATTIC"], "alt": [["2F_ATTIC", "2F_TROPHY"]] },
+          "A_JUNKYARD": { "via": ["1F_SMALL_TOWER", "2F_SMALL_TOWER"], "alt": [["1F_DINING"]] },
+          "B_STREET": { "via": ["1F_LOBBY", "2F_ARMORY_CORRIDOR", "2F_MASTER_BEDROOM", "2F_WALK_IN"], "alt": [["1F_SECURITY_CORRIDOR", "2F_WHITE_STAIRS"]] }
+        },
+        "hardBreach": [
+          { "panel": "SW-2F-02", "from": "2F_LOW_ATTIC", "ops": ["thermite", "striker", "fuze"] },
+          { "panel": "SW-2F-04", "from": "2F_WALK_IN", "ops": ["striker", "fuze", "thermite"] }
+        ],
+        "softBreach": [
+          { "panel": "SW-2F-05", "from": "2F_LOW_ATTIC", "ops": ["sledge"] },
+          { "panel": "SW-2F-08", "from": "2F_TOWER", "ops": ["sledge"] }
+        ],
+        "plant": ["2F_KIDS_DORMS", "2F_DORMS_MAIN_HALL"],
+        "postPlant": ["2F_LOW_ATTIC", "2F_WALK_IN", "2F_GAME_ROOM"],
+        "flank": ["2F_WHITE_STAIRS", "2F_ARMORY_CORRIDOR", "2F_SMALL_TOWER"]
+      }
+    }
+  }
+}

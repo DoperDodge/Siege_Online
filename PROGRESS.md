@@ -5,7 +5,262 @@ known issues, and what's next.
 
 ---
 
-## Your requests after Phase 8 · in review (PR #10; D-155 to D-157)
+## Phase 9 — Bot Training · ✅ complete (PR #11, squash-merged into `main`)
+
+The plan: game/shared/src/bots/DESIGN.md (D-158). Bots are players without a connection: the room asks each bot's
+brain for its keys and mouse every tick and plays them exactly as a player's, so they move, shoot, reinforce and
+breach by the same rules, and they know only what their team could know (what they see, hear and are told).
+
+| M | What | State |
+|---|---|---|
+| M1 | Bots in rooms, the Bot Training format, lobby controls, backfill, offline matches | ✅ |
+| M2 | Navigation on Oregon (grid, vaults, ladders, drops), rebuilt as walls and floors open | ✅ |
+| M3 | Sight, hearing (placeholder sounds until Phase 11), team intel; aim and gunfights; difficulty levels | ✅ |
+| M4 | Defending bots: reinforce, holes, barricades, gadgets, anchors, roamers, rotations, retakes | ✅ (gadgets with M7) |
+| M5 | Attacking bots: drones in prep, routes, breaches, vertical play, rappel, the plant | ✅ (breaches and vertical with M7; rappel not yet) |
+| M6 | The team planner and every site's plan (data/maps/oregon/bot_strats.json); orders from you on the comm wheel | ✅ |
+| M7 | All twelve operators' abilities, the generic gadgets, Fuze's shield | ✅ |
+| M8 | Bot Training setup and the drills | ✅ |
+| M9 | Training feedback after each round: report, killcam, stats | ✅ |
+| M10 | Soak tests, the tick budget, browser test, review, report | ✅ (D-168) |
+
+### M1: bots in rooms (D-159)
+- **Play page → Bot Training → "Play vs bots (offline)"**: a match on Oregon in your browser, no server. Bots fill
+  every empty place on both teams (BOT and a callsign, their difficulty beside the name).
+- **The lobby's Bot Training settings** (you're the host): your side (attack and defense alternating every round, the
+  default; attack only; defense only), each team's size (1–5, uneven allowed: people and bots together), each team's
+  difficulty (Recruit, Normal, Hard, Elite), the site (the defenders' vote, or a fixed one), and how bots pick
+  operators. ✕ on a bot removes it (one fewer on that team). Everything else (rounds, timers…) is Custom's.
+- **Online**: create a Bot Training match on the Play page and send the code; each friend who joins takes a bot's
+  place. In Quick Match, Unranked and 1v1 the host can tick "Fill empty slots with bots" (Ranked can't).
+- **What the bots do so far**: the planning screen like a player (an operator: on your team once you've picked, or
+  5 s before the timer ends; the defenders' bots agree on a site; the attackers' choose spawns), and in the round
+  they stand where they spawn and look about. They can't move or fight yet (M2, M3), so rounds end on time.
+- How it works: a bot is a room member with no connection; each tick its brain sends the same input a player's
+  client would, and the room plays it by the same rules (game/shared/src/bots/DESIGN.md §1).
+- Tests: game/shared/test/botMatch.test.ts (the lobby filling and shrinking, people taking bots' places, a whole
+  match with bots, the fixed site, backfill and Ranked refusing bots), the lobby messages' wire test.
+- Known: a person can't join a match under way when bots have every place (in the lobby they can).
+
+### M2: navigation (D-160)
+- **Bots walk Oregon by their own keys**: stairs, the 2F Tower ladder to the Cat Walk, vaults, drops through holes,
+  and barricaded doors and windows, which they knife down (a different part of the barricade each swing) before
+  walking or vaulting through. In a Bot Training match they now walk about: defenders round their site, attackers
+  into the building (toward the site once they know it). They still don't see or shoot anyone (M3).
+- **They follow the walls as they change**: break a hatch, cut a hole in a wall or knock a barricade down and the
+  bots' map of where they can go is rebuilt there within a tick or two; they use the new way at once.
+- **See it: the Oregon page, F6** draws the bots' map round you: a dot wherever a body can stand (green; yellow where
+  only crouched; blue on the stairs' ramps) and lines for vaults (orange), the ladder (purple), drops (red) and
+  barricades to break (brown). It takes about a second to appear the first time.
+- How it works: a grid of 25 cm columns read from the same collision boxes bodies move against, cut into 4 m chunks;
+  routes are found over the chunks' regions, then the next few metres are worked out step by step as the bot walks
+  (bots/DESIGN.md §3).
+- Tests: game/shared/test/botNav.test.ts (every room reachable; the outside reaches the inside through barricades; a
+  bot walking from the basement to 2F, up the ladder, out through a barricaded window, down an opened hatch, and
+  through a new hole in a wall).
+- Known: rebuilding the map where a wall changed costs the room 6–15 ms that tick (a few times a round); it will be
+  spread over several ticks in M10.
+
+### M3: senses and gunfights (D-161)
+- **Bots fight now.** In a Bot Training match they notice you, aim, shoot, finish you when you're down, hold the
+  angle you just left, go and look where they heard you, revive their teammates, and reload when it's quiet. A full
+  bot-against-bot match plays out with rounds won by eliminations.
+- **They know only what their team could**: what they see (their view cone; walls and soft walls block it, holes
+  don't; smoke and deployable shields block it; the more of you shows, the nearer and more central you are and the
+  more you move, the sooner they notice), what they hear (your gunshots, your footsteps by how fast you move: sprinting
+  carries about 20 m, walking 10, crouch-walking 4, half that through a floor; these sounds are placeholders until the
+  audio phase), being hit (they turn to where it came from), their team's pings and red marks, and what their bot
+  teammates saw, passed on a moment later (voice comms).
+- **Difficulty** (data/bots/difficulty.json, set per team in the lobby): Recruit, Normal, Hard, Elite differ in how
+  fast they notice and react, aim error and how fast it settles, how they follow a moving target, how fast they turn,
+  how much recoil they pull down, how often they go for the head, how much they strafe and crouch in a fight, and how
+  much they trust their ears and share with teammates. An Elite bot beats a Recruit in most duels.
+- Try it: Play → Bot Training → Play vs bots (offline). Set Orange's bots to Recruit for an easier time.
+- Tests: game/shared/test/botFight.test.ts (nobody known through a wall until they sprint; noticed, shot and finished in
+  the open; a teammate told after the comms delay; Elite against Recruit duels).
+- Known: they don't play the objective yet (reinforce, plant, defuse: M4, M5), and use no gadgets (M7).
+
+### M4: defending bots, and every site's plan (D-162)
+- **Defending bots set the site up in prep, the way the plan for that site says** (data/maps/oregon/bot_strats.json,
+  made from the Oregon research's four site write-ups): they reinforce the plan's walls and hatches in order while the
+  team's reinforcements last (a hatch from the room above), knife the rotation holes through the walls the plan
+  leaves soft, and in the last seconds of prep barricade the doors between the site's rooms and the rest, from inside.
+- **Then they take roles**: three anchors hold spots in the site's rooms (each spot chosen from where it sees the
+  room's doors, soft walls and hatches from a fair distance), two roamers walk the rooms the plan gives them and come
+  back to the site for the last minute. Anchors don't leave their spot to chase a far-off sound. Roamers do the jobs
+  outside the site (a hatch from the floor above), so anchors aren't shut outside when the doors are barricaded.
+- **After a plant** they all go for the defuser, and the first there disables it.
+- Try it: Bot Training offline, set your side to **Attack only**, and drone or walk into the site (the bots only
+  defend for now; attacking comes in M5). The Laundry's Freezer and Bunker walls go steel, the doors are barricaded,
+  the Laundry–Supply walls get holes.
+- Tests: game/shared/test/botDefense.test.ts (prep at each of the four sites: the plan's first walls reinforced, doors
+  barricaded, a rotation hole, three anchors in the site at their spots; a plant in the Kitchen disabled by them),
+  botStrats.test.ts (every room, wall, hatch and spawn the plans name is the level's).
+- Known: no gadgets yet (M7); the plans are the research's derivations, not observed play (marked DER).
+
+### M5: attacking bots (D-163)
+- **In prep the attacking bots drone**: each drives its drone from its spawn toward a bomb of one of the four sites
+  (spread over them; all to the defended one once it's found), under door barricades and down drops, and pings any
+  defender it sees for its team.
+- **In action they come in** by the plan's way in for their spawn (half the team its main route, the rest its other
+  routes), breaking barricades in doors and windows on the way, fighting what they meet. The defuser's carrier plants
+  as soon as it's in one of the site's rooms (clear of the edges); if it dies, the nearest picks the defuser up. After
+  the plant they hold spots round it that see it.
+- **Whole rounds play bot against bot**: wins by elimination, on time, and by plants (tests and full matches).
+- Try it: Bot Training offline, **Defense only**, and defend the site against five attackers.
+- Tests: game/shared/test/botAttack.test.ts (they find the site and beat a lone defender; with nobody in the way the
+  carrier plants and the fuse runs out).
+- Known: attackers don't breach walls or play vertically yet (that needs their gadgets: M7), and don't rappel.
+
+### M7: every operator's ability and the gadgets (D-164)
+- **Bots use their gadgets the way you do**: the gadget's key, the equip time, the view on the spot, Fire held to
+  place it (Ads to lob, Fire to throw, Fire held to swing), and a remote charge set off from cover with its detonator.
+  Throws are aimed along the arc that lands them where the bot means (speed, lift, gravity).
+- **Defenders set up in prep** where the site's plan puts each operator's device, after the plan's first two walls
+  have steel: **Mute** his jammers by the reinforced walls and hatches and in the corridor; **Mira** her mirrors in
+  the plan's walls from the site's side, once those walls are reinforced; **Lesion** Gu mines in the stairs and rooms
+  round the site (and in action, one at a way into his room whenever one comes back); **Sentry** wire on the stairs and
+  his shield in the site; **Skopós** walks her other shell into the plan's other room and comes back to the first;
+  impact grenades blow the plan's rotation holes. Everyone's spare gadget (wire, a shield, a camera, an observation
+  blocker, an alarm) goes at the site's doors. In action **Pulse** roams the rooms above or below the site (the plan's)
+  and puts his sensor up every so often: a heartbeat he finds is known to him and his team and pinged for everyone.
+  **Skopós** swaps shells when hers is hurt, or when the attackers are heard by the other one and far from this one.
+  A defender with a **Nitro Cell** throws it where an attacker was just heard close by and sets it off when one comes by.
+- **Attackers breach on their way in**, each breach of the plan to the first of its operators on the team:
+  **Thermite** his Exothermic Charge on the reinforced wall, set off from cover; **Striker** an EMP at the wall first,
+  then her Hard Breach Charge, waited out from cover; **Fuze** a Cluster Charge on the hatch over the site (or a Hard
+  Breach Charge on a wall); **Sledge** opens the hatch from above with his hammer (two blows low and high on a soft
+  wall); anyone with breach charges (**Dokkaebi**) takes a soft breach no one else has. **Brava** throws a Kludge
+  ahead of the team toward the breach's far side and hacks the jammers and cameras it sees, then goes back to her body.
+  **Dokkaebi** sends her payload to a spotted defender. A **frag** goes into the site's room (or down the hatch just
+  opened) before going in; a **smoke** goes on a teammate planting; a **claymore** goes down behind a bot once it's in
+  the site or holding a spot after the plant.
+- **Fuze sometimes takes his Ballistic Shield** (a quarter of the time, data/bots/picks.json) and fights with it.
+- What each bot carries is in data/bots/picks.json (the research's roles: Striker and Sentry's default kits, and so
+  on), which also holds Bot Training's "counter my pick" table for M8.
+- Try it: Bot Training offline. Defend, and watch the walls the bots breach; attack, and drone the site in prep to see
+  their setup (F6 on the Oregon page still shows their map).
+- Tests: game/shared/test/botGadgets.test.ts (the Laundry's defenders set up in prep; the Laundry's attackers breach
+  with Thermite, Striker, Fuze, Dokkaebi and Brava, and Dokkaebi calls a spotted defender; Sledge opens the hatch;
+  Pulse scans and pings, Skopós swaps when hurt; a Nitro Cell thrown at a heard attacker and set off by him, Lesion's
+  mines in action; Sledge's frag, Thermite's smoke on a planter, Brava's claymore; a shield Fuze wins his duels).
+- Known: bots don't rappel or use the drones' cameras for intel beyond pinging; Skopós doesn't fight from her shell's
+  barrier; Brava's Kludge only hacks (no drone scans); Pulse's scans are on a timer, not on sounds.
+
+### M6: orders to your bot teammates (D-165)
+- **The comm wheel (hold the ping key) has five orders now**: **Go here** (the nearest bot teammate goes to where you
+  last pinged and holds there, looking on past it), **Hold here** (holds that spot, longer), **Breach this** (ping a
+  wall or hatch first: the nearest teammate that can open it does, with whatever it has: Thermite's charge, Striker's
+  EMP and charge, Sledge's hammer, a breach or Cluster Charge, an impact grenade, or the knife on a soft wall or a
+  barricade), **Follow me** (one keeps near you), **Regroup** (all of them come to you and stay with you a while).
+- **Some old callouts mean something to bots too**: **Help** (the nearest comes to you), **Push** (attacking bots
+  drop their breaches and other jobs and go in now), **Rotate** (defending roamers come back to the site).
+- An order lasts until it's done, a fight takes over, you give another, or its time runs out (25–75 s); then the bot
+  goes back to the team's plan. With no ping in the last 30 s, "here" is where you stand.
+- Try it: Bot Training offline with your team's size at 5 (you and four bots). Ping a spot, then the wheel.
+- Tests: game/shared/test/botOrders.test.ts (the wheel's orders; Go here, Follow me, Regroup; Breach this on a soft
+  wall; Push and Rotate).
+
+### M8: the drills, and "counter my pick" (D-166)
+- **Play page → Bot Training → Drills**: six offline setups, each a Bot Training preset you can still change in the
+  lobby (sizes, difficulty, site…):
+  - **1v1 Aim Duel**: you and one bot either side of a doorway (Oregon's inside doors in turn, 4 m each side), straight
+    into a 60 s round, no defuser, sides swapping every round, first to 5.
+  - **Retake**: the round starts with the defuser already planted in the site and its fuse running, you near it, three
+    defender bots in the rooms about the site coming to disable it (swap sides in the lobby to retake it yourself).
+  - **Site Hold**: you defend a site alone against five attacking bots, prep included.
+  - **Clear a Floor**: five defender bots spread over the first floor, a room each, holding an angle; no defuser: kill
+    them all before the time's up.
+  - **Drone and Call**: prep only. Drone the house and ping every defender you find; the round ends with prep, won if
+    you found them all ("Every defender found").
+  - **Custom Scenario**: Bot Training starting straight in action (the drill block in the lobby's rules says how rounds
+    start: prep, action, or planted).
+- **"Counter your pick"** (the lobby's Bots' operators): the other side's bots wait for your pick and answer it from
+  data/bots/picks.json (Mute, Mira and Lesion against Thermite; Brava, Striker and Fuze against Mute; and so on).
+- Drills aren't in the New match menu (they have their own buttons); a drill that starts in action or planted has only
+  a 3 s prep, and no drones.
+- Tests: game/shared/test/botDrills.test.ts (each drill sets up and ends as it says; counter my pick); a browser check
+  of the Play page and an offline duel.
+- Known: the drills' own scores (time to kill, defenders found…) are in the round results only as wins until M9's
+  training feedback.
+
+### M9: training feedback (D-167)
+- **Your round, at its end** (under the round banner, in every match format): where you died, how far into the round,
+  to whom and with what (a headshot?); **who saw you first**, when and from where, and how far off (the bots log who
+  noticed you); damage you dealt and took, by whom; your kills; when you planted or how long your disable took after
+  the plant; the gadgets you used; and the drill's numbers (the duel's time to kill, defenders found of how many, the
+  time to clear a floor, how long the retake took).
+- **Killcam**: eliminated by someone, you see your last 4 seconds again from their eye (everyone as they were then,
+  "KILLCAM · their name" over it), then your teammates as before. It's replayed from what your browser already had;
+  nothing extra is sent.
+- **Your training stats** on the Play page (kept in this browser, Clear to start again): per drill and per operator,
+  rounds, wins, kills/deaths, damage a round, your best (quickest duel kill, fastest clear, most defenders found,
+  quickest retake) and your last ten rounds as W/L.
+- Tests: game/shared/test/botReport.test.ts (the report's wire format; a duel lost to the bot: killer, weapon, first
+  seen, damage, no time to kill); a browser check of the killcam, the report and the stats.
+- Known: the report and stats come from the server's view of the round (a Bot Training or drill match; in other formats
+  you get the report too).
+
+### M10: the checks — soak, tick budget, browser test (D-168)
+- **Bots get unstuck, and don't walk into what no body could**: bots that couldn't get somewhere used to push at it
+  for good. Now a bot that isn't getting on taps vault, then searches again and wriggles (crouched, stepping to either
+  side), then gives up and does something else; a drop, vault or window it can't take is crossed off for the round, for
+  every bot. In prep, defenders no longer try to cut through the outside (the red walls keep them in: they used to
+  stand at a 2F window trying to vault out); a barred window level with the floor (the attic's) is no longer taken for
+  a doorway; low openings are crouched through; a defender who hears you through a barricaded door knifes it down
+  instead of starting over each time you make a sound; a spot it can't reach is held from where it is; a droning
+  attacker's body stays at the spawn.
+- **The Play page's "Play vs bots (offline)" button** had your training stats drawn over its label (M9): fixed.
+- **Soak** (`npm run soak`, tools/soak): five bots against five on every site, a watching client connected as you
+  would be: no crash, no desync (its walls and gadgets never disagree with the server's), no bot stuck more than 10 s.
+  Two rounds a site: the Laundry, Dining and Meeting clean; the Dorms clean but for one Skopós boxed in by a teammate
+  and a gadget for a while. One round each of the Laundry and the Dorms runs with the unit tests.
+- **Tick budget** (`npm run bench:bots`: one silent person and nine bots, two rounds): the room's step takes
+  0.84 ms at the median, 2.4 ms at the 95th percentile and 4.4 ms at the 99th, against PLAN §18's 5 ms; 0.8 % of ticks
+  go over, nearly all in prep (the bots' first thoughts as it starts; a reinforced wall's part of their map rebuilt),
+  the worst 56 ms in prep and 20 ms in action (the map rebuilt after a breach). Before M10 the worst prep tick was
+  337 ms and a rebuild 50–150 ms.
+- **Browser test** (tools/e2e/bot-training.mjs): an offline solo match in Chromium: the lobby with you and nine bots,
+  your picks, attack (through your drone in prep) then defense, the bots getting about and fighting, your report each
+  round, the summary, and both rounds in your training stats (14 checks).
+- **Review**: two reviewers were set to read the phase (the room, network and browser side; the bots' brains and
+  map), but the session's usage limit stopped both before they'd read anything, so the full review didn't happen. I
+  checked by hand what a hostile browser could send that's new in this phase (the lobby's bot settings, removing bots,
+  a drill's rules, orders off the comm wheel): each is checked when it's read or by the rules' schema, and unknown ids
+  (a site, a door, a storey) are ignored. A full review can still be run on `main` if you want one.
+- **CI**: the whole-match bot test now has 120 s (a runner took longer than the default 20 s), and the match
+  test's spectating check waits on a timer for 20 s with the dead view counted from the death itself (a slow runner's
+  page draws about a frame a second; reproduced with the page's CPU throttled 12 and 40 times).
+
+### How to test (needs Node 22.12+)
+1. `npm ci`, then `npm run build && npm start`, and open http://localhost:8080 → *Play a match* → **Play vs bots
+   (offline)**. In the lobby: your side (attack and defense alternating is the default), sizes, difficulty, site, how
+   bots pick; *Start the match*.
+2. Attack: in prep drive your drone and watch the defenders reinforce and barricade the site; in action follow your
+   bot teammates in (or lead them: ping, then the comm wheel's Go here / Breach this / Follow me / Regroup).
+3. Defend: help reinforce in prep; your anchors take spots in the site, roamers walk the rooms round it.
+4. After each round: your report under the banner (where you died, who saw you first, damage, utility); killed by
+   someone, the killcam first. Your stats on the Play page.
+5. The drills: Play page → Bot Training → Drills (1v1 Aim Duel, Retake, Site Hold, Clear a Floor, Drone and Call,
+   Custom Scenario).
+6. `npx vitest run` (1,148 tests), `npm run soak`, `npm run bench:bots`, `node tools/e2e/bot-training.mjs` (after a
+   build).
+
+### Known issues
+- Bots don't rappel, and Skopós doesn't fight from her shell's barrier.
+- A bot can be boxed in for a while by a teammate's body and a gadget in a narrow spot (the soak's Dorms case); a
+  stuck bot gives up after about 5 s and tries something else, so it's rarely more than that.
+- Spikes over the 5 ms budget in prep (above): a tick or two of hitch, a few times a round; to be spread further.
+- Bot sounds (footsteps, gunshots) are placeholders until the audio phase; bots hear by our numbers, not Siege's.
+
+### Next
+Your requests from before this phase's end: Fuze's shield to the reference pictures (its width and the curve round
+its sides, held flush with crossed arms on its grips), aiming swinging it aside quickly, leaning tilting it with you
+(no stretch), and Skopós's other shell staying still when you look round through it.
+
+---
+
+## Your requests after Phase 8 · ✅ done (PR #10, squash-merged into `main`; D-155 to D-157)
 
 On top of `main` (Phase 8 merged, PR #9): the camera requests you asked to have done once Phase 8 was, then your look at
 the shields and the bash.

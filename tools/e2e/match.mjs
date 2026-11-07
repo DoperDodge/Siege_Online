@@ -428,7 +428,7 @@ try {
       await shooter.waitForFunction(() => window.__lab.net.own?.adsQ === 65535, null, { timeout: 10000 }).catch(() => {});
       await shooter.evaluate(() => window.__lab.fire());
     }
-    killed = await victim.waitForFunction(() => window.__lab.net.dead, null, { timeout: 3000 }).then(() => true, () => false);
+    killed = await victim.waitForFunction(() => window.__lab.net.dead, null, { timeout: 3000, polling: 100 }).then(() => true, () => false);
   }
   await shooter.evaluate(() => (window.__lab.input = null));
   result.twoVsThree.teamKill = { victimPawn, killed };
@@ -436,8 +436,11 @@ try {
   // Dead, the victim looks through a living teammate's eyes; the scoreboard counts the death (no kill for a teamkill).
   const mates = await Promise.all(defenders.filter((d) => d !== victim).map((d) => d.evaluate(() => window.__lab.net.pawnId)));
   result.twoVsThree.teamKill.mates = mates;
+  // Polled on a timer (as every other wait here): polled on the page's frames, a slow runner's page that draws one a second
+  // or so was sampled just before its view moved on and next only after the time was up (CI runs 42355524876 and
+  // 42364768524; reproduced with the page's CPU throttled 40 times: a frame-polled wait missed it, a timed one had it 6 s on).
   result.checks.deadLookThroughATeammate = await victim
-    .waitForFunction((ids) => window.__match.camera?.kind === "pawn" && ids.includes(window.__match.camera.pawnId), mates, { timeout: 10000 })
+    .waitForFunction((ids) => window.__match.camera?.kind === "pawn" && ids.includes(window.__match.camera.pawnId), mates, { timeout: 20000, polling: 100 })
     .then(() => true, () => false);
   // What the dead page had, should it not have been a teammate's eyes.
   result.twoVsThree.teamKill.view = await victim.evaluate(() => ({ phase: window.__match.view.phase, camera: window.__match.camera }));

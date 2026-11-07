@@ -11,7 +11,17 @@ import { explosiveOps, explosiveReach } from "../destruction/explosives.js";
 import { meleeOnPanels } from "../destruction/hits.js";
 import { L_STEEL, type PanelChange, type PanelOp } from "../destruction/panel.js";
 import type { IndexedOp } from "../destruction/panels.js";
-import type { BlastData, DummyDef, GadgetData, ModeData } from "../data/schemas.js";
+import type { BlastData, BotLevel, DummyDef, GadgetData, ModeData } from "../data/schemas.js";
+import { Bot, botLoadout, type BotWorld } from "../bots/bot.js";
+import { NavWorld } from "../bots/nav/world.js";
+import { TeamBoard } from "../bots/perceive.js";
+import { AttackPlanner, DefensePlanner } from "../bots/plan.js";
+import { orderFor } from "../bots/orders.js";
+import { encodeRoundReport, RoundReporter } from "./report.js";
+import { holdScores, roomAt } from "../bots/places.js";
+import { WinReason } from "../match/outcome.js";
+import type { RoundRecord } from "../match/match.js";
+import { BotRng } from "../bots/rng.js";
 import { DUMMY_STANCE, dummyInput } from "../lab/dummies.js";
 import { spawnAmmo, type Pawn, type PlayerController } from "../player/pawn.js";
 import { eyePose } from "../player/hitboxes.js";
@@ -30,7 +40,7 @@ import { sideTeam } from "../sim.js";
 import { encodeEvents, type GameEvent } from "./events.js";
 import { MatchDirector, type DirectorHost } from "./matchDirector.js";
 import type { LobbyAction, MatchAction, RoomListEntry } from "./matchWire.js";
-import { DEFENSE, isFormat, type FormatMode, type Side } from "../match/rules.js";
+import { ATTACK, DEFENSE, isFormat, type FormatMode, type Side, type Team } from "../match/rules.js";
 import { Phase } from "../match/match.js";
 import { camerasOnRay } from "../intel/cameras.js";
 import { raycastLevel } from "../level/raycast.js";
@@ -123,6 +133,13 @@ interface Member {
   id: number;
   name: string;
   client: RoomClient;
+  /**
+   * A bot's brain (Phase 9, bots/DESIGN.md §1), or null: a person. A bot's client sends nothing and drops what it's
+   * sent: its brain queues its input each tick, the room never predicts or corrects it, and its events go to the brain.
+   */
+  bot: Bot | null;
+  /** What a bot reads and does through the room (made once with it). */
+  botWorld?: BotWorld;
   ctrl: PlayerController | null;
   /** What the member carries (normalized: an invalid pick became the default) and their team. */
   pick: LoadoutPick;
@@ -160,6 +177,8 @@ interface Member {
    */
   lastPing: number;
   lastPingDanger: boolean;
+  /** Where its last ping landed (a bot order's spot, Phase 9 M6), or null. */
+  lastPingAt: Vec3 | null;
   lastCallout: number;
   scanTicks: number;
   gadgetHeld: boolean;
@@ -201,6 +220,9 @@ interface Member {
   gadgetStateAt: number;
   gadgetsStale: boolean;
 }
+
+/** A bot's "connection" (Phase 9): nothing is ever sent down it. */
+const NO_CLIENT: RoomClient = { send() {}, buffered: () => 0 };
 
 /** More ops than this held back for one client: send it the panels' state instead (a message carries at most 4096). */
 const MAX_HELD_OPS = 2048;
@@ -298,6 +320,17 @@ export class Room implements DirectorHost {
   readonly gadgetServer: GadgetServer;
   /** Shots judged this tick, applied together at its end (DECISIONS D-044). */
   private judged: JudgedShot[] = [];
+  /** Bots' navigation (Phase 9 M2): made with the first bot, kept up with the walls and gadgets each tick. */
+  nav: NavWorld | null = null;
+  /** What each team's bots have seen, shared among them (Phase 9 M3: voice comms). */
+  readonly botBoards: [TeamBoard, TeamBoard] = [new TeamBoard(), new TeamBoard()];
+  /** The defending bots' planner this round (Phase 9 M4), made as prep starts; the round it's for. */
+  defensePlan: DefensePlanner | null = null;
+  /** Each person's round as it happens, for their round report (Phase 9 M9). */
+  readonly reporter = new RoundReporter();
+  /** The attacking bots' planner this round (Phase 9 M5). */
+  attackPlan: AttackPlanner | null = null;
+  private planRound = -1;
   /**
    * Who downed each body that is down now, and in which of its lives (Pawn.life): they get the kill when it
    * dies (research/core_mechanics.md §10.2). A body that came back since (a teleport, the kill plane in the
@@ -419,8 +452,9 @@ export class Room implements DirectorHost {
     return this.director?.listing() ?? null;
   }
 
+  /** People connected (bots aren't counted: a room with only bots in it is empty, and the server drops it). */
   get size(): number {
-    return this.members.size;
+    return this.people;
   }
 
   /**
@@ -428,15 +462,90 @@ export class Room implements DirectorHost {
    * member gets a body at once; in a match room they join the match (its lobby, or a team mid-match) with none.
    */
   join(name: string, client: RoomClient, operatorId = "sledge"): number | null {
+    // A person takes a bot's place in a full lobby (the lobby's sizes then put the bots right).
+    if (this.members.size >= MAX_ROOM_PLAYERS && this.director?.match.phase === Phase.Lobby) {
+      const bot = [...this.members.values()].reverse().find((b) => b.bot);
+      if (bot) this.removeBot(bot.id);
+    }
     if (this.members.size >= MAX_ROOM_PLAYERS) {
       client.send(encodeError(ErrorCode.RoomFull, `Room ${this.code} is full`));
       return null;
     }
     if (!this.sim.data.operators.has(operatorId)) operatorId = "sledge";
-    const m: Member = {
-      id: this.nextMemberId++,
-      name: name || "Player",
+    const m = this.newMember(this.nextMemberId++, name || "Player", client, operatorId);
+    if (this.director && !this.director.join(m.id, m.name)) {
+      client.send(encodeError(ErrorCode.RoomFull, `Room ${this.code}'s teams are full`));
+      return null;
+    }
+    this.members.set(m.id, m);
+    if (!this.director) this.spawn(m);
+    client.send(encodeWelcome({ roomCode: this.code, tick: this.sim.tick, levelId: this.levelId, controllerId: m.ctrl?.id ?? 0 }));
+    client.send(encodePanelState(this.sim.level.panels)); // the walls as they are now (ops waiting to go included); every later op follows
+    client.send(encodeGadgetState(this.sim.gadgets.list)); // the gadgets too (the ops waiting to go are already in it, and redo nothing)
+    m.events.push(this.deployRulesEvent());
+    this.broadcastRoster();
+    this.director?.syncBots();
+    return m.id;
+  }
+
+  /**
+   * A bot (Phase 9) on a match team, at a difficulty: a member with no connection, named from the callsigns no bot
+   * here has. Null when the room or the team is full.
+   */
+  addBot(team: Team, level: BotLevel): number | null {
+    if (this.members.size >= MAX_ROOM_PLAYERS) return null;
+    const id = this.nextMemberId++;
+    const names = this.sim.data.bots.names;
+    const used = new Set([...this.members.values()].map((m) => m.name));
+    const free = names.filter((n) => !used.has(`BOT ${n}`));
+    const name = `BOT ${new BotRng(this.seed, id).pick(free.length ? free : names)}`;
+    if (!this.nav) {
+      this.nav = new NavWorld(this.sim);
+      // The anchor rooms' hold spots of every site's plan, worked out now (the lobby) rather than as a round's prep
+      // starts (a planner made then would take a tenth of a second over them).
+      for (const st of Object.values(this.sim.data.bots.strats.get(this.levelId)?.sites ?? {})) for (const r of st.defense.anchors) holdScores(this.sim, this.nav, r);
+    }
+    const m: Member = { ...this.newMember(id, name, NO_CLIENT), bot: new Bot(id, level, this.seed) };
+    m.botWorld = this.botWorld(m);
+    if (this.director) {
+      if (!this.director.seatBot(id, name, team, level)) return null;
+      this.members.set(id, m);
+    } else {
+      // A lab room (tests, a lab page): a body at once, the side's first operator.
+      const op = [...this.sim.data.operators.values()].find((o) => sideTeam(o.side) === team)!;
+      m.pick = botLoadout(this.sim.data, op.id);
+      m.team = team;
+      this.members.set(id, m);
+      this.spawn(m);
+    }
+    this.broadcastRoster();
+    return id;
+  }
+
+  /** A bot member's brain (tests, the overlay), or null. */
+  botOf(memberId: number): Bot | null {
+    return this.members.get(memberId)?.bot ?? null;
+  }
+
+  /** Take a bot out of the room (the lobby's sizes shrank, a person took its place, the host removed it). */
+  removeBot(memberId: number): void {
+    if (this.members.get(memberId)?.bot) this.leave(memberId);
+  }
+
+  /** People connected (bots aren't): the server drops a room nobody is in. */
+  get people(): number {
+    let n = 0;
+    for (const m of this.members.values()) if (!m.bot) n++;
+    return n;
+  }
+
+  /** A member's starting state (a person's connection, or a bot's dead end). */
+  private newMember(id: number, name: string, client: RoomClient, operatorId = "sledge"): Member {
+    return {
+      id,
+      name,
       client,
+      bot: null,
       ctrl: null,
       pick: defaultLoadoutPick(this.sim.data, operatorId),
       team: sideTeam(this.sim.data.operators.get(operatorId)!.side),
@@ -450,6 +559,7 @@ export class Room implements DirectorHost {
       stalled: false,
       lastPing: -1e9,
       lastPingDanger: false,
+      lastPingAt: null,
       lastCallout: -1e9,
       scanTicks: 0,
       gadgetHeld: false,
@@ -476,18 +586,6 @@ export class Room implements DirectorHost {
       gadgetStateAt: -Infinity,
       gadgetsStale: false,
     };
-    if (this.director && !this.director.join(m.id, m.name)) {
-      client.send(encodeError(ErrorCode.RoomFull, `Room ${this.code}'s teams are full`));
-      return null;
-    }
-    this.members.set(m.id, m);
-    if (!this.director) this.spawn(m);
-    client.send(encodeWelcome({ roomCode: this.code, tick: this.sim.tick, levelId: this.levelId, controllerId: m.ctrl?.id ?? 0 }));
-    client.send(encodePanelState(this.sim.level.panels)); // the walls as they are now (ops waiting to go included); every later op follows
-    client.send(encodeGadgetState(this.sim.gadgets.list)); // the gadgets too (the ops waiting to go are already in it, and redo nothing)
-    m.events.push(this.deployRulesEvent());
-    this.broadcastRoster();
-    return m.id;
   }
 
   leave(memberId: number): void {
@@ -498,6 +596,8 @@ export class Room implements DirectorHost {
     if (m.ctrl) this.sim.removePlayer(m.ctrl.id);
     this.members.delete(memberId);
     this.broadcastRoster();
+    // A person leaving the lobby frees a place a bot may take (bots leaving don't start this again).
+    if (!m.bot) this.director?.syncBots();
   }
 
   /**
@@ -556,7 +656,7 @@ export class Room implements DirectorHost {
     if (kludge?.kludge && !drones.some((d) => d.kludge)) for (let i = 0; i < kludge.count; i++) this.sim.addDrone(m.ctrl.id, undefined, true);
     m.queue = [];
     this.force(m);
-    m.newBody = true;
+    m.newBody = m.bot === null;
     m.credit = 0;
     m.held = 0;
     m.stalled = false;
@@ -593,7 +693,7 @@ export class Room implements DirectorHost {
     if (first) this.sim.placeDrone(first.id, sp.pos[0], sp.pos[1] + 0.02, sp.pos[2], sp.yawDeg);
     m.queue = [];
     this.force(m);
-    m.newBody = true;
+    m.newBody = m.bot === null;
     m.credit = 0;
     m.held = 0;
     m.stalled = false;
@@ -656,8 +756,17 @@ export class Room implements DirectorHost {
 
   /** The server changed this member's bodies outside their inputs: correct them at the next snapshot. */
   private force(m: Member) {
+    if (m.bot) return this.settleBot(m);
     m.needCorrection = true;
     m.forced = true;
+  }
+
+  /** A bot's body is the server's from the start: nothing to correct, and its next input counts. */
+  private settleBot(m: Member) {
+    m.newBody = false;
+    m.confirmEpoch = null;
+    m.needCorrection = false;
+    m.forced = false;
   }
 
   onInput(memberId: number, msg: InputMsg): void {
@@ -728,6 +837,8 @@ export class Room implements DirectorHost {
       this.sendPanelState(m, state);
       m.events.push(this.deployRulesEvent());
     }
+    // The walls as built again: the bots' grid too (gadgets are reset first, D-158).
+    this.nav?.reset();
   }
 
   /** A panel op from outside a tick (a lab tool, a test): applied and sent with the next tick's. */
@@ -823,7 +934,7 @@ export class Room implements DirectorHost {
     const ignore = new Set(m.ctrl.pawnIds);
     for (const p of this.sim.pawns.values()) if (p.state.mode === PawnMode.Dead) ignore.add(p.id);
     const through = { rule: w.destruction, view: { tick: panelTick, history: this.panelHistory } };
-    const paths = tracePellets(this.sim, this.history, origin, dirs, rewoundTick, w.damage.penetration, ignore, m.sent, through);
+    const paths = tracePellets(this.sim, this.history, origin, dirs, rewoundTick, w.damage.penetration, ignore, this.sentOf(m), through);
     const bodies = shotOnBodies(this.sim.data.combat, w.damage, paths, (id) => {
       const v = this.sim.pawns.get(id)!;
       return { scale: v.team === shooter.team ? this.rules.friendlyFire.scale : 1, idleShell: isIdleShell(this.sim, v) };
@@ -876,13 +987,13 @@ export class Room implements DirectorHost {
         serverTick: now,
         hit: p0.first && { pawnId: p0.first.pawnId, part: p0.first.part, distance: p0.first.t },
         wallDistance: p0.wall !== null && !p0.first ? p0.wall : null,
-        target: this.shotTarget(origin, p0.dir, p0.first?.pawnId ?? null, p0.wall ?? Infinity, rewoundTick, ignore, m.sent),
+        target: this.shotTarget(origin, p0.dir, p0.first?.pawnId ?? null, p0.wall ?? Infinity, rewoundTick, ignore, this.sentOf(m)),
       }),
     );
   }
 
   /** The body a pellet entered, or else the one whose torso it passed closest to (within 2 m, before the wall), as rewound. */
-  private shotTarget(origin: Vec3, dir: Vec3, hitId: number | null, wall: number, tick: number, ignore: ReadonlySet<number>, sent: SentRing): ShotResult["target"] {
+  private shotTarget(origin: Vec3, dir: Vec3, hitId: number | null, wall: number, tick: number, ignore: ReadonlySet<number>, sent: SentRing | undefined): ShotResult["target"] {
     const posed = this.history.at(tick, sent);
     let best = hitId;
     if (best === null) {
@@ -913,7 +1024,7 @@ export class Room implements DirectorHost {
     const { now, rewoundTick, panelTick } = this.viewTimeFor(m, applied);
     const ignore = new Set(m.ctrl.pawnIds);
     for (const p of this.sim.pawns.values()) if (p.state.mode === PawnMode.Dead) ignore.add(p.id);
-    const target = judgeMelee(this.sim, hit.origin, attacker.state, hit.yaw, this.history.at(rewoundTick, m.sent), ignore);
+    const target = judgeMelee(this.sim, hit.origin, attacker.state, hit.yaw, this.history.at(rewoundTick, this.sentOf(m)), ignore);
     const base = { m, cause: Cause.Melee, ctrlId: m.ctrl.id, team: attacker.team, seq: hit.seq, weaponId: "knife", receivedTick: now, rewoundTick, origin: hit.origin };
     // Fuze's melee with his shield up is a bash (Phase 8 M11): no damage (Y9S4), the body it meets pushed back.
     const bash = attacker.loadout?.shield && shieldUp(attacker.state) ? attacker.loadout.shield : null;
@@ -978,7 +1089,7 @@ export class Room implements DirectorHost {
     const ignore = new Set(m.ctrl.pawnIds);
     for (const p of this.sim.pawns.values()) if (p.state.mode === PawnMode.Dead) ignore.add(p.id);
     let hit: { id: number; t: number; zone: ReturnType<typeof zoneOf>; shield: boolean } | null = null;
-    for (const [id, boxes] of this.history.at(rewoundTick, m.sent)) {
+    for (const [id, boxes] of this.history.at(rewoundTick, this.sentOf(m))) {
       if (ignore.has(id)) continue;
       for (const h of boxes) {
         const t = rayCapsule(origin, dir, h.a, h.b, h.radius);
@@ -1155,6 +1266,7 @@ export class Room implements DirectorHost {
     const ctrl = by.attacker?.ctrlId ?? 0;
     const weapon = by.attacker?.weaponId ?? "";
     const friendly = by.attacker !== null && victim.team === by.attacker.team;
+    if (victim.kind === PawnKind.Body && victim.ownerId !== null) this.reporter.damage(victim.ownerId, ctrl, r.removed);
     if (r.outcome === "downed") {
       this.director?.onBodyDown(victim); // a carrier drops the defuser
       this.downedBy.set(victim.id, { ctrl, weapon, life: victim.life });
@@ -1199,6 +1311,7 @@ export class Room implements DirectorHost {
       ? { kind: "shellDestroyed", pawnId: victim.id, ownerCtrl, killerCtrl, weapon, headshot }
       : { kind: "kill", victimPawn: victim.id, victimCtrl: ownerCtrl, killerCtrl, assistCtrl, weapon: weapon || downer?.weapon || "", cause, headshot, friendly };
     for (const m of this.members.values()) m.events.push(e);
+    if (!idle) this.reporter.death(ownerCtrl, [victim.state.x, victim.state.y, victim.state.z], this.sim.tick, killerCtrl, e.kind === "kill" ? e.weapon : weapon, headshot);
     this.director?.onBodyDown(victim); // a carrier drops the defuser
     // Skopós's idle shell isn't an elimination (research/operators/skopos.md): only a body's death counts.
     if (!idle) this.director?.onDeath(ownerCtrl, killerCtrl, assistCtrl, friendly);
@@ -1217,10 +1330,14 @@ export class Room implements DirectorHost {
       } else if (e.kind === "deploy") {
         this.completeDeploy(e);
       } else if (e.kind === "throw" || e.kind === "place" || e.kind === "detonate" || e.kind === "pickUpGadget") {
+        if (e.kind === "throw" || e.kind === "place") this.reporter.gadget(this.sim.pawns.get(e.pawnId)?.ownerId ?? 0, e.gadget);
         this.gadgetServer.onEvent(e);
       } else if (e.kind === "rappelBreach") {
         this.completeBreach(e);
       } else if (e.kind === "plant" || e.kind === "disable" || e.kind === "pickup" || e.kind === "drop") {
+        const by = e.kind === "plant" || e.kind === "disable" ? (this.sim.pawns.get(e.pawnId)?.ownerId ?? 0) : 0;
+        if (e.kind === "plant") this.reporter.plant(by, this.sim.tick);
+        else if (e.kind === "disable") this.reporter.disable(by, this.sim.tick);
         this.director?.onSimEvent(e);
       } else if (e.kind === "reviveStart" || e.kind === "reviveEnd") {
         const target = this.sim.pawns.get(e.targetPawn);
@@ -1291,7 +1408,7 @@ export class Room implements DirectorHost {
 
   private broadcastRoster() {
     const entries = this.roster();
-    for (const m of this.members.values()) m.client.send(encodeRoster(entries, m.ctrl?.id ?? 0));
+    for (const m of this.members.values()) if (!m.bot) m.client.send(encodeRoster(entries, m.ctrl?.id ?? 0));
   }
 
   private take(m: Member): QueuedInput | null {
@@ -1313,7 +1430,7 @@ export class Room implements DirectorHost {
    * and not while one is already on its way: a body the server just changed can't have been predicted).
    */
   private afterInput(m: Member, applied: QueuedInput) {
-    if (!m.ctrl || m.needCorrection || applied.epoch !== (m.epoch & 0xff)) return;
+    if (!m.ctrl || m.bot || m.needCorrection || applied.epoch !== (m.epoch & 0xff)) return;
     if (predictionHash(this.sim, m.ctrl) !== applied.predictedHash) m.needCorrection = true;
     else m.forced = false; // (stepped without input, but it still came out as predicted)
   }
@@ -1332,6 +1449,7 @@ export class Room implements DirectorHost {
     if (!danger && since < ticksOrZero(k.cooldownS)) return;
     m.lastPing = this.sim.tick;
     m.lastPingDanger = danger;
+    m.lastPingAt = [pos[0], pos[1], pos[2]];
     const team = this.teamOf(m);
     // On an enemy body (the first thing the view's ray meets), it spots him: a red ping (Phase 8 M9; research/intel.md §2).
     const body = gadget < 0 && !heart && m.ctrl ? this.pingedBody(m.ctrl, team, pos) : null;
@@ -1367,6 +1485,7 @@ export class Room implements DirectorHost {
   private spotted(p: Pawn, byCtrl: number, team: number) {
     const e: GameEvent = { kind: "spotted", pawnId: p.id, by: byCtrl, ticks: ticks(this.sim.data.intel.ping.seconds) };
     this.spot(p.id, this.sim.data.intel.ping.seconds);
+    this.director?.onSpotted(p, team === ATTACK ? ATTACK : DEFENSE);
     for (const o of this.members.values()) if (this.teamOf(o) === team || o.ctrl?.id === p.ownerId) o.events.push(e);
   }
 
@@ -2139,6 +2258,78 @@ export class Room implements DirectorHost {
     const e: GameEvent = { kind: "callout", name: m.name, id };
     const team = this.teamOf(m);
     for (const o of this.members.values()) if (this.teamOf(o) === team) o.events.push(e);
+    this.orderBots(m, this.sim.data.intel.callouts[id]);
+  }
+
+  /** A round's prep or action started (Phase 9 M9): the round report starts afresh, its times from the action. */
+  roundPhase(phase: "prep" | "action"): void {
+    if (phase === "prep") this.reporter.reset(this.sim.tick);
+    else this.reporter.actionAt = this.sim.tick;
+  }
+
+  /** A round is over (Phase 9 M9): each person in it gets their round report. */
+  roundOver(record: RoundRecord): void {
+    const d = this.director;
+    if (!d) return;
+    const m = d.match;
+    const drill = m.mode.match.drill;
+    const level = this.sim.level.def;
+    const nameOfCtrl = (ctrl: number) => {
+      for (const o of this.members.values()) if (o.ctrl?.id === ctrl) return o.name;
+      return "";
+    };
+    for (const o of this.members.values()) {
+      if (o.bot || !o.ctrl) continue;
+      const side = m.sideOf(o.id);
+      const p = m.players.get(o.id);
+      if (side === null || !p) continue;
+      const ctrl = o.ctrl.id;
+      const kills = this.reporter.firstKill(ctrl);
+      const seconds = (this.sim.tick - this.reporter.actionAt) / TICK_HZ;
+      const score: Record<string, number> = {};
+      if (drill?.kind === "duel") score.ttk = kills !== null ? Math.round(((kills - this.reporter.actionAt) / TICK_HZ) * 10) / 10 : -1;
+      if (drill?.kind === "drone") [score.found, score.of] = [d.foundCount, m.sides[DEFENSE].length];
+      if (drill?.kind === "clear") [score.cleared, score.deaths] = [record.reason === WinReason.Elimination && record.winner === record.attackers ? Math.round(seconds * 10) / 10 : -1, this.reporter.died(ctrl) ? 1 : 0];
+      if (drill?.kind === "retake") score.seconds = Math.round(seconds * 10) / 10;
+      const report = this.reporter.build(
+        ctrl,
+        this.sim.tick,
+        { round: record.round, format: m.mode.id, drill: drill?.kind ?? null, side: side === ATTACK ? "attack" : "defense", operator: p.operator ?? "", won: record.winner === p.team, score },
+        nameOfCtrl,
+        (id) => this.members.get(id)?.name ?? "",
+        (q) => roomAt(level, q[0], q[1] + 0.3, q[2]),
+      );
+      o.client.send(encodeRoundReport(report));
+    }
+  }
+
+  /**
+   * A person's callout as an order to their bot teammates (Phase 9 M6, bots/DESIGN.md §8; data/intel.json `botOrders`):
+   * Push and Rotate go to the team's planner; Regroup to every bot teammate; the rest to the nearest one on its feet
+   * that can do it (Breach this: one with something to open that wall or hatch with), at the caller's last ping's spot
+   * (or the caller's, with no ping in the last half minute).
+   */
+  private orderBots(m: Member, callout: string) {
+    const kind = this.sim.data.intel.botOrders[callout];
+    const match = this.director?.match;
+    if (!kind || m.bot || !match || !this.nav || !m.ctrl) return;
+    const side = match.sideOf(m.id);
+    const caller = this.sim.pawns.get(m.ctrl.possessedPawnId);
+    if (side === null || !caller || caller.state.mode === PawnMode.Dead) return;
+    if (kind === "push") return void (side === ATTACK && this.attackPlan?.push());
+    if (kind === "rotate") return void (side === DEFENSE && this.defensePlan?.rotate());
+    const at = m.lastPingAt && this.sim.tick - m.lastPing < ticks(30) ? m.lastPingAt : ([caller.state.x, caller.state.y, caller.state.z] as Vec3);
+    const bots = [...this.members.values()]
+      .filter((o) => o.bot && o.ctrl && match.sideOf(o.id) === side)
+      .map((o) => ({ o, b: this.sim.pawns.get(o.ctrl!.possessedPawnId) }))
+      .filter((x): x is { o: Member; b: Pawn } => x.b !== undefined && x.b.kind === PawnKind.Body && (x.b.state.mode === PawnMode.Walk || x.b.state.mode === PawnMode.Rappel))
+      .sort((a, b) => Math.hypot(a.b.state.x - at[0], a.b.state.z - at[2]) - Math.hypot(b.b.state.x - at[0], b.b.state.z - at[2]));
+    for (const { o, b } of bots) {
+      const order = orderFor(this.sim, this.nav, kind, caller, at, b);
+      if (!order) continue;
+      o.bot!.command(order.tasks, this.sim.tick, order.seconds);
+      if (kind !== "regroup") return;
+    }
   }
 
   /** Judge the shots of the step just taken; `applied` is each member's input in that step. */
@@ -2163,7 +2354,10 @@ export class Room implements DirectorHost {
         const m = a?.m ?? this.memberOf(owner);
         const input = a?.input ?? m?.lastApplied;
         if (m && input && e.kind === "meleeImpact") this.judgeMeleeImpact(m, input, e);
-        else if (m && input && e.kind === "swing") this.judgeSwing(m, input, e);
+        else if (m && input && e.kind === "swing") {
+          if (e.spent) this.reporter.gadget(m.ctrl?.id ?? 0, e.gadget);
+          this.judgeSwing(m, input, e);
+        }
       }
     }
   }
@@ -2178,6 +2372,11 @@ export class Room implements DirectorHost {
   step(): void {
     const inputs = new Map<number, InputCmd>();
     const active = new Set<number>();
+    // Bots (Phase 9): the navigation caught up with last tick's walls and gadgets (a chunk or so a tick), then each
+    // brain's input for this tick, queued as a client's would arrive (it sees the present).
+    this.nav?.step();
+    this.plans();
+    for (const m of this.members.values()) if (m.bot) this.botInput(m);
     for (const m of this.members.values()) {
       m.applied = null;
       if (!m.ctrl) continue;
@@ -2249,6 +2448,87 @@ export class Room implements DirectorHost {
     this.flushEvents();
   }
 
+  /** The bots' team planners: a defense plan as each round's prep starts (Phase 9 M4), kept through its action. */
+  private plans() {
+    const m = this.director?.match;
+    if (!m || !this.nav) return;
+    const live = m.phase === Phase.Prep || m.phase === Phase.Action || m.phase === Phase.PostPlant;
+    if (!live) {
+      if (m.phase !== Phase.RoundEnd) this.defensePlan = this.attackPlan = null;
+      return;
+    }
+    // A drill that puts everyone somewhere (the duel, a floor to clear) has no site plan: each bot holds where it was put.
+    const drill = m.mode.match.drill;
+    const placed = drill !== null && (drill.kind === "duel" || drill.storey !== null);
+    if (this.planRound !== m.round) {
+      this.planRound = m.round;
+      for (const o of this.members.values()) o.bot?.clearOrders();
+      const ctrlOf = (id: number) => this.members.get(id)?.ctrl?.id ?? 0;
+      const bots = m.sides[DEFENSE].filter((id) => this.members.get(id)?.bot);
+      const strat = this.sim.data.bots.strats.get(this.levelId)?.sites[m.site ?? ""] ?? null;
+      this.defensePlan = bots.length && m.site && !placed ? new DefensePlanner(this.sim, this.nav, m, m.site, strat, bots, new BotRng(this.seed, 0xd3f + m.round), ctrlOf) : null;
+      const attackers = m.sides[ATTACK].filter((id) => this.members.get(id)?.bot);
+      this.attackPlan = attackers.length && drill?.kind !== "duel" ? new AttackPlanner(this.sim, this.nav, m, attackers, new BotRng(this.seed, 0xa7c + m.round), ctrlOf) : null;
+    }
+    if (placed && this.director)
+      for (const [id, spot] of this.director.drillSpots) {
+        const bot = this.members.get(id)?.bot;
+        if (bot && !bot.ordered(this.sim.tick)) bot.command([{ kind: "hold", spot: spot.pos, face: spot.face, room: "" }], this.sim.tick, 600);
+      }
+    this.defensePlan?.step();
+  }
+
+  /**
+   * The snapshots a member's shots are judged against (lag compensation: only those its client drew from); a bot has
+   * none sent and sees the world as the room records it (Phase 9).
+   */
+  private sentOf(m: Member): SentRing | undefined {
+    return m.bot ? undefined : m.sent;
+  }
+
+  /** A bot's input for this tick, queued as its client's would arrive, made with the newest state (no view lag). */
+  private botInput(m: Member) {
+    const bot = m.bot!;
+    const cmd = bot.think(m.botWorld ??= this.botWorld(m), m.ctrl);
+    if (!cmd || !m.ctrl) return;
+    const now = this.sim.tick;
+    m.lastQueuedSeq++;
+    m.lags[m.lagAt] = 0;
+    m.lagAt = (m.lagAt + 1) % LAG_WINDOW;
+    m.queue.push({ cmd: { ...cmd, seq: m.lastQueuedSeq }, predictedHash: 0, epoch: m.epoch & 0xff, snapTick: now & 0xffff, viewBackQ8: 0, receivedTick: now });
+  }
+
+  /** What a bot reads and does through the room: the same choices its member's client could send. */
+  private botWorld(m: Member): BotWorld {
+    const room = this;
+    return {
+      sim: this.sim,
+      get match() {
+        return room.director?.match ?? null;
+      },
+      get nav() {
+        return room.nav;
+      },
+      board: (team) => this.botBoards[team === 1 ? 1 : 0],
+      taskOf: () => {
+        const side = this.director?.match.sideOf(m.id);
+        return side === DEFENSE ? (this.defensePlan?.taskOf(m.id) ?? null) : side === ATTACK ? (this.attackPlan?.taskOf(m.id) ?? null) : null;
+      },
+      noticed: (pawnId) => {
+        const p = this.sim.pawns.get(pawnId);
+        const me = m.ctrl ? this.sim.pawns.get(m.ctrl.possessedPawnId) : undefined;
+        if (p && me && p.ownerId !== null) this.reporter.seen(p.ownerId, m.id, this.sim.tick, [me.state.x, me.state.y, me.state.z], [p.state.x, p.state.y, p.state.z]);
+      },
+      report: (ok) => {
+        const side = this.director?.match.sideOf(m.id);
+        if (side === DEFENSE) this.defensePlan?.report(m.id, ok);
+        else if (side === ATTACK) this.attackPlan?.report(m.id, ok);
+      },
+      pick: (pick) => this.pickLoadout(m.id, pick),
+      act: (a) => this.onMatchAction(m.id, a),
+    };
+  }
+
   /** Dead dummies come back dummyRespawnS after they died. */
   private reviveDummies() {
     const wait = Math.round(this.rules.dummyRespawnS * TICK_HZ);
@@ -2263,6 +2543,11 @@ export class Room implements DirectorHost {
   private flushEvents() {
     for (const m of this.members.values()) {
       if (m.events.length === 0) continue;
+      if (m.bot) {
+        m.bot.hear(m.events);
+        m.events = [];
+        continue;
+      }
       if (m.client.buffered() > MAX_BUFFERED_EVENTS) {
         m.client.close?.(1008, "not reading"); // policy violation
         m.events = [];
@@ -2292,6 +2577,13 @@ export class Room implements DirectorHost {
     const gadgetOps = this.sim.gadgets.takeOps();
     let gadgetMsg: Uint8Array | null = null;
     for (const m of this.members.values()) {
+      if (m.bot) {
+        // Nothing goes down a bot's connection: it reads the room itself.
+        m.opsHad = 0;
+        m.opsHeld = [];
+        m.idled = false;
+        continue;
+      }
       const fresh = m.opsHad ? ops.slice(m.opsHad) : ops;
       const mine = m.opsHeld === null ? null : m.opsHeld.length ? m.opsHeld.concat(fresh) : fresh;
       m.opsHad = 0;

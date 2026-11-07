@@ -2,7 +2,7 @@
 // picks, the defuser's carrier, the score, the round history and the result. Pure and deterministic: the room
 // feeds it the tick, its players' choices and what happened in the simulation, and acts on what it reports back
 // (bodies, panels, the wire). Its random draws come from the room's secret seed.
-import type { LevelDef, OperatorData } from "../data/schemas.js";
+import type { BotLevel, LevelDef, OperatorData } from "../data/schemas.js";
 import { hash4 } from "../weapons/spread.js";
 import { ticks } from "../weapons/ticks.js";
 import { roundOutcome, type WinReason } from "./outcome.js";
@@ -27,6 +27,8 @@ import {
 } from "./rules.js";
 import { applyHostChange, type HostChange } from "./settings.js";
 
+/** A drill starting in action or planted (Phase 9 M8): its prep is this long at most (s), for bodies to stand. */
+const DRILL_PREP_S = 3;
 export const Phase = { Lobby: 0, Ban: 1, Planning: 2, Prep: 3, Action: 4, PostPlant: 5, RoundEnd: 6, MatchEnd: 7 } as const;
 export type Phase = (typeof Phase)[keyof typeof Phase];
 export const PHASE_NAMES = ["lobby", "ban", "planning", "prep", "action", "postPlant", "roundEnd", "matchEnd"] as const;
@@ -62,6 +64,8 @@ export interface MatchPlayer {
   rating: number | null;
   /** Ranked, once the match is over: the rating after it (back in the lobby it becomes `rating`). */
   newRating: number | null;
+  /** A bot (Phase 9) and its difficulty, or null: a person. A bot is always ready and never the host. */
+  bot: BotLevel | null;
 }
 
 export interface RoundRecord {
@@ -170,6 +174,21 @@ export class Match {
     let team: Team = sizes[1] < sizes[0] ? 1 : 0;
     if (sizes[team] >= max) team = other(team);
     if (sizes[team] >= max) return null;
+    return this.seat(id, name, team, rating, null);
+  }
+
+  /** A bot (Phase 9) on a team that has room: ready, never the host. Null when the team is full. */
+  addBot(id: number, name: string, team: Team, level: BotLevel): MatchPlayer | null {
+    if (this.team(team).length >= this.m.teamSize.max || this.players.has(id)) return null;
+    return this.seat(id, name, team, null, level);
+  }
+
+  /** The players who are people (not bots). */
+  people(): MatchPlayer[] {
+    return [...this.players.values()].filter((p) => p.bot === null);
+  }
+
+  private seat(id: number, name: string, team: Team, rating: number | null, bot: BotLevel | null): MatchPlayer {
     const p: MatchPlayer = {
       id,
       name,
@@ -189,10 +208,18 @@ export class Match {
       rounds: 0,
       rating,
       newRating: null,
+      bot,
     };
+    if (bot !== null) p.ready = true;
     this.players.set(id, p);
-    if (!this.players.get(this.hostId)?.connected) this.hostId = id;
+    if (bot === null && !this.isHost(this.hostId)) this.hostId = id;
     return p;
+  }
+
+  /** Whether a member can be the host: a person still here. */
+  private isHost(id: number): boolean {
+    const p = this.players.get(id);
+    return p !== undefined && p.connected && p.bot === null;
   }
 
   /**
@@ -206,10 +233,10 @@ export class Match {
     if (this.phase === Phase.Lobby || this.phase === Phase.MatchEnd) this.players.delete(id);
     else {
       p.connected = false;
-      p.ready = false;
+      p.ready = p.bot !== null;
     }
     if (this.carrier === id) this.carrier = null;
-    if (this.hostId === id) this.hostId = [...this.players.values()].filter((q) => q.connected).sort((a, b) => a.order - b.order)[0]?.id ?? 0;
+    if (this.hostId === id) this.hostId = [...this.players.values()].filter((q) => q.connected && q.bot === null).sort((a, b) => a.order - b.order)[0]?.id ?? 0;
   }
 
   /** A player who left mid-match is back, on a new connection (member id). */
@@ -221,7 +248,7 @@ export class Match {
     p.connected = true;
     this.players.set(newId, p);
     for (const side of this.sides) for (let i = 0; i < side.length; i++) if (side[i] === oldId) side[i] = newId;
-    if (!this.players.get(this.hostId)?.connected) this.hostId = newId;
+    if (!this.isHost(this.hostId)) this.hostId = newId;
     return p;
   }
 
@@ -242,7 +269,7 @@ export class Match {
     if (p.team === team) return null;
     if (!this.hasRoom(team)) return `${team === 0 ? "Blue" : "Orange"} is full`;
     p.team = team;
-    p.ready = false;
+    p.ready = p.bot !== null;
     return null;
   }
 
@@ -250,7 +277,7 @@ export class Match {
     const p = this.players.get(id);
     if (!p) return "Not in this room";
     if (this.inLobby()) return this.inLobby();
-    p.ready = ready;
+    p.ready = ready || p.bot !== null;
     return null;
   }
 
@@ -269,7 +296,7 @@ export class Match {
     if (why) return why;
     for (const p of this.players.values()) {
       p.team = other(p.team);
-      p.ready = false;
+      p.ready = p.bot !== null;
     }
     return null;
   }
@@ -280,7 +307,7 @@ export class Match {
     if (why) return why;
     this.base = base;
     this.mode = clone(base);
-    for (const p of this.players.values()) p.ready = false;
+    for (const p of this.players.values()) p.ready = p.bot !== null;
     return null;
   }
 
@@ -291,7 +318,7 @@ export class Match {
     const next = applyHostChange(this.base, this.mode, change);
     if (typeof next === "string") return next;
     this.mode = next;
-    for (const p of this.players.values()) p.ready = false;
+    for (const p of this.players.values()) p.ready = p.bot !== null;
     return null;
   }
 
@@ -350,7 +377,7 @@ export class Match {
         this.players.delete(p.id);
         continue;
       }
-      p.ready = false;
+      p.ready = p.bot !== null;
       p.rating = p.newRating ?? p.rating;
       p.newRating = null;
     }
@@ -385,7 +412,7 @@ export class Match {
     }
     const atk = this.attackers;
     this.sides = [this.team(atk, true).map((p) => p.id), this.team(other(atk), true).map((p) => p.id)];
-    this.site = this.m.site === "random" ? this.map.sites[Math.floor(this.roll(ROLL.site) * this.map.sites.length)] : null;
+    this.site = this.fixedSite() ?? (this.m.site === "random" ? this.map.sites[Math.floor(this.roll(ROLL.site) * this.map.sites.length)] : null);
     this.siteRevealed = false;
     this.carrier = null;
     this.plantedAt = null;
@@ -452,11 +479,12 @@ export class Match {
         return [this.enter(Phase.Planning, tick, pickSeconds(this.m, this.firstAttackers, this.round))];
       case Phase.Planning:
         if (!due) return [];
-        if (this.m.site === "vote") this.site = this.tallySite();
+        if (this.m.site === "vote" && this.fixedSite() === null) this.site = this.tallySite();
         this.autoPick(this.sides[ATTACK]);
         this.autoPick(this.sides[DEFENSE]);
         if (this.m.siteReveal === "roundStart") this.siteRevealed = true;
-        return [this.enter(Phase.Prep, tick, this.m.seconds.prep)];
+        // A drill that starts in action (or planted) has only a moment of prep: bodies to their places (Phase 9 M8).
+        return [this.enter(Phase.Prep, tick, this.m.drill && this.m.drill.start !== "prep" ? Math.min(this.m.seconds.prep, DRILL_PREP_S) : this.m.seconds.prep)];
       case Phase.Prep:
         if (!due) return [];
         this.autoPick(this.sides[ATTACK]);
@@ -489,6 +517,12 @@ export class Match {
   }
 
   // ------------------------------------------------------------------ what happens in the simulation
+
+  /** A drill's round decided by the drill (drone and call: when prep ends), for `side`. */
+  drillEnd(tick: number, side: Side, reason: WinReason): MatchEvent[] {
+    if (this.phase !== Phase.Prep && this.phase !== Phase.Action && this.phase !== Phase.PostPlant) return [];
+    return this.endRound(tick, side, reason);
+  }
 
   /** The defuser is planted: post-plant, with the fuse as its timer. A plant started before the timer ran out may finish after it. */
   planted(tick: number): MatchEvent[] {
@@ -555,9 +589,15 @@ export class Match {
     return null;
   }
 
+  /** Bot Training's fixed site (the host's setup), if it is one of the map's; else null. */
+  fixedSite(): string | null {
+    const s = this.m.bots?.site ?? null;
+    return s !== null && this.map.sites.includes(s) ? s : null;
+  }
+
   /** A site vote (planning; defenders, where the format votes). */
   voteSite(id: number, site: string | null): string | null {
-    if (this.phase !== Phase.Planning || this.sideOf(id) !== DEFENSE || this.m.site !== "vote") return "Not voting on the site now";
+    if (this.phase !== Phase.Planning || this.sideOf(id) !== DEFENSE || this.m.site !== "vote" || this.fixedSite() !== null) return "Not voting on the site now";
     if (site !== null && !this.map.sites.includes(site)) return "No such site";
     this.players.get(id)!.siteVote = site;
     return null;

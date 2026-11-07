@@ -35,6 +35,9 @@ describe("match messages", () => {
       { kind: "change", change: { kind: "bans", maxPerSide: 2 } },
       { kind: "change", change: { kind: "reinforcementScaling", value: "full" } },
       { kind: "change", change: { kind: "rules", rules: { match: { rounds: 4 } } } },
+      { kind: "change", change: { kind: "bots", bots: null } },
+      { kind: "change", change: { kind: "bots", bots: { fill: true, size: [1, 5], difficulty: ["elite", "recruit"], picks: "counter", site: "SITE_LAUNDRY" } } },
+      { kind: "change", change: { kind: "bots", bots: { fill: false, size: [5, 5], difficulty: ["normal", "hard"], picks: "fixed", site: null } } },
       { kind: "start" },
       { kind: "backToLobby" },
       { kind: "private", private: true },
@@ -74,8 +77,8 @@ describe("match messages", () => {
       private: false,
       redWalls: true,
       players: [
-        { id: 1, name: "Ana", team: 0, ready: true, connected: true, side: 1, alive: true, safe: false, operator: "mute", spawn: null, banVote: "sledge", siteVote: "SITE_DORMS", locked: "pulse", kills: 4, deaths: 2, assists: 1, rating: 1100, newRating: 1116 },
-        { id: 2, name: "Bo", team: 1, ready: false, connected: false, side: null, alive: false, safe: true, operator: null, spawn: "B_STREET", banVote: null, siteVote: null, locked: null, kills: 0, deaths: 3, assists: 0, rating: null, newRating: null },
+        { id: 1, name: "Ana", team: 0, ready: true, connected: true, side: 1, alive: true, safe: false, operator: "mute", spawn: null, banVote: "sledge", siteVote: "SITE_DORMS", locked: "pulse", kills: 4, deaths: 2, assists: 1, rating: 1100, newRating: 1116, bot: null },
+        { id: 2, name: "Bo", team: 1, ready: false, connected: false, side: null, alive: false, safe: true, operator: null, spawn: "B_STREET", banVote: null, siteVote: null, locked: null, kills: 0, deaths: 3, assists: 0, rating: null, newRating: null, bot: "hard" },
       ],
       bans: [["thermite"], ["pulse"]],
       site: "SITE_LAUNDRY",
@@ -106,6 +109,8 @@ describe("match messages", () => {
     expect(bad([0, 2])).toThrow(ProtocolError); // team 2
     expect(bad([1, 5])).toThrow(ProtocolError); // ready 5
     expect(bad([6, 1, 9])).toThrow(ProtocolError); // an unknown scaling
+    expect(bad([6, 3, 1, 1, 5, 5, 0, 7, 0, 0])).toThrow(ProtocolError); // an unknown bot level
+    expect(bad([6, 3, 1, 1, 5, 5, 0, 1, 3, 0])).toThrow(ProtocolError); // an unknown way to pick
     const json = new ByteWriter().u8(6).u8(2).str("{nope").finish();
     expect(() => decodeLobbyAction(new ByteReader(json))).toThrow(ProtocolError);
     expect(() => decodeMatchAction(new ByteReader(Uint8Array.of(3, 2)))).toThrow(ProtocolError);

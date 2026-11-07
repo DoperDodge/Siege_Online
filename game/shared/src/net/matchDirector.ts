@@ -16,10 +16,15 @@ import type { Sim } from "../sim.js";
 import { viewDir } from "../weapons/spread.js";
 import type { SimEvent } from "../weapons/step.js";
 import { ticks, ticksOrZero } from "../weapons/ticks.js";
-import { Match, matchMapOf, NO_END, Phase, type MatchEvent } from "../match/match.js";
+import { Match, matchMapOf, NO_END, Phase, type MatchEvent, type RoundRecord } from "../match/match.js";
 import { inSite, siteArea } from "../match/objective.js";
 import { preSetupOps } from "../match/preSetup.js";
-import { ATTACK, DEFENSE, isFormat, mvp, RATING_MAX, RATING_MIN, reinforcementPool, type FormatMode, type Side } from "../match/rules.js";
+import { ATTACK, DEFENSE, isFormat, mvp, RATING_MAX, RATING_MIN, reinforcementPool, type FormatMode, type Side, type Team } from "../match/rules.js";
+import type { BotLevel } from "../data/schemas.js";
+import type { NavWorld } from "../bots/nav/world.js";
+import { BotRng } from "../bots/rng.js";
+import { WinReason } from "../match/outcome.js";
+import { aroundSpots, duelSpots, plantedSpot, spreadSpots, type DrillSpot } from "./drills.js";
 import { encodeMatchState, MAX_HISTORY, type LobbyAction, type MatchAction, type MatchView, type RoomListEntry } from "./matchWire.js";
 
 /** What the director needs from its room (net/room.ts implements it). */
@@ -51,6 +56,15 @@ export interface DirectorHost {
   kick(memberId: number): void;
   /** Tell one player why a choice of theirs didn't go through. */
   refuse(memberId: number, why: string): void;
+  /** A new bot member (Phase 9) seated on `team` (it calls seatBot), or null: the room is full. */
+  addBot(team: Team, level: BotLevel): number | null;
+  /** Take a bot out of the room (it leaves like a member). */
+  removeBot(memberId: number): void;
+  /** The bots' navigation (where a drill puts bodies), or null before the first bot. */
+  readonly nav: NavWorld | null;
+  /** A round's prep or action started; a round is over (Phase 9 M9: the people's round reports). */
+  roundPhase?(phase: "prep" | "action"): void;
+  roundOver?(record: RoundRecord): void;
 }
 
 /** How often (ticks) the match state goes out when only scores, votes or run-outs changed; phase changes go at once. */
@@ -58,6 +72,11 @@ const STATE_EVERY = 8;
 
 export class MatchDirector {
   readonly match: Match;
+  /** A drill's round (Phase 9 M8): where it put each member (their bot holds there), the defenders found in prep. */
+  readonly drillSpots = new Map<number, DrillSpot>();
+  private readonly found = new Set<number>();
+  /** A retake drill's defuser, planted once action has started (next step). */
+  private plantNow: Vec3 | null = null;
   /** Each member's loadout pick for their operator (PickLoadout), kept across rounds. */
   private readonly loadouts = new Map<number, LoadoutPick>();
   private readonly formats: Map<string, FormatMode>;
@@ -75,6 +94,8 @@ export class MatchDirector {
   private readonly rulesSent = new Map<number, number>();
   /** Not in the server's room list. */
   private hidden = false;
+  /** syncBots is adding or removing bots (their joins and leaves don't start it again). */
+  private syncing = false;
   /** The hatch the defuser was planted on (a panel index), or null: destroying it deactivates the defuser (research §4 case 8). */
   private plantHatch: number | null = null;
   /**
@@ -87,7 +108,7 @@ export class MatchDirector {
   constructor(
     private readonly host: DirectorHost,
     format: FormatMode,
-    seed: number,
+    private readonly seed: number,
   ) {
     const data = host.sim.data;
     this.formats = new Map([...data.modes.values()].filter(isFormat).map((m) => [m.id, m]));
@@ -112,6 +133,36 @@ export class MatchDirector {
     return true;
   }
 
+  /** A bot member the room made (addBot, Phase 9): its seat on `team`. False when the team is full. */
+  seatBot(memberId: number, name: string, team: Team, level: BotLevel): boolean {
+    if (!this.match.addBot(memberId, name, team, level)) return false;
+    this.changed(true);
+    return true;
+  }
+
+  /**
+   * In the lobby (Phase 9, bots/DESIGN.md §2): each team's bots topped up, or cut back, so that people and bots make
+   * the format's `bots.size` (none without `bots.fill`), at the team's difficulty. People always come first.
+   */
+  syncBots() {
+    if (this.match.phase !== Phase.Lobby || this.syncing) return;
+    this.syncing = true;
+    try {
+      const b = this.mode.match.bots;
+      for (const t of [0, 1] as const) {
+        const on = this.match.team(t);
+        const people = on.filter((p) => p.bot === null).length;
+        const bots = on.filter((p) => p.bot !== null);
+        const want = b?.fill ? Math.max(0, Math.min(b.size[t], this.mode.match.teamSize.max) - people) : 0;
+        for (const p of bots.slice(want).reverse()) this.host.removeBot(p.id);
+        for (const p of bots.slice(0, want)) if (p.bot !== b!.difficulty[t]) (p.bot = b!.difficulty[t]), this.changed(true);
+        for (let n = bots.length; n < want; n++) if (this.host.addBot(t, b!.difficulty[t]) === null) break;
+      }
+    } finally {
+      this.syncing = false;
+    }
+  }
+
   /** A member left: their body dies where it is (D-123), and the match keeps their slot. */
   leave(memberId: number) {
     const body = this.host.bodyOf(memberId);
@@ -127,7 +178,7 @@ export class MatchDirector {
   listing(): RoomListEntry | null {
     if (this.hidden) return null;
     const max = this.mode.match.teamSize.max * 2;
-    return { code: this.host.code, format: this.mode.id, players: [...this.match.players.values()].filter((p) => p.connected).length, maxPlayers: max, phase: this.match.phase, round: this.match.round };
+    return { code: this.host.code, format: this.mode.id, players: [...this.match.players.values()].filter((p) => p.connected && p.bot === null).length, maxPlayers: max, phase: this.match.phase, round: this.match.round };
   }
 
   /** Team damage now: off in prep, the format's rule in action (core_mechanics.md §11). */
@@ -141,6 +192,13 @@ export class MatchDirector {
   lobby(memberId: number, a: LobbyAction) {
     const m = this.match;
     let why: string | null = null;
+    // A person moving onto a team full of bots takes a bot's place (Phase 9).
+    if ((a.kind === "team" || a.kind === "move") && m.phase === Phase.Lobby) {
+      const who = m.players.get(a.kind === "team" ? memberId : a.member);
+      const full = m.team(a.team).length >= this.mode.match.teamSize.max;
+      const bot = full && who && who.bot === null ? m.team(a.team).reverse().find((p) => p.bot !== null) : undefined;
+      if (bot && (a.kind === "team" || memberId === m.hostId)) this.host.removeBot(bot.id);
+    }
     switch (a.kind) {
       case "team":
         why = m.setTeam(memberId, a.team);
@@ -154,11 +212,14 @@ export class MatchDirector {
       case "swapTeams":
         why = m.swapTeams(memberId);
         break;
-      case "kick":
+      case "kick": {
+        const target = m.players.get(a.member);
         if (memberId !== m.hostId) why = "Only the host can do that";
-        else if (a.member === memberId || !m.players.has(a.member)) why = "Can't kick that player";
+        else if (a.member === memberId || !target) why = "Can't kick that player";
+        else if (target.bot !== null) why = this.dropBot(target.id, target.team);
         else this.host.kick(a.member);
         break;
+      }
       case "format": {
         const f = this.formats.get(a.format);
         why = f ? m.setFormat(memberId, f) : "No such format";
@@ -170,6 +231,7 @@ export class MatchDirector {
         if (!why) this.rulesVersion++;
         break;
       case "start": {
+        this.syncBots();
         const r = m.start(memberId, this.host.sim.tick);
         if ("error" in r) why = r.error;
         else this.apply(r);
@@ -199,6 +261,23 @@ export class MatchDirector {
     }
     if (why) this.host.refuse(memberId, why);
     this.changed(true);
+    this.syncBots();
+  }
+
+  /** The host removes a bot: one fewer on its team from now on (the lobby's size for it), or it's gone (backfill). */
+  private dropBot(id: number, team: Team): string | null {
+    if (this.match.phase !== Phase.Lobby) return "Bots leave between matches";
+    if (this.match.base.match.host !== "all") return "This format fills every empty slot: turn its bots off instead";
+    const b = this.mode.match.bots;
+    if (b?.fill) {
+      const size: [number, number] = [b.size[0], b.size[1]];
+      size[team] = Math.max(0, size[team] - 1);
+      const why = this.match.change(this.match.hostId, { kind: "bots", bots: { ...b, size } });
+      if (why) return why;
+      this.rulesVersion++;
+    }
+    this.host.removeBot(id);
+    return null;
   }
 
   action(memberId: number, a: MatchAction) {
@@ -244,6 +323,19 @@ export class MatchDirector {
     }
     if (m.phase === Phase.PostPlant && this.plantHatch !== null && sim.level.panels.list[this.plantHatch]?.panel.broken) m.defuserDeactivated();
     const facts = live ? { attackersUp: this.up(ATTACK), defendersUp: this.up(DEFENSE), plantInProgress: this.planting() } : undefined;
+    // A retake drill: the defuser down and its fuse running as soon as action has started.
+    if (this.plantNow && m.phase === Phase.Action) {
+      const o = sim.objective;
+      if (o) Object.assign(o, { carrier: 0, dropped: null, planted: this.plantNow, canPlant: false });
+      this.plantNow = null;
+      this.apply(m.planted(sim.tick));
+    }
+    // Drone and call: the round is over when prep is, won if every defender was found.
+    const drill = this.mode.match.drill;
+    if (drill?.prepOnly && m.phase === Phase.Prep && sim.tick + 1 >= m.phaseEnd) {
+      const all = m.sides[DEFENSE].length > 0 && m.sides[DEFENSE].every((id) => this.found.has(id));
+      this.apply(m.drillEnd(sim.tick, all ? ATTACK : DEFENSE, all ? WinReason.Found : WinReason.Time));
+    }
     this.apply(m.update(sim.tick, facts));
     this.redWalls();
     this.watchCams();
@@ -338,6 +430,18 @@ export class MatchDirector {
     if ((rules.camsBroken | bits) === rules.camsBroken) return;
     rules.camsBroken |= bits;
     this.changed(true);
+  }
+
+  /** An enemy body spotted by `side` (a ping, a scan): a drone drill counts the defenders found in prep (Phase 9 M8). */
+  onSpotted(pawn: Pawn, side: Side) {
+    if (side !== ATTACK || this.match.phase !== Phase.Prep || pawn.ownerId === null) return;
+    const id = this.memberOfCtrl(pawn.ownerId);
+    if (id !== null && this.match.sideOf(id) === DEFENSE) this.found.add(id);
+  }
+
+  /** How many defenders the attackers have found this prep (a drone drill's score). */
+  get foundCount(): number {
+    return this.found.size;
   }
 
   /** A body went down or died: if it carried the defuser, it falls to the floor under it (research §5; off a rope too). */
@@ -474,6 +578,7 @@ export class MatchDirector {
   private apply(events: readonly MatchEvent[]) {
     for (const e of events) {
       if (e.kind !== "phase") {
+        if (e.kind === "round") this.host.roundOver?.(e.record);
         this.changed(true);
         continue;
       }
@@ -485,6 +590,7 @@ export class MatchDirector {
       }
       if (e.phase === Phase.Prep) this.startPrep();
       if (e.phase === Phase.Action) this.startAction();
+      if (e.phase === Phase.Prep || e.phase === Phase.Action) this.host.roundPhase?.(e.phase === Phase.Prep ? "prep" : "action");
       // The round is decided: no more plants (a planted defuser stays where it is until the next round).
       if (e.phase === Phase.RoundEnd && this.host.sim.objective) this.host.sim.objective.canPlant = false;
       this.prevPhase = e.phase;
@@ -536,12 +642,69 @@ export class MatchDirector {
     if (this.mode.match.preSetups && this.match.site) for (const o of preSetupOps(sim.level.def, sim.level.panels, sim.data.destruction, this.match.site)) this.host.queuePanelOp(o.panel, o.op);
     const spots = this.spawnsOf(this.match.site ?? "");
     defenders.forEach((id, k) => this.spawnOne(id, spots[k % Math.max(1, spots.length)] ?? 0, DEFENSE));
-    // Attackers drone through prep (intel/DESIGN.md §2): their first drone out at the spawn they've chosen.
-    if (sim.data.intel.drone.perAttacker > 0)
+    const drill = this.mode.match.drill;
+    this.drillSpots.clear();
+    this.found.clear();
+    this.plantNow = null;
+    this.placeDefenders();
+    // Attackers drone through prep (intel/DESIGN.md §2): their first drone out at the spawn they've chosen (not in a
+    // drill that starts in action or planted: its prep is only a moment).
+    if (sim.data.intel.drone.perAttacker > 0 && (!drill || drill.start === "prep"))
       for (const [id, spawn] of this.attackerSpawns()) if (this.match.players.get(id)?.connected) this.host.spawnPilot(id, this.loadoutFor(id), spawn, ATTACK);
     const sec = this.mode.match.seconds;
-    sim.objective = { carrier: 0, dropped: null, planted: null, site: this.match.site, canPlant: false, plantTicks: ticks(sec.plant), disableTicks: ticks(sec.disable) };
+    sim.objective = drill && !drill.objective ? null : { carrier: 0, dropped: null, planted: null, site: this.match.site, canPlant: false, plantTicks: ticks(sec.plant), disableTicks: ticks(sec.disable) };
     this.host.rosterChanged();
+  }
+
+  /** A body put on a drill's spot (its client corrected), and the spot kept for its bot. */
+  private placeAt(id: number, spot: DrillSpot) {
+    const body = this.host.bodyOf(id);
+    if (!body) return;
+    this.host.sim.teleport(body.possessedPawnId, spot.pos[0], spot.pos[1], spot.pos[2], spot.yawDeg);
+    this.host.correct(id);
+    this.drillSpots.set(id, spot);
+  }
+
+  /** A drill's defenders where it wants them as prep starts: the duel's side of its door; spread over the storey to clear. */
+  private placeDefenders() {
+    const drill = this.mode.match.drill;
+    const nav = this.host.nav;
+    if (!drill || !nav) return;
+    const sim = this.host.sim;
+    const defenders = this.match.sides[DEFENSE];
+    if (drill.kind === "duel") {
+      const spots = duelSpots(sim, nav, drill, this.match.round);
+      if (spots) defenders.forEach((id) => this.placeAt(id, spots[1]));
+    } else if (drill.storey) {
+      const spots = spreadSpots(sim, nav, drill.storey, defenders.length, new BotRng(this.seed, 0xc1ea + this.match.round));
+      defenders.forEach((id, k) => spots[k] && this.placeAt(id, spots[k]));
+    }
+  }
+
+  /**
+   * A drill's attackers where it wants them as action starts: the duel's other side of its door; for a retake, round the
+   * defuser it plants in the site (its defenders off in the rooms about the site), the fuse starting next step.
+   */
+  private placeAttackers() {
+    const drill = this.mode.match.drill;
+    const nav = this.host.nav;
+    if (!drill || !nav) return;
+    const sim = this.host.sim;
+    const m = this.match;
+    if (drill.kind === "duel") {
+      const spots = duelSpots(sim, nav, drill, m.round);
+      if (spots) m.sides[ATTACK].forEach((id) => this.placeAt(id, spots[0]));
+    }
+    if (drill.start === "planted" && m.site) {
+      const rng = new BotRng(this.seed, 0x7e7a + m.round);
+      const at = plantedSpot(sim, nav, m.site, rng);
+      if (!at) return;
+      const atk = aroundSpots(sim, nav, at, m.site, true, m.sides[ATTACK].length, rng);
+      m.sides[ATTACK].forEach((id, k) => atk[k] && this.placeAt(id, atk[k]));
+      const def = aroundSpots(sim, nav, at, m.site, false, m.sides[DEFENSE].length, rng);
+      m.sides[DEFENSE].forEach((id, k) => def[k] && this.placeAt(id, def[k]));
+      this.plantNow = at;
+    }
   }
 
   /** Action: each attacker at their spawn group's next free point, in slot order; the format's safeguard starts. */
@@ -550,6 +713,7 @@ export class MatchDirector {
     this.safeguardEnd = sec > 0 ? this.host.sim.tick + ticks(sec) : 0;
     this.safeguardOver.clear();
     for (const [id, spawn] of this.attackerSpawns()) this.spawnOne(id, spawn, ATTACK);
+    this.placeAttackers();
     // The defuser comes in on its carrier (the match chose one as action started).
     const o = this.host.sim.objective;
     const carrier = this.match.carrier !== null ? this.host.bodyOf(this.match.carrier) : null;
@@ -591,7 +755,7 @@ export class MatchDirector {
     this.dirty = false;
     this.urgent = false;
     this.lastSent = tick;
-    for (const id of this.match.players.keys()) if (this.match.players.get(id)!.connected) this.host.send(id, encodeMatchState(this.view(id)));
+    for (const [id, p] of this.match.players) if (p.connected && p.bot === null) this.host.send(id, encodeMatchState(this.view(id)));
   }
 
   /** Who carries the defuser: the owner of its carrier pawn once the round is under way, else the planning screen's choice. */
@@ -643,6 +807,7 @@ export class MatchDirector {
           assists: p.assists,
           rating: p.rating,
           newRating: p.newRating,
+          bot: p.bot,
         };
       });
     const rulesFresh = this.rulesSent.get(you) === this.rulesVersion;

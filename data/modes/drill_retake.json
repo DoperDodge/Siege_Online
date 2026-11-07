@@ -1,0 +1,78 @@
+{
+  "_doc": "A Bot Training drill (PLAN §15.1; bots/DESIGN.md §10; Phase 9 M8): Bot Training's rules with a `drill` block the match director reads to set rounds up; the host can still change sizes, difficulty and the rest in the lobby. Retake: the defuser already planted in the site, you attacking and holding it against three defender bots coming to disable it (or, swapping sides in the lobby, retaking it yourself). Rounds start with the fuse running. Score: rounds won, time (ours).",
+  "_season": "Y11S3",
+  "_unverified": [
+    "reverseFriendlyFire.thresholdHp",
+    "match.seconds.pick",
+    "match.seconds.roundEnd"
+  ],
+  "id": "drill_retake",
+  "friendlyFire": {
+    "actionPhase": true,
+    "prepPhase": false,
+    "scale": 1.0
+  },
+  "reverseFriendlyFire": {
+    "enabled": true,
+    "thresholdHp": 100
+  },
+  "lastAliveDies": true,
+  "dummyRespawnS": 0,
+  "reinforcements": 10,
+  "defenderToolsForAll": false,
+  "attackerToolsForAll": false,
+  "match": {
+    "name": "Drill: Retake",
+    "teamSize": {
+      "min": 1,
+      "max": 5
+    },
+    "rounds": 6,
+    "swapEvery": 24,
+    "firstAttack": "blue",
+    "overtime": null,
+    "bans": null,
+    "site": "random",
+    "siteReveal": "sight",
+    "seconds": {
+      "pick": 10,
+      "pickSameSides": null,
+      "prep": 3,
+      "action": 180,
+      "plant": 7,
+      "fuse": 45,
+      "disable": 7,
+      "roundEnd": 6,
+      "runoutGrace": 1,
+      "attackerSafeguard": 0,
+      "redWallExtension": 0
+    },
+    "reinforcementScaling": "scaled",
+    "preSetups": false,
+    "attrition": "none",
+    "stats": "none",
+    "host": "all",
+    "bots": {
+      "fill": true,
+      "size": [
+        1,
+        3
+      ],
+      "difficulty": [
+        "normal",
+        "normal"
+      ],
+      "picks": "random",
+      "site": null
+    },
+    "drill": {
+      "kind": "retake",
+      "start": "planted",
+      "objective": true,
+      "prepOnly": false,
+      "doors": [],
+      "apartM": 4,
+      "storey": null
+    }
+  }
+}

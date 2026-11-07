@@ -77,6 +77,7 @@ import {
   placeSpotFor,
   slotGadget,
   type GadgetData,
+  type RoundReport,
 } from "@redmond/shared";
 import { Controls, type Action, type UiAction } from "../../input/controls.js";
 import { horizontalFov, keyLabel, loadSettings, saveSettings, type HoldMode, type Settings } from "../../input/settings.js";
@@ -185,6 +186,8 @@ export interface LabApi extends LabHandle {
   onShot(fn: (shot: ShotResult) => void): void;
   /** Each tick's server events. */
   onEvents(fn: (tick: number, events: GameEvent[]) => void): void;
+  /** Your round's report as it ends (Phase 9 M9, match pages). */
+  onReport(fn: (report: RoundReport) => void): void;
   /** Every frame, with everything posed and before drawing; `renderTick` is the moment others are drawn at. */
   onFrame(fn: (now: number, renderTick: number) => void): void;
   /** A key the lab itself leaves free (e.g. F2). */
@@ -265,6 +268,10 @@ export async function startLab(o: LabOptions): Promise<void> {
   const hitMarkers = new HitMarkers(app);
   const damageHud = new DamageIndicator(app);
   const killFeed = new KillFeed(app);
+  /** "KILLCAM · name" over the view while the killcam plays (Phase 9 M9). */
+  const killcamTag = document.createElement("div");
+  killcamTag.className = "killcam-tag hidden";
+  app.appendChild(killcamTag);
   /** Pings, spotted enemies, the comm wheel and the scan's gauge (Phase 7 M4). */
   const intelHud = new IntelHud(app, data.intel.callouts, data.intel.ping.perPlayer);
 
@@ -305,6 +312,7 @@ export async function startLab(o: LabOptions): Promise<void> {
   const hooks = {
     shot: [] as ((shot: ShotResult) => void)[],
     events: [] as ((tick: number, events: GameEvent[]) => void)[],
+    reports: [] as ((report: RoundReport) => void)[],
     frame: [] as ((now: number, renderTick: number) => void)[],
     keys: new Map<string, () => void>(),
     tools: [] as { label: string; run: () => void }[],
@@ -961,6 +969,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     claimedViewTick: (seq16) => claims.get(seq16)?.viewTick ?? null,
     onShot: (fn) => hooks.shot.push(fn),
     onEvents: (fn) => hooks.events.push(fn),
+    onReport: (fn) => hooks.reports.push(fn),
     onFrame: (fn) => hooks.frame.push(fn),
     onKey: (code, fn) => hooks.keys.set(code, fn),
     addLabTool: (label, run) => hooks.tools.push({ label, run }),
@@ -1173,14 +1182,28 @@ export async function startLab(o: LabOptions): Promise<void> {
 
     const me = live ? possessed() : undefined;
     const viewed = me ? (sim.pawns.get(viewedId) ?? me) : undefined;
-    const renderTick = net ? net.session.frame() : 0;
+    const liveRenderTick = net ? net.session.frame() : 0;
+    // The killcam replays the seconds before your death (everyone else as they were then).
+    const replay = spec?.kind === "pawn" ? killcamTick(now) : null;
+    const renderTick = replay ?? liveRenderTick;
     shownRenderTick = renderTick;
+    killcamTag.classList.toggle("hidden", replay === null);
+    if (replay !== null && killcam) killcamTag.textContent = `KILLCAM · ${killcam.name}`;
+    // Your bodies' trail (for the killcam), alive, a few seconds of it.
+    if (net && o.match && me && me.state.mode !== PawnMode.Dead) {
+      const tick = net.session.serverTick();
+      for (const id of ctrl.pawnIds) {
+        const p = sim.pawns.get(id);
+        if (p && p.kind === PawnKind.Body) ownTrail.push({ tick, pawnId: id, state: { ...p.state } });
+      }
+      while (ownTrail.length && ownTrail[0].tick < tick - (KILLCAM_S + 2) * TICK_HZ) ownTrail.shift();
+    }
     /** Looking from outside your body: third person, or a map's plan view. */
     const outside = thirdPerson || storeyView?.plan === true || freeCam !== null;
     // On a default camera everyone is drawn, your body too (it stands where you left it).
     // (A Bulletproof Camera of a round just over is still yours until the next tick hands you on: not this frame.)
     const onCamera = !spec && ctrl.cam !== 0 && ctrl.cam <= sim.camCount();
-    drawBodies(alpha, renderTick, spec ? (spec.kind === "pawn" ? spec.pawnId : -1) : onCamera ? -1 : viewed!.id, spec ? spec.kind !== "pawn" : outside || onCamera);
+    drawBodies(alpha, renderTick, spec ? (spec.kind === "pawn" ? spec.pawnId : -1) : onCamera ? -1 : viewed!.id, spec ? spec.kind !== "pawn" : outside || onCamera, replay !== null);
     // A watched camera's light: blue to defenders, red to attackers.
     const watched = net?.session.match?.camsWatched ?? 0;
     const levelCams = sim.level.def.cameras.length;
@@ -1314,11 +1337,12 @@ export async function startLab(o: LabOptions): Promise<void> {
    * Pose and show every body: other players a little in the past, between two server snapshots; our own from our
    * prediction. The body whose eyes the camera is at (`eyesId`) isn't drawn in first person (`outside` false).
    */
-  function drawBodies(alpha: number, renderTick: number, eyesId: number, outside: boolean) {
+  function drawBodies(alpha: number, renderTick: number, eyesId: number, outside: boolean, replay = false) {
     syncPawnViews();
     for (const pawn of sim.pawns.values()) {
       const v = pawnViews.get(pawn.id)!;
-      const rs = pawn.proxy ? net!.session.remoteAt(pawn.id, renderTick) : interpolated(pawn, alpha);
+      // A killcam replay draws your own body as it was then (its trail).
+      const rs = pawn.proxy ? net!.session.remoteAt(pawn.id, renderTick) : replay ? (ownAt(pawn.id, renderTick) ?? interpolated(pawn, alpha)) : interpolated(pawn, alpha);
       // On a map, a body on a storey hidden over yours is hidden with it.
       const drawn = rs !== null && (storeyView?.draws(rs.y) ?? true);
       v.body.visible = drawn;
@@ -1356,6 +1380,27 @@ export async function startLab(o: LabOptions): Promise<void> {
   /** How long a match page shows your own dead body before the camera moves on (to a teammate). */
   const DEAD_VIEW_MS = 3000;
   let deadSince: number | null = null;
+  /**
+   * The killcam (Phase 9 M9, bots/DESIGN.md §11): once you're eliminated by someone, the last KILLCAM_S seconds before
+   * it replayed from their eye (everyone drawn as they were then: the snapshots kept, your own body from its trail),
+   * then on to your teammates. No new data on the wire.
+   */
+  const KILLCAM_S = 4;
+  let killcam: { killer: number; name: string; deathTick: number; start: number } | null = null;
+  /** Your bodies' recent states (the killcam draws you as you were), by server tick. */
+  const ownTrail: { tick: number; pawnId: number; state: PawnState }[] = [];
+  /** The tick the killcam shows now, or null (not replaying). */
+  function killcamTick(now: number): number | null {
+    if (!killcam) return null;
+    const t = (now - killcam.start) / 1000;
+    return t < KILLCAM_S ? killcam.deathTick - (KILLCAM_S - t) * TICK_HZ : null;
+  }
+  /** Your body as it was at `tick` (its trail), or null. */
+  function ownAt(pawnId: number, tick: number): PawnState | null {
+    let best: PawnState | null = null;
+    for (const e of ownTrail) if (e.pawnId === pawnId && e.tick <= tick) best = e.state;
+    return best;
+  }
 
   /** The spectator view for this frame, or null while you have a living body (or a fresh death) to look through. */
   function spectating(live: boolean): SpectateView | null {
@@ -1365,11 +1410,14 @@ export async function startLab(o: LabOptions): Promise<void> {
     const p = live ? possessed() : undefined;
     if (p && p.state.mode !== PawnMode.Dead) {
       deadSince = null;
+      killcam = null;
       return null;
     }
     if (p) {
       deadSince ??= performance.now();
-      if (performance.now() - deadSince < DEAD_VIEW_MS) return null;
+      // Your killer's view of your last seconds first; with no killcam, your own body a moment.
+      if (killcam && killcamTick(performance.now()) !== null) return { kind: "pawn", pawnId: killcam.killer };
+      if (!killcam && performance.now() - deadSince < DEAD_VIEW_MS) return null;
     }
     return spectateFn?.() ?? { kind: "overview" };
   }
@@ -2003,6 +2051,7 @@ export async function startLab(o: LabOptions): Promise<void> {
             onRoster: () => (rosterChanged = true),
             onShot: (shot) => showShot(shot),
             onEvents: (tick, events) => gameEvents(tick, events),
+            onReport: (report) => hooks.reports.forEach((fn) => fn(report)),
             onPanels: (_tick, ops, changes) => panelEvents(ops, changes),
             trackMispredictions: autotest, // the e2e scripts report what a misprediction got wrong
             onLocalEvents: (events) => onWeaponEvents(events),
@@ -2047,6 +2096,8 @@ export async function startLab(o: LabOptions): Promise<void> {
   function matchRoom(): Promise<OnlineConnection> {
     const code = (params.get("room") ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 5);
     const format = params.get("format");
+    // Bot Training offline (Phase 9, `?offline`): the match room runs in this page's worker, you and the bots, no server.
+    const offline = params.has("offline") && !!format;
     const fail = matchFail;
     if (!code && !format) {
       location.replace("/play.html");
@@ -2064,16 +2115,18 @@ export async function startLab(o: LabOptions): Promise<void> {
       let joined = false;
       const conn: OnlineConnection = new OnlineConnection({
         name: name.trim().slice(0, 24) || "Player",
-        room: code || null,
+        room: offline ? null : code || null,
         format: format ?? undefined,
         levelId: o.levelId,
         conditions: () => conditions,
+        socket: offline ? () => new LocalSocket() : undefined,
         session: {
           onWelcome: () => {
             if (conn.closed) return;
             joined = true;
             void conn.session.loaded().then(() => {
               if (conn.closed) return fail(disconnected ?? "Lost connection to the server.");
+              if (offline) return resolve(conn); // a reload starts a new offline match: the link stays as it is
               const url = new URL(location.href);
               url.searchParams.delete("format");
               url.searchParams.delete("name");
@@ -2090,6 +2143,7 @@ export async function startLab(o: LabOptions): Promise<void> {
           onRoster: () => (rosterChanged = true),
           onShot: (shot) => showShot(shot),
           onEvents: (tick, events) => gameEvents(tick, events),
+          onReport: (report) => hooks.reports.forEach((fn) => fn(report)),
           onPanels: (_tick, ops, changes) => panelEvents(ops, changes),
           trackMispredictions: autotest,
           onLocalEvents: (events) => onWeaponEvents(events),
@@ -2137,6 +2191,7 @@ export async function startLab(o: LabOptions): Promise<void> {
           onRoster: () => (rosterChanged = true),
           onShot: (shot) => showShot(shot),
           onEvents: (tick, events) => gameEvents(tick, events),
+          onReport: (report) => hooks.reports.forEach((fn) => fn(report)),
           onPanels: (_tick, ops, changes) => panelEvents(ops, changes),
           trackMispredictions: autotest,
           onLocalEvents: (events) => onWeaponEvents(events),
@@ -2429,7 +2484,15 @@ export async function startLab(o: LabOptions): Promise<void> {
       } else {
         const line = feedLine(e, feedNames, { ctrl: me, pawns: ctrl.pawnIds });
         if (line) killFeed.push(line, now);
-        if (e.kind === "kill" && e.victimCtrl === me) death = { pawnId: e.victimPawn, life: sim.pawns.get(e.victimPawn)?.life ?? 0, text: deathLine(e, feedNames) };
+        if (e.kind === "kill" && e.victimCtrl === me) {
+          death = { pawnId: e.victimPawn, life: sim.pawns.get(e.victimPawn)?.life ?? 0, text: deathLine(e, feedNames) };
+          // The dead view's time counts from the death itself, not from the next frame drawn (a slow page draws few).
+          deadSince = performance.now();
+          // Killed by someone else (in a match): their view of it, from the snapshots kept.
+          const by = e.killerCtrl && e.killerCtrl !== me ? net!.session.roster.find((r) => r.controllerId === e.killerCtrl) : undefined;
+          const killer = by?.pawnIds.find((id) => net!.session.remoteNewestTick(id) !== null);
+          if (o.match && by && killer !== undefined) killcam = { killer, name: by.name, deathTick: tick, start: performance.now() };
+        }
         // Intel (Phase 7): pings, scans and callouts from your team (and word that you were spotted).
         // Brava's Kludge drone (Phase 8 M8): its hack's progress and the hacks it has left; Skopós told her shell's overheating.
         if (e.kind === "hack") {
