@@ -212,6 +212,10 @@ Each drill is a Bot Training preset (data/modes/drill_*.json, a `drill` block th
 The wording "solo retake vs 1–3 defenders after plant" names defenders as the opponents, so you attack (holding the
 plant); the drill offers the other side too (D-158).
 
+As built (M8, D-166): the `drill` block is in the format's match rules (start: prep, action or planted; objective;
+prepOnly; the duel's doors; the clear's storey); the director places bodies from the nav grid (net/drills.ts) and the
+bots placed by a drill hold there. Scores per drill come with M9's feedback.
+
 ## 11. Training feedback (§15.5)
 
 - **Round report**, sent to each human at the round's end (a new message): where they died and who saw them first

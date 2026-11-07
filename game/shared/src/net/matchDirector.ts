@@ -21,6 +21,10 @@ import { inSite, siteArea } from "../match/objective.js";
 import { preSetupOps } from "../match/preSetup.js";
 import { ATTACK, DEFENSE, isFormat, mvp, RATING_MAX, RATING_MIN, reinforcementPool, type FormatMode, type Side, type Team } from "../match/rules.js";
 import type { BotLevel } from "../data/schemas.js";
+import type { NavWorld } from "../bots/nav/world.js";
+import { BotRng } from "../bots/rng.js";
+import { WinReason } from "../match/outcome.js";
+import { aroundSpots, duelSpots, plantedSpot, spreadSpots, type DrillSpot } from "./drills.js";
 import { encodeMatchState, MAX_HISTORY, type LobbyAction, type MatchAction, type MatchView, type RoomListEntry } from "./matchWire.js";
 
 /** What the director needs from its room (net/room.ts implements it). */
@@ -56,6 +60,8 @@ export interface DirectorHost {
   addBot(team: Team, level: BotLevel): number | null;
   /** Take a bot out of the room (it leaves like a member). */
   removeBot(memberId: number): void;
+  /** The bots' navigation (where a drill puts bodies), or null before the first bot. */
+  readonly nav: NavWorld | null;
 }
 
 /** How often (ticks) the match state goes out when only scores, votes or run-outs changed; phase changes go at once. */
@@ -63,6 +69,11 @@ const STATE_EVERY = 8;
 
 export class MatchDirector {
   readonly match: Match;
+  /** A drill's round (Phase 9 M8): where it put each member (their bot holds there), the defenders found in prep. */
+  readonly drillSpots = new Map<number, DrillSpot>();
+  private readonly found = new Set<number>();
+  /** A retake drill's defuser, planted once action has started (next step). */
+  private plantNow: Vec3 | null = null;
   /** Each member's loadout pick for their operator (PickLoadout), kept across rounds. */
   private readonly loadouts = new Map<number, LoadoutPick>();
   private readonly formats: Map<string, FormatMode>;
@@ -94,7 +105,7 @@ export class MatchDirector {
   constructor(
     private readonly host: DirectorHost,
     format: FormatMode,
-    seed: number,
+    private readonly seed: number,
   ) {
     const data = host.sim.data;
     this.formats = new Map([...data.modes.values()].filter(isFormat).map((m) => [m.id, m]));
@@ -309,6 +320,19 @@ export class MatchDirector {
     }
     if (m.phase === Phase.PostPlant && this.plantHatch !== null && sim.level.panels.list[this.plantHatch]?.panel.broken) m.defuserDeactivated();
     const facts = live ? { attackersUp: this.up(ATTACK), defendersUp: this.up(DEFENSE), plantInProgress: this.planting() } : undefined;
+    // A retake drill: the defuser down and its fuse running as soon as action has started.
+    if (this.plantNow && m.phase === Phase.Action) {
+      const o = sim.objective;
+      if (o) Object.assign(o, { carrier: 0, dropped: null, planted: this.plantNow, canPlant: false });
+      this.plantNow = null;
+      this.apply(m.planted(sim.tick));
+    }
+    // Drone and call: the round is over when prep is, won if every defender was found.
+    const drill = this.mode.match.drill;
+    if (drill?.prepOnly && m.phase === Phase.Prep && sim.tick + 1 >= m.phaseEnd) {
+      const all = m.sides[DEFENSE].length > 0 && m.sides[DEFENSE].every((id) => this.found.has(id));
+      this.apply(m.drillEnd(sim.tick, all ? ATTACK : DEFENSE, all ? WinReason.Found : WinReason.Time));
+    }
     this.apply(m.update(sim.tick, facts));
     this.redWalls();
     this.watchCams();
@@ -403,6 +427,18 @@ export class MatchDirector {
     if ((rules.camsBroken | bits) === rules.camsBroken) return;
     rules.camsBroken |= bits;
     this.changed(true);
+  }
+
+  /** An enemy body spotted by `side` (a ping, a scan): a drone drill counts the defenders found in prep (Phase 9 M8). */
+  onSpotted(pawn: Pawn, side: Side) {
+    if (side !== ATTACK || this.match.phase !== Phase.Prep || pawn.ownerId === null) return;
+    const id = this.memberOfCtrl(pawn.ownerId);
+    if (id !== null && this.match.sideOf(id) === DEFENSE) this.found.add(id);
+  }
+
+  /** How many defenders the attackers have found this prep (a drone drill's score). */
+  get foundCount(): number {
+    return this.found.size;
   }
 
   /** A body went down or died: if it carried the defuser, it falls to the floor under it (research §5; off a rope too). */
@@ -601,12 +637,69 @@ export class MatchDirector {
     if (this.mode.match.preSetups && this.match.site) for (const o of preSetupOps(sim.level.def, sim.level.panels, sim.data.destruction, this.match.site)) this.host.queuePanelOp(o.panel, o.op);
     const spots = this.spawnsOf(this.match.site ?? "");
     defenders.forEach((id, k) => this.spawnOne(id, spots[k % Math.max(1, spots.length)] ?? 0, DEFENSE));
-    // Attackers drone through prep (intel/DESIGN.md §2): their first drone out at the spawn they've chosen.
-    if (sim.data.intel.drone.perAttacker > 0)
+    const drill = this.mode.match.drill;
+    this.drillSpots.clear();
+    this.found.clear();
+    this.plantNow = null;
+    this.placeDefenders();
+    // Attackers drone through prep (intel/DESIGN.md §2): their first drone out at the spawn they've chosen (not in a
+    // drill that starts in action or planted: its prep is only a moment).
+    if (sim.data.intel.drone.perAttacker > 0 && (!drill || drill.start === "prep"))
       for (const [id, spawn] of this.attackerSpawns()) if (this.match.players.get(id)?.connected) this.host.spawnPilot(id, this.loadoutFor(id), spawn, ATTACK);
     const sec = this.mode.match.seconds;
-    sim.objective = { carrier: 0, dropped: null, planted: null, site: this.match.site, canPlant: false, plantTicks: ticks(sec.plant), disableTicks: ticks(sec.disable) };
+    sim.objective = drill && !drill.objective ? null : { carrier: 0, dropped: null, planted: null, site: this.match.site, canPlant: false, plantTicks: ticks(sec.plant), disableTicks: ticks(sec.disable) };
     this.host.rosterChanged();
+  }
+
+  /** A body put on a drill's spot (its client corrected), and the spot kept for its bot. */
+  private placeAt(id: number, spot: DrillSpot) {
+    const body = this.host.bodyOf(id);
+    if (!body) return;
+    this.host.sim.teleport(body.possessedPawnId, spot.pos[0], spot.pos[1], spot.pos[2], spot.yawDeg);
+    this.host.correct(id);
+    this.drillSpots.set(id, spot);
+  }
+
+  /** A drill's defenders where it wants them as prep starts: the duel's side of its door; spread over the storey to clear. */
+  private placeDefenders() {
+    const drill = this.mode.match.drill;
+    const nav = this.host.nav;
+    if (!drill || !nav) return;
+    const sim = this.host.sim;
+    const defenders = this.match.sides[DEFENSE];
+    if (drill.kind === "duel") {
+      const spots = duelSpots(sim, nav, drill, this.match.round);
+      if (spots) defenders.forEach((id) => this.placeAt(id, spots[1]));
+    } else if (drill.storey) {
+      const spots = spreadSpots(sim, nav, drill.storey, defenders.length, new BotRng(this.seed, 0xc1ea + this.match.round));
+      defenders.forEach((id, k) => spots[k] && this.placeAt(id, spots[k]));
+    }
+  }
+
+  /**
+   * A drill's attackers where it wants them as action starts: the duel's other side of its door; for a retake, round the
+   * defuser it plants in the site (its defenders off in the rooms about the site), the fuse starting next step.
+   */
+  private placeAttackers() {
+    const drill = this.mode.match.drill;
+    const nav = this.host.nav;
+    if (!drill || !nav) return;
+    const sim = this.host.sim;
+    const m = this.match;
+    if (drill.kind === "duel") {
+      const spots = duelSpots(sim, nav, drill, m.round);
+      if (spots) m.sides[ATTACK].forEach((id) => this.placeAt(id, spots[0]));
+    }
+    if (drill.start === "planted" && m.site) {
+      const rng = new BotRng(this.seed, 0x7e7a + m.round);
+      const at = plantedSpot(sim, nav, m.site, rng);
+      if (!at) return;
+      const atk = aroundSpots(sim, nav, at, m.site, true, m.sides[ATTACK].length, rng);
+      m.sides[ATTACK].forEach((id, k) => atk[k] && this.placeAt(id, atk[k]));
+      const def = aroundSpots(sim, nav, at, m.site, false, m.sides[DEFENSE].length, rng);
+      m.sides[DEFENSE].forEach((id, k) => def[k] && this.placeAt(id, def[k]));
+      this.plantNow = at;
+    }
   }
 
   /** Action: each attacker at their spawn group's next free point, in slot order; the format's safeguard starts. */
@@ -615,6 +708,7 @@ export class MatchDirector {
     this.safeguardEnd = sec > 0 ? this.host.sim.tick + ticks(sec) : 0;
     this.safeguardOver.clear();
     for (const [id, spawn] of this.attackerSpawns()) this.spawnOne(id, spawn, ATTACK);
+    this.placeAttackers();
     // The defuser comes in on its carrier (the match chose one as action started).
     const o = this.host.sim.objective;
     const carrier = this.match.carrier !== null ? this.host.bodyOf(this.match.carrier) : null;

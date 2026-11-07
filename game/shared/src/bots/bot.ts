@@ -160,6 +160,11 @@ export class Bot {
     this.legs.stop();
   }
 
+  /** No order any more (a new round). */
+  clearOrders(): void {
+    this.orders = [];
+  }
+
   /** The order it's on (its current task), or null: none, done, or its time is up. */
   ordered(now: number): Task | null {
     if (this.orders.length && now > this.ordersUntil) this.orders = [];
@@ -1067,7 +1072,15 @@ export class Bot {
     if (waiting && m.ticksLeft(now) > PICK_LATE_S * TICK_HZ) return;
     const allowed = m.allowed(this.memberId);
     const how = m.mode.match.bots?.picks ?? "random";
-    const op = how === "fixed" ? allowed[0] : this.rng.pick(allowed);
+    let op: string | undefined;
+    if (how === "counter") {
+      // The answer to the other side's people's operators (data/bots/picks.json `counters`, best first), once they've
+      // picked (or the timer's nearly out); none of those free: at random.
+      const theirs = m.sides[side === ATTACK ? DEFENSE : ATTACK].map((id) => m.players.get(id)).filter((p) => p && p.bot === null && p.connected);
+      if (theirs.some((p) => p!.operator === null) && m.ticksLeft(now) > PICK_LATE_S * TICK_HZ) return;
+      op = theirs.flatMap((p) => w.sim.data.bots.picks.counters[p!.operator ?? ""] ?? []).find((c) => allowed.includes(c));
+    }
+    op ??= how === "fixed" ? allowed[0] : this.rng.pick(allowed);
     if (op) w.pick(botLoadout(w.sim.data, op, this.rng.next()));
   }
 }

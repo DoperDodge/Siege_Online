@@ -29,7 +29,7 @@ const phase = (v: number): Phase => {
   return v as Phase;
 };
 const reason = (v: number): WinReason => {
-  if (v > WinReason.Deactivated) throw new ProtocolError("bad round result");
+  if (v > WinReason.Found) throw new ProtocolError("bad round result");
   return v as WinReason;
 };
 /** An optional id: the empty string is none. */

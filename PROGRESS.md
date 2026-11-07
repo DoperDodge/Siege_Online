@@ -20,7 +20,7 @@ breach by the same rules, and they know only what their team could know (what th
 | M5 | Attacking bots: drones in prep, routes, breaches, vertical play, rappel, the plant | ✅ (breaches and vertical with M7; rappel not yet) |
 | M6 | The team planner and every site's plan (data/maps/oregon/bot_strats.json); orders from you on the comm wheel | ✅ |
 | M7 | All twelve operators' abilities, the generic gadgets, Fuze's shield | ✅ |
-| M8 | Bot Training setup and the drills | |
+| M8 | Bot Training setup and the drills | ✅ |
 | M9 | Training feedback after each round: report, killcam, stats | |
 | M10 | Soak tests, the tick budget, browser test, review, report | |
 
@@ -160,6 +160,29 @@ breach by the same rules, and they know only what their team could know (what th
 - Try it: Bot Training offline with your team's size at 5 (you and four bots). Ping a spot, then the wheel.
 - Tests: game/shared/test/botOrders.test.ts (the wheel's orders; Go here, Follow me, Regroup; Breach this on a soft
   wall; Push and Rotate).
+
+### M8: the drills, and "counter my pick" (D-166)
+- **Play page → Bot Training → Drills**: six offline setups, each a Bot Training preset you can still change in the
+  lobby (sizes, difficulty, site…):
+  - **1v1 Aim Duel**: you and one bot either side of a doorway (Oregon's inside doors in turn, 4 m each side), straight
+    into a 60 s round, no defuser, sides swapping every round, first to 5.
+  - **Retake**: the round starts with the defuser already planted in the site and its fuse running, you near it, three
+    defender bots in the rooms about the site coming to disable it (swap sides in the lobby to retake it yourself).
+  - **Site Hold**: you defend a site alone against five attacking bots, prep included.
+  - **Clear a Floor**: five defender bots spread over the first floor, a room each, holding an angle; no defuser: kill
+    them all before the time's up.
+  - **Drone and Call**: prep only. Drone the house and ping every defender you find; the round ends with prep, won if
+    you found them all ("Every defender found").
+  - **Custom Scenario**: Bot Training starting straight in action (the drill block in the lobby's rules says how rounds
+    start: prep, action, or planted).
+- **"Counter your pick"** (the lobby's Bots' operators): the other side's bots wait for your pick and answer it from
+  data/bots/picks.json (Mute, Mira and Lesion against Thermite; Brava, Striker and Fuze against Mute; and so on).
+- Drills aren't in the New match menu (they have their own buttons); a drill that starts in action or planted has only
+  a 3 s prep, and no drones.
+- Tests: game/shared/test/botDrills.test.ts (each drill sets up and ends as it says; counter my pick); a browser check
+  of the Play page and an offline duel.
+- Known: the drills' own scores (time to kill, defenders found…) are in the round results only as wins until M9's
+  training feedback.
 
 ---
 

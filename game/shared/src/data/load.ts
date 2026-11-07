@@ -29,6 +29,12 @@ import oneVOneJson from "../../../../data/modes/one_v_one.json";
 import customJson from "../../../../data/modes/custom.json";
 import practiceJson from "../../../../data/modes/practice.json";
 import botTrainingJson from "../../../../data/modes/bot_training.json";
+import drillDuelJson from "../../../../data/modes/drill_duel.json";
+import drillRetakeJson from "../../../../data/modes/drill_retake.json";
+import drillSiteHoldJson from "../../../../data/modes/drill_site_hold.json";
+import drillClearJson from "../../../../data/modes/drill_clear.json";
+import drillDroneJson from "../../../../data/modes/drill_drone.json";
+import drillCustomJson from "../../../../data/modes/drill_custom.json";
 import botDifficultyJson from "../../../../data/bots/difficulty.json";
 import botNamesJson from "../../../../data/bots/names.json";
 import botPicksJson from "../../../../data/bots/picks.json";
@@ -116,7 +122,7 @@ export const rawData = {
   weapons: weaponFiles,
   gunplay: gunplayJson as Record<string, unknown>,
   combat: combatJson as Record<string, unknown>,
-  modes: [labModeJson, quickMatchJson, unrankedJson, rankedJson, oneVOneJson, customJson, practiceJson, botTrainingJson] as Record<string, unknown>[],
+  modes: [labModeJson, quickMatchJson, unrankedJson, rankedJson, oneVOneJson, customJson, practiceJson, botTrainingJson, drillDuelJson, drillRetakeJson, drillSiteHoldJson, drillClearJson, drillDroneJson, drillCustomJson] as Record<string, unknown>[],
   objective: objectiveJson as Record<string, unknown>,
   intel: intelJson as Record<string, unknown>,
   destruction: destructionJson as Record<string, unknown>,

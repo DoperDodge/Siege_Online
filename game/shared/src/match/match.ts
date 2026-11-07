@@ -27,6 +27,8 @@ import {
 } from "./rules.js";
 import { applyHostChange, type HostChange } from "./settings.js";
 
+/** A drill starting in action or planted (Phase 9 M8): its prep is this long at most (s), for bodies to stand. */
+const DRILL_PREP_S = 3;
 export const Phase = { Lobby: 0, Ban: 1, Planning: 2, Prep: 3, Action: 4, PostPlant: 5, RoundEnd: 6, MatchEnd: 7 } as const;
 export type Phase = (typeof Phase)[keyof typeof Phase];
 export const PHASE_NAMES = ["lobby", "ban", "planning", "prep", "action", "postPlant", "roundEnd", "matchEnd"] as const;
@@ -481,7 +483,8 @@ export class Match {
         this.autoPick(this.sides[ATTACK]);
         this.autoPick(this.sides[DEFENSE]);
         if (this.m.siteReveal === "roundStart") this.siteRevealed = true;
-        return [this.enter(Phase.Prep, tick, this.m.seconds.prep)];
+        // A drill that starts in action (or planted) has only a moment of prep: bodies to their places (Phase 9 M8).
+        return [this.enter(Phase.Prep, tick, this.m.drill && this.m.drill.start !== "prep" ? Math.min(this.m.seconds.prep, DRILL_PREP_S) : this.m.seconds.prep)];
       case Phase.Prep:
         if (!due) return [];
         this.autoPick(this.sides[ATTACK]);
@@ -514,6 +517,12 @@ export class Match {
   }
 
   // ------------------------------------------------------------------ what happens in the simulation
+
+  /** A drill's round decided by the drill (drone and call: when prep ends), for `side`. */
+  drillEnd(tick: number, side: Side, reason: WinReason): MatchEvent[] {
+    if (this.phase !== Phase.Prep && this.phase !== Phase.Action && this.phase !== Phase.PostPlant) return [];
+    return this.endRound(tick, side, reason);
+  }
 
   /** The defuser is planted: post-plant, with the fuse as its timer. A plant started before the timer ran out may finish after it. */
   planted(tick: number): MatchEvent[] {

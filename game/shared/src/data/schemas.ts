@@ -582,6 +582,23 @@ export const botsRulesSchema = z.strictObject({
 export type BotsRules = z.infer<typeof botsRulesSchema>;
 
 /**
+ * A Bot Training drill (Phase 9 M8, bots/DESIGN.md §10; data/modes/drill_*.json): how its rounds start (prep as usual;
+ * straight into action, everyone where the drill puts them; or with the defuser already planted in the site), whether
+ * there's a defuser at all, whether the round is over when prep is (droning), the doors a duel is fought across (one
+ * a round, in turn, each player `apartM` from it), the storey the defenders spread over to be cleared.
+ */
+export const drillSchema = z.strictObject({
+  kind: z.enum(["duel", "retake", "hold", "clear", "drone", "custom"]),
+  start: z.enum(["prep", "action", "planted"]),
+  objective: z.boolean(),
+  prepOnly: z.boolean(),
+  doors: z.array(z.string()).default([]),
+  apartM: z.number().positive().default(4),
+  storey: z.string().nullable().default(null),
+});
+export type Drill = z.infer<typeof drillSchema>;
+
+/**
  * A format's match rules (data/modes/<id>.json `match`; game/shared/src/match/DESIGN.md §3). Seconds in the data,
  * ticks in the match logic.
  */
@@ -644,6 +661,8 @@ export const matchRulesSchema = z
     host: z.union([z.literal("all"), z.array(z.enum(HOST_TOGGLES))]),
     /** Bots filling empty slots (Phase 9), or null: none. */
     bots: botsRulesSchema.nullable().default(null),
+    /** A Bot Training drill's setup (Phase 9 M8), or null: plain rounds. */
+    drill: drillSchema.nullable().default(null),
   })
   .superRefine((m, ctx) => {
     if (m.teamSize.min > m.teamSize.max) ctx.addIssue({ code: "custom", path: ["teamSize"], message: "min is more than max" });

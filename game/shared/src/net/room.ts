@@ -1468,6 +1468,7 @@ export class Room implements DirectorHost {
   private spotted(p: Pawn, byCtrl: number, team: number) {
     const e: GameEvent = { kind: "spotted", pawnId: p.id, by: byCtrl, ticks: ticks(this.sim.data.intel.ping.seconds) };
     this.spot(p.id, this.sim.data.intel.ping.seconds);
+    this.director?.onSpotted(p, team === ATTACK ? ATTACK : DEFENSE);
     for (const o of this.members.values()) if (this.teamOf(o) === team || o.ctrl?.id === p.ownerId) o.events.push(e);
   }
 
@@ -2394,15 +2395,24 @@ export class Room implements DirectorHost {
       if (m.phase !== Phase.RoundEnd) this.defensePlan = this.attackPlan = null;
       return;
     }
+    // A drill that puts everyone somewhere (the duel, a floor to clear) has no site plan: each bot holds where it was put.
+    const drill = m.mode.match.drill;
+    const placed = drill !== null && (drill.kind === "duel" || drill.storey !== null);
     if (this.planRound !== m.round) {
       this.planRound = m.round;
+      for (const o of this.members.values()) o.bot?.clearOrders();
       const ctrlOf = (id: number) => this.members.get(id)?.ctrl?.id ?? 0;
       const bots = m.sides[DEFENSE].filter((id) => this.members.get(id)?.bot);
       const strat = this.sim.data.bots.strats.get(this.levelId)?.sites[m.site ?? ""] ?? null;
-      this.defensePlan = bots.length && m.site ? new DefensePlanner(this.sim, this.nav, m, m.site, strat, bots, new BotRng(this.seed, 0xd3f + m.round), ctrlOf) : null;
+      this.defensePlan = bots.length && m.site && !placed ? new DefensePlanner(this.sim, this.nav, m, m.site, strat, bots, new BotRng(this.seed, 0xd3f + m.round), ctrlOf) : null;
       const attackers = m.sides[ATTACK].filter((id) => this.members.get(id)?.bot);
-      this.attackPlan = attackers.length ? new AttackPlanner(this.sim, this.nav, m, attackers, new BotRng(this.seed, 0xa7c + m.round), ctrlOf) : null;
+      this.attackPlan = attackers.length && drill?.kind !== "duel" ? new AttackPlanner(this.sim, this.nav, m, attackers, new BotRng(this.seed, 0xa7c + m.round), ctrlOf) : null;
     }
+    if (placed && this.director)
+      for (const [id, spot] of this.director.drillSpots) {
+        const bot = this.members.get(id)?.bot;
+        if (bot && !bot.ordered(this.sim.tick)) bot.command([{ kind: "hold", spot: spot.pos, face: spot.face, room: "" }], this.sim.tick, 600);
+      }
     this.defensePlan?.step();
   }
 

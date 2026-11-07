@@ -62,6 +62,8 @@ export function reasonText(r: Pick<RoundRecord, "reason" | "winner" | "attackers
       return "Defuser disabled";
     case WinReason.Deactivated:
       return "Defuser destroyed";
+    case WinReason.Found:
+      return "Every defender found";
     default:
       return "";
   }

@@ -10,6 +10,18 @@ import { rankBadge, storedRating } from "../ui/rank.js";
 
 const data = loadGameData();
 const formats = [...data.modes.values()].filter(isFormat);
+/** Bot Training's drills (Phase 9 M8): played offline from their own buttons, not in the new-match list. */
+const drills = formats.filter((m) => m.match.drill !== null);
+const matchFormats = formats.filter((m) => m.match.drill === null);
+/** What each drill is, in a line (its button's title). */
+const DRILL_NOTES: Record<string, string> = {
+  drill_duel: "You and one bot either side of a doorway, straight into the fight, first to 5.",
+  drill_retake: "The defuser's planted: hold it against three bots coming to disable it.",
+  drill_site_hold: "Defend a site alone against five attacking bots, prep included.",
+  drill_clear: "Five bots spread over the first floor, a room each: clear it before time's up.",
+  drill_drone: "Prep only: find and ping every defender with your drones.",
+  drill_custom: "Bot Training starting straight in action; set it up in the lobby.",
+};
 const formatName = (id: string) => formats.find((m) => m.id === id)?.match.name ?? id;
 const NAME_KEY = "redmond.name";
 const FORMAT_KEY = "redmond.format";
@@ -47,10 +59,13 @@ root.innerHTML = `
   <section><h2>Your name</h2><div class="row"><input class="name" maxlength="24" placeholder="Player" autocomplete="nickname"></div></section>
   <section><h2>Bot Training</h2>
     <div class="row"><button class="primary training">Play vs bots (offline)</button></div>
-    <p class="note">You and bots on Oregon, no server needed: bots fill every empty place on both teams. In the lobby, choose your side (attack, defense or both), the team sizes, each team's difficulty (Recruit, Normal, Hard, Elite) and the site. To bring friends, create a Bot Training match below instead.</p>
+    <p class="note">You and bots on Oregon, no server needed: bots fill every empty place on both teams. In the lobby, choose your side (attack, defense or both), the team sizes, each team's difficulty (Recruit, Normal, Hard, Elite), the site, and how the bots pick operators (at random, in order, or the answer to yours). To bring friends, create a Bot Training match below instead.</p>
+    <h3>Drills</h3>
+    <div class="row drills">${drills.map((m) => `<button class="drill" data-format="${m.id}" title="${escapeHtml(DRILL_NOTES[m.id] ?? "")}">${escapeHtml(m.match.name.replace(/^Drill: /, ""))}</button>`).join("")}</div>
+    <p class="note">Offline, one setup each: ${drills.map((m) => `<b>${escapeHtml(m.match.name.replace(/^Drill: /, ""))}</b>: ${escapeHtml(DRILL_NOTES[m.id] ?? "")}`).join(" ")}</p>
   </section>
   <section><h2>New match</h2>
-    <div class="row"><select class="format">${formats.map((m) => `<option value="${m.id}">${escapeHtml(m.match.name)}</option>`).join("")}</select><button class="primary create">Create</button></div>
+    <div class="row"><select class="format">${matchFormats.map((m) => `<option value="${m.id}">${escapeHtml(m.match.name)}</option>`).join("")}</select><button class="primary create">Create</button></div>
     <p class="format-note"></p>
     <p class="note format-note">You host it: send the room code or the invite link to your friends.</p>
   </section>
@@ -76,7 +91,7 @@ const formatSelect = $<HTMLSelectElement>(".format");
 const codeInput = $<HTMLInputElement>(".code");
 const error = $(".error");
 nameInput.value = remembered(NAME_KEY);
-formatSelect.value = formats.some((m) => m.id === remembered(FORMAT_KEY)) ? remembered(FORMAT_KEY) : (formats[0]?.id ?? "");
+formatSelect.value = matchFormats.some((m) => m.id === remembered(FORMAT_KEY)) ? remembered(FORMAT_KEY) : (matchFormats[0]?.id ?? "");
 /** The format's line; Ranked's says your local rating (D-124). */
 const showNote = () =>
   ($(".format-note").innerHTML = escapeHtml(FORMAT_NOTES[formatSelect.value] ?? "") + (formatSelect.value === "ranked" ? ` Yours: ${rankBadge(storedRating())}.` : ""));
@@ -95,6 +110,7 @@ function go(params: Record<string, string>) {
 $(".create").onclick = () => go({ format: formatSelect.value });
 // Bot Training offline (Phase 9): the match room runs in the match page's own worker.
 $(".training").onclick = () => go({ format: "bot_training", offline: "1" });
+for (const b of root.querySelectorAll<HTMLButtonElement>(".drill")) b.onclick = () => go({ format: b.dataset.format!, offline: "1" });
 const join = (code: string) => {
   const c = code.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
   if (c.length !== 5) {

@@ -1016,7 +1016,7 @@ export interface MatchNetsimOptions {
 
 export const MATCH_DEFAULTS: MatchNetsimOptions = { clients: 10, oneWayMs: 50, jitterMs: 10, stallsPerSecond: 0.05, stallMs: 200, driftPct: 0.5, seed: 1, script: MATCH_SCRIPT };
 
-const REASONS = ["elimination", "time", "detonated", "disabled", "deactivated"] as const;
+const REASONS = ["elimination", "time", "detonated", "disabled", "deactivated", "found"] as const;
 /** How each scripted round should end, and which side wins it. */
 const SCRIPTED: Record<RoundScript, { reason: (typeof REASONS)[number]; attackersWin: boolean }> = {
   time: { reason: "time", attackersWin: false },
