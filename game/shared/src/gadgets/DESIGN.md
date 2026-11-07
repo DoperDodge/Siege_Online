@@ -347,6 +347,15 @@ every few seconds each bot takes out its gadget or ability, holds Fire 2.5 s and
 trip with jitter, stalls and drift; once the last snapshot has reached everyone, every client's gadget table must hash
 as the server's, with no desync. Its 20 s run is a unit test.
 
+**The review (M12, D-154)** changed these rules: every hammer blow goes to the room (the simulation charges the
+level, panels and gadgets it meets, the room charges a body two charges in all and a drone or a shield's plate one,
+from its rewound judgment); reinforcing crushes only that section's entries and the devices at its foot, not grenades
+or clouds; Skopós's gadgets are one pool, in the shell she's in, moving with her on a swap; while Dokkaebi's call rings
+on a player (`PawnState.ringing`, the server's, corrected) a fresh Interact press is the dismissal's alone; a
+controller keeps the gadget entry of the camera it watches (`camEntry`), so its view stays on that camera as the
+list's numbers shift; a teammate's bullets don't suppress Fuze with friendly fire off; the key of the weapon already
+out, with a gadget in hand, is sent as the slot's key and Swap together, which the hands read as "put it away".
+
 ## 11. Wire and client
 
 - **Protocol 15:** the new pawn fields (exact in corrections); a remote field for what's in the hands; gadget ops

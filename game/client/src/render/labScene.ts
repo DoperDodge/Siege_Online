@@ -555,6 +555,7 @@ export class PawnView {
     // The gun it holds: in front of the chest along the view (placeholder until the art pass); none while
     // down or dead.
     const armed = state.mode !== PawnMode.Dead && !isDowned(state);
+    this.armed = armed;
     this.gunVisible = this.gun !== null && armed && this.held === null;
     const eye = eyePose(data.movement, data.hitboxes, state).pos;
     const rot = new THREE.Euler(state.pitch, state.yaw, 0, "YXZ");
@@ -590,6 +591,8 @@ export class PawnView {
 
   /** Whether the gadget in its hands is held up to the face (a `hold` item). */
   private heldUp = false;
+  /** Alive and not down, as its last update had it (what it holds shows only then). */
+  private armed = true;
 
   /** The gadget in its hands (its box size; `up`: held up to the face), or none: the gun shows again. */
   setHeld(size: readonly number[] | null, up = false) {
@@ -661,7 +664,8 @@ export class PawnView {
     }
     this.shape.visible = !on;
     if (this.gun) this.gun.group.visible = this.gunVisible && !on;
-    if (this.held) this.held.visible = !on;
+    // (Only while armed, as update has it: a body killed holding a gadget doesn't keep it by its head, the review, M12.)
+    if (this.held) this.held.visible = !on && this.armed;
   }
 
   /** Remove from the scene and free the GPU resources it owns. */

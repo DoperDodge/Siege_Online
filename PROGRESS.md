@@ -5,7 +5,7 @@ known issues, and what's next.
 
 ---
 
-## Phase 8 — Operators · 🚧 in progress (branch `claude/phase-8-operators`, PR #9)
+## Phase 8 — Operators · ✅ complete (PR #9, squash-merged into `main`)
 
 **Done when (PLAN §17):** every row of research/interactions.csv (343) has a passing test. The design is
 `game/shared/src/gadgets/DESIGN.md` (D-140). Phases 6 and 7 are merged into `main` (PRs #7 and #8), so this PR
@@ -24,7 +24,43 @@ targets `main`.
 | M9 Dokkaebi | ✅ (D-149) |
 | M10 Skopós's remaining rules; Lesion | ✅ (D-151) |
 | M11 The Ballistic Shield | ✅ (D-152) |
-| M12 Every CSV row passing; netsim, browser tests, review, docs, report | next |
+| M12 Every CSV row passing; netsim, browser tests, review, docs, report | ✅ (D-154) all 343 rows pass; the gadgets netsim; 21 + 40 + 27 browser checks; a review of the phase (19 findings fixed) |
+
+### What's done (M12: every row, the checks and the review)
+- **Every row of research/interactions.csv has a passing test (343 of 343).** The last 11 were Phase 7's tools seen
+  through the CSV: the Bulletproof Camera's dart (fired from the camera with 3) jams a drone, turns a Claymore and a
+  Breach Charge off, stops Fuze setting his charge off and leaves a Hard Breach Charge's fuse alone; drones, the
+  level's camera and Bulletproof Cameras spot what they scan; a bullet or a knife destroys a drone, a bullet the
+  level's camera.
+- **The netsim with gadgets:** `npm run netsim -- --gadgets` puts two lines of every operator on the Gadget Lab, each
+  taking out its gadget or ability every few seconds and throwing, placing, swinging or holding it up over a 100 ms
+  round trip with jitter, stalls and clock drift. Every client ends with the server's gadget table and no
+  misprediction (also over 60 s, and at 200 ms with more stalls). Its 20 s run is a unit test.
+- **Browser tests:** the Gadget Lab test checks Fuze's shield too, offline and online (21 checks); the match test
+  (40) and the online lab (27) pass on this build.
+- **CI:** GitHub's default runner moved to Ubuntu 26.04, where the browser tests' Chromium can't be installed; CI now
+  runs on Ubuntu 24.04.
+- **Review (D-154):** two reviewers read the phase (the shared code, the client). Of 21 findings, 19 held up and are
+  fixed, most with a test that fails without the fix; one (a grenade's 5 hp direct hit) stays a known issue. The ones
+  you'd notice:
+  - Dokkaebi's 7 s call finished early whenever another player's connection hiccuped, and one held click could hack
+    two phones.
+  - Sledge's hammer missed a body he saw it hit if the body had just stepped away on the server; a blow on a drone
+    cost 2 charges (now 1).
+  - Reinforcing one section of a wall broke cameras on the other section and made a live frag or a smoke cloud at its
+    foot vanish.
+  - Skopós had a full set of gadgets in each shell: it's one set now, in the shell she's in.
+  - Holding F to dismiss Dokkaebi's call also started reinforcing the wall in front of you.
+  - Placing a Bulletproof Camera switched anyone watching Skopós's shell camera onto the new camera.
+  - With a charge's detonator out, pressing 1 brought out the next charge instead of the weapon.
+  - With Fuze's shield, 2 or the mouse wheel left a stuck request that put a gadget away the moment it came out.
+  - Dokkaebi's phone blast and its fire were invisible (you burned in an unseen fire); they're drawn now.
+  - No prompt said you could take your own gadget back (F held).
+  - Dead, you could still see the suppression blur, the placing bar or the Gu needle's green edges.
+  - Brava's scan gauge filled while she hacked; "EMP dart ready" showed on cameras that couldn't fire one; Pulse's
+    sensor stayed on screen over the cameras; a corpse kept the gadget it held; Fuze's shield lagged a little
+    behind the view when turning; the shield's and the barrier's shadows were left behind on the floor; gadget
+    models leaked memory over a long match.
 
 ### What's done (your test of M11, 2026-11-01; D-153)
 - **Shooting Fuze's shield no longer drops the shooter.** The server's reply to a shot lists the hitboxes of the body
@@ -284,6 +320,12 @@ the rest are todos), `npm run build`, `node tools/e2e/gadget-lab.mjs`.
 - Fuze's grenades also destroy his own waiting charges close to them (ours).
 - Every gadget is a greybox in its kind's colour; the gadget in your hands is a box.
 - You can't watch a Bulletproof Camera in a lab (cameras are a match's), so Dokkaebi's phone hack shows nothing there.
+
+### Next
+Your camera requests from before (each camera keeps where you turned it; the cameras reopen on the last one you watched;
+on mobile, one Observe button with Skopós's shell as one of the cameras), then Phase 9 — Bot Training (PLAN §17):
+navmesh, perception, a team planner and every operator played by bots; done when you can play a full solo match
+against five Normal bots on attack and defense.
 
 ---
 

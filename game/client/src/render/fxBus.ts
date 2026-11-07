@@ -76,6 +76,11 @@ export class FxBus {
   private readonly puffs: Pool<THREE.Mesh>;
   /** A stun's flash, an extinguisher's burst (Phase 8 M3). */
   private readonly whites: Pool<THREE.Mesh>;
+  /**
+   * Dokkaebi's payload's fire on the floor where the phone went off, for its seconds (Phase 8 M9): drawn from the
+   * blast event and the data (the review, M12: it burned unseen, the room's alone).
+   */
+  private readonly groundFires: Pool<THREE.Mesh>;
   /** Each chunk's velocity (m/s), by its place in the pool. */
   private readonly debrisVel: THREE.Vector3[];
   private readonly debrisMat = { skin: new THREE.MeshBasicMaterial({ color: 0xd9d4c7 }), wood: new THREE.MeshBasicMaterial({ color: 0x8b6a43 }), steel: new THREE.MeshBasicMaterial({ color: 0x56606b }) };
@@ -155,6 +160,15 @@ export class FxBus {
     this.fireballs = new Pool(ball(fireMat));
     this.puffs = new Pool(ball(puffMat));
     this.whites = new Pool(ball(new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthWrite: false })));
+    const flameGeo = new THREE.CylinderGeometry(1, 1, 0.3, 16);
+    const flameMat = new THREE.MeshBasicMaterial({ color: 0xff7a1a, transparent: true, opacity: 0.6, depthWrite: false });
+    this.groundFires = new Pool(
+      Array.from({ length: 4 }, () => {
+        const m = new THREE.Mesh(flameGeo, flameMat);
+        scene.add(m);
+        return m;
+      }),
+    );
   }
 
   /**
@@ -176,6 +190,18 @@ export class FxBus {
       puff.position.copy(at);
       puff.scale.setScalar(r * 1.4);
       this.light(at, now);
+    } else if (d?.jegeo) {
+      // Dokkaebi's payload: the phone goes off in his hands (a small fireball), and a fire burns on the floor there.
+      const fire = this.fireballs.take(now, FIREBALL_MS);
+      fire.position.copy(at);
+      fire.scale.setScalar(0.45);
+      this.puffs.take(now, PUFF_MS).position.copy(at);
+      this.light(at, now);
+      const k = d.jegeo.fire;
+      const floor = raycastLevel(this.sim, pos, [0, -1, 0], 3);
+      const ground = this.groundFires.take(now, k.seconds * 1000);
+      ground.position.set(pos[0], pos[1] - (floor?.t ?? 1.1) + 0.15, pos[2]);
+      ground.scale.set(k.radiusM, 1, k.radiusM);
     } else if (d?.stun || id === "fire_extinguisher") {
       const white = this.whites.take(now, d?.stun ? FIREBALL_MS : PUFF_MS);
       white.position.copy(at);
@@ -271,6 +297,9 @@ export class FxBus {
     this.fireballs.update(now);
     this.puffs.update(now);
     this.whites.update(now);
+    this.groundFires.update(now);
+    // (A flicker: the flames rise and fall.)
+    for (const f of this.groundFires.items) if (f.visible) f.scale.y = 1 + 0.35 * Math.sin(now / 90 + f.id);
     const dt = Math.min(0.05, Math.max(0, now - this.lastFrameAt) / 1000);
     this.lastFrameAt = now;
     this.debris.items.forEach((m, i) => {

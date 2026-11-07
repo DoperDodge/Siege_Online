@@ -8,6 +8,7 @@ import * as THREE from "three";
 import {
   applyDamage,
   Btn,
+  DEFENSE,
   DEG,
   DT,
   encodeLabTool,
@@ -1026,7 +1027,9 @@ export async function startLab(o: LabOptions): Promise<void> {
       if (sent) claims.set(sent.seq & 0xffff, { viewTick: net.session.lastViewTick, weapon: heldWeapon() });
       if (claims.size > 512) claims.delete(claims.keys().next().value!);
       clickViewTick = null;
-      scanTicks = input.buttons & Btn.Fire && controls.onDrone() ? scanTicks + 1 : 0;
+      // (Not on Brava's Kludge: its Fire hacks, it never scans: the review, M12.)
+      const kludge = ctrl.drone !== 0 && sim.pawns.get(ctrl.drone)?.kludge === true;
+      scanTicks = input.buttons & Btn.Fire && controls.onDrone() && !kludge ? scanTicks + 1 : 0;
     } else {
       const input = freeLook(still(script ? autoInput(++seq) : controls.sample(++seq)));
       sim.step(new Map([[ctrl.id, input]]));
@@ -1306,7 +1309,11 @@ export async function startLab(o: LabOptions): Promise<void> {
       const held = heldGadget(pawn, rs);
       v.setHeld(held ? (held.detonator ? [0.05, 0.09, 0.03] : held.data.sizeM) : null, !!held && !held.detonator && held.data.use.kind === "hold");
       v.setShield(pawn.loadout?.shield?.plate ?? null);
-      v.update(sim.data, rs.mode === PawnMode.Dead ? corpse(rs) : rs);
+      // The body whose eyes we see through, in first person, faces the view itself (the mouse's, as the camera does), so
+      // Fuze's shield doesn't trail the view by a tick when he turns (the review, M12); in free look the body keeps its
+      // own facing (that's the point of it).
+      const fpYaw = pawn.id === eyesId && !outside && !freeLookFrom && !pawn.proxy && rs.mode !== PawnMode.Dead;
+      v.update(sim.data, rs.mode === PawnMode.Dead ? corpse(rs) : fpYaw ? { ...rs, yaw: controls.yaw } : rs);
       // On a rope: drawn from the body's middle (its harness) up to where the rope is fixed (a swing takes the body
       // out from under it).
       const m = sim.data.movement;
@@ -1479,6 +1486,12 @@ export async function startLab(o: LabOptions): Promise<void> {
     if (touchLayer) touchLayer.querySelector(".touch-btn")!.classList.toggle("on", controls.sprintIsLatched);
 
     const k = settings.keys;
+    /** The name of your own gadget Interact held would take back (Phase 8; the review, M12: no prompt said so). */
+    const pickUpName = () => {
+      const me = possessed();
+      const g = me ? sim.gadgetToPickUp(me) : null;
+      return (g && sim.data.gadgets.get(kindId(g.kind) ?? "")?.name.toLowerCase()) || "gadget";
+    };
     const promptText =
       prompt === "mantle"
         ? `${keyLabel(k.vault)} to mantle`
@@ -1510,6 +1523,8 @@ export async function startLab(o: LabOptions): Promise<void> {
                           ? `${keyLabel(k.interact)} to pick up the defuser`
                           : prompt === "pickUpDrone"
                             ? `${keyLabel(k.interact)} to pick up your drone`
+                          : prompt === "pickUpGadget"
+                            ? `Hold ${keyLabel(k.interact)} to pick up your ${pickUpName()}`
                           : "";
     $(".prompt").textContent = promptText;
     $(".prompt").classList.toggle("hidden", !promptText || dead);
@@ -1555,7 +1570,8 @@ export async function startLab(o: LabOptions): Promise<void> {
       const left = (t: number) => `${(Math.max(0, t - now) * DT).toFixed(1)} s`;
       $(".dronecam-title").textContent = [
         `${bp ? "BULLETPROOF CAM" : shell ? "SKOPÓS SHELL" : "CAM"} ${ctrl.cam}/${sim.camCount()}${room ? ` · ${room}` : ""}${broken ? ` · ${broken} broken` : ""}`,
-        bp && !dead ? `${keyLabel(k.gadget)} EMP dart ${now >= bp.readyAt ? "ready" : left(bp.readyAt)}` : "",
+        // (Only a defender fires a defenders' camera's dart: not one Brava hacked, nor one Dokkaebi's lend shows.)
+        bp && !dead && bp.team === DEFENSE && ctrl.team === DEFENSE ? `${keyLabel(k.gadget)} EMP dart ${now >= bp.readyAt ? "ready" : left(bp.readyAt)}` : "",
         bp?.signalEnd && !(bp.flags & GFlag.Lost) ? `signal lost in ${left(bp.signalEnd)}` : "",
         `${keyLabel(k.leanLeft)} / ${keyLabel(k.leanRight)} switch · ${keyLabel(k.observe)} back`,
       ]
@@ -1605,8 +1621,8 @@ export async function startLab(o: LabOptions): Promise<void> {
     $(".flash").classList.toggle("show", performance.now() < flashUntil);
 
     ammoHud.update(p.loadout?.weapons[s.slot], s, dead || onCam, keyLabel(k.fireMode), p.loadout?.shield ? (s.shieldAt === 1 ? (freeLookFrom ? "SHIELD UP · FREE LOOK" : "SHIELD UP · aim to fire, hold fire to look round") : s.shieldAt === 2 ? "SHIELD ON YOUR BACK" : "SHIELD KNOCKED ASIDE") : "");
-    // Fuze's shield suppressed (Phase 8 M11): the edges of the view blur, and no sprinting.
-    app.classList.toggle("suppressed", suppressed(p.loadout ?? null, s));
+    // Fuze's shield suppressed (Phase 8 M11): the edges of the view blur, and no sprinting (alive only: the review, M12).
+    app.classList.toggle("suppressed", !dead && suppressed(p.loadout ?? null, s));
     // The gadgets in the two slots (Phase 8): how many are left, on which key; a detonator's devices waiting.
     const slotText = (slot: 1 | 2, key: string) => {
       const g = slotGadget(data, p.loadout, slot);
@@ -2418,7 +2434,9 @@ export async function startLab(o: LabOptions): Promise<void> {
    */
   function updateSensorHud() {
     const body = livingBody();
-    const k = body ? sensorUp(data, body) : null;
+    // Not over a feed (a camera, a drone, Skopós's shell): his sensor reads round his body (the review, M12).
+    const onFeed = ctrl.cam !== 0 || ctrl.drone !== 0 || ctrl.shellCam || ctrl.swapPhase !== 0;
+    const k = body && !onFeed ? sensorUp(data, body) : null;
     $(".sensor").classList.toggle("hidden", !k);
     if (!k || !body) return;
     const frozen = body.state.jammed > 0;

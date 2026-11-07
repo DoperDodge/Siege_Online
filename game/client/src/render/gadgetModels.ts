@@ -164,8 +164,7 @@ export class GadgetModels {
         const m = new THREE.Mesh(seg, mat);
         m.position.set(-Math.sin(a) * r, 0, -Math.cos(a) * r);
         m.rotation.y = a;
-        m.castShadow = true;
-        body.add(m);
+        body.add(m); // (no shadow: the shadow map is the level's, redrawn only when it changes)
       }
       group.add(body);
       if (d.electronic) {
@@ -259,6 +258,7 @@ export class GadgetModels {
         if (k >= 0) {
           const [ghost] = this.ghosts.splice(k, 1);
           this.scene.remove(ghost.obj);
+          this.disposeOwn(ghost.obj);
           if (isFlying(g)) this.ownStart.set(g.id, ghost.at);
         }
       }
@@ -292,8 +292,15 @@ export class GadgetModels {
     for (const [id, it] of this.items)
       if (!seen.has(id)) {
         this.scene.remove(it.obj);
-        if (it.extra) this.scene.remove(it.extra);
-        if (it.reach) this.scene.remove(it.reach);
+        this.disposeOwn(it.obj);
+        if (it.extra) {
+          this.scene.remove(it.extra);
+          this.disposeOwn(it.extra);
+        }
+        if (it.reach) {
+          this.scene.remove(it.reach);
+          this.disposeOwn(it.reach);
+        }
         for (const l of it.lasers) {
           this.scene.remove(l);
           l.geometry.dispose();
@@ -308,6 +315,7 @@ export class GadgetModels {
       const x = this.ghosts[i];
       if (now - x.at > 64) {
         this.scene.remove(x.obj);
+        this.disposeOwn(x.obj);
         this.ghosts.splice(i, 1);
         continue;
       }
@@ -323,7 +331,10 @@ export class GadgetModels {
    * blocker's barrier to the other side's observation tools.
    */
   private setExtra(it: { extra: THREE.Object3D | null }, g: Gadget) {
-    if (it.extra) this.scene.remove(it.extra);
+    if (it.extra) {
+      this.scene.remove(it.extra);
+      this.disposeOwn(it.extra);
+    }
     it.extra = null;
     const data = this.sim.data;
     const group = new THREE.Group();
@@ -432,8 +443,24 @@ export class GadgetModels {
       this.scene.add(it.reach);
     } else if (!on && it.reach) {
       this.scene.remove(it.reach);
+      this.disposeOwn(it.reach);
       it.reach = null;
     }
+  }
+
+  /**
+   * Free what an object made for itself (its own geometries and materials: an LED, a phone's screen, a barrier's
+   * segments, a cloud, a jet), not the kinds' and the effects' shared ones (the review, M12: they piled up).
+   */
+  private disposeOwn(o: THREE.Object3D) {
+    const sharedGeo = new Set<THREE.BufferGeometry>(this.geometry.values());
+    const sharedMat = new Set<THREE.Material>([...this.materials.values(), ...Object.values(this.fxMat)]);
+    o.traverse((c) => {
+      const m = c as THREE.Mesh;
+      if (m.geometry && !sharedGeo.has(m.geometry)) m.geometry.dispose();
+      const mats = Array.isArray(m.material) ? m.material : m.material ? [m.material] : [];
+      for (const mat of mats) if (!sharedMat.has(mat)) mat.dispose();
+    });
   }
 
   /** A tripwire's lasers where the entry stands: along its facing turned by each angle, up to what stops sight. */
@@ -471,15 +498,25 @@ export class GadgetModels {
   dispose() {
     for (const it of this.items.values()) {
       this.scene.remove(it.obj);
-      if (it.extra) this.scene.remove(it.extra);
-      if (it.reach) this.scene.remove(it.reach);
+      this.disposeOwn(it.obj);
+      if (it.extra) {
+        this.scene.remove(it.extra);
+        this.disposeOwn(it.extra);
+      }
+      if (it.reach) {
+        this.scene.remove(it.reach);
+        this.disposeOwn(it.reach);
+      }
       for (const l of it.lasers) {
         this.scene.remove(l);
         l.geometry.dispose();
       }
     }
     this.laserMat.dispose();
-    for (const x of this.ghosts) this.scene.remove(x.obj);
+    for (const x of this.ghosts) {
+      this.scene.remove(x.obj);
+      this.disposeOwn(x.obj);
+    }
     this.items.clear();
     this.ghosts.length = 0;
     for (const g of this.geometry.values()) g.dispose();

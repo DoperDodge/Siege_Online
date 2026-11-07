@@ -44,7 +44,9 @@ export class ShieldModel {
     this.glass = new THREE.MeshStandardMaterial({ color: 0xa8d4f0, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.25, depthWrite: false, side: THREE.DoubleSide });
     this.mesh = new THREE.Mesh(this.geometry, [this.plate, this.glass]);
     this.mesh.frustumCulled = false; // its vertices are world points, rewritten every frame
-    this.mesh.castShadow = true;
+    // No shadow: the shadow map is only redrawn when the level changes, so a moving plate's would be left behind (as
+    // bodies cast none: the review, M12).
+    this.mesh.castShadow = false;
   }
 
   /** Put it where a body's state has it (`place`), or hide it (none, or prone). */

@@ -39,19 +39,22 @@ export class DownedHud {
     $(".hp").classList.toggle("down", down);
     this.root.classList.toggle("downed", down);
     $(".down-ui").classList.toggle("hidden", !down);
-    // A Gu needle in you (Phase 8 M10): the view sickly green at its edges, and how to pull it.
-    this.root.classList.toggle("needled", s.needled);
-    $(".needle-ui").classList.toggle("hidden", !s.needled || s.deployKind === DeployKind.Needle);
-    if (s.needled) $(".needle-ui").textContent = `GU NEEDLE · no sprinting · stand and hold ${interactKey} to pull it`;
+    // A Gu needle in you (Phase 8 M10): the view sickly green at its edges, and how to pull it. (Nothing of a body's own
+    // holds or needle once it's dead: a lethal fall left them on the death screen, the review found, M12.)
+    const alive = s.mode !== PawnMode.Dead;
+    const needled = alive && s.needled;
+    this.root.classList.toggle("needled", needled);
+    $(".needle-ui").classList.toggle("hidden", !needled || s.deployKind === DeployKind.Needle);
+    if (needled) $(".needle-ui").textContent = `GU NEEDLE · no sprinting · stand and hold ${interactKey} to pull it`;
     if (down) {
       $(".down-title").textContent = s.revivedBy
         ? "BEING REVIVED — hold still"
         : `DOWN — crawl to cover; a teammate can revive you (hold ${interactKey})${Math.hypot(s.vx, s.vz) > combat.dbno.movingSpeed ? " · bleeding faster while you crawl" : ""}`;
       $(".down-bar div").style.width = `${(100 * s.downHp) / pool}%`;
     }
-    const reviving = s.reviveTarget !== 0;
-    const deploying = destruction !== undefined && s.deployKind !== DeployKind.None;
-    const placing = gadget !== null && s.gAct === GadgetAct.Place;
+    const reviving = alive && s.reviveTarget !== 0;
+    const deploying = alive && destruction !== undefined && s.deployKind !== DeployKind.None;
+    const placing = alive && gadget !== null && s.gAct === GadgetAct.Place;
     const hooking = movement !== undefined && s.mode === PawnMode.Walk && s.rappelTicks > 0;
     const breaching = movement !== undefined && s.mode === PawnMode.Rappel && s.rappelTicks > 0;
     $(".revive-ui").classList.toggle("hidden", !reviving && !deploying && !hooking && !breaching && !placing);
