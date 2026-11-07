@@ -14,6 +14,7 @@ import type { IndexedOp } from "../destruction/panels.js";
 import type { BlastData, BotLevel, DummyDef, GadgetData, ModeData } from "../data/schemas.js";
 import { Bot, type BotWorld } from "../bots/bot.js";
 import { NavWorld } from "../bots/nav/world.js";
+import { TeamBoard } from "../bots/perceive.js";
 import { BotRng } from "../bots/rng.js";
 import { DUMMY_STANCE, dummyInput } from "../lab/dummies.js";
 import { spawnAmmo, type Pawn, type PlayerController } from "../player/pawn.js";
@@ -313,6 +314,8 @@ export class Room implements DirectorHost {
   private judged: JudgedShot[] = [];
   /** Bots' navigation (Phase 9 M2): made with the first bot, kept up with the walls and gadgets each tick. */
   nav: NavWorld | null = null;
+  /** What each team's bots have seen, shared among them (Phase 9 M3: voice comms). */
+  readonly botBoards: [TeamBoard, TeamBoard] = [new TeamBoard(), new TeamBoard()];
   /**
    * Who downed each body that is down now, and in which of its lives (Pawn.life): they get the kill when it
    * dies (research/core_mechanics.md §10.2). A body that came back since (a teleport, the kill plane in the
@@ -910,7 +913,7 @@ export class Room implements DirectorHost {
     const ignore = new Set(m.ctrl.pawnIds);
     for (const p of this.sim.pawns.values()) if (p.state.mode === PawnMode.Dead) ignore.add(p.id);
     const through = { rule: w.destruction, view: { tick: panelTick, history: this.panelHistory } };
-    const paths = tracePellets(this.sim, this.history, origin, dirs, rewoundTick, w.damage.penetration, ignore, m.sent, through);
+    const paths = tracePellets(this.sim, this.history, origin, dirs, rewoundTick, w.damage.penetration, ignore, this.sentOf(m), through);
     const bodies = shotOnBodies(this.sim.data.combat, w.damage, paths, (id) => {
       const v = this.sim.pawns.get(id)!;
       return { scale: v.team === shooter.team ? this.rules.friendlyFire.scale : 1, idleShell: isIdleShell(this.sim, v) };
@@ -963,13 +966,13 @@ export class Room implements DirectorHost {
         serverTick: now,
         hit: p0.first && { pawnId: p0.first.pawnId, part: p0.first.part, distance: p0.first.t },
         wallDistance: p0.wall !== null && !p0.first ? p0.wall : null,
-        target: this.shotTarget(origin, p0.dir, p0.first?.pawnId ?? null, p0.wall ?? Infinity, rewoundTick, ignore, m.sent),
+        target: this.shotTarget(origin, p0.dir, p0.first?.pawnId ?? null, p0.wall ?? Infinity, rewoundTick, ignore, this.sentOf(m)),
       }),
     );
   }
 
   /** The body a pellet entered, or else the one whose torso it passed closest to (within 2 m, before the wall), as rewound. */
-  private shotTarget(origin: Vec3, dir: Vec3, hitId: number | null, wall: number, tick: number, ignore: ReadonlySet<number>, sent: SentRing): ShotResult["target"] {
+  private shotTarget(origin: Vec3, dir: Vec3, hitId: number | null, wall: number, tick: number, ignore: ReadonlySet<number>, sent: SentRing | undefined): ShotResult["target"] {
     const posed = this.history.at(tick, sent);
     let best = hitId;
     if (best === null) {
@@ -1000,7 +1003,7 @@ export class Room implements DirectorHost {
     const { now, rewoundTick, panelTick } = this.viewTimeFor(m, applied);
     const ignore = new Set(m.ctrl.pawnIds);
     for (const p of this.sim.pawns.values()) if (p.state.mode === PawnMode.Dead) ignore.add(p.id);
-    const target = judgeMelee(this.sim, hit.origin, attacker.state, hit.yaw, this.history.at(rewoundTick, m.sent), ignore);
+    const target = judgeMelee(this.sim, hit.origin, attacker.state, hit.yaw, this.history.at(rewoundTick, this.sentOf(m)), ignore);
     const base = { m, cause: Cause.Melee, ctrlId: m.ctrl.id, team: attacker.team, seq: hit.seq, weaponId: "knife", receivedTick: now, rewoundTick, origin: hit.origin };
     // Fuze's melee with his shield up is a bash (Phase 8 M11): no damage (Y9S4), the body it meets pushed back.
     const bash = attacker.loadout?.shield && shieldUp(attacker.state) ? attacker.loadout.shield : null;
@@ -1065,7 +1068,7 @@ export class Room implements DirectorHost {
     const ignore = new Set(m.ctrl.pawnIds);
     for (const p of this.sim.pawns.values()) if (p.state.mode === PawnMode.Dead) ignore.add(p.id);
     let hit: { id: number; t: number; zone: ReturnType<typeof zoneOf>; shield: boolean } | null = null;
-    for (const [id, boxes] of this.history.at(rewoundTick, m.sent)) {
+    for (const [id, boxes] of this.history.at(rewoundTick, this.sentOf(m))) {
       if (ignore.has(id)) continue;
       for (const h of boxes) {
         const t = rayCapsule(origin, dir, h.a, h.b, h.radius);
@@ -2340,6 +2343,14 @@ export class Room implements DirectorHost {
     this.flushEvents();
   }
 
+  /**
+   * The snapshots a member's shots are judged against (lag compensation: only those its client drew from); a bot has
+   * none sent and sees the world as the room records it (Phase 9).
+   */
+  private sentOf(m: Member): SentRing | undefined {
+    return m.bot ? undefined : m.sent;
+  }
+
   /** A bot's input for this tick, queued as its client's would arrive, made with the newest state (no view lag). */
   private botInput(m: Member) {
     const bot = m.bot!;
@@ -2363,6 +2374,7 @@ export class Room implements DirectorHost {
       get nav() {
         return room.nav;
       },
+      board: (team) => this.botBoards[team === 1 ? 1 : 0],
       pick: (pick) => this.pickLoadout(m.id, pick),
       act: (a) => this.onMatchAction(m.id, a),
     };

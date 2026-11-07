@@ -78,3 +78,5 @@ export * from "./bots/nav/grid.js";
 export * from "./bots/nav/search.js";
 export * from "./bots/nav/world.js";
 export * from "./bots/nav/follow.js";
+export * from "./bots/perceive.js";
+export * from "./bots/aim.js";

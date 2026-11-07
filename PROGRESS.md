@@ -15,8 +15,8 @@ breach by the same rules, and they know only what their team could know (what th
 |---|---|---|
 | M1 | Bots in rooms, the Bot Training format, lobby controls, backfill, offline matches | ✅ |
 | M2 | Navigation on Oregon (grid, vaults, ladders, drops), rebuilt as walls and floors open | ✅ |
-| M3 | Sight, hearing (placeholder sounds until Phase 11), team intel; aim and gunfights; difficulty levels | next |
-| M4 | Defending bots: reinforce, holes, barricades, gadgets, anchors, roamers, rotations, retakes | |
+| M3 | Sight, hearing (placeholder sounds until Phase 11), team intel; aim and gunfights; difficulty levels | ✅ |
+| M4 | Defending bots: reinforce, holes, barricades, gadgets, anchors, roamers, rotations, retakes | next |
 | M5 | Attacking bots: drones in prep, routes, breaches, vertical play, rappel, the plant | |
 | M6 | The team planner and every site's plan (data/maps/oregon/bot_strats.json); orders from you on the comm wheel | |
 | M7 | All twelve operators' abilities | |
@@ -60,6 +60,25 @@ breach by the same rules, and they know only what their team could know (what th
   through a new hole in a wall).
 - Known: rebuilding the map where a wall changed costs the room 6–15 ms that tick (a few times a round); it will be
   spread over several ticks in M10.
+
+### M3: senses and gunfights (D-161)
+- **Bots fight now.** In a Bot Training match they notice you, aim, shoot, finish you when you're down, hold the
+  angle you just left, go and look where they heard you, revive their teammates, and reload when it's quiet. A full
+  bot-against-bot match plays out with rounds won by eliminations.
+- **They know only what their team could**: what they see (their view cone; walls and soft walls block it, holes
+  don't; smoke and deployable shields block it; the more of you shows, the nearer and more central you are and the
+  more you move, the sooner they notice), what they hear (your gunshots, your footsteps by how fast you move: sprinting
+  carries about 20 m, walking 10, crouch-walking 4, half that through a floor; these sounds are placeholders until the
+  audio phase), being hit (they turn to where it came from), their team's pings and red marks, and what their bot
+  teammates saw, passed on a moment later (voice comms).
+- **Difficulty** (data/bots/difficulty.json, set per team in the lobby): Recruit, Normal, Hard, Elite differ in how
+  fast they notice and react, aim error and how fast it settles, how they follow a moving target, how fast they turn,
+  how much recoil they pull down, how often they go for the head, how much they strafe and crouch in a fight, and how
+  much they trust their ears and share with teammates. An Elite bot beats a Recruit in most duels.
+- Try it: Play → Bot Training → Play vs bots (offline). Set Orange's bots to Recruit for an easier time.
+- Tests: game/shared/test/botFight.test.ts (nobody known through a wall until they sprint; noticed, shot and finished in
+  the open; a teammate told after the comms delay; Elite against Recruit duels).
+- Known: they don't play the objective yet (reinforce, plant, defuse: M4, M5), and use no gadgets (M7).
 
 ---
 
