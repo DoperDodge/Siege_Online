@@ -15,7 +15,7 @@ import type { BlastData, BotLevel, DummyDef, GadgetData, ModeData } from "../dat
 import { Bot, type BotWorld } from "../bots/bot.js";
 import { NavWorld } from "../bots/nav/world.js";
 import { TeamBoard } from "../bots/perceive.js";
-import { DefensePlanner } from "../bots/plan.js";
+import { AttackPlanner, DefensePlanner } from "../bots/plan.js";
 import { BotRng } from "../bots/rng.js";
 import { DUMMY_STANCE, dummyInput } from "../lab/dummies.js";
 import { spawnAmmo, type Pawn, type PlayerController } from "../player/pawn.js";
@@ -35,7 +35,7 @@ import { sideTeam } from "../sim.js";
 import { encodeEvents, type GameEvent } from "./events.js";
 import { MatchDirector, type DirectorHost } from "./matchDirector.js";
 import type { LobbyAction, MatchAction, RoomListEntry } from "./matchWire.js";
-import { DEFENSE, isFormat, type FormatMode, type Side, type Team } from "../match/rules.js";
+import { ATTACK, DEFENSE, isFormat, type FormatMode, type Side, type Team } from "../match/rules.js";
 import { Phase } from "../match/match.js";
 import { camerasOnRay } from "../intel/cameras.js";
 import { raycastLevel } from "../level/raycast.js";
@@ -319,6 +319,8 @@ export class Room implements DirectorHost {
   readonly botBoards: [TeamBoard, TeamBoard] = [new TeamBoard(), new TeamBoard()];
   /** The defending bots' planner this round (Phase 9 M4), made as prep starts; the round it's for. */
   defensePlan: DefensePlanner | null = null;
+  /** The attacking bots' planner this round (Phase 9 M5). */
+  attackPlan: AttackPlanner | null = null;
   private planRound = -1;
   /**
    * Who downed each body that is down now, and in which of its lives (Pawn.life): they get the kill when it
@@ -2354,14 +2356,17 @@ export class Room implements DirectorHost {
     if (!m || !this.nav) return;
     const live = m.phase === Phase.Prep || m.phase === Phase.Action || m.phase === Phase.PostPlant;
     if (!live) {
-      if (m.phase !== Phase.RoundEnd) this.defensePlan = null;
+      if (m.phase !== Phase.RoundEnd) this.defensePlan = this.attackPlan = null;
       return;
     }
-    if (this.planRound !== m.round || !this.defensePlan) {
+    if (this.planRound !== m.round) {
       this.planRound = m.round;
+      const ctrlOf = (id: number) => this.members.get(id)?.ctrl?.id ?? 0;
       const bots = m.sides[DEFENSE].filter((id) => this.members.get(id)?.bot);
       const strat = this.sim.data.bots.strats.get(this.levelId)?.sites[m.site ?? ""] ?? null;
-      this.defensePlan = bots.length && m.site ? new DefensePlanner(this.sim, this.nav, m, m.site, strat, bots, new BotRng(this.seed, 0xd3f + m.round), (id) => this.members.get(id)?.ctrl?.id ?? 0) : null;
+      this.defensePlan = bots.length && m.site ? new DefensePlanner(this.sim, this.nav, m, m.site, strat, bots, new BotRng(this.seed, 0xd3f + m.round), ctrlOf) : null;
+      const attackers = m.sides[ATTACK].filter((id) => this.members.get(id)?.bot);
+      this.attackPlan = attackers.length ? new AttackPlanner(this.sim, this.nav, m, attackers, new BotRng(this.seed, 0xa7c + m.round), ctrlOf) : null;
     }
     this.defensePlan?.step();
   }
@@ -2398,7 +2403,10 @@ export class Room implements DirectorHost {
         return room.nav;
       },
       board: (team) => this.botBoards[team === 1 ? 1 : 0],
-      taskOf: () => (this.director?.match.sideOf(m.id) === DEFENSE ? (this.defensePlan?.taskOf(m.id) ?? null) : null),
+      taskOf: () => {
+        const side = this.director?.match.sideOf(m.id);
+        return side === DEFENSE ? (this.defensePlan?.taskOf(m.id) ?? null) : side === ATTACK ? (this.attackPlan?.taskOf(m.id) ?? null) : null;
+      },
       report: (ok) => this.defensePlan?.report(m.id, ok),
       pick: (pick) => this.pickLoadout(m.id, pick),
       act: (a) => this.onMatchAction(m.id, a),

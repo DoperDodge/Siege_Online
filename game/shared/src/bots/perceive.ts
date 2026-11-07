@@ -12,6 +12,7 @@ import { smokeOnSegment } from "../gadgets/areas.js";
 import { raycastLevel } from "../level/raycast.js";
 import type { GameEvent } from "../net/events.js";
 import { eyePose, poseHitboxes, type Hitbox } from "../player/hitboxes.js";
+import { droneEye } from "../player/drone.js";
 import type { Pawn } from "../player/pawn.js";
 import { PawnKind, PawnMode, Stance } from "../player/types.js";
 import type { Sim } from "../sim.js";
@@ -176,9 +177,10 @@ export class Perception {
   private look(sim: Sim, me: Pawn, d: BotDifficulty, board: TeamBoard, now: number) {
     const s = me.state;
     const m = sim.data.movement;
-    const eye = eyePose(m, sim.data.hitboxes, s).pos;
+    // Through its body's eyes, or its drone's camera (as wide as the drone's, however good its eyes).
+    const eye = eyeOf(sim, me);
     const view = viewDir(s.yaw, s.pitch);
-    const half = (d.fovDeg * Math.PI) / 360;
+    const half = (((me.kind === PawnKind.Drone ? sim.data.intel.drone.fovDeg : d.fovDeg) * Math.PI) / 360);
     const dt = LOOK_EVERY / TICK_HZ;
     for (const c of this.contacts.values()) c.visible = false;
     for (const p of sim.pawns.values()) {
@@ -388,4 +390,9 @@ export class Perception {
 
 function blank(p: Pick<Pawn, "id" | "kind">, now: number): Contact {
   return { pawnId: p.id, kind: p.kind, pos: [0, 0, 0], at: now, source: Source.Heard, uncertainty: 10, visible: false, detected: false, noticing: 0, spottedAt: 0, head: null, chest: null, legs: null, downed: false, trail: [] };
+}
+
+/** Where a pawn sees from: a body's eye, or a drone's camera. */
+export function eyeOf(sim: Sim, p: Pawn): Vec3 {
+  return p.kind === PawnKind.Drone ? droneEye(sim.data.intel.drone, p.state).pos : eyePose(sim.data.movement, sim.data.hitboxes, p.state).pos;
 }

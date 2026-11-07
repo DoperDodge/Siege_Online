@@ -63,6 +63,8 @@ export class PathFollower {
   sprint = false;
   /** Allow links of these kinds (a drone can't vault; an attacker may not want to drop in). */
   allow: ((l: NavLink) => boolean) | undefined;
+  /** Driving a drone: under a door's barricade, not through it. */
+  drone = false;
   private route: NavRoute | null = null;
   private steps: PathStep[] = [];
   private idx = 0;
@@ -259,6 +261,11 @@ export class PathFollower {
         return facing && t % 8 === 0 ? { ...base, buttons: Btn.Interact } : base;
       }
       case LinkKind.Barricade: {
+        if (this.drone) {
+          // Under the barricade's gap.
+          if (dist2([s.x, s.y, s.z], end) < NEAR) return arrived();
+          return { ...base, forward: facing ? 1 : 0.3 };
+        }
         const list = sim.level.panels.list;
         const e = list[l.panel];
         const standing = e && !e.panel.empty && !e.panel.broken;

@@ -17,7 +17,7 @@ breach by the same rules, and they know only what their team could know (what th
 | M2 | Navigation on Oregon (grid, vaults, ladders, drops), rebuilt as walls and floors open | ✅ |
 | M3 | Sight, hearing (placeholder sounds until Phase 11), team intel; aim and gunfights; difficulty levels | ✅ |
 | M4 | Defending bots: reinforce, holes, barricades, gadgets, anchors, roamers, rotations, retakes | ✅ (gadgets: M7) |
-| M5 | Attacking bots: drones in prep, routes, breaches, vertical play, rappel, the plant | next |
+| M5 | Attacking bots: drones in prep, routes, breaches, vertical play, rappel, the plant | ✅ (breach charges and vertical with the gadgets, M7) |
 | M6 | The team planner and every site's plan (data/maps/oregon/bot_strats.json); orders from you on the comm wheel | plans ✅ (with M4); orders next |
 | M7 | All twelve operators' abilities | |
 | M8 | Bot Training setup and the drills | |
@@ -97,6 +97,20 @@ breach by the same rules, and they know only what their team could know (what th
   barricaded, a rotation hole, three anchors in the site at their spots; a plant in the Kitchen disabled by them),
   botStrats.test.ts (every room, wall, hatch and spawn the plans name is the level's).
 - Known: no gadgets yet (M7); the plans are the research's derivations, not observed play (marked DER).
+
+### M5: attacking bots (D-163)
+- **In prep the attacking bots drone**: each drives its drone from its spawn toward a bomb of one of the four sites
+  (spread over them; all to the defended one once it's found), under door barricades and down drops, and pings any
+  defender it sees for its team.
+- **In action they come in** by the plan's way in for their spawn (half the team its main route, the rest its other
+  routes), breaking barricades in doors and windows on the way, fighting what they meet. The defuser's carrier plants
+  as soon as it's in one of the site's rooms (clear of the edges); if it dies, the nearest picks the defuser up. After
+  the plant they hold spots round it that see it.
+- **Whole rounds play bot against bot**: wins by elimination, on time, and by plants (tests and full matches).
+- Try it: Bot Training offline, **Defense only**, and defend the site against five attackers.
+- Tests: game/shared/test/botAttack.test.ts (they find the site and beat a lone defender; with nobody in the way the
+  carrier plants and the fuse runs out).
+- Known: attackers don't breach walls or play vertically yet (that needs their gadgets: M7), and don't rappel.
 
 ---
 

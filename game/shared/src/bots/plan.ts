@@ -28,7 +28,15 @@ export type Task =
   /** Walk the rooms `rooms`, a spot at a time. */
   | { kind: "roam"; rooms: string[] }
   /** Go to the planted defuser and disable it. */
-  | { kind: "retake"; defuser: Vec3 };
+  | { kind: "retake"; defuser: Vec3 }
+  /** Drive its drone to `to` (prep), pinging what it sees. */
+  | { kind: "drone"; to: Vec3 }
+  /** Go through `via` (spots, in order) to `to`. */
+  | { kind: "go"; via: Vec3[]; to: Vec3 }
+  /** Plant the defuser at `spot` (the carrier). */
+  | { kind: "plant"; spot: Vec3 }
+  /** Pick the dropped defuser up. */
+  | { kind: "pickup"; at: Vec3 };
 
 /** A job in the planner's queue: its task, who has it (member id; 0: nobody), done. */
 interface Job {
@@ -62,6 +70,13 @@ function jobAt(t: Task): Vec3 {
       return t.spot;
     case "retake":
       return t.defuser;
+    case "drone":
+    case "go":
+      return t.to;
+    case "plant":
+      return t.spot;
+    case "pickup":
+      return t.at;
     case "roam":
       return [0, 0, 0];
   }
@@ -400,3 +415,153 @@ export class DefensePlanner {
     });
   }
 }
+
+/**
+ * An attacking team's planner for one round (Phase 9 M5). Prep: each bot's drone toward a bomb of a site it could be
+ * (spread over the four, all to the found one once it's found). Action: each bot in through its spawn group's way in
+ * (the plan's rooms) to a spot in the site's rooms, the defuser's carrier planting there; one watching a flank; the
+ * dropped defuser picked up by the nearest; after the plant, holds round it.
+ */
+export class AttackPlanner {
+  /** Each bot's way in this round (spots), worked out when it first asks in action. */
+  private readonly ways = new Map<number, Task>();
+
+  constructor(
+    private readonly sim: Sim,
+    private readonly nav: NavWorld,
+    private readonly match: Match,
+    private readonly bots: readonly number[],
+    private readonly rng: BotRng,
+    /** A member's controller id (its body), or 0. */
+    private readonly ctrlOf: (memberId: number) => number,
+  ) {}
+
+  /** The site, as the attackers know it: found, or a guess (the nearest to the bot's spawn) until then. */
+  private site(from: Vec3 | null): string | null {
+    const level = this.sim.level.def;
+    if (this.match.siteRevealed && this.match.site) return this.match.site;
+    if (!from) return level.sites[0]?.id ?? null;
+    let best: string | null = null;
+    let bestD = Infinity;
+    for (const st of level.sites)
+      for (const b of st.bombs) {
+        const d = Math.hypot(b.pos[0] - from[0], b.pos[1] - from[1], b.pos[2] - from[2]);
+        if (d < bestD) [best, bestD] = [st.id, d];
+      }
+    return best;
+  }
+
+  private body(id: number): { pos: Vec3; pawnId: number } | null {
+    const ctrlId = this.ctrlOf(id);
+    const c = this.sim.controllers.get(ctrlId);
+    const p = c ? this.sim.pawns.get(c.possessedPawnId) : undefined;
+    return p ? { pos: [p.state.x, p.state.y, p.state.z], pawnId: p.id } : null;
+  }
+
+  taskOf(id: number): Task | null {
+    const m = this.match;
+    const level = this.sim.level.def;
+    const me = this.body(id);
+    if (m.phase === Phase.Prep) {
+      // Droning: the k-th bot toward the k-th site's first bomb (or the found site's bombs, shared out).
+      const k = this.bots.indexOf(id);
+      const sites = m.siteRevealed && m.site ? level.sites.filter((x) => x.id === m.site) : level.sites;
+      const st = sites[k % Math.max(1, sites.length)];
+      const bomb = st?.bombs[Math.floor(k / Math.max(1, sites.length)) % Math.max(1, st.bombs.length)];
+      return bomb ? { kind: "drone", to: [bomb.pos[0], bomb.pos[1], bomb.pos[2]] } : null;
+    }
+    const o = this.sim.objective;
+    if (!o) return null;
+    // After the plant: hold round the defuser.
+    if (o.planted) return this.guard(id, o.planted);
+    // The dropped defuser: the nearest bot picks it up.
+    if (o.dropped && o.carrier === 0) {
+      const d = o.dropped;
+      const nearest = this.bots.map((b) => ({ b, at: this.body(b) })).filter((x) => x.at).sort((a, b) => dist(a.at!.pos, d) - dist(b.at!.pos, d))[0];
+      if (nearest?.b === id) return { kind: "pickup", at: [d[0], d[1], d[2]] };
+    }
+    const site = this.site(me?.pos ?? null);
+    if (!site) return null;
+    const stInfo = level.sites.find((x) => x.id === site)!;
+    // The carrier plants as soon as it's in one of the site's rooms (a spot clear of the room's edges).
+    if (me && o.carrier === me.pawnId) {
+      const here = roomAt(level, me.pos[0], me.pos[1] + 0.3, me.pos[2]);
+      if (here && stInfo.rooms.includes(here)) {
+        const spot = this.plantSpot(here, me.pos);
+        if (spot) return { kind: "plant", spot };
+      }
+    }
+    let way = this.ways.get(id);
+    if (!way || (way.kind === "go" && !stInfo.rooms.includes(roomAt(level, way.to[0], way.to[1] + 0.3, way.to[2]) ?? ""))) {
+      way = this.wayIn(id, site, me?.pos ?? null);
+      this.ways.set(id, way);
+    }
+    return way;
+  }
+
+  /** A spot to plant in a room: a node at least the plant margin and a body's width inside its edges, near `from`. */
+  private plantSpot(room: string, from: Vec3): Vec3 | null {
+    const spots = roomSpots(this.nav, this.sim.level.def, room, 0.5);
+    const area = this.sim.level.def.sites.find((s) => s.rooms.includes(room));
+    const margin = (area?.plantMarginM ?? 0.5) + 0.35;
+    const r = this.sim.level.def.rooms.find((x) => x.id === room)!;
+    const inside = (p: Vec3) => r.rects.some((q) => p[0] >= Math.min(q[0], q[2]) + margin && p[0] <= Math.max(q[0], q[2]) - margin && p[2] >= Math.min(q[1], q[3]) + margin && p[2] <= Math.max(q[1], q[3]) - margin);
+    const ok = spots.filter(inside).sort((a, b) => dist(a, from) - dist(b, from));
+    return ok[0] ?? null;
+  }
+
+  /** A bot's way in: its spawn group's rooms from the plan (a spot in each), then a spot in a site room. */
+  private wayIn(id: number, site: string, from: Vec3 | null): Task {
+    const level = this.sim.level.def;
+    const strat = this.sim.data.bots.strats.get(level.id)?.sites[site] ?? null;
+    const st = level.sites.find((x) => x.id === site)!;
+    const group = this.match.players.get(id)?.spawn ?? "";
+    const plan = strat?.attack.spawns[group];
+    const k = this.bots.indexOf(id);
+    // Half the team the plan's main way, the rest its others in turn.
+    const rooms = plan ? (k % 2 === 0 || plan.alt.length === 0 ? plan.via : plan.alt[(k >> 1) % plan.alt.length]) : [];
+    const via: Vec3[] = [];
+    let at = from;
+    for (const r of rooms) {
+      const spots = roomSpots(this.nav, level, r, 1.5);
+      if (!spots.length) continue;
+      const near = at ? spots.sort((a, b) => dist(a, at!) - dist(b, at!))[Math.min(spots.length - 1, this.rng.int(3))] : spots[0];
+      via.push(near);
+      at = near;
+    }
+    const room = st.rooms[k % st.rooms.length];
+    const inside = roomSpots(this.nav, level, room, 1.0);
+    const to = inside[this.rng.int(Math.max(1, inside.length))] ?? via[via.length - 1] ?? from ?? [0, 0, 0];
+    return { kind: "go", via, to };
+  }
+
+  /** After the plant: hold a spot 4–9 m from the defuser that sees it, facing it. */
+  private guard(id: number, at: readonly [number, number, number]): Task {
+    const prev = this.ways.get(id);
+    if (prev?.kind === "hold") return prev;
+    const level = this.sim.level.def;
+    const room = roomAt(level, at[0], at[1] + 0.3, at[2]);
+    const def: Vec3 = [at[0], at[1] + 0.3, at[2]];
+    const cands = [...(room ? roomSpots(this.nav, level, room, 1) : []), ...this.nearbySpots(at)].filter((p) => {
+      const d = dist(p, at);
+      return d >= 3 && d <= 10 && sees(this.sim, [p[0], p[1] + 1.6, p[2]], def);
+    });
+    const spot = cands[this.rng.int(Math.max(1, cands.length))] ?? [at[0], at[1], at[2]];
+    const t: Task = { kind: "hold", spot, face: def, room: room ?? "" };
+    this.ways.set(id, t);
+    return t;
+  }
+
+  /** Nodes round a point (every 1.5 m within 8 m). */
+  private nearbySpots(at: readonly [number, number, number]): Vec3[] {
+    const out: Vec3[] = [];
+    for (let dx = -8; dx <= 8; dx += 1.5)
+      for (let dz = -8; dz <= 8; dz += 1.5) {
+        const n = this.nav.grid.nodeNear(at[0] + dx, at[1], at[2] + dz, 0.7, 0.6);
+        if (n >= 0) out.push(this.nav.grid.nodePos(n));
+      }
+    return out;
+  }
+}
+
+const dist = (a: readonly number[], b: readonly number[]) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);

@@ -21,7 +21,7 @@ import { Aim, lookAt, viewGap, type View } from "./aim.js";
 import { FollowState, PathFollower } from "./nav/follow.js";
 import { LinkKind, type NavLink } from "./nav/grid.js";
 import type { NavWorld } from "./nav/world.js";
-import { Perception, Source, type Contact, type TeamBoard } from "./perceive.js";
+import { eyeOf, Perception, Source, type Contact, type TeamBoard } from "./perceive.js";
 import { roomSpots, type Task } from "./plan.js";
 import { DeployKind } from "../destruction/deploy.js";
 import { defaultLoadoutPick, type LoadoutPick } from "../weapons/loadout.js";
@@ -101,6 +101,7 @@ export class Bot {
   private taskSince = 0;
   private taskStep = 0;
   private lastSwing = -1e9;
+  private lastPing = -1e9;
   /** The view it asked for last tick: the weapon's kick since is the body's view less it. */
   private asked: View | null = null;
 
@@ -124,11 +125,13 @@ export class Bot {
   /** This tick: the choices a player would make now, and the input for its body (null: no body to steer). */
   think(w: BotWorld, ctrl: PlayerController | null): BotInput | null {
     if (w.match && w.sim.tick % CHOOSE_EVERY === this.memberId % CHOOSE_EVERY) this.choose(w, w.match);
-    const pawn = ctrl ? w.sim.pawns.get(ctrl.possessedPawnId) : undefined;
-    if (!ctrl || !pawn || ctrl.drone !== 0 || pawn.kind !== PawnKind.Body) {
+    const pawn = ctrl ? w.sim.pawns.get(ctrl.drone || ctrl.possessedPawnId) : undefined;
+    if (!ctrl || !pawn) {
       this.heard.length = 0;
       return null;
     }
+    // Driving a drone (an attacker in prep): its own way of thinking.
+    if (pawn.kind === PawnKind.Drone) return this.drive(w, ctrl, pawn);
     const s = pawn.state;
     if (s.mode === PawnMode.Dead) {
       this.heard.length = 0;
@@ -138,6 +141,7 @@ export class Bot {
     const now = w.sim.tick;
     // Defenders go round their own barricades (breaking one only when there's no other way).
     this.legs.allow = pawn.team === DEFENSE ? notBarricade : undefined;
+    this.legs.drone = false;
     const mates = [...w.sim.pawns.values()].filter((p) => p.team === pawn.team && p.id !== pawn.id && p.kind === PawnKind.Body && p.state.mode !== PawnMode.Dead);
     this.senses.update(w.sim, pawn, ctrl.id, d, this.heard, w.board(pawn.team), mates);
     this.heard.length = 0;
@@ -440,8 +444,69 @@ export class Bot {
         const target: Vec3 = [def[0], def[1] + 0.15, def[2]];
         return look(target, aimed(target) || s.deployKind === DeployKind.Disable ? Btn.Interact : 0);
       }
+      case "go": {
+        // Through each spot of the way in, then to the end (where it holds, looking about).
+        while (this.taskStep < t.via.length && at(t.via[this.taskStep], 1.5)) this.taskStep++;
+        const next = this.taskStep < t.via.length ? t.via[this.taskStep] : t.to;
+        if (this.taskStep >= t.via.length && at(t.to, 0.8)) return null;
+        const input = walk(next, this.taskStep < t.via.length ? 1.2 : 0.6, now - this.taskSince < 25 * TICK_HZ);
+        if (!input && this.legs.state === FollowState.Failed) this.taskStep++;
+        return input;
+      }
+      case "plant": {
+        const o = sim.objective;
+        if (!o || o.planted) return null;
+        if (!at(t.spot, 0.4) && s.deployKind !== DeployKind.Plant) return walk(t.spot, 0.3) ?? look([t.spot[0], t.spot[1], t.spot[2]]);
+        // Hold Use (the body crouches and holds still for it).
+        return { forward: 0, strafe: 0, yaw: s.yaw, pitch: -0.5, buttons: Btn.Interact, stance: Stance.Crouch, lean: 0 };
+      }
+      case "pickup": {
+        if (!at(t.at, 0.8)) return walk(t.at, 0.5, true) ?? look(t.at);
+        return { forward: 0, strafe: 0, yaw: s.yaw, pitch: -0.6, buttons: now % 16 < 2 ? Btn.Interact : 0, stance: Stance.Stand, lean: 0 };
+      }
+      case "drone":
+        return null;
     }
-    return null;
+  }
+
+  /**
+   * Driving its drone (prep): toward where its planner sends it (doorways, under door barricades, drops; no vaults or
+   * ladders), looking through it; a defender it notices is pinged for the team (the crosshair on it, Ping) and watched.
+   */
+  private drive(w: BotWorld, ctrl: PlayerController, drone: Pawn): BotInput | null {
+    const s = drone.state;
+    if (s.mode === PawnMode.Dead) return null;
+    const d = w.sim.data.bots.levels[this.level];
+    const now = w.sim.tick;
+    this.senses.update(w.sim, drone, ctrl.id, d, this.heard, w.board(drone.team), []);
+    this.heard.length = 0;
+    const eye = eyeOf(w.sim, drone);
+    const seen = this.senses.target(drone);
+    if (seen && seen.kind === PawnKind.Body) {
+      const at = seen.chest ?? seen.head ?? [seen.pos[0], seen.pos[1] + 1.1, seen.pos[2]];
+      const want = lookAt(eye, at);
+      const v = this.turnTo({ yaw: s.yaw, pitch: s.pitch }, want, d);
+      let buttons = 0;
+      if (viewGap(v, want) < 0.05 && now - this.lastPing > 1.5 * TICK_HZ) {
+        buttons = Btn.Ping;
+        this.lastPing = now;
+      }
+      return { forward: 0, strafe: 0, yaw: v.yaw, pitch: v.pitch, buttons, stance: Stance.Stand, lean: 0 };
+    }
+    const job = w.taskOf();
+    if (job?.kind !== "drone" || !w.nav) return { forward: 0, strafe: 0, yaw: s.yaw, pitch: 0, buttons: 0, stance: Stance.Stand, lean: 0 };
+    this.legs.allow = droneLink;
+    this.legs.drone = true;
+    this.legs.goTo(job.to, 2.5);
+    this.legs.sprint = false;
+    if (this.legs.state !== FollowState.Walking) {
+      // There (or no way on): look about the room.
+      const yaw = wrapAngle(s.yaw + 0.02);
+      return { forward: 0, strafe: 0, yaw, pitch: 0.05, buttons: 0, stance: Stance.Stand, lean: 0 };
+    }
+    const st = this.legs.tick(w.nav, w.sim, drone, null);
+    // A drone jumps where a body would vault (the follower's tap), and never presses Use or the knife.
+    return { forward: st.forward, strafe: st.strafe, yaw: st.yaw, pitch: 0.05, buttons: st.buttons & (Btn.Vault | Btn.Sprint), stance: Stance.Stand, lean: 0 };
   }
 
   /** A view turned toward `want` at its turn rate. */
@@ -541,8 +606,18 @@ function taskKey(t: Task): string {
       return `w${t.rooms.join()}`;
     case "retake":
       return "t";
+    case "drone":
+      return `d${t.to.join()}`;
+    case "go":
+      return `g${t.to.join()}`;
+    case "plant":
+      return "p";
+    case "pickup":
+      return "u";
   }
 }
 
 /** A link that isn't a barricade to break. */
 const notBarricade = (l: NavLink) => l.kind !== LinkKind.Barricade;
+/** A link a drone takes: a drop, or a door barricade (under its gap); no vault, ladder or window. */
+const droneLink = (l: NavLink) => l.kind === LinkKind.Drop || (l.kind === LinkKind.Barricade && !l.vault);
