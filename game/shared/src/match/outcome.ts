@@ -13,6 +13,8 @@ export const WinReason = {
   Disabled: 3,
   /** The hatch the defuser was planted on was destroyed (case 8). */
   Deactivated: 4,
+  /** A drill's goal met (Phase 9 M8: every defender found in a drone drill's prep). */
+  Found: 5,
 } as const;
 export type WinReason = (typeof WinReason)[keyof typeof WinReason];
 

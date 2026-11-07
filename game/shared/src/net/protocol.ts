@@ -10,7 +10,7 @@ import { MSG_SNAPSHOT } from "./snapshot.js";
 import { MSG_GADGET_OPS, MSG_GADGET_RESYNC, MSG_GADGET_STATE } from "./gadgetWire.js";
 
 /** Bump when the wire format changes; client and server must match. */
-export const PROTOCOL_VERSION = 16;
+export const PROTOCOL_VERSION = 18;
 
 export const Msg = {
   // client → server
@@ -54,6 +54,8 @@ export const Msg = {
   /** The gadget table's ops since the last snapshot and its hash after them; the whole table (net/gadgetWire.ts). */
   GadgetOps: MSG_GADGET_OPS,
   GadgetState: MSG_GADGET_STATE,
+  /** A person's round, at its end (Phase 9 M9, net/report.ts): Bot Training's feedback. */
+  RoundReport: 0x1d,
 } as const;
 
 export const MAX_NAME = 24;

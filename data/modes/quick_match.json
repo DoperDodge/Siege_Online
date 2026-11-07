@@ -24,6 +24,6 @@
     "preSetups": true,
     "attrition": "none",
     "stats": "local",
-    "host": ["reinforcementScaling"]
+    "host": ["reinforcementScaling", "bots"]
   }
 }

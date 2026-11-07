@@ -549,10 +549,54 @@ export const combatSchema = z.strictObject({
 });
 export type CombatData = z.infer<typeof combatSchema>;
 
-/** Settings a format's host may change besides "all" of them (Custom, Practice): PLAN §6.2's toggles. */
-export const HOST_TOGGLES = ["bans", "reinforcementScaling"] as const;
+/**
+ * Settings a format's host may change besides "all" of them (Custom, Practice): PLAN §6.2's toggles, and bots filling
+ * empty slots (Phase 9, D-122).
+ */
+export const HOST_TOGGLES = ["bans", "reinforcementScaling", "bots"] as const;
 export type HostToggle = (typeof HOST_TOGGLES)[number];
 export const MAX_TEAM_SIZE = 5;
+
+/** Bot difficulty levels (PLAN §15.2; data/bots/difficulty.json), easiest first. */
+/** What a person can ask of their bot teammates off the comm wheel (Phase 9 M6, bots/DESIGN.md §8). */
+export const BOT_ORDERS = ["go", "hold", "breach", "follow", "regroup", "help", "push", "rotate"] as const;
+export type BotOrder = (typeof BOT_ORDERS)[number];
+export const BOT_LEVELS = ["recruit", "normal", "hard", "elite"] as const;
+export type BotLevel = (typeof BOT_LEVELS)[number];
+const botLevel = z.enum(BOT_LEVELS);
+
+/**
+ * Bots in a match (Phase 9, bots/DESIGN.md §2): each team's empty slots are filled with bots up to `size` (Bot
+ * Training always; other formats when the host turns backfill on), at `difficulty`; their operator picks; and the site
+ * (Bot Training's setup: a fixed site the defenders' vote can't change, or null).
+ */
+export const botsRulesSchema = z.strictObject({
+  fill: z.boolean(),
+  /** Each team's players, humans and bots together ([Blue, Orange]). */
+  size: z.tuple([z.number().int().min(0).max(MAX_TEAM_SIZE), z.number().int().min(0).max(MAX_TEAM_SIZE)]),
+  difficulty: z.tuple([botLevel, botLevel]),
+  /** At random, the roster's order (`fixed`), or the answer to the other team's humans' picks (data/bots/picks.json). */
+  picks: z.enum(["random", "fixed", "counter"]),
+  site: z.string().nullable(),
+});
+export type BotsRules = z.infer<typeof botsRulesSchema>;
+
+/**
+ * A Bot Training drill (Phase 9 M8, bots/DESIGN.md §10; data/modes/drill_*.json): how its rounds start (prep as usual;
+ * straight into action, everyone where the drill puts them; or with the defuser already planted in the site), whether
+ * there's a defuser at all, whether the round is over when prep is (droning), the doors a duel is fought across (one
+ * a round, in turn, each player `apartM` from it), the storey the defenders spread over to be cleared.
+ */
+export const drillSchema = z.strictObject({
+  kind: z.enum(["duel", "retake", "hold", "clear", "drone", "custom"]),
+  start: z.enum(["prep", "action", "planted"]),
+  objective: z.boolean(),
+  prepOnly: z.boolean(),
+  doors: z.array(z.string()).default([]),
+  apartM: z.number().positive().default(4),
+  storey: z.string().nullable().default(null),
+});
+export type Drill = z.infer<typeof drillSchema>;
 
 /**
  * A format's match rules (data/modes/<id>.json `match`; game/shared/src/match/DESIGN.md §3). Seconds in the data,
@@ -615,6 +659,10 @@ export const matchRulesSchema = z
     stats: z.enum(["none", "local", "rated"]),
     /** What the host may change: everything (Custom, Practice) or only these toggles. */
     host: z.union([z.literal("all"), z.array(z.enum(HOST_TOGGLES))]),
+    /** Bots filling empty slots (Phase 9), or null: none. */
+    bots: botsRulesSchema.nullable().default(null),
+    /** A Bot Training drill's setup (Phase 9 M8), or null: plain rounds. */
+    drill: drillSchema.nullable().default(null),
   })
   .superRefine((m, ctx) => {
     if (m.teamSize.min > m.teamSize.max) ctx.addIssue({ code: "custom", path: ["teamSize"], message: "min is more than max" });
@@ -622,6 +670,7 @@ export const matchRulesSchema = z
       ctx.addIssue({ code: "custom", path: ["overtime", "rounds"], message: "an odd number, so someone always leads after the last one" });
     }
     if (m.rounds === null && m.overtime !== null) ctx.addIssue({ code: "custom", path: ["overtime"], message: "endless rounds have no overtime" });
+    if (m.bots && m.bots.size.some((n) => n > m.teamSize.max)) ctx.addIssue({ code: "custom", path: ["bots", "size"], message: "more than the format's team size" });
   });
 export type MatchRules = z.infer<typeof matchRulesSchema>;
 
@@ -664,6 +713,102 @@ export const objectiveSchema = z.strictObject({
   siteSight: z.strictObject({ rangeM: z.number().positive(), coneDeg: z.number().positive().max(180) }),
 });
 export type ObjectiveData = z.infer<typeof objectiveSchema>;
+
+/** One bot difficulty level (data/bots/difficulty.json; bots/DESIGN.md §9). All ours, tuned by playing. */
+export const botDifficultySchema = z.strictObject({
+  /** From an enemy's detection to the first shot (ms); peripheral sightings take longer. */
+  reactionMs: z.number().positive(),
+  /** The view cone it notices enemies in (degrees across). */
+  fovDeg: z.number().positive().max(180),
+  /** Aim error when it acquires a target (degrees, one standard deviation), settling over `settleMs`. */
+  aimErrorDeg: z.number().nonnegative(),
+  settleMs: z.number().positive(),
+  /** How far behind a moving target its aim follows (ms). */
+  trackLagMs: z.number().nonnegative(),
+  /** Fastest turn (degrees a second). */
+  turnRateDeg: z.number().positive(),
+  /** How much of its weapon's recoil it pulls down (0–1). */
+  recoilControl: z.number().min(0).max(1),
+  /** How often it aims for the head (0–1, less with distance). */
+  headshotBias: z.number().min(0).max(1),
+  /** How it peeks: swinging wide, jiggling, or leaning out of cover. */
+  peekStyle: z.enum(["wide", "jiggle", "lean"]),
+  /** How much it strafes and crouches in a fight (0–1). */
+  strafe: z.number().min(0).max(1),
+  /** How readily it uses gadgets and abilities (0–1). */
+  utilityUse: z.number().min(0).max(1),
+  /** How much it trusts what it hears (0–1). */
+  soundUse: z.number().min(0).max(1),
+  /** How much and how soon it shares what it knows with its team, and follows the team's plan (0–1). */
+  coordination: z.number().min(0).max(1),
+  /** How readily it shoots through soft walls at enemies it heard (0–1). */
+  wallbang: z.number().min(0).max(1),
+  /** How readily it pre-aims the angles enemies come from (0–1). */
+  prefire: z.number().min(0).max(1),
+});
+export type BotDifficulty = z.infer<typeof botDifficultySchema>;
+
+/** A wall or hatch in a bot plan (data/maps/<level>/bot_strats.json): the level's panel id, the room it's worked from. */
+const stratPanel = z.strictObject({ panel: z.string(), from: z.string().optional(), why: z.string().optional() });
+/** Where an operator's device goes in a bot plan: on a panel (from a room), near one (in a room), or in a room. */
+const stratSpot = z.strictObject({ panel: z.string().optional(), from: z.string().optional(), near: z.string().optional(), room: z.string().optional(), gadget: z.string().optional() });
+
+/** Bots' plans for a level's sites (PLAN §15.4; bots/DESIGN.md §6), each from the research's site notes. */
+export const botStratsSchema = z.strictObject({
+  ...meta,
+  sites: z.record(
+    z.string(),
+    z.strictObject({
+      research: z.string(),
+      ev: z.string(),
+      note: z.string().optional(),
+      defense: z.strictObject({
+        reinforce: z.array(stratPanel),
+        holes: z.array(z.strictObject({ panel: z.string(), size: z.enum(["vault", "crouch"]), from: z.string(), why: z.string().optional() })),
+        anchors: z.array(z.string()).min(1),
+        roam: z.array(z.string()),
+        gadgets: z.record(z.string(), z.array(stratSpot)),
+      }),
+      attack: z.strictObject({
+        spawns: z.record(z.string(), z.strictObject({ via: z.array(z.string()), alt: z.array(z.array(z.string())) })),
+        hardBreach: z.array(z.strictObject({ panel: z.string(), from: z.string(), ops: z.array(z.string()) })),
+        softBreach: z.array(z.strictObject({ panel: z.string(), from: z.string(), ops: z.array(z.string()) })),
+        plant: z.array(z.string()).min(1),
+        postPlant: z.array(z.string()),
+        flank: z.array(z.string()),
+      }),
+    }),
+  ),
+});
+export type BotStrats = z.infer<typeof botStratsSchema>;
+export type SiteStrat = BotStrats["sites"][string];
+
+/** data/bots/difficulty.json: the four levels (PLAN §15.2). */
+export const botDifficultyFileSchema = z.strictObject({
+  ...meta,
+  levels: z.strictObject({ recruit: botDifficultySchema, normal: botDifficultySchema, hard: botDifficultySchema, elite: botDifficultySchema }),
+});
+/** data/bots/picks.json: each operator's gadgets when a bot plays it, and the operators that counter each one. */
+export const botPicksFileSchema = z.strictObject({
+  ...meta,
+  gadgets: z.record(z.string(), z.array(z.string())),
+  counters: z.record(z.string(), z.array(z.string())),
+  /** A primary a bot sometimes takes in place of the default (Fuze's Ballistic Shield), and how often. */
+  primaries: z.record(z.string(), z.strictObject({ id: z.string(), chance: z.number().min(0).max(1) })).default({}),
+});
+
+/** data/bots/names.json: the callsigns bots are named from (ours; no operator's name). */
+export const botNamesFileSchema = z.strictObject({ ...meta, names: z.array(z.string().min(1).max(12)).min(10) });
+
+/** Bots' data (data/bots/), as GameData.bots. */
+export interface BotsData {
+  levels: Record<BotLevel, BotDifficulty>;
+  names: string[];
+  /** Each level's site plans (data/maps/<level>/bot_strats.json), by level id; a level without any has none. */
+  strats: Map<string, BotStrats>;
+  /** Each operator's gadgets for a bot, and its counters (data/bots/picks.json). */
+  picks: { gadgets: Record<string, string[]>; counters: Record<string, string[]>; primaries: Record<string, { id: string; chance: number }> };
+}
 
 /** A camera's view (Phase 7): how far it turns either side of its facing, how far it tilts, how fast, how wide it sees. */
 const cameraViewSchema = z.strictObject({
@@ -710,6 +855,8 @@ export const intelSchema = z.strictObject({
   ping: z.strictObject({ seconds: z.number().positive(), cooldownS: z.number().min(0), perPlayer: z.number().int().positive(), doubleTapS: z.number().positive() }),
   /** The comm wheel's callouts, in order round the wheel (at most 16). */
   callouts: z.array(z.string().min(1).max(24)).min(1).max(16),
+  /** What a callout asks of the caller's bot teammates (Phase 9 M6, bots/DESIGN.md §8), by its text. */
+  botOrders: z.record(z.string(), z.enum(BOT_ORDERS)).default({}),
   /**
    * The Bulletproof Camera (Phase 7 M5; its count, placing and size are a gadget's, data/gadgets/bulletproof_camera.json):
    * its front, `frontDeg` either side of its facing, is bulletproof; its view like a default camera's (on the floor it

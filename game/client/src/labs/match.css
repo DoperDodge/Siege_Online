@@ -79,3 +79,15 @@
 /* The lab's network line is for the labs; a match keeps the frame rate and the kill feed up there. */
 .match .hud-tr .net { display: none; }
 .match.spectating .hud.where { display: none; }
+
+/* Bots in the lobby (Phase 9): their difficulty beside the name. */
+.match-screen li.bot .name { color: #b8c4cc; }
+.match-screen .bot-level { font-size: 0.75em; padding: 0 0.4em; border-radius: 3px; background: #2c3640; color: #9fc3dd; margin-left: 0.3em; }
+
+/* Your round's report under the round banner (Phase 9 M9, labs/training.ts). */
+.match-banner .report { margin: 14px auto 0; max-width: 560px; text-align: left; background: rgba(10, 12, 16, 0.72); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 6px; padding: 10px 14px; font: 500 13px/1.45 system-ui, sans-serif; color: #e8ecf2; text-shadow: none; }
+.match-banner .report .report-title { font: 700 12px system-ui, sans-serif; letter-spacing: 0.12em; color: #9aa6b8; margin-bottom: 4px; }
+.match-banner .report b { color: #fff; font-weight: 700; margin-right: 4px; }
+/* The killcam's label (Phase 9 M9). */
+.killcam-tag { position: absolute; top: 18%; left: 50%; transform: translateX(-50%); padding: 4px 12px; border-radius: 4px; background: rgba(160, 30, 30, 0.85); color: #fff; font: 700 14px system-ui, sans-serif; letter-spacing: 0.1em; pointer-events: none; z-index: 5; }
+.killcam-tag.hidden { display: none; }

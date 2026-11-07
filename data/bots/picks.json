@@ -1,0 +1,112 @@
+{
+  "_doc": "Bots' operator choices (bots/DESIGN.md §7.4). `gadgets`: the secondary gadget(s) each operator's bot carries (research/oregon/common_setups.md §0.1's roles; the operator's own list where the research names none): Striker's and Sentry's kits as the research's defaults (Hard Breach Charge + Impact EMP; Barbed Wire + Deployable Shield). `counters`: for Bot Training's \"counter my pick\", the operators that answer each one (ours, from the research's roles: Brava and Striker's EMP against Mute, Mute against Thermite and Fuze's charges, and so on), best first. `primaries`: a primary an operator's bot sometimes takes in place of its default, and how often (Fuze's Ballistic Shield a quarter of the time; ours).",
+  "_season": "Y11S3",
+  "gadgets": {
+    "sledge": [
+      "frag"
+    ],
+    "thermite": [
+      "smoke"
+    ],
+    "striker": [
+      "hard_breach_charge",
+      "impact_emp"
+    ],
+    "fuze": [
+      "hard_breach_charge"
+    ],
+    "brava": [
+      "claymore"
+    ],
+    "dokkaebi": [
+      "breach_charge"
+    ],
+    "mute": [
+      "nitro_cell"
+    ],
+    "mira": [
+      "nitro_cell"
+    ],
+    "skopos": [
+      "impact_grenade"
+    ],
+    "sentry": [
+      "barbed_wire",
+      "deployable_shield"
+    ],
+    "pulse": [
+      "nitro_cell"
+    ],
+    "lesion": [
+      "observation_blocker"
+    ]
+  },
+  "counters": {
+    "mute": [
+      "brava",
+      "striker",
+      "fuze"
+    ],
+    "mira": [
+      "fuze",
+      "sledge",
+      "dokkaebi"
+    ],
+    "skopos": [
+      "brava",
+      "fuze",
+      "dokkaebi"
+    ],
+    "sentry": [
+      "fuze",
+      "sledge",
+      "brava"
+    ],
+    "pulse": [
+      "dokkaebi",
+      "sledge",
+      "brava"
+    ],
+    "lesion": [
+      "sledge",
+      "fuze",
+      "thermite"
+    ],
+    "thermite": [
+      "mute",
+      "mira",
+      "lesion"
+    ],
+    "striker": [
+      "mute",
+      "sentry",
+      "skopos"
+    ],
+    "fuze": [
+      "mute",
+      "lesion",
+      "sentry"
+    ],
+    "brava": [
+      "mira",
+      "lesion",
+      "skopos"
+    ],
+    "sledge": [
+      "pulse",
+      "sentry",
+      "mute"
+    ],
+    "dokkaebi": [
+      "mute",
+      "mira",
+      "lesion"
+    ]
+  },
+  "primaries": {
+    "fuze": {
+      "id": "ballistic_shield",
+      "chance": 0.25
+    }
+  }
+}

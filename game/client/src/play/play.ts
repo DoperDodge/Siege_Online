@@ -5,11 +5,24 @@
 import { ByteReader, decodeRoomList, encodeHello, encodeListRooms, isFormat, loadGameData, Msg, Phase, type RoomListEntry, type WeaponPick } from "@redmond/shared";
 import { serverUrl } from "../net/online.js";
 import { escapeHtml } from "../ui/dom.js";
+import { loadStats, statsHtml } from "../labs/training.js";
 import { changedGadget, changedPick, loadoutRows, saveLoadout, savedLoadout, type Slot } from "../ui/loadout.js";
 import { rankBadge, storedRating } from "../ui/rank.js";
 
 const data = loadGameData();
 const formats = [...data.modes.values()].filter(isFormat);
+/** Bot Training's drills (Phase 9 M8): played offline from their own buttons, not in the new-match list. */
+const drills = formats.filter((m) => m.match.drill !== null);
+const matchFormats = formats.filter((m) => m.match.drill === null);
+/** What each drill is, in a line (its button's title). */
+const DRILL_NOTES: Record<string, string> = {
+  drill_duel: "You and one bot either side of a doorway, straight into the fight, first to 5.",
+  drill_retake: "The defuser's planted: hold it against three bots coming to disable it.",
+  drill_site_hold: "Defend a site alone against five attacking bots, prep included.",
+  drill_clear: "Five bots spread over the first floor, a room each: clear it before time's up.",
+  drill_drone: "Prep only: find and ping every defender with your drones.",
+  drill_custom: "Bot Training starting straight in action; set it up in the lobby.",
+};
 const formatName = (id: string) => formats.find((m) => m.id === id)?.match.name ?? id;
 const NAME_KEY = "redmond.name";
 const FORMAT_KEY = "redmond.format";
@@ -37,6 +50,7 @@ const FORMAT_NOTES: Record<string, string> = {
   one_v_one: "One player a side, 6 rounds; the winner of a round can't pick the same operator again.",
   custom: "Every setting is the host's (starts as Unranked).",
   practice: "Rounds without end (the host ends it); one side may be empty.",
+  bot_training: "Online with bots in every empty place: friends with you, against you, or both. Set the sides, sizes and difficulty in the lobby.",
 };
 
 const root = document.getElementById("play")!;
@@ -44,8 +58,16 @@ root.innerHTML = `
   <h1>PLAY</h1>
   <p class="tag">Matches on Oregon: two teams of 1–5, uneven allowed. <a href="/">Home</a></p>
   <section><h2>Your name</h2><div class="row"><input class="name" maxlength="24" placeholder="Player" autocomplete="nickname"></div></section>
+  <section><h2>Bot Training</h2>
+    <div class="row"><button class="primary training">Play vs bots (offline)</button></div>
+    <p class="note">You and bots on Oregon, no server needed: bots fill every empty place on both teams. In the lobby, choose your side (attack, defense or both), the team sizes, each team's difficulty (Recruit, Normal, Hard, Elite), the site, and how the bots pick operators (at random, in order, or the answer to yours). To bring friends, create a Bot Training match below instead.</p>
+    <h3>Drills</h3>
+    <div class="row drills">${drills.map((m) => `<button class="drill" data-format="${m.id}" title="${escapeHtml(DRILL_NOTES[m.id] ?? "")}">${escapeHtml(m.match.name.replace(/^Drill: /, ""))}</button>`).join("")}</div>
+    <p class="note">Offline, one setup each: ${drills.map((m) => `<b>${escapeHtml(m.match.name.replace(/^Drill: /, ""))}</b>: ${escapeHtml(DRILL_NOTES[m.id] ?? "")}`).join(" ")}</p>
+  </section>
+  <section><h2>Your training</h2><div class="training"></div><p class="note">Every round you play in Bot Training and its drills, counted in this browser: per drill and per operator, your best times and your last ten rounds. <button class="link reset-training">Clear</button></p></section>
   <section><h2>New match</h2>
-    <div class="row"><select class="format">${formats.map((m) => `<option value="${m.id}">${escapeHtml(m.match.name)}</option>`).join("")}</select><button class="primary create">Create</button></div>
+    <div class="row"><select class="format">${matchFormats.map((m) => `<option value="${m.id}">${escapeHtml(m.match.name)}</option>`).join("")}</select><button class="primary create">Create</button></div>
     <p class="format-note"></p>
     <p class="note format-note">You host it: send the room code or the invite link to your friends.</p>
   </section>
@@ -71,7 +93,7 @@ const formatSelect = $<HTMLSelectElement>(".format");
 const codeInput = $<HTMLInputElement>(".code");
 const error = $(".error");
 nameInput.value = remembered(NAME_KEY);
-formatSelect.value = formats.some((m) => m.id === remembered(FORMAT_KEY)) ? remembered(FORMAT_KEY) : (formats[0]?.id ?? "");
+formatSelect.value = matchFormats.some((m) => m.id === remembered(FORMAT_KEY)) ? remembered(FORMAT_KEY) : (matchFormats[0]?.id ?? "");
 /** The format's line; Ranked's says your local rating (D-124). */
 const showNote = () =>
   ($(".format-note").innerHTML = escapeHtml(FORMAT_NOTES[formatSelect.value] ?? "") + (formatSelect.value === "ranked" ? ` Yours: ${rankBadge(storedRating())}.` : ""));
@@ -88,6 +110,21 @@ function go(params: Record<string, string>) {
   location.href = `/labs/match.html?${new URLSearchParams(params)}`;
 }
 $(".create").onclick = () => go({ format: formatSelect.value });
+// Bot Training offline (Phase 9): the match room runs in the match page's own worker.
+$(".training").onclick = () => go({ format: "bot_training", offline: "1" });
+for (const b of root.querySelectorAll<HTMLButtonElement>(".drill")) b.onclick = () => go({ format: b.dataset.format!, offline: "1" });
+// Your training stats (Phase 9 M9): kept by the match page from each round's report.
+const showTraining = () => ($(".training").innerHTML = statsHtml(loadStats(), data));
+showTraining();
+$(".reset-training").onclick = () => {
+  if (!confirm("Clear your training stats in this browser?")) return;
+  try {
+    localStorage.removeItem("redmond.training");
+  } catch {
+    // nothing kept
+  }
+  showTraining();
+};
 const join = (code: string) => {
   const c = code.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
   if (c.length !== 5) {

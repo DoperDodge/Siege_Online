@@ -1,6 +1,7 @@
 // The client side of a match (PLAN §5): predicts its own player with the shared simulation, reconciles
 // with the server's corrections, and interpolates everyone else. Transport- and DOM-free, so the browser
 // and the headless netsim clients run the same code.
+import { decodeRoundReport, type RoundReport } from "./report.js";
 import { TICK_HZ } from "../core/constants.js";
 import type { PlayerController } from "../player/pawn.js";
 import { PawnKind, quantizeInput, type InputCmd, type PawnState } from "../player/types.js";
@@ -37,8 +38,11 @@ import { interpolateRemote, MAX_INTERP_MS, remoteState, SNAPSHOT_EVERY, Snapshot
 const SNAPSHOT_MS = (1000 * SNAPSHOT_EVERY) / TICK_HZ;
 /** Interpolation delay bounds (ms): at least two snapshot intervals, at most MAX_INTERP_MS. */
 const MIN_INTERP_MS = 2 * SNAPSHOT_MS;
-/** Keep a second of remote history (render time never goes further back than the interpolation delay). */
-const REMOTE_HISTORY_TICKS = TICK_HZ;
+/**
+ * Keep six seconds of remote history: drawing never goes further back than the interpolation delay, but the killcam
+ * (Phase 9 M9) replays the last four seconds before a death from the killer's eye.
+ */
+const REMOTE_HISTORY_TICKS = 6 * TICK_HZ;
 
 export interface ClientSessionOptions {
   send(bytes: Uint8Array): void;
@@ -58,6 +62,8 @@ export interface ClientSessionOptions {
   onError?(code: number, message: string): void;
   /** A match room's state, as this player may see it (Phase 6, net/matchWire.ts). */
   onMatch?(view: MatchView): void;
+  /** Your round as it ended (Phase 9 M9, net/report.ts): Bot Training's feedback. */
+  onReport?(report: RoundReport): void;
   /**
    * A message held while the level loaded threw when it was replayed after (one arriving live throws from
    * handle() instead). Without this, the replay's error is rethrown.
@@ -228,6 +234,10 @@ export class ClientSession {
       case Msg.Error: {
         const e = decodeError(r);
         this.opts.onError?.(e.code, e.message);
+        return;
+      }
+      case Msg.RoundReport: {
+        this.opts.onReport?.(decodeRoundReport(r));
         return;
       }
       case Msg.MatchState: {

@@ -7,6 +7,7 @@
 import * as THREE from "three";
 import {
   ATTACK,
+  BOT_LEVELS,
   DEFENSE,
   encodeLobbyAction,
   encodeMatchAction,
@@ -20,6 +21,8 @@ import {
   winAt,
   TICK_HZ,
   WinReason,
+  type BotLevel,
+  type BotsRules,
   type FormatMode,
   type LoadoutPick,
   type LobbyAction,
@@ -28,12 +31,14 @@ import {
   type MatchViewPlayer,
   type RoundRecord,
   type WeaponPick,
+  type RoundReport,
 } from "@redmond/shared";
 import { keyLabel, loadSettings } from "../input/settings.js";
 import { escapeHtml } from "../ui/dom.js";
 import { changedGadget, changedPick, loadoutRows, saveLoadout, savedLoadout, type Slot } from "../ui/loadout.js";
 import { rankBadge, ratingChange, saveRating, storedRating } from "../ui/rank.js";
 import type { LabApi, SpectateView } from "./common/lab.js";
+import { reportHtml, saveReport } from "./training.js";
 
 const PHASE_LABEL: Record<Phase, string> = {
   [Phase.Lobby]: "LOBBY",
@@ -59,6 +64,8 @@ export function reasonText(r: Pick<RoundRecord, "reason" | "winner" | "attackers
       return "Defuser disabled";
     case WinReason.Deactivated:
       return "Defuser destroyed";
+    case WinReason.Found:
+      return "Every defender found";
     default:
       return "";
   }
@@ -167,6 +174,30 @@ function choiceRules(r: FormatMode, key: string, value: string): Record<string, 
   }
 }
 
+/** Bot difficulty names as the lobby shows them (data/bots/difficulty.json). */
+const LEVEL_NAMES: Record<BotLevel, string> = { recruit: "Recruit", normal: "Normal", hard: "Hard", elite: "Elite" };
+
+/** Your side in Bot Training (Phase 9, bots/DESIGN.md §2): attack only, defense only, or alternating every round. */
+type YourSide = "attack" | "defense" | "alternate";
+
+/** Your side as the rules have it: sides that never swap (in regulation) are attack or defense, else alternating. */
+function yourSide(r: FormatMode, team: 0 | 1): YourSide {
+  const m = r.match;
+  if (m.rounds !== null && m.swapEvery < m.rounds) return "alternate";
+  const first = m.firstAttack === "blue" ? 0 : m.firstAttack === "orange" ? 1 : null;
+  return first === team ? "attack" : "defense";
+}
+
+/** The rules for your side: fixed sides have no overtime (a tie is a draw); alternating swaps every round. */
+function sideRules(r: FormatMode, team: 0 | 1, side: YourSide): Record<string, unknown> {
+  const match = structuredClone(r.match) as unknown as Record<string, unknown>;
+  const mine = team === 0 ? "blue" : "orange";
+  const theirs = team === 0 ? "orange" : "blue";
+  if (side === "alternate") Object.assign(match, { swapEvery: 1, firstAttack: mine, overtime: { rounds: 3, winBy: 2, swapEvery: 1 } });
+  else Object.assign(match, { swapEvery: 24, firstAttack: side === "attack" ? mine : theirs, overtime: null });
+  return { match };
+}
+
 export function matchFeatures(lab: LabApi): void {
   const net = lab.net!;
   const session = net.session;
@@ -174,6 +205,8 @@ export function matchFeatures(lab: LabApi): void {
   const level = lab.sim.level.def;
   const keys = loadSettings().keys;
   const send = (bytes: Uint8Array) => net.send(bytes);
+  /** The page's own offline room (Bot Training offline, Phase 9): no code to share. */
+  const offline = session.roomCode === "LOCAL";
   const lobby = (a: LobbyAction) => send(encodeLobbyAction(a));
   const act = (a: MatchAction) => send(encodeMatchAction(a));
 
@@ -256,12 +289,40 @@ export function matchFeatures(lab: LabApi): void {
 
   function playerRow(v: MatchView, p: MatchViewPlayer, host: boolean): string {
     const t = p.team;
+    // A bot (Phase 9): its difficulty; the host removes it (Bot Training: one fewer on its team) but doesn't move it.
     const tools =
       host && p.id !== v.you
-        ? `<button data-act="move" data-member="${p.id}" data-team="${1 - t}" title="Move to ${TEAM_NAMES[1 - t]}">⇄</button><button data-act="kick" data-member="${p.id}" title="Kick">✕</button>`
+        ? `${p.bot === null ? `<button data-act="move" data-member="${p.id}" data-team="${1 - t}" title="Move to ${TEAM_NAMES[1 - t]}">⇄</button>` : ""}<button data-act="kick" data-member="${p.id}" title="${p.bot === null ? "Kick" : "Remove this bot"}">✕</button>`
         : "";
-    const rank = rated() ? rankBadge(p.rating ?? RATING_START) : "";
-    return `<li class="${p.id === v.you ? "you" : ""}${p.connected ? "" : " gone"}"><span class="ready ${p.ready ? "on" : ""}">${p.ready ? "✓" : "·"}</span><span class="name">${escapeHtml(p.name)}${p.id === v.host ? ' <span class="host" title="Host">★</span>' : ""}${p.connected ? "" : " (left)"}</span>${rank}${tools}</li>`;
+    const rank = rated() && p.bot === null ? rankBadge(p.rating ?? RATING_START) : "";
+    const level = p.bot !== null ? ` <span class="bot-level">${LEVEL_NAMES[p.bot]}</span>` : "";
+    return `<li class="${p.id === v.you ? "you" : ""}${p.connected ? "" : " gone"}${p.bot !== null ? " bot" : ""}"><span class="ready ${p.ready ? "on" : ""}">${p.ready ? "✓" : "·"}</span><span class="name">${escapeHtml(p.name)}${level}${p.id === v.host ? ' <span class="host" title="Host">★</span>' : ""}${p.connected ? "" : " (left)"}</span>${rank}${tools}</li>`;
+  }
+
+  /** The lobby's bot settings (Phase 9): Bot Training's setup, or another format's "fill empty slots" toggle. */
+  function botSettings(v: MatchView, r: FormatMode, host: boolean): string {
+    const toggles = r.match.host;
+    if (toggles !== "all" && !toggles.includes("bots")) return "";
+    const b = r.match.bots;
+    const me = meOf(v);
+    const training = toggles === "all" && v.format === "bot_training";
+    const levelSel = (t: 0 | 1) =>
+      `<label>${TEAM_NAMES[t]} bots <select data-act="botLevel" data-team="${t}" ${host && b ? "" : "disabled"}>${BOT_LEVELS.map((l) => `<option value="${l}" ${l === (b?.difficulty[t] ?? "normal") ? "selected" : ""}>${LEVEL_NAMES[l]}</option>`).join("")}</select></label>`;
+    if (!training) {
+      return `<h3>Bots</h3><div class="row"><label class="check"><input type="checkbox" data-act="backfill" ${b?.fill ? "checked" : ""} ${host ? "" : "disabled"}> Fill empty slots with bots</label>${b?.fill ? levelSel(0) + levelSel(1) : ""}</div>`;
+    }
+    const max = r.match.teamSize.max;
+    const sizeSel = (t: 0 | 1) => `<label>${TEAM_NAMES[t]} players <select data-act="botSize" data-team="${t}" ${host ? "" : "disabled"}>${Array.from({ length: max }, (_, i) => i + 1).map((n) => `<option value="${n}" ${n === b?.size[t] ? "selected" : ""}>${n}</option>`).join("")}</select></label>`;
+    const side = me ? yourSide(r, me.team) : "alternate";
+    const sides: [YourSide, string][] = [["alternate", "Attack and defense (alternating)"], ["attack", "Attack only"], ["defense", "Defense only"]];
+    return `<h3>Bot Training</h3>
+      <div class="row">
+        <label>Your side <select data-act="botSide" ${host && me ? "" : "disabled"}>${sides.map(([k, label]) => `<option value="${k}" ${k === side ? "selected" : ""}>${label}</option>`).join("")}</select></label>
+        ${sizeSel(0)}${sizeSel(1)}${levelSel(0)}${levelSel(1)}
+        <label>Site <select data-act="botSite" ${host ? "" : "disabled"}><option value="">The defenders vote</option>${level.sites.map((st) => `<option value="${st.id}" ${st.id === b?.site ? "selected" : ""}>${escapeHtml(st.name)}</option>`).join("")}</select></label>
+        <label>Bots' operators <select data-act="botPicks" ${host ? "" : "disabled"}>${(["random", "fixed", "counter"] as const).map((k) => `<option value="${k}" ${k === b?.picks ? "selected" : ""}>${k === "random" ? "At random" : k === "fixed" ? "In roster order" : "Counter your pick"}</option>`).join("")}</select></label>
+      </div>
+      <p class="note">Bots fill every empty place when you start: people first. They see, hear and know only what their team could.</p>`;
   }
 
   function lobbyParts(v: MatchView): [string, string][] {
@@ -291,12 +352,15 @@ export function matchFeatures(lab: LabApi): void {
         ${can("bans") && !all && r.match.bans ? `<label>Bans per side <select data-act="bans">${[0, 1, 2].map((n) => `<option value="${n}" ${n === r.match.bans!.maxPerSide ? "selected" : ""}>${n}</option>`).join("")}</select></label>` : ""}
         ${can("reinforcementScaling") ? `<label>Reinforcements <select data-act="scaling">${(["scaled", "full", ...(toggles === "all" ? ["infinite"] : [])] as const).map((s) => `<option value="${s}" ${s === r.match.reinforcementScaling ? "selected" : ""}>${s === "scaled" ? "scaled to the team" : s === "full" ? `${r.reinforcements} each round` : "endless"}</option>`).join("")}</select></label>` : ""}
         </div>
+        ${botSettings(v, r, host)}
         ${all ? `<div class="rules">${choices}${RULE_FIELDS.filter(fits).map((f) => `<label>${f.label} <input type="number" data-act="rule" data-key="${f.key}" min="${f.min}" max="${f.max}" step="${f.step}" value="${ruleValue(r, f.key)}"></label>`).join("")}</div>` : ""}`
       : "";
     return [
       [
         "head",
-        `<h2>${escapeHtml(formatName(v))} · Room ${escapeHtml(session.roomCode)}</h2>
+        offline
+          ? `<h2>${escapeHtml(formatName(v))} · Offline</h2><p class="note">This match runs in your browser: no server, no other players.</p>`
+          : `<h2>${escapeHtml(formatName(v))} · Room ${escapeHtml(session.roomCode)}</h2>
         <div class="row"><button data-act="invite">Copy invite link</button>${host ? `<label class="check"><input type="checkbox" data-act="private" ${v.private ? "checked" : ""}> Private (not in the room list)</label>` : v.private ? '<span class="note">Private room</span>' : ""}</div>`,
       ],
       ["teams", `<div class="teams">${team(0)}${team(1)}</div>`],
@@ -492,6 +556,22 @@ export function matchFeatures(lab: LabApi): void {
     else if (d.act === "bans") lobby({ kind: "change", change: { kind: "bans", maxPerSide: Number(t.value) } });
     else if (d.act === "scaling") lobby({ kind: "change", change: { kind: "reinforcementScaling", value: t.value as "scaled" | "full" | "infinite" } });
     else if (d.act === "choice" && r) lobby({ kind: "change", change: { kind: "rules", rules: choiceRules(r, d.key!, t.value) } });
+    else if (d.act?.startsWith("bot") && r) {
+      // Bot Training's setup and the backfill toggle (Phase 9): the whole bots block each time.
+      const max = r.match.teamSize.max;
+      const b: BotsRules = r.match.bots ?? { fill: true, size: [max, max], difficulty: ["normal", "normal"], picks: "random", site: null };
+      const team = Number(d.team) as 0 | 1;
+      const me = session.match && meOf(session.match);
+      if (d.act === "botSide" && me) lobby({ kind: "change", change: { kind: "rules", rules: sideRules(r, me.team, t.value as YourSide) } });
+      else if (d.act === "botLevel") lobby({ kind: "change", change: { kind: "bots", bots: { ...b, difficulty: team === 0 ? [t.value as BotLevel, b.difficulty[1]] : [b.difficulty[0], t.value as BotLevel] } } });
+      else if (d.act === "botSize") lobby({ kind: "change", change: { kind: "bots", bots: { ...b, size: team === 0 ? [Number(t.value), b.size[1]] : [b.size[0], Number(t.value)] } } });
+      else if (d.act === "botSite") lobby({ kind: "change", change: { kind: "bots", bots: { ...b, site: t.value || null } } });
+      else if (d.act === "botPicks") lobby({ kind: "change", change: { kind: "bots", bots: { ...b, picks: t.value as BotsRules["picks"] } } });
+    } else if (d.act === "backfill" && r) {
+      const max = r.match.teamSize.max;
+      const on = (t as HTMLInputElement).checked;
+      lobby({ kind: "change", change: { kind: "bots", bots: on ? { fill: true, size: [max, max], difficulty: r.match.bots?.difficulty ?? ["normal", "normal"], picks: "random", site: null } : null } });
+    }
     else if (d.act === "rule" && r) {
       const match = structuredClone(r.match) as unknown as Record<string, unknown>;
       const [a, b] = d.key!.split(".");
@@ -761,15 +841,16 @@ export function matchFeatures(lab: LabApi): void {
       info.innerHTML = infoHtml;
     }
 
-    // The round's result, for the round end.
+    // The round's result, for the round end (with your round's report, Phase 9 M9).
     const last = v.history.at(-1);
     const showBanner = v.phase === Phase.RoundEnd && last !== undefined && last.round === v.round;
     banner.classList.toggle("hidden", !showBanner);
     if (showBanner) {
       const mine = me ? me.team === last.winner : null;
+      const report = lastReport && lastReport.round === last.round ? reportHtml(lastReport, lab.data) : "";
       const html = `<div class="title team-${last.winner}">${TEAM_NAMES[last.winner].toUpperCase()} WINS ROUND ${last.round}</div><div class="why">${reasonText(last)}</div>${
         mine === null ? "" : `<div class="you ${mine ? "won" : "lost"}">${mine ? "Round won" : "Round lost"}</div>`
-      }`;
+      }${report}`;
       if (banner.dataset.html !== html) {
         banner.dataset.html = html;
         banner.innerHTML = html;
@@ -787,6 +868,13 @@ export function matchFeatures(lab: LabApi): void {
     }
 
     updateMarkers(v, renderTick);
+  });
+
+  // Your round's report (Phase 9 M9): kept for the round's end screen, and counted in your training stats.
+  let lastReport: RoundReport | null = null;
+  lab.onReport((r) => {
+    lastReport = r;
+    saveReport(r);
   });
 
   lab.addMatchTool(() => (session.match && practiceHost(session.match) ? "End practice" : null), () => lobby({ kind: "end" }));

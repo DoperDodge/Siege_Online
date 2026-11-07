@@ -1,15 +1,18 @@
 // A room of your own, for the Range Lab offline (Phase 3 M10, DECISIONS D-052): the same shared Room the
-// game server runs, spoken to with the same messages, so hits, downs and the dummies work exactly as online.
+// game server runs, spoken to with the same messages, so hits, downs and the dummies work exactly as online. Since
+// Phase 9 it also runs a match room (Bot Training offline: you and the bots, no server; bots/DESIGN.md §2).
 // It runs in a Web Worker (localRoom.worker.ts) to keep the 64 Hz room off the page's thread; this class is
 // the part that doesn't need a worker (tests drive it directly).
 import {
   ByteReader,
+  decodeCreateMatch,
   decodeCreateRoom,
   decodeHelloRest,
   decodeHelloVersion,
   encodeError,
   ErrorCode,
   handleRoomMessage,
+  isFormat,
   loadGameData,
   Msg,
   PROTOCOL_VERSION,
@@ -19,6 +22,8 @@ import {
 } from "@redmond/shared";
 
 export const LOCAL_ROOM_CODE = "LOCAL";
+/** The map match rooms are played on (the server's MATCH_LEVEL). */
+const MATCH_LEVEL = "oregon";
 
 export class LocalHost {
   private state: "hello" | "lobby" | "joining" | "room" | "closed" = "hello";
@@ -39,6 +44,7 @@ export class LocalHost {
     try {
       if (this.state === "hello" && bytes[0] === Msg.Hello) this.hello(r);
       else if (this.state === "lobby" && bytes[0] === Msg.CreateRoom) void this.create(decodeCreateRoom(r).levelId);
+      else if (this.state === "lobby" && bytes[0] === Msg.CreateMatch) this.createMatch(decodeCreateMatch(r).format);
       else if (this.state === "room") handleRoomMessage(this.room!, this.memberId, bytes[0], r);
     } catch (e) {
       if (!(e instanceof ProtocolError)) throw e;
@@ -90,9 +96,16 @@ export class LocalHost {
     this.stop(1000, "version mismatch");
   }
 
-  private async create(levelId: string) {
+  /** A match room in this format (Bot Training, offline), with you as its host. */
+  private createMatch(format: string) {
+    const mode = loadGameData().modes.get(format);
+    if (!mode || !isFormat(mode)) return this.stop(1002, "unknown format");
+    void this.create(MATCH_LEVEL, format);
+  }
+
+  private async create(levelId: string, format?: string) {
     this.state = "joining";
-    const room = await Room.create(LOCAL_ROOM_CODE, levelId, { lab: true });
+    const room = await Room.create(LOCAL_ROOM_CODE, levelId, format ? { format } : { lab: true });
     if (this.state !== "joining") return;
     const id = room.join(this.name, { send: (b) => this.send(b), buffered: () => 0 });
     if (id === null) return this.stop(1011, "room full");

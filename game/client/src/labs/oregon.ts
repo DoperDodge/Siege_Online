@@ -9,6 +9,7 @@
 import { loadGameData } from "@redmond/shared";
 import { startLab } from "./common/lab.js";
 import { destructionFeatures } from "./destructionFeatures.js";
+import { navOverlay } from "./navOverlay.js";
 
 const level = loadGameData().levels.get("oregon")!;
 /** Metres from the plan's u (the level's plan.mPerU). */
@@ -64,9 +65,13 @@ await startLab({
       "The line at the bottom left says where you are: the room, the storey, and your position in the plan's units (u), first in the world frame (1F's drawing), then in your storey's own drawing (the frame its wall file uses). Quote it when you report something out of place.",
       "Press M for the plan view: your storey from above, north up, centred on you, with the room callouts; the wheel zooms. Hold it against the blueprint. You keep walking in it (W goes the way the arrow points); M again goes back.",
       "Press H to hide the storeys above yours (it follows you up and down), and P to switch between the surface colours and one light grey.",
+      "Press F6 for the bots' navigation grid round you (Phase 9): a dot wherever a body can stand (green; yellow where only crouched; blue on the stairs' ramps), and lines for the ways bots get between places other than walking: vaults (orange), the ladder (purple), drops (red) and barricades they break first (brown). Break a wall or a barricade and watch it follow.",
       "Press F8 (or open the page with ?stats) for the frame-rate overlay: the target is 120 FPS on average and 90 at the 1% lows, at 1080p on High. The browser draws no faster than the display refreshes, so read the FPS on a display faster than 120 Hz (144 Hz or more). On a slower one, read the work instead: the page's own work each frame on the main thread (8.3 ms on average and 11.1 ms for the slowest 1% leave room for 120 and 90 FPS); it can't see the graphics card, so it says nothing about a frame the GPU holds up.",
     ],
     note: "Phase 5 milestone 8: rappel on every outside wall, on top of the four bomb sites with five defenders each, r6calls' cameras and ingredients, the major furniture and the zones, the roofs, the outside, the attacker spawns and every storey, room, stair and the ladder. Every shape, size and marker is a placeholder until you've walked it: 1 u of the plan = 0.15 m, floors at −3.2, 0, 3.2 and 6.2 m, roofs at 3.2, 6.2 and 9.2 m, doors 2.1 m (research/OPEN_QUESTIONS.md).",
   },
-  extend: destructionFeatures,
+  extend: (lab) => {
+    destructionFeatures(lab);
+    navOverlay(lab);
+  },
 });

@@ -1,0 +1,82 @@
+{
+  "_doc": "A Bot Training drill (PLAN §15.1; bots/DESIGN.md §10; Phase 9 M8): Bot Training's rules with a `drill` block the match director reads to set rounds up; the host can still change sizes, difficulty and the rest in the lobby. Custom scenario: Bot Training with a drill block you set in the lobby's rules: the site, each team's bots, and how rounds start (prep, action, or planted). Starts as a plain round from action.",
+  "_season": "Y11S3",
+  "_unverified": [
+    "reverseFriendlyFire.thresholdHp",
+    "match.seconds.pick",
+    "match.seconds.roundEnd"
+  ],
+  "id": "drill_custom",
+  "friendlyFire": {
+    "actionPhase": true,
+    "prepPhase": false,
+    "scale": 1.0
+  },
+  "reverseFriendlyFire": {
+    "enabled": true,
+    "thresholdHp": 100
+  },
+  "lastAliveDies": true,
+  "dummyRespawnS": 0,
+  "reinforcements": 10,
+  "defenderToolsForAll": false,
+  "attackerToolsForAll": false,
+  "match": {
+    "name": "Drill: Custom Scenario",
+    "teamSize": {
+      "min": 1,
+      "max": 5
+    },
+    "rounds": 6,
+    "swapEvery": 1,
+    "firstAttack": "blue",
+    "overtime": {
+      "rounds": 3,
+      "winBy": 2,
+      "swapEvery": 1
+    },
+    "bans": null,
+    "site": "random",
+    "siteReveal": "sight",
+    "seconds": {
+      "pick": 30,
+      "pickSameSides": null,
+      "prep": 45,
+      "action": 180,
+      "plant": 7,
+      "fuse": 45,
+      "disable": 7,
+      "roundEnd": 6,
+      "runoutGrace": 1,
+      "attackerSafeguard": 0,
+      "redWallExtension": 0
+    },
+    "reinforcementScaling": "scaled",
+    "preSetups": false,
+    "attrition": "none",
+    "stats": "none",
+    "host": "all",
+    "bots": {
+      "fill": true,
+      "size": [
+        5,
+        5
+      ],
+      "difficulty": [
+        "normal",
+        "normal"
+      ],
+      "picks": "random",
+      "site": null
+    },
+    "drill": {
+      "kind": "custom",
+      "start": "action",
+      "objective": true,
+      "prepOnly": false,
+      "doors": [],
+      "apartM": 4,
+      "storey": null
+    }
+  }
+}
