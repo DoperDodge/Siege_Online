@@ -5,7 +5,7 @@ known issues, and what's next.
 
 ---
 
-## Phase 9 — Bot Training · 🚧 in progress (branch `claude/phase-9-bots`)
+## Phase 9 — Bot Training · ✅ complete (PR #11, squash-merged into `main`)
 
 The plan: game/shared/src/bots/DESIGN.md (D-158). Bots are players without a connection: the room asks each bot's
 brain for its keys and mouse every tick and plays them exactly as a player's, so they move, shoot, reinforce and
@@ -223,6 +223,11 @@ breach by the same rules, and they know only what their team could know (what th
 - **Browser test** (tools/e2e/bot-training.mjs): an offline solo match in Chromium: the lobby with you and nine bots,
   your picks, attack (through your drone in prep) then defense, the bots getting about and fighting, your report each
   round, the summary, and both rounds in your training stats (14 checks).
+- **Review**: two reviewers were set to read the phase (the room, network and browser side; the bots' brains and
+  map), but the session's usage limit stopped both before they'd read anything, so the full review didn't happen. I
+  checked by hand what a hostile browser could send that's new in this phase (the lobby's bot settings, removing bots,
+  a drill's rules, orders off the comm wheel): each is checked when it's read or by the rules' schema, and unknown ids
+  (a site, a door, a storey) are ignored. A full review can still be run on `main` if you want one.
 - **CI**: the whole-match bot test now has 120 s (a runner took longer than the default 20 s), and the match
   test's spectating check waits on a timer for 20 s with the dead view counted from the death itself (a slow runner's
   page draws about a frame a second; reproduced with the page's CPU throttled 12 and 40 times).
