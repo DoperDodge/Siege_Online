@@ -19,6 +19,7 @@ import {
   pawnHitboxes,
   plateBend,
   poseHitboxes,
+  shieldFrame,
   shieldHitboxes,
   shieldPlace,
   Sim,
@@ -138,12 +139,20 @@ describe("the plate's hitboxes", () => {
     // Crouched and aimed it stays over the floor.
     const crouched = { ...s, stance: Stance.Crouch, stanceFrom: Stance.Crouch, stanceT: 1, adsQ: 65535 };
     expect(bottom(shieldHitboxes(m, hb, crouched, k.plate, "front"))).toBeGreaterThanOrEqual(0.02 - 1e-6);
-    // Leaning right, it tilts whole with his upper body (about his hips): its top goes right, its right side dips, and
-    // nothing on it stretches.
+    // Leaning right, it tilts whole (as far as the view rolls): its top goes right, its right side dips, nothing on it
+    // stretches, and its window stays in front of the eyes, carried across with the head (lean · offset), standing and
+    // crouched (Ulo: crouched, a lean bared the head).
     const leaning = shieldHitboxes(m, hb, { ...s, lean: 1 }, k.plate, "front");
     expect(leaning[3].b[0] - front[3].b[0]).toBeGreaterThan(0.1);
     expect(Math.max(leaning[6].a[1], leaning[6].b[1])).toBeLessThan(Math.max(leaning[0].a[1], leaning[0].b[1]));
     for (let i = 0; i < 7; i++) expect(len(leaning[i])).toBeCloseTo(len(front[i]), 6);
+    const atEyes = (b: Boxes[number], y: number) => b.a[0] + ((y - b.a[1]) / (b.b[1] - b.a[1])) * (b.b[0] - b.a[0]);
+    expect(atEyes(leaning[3], eye)).toBeCloseTo(m.lean.offset, 4);
+    const crouch = { ...s, stance: Stance.Crouch, stanceFrom: Stance.Crouch, stanceT: 1 };
+    const crouchEye = eyePose(m, hb, crouch).pos[1];
+    expect(atEyes(shieldHitboxes(m, hb, { ...crouch, lean: -1 }, k.plate, "front")[3], crouchEye)).toBeCloseTo(-m.lean.offset, 4);
+    // Crouched it's held crouchRaiseM higher over the eyes (over his shoulders).
+    expect(top(shieldHitboxes(m, hb, crouch, k.plate, "front"))).toBeCloseTo(crouchEye + k.plate.aboveEyeM + k.plate.crouchRaiseM, 3);
     // Facing +x (yaw −90°), its middle is frontM out along +x.
     const turned = shieldHitboxes(m, hb, { ...s, yaw: -90 * DEG }, k.plate, "front");
     expect(turned[3].a[0]).toBeCloseTo(k.plate.frontM, 4);
@@ -172,6 +181,12 @@ describe("the plate's hitboxes", () => {
     expect(aimedR.b[2]).toBeLessThan(r.b[2] - 0.1);
     // Without the shield up the hands are where any body's are.
     expect(arms({ ...s, shieldAt: ShieldAt.None })[1].b).toEqual(poseHitboxes(m, hb, s).find((b) => b.part === "arm_r")!.b);
+    // Crouched, his shoulders hunch behind it: each arm's top (at the shoulder) under the plate's top part's shoulders,
+    // so behind its wider body (Ulo: crouched, the shoulders showed); standing they are anyway.
+    for (const st of [s, { ...s, stance: Stance.Crouch, stanceFrom: Stance.Crouch, stanceT: 1 }]) {
+      const f = shieldFrame(m, hb, st, k.plate, "front")!;
+      for (const b of arms(st)) expect(b.a[1] + b.radius).toBeLessThan(f.y1 - f.shoulder);
+    }
   });
 
   it("how far it has slid down goes to others in the remote record (8 steps), with the shield up only", async () => {

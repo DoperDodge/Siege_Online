@@ -35,7 +35,19 @@ export interface ShieldHold {
   frontM: number;
   sideM: number;
   aside: number;
+  /** Crouched (0 standing … 1): his shoulders hunched down and in behind the plate's top part. */
+  hunch: number;
 }
+
+/** How far crouched a body of this height is: 0 standing … 1 crouched (prone and between count as crouched). */
+export function crouchWeight(m: MovementData, height: number): number {
+  const span = m.stance.stand.height - m.stance.crouch.height;
+  return span > 0 ? Math.min(1, Math.max(0, (m.stance.stand.height - height) / span)) : 0;
+}
+
+/** How far a crouched body's shoulders hunch down behind its raised shield (m), and in (a fraction of their width). */
+const HUNCH_DOWN_M = 0.06;
+const HUNCH_IN = 0.12;
 
 /** How far behind the plate's middle a hand on its grips is (m): the plate's own half thickness, an arm's, a little more. */
 const HOLD_BEHIND_M = 0.12;
@@ -52,6 +64,9 @@ function uprightPose(hb: HitboxData, height: number, eye: number, leanOffset: nu
   const bend = (y: number) => (head > hip ? leanOffset * Math.max(0, (y - hip) / (head - hip)) : 0);
   const p = (x: number, y: number, z: number): Vec3 => [x + bend(y), y, z];
   const hand = hip + st.handAboveHip;
+  // Behind a raised shield, crouched: the shoulders hunched down and in behind its top part.
+  const shoulderY = chest - (hold ? hold.hunch * HUNCH_DOWN_M : 0);
+  const shoulderX = sw * (1 - (hold ? hold.hunch * HUNCH_IN : 0));
   let left: Vec3 = [-st.handHalfWidth, hand, -st.handForward];
   let right: Vec3 = [st.handHalfWidth, hand, -st.handForward];
   if (hold) {
@@ -67,8 +82,8 @@ function uprightPose(hb: HitboxData, height: number, eye: number, leanOffset: nu
     ["neck", p(0, chest + st.neckBaseAboveChest, 0), p(0, neckTop, 0)],
     ["torso", p(0, hip + st.torsoBaseAboveHip, 0), p(0, chest, 0)],
     ["pelvis", p(-hw, hip, 0), p(hw, hip, 0)],
-    ["arm_l", p(-sw, chest, 0), p(left[0], left[1], left[2])],
-    ["arm_r", p(sw, chest, 0), p(right[0], right[1], right[2])],
+    ["arm_l", p(-shoulderX, shoulderY, 0), p(left[0], left[1], left[2])],
+    ["arm_r", p(shoulderX, shoulderY, 0), p(right[0], right[1], right[2])],
     ["leg_l", p(-hw, hip, 0), p(-hw, st.footHeight, -st.footForward)],
     ["leg_r", p(hw, hip, 0), p(hw, st.footHeight, -st.footForward)],
   ];
@@ -227,6 +242,7 @@ export interface ShieldPlate {
   curveM: number;
   frontM: number;
   aboveEyeM: number;
+  crouchRaiseM: number;
   ads: { sideM: number; dropM: number; yawDeg: number };
   window: { widthM: number; heightM: number };
 }
@@ -265,8 +281,8 @@ const PLATE_FLAT = 0.45;
 const easeAside = (a: number) => a * a * (3 - 2 * a);
 
 /** Fuze's hands on his shield held up in front now (ShieldHold). */
-export function shieldHold(k: ShieldPlate, s: PawnState): ShieldHold {
-  return { frontM: k.frontM, sideM: k.ads.sideM, aside: easeAside(shieldLowered(s)) };
+export function shieldHold(m: MovementData, k: ShieldPlate, s: PawnState): ShieldHold {
+  return { frontM: k.frontM, sideM: k.ads.sideM, aside: easeAside(shieldLowered(s)), hunch: crouchWeight(m, currentHeight(m, s)) };
 }
 
 /**
@@ -286,7 +302,9 @@ export function shieldFrame(m: MovementData, hb: HitboxData, s: PawnState, k: Sh
   const hip = height * st.hipHeight;
   const front = place === "front";
   const aside = front ? easeAside(shieldLowered(s)) : 0;
-  const top = eye + k.aboveEyeM;
+  // Crouched it's held higher over the eyes (the window stays where it is on the plate, the eyes lower in it), so its
+  // top part's shoulders are over his (Ulo: crouched, the shoulders showed).
+  const top = eye + k.aboveEyeM + k.crouchRaiseM * crouchWeight(m, height);
   const drop = front ? Math.min(k.ads.dropM * aside, Math.max(0, top - k.heightM - FLOOR_GAP_M)) : 0;
   const y1 = front ? top - drop : height * st.chestHeight + 0.15;
   const y0 = front ? Math.max(FLOOR_GAP_M, y1 - k.heightM) : hip;
@@ -294,8 +312,11 @@ export function shieldFrame(m: MovementData, hb: HitboxData, s: PawnState, k: Sh
   const half = (front ? k.widthM : k.widthM * 0.85) / 2;
   const shoulder = k.shoulderM * (tall / k.heightM);
   const torso = hb.parts.torso.radius;
-  // Leaning: the spine's angle, the eyes `lean · offset` across from over the hips.
-  const roll = front && eye > hip ? Math.atan2(s.lean * m.lean.offset, eye - hip) : 0;
+  // Leaning: turned by the spine's angle (the eyes `lean · offset` across from over the hips: it follows the upper body
+  // from the hips to the head, covering both), and carried across so its window is in front of the eyes, crouched as
+  // standing (Ulo: turned about the hips alone, it fell short of the head and lower, and leaning crouched bared it).
+  const shift = front ? s.lean * m.lean.offset : 0;
+  const roll = front && eye > hip ? Math.atan2(shift, eye - hip) : 0;
   const [cr, sr] = [Math.cos(roll), Math.sin(roll)];
   // Aside: across to his left, its left edge drawn back round his side.
   const side = k.ads.sideM * aside;
@@ -309,9 +330,9 @@ export function shieldFrame(m: MovementData, hb: HitboxData, s: PawnState, k: Sh
     const dz = bend - out;
     const xa = x * cy + dz * sy - side;
     const za = -x * sy + dz * cy - k.frontM;
-    // Tilted with the lean, about his hips.
-    const ry = y - hip;
-    return toWorld(s, [xa * cr + ry * sr, hip + ry * cr - xa * sr, za], height, torso);
+    // Tilted with the lean about the eyes' height, and across with the head.
+    const ry = y - eye;
+    return toWorld(s, [xa * cr + ry * sr + shift, eye + ry * cr - xa * sr, za], height, torso);
   };
   return { y0, y1, tall, half, shoulder, at };
 }

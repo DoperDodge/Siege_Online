@@ -43,7 +43,7 @@ export function pawnHitboxes(m: MovementData, hb: HitboxData, pawn: Pawn): Hitbo
   const k = pawn.loadout?.shield;
   const place = k ? shieldPlace(pawn.state) : null;
   // Held up in front, his hands are on its grips behind it (D-169): no arm out past the plate.
-  const body = poseHitboxes(m, hb, pawn.state, k && place === "front" ? shieldHold(k.plate, pawn.state) : undefined);
+  const body = poseHitboxes(m, hb, pawn.state, k && place === "front" ? shieldHold(m, k.plate, pawn.state) : undefined);
   return k && place ? [...body, ...shieldHitboxes(m, hb, pawn.state, k.plate, place)] : body;
 }
 

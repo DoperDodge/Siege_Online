@@ -24,6 +24,16 @@ known issues, and what's next.
   as they stand. Waking it (F) turns it to where you're looking.
 - Hitboxes follow the plate as drawn (the server's and every page's), and the tests check each of these.
 
+### What's done (your second look)
+- **Skopós's shell view looks round again**: like a Bulletproof Camera, the mouse turns the view and the shell stays
+  as it stands. (The page kept pulling your view back to the shell's facing, which no longer turns: it now follows your
+  view there.) The Gadget Lab browser test checks it with the real mouse.
+- **Crouched, the shoulders are covered**: crouched, the shield is held 5 cm higher over the eyes (the window stays
+  where it is on the plate) and his shoulders hunch a little behind it, below its top part's shoulders.
+- **Leaning crouched no longer bares the head**: the shield turns with the upper body as before, and is now also
+  carried across with the head, so the window stays in front of the eyes at any lean, crouched or standing; the hips
+  stay covered too.
+
 ### How to test
 1. `npm run build && npm start`, http://localhost:8080 → the Gadget Lab: Fuze with the Ballistic Shield (loadout);
    look at it from a second window, aim (right mouse) and lean (Q / E) in the first.

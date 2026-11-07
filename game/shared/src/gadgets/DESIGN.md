@@ -293,8 +293,9 @@ flat across its middle and curving back round his sides (player/hitboxes.ts plat
 two bolts low down. Held close (`frontM` 0.30 m), his hands crossed on its grips behind it (poseHitboxes' `hold`: the
 arms end just behind the plate, in the hitboxes and the drawn body). Aiming swings it aside to his left (`ads`: 0.30 m
 across, turned 22° back round his side about its middle, 0.10 m lower, eased over the aim) and his right hand comes out
-with the pistol; leaning tilts it whole about his hips by the spine's angle. The outer two capsules end at its
-shoulders.
+with the pistol; leaning turns it whole by the spine's angle and carries it across so its window stays in front of the
+eyes; crouched it's held `crouchRaiseM` higher and his shoulders hunch behind its top part. The outer two capsules end
+at its shoulders.
 
 **The game's model and the knockdown (D-156, D-157):** the plate is now the game's as its renders show it: rigid,
 0.58 × 1.1 m (`heightM`), all but flat (`curveM` 0.02), its top corners cut (`chamferM`: the edge capsules stop short),

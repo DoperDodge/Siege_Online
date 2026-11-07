@@ -377,10 +377,11 @@ const shieldSchema = z.strictObject({
      * Its plate (Phase 8 M11; the game's model from its renders, D-157; Ulo's reference renders, D-169): a rigid plate
      * `heightM` tall, `widthM` across its body and `topWidthM` across its top part (`shoulderM` deep, down to rounded
      * shoulders), its corners rounded `cornerM`, flat across its middle and curving back round his sides (its edges
-     * `curveM` nearer him), held close `frontM` ahead with its top `aboveEyeM` over the eyes; aiming swings it aside to
-     * his left (`ads`: `sideM` across, turned `yawDeg` back round his side, `dropM` lower; never into the floor), leaning
-     * tilts it with his upper body; a viewport `window` at eye height (bulletproof glass: drawn see-through, in a frame
-     * that stands out of the plate).
+     * `curveM` nearer him), held close `frontM` ahead with its top `aboveEyeM` over the eyes (`crouchRaiseM` more
+     * crouched, over his shoulders); aiming swings it aside to his left (`ads`: `sideM` across, turned `yawDeg` back round
+     * his side, `dropM` lower; never into the floor); leaning turns it as far as the view rolls, about the eyes, carried
+     * across with the head; a viewport `window` at eye height (bulletproof glass: drawn see-through, in a frame that
+     * stands out of the plate).
      */
     plate: z.strictObject({
       widthM: z.number().positive(),
@@ -391,6 +392,7 @@ const shieldSchema = z.strictObject({
       curveM: z.number().min(0),
       frontM: z.number().positive(),
       aboveEyeM: z.number().min(0),
+      crouchRaiseM: z.number().min(0),
       ads: z.strictObject({ sideM: z.number().min(0), dropM: z.number().min(0), yawDeg: z.number() }),
       window: z.strictObject({ widthM: z.number().positive(), heightM: z.number().positive() }),
     }),
