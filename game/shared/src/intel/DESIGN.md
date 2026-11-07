@@ -80,6 +80,15 @@ lean goes to the previous / next working one. The view turns toward the mouse at
 being watched will show a red light to attackers (Y6S4: viewer-relative colours; whether a passive viewer lights it
 is an open question; not built yet).
 
+**Ulo's requests after Phase 8 (D-155):** each viewer's cameras keep where they left them looking. The controller
+remembers the view of every camera it watched this life (`camViews`: yaw and pitch by a key that survives the list
+shifting, 2(i + 1) for the level's camera i, 2·id + 1 for a gadget entry's; the newest last, 24 at most), and opening
+a camera restores its view (clamped to its limits) instead of its facing. Observe opens the feed last watched
+(`lastCam`), or the next working one after it if it broke since, the first the first time. A camera just opened
+doesn't turn on that tick (the mouse still points where the last feed looked). Both fields are in the controller's
+state, so they're predicted and corrected like the rest (protocol 16). Skopós's own idle shell is one of her feeds
+(§5).
+
 ## 4. Bulletproof Camera
 
 A defender gadget (data: `bulletproof_camera` in Mute's, Lesion's and Sentry's gadgets; count 1, I:198). Hold the
@@ -122,6 +131,14 @@ where you are your first drone, a new lean goes round it and your teammates'. Th
 (camera numbers, `BP` for a Bulletproof Camera; `D1`, `D2` for your drones and a teammate's name for theirs), the one
 watched lit, broken ones struck out, teammates' drones in italics. A camera someone watches shows a light by its lens
 (the match state carries which, `camsWatched`): blue to the defenders, red to the attackers (Y6S4's colours).
+
+**Skopós's shell in the list (D-155):** her own idle shell is one of her feeds, after the cameras (`SH` in the row):
+the view from the shell itself (Phase 5's shell camera, from which Interact swaps), standing in for its barrier's
+camera (Phase 8 M10), which her list leaves out and her teammates' keep. Observe, the lean and a broken camera's
+hand-over go round the one list (`Sim.nextCamFeed`, `camFeedOk`); with no cameras (a lab) her shell is her only feed,
+and with her phone blown up by Dokkaebi (Phase 8 M9) she has none. Her ability key still opens her shell's view from her body or a
+camera, and closes it; on a touch screen her Ability button is hidden, Observe doing its work. Mid-swap, the feeds'
+keys do nothing.
 
 ## 6. Pings, scans and the comm wheel
 

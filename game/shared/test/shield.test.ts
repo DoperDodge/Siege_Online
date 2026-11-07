@@ -98,7 +98,7 @@ describe("where the plate is", () => {
 });
 
 describe("the plate's hitboxes", () => {
-  it("curve round him in front (frontM at the middle, curveM nearer at the edges), shins to over the eyes; slide down as he aims; bend with a lean; on the back behind the torso; none prone", async () => {
+  it("stand across him in front (frontM at the middle, curveM nearer at the edges), a rigid heightM down from aboveEyeM over the eyes, the top corners cut; slide down as he aims (crouched, no further than the floor); bend with a lean; on the back behind the torso; none prone", async () => {
     const { sim, pawn } = await fuze();
     const k = pawn.loadout!.shield!;
     const m = sim.data.movement;
@@ -118,14 +118,22 @@ describe("the plate's hitboxes", () => {
     const width = Math.max(...front.map((b) => b.a[0] + b.radius)) - Math.min(...front.map((b) => b.a[0] - b.radius));
     expect(width).toBeCloseTo(k.plate.widthM, 4);
     expect(top(front)).toBeCloseTo(eye + k.plate.aboveEyeM, 3);
-    expect(bottom(front)).toBeCloseTo(k.plate.bottomM.stand, 3);
-    // Fully aimed it has slid down by aboveEye + adsBelowEye (the head over it), its bottom stopping at the floor; half
-    // aimed, half as far.
+    expect(bottom(front)).toBeCloseTo(eye + k.plate.aboveEyeM - k.plate.heightM, 3);
+    // Its cut top corners: the edge capsules stop chamferM under the middle's top.
+    const edgeTop = Math.max(front[0].a[1], front[0].b[1]) + front[0].radius;
+    expect(edgeTop).toBeCloseTo(top(front) - k.plate.chamferM, 3);
+    // Fully aimed it has slid down by aboveEye + adsBelowEye (the head over it), all of it; half aimed, half as far.
     const slide = k.plate.aboveEyeM + k.plate.adsBelowEyeM;
     const aimed = shieldHitboxes(m, hb, { ...s, adsQ: 65535 }, k.plate, "front");
     expect(top(aimed)).toBeCloseTo(eye - k.plate.adsBelowEyeM, 3);
-    expect(bottom(aimed)).toBeCloseTo(0.02, 3);
+    expect(bottom(aimed)).toBeCloseTo(eye - k.plate.adsBelowEyeM - k.plate.heightM, 3);
     expect(top(shieldHitboxes(m, hb, { ...s, adsQ: 32768 }, k.plate, "front"))).toBeCloseTo(eye + k.plate.aboveEyeM - slide * (32768 / 65535), 3);
+    // Crouched and aimed it comes to rest on the floor (it slides no further), and he aims over its top.
+    const crouched = { ...s, stance: Stance.Crouch, stanceFrom: Stance.Crouch, stanceT: 1, adsQ: 65535 };
+    const low = shieldHitboxes(m, hb, crouched, k.plate, "front");
+    expect(bottom(low)).toBeCloseTo(0.02, 3);
+    expect(top(low)).toBeCloseTo(0.02 + k.plate.heightM, 3);
+    expect(top(low)).toBeLessThan(eyePose(m, hb, crouched).pos[1]);
     // Leaning right, it bends with his spine: its top goes right by about the lean's offset (a little more, being over
     // the eyes), its bottom (under the hips) not at all.
     const leaning = shieldHitboxes(m, hb, { ...s, lean: 1 }, k.plate, "front");

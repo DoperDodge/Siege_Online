@@ -16,6 +16,11 @@ export enum PawnMode {
   Rappel = 5,
   /** A drone in its owner's hand (Phase 7, intel/DESIGN.md §2): no collider, not stepped, not sent to others. */
   Held = 6,
+  /**
+   * Knocked down (D-156: a shield's bash, Sledge's hammer on a raised shield): shoved back onto its back, lying, then
+   * getting up, its player's input ignored until it's up (PawnState.knockTicks, knockLie; player/movement.ts).
+   */
+  Knocked = 7,
 }
 
 /** What a pawn is (Phase 7): an operator's body (Skopós's shells too), or an attacker's drone. */
@@ -258,6 +263,10 @@ export interface PawnState {
   suppressT: number;
   /** Where its plate is (player/shield.ts ShieldAt: none, front, back), set at the end of each step. */
   shieldAt: number;
+  /** Knocked down (PawnMode.Knocked, D-156): ticks since it began (0 otherwise). */
+  knockTicks: number;
+  /** How far over a knocked-down body is: 0 upright … 1 flat on its back (as far as the room behind it lets it). */
+  knockLie: number;
 }
 
 /** What a body's hands hold (PawnState.hand). */

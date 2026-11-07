@@ -22,7 +22,7 @@ const BUTTONS: TouchButton[] = [
   { label: "Lean R", action: "leanRight", kind: "mode" },
   { label: "Use", action: "interact", kind: "hold" }, // held: a revive takes 4 s
   { label: "ADS", action: "ads", kind: "mode" },
-  { label: "Ability", action: "ability", kind: "tap" }, // Skopós: her shell camera
+  { label: "Ability", action: "ability", kind: "tap" }, // the operator's item (Z); none for Skopós, her shell is a camera
   { label: "Fire", action: "fire", kind: "hold" },
   { label: "Reload", action: "reload", kind: "tap" },
   { label: "Swap", action: "swap", kind: "tap" },
@@ -136,6 +136,7 @@ export function mountTouchControls(root: HTMLElement, controls: Controls, modeOf
     const el = document.createElement("button");
     el.className = "touch-btn";
     el.textContent = b.label;
+    if (b.action) el.dataset.action = b.action;
     let heldAction: Action | null = null;
     el.addEventListener("pointerdown", (e) => {
       e.preventDefault();

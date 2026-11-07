@@ -1,15 +1,15 @@
 // Exact (lossless) encoding of a PawnState. Every continuous field is kept float32-exact by the
 // simulation (roundState in movement.ts), so float32 on the wire restores the state bit-for-bit — what
 // reconciliation needs to replay a client's prediction from the server's state.
-import type { PlayerController } from "../player/pawn.js";
-import type { PawnState } from "../player/types.js";
+import { MAX_CAM_VIEWS, type CamView, type PlayerController } from "../player/pawn.js";
+import { PawnMode, type PawnState } from "../player/types.js";
 import { ByteReader, ByteWriter, fnv1a, ProtocolError } from "./bytes.js";
 
 /** Continuous fields, in wire order. */
 export const PAWN_F32_FIELDS = [
   "x", "y", "z", "vx", "vy", "vz", "yaw", "pitch", "stanceT", "lean", "tiltF", "tiltB", "tiltSide",
   "sinceSprint", "moveT", "moveDur", "fromX", "fromY", "fromZ", "toX", "toY", "toZ", "apexY", "tuck", "airPeakY",
-  "recoilPendP", "recoilPendY", "recoilRecP", "recoilRecY", "downHp", "ropeTurn",
+  "recoilPendP", "recoilPendY", "recoilRecP", "recoilRecY", "downHp", "ropeTurn", "knockLie",
 ] as const satisfies readonly (keyof PawnState)[];
 
 /** Integer fields by wire width (after the flags, enums, buttons and ladder written by hand below). */
@@ -19,7 +19,7 @@ export const PAWN_U8_FIELDS = [
 ] as const satisfies readonly (keyof PawnState)[];
 export const PAWN_U16_FIELDS = [
   "hp", "maxHp", "lastFallDamage", "actTicks", "reserve0", "reserve1", "cycle", "adsQ", "shotIdx", "sinceShot", "reviveTicks",
-  "deployPanel", "deployTicks", "rappelTicks", "jumpCd", "boostTicks", "boostCd", "jammed", "gTicks", "regenTicks", "guard", "suppressT",
+  "deployPanel", "deployTicks", "rappelTicks", "jumpCd", "boostTicks", "boostCd", "jammed", "gTicks", "regenTicks", "guard", "suppressT", "knockTicks",
 ] as const satisfies readonly (keyof PawnState)[];
 export const PAWN_U32_FIELDS = ["rng", "reviveTarget", "revivedBy", "gTarget"] as const satisfies readonly (keyof PawnState)[];
 
@@ -51,7 +51,7 @@ export function readPawnState(r: ByteReader): PawnState {
   const stance = r.u8();
   const stanceFrom = r.u8();
   const mode = r.u8();
-  if (stance > 2 || stanceFrom > 2 || mode > 6) throw new ProtocolError("bad pawn state enum");
+  if (stance > 2 || stanceFrom > 2 || mode > PawnMode.Knocked) throw new ProtocolError("bad pawn state enum");
   const prevButtons = r.u16();
   const ladder = r.i8();
   const rappel = r.i16();
@@ -85,18 +85,25 @@ export function hashPawnState(s: PawnState): number {
 }
 
 /** The predicted part of a controller (Skopós' camera and swap state, the drone driven): exact, like PawnState. */
-export type ControllerState = Pick<PlayerController, "possessedPawnId" | "shellCam" | "swapPhase" | "swapT" | "swapCooldown" | "prevButtons" | "drone" | "prevLean" | "cam" | "camYaw" | "camPitch" | "camEntry"> & {
+export type ControllerState = Pick<
+  PlayerController,
+  "possessedPawnId" | "shellCam" | "swapPhase" | "swapT" | "swapCooldown" | "prevButtons" | "drone" | "prevLean" | "cam" | "camYaw" | "camPitch" | "camEntry" | "lastCam" | "camViews"
+> & {
   phoneLost: boolean;
 };
 
 export function controllerState(c: PlayerController): ControllerState {
   const { possessedPawnId, shellCam, swapPhase, swapT, swapCooldown, prevButtons, drone, prevLean, cam, camYaw, camPitch, camEntry } = c;
-  return { possessedPawnId, shellCam, swapPhase, swapT, swapCooldown, prevButtons, drone, prevLean, cam, camYaw, camPitch, camEntry: camEntry ?? 0, phoneLost: c.phoneLost ?? false };
+  // (The views' list is replaced, never changed in place: a copy of it is enough.)
+  return { possessedPawnId, shellCam, swapPhase, swapT, swapCooldown, prevButtons, drone, prevLean, cam, camYaw, camPitch, camEntry: camEntry ?? 0, lastCam: c.lastCam ?? 0, camViews: [...(c.camViews ?? [])], phoneLost: c.phoneLost ?? false };
 }
 
 export function writeControllerState(w: ByteWriter, c: ControllerState): void {
   w.varu(c.possessedPawnId).u8((c.shellCam ? 1 : 0) | (c.swapPhase << 1) | (c.phoneLost ? 8 : 0)).f32(c.swapT).f32(c.swapCooldown).u16(c.prevButtons);
   w.varu(c.drone).i8(c.prevLean).u8(c.cam).f32(c.camYaw).f32(c.camPitch).varu(c.camEntry);
+  // Each camera's view as this viewer left it, and the feed Observe opens again (Ulo, D-155).
+  w.varu(c.lastCam).u8(c.camViews.length);
+  for (const v of c.camViews) w.varu(v.key).f32(v.yaw).f32(v.pitch);
 }
 
 export function readControllerState(r: ByteReader): ControllerState {
@@ -108,5 +115,15 @@ export function readControllerState(r: ByteReader): ControllerState {
   const drone = r.varu();
   const prevLean = r.i8();
   if (prevLean < -1 || prevLean > 1) throw new ProtocolError("bad lean");
-  return { ...head, drone, prevLean, cam: r.u8(), camYaw: r.finite(), camPitch: r.finite(), camEntry: r.varu() };
+  const cams = { cam: r.u8(), camYaw: r.finite(), camPitch: r.finite(), camEntry: r.varu(), lastCam: r.varu() };
+  const n = r.u8();
+  if (n > MAX_CAM_VIEWS) throw new ProtocolError("too many camera views");
+  const camViews: CamView[] = [];
+  for (let i = 0; i < n; i++) {
+    const key = r.varu();
+    // (A camera's key: 2 and up; Skopós's shell view has none.)
+    if (key < 2) throw new ProtocolError("bad camera view");
+    camViews.push({ key, yaw: r.finite(), pitch: r.finite() });
+  }
+  return { ...head, drone, prevLean, ...cams, camViews };
 }

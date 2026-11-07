@@ -29,6 +29,19 @@ export interface Pawn {
   life: number;
 }
 
+/** A camera's view as a viewer left it (D-155): its key (Sim.camKey) and where it looked (radians). */
+export interface CamView {
+  key: number;
+  yaw: number;
+  pitch: number;
+}
+
+/** A controller's key for Skopós's own idle shell among its feeds (D-155); cameras' keys are 2 and up. */
+export const SHELL_VIEW = 1;
+
+/** How many cameras' views a controller remembers (D-155): the oldest goes first. */
+export const MAX_CAM_VIEWS = 24;
+
 export interface PlayerController {
   id: number;
   name: string;
@@ -51,6 +64,16 @@ export interface PlayerController {
    * level's: the list's numbers shift as such cameras come and go, and the view stays on its camera (the review, M12).
    */
   camEntry: number;
+  /**
+   * The feed last watched on the cameras (Ulo, D-155), which Observe opens again: a camera's key (Sim.camKey), or
+   * SHELL_VIEW for Skopós's own idle shell; 0: none yet this life.
+   */
+  lastCam: number;
+  /**
+   * Where each camera watched this life was left looking (Ulo, D-155: flip back to one and it looks where you left
+   * it), by its key, the newest last (at most MAX_CAM_VIEWS). Each entry is replaced, never changed in place.
+   */
+  camViews: readonly CamView[];
   /** Skopós: looking through the idle shell's camera (the step before a swap). */
   shellCam: boolean;
   /** Skopós swap in progress: 0 none, 1 transfer (active shell idles), 2 activation (target shell wakes). */
@@ -167,5 +190,7 @@ export function initialPawnState(x: number, y: number, z: number, yaw: number, m
     suppress: 0,
     suppressT: 0,
     shieldAt: 0,
+    knockTicks: 0,
+    knockLie: 0,
   };
 }

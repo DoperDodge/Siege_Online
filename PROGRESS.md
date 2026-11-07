@@ -5,6 +5,69 @@ known issues, and what's next.
 
 ---
 
+## Your requests after Phase 8 · in review (PR #10; D-155 to D-157)
+
+On top of `main` (Phase 8 merged, PR #9): the camera requests you asked to have done once Phase 8 was, then your look at
+the shields and the bash.
+
+### What's done (the cameras, D-155)
+- **Each camera keeps where you left it looking.** Turn a camera, flip to another (Q / E) and back, and it still
+  looks where you turned it. The views are yours alone (a camera's view is each viewer's own, D-134), for the round.
+- **The cameras open on the last one you watched.** Close them (5) and open them again: you're back on that camera,
+  looking where you left it. The first time it's the first camera; if yours broke since, the next working one.
+- **Skopós's other shell is one of her cameras.** 5 opens the cameras for her too, and her other shell is in the list
+  (last, `SH` in the row over the view), so Q / E go round the cameras and her shell; on her shell, F swaps into it
+  as before. Her own shell's barrier camera (the one her teammates watch) isn't in her list twice. In a lab, with no
+  cameras, 5 opens her shell alone. Z still goes straight to her shell (from a camera too) and back.
+- **On mobile, one button:** playing Skopós there's no Ability button any more; Observe does it all.
+- Switching cameras no longer turns the new one a little (about 1°) toward where the last one looked.
+
+### What's done (the shields and the bash, D-156, D-157)
+Researched from the game's own renders (Fuze's operator renders; the Pantheon Shells' artist's renders and the Twin
+Shells key art) and the wiki.
+- **The shield bash knocks people down.** Fuze's melee with his shield up, on someone on their feet, knocks them over
+  onto their back: they turn to face him, are shoved back about a metre as they fall, lie there, and get up again,
+  about 2 s in all, and **none of their keys or mouse do anything until they're up** (their view goes over with them,
+  looking up at the ceiling). On a raised shield it still only knocks the shield aside. Knocked into a wall, they
+  slump against it instead of lying flat. No damage (as the game since Y9S4).
+- **Sledge's hammer on Fuze's raised shield knocks Fuze to the ground** the same way (the research's Y10S2 row: "the
+  shield aside and the operator to the ground"); before, only the shield went down.
+- **Fuze's shield is the game's:** a green, all but flat plate, about 0.58 × 1.1 m, its top corners cut, a dark rim,
+  a framed viewport of bulletproof glass across its upper part at eye level, bolts across where the handle is, its
+  inside dark (what you see in first person, looking out through the viewport). It covers head and torso; standing,
+  your legs are out under it, crouched it covers you nearly to the floor. Aiming slides it down; crouched it comes to
+  rest on the floor and you aim over it.
+- **Skopós's barrier is the game's:** a flat front of armour panels (yellow stripe down the seams) with a wing either
+  side angled back (the slight curve), up to the crouched shell's chest, and over it a **see-through canopy of tinted
+  bulletproof glass** at its head (front leaning back, side panes, a roof), with lights at the corners. Its sides and
+  back are open: shoot the shell from beside or behind, or blow the barrier away. (This replaces the 220° wrap from
+  your first look, D-153.)
+
+### How to test (needs Node 22.12+)
+1. `npm ci`, then `npm run build && npm start`, and open http://localhost:8080 → *Play a match*: *Create* a Custom (or
+   Practice) match on Oregon and defend.
+2. 5 opens the cameras: turn one, E to the next, Q back: it looks where you left it. 5 closes them; 5 again: the
+   same camera, the same view.
+3. As Skopós: 5, then Q from the first camera: her shell (`SH` lit); F swaps into it. From any camera, Z goes to her
+   shell; Z again, back to your body. In the Gadget Lab (no cameras), 5 opens her shell.
+4. On a phone or tablet (or the browser's device toolbar), play Skopós: no Ability button; Observe opens her shell.
+5. The Gadget Lab online (two windows): Fuze with the Ballistic Shield (loadout), the other window right in front of
+   him; his knife key with the shield up knocks the other one down. Walk round Skopós's idle shell to see its barrier.
+6. `npx vitest run`; `tools/e2e/gadget-lab.mjs` now also knocks the other page down (22 checks);
+   `tools/e2e/match.mjs` reopens the cameras on the last feed and, as Skopós, presses E and Q on her shell view (41).
+
+### Known issues
+- Shoved into a breakable wall, a knocked-down body doesn't break it (the game's does, +5 damage).
+- Skopós's barrier's glass doesn't crack under fire yet (the game's can be shattered).
+- Knocked down, Fuze's shield comes back up with him (in the game he re-equips it himself).
+- Phase 8's still stand (below).
+
+### Next
+Phase 9 — Bot Training (PLAN §17): navmesh, perception, a team planner and every operator played by bots; done when
+you can play a full solo match against five Normal bots on attack and defense.
+
+---
+
 ## Phase 8 — Operators · ✅ complete (PR #9, squash-merged into `main`)
 
 **Done when (PLAN §17):** every row of research/interactions.csv (343) has a passing test. The design is
@@ -323,9 +386,8 @@ the rest are todos), `npm run build`, `node tools/e2e/gadget-lab.mjs`.
 
 ### Next
 Your camera requests from before (each camera keeps where you turned it; the cameras reopen on the last one you watched;
-on mobile, one Observe button with Skopós's shell as one of the cameras), then Phase 9 — Bot Training (PLAN §17):
-navmesh, perception, a team planner and every operator played by bots; done when you can play a full solo match
-against five Normal bots on attack and defense.
+on mobile, one Observe button with Skopós's shell as one of the cameras): done after the merge (above, D-155). Then
+Phase 9 — Bot Training (PLAN §17).
 
 ---
 

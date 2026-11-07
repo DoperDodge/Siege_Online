@@ -10,7 +10,8 @@
 // mine (Z) at the attacker dummy's feet and it goes off; Skopós's idle shell stands behind its barrier. Mute throws his Nitro Cell at the feet of the attacker dummy in the open, steps well away and sets it off:
 // the dummy is down, by the Nitro Cell. Sledge's stun thrown in front of him whites out his screen; Thermite's smoke
 // grenade leaves its cloud in the table. Online, two pages at 100 ms of simulated round trip: what A throws, B has in
-// its table too, A's prediction needed no corrections, and both see its blast. (The level's ingredients are in the
+// its table too, A's prediction needed no corrections, and both see its blast; then A as Fuze: B sees his shield up
+// and on his back, and his bash knocks B down onto its back and up again (D-156). (The level's ingredients are in the
 // table from the start: the checks look at the gadgets thrown.) Requires `npm run build` first.
 import { spawn } from "node:child_process";
 import { mkdirSync } from "node:fs";
@@ -457,6 +458,37 @@ try {
   await until(b, seenAt, [fuzeId, 2], 15000);
   await input(b, null);
   result.checks.onlineShieldSeenByTheOther = true;
+
+  // ---- online (D-156): his bash knocks the other page's body down: over onto its back (the page's own state), then up
+  // again, its keys ignored meanwhile. The gadget away first: the shield up again.
+  await a.keyboard.press("Digit3");
+  await until(b, seenAt, [fuzeId, 1], 15000);
+  await b.evaluate(() => window.__lab.teleport(0, 0, 9.1, 90));
+  await input(a, { yaw: Math.PI, pitch: 0 });
+  await sleep(800);
+  const MELEE = 1 << 10;
+  const bashed = await (async () => {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      // (A slow page can let a short press go by between its ticks: pressed again until it lands.)
+      await input(a, { yaw: Math.PI, pitch: 0, buttons: MELEE });
+      await sleep(200);
+      await input(a, { yaw: Math.PI, pitch: 0 });
+      const hit = await b.waitForFunction(() => window.__lab.net.own?.mode === 7, null, { timeout: 3000, polling: 25 }).then(() => true, () => false);
+      if (hit) return true;
+    }
+    return false;
+  })();
+  // Down: its player holds forward (it mustn't walk off while it lies there).
+  await input(b, { forward: 1, yaw: Math.PI / 2, pitch: 0 });
+  const flat = bashed && (await b.waitForFunction(() => window.__lab.net.own?.mode === 7 && window.__lab.net.own.knockLie > 0.95, null, { timeout: 10000, polling: 25 }).then(() => true, () => false));
+  await b.screenshot({ path: shot("gadget-knocked-down.png") });
+  const lyingAt = await b.evaluate(() => [window.__lab.net.own.x, window.__lab.net.own.z]);
+  const up = flat && (await b.waitForFunction(() => window.__lab.net.own?.mode === 0, null, { timeout: 10000, polling: 25 }).then(() => true, () => false));
+  const upAt = await b.evaluate(() => [window.__lab.net.own.x, window.__lab.net.own.z]);
+  await input(b, null);
+  result.knockdown = { bashed, flat, up, lyingAt, upAt };
+  // (Holding forward from when it went down: it didn't walk off while it lay there.)
+  result.checks.bashKnocksTheOtherDown = bashed && flat && up && Math.hypot(upAt[0] - lyingAt[0], upAt[1] - lyingAt[1]) < 0.05;
 
   result.errors = errors;
   ok = Object.values(result.checks).every(Boolean) && errors.length === 0;

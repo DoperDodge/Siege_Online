@@ -72,7 +72,7 @@ describe("snapshot codec", () => {
     expect(snap.records).toHaveLength(0);
   });
 
-  it("a downed body's mode and its being-revived mark make the trip, and a body upside down on a rope; a mode past Held is refused", () => {
+  it("a downed body's mode and its being-revived mark make the trip, and a body upside down on a rope, one knocked down; bad flags are refused", () => {
     const s = remoteState(quantizeRemote(initialPawnState(1, 0, 2, 0, 100)));
     Object.assign(s, { mode: PawnMode.Downed, stance: Stance.Prone, stanceFrom: Stance.Crouch, stanceT: 1, revivedBy: 7, sprinting: true, grounded: true });
     const enc = new SnapshotEncoder();
@@ -91,8 +91,15 @@ describe("snapshot codec", () => {
     expect(seen.mode).toBe(PawnMode.Rappel);
     expect(seen.ropeTurn).toBeCloseTo(0.4, 2);
     expect(remoteState(quantizeRemote({ ...turning, mode: PawnMode.Walk })).ropeTurn).toBe(0);
+    // Knocked down (D-156): the last of the mode's eight values, and how far over it is in the rope's byte.
+    const knocked = { ...initialPawnState(1, 4, 2, 0, 100), mode: PawnMode.Knocked, knockTicks: 20, knockLie: 0.7 };
+    const floored = new SnapshotDecoder();
+    floored.decode(new SnapshotEncoder().encode({ tick: 2, ackSeq: 0, idled: false, queueDepth: 2 }, null, new Map([[5, quantizeRemote(knocked)]])));
+    const lying = remoteState(floored.have.get(5)!);
+    expect([lying.mode, lying.ropeTurn]).toEqual([PawnMode.Knocked, 0]);
+    expect(lying.knockLie).toBeCloseTo(0.7, 2);
     // (Bits 9–10 are Fuze's shield's place, Phase 8 M11: 3 isn't one; 11–13 how far it's slid down; nothing past them.)
-    for (const flags of [(quantizeRemote(s).flags & ~(7 << 4)) | (7 << 4), quantizeRemote(s).flags | (3 << 9), quantizeRemote(s).flags | 16384]) {
+    for (const flags of [quantizeRemote(s).flags | (3 << 9), quantizeRemote(s).flags | 16384]) {
       const bad = { ...quantizeRemote(s), flags };
       expect(() => new SnapshotDecoder().decode(new SnapshotEncoder().encode({ tick: 2, ackSeq: 0, idled: false, queueDepth: 2 }, null, new Map([[5, bad]])))).toThrow(ProtocolError);
     }

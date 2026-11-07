@@ -108,6 +108,12 @@ export class GadgetModels {
     glassShattered: new THREE.MeshBasicMaterial({ color: 0xcbd5e1, side: THREE.DoubleSide }),
     reach: new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.12, wireframe: true, depthWrite: false }),
     tube: new THREE.MeshStandardMaterial({ color: 0x52525b, roughness: 0.5, metalness: 0.6 }),
+    // Skopós's idle shell's barrier (D-157): dark armour panels in grey frames, yellow seams, a tinted glass canopy.
+    armour: new THREE.MeshStandardMaterial({ color: 0x24282d, roughness: 0.7, metalness: 0.35 }),
+    armourFrame: new THREE.MeshStandardMaterial({ color: 0xa3a9b0, roughness: 0.5, metalness: 0.35 }),
+    stripe: new THREE.MeshStandardMaterial({ color: 0xd4a514, roughness: 0.5, metalness: 0.2 }),
+    canopy: new THREE.MeshStandardMaterial({ color: 0x6b5634, roughness: 0.05, metalness: 0.2, transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide }),
+    canopyLight: new THREE.MeshBasicMaterial({ color: 0xffd34d }),
   };
   /** A Claymore's lasers (Phase 8 M2): red, once it's armed. */
   private readonly laserMat = new THREE.LineBasicMaterial({ color: 0xff2020, transparent: true, opacity: 0.7 });
@@ -150,26 +156,12 @@ export class GadgetModels {
       this.materials.set(id, mat);
     }
     const group = new THREE.Group();
-    if (d?.arc) {
-      // Curving round its centre (Skopós's idle shell's barrier, Ulo's test): its segments as gadgets/hits.ts arcBoxes
-      // has them, in its own frame (forward is −z).
-      const { radiusM: r, degrees, segments } = d.arc;
-      const span = (degrees * Math.PI) / 180;
-      const step = span / segments;
-      const body = new THREE.Group();
-      body.name = "body";
-      const seg = new THREE.BoxGeometry(2 * (r * Math.sin(step / 2) + 0.01), h, depth);
-      for (let i = 0; i < segments; i++) {
-        const a = -span / 2 + step * (i + 0.5);
-        const m = new THREE.Mesh(seg, mat);
-        m.position.set(-Math.sin(a) * r, 0, -Math.cos(a) * r);
-        m.rotation.y = a;
-        body.add(m); // (no shadow: the shadow map is the level's, redrawn only when it changes)
-      }
-      group.add(body);
+    if (d?.parts) {
+      group.add(this.partsModel(d.parts, d.sizeM[1]));
       if (d.electronic) {
         const led = new THREE.Mesh(new THREE.SphereGeometry(0.01, 6, 4), new THREE.MeshBasicMaterial({ color: 0xff3030 }));
-        led.position.set(0, h / 4, -r - depth / 2 - 0.005);
+        const front = d.parts[0];
+        led.position.set(0, front.at[1] + front.sizeM[1] / 2 - d.sizeM[1] / 2 - 0.04, -(front.at[2] + front.sizeM[2] / 2) - 0.005);
         group.add(led);
       }
       return group;
@@ -452,6 +444,55 @@ export class GadgetModels {
    * Free what an object made for itself (its own geometries and materials: an LED, a phone's screen, a barrier's
    * segments, a cloud, a jet), not the kinds' and the effects' shared ones (the review, M12: they piled up).
    */
+  /**
+   * An entry built of parts (Skopós's idle shell's barrier, the game's model: D-157), each where gadgets/hits.ts partBoxes
+   * has it, in the entry's own frame (forward is −z; `height` its whole height, its position at half that): armour
+   * panels in grey frames (two rows, the wide ones two columns) with a yellow stripe down each seam; glass panes tinted,
+   * thin-framed, the front one with a light at each corner. Its group is named "body" (a broken one hides it).
+   */
+  private partsModel(parts: NonNullable<ReturnType<GadgetModels["dataOf"]>>["parts"] & object, height: number): THREE.Group {
+    const body = new THREE.Group();
+    body.name = "body";
+    const m = this.fxMat;
+    /** A box `w × h × d` at (x, y, z) in a part's frame. */
+    const box = (into: THREE.Group, w: number, h: number, d: number, x: number, y: number, z: number, mat: THREE.Material) => {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+      mesh.position.set(x, y, z);
+      into.add(mesh);
+    };
+    parts.forEach((p, i) => {
+      const part = new THREE.Group();
+      part.position.set(p.at[0], p.at[1] - height / 2, -p.at[2]);
+      part.rotation.set(p.pitchDeg * DEG, p.yawDeg * DEG, 0, "YXZ");
+      const [w, h, d] = p.sizeM;
+      const face = -d / 2 - 0.006; // just proud of its outer face (forward is −z)
+      if (p.glass) {
+        box(part, w, h, d, 0, 0, 0, m.canopy);
+        // A thin dark frame round the pane.
+        const f = 0.018;
+        for (const [bw, bh, x, y] of [[w, f, 0, h / 2], [w, f, 0, -h / 2], [f, h, w / 2, 0], [f, h, -w / 2, 0]] as const) box(part, bw, bh, f, x, y, 0, m.tube);
+        // The front pane's lights at its corners.
+        if (i === parts.findIndex((q) => q.glass)) for (const sx of [-1, 1]) for (const sy of [-1, 1]) box(part, 0.03, 0.03, 0.012, sx * (w / 2 - 0.03), sy * (h / 2 - 0.03), face, m.canopyLight);
+      } else {
+        box(part, w, h, d, 0, 0, 0, m.armour);
+        // Its panels' grey frames: round its edge, across its middle (two rows) and, a wide one, down its middle; a
+        // yellow stripe down each vertical seam.
+        const f = 0.045;
+        const cols = w > 0.5 ? 2 : 1;
+        for (const y of [-h / 2 + f / 2, 0, h / 2 - f / 2]) box(part, w, f, 0.012, 0, y, face, m.armourFrame);
+        for (let c = 0; c <= cols; c++) {
+          const x = -w / 2 + (w * c) / cols;
+          const edge = c === 0 ? f / 2 : c === cols ? -f / 2 : 0;
+          box(part, f, h, 0.012, x + edge, 0, face, m.armourFrame);
+          if (c > 0 && c < cols) box(part, 0.012, h * 0.92, 0.016, x, 0, face - 0.004, m.stripe);
+        }
+        if (cols === 1) box(part, 0.012, h * 0.92, 0.016, (p.yawDeg >= 0 ? 1 : -1) * (w / 2 - f - 0.01), 0, face - 0.004, m.stripe);
+      }
+      body.add(part);
+    });
+    return body;
+  }
+
   private disposeOwn(o: THREE.Object3D) {
     const sharedGeo = new Set<THREE.BufferGeometry>(this.geometry.values());
     const sharedMat = new Set<THREE.Material>([...this.materials.values(), ...Object.values(this.fxMat)]);

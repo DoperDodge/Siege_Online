@@ -204,8 +204,11 @@ export interface LabApi extends LabHandle {
   releasePointer(): void;
 }
 
+/** How far up a knocked-down view tips flat on its back (radians; D-156): toward the ceiling. */
+const KNOCK_LOOK_UP = 1.2;
+
 /** A match page's stand-in controller while you have no body: it controls no pawns, so nothing of yours is ever found. */
-const NO_BODY: PlayerController = { id: 0, name: "", operatorId: "sledge", pawnIds: [], possessedPawnId: 0, drone: 0, prevLean: 0, cam: 0, camYaw: 0, camPitch: 0, camEntry: 0, shellCam: false, swapPhase: 0, swapT: 0, swapCooldown: 0, prevButtons: 0, team: 0 };
+const NO_BODY: PlayerController = { id: 0, name: "", operatorId: "sledge", pawnIds: [], possessedPawnId: 0, drone: 0, prevLean: 0, cam: 0, camYaw: 0, camPitch: 0, camEntry: 0, lastCam: 0, camViews: [], shellCam: false, swapPhase: 0, swapT: 0, swapCooldown: 0, prevButtons: 0, team: 0 };
 
 export async function startLab(o: LabOptions): Promise<void> {
   // ------------------------------------------------------------------ setup
@@ -246,7 +249,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     <div class="prompt hidden"></div>
     <div class="needle-ui hidden"></div>
     <div class="jegeo-bar hidden"><div class="jegeo-title"></div><div class="jegeo-fill"><div></div></div></div>
-    <div class="shellcam hidden"><div class="shellcam-title"></div><div class="swap-bar"><div></div></div></div>
+    <div class="shellcam hidden"><div class="shellcam-title"></div><div class="feeds"></div><div class="swap-bar"><div></div></div></div>
     <div class="dronecam hidden"><div class="dronecam-title"></div><div class="feeds"></div><div class="hack-bar hidden"><div></div></div></div>
     <div class="down-ui hidden"><div class="down-title"></div><div class="down-bar"><div></div></div></div>
     <div class="revive-ui hidden"><div class="revive-title"></div><div class="revive-bar"><div></div></div></div>
@@ -409,7 +412,8 @@ export async function startLab(o: LabOptions): Promise<void> {
   controls.setView(sim.pawns.get(ctrl.possessedPawnId)?.state.yaw ?? 0, 0);
   controls.attach(renderer.domElement);
   controls.isBlocked = () => !$(".pause").classList.contains("hidden") || !$(".help").classList.contains("hidden");
-  controls.onDrone = () => ctrl.cam !== 0 || sim.pawns.get(sim.viewedPawnId(ctrl.id))?.kind === PawnKind.Drone;
+  // On a feed: a camera, a drone, or Skopós's shell view (one of her feeds, D-155: Q / E go round them there too).
+  controls.onDrone = () => ctrl.cam !== 0 || ctrl.shellCam || sim.pawns.get(sim.viewedPawnId(ctrl.id))?.kind === PawnKind.Drone;
   // The comm wheel (Phase 7) needs a room to send its callouts to.
   controls.wheelSize = () => (net ? data.intel.callouts.length : 0);
   controls.onCallout = (id) => net?.send(encodeCallout(id));
@@ -777,7 +781,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     const labSections = () => `
       <section><h3>Operator</h3>
         <select class="op-select"><optgroup label="Attackers">${opts("attacker")}</optgroup><optgroup label="Defenders">${opts("defender")}</optgroup></select>
-        ${op.pawns > 1 ? `<p class="note">${op.name} has two shells: press <kbd>${keyLabel(settings.keys.ability)}</kbd> to look through the other shell's camera, then <kbd>${keyLabel(settings.keys.interact)}</kbd> to transfer (${swap.transferSeconds} s + ${swap.activationSeconds} s).</p>` : ""}
+        ${op.pawns > 1 ? `<p class="note">${op.name} has two shells: press <kbd>${keyLabel(settings.keys.observe)}</kbd> (or <kbd>${keyLabel(settings.keys.ability)}</kbd>) to look through the other shell's camera, one of your cameras (<kbd>${keyLabel(settings.keys.leanLeft)}</kbd> / <kbd>${keyLabel(settings.keys.leanRight)}</kbd> go round them), then <kbd>${keyLabel(settings.keys.interact)}</kbd> to transfer (${swap.transferSeconds} s + ${swap.activationSeconds} s).</p>` : ""}
         ${net ? `<label>Team <select class="team-select"><option value="0" ${ctrl.team === 0 ? "selected" : ""}>Attackers</option><option value="1" ${ctrl.team === 1 ? "selected" : ""}>Defenders</option></select></label>` : ""}
       </section>
       ${loadoutSection()}
@@ -920,7 +924,7 @@ export async function startLab(o: LabOptions): Promise<void> {
         ${row(`<kbd>${keyLabel(k.interact)}</kbd>`, "Use: grab / let go of a ladder; Skopós: transfer to the shell you're viewing")}
         ${row(`<kbd>${keyLabel(k.slowWalk)}</kbd>`, "Slow walk")}
         ${row("Right mouse", "Aim down sights (slower walk)")}
-        ${row(`<kbd>${keyLabel(k.gadget)}</kbd> / <kbd>${keyLabel(k.ability)}</kbd>`, `Gadgets: take your gadget out (${keyLabel(k.ability)}: Striker's and Sentry's second one) and put it away. Left mouse throws it (right mouse lobs it) or, held, places it where the green outline shows; with a charge out, left mouse sets it off (${keyLabel(k.gadget)} again takes out the next one). Hold <kbd>${keyLabel(k.interact)}</kbd> on one of yours to take it back. Skopós: ${keyLabel(k.ability)} views your other shell's camera (press again to go back)`)}
+        ${row(`<kbd>${keyLabel(k.gadget)}</kbd> / <kbd>${keyLabel(k.ability)}</kbd>`, `Gadgets: take your gadget out (${keyLabel(k.ability)}: Striker's and Sentry's second one) and put it away. Left mouse throws it (right mouse lobs it) or, held, places it where the green outline shows; with a charge out, left mouse sets it off (${keyLabel(k.gadget)} again takes out the next one). Hold <kbd>${keyLabel(k.interact)}</kbd> on one of yours to take it back. Skopós: ${keyLabel(k.ability)} (or ${keyLabel(k.observe)}) views your other shell's camera, one of your cameras (press again to go back)`)}
         ${o.match ? "" : row(`<kbd>${keyLabel(k.respawn)}</kbd>`, "Respawn")}
         ${row("Left mouse", net ? "Fire (hold for automatic weapons). Online, each shot shows what the server's lag compensation hit." : "Fire (hold for automatic weapons)")}
         ${row(`<kbd>${keyLabel(k.reload)}</kbd>`, "Reload")}
@@ -992,6 +996,8 @@ export async function startLab(o: LabOptions): Promise<void> {
   let viewedId = sim.viewedPawnId(ctrl.id);
   /** The default camera watched (Phase 7): ctrl.cam as of the last tick. */
   let camId = 0;
+  /** Your body knocked down as of the last tick (D-156). */
+  let wasKnocked = false;
   /** Ticks Fire has been held on a drone or a camera (Phase 7: a scan when it reaches data/intel.json `scan.holdS`). */
   let scanTicks = 0;
   let possessedId = ctrl.possessedPawnId;
@@ -1029,7 +1035,8 @@ export async function startLab(o: LabOptions): Promise<void> {
       clickViewTick = null;
       // (Not on Brava's Kludge: its Fire hacks, it never scans: the review, M12.)
       const kludge = ctrl.drone !== 0 && sim.pawns.get(ctrl.drone)?.kludge === true;
-      scanTicks = input.buttons & Btn.Fire && controls.onDrone() && !kludge ? scanTicks + 1 : 0;
+      // (Nor on Skopós's shell view: the room scans from cameras and drones.)
+      scanTicks = input.buttons & Btn.Fire && controls.onDrone() && !ctrl.shellCam && !kludge ? scanTicks + 1 : 0;
     } else {
       const input = freeLook(still(script ? autoInput(++seq) : controls.sample(++seq)));
       sim.step(new Map([[ctrl.id, input]]));
@@ -1052,6 +1059,9 @@ export async function startLab(o: LabOptions): Promise<void> {
       // On a camera the mouse leads; the camera follows at its own turn rate (what's drawn).
     } else if (nowViewed !== viewedId) {
       viewedId = nowViewed;
+      if (!freeCam) controls.setView(v.state.yaw, v.state.pitch);
+    } else if (v.state.mode === PawnMode.Knocked) {
+      // Knocked down (D-156): the mouse does nothing until you're up, and you're up looking where you went down.
       if (!freeCam) controls.setView(v.state.yaw, v.state.pitch);
     } else if (!freeCam && !freeLookFrom && !(v.kind === PawnKind.Drone && !ctrl.pawnIds.includes(v.id))) {
       // (On a teammate's drone the view is yours alone: the drone's own facing is its driver's. In Fuze's free look the
@@ -1089,6 +1099,10 @@ export async function startLab(o: LabOptions): Promise<void> {
     }
     if (freeCam) controls.limits = { pitchMin: -89 * DEG, pitchMax: 89 * DEG, maxYawStep: null };
     if (p.state.lastFallDamage > 0) flash(`-${p.state.lastFallDamage} HP (fall)`, "bad");
+    // Knocked down (D-156): said once as it starts.
+    const knockedNow = p.state.mode === PawnMode.Knocked;
+    if (knockedNow && !wasKnocked) flash("Knocked down", "bad");
+    wasKnocked = knockedNow;
     observe(p);
     if (net) notePredicted();
   }
@@ -1219,7 +1233,9 @@ export async function startLab(o: LabOptions): Promise<void> {
           camera.updateProjectionMatrix();
         }
       } else aim(viewed!, rs);
-      const eye = droneView ? { pos: droneEye(data.intel.drone, rs).pos, roll: 0 } : eyePose(data.movement, data.hitboxes, { ...rs, yaw: controls.yaw });
+      // Knocked down (D-156): the view is the body's as it goes over, the mouse doing nothing until it's up.
+      const knocked = !droneView && rs.mode === PawnMode.Knocked;
+      const eye = droneView ? { pos: droneEye(data.intel.drone, rs).pos, roll: 0 } : eyePose(data.movement, data.hitboxes, knocked ? rs : { ...rs, yaw: controls.yaw });
       if (onCamera) {
         // A camera: from just in front of its lens, where the camera looks (it follows the mouse at its rate).
         eye.pos = lens!;
@@ -1241,6 +1257,10 @@ export async function startLab(o: LabOptions): Promise<void> {
       } else if (onCamera) {
         camera.position.set(eye.pos[0], eye.pos[1], eye.pos[2]);
         camera.rotation.set(ctrl.camPitch, ctrl.camYaw, 0, "YXZ");
+      } else if (knocked) {
+        // Going over onto your back, the view tips up with you (up to the ceiling flat on the floor).
+        camera.position.set(eye.pos[0], eye.pos[1], eye.pos[2]);
+        camera.rotation.set(rs.pitch + rs.knockLie * KNOCK_LOOK_UP, rs.yaw, 0, "YXZ");
       } else {
         camera.position.set(eye.pos[0], eye.pos[1], eye.pos[2]);
         camera.rotation.set(controls.pitch, controls.yaw, eye.roll);
@@ -1260,7 +1280,8 @@ export async function startLab(o: LabOptions): Promise<void> {
     intelHud.showScan(scanTicks && !spec ? Math.min(1, scanTicks / ticks(data.intel.scan.holdS)) : null);
     drawWorld();
     if (rs && viewed && me) {
-      const inHand = viewed.id === me.id && !outside && !onCamera && !ctrl.shellCam && ctrl.swapPhase === 0 ? (viewed.loadout?.weapons[rs.slot] ?? null) : null;
+      // (Knocked down, D-156: nothing in hand until you're up.)
+      const inHand = viewed.id === me.id && !outside && !onCamera && !ctrl.shellCam && ctrl.swapPhase === 0 && rs.mode !== PawnMode.Knocked ? (viewed.loadout?.weapons[rs.slot] ?? null) : null;
       viewmodel.update(now, elapsed, inHand, rs, viewed.loadout?.swapTicks ?? 1, inHand ? heldGadget(viewed, rs) : null, !!viewed.loadout?.shield && rs.shieldAt === 1);
       viewmodel.render(renderer);
       const held = viewed.loadout?.weapons[rs.slot];
@@ -1312,7 +1333,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       // The body whose eyes we see through, in first person, faces the view itself (the mouse's, as the camera does), so
       // Fuze's shield doesn't trail the view by a tick when he turns (the review, M12); in free look the body keeps its
       // own facing (that's the point of it).
-      const fpYaw = pawn.id === eyesId && !outside && !freeLookFrom && !pawn.proxy && rs.mode !== PawnMode.Dead;
+      const fpYaw = pawn.id === eyesId && !outside && !freeLookFrom && !pawn.proxy && rs.mode !== PawnMode.Dead && rs.mode !== PawnMode.Knocked;
       v.update(sim.data, rs.mode === PawnMode.Dead ? corpse(rs) : fpYaw ? { ...rs, yaw: controls.yaw } : rs);
       // On a rope: drawn from the body's middle (its harness) up to where the rope is fixed (a swing takes the body
       // out from under it).
@@ -1484,6 +1505,8 @@ export async function startLab(o: LabOptions): Promise<void> {
             : `${deathText ?? "You died from the fall"} — press ${keyLabel(settings.keys.respawn)} to respawn`
           : "Click to play · F1 for controls";
     if (touchLayer) touchLayer.querySelector(".touch-btn")!.classList.toggle("on", controls.sprintIsLatched);
+    // Skopós's shell is one of her cameras (Ulo, D-155): Observe reaches it, so her touch layer has no Ability button.
+    touchLayer?.querySelector('[data-action="ability"]')?.classList.toggle("hidden", op.pawns > 1);
 
     const k = settings.keys;
     /** The name of your own gadget Interact held would take back (Phase 8; the review, M12: no prompt said so). */
@@ -1551,9 +1574,9 @@ export async function startLab(o: LabOptions): Promise<void> {
     const hackBar = $(".hack-bar");
     hackBar.classList.toggle("hidden", !(onDrone && hackRun));
     if (hackRun) (hackBar.firstElementChild as HTMLElement).style.width = `${Math.min(100, ((performance.now() - hackRun.start) / hackRun.ms) * 100).toFixed(0)}%`;
-    if (onDrone || ctrl.cam) {
+    if (onDrone || ctrl.cam || onCam) {
       const html = feedRow();
-      const row = $(".dronecam .feeds");
+      const row = $(onCam ? ".shellcam .feeds" : ".dronecam .feeds");
       if (row.dataset.html !== html) row.innerHTML = row.dataset.html = html;
     }
     if (ctrl.cam) {
@@ -1614,7 +1637,19 @@ export async function startLab(o: LabOptions): Promise<void> {
       const params = op.ability.params;
       const dur = ctrl.swapPhase === 1 ? params.transferSeconds : params.activationSeconds;
       $(".shellcam-title").textContent =
-        ctrl.swapPhase === 1 ? "TRANSFERRING…" : ctrl.swapPhase === 2 ? "ACTIVATING SHELL…" : `SHELL CAMERA · ${keyLabel(k.ability)} to go back`;
+        ctrl.swapPhase === 1
+          ? "TRANSFERRING…"
+          : ctrl.swapPhase === 2
+            ? "ACTIVATING SHELL…"
+            : [
+                // (Its prompt says the interact key swaps.)
+                "SHELL CAMERA",
+                // (One of her feeds, D-155: Q / E go round the cameras and it, while there are others.)
+                Array.from({ length: sim.camCount() }, (_, i) => i).some((i) => sim.camFeedOk(ctrl, i)) ? `${keyLabel(k.leanLeft)} / ${keyLabel(k.leanRight)} switch` : "",
+                `${keyLabel(k.observe)} back`,
+              ]
+                .filter(Boolean)
+                .join("  ·  ");
       $(".swap-bar").classList.toggle("hidden", ctrl.swapPhase === 0);
       $(".swap-bar div").style.width = `${Math.min(100, (100 * ctrl.swapT) / dur)}%`;
     }
@@ -1725,6 +1760,9 @@ export async function startLab(o: LabOptions): Promise<void> {
           cam: ctrl.cam,
           /** How many cameras the defenders' list holds now (the level's, Bulletproof Cameras, idle shells: Phase 8 M10). */
           cams: sim.camCount(),
+          /** Skopós on her own idle shell's view, one of her feeds (D-155), and the feed Observe opens again. */
+          shellCam: ctrl.shellCam,
+          lastCam: ctrl.lastCam,
           viewedKind: sim.pawns.get(sim.viewedPawnId(ctrl.id))?.kind ?? null,
           /** Pings and spotted enemies marked on the screen (Phase 7). */
           intel: intelHud.count,
@@ -2229,11 +2267,21 @@ export async function startLab(o: LabOptions): Promise<void> {
    * list (your own, then your teammates'), the one watched lit, a broken one struck out, a teammate's greyed.
    */
   function feedRow(): string {
-    if (ctrl.cam) {
-      return Array.from({ length: sim.camCount() }, (_, i) => {
+    if (ctrl.cam || ctrl.shellCam || ctrl.swapPhase) {
+      // Skopós's own idle shell is one of her feeds (Ulo, D-155): last, in place of its barrier's camera, as the lean
+      // goes round them.
+      const n = sim.camCount();
+      // (No cameras in a lab, or with the phone blown up: her shell alone.)
+      const cams = sim.camsOn(ctrl) ? Array.from({ length: n }, (_, i) => i).filter((i) => sim.shellCamAt(i)?.owner !== ctrl.id) : [];
+      const row = cams.map((i) => {
         const cls = [i === ctrl.cam - 1 ? "on" : "", sim.camWorks(i) ? "" : "broken"].filter(Boolean).join(" ");
         return `<span class="${cls}">${sim.bpCamAt(i) ? "BP" : sim.shellCamAt(i) ? "SH" : i + 1}</span>`;
-      }).join("");
+      });
+      if (sim.bodyIds(ctrl).length > 1) {
+        const on = ctrl.shellCam || ctrl.swapPhase !== 0;
+        row.push(`<span class="${on ? "on" : sim.camFeedOk(ctrl, n) ? "" : "broken"}">SH</span>`);
+      }
+      return row.join("");
     }
     const viewed = sim.viewedPawnId(ctrl.id);
     const own = sim.dronesOf(ctrl);

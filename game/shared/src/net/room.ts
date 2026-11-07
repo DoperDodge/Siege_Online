@@ -919,7 +919,7 @@ export class Room implements DirectorHost {
     const bash = attacker.loadout?.shield && shieldUp(attacker.state) ? attacker.loadout.shield : null;
     const struckBody = target ? this.sim.pawns.get(target.pawnId) : undefined;
     if (target && struckBody && bash) {
-      if (this.blowLands(attacker, struckBody)) this.bashed(attacker, struckBody, bash);
+      if (this.blowLands(attacker, struckBody)) this.bashed(attacker, struckBody, bash, target.shield);
       return;
     }
     // A knife meeting a shield's plate stops there: held up, it's knocked aside (a guard break, Y9S1).
@@ -995,11 +995,13 @@ export class Room implements DirectorHost {
       else s.g2 = Math.max(0, s.g2 - extra);
       this.force(m);
     };
-    // A blow on Fuze's shield's plate knocks it down, and its carrier unhurt (Phase 8 M11; Y10S2).
+    // A blow on Fuze's shield's plate knocks him to the ground, unhurt (Phase 8 M11; Y10S2: "knocks the shield aside and
+    // the operator to the ground", the research CSV; D-156).
     const knocked = hit?.shield ? this.sim.pawns.get(hit.id) : undefined;
     if (knocked?.loadout?.shield) {
       charge(1);
-      if (this.blowLands(pawn, knocked)) this.knockAside(knocked, knocked.loadout.shield.knockdownS);
+      // (Not on his feet, on a rope or a ladder: the shield's only knocked aside.)
+      if (this.blowLands(pawn, knocked) && !this.knockOver(knocked, pawn)) this.guardBreak(knocked);
       return;
     }
     if (hit) {
@@ -1626,20 +1628,43 @@ export class Room implements DirectorHost {
   }
 
   /**
-   * Fuze's bash (Phase 8 M11; weapons_notes.md §5): its `bashDamage` (none since Y9S4), and the body it meets pushed
-   * straight back from him at `bashPushMps` (its own shield knocked aside too).
+   * Fuze's bash (Phase 8 M11; weapons_notes.md §5; D-156): on a raised shield's plate it knocks the shield aside (a
+   * guard break: any melee does, Y9S1); a body on its feet it knocks down, shoved back onto its back (Fandom: like
+   * Oryx's dash and Nomad's Airjab), with its `bashDamage` (none since Y9S4); anything else it meets (a drone, an idle
+   * Skopós shell, a body down or on a rope) it shoves back as far.
    */
-  private bashed(by: Pawn, target: Pawn, k: NonNullable<Pawn["loadout"]>["shield"] & object) {
+  private bashed(by: Pawn, target: Pawn, k: NonNullable<Pawn["loadout"]>["shield"] & object, onPlate: boolean) {
+    if (onPlate && shieldUp(target.state)) {
+      this.guardBreak(target);
+      return;
+    }
+    if (this.knockOver(target, by)) {
+      if (k.bashDamage > 0) this.hurt(target, { amount: k.bashDamage, kill: false }, { cause: Cause.Melee, attacker: { ctrlId: by.ownerId ?? 0, team: by.team, weaponId: "ballistic_shield", origin: [by.state.x, by.state.y, by.state.z] }, headshot: false });
+      return;
+    }
     const s = target.state;
+    const kd = this.sim.data.combat.knockdown;
     const dx = s.x - by.state.x;
     const dz = s.z - by.state.z;
     const len = Math.hypot(dx, dz) || 1;
-    s.vx = Math.fround(s.vx + (dx / len) * k.bashPushMps);
-    s.vz = Math.fround(s.vz + (dz / len) * k.bashPushMps);
-    if (k.bashDamage > 0) this.hurt(target, { amount: k.bashDamage, kill: false }, { cause: Cause.Melee, attacker: { ctrlId: by.ownerId ?? 0, team: by.team, weaponId: "ballistic_shield", origin: [by.state.x, by.state.y, by.state.z] }, headshot: false });
+    s.vx = Math.fround(s.vx + (dx / len) * (kd.pushM / kd.fallS));
+    s.vz = Math.fround(s.vz + (dz / len) * (kd.pushM / kd.fallS));
     this.guardBreak(target);
     const owner = target.ownerId !== null ? this.memberOf(target.ownerId) : null;
     if (owner) this.force(owner);
+  }
+
+  /**
+   * Knock a body to the ground from `by` (D-156: Fuze's bash, Sledge's hammer on Fuze's raised shield): only one on its
+   * feet that its player is in (an idle Skopós shell crouches behind its barrier, a gadget's); its player corrected.
+   * False when it wasn't.
+   */
+  private knockOver(target: Pawn, by: Pawn): boolean {
+    const ctrl = target.ownerId !== null ? this.sim.controllers.get(target.ownerId) : undefined;
+    if (!ctrl || ctrl.possessedPawnId !== target.id || !this.sim.knockDown(target, [by.state.x, by.state.y, by.state.z])) return false;
+    const owner = this.memberOf(ctrl.id);
+    if (owner) this.force(owner);
+    return true;
   }
 
   /**
@@ -1700,8 +1725,8 @@ export class Room implements DirectorHost {
       if (bodies.length < 2) continue;
       for (const id of bodies) if (id !== c.possessedPawnId && this.sim.pawns.get(id)?.state.mode !== PawnMode.Dead) idle.add(id);
     }
-    // Round the crouched shell (its entry at the shell's centre, data `arc`); a plain one in front, just clear of its body.
-    const out = d.arc ? 0 : this.sim.data.movement.stance.collisionRadius + 0.15 + d.sizeM[2] / 2;
+    // Built round the crouched shell (its entry at the shell's centre, data `parts`); a plain one in front, clear of it.
+    const out = d.parts ? 0 : this.sim.data.movement.stance.collisionRadius + 0.15 + d.sizeM[2] / 2;
     const spot = (p: Pawn): Vec3 => {
       const [fx, fz] = forwardXZ(p.state.yaw);
       return [p.state.x + fx * out, p.state.y + d.sizeM[1] / 2, p.state.z + fz * out];
