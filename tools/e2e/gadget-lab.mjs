@@ -365,10 +365,10 @@ try {
   await until(les, () => window.__lab.net.hand === 3);
   await sleep(1000);
   await input(les, { buttons: Btn.Fire, yaw: 0, pitch: -1.0 });
-  // (Waits long enough for a slow page's game time: THROTTLE=8 took over 10 s.)
-  await until(les, () => window.__lab.net.table.some((g) => g.kind === "gu_mine"), null, 30000);
+  // (Waits long enough for a slow page's game time: THROTTLE=8 took over 10 s. The mine is read in the same look that
+  // finds it: a slow page can have it go off before a second look.)
+  result.guThrown = await until(les, () => window.__lab.net.table.find((g) => g.kind === "gu_mine") ?? null, null, 30000).then((h) => h.jsonValue());
   await input(les, { yaw: 0, pitch: -1.0 });
-  result.guThrown = (await state(les)).table.find((g) => g.kind === "gu_mine") ?? null;
   await until(les, () => !window.__lab.net.table.some((g) => g.kind === "gu_mine"), null, 30000);
   result.guLeft = await les.evaluate(() => window.__lab.net.gadgets2);
   await input(les, null);
@@ -434,7 +434,9 @@ try {
   await until(a, () => window.__lab.net.table.some((g) => g.kind === "frag"));
   await input(a, { pitch: -0.15 });
   await until(b, () => window.__lab.net.table.some((g) => g.kind === "frag"));
+  // Landed on both pages (each its own time: a slow one may not have it down yet when the other has).
   await until(b, () => window.__lab.net.table.some((g) => g.kind === "frag" && !(g.flags & 1)));
+  await until(a, () => window.__lab.net.table.some((g) => g.kind === "frag" && !(g.flags & 1)));
   const [ta, tb] = [await state(a), await state(b)];
   const statsAfter = await serverStats();
   result.online = {
@@ -500,15 +502,16 @@ try {
   // Down: its player holds forward (it mustn't walk off while it lies there).
   await input(b, { forward: 1, yaw: Math.PI / 2, pitch: 0 });
   const flat = bashed && (await b.waitForFunction(() => window.__lab.net.own?.mode === 7 && window.__lab.net.own.knockLie > 0.95, null, { timeout: 30000, polling: 25 }).then(() => true, () => false));
-  // Where it lies, and where it still lies 30 of the page's ticks later, holding forward all the while (read while it's
-  // still down: after it's up, a slow page has walked it on before anything here can read it).
+  // Where it lies, and where it still lies 20 of the page's ticks later (it's down 0.6 s), holding forward all the while:
+  // read while it's still down (after it's up, a slow page has walked it on before anything here can read it), and the
+  // screenshot only after (one takes a second or two on CI: run 42414523946 found it up by then).
   const lying = flat ? await b.evaluate(() => ({ at: [window.__lab.net.own.x, window.__lab.net.own.z], tick: window.__lab.tick })) : null;
-  await b.screenshot({ path: shot("gadget-knocked-down.png") });
   const stillAt = lying
     ? await b
-        .waitForFunction((t) => window.__lab.tick >= t && (window.__lab.net.own?.mode === 7 ? [window.__lab.net.own.x, window.__lab.net.own.z] : "up"), lying.tick + 30, { timeout: 30000, polling: 25 })
+        .waitForFunction((t) => window.__lab.tick >= t && (window.__lab.net.own?.mode === 7 ? [window.__lab.net.own.x, window.__lab.net.own.z] : "up"), lying.tick + 20, { timeout: 30000, polling: 25 })
         .then((h) => h.jsonValue(), () => null)
     : null;
+  await b.screenshot({ path: shot("gadget-knocked-down.png") });
   const up = flat && (await b.waitForFunction(() => window.__lab.net.own?.mode === 0, null, { timeout: 30000, polling: 25 }).then(() => true, () => false));
   await input(b, null);
   const lyingAt = lying?.at ?? null;
