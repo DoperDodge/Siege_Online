@@ -5,6 +5,33 @@ known issues, and what's next.
 
 ---
 
+## Your requests after Phase 9 · 🚧 in review (D-169)
+
+### What's done
+- **Fuze's shield, copied from your reference pictures**: the narrower top part with rounded corners round the window
+  (now at eye height, taller), stepping out at rounded shoulders to the wider body below, which is flat across the
+  middle and curves back round his sides; two bolts low down; 1.1 m tall, 0.62 m across the body, 0.41 m across the
+  top.
+- **Held flush, arms crossed on its grips**: the plate is close in front of him (0.30 m from his middle, was 0.45) with
+  his hands crossed on the grips behind it. His arms no longer stick out past the plate, so a knife or a bullet can't
+  reach them through it (it could have, with the plate this close).
+- **Aiming swings it sideways**: it goes across to his left, turned back round his side and a little lower, quick in
+  the middle of the aim's half second; his right hand comes out with the pistol past its right edge. It used to drop
+  straight down.
+- **Leaning tilts it with you, no stretch**: the whole plate turns with your upper body and still covers it. It used to
+  be skewed, the top sliding over while the bottom stayed.
+- **Skopós's other shell as a camera**: looking round through it turns the view only; the shell and its barrier stay
+  as they stand. Waking it (F) turns it to where you're looking.
+- Hitboxes follow the plate as drawn (the server's and every page's), and the tests check each of these.
+
+### How to test
+1. `npm run build && npm start`, http://localhost:8080 → the Gadget Lab: Fuze with the Ballistic Shield (loadout);
+   look at it from a second window, aim (right mouse) and lean (Q / E) in the first.
+2. As Skopós: Z (or the cameras' list) onto her other shell, look round; the shell and barrier stay put (watch from a
+   second window).
+
+---
+
 ## Phase 9 — Bot Training · ✅ complete (PR #11, squash-merged into `main`)
 
 The plan: game/shared/src/bots/DESIGN.md (D-158). Bots are players without a connection: the room asks each bot's

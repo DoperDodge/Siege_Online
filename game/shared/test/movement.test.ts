@@ -341,9 +341,12 @@ describe("player/pawn separation (Skopós)", () => {
     expect(sim.viewedPawnId(ctrl.id)).toBe(b.id);
     expect(sim.prompt(ctrl.id)).toBe("transfer");
     const aZ = a.state.z;
+    const bYaw = b.state.yaw;
     run(sim, ctrl, { forward: 1, yawDeg: 30 }, 0.5);
     expect(a.state.z).toBeCloseTo(aZ, 3);
-    expect(b.state.yaw).toBeCloseTo(30 * DEG, 3); // looking around through B's camera
+    // Looking around through B's camera turns the view, not B (nor its barrier).
+    expect(ctrl.camYaw).toBeCloseTo(30 * DEG, 3);
+    expect(b.state.yaw).toBeCloseTo(bYaw, 3);
 
     // Z again closes the camera without swapping.
     run(sim, ctrl, { buttons: Btn.Ability }, 1 / 64);

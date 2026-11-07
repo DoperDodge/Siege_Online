@@ -1110,11 +1110,19 @@ export class Sim {
     return c.swapPhase === 0 && c.swapCooldown <= 0 && this.shellReachable(c);
   }
 
-  /** Skopós onto her idle shell's view, off any camera (her ability key, or the feeds' list: D-155). */
+  /**
+   * Skopós onto her idle shell's view, off any camera (her ability key, or the feeds' list: D-155). The view starts
+   * where the shell faces and looks round from there without turning it (Ulo: its body and barrier stay as they stand).
+   */
   private openShellView(c: PlayerController) {
     c.cam = 0;
     c.shellCam = true;
     c.lastCam = SHELL_VIEW;
+    const shell = this.otherPawn(c.id);
+    if (shell) {
+      c.camYaw = shell.state.yaw;
+      c.camPitch = shell.state.pitch;
+    }
   }
 
   /**
@@ -1138,7 +1146,9 @@ export class Sim {
     if (!p || p.state.mode === PawnMode.Dead || p.state.mode === PawnMode.Held) return null;
     const eye = this.eyeOf(p);
     if (p.kind === PawnKind.Drone && !c.pawnIds.includes(p.id)) return { ...eye, yaw: c.camYaw, pitch: c.camPitch }; // a teammate's drone
-    return input ? { ...eye, yaw: input.yaw, pitch: input.pitch } : eye;
+    if (input) return { ...eye, yaw: input.yaw, pitch: input.pitch };
+    // Skopós's shell view looks where she turned it, not where the shell faces.
+    return c.shellCam && c.swapPhase === 0 ? { ...eye, yaw: c.camYaw, pitch: c.camPitch } : eye;
   }
 
   /**
@@ -1698,8 +1708,20 @@ export class Sim {
           drive.set(active.id, idleInput(active, c.swapPhase === 1 ? Stance.Crouch : active.state.stance));
           idleDriven.add(active.id);
         }
-        const view = input && !viewChanged ? { yaw: input.yaw, pitch: input.pitch } : {};
-        drive.set(target.id, { ...idleInput(target, c.swapPhase === 2 ? Stance.Stand : target.state.stance), ...view });
+        if (c.shellCam && c.swapPhase === 0) {
+          // Her shell view looks round like a camera (the controller's view): the shell and its barrier stay as they
+          // stand (Ulo). Its first tick keeps the view where the shell faced (openShellView).
+          if (input && !viewChanged) {
+            const m = this.data.movement.look;
+            c.camYaw = Math.fround(wrapAngle(input.yaw));
+            c.camPitch = Math.fround(clamp(input.pitch, m.pitchMinDeg * DEG, m.pitchMaxDeg * DEG));
+          }
+          drive.set(target.id, idleInput(target, target.state.stance));
+        } else {
+          // Mid-swap, the shell she's waking turns to where she looks.
+          const view = input && !viewChanged ? { yaw: input.yaw, pitch: input.pitch } : {};
+          drive.set(target.id, { ...idleInput(target, c.swapPhase === 2 ? Stance.Stand : target.state.stance), ...view });
+        }
         idleDriven.add(target.id);
       } else if (input) {
         const body = this.pawns.get(c.possessedPawnId);

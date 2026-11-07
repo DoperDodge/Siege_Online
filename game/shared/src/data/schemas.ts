@@ -374,20 +374,24 @@ const shieldSchema = z.strictObject({
     suppression: z.strictObject({ hitsToTrigger: z.number().int().positive(), hitsToMax: z.number().int().positive(), falloffS: secs }),
     bashDamage: z.number().nonnegative(),
     /**
-     * Its plate (Phase 8 M11; matched to the game's model after Ulo's second look, D-157): a rigid plate `widthM` across
-     * and `heightM` tall, its top corners cut `chamferM`, all but flat (its edges `curveM` nearer him than its middle),
-     * `frontM` ahead; held with its top `aboveEyeM` over the eyes, slid down by up to `aboveEyeM + adsBelowEyeM` as he
-     * aims (no further than the floor: crouched, it rests on it); a viewport `window` at eye height (bulletproof glass:
-     * drawn see-through, in a frame that stands out of the plate).
+     * Its plate (Phase 8 M11; the game's model from its renders, D-157; Ulo's reference renders, D-169): a rigid plate
+     * `heightM` tall, `widthM` across its body and `topWidthM` across its top part (`shoulderM` deep, down to rounded
+     * shoulders), its corners rounded `cornerM`, flat across its middle and curving back round his sides (its edges
+     * `curveM` nearer him), held close `frontM` ahead with its top `aboveEyeM` over the eyes; aiming swings it aside to
+     * his left (`ads`: `sideM` across, turned `yawDeg` back round his side, `dropM` lower; never into the floor), leaning
+     * tilts it with his upper body; a viewport `window` at eye height (bulletproof glass: drawn see-through, in a frame
+     * that stands out of the plate).
      */
     plate: z.strictObject({
       widthM: z.number().positive(),
+      topWidthM: z.number().positive(),
       heightM: z.number().positive(),
-      chamferM: z.number().min(0),
+      shoulderM: z.number().min(0),
+      cornerM: z.number().min(0),
       curveM: z.number().min(0),
       frontM: z.number().positive(),
       aboveEyeM: z.number().min(0),
-      adsBelowEyeM: z.number().min(0),
+      ads: z.strictObject({ sideM: z.number().min(0), dropM: z.number().min(0), yawDeg: z.number() }),
       window: z.strictObject({ widthM: z.number().positive(), heightM: z.number().positive() }),
     }),
     absorb: z.number().min(0).max(1),

@@ -7,7 +7,7 @@ import { DeployKind } from "../destruction/deploy.js";
 import type { HitboxData, MovementData } from "../data/schemas.js";
 import { ticks } from "../weapons/ticks.js";
 import { isDowned } from "./downed.js";
-import { poseHitboxes, shieldHitboxes, type Hitbox, type ShieldPlace } from "./hitboxes.js";
+import { poseHitboxes, shieldHitboxes, shieldHold, type Hitbox, type ShieldPlace } from "./hitboxes.js";
 import type { Pawn } from "./pawn.js";
 import { Hand, PawnMode, Stance, type PawnState } from "./types.js";
 import type { ResolvedLoadout } from "../weapons/loadout.js";
@@ -40,9 +40,10 @@ export const shieldUp = (s: PawnState) => s.shieldAt === ShieldAt.Front;
 
 /** A body's hitboxes now: its pose's, and its shield's plate where it is (Phase 8 M11). */
 export function pawnHitboxes(m: MovementData, hb: HitboxData, pawn: Pawn): Hitbox[] {
-  const body = poseHitboxes(m, hb, pawn.state);
   const k = pawn.loadout?.shield;
   const place = k ? shieldPlace(pawn.state) : null;
+  // Held up in front, his hands are on its grips behind it (D-169): no arm out past the plate.
+  const body = poseHitboxes(m, hb, pawn.state, k && place === "front" ? shieldHold(k.plate, pawn.state) : undefined);
   return k && place ? [...body, ...shieldHitboxes(m, hb, pawn.state, k.plate, place)] : body;
 }
 

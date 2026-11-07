@@ -286,6 +286,16 @@ down (D-156), suppression after [5 hits], guard break from blasts of 30 hp or mo
 knocks him down (D-156), ×0.9 speed, off for placing gadgets and on ropes, kept on the back when away (covers the
 back).
 
+**From Ulo's reference renders (D-169; its shape and hold supersede D-157's, below):** a narrower top part (0.41 m
+across, 0.37 m deep, `topWidthM`, `shoulderM`) round a 0.33 × 0.18 m viewport at eye height (its top `aboveEyeM` 0.21 m
+over the eyes), stepping out at rounded shoulders to a 0.62 m body (`widthM`), every corner rounded (`cornerM` 5 cm),
+flat across its middle and curving back round his sides (player/hitboxes.ts plateBend: its edges `curveM` 6 cm nearer),
+two bolts low down. Held close (`frontM` 0.30 m), his hands crossed on its grips behind it (poseHitboxes' `hold`: the
+arms end just behind the plate, in the hitboxes and the drawn body). Aiming swings it aside to his left (`ads`: 0.30 m
+across, turned 22° back round his side about its middle, 0.10 m lower, eased over the aim) and his right hand comes out
+with the pistol; leaning tilts it whole about his hips by the spine's angle. The outer two capsules end at its
+shoulders.
+
 **The game's model and the knockdown (D-156, D-157):** the plate is now the game's as its renders show it: rigid,
 0.58 × 1.1 m (`heightM`), all but flat (`curveM` 0.02), its top corners cut (`chamferM`: the edge capsules stop short),
 0.45 m ahead (in front of the hands), its top 0.13 m over the eyes: head and torso covered, the legs out under it

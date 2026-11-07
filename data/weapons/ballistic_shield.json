@@ -1,5 +1,5 @@
 {
-  "_doc": "Ballistic Shield (Fuze). research/weapons.csv row ballistic_shield; rules research/weapons_notes.md §5; built in Phase 8 M11 (gadgets/DESIGN.md §8). Held with the secondary pistol: no hip fire; aiming takes `pistolAdsS` and lowers the plate's top under the eyes. Bash damage 0 (Y9S4, the official Collision Point page) supersedes fuze.md's 65 (Y9S1). The bash knocks a body down: shoved back onto its back, up again a couple of seconds later, its player's input ignored meanwhile (D-156; Fandom: like Oryx's dash and Nomad's Airjab; data/combat.json `knockdown`); on a raised shield's plate it knocks the shield aside instead (a guard break, any melee: Y9S1). Bullets stop at its plate (hits suppress the carrier: 5 to start, 20 at most, ~7 s to fade). A blast from in front loses 66% (Y9S1.3); one of 30 hp or more, a knife or a stun knocks it aside (guard break, ~1 s); Sledge's hammer knocks him to the ground (Y10S2). Its plate is the game's model as its renders show it (D-157): a green, all but flat plate about 0.58 × 1.1 m, its top corners cut, a dark rim, and a framed viewport of bulletproof glass across its upper part at eye height (Fandom: 'a panel of bulletproof glass at the operator's eye level'); held up it covers head and torso, the legs out under it standing (Fandom); it slides down as he aims. The plate's numbers are measured off the renders (ours), and so is the guard break's length.",
+  "_doc": "Ballistic Shield (Fuze). research/weapons.csv row ballistic_shield; rules research/weapons_notes.md §5; built in Phase 8 M11 (gadgets/DESIGN.md §8). Held with the secondary pistol: no hip fire; aiming takes `pistolAdsS` and swings the plate aside to his left (Ulo, after Phase 9). Bash damage 0 (Y9S4, the official Collision Point page) supersedes fuze.md's 65 (Y9S1). The bash knocks a body down: shoved back onto its back, up again a couple of seconds later, its player's input ignored meanwhile (D-156; Fandom: like Oryx's dash and Nomad's Airjab; data/combat.json `knockdown`); on a raised shield's plate it knocks the shield aside instead (a guard break, any melee: Y9S1). Bullets stop at its plate (hits suppress the carrier: 5 to start, 20 at most, ~7 s to fade). A blast from in front loses 66% (Y9S1.3); one of 30 hp or more, a knife or a stun knocks it aside (guard break, ~1 s); Sledge's hammer knocks him to the ground (Y10S2). Its plate is the game's model as its renders show it (D-157, redrawn from Ulo's reference renders after Phase 9, D-169): a green plate 1.1 m tall, a narrower top part (0.41 m) with rounded corners round a framed viewport of bulletproof glass at eye height (Fandom: 'a panel of bulletproof glass at the operator's eye level'), stepping out at rounded shoulders to the body below (0.62 m), which curves back round his sides; a dark rim, two bolts low down; held close in front of him with both arms; held up it covers head and torso, the legs out under it standing (Fandom); aiming swings it aside to his left, turned back round his side and a little lower, so the pistol clears its right edge; leaning tilts it with him. The plate's numbers are measured off the renders (ours), and so is the guard break's length.",
   "_season": "Y11S3.1",
   "_unverified": [
     "shield.moveSpeedMult",
@@ -25,16 +25,22 @@
     },
     "bashDamage": 0,
     "plate": {
-      "widthM": 0.58,
+      "widthM": 0.62,
+      "topWidthM": 0.41,
       "heightM": 1.1,
-      "chamferM": 0.09,
-      "curveM": 0.02,
-      "frontM": 0.45,
-      "aboveEyeM": 0.13,
-      "adsBelowEyeM": 0.25,
+      "shoulderM": 0.37,
+      "cornerM": 0.05,
+      "curveM": 0.06,
+      "frontM": 0.3,
+      "aboveEyeM": 0.21,
+      "ads": {
+        "sideM": 0.3,
+        "dropM": 0.1,
+        "yawDeg": 22
+      },
       "window": {
-        "widthM": 0.36,
-        "heightM": 0.11
+        "widthM": 0.33,
+        "heightM": 0.18
       }
     },
     "absorb": 0.66,

@@ -10,6 +10,7 @@ import {
   PawnKind,
   PawnMode,
   poseHitboxes,
+  shieldHold,
   shieldPlace,
   type BuiltLevel,
   type GameData,
@@ -543,7 +544,8 @@ export class PawnView {
 
   update(data: GameData, state: PawnState) {
     if (this.drone) return this.updateDrone(data, state);
-    const parts = poseHitboxes(data.movement, data.hitboxes, state);
+    // Fuze with his shield up in front: his hands on its grips behind it (D-169).
+    const parts = poseHitboxes(data.movement, data.hitboxes, state, this.plate && shieldPlace(state) === "front" ? shieldHold(this.plate, state) : undefined);
     parts.forEach((hb, i) => {
       this.bodyParts[i].place(hb, 1);
       this.wireParts[i].place(hb, 1.02);
