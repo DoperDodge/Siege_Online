@@ -59,13 +59,13 @@ root.innerHTML = `
   <p class="tag">Matches on Oregon: two teams of 1–5, uneven allowed. <a href="/">Home</a></p>
   <section><h2>Your name</h2><div class="row"><input class="name" maxlength="24" placeholder="Player" autocomplete="nickname"></div></section>
   <section><h2>Bot Training</h2>
-    <div class="row"><button class="primary training">Play vs bots (offline)</button></div>
+    <div class="row"><button class="primary vs-bots">Play vs bots (offline)</button></div>
     <p class="note">You and bots on Oregon, no server needed: bots fill every empty place on both teams. In the lobby, choose your side (attack, defense or both), the team sizes, each team's difficulty (Recruit, Normal, Hard, Elite), the site, and how the bots pick operators (at random, in order, or the answer to yours). To bring friends, create a Bot Training match below instead.</p>
     <h3>Drills</h3>
     <div class="row drills">${drills.map((m) => `<button class="drill" data-format="${m.id}" title="${escapeHtml(DRILL_NOTES[m.id] ?? "")}">${escapeHtml(m.match.name.replace(/^Drill: /, ""))}</button>`).join("")}</div>
     <p class="note">Offline, one setup each: ${drills.map((m) => `<b>${escapeHtml(m.match.name.replace(/^Drill: /, ""))}</b>: ${escapeHtml(DRILL_NOTES[m.id] ?? "")}`).join(" ")}</p>
   </section>
-  <section><h2>Your training</h2><div class="training"></div><p class="note">Every round you play in Bot Training and its drills, counted in this browser: per drill and per operator, your best times and your last ten rounds. <button class="link reset-training">Clear</button></p></section>
+  <section><h2>Your training</h2><div class="my-training"></div><p class="note">Every round you play in Bot Training and its drills, counted in this browser: per drill and per operator, your best times and your last ten rounds. <button class="link reset-training">Clear</button></p></section>
   <section><h2>New match</h2>
     <div class="row"><select class="format">${matchFormats.map((m) => `<option value="${m.id}">${escapeHtml(m.match.name)}</option>`).join("")}</select><button class="primary create">Create</button></div>
     <p class="format-note"></p>
@@ -111,10 +111,10 @@ function go(params: Record<string, string>) {
 }
 $(".create").onclick = () => go({ format: formatSelect.value });
 // Bot Training offline (Phase 9): the match room runs in the match page's own worker.
-$(".training").onclick = () => go({ format: "bot_training", offline: "1" });
+$(".vs-bots").onclick = () => go({ format: "bot_training", offline: "1" });
 for (const b of root.querySelectorAll<HTMLButtonElement>(".drill")) b.onclick = () => go({ format: b.dataset.format!, offline: "1" });
 // Your training stats (Phase 9 M9): kept by the match page from each round's report.
-const showTraining = () => ($(".training").innerHTML = statsHtml(loadStats(), data));
+const showTraining = () => ($(".my-training").innerHTML = statsHtml(loadStats(), data));
 showTraining();
 $(".reset-training").onclick = () => {
   if (!confirm("Clear your training stats in this browser?")) return;

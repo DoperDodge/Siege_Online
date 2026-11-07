@@ -2486,6 +2486,8 @@ export async function startLab(o: LabOptions): Promise<void> {
         if (line) killFeed.push(line, now);
         if (e.kind === "kill" && e.victimCtrl === me) {
           death = { pawnId: e.victimPawn, life: sim.pawns.get(e.victimPawn)?.life ?? 0, text: deathLine(e, feedNames) };
+          // The dead view's time counts from the death itself, not from the next frame drawn (a slow page draws few).
+          deadSince = performance.now();
           // Killed by someone else (in a match): their view of it, from the snapshots kept.
           const by = e.killerCtrl && e.killerCtrl !== me ? net!.session.roster.find((r) => r.controllerId === e.killerCtrl) : undefined;
           const killer = by?.pawnIds.find((id) => net!.session.remoteNewestTick(id) !== null);

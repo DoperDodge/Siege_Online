@@ -111,6 +111,8 @@ interface Box {
   max: [number, number, number];
   /** A body vaults onto it or over it (the level's tag). */
   vault: boolean;
+  /** Its collider's handle. */
+  handle: number;
 }
 
 /** Which colliders bodies collide with (what walkgraph.ts reads, and solid gadgets). */
@@ -187,6 +189,21 @@ export class NavGrid {
   }
 
   /** A copy of this grid for another simulation of the same level as it is now (a room's, from a level's pristine one). */
+  /**
+   * The grid version each chunk was last rebuilt at (none: as built). A route that crosses no chunk rebuilt since it
+   * was found still holds (its regions' and nodes' numbers are the same): only those through a change look again.
+   */
+  readonly rebuiltAt = new Map<number, number>();
+
+  /** Whether a route found at `version` through these regions (and from and to these nodes) still holds. */
+  routeHolds(version: number, regions: readonly number[], nodes: readonly number[]): boolean {
+    if (version === this.version) return true;
+    if (this.rebuiltAt.size === 0) return true;
+    for (const r of regions) if ((this.rebuiltAt.get(Math.floor(r / REGION_SPAN)) ?? -1) > version) return false;
+    for (const n of nodes) if ((this.rebuiltAt.get(Math.floor(n / NODE_SPAN)) ?? -1) > version) return false;
+    return true;
+  }
+
   clone(sim: Sim): NavGrid {
     const g = new NavGrid(sim);
     this.chunks.forEach((c, k) => {
@@ -209,7 +226,29 @@ export class NavGrid {
     for (const [key, at] of this.special) g.special.set(key, [...at]);
     g.offset = this.offset.slice();
     g.version = this.version;
+    for (const [key, p] of this.probes) g.probes.set(key, p);
     return g;
+  }
+
+  /**
+   * Vault probes made (the movement code's own vault, run from a node toward a prop: the costliest part of a rebuild),
+   * kept by where and which way: a chunk rebuilt because a door was barricaded a few metres off needn't probe its
+   * tables again. Those in an area that changed are forgotten (NavWorld.mark), so they're probed afresh.
+   */
+  private readonly probes = new Map<string, { x: number; z: number; plan: ReturnType<Sim["probeVault"]> }>();
+
+  private vaultProbe(x: number, y: number, z: number, yaw: number): ReturnType<Sim["probeVault"]> {
+    const key = `${Math.round(x * 100)},${Math.round(y * 100)},${Math.round(z * 100)},${Math.round(yaw * 1000)}`;
+    const had = this.probes.get(key);
+    if (had) return had.plan;
+    const plan = this.sim.probeVault(x, y, z, yaw);
+    this.probes.set(key, { x, z, plan });
+    return plan;
+  }
+
+  /** Forget the vault probes made from inside a box of the world [x0, z0]–[x1, z1] (something there changed). */
+  forgetProbes(x0: number, z0: number, x1: number, z1: number): void {
+    for (const [key, p] of this.probes) if (p.x >= x0 && p.x <= x1 && p.z >= z0 && p.z <= z1) this.probes.delete(key);
   }
 
   /** The dense numbering (after any chunk's nodes changed). */
@@ -272,6 +311,7 @@ export class NavGrid {
     for (const k of set) this.buildRegions(k);
     this.numberNodes();
     this.version++;
+    for (const k of set) this.rebuiltAt.set(k, this.version);
     return [...around];
   }
 
@@ -295,13 +335,12 @@ export class NavGrid {
   }
 
   /** The chunks of the columns within `r` of column (i, j) (its own first). */
-  private chunksNear(i: number, j: number, r: number): number[] {
-    const out: number[] = [];
-    for (const [di, dj] of [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r], [r, r], [r, -r], [-r, r], [-r, -r]]) {
-      const k = this.chunkOf(i + di, j + dj);
-      if (k >= 0 && !out.includes(k)) out.push(k);
-    }
-    return out;
+  /**
+   * Whether a chunk of `set` is within `r` columns of column (i, j). The square that far round it is smaller than a
+   * chunk, so the chunks it touches are its corners' (no list made: a rebuild asks this of every column next to it).
+   */
+  private nearAny(i: number, j: number, r: number, set: ReadonlySet<number>): boolean {
+    return set.has(this.chunkOf(i - r, j - r)) || set.has(this.chunkOf(i + r, j - r)) || set.has(this.chunkOf(i - r, j + r)) || set.has(this.chunkOf(i + r, j + r)) || set.has(this.chunkOf(i, j));
   }
 
   /** A chunk and the (up to 8) chunks around it. */
@@ -488,6 +527,7 @@ export class NavGrid {
         min: [t.x - ext[0], t.y - ext[1], t.z - ext[2]],
         max: [t.x + ext[0], t.y + ext[1], t.z + ext[2]],
         vault: sim.level.solids.get(col.handle)?.vaultable === true,
+        handle: col.handle,
       });
       return true;
     });
@@ -700,6 +740,20 @@ export class NavGrid {
   }
 
   /** Remove one link. */
+  /**
+   * A link a body couldn't take (stuck at a drop's lip, a vault that doesn't go): out of the grid, and the routes
+   * through its chunk look again; it's built again if its chunk is rebuilt. The chunk, or -1 (not found).
+   */
+  blockLink(link: NavLink): number {
+    const at = this.links.indexOf(link);
+    if (at < 0) return -1;
+    const k = Math.floor(link.from / NODE_SPAN);
+    this.removeLink(at);
+    this.version++;
+    this.rebuiltAt.set(k, this.version);
+    return k;
+  }
+
   private removeLink(at: number): void {
     const l = this.links[at];
     if (!l) return;
@@ -743,7 +797,7 @@ export class NavGrid {
         const col = lj * CHUNK + li;
         const [i, j] = [i0 + li, j0 + lj];
         // Only the columns a drop into `into` could start from (two columns from its edge).
-        if (into && !this.chunksNear(i, j, 2).some((o) => into.has(o))) continue;
+        if (into && !this.nearAny(i, j, 2, into)) continue;
         const x = this.x0 + (i + 0.5) * c;
         const z = this.z0 + (j + 0.5) * c;
         for (let n = ch.first[col]; n < ch.first[col + 1]; n++) {
@@ -771,7 +825,7 @@ export class NavGrid {
             const yaw = Math.atan2(-fx, -fz);
             if (tried.some((t) => Math.abs(Math.atan2(Math.sin(t - yaw), Math.cos(t - yaw))) < 0.2)) continue;
             tried.push(yaw);
-            const plan = this.sim.probeVault(x, y, z, yaw);
+            const plan = this.vaultProbe(x, y, z, yaw);
             if (!plan) continue;
             const to = this.nodeNear(plan.toX, plan.toY, plan.toZ, 0.45, 0.4);
             if (to < 0 || to === id) continue;
@@ -857,8 +911,13 @@ export class NavGrid {
       const yaw = Math.atan2(f.n[0] * a.side, f.n[2] * a.side);
       const floor = this.nodeY(a.node);
       if (bottom - floor < 0.3) {
+        // A doorway, walked through once the planks are gone, if a body fits through it crouched, standing on its sill
+        // (a window whose sill is about level with the floor, under a head lower than that, is no way through at all).
         const b = ends.find((o) => o !== a)!;
-        if (b.node >= 0) made.push(this.addLink({ kind: LinkKind.Barricade, from: a.node, to: b.node, yaw, cost: 2 * d + BREAK_COST, ladder: -1, up: false, panel: index, vault: false }));
+        const [cx, , cz] = f.center;
+        const sill = Math.max(floor, bottom);
+        const fits = this.boxesIn(cx - 0.5, cz - 0.5, cx + 0.5, cz + 0.5).every((bx) => skip.has(bx.handle) || !this.inWay(bx, cx, sill, cz, this.crouchH));
+        if (fits && b.node >= 0) made.push(this.addLink({ kind: LinkKind.Barricade, from: a.node, to: b.node, yaw, cost: 2 * d + BREAK_COST, ladder: -1, up: false, panel: index, vault: false }));
         continue;
       }
       const [ax, , az] = this.nodePos(a.node);

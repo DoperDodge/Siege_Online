@@ -172,7 +172,9 @@ describe("bots in match rooms (Phase 9 M1)", () => {
     // client didn't yet: a correction or two, as with any other player walking into you.
     expect(you.session.mispredictions.length).toBeLessThanOrEqual(3);
     expect(you.errors).toEqual([]);
-  });
+    // A whole two-round match of nine bots fighting and using their gadgets (M3–M9): 14–19 s here, about twice that on
+    // a CI runner (CI run 42366392830 timed out at the default 20 s), as the other whole-match tests allow for.
+  }, 120000);
 
   it("Bot Training's fixed site: the defenders' vote can't change it", async () => {
     const t = await botRoom();

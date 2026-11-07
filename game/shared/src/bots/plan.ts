@@ -246,6 +246,8 @@ export class DefensePlanner {
   private readonly equipped = new Set<number>();
   /** Told to rotate (the roamers back to the site). */
   private rotated = false;
+  /** The tick a bot's own jobs were last worked out (one a tick). */
+  private ownJobsTick = -1;
 
   constructor(
     private readonly sim: Sim,
@@ -267,7 +269,9 @@ export class DefensePlanner {
   taskOf(id: number): Task | null {
     if (this.planted) return this.retake();
     if (this.match.phase === Phase.Prep) {
-      if (!this.equipped.has(id) && this.bodyPawn(id)) {
+      // Its own gadget jobs, worked out once it has a body; one bot's a tick (they're spots found by sight lines).
+      if (!this.equipped.has(id) && this.bodyPawn(id) && this.ownJobsTick !== this.sim.tick) {
+        this.ownJobsTick = this.sim.tick;
         this.equipped.add(id);
         this.ownJobs(id);
       }

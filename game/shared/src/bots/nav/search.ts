@@ -129,6 +129,8 @@ export class NavSearch {
     };
     const nb: [number, number][] = [];
     const base = k * NODE_SPAN;
+    // Each pair of regions once (many edge nodes join the same two): its cost is the same each time.
+    const pairs = new Set<number>();
     for (let n = 0; n < c.y.length; n++) {
       // Only nodes on the chunk's edge have neighbours in another chunk.
       const col = c.col[n];
@@ -137,7 +139,15 @@ export class NavSearch {
       if (li !== 0 && li !== 15 && lj !== 0 && lj !== 15) continue;
       nb.length = 0;
       g.neighbours(base + n, nb);
-      for (const [m] of nb) if (Math.floor(m / NODE_SPAN) !== k) add(g.regionOf(base + n), g.regionOf(m), 0);
+      const a = g.regionOf(base + n);
+      for (const [m] of nb) {
+        if (Math.floor(m / NODE_SPAN) === k) continue;
+        const b = g.regionOf(m);
+        const key = a * 0x200000 + b; // region ids are under 2^21 (8192 chunks of 256)
+        if (pairs.has(key)) continue;
+        pairs.add(key);
+        add(a, b, 0);
+      }
     }
     for (const at of c.links) {
       const l = g.links[at];

@@ -4,7 +4,8 @@
 // goes back to a copy of the level's pristine one, built once per level per process.
 import type { Collider } from "../../physics/rapier.js";
 import type { Sim } from "../../sim.js";
-import { NAV_CELL, NavGrid } from "./grid.js";
+import { clearHoldCache } from "../places.js";
+import { NAV_CELL, NavGrid, type NavLink } from "./grid.js";
 import { NavSearch } from "./search.js";
 
 /** The level's grid as built (panels whole, barricades up, no gadget) and its search, by level id: built once, copied per room. */
@@ -12,6 +13,11 @@ const pristine = new Map<string, { grid: NavGrid; search: NavSearch }>();
 
 /** How far round a changed box its chunks are rebuilt (a body's radius and a column). */
 const MARGIN = 0.6;
+
+/** Vault probes from this near a change (m) are made again (a vault's reach and length). */
+const PROBE_MARGIN = 2.5;
+/** New route searches a tick, all the bots together (bots/DESIGN.md §12: the search budget). */
+const ROUTES_PER_TICK = 3;
 
 export class NavWorld {
   grid: NavGrid;
@@ -25,6 +31,9 @@ export class NavWorld {
   private readonly dirty = new Set<number>();
   /** Chunks rebuilt so far (tests, the bench). */
   rebuilt = 0;
+  /** New routes searched this tick (at most ROUTES_PER_TICK: the rest wait a tick), and the tick. */
+  private routes = 0;
+  private routesTick = -1;
 
   constructor(readonly sim: Sim) {
     const id = sim.level.def.id;
@@ -61,6 +70,24 @@ export class NavWorld {
     this.solidsAt = this.sim.solidsVersion;
     this.solids.clear();
     for (const [id, cs] of this.sim.solidColliders()) this.solids.set(id, { cs, box: boundsOf(cs) });
+  }
+
+  /**
+   * Whether a new route may be searched this tick (a bot asking past the tick's budget waits for the next: when many
+   * want one at once, prep's start, the searches spread over a few ticks instead of all landing in one).
+   */
+  takeRoute(): boolean {
+    if (this.sim.tick !== this.routesTick) {
+      this.routesTick = this.sim.tick;
+      this.routes = 0;
+    }
+    return this.routes++ < ROUTES_PER_TICK;
+  }
+
+  /** A link a bot couldn't take: out of the grid (and the region graph), so routes go another way. */
+  blockLink(link: NavLink): void {
+    const k = this.grid.blockLink(link);
+    if (k >= 0) this.search.refresh([k]);
   }
 
   /** Whether chunks are waiting to be rebuilt. */
@@ -124,6 +151,8 @@ export class NavWorld {
   /** Mark the chunks under a box of the world (with a margin) to be rebuilt. */
   mark(x0: number, z0: number, x1: number, z1: number): void {
     for (const k of this.grid.chunksIn(x0 - MARGIN, z0 - MARGIN, x1 + MARGIN, z1 + MARGIN)) this.dirty.add(k);
+    // A vault started up to a body's reach and a vault's length away may cross what changed: probed again.
+    this.grid.forgetProbes(x0 - PROBE_MARGIN, z0 - PROBE_MARGIN, x1 + PROBE_MARGIN, z1 + PROBE_MARGIN);
   }
 }
 
@@ -142,9 +171,10 @@ function boundsOf(cs: readonly Collider[]): [number, number, number, number] {
   return b;
 }
 
-/** Forget the levels' pristine grids (tests that change a level's data). */
+/** Forget the levels' pristine grids (tests that change a level's data); the hold spots worked out on them too. */
 export function clearNavCache(): void {
   pristine.clear();
+  clearHoldCache();
 }
 
 void NAV_CELL;

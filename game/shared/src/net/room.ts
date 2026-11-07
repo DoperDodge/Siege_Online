@@ -18,7 +18,7 @@ import { TeamBoard } from "../bots/perceive.js";
 import { AttackPlanner, DefensePlanner } from "../bots/plan.js";
 import { orderFor } from "../bots/orders.js";
 import { encodeRoundReport, RoundReporter } from "./report.js";
-import { roomAt } from "../bots/places.js";
+import { holdScores, roomAt } from "../bots/places.js";
 import { WinReason } from "../match/outcome.js";
 import type { RoundRecord } from "../match/match.js";
 import { BotRng } from "../bots/rng.js";
@@ -499,7 +499,12 @@ export class Room implements DirectorHost {
     const used = new Set([...this.members.values()].map((m) => m.name));
     const free = names.filter((n) => !used.has(`BOT ${n}`));
     const name = `BOT ${new BotRng(this.seed, id).pick(free.length ? free : names)}`;
-    this.nav ??= new NavWorld(this.sim);
+    if (!this.nav) {
+      this.nav = new NavWorld(this.sim);
+      // The anchor rooms' hold spots of every site's plan, worked out now (the lobby) rather than as a round's prep
+      // starts (a planner made then would take a tenth of a second over them).
+      for (const st of Object.values(this.sim.data.bots.strats.get(this.levelId)?.sites ?? {})) for (const r of st.defense.anchors) holdScores(this.sim, this.nav, r);
+    }
     const m: Member = { ...this.newMember(id, name, NO_CLIENT), bot: new Bot(id, level, this.seed) };
     m.botWorld = this.botWorld(m);
     if (this.director) {

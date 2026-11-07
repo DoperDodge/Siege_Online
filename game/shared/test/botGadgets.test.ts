@@ -228,6 +228,10 @@ describe("bots' gadgets (Phase 9 M7)", () => {
     const { room, m, until, botOf, body, person, seen, info } = await match("SITE_DINING", false, ops, 10);
     expect(until(() => m.phase === Phase.Action, 60)).toBe(true);
     room.sim.teleport(body(person.id).id, 75, 0, 70, 0);
+    // The defuser's carrier goes for the plant and throws no grenade first (D-164): the frag's to come from a Sledge
+    // without it (who carries it was drawn as action started, so depends on how the round went until then).
+    const o = room.sim.objective!;
+    if (o.carrier === body(botOf("sledge")).id) o.carrier = body(botOf("dokkaebi")).id;
     expect(until(() => seen.has("frag"), 60), info()).toBe(true);
     // Someone plants; Thermite is brought near, in sight of the planter: a smoke goes on him.
     const planting = () => [...m.players.values()].map((p) => (room.bodyOf(p.id) ? body(p.id) : null)).find((b) => b?.state.deployKind === DeployKind.Plant) ?? null;

@@ -7,7 +7,7 @@ import { forwardXZ, wrapAngle, type Vec3 } from "../../core/math.js";
 import type { Pawn } from "../../player/pawn.js";
 import { Btn, PawnMode, Stance } from "../../player/types.js";
 import type { Sim } from "../../sim.js";
-import { LinkKind, type NavLink } from "./grid.js";
+import { LinkKind, type NavGrid, type NavLink } from "./grid.js";
 import type { NavRoute, PathStep } from "./search.js";
 import type { NavWorld } from "./world.js";
 
@@ -54,6 +54,13 @@ const SWING_SPOTS: readonly [number, number][] = [
   [0.9, 0],
 ];
 
+/** Getting this far (m) while walking isn't stuck. */
+const UNSTUCK_M = 0.5;
+/** A goal given up on stays given up this long (s) when asked for again. */
+const FAILED_HOLD_S = 3;
+/** A goal moved less than this (m), within its route's last region, keeps the route. */
+const REAIM_M = 3;
+
 export class PathFollower {
   state: FollowState = FollowState.Idle;
   goal: Vec3 | null = null;
@@ -66,6 +73,9 @@ export class PathFollower {
   /** Driving a drone: under a door's barricade, not through it. */
   drone = false;
   private route: NavRoute | null = null;
+  /** The grid its route is on (a moved goal's region is looked up there), and its world. */
+  private grid: NavGrid | null = null;
+  private nav: NavWorld | null = null;
   private steps: PathStep[] = [];
   private idx = 0;
   private done = false;
@@ -76,15 +86,52 @@ export class PathFollower {
   /** Blows struck at the barricade being broken. */
   private swings = 0;
   /** Progress watch: the best distance to the waypoint, and when it last improved. */
-  private best = Infinity;
-  private bestAt = 0;
+  /** Where the body was when it last got UNSTUCK_M on while walking, when, and the last tick it walked. */
+  private anchor: Vec3 | null = null;
+  private anchorAt = 0;
+  private lastWalk = -10;
+  /** Where it last gave up going (and when, its own ticks): asked there again soon after, it doesn't start over. */
+  private failedGoal: Vec3 | null = null;
+  private failedAt = -1e9;
   private retries = 0;
+  /** When the barricade a link breaks was gone (its tick of the link; -1: still up). */
+  private clearAt = -1;
+  /** The goal moved while a link was under way: a new route once it's done. */
+  private reroute = false;
+  /** The sim tick it was last asked for a stride (legs not asked lately aren't walking anywhere, whatever their state). */
+  tickedAt = -1;
 
   /** Go to `goal` (feet); searches lazily. Same goal again: carries on. */
   goTo(goal: Vec3, radius = NEAR): void {
     if (this.goal && Math.hypot(goal[0] - this.goal[0], goal[1] - this.goal[1], goal[2] - this.goal[2]) < 0.2 && this.state !== FollowState.Failed) {
       this.radius = radius;
       return;
+    }
+    // Asked again where it just gave up (stuck, no way): it stays given up a while, so the asker can give up too.
+    if (this.state === FollowState.Failed && this.failedGoal && Math.hypot(goal[0] - this.failedGoal[0], goal[1] - this.failedGoal[1], goal[2] - this.failedGoal[2]) < 0.5 && this.ticks - this.failedAt < FAILED_HOLD_S * TICK_HZ) return;
+    // A new goal while a link's under way (a barricade being knifed, a vault, a ladder): the link's finished first (it
+    // gives up by itself in a few seconds), then the way on is found again toward the new goal (dropping the link each
+    // time a sound is heard again would never get a barricade down).
+    if (this.taking && this.goal && this.state === FollowState.Walking) {
+      this.goal = [goal[0], goal[1], goal[2]];
+      this.radius = radius;
+      this.reroute = true;
+      return;
+    }
+    // A goal moved a little (a sound heard again, a teammate walking on) and still in its route's last region: the
+    // same route, only its end moved (a new search costs a millisecond; bots re-aim like this many times a second).
+    const g = this.grid;
+    if (g && this.goal && this.route && this.state === FollowState.Walking && !this.taking && this.route.version === g.version && Math.hypot(goal[0] - this.goal[0], goal[2] - this.goal[2]) < REAIM_M) {
+      const n = g.nodeNear(goal[0], goal[1], goal[2], 1, 0.9);
+      if (n >= 0 && g.regionOf(n) === g.regionOf(this.route.goal)) {
+        this.goal = [goal[0], goal[1], goal[2]];
+        this.radius = radius;
+        this.route.goal = n;
+        // The stretch in hand led to the old end: the next one is found toward the new.
+        if (this.done) this.steps = [];
+        this.done = false;
+        return;
+      }
     }
     this.goal = [goal[0], goal[1], goal[2]];
     this.radius = radius;
@@ -93,6 +140,14 @@ export class PathFollower {
     this.steps = [];
     this.retries = 0;
     this.taking = null;
+    this.reroute = false;
+  }
+
+  /** Given up on the goal (stuck, or no way there). */
+  private fail(): void {
+    this.state = FollowState.Failed;
+    this.failedGoal = this.goal;
+    this.failedAt = this.ticks;
   }
 
   stop(): void {
@@ -114,6 +169,9 @@ export class PathFollower {
    */
   tick(nav: NavWorld, sim: Sim, pawn: Pawn, look: number | null): Stride {
     const s = pawn.state;
+    this.ticks++;
+    this.tickedAt = sim.tick;
+    this.nav = nav;
     const still: Stride = { forward: 0, strafe: 0, yaw: look ?? s.yaw, pitch: null, buttons: 0, stance: Stance.Stand };
     if (!this.goal || this.state === FollowState.Idle || this.state === FollowState.Failed) return still;
     // A scripted move under way (a vault, a ladder's dismount): nothing to do but wait.
@@ -138,6 +196,7 @@ export class PathFollower {
       if (dist2(pos, start) <= AT_LINK + (target.link.kind === LinkKind.Drop ? 0.15 : 0)) {
         this.taking = target.link;
         this.takingT = 0;
+        this.clearAt = -1;
         return this.takeLink(sim, pawn, look);
       }
       return this.walkTo(start, pos, pawn, look, this.lowAt(nav, start), AT_LINK);
@@ -154,16 +213,23 @@ export class PathFollower {
   /** A route and a stretch of steps to walk; false: none (failed, or waiting). */
   private ensurePath(nav: NavWorld, pos: Vec3): boolean {
     const grid = nav.grid;
-    // The grid changed under the route: find it again.
+    this.grid = grid;
+    // The grid changed under the route (a chunk it crosses was rebuilt): find it again. A change elsewhere leaves it.
     if (this.route && this.route.version !== grid.version && !this.taking) {
-      this.route = null;
-      this.steps = [];
+      const r = this.route;
+      if (grid.routeHolds(r.version, r.regions, [r.start, r.goal, ...this.steps.slice(this.idx).flatMap((st) => (st.link ? [st.link.from, st.link.to] : []))])) r.version = grid.version;
+      else {
+        this.route = null;
+        this.steps = [];
+      }
     }
     if (!this.route) {
+      // A new route waits its turn when many bots want one this tick.
+      if (!nav.takeRoute()) return false;
       this.route = nav.search.route(pos, this.goal!);
       this.steps = [];
       if (!this.route) {
-        this.state = FollowState.Failed;
+        this.fail();
         return false;
       }
     }
@@ -174,14 +240,12 @@ export class PathFollower {
       if (!part) {
         // Off the route (pushed, fell): a new one from here, at most a few times in a row.
         this.route = null;
-        if (++this.retries > 4) this.state = FollowState.Failed;
+        if (++this.retries > 4) this.fail();
         return false;
       }
       this.steps = part.steps;
       this.done = part.done;
       this.idx = Math.min(1, this.steps.length - 1);
-      this.best = Infinity;
-      this.bestAt = 0;
     }
     return true;
   }
@@ -193,38 +257,48 @@ export class PathFollower {
     const dz = to[2] - pos[2];
     const len = Math.hypot(dx, dz);
     const way = Math.atan2(-dx, -dz);
-    // Progress: closer than ever by 5 cm, or note how long it's been.
+    // Stuck: the body trying to walk but not getting half a metre on (whatever the waypoints: a new route from the
+    // same place is still stuck), for how long.
     const now = this.tickCount++;
-    if (len < this.best - 0.05) {
-      this.best = len;
-      this.bestAt = now;
+    // (Across the floor: bobbing up and down, a jump or a vault tap that goes nowhere, isn't getting on.)
+    if (!this.anchor || Math.hypot(pos[0] - this.anchor[0], pos[2] - this.anchor[2]) > UNSTUCK_M || now - this.lastWalk > 2) {
+      this.anchor = [pos[0], pos[1], pos[2]];
+      this.anchorAt = now;
     }
-    const stuckFor = (now - this.bestAt) / TICK_HZ;
+    this.lastWalk = now;
+    const stuckFor = (now - this.anchorAt) / TICK_HZ;
     let buttons = 0;
+    // Stuck long enough to search again: crouched (a low beam, a stair's underside the grid missed by a few
+    // centimetres) and stepping to one side and the other of the way as it goes.
+    let side = 0;
     if (stuckFor > STUCK_S) {
-      // Something's in the way: try climbing it, then search again, then give up.
-      buttons |= vaultTap(now);
-      if (stuckFor > STUCK_S * 2 && stuckFor <= STUCK_S * 2 + 1 / TICK_HZ) {
+      // Something's in the way: try climbing it, then search again and wriggle, then give up.
+      if (stuckFor <= STUCK_S * 2) buttons |= vaultTap(now);
+      if (stuckFor > STUCK_S * 2 && stuckFor <= STUCK_S * 2 + 1.5 / TICK_HZ) {
         this.route = null;
         this.steps = [];
         this.retries++;
       }
+      if (stuckFor > STUCK_S * 2) side = Math.floor(now / (TICK_HZ * 0.6)) % 2 ? 0.8 : -0.8;
       if (stuckFor > STUCK_S * 4 || this.retries > 4) {
-        this.state = FollowState.Failed;
+        this.fail();
         return { forward: 0, strafe: 0, yaw: s.yaw, pitch: null, buttons: 0, stance: Stance.Stand };
       }
     }
     // Slow down onto a waypoint that turns hard; otherwise full speed.
     const speed = len < near * 2 ? 0.6 : 1;
     const yaw = look ?? turnToward(s.yaw, way, WALK_TURN / TICK_HZ);
-    // The way, relative to the facing.
+    // The way, relative to the facing (and a step across it, wriggling).
     const rel = wrapAngle(way - yaw);
-    const forward = Math.cos(rel) * speed;
-    const strafe = -Math.sin(rel) * speed;
-    if (this.sprint && !low && look === null && Math.abs(rel) < 0.3 && len > 2) buttons |= Btn.Sprint;
-    return { forward, strafe, yaw, pitch: null, buttons, stance: low ? Stance.Crouch : Stance.Stand };
+    const clamp = (v: number) => Math.max(-1, Math.min(1, v));
+    const forward = clamp(Math.cos(rel) * speed - Math.sin(rel) * side);
+    const strafe = clamp(-Math.sin(rel) * speed - Math.cos(rel) * side);
+    if (this.sprint && !low && !side && look === null && Math.abs(rel) < 0.3 && len > 2) buttons |= Btn.Sprint;
+    return { forward, strafe, yaw, pitch: null, buttons, stance: low || side ? Stance.Crouch : Stance.Stand };
   }
   private tickCount = 0;
+  /** Its ticks (every tick asked, walking or not). */
+  private ticks = 0;
 
   /** A link under way: each kind as a player takes it. */
   private takeLink(sim: Sim, pawn: Pawn, look: number | null): Stride {
@@ -234,13 +308,22 @@ export class PathFollower {
     const facing = Math.abs(wrapAngle(s.yaw - l.yaw)) < 0.15;
     const turn = turnToward(s.yaw, l.yaw, 0.35);
     const base: Stride = { forward: 0, strafe: 0, yaw: turn, pitch: 0, buttons: 0, stance: Stance.Stand };
-    // Too long on one link (blocked by a body, a barricade put back up): leave it and search again.
-    if (t > TICK_HZ * 10) return this.leaveLink();
+    // Too long on one link (blocked by a body, a barricade put back up, a drop's lip it can't get off, a window too low
+    // to get through once its planks are gone): leave it and search again; a drop, vault or barricade that doesn't go
+    // is taken out of the grid for the round (no body would get through it either). A ladder's only left.
+    if (t > TICK_HZ * (l.kind === LinkKind.Drop || l.kind === LinkKind.Vault ? 4 : 10)) {
+      if (l.kind !== LinkKind.Ladder) this.nav?.blockLink(l);
+      return this.leaveLink();
+    }
     const end = this.steps[this.idx].pos;
     const arrived = () => {
       this.taking = null;
       this.idx = Math.min(this.idx + 1, this.steps.length);
-      this.best = Infinity;
+      if (this.reroute) {
+        this.reroute = false;
+        this.route = null;
+        this.steps = [];
+      }
       return this.tick0(look, s.yaw);
     };
     switch (l.kind) {
@@ -251,9 +334,14 @@ export class PathFollower {
         // Down on the floor below (wherever the fall carried it): on with the path.
         if (s.grounded && Math.abs(s.y - end[1]) < 0.4 && dist2([s.x, s.y, s.z], end) < 3) return arrived();
         if (!s.grounded) return { ...base, yaw: s.yaw };
-        // Walked on over the gap (it didn't fall): search again from wherever it is.
-        if (t > TICK_HZ * 1.5 && s.grounded && s.y > end[1] + 0.5) return this.leaveLink();
-        return { ...base, forward: facing ? 0.7 : 0 };
+        // Walked on over the gap, or still on the lip (it didn't fall): a drop that doesn't go (out of the grid for the
+        // round), and a search again from wherever it is.
+        if (t > TICK_HZ * 1.5 && s.grounded && s.y > end[1] + 0.5) {
+          this.nav?.blockLink(l);
+          return this.leaveLink();
+        }
+        // Not off the edge by now: something low over it (a staircase above the lip), so crouched.
+        return { ...base, forward: facing ? 0.7 : 0, stance: t > TICK_HZ * 0.75 ? Stance.Crouch : Stance.Stand };
       }
       case LinkKind.Ladder: {
         if (s.mode === PawnMode.Walk && t > 8 && Math.abs(s.y - end[1]) < 0.4) return arrived();
@@ -289,13 +377,22 @@ export class PathFollower {
           }
           return { ...base, yaw, pitch, buttons };
         }
-        // Gone: through the doorway, or over the sill.
+        // Gone: through the doorway, or over the sill; not through 4 s after (a body in the way on the far side, a sill
+        // the movement code won't take from here), it doesn't go: out of the grid for the round, and another way.
+        if (this.clearAt < 0) this.clearAt = t;
+        if (t - this.clearAt > TICK_HZ * 4) {
+          this.nav?.blockLink(l);
+          return this.leaveLink();
+        }
         if (l.vault) {
           if (t > 4 && s.mode === PawnMode.Walk && dist2([s.x, s.y, s.z], end) < 0.7) return arrived();
           return facing ? { ...base, buttons: vaultTap(t) } : base;
         }
         if (dist2([s.x, s.y, s.z], end) < NEAR) return arrived();
-        return { ...base, forward: facing ? 1 : 0.3 };
+        // Crouched under a low one (a window level with the roof outside it: the grid only joins those a body fits
+        // through crouched).
+        const low = e !== undefined && e.frame.center[1] + e.frame.h / 2 - s.y < sim.data.movement.stance.stand.height + 0.05;
+        return { ...base, forward: facing ? 1 : 0.3, stance: low ? Stance.Crouch : Stance.Stand };
       }
     }
     return arrived();
@@ -311,7 +408,9 @@ export class PathFollower {
     this.taking = null;
     this.route = null;
     this.steps = [];
-    this.retries++;
+    this.reroute = false;
+    // Link after link that doesn't go: given up (as after a few routes that lead nowhere).
+    if (++this.retries > 4) this.fail();
     return { forward: 0, strafe: 0, yaw: 0, pitch: null, buttons: 0, stance: Stance.Stand };
   }
 

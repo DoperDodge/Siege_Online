@@ -68,6 +68,8 @@ const PICK_LATE_S = 5;
 export const Doing = { Task: 0, Fight: 1, Hold: 2, Investigate: 3, Reload: 4, Revive: 5, Gadget: 6 } as const;
 export type Doing = (typeof Doing)[keyof typeof Doing];
 
+/** A Kludge looks for devices to hack every this many ticks. */
+const HACK_SCAN_TICKS = 6;
 /** A behaviour's score must beat the current one's by this to take over (no dithering). */
 const KEEP = 0.12;
 /** How long an enemy that left its sight keeps it holding the angle (s), and how long a sound stays worth checking. */
@@ -121,6 +123,14 @@ export class Bot {
   private hackKey = "";
   private hackFrom = 0;
   private hackSeen = 0;
+  /** The devices its Kludge last saw (where, how far), and when it looks again. */
+  private hackDevices: { p: Vec3; dist: number }[] = [];
+  private hackScanAt = 0;
+  /** How near its Kludge has got to where it's going, and when it last got a metre nearer. */
+  private kludgeBest = Infinity;
+  private kludgeAt = 0;
+  /** A task whose place it couldn't get to (it does it from where it is), by its key. */
+  private unreachable = "";
   /** Its planner's gadget job under way (by the task's key). */
   private use: GadgetUse | null = null;
   private useKey = "";
@@ -637,7 +647,8 @@ export class Bot {
       // There, or no way there: what was there is no news any more.
       c.at = Math.min(c.at, now - SOUND_S * TICK_HZ);
     }
-    return { forward: st.forward, strafe: st.strafe, yaw: st.yaw, pitch: look ? look.pitch : (st.pitch ?? s.pitch * 0.9), buttons: st.buttons & ~Btn.Sprint, stance: st.stance, lean: 0 };
+    // (A link under way aims where it must, a barricade's knifing above all: its pitch over the look's.)
+    return { forward: st.forward, strafe: st.strafe, yaw: st.yaw, pitch: st.pitch ?? (look ? look.pitch : s.pitch * 0.9), buttons: st.buttons & ~Btn.Sprint, stance: st.stance, lean: 0 };
   }
 
   /** Go to a downed teammate and hold Use on it, facing it. */
@@ -663,7 +674,7 @@ export class Bot {
       const input = this.doTask(w, me, job, now);
       if (input) return input;
     }
-    if (w.nav) {
+    if (w.nav && job?.kind !== "drone") {
       if (this.order) this.legs.goTo(this.order, 0.4);
       else if (w.match && (this.legs.state !== FollowState.Walking || now >= this.wanderAt)) {
         const spot = this.wanderSpot(w, w.match, me.team);
@@ -762,7 +773,12 @@ export class Bot {
         return look(spot);
       }
       case "hold": {
-        if (!at(t.spot, 0.45)) return walk(t.spot, 0.35, now - this.taskSince < 20 * TICK_HZ) ?? look(t.face);
+        // A spot it can't get to (a teammate's shield in the way, a door it won't break): held from where it is.
+        if (this.legs.state === FollowState.Failed && this.legs.goal && Math.hypot(this.legs.goal[0] - t.spot[0], this.legs.goal[2] - t.spot[2]) < 0.5) {
+          this.unreachable = key;
+          this.legs.stop();
+        }
+        if (!at(t.spot, 0.45) && this.unreachable !== key) return walk(t.spot, 0.35, now - this.taskSince < 20 * TICK_HZ) ?? look(t.face);
         // There: watch the way in, a little either side of it now and then.
         const sway = Math.sin((now + this.memberId * 37) / (2.5 * TICK_HZ)) * 0.25;
         const f = t.face;
@@ -772,6 +788,7 @@ export class Bot {
         return look(p, d.prefire > 0.5 ? Btn.Ads : 0);
       }
       case "roam": {
+        if (this.legs.state === FollowState.Failed) this.legs.stop();
         if (this.legs.state !== FollowState.Walking || now >= this.wanderAt) {
           const room = this.rng.pick(t.rooms);
           const spots = room ? roomSpots(w.nav!, sim.level.def, room, 1.5) : [];
@@ -788,7 +805,8 @@ export class Bot {
         return look(target, aimed(target) || s.deployKind === DeployKind.Disable ? Btn.Interact : 0);
       }
       case "go": {
-        // Through each spot of the way in, then to the end (where it holds, looking about).
+        // Through each spot of the way in, then to the end (where it holds, looking about); a spot it's past (it got
+        // nearer the end some other way: a hole, a hatch) is left out.
         while (this.taskStep < t.via.length && at(t.via[this.taskStep], 1.5)) this.taskStep++;
         const next = this.taskStep < t.via.length ? t.via[this.taskStep] : t.to;
         if (this.taskStep >= t.via.length && at(t.to, 0.8)) {
@@ -812,6 +830,9 @@ export class Bot {
         return { forward: 0, strafe: 0, yaw: s.yaw, pitch: -0.6, buttons: now % 16 < 2 ? Btn.Interact : 0, stance: Stance.Stand, lean: 0 };
       }
       case "drone":
+        // Its body while it drives (or after its drone's gone): where it is, looking about (the drone's way isn't
+        // the body's).
+        if (this.legs.state !== FollowState.Idle) this.legs.stop();
         return null;
       case "gadget": {
         if (!this.use || this.useKey !== key) {
@@ -932,7 +953,9 @@ export class Bot {
     if (job?.kind !== "drone" || !w.nav) return { forward: 0, strafe: 0, yaw: s.yaw, pitch: 0, buttons: 0, stance: Stance.Stand, lean: 0 };
     this.legs.allow = droneLink;
     this.legs.drone = true;
-    this.legs.goTo(job.to, 2.5);
+    // Near enough to see the bomb's room; a way it can't drive (no way up a staircase, a body in the way) given up.
+    if (this.legs.state !== FollowState.Failed) this.legs.goTo(job.to, 3.5);
+    else this.legs.stop();
     this.legs.sprint = false;
     if (this.legs.state !== FollowState.Walking) {
       // There (or no way on): look about the room.
@@ -956,20 +979,32 @@ export class Bot {
       this.taskStep = 2;
       this.taskSince = now;
       this.hackSeen = now;
+      this.kludgeBest = Infinity;
+      this.kludgeAt = now;
       this.legs.stop();
     }
+    // The other side's devices it sees within reach, nearest first (looked for a few times a second: each is a sight
+    // line), and what's in its sights (only with one near enough to hack).
+    if (now >= this.hackScanAt) {
+      this.hackScanAt = now + HACK_SCAN_TICKS;
+      this.hackDevices = hackables(sim, drone.team)
+        .map((p) => ({ p, dist: Math.hypot(p[0] - eye[0], p[1] - eye[1], p[2] - eye[2]) }))
+        .filter((x) => x.dist < k.rangeM * 1.6 && sees(sim, eye, x.p))
+        .sort((a, b) => a.dist - b.dist);
+    }
+    const devices = this.hackDevices;
     const view = { pos: eye, yaw: s.yaw, pitch: s.pitch };
-    const sights = hackTargetFor(sim, drone, k, view, () => false);
+    const sights = devices.length && devices[0].dist <= k.rangeM * 1.1 ? hackTargetFor(sim, drone, k, view, () => false) : null;
     const key = sights ? JSON.stringify(sights) : "";
     if (key !== this.hackKey) {
       this.hackKey = key;
       this.hackFrom = now + 2;
     }
-    const devices = hackables(sim, drone.team)
-      .map((p) => ({ p, dist: Math.hypot(p[0] - eye[0], p[1] - eye[1], p[2] - eye[2]) }))
-      .filter((x) => x.dist < k.rangeM * 1.6 && sees(sim, eye, x.p))
-      .sort((a, b) => a.dist - b.dist);
-    const done = now - this.taskSince > 25 * TICK_HZ || (this.legs.state !== FollowState.Walking && now - this.hackSeen > 5 * TICK_HZ && !devices.length);
+    // Getting nowhere (stuck on a step, no way in) is as done as having got there.
+    // Getting on: a metre nearer where it's going, or a hack running (a device merely in view it can't get to isn't).
+    const toGo = Math.hypot(to[0] - s.x, to[2] - s.z);
+    if (toGo < this.kludgeBest - 1 || (sights !== null && now >= this.hackFrom)) [this.kludgeBest, this.kludgeAt] = [Math.min(toGo, this.kludgeBest), now];
+    const done = now - this.taskSince > 25 * TICK_HZ || now - this.kludgeAt > 6 * TICK_HZ || this.legs.state === FollowState.Failed || (this.legs.state !== FollowState.Walking && now - this.hackSeen > 5 * TICK_HZ && !devices.length);
     if (done) {
       const job = this.ordered(now) ?? w.taskOf();
       if (job?.kind === "kludge") this.report(w, job, true);

@@ -54,9 +54,13 @@ export function sides(level: LevelDef, e: PanelEntry, d: number, uOff = 0): { po
   });
 }
 
-/** A place to stand on the nav grid near `p` (within `within` m), or null. */
-export function standAt(nav: NavWorld, p: Vec3, within = 0.8): Vec3 | null {
-  const n = nav.grid.nodeNear(p[0], p[1], p[2], within, 0.8);
+/**
+ * A place to stand on the nav grid near `p` (within `within` m across): at its height if there's one (so on the floor
+ * by a table rather than up on it), else up to `dy` m up or down (a wall whose panel starts above the floor), or null.
+ */
+export function standAt(nav: NavWorld, p: Vec3, within = 0.8, dy = 0.8): Vec3 | null {
+  let n = nav.grid.nodeNear(p[0], p[1], p[2], within, Math.min(0.35, dy));
+  if (n < 0) n = nav.grid.nodeNear(p[0], p[1], p[2], within, dy);
   return n >= 0 ? nav.grid.nodePos(n) : null;
 }
 
@@ -87,13 +91,17 @@ export function sees(sim: Sim, eye: Vec3, p: Vec3): boolean {
 }
 
 /**
- * Spots to hold in a room, best first: a node whose eye sees the room's ways in, from a fair distance (not on top of
- * one), with a wall at its back; each with the way in it watches. At most `n`, 2 m apart.
+ * Each room's candidate hold spots and how good each is (the sight lines to its ways in: hundreds of rays a room), on
+ * the level as built (a round's prep starts from it), worked out once per level and room (bots/DESIGN.md §12).
  */
-export function holdSpots(sim: Sim, nav: NavWorld, roomId: string, n: number, rng: BotRng): { spot: Vec3; face: Vec3 }[] {
+const holdCache = new Map<string, { spot: Vec3; face: Vec3; score: number }[]>();
+
+export function holdScores(sim: Sim, nav: NavWorld, roomId: string): readonly { spot: Vec3; face: Vec3; score: number }[] {
+  const key = `${sim.level.def.id}/${roomId}`;
+  const had = holdCache.get(key);
+  if (had) return had;
   const ways = waysIn(sim, roomId);
-  const cands = roomSpots(nav, sim.level.def, roomId, 0.75);
-  const scored = cands.map((c) => {
+  const scored = roomSpots(nav, sim.level.def, roomId, 0.75).map((c) => {
     const eye: Vec3 = [c[0], c[1] + 1.6, c[2]];
     let score = 0;
     let face: Vec3 | null = null;
@@ -105,8 +113,23 @@ export function holdSpots(sim: Sim, nav: NavWorld, roomId: string, n: number, rn
       score += v;
       if (v > best) [best, face] = [v, w];
     }
-    return { spot: c, face: face ?? ways[0] ?? [c[0], c[1] + 1.4, c[2] - 1], score: score + rng.next() * 0.3 };
+    return { spot: c, face: face ?? ways[0] ?? ([c[0], c[1] + 1.4, c[2] - 1] as Vec3), score };
   });
+  holdCache.set(key, scored);
+  return scored;
+}
+
+/** Forget the hold spots worked out (tests that change a level). */
+export function clearHoldCache(): void {
+  holdCache.clear();
+}
+
+/**
+ * Spots to hold in a room, best first: a node whose eye sees the room's ways in, from a fair distance (not on top of
+ * one), with a wall at its back; each with the way in it watches. At most `n`, 2 m apart.
+ */
+export function holdSpots(sim: Sim, nav: NavWorld, roomId: string, n: number, rng: BotRng): { spot: Vec3; face: Vec3 }[] {
+  const scored = holdScores(sim, nav, roomId).map((h) => ({ ...h, score: h.score + rng.next() * 0.3 }));
   scored.sort((a, b) => b.score - a.score);
   const out: { spot: Vec3; face: Vec3 }[] = [];
   for (const s of scored) {

@@ -121,9 +121,9 @@ export class GadgetUse {
         const near = t.how === "throw" || t.how === "lob" ? 1.2 : 0.35;
         if (Math.hypot(t.stand[0] - s.x, t.stand[2] - s.z) > near || Math.abs(t.stand[1] - s.y) > 0.8) {
           const w = ctx.walk(t.stand, near * 0.7, t.how !== "detonate");
-          // (The follower tries again when asked again after failing: a few failures and it's given up.)
-          if (ctx.failed() && ++this.walkFails > 3) return this.end(false);
           if (w) return { ...w, buttons: w.buttons & ~(Btn.Fire | Btn.Ads) };
+          // No way there (stuck, or none): a few tries, then given up; not used from where it is meanwhile.
+          if (ctx.failed()) return ++this.walkFails > 3 ? this.end(false) : null;
         }
       }
       this.state = UseState.Using;
