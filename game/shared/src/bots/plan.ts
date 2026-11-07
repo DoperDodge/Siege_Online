@@ -44,7 +44,9 @@ export type Task =
   /** Skopós: walk her idle shell to `to` (into it, there, and back to the shell she was in). */
   | { kind: "shell"; to: Vec3 }
   /** Brava: a Kludge drone thrown and driven toward `to`, hacking the other side's devices it finds on the way. */
-  | { kind: "kludge"; to: Vec3 };
+  | { kind: "kludge"; to: Vec3 }
+  /** Keep near this teammate's body (an order, M6). */
+  | { kind: "follow"; pawnId: number };
 
 /**
  * A gadget used as a player does (gadgets/DESIGN.md §2) from slot `slot`, from `stand` (null: where it is) with the
@@ -117,9 +119,107 @@ function jobAt(t: Task): Vec3 {
     case "shell":
     case "kludge":
       return t.to;
+    case "follow":
     case "roam":
       return [0, 0, 0];
   }
+}
+
+/** The slot holding gadget `gid` with one left (1 or 2), or 0. */
+export function slotWith(sim: Sim, b: Pawn, gid: string): 1 | 2 | 0 {
+  if (slotGadget(sim.data, b.loadout, 1)?.id === gid && b.state.g1 > 0) return 1;
+  return slotGadget(sim.data, b.loadout, 2)?.id === gid && b.state.g2 > 0 ? 2 : 0;
+}
+
+/** A gadget task from a use spot. */
+function gadgetTask(slot: 1 | 2, how: GadgetTask["how"], at: UseSpot, tag: string, extra: Partial<GadgetTask> = {}): GadgetTask {
+  return { kind: "gadget", slot, how, stand: at.stand, look: at.look, tag, ...extra };
+}
+
+/** Cover from a charge: a place to stand `d` m back from where it was put, on the same floor (or where it was put from). */
+export function coverFrom(nav: NavWorld, at: UseSpot, d = 3): Vec3 {
+  const dx = at.stand[0] - at.look[0];
+  const dz = at.stand[2] - at.look[2];
+  const len = Math.hypot(dx, dz) || 1;
+  for (const back of [d, d * 0.75, d * 1.3]) {
+    const p = standAt(nav, [at.stand[0] + (dx / len) * back, at.stand[1], at.stand[2] + (dz / len) * back], 0.8);
+    if (p && Math.abs(p[1] - at.stand[1]) < 0.15) return p;
+  }
+  return at.stand;
+}
+
+/**
+ * A hard breach of wall `e` from room `from` by this body (M7): Thermite's Exothermic Charge, set off from cover; else
+ * a Hard Breach Charge (Striker's EMP at the wall first), waited out from cover. None: it has neither.
+ */
+export function hardBreachTasks(sim: Sim, nav: NavWorld, b: Pawn, e: PanelEntry, from: string | null): Task[] {
+  const at = wallSpot(sim, nav, e, from, 0.8, 0.9);
+  if (!at || e.panel.kind !== "wall") return [];
+  const index = e.panel.spec.index;
+  const cover = coverFrom(nav, at);
+  const thermite = slotWith(sim, b, "exothermic_charge");
+  if (thermite) return [gadgetTask(thermite, "place", at, `therm${index}`, { cover })];
+  const hbc = slotWith(sim, b, "hard_breach_charge");
+  if (!hbc) return [];
+  const out: Task[] = [];
+  // Striker's EMP at the wall first: a jammer behind it would stop the charge.
+  const emp = slotWith(sim, b, "impact_emp");
+  const far = wallSpot(sim, nav, e, from, 3.2, 1.3);
+  if (emp && far) out.push(gadgetTask(emp, "throw", far, `emp${index}`));
+  out.push(gadgetTask(hbc, "place", { stand: at.stand, look: [at.look[0], at.look[1] + 0.1, at.look[2]] }, `hbc${index}`, { cover, seconds: 5 }));
+  return out;
+}
+
+/**
+ * A soft breach of `e` (a hatch from above, or a wall from room `from`) by this body (M7): Sledge's hammer (a blow, low
+ * and high on a wall), a Cluster Charge or a breach charge on it, set off from cover. None: it has none of them.
+ */
+export function softBreachTasks(sim: Sim, nav: NavWorld, b: Pawn, e: PanelEntry, from: string | null): Task[] {
+  const hatch = e.panel.kind === "hatch";
+  const at = hatch ? hatchSpot(sim, nav, e) : wallSpot(sim, nav, e, from, 0.7, 0.55);
+  if (!at) return [];
+  const index = e.panel.spec.index;
+  const hammer = slotWith(sim, b, "breaching_hammer");
+  if (hammer) {
+    const spots = hatch ? [at.look] : [at.look, [at.look[0], at.look[1] + 0.95, at.look[2]] as Vec3];
+    return [gadgetTask(hammer, "swing", at, `ham${index}`, { spots, panel: index, crouch: hatch })];
+  }
+  const charge = slotWith(sim, b, "cluster_charge") || slotWith(sim, b, "breach_charge");
+  if (!charge) return [];
+  const put = hatch ? at : wallSpot(sim, nav, e, from, 0.8, 1.0);
+  if (!put) return [];
+  return [gadgetTask(charge, "place", put, `soft${index}`, { cover: coverFrom(nav, put, hatch ? 2.5 : 3) })];
+}
+
+/**
+ * Any opening this body can make in `e` from room `from` (an order, M6): a hard breach, a soft breach, an impact
+ * grenade at a soft wall, else the knife (a crouch-size hole in a soft wall, a barricade broken). None: nothing it can do.
+ */
+export function breachTasks(sim: Sim, nav: NavWorld, b: Pawn, e: PanelEntry, from: string | null): Task[] {
+  const p = e.panel;
+  if (p.kind === "wall") {
+    const hard = hardBreachTasks(sim, nav, b, e, from);
+    if (hard.length) return hard;
+  }
+  if (p.kind === "wall" || p.kind === "hatch") {
+    const soft = softBreachTasks(sim, nav, b, e, from);
+    if (soft.length) return soft;
+  }
+  const index = p.spec.index;
+  const soft = p.kind === "wall" && p.reinforced === 0;
+  const impact = slotWith(sim, b, "impact_grenade");
+  const far = soft && impact ? wallSpot(sim, nav, e, from, 2.6, 0.9) : null;
+  if (impact && far) return [gadgetTask(impact, "throw", far, `imp${index}`)];
+  if (!soft && p.kind !== "barricade") return [];
+  const at = wallSpot(sim, nav, e, from, WORK_M, 0);
+  if (!at) return [];
+  const f = e.frame;
+  const size = sim.data.destruction.rotationHoles.crouch;
+  const floor = f.center[1] - f.h / 2;
+  const spots: Vec3[] = [];
+  const [bottom, top, width] = p.kind === "barricade" ? [0.5, 1.5, 0.6] : [size.bottomM, size.topM, size.widthM];
+  for (let v = bottom + 0.12; v <= top - 0.08; v += 0.2) for (let u = -width / 2 + 0.12; u <= width / 2 - 0.08; u += 0.2) spots.push([f.center[0] + f.u[0] * u, floor + v, f.center[2] + f.u[2] * u]);
+  return [{ kind: "hole", panel: index, stand: at.stand, spots }];
 }
 
 /** A panel's face at floor level on room `room`'s side (0.3 m out), or its middle's foot. */
@@ -144,6 +244,8 @@ export class DefensePlanner {
   private planted = false;
   /** Bots whose own gadget jobs are made (once each has a body). */
   private readonly equipped = new Set<number>();
+  /** Told to rotate (the roamers back to the site). */
+  private rotated = false;
 
   constructor(
     private readonly sim: Sim,
@@ -230,6 +332,11 @@ export class DefensePlanner {
     }
   }
 
+  /** "Rotate" off a person's comm wheel (M6): the roamers come back to the site's rooms now. */
+  rotate(): void {
+    this.rotated = true;
+  }
+
   /** Each tick: the defuser planted means a retake. */
   step(): void {
     this.planted = this.sim.objective?.planted !== null && this.sim.objective?.planted !== undefined && this.match.phase === Phase.PostPlant;
@@ -261,8 +368,8 @@ export class DefensePlanner {
     const role = this.roles.get(id) ?? null;
     const r = role === "anchor" ? this.anchorSpot(id) : role;
     if (role === "anchor" && r) this.roles.set(id, r);
-    // Roamers come back to the site for the last minute.
-    if (r?.kind === "roam" && this.match.phase === Phase.Action && this.match.ticksLeft(this.sim.tick) < FALL_BACK_S * TICK_HZ) {
+    // Roamers come back to the site for the last minute (or when told to rotate).
+    if (r?.kind === "roam" && this.match.phase === Phase.Action && (this.rotated || this.match.ticksLeft(this.sim.tick) < FALL_BACK_S * TICK_HZ)) {
       const anchors = this.strat?.defense.anchors ?? this.siteRooms();
       return { kind: "roam", rooms: anchors };
     }
@@ -509,6 +616,8 @@ export class AttackPlanner {
   /** Each bot's jobs before its way in (M7: breaches, Brava's Kludge), made for the site it then went for. */
   private readonly jobs = new Map<number, Job[]>();
   private jobsFor: string | null = null;
+  /** Told to push: no more jobs before the way in. */
+  private pushed = false;
 
   constructor(
     private readonly sim: Sim,
@@ -576,7 +685,7 @@ export class AttackPlanner {
       }
     }
     // Its jobs first (a breach on the way in, Brava's Kludge ahead of the team), then its way in.
-    if (this.jobsFor !== site) this.makeJobs(site);
+    if (this.jobsFor !== site && !this.pushed) this.makeJobs(site);
     const job = this.jobs.get(id)?.find((j) => !j.done && j.fails < 2);
     if (job) return job.task;
     let way = this.ways.get(id);
@@ -585,6 +694,12 @@ export class AttackPlanner {
       this.ways.set(id, way);
     }
     return way;
+  }
+
+  /** "Push" off a person's comm wheel (M6): the jobs before the way in are dropped; everyone goes in now. */
+  push(): void {
+    for (const list of this.jobs.values()) for (const j of list) j.done = true;
+    this.pushed = true;
   }
 
   /** Bot `id` finished its job (`ok`), or gave up on it (tried again once). */
@@ -623,14 +738,7 @@ export class AttackPlanner {
       if (!list) this.jobs.set(id, (list = []));
       list.push({ task, by: id, done: false, fails: 0 });
     };
-    const slotOf = (b: Pawn, gid: string): 1 | 2 | 0 => {
-      const g1 = slotGadget(sim.data, b.loadout, 1);
-      const g2 = slotGadget(sim.data, b.loadout, 2);
-      if (g1?.id === gid && b.state.g1 > 0) return 1;
-      return g2?.id === gid && b.state.g2 > 0 ? 2 : 0;
-    };
-    let tag = 0;
-    const gadget = (slot: 1 | 2, how: GadgetTask["how"], at: UseSpot, extra: Partial<GadgetTask> = {}): GadgetTask => ({ kind: "gadget", slot, how, stand: at.stand, look: at.look, tag: `a${site}.${tag++}`, ...extra });
+    const slotOf = (b: Pawn, gid: string) => slotWith(sim, b, gid);
     // Brava: her Kludge toward the far side of the first hard breach (where the jammers are), else the site.
     for (const b of bots) {
       if (b.op !== "brava" || slotGadget(sim.data, b.body.loadout, 2)?.use.kind !== "drone") continue;
@@ -644,7 +752,7 @@ export class AttackPlanner {
       if (!e) continue;
       for (const op of h.ops) {
         const b = bots.find((x) => x.op === op && !busy.has(x.id));
-        const tasks = b ? this.hardBreach(b.body, e, h.from, slotOf, gadget) : [];
+        const tasks = b ? hardBreachTasks(sim, this.nav, b.body, e, h.from) : [];
         if (!b || !tasks.length) continue;
         busy.add(b.id);
         for (const t of tasks) add(b.id, t);
@@ -656,66 +764,13 @@ export class AttackPlanner {
       if (!e) continue;
       const cands = [...h.ops.map((op) => bots.find((x) => x.op === op && !busy.has(x.id))), ...bots.filter((x) => !busy.has(x.id) && slotOf(x.body, "breach_charge"))];
       for (const b of cands) {
-        const tasks = b ? this.softBreach(b.body, e, h.from, slotOf, gadget) : [];
+        const tasks = b ? softBreachTasks(sim, this.nav, b.body, e, h.from) : [];
         if (!b || !tasks.length) continue;
         busy.add(b.id);
         for (const t of tasks) add(b.id, t);
         break;
       }
     }
-  }
-
-  /** A hard breach of wall `e` from room `from` by this body: its charge on it from close, set off (or waited out) from cover. */
-  private hardBreach(b: Pawn, e: PanelEntry, from: string, slotOf: (b: Pawn, gid: string) => 1 | 2 | 0, gadget: (slot: 1 | 2, how: GadgetTask["how"], at: UseSpot, extra?: Partial<GadgetTask>) => GadgetTask): Task[] {
-    const sim = this.sim;
-    const at = wallSpot(sim, this.nav, e, from, 0.8, 0.9);
-    if (!at || e.panel.kind !== "wall") return [];
-    const cover = this.coverFrom(at);
-    const thermite = slotOf(b, "exothermic_charge");
-    if (thermite) return [gadget(thermite, "place", at, { cover, tag: `therm${e.panel.spec.index}` })];
-    const hbc = slotOf(b, "hard_breach_charge");
-    if (!hbc) return [];
-    const out: Task[] = [];
-    // Striker's EMP at the wall first: a jammer behind it would stop the charge.
-    const emp = slotOf(b, "impact_emp");
-    const far = wallSpot(sim, this.nav, e, from, 3.2, 1.3);
-    if (emp && far) out.push(gadget(emp, "throw", far, { tag: `emp${e.panel.spec.index}` }));
-    out.push(gadget(hbc, "place", { stand: at.stand, look: [at.look[0], at.look[1] + 0.1, at.look[2]] }, { cover, seconds: 5, tag: `hbc${e.panel.spec.index}` }));
-    return out;
-  }
-
-  /**
-   * A soft breach of `e` (a hatch from above, or a wall from room `from`) by this body: Sledge's hammer (a blow, low
-   * and high on a wall), a Cluster Charge or a breach charge on it, set off from cover.
-   */
-  private softBreach(b: Pawn, e: PanelEntry, from: string, slotOf: (b: Pawn, gid: string) => 1 | 2 | 0, gadget: (slot: 1 | 2, how: GadgetTask["how"], at: UseSpot, extra?: Partial<GadgetTask>) => GadgetTask): Task[] {
-    const sim = this.sim;
-    const hatch = e.panel.kind === "hatch";
-    const at = hatch ? hatchSpot(sim, this.nav, e) : wallSpot(sim, this.nav, e, from, 0.7, 0.55);
-    if (!at) return [];
-    const index = e.panel.spec.index;
-    const hammer = slotOf(b, "breaching_hammer");
-    if (hammer) {
-      const spots = hatch ? [at.look] : [at.look, [at.look[0], at.look[1] + 0.95, at.look[2]] as Vec3];
-      return [gadget(hammer, "swing", at, { spots, panel: index, crouch: hatch, tag: `ham${index}` })];
-    }
-    const charge = slotOf(b, "cluster_charge") || slotOf(b, "breach_charge");
-    if (!charge) return [];
-    const put = hatch ? at : wallSpot(sim, this.nav, e, from, 0.8, 1.0);
-    if (!put) return [];
-    return [gadget(charge, "place", put, { cover: this.coverFrom(put, hatch ? 2.5 : 3), tag: `soft${index}` })];
-  }
-
-  /** Cover from a charge: a place to stand `d` m back from where it was put, on the same side (or where it was). */
-  private coverFrom(at: UseSpot, d = 3): Vec3 {
-    const dx = at.stand[0] - at.look[0];
-    const dz = at.stand[2] - at.look[2];
-    const len = Math.hypot(dx, dz) || 1;
-    for (const back of [d, d * 0.75, d * 1.3]) {
-      const p = standAt(this.nav, [at.stand[0] + (dx / len) * back, at.stand[1], at.stand[2] + (dz / len) * back], 0.8);
-      if (p && Math.abs(p[1] - at.stand[1]) < 0.15) return p;
-    }
-    return at.stand;
   }
 
   /** A bot's body now, or null. */

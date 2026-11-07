@@ -89,8 +89,11 @@ export class Bot {
   readonly legs = new PathFollower();
   readonly senses: Perception;
   private readonly aim: Aim;
-  /** Where it's been sent (a test, later a human teammate's order), or null: its own idea. */
+  /** Where it's been sent (a test), or null: its own idea. */
   order: Vec3 | null = null;
+  /** A human teammate's order off the comm wheel (M6): its tasks, in turn, before its planner's, until this tick. */
+  private orders: Task[] = [];
+  private ordersUntil = 0;
   /** What it's doing, and the contact it's about (fight, hold, investigate). */
   doing: Doing = Doing.Task;
   private about: Contact | null = null;
@@ -147,6 +150,31 @@ export class Bot {
     this.aim = new Aim(this.rng);
   }
 
+  /** An order from a human teammate (bots/orders.ts): these tasks in turn, for at most `seconds`; a new one replaces it. */
+  command(tasks: readonly Task[], now: number, seconds: number): void {
+    this.orders = [...tasks];
+    this.ordersUntil = now + Math.round(seconds * TICK_HZ);
+    this.use = null;
+    this.useKey = "";
+    this.taskKey = "";
+    this.legs.stop();
+  }
+
+  /** The order it's on (its current task), or null: none, done, or its time is up. */
+  ordered(now: number): Task | null {
+    if (this.orders.length && now > this.ordersUntil) this.orders = [];
+    return this.orders[0] ?? null;
+  }
+
+  /** A task done (`ok`) or given up: an order's next step, else its planner told. */
+  private report(w: BotWorld, t: Task, ok: boolean): void {
+    if (this.orders[0] === t) {
+      this.orders.shift();
+      return;
+    }
+    w.report(ok);
+  }
+
   /** What its client would have been told this tick. */
   hear(events: readonly GameEvent[]): void {
     this.heard.push(...events);
@@ -192,7 +220,8 @@ export class Bot {
   /** Score what it could do and take the best (keeping the current one unless beaten by KEEP). */
   private decide(w: BotWorld, me: Pawn, ctrl: PlayerController, mates: readonly Pawn[], d: BotDifficulty, now: number) {
     const s = me.state;
-    const job = this.order ? null : w.taskOf();
+    const ordered = this.ordered(now);
+    const job = this.order ? null : (ordered ?? w.taskOf());
     const target = this.senses.target(me);
     const recent = this.senses.recent(now, SOUND_S);
     const w0 = me.loadout?.weapons[s.slot];
@@ -215,7 +244,7 @@ export class Bot {
       else if (dist < 30 && leash) scores.push([Doing.Investigate, 0.35 + 0.35 * d.soundUse * (1 - dist / 30), recent]);
     }
     if (downMate && !target && !recent) scores.push([Doing.Revive, 0.7, null]);
-    if (this.order && !target) scores.push([Doing.Task, 0.8, null]);
+    if ((this.order || ordered) && !target) scores.push([Doing.Task, 0.8, null]);
     // Its own gadget uses: one under way goes on (unless something beats it); else, twice a second, a new one if any.
     if (this.react && (this.react.over || (this.react.state === UseState.Going && this.doing !== Doing.Gadget && now - this.reactMade > TICK_HZ) || now - this.reactMade > 12 * TICK_HZ)) this.react = null;
     if (!this.react && now >= this.reactAt) {
@@ -620,7 +649,7 @@ export class Bot {
   /** Its task: an order, else its planner's job or role (M4), else walking about; else standing and looking about. */
   private task(w: BotWorld, me: Pawn, now: number): BotInput {
     const s = me.state;
-    const job = this.order ? null : w.taskOf();
+    const job = this.order ? null : (this.ordered(now) ?? w.taskOf());
     if (job && w.nav) {
       const input = this.doTask(w, me, job, now);
       if (input) return input;
@@ -692,11 +721,11 @@ export class Bot {
         const p = sim.level.panels.list[t.panel].panel;
         const done = t.kind === "reinforce" ? p.reinforcedBefore(t.section) : !p.empty && !p.broken;
         if (done) {
-          w.report(true);
+          this.report(w, t, true);
           return null;
         }
         if (giveUp(40) || (this.legs.state === FollowState.Failed && !at(t.stand, 0.5))) {
-          w.report(false);
+          this.report(w, t, false);
           this.legs.stop();
           return null;
         }
@@ -707,11 +736,11 @@ export class Bot {
       }
       case "hole": {
         if (this.taskStep >= t.spots.length) {
-          w.report(true);
+          this.report(w, t, true);
           return null;
         }
         if (giveUp(40)) {
-          w.report(false);
+          this.report(w, t, false);
           return null;
         }
         if (!at(t.stand, 0.35)) return walk(t.stand, 0.25, true) ?? look(t.spots[0]);
@@ -753,7 +782,11 @@ export class Bot {
         // Through each spot of the way in, then to the end (where it holds, looking about).
         while (this.taskStep < t.via.length && at(t.via[this.taskStep], 1.5)) this.taskStep++;
         const next = this.taskStep < t.via.length ? t.via[this.taskStep] : t.to;
-        if (this.taskStep >= t.via.length && at(t.to, 0.8)) return null;
+        if (this.taskStep >= t.via.length && at(t.to, 0.8)) {
+          // There: an order's next step (its planner's way in just holds there).
+          if (this.orders[0] === t) this.report(w, t, true);
+          return null;
+        }
         const input = walk(next, this.taskStep < t.via.length ? 1.2 : 0.6, now - this.taskSince < 25 * TICK_HZ);
         if (!input && this.legs.state === FollowState.Failed) this.taskStep++;
         return input;
@@ -778,7 +811,7 @@ export class Bot {
         }
         const input = this.use.step(this.useCtx(w, me, now, d));
         if (this.use.over) {
-          w.report(this.use.state === UseState.Done);
+          this.report(w, t, this.use.state === UseState.Done);
           this.use = null;
           this.useKey = "";
           return null;
@@ -795,7 +828,7 @@ export class Bot {
         }
         if (giveUp(35) || (c.possessedPawnId === this.shellHome && this.taskStep === 1 && !sim.otherPawn(c.id))) {
           if (c.possessedPawnId !== this.shellHome && sim.otherPawn(c.id)) this.startSwap(now);
-          else w.report(false);
+          else this.report(w, t, false);
           return null;
         }
         if (this.taskStep === 1) {
@@ -813,11 +846,28 @@ export class Bot {
           this.taskStep = 3;
         }
         if (c.possessedPawnId === this.shellHome) {
-          w.report(true);
+          this.report(w, t, true);
           return null;
         }
         this.startSwap(now);
         return null;
+      }
+      case "follow": {
+        // Near the teammate (within 2.5 m), looking where it looks once there.
+        const p = sim.pawns.get(t.pawnId);
+        if (!p || p.state.mode === PawnMode.Dead) {
+          this.report(w, t, false);
+          return null;
+        }
+        const ps = p.state;
+        const dist = Math.hypot(ps.x - s.x, ps.z - s.z);
+        if (dist > 2.5 || Math.abs(ps.y - s.y) > 1.5) {
+          this.legs.goTo([ps.x, ps.y, ps.z], 1.8);
+          if (this.legs.goal && Math.hypot(this.legs.goal[0] - ps.x, this.legs.goal[2] - ps.z) > 1.5) this.legs.stop();
+          return walk([ps.x, ps.y, ps.z], 1.8, dist > 6) ?? look([ps.x, ps.y + 1.4, ps.z]);
+        }
+        const v = this.turnTo({ yaw: s.yaw, pitch: s.pitch }, { yaw: ps.yaw, pitch: 0 }, d);
+        return { forward: 0, strafe: 0, yaw: v.yaw, pitch: v.pitch, buttons: 0, stance: Stance.Stand, lean: 0 };
       }
       case "kludge": {
         // Brava: a Kludge drone out toward `to` (her ability key), then driven (drive()).
@@ -826,7 +876,7 @@ export class Bot {
           this.taskCount = this.dronesOut(w, me);
         }
         if (this.dronesOut(w, me) > this.taskCount || giveUp(4)) {
-          if (giveUp(4)) w.report(false);
+          if (giveUp(4)) this.report(w, t, false);
           return null;
         }
         const v = lookAt(eye, [t.to[0], eye[1], t.to[2]]);
@@ -853,7 +903,7 @@ export class Bot {
     this.senses.update(w.sim, drone, ctrl.id, d, this.heard, w.board(drone.team), []);
     this.heard.length = 0;
     const eye = eyeOf(w.sim, drone);
-    const job = w.taskOf();
+    const job = this.ordered(now) ?? w.taskOf();
     // A drone out in the action that's no longer its job (a Kludge's done): back to the body (Observe).
     if (ctrl.drone && job?.kind !== "kludge" && job?.kind !== "drone") return { forward: 0, strafe: 0, yaw: s.yaw, pitch: s.pitch, buttons: now % 6 === 0 ? Btn.Observe : 0, stance: Stance.Stand, lean: 0 };
     const k = kludgeOf(w.sim.data, drone);
@@ -912,7 +962,8 @@ export class Bot {
       .sort((a, b) => a.dist - b.dist);
     const done = now - this.taskSince > 25 * TICK_HZ || (this.legs.state !== FollowState.Walking && now - this.hackSeen > 5 * TICK_HZ && !devices.length);
     if (done) {
-      w.report(true);
+      const job = this.ordered(now) ?? w.taskOf();
+      if (job?.kind === "kludge") this.report(w, job, true);
       return { forward: 0, strafe: 0, yaw: s.yaw, pitch: s.pitch, buttons: Btn.Observe, stance: Stance.Stand, lean: 0 };
     }
     this.legs.allow = droneLink;
@@ -1050,6 +1101,8 @@ function taskKey(t: Task): string {
       return `s${t.to.join()}`;
     case "kludge":
       return `q${t.to.join()}`;
+    case "follow":
+      return `f${t.pawnId}`;
   }
 }
 

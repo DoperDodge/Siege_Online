@@ -67,10 +67,12 @@ export class IntelHud {
     callouts: readonly string[],
     private readonly perPlayer: number,
   ) {
+    // Wider with more callouts (Phase 9's orders to bots), so the labels round it don't overlap.
+    const r = WHEEL_PX * Math.max(1, callouts.length / 8);
     const items = callouts
       .map((c, i) => {
         const a = (i / callouts.length) * 2 * Math.PI; // 0 up, clockwise
-        const [x, y] = [Math.sin(a) * WHEEL_PX, -Math.cos(a) * WHEEL_PX];
+        const [x, y] = [Math.sin(a) * r, -Math.cos(a) * r];
         return `<div style="transform: translate(calc(-50% + ${x.toFixed(1)}px), calc(-50% + ${y.toFixed(1)}px))">${escapeHtml(c)}</div>`;
       })
       .join("");

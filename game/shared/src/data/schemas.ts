@@ -558,6 +558,9 @@ export type HostToggle = (typeof HOST_TOGGLES)[number];
 export const MAX_TEAM_SIZE = 5;
 
 /** Bot difficulty levels (PLAN §15.2; data/bots/difficulty.json), easiest first. */
+/** What a person can ask of their bot teammates off the comm wheel (Phase 9 M6, bots/DESIGN.md §8). */
+export const BOT_ORDERS = ["go", "hold", "breach", "follow", "regroup", "help", "push", "rotate"] as const;
+export type BotOrder = (typeof BOT_ORDERS)[number];
 export const BOT_LEVELS = ["recruit", "normal", "hard", "elite"] as const;
 export type BotLevel = (typeof BOT_LEVELS)[number];
 const botLevel = z.enum(BOT_LEVELS);
@@ -833,6 +836,8 @@ export const intelSchema = z.strictObject({
   ping: z.strictObject({ seconds: z.number().positive(), cooldownS: z.number().min(0), perPlayer: z.number().int().positive(), doubleTapS: z.number().positive() }),
   /** The comm wheel's callouts, in order round the wheel (at most 16). */
   callouts: z.array(z.string().min(1).max(24)).min(1).max(16),
+  /** What a callout asks of the caller's bot teammates (Phase 9 M6, bots/DESIGN.md §8), by its text. */
+  botOrders: z.record(z.string(), z.enum(BOT_ORDERS)).default({}),
   /**
    * The Bulletproof Camera (Phase 7 M5; its count, placing and size are a gadget's, data/gadgets/bulletproof_camera.json):
    * its front, `frontDeg` either side of its facing, is bulletproof; its view like a default camera's (on the floor it

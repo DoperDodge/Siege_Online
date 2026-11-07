@@ -16,6 +16,7 @@ import { Bot, botLoadout, type BotWorld } from "../bots/bot.js";
 import { NavWorld } from "../bots/nav/world.js";
 import { TeamBoard } from "../bots/perceive.js";
 import { AttackPlanner, DefensePlanner } from "../bots/plan.js";
+import { orderFor } from "../bots/orders.js";
 import { BotRng } from "../bots/rng.js";
 import { DUMMY_STANCE, dummyInput } from "../lab/dummies.js";
 import { spawnAmmo, type Pawn, type PlayerController } from "../player/pawn.js";
@@ -172,6 +173,8 @@ interface Member {
    */
   lastPing: number;
   lastPingDanger: boolean;
+  /** Where its last ping landed (a bot order's spot, Phase 9 M6), or null. */
+  lastPingAt: Vec3 | null;
   lastCallout: number;
   scanTicks: number;
   gadgetHeld: boolean;
@@ -545,6 +548,7 @@ export class Room implements DirectorHost {
       stalled: false,
       lastPing: -1e9,
       lastPingDanger: false,
+      lastPingAt: null,
       lastCallout: -1e9,
       scanTicks: 0,
       gadgetHeld: false,
@@ -1428,6 +1432,7 @@ export class Room implements DirectorHost {
     if (!danger && since < ticksOrZero(k.cooldownS)) return;
     m.lastPing = this.sim.tick;
     m.lastPingDanger = danger;
+    m.lastPingAt = [pos[0], pos[1], pos[2]];
     const team = this.teamOf(m);
     // On an enemy body (the first thing the view's ray meets), it spots him: a red ping (Phase 8 M9; research/intel.md §2).
     const body = gadget < 0 && !heart && m.ctrl ? this.pingedBody(m.ctrl, team, pos) : null;
@@ -2235,6 +2240,36 @@ export class Room implements DirectorHost {
     const e: GameEvent = { kind: "callout", name: m.name, id };
     const team = this.teamOf(m);
     for (const o of this.members.values()) if (this.teamOf(o) === team) o.events.push(e);
+    this.orderBots(m, this.sim.data.intel.callouts[id]);
+  }
+
+  /**
+   * A person's callout as an order to their bot teammates (Phase 9 M6, bots/DESIGN.md §8; data/intel.json `botOrders`):
+   * Push and Rotate go to the team's planner; Regroup to every bot teammate; the rest to the nearest one on its feet
+   * that can do it (Breach this: one with something to open that wall or hatch with), at the caller's last ping's spot
+   * (or the caller's, with no ping in the last half minute).
+   */
+  private orderBots(m: Member, callout: string) {
+    const kind = this.sim.data.intel.botOrders[callout];
+    const match = this.director?.match;
+    if (!kind || m.bot || !match || !this.nav || !m.ctrl) return;
+    const side = match.sideOf(m.id);
+    const caller = this.sim.pawns.get(m.ctrl.possessedPawnId);
+    if (side === null || !caller || caller.state.mode === PawnMode.Dead) return;
+    if (kind === "push") return void (side === ATTACK && this.attackPlan?.push());
+    if (kind === "rotate") return void (side === DEFENSE && this.defensePlan?.rotate());
+    const at = m.lastPingAt && this.sim.tick - m.lastPing < ticks(30) ? m.lastPingAt : ([caller.state.x, caller.state.y, caller.state.z] as Vec3);
+    const bots = [...this.members.values()]
+      .filter((o) => o.bot && o.ctrl && match.sideOf(o.id) === side)
+      .map((o) => ({ o, b: this.sim.pawns.get(o.ctrl!.possessedPawnId) }))
+      .filter((x): x is { o: Member; b: Pawn } => x.b !== undefined && x.b.kind === PawnKind.Body && (x.b.state.mode === PawnMode.Walk || x.b.state.mode === PawnMode.Rappel))
+      .sort((a, b) => Math.hypot(a.b.state.x - at[0], a.b.state.z - at[2]) - Math.hypot(b.b.state.x - at[0], b.b.state.z - at[2]));
+    for (const { o, b } of bots) {
+      const order = orderFor(this.sim, this.nav, kind, caller, at, b);
+      if (!order) continue;
+      o.bot!.command(order.tasks, this.sim.tick, order.seconds);
+      if (kind !== "regroup") return;
+    }
   }
 
   /** Judge the shots of the step just taken; `applied` is each member's input in that step. */

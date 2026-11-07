@@ -82,3 +82,5 @@ export * from "./bots/perceive.js";
 export * from "./bots/aim.js";
 export * from "./bots/plan.js";
 export * from "./bots/places.js";
+export * from "./bots/use.js";
+export * from "./bots/orders.js";

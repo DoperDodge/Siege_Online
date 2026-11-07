@@ -18,7 +18,7 @@ breach by the same rules, and they know only what their team could know (what th
 | M3 | Sight, hearing (placeholder sounds until Phase 11), team intel; aim and gunfights; difficulty levels | ✅ |
 | M4 | Defending bots: reinforce, holes, barricades, gadgets, anchors, roamers, rotations, retakes | ✅ (gadgets with M7) |
 | M5 | Attacking bots: drones in prep, routes, breaches, vertical play, rappel, the plant | ✅ (breaches and vertical with M7; rappel not yet) |
-| M6 | The team planner and every site's plan (data/maps/oregon/bot_strats.json); orders from you on the comm wheel | plans ✅ (with M4); orders next |
+| M6 | The team planner and every site's plan (data/maps/oregon/bot_strats.json); orders from you on the comm wheel | ✅ |
 | M7 | All twelve operators' abilities, the generic gadgets, Fuze's shield | ✅ |
 | M8 | Bot Training setup and the drills | |
 | M9 | Training feedback after each round: report, killcam, stats | |
@@ -146,6 +146,20 @@ breach by the same rules, and they know only what their team could know (what th
   mines in action; Sledge's frag, Thermite's smoke on a planter, Brava's claymore; a shield Fuze wins his duels).
 - Known: bots don't rappel or use the drones' cameras for intel beyond pinging; Skopós doesn't fight from her shell's
   barrier; Brava's Kludge only hacks (no drone scans); Pulse's scans are on a timer, not on sounds.
+
+### M6: orders to your bot teammates (D-165)
+- **The comm wheel (hold the ping key) has five orders now**: **Go here** (the nearest bot teammate goes to where you
+  last pinged and holds there, looking on past it), **Hold here** (holds that spot, longer), **Breach this** (ping a
+  wall or hatch first: the nearest teammate that can open it does, with whatever it has: Thermite's charge, Striker's
+  EMP and charge, Sledge's hammer, a breach or Cluster Charge, an impact grenade, or the knife on a soft wall or a
+  barricade), **Follow me** (one keeps near you), **Regroup** (all of them come to you and stay with you a while).
+- **Some old callouts mean something to bots too**: **Help** (the nearest comes to you), **Push** (attacking bots
+  drop their breaches and other jobs and go in now), **Rotate** (defending roamers come back to the site).
+- An order lasts until it's done, a fight takes over, you give another, or its time runs out (25–75 s); then the bot
+  goes back to the team's plan. With no ping in the last 30 s, "here" is where you stand.
+- Try it: Bot Training offline with your team's size at 5 (you and four bots). Ping a spot, then the wheel.
+- Tests: game/shared/test/botOrders.test.ts (the wheel's orders; Go here, Follow me, Regroup; Breach this on a soft
+  wall; Push and Rotate).
 
 ---
 
