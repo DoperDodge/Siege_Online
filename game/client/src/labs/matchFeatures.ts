@@ -31,12 +31,14 @@ import {
   type MatchViewPlayer,
   type RoundRecord,
   type WeaponPick,
+  type RoundReport,
 } from "@redmond/shared";
 import { keyLabel, loadSettings } from "../input/settings.js";
 import { escapeHtml } from "../ui/dom.js";
 import { changedGadget, changedPick, loadoutRows, saveLoadout, savedLoadout, type Slot } from "../ui/loadout.js";
 import { rankBadge, ratingChange, saveRating, storedRating } from "../ui/rank.js";
 import type { LabApi, SpectateView } from "./common/lab.js";
+import { reportHtml, saveReport } from "./training.js";
 
 const PHASE_LABEL: Record<Phase, string> = {
   [Phase.Lobby]: "LOBBY",
@@ -839,15 +841,16 @@ export function matchFeatures(lab: LabApi): void {
       info.innerHTML = infoHtml;
     }
 
-    // The round's result, for the round end.
+    // The round's result, for the round end (with your round's report, Phase 9 M9).
     const last = v.history.at(-1);
     const showBanner = v.phase === Phase.RoundEnd && last !== undefined && last.round === v.round;
     banner.classList.toggle("hidden", !showBanner);
     if (showBanner) {
       const mine = me ? me.team === last.winner : null;
+      const report = lastReport && lastReport.round === last.round ? reportHtml(lastReport, lab.data) : "";
       const html = `<div class="title team-${last.winner}">${TEAM_NAMES[last.winner].toUpperCase()} WINS ROUND ${last.round}</div><div class="why">${reasonText(last)}</div>${
         mine === null ? "" : `<div class="you ${mine ? "won" : "lost"}">${mine ? "Round won" : "Round lost"}</div>`
-      }`;
+      }${report}`;
       if (banner.dataset.html !== html) {
         banner.dataset.html = html;
         banner.innerHTML = html;
@@ -865,6 +868,13 @@ export function matchFeatures(lab: LabApi): void {
     }
 
     updateMarkers(v, renderTick);
+  });
+
+  // Your round's report (Phase 9 M9): kept for the round's end screen, and counted in your training stats.
+  let lastReport: RoundReport | null = null;
+  lab.onReport((r) => {
+    lastReport = r;
+    saveReport(r);
   });
 
   lab.addMatchTool(() => (session.match && practiceHost(session.match) ? "End practice" : null), () => lobby({ kind: "end" }));

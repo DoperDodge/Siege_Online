@@ -16,7 +16,7 @@ import type { Sim } from "../sim.js";
 import { viewDir } from "../weapons/spread.js";
 import type { SimEvent } from "../weapons/step.js";
 import { ticks, ticksOrZero } from "../weapons/ticks.js";
-import { Match, matchMapOf, NO_END, Phase, type MatchEvent } from "../match/match.js";
+import { Match, matchMapOf, NO_END, Phase, type MatchEvent, type RoundRecord } from "../match/match.js";
 import { inSite, siteArea } from "../match/objective.js";
 import { preSetupOps } from "../match/preSetup.js";
 import { ATTACK, DEFENSE, isFormat, mvp, RATING_MAX, RATING_MIN, reinforcementPool, type FormatMode, type Side, type Team } from "../match/rules.js";
@@ -62,6 +62,9 @@ export interface DirectorHost {
   removeBot(memberId: number): void;
   /** The bots' navigation (where a drill puts bodies), or null before the first bot. */
   readonly nav: NavWorld | null;
+  /** A round's prep or action started; a round is over (Phase 9 M9: the people's round reports). */
+  roundPhase?(phase: "prep" | "action"): void;
+  roundOver?(record: RoundRecord): void;
 }
 
 /** How often (ticks) the match state goes out when only scores, votes or run-outs changed; phase changes go at once. */
@@ -575,6 +578,7 @@ export class MatchDirector {
   private apply(events: readonly MatchEvent[]) {
     for (const e of events) {
       if (e.kind !== "phase") {
+        if (e.kind === "round") this.host.roundOver?.(e.record);
         this.changed(true);
         continue;
       }
@@ -586,6 +590,7 @@ export class MatchDirector {
       }
       if (e.phase === Phase.Prep) this.startPrep();
       if (e.phase === Phase.Action) this.startAction();
+      if (e.phase === Phase.Prep || e.phase === Phase.Action) this.host.roundPhase?.(e.phase === Phase.Prep ? "prep" : "action");
       // The round is decided: no more plants (a planted defuser stays where it is until the next round).
       if (e.phase === Phase.RoundEnd && this.host.sim.objective) this.host.sim.objective.canPlant = false;
       this.prevPhase = e.phase;

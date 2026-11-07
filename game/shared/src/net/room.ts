@@ -17,6 +17,10 @@ import { NavWorld } from "../bots/nav/world.js";
 import { TeamBoard } from "../bots/perceive.js";
 import { AttackPlanner, DefensePlanner } from "../bots/plan.js";
 import { orderFor } from "../bots/orders.js";
+import { encodeRoundReport, RoundReporter } from "./report.js";
+import { roomAt } from "../bots/places.js";
+import { WinReason } from "../match/outcome.js";
+import type { RoundRecord } from "../match/match.js";
 import { BotRng } from "../bots/rng.js";
 import { DUMMY_STANCE, dummyInput } from "../lab/dummies.js";
 import { spawnAmmo, type Pawn, type PlayerController } from "../player/pawn.js";
@@ -322,6 +326,8 @@ export class Room implements DirectorHost {
   readonly botBoards: [TeamBoard, TeamBoard] = [new TeamBoard(), new TeamBoard()];
   /** The defending bots' planner this round (Phase 9 M4), made as prep starts; the round it's for. */
   defensePlan: DefensePlanner | null = null;
+  /** Each person's round as it happens, for their round report (Phase 9 M9). */
+  readonly reporter = new RoundReporter();
   /** The attacking bots' planner this round (Phase 9 M5). */
   attackPlan: AttackPlanner | null = null;
   private planRound = -1;
@@ -1255,6 +1261,7 @@ export class Room implements DirectorHost {
     const ctrl = by.attacker?.ctrlId ?? 0;
     const weapon = by.attacker?.weaponId ?? "";
     const friendly = by.attacker !== null && victim.team === by.attacker.team;
+    if (victim.kind === PawnKind.Body && victim.ownerId !== null) this.reporter.damage(victim.ownerId, ctrl, r.removed);
     if (r.outcome === "downed") {
       this.director?.onBodyDown(victim); // a carrier drops the defuser
       this.downedBy.set(victim.id, { ctrl, weapon, life: victim.life });
@@ -1299,6 +1306,7 @@ export class Room implements DirectorHost {
       ? { kind: "shellDestroyed", pawnId: victim.id, ownerCtrl, killerCtrl, weapon, headshot }
       : { kind: "kill", victimPawn: victim.id, victimCtrl: ownerCtrl, killerCtrl, assistCtrl, weapon: weapon || downer?.weapon || "", cause, headshot, friendly };
     for (const m of this.members.values()) m.events.push(e);
+    if (!idle) this.reporter.death(ownerCtrl, [victim.state.x, victim.state.y, victim.state.z], this.sim.tick, killerCtrl, e.kind === "kill" ? e.weapon : weapon, headshot);
     this.director?.onBodyDown(victim); // a carrier drops the defuser
     // Skopós's idle shell isn't an elimination (research/operators/skopos.md): only a body's death counts.
     if (!idle) this.director?.onDeath(ownerCtrl, killerCtrl, assistCtrl, friendly);
@@ -1317,10 +1325,14 @@ export class Room implements DirectorHost {
       } else if (e.kind === "deploy") {
         this.completeDeploy(e);
       } else if (e.kind === "throw" || e.kind === "place" || e.kind === "detonate" || e.kind === "pickUpGadget") {
+        if (e.kind === "throw" || e.kind === "place") this.reporter.gadget(this.sim.pawns.get(e.pawnId)?.ownerId ?? 0, e.gadget);
         this.gadgetServer.onEvent(e);
       } else if (e.kind === "rappelBreach") {
         this.completeBreach(e);
       } else if (e.kind === "plant" || e.kind === "disable" || e.kind === "pickup" || e.kind === "drop") {
+        const by = e.kind === "plant" || e.kind === "disable" ? (this.sim.pawns.get(e.pawnId)?.ownerId ?? 0) : 0;
+        if (e.kind === "plant") this.reporter.plant(by, this.sim.tick);
+        else if (e.kind === "disable") this.reporter.disable(by, this.sim.tick);
         this.director?.onSimEvent(e);
       } else if (e.kind === "reviveStart" || e.kind === "reviveEnd") {
         const target = this.sim.pawns.get(e.targetPawn);
@@ -2244,6 +2256,48 @@ export class Room implements DirectorHost {
     this.orderBots(m, this.sim.data.intel.callouts[id]);
   }
 
+  /** A round's prep or action started (Phase 9 M9): the round report starts afresh, its times from the action. */
+  roundPhase(phase: "prep" | "action"): void {
+    if (phase === "prep") this.reporter.reset(this.sim.tick);
+    else this.reporter.actionAt = this.sim.tick;
+  }
+
+  /** A round is over (Phase 9 M9): each person in it gets their round report. */
+  roundOver(record: RoundRecord): void {
+    const d = this.director;
+    if (!d) return;
+    const m = d.match;
+    const drill = m.mode.match.drill;
+    const level = this.sim.level.def;
+    const nameOfCtrl = (ctrl: number) => {
+      for (const o of this.members.values()) if (o.ctrl?.id === ctrl) return o.name;
+      return "";
+    };
+    for (const o of this.members.values()) {
+      if (o.bot || !o.ctrl) continue;
+      const side = m.sideOf(o.id);
+      const p = m.players.get(o.id);
+      if (side === null || !p) continue;
+      const ctrl = o.ctrl.id;
+      const kills = this.reporter.firstKill(ctrl);
+      const seconds = (this.sim.tick - this.reporter.actionAt) / TICK_HZ;
+      const score: Record<string, number> = {};
+      if (drill?.kind === "duel") score.ttk = kills !== null ? Math.round(((kills - this.reporter.actionAt) / TICK_HZ) * 10) / 10 : -1;
+      if (drill?.kind === "drone") [score.found, score.of] = [d.foundCount, m.sides[DEFENSE].length];
+      if (drill?.kind === "clear") [score.cleared, score.deaths] = [record.reason === WinReason.Elimination && record.winner === record.attackers ? Math.round(seconds * 10) / 10 : -1, this.reporter.died(ctrl) ? 1 : 0];
+      if (drill?.kind === "retake") score.seconds = Math.round(seconds * 10) / 10;
+      const report = this.reporter.build(
+        ctrl,
+        this.sim.tick,
+        { round: record.round, format: m.mode.id, drill: drill?.kind ?? null, side: side === ATTACK ? "attack" : "defense", operator: p.operator ?? "", won: record.winner === p.team, score },
+        nameOfCtrl,
+        (id) => this.members.get(id)?.name ?? "",
+        (q) => roomAt(level, q[0], q[1] + 0.3, q[2]),
+      );
+      o.client.send(encodeRoundReport(report));
+    }
+  }
+
   /**
    * A person's callout as an order to their bot teammates (Phase 9 M6, bots/DESIGN.md §8; data/intel.json `botOrders`):
    * Push and Rotate go to the team's planner; Regroup to every bot teammate; the rest to the nearest one on its feet
@@ -2295,7 +2349,10 @@ export class Room implements DirectorHost {
         const m = a?.m ?? this.memberOf(owner);
         const input = a?.input ?? m?.lastApplied;
         if (m && input && e.kind === "meleeImpact") this.judgeMeleeImpact(m, input, e);
-        else if (m && input && e.kind === "swing") this.judgeSwing(m, input, e);
+        else if (m && input && e.kind === "swing") {
+          if (e.spent) this.reporter.gadget(m.ctrl?.id ?? 0, e.gadget);
+          this.judgeSwing(m, input, e);
+        }
       }
     }
   }
@@ -2451,6 +2508,11 @@ export class Room implements DirectorHost {
       taskOf: () => {
         const side = this.director?.match.sideOf(m.id);
         return side === DEFENSE ? (this.defensePlan?.taskOf(m.id) ?? null) : side === ATTACK ? (this.attackPlan?.taskOf(m.id) ?? null) : null;
+      },
+      noticed: (pawnId) => {
+        const p = this.sim.pawns.get(pawnId);
+        const me = m.ctrl ? this.sim.pawns.get(m.ctrl.possessedPawnId) : undefined;
+        if (p && me && p.ownerId !== null) this.reporter.seen(p.ownerId, m.id, this.sim.tick, [me.state.x, me.state.y, me.state.z], [p.state.x, p.state.y, p.state.z]);
       },
       report: (ok) => {
         const side = this.director?.match.sideOf(m.id);

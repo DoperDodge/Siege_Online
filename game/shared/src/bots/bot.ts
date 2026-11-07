@@ -51,6 +51,8 @@ export interface BotWorld {
   taskOf(): Task | null;
   /** Its job done (`ok`), or given up on. */
   report(ok: boolean): void;
+  /** It has just noticed this enemy body (the round report's "who saw you first"). */
+  noticed?(pawnId: number): void;
   /** An operator and loadout, as PickLoadout would bring it. */
   pick(pick: LoadoutPick): void;
   /** A round's choice, as MatchAction would bring it. */
@@ -209,6 +211,8 @@ export class Bot {
     const mates = [...w.sim.pawns.values()].filter((p) => p.team === pawn.team && p.id !== pawn.id && p.kind === PawnKind.Body && p.state.mode !== PawnMode.Dead);
     this.senses.update(w.sim, pawn, ctrl.id, d, this.heard, w.board(pawn.team), mates);
     this.heard.length = 0;
+    // Who it has just noticed (in sight), for the round report.
+    if (w.noticed) for (const c of this.senses.contacts.values()) if (c.detected && c.spottedAt === now && c.kind === PawnKind.Body) w.noticed(c.pawnId);
     // Down: nothing a downed body can usefully press (crawling to cover comes with the plans).
     if (s.mode === PawnMode.Downed || s.mode === PawnMode.Knocked) return this.still(s);
     // Skopós between shells: the keys of the swap and nothing else.

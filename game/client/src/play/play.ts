@@ -5,6 +5,7 @@
 import { ByteReader, decodeRoomList, encodeHello, encodeListRooms, isFormat, loadGameData, Msg, Phase, type RoomListEntry, type WeaponPick } from "@redmond/shared";
 import { serverUrl } from "../net/online.js";
 import { escapeHtml } from "../ui/dom.js";
+import { loadStats, statsHtml } from "../labs/training.js";
 import { changedGadget, changedPick, loadoutRows, saveLoadout, savedLoadout, type Slot } from "../ui/loadout.js";
 import { rankBadge, storedRating } from "../ui/rank.js";
 
@@ -64,6 +65,7 @@ root.innerHTML = `
     <div class="row drills">${drills.map((m) => `<button class="drill" data-format="${m.id}" title="${escapeHtml(DRILL_NOTES[m.id] ?? "")}">${escapeHtml(m.match.name.replace(/^Drill: /, ""))}</button>`).join("")}</div>
     <p class="note">Offline, one setup each: ${drills.map((m) => `<b>${escapeHtml(m.match.name.replace(/^Drill: /, ""))}</b>: ${escapeHtml(DRILL_NOTES[m.id] ?? "")}`).join(" ")}</p>
   </section>
+  <section><h2>Your training</h2><div class="training"></div><p class="note">Every round you play in Bot Training and its drills, counted in this browser: per drill and per operator, your best times and your last ten rounds. <button class="link reset-training">Clear</button></p></section>
   <section><h2>New match</h2>
     <div class="row"><select class="format">${matchFormats.map((m) => `<option value="${m.id}">${escapeHtml(m.match.name)}</option>`).join("")}</select><button class="primary create">Create</button></div>
     <p class="format-note"></p>
@@ -111,6 +113,18 @@ $(".create").onclick = () => go({ format: formatSelect.value });
 // Bot Training offline (Phase 9): the match room runs in the match page's own worker.
 $(".training").onclick = () => go({ format: "bot_training", offline: "1" });
 for (const b of root.querySelectorAll<HTMLButtonElement>(".drill")) b.onclick = () => go({ format: b.dataset.format!, offline: "1" });
+// Your training stats (Phase 9 M9): kept by the match page from each round's report.
+const showTraining = () => ($(".training").innerHTML = statsHtml(loadStats(), data));
+showTraining();
+$(".reset-training").onclick = () => {
+  if (!confirm("Clear your training stats in this browser?")) return;
+  try {
+    localStorage.removeItem("redmond.training");
+  } catch {
+    // nothing kept
+  }
+  showTraining();
+};
 const join = (code: string) => {
   const c = code.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
   if (c.length !== 5) {

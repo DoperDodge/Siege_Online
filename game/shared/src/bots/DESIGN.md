@@ -226,6 +226,10 @@ bots placed by a drill hold there. Scores per drill come with M9's feedback.
 - **Stats** per drill and per operator in the browser (localStorage, like the local rating): rounds, wins, kills,
   deaths, damage, times; a Training page shows them over time.
 
+As built (M9, D-167): net/report.ts (the room's RoundReporter, the RoundReport message); the client's
+labs/training.ts (the report panel, the stats) and the killcam in labs/common/lab.ts (6 s of snapshots kept); the
+stats are on the Play page.
+
 ## 12. Performance and tests
 
 - **Budget** (§18): the server tick ≤ 5 ms with 10 players of whom 9 bots. Bots think 16 times a second, staggered;

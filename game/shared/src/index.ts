@@ -84,3 +84,5 @@ export * from "./bots/plan.js";
 export * from "./bots/places.js";
 export * from "./bots/use.js";
 export * from "./bots/orders.js";
+export * from "./net/report.js";
+export * from "./net/drills.js";

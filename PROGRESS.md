@@ -21,7 +21,7 @@ breach by the same rules, and they know only what their team could know (what th
 | M6 | The team planner and every site's plan (data/maps/oregon/bot_strats.json); orders from you on the comm wheel | ✅ |
 | M7 | All twelve operators' abilities, the generic gadgets, Fuze's shield | ✅ |
 | M8 | Bot Training setup and the drills | ✅ |
-| M9 | Training feedback after each round: report, killcam, stats | |
+| M9 | Training feedback after each round: report, killcam, stats | ✅ |
 | M10 | Soak tests, the tick budget, browser test, review, report | |
 
 ### M1: bots in rooms (D-159)
@@ -183,6 +183,23 @@ breach by the same rules, and they know only what their team could know (what th
   of the Play page and an offline duel.
 - Known: the drills' own scores (time to kill, defenders found…) are in the round results only as wins until M9's
   training feedback.
+
+### M9: training feedback (D-167)
+- **Your round, at its end** (under the round banner, in every match format): where you died, how far into the round,
+  to whom and with what (a headshot?); **who saw you first**, when and from where, and how far off (the bots log who
+  noticed you); damage you dealt and took, by whom; your kills; when you planted or how long your disable took after
+  the plant; the gadgets you used; and the drill's numbers (the duel's time to kill, defenders found of how many, the
+  time to clear a floor, how long the retake took).
+- **Killcam**: eliminated by someone, you see your last 4 seconds again from their eye (everyone as they were then,
+  "KILLCAM · their name" over it), then your teammates as before. It's replayed from what your browser already had;
+  nothing extra is sent.
+- **Your training stats** on the Play page (kept in this browser, Clear to start again): per drill and per operator,
+  rounds, wins, kills/deaths, damage a round, your best (quickest duel kill, fastest clear, most defenders found,
+  quickest retake) and your last ten rounds as W/L.
+- Tests: game/shared/test/botReport.test.ts (the report's wire format; a duel lost to the bot: killer, weapon, first
+  seen, damage, no time to kill); a browser check of the killcam, the report and the stats.
+- Known: the report and stats come from the server's view of the round (a Bot Training or drill match; in other formats
+  you get the report too).
 
 ---
 
