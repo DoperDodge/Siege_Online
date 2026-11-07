@@ -98,11 +98,11 @@ describe("lobby, clock, error and debug messages round-trip", () => {
     const w = { roomCode: "QX7PA", tick: 123456, levelId: "movement_lab", controllerId: 9 };
     expect(decodeWelcome(body(encodeWelcome(w), Msg.Welcome))).toEqual({ version: PROTOCOL_VERSION, ...w });
     const roster = [
-      { controllerId: 1, name: "Ulo", operatorId: "skopos", pawnIds: [2, 3], drones: [], team: 1, kind: 0, loadout: defaultLoadoutPick(loadGameData(), "skopos") },
-      { controllerId: 4, name: "Bot ✓", operatorId: "brava", pawnIds: [5], drones: [], team: 0, kind: 1, loadout: pick },
+      { controllerId: 1, name: "Ulo", operatorId: "skopos", pawnIds: [2, 3], drones: [], kludges: [], team: 1, kind: 0, loadout: defaultLoadoutPick(loadGameData(), "skopos") },
+      { controllerId: 4, name: "Bot ✓", operatorId: "brava", pawnIds: [5], drones: [6, 7, 8, 9], kludges: [8, 9], team: 0, kind: 1, loadout: pick },
       // An attacker in a match: a body and two drones; in prep, the drones alone (Phase 7).
-      { controllerId: 6, name: "Ash", operatorId: "thermite", pawnIds: [7], drones: [8, 9], team: 0, kind: 0, loadout: defaultLoadoutPick(loadGameData(), "thermite") },
-      { controllerId: 10, name: "Bo", operatorId: "sledge", pawnIds: [], drones: [11, 12], team: 0, kind: 0, loadout: defaultLoadoutPick(loadGameData(), "sledge") },
+      { controllerId: 6, name: "Ash", operatorId: "thermite", pawnIds: [7], drones: [8, 9], kludges: [], team: 0, kind: 0, loadout: defaultLoadoutPick(loadGameData(), "thermite") },
+      { controllerId: 10, name: "Bo", operatorId: "sledge", pawnIds: [], drones: [11, 12], kludges: [], team: 0, kind: 0, loadout: defaultLoadoutPick(loadGameData(), "sledge") },
     ];
     expect(decodeRoster(body(encodeRoster(roster, 4), Msg.Roster))).toEqual({ you: 4, entries: roster });
   });
@@ -120,6 +120,11 @@ describe("lobby, clock, error and debug messages round-trip", () => {
     const shot = { seq: 65000, viewTick: 988.25, origin: [1, 2, 3] as V3, dir: dirs[0], dirs, ends: [12.5, 30], rewoundTick: 990.5, serverTick: 1000, hit: { pawnId: 7, part: "head", distance: 12.5 }, wallDistance: 30, target };
     expect(decodeShotResult(body(encodeShotResult(shot), Msg.ShotResult))).toEqual(shot);
     expect(decodeShotResult(body(encodeShotResult({ ...shot, hit: null, wallDistance: null, target: null }), Msg.ShotResult))).toEqual({ ...shot, hit: null, wallDistance: null, target: null });
+    // A body behind Fuze's shield (Phase 8 M11): its nine boxes and the plate's six, the first pellet on the plate. (A
+    // shot result naming "shield" once disconnected the shooter: the part wasn't in the list, and 15 boxes were too many.)
+    const plate = Array.from({ length: 6 }, (_, i) => ({ part: "shield" as const, a: [i * 0.125, 0.625, -9.5] as V3, b: [i * 0.125, 1.75, -9.5] as V3, radius: 0.0625 }));
+    const shielded = { ...shot, hit: { pawnId: 7, part: "shield", distance: 9.5 }, target: { pawnId: 7, boxes: [...Array.from({ length: 9 }, () => target.boxes[0]), ...plate] } };
+    expect(decodeShotResult(body(encodeShotResult(shielded), Msg.ShotResult))).toEqual(shielded);
     expect(decodeCreateRoom(body(encodeCreateRoom("range_lab"), Msg.CreateRoom))).toEqual({ levelId: "range_lab" });
     expect(() => decodeCreateRoom(body(encodeCreateRoom("oregon_secret"), Msg.CreateRoom))).toThrow(ProtocolError);
     expect(decodeLabTool(body(encodeLabTool({ kind: "resetDummies" }), Msg.LabTool))).toEqual({ kind: "resetDummies" });
@@ -146,7 +151,24 @@ describe("lobby, clock, error and debug messages round-trip", () => {
       { kind: "reviveEnd", reviverPawn: 11, targetPawn: 7, completed: true },
       { kind: "reviveEnd", reviverPawn: 11, targetPawn: 7, completed: false },
       { kind: "shellDestroyed", pawnId: 9, ownerCtrl: 5, killerCtrl: 4, weapon: "mp5k", headshot: false },
+      // Phase 8: a ping on nothing and on an enemy gadget, a blast, a stun and a concussion, an alarm, a kill by wire.
+      { kind: "ping", ctrl: 3, pos: [1.5, 0.25, -7], danger: false, ticks: 320, gadget: -1, heart: false },
+      { kind: "ping", ctrl: 3, pos: [1.5, 0.25, -7], danger: true, ticks: 320, gadget: 13, heart: false },
+      { kind: "ping", ctrl: 3, pos: [1.5, 1.05, -7], danger: false, ticks: 320, gadget: -1, heart: true },
+      { kind: "blast", gadget: 3, pos: [0, 0.03125, 12] },
+      { kind: "stunned", seconds: 5, blind: 1, ring: true, concuss: false },
+      { kind: "stunned", seconds: 3, blind: 0, ring: true, concuss: true },
+      { kind: "alarm", gadget: 41, pos: [2, 0.05, 15], on: true, pawnId: 6 },
+      { kind: "hack", stage: 0, kludge: 9, ticks: 192, left: 3 },
+      { kind: "hack", stage: 1, kludge: 9, ticks: 0, left: 2 },
+      { kind: "overheat", pawnId: 4, ticks: 512 },
+      { kind: "jegeo", stage: 3, pawnId: 4, ticks: 448, charges: 0 },
+      { kind: "jegeo", stage: 4, pawnId: 7, ticks: 1280, charges: 2 },
+      { kind: "alarm", gadget: 41, pos: [2, 0.05, 15], on: false, pawnId: 0 },
+      { kind: "kill", victimPawn: 8, victimCtrl: 5, killerCtrl: 4, assistCtrl: 0, weapon: "barbed_wire", cause: 8, headshot: false, friendly: false },
     ];
+    // (Float32 positions; a stun's blindness in 255ths.)
+    for (const e of events) if (e.kind === "ping" || e.kind === "blast" || e.kind === "alarm") e.pos = [Math.fround(e.pos[0]), Math.fround(e.pos[1]), Math.fround(e.pos[2])];
     expect(decodeEvents(body(encodeEvents(123456, events), Msg.Events))).toEqual({ tick: 123456, events });
     const ok = encodeEvents(5, [events[3]]);
     const bad = (bytes: number[]) => () => decodeEvents(new ByteReader(Uint8Array.from(bytes)));

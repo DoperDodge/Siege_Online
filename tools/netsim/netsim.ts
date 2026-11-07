@@ -29,6 +29,7 @@ import {
   Room,
   ropeAt,
   siteArea,
+  SNAPSHOT_EVERY,
   Stance,
   TEAM_NAMES,
   TICK_HZ,
@@ -79,6 +80,13 @@ export interface NetsimOptions {
    */
   rappel?: boolean;
   operators?: string[];
+  /**
+   * Gadgets (Phase 8 M12, on the Gadget Lab): the two lines of `combat`, attackers and defenders of every operator
+   * there is, wander near their spots; every few seconds each takes out its gadget (3) or its ability (Z), holds Fire
+   * for 2.5 s (throwing, placing, swinging, holding it up, hacking), presses it once more (a detonator) and puts it
+   * away. The run checks every client ends with the server's gadget table.
+   */
+  gadgets?: boolean;
 }
 
 export const DEFAULTS: NetsimOptions = {
@@ -133,6 +141,11 @@ export interface NetsimReport {
   panels: { ops: number; differ: string[]; mismatches: number; resyncs: number };
   /** With `rappel`: per bot, how many times its body hooked on and the ticks it spent on a rope (the server's). */
   rappel: { hookOns: number[]; ropeTicks: number[] } | null;
+  /**
+   * With `gadgets`: entries the server's table held over the run, blasts the first client heard, and clients whose
+   * table differs from the server's once the last snapshot has reached everyone.
+   */
+  gadgets: { entries: number; blasts: number; differ: string[] } | null;
 }
 
 class Rng {
@@ -242,6 +255,35 @@ function bot(rng: Rng, crowd: boolean, home: { x: number; z: number } | null = n
     return out;
   };
 }
+
+/**
+ * A bot's gadgets (Phase 8 M12): every 2–5 s, its gadget key or its ability's (as a coin falls), then Fire held 2.5 s
+ * looking a little down (a throw, a placing, a swing, a hold, a hack), Fire pressed once more (whatever a detonator in
+ * hand sets off) and the key again (it's put away). It stands still meanwhile.
+ */
+function gadgeteer(rng: Rng) {
+  let start = 64 + Math.floor(rng.next() * 192);
+  let key = 0;
+  return (tick: number, cmd: Omit<InputCmd, "seq">): Omit<InputCmd, "seq"> => {
+    const t = tick - start;
+    if (t < 0) return cmd;
+    if (t === 0) key = rng.next() < 0.5 ? Btn.Gadget : Btn.Ability;
+    const still: Omit<InputCmd, "seq"> = { ...cmd, forward: 0, strafe: 0, pitch: -0.3, stance: Stance.Stand, lean: 0, buttons: 0 };
+    if (t === 0) return { ...still, buttons: key };
+    if (t < 48) return still;
+    if (t < 48 + 160) return { ...still, buttons: Btn.Fire };
+    if (t === 240) return { ...still, buttons: Btn.Fire };
+    if (t === 272) {
+      start = tick + 128 + Math.floor(rng.next() * 192);
+      return { ...still, buttons: key };
+    }
+    return still;
+  };
+}
+
+/** The operators of a gadgets run: the attackers' line (even bots) and the defenders' (odd). */
+const GADGET_ATTACKERS = ["sledge", "thermite", "fuze", "dokkaebi", "brava"];
+const GADGET_DEFENDERS = ["mute", "pulse", "lesion", "mira", "skopos"];
 
 /** A bot's spot at the foot of its own rope: where it stands, facing the wall. */
 interface RopeSpot {
@@ -397,6 +439,14 @@ export const VENUES: Record<string, Venue> = {
     // The lines 2.5 m either side of the sample walls at z 17 (soft x −5.5…−3.5, reinforceable −2.5…−0.5, hard 0.5…2.5).
     walls: (i) => ({ x: [-5, -4, -2, -1, 1.5][Math.floor(i / 2) % 5], z: i % 2 ? 14.5 : 19.5, yawDeg: i % 2 ? 180 : 0 }),
   },
+  gadget_lab: {
+    // The open floor north of the door wall (z 14 to 26 is clear wall to wall).
+    middle: { x: 0, z: 20 },
+    spread: (i) => ({ x: -18 + (i % 10) * 4, z: 22 - Math.floor(i / 10) * 4 }),
+    // Attackers (even) at z 15 facing the defenders (odd) at z 25, 6 m apart along each line.
+    combat: (i) => ({ x: -12 + Math.floor(i / 2) * 6, z: i % 2 ? 25 : 15, yawDeg: i % 2 ? 0 : 180 }),
+    walls: (i) => ({ x: -12 + Math.floor(i / 2) * 6, z: i % 2 ? 25 : 15, yawDeg: i % 2 ? 0 : 180 }),
+  },
   oregon: {
     // The street south of the building, on the ground (1F's level).
     middle: { x: 30, z: 54 },
@@ -411,7 +461,7 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
   const o: NetsimOptions = { ...DEFAULTS, ...partial };
   const rng = new Rng(o.seed);
   const clock = new Clock();
-  const level = o.level ?? "movement_lab";
+  const level = o.level ?? (o.gadgets ? "gadget_lab" : "movement_lab");
   const venue = VENUES[level];
   if (!venue) throw new Error(`netsim: no venue for level "${level}" (one of ${Object.keys(VENUES).join(", ")})`);
   const room = await Room.create("SIM00", level, { lab: true, seed: o.seed });
@@ -434,8 +484,10 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
   let stallShots = 0;
   let stallWindow: [number, number] | null = null;
   const combat = { downs: 0, reviveStarts: 0, revives: 0, kills: 0, knifeKills: 0, bleedOuts: 0 };
+  let blasts = 0;
   const tally = (events: GameEvent[]) => {
     for (const e of events) {
+      if (e.kind === "blast") blasts++;
       if (e.kind === "down") combat.downs++;
       else if (e.kind === "reviveStart") combat.reviveStarts++;
       else if (e.kind === "reviveEnd" && e.completed) combat.revives++;
@@ -463,13 +515,16 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
         },
       });
       const deliverToServer = (b: Uint8Array) => serverReceive(memberId, b);
-      const op = o.operators?.[i % o.operators.length] ?? (o.combat ? (i % 2 ? "mute" : "sledge") : i === 3 ? "skopos" : "sledge");
+      const op =
+        o.operators?.[i % o.operators.length] ??
+        (o.gadgets ? (i % 2 ? GADGET_DEFENDERS : GADGET_ATTACKERS)[Math.floor(i / 2) % 5] : o.combat ? (i % 2 ? "mute" : "sledge") : i === 3 ? "skopos" : "sledge");
       memberId = room.join(name, { send: (b) => down.send(b), buffered: () => 0 }, op)!;
       const drift = 1 + ((rng.next() * 2 - 1) * o.driftPct) / 100;
       // In a fight the first two (one a side) charge; everyone else keeps to their spot in the line.
-      const home = o.combat ? (o.walls ? venue.walls(i) : i < 2 ? null : venue.combat(i)) : o.spread ? venue.spread(i) : null;
-      const brain = spots ? rappeller(new Rng(o.seed * 1000 + i), spots[i]) : bot(new Rng(o.seed * 1000 + i), o.crowd && !o.combat, home, venue.middle);
-      return { name, session, down, up, memberId, drift, brain, nextTickAt: 0, ticks: 0, deadSince: null as number | null, walkingSince: null as number | null };
+      const home = o.gadgets ? venue.combat(i) : o.combat ? (o.walls ? venue.walls(i) : i < 2 ? null : venue.combat(i)) : o.spread ? venue.spread(i) : null;
+      const brain = spots ? rappeller(new Rng(o.seed * 1000 + i), spots[i]) : bot(new Rng(o.seed * 1000 + i), o.crowd && !o.combat && !o.gadgets, home, venue.middle);
+      const gadgets = o.gadgets ? gadgeteer(new Rng(o.seed * 7000 + i)) : null;
+      return { name, session, down, up, memberId, drift, brain, gadgets, nextTickAt: 0, ticks: 0, deadSince: null as number | null, walkingSince: null as number | null };
     }),
   );
 
@@ -481,8 +536,14 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
   clock.runUntil(o.oneWayMs * 3 + o.jitterMs);
   await Promise.all(clients.map((c) => c.session.loaded()));
   const place = (i: number) =>
-    room.onLabTool(clients[i].memberId, { kind: "teleport", y: 0, ...(spots ? spots[i] : o.combat ? (o.walls ? venue.walls(i) : venue.combat(i)) : { ...venue.spread(i), yawDeg: 90 * i }) });
-  if (o.spread || o.combat || spots) clients.forEach((_, i) => place(i));
+    room.onLabTool(clients[i].memberId, {
+      kind: "teleport",
+      y: 0,
+      ...(spots ? spots[i] : o.gadgets ? venue.combat(i) : o.combat ? (o.walls ? venue.walls(i) : venue.combat(i)) : { ...venue.spread(i), yawDeg: 90 * i }),
+    });
+  if (o.spread || o.combat || o.gadgets || spots) clients.forEach((_, i) => place(i));
+  /** Every entry id the server's gadget table held (Phase 8 M12). */
+  const entries = new Set<number>();
   const rappel = spots ? { hookOns: clients.map(() => 0), ropeTicks: clients.map(() => 0) } : null;
   const wasRoped = clients.map(() => false);
 
@@ -511,6 +572,7 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
       room.step();
       serverTimes.push(performance.now() - t0);
       serverNext += tickMs;
+      if (o.gadgets) for (const g of room.sim.gadgets.list) entries.add(g.id);
       // Bots shoot each other now (Phase 3 M6): the dead come straight back, as with the lab's respawn. In a
       // fight, the downed wait for a revive or a finisher, and the dead come back a second later.
       clients.forEach((c, i) => {
@@ -521,7 +583,7 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
           c.deadSince = null;
         } else if (!isDead(room, c.memberId)) return;
         room.onLabTool(c.memberId, { kind: "respawn" });
-        if (o.spread || o.combat || spots) place(i);
+        if (o.spread || o.combat || o.gadgets || spots) place(i);
       });
       // Rappellers: count the time on ropes; one on its feet away from its spot for a second goes back to it.
       if (rappel && spots) {
@@ -549,6 +611,7 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
         const own = c.session.sim?.pawns.get(c.session.ctrl!.possessedPawnId)?.state ?? null;
         let cmd = c.brain(c.ticks++, own);
         if (o.combat && own) cmd = fight(c.session, own, c.ticks, cmd, !o.walls && clients.indexOf(c) < 2);
+        if (c.gadgets) cmd = c.gadgets(c.ticks, cmd);
         if (o.sprayStall?.client === clients.indexOf(c)) cmd = { ...cmd, buttons: cmd.buttons | Btn.Fire };
         c.session.tick(clock.now < inputsStopAt ? cmd : { ...cmd, forward: 0, strafe: 0, buttons: 0, lean: 0, stance: Stance.Stand });
       }
@@ -574,6 +637,15 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
     if (touching(c.memberId)) contactLate.push(`${c.name}: ${late} correction(s) at rest, pressed against another body`);
     else desyncs.push(`${c.name}: ${late} correction(s) while standing still`);
   });
+  // Gadgets (Phase 8 M12): the server steps on to its next snapshot (its table's ops go with it) and every link
+  // delivers what it holds; then each client's table must be the server's.
+  let gadgetsDiffer: string[] = [];
+  if (o.gadgets) {
+    do room.step();
+    while (room.sim.tick % SNAPSHOT_EVERY !== 0);
+    clock.runUntil(clock.now + 3 * (o.oneWayMs + o.jitterMs) + o.stallMs);
+    gadgetsDiffer = clients.filter((c) => c.session.sim!.gadgets.hash() !== room.sim.gadgets.hash()).map((c) => c.name);
+  }
   const spread = (times: number[]) => {
     const sorted = [...times].sort((a, b) => a - b);
     return { mean: sorted.reduce((a, b) => a + b, 0) / sorted.length, p99: sorted[Math.floor(sorted.length * 0.99)], max: sorted[sorted.length - 1] };
@@ -601,6 +673,7 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
     starvedRemoteFrames: clients.reduce((n, c) => n + c.session.starvedFrames, 0),
     combat,
     rappel,
+    gadgets: o.gadgets ? { entries: entries.size, blasts, differ: gadgetsDiffer } : null,
     panels: {
       ops: room.stats.panelOps,
       differ: clients.filter((c) => c.session.sim!.level.panels.hash() !== room.sim.level.panels.hash()).map((c) => c.name),

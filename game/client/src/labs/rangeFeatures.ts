@@ -37,12 +37,14 @@ export function rangeFeatures(lab: LabApi): void {
     const lines = [`<b>Last shot</b>${weapon ? ` · ${escapeHtml(weapon.name)}` : ""}`];
     if (shot.hit) {
       const part = shot.hit.part as BodyPart;
-      lines.push(`${escapeHtml(nameOf(shot.hit.pawnId))} · ${zoneOf(part)} · ${shot.hit.distance.toFixed(1)} m`);
+      // (Fuze's shield's plate, Phase 8 M11: it takes nothing.)
+      if (part === "shield") lines.push(`${escapeHtml(nameOf(shot.hit.pawnId))} · the shield (no damage) · ${shot.hit.distance.toFixed(1)} m`);
+      else lines.push(`${escapeHtml(nameOf(shot.hit.pawnId))} · ${zoneOf(part)} · ${shot.hit.distance.toFixed(1)} m`);
       const dealt = hits.reduce((n, h) => n + h.damage, 0);
       // A kill or a down takes only what the body had left.
       const ended = hits.some((h) => h.killed) ? " · kill" : hits.some((h) => h.downed) ? " · down" : "";
       const what = `${dealt}${ended && hits.some((h) => h.hpAfter === 0) ? " (all it had left)" : ""}${ended}`;
-      if (weapon) lines.push(`Dealt ${hits.length ? what : "…"} — the data says ${expectedDamage(lab, weapon, shot.hit.distance, part)} at this range`);
+      if (weapon && part !== "shield") lines.push(`Dealt ${hits.length ? what : "…"} — the data says ${expectedDamage(lab, weapon, shot.hit.distance, part)} at this range`);
     } else lines.push(shot.wallDistance !== null ? `Miss · the level at ${shot.wallDistance.toFixed(1)} m` : "Miss");
     if (shot.dirs.length > 1) lines.push(`${shot.dirs.length} pellets${hits.length ? `, ${hits.reduce((n, h) => n + h.pellets, 0)} hit` : ""}`);
     const capped = shot.rewoundTick > shot.viewTick + 1e-6;

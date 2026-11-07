@@ -1,0 +1,17 @@
+{
+  "_doc": "Claymore (attacker pool; research/gadgets.md §3.3). Two each (Y7S1.2); placed on the floor facing the placer's way; electronic (a Bulletproof Camera's dart disables it, Y6S4). How long it takes to place, its reach and its size are placeholders. Its blast: 155 hp (Y11S3) within 2 m, none past 6 m (Fandom), in the 180° in front of it and 1 m behind it; it cuts nothing (not documented). Its tripwire: three 2 m lasers, ahead and 30° either side, armed 1 s after it's placed; a defender crossing one sets it off at once (Y9S3). One bullet destroys it (Y9S3).",
+  "_season": "Y11S3",
+  "_unverified": ["use.placeS", "use.reachM", "sizeM", "blast.damage.fullM", "blast.damage.zeroM", "blast.destroyM", "blast.throughSoft", "blast.concussM", "tripwire.armS"],
+  "id": "claymore",
+  "name": "Claymore",
+  "side": "attacker",
+  "count": 2,
+  "electronic": true,
+  "use": {"kind": "place", "on": ["floor"], "placeS": 1.0, "reachM": 2.5},
+  "remote": false,
+  "pickUp": false,
+  "sizeM": [0.22, 0.14, 0.06],
+  "blast": {"damage": {"max": 155, "fullM": 2.0, "zeroM": 6.0}, "arcDeg": 180, "behindM": 1.0, "destroyM": 2.0, "throughSoft": 0.7, "concussM": 3.0},
+  "tripwire": {"anglesDeg": [0, 30, -30], "lengthM": 2.0, "armS": 1.0},
+  "fragile": true
+}

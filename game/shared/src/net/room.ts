@@ -1,7 +1,7 @@
 // A match room: the authoritative simulation plus everyone connected to it (PLAN §5). Transport-free, so
 // the Node server, the netsim harness and (later) offline Practice in a Web Worker all run this same code.
 import { DT, TICK_HZ } from "../core/constants.js";
-import { DEG, type Vec3 } from "../core/math.js";
+import { DEG, forwardXZ, wrapAngle, type Vec3 } from "../core/math.js";
 import { applyDamage, Cause, isIdleShell, type Damage } from "../combat/apply.js";
 import { shotOnBodies, tracePellets, type ShotOnBody } from "../combat/hitreg.js";
 import { judgeMelee } from "../combat/melee.js";
@@ -11,27 +11,44 @@ import { explosiveOps, explosiveReach } from "../destruction/explosives.js";
 import { meleeOnPanels } from "../destruction/hits.js";
 import { L_STEEL, type PanelChange, type PanelOp } from "../destruction/panel.js";
 import type { IndexedOp } from "../destruction/panels.js";
-import type { DummyDef, ModeData } from "../data/schemas.js";
+import type { BlastData, DummyDef, GadgetData, ModeData } from "../data/schemas.js";
 import { DUMMY_STANCE, dummyInput } from "../lab/dummies.js";
 import { spawnAmmo, type Pawn, type PlayerController } from "../player/pawn.js";
 import { eyePose } from "../player/hitboxes.js";
-import { Btn, PawnKind, PawnMode, type InputCmd, type PawnState } from "../player/types.js";
+import { currentHeight } from "../player/stance.js";
+import { knockShield, shieldHit, shieldUp } from "../player/shield.js";
+import { Btn, GadgetAct, Hand, PawnKind, PawnMode, type InputCmd, type PawnState } from "../player/types.js";
 import { Sim } from "../sim.js";
 import { ByteWriter, fnv1a } from "./bytes.js";
-import { HitboxHistory, SentRing } from "./lagComp.js";
+import { HitboxHistory, rayCapsule, SentRing } from "./lagComp.js";
 import { controllerState, writeControllerState, writePawnState } from "./pawnState.js";
 import type { SimEvent } from "../weapons/step.js";
 import { defaultLoadoutPick, resolveLoadout, type LoadoutPick } from "../weapons/loadout.js";
 import { hash4, pelletDirections, viewDir } from "../weapons/spread.js";
-import { QUERY_SIGHT } from "../physics/rapier.js";
+import { QUERY_FLASH, QUERY_SIGHT } from "../physics/rapier.js";
 import { sideTeam } from "../sim.js";
 import { encodeEvents, type GameEvent } from "./events.js";
 import { MatchDirector, type DirectorHost } from "./matchDirector.js";
 import type { LobbyAction, MatchAction, RoomListEntry } from "./matchWire.js";
-import { isFormat, type FormatMode, type Side } from "../match/rules.js";
+import { DEFENSE, isFormat, type FormatMode, type Side } from "../match/rules.js";
+import { Phase } from "../match/match.js";
 import { camerasOnRay } from "../intel/cameras.js";
-import { bpCamsOnRay, dartBurst } from "../intel/bpCamera.js";
 import { raycastLevel } from "../level/raycast.js";
+import { dartBurst } from "../intel/bpCamera.js";
+import { bpCamsBroken, gadgetOnRay } from "../gadgets/hits.js";
+import { mirrorOf, sightPast } from "../gadgets/mirror.js";
+import { hackTargetFor, hackTargetPos, kludgeOf, type HackTarget, type KludgeData } from "../gadgets/hack.js";
+import { pawnJammed, pointJammed } from "../gadgets/jammers.js";
+import { heartOf } from "../gadgets/sensor.js";
+import { GadgetServer, type IngredientStage } from "../gadgets/serve.js";
+import { blastEffects, isCloud, pawnDistance } from "../gadgets/blast.js";
+import { hammerOps } from "../gadgets/hammer.js";
+import { zoneOf } from "../combat/damage.js";
+import { barrierOf, smokeOnSegment, crossesBarrier } from "../gadgets/areas.js";
+import { isIngredient, kindId, kindOf } from "../gadgets/kinds.js";
+import { GFlag, type Gadget } from "../gadgets/table.js";
+import { deviceLost, emptySlots, slotGadget, stockSlots } from "../gadgets/hands.js";
+import { encodeGadgetOps, encodeGadgetState } from "./gadgetWire.js";
 import { ticks, ticksOrZero } from "../weapons/ticks.js";
 import { encodeError, encodePong, encodeRoster, encodeShotResult, encodeWelcome, ErrorCode, unwrap16, type InputMsg, type LabTool, type RosterEntry, type ShotResult } from "./protocol.js";
 import { encodePanelOps, encodePanelState, wireOp } from "./panels.js";
@@ -146,6 +163,10 @@ interface Member {
   lastCallout: number;
   scanTicks: number;
   gadgetHeld: boolean;
+  /** A Kludge drone's hack under way (Phase 8 M8): which Kludge, on what, how many ticks it has run. */
+  hack: { kludge: number; target: HackTarget; ticks: number } | null;
+  /** Fire held since a hack ended: it's let go before the next starts. */
+  hackHeld: boolean;
   /** Arrival tick minus claimed snapshot tick, for the last LAG_WINDOW inputs (a ring). */
   lags: number[];
   lagAt: number;
@@ -173,6 +194,12 @@ interface Member {
    */
   opsHad: number;
   opsHeld: IndexedOp[] | null;
+  /**
+   * The gadget table (Phase 8): when we last sent it whole because it asked, and whether it missed ops with a snapshot
+   * it wasn't sent (it gets the whole table with its next one).
+   */
+  gadgetStateAt: number;
+  gadgetsStale: boolean;
 }
 
 /** More ops than this held back for one client: send it the panels' state instead (a message carries at most 4096). */
@@ -196,6 +223,13 @@ interface JudgedShot {
   /** What it did to panels (holes, wear), in order: applied with its damage. */
   panelOps: IndexedOp[];
 }
+
+/** Who hurt a body, as the kill feed and the damage indicator tell it: a shot, the knife, or a gadget's blast. */
+type Attacker = Pick<JudgedShot, "ctrlId" | "team" | "weaponId" | "origin">;
+/** The team of what belongs to nobody (the level's ingredients, Phase 8 M3): never friendly to anyone. */
+const NEUTRAL = 2;
+type StunData = NonNullable<GadgetData["stun"]>;
+type JegeoData = NonNullable<GadgetData["jegeo"]>;
 
 /** A Range Lab target: a body with no client, stepped from its script (lab/dummies.ts). */
 interface Dummy {
@@ -254,11 +288,14 @@ export class Room implements DirectorHost {
     panelOps: 0,
     /** Panel states sent because a client's panels disagreed. */
     panelResyncs: 0,
+    gadgetResyncs: 0,
   };
   /** The lab preset: a lab room's damage rules. */
   private readonly labRules: ModeData;
   /** A match room's match (Phase 6); null in a lab room. */
   readonly director: MatchDirector | null;
+  /** The gadget table's server side (Phase 8, gadgets/serve.ts): events into entries, flights, fuses. */
+  readonly gadgetServer: GadgetServer;
   /** Shots judged this tick, applied together at its end (DECISIONS D-044). */
   private judged: JudgedShot[] = [];
   /**
@@ -281,6 +318,33 @@ export class Room implements DirectorHost {
     format: FormatMode | null,
   ) {
     this.history = new HitboxHistory(sim, 32);
+    this.gadgetServer = new GadgetServer(sim, (g, at) => this.goOff(g, at));
+    // Phase 8 M3: wire and fire hurt over time, alarms sound, ingredients go through their stages; no alarm outdoors in prep.
+    this.gadgetServer.hurt = (g, pawn, amount) => this.gadgetHurt(g, pawn, amount);
+    this.gadgetServer.onAlarm = (g, by) => this.alarm(g, by);
+    // A Gu needle (Phase 8 M10) changes the body: its owner's next correction carries it.
+    this.gadgetServer.onNeedle = (pawn) => {
+      const owner = pawn.ownerId !== null ? this.memberOf(pawn.ownerId) : null;
+      if (owner) this.force(owner);
+    };
+    this.gadgetServer.onIngredient = (g, stage) => this.ingredientStage(g, stage);
+    this.gadgetServer.inPrep = () => this.director?.match.phase === Phase.Prep;
+    // Phase 8 M5: a cluster charge's hole goes in with this tick's panel ops.
+    this.gadgetServer.cut = (ops) => {
+      for (const o of ops) this.queuePanelOp(o.panel, o.op);
+    };
+    // A remote device gone without its detonator (destroyed, cleared): its owner has one fewer waiting; told at once.
+    this.gadgetServer.onLost = (g, d) => {
+      const c = sim.controllers.get(g.owner);
+      const owner = c ? this.memberOf(c.id) : null;
+      for (const id of c?.pawnIds ?? []) {
+        const p = sim.pawns.get(id);
+        if (p && deviceLost(sim.data, p, d.id)) {
+          if (owner) this.force(owner);
+          return;
+        }
+      }
+    };
     this.labRules = sim.data.modes.get("lab")!;
     this.director = format ? new MatchDirector(this, format, seed) : null;
     // Reinforcing and barricades (Phase 4 M6): each team's pool; lab rooms let attackers do it too, and let
@@ -294,6 +358,7 @@ export class Room implements DirectorHost {
       if (owner) this.force(owner);
     };
     if (lab) for (const def of sim.level.def.dummies) this.addDummy(def);
+    this.placeIngredients();
   }
 
   /** A dummy's body: spawned like a player's (same ids for the same order), then put on its spot. */
@@ -388,6 +453,8 @@ export class Room implements DirectorHost {
       lastCallout: -1e9,
       scanTicks: 0,
       gadgetHeld: false,
+      hack: null,
+      hackHeld: false,
       lags: [],
       lagAt: 0,
       needCorrection: false,
@@ -406,6 +473,8 @@ export class Room implements DirectorHost {
       panelStateAt: -Infinity,
       opsHad: this.unsentOps.length,
       opsHeld: [],
+      gadgetStateAt: -Infinity,
+      gadgetsStale: false,
     };
     if (this.director && !this.director.join(m.id, m.name)) {
       client.send(encodeError(ErrorCode.RoomFull, `Room ${this.code}'s teams are full`));
@@ -415,6 +484,7 @@ export class Room implements DirectorHost {
     if (!this.director) this.spawn(m);
     client.send(encodeWelcome({ roomCode: this.code, tick: this.sim.tick, levelId: this.levelId, controllerId: m.ctrl?.id ?? 0 }));
     client.send(encodePanelState(this.sim.level.panels)); // the walls as they are now (ops waiting to go included); every later op follows
+    client.send(encodeGadgetState(this.sim.gadgets.list)); // the gadgets too (the ops waiting to go are already in it, and redo nothing)
     m.events.push(this.deployRulesEvent());
     this.broadcastRoster();
     return m.id;
@@ -481,6 +551,9 @@ export class Room implements DirectorHost {
       d.ownerId = m.ctrl.id;
       m.ctrl.pawnIds.push(d.id);
     }
+    // Brava's Kludge drones (Phase 8 M8) come with her body (prep's pilot has only her drones).
+    const kludge = slotGadget(this.sim.data, this.sim.pawns.get(m.ctrl.possessedPawnId)?.loadout ?? null, 2);
+    if (kludge?.kludge && !drones.some((d) => d.kludge)) for (let i = 0; i < kludge.count; i++) this.sim.addDrone(m.ctrl.id, undefined, true);
     m.queue = [];
     this.force(m);
     m.newBody = true;
@@ -623,6 +696,15 @@ export class Room implements DirectorHost {
     this.sendPanelState(m, encodePanelState(this.sim.level.panels));
   }
 
+  /** A client's gadget table disagrees with ours (its hash): send it the whole table (at most once a second). */
+  onGadgetResync(memberId: number): void {
+    const m = this.members.get(memberId);
+    if (!m || this.sim.tick - m.gadgetStateAt < TICK_HZ) return;
+    m.gadgetStateAt = this.sim.tick;
+    this.stats.gadgetResyncs++;
+    m.client.send(encodeGadgetState(this.sim.gadgets.list));
+  }
+
   /** Every changed panel's state, which covers every op this member was still to be sent. */
   private sendPanelState(m: Member, state: Uint8Array) {
     m.client.send(state);
@@ -668,13 +750,19 @@ export class Room implements DirectorHost {
     } else if (tool.kind === "resetDummies") {
       for (const d of this.dummies) this.respawnDummy(d);
     } else if (tool.kind === "refill") {
+      // Ammo, and the gadgets in both slots (Phase 8).
       for (const id of m.ctrl.pawnIds) {
         const p = this.sim.pawns.get(id);
         if (!p?.loadout || p.state.mode === PawnMode.Dead) continue;
         const [a, b] = p.loadout.weapons.map(spawnAmmo);
         Object.assign(p.state, { loaded0: a.loaded, reserve0: a.reserve, loaded1: b.loaded, reserve1: b.reserve });
+        // (Skopós's gadgets are one pool, in the shell she's in.)
+        if (m.ctrl.pawnIds.length > 1 && id !== m.ctrl.possessedPawnId) emptySlots(p.state);
+        else stockSlots(this.sim.data, p.state, p.loadout);
       }
       this.force(m);
+    } else if (tool.kind === "clearGadgets") {
+      this.resetGadgets();
     } else if (tool.kind === "explosive") {
       // Its cut where your body looks along the view you sent, applied with the next tick's ops. The id is the
       // client's: only the data's own keys name an explosive (not "constructor" or "__proto__").
@@ -744,17 +832,29 @@ export class Room implements DirectorHost {
     if (rewoundTick > viewTick) this.stats.cappedShots++;
     const panelOps = paths.flatMap((p) => p.ops);
     // Default cameras on a pellet's way, short of what stopped it, break (Phase 7: any hit, either side's), and so do
-    // Bulletproof Cameras hit from the side or the back.
-    if (this.director && this.sim.matchRules.cameras) {
-      let broke = 0;
-      let bp = 0;
-      for (const p of paths) {
-        const end = Math.min(p.end, p.first?.t ?? Infinity);
-        broke |= camerasOnRay(this.sim.level.def, origin, p.dir, end, this.sim.matchRules.camsBroken);
-        bp |= bpCamsOnRay(this.sim.matchRules.bpCams, this.sim.data.intel.bulletproofCamera, origin, p.dir, end);
+    // Bulletproof Cameras hit from the side or the back (the gadget table's, in any room).
+    const cams = this.sim.bpCams();
+    for (const p of paths) {
+      const end = Math.min(p.end, p.first?.t ?? Infinity);
+      if (this.sim.matchRules.cameras) {
+        const broke = camerasOnRay(this.sim.level.def, origin, p.dir, end, this.sim.matchRules.camsBroken);
+        // (A lab has its cameras on only in tests: there they break as an EMP turns them off, camsOffNow.)
+        if (broke && this.director) this.director.camerasBroken(broke);
+        else if (broke) this.sim.matchRules.camsBroken |= broke;
       }
-      if (broke) this.director.camerasBroken(broke);
-      if (bp) this.director.bpCamsBroken(bp);
+      if (cams.length) this.gadgetServer.breakCams(bpCamsBroken(this.sim.bpCams(), this.sim.data, origin, p.dir, end));
+      // The first gadget on its way a bullet destroys (a fragile one: research/gadgets.md; no blast) or sets off (an
+      // ingredient, Phase 8 M3).
+      const struck = gadgetOnRay(this.sim.gadgets, this.sim.data, origin, p.dir, end, (g) => this.fragile(g) || this.ignitable(g));
+      if (struck) this.strike(struck.g);
+      // A pellet Fuze's shield stopped (Phase 8 M11): no damage, one more toward its bearer's suppression (not a
+      // teammate's with friendly fire off, as a blow wouldn't do anything: the review, M12).
+      const bearer = p.shield ? this.sim.pawns.get(p.shield.pawnId) : undefined;
+      if (bearer && (bearer.team !== shooter.team || this.friendlyFireOn())) {
+        shieldHit(bearer);
+        const owner = bearer.ownerId !== null ? this.memberOf(bearer.ownerId) : null;
+        if (owner) this.force(owner);
+      }
     }
     this.judged.push({ m, cause: Cause.Bullet, ctrlId: m.ctrl.id, team: shooter.team, seq: shot.seq, weaponId: w.id, receivedTick: now, rewoundTick, origin, bodies, lives: this.livesOf(bodies), panelOps });
     // Everyone sees and hears it (the shooter's own client draws its flash itself, but not where pellets went).
@@ -815,6 +915,18 @@ export class Room implements DirectorHost {
     for (const p of this.sim.pawns.values()) if (p.state.mode === PawnMode.Dead) ignore.add(p.id);
     const target = judgeMelee(this.sim, hit.origin, attacker.state, hit.yaw, this.history.at(rewoundTick, m.sent), ignore);
     const base = { m, cause: Cause.Melee, ctrlId: m.ctrl.id, team: attacker.team, seq: hit.seq, weaponId: "knife", receivedTick: now, rewoundTick, origin: hit.origin };
+    // Fuze's melee with his shield up is a bash (Phase 8 M11): no damage (Y9S4), the body it meets pushed back.
+    const bash = attacker.loadout?.shield && shieldUp(attacker.state) ? attacker.loadout.shield : null;
+    const struckBody = target ? this.sim.pawns.get(target.pawnId) : undefined;
+    if (target && struckBody && bash) {
+      if (this.blowLands(attacker, struckBody)) this.bashed(attacker, struckBody, bash);
+      return;
+    }
+    // A knife meeting a shield's plate stops there: held up, it's knocked aside (a guard break, Y9S1).
+    if (target?.shield && struckBody?.loadout?.shield) {
+      if (this.blowLands(attacker, struckBody)) this.guardBreak(struckBody);
+      return;
+    }
     if (target) {
       const body: ShotOnBody = { pawnId: target.pawnId, kill: false, amount: 0, headshot: false, zone: target.zone, pellets: 1, distance: target.reach };
       this.judged.push({ ...base, bodies: [body], lives: this.livesOf([body]), panelOps: [] });
@@ -825,13 +937,91 @@ export class Room implements DirectorHost {
     const ray = new this.sim.R.Ray({ x: hit.origin[0], y: hit.origin[1], z: hit.origin[2] }, { x: dir[0], y: dir[1], z: dir[2] });
     const plain = this.sim.world.castRay(ray, reach, true, undefined, QUERY_SIGHT)?.timeOfImpact ?? reach;
     // A Bulletproof Camera in reach: the knife breaks its glass, any face (Phase 7; for us its feed is gone, broken).
-    const knifed = this.director ? bpCamsOnRay(this.sim.matchRules.bpCams, this.sim.data.intel.bulletproofCamera, hit.origin, dir, plain, true) : 0;
-    if (knifed) {
-      this.director!.bpCamsBroken(knifed);
+    const knifed = bpCamsBroken(this.sim.bpCams(), this.sim.data, hit.origin, dir, plain, true);
+    if (knifed.length) {
+      this.gadgetServer.breakCams(knifed);
       return;
     }
-    const onPanel = meleeOnPanels(this.sim.level.panels, this.sim.data.destruction, hit.origin, dir, reach, plain, { tick: panelTick, history: this.panelHistory });
+    // A gadget in reach (Phase 8 M2, M3): a fragile one is destroyed, barbed wire takes a hit (the next destroys it), a
+    // deployable shield's glass goes opaque, a fire extinguisher bursts, a metal detector is destroyed.
+    const struck = gadgetOnRay(this.sim.gadgets, this.sim.data, hit.origin, dir, plain + 0.02, (g) => this.knifeable(g));
+    if (struck) {
+      this.knifed(struck.g);
+      return;
+    }
+    // Skopós's knife makes a bigger hole, through the studs, and breaks a barricade at once (Phase 8 M10: `meleeHole`).
+    const large = this.sim.data.operators.get(attacker.operatorId)?.combat.meleeHole === "large";
+    const d = this.sim.data.destruction;
+    const onPanel = meleeOnPanels(this.sim.level.panels, d, hit.origin, dir, reach, plain, { tick: panelTick, history: this.panelHistory }, large ? d.meleeLarge : d.melee);
     if (onPanel) this.judged.push({ ...base, bodies: [], lives: new Map(), panelOps: onPanel.ops.map(({ panel, op }) => ({ panel, op })) });
+  }
+
+  /**
+   * A swing's blow (Phase 8 M4, Sledge's hammer; research/operators/sledge.md §3), judged like the knife against
+   * everyone as its swinger saw them: the first thing along the view within its reach that the level and panels
+   * don't hide. A body dies (a kill costs `killCharges` charges in all); an enemy gadget is destroyed as a blast
+   * destroys it, an ingredient set off; otherwise the first panel takes the blow (gadgets/hammer.ts).
+   */
+  private judgeSwing(m: Member, applied: QueuedInput, e: Extract<SimEvent, { kind: "swing" }>) {
+    const pawn = this.sim.pawns.get(e.pawnId);
+    const g = this.sim.data.gadgets.get(e.gadget);
+    if (!m.ctrl || !pawn || g?.use.kind !== "swing") return;
+    const u = g.use;
+    const { now, rewoundTick } = this.viewTimeFor(m, applied);
+    const origin = e.origin;
+    const dir = viewDir(e.yaw, e.pitch);
+    const ray = new this.sim.R.Ray({ x: origin[0], y: origin[1], z: origin[2] }, { x: dir[0], y: dir[1], z: dir[2] });
+    const plain = this.sim.world.castRay(ray, u.reachM, true, undefined, QUERY_SIGHT)?.timeOfImpact ?? u.reachM;
+    const wall = Math.min(plain, this.sim.level.panels.firstSolid(origin, dir, plain)?.crossing.face ?? plain);
+    const base = { m, cause: Cause.Gadget, ctrlId: m.ctrl.id, team: pawn.team, seq: e.seq, weaponId: g.id, receivedTick: now, rewoundTick, origin };
+    // Bodies first, as the swinger saw them (not their own, not the dead).
+    const ignore = new Set(m.ctrl.pawnIds);
+    for (const p of this.sim.pawns.values()) if (p.state.mode === PawnMode.Dead) ignore.add(p.id);
+    let hit: { id: number; t: number; zone: ReturnType<typeof zoneOf>; shield: boolean } | null = null;
+    for (const [id, boxes] of this.history.at(rewoundTick, m.sent)) {
+      if (ignore.has(id)) continue;
+      for (const h of boxes) {
+        const t = rayCapsule(origin, dir, h.a, h.b, h.radius);
+        if (t !== null && t <= wall && (!hit || t < hit.t)) hit = { id, t, zone: h.part === "shield" ? "torso" : zoneOf(h.part), shield: h.part === "shield" };
+      }
+    }
+    // What a blow on a body or a drone costs (the room's to charge: the simulation only charged the level, a panel or a
+    // gadget in reach, `e.spent`): `killCharges` in all for a body, one for a drone or a shield's plate.
+    const charge = (total: number) => {
+      const extra = total - (e.spent ? 1 : 0);
+      if (extra <= 0) return;
+      const s = pawn.state;
+      if (e.slot === 1) s.g1 = Math.max(0, s.g1 - extra);
+      else s.g2 = Math.max(0, s.g2 - extra);
+      this.force(m);
+    };
+    // A blow on Fuze's shield's plate knocks it down, and its carrier unhurt (Phase 8 M11; Y10S2).
+    const knocked = hit?.shield ? this.sim.pawns.get(hit.id) : undefined;
+    if (knocked?.loadout?.shield) {
+      charge(1);
+      if (this.blowLands(pawn, knocked)) this.knockAside(knocked, knocked.loadout.shield.knockdownS);
+      return;
+    }
+    if (hit) {
+      const body: ShotOnBody = { pawnId: hit.id, kill: true, amount: 0, headshot: false, zone: hit.zone, pellets: 1, distance: hit.t };
+      this.judged.push({ ...base, bodies: [body], lives: this.livesOf([body]), panelOps: [] });
+      charge(this.sim.pawns.get(hit.id)?.kind === PawnKind.Drone ? 1 : u.killCharges);
+      return;
+    }
+    // A gadget on the way: an enemy's (not a smoke cloud) or an ingredient.
+    const struck = gadgetOnRay(this.sim.gadgets, this.sim.data, origin, dir, wall + 0.02, (x) =>
+      isIngredient(x.kind) ? this.ignitable(x) : !(x.flags & GFlag.Flying) && x.team !== pawn.team && !isCloud(this.sim, x),
+    );
+    if (struck) {
+      // A Black Mirror's glass shatters as to a knife (Phase 8 M7; UNVERIFIED for the hammer); the rest as to a blast.
+      if (mirrorOf(this.sim.data, struck.g)) this.sim.gadgets.update(struck.g.id, { flags: struck.g.flags | GFlag.Hit });
+      // A Gu mine goes off under the hammer, as under a knife (Phase 8 M10; the CSV's trigger_sting).
+      else if (this.sim.data.gadgets.get(kindId(struck.g.kind) ?? "")?.gu) this.gadgetServer.sting(struck.g);
+      else this.gadgetServer.blastHit(struck.g);
+      return;
+    }
+    const ops = hammerOps(this.sim.level.panels, origin, dir, plain, u);
+    if (ops.length) this.judged.push({ ...base, bodies: [], lives: new Map(), panelOps: ops });
   }
 
   /** The life each body hit is in now (Pawn.life), kept with a judged shot until it applies. */
@@ -853,6 +1043,8 @@ export class Room implements DirectorHost {
     this.panelHistory.record(this.sim.tick, index, e.panel.w * e.panel.h, change);
     this.unsentOps.push({ panel: index, op: wire });
     this.stats.panelOps++;
+    // A Black Mirror falls with its wall (Phase 8 M7).
+    this.gadgetServer.panelChanged(index);
     return change;
   }
 
@@ -871,7 +1063,7 @@ export class Room implements DirectorHost {
     if (pools[pawn.team] <= 0) return;
     if (!this.applyPanelOp(e.panel, { kind: "reinforce", section: e.section, side: e.side })?.added[L_STEEL].length) return;
     pools[pawn.team]--;
-    this.director?.panelReinforced(e.panel);
+    this.gadgetServer.reinforced(e.panel, e.section);
     for (const m of this.members.values()) m.events.push(this.deployRulesEvent());
   }
 
@@ -948,7 +1140,7 @@ export class Room implements DirectorHost {
    * the damage indicator) and, if it died, everyone (the kill feed; Skopós's idle shell is "destroyed", not
    * an elimination).
    */
-  private hurt(victim: Pawn, d: Damage, by: { cause: Cause; attacker: JudgedShot | null; headshot: boolean }) {
+  private hurt(victim: Pawn, d: Damage, by: { cause: Cause; attacker: Attacker | null; headshot: boolean }) {
     const r = applyDamage(this.sim, victim, { ...d, cause: by.cause }, this.rules);
     if (r.outcome === "ignored") return r;
     const owner = victim.ownerId !== null ? this.memberOf(victim.ownerId) : null;
@@ -999,6 +1191,8 @@ export class Room implements DirectorHost {
       if (owner) this.force(owner);
     }
     const idle = leftBehind || isIdleShell(this.sim, victim);
+    // An eliminated defender drops his phone (Phase 8 M9; Skopós: his circuit board), for Dokkaebi to hack.
+    if (!idle && victim.team === DEFENSE) this.dropPhone(victim);
     const e: GameEvent = idle
       ? { kind: "shellDestroyed", pawnId: victim.id, ownerCtrl, killerCtrl, weapon, headshot }
       : { kind: "kill", victimPawn: victim.id, victimCtrl: ownerCtrl, killerCtrl, assistCtrl, weapon: weapon || downer?.weapon || "", cause, headshot, friendly };
@@ -1020,8 +1214,8 @@ export class Room implements DirectorHost {
         if (p) this.announceDeath(p, 0, "", e.cause === "bleed" ? Cause.Bleed : Cause.Fall, false, false, e.life);
       } else if (e.kind === "deploy") {
         this.completeDeploy(e);
-      } else if (e.kind === "camera") {
-        this.director?.cameraPlaced(e);
+      } else if (e.kind === "throw" || e.kind === "place" || e.kind === "detonate" || e.kind === "pickUpGadget") {
+        this.gadgetServer.onEvent(e);
       } else if (e.kind === "rappelBreach") {
         this.completeBreach(e);
       } else if (e.kind === "plant" || e.kind === "disable" || e.kind === "pickup" || e.kind === "drop") {
@@ -1074,6 +1268,7 @@ export class Room implements DirectorHost {
         operatorId: m.ctrl!.operatorId,
         pawnIds: this.sim.bodyIds(m.ctrl!),
         drones: this.sim.dronesOf(m.ctrl!).map((d) => d.id),
+        kludges: this.sim.dronesOf(m.ctrl!).filter((d) => d.kludge).map((d) => d.id),
         team: m.team,
         kind: 0,
         loadout: m.pick,
@@ -1084,6 +1279,7 @@ export class Room implements DirectorHost {
       operatorId: d.ctrl.operatorId,
       pawnIds: [...d.ctrl.pawnIds],
       drones: [],
+      kludges: [],
       team: d.def.team,
       kind: 1,
       loadout: defaultLoadoutPick(this.sim.data, d.def.operator),
@@ -1125,7 +1321,7 @@ export class Room implements DirectorHost {
    * when it follows their last (a yellow one) within `doubleTapS` (a double tap, in place of that one); otherwise none
    * within `cooldownS` of the last, so a held or hammered key sends a few a second at most.
    */
-  private ping(ctrlId: number, pos: Vec3) {
+  private ping(ctrlId: number, pos: Vec3, gadget: number, heart: boolean) {
     const m = this.memberOf(ctrlId);
     if (!m) return;
     const k = this.sim.data.intel.ping;
@@ -1134,9 +1330,42 @@ export class Room implements DirectorHost {
     if (!danger && since < ticksOrZero(k.cooldownS)) return;
     m.lastPing = this.sim.tick;
     m.lastPingDanger = danger;
-    const e: GameEvent = { kind: "ping", ctrl: ctrlId, pos, danger, ticks: ticks(k.seconds) };
     const team = this.teamOf(m);
+    // On an enemy body (the first thing the view's ray meets), it spots him: a red ping (Phase 8 M9; research/intel.md §2).
+    const body = gadget < 0 && !heart && m.ctrl ? this.pingedBody(m.ctrl, team, pos) : null;
+    if (body) {
+      this.spotted(body, ctrlId, team);
+      return;
+    }
+    const e: GameEvent = { kind: "ping", ctrl: ctrlId, pos, danger, ticks: ticks(k.seconds), gadget, heart };
     for (const o of this.members.values()) if (this.teamOf(o) === team) o.events.push(e);
+  }
+
+  /** The enemy body (of the other team than `team`) a ping's ray from the view meets before where it landed, or null. */
+  private pingedBody(c: PlayerController, team: number, landed: Vec3): Pawn | null {
+    const view = this.sim.viewOf(c);
+    if (!view) return null;
+    const d: Vec3 = [landed[0] - view.pos[0], landed[1] - view.pos[1], landed[2] - view.pos[2]];
+    const len = Math.hypot(d[0], d[1], d[2]);
+    if (len < 1e-3) return null;
+    const dir: Vec3 = [d[0] / len, d[1] / len, d[2] / len];
+    const r = this.sim.data.movement.stance.collisionRadius;
+    let best: { p: Pawn; t: number } | null = null;
+    for (const p of this.sim.pawns.values()) {
+      const s = p.state;
+      if (p.kind !== PawnKind.Body || p.team === team || p.proxy || s.mode === PawnMode.Dead || s.mode === PawnMode.Held) continue;
+      const top = s.y + Math.max(2 * r, currentHeight(this.sim.data.movement, s)) - r;
+      const t = rayCapsule(view.pos, dir, [s.x, s.y + r, s.z], [s.x, top, s.z], r);
+      if (t !== null && t <= len + 0.05 && (!best || t < best.t)) best = { p, t };
+    }
+    return best?.p ?? null;
+  }
+
+  /** An enemy body spotted (a scan, a red ping): a red mark for the spotter's team, and he's told. */
+  private spotted(p: Pawn, byCtrl: number, team: number) {
+    const e: GameEvent = { kind: "spotted", pawnId: p.id, by: byCtrl, ticks: ticks(this.sim.data.intel.ping.seconds) };
+    this.spot(p.id, this.sim.data.intel.ping.seconds);
+    for (const o of this.members.values()) if (this.teamOf(o) === team || o.ctrl?.id === p.ownerId) o.events.push(e);
   }
 
   /**
@@ -1156,7 +1385,9 @@ export class Room implements DirectorHost {
     const k = this.sim.data.intel.scan;
     for (const { m, input } of applied.values()) {
       const c = m.ctrl;
-      const onFeed = c !== null && (c.cam !== 0 || this.sim.pawns.get(this.sim.viewedPawnId(c.id))?.kind === PawnKind.Drone);
+      // Not from a Kludge drone (Phase 8 M8): its Fire hacks.
+      const viewed = c ? this.sim.pawns.get(this.sim.viewedPawnId(c.id)) : undefined;
+      const onFeed = c !== null && (c.cam !== 0 || (viewed?.kind === PawnKind.Drone && !viewed.kludge));
       if (!onFeed || !(input.cmd.buttons & Btn.Fire)) {
         m.scanTicks = 0;
         continue;
@@ -1167,17 +1398,442 @@ export class Room implements DirectorHost {
       const look = viewDir(view.yaw, view.pitch);
       const cos = Math.cos(k.coneDeg * DEG);
       const team = this.teamOf(m);
+      const thermal = c!.cam !== 0 && this.sim.bpCamAt(c!.cam - 1) !== null;
       for (const p of this.sim.pawns.values()) {
         if (p.kind !== PawnKind.Body || p.team === team || p.state.mode === PawnMode.Dead || p.proxy) continue;
         const at = eyePose(this.sim.data.movement, this.sim.data.hitboxes, p.state).pos;
         const d: Vec3 = [at[0] - view.pos[0], at[1] - view.pos[1], at[2] - view.pos[2]];
         const dist = Math.hypot(d[0], d[1], d[2]);
         if (dist > k.rangeM || dist < 1e-3 || (d[0] * look[0] + d[1] * look[1] + d[2] * look[2]) / dist < cos) continue;
-        const wall = raycastLevel(this.sim, view.pos, [d[0] / dist, d[1] / dist, d[2] / dist], dist);
+        // A Black Mirror is seen through from its placer's side (Phase 8 M7).
+        const wall = sightPast(this.sim, view.pos, [d[0] / dist, d[1] / dist, d[2] / dist], dist);
         if (wall && wall.t < dist - 0.05) continue;
-        const e: GameEvent = { kind: "spotted", pawnId: p.id, by: c!.id, ticks: ticks(this.sim.data.intel.ping.seconds) };
-        for (const o of this.members.values()) if (this.teamOf(o) === team || o.ctrl?.id === p.ownerId) o.events.push(e);
+        // Smoke hides them (a Bulletproof Camera sees through it), and so does the other side's observation blocker (Phase 8 M3).
+        if (!thermal && smokeOnSegment(this.sim.data, this.sim.gadgets, view.pos, at) !== null) continue;
+        if (this.barrierBetween(team, view.pos, at)) continue;
+        this.spotted(p, c!.id, team);
       }
+    }
+  }
+
+  /** Who has been spotted (identified: a scan, a red ping), until when (Phase 8 M9: Dokkaebi's payload targets them). */
+  private readonly spottedUntil = new Map<number, number>();
+
+  /** A body spotted (identified) for `seconds` (a scan's or a red ping's mark; Phase 8 M9). */
+  spot(pawnId: number, seconds: number): void {
+    this.spottedUntil.set(pawnId, Math.max(this.spottedUntil.get(pawnId) ?? 0, this.sim.tick + ticks(seconds)));
+  }
+
+  /**
+   * Dokkaebi's call ringing on a player's phone (Phase 8 M9; the review, M12): `ringing` on the body he's in, so his
+   * simulation leaves a fresh Interact press to the dismissal, and off on his others; his owner corrected on a change.
+   */
+  private ringing(tm: Member | null, called: Pawn | undefined, on: boolean) {
+    const ids = tm?.ctrl ? tm.ctrl.pawnIds : called ? [called.id] : [];
+    let changed = false;
+    for (const id of ids) {
+      const p = this.sim.pawns.get(id);
+      const want = on && (!tm?.ctrl || id === tm.ctrl.possessedPawnId);
+      if (!p || p.state.ringing === want) continue;
+      p.state.ringing = want;
+      changed = true;
+    }
+    if (changed && tm) this.force(tm);
+  }
+
+  /** Dokkaebi's tablet (Phase 8 M9), by her body's pawn id: her charges, when the next comes, the upload under way, her phone hacks. */
+  private readonly jegeoState = new Map<number, { charges: number; next: number; upload: { target: number; start: number; dismiss: number } | null; held: boolean; hacks: number }>();
+  /** Each defender's next tick Dokkaebi may send to him again. */
+  private readonly jegeoCooldown = new Map<number, number>();
+  /** Dead defenders' phones (and Skopós's circuit boards) hacked already, by their entries' ids. */
+  private readonly phonesHacked = new Set<number>();
+  /** The tick the attackers' look at the defenders' cameras ends (0: none). */
+  private camsLentUntil = 0;
+  /** Phones' fires burning: where, until when, its next bite, its numbers. */
+  private fires: { pos: Vec3; end: number; next: number; k: JegeoData["fire"] }[] = [];
+
+  /**
+   * Dokkaebi's tablet (Phase 8 M9; research/operators/dokkaebi.md §3): her charges come back over time; with it up,
+   * Fire sends the payload to the identified defender nearest her crosshair (one of her charges), or with none, hacks a
+   * dead defender's phone (the attackers watch the defenders' cameras for a while). An upload runs over a constant
+   * connection: her tablet put away, her going down, a jammer or an EMP on either of them, or his dismissal cut it;
+   * done, his phone explodes (jegeoDone). The phones' fires burn whoever's in them.
+   */
+  private jegeo(applied: ReadonlyMap<number, { m: Member; input: QueuedInput }>) {
+    const tick = this.sim.tick;
+    for (const m of this.members.values()) {
+      const c = m.ctrl;
+      const body = c ? this.sim.pawns.get(c.possessedPawnId) : undefined;
+      const t = body && body.kind === PawnKind.Body ? slotGadget(this.sim.data, body.loadout, 2)?.jegeo : undefined;
+      if (!c || !body || !t) continue;
+      let st = this.jegeoState.get(body.id);
+      if (!st) {
+        st = { charges: t.startCharges, next: tick + ticks(t.regenS), upload: null, held: false, hacks: 0 };
+        this.jegeoState.set(body.id, st);
+      }
+      if (st.charges >= t.maxCharges) st.next = tick + ticks(t.regenS);
+      else if (tick >= st.next) {
+        st.charges++;
+        st.next = tick + ticks(t.regenS);
+      }
+      const s = body.state;
+      const alive = s.mode !== PawnMode.Dead && s.mode !== PawnMode.Held && s.mode !== PawnMode.Downed;
+      // Up: in her hands and ready, and her view her own (on a camera or a drone, Fire scans).
+      const up = alive && s.hand === Hand.Ability && s.gAct !== GadgetAct.Equip && c.cam === 0 && c.drone === 0;
+      const tell = (stage: 0 | 1 | 2 | 3 | 4, pawnId: number, n: number) => m.events.push({ kind: "jegeo", stage, pawnId, ticks: n, charges: st!.charges });
+      if (st.upload) {
+        const u = st.upload;
+        const called = this.sim.pawns.get(u.target);
+        const tm = called && called.ownerId !== null ? this.memberOf(called.ownerId) : null;
+        // The phone is the player's: on Skopós, in whichever shell he is now.
+        const target = tm?.ctrl ? this.sim.pawns.get(tm.ctrl.possessedPawnId) : called;
+        const ti = tm?.ctrl ? applied.get(tm.ctrl.id)?.input : undefined;
+        if (ti) u.dismiss = ti.cmd.buttons & Btn.Interact ? u.dismiss + 1 : 0;
+        const heart = target ? heartOf(this.sim, target) : null;
+        const cut =
+          !up ||
+          s.jammed > 0 ||
+          pawnJammed(this.sim, body) ||
+          !target ||
+          !heart ||
+          target.state.mode === PawnMode.Dead ||
+          target.state.jammed > 0 ||
+          (tm?.ctrl?.phoneLost ?? false) ||
+          pointJammed(this.sim, body.team, heart) ||
+          u.dismiss >= ticks(t.dismissS);
+        if (cut) {
+          st.upload = null;
+          this.ringing(tm ?? null, called, false);
+          this.jegeoCooldown.set(u.target, tick + ticks(t.cooldownS));
+          tell(2, u.target, 0);
+          tm?.events.push({ kind: "jegeo", stage: 2, pawnId: u.target, ticks: 0, charges: 0 });
+          continue;
+        }
+        // (By the tick it started: this runs again for every catch-up step, the review found, M12.)
+        this.ringing(tm ?? null, called, tick - u.start < ticks(t.uploadS));
+        if (tick - u.start < ticks(t.uploadS)) continue;
+        st.upload = null;
+        this.jegeoCooldown.set(u.target, tick + ticks(t.cooldownS));
+        this.jegeoDone(c, body, target!, tm ?? null, t);
+        tell(1, u.target, 0);
+        continue;
+      }
+      // Her Fire as of an input of hers this step (a catch-up step for someone else has none: that's not a let-go).
+      const input = applied.get(c.id)?.input;
+      if (!input) continue;
+      const fire = (input.cmd.buttons & Btn.Fire) !== 0;
+      if (!fire) st.held = false;
+      if (!fire || st.held || !up) continue;
+      st.held = true;
+      const target = this.jegeoTarget(body, t);
+      if (target) {
+        // Not while she's jammed or EMP'd herself (the connection would be cut at once).
+        if (st.charges <= 0 || s.jammed > 0 || pawnJammed(this.sim, body)) continue;
+        st.charges--;
+        st.upload = { target: target.id, start: tick, dismiss: 0 };
+        tell(0, target.id, ticks(t.uploadS));
+        const tm = target.ownerId !== null ? this.memberOf(target.ownerId) : null;
+        this.ringing(tm, target, true);
+        tm?.events.push({ kind: "jegeo", stage: 3, pawnId: target.id, ticks: ticks(t.uploadS), charges: 0 });
+        continue;
+      }
+      // No live target: a dead defender's phone (Skopós's circuit board), the oldest not hacked yet, from anywhere (a
+      // jammer doesn't stop it: research/interactions.csv, ours).
+      if (st.hacks >= t.camHacks) continue;
+      const phoneKind = kindOf("dropped_phone");
+      const phone = this.sim.gadgets.list.find((g) => g.kind === phoneKind && g.team !== body.team && !this.phonesHacked.has(g.id));
+      if (!phone) continue;
+      this.phonesHacked.add(phone.id);
+      st.hacks++;
+      this.camsLentUntil = tick + ticks(t.camS);
+      if (this.director) this.director.camerasLent(true);
+      else this.sim.matchRules.camsLent = true;
+      tell(4, phone.id, ticks(t.camS));
+    }
+    if (this.camsLentUntil && tick >= this.camsLentUntil) {
+      this.camsLentUntil = 0;
+      if (this.director) this.director.camerasLent(false);
+      else this.sim.matchRules.camsLent = false;
+    }
+    // The phones' fires (team-neutral, as the level's are): a bite every `everyS` for whoever stands in one.
+    this.fires = this.fires.filter((f) => tick < f.end);
+    for (const f of this.fires) {
+      if (tick < f.next) continue;
+      f.next = tick + ticks(f.k.everyS);
+      const attacker: Attacker = { ctrlId: 0, team: NEUTRAL, weaponId: "jegeo_payload", origin: [f.pos[0], f.pos[1], f.pos[2]] };
+      for (const p of [...this.sim.pawns.values()]) {
+        const ps = p.state;
+        if (p.kind !== PawnKind.Body || ps.mode === PawnMode.Dead || ps.mode === PawnMode.Held) continue;
+        if (Math.hypot(ps.x - f.pos[0], ps.z - f.pos[2]) <= f.k.radiusM && Math.abs(ps.y - f.pos[1]) <= 1.0) this.hurt(p, { amount: f.k.damage, kill: false }, { cause: Cause.Gadget, attacker, headshot: false });
+      }
+    }
+  }
+
+  /**
+   * An eliminated defender's phone (Phase 8 M9; gadgets/DESIGN.md §9; Skopós's circuit board): an entry on the floor
+   * under where his body fell, his side's, until any damage destroys it (data/gadgets/dropped_phone.json).
+   */
+  private dropPhone(victim: Pawn) {
+    const d = this.sim.data.gadgets.get("dropped_phone");
+    if (!d) return;
+    const s = victim.state;
+    const down = raycastLevel(this.sim, [s.x, s.y + 0.3, s.z], [0, -1, 0], 4);
+    const floor = down ? s.y + 0.3 - down.t : s.y;
+    this.sim.gadgets.add({ kind: kindOf(d.id), owner: victim.ownerId ?? 0, team: victim.team, pos: [s.x, floor + d.sizeM[1] / 2, s.z], yaw: s.yaw, vel: [0, 0, 0], flags: GFlag.OnFloor, panel: -1, launchTick: 0, fuseEnd: 0, signalEnd: 0, readyAt: 0, offEnd: 0, seq: 0 });
+  }
+
+  /**
+   * The identified defender Dokkaebi's tablet sends to: the one nearest her crosshair within `aimDeg`, through anything
+   * (spotted by her team's scans, alive and not Skopós's idle shell, his phone whole, not on his cooldown, not inside a
+   * jammer of his side's), or null.
+   */
+  private jegeoTarget(body: Pawn, t: JegeoData): Pawn | null {
+    const eye = eyePose(this.sim.data.movement, this.sim.data.hitboxes, body.state).pos;
+    const look = viewDir(body.state.yaw, body.state.pitch);
+    const cone = Math.cos(t.aimDeg * DEG);
+    let best: { p: Pawn; cos: number } | null = null;
+    for (const p of this.sim.pawns.values()) {
+      if (p.kind !== PawnKind.Body || p.team === body.team || p.state.mode === PawnMode.Dead || isIdleShell(this.sim, p)) continue;
+      if ((this.spottedUntil.get(p.id) ?? 0) <= this.sim.tick || (this.jegeoCooldown.get(p.id) ?? 0) > this.sim.tick) continue;
+      // No phone left to call (another payload blew it up).
+      if (p.ownerId !== null && this.sim.controllers.get(p.ownerId)?.phoneLost) continue;
+      const h = heartOf(this.sim, p);
+      if (pointJammed(this.sim, body.team, h)) continue;
+      const d = [h[0] - eye[0], h[1] - eye[1], h[2] - eye[2]];
+      const len = Math.hypot(d[0], d[1], d[2]);
+      const cos = len < 1e-6 ? 1 : (d[0] * look[0] + d[1] * look[1] + d[2] * look[2]) / len;
+      if (cos >= cone && (!best || cos > best.cos)) best = { p, cos };
+    }
+    return best?.p ?? null;
+  }
+
+  /**
+   * A payload's upload done (Phase 8 M9): his phone explodes in his hands (its damage, credited to Dokkaebi), a fire
+   * burns where he stood for its seconds, and he has no observation tools for the rest of the round (corrected now).
+   */
+  private jegeoDone(c: PlayerController, body: Pawn, target: Pawn, tm: Member | null, t: JegeoData) {
+    const at = heartOf(this.sim, target);
+    this.hurt(target, { amount: t.damage, kill: false }, { cause: Cause.Explosive, attacker: { ctrlId: c.id, team: body.team, weaponId: "jegeo_payload", origin: at }, headshot: false });
+    this.fires.push({ pos: [target.state.x, target.state.y, target.state.z], end: this.sim.tick + ticks(t.fire.seconds), next: this.sim.tick + ticks(t.fire.everyS), k: t.fire });
+    this.tellBlast(kindOf("jegeo_payload"), at);
+    if (tm?.ctrl) {
+      tm.ctrl.phoneLost = true;
+      tm.ctrl.cam = 0;
+      tm.ctrl.shellCam = false;
+      tm.events.push({ kind: "jegeo", stage: 1, pawnId: target.id, ticks: 0, charges: 0 });
+      this.force(tm);
+    }
+  }
+
+  /**
+   * Fuze's bash (Phase 8 M11; weapons_notes.md §5): its `bashDamage` (none since Y9S4), and the body it meets pushed
+   * straight back from him at `bashPushMps` (its own shield knocked aside too).
+   */
+  private bashed(by: Pawn, target: Pawn, k: NonNullable<Pawn["loadout"]>["shield"] & object) {
+    const s = target.state;
+    const dx = s.x - by.state.x;
+    const dz = s.z - by.state.z;
+    const len = Math.hypot(dx, dz) || 1;
+    s.vx = Math.fround(s.vx + (dx / len) * k.bashPushMps);
+    s.vz = Math.fround(s.vz + (dz / len) * k.bashPushMps);
+    if (k.bashDamage > 0) this.hurt(target, { amount: k.bashDamage, kill: false }, { cause: Cause.Melee, attacker: { ctrlId: by.ownerId ?? 0, team: by.team, weaponId: "ballistic_shield", origin: [by.state.x, by.state.y, by.state.z] }, headshot: false });
+    this.guardBreak(target);
+    const owner = target.ownerId !== null ? this.memberOf(target.ownerId) : null;
+    if (owner) this.force(owner);
+  }
+
+  /**
+   * Whether a blow (a knife, a bash, the hammer) does anything to a body: not to a teammate while friendly fire is off,
+   * as its damage wouldn't (Phase 8 M11). A blast or a stun knocks a shield aside whoever's it is, as a stun flashes
+   * either side.
+   */
+  private blowLands(by: Pawn, target: Pawn): boolean {
+    return target.team !== by.team || this.friendlyFireOn();
+  }
+
+  /** A guard break (Phase 8 M11): a body's shield held up is knocked aside for `guardBreak.seconds`. */
+  private guardBreak(pawn: Pawn) {
+    const k = pawn.loadout?.shield;
+    if (k && shieldUp(pawn.state)) this.knockAside(pawn, k.guardBreak.seconds);
+  }
+
+  /** Fuze's shield knocked aside (a guard break) or down (the hammer) for `seconds` (Phase 8 M11): its owner corrected. */
+  private knockAside(pawn: Pawn, seconds: number) {
+    knockShield(pawn, seconds);
+    const owner = pawn.ownerId !== null ? this.memberOf(pawn.ownerId) : null;
+    if (owner) this.force(owner);
+  }
+
+  /**
+   * Fuze's shield dash (Phase 8 M11; weapons_notes.md §5): a body sprinting with its shield up into a barricade already
+   * worn below its full hit points breaks through it; a fresh one stops it (Y11S1: no dashing through undamaged ones).
+   */
+  private shieldDashes() {
+    for (const pawn of this.sim.pawns.values()) {
+      const s = pawn.state;
+      const k = pawn.loadout?.shield;
+      if (pawn.kind !== PawnKind.Body || !k || !s.sprinting || !shieldUp(s)) continue;
+      const eye = eyePose(this.sim.data.movement, this.sim.data.hitboxes, s).pos;
+      const [fx, fz] = forwardXZ(s.yaw);
+      // (Any crossing of it, a hole's too: a worn barricade is still one.)
+      const along = this.sim.level.panels.crossings([s.x, eye[1] - 0.6, s.z], [fx, 0, fz], k.plate.frontM + 0.25);
+      const p = along.find((c) => c.entry.panel.kind === "barricade")?.entry.panel;
+      if (!p || p.kind !== "barricade" || p.broken || p.hp >= p.spec.hp) continue;
+      this.applyPanelOp(p.spec.index, { kind: "damage", amount: Math.max(1, p.hp), hard: false });
+    }
+  }
+
+  /** Skopós's idle shells' barriers (Phase 8 M10): the entry standing in front of each, by the shell's pawn id. */
+  private readonly barriers = new Map<number, number>();
+
+  /**
+   * Skopós's idle shells' barriers (Phase 8 M10; skopos.md §3.3; data/gadgets/shell_shield.json): every living shell she
+   * isn't in has one standing in front of it (its camera for the defence too); the one she wakes loses it, the one she
+   * leaves gets one, and a dead shell's goes. One a blast broke stays (broken: the shell's camera still).
+   */
+  private shellShields() {
+    const d = this.sim.data.gadgets.get("shell_shield");
+    if (!d) return;
+    const idle = new Set<number>();
+    for (const c of this.sim.controllers.values()) {
+      const bodies = this.sim.bodyIds(c);
+      if (bodies.length < 2) continue;
+      for (const id of bodies) if (id !== c.possessedPawnId && this.sim.pawns.get(id)?.state.mode !== PawnMode.Dead) idle.add(id);
+    }
+    // Round the crouched shell (its entry at the shell's centre, data `arc`); a plain one in front, just clear of its body.
+    const out = d.arc ? 0 : this.sim.data.movement.stance.collisionRadius + 0.15 + d.sizeM[2] / 2;
+    const spot = (p: Pawn): Vec3 => {
+      const [fx, fz] = forwardXZ(p.state.yaw);
+      return [p.state.x + fx * out, p.state.y + d.sizeM[1] / 2, p.state.z + fz * out];
+    };
+    for (const [shell, entry] of this.barriers) {
+      const g = this.sim.gadgets.get(entry);
+      if (idle.has(shell) && g) {
+        // A shell moved (a lab tool, a test) takes its barrier with it.
+        const p = this.sim.pawns.get(shell)!;
+        const at = spot(p);
+        if (Math.hypot(at[0] - g.pos[0], at[1] - g.pos[1], at[2] - g.pos[2]) > 0.05 || Math.abs(wrapAngle(p.state.yaw - g.yaw)) > 0.01) this.sim.gadgets.update(entry, { pos: at, yaw: p.state.yaw });
+        continue;
+      }
+      if (!idle.has(shell)) this.sim.gadgets.remove(entry);
+      this.barriers.delete(shell);
+    }
+    for (const id of idle) {
+      if (this.barriers.has(id)) continue;
+      const p = this.sim.pawns.get(id)!;
+      const s = p.state;
+      const g = this.sim.gadgets.add({
+        kind: kindOf(d.id),
+        owner: p.ownerId ?? 0,
+        team: p.team,
+        pos: spot(p),
+        yaw: s.yaw,
+        vel: [0, 0, 0],
+        flags: GFlag.OnFloor,
+        panel: -1,
+        launchTick: 0,
+        fuseEnd: 0,
+        signalEnd: 0,
+        readyAt: 0,
+        offEnd: 0,
+        seq: 0,
+      });
+      this.barriers.set(id, g.id);
+    }
+  }
+
+  /** Each Kludge drone's hacks left (Phase 8 M8; by its pawn id, from its data's `charges`). */
+  private readonly kludgeCharges = new Map<number, number>();
+  /** Skopós's idle shells a Kludge's hack has overheating (Phase 8 M8): the tick each burns out, and who did it. */
+  private readonly overheats = new Map<number, { end: number; by: Attacker }>();
+
+  /**
+   * Kludge drones' hacks (Phase 8 M8; research/operators/brava.md §3; gadgets/hack.ts): driving her own Kludge, Fire held
+   * on the other side's device in view within range starts one (not while it's jammed or EMP'd, nor with no hacks
+   * left); it runs while Fire is held, the Kludge stays within range of it (it needn't see it), and isn't jammed,
+   * EMP'd or destroyed; done after `hackS`, its result (hackDone) and one hack spent. Fire is let go before the next.
+   */
+  private hacks(applied: ReadonlyMap<number, { m: Member; input: QueuedInput }>) {
+    for (const { m, input } of applied.values()) {
+      const c = m.ctrl;
+      const fire = (input.cmd.buttons & Btn.Fire) !== 0;
+      const kludge = c && c.drone && c.pawnIds.includes(c.drone) ? this.sim.pawns.get(c.drone) : undefined;
+      const k = kludge ? kludgeOf(this.sim.data, kludge) : null;
+      const working = kludge !== undefined && k !== null && kludge.state.mode === PawnMode.Walk && kludge.state.jammed === 0 && !pawnJammed(this.sim, kludge);
+      const left = (id: number) => this.kludgeCharges.get(id) ?? k?.charges ?? 0;
+      const tell = (stage: 0 | 1 | 2, id: number, n: number) => m.events.push({ kind: "hack", stage, kludge: id, ticks: n, left: left(id) });
+      if (m.hack) {
+        const h = m.hack;
+        const at = working && kludge.id === h.kludge ? hackTargetPos(this.sim, h.target, kludge.team) : null;
+        const s = kludge?.state;
+        const near = at !== null && s !== undefined && Math.hypot(at[0] - s.x, at[1] - s.y, at[2] - s.z) <= k!.rangeM;
+        if (!fire || !near) {
+          m.hack = null;
+          m.hackHeld = fire;
+          tell(2, h.kludge, 0);
+          continue;
+        }
+        if (++h.ticks < ticks(k!.hackS)) continue;
+        m.hack = null;
+        m.hackHeld = true;
+        this.kludgeCharges.set(kludge!.id, left(kludge!.id) - 1);
+        this.hackDone(kludge!, k!, h.target, { ctrlId: c!.id, team: kludge!.team, weaponId: "kludge_drone", origin: [s!.x, s!.y, s!.z] });
+        tell(1, kludge!.id, 0);
+        continue;
+      }
+      if (!fire) m.hackHeld = false;
+      if (!fire || m.hackHeld || !working || left(kludge.id) <= 0) continue;
+      const view = this.sim.viewOf(c!);
+      if (!view) continue;
+      const team = kludge.team;
+      const target = hackTargetFor(this.sim, kludge, k, view, (from, to) => smokeOnSegment(this.sim.data, this.sim.gadgets, from, to) !== null || this.barrierBetween(team, from, to));
+      if (!target) continue;
+      m.hack = { kludge: kludge.id, target, ticks: 0 };
+      tell(0, kludge.id, ticks(k.hackS));
+    }
+  }
+
+  /**
+   * A Kludge's hack done (Phase 8 M8; research/operators/brava.md §4): a device of the other side's that can be controlled
+   * switches sides (a default camera's bit in `matchRules.camsHacked`, an entry's team); one that can't (a Nitro Cell)
+   * is disabled and fizzles `destroyS` later; Skopós's idle shell overheats, `overheatS` from now unless she wakes it.
+   */
+  private hackDone(kludge: Pawn, k: KludgeData, t: HackTarget, by: Attacker) {
+    if (t.kind === "camera") {
+      const bits = 1 << t.index;
+      if (this.director) this.director.camerasHacked(bits);
+      else this.sim.matchRules.camsHacked |= bits;
+      return;
+    }
+    if (t.kind === "shell") {
+      const shell = this.sim.pawns.get(t.pawnId);
+      if (!shell) return;
+      this.overheats.set(shell.id, { end: this.sim.tick + ticks(k.overheatS), by });
+      const owner = shell.ownerId !== null ? this.memberOf(shell.ownerId) : null;
+      owner?.events.push({ kind: "overheat", pawnId: shell.id, ticks: ticks(k.overheatS) });
+      return;
+    }
+    const g = this.sim.gadgets.get(t.id);
+    const how = g && this.sim.data.gadgets.get(kindId(g.kind) ?? "")?.hack;
+    if (!g || !how) return;
+    if (how === "convert") this.sim.gadgets.update(g.id, { team: kludge.team, flags: g.flags & ~GFlag.Active });
+    else this.gadgetServer.fizzle(g, ticks(k.destroyS));
+  }
+
+  /**
+   * Skopós's idle shells overheating (Phase 8 M8): woken (she swapped into it) the overheat's over; still idle when it
+   * burns out, it's destroyed (she lives on in the other, but can't swap any more).
+   */
+  private overheating() {
+    for (const [id, o] of this.overheats) {
+      const shell = this.sim.pawns.get(id);
+      if (!shell || shell.state.mode === PawnMode.Dead || !isIdleShell(this.sim, shell)) {
+        this.overheats.delete(id);
+        continue;
+      }
+      if (this.sim.tick < o.end) continue;
+      this.overheats.delete(id);
+      this.hurt(shell, { amount: shell.state.hp, kill: true }, { cause: Cause.Gadget, attacker: o.by, headshot: false });
     }
   }
 
@@ -1196,24 +1852,258 @@ export class Room implements DirectorHost {
       const pressed = down && !m.gadgetHeld;
       m.gadgetHeld = down;
       const c = m.ctrl;
-      if (!pressed || !c?.cam || !this.director) continue;
+      if (!pressed || !c?.cam) continue;
       const i = c.cam - 1;
       const cam = this.sim.bpCamAt(i);
       const body = this.sim.pawns.get(c.possessedPawnId);
-      if (!cam || !this.sim.camWorks(i) || this.sim.tick < cam.dartReady || !body || body.state.mode === PawnMode.Dead) continue;
+      // Only a defender's own: attackers watching one a Kludge hacked can't fire it (Phase 8 M8; Fandom's BP camera page).
+      if (!cam || !this.sim.camWorks(i) || this.sim.tick < cam.readyAt || !body || body.state.mode === PawnMode.Dead || cam.team !== DEFENSE || body.team !== DEFENSE) continue;
       const view = this.sim.viewOf(c)!;
       const team = this.teamOf(m);
       const drones = [...this.sim.pawns.values()].filter((p) => p.kind === PawnKind.Drone && p.state.mode === PawnMode.Walk && p.team !== team);
       const centre = (p: Pawn): Vec3 => [p.state.x, p.state.y + size[1] / 2, p.state.z];
       const burst = dartBurst(this.sim, k, view.pos, viewDir(view.yaw, view.pitch), drones.map(centre), size[0] / 2);
-      for (const p of drones) {
-        const at = centre(p);
-        if (Math.hypot(at[0] - burst[0], at[1] - burst[1], at[2] - burst[2]) <= k.dartRadiusM) p.state.jammed = ticks(k.disableS);
-      }
-      this.director.dartFired(i - this.sim.level.def.cameras.length, this.sim.tick + ticksOrZero(k.dartRechargeS));
+      // Its burst is an EMP (DSEG, Phase 8 M3): the attackers' drones, bodies and electronic gadgets in it.
+      this.dseg(team, burst, k.dartRadiusM, k.disableS);
+      this.sim.gadgets.update(cam.id, { readyAt: this.sim.tick + ticksOrZero(k.dartRechargeS) });
       const e: GameEvent = { kind: "emp", pos: burst };
       for (const o of this.members.values()) o.events.push(e);
     }
+  }
+
+  /**
+   * A gadget went off where it is (Phase 8 M2, M3; gadgets/DESIGN.md §5, §6): its blast, its flash, its EMP (smoke stays
+   * as a cloud, gadgets/serve.ts). Everyone sees and hears it.
+   */
+  private goOff(g: Gadget, at: Vec3) {
+    const data = this.sim.data.gadgets.get(kindId(g.kind) ?? "");
+    if (!data) return;
+    if (data.blast) this.explode(g, data.blast, this.creditOf(data), at);
+    if (data.stun) this.flash(data.stun, at);
+    if (data.emp) this.dseg(g.team, at, data.emp.radiusM, data.emp.seconds);
+    this.tellBlast(g.kind, at);
+  }
+
+  /** The weapon a gadget's blast is credited to: a cluster charge's grenade's to the charge (Phase 8 M5). */
+  private creditOf(data: GadgetData): string {
+    for (const d of this.sim.data.gadgets.values()) if (d.cluster?.grenade === data.id) return d.id;
+    return data.id;
+  }
+
+  /** Everyone sees and hears a gadget (or an ingredient) go off there (the client's effects, by its kind). */
+  private tellBlast(kind: number, at: Vec3) {
+    const ev: GameEvent = { kind: "blast", gadget: kind, pos: [at[0], at[1], at[2]] };
+    for (const m of this.members.values()) m.events.push(ev);
+  }
+
+  /**
+   * A blast (gadgets/blast.ts): its damage now, credited to its gadget's owner (their own bodies always; teammates by
+   * the friendly fire rules, as bullets: off, scaled, or reflected on its owner; an ingredient's belongs to nobody; a
+   * drone is a gadget to it, either side's, Phase 8 M5), its cuts with this tick's panel ops, and what it destroys.
+   */
+  private explode(g: Gadget, blast: BlastData, weaponId: string, at: Vec3) {
+    const fx = blastEffects(this.sim, g, blast, at);
+    const owner = g.owner ? this.memberOf(g.owner) : null;
+    const attacker: Attacker = { ctrlId: g.owner, team: g.owner ? g.team : NEUTRAL, weaponId, origin: [at[0], at[1], at[2]] };
+    for (const { pawn, damage, guard } of fx.bodies) {
+      // Fuze's shield knocked aside by it (Phase 8 M11), whoever's blast it is.
+      if (guard) this.guardBreak(pawn);
+      const own = g.owner !== 0 && pawn.ownerId === g.owner;
+      const friendly = !own && pawn.team === attacker.team && pawn.kind !== PawnKind.Drone;
+      if (friendly && !this.friendlyFireOn()) continue;
+      if (this.director?.safeguarded(pawn)) continue;
+      const amount = friendly ? Math.round(damage * this.rules.friendlyFire.scale) : damage;
+      if (amount <= 0) continue;
+      if (friendly && owner?.reflect) {
+        const body = owner.ctrl && this.sim.pawns.get(owner.ctrl.possessedPawnId);
+        if (body) this.hurt(body, { amount, kill: false }, { cause: Cause.Reflect, attacker: null, headshot: false });
+        continue;
+      }
+      const r = this.hurt(pawn, { amount, kill: false }, { cause: Cause.Explosive, attacker, headshot: false });
+      if (friendly && owner && r.outcome !== "ignored") {
+        owner.teamDamage += r.removed;
+        if (this.rules.reverseFriendlyFire.enabled && owner.teamDamage >= this.rules.reverseFriendlyFire.thresholdHp) owner.reflect = true;
+      }
+    }
+    for (const o of fx.panelOps) this.queuePanelOp(o.panel, o.op);
+    for (const e of fx.gadgets) this.gadgetServer.blastHit(e);
+  }
+
+  /**
+   * A stun's flash (Phase 8 M3; research/gadgets.md §3.5), for everyone in sight of it, either side's, but not those on
+   * a camera, a drone or Skopós's shell camera: facing it, blinded fully within `fullM` and less out to `maxM`; facing
+   * away, half within `behindM`; ears ringing within `ringM`, whatever the facing. Each one's own client is told.
+   */
+  private flash(k: StunData, at: Vec3) {
+    for (const m of this.members.values()) {
+      const c = m.ctrl;
+      if (!c || c.cam !== 0 || c.drone !== 0 || c.shellCam || c.swapPhase !== 0) continue;
+      const body = this.sim.pawns.get(c.possessedPawnId);
+      if (!body || body.kind !== PawnKind.Body || body.state.mode === PawnMode.Dead) continue;
+      const eye = eyePose(this.sim.data.movement, this.sim.data.hitboxes, body.state).pos;
+      const d: Vec3 = [at[0] - eye[0], at[1] - eye[1], at[2] - eye[2]];
+      const dist = Math.hypot(d[0], d[1], d[2]);
+      let blind = 0;
+      if (dist <= k.maxM && this.flashSeen(eye, at)) {
+        const look = viewDir(body.state.yaw, body.state.pitch);
+        const facing = dist < 1e-6 || (d[0] * look[0] + d[1] * look[1] + d[2] * look[2]) / dist > 0;
+        if (facing) blind = dist <= k.fullM ? 1 : (k.maxM - dist) / Math.max(1e-6, k.maxM - k.fullM);
+        else if (dist <= k.behindM) blind = 0.5;
+      }
+      const ring = dist <= k.ringM;
+      if (blind > 0 || ring) m.events.push({ kind: "stunned", seconds: k.seconds, blind, ring, concuss: false });
+      // A stun always knocks Fuze's shield aside (a concussion's guard break is 100%, weapons_notes.md §5; Phase 8 M11).
+      if (blind > 0 || ring) this.guardBreak(body);
+    }
+  }
+
+  /** Whether a flash at `at` reaches an eye: the level, props and panels' material stop it; a deployable shield's slits don't. */
+  private flashSeen(eye: Vec3, at: Vec3): boolean {
+    const d: Vec3 = [at[0] - eye[0], at[1] - eye[1], at[2] - eye[2]];
+    const len = Math.hypot(d[0], d[1], d[2]);
+    if (len < 1e-6) return true;
+    const dir: Vec3 = [d[0] / len, d[1] / len, d[2] / len];
+    const ray = new this.sim.R.Ray({ x: eye[0], y: eye[1], z: eye[2] }, { x: dir[0], y: dir[1], z: dir[2] });
+    if (this.sim.world.castRay(ray, len - 0.05, true, undefined, QUERY_FLASH)) return false;
+    return this.sim.level.panels.firstSolid(eye, dir, len - 0.05) === null;
+  }
+
+  /**
+   * An EMP's DSEG (Phase 8 M3, gadgets/electronics.ts): applied; those whose bodies or drones it jammed get a
+   * correction; the default cameras it reached are off for its time.
+   */
+  private dseg(team: number, at: Vec3, radiusM: number, seconds: number) {
+    const hit = this.gadgetServer.emp(team, at, radiusM, seconds);
+    for (const p of hit.pawns) {
+      const owner = p.ownerId !== null ? this.memberOf(p.ownerId) : null;
+      if (owner) this.force(owner);
+    }
+    const end = this.sim.tick + ticks(seconds);
+    for (let i = 0; i < 32; i++) if (hit.cams & (1 << i)) this.camOffEnd[i] = Math.max(this.camOffEnd[i] ?? 0, end);
+    this.camsOffNow();
+  }
+
+  /** When an EMP turned each default camera off until (server ticks; Phase 8 M3). */
+  private camOffEnd: number[] = [];
+
+  /** The default cameras an EMP has off now: in a match everyone's told when that changes. */
+  private camsOffNow() {
+    let bits = 0;
+    this.camOffEnd.forEach((end, i) => void (end > this.sim.tick && (bits |= 1 << i)));
+    if (this.director) this.director.camerasOff(bits);
+    else this.sim.matchRules.camsOff = bits;
+  }
+
+  /** Whether the other side's observation blocker (on, not in flight) stands between an observation tool and a point. */
+  private barrierBetween(team: number, from: Vec3, to: Vec3): boolean {
+    for (const g of this.sim.gadgets.list) {
+      const d = this.sim.data.gadgets.get(kindId(g.kind) ?? "");
+      if (!d?.barrier || g.team === team || g.flags & (GFlag.Flying | GFlag.Off)) continue;
+      if (crossesBarrier(barrierOf(this.sim, d.barrier, g, d.sizeM), from, to) !== null) return true;
+    }
+    return false;
+  }
+
+  /** Damage from a gadget over time (barbed wire, a gas pipe's jet or fire), credited to its owner (an ingredient's to nobody). */
+  private gadgetHurt(g: Gadget, pawn: Pawn, amount: number) {
+    if (this.director?.safeguarded(pawn)) return;
+    const attacker: Attacker = { ctrlId: g.owner, team: g.owner ? g.team : NEUTRAL, weaponId: kindId(g.kind) ?? "", origin: [g.pos[0], g.pos[1], g.pos[2]] };
+    this.hurt(pawn, { amount, kill: false }, { cause: Cause.Gadget, attacker, headshot: false });
+  }
+
+  /** An alarm (or a metal detector) started or stopped sounding: everyone hears it; the body that set it off sees it marked. */
+  private alarm(g: Gadget, by: Pawn | null) {
+    const e: GameEvent = { kind: "alarm", gadget: g.id, pos: [g.pos[0], g.pos[1], g.pos[2]], on: by !== null, pawnId: by?.id ?? 0 };
+    for (const m of this.members.values()) m.events.push(e);
+  }
+
+  /**
+   * An ingredient's stage (Phase 8 M3, gadgets/DESIGN.md §9): a fire extinguisher's burst concusses those close by; a
+   * gas pipe goes off. Everyone sees and hears it.
+   */
+  private ingredientStage(g: Gadget, stage: IngredientStage) {
+    const k = this.sim.data.gadgetRules.ingredients;
+    if (stage === "burst") this.concuss(g.pos, k.fire_extinguisher.concuss.radiusM, k.fire_extinguisher.concuss.seconds);
+    if (stage === "blast") this.explode(g, k.gas_pipe.blast, "gas_pipe", g.pos);
+    // (A jet is drawn from the table, for as long as it lasts.)
+    if (stage !== "jet") this.tellBlast(g.kind, g.pos);
+  }
+
+  /** Bodies within `radiusM` of `at` and in sight of it are concussed for `seconds`: their own clients are told. */
+  private concuss(at: Vec3, radiusM: number, seconds: number) {
+    for (const m of this.members.values()) {
+      const body = m.ctrl ? this.sim.pawns.get(m.ctrl.possessedPawnId) : undefined;
+      if (!body || body.kind !== PawnKind.Body || body.state.mode === PawnMode.Dead || pawnDistance(this.sim, body, at) > radiusM) continue;
+      if (!this.flashSeen(eyePose(this.sim.data.movement, this.sim.data.hitboxes, body.state).pos, at)) continue;
+      m.events.push({ kind: "stunned", seconds, blind: 0, ring: true, concuss: true });
+      this.guardBreak(body);
+    }
+  }
+
+  /** No gadget left but the level's ingredients, put back as new (a match's prep, the lab's Clear gadgets). */
+  resetGadgets(): void {
+    this.gadgetServer.clear();
+    this.camOffEnd = [];
+    this.camsOffNow();
+    this.placeIngredients();
+    // Dokkaebi's (Phase 8 M9): no call or phone hack left over, no fire burning (a match's director lends no cameras now).
+    for (const st of this.jegeoState.values()) {
+      const called = st.upload ? this.sim.pawns.get(st.upload.target) : undefined;
+      if (called) this.ringing(called.ownerId !== null ? this.memberOf(called.ownerId) : null, called, false);
+    }
+    this.jegeoState.clear();
+    this.jegeoCooldown.clear();
+    this.spottedUntil.clear();
+    this.phonesHacked.clear();
+    this.fires = [];
+    this.camsLentUntil = 0;
+    if (!this.director) this.sim.matchRules.camsLent = false;
+  }
+
+  /** The level's ingredients (Phase 8 M3) into the table, each owned by nobody (a metal detector is the defenders' to an EMP). */
+  private placeIngredients() {
+    for (const ing of this.sim.level.def.ingredients) {
+      const team = ing.kind === "metal_detector" ? DEFENSE : 0;
+      const base = { owner: 0, team, vel: [0, 0, 0] as Vec3, flags: 0, panel: -1, launchTick: 0, fuseEnd: 0, signalEnd: 0, readyAt: 0, offEnd: 0, seq: 0 };
+      this.sim.gadgets.add({ ...base, kind: kindOf(ing.kind), pos: [ing.pos[0], ing.pos[1], ing.pos[2]], yaw: ing.yawDeg * DEG });
+    }
+  }
+
+  /** Whether one bullet or a knife destroys this entry (its data's `fragile`; not in the air). */
+  private fragile(g: Gadget): boolean {
+    return !(g.flags & GFlag.Flying) && (this.sim.data.gadgets.get(kindId(g.kind) ?? "")?.fragile ?? false);
+  }
+
+  /** Whether a bullet sets this entry off: a level ingredient not yet going or spent; a metal detector (destroyed), beeping or not. */
+  private ignitable(g: Gadget): boolean {
+    if (!isIngredient(g.kind)) return false;
+    return kindId(g.kind) === "metal_detector" || !(g.flags & (GFlag.Active | GFlag.Broken));
+  }
+
+  /** A bullet's (or a knife's) gadget: an ingredient set off, the rest destroyed. */
+  private strike(g: Gadget) {
+    if (isIngredient(g.kind)) this.gadgetServer.ignite(g);
+    else this.gadgetServer.destroy(g);
+  }
+
+  /** What a knife does something to: a fragile gadget, barbed wire, a solid one's clear glass, a fire extinguisher or a metal detector. */
+  private knifeable(g: Gadget): boolean {
+    if (g.flags & GFlag.Flying) return false;
+    const d = this.sim.data.gadgets.get(kindId(g.kind) ?? "");
+    if (d) return d.fragile || d.wire !== undefined || (d.solid && !(g.flags & (GFlag.Hit | GFlag.Broken)));
+    return this.ignitable(g) && kindId(g.kind) !== "gas_pipe";
+  }
+
+  /** A knife hit on a gadget (research/gadgets.md §4): wire takes `knifeHits` of them; a shield's glass goes opaque. */
+  private knifed(g: Gadget) {
+    const d = this.sim.data.gadgets.get(kindId(g.kind) ?? "");
+    // A Gu mine knifed goes off: whoever's close (the knifer, surely) is needled (Phase 8 M10; lesion.md).
+    if (d?.gu) this.gadgetServer.sting(g);
+    else if (d?.wire) {
+      if (d.wire.knifeHits <= 1 || g.flags & GFlag.Hit) this.gadgetServer.destroy(g);
+      else this.sim.gadgets.update(g.id, { flags: g.flags | GFlag.Hit });
+    } else if (d?.solid) this.sim.gadgets.update(g.id, { flags: g.flags | GFlag.Hit });
+    else this.strike(g);
   }
 
   /** A callout off the comm wheel (Phase 7): to the caller's team, at most two a second. */
@@ -1230,9 +2120,13 @@ export class Room implements DirectorHost {
   private judgeEvents(applied: ReadonlyMap<number, { m: Member; input: QueuedInput }>) {
     this.scans(applied);
     this.darts(applied);
+    this.hacks(applied);
+    this.overheating();
+    this.jegeo(applied);
+    this.shellShields();
     for (const e of this.sim.events) {
-      if (e.kind === "ping") this.ping(e.ctrlId, e.pos);
-      if (e.kind !== "shot" && e.kind !== "meleeImpact") continue;
+      if (e.kind === "ping") this.ping(e.ctrlId, e.pos, e.gadget, e.heart ?? false);
+      if (e.kind !== "shot" && e.kind !== "meleeImpact" && e.kind !== "swing") continue;
       const owner = this.sim.pawns.get(e.pawnId)?.ownerId;
       if (owner === undefined || owner === null) continue;
       const a = applied.get(owner);
@@ -1243,7 +2137,8 @@ export class Room implements DirectorHost {
       } else {
         const m = a?.m ?? this.memberOf(owner);
         const input = a?.input ?? m?.lastApplied;
-        if (m && input) this.judgeMeleeImpact(m, input, e);
+        if (m && input && e.kind === "meleeImpact") this.judgeMeleeImpact(m, input, e);
+        else if (m && input && e.kind === "swing") this.judgeSwing(m, input, e);
       }
     }
   }
@@ -1305,6 +2200,7 @@ export class Room implements DirectorHost {
       applied.set(m.ctrl.id, { m, input: m.applied });
     }
     this.judgeEvents(applied);
+    this.shieldDashes();
     // Catch up after a stall: one extra input for a client that has a backlog and banked credit.
     for (const m of this.members.values()) {
       if (!m.ctrl || m.queue.length <= TARGET_QUEUE || m.credit < 1) continue;
@@ -1317,7 +2213,10 @@ export class Room implements DirectorHost {
     this.resolveShots();
     this.checkReviveLinks();
     this.reviveDummies();
-    // A match's clock and what its phases do with bodies; its state goes out before this tick's snapshot.
+    // Gadgets in flight, fuses and outdoor signals (Phase 8), then a match's clock and what its phases do with bodies;
+    // its state goes out before this tick's snapshot.
+    this.gadgetServer.step();
+    this.camsOffNow();
     this.director?.step();
     this.history.record();
     this.stats.ticks++;
@@ -1364,6 +2263,9 @@ export class Room implements DirectorHost {
     let shared: Uint8Array | null = null;
     const ops = this.unsentOps;
     this.unsentOps = [];
+    // The gadget table's ops since the last snapshot (Phase 8), the same message for everyone who had every op before.
+    const gadgetOps = this.sim.gadgets.takeOps();
+    let gadgetMsg: Uint8Array | null = null;
     for (const m of this.members.values()) {
       const fresh = m.opsHad ? ops.slice(m.opsHad) : ops;
       const mine = m.opsHeld === null ? null : m.opsHeld.length ? m.opsHeld.concat(fresh) : fresh;
@@ -1371,12 +2273,17 @@ export class Room implements DirectorHost {
       if (m.client.buffered() > MAX_BUFFERED) {
         this.stats.skippedSnapshots++;
         m.opsHeld = mine && mine.length <= MAX_HELD_OPS ? mine : null;
+        if (gadgetOps.length) m.gadgetsStale = true;
         continue; // never encode a snapshot that isn't sent: deltas are against what was sent
       }
       m.opsHeld = [];
       if (mine === null) m.client.send(encodePanelState(this.sim.level.panels));
       else if (mine === ops && ops.length) m.client.send((shared ??= encodePanelOps({ tick, ops, hash })));
       else if (mine.length) m.client.send(encodePanelOps({ tick, ops: mine, hash: this.sim.level.panels.hash() }));
+      if (m.gadgetsStale) {
+        m.gadgetsStale = false;
+        m.client.send(encodeGadgetState(this.sim.gadgets.list));
+      } else if (gadgetOps.length) m.client.send((gadgetMsg ??= encodeGadgetOps({ tick, ops: gadgetOps, hash: this.sim.gadgets.hash() })));
       const own = new Set(m.ctrl?.pawnIds ?? []);
       const remotes = new Map([...all].filter(([id]) => !own.has(id)));
       let correction = null;

@@ -1,0 +1,48 @@
+// Gadget Lab (Phase 8, gadgets/DESIGN.md §11): the Destruction Lab's walls to take every operator's gadgets to. Pick an
+// operator and their gadgets in the pause menu (Striker and Sentry take any two of their side's). Offline the page runs
+// a room of its own in a Web Worker (gadgets are the server's side, exactly as online); `?online` / `?room=CODE` play
+// it on the server, where everyone sees the same gadgets.
+import { startLab } from "./common/lab.js";
+import { gadgetFeatures } from "./gadgetFeatures.js";
+
+await startLab({
+  levelId: "gadget_lab",
+  title: "Gadget Lab",
+  page: "/labs/gadget_lab.html",
+  offline: "local",
+  goTo: [
+    ["Start", 0, 0, 18, 0],
+    ["Soft walls", -8, 0, -3, 0],
+    ["Reinforceable walls", 6, 0, -3, 0],
+    ["Doors and window", -6, 0, 9, 0],
+    ["Platform (hatch, soft floor)", 12, 3, 9.8, 0],
+    ["Open floor", 3, 0, 14, 0],
+    ["Metal detector", 8, 0, 17, 0],
+  ],
+  help: {
+    tryThis: [
+      "Pick an operator and their gadget in the pause menu (Esc): Striker and Sentry take any two different gadgets of their side's.",
+      "Press 3 (Z: Striker's and Sentry's second gadget) to take it out, and again to put it away; 1 or 2 bring a weapon back.",
+      "Grenades: left mouse throws, right mouse lobs. A frag bounces and goes off 4 s after the throw (2 s after its first bounce); an impact grenade goes off where it hits.",
+      "Charges, the Claymore, wire, shields, cameras: hold left mouse where the green outline shows. A Breach Charge goes on a soft wall, floor, hatch or barricade; a Hard Breach Charge on steel too; the Nitro Cell sticks where it's thrown.",
+      "With a charge out, the detonator is in your hand: left mouse sets the oldest one off. A Hard Breach Charge goes off by itself 4 s after it's on. Hold F on your wire, shield, alarm or blocker to take it back.",
+      "Blasts hurt the dummies: behind the soft wall (it gets through), behind the steel (it doesn't), behind the barricaded door and in the open. They cut soft walls, open the hatch, leave see-through holes in the soft floor, break barricades and destroy gadgets close by.",
+      "A Claymore goes off when a defender crosses one of its three lasers, 1 s after it's down: switch to the defenders (pause menu) and walk into one. One bullet destroys a charge, a Claymore, a Nitro Cell, an alarm or a blocker without a blast.",
+      "A stun blinds whoever faces it (fully within 11 m) for 5 s, and rings ears within 8 m; a smoke grenade leaves a cloud 5 m across for 10 s that cameras, drones and pings can't see through; an Impact EMP turns the defenders' electronics (and their sights' zoom, cameras, drones and detonators) off within 2 m for 9 s.",
+      "Barbed wire halves an attacker's speed and bites 5 a second while he moves; the deployable shield stops bullets, blasts, bodies and drones (a knife makes its glass opaque); the proximity alarm sounds while an attacker is within 3 m; the observation blocker hides what's behind it from the attackers' drones.",
+      "The fire extinguisher (west door wall) bursts into smoke and concusses those close by; the gas pipe (window wall) throws a flame jet for 15 s, then goes off; the metal detector (open floor) beeps while someone walks through. Shoot them or blow them up; Clear gadgets puts them back.",
+      "Sledge (M4): Z takes out his hammer, left mouse swings it (25 charges, one a swing that meets something). Close to a soft wall it breaks both faces and the studs (swing low and high for a hole to walk through), further only the near face; floors, hatches and barricades break, steel doesn't; it kills, and destroys defender gadgets.",
+      "Thermite (M5): Z, then hold left mouse 3 s on any breakable wall, floor or hatch, the reinforced wall too: on a wall it stands on the floor. Left mouse sets it burning; 3 s later a hole you can walk through, through steel. Fuze: Z, 2 s on a wall, floor, hatch or a deployable shield; set off, it goes through soft surfaces at once and drills steel for 1.75 s, then 5 grenades come out on the far side. One at a time for both: once a charge is on, Z gives only its detonator until it's set off.",
+      "Mira (M7): Z, then 5 s at a reinforceable wall (steel only from its own side), standing or crouched: a Black Mirror, clear from your side and black from the other, bulletproof both ways. A knife shatters it; its red canister (your side, under it) shot or blown up ejects the glass 4 s later.",
+      "Brava (M8): Z throws a Kludge drone (2, besides her drones); driving it, hold left mouse on a defenders' device within 10 m for 3 s to hack it: cameras, alarms, blockers and jammers switch sides, a Nitro Cell fizzles, Skopós's idle shell overheats. 3 hacks each.",
+      "Dokkaebi (M9): spot a defender first (ping him in view with T: a red mark), then Z takes out her tablet and left mouse aimed near him (through walls) uploads her payload for 7 s while it stays up: his phone explodes for 40 and burns, and he loses his cameras (Skopós his swap) for the round. A jammer or an EMP on either of them cuts it; he can hold F to dismiss it. 1 charge to start, +1 every 25 s. With no one to call, left mouse hacks a dead defender's phone (the blue-screened one where he fell): in a match, 20 s of the defenders' cameras, twice a round. Shoot a dead teammate's phone to stop her.",
+      "Lesion (M10): Z throws a Gu mine (1 to start, one more every 25 s, 8 in all); it settles on the floor. Switch to the attackers and walk near one: 3 damage, then 12 every 2 s and no sprinting until you stand and hold F for 2 s to pull the needle. A knife or the hammer on one sets it off on you; shoot it or blow it up and it's gone.",
+      "Skopós (M10): her idle shell crouches behind a bulletproof barrier (a blast or Sledge's hammer breaks it, and a blast reaches the shell through it); in a match the shell is a camera for her team, and for the attackers on a phone Dokkaebi hacked. Her knife makes a bigger hole, through the studs, and breaks a barricade at once.",
+      "Fuze's Ballistic Shield (M11): pick it as his primary (Esc → loadout). Bullets stop at it; right mouse raises his pistol (0.5 s) and only then does left mouse fire it. 5 bullets on it suppress him (no sprinting) for 7 s; a blast in front does a third of its damage; a blast of 30 or more, a knife or a stun knocks it aside for a second, Sledge's hammer for 2.5 s. His melee is a bash: no damage, a shove. Sprinting into a damaged barricade breaks through it. A gadget, a detonator, a plant, a rope or going prone puts it on his back.",
+      "Mute (M6): Z, 3 s on the floor: a Signal Disruptor. Within 2.6 m no attacker charge can be set off (nor by an attacker standing in it) and drones lose control; F takes it back. Pulse: Z holds his sensor up: the attackers' heartbeats within 10.5 m in front of him, through walls; ping (T) to mark one for the team.",
+      "Refill ammo (pause menu) gives your gadgets back too; Clear gadgets takes every gadget out of the room; Reset walls puts them back.",
+    ],
+    note: "Phase 8 M11: every generic gadget in both pools, the ingredients, and Sledge's, Thermite's, Fuze's (his Ballistic Shield too), Mute's, Pulse's, Mira's, Brava's, Dokkaebi's, Lesion's and Skopós's abilities. Every number is in data/gadgets.json and data/gadgets/; most are placeholders listed in research/OPEN_QUESTIONS.md.",
+  },
+  extend: gadgetFeatures,
+});

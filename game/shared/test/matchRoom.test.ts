@@ -7,6 +7,8 @@ import {
   ATTACK,
   Btn,
   eyePose,
+  heartOf,
+  forwardXZ,
   loadedOf,
   poseHitboxes,
   ByteReader,
@@ -20,6 +22,8 @@ import {
   encodeMatchAction,
   encodePickLoadout,
   defaultLoadoutPick,
+  GFlag,
+  ticks,
   ErrorCode,
   handleRoomMessage,
   hash4,
@@ -777,7 +781,11 @@ describe("drones in a match (Phase 7 M1)", () => {
     t.tick();
     const ctrl = t.room.bodyOf(atk.id)!;
     expect(t.room.sim.pawns.get(ctrl.possessedPawnId)!.kind).toBe(PawnKind.Body);
-    expect(ctrl.pawnIds.slice(1)).toEqual([d1.id, d2.id]);
+    expect(ctrl.pawnIds.slice(1, 3)).toEqual([d1.id, d2.id]);
+    // Brava's body comes with her two Kludge drones as well (Phase 8 M8); anyone else's with nothing more.
+    const more = ctrl.pawnIds.slice(3).map((id) => t.room.sim.pawns.get(id)!);
+    expect(more.length).toBe(ctrl.operatorId === "brava" ? 2 : 0);
+    expect(more.every((p) => p.kind === PawnKind.Drone && p.kludge)).toBe(true);
     expect(dist(d1, parked)).toBeLessThan(0.01);
     expect(atk.session.ctrl!.pawnIds).toEqual(ctrl.pawnIds);
     for (let i = 0; i < 16; i++) t.tick();
@@ -1003,6 +1011,31 @@ describe("pings, scans and callouts (Phase 7 M4)", () => {
     expect(spotted(c)).toBe(1);
   }, 60_000);
 
+  it("a ping on an enemy in view spots him, a red ping (Phase 8 M9); with a wall between, it lands on the wall", async () => {
+    const { t, a, b, c } = await three();
+    t.place(b, ...LAUNDRY, 90);
+    const [drone] = t.room.sim.dronesOf(t.room.bodyOf(a.id)!);
+    const aimFrom = (x: number, z: number) => {
+      t.room.sim.placeDrone(drone.id, x, LAUNDRY[1] + 0.02, z, 0);
+      t.room.correct(a.id);
+      const eye = t.room.sim.eyeOf(drone).pos;
+      const chest = heartOf(t.room.sim, t.bodyOf(b)!);
+      const d = [0, 1, 2].map((i) => chest[i] - eye[i]);
+      a.cmd = { yaw: Math.atan2(-d[0], -d[2]), pitch: Math.atan2(d[1], Math.hypot(d[0], d[2])) };
+      for (let i = 0; i < 16; i++) t.tick();
+    };
+    const count = (x: { events: GameEvent[] }, kind: GameEvent["kind"]) => x.events.filter((e) => e.kind === kind).length;
+    aimFrom(LAUNDRY[0], LAUNDRY[2] + 2);
+    press(t, a, Btn.Ping);
+    for (let i = 0; i < 4; i++) t.tick();
+    expect([count(a, "spotted"), count(c, "spotted"), count(b, "spotted"), count(c, "ping")]).toEqual([1, 1, 1, 0]);
+    for (let i = 0; i < 64; i++) t.tick();
+    aimFrom(40.375, 24.625);
+    press(t, a, Btn.Ping);
+    for (let i = 0; i < 4; i++) t.tick();
+    expect([count(c, "spotted"), count(c, "ping")]).toEqual([1, 1]);
+  }, 60_000);
+
   it("a ping key hammered every other tick sends a few a second at most", async () => {
     const { t, a, c } = await three();
     for (let i = 0; i < 64; i++) {
@@ -1065,13 +1098,20 @@ describe("the Bulletproof Camera in a match (Phase 7 M5)", () => {
   const wait = (t: T, n: number) => {
     for (let i = 0; i < n; i++) t.tick();
   };
-  /** b holds the gadget key looking `yaw`, `pitch` from where they stand until the room has the camera. */
+  /**
+   * b takes the camera out with the gadget key and holds Fire looking `yaw`, `pitch` from where they stand until the
+   * room has it (Phase 8's hands). The camera as the room has it now (its entry changes as the room changes it).
+   */
   const placeCamera = (t: T, b: C, yaw = 0, pitch = 0) => {
     b.cmd = { yaw, pitch, buttons: Btn.Gadget };
-    t.until(() => t.room.sim.matchRules.bpCams.length > 0, 2, "placed");
+    t.tick();
+    b.cmd = { yaw, pitch };
+    wait(t, ticks(data.gadgetRules.equipS) + 2);
+    b.cmd = { yaw, pitch, buttons: Btn.Fire };
+    t.until(() => t.room.sim.bpCams().length > 0, 2, "placed");
     b.cmd = { yaw, pitch };
     wait(t, 16);
-    return t.room.sim.matchRules.bpCams[0];
+    return () => t.room.sim.bpCams()[0];
   };
   /** The yaw and pitch from b's eye to `at`. */
   const aimAt = (t: T, b: C, at: readonly number[]) => {
@@ -1094,10 +1134,10 @@ describe("the Bulletproof Camera in a match (Phase 7 M5)", () => {
     t.place(b, ...WALL, 0);
     wait(t, 8);
     const missed = b.session.mispredictions.length;
-    const cam = placeCamera(t, b);
-    expect([cam.onFloor, cam.panel, cam.signalEnd, cam.broken, cam.owner]).toEqual([false, 97, 0, false, t.room.bodyOf(b.id)!.id]);
-    expect([a.session.match!.bpCams, b.session.match!.bpCams]).toEqual([[cam], [cam]]);
-    expect(t.bodyOf(b)!.state.gadgets).toBe(0);
+    const cam = placeCamera(t, b)();
+    expect([cam.flags & GFlag.OnFloor, cam.panel, cam.signalEnd, cam.flags & GFlag.Broken, cam.owner, cam.team]).toEqual([0, 97, 0, 0, t.room.bodyOf(b.id)!.id, DEFENSE]);
+    expect([a.session.sim!.bpCams(), b.session.sim!.bpCams()]).toEqual([[cam], [cam]]);
+    expect(t.bodyOf(b)!.state.g1).toBe(0);
     const ctrl = t.room.bodyOf(b.id)!;
     b.cmd = { yaw: 0, buttons: Btn.Observe };
     t.tick();
@@ -1117,15 +1157,15 @@ describe("the Bulletproof Camera in a match (Phase 7 M5)", () => {
     t.place(b, ...WALL, 0);
     wait(t, 8);
     const cam = placeCamera(t, b);
-    shoot(t, b, aimAt(t, b, cam.pos));
-    expect(cam.broken).toBe(false);
+    shoot(t, b, aimAt(t, b, cam().pos));
+    expect(cam().flags & GFlag.Broken).toBe(0);
     // 1.2 m along the wall from it, close to the wall: the shot comes at its side.
     t.place(b, WALL[0] - 1.2, WALL[1], 30.75, -90);
     wait(t, 8);
-    shoot(t, b, aimAt(t, b, cam.pos));
-    expect(cam.broken).toBe(true);
+    shoot(t, b, aimAt(t, b, cam().pos));
+    expect(cam().flags & GFlag.Broken).toBe(GFlag.Broken);
     wait(t, 8);
-    expect([a.session.match!.bpCams[0].broken, b.session.match!.bpCams[0].broken]).toEqual([true, true]);
+    expect([a.session.sim!.bpCams()[0].flags & GFlag.Broken, b.session.sim!.bpCams()[0].flags & GFlag.Broken]).toEqual([GFlag.Broken, GFlag.Broken]);
   }, 60_000);
 
   it("steel going up on its wall breaks it", async () => {
@@ -1134,7 +1174,7 @@ describe("the Bulletproof Camera in a match (Phase 7 M5)", () => {
     wait(t, 8);
     const cam = placeCamera(t, b);
     b.cmd = { yaw: 0, buttons: Btn.Interact };
-    t.until(() => cam.broken, 8, "reinforced");
+    t.until(() => (cam().flags & GFlag.Broken) !== 0, 8, "reinforced");
     expect(t.room.sim.level.panels.list[97].panel.kind).toBe("wall");
   }, 60_000);
 
@@ -1146,7 +1186,7 @@ describe("the Bulletproof Camera in a match (Phase 7 M5)", () => {
     t.place(b, street[0], street[1], street[2], 0);
     wait(t, 8);
     const cam = placeCamera(t, b, 0, -60 * DEG);
-    expect([cam.onFloor, cam.signalEnd > t.room.sim.tick]).toEqual([true, true]);
+    expect([cam().flags & GFlag.OnFloor, cam().signalEnd > t.room.sim.tick]).toEqual([GFlag.OnFloor, true]);
     const ctrl = t.room.bodyOf(b.id)!;
     b.cmd = { buttons: Btn.Observe };
     t.tick();
@@ -1156,17 +1196,18 @@ describe("the Bulletproof Camera in a match (Phase 7 M5)", () => {
     t.until(() => ctrl.cam === t.room.sim.level.def.cameras.length + 1, 0.5, "the Bulletproof Camera");
     b.cmd = {};
     t.until(() => ctrl.cam === 1, 10.5, "its signal gone");
-    expect(t.room.sim.tick).toBeGreaterThanOrEqual(cam.signalEnd);
+    expect(t.room.sim.tick).toBeGreaterThanOrEqual(cam().signalEnd);
     // The room tells everyone; the defender's own client hands over as well.
     for (let i = 0; i < 16; i++) t.tick();
-    expect([cam.lost, b.session.match!.bpCams[0].lost, b.session.ctrl!.cam]).toEqual([true, true, 1]);
+    expect([cam().flags & GFlag.Lost, b.session.sim!.bpCams()[0].flags & GFlag.Lost, b.session.ctrl!.cam]).toEqual([GFlag.Lost, GFlag.Lost, 1]);
   }, 60_000);
 
   it("its EMP dart jams the drone it bursts on (6 s, no driving); it's ready again 10 s later; the dead can't fire it", async () => {
     const { t, a, b } = await setup();
     t.place(b, ...WALL, 0);
     wait(t, 8);
-    const cam = placeCamera(t, b);
+    const camNow = placeCamera(t, b);
+    const cam = camNow();
     // a's drone on the Laundry floor, 2 m out in front of the camera.
     const [drone] = t.room.sim.dronesOf(t.room.bodyOf(a.id)!);
     t.room.sim.placeDrone(drone.id, WALL[0], WALL[1] + 0.02, cam.pos[2] + 2, 0);
@@ -1204,11 +1245,11 @@ describe("the Bulletproof Camera in a match (Phase 7 M5)", () => {
     t.until(() => Math.hypot(drone.state.x - at.x, drone.state.z - at.z) > 0.5, 3, "the drone free again");
     a.cmd = {};
     // Ready again 10 s after the first (the dart flies on past the drone now gone).
-    t.until(() => t.room.sim.tick >= cam.dartReady, 6, "the dart ready");
+    t.until(() => t.room.sim.tick >= camNow().readyAt, 6, "the dart ready");
     fire();
     expect(emps(b)).toBe(2);
     // Dead, b still watches it, but can't fire.
-    t.until(() => t.room.sim.tick >= cam.dartReady, 11, "ready once more");
+    t.until(() => t.room.sim.tick >= camNow().readyAt, 11, "ready once more");
     t.room.killBody(t.bodyOf(b)!.id, Cause.Lab);
     wait(t, 8);
     if (ctrl.cam === 0) {
@@ -1321,15 +1362,19 @@ describe("Skopós's idle shell in a match", () => {
     expect(ctrl.operatorId).toBe("skopos");
     const idle = t.room.sim.bodyIds(ctrl).find((id) => id !== ctrl.possessedPawnId)!;
     const shell = t.room.sim.pawns.get(idle)!;
-    // The attacker, 3 m from the idle shell, shoots it down the sights until it's gone.
+    // Its barrier curves round its front and sides (Phase 8 M10; Ulo's test): the attacker comes right up against the
+    // barrier's front and shoots down over it at the crouched shell's head, down the sights, until it's gone.
     const at = shell.state;
-    t.place(a, at.x + 3, at.y, at.z, 90);
+    const [fx, fz] = forwardXZ(at.yaw);
+    const arc = data.gadgets.get("shell_shield")!.arc!;
+    const out = arc.radiusM + data.gadgets.get("shell_shield")!.sizeM[2] / 2 + data.movement.stance.collisionRadius + 0.08;
+    t.place(a, at.x + fx * out, at.y, at.z + fz * out, 0);
     for (let i = 0; i < 16; i++) t.tick();
     for (let shot = 0; shot < 30 && shell.state.mode !== PawnMode.Dead; shot++) {
       const eye = eyePose(data.movement, data.hitboxes, t.bodyOf(a)!.state).pos;
       const head = eyePose(data.movement, data.hitboxes, shell.state).pos;
       const d = [0, 1, 2].map((k) => head[k] - eye[k]);
-      const aim = { yaw: Math.atan2(-d[0], -d[2]), pitch: Math.atan2(d[1] - 0.3, Math.hypot(d[0], d[2])) };
+      const aim = { yaw: Math.atan2(-d[0], -d[2]), pitch: Math.atan2(d[1], Math.hypot(d[0], d[2])) };
       a.cmd = { ...aim, buttons: Btn.Ads };
       for (let i = 0; i < 40; i++) t.tick();
       a.cmd = { ...aim, buttons: Btn.Ads | Btn.Fire };

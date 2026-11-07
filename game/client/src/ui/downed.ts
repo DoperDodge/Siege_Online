@@ -1,8 +1,9 @@
 // Health and being down (Phase 3 M7, M9): the health bar (the 20 HP down pool while down), the down screen
 // (crawl, bleed, wait for a teammate) and, while you revive someone, the revive's progress (D-048, D-049);
 // the same gauge shows a reinforcement or barricade going up (Phase 4 M6), a rope being hooked on (Phase 5 M8), the
-// defuser being planted or disabled (Phase 6, match/DESIGN.md §8), and a Bulletproof Camera being placed (Phase 7).
-import { DeployKind, deployTicks, isDowned, PawnMode, ticks, TICK_HZ, type CombatData, type DestructionData, type MovementData, type PawnState } from "@redmond/shared";
+// defuser being planted or disabled (Phase 6, match/DESIGN.md §8), a Bulletproof Camera being placed (Phase 7), and a
+// Gu needle being pulled (Phase 8 M10; a needle in you tints the view and says how to pull it).
+import { DeployKind, deployTicks, GadgetAct, isDowned, PawnMode, ticks, TICK_HZ, type CombatData, type DestructionData, type MovementData, type PawnState } from "@redmond/shared";
 
 /** Seconds left on a revive `reviveTicks` in. */
 export const reviveSecondsLeft = (combat: CombatData, reviveTicks: number) => Math.max(0, reviveTotalTicks(combat) - reviveTicks) / TICK_HZ;
@@ -17,7 +18,8 @@ export class DownedHud {
 
   /**
    * `interactKey` names the revive key; `nameOfPawn` the teammate being revived; `holds`, a match's plant and disable
-   * holds in ticks (the simulation's objective); `placeTicks`, placing a Bulletproof Camera's.
+   * holds in ticks (the simulation's objective); `gadget`: the gadget in hand's name and placing time, and the one an
+   * Interact hold takes back and how long that takes, in ticks (Phase 8).
    */
   update(
     s: PawnState,
@@ -27,7 +29,7 @@ export class DownedHud {
     destruction?: DestructionData,
     movement?: MovementData,
     holds?: { plantTicks: number; disableTicks: number } | null,
-    placeTicks = 1,
+    gadget: { name: string; placeTicks: number; takeBack: string; takeBackTicks: number; needleTicks?: number } | null = null,
   ) {
     const $ = this.$;
     const pool = combat.dbno.hp;
@@ -37,26 +39,50 @@ export class DownedHud {
     $(".hp").classList.toggle("down", down);
     this.root.classList.toggle("downed", down);
     $(".down-ui").classList.toggle("hidden", !down);
+    // A Gu needle in you (Phase 8 M10): the view sickly green at its edges, and how to pull it. (Nothing of a body's own
+    // holds or needle once it's dead: a lethal fall left them on the death screen, the review found, M12.)
+    const alive = s.mode !== PawnMode.Dead;
+    const needled = alive && s.needled;
+    this.root.classList.toggle("needled", needled);
+    $(".needle-ui").classList.toggle("hidden", !needled || s.deployKind === DeployKind.Needle);
+    if (needled) $(".needle-ui").textContent = `GU NEEDLE · no sprinting · stand and hold ${interactKey} to pull it`;
     if (down) {
       $(".down-title").textContent = s.revivedBy
         ? "BEING REVIVED — hold still"
         : `DOWN — crawl to cover; a teammate can revive you (hold ${interactKey})${Math.hypot(s.vx, s.vz) > combat.dbno.movingSpeed ? " · bleeding faster while you crawl" : ""}`;
       $(".down-bar div").style.width = `${(100 * s.downHp) / pool}%`;
     }
-    const reviving = s.reviveTarget !== 0;
-    const deploying = destruction !== undefined && s.deployKind !== DeployKind.None;
+    const reviving = alive && s.reviveTarget !== 0;
+    const deploying = alive && destruction !== undefined && s.deployKind !== DeployKind.None;
+    const placing = alive && gadget !== null && s.gAct === GadgetAct.Place;
     const hooking = movement !== undefined && s.mode === PawnMode.Walk && s.rappelTicks > 0;
     const breaching = movement !== undefined && s.mode === PawnMode.Rappel && s.rappelTicks > 0;
-    $(".revive-ui").classList.toggle("hidden", !reviving && !deploying && !hooking && !breaching);
+    $(".revive-ui").classList.toggle("hidden", !reviving && !deploying && !hooking && !breaching && !placing);
     if (reviving) {
       $(".revive-title").textContent = `REVIVING ${nameOfPawn(s.reviveTarget) || "teammate"}… ${reviveSecondsLeft(combat, s.reviveTicks).toFixed(1)} s`;
       $(".revive-bar div").style.width = `${Math.min(100, (100 * s.reviveTicks) / reviveTotalTicks(combat))}%`;
+    } else if (placing) {
+      const total = Math.max(1, gadget.placeTicks);
+      $(".revive-title").textContent = `PLACING THE ${gadget.name.toUpperCase()}… ${(Math.max(0, total - s.gTicks) / TICK_HZ).toFixed(1)} s`;
+      $(".revive-bar div").style.width = `${Math.min(100, (100 * s.gTicks) / total)}%`;
     } else if (deploying) {
       const defuser = s.deployKind === DeployKind.Plant || s.deployKind === DeployKind.Disable;
-      const camera = s.deployKind === DeployKind.Camera;
-      const total = Math.max(1, defuser ? ((s.deployKind === DeployKind.Plant ? holds?.plantTicks : holds?.disableTicks) ?? 1) : camera ? placeTicks : deployTicks(destruction, s.deployKind));
-      const what = camera
-        ? "PLACING THE BULLETPROOF CAMERA"
+      const takeBack = s.deployKind === DeployKind.PickUp;
+      const needle = s.deployKind === DeployKind.Needle;
+      const total = Math.max(
+        1,
+        defuser
+          ? ((s.deployKind === DeployKind.Plant ? holds?.plantTicks : holds?.disableTicks) ?? 1)
+          : takeBack
+            ? (gadget?.takeBackTicks ?? 1)
+            : needle
+              ? (gadget?.needleTicks ?? 1)
+              : deployTicks(destruction, s.deployKind),
+      );
+      const what = needle
+        ? "PULLING THE NEEDLE"
+        : takeBack
+        ? `PICKING UP THE ${(gadget?.takeBack ?? "gadget").toUpperCase()}`
         : s.deployKind === DeployKind.Reinforce
           ? "REINFORCING"
           : s.deployKind === DeployKind.BarricadeUp

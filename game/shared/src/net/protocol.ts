@@ -7,9 +7,10 @@ import type { LoadoutPick, WeaponPick } from "../weapons/loadout.js";
 import { ByteReader, ByteWriter, ProtocolError } from "./bytes.js";
 import { MSG_PANEL_OPS, MSG_PANEL_RESYNC, MSG_PANEL_STATE } from "./panels.js";
 import { MSG_SNAPSHOT } from "./snapshot.js";
+import { MSG_GADGET_OPS, MSG_GADGET_RESYNC, MSG_GADGET_STATE } from "./gadgetWire.js";
 
 /** Bump when the wire format changes; client and server must match. */
-export const PROTOCOL_VERSION = 14;
+export const PROTOCOL_VERSION = 15;
 
 export const Msg = {
   // client → server
@@ -21,7 +22,8 @@ export const Msg = {
   PickLoadout: 0x05,
   Ping: 0x06,
   Resync: 0x07,
-  // 0x08 unused (test shots ride on inputs: Btn.Fire)
+  /** Our gadget table disagrees with the server's hash: send it again (Phase 8, net/gadgetWire.ts). */
+  GadgetResync: MSG_GADGET_RESYNC,
   LabTool: 0x09,
   /** Our panels disagree with the server's hash: send their state again (net/panels.ts). */
   PanelResync: MSG_PANEL_RESYNC,
@@ -49,6 +51,9 @@ export const Msg = {
   RoomList: 0x19,
   /** The match as this player may see it (net/matchWire.ts). */
   MatchState: 0x1a,
+  /** The gadget table's ops since the last snapshot and its hash after them; the whole table (net/gadgetWire.ts). */
+  GadgetOps: MSG_GADGET_OPS,
+  GadgetState: MSG_GADGET_STATE,
 } as const;
 
 export const MAX_NAME = 24;
@@ -131,7 +136,7 @@ export function decodeHelloRest(r: ByteReader): { name: string; dataHash: number
 }
 
 /** Levels a client may ask a new room to load (the lab pages'). */
-export const ROOM_LEVELS = ["movement_lab", "range_lab", "destruction_lab", "oregon"] as const;
+export const ROOM_LEVELS = ["movement_lab", "range_lab", "destruction_lab", "oregon", "gadget_lab"] as const;
 export const encodeCreateRoom = (levelId: string = "movement_lab") => new ByteWriter().u8(Msg.CreateRoom).str(levelId).finish();
 /** Throws ProtocolError for a level that isn't in ROOM_LEVELS. */
 export function decodeCreateRoom(r: ByteReader): { levelId: string } {
@@ -195,8 +200,10 @@ export interface RosterEntry {
   operatorId: string;
   /** The bodies (Skopós: her two shells), none for an attacker in prep. */
   pawnIds: number[];
-  /** An attacker's drones in a match (Phase 7, intel/DESIGN.md §2), held or out. */
+  /** An attacker's drones in a match (Phase 7, intel/DESIGN.md §2), held or out; Brava's Kludge drones too (Phase 8 M8). */
   drones: number[];
+  /** Which of `drones` are Brava's Kludge drones (Phase 8 M8). */
+  kludges: number[];
   /** 0 attackers, 1 defenders (from the operator's side unless a lab tool moved them). */
   team: number;
   /** 0 a player; 1 a range-lab dummy (Phase 3 M10). */
@@ -213,6 +220,8 @@ export function encodeRoster(entries: RosterEntry[], you: number): Uint8Array {
     for (const id of e.pawnIds) w.varu(id);
     w.u8(e.drones.length);
     for (const id of e.drones) w.varu(id);
+    // Which of them are Kludges: a bit per drone, in order (Phase 8 M8).
+    w.u8(e.drones.reduce((bits, id, i) => (e.kludges.includes(id) ? bits | (1 << i) : bits), 0));
     w.u8(e.team).u8(e.kind);
     writeLoadoutPick(w, e.loadout);
   }
@@ -231,12 +240,15 @@ export function decodeRoster(r: ByteReader): { you: number; entries: RosterEntry
     if (k > 2) throw new ProtocolError("too many pawns");
     const pawnIds = Array.from({ length: k }, () => r.varu());
     const nd = r.u8();
-    if (nd > 2 || k + nd === 0) throw new ProtocolError("bad drones");
+    if (nd > 4 || k + nd === 0) throw new ProtocolError("bad drones");
     const drones = Array.from({ length: nd }, () => r.varu());
+    const bits = r.u8();
+    if (bits >> nd) throw new ProtocolError("bad drones");
+    const kludges = drones.filter((_, i) => bits & (1 << i));
     const team = r.u8();
     const kind = r.u8();
     if (team > 1 || kind > 1) throw new ProtocolError("bad roster entry");
-    out.push({ controllerId, name, operatorId, pawnIds, drones, team, kind, loadout: readLoadoutPick(r) });
+    out.push({ controllerId, name, operatorId, pawnIds, drones, kludges, team, kind, loadout: readLoadoutPick(r) });
   }
   return { you, entries: out };
 }
@@ -267,7 +279,10 @@ export interface ShotBox {
   radius: number;
 }
 
-const BOX_PARTS: readonly BodyPart[] = ["head", "neck", "torso", "pelvis", "arm_l", "arm_r", "leg_l", "leg_r", "drone"];
+/** Every body part a shot result's boxes can name ("shield": Fuze's plate, Phase 8 M11), by index. Append only. */
+const BOX_PARTS: readonly BodyPart[] = ["head", "neck", "torso", "pelvis", "arm_l", "arm_r", "leg_l", "leg_r", "drone", "shield"];
+/** A shot result's boxes at most: a body's (nine) and Fuze's shield's plate (six) with room to spare. */
+const MAX_SHOT_BOXES = 24;
 const MAX_SHOT_PELLETS = 16;
 
 /**
@@ -310,8 +325,9 @@ export function encodeShotResult(s: ShotResult): Uint8Array {
   if (s.hit) w.varu(s.hit.pawnId).str(s.hit.part).f32(s.hit.distance);
   if (s.wallDistance !== null) w.f32(s.wallDistance);
   if (s.target) {
-    w.varu(s.target.pawnId).u8(s.target.boxes.length);
-    for (const b of s.target.boxes) {
+    const boxes = s.target.boxes.slice(0, MAX_SHOT_BOXES);
+    w.varu(s.target.pawnId).u8(boxes.length);
+    for (const b of boxes) {
       w.u8(BOX_PARTS.indexOf(b.part));
       for (const v of [...b.a, ...b.b, b.radius]) w.f32(v);
     }
@@ -340,7 +356,7 @@ export function decodeShotResult(r: ByteReader): ShotResult {
   if (f & 4) {
     const pawnId = r.varu();
     const k = r.u8();
-    if (k > BOX_PARTS.length) throw new ProtocolError("too many boxes");
+    if (k > MAX_SHOT_BOXES) throw new ProtocolError("too many boxes");
     const boxes = Array.from({ length: k }, (): ShotBox => {
       const part = BOX_PARTS[r.u8()];
       if (!part) throw new ProtocolError("bad body part");
@@ -366,9 +382,11 @@ export type LabTool =
   /** Every Range Lab dummy back to its spot, alive (or down, for the one that starts down). */
   | { kind: "resetDummies" }
   | { kind: "explosive"; id: string; yaw: number; pitch: number }
-  | { kind: "resetPanels" };
+  | { kind: "resetPanels" }
+  /** Every gadget gone from the room's table (Phase 8, the Gadget Lab). */
+  | { kind: "clearGadgets" };
 
-const LAB_KIND = { respawn: 0, teleport: 1, team: 3, damage: 4, refill: 5, resetDummies: 6, explosive: 7, resetPanels: 8 } as const;
+const LAB_KIND = { respawn: 0, teleport: 1, team: 3, damage: 4, refill: 5, resetDummies: 6, explosive: 7, resetPanels: 8, clearGadgets: 9 } as const;
 
 export function encodeLabTool(t: LabTool): Uint8Array {
   const w = new ByteWriter().u8(Msg.LabTool).u8(LAB_KIND[t.kind]);
@@ -398,6 +416,7 @@ export function decodeLabTool(r: ByteReader): LabTool {
   if (k === LAB_KIND.resetDummies) return { kind: "resetDummies" };
   if (k === LAB_KIND.explosive) return { kind: "explosive", id: r.str(32), yaw: r.finite(), pitch: r.finite() };
   if (k === LAB_KIND.resetPanels) return { kind: "resetPanels" };
+  if (k === LAB_KIND.clearGadgets) return { kind: "clearGadgets" };
   throw new ProtocolError("bad lab tool");
 }
 

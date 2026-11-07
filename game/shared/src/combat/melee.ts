@@ -14,6 +14,8 @@ export interface MeleeHit {
   zone: Zone;
   /** Across the floor from the attacker's body to the part hit. */
   reach: number;
+  /** It met the body's Fuze shield's plate first (Phase 8 M11): a guard break, no damage. */
+  shield: boolean;
 }
 
 /**
@@ -36,7 +38,7 @@ export function judgeMelee(sim: Sim, eye: Vec3, feet: { x: number; z: number }, 
       const reach = Math.hypot(dx, dz);
       if (reach > m.reach || Math.abs(p[1] - eye[1]) > m.verticalReach) continue;
       if (reach > 1e-3 && (dx * fx + dz * fz) / reach < cosCone) continue; // outside the cone
-      if (!mine || reach < mine.reach) mine = { pawnId: id, zone: zoneOf(h.part), reach, point: p };
+      if (!mine || reach < mine.reach) mine = { pawnId: id, zone: h.part === "shield" ? "torso" : zoneOf(h.part), reach, point: p, shield: h.part === "shield" };
     }
     if (!mine) continue;
     // Nothing solid between the eye and the part (a thin wall, a floor edge).
@@ -46,7 +48,7 @@ export function judgeMelee(sim: Sim, eye: Vec3, feet: { x: number; z: number }, 
       const wall = traceStatic(sim, eye, [d[0] / len, d[1] / len, d[2] / len], len);
       if (wall !== null && wall < len - 0.05) continue;
     }
-    if (!best || mine.reach < best.reach || (mine.reach === best.reach && id < best.pawnId)) best = { pawnId: id, zone: mine.zone, reach: mine.reach };
+    if (!best || mine.reach < best.reach || (mine.reach === best.reach && id < best.pawnId)) best = { pawnId: id, zone: mine.zone, reach: mine.reach, shield: mine.shield };
   }
   return best;
 }

@@ -94,6 +94,23 @@ describe("netsim: 10 clients, 100 ms round trip, jitter, stalls, drift", () => {
     expect(r.serverTickMs.mean).toBeLessThan(5);
   }, 90000);
 
+  it("gadgets (Phase 8 M12): two lines of every operator throwing, placing and setting off theirs; every client ends with the server's gadget table, no mispredictions", async () => {
+    const r = await runNetsim({ seconds: 20, gadgets: true, crowd: false, seed: 8 });
+    expect(r.desyncs).toEqual([]);
+    expect(r.room.droppedInputs).toBe(0);
+    expect(r.gadgets!.entries).toBeGreaterThanOrEqual(8);
+    expect(r.gadgets!.blasts).toBeGreaterThanOrEqual(3);
+    expect(r.gadgets!.differ).toEqual([]);
+    expect(r.room.gadgetResyncs).toBe(0);
+    expect(r.panels.differ).toEqual([]);
+    for (const c of r.perClient) {
+      expect(c.resyncs, c.name).toBe(0);
+      expect(c.corrections - c.forced, c.name).toBeLessThanOrEqual(2);
+      expect(c.downKbps, c.name).toBeLessThan(64);
+    }
+    expect(r.serverTickMs.mean).toBeLessThan(5);
+  }, 90000);
+
   it("crowded (constant contact): still no desyncs, resyncs or dropped inputs", async () => {
     const r = await runNetsim({ seconds: 10, seed: 3 });
     expect(r.desyncs).toEqual([]);

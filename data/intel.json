@@ -1,11 +1,10 @@
 {
-  "_doc": "Intel (Phase 7; game/shared/src/intel/DESIGN.md, DECISIONS D-134), from research/intel.md §9. Drones: two per attacker, any damage but a fall destroys one, a jump every 3 s, strafing at full speed (verified); the speed, acceleration, air control, jump height, boost numbers, size, the height of a step it climbs, its view (field and tilt), where its camera sits, the throw and the pickup reach are placeholders. Default cameras: their turn limits, speed and field of view are placeholders. Scans: a 1 s hold (verified), the cone and the range placeholders. Pings: their time, cooldown and count, and how quick a double tap is, are placeholders. Callouts: the comm wheel's (research/intel.md §2: Breach, Area Clear, Help, Danger and Thanks partly verified; Defuser, Rotate and Push ours). The Bulletproof Camera: one each, a 0.75 m EMP dart and 10 s of signal outdoors (verified); how long placing it takes, its reach, its size, how wide its bulletproof front is (`frontDeg` either side of its facing), its view, how far the dart flies, its recharge and how long it disables a drone are placeholders. Metres, seconds, degrees.",
+  "_doc": "Intel (Phase 7; game/shared/src/intel/DESIGN.md, DECISIONS D-134), from research/intel.md §9. Drones: two per attacker, any damage but a fall destroys one, a jump every 3 s, strafing at full speed (verified); the speed, acceleration, air control, jump height, boost numbers, size, the height of a step it climbs, its view (field and tilt), where its camera sits, the throw and the pickup reach are placeholders. Default cameras: their turn limits, speed and field of view are placeholders. Scans: a 1 s hold (verified), the cone and the range placeholders. Pings: their time, cooldown and count, and how quick a double tap is, are placeholders. Callouts: the comm wheel's (research/intel.md §2: Breach, Area Clear, Help, Danger and Thanks partly verified; Defuser, Rotate and Push ours). The Bulletproof Camera (its count, placing and size are in data/gadgets/bulletproof_camera.json since Phase 8): a 0.75 m EMP dart and 10 s of signal outdoors (verified); how wide its bulletproof front is (`frontDeg` either side of its facing), its view, how far the dart flies, its recharge and how long it disables a drone are placeholders. Metres, seconds, degrees.",
   "_season": "Y11S3",
   "_unverified": [
     "drone.speedMps", "drone.accelMps2", "drone.airControl", "drone.jumpHeightM", "drone.boost", "drone.sizeM", "drone.stepM",
     "drone.fovDeg", "drone.pitchMinDeg", "drone.pitchMaxDeg", "drone.eyeM", "drone.throw", "drone.pickupReachM",
-    "camera", "scan.coneDeg", "scan.rangeM", "ping", "callouts", "bulletproofCamera.placeS", "bulletproofCamera.reachM",
-    "bulletproofCamera.sizeM", "bulletproofCamera.frontDeg", "bulletproofCamera.view", "bulletproofCamera.dartRangeM",
+    "camera", "scan.coneDeg", "scan.rangeM", "ping", "callouts", "bulletproofCamera.frontDeg", "bulletproofCamera.view", "bulletproofCamera.dartRangeM",
     "bulletproofCamera.dartRechargeS", "bulletproofCamera.disableS"
   ],
   "drone": {
@@ -30,10 +29,6 @@
   "ping": { "seconds": 5, "cooldownS": 0.5, "perPlayer": 1, "doubleTapS": 0.35 },
   "callouts": ["Breach", "Area clear", "Help", "Danger", "Thanks", "Defuser", "Rotate", "Push"],
   "bulletproofCamera": {
-    "count": 1,
-    "placeS": 1.0,
-    "reachM": 2.0,
-    "sizeM": [0.16, 0.12, 0.1],
     "frontDeg": 50,
     "view": { "yawHalfRangeDeg": 80, "pitchMinDeg": -50, "pitchMaxDeg": 50, "turnDegPerS": 90, "fovDeg": 70 },
     "dartRangeM": 8,

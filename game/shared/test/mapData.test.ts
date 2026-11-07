@@ -45,8 +45,11 @@ describe("map metadata", () => {
     const data = loadGameData();
     for (const lvl of data.levels.values()) {
       if (lvl.id === "oregon") continue;
+      // The Gadget Lab has a default camera and the ingredients to try gadgets on (Phase 8 M3); the other labs none.
+      const gadgetLab = lvl.id === "gadget_lab";
       expect(lvl.bounds, lvl.id).toBeUndefined();
-      expect([lvl.storeys, lvl.rooms, lvl.sites, lvl.cameras, lvl.ingredients, lvl.zones], lvl.id).toEqual([[], [], [], [], [], []]);
+      expect([lvl.storeys, lvl.rooms, lvl.sites, lvl.zones], lvl.id).toEqual([[], [], [], []]);
+      expect([lvl.cameras.length > 0, lvl.ingredients.length > 0], lvl.id).toEqual([gadgetLab, gadgetLab]);
       expect(lvl.solids.every((s) => !s.bodiesOnly), lvl.id).toBe(true);
     }
   });

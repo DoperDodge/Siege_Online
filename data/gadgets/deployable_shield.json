@@ -1,0 +1,15 @@
+{
+  "_doc": "Deployable Shield (defender pool; research/gadgets.md §4.2). One each; set on the floor as waist-high cover, picked up again while its glass is clear. How long it takes to set up, its reach and its size are placeholders. It's solid (M3): bulletproof, slits included, it stops bodies, drones, throws and blasts (any blast close by destroys it); attackers vault it. A knife hit makes its glass opaque, and then it can't be picked up (Fandom).",
+  "_season": "Y11S3",
+  "_unverified": ["use.placeS", "use.reachM", "sizeM"],
+  "id": "deployable_shield",
+  "name": "Deployable Shield",
+  "side": "defender",
+  "count": 1,
+  "electronic": false,
+  "use": {"kind": "place", "on": ["floor"], "placeS": 1.0, "reachM": 2.5},
+  "remote": false,
+  "pickUp": true,
+  "sizeM": [1.0, 1.0, 0.12],
+  "solid": true
+}

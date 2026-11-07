@@ -165,8 +165,16 @@ export function bulletThroughPanels(
  * melee.bothSkins; a stud, metal or steel stops the blade. Wear on a hatch or barricade. Within `reach`
  * along the view, nearer than `maxT` (plain level geometry). Null if it reaches no panel material.
  */
-export function meleeOnPanels(panels: PanelSet, d: DestructionData, origin: Vec3, dir: Vec3, reach: number, maxT: number, view?: PanelView): PanelPassage | null {
-  const rule = d.melee;
+export function meleeOnPanels(
+  panels: PanelSet,
+  d: DestructionData,
+  origin: Vec3,
+  dir: Vec3,
+  reach: number,
+  maxT: number,
+  view?: PanelView,
+  rule: DestructionData["melee"] = d.melee,
+): PanelPassage | null {
   const half = rule.holeDiameterM / 2;
   // Across the swing: horizontal right of the view, and up completing it (any perpendicular pair when looking straight up or down).
   const flat = Math.hypot(dir[0], dir[2]);

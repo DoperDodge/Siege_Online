@@ -1,0 +1,16 @@
+{
+  "_doc": "A dead defender's phone (Phase 8 M9; research/operators/dokkaebi.md §3, gadgets/DESIGN.md §9): the server drops one on the floor where an eliminated defender's body fell (Skopós's is his circuit board, research/operators/skopos.md §4: the same rules). Never carried (`dropped`: its `count` and `use` are unused). Any damage destroys it (a bullet, the knife, a blast), from either team: his teammates shoot it to keep Dokkaebi off their cameras (a pre-remaster rule we keep). Her tablet hacks each one once, from anywhere (data/gadgets/jegeo_payload.json `jegeo`). An EMP does nothing to it (ours). Its size is a placeholder.",
+  "_season": "Y11S3",
+  "_unverified": ["sizeM", "fragile", "electronic"],
+  "id": "dropped_phone",
+  "name": "Phone",
+  "side": "defender",
+  "dropped": true,
+  "count": 1,
+  "electronic": false,
+  "use": {"kind": "place", "on": ["floor"], "placeS": 1.0, "reachM": 1.0},
+  "remote": false,
+  "pickUp": false,
+  "sizeM": [0.08, 0.02, 0.16],
+  "fragile": true
+}

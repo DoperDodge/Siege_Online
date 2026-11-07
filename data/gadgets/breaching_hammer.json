@@ -1,0 +1,15 @@
+{
+  "_doc": "Sledge's Tactical Breaching Hammer \"The Caber\" (research/operators/sledge.md §3; Phase 8 M4): his ability, the item in his slot 2 (Z). Fire swings it, 0.8 s a swing (Y11S3.1); the blow lands `use.hitS` into the swing and reaches `use.reachM` from his eye. Within `use.bothSkinsM` of a soft wall (across the floor; a floor hammered from above) it breaks both faces and the wooden studs, a rectangle `use.holeM` (width, height) round where he looks: one swing a hole to crouch or vault through, two (one low, one high) a hole to walk through; further away only the near face. Barricades and unreinforced hatches go in one; reinforced and hard surfaces don't, but the swing is still spent. An enemy body it hits dies (`use.killCharges` charges, Fandom's Breaching Hammer page); an enemy gadget it hits is destroyed as a blast destroys it; an ingredient is set off. It works on a rope. 25 charges (Fandom, Liquipedia), one for each swing that meets something. Its reach, hole, hit time, the kill's cost and its size are placeholders.",
+  "_season": "Y11S3",
+  "_unverified": ["count", "use.hitS", "use.reachM", "use.bothSkinsM", "use.holeM", "use.killCharges", "sizeM"],
+  "id": "breaching_hammer",
+  "name": "Breaching Hammer",
+  "side": "attacker",
+  "operator": "sledge",
+  "count": 25,
+  "electronic": false,
+  "use": {"kind": "swing", "swingS": 0.8, "hitS": 0.35, "reachM": 1.8, "bothSkinsM": 1.0, "holeM": [0.9, 1.1], "killCharges": 2},
+  "remote": false,
+  "pickUp": false,
+  "sizeM": [0.12, 0.9, 0.12]
+}

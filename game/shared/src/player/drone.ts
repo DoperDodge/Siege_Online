@@ -44,9 +44,10 @@ export function stepDrone(ctx: MoveContext, pawn: Pawn, driver: InputCmd | null)
   const d = ctx.data.intel.drone;
   const s = pawn.state;
   if (s.mode !== PawnMode.Walk) return;
-  // Jammed by a Bulletproof Camera's EMP dart: deaf to its driver until it wears off (it settles where it is).
-  const jammed = s.jammed > 0;
-  if (jammed) s.jammed--;
+  // Jammed by an EMP (a Bulletproof Camera's dart: until it wears off) or inside an enemy jammer (Mute's, Phase 8 M6:
+  // while it's there): deaf to its driver, it settles where it is.
+  const jammed = s.jammed > 0 || (ctx.droneJammed?.(pawn) ?? false);
+  if (s.jammed > 0) s.jammed--;
   const input = jammed ? null : driver;
   const pressed = input ? input.buttons & ~s.prevButtons : 0;
   if (s.jumpCd > 0) s.jumpCd--;
@@ -68,7 +69,8 @@ export function stepDrone(ctx: MoveContext, pawn: Pawn, driver: InputCmd | null)
     f /= len;
     st /= len;
   }
-  const speed = d.speedMps * (s.boostTicks > 0 ? d.boost.mult : 1);
+  // An enemy's barbed wire slows it a little (Phase 8 M3).
+  const speed = d.speedMps * (s.boostTicks > 0 ? d.boost.mult : 1) * (ctx.slowOf?.(pawn) ?? 1);
   const [fx, fz] = forwardXZ(s.yaw);
   const [rx, rz] = rightXZ(s.yaw);
   const wx = (fx * f + rx * st) * speed;

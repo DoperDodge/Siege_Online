@@ -1,0 +1,17 @@
+{
+  "_doc": "Mira's Black Mirror (research/operators/mira.md §3; Phase 8 M7): her ability, the item in her slot 2 (Z). Placed in `use.placeS` (Fandom: 5 s) on a reinforceable wall, reinforced or not (only from the side its steel went up from), at her head height standing (`mirror.standY` off the floor) or crouched (`mirror.crouchY`), never prone. It burns its window (`sizeM`'s width × height) out of every layer, steel too, and fills it with glass: bulletproof and blast-proof both ways, seen through from her side only (opaque black from the other); a knife hit from either side shatters it (opaque both ways, still bulletproof, Y6S2). Its canister (data/gadgets/mirror_canister.json) sits on her side under the glass: any damage destroys it, and `mirror.ejectS` later the glass is ejected (an open hole in its frame, Fandom). It falls with its wall: when more than `mirror.lossMax` of the band `mirror.frameM` wide round its window is gone through every layer (a soft wall breached round it, a Hard Breach or Exothermic Charge over its frame). It can't be picked up, and its wall can't be reinforced afterwards. 2 a round. Its size (1.0 × 0.35 m by eye), heights, frame and the share of it that holds it are placeholders.",
+  "_season": "Y11S3",
+  "_unverified": ["use.placeS", "use.reachM", "sizeM", "mirror.standY", "mirror.crouchY", "mirror.frameM", "mirror.lossMax", "mirror.ejectS"],
+  "id": "black_mirror",
+  "name": "Black Mirror",
+  "side": "defender",
+  "operator": "mira",
+  "count": 2,
+  "electronic": false,
+  "use": {"kind": "place", "on": ["reinforceable"], "placeS": 5.0, "reachM": 1.5},
+  "remote": false,
+  "pickUp": false,
+  "sizeM": [1.0, 0.35, 0.04],
+  "solid": true,
+  "mirror": {"standY": 1.5, "crouchY": 1.0, "frameM": 0.1, "lossMax": 0.2, "ejectS": 4, "canister": "mirror_canister"}
+}

@@ -42,7 +42,7 @@ export const Btn = {
   Interact: 1 << 2,
   Ads: 1 << 3,
   SlowWalk: 1 << 4,
-  /** Unique-ability key (Skopós: open / close the idle shell's camera). */
+  /** Unique-ability key: the ability's item in and out, like the gadget key (Skopós: open / close the idle shell's camera). */
   Ability: 1 << 5,
   /** Fire, held (DECISIONS D-055): automatic weapons fire while it is down, others on the press. */
   Fire: 1 << 6,
@@ -55,8 +55,8 @@ export const Btn = {
   /** Ping where the view is on (Phase 7, intel/DESIGN.md §6: the room shares it with the team). */
   Ping: 1 << 11,
   /**
-   * The gadget key: held, it places a Bulletproof Camera (Phase 7, intel/DESIGN.md §4); on one, it fires the camera's
-   * EMP dart. Phase 8 gives it every gadget.
+   * The gadget key (Phase 8, gadgets/DESIGN.md §2): takes the secondary gadget out (or its detonator) and puts it
+   * away; on a Bulletproof Camera, fires its EMP dart (as Fire does).
    */
   Gadget: 1 << 12,
   /** Drop the defuser (Phase 6, D-120). */
@@ -229,8 +229,64 @@ export interface PawnState {
   boostCd: number;
   /** A drone's ticks left jammed by a Bulletproof Camera's EMP dart (it doesn't move or turn meanwhile). */
   jammed: number;
-  /** Gadgets left to place: Bulletproof Cameras (Phase 7, intel/DESIGN.md §4; Phase 8 brings the others). */
-  gadgets: number;
+  // gadgets (Phase 8, gadgets/DESIGN.md §2): what the hands hold (Hand), what the gadget in them is doing (GadgetAct)
+  // and for how many ticks, the devices left in slot 1 (the secondary gadget) and slot 2 (the ability's, or a kit's
+  // second gadget), the remote ones of each out and waiting for the detonator, and the gadget an Interact hold is on
+  hand: number;
+  gAct: number;
+  gTicks: number;
+  g1: number;
+  g2: number;
+  w1: number;
+  w2: number;
+  gTarget: number;
+  // Lesion's Gu (Phase 8 M10): a needle in this body (no sprinting; the server's bites until it's pulled or the body is
+  // down), and a slot 2 item that comes back over time (his mines, gadgets/hands.ts regenSlot): how many it has given
+  // this life, and the ticks into the next
+  needled: boolean;
+  /**
+   * Dokkaebi's call ringing on this body's player's phone (Phase 8 M9; the server's, its owner corrected): a fresh
+   * Interact press is the dismissal's, so nothing else starts on it (the review, M12).
+   */
+  ringing: boolean;
+  regenMade: number;
+  regenTicks: number;
+  // Fuze's Ballistic Shield (Phase 8 M11, player/shield.ts): ticks it's knocked aside (a guard break, or Sledge's
+  // knockdown) and nowhere; the bullets it has stopped lately (its suppression), and the ticks since the last
+  guard: number;
+  suppress: number;
+  suppressT: number;
+  /** Where its plate is (player/shield.ts ShieldAt: none, front, back), set at the end of each step. */
+  shieldAt: number;
+}
+
+/** What a body's hands hold (PawnState.hand). */
+export enum Hand {
+  Weapon = 0,
+  /** Slot 1, the secondary gadget: a device, or the detonator of those waiting. */
+  Gadget = 1,
+  Detonator = 2,
+  /** Slot 2, the ability's item (Striker's and Sentry's second gadget): a device, or its detonator. */
+  Ability = 3,
+  AbilityDetonator = 4,
+}
+
+/** The slot (1 or 2) a hand holds, or 0 for the weapon. */
+export const handSlot = (hand: number): 0 | 1 | 2 => (hand === Hand.Gadget || hand === Hand.Detonator ? 1 : hand === Hand.Ability || hand === Hand.AbilityDetonator ? 2 : 0);
+export const isDetonator = (hand: number) => hand === Hand.Detonator || hand === Hand.AbilityDetonator;
+
+/** What the gadget in hand is doing (PawnState.gAct), `gTicks` into it. */
+export enum GadgetAct {
+  Ready = 0,
+  /** Coming out of its slot (data/gadgets.json `equipS`). */
+  Equip = 1,
+  /** Winding up a throw: overhand (Fire) or a lob (ADS). */
+  Throw = 2,
+  Lob = 3,
+  /** Fire held with the view on a spot for it: placing. */
+  Place = 4,
+  /** Swinging (Sledge's hammer, Phase 8 M4): its blow lands partway through. */
+  Swing = 5,
 }
 
 export const NEUTRAL_INPUT: Readonly<Omit<InputCmd, "seq" | "yaw" | "pitch">> = {

@@ -10,11 +10,14 @@ import { ticks } from "../weapons/ticks.js";
 import { parkWeapon } from "../weapons/step.js";
 
 /** Why a body took damage. */
-export const Cause = { Bullet: 0, Melee: 1, Fall: 2, Explosive: 3, Lab: 4, Reflect: 5, Bleed: 6, Left: 7 } as const;
+export const Cause = { Bullet: 0, Melee: 1, Fall: 2, Explosive: 3, Lab: 4, Reflect: 5, Bleed: 6, Left: 7, Gadget: 8 } as const;
 export type Cause = (typeof Cause)[keyof typeof Cause];
-export const CAUSE_MAX = 7;
-/** The names data/combat.json uses (`dbno.lethalCauses`); "left": the player left the match (D-123). */
-const CAUSE_NAMES = ["bullet", "melee", "fall", "explosive", "lab", "reflect", "bleed", "left"] as const;
+export const CAUSE_MAX = 8;
+/**
+ * The names data/combat.json uses (`dbno.lethalCauses`); "left": the player left the match (D-123); "gadget": barbed
+ * wire, a gas pipe's jet or fire (Phase 8 M3).
+ */
+const CAUSE_NAMES = ["bullet", "melee", "fall", "explosive", "lab", "reflect", "bleed", "left", "gadget"] as const;
 /** Kills a just-downed body's moment of invulnerability doesn't stop: leaving, out of the map, a lab tool. */
 const ABSOLUTE_KILLS: readonly Cause[] = [Cause.Fall, Cause.Lab, Cause.Left];
 
@@ -89,6 +92,7 @@ export function applyDamage(sim: Sim, pawn: Pawn, d: Damage, rules?: Pick<ModeDa
   if (s.mode !== PawnMode.Vault) s.mode = PawnMode.Downed;
   s.lean = 0;
   s.sprinting = false;
+  s.needled = false; // a Gu's poison stops when he's down (lesion.md)
   s.meleeTicks = 0;
   parkWeapon(s);
   s.adsQ = 0;
@@ -102,6 +106,7 @@ function kill(sim: Sim, pawn: Pawn, removed: number): { outcome: DamageOutcome; 
   s.downHp = 0;
   s.mode = PawnMode.Dead;
   s.sprinting = false;
+  s.needled = false;
   dropRevive(sim, pawn);
   sim.refreshPawn(pawn.id); // a dead body stops blocking at once
   return { outcome: "killed", removed };

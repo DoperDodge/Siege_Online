@@ -1,0 +1,16 @@
+{
+  "_doc": "Hard Breach Charge (attacker pool; research/gadgets.md §3.2). Placed on any breakable surface, reinforced ones included, in 2 s; its fuse runs 4 s from then (not remote, Y7S3). Two each (Y6S3.3). Its reach and size are placeholders. Its blast: 5 hp to anyone within about 0.5 m (Fandom); it cuts its square, steel too. Whether a bullet destroys it is a placeholder (yes).",
+  "_season": "Y11S3",
+  "_unverified": ["use.reachM", "sizeM", "blast.throughSoft", "fragile"],
+  "id": "hard_breach_charge",
+  "name": "Hard Breach Charge",
+  "side": "attacker",
+  "count": 2,
+  "electronic": false,
+  "use": {"kind": "place", "on": ["soft", "steel"], "placeS": 2.0, "reachM": 2.0, "fuseS": 4},
+  "remote": false,
+  "pickUp": false,
+  "sizeM": [0.75, 0.75, 0.1],
+  "blast": {"damage": {"max": 5, "fullM": 0.5, "zeroM": 0.5}, "destroyM": 0.5, "cut": "hard_breach_charge", "throughSoft": 0.7},
+  "fragile": true
+}

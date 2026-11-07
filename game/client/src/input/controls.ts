@@ -58,9 +58,11 @@ export class Controls {
   stanceLocked: () => boolean = () => false;
   /**
    * The predicted weapon state (slot in hand, and whether a swap is still bringing it up), so 1 / 2 / the
-   * wheel turn into a single swap press only when the slot would change (C16 in the Phase 3 plan).
+   * wheel turn into a single swap press only when the slot would change (C16 in the Phase 3 plan). `gadget`: the
+   * gadget slot in the hands (Phase 8: 1 or 2; 0 the weapon), which 1 / 2 put away.
    */
-  weaponState: () => { slot: number; equipping: boolean; zoom?: number } | null = () => null;
+  /** `fixed`: the loadout has one weapon only (Fuze's shield and pistol): every weapon key means the one out. */
+  weaponState: () => { slot: number; equipping: boolean; zoom?: number; gadget?: number; fixed?: boolean } | null = () => null;
   /** When this returns true (a map's plan view zooms with it), the mouse wheel doesn't switch weapons. */
   wheelTaken: () => boolean = () => false;
   /**
@@ -87,7 +89,7 @@ export class Controls {
   private meleePulse = false;
   private dropPulse = false;
   private observePulse = false;
-  /** The gadget key is held to place a camera (Phase 7); a tap shorter than a tick still goes out once (its dart). */
+  /** The gadget key (Phase 8): a press takes the gadget out or puts it away (on a Bulletproof Camera, fires its dart). */
   private gadgetPulse = false;
   private throwPulse = false;
   /**
@@ -435,13 +437,23 @@ export class Controls {
     if (this.meleePulse) buttons |= Btn.Melee;
     if (this.dropPulse) buttons |= Btn.Drop;
     if (this.observePulse) buttons |= Btn.Observe;
-    if (this.held.has("gadget") || this.gadgetPulse) buttons |= Btn.Gadget;
+    if (this.gadgetPulse) buttons |= Btn.Gadget;
     if (this.throwPulse) buttons |= Btn.Throw;
     if (this.pingDown && !this.wheel && ++this.pingTicks >= WHEEL_TICKS && this.wheelSize() > 0) this.wheel = { x: 0, y: 0 };
     if (this.pingPulse) buttons |= Btn.Ping;
     // Weapon slot: one swap press, sent only while the slot differs and no swap is already under way
     // (a press then would be ignored); released for a tick in between so the next press is a new one.
     const ws = this.weaponState();
+    // One weapon only (Fuze's shield): any weapon key is the weapon already out (a swap would never happen, and a
+    // request kept for it would go on sending Swap, which puts a gadget away the moment it comes out).
+    if (ws?.fixed && this.wantSlot !== null) this.wantSlot = ws.slot === 1 ? 1 : 0;
+    if (ws?.gadget && this.wantSlot !== null) {
+      // A gadget in hand (Phase 8): the weapon already out comes back with the gadget's own key and Swap together (it's
+      // put away, gadgets/hands.ts; the key alone, with a detonator out, would bring out the next charge), the other
+      // weapon with a swap alone (which puts it away too).
+      buttons |= this.wantSlot === ws.slot ? (ws.gadget === 1 ? Btn.Gadget : Btn.Ability) | Btn.Swap : Btn.Swap;
+      this.wantSlot = null;
+    }
     // No weapon to switch (down, dead, between bodies): a request made now is dropped, not kept for later.
     if (!ws || ws.slot === this.wantSlot) this.wantSlot = null;
     if (this.wantSlot !== null && ws && !ws.equipping && !this.sentSwap) {

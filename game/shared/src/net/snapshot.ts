@@ -17,10 +17,13 @@
 //   bit0 x, bit1 z, bit5 y : varu zigzag(Δ), 1/512 m
 //   bit2 yaw               : varu zigzag(wrapped Δ) of a u16 angle (full turn = 65536)
 //   bit3 pitch             : varu zigzag(Δ), pitch · 16384/π
-//   bit4 flags             : u16 stance | stanceFrom<<2 | mode<<4 (3 bits) | sprinting<<7 | grounded<<8
+//   bit4 flags             : u16 stance | stanceFrom<<2 | mode<<4 (3 bits) | sprinting<<7 | grounded<<8 |
+//                            shieldAt<<9 (2 bits: Fuze's shield's plate, Phase 8 M11) | lowered<<11 (3 bits: how far
+//                            his raised shield has slid down for aiming, 0–7; 0 with no shield up)
 //   bit6 lean (i8 ·127)   bit7 stanceT (u8 ·255)   bit8 tilts (3 × i8 ·128)   bit9 tuck (u8 ·255)
 //   bit10 aux              : u8, bit0 = aiming, bit1 = secondary weapon in hand, bit2 = a drone jammed, bit4 = being
-//                            revived (3, 5–7 free)
+//                            revived, bits 5–7 = what the hands hold (PawnState.hand, Phase 8: a gadget or its
+//                            detonator; 0 the weapon) (3 free)
 //   bit11 turn (u8 ·255)   : on a rope, how far turned upside down (PawnState.ropeTurn)
 // TCP delivers every snapshot in order, so deltas are against the last one *sent*, never lost ones.
 import { lerp, wrapAngle } from "../core/math.js";
@@ -29,8 +32,11 @@ import { Btn, PawnMode, Stance, type PawnState } from "../player/types.js";
 import { ByteReader, ByteWriter, fnv1a, ProtocolError } from "./bytes.js";
 import { readControllerState, readPawnState, writeControllerState, writePawnState, type ControllerState } from "./pawnState.js";
 
-/** The most pawns a correction carries: a body and its drones (Phase 7), or Skopós's two shells. */
-export const MAX_OWN_PAWNS = 4;
+/**
+ * The most pawns a correction carries: a body and its drones (Phase 7; Brava's two Kludge drones too, Phase 8 M8), or
+ * Skopós's two shells.
+ */
+export const MAX_OWN_PAWNS = 6;
 
 export const MSG_SNAPSHOT = 0x10;
 /** Snapshots go out on every SNAPSHOT_EVERY-th tick. */
@@ -48,6 +54,8 @@ const AUX_SECONDARY = 2;
 /** A drone jammed by an EMP dart (Phase 7): a teammate watching it is told (how long, they don't need). */
 const AUX_JAMMED = 4;
 const AUX_REVIVED = 16;
+/** What the hands hold (PawnState.hand, Phase 8), in aux bits 5–7: others draw the gadget out instead of the weapon. */
+const AUX_HAND_SHIFT = 5;
 /** `revivedBy` of a remote body someone is reviving (the reviver's id isn't sent). */
 export const REVIVER_UNKNOWN = 0xffffffff;
 
@@ -88,8 +96,10 @@ export function quantizeRemote(s: PawnState): RemoteQ {
     tiltB: i8(s.tiltB, 128),
     tiltSide: i8(s.tiltSide, 128),
     tuck: round(s.tuck * 255),
-    flags: s.stance | (s.stanceFrom << 2) | (s.mode << 4) | (s.sprinting ? 128 : 0) | (s.grounded ? 256 : 0),
-    aux: (s.prevButtons & Btn.Ads ? 1 : 0) | (s.slot === 1 ? AUX_SECONDARY : 0) | (s.jammed > 0 ? AUX_JAMMED : 0) | (s.revivedBy !== 0 ? AUX_REVIVED : 0),
+    // Fuze's shield's plate (Phase 8 M11) in bits 9-10, and how far it's slid down for aiming in 11-13: others draw it,
+    // and a rewind puts it where they saw it.
+    flags: s.stance | (s.stanceFrom << 2) | (s.mode << 4) | (s.sprinting ? 128 : 0) | (s.grounded ? 256 : 0) | ((s.shieldAt & 3) << 9) | (s.shieldAt === 1 ? round((s.adsQ / 65535) * 7) << 11 : 0),
+    aux: (s.prevButtons & Btn.Ads ? 1 : 0) | (s.slot === 1 ? AUX_SECONDARY : 0) | (s.jammed > 0 ? AUX_JAMMED : 0) | (s.revivedBy !== 0 ? AUX_REVIVED : 0) | ((s.hand & 7) << AUX_HAND_SHIFT),
     turn: s.mode === PawnMode.Rappel ? round(s.ropeTurn * 255) : 0,
   };
 }
@@ -109,12 +119,16 @@ export function remoteState(q: RemoteQ, maxHp = 100): PawnState {
   s.mode = (q.flags >> 4) & 7;
   s.sprinting = (q.flags & 128) !== 0;
   s.grounded = (q.flags & 256) !== 0;
+  s.shieldAt = (q.flags >> 9) & 3;
+  // (Its aiming progress as far as the shield shows it: the plate slides down with it.)
+  s.adsQ = round((((q.flags >> 11) & 7) / 7) * 65535);
   s.ropeTurn = q.turn / 255;
   s.prevButtons = q.aux & 1 ? Btn.Ads : 0;
   s.slot = q.aux & AUX_SECONDARY ? 1 : 0; // (others see which weapon is out)
   s.jammed = q.aux & AUX_JAMMED ? 1 : 0;
   // Someone is reviving this body (who, a remote client doesn't need: it can't start a second revive).
   s.revivedBy = q.aux & AUX_REVIVED ? REVIVER_UNKNOWN : 0;
+  s.hand = Math.min(4, (q.aux >> AUX_HAND_SHIFT) & 7);
   return s;
 }
 
@@ -138,6 +152,7 @@ export function interpolateRemote(a: PawnState, b: PawnState, u: number): PawnSt
     tiltSide: lerp(a.tiltSide, b.tiltSide, u),
     tuck: lerp(a.tuck, b.tuck, u),
     ropeTurn: lerp(a.ropeTurn, b.ropeTurn, u),
+    adsQ: lerp(a.adsQ, b.adsQ, u),
   };
 }
 
@@ -192,7 +207,7 @@ function readRecord(r: ByteReader, baseOf: (id: number) => RemoteQ): [number, Re
   if (m & 8) q.pitch += unzz(r.varu());
   if (m & 16) {
     q.flags = r.u16();
-    if ((q.flags & 3) > Stance.Prone || ((q.flags >> 2) & 3) > Stance.Prone || ((q.flags >> 4) & 7) > PawnMode.Held || q.flags >= 512) throw new ProtocolError("bad flags");
+    if ((q.flags & 3) > Stance.Prone || ((q.flags >> 2) & 3) > Stance.Prone || ((q.flags >> 4) & 7) > PawnMode.Held || ((q.flags >> 9) & 3) > 2 || q.flags >= 16384) throw new ProtocolError("bad flags");
   }
   if (m & 32) q.y += unzz(r.varu());
   if (m & 64) q.lean = r.i8();

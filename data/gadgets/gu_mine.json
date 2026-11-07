@@ -1,0 +1,18 @@
+{
+  "_doc": "Lesion's Gu mines (research/operators/lesion.md; Phase 8 M10): his ability, thrown from his slot 2 (Z) like a grenade; it settles on something flat (a wall drops it). Mechanical: no EMP, jammer or hack touches it; always visible (Y8S3). 1 at the round's start, one more every 25 s (Y11S2.2, the timer runs in prep too), until 8 have been given (Y9S4.2). An attacker body (a downed one too: DBNO bodies set them off, Y5S1) within `gu.radiusM` of one at rest sets it off: it's gone, and every attacker body within that reach and not down is needled: `gu.hit` (Y9S1.3), then `gu.damage` every `gu.everyS` (Y8S3; the first bite `everyS` after the needle, ours) until he pulls the needle (Interact held `gu.pullS`, standing; the weapon lowered) or goes down. Needled, he can't sprint, nor plant or drop the defuser. A second needle restarts the timer with its hit and one bite (Y8S3). A knife or Sledge's hammer on one sets it off (stinging who's close); a bullet or a blast destroys it; reinforcing the wall it lies at crushes it. Lesion picks his own back up (F). Drones never set one off. The pull time, its throw and size are placeholders.",
+  "_season": "Y11S3",
+  "_unverified": ["gu.pullS", "sizeM", "use"],
+  "id": "gu_mine",
+  "name": "Gu Mine",
+  "side": "defender",
+  "operator": "lesion",
+  "count": 8,
+  "electronic": false,
+  "use": {"kind": "throw", "flight": "settle"},
+  "remote": false,
+  "pickUp": true,
+  "sizeM": [0.1, 0.06, 0.1],
+  "fragile": true,
+  "regen": {"start": 1, "everyS": 25},
+  "gu": {"radiusM": 1.0, "hit": 3, "damage": 12, "everyS": 2, "pullS": 2.0}
+}

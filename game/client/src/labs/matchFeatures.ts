@@ -31,7 +31,7 @@ import {
 } from "@redmond/shared";
 import { keyLabel, loadSettings } from "../input/settings.js";
 import { escapeHtml } from "../ui/dom.js";
-import { changedPick, loadoutRows, saveLoadout, savedLoadout, type Slot } from "../ui/loadout.js";
+import { changedGadget, changedPick, loadoutRows, saveLoadout, savedLoadout, type Slot } from "../ui/loadout.js";
 import { rankBadge, ratingChange, saveRating, storedRating } from "../ui/rank.js";
 import type { LabApi, SpectateView } from "./common/lab.js";
 
@@ -498,12 +498,13 @@ export function matchFeatures(lab: LabApi): void {
       if (b) (match[a] as Record<string, unknown>)[b] = Number(t.value);
       else match[a] = Number(t.value);
       lobby({ kind: "change", change: { kind: "rules", rules: { match } } });
-    } else if (d.slot && d.part) {
-      // The loadout: a weapon or attachment, kept for this operator and carried now.
+    } else if ((d.slot && d.part) || d.gadget !== undefined) {
+      // The loadout: a weapon, an attachment or a gadget, kept for this operator and carried now.
       const v = session.match;
       const me = v && meOf(v);
       if (!me?.operator) return;
-      myPick = changedPick(pickFor(me.operator), d.slot as Slot, d.part as keyof WeaponPick, t.value);
+      const now = pickFor(me.operator);
+      myPick = d.gadget !== undefined ? changedGadget(data, now, Number(d.gadget), t.value) : changedPick(now, d.slot as Slot, d.part as keyof WeaponPick, t.value);
       saveLoadout(myPick);
       send(encodePickLoadout(myPick));
     }
@@ -797,8 +798,8 @@ export function matchFeatures(lab: LabApi): void {
   );
   lab.addHelp(`<kbd>${keyLabel(keys.throwDrone)}</kbd>`, "Throw a drone you have in hand, and drive it (attackers)");
   lab.addHelp(
-    `Hold <kbd>${keyLabel(keys.gadget)}</kbd>`,
-    `Bulletproof Camera (defenders who took it): place it on the wall or the floor in front of you (${lab.data.intel.bulletproofCamera.placeS} s); it joins the cameras (after the level's). Watching it, ${keyLabel(keys.gadget)} fires its EMP dart: drones in its burst are jammed for ${lab.data.intel.bulletproofCamera.disableS} s (ready again ${lab.data.intel.bulletproofCamera.dartRechargeS} s later). Its front is bulletproof; its sides and back aren't`,
+    `<kbd>${keyLabel(keys.gadget)}</kbd> (Bulletproof Camera)`,
+    `Defenders who took it: take it out, then hold left mouse at a wall or the floor in front of you (${(lab.data.gadgets.get("bulletproof_camera")!.use as { placeS: number }).placeS} s); it joins the cameras (after the level's). Watching it, ${keyLabel(keys.gadget)} fires its EMP dart: drones in its burst are jammed for ${lab.data.intel.bulletproofCamera.disableS} s (ready again ${lab.data.intel.bulletproofCamera.dartRechargeS} s later). Its front is bulletproof; its sides and back aren't`,
   );
   lab.addHelp(
     "Hold left mouse (on a drone or a camera)",

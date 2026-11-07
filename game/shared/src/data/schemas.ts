@@ -355,7 +355,14 @@ const gunSchema = z
     if (starts && (starts[0] !== 0 || starts.some((v, i) => i > 0 && v <= starts[i - 1]))) issue(["recoil", "stageStarts"], "stage starts begin at 0 and increase");
   });
 
-/** The Ballistic Shield (weapons_notes.md §5). Validated now; usable from Phase 8 (DECISIONS D-054). */
+/**
+ * The Ballistic Shield (weapons_notes.md §5; Phase 8 M11, gadgets/DESIGN.md §8): a primary held with the secondary
+ * pistol. Its `plate` is where it stands (player/shield.ts): `frontM` ahead of the body, `widthM` across, from
+ * `bottomM` (standing, crouched) up to `aboveEyeM` over the eyes, its top `adsBelowEyeM` under them while aiming; on
+ * the back it covers the torso. A blast from in front loses `absorb` of its damage; one of `guardBreak.blastHp` or
+ * more, a knife or a stun knocks it aside for `guardBreak.seconds`; Sledge's hammer knocks it down for `knockdownS`.
+ * The bash (melee) does `bashDamage` and pushes its target back at `bashPushMps`.
+ */
 const shieldSchema = z.strictObject({
   ...meta,
   id: z.string().regex(/^[a-z0-9_]+$/),
@@ -367,6 +374,24 @@ const shieldSchema = z.strictObject({
     moveSpeedMult: z.number().positive(),
     suppression: z.strictObject({ hitsToTrigger: z.number().int().positive(), hitsToMax: z.number().int().positive(), falloffS: secs }),
     bashDamage: z.number().nonnegative(),
+    bashPushMps: z.number().nonnegative(),
+    /**
+     * Its plate (Phase 8 M11, reworked after Ulo's test): `widthM` across, curving round its carrier (its edges `curveM`
+     * nearer him than its middle, `frontM` ahead); from `bottomM` up to `aboveEyeM` over the eyes, slid down by
+     * `aboveEyeM + adsBelowEyeM` as he aims; a viewport `window` at eye height (bulletproof glass: drawn see-through).
+     */
+    plate: z.strictObject({
+      widthM: z.number().positive(),
+      curveM: z.number().min(0),
+      frontM: z.number().positive(),
+      bottomM: z.strictObject({ stand: z.number().min(0), crouch: z.number().min(0) }),
+      aboveEyeM: z.number().min(0),
+      adsBelowEyeM: z.number().min(0),
+      window: z.strictObject({ widthM: z.number().positive(), heightM: z.number().positive() }),
+    }),
+    absorb: z.number().min(0).max(1),
+    guardBreak: z.strictObject({ blastHp: z.number().positive(), seconds: secs }),
+    knockdownS: secs,
   }),
 });
 
@@ -680,17 +705,12 @@ export const intelSchema = z.strictObject({
   /** The comm wheel's callouts, in order round the wheel (at most 16). */
   callouts: z.array(z.string().min(1).max(24)).min(1).max(16),
   /**
-   * The Bulletproof Camera (Phase 7 M5): `count` each for a defender who picked it, placed by holding the gadget key
-   * `placeS` at a wall or the floor within `reachM`; a box `sizeM` (width, height, depth) whose front, `frontDeg` either
-   * side of its facing, is bulletproof; its view like a default camera's (on the floor it turns all the way round); its
-   * EMP dart flies up to `dartRangeM` and jams drones within `dartRadiusM` for `disableS`, again after `dartRechargeS`;
-   * outdoors it loses its signal after `outdoorSignalS`.
+   * The Bulletproof Camera (Phase 7 M5; its count, placing and size are a gadget's, data/gadgets/bulletproof_camera.json):
+   * its front, `frontDeg` either side of its facing, is bulletproof; its view like a default camera's (on the floor it
+   * turns all the way round); its EMP dart flies up to `dartRangeM` and jams drones within `dartRadiusM` for
+   * `disableS`, again after `dartRechargeS`; outdoors it loses its signal after `outdoorSignalS`.
    */
   bulletproofCamera: z.strictObject({
-    count: z.number().int().min(0),
-    placeS: z.number().positive(),
-    reachM: z.number().positive(),
-    sizeM: z.tuple([z.number().positive(), z.number().positive(), z.number().positive()]),
     frontDeg: z.number().min(0).max(90),
     view: cameraViewSchema,
     dartRangeM: z.number().positive(),
@@ -701,6 +721,358 @@ export const intelSchema = z.strictObject({
   }),
 });
 export type IntelData = z.infer<typeof intelSchema>;
+
+// ---- Gadgets (Phase 8; game/shared/src/gadgets/DESIGN.md §1) ----
+
+/**
+ * Where a placed gadget may go (gadgets/place.ts): something flat enough to stand on, a wall, a breakable surface
+ * that isn't reinforced where it goes (a soft wall, a floor, a hatch, a barricade), a reinforced section, a
+ * deployable shield's front (Fuze's Cluster Charge, Phase 8 M5), or a reinforceable wall, from its steel's side if
+ * it's reinforced (Mira's Black Mirror, M7).
+ */
+export const PLACE_ON = ["floor", "wall", "soft", "steel", "shield", "reinforceable"] as const;
+export type PlaceOn = (typeof PLACE_ON)[number];
+
+const sizeM = z.tuple([z.number().positive(), z.number().positive(), z.number().positive()]);
+
+/** Damage by distance (gadgets/blast.ts): `max` within `fullM`, falling in a straight line to 0 at `zeroM`. */
+const falloffSchema = z
+  .strictObject({ max: z.number().min(0), fullM: z.number().min(0), zeroM: z.number().min(0) })
+  .refine((f) => f.zeroM >= f.fullM, { message: "zeroM must be at least fullM" });
+export type BlastFalloff = z.infer<typeof falloffSchema>;
+
+/**
+ * What a blast does (gadgets/blast.ts, RealBlast: research/destruction.md §5). `damage` to bodies (a charge's far
+ * side), `near` its placer's side when it's on a wall; the Claymore only within `arcDeg` of its facing and `behindM`
+ * behind it. Gadgets, barricades and drones within `destroyM` are destroyed. `cut`: the hole it makes
+ * (data/destruction.json `explosives`), on its own panel for a charge, on every panel within `cutM` for a grenade.
+ * `throughSoft` of its damage gets through each soft surface on the way (shrapnel); steel and the level stop it.
+ * Tinnitus within `concussM` (the client's).
+ */
+const blastSchema = z.strictObject({
+  damage: falloffSchema,
+  near: falloffSchema.optional(),
+  arcDeg: z.number().gt(0).max(360).default(360),
+  behindM: z.number().min(0).default(0),
+  destroyM: z.number().min(0),
+  cut: z.string().optional(),
+  cutM: z.number().min(0).default(0),
+  throughSoft: z.number().min(0).max(1),
+  concussM: z.number().min(0).default(0),
+});
+export type BlastData = z.infer<typeof blastSchema>;
+
+/** A sphere of smoke for a while (a smoke grenade's cloud, a fire extinguisher's). */
+const cloudSchema = z.strictObject({ radiusM: z.number().positive(), seconds: z.number().positive() });
+
+/** Damage over time where something burns or cuts: `damage` every `everyS` to a body in it. */
+const dotSchema = z.strictObject({ damage: z.number().min(0), everyS: z.number().positive() });
+
+/** A secondary gadget (data/gadgets/<id>.json; research/gadgets.md). Metres, seconds. */
+export const gadgetSchema = z
+  .strictObject({
+    ...meta,
+    id: z.string(),
+    name: z.string(),
+    side: z.enum(["attacker", "defender"]),
+    /**
+     * An operator's own item (their ability, carried in slot 2, Phase 8 M4: Sledge's hammer), not one of the generic
+     * pools: the operator whose `ability.id` is this file's id.
+     */
+    operator: z.string().optional(),
+    /**
+     * Never carried nor in a pool: the server puts it in the world (Phase 8 M9: a dead defender's phone; M10: Skopós's
+     * idle shell's barrier); its `count` and `use` are unused.
+     */
+    dropped: z.literal(true).optional(),
+    /** How many a loadout with it gets each round (Striker's and Sentry's kits too, research/operators/sentry.md §3.2; a hammer's charges). */
+    count: z.number().int().min(1).max(30),
+    /** Electronic gadgets are disabled by DSEG, jammed and hacked (§6); mechanical ones never are. */
+    electronic: z.boolean(),
+    use: z.discriminatedUnion("kind", [
+      z.strictObject({
+        kind: z.literal("throw"),
+        /** What it does when it meets something: bounces on, goes off (`impact`), sticks, or settles on something flat. */
+        flight: z.enum(["bounce", "impact", "stick", "settle"]),
+        /** The Nitro Cell's heavy throw (data/gadgets.json `throw.heavy`) for both Fire and ADS. */
+        heavy: z.boolean().default(false),
+        /** Goes off this long after the throw; at its first hit, if more than `afterHitS` is left, it's cut to that. */
+        fuseS: z.number().positive().optional(),
+        afterHitS: z.number().positive().optional(),
+        /** An impact gadget that meets nothing goes off in the air after this far. */
+        maxTravelM: z.number().positive().optional(),
+      }),
+      z.strictObject({
+        kind: z.literal("place"),
+        on: z.array(z.enum(PLACE_ON)).min(1),
+        /** Fire held this long, the view on a spot for it within `reachM`. */
+        placeS: z.number().positive(),
+        reachM: z.number().positive(),
+        /** Goes off this long after it's placed (the Hard Breach Charge). */
+        fuseS: z.number().positive().optional(),
+        /** On a wall it stands on the floor under where the view met it, if that surface goes down so far (Thermite's: its hole from the floor up). */
+        toFloor: z.boolean().default(false),
+      }),
+      z.strictObject({
+        /**
+         * Swung (Sledge's hammer, M4): Fire held swings it, each swing `swingS` long, its blow landing `hitS` in and
+         * reaching `reachM` from the eye. Within `bothSkinsM` of a soft surface (across the floor) it breaks both faces (a `holeM` width ×
+         * height rectangle), further only the near one; a body it hits dies, costing `killCharges` charges in all.
+         */
+        kind: z.literal("swing"),
+        swingS: z.number().positive(),
+        hitS: z.number().positive(),
+        reachM: z.number().positive(),
+        bothSkinsM: z.number().min(0),
+        holeM: z.tuple([z.number().positive(), z.number().positive()]),
+        killCharges: z.number().int().min(1),
+      }),
+      /** Held up in the hands while it's out, never placed or thrown (Pulse's sensor, Phase 8 M6: `sensor`). */
+      z.strictObject({ kind: z.literal("hold") }),
+      /**
+       * Drones of her own (Brava's Kludge drones, Phase 8 M8: `kludge`): her body carries `count` of them besides her
+       * drones; Z throws one out and drives it, as the drone key does a drone. Never in the hands.
+       */
+      z.strictObject({ kind: z.literal("drone") }),
+    ]),
+    /** Waits for its owner's detonator once it's out. */
+    remote: z.boolean(),
+    /**
+     * At most this many of its owner's wait for the detonator at once (Thermite's and Fuze's charges: one, Ulo): with
+     * that many out, its slot's key gives the detonator, not another, until one is set off or lost (gadgets/hands.ts).
+     */
+    maxOut: z.number().int().min(1).optional(),
+    /**
+     * Once its detonator sets it off it burns this long before it goes off (Thermite's Exothermic Charge, Phase 8 M5:
+     * sparks on both sides); nothing stops it then but its destruction.
+     */
+    burnS: z.number().positive().optional(),
+    /**
+     * Fuze's Cluster Charge (Phase 8 M5): set off, its tube goes through the surface it's on, at once through a soft one
+     * (a wall, a floor, a hatch, a barricade), after `drillS` through steel or a deployable shield (whose glass
+     * shatters), reaching `tubeM` behind it (shot or blown up there from the far side, it's destroyed; at least one
+     * grenade has come out by then). It drills `cut` (data/destruction.json explosives) and lets `count` of `grenade`
+     * (a gadget file of their own, thrown with a fuse) out on the far side, one every `everyS`, in a fan `fanDeg`
+     * wide from its placer's left to right, at `speedMps`, `upDeg` above level out of a wall and `downDeg` below it
+     * out of a floor. Then it's gone, its hole left.
+     */
+    cluster: z
+      .strictObject({
+        grenade: z.string(),
+        count: z.number().int().min(1),
+        everyS: z.number().positive(),
+        fanDeg: z.number().min(0).max(180),
+        speedMps: z.number().positive(),
+        upDeg: z.number().min(-45).max(80),
+        downDeg: z.number().min(0).max(90),
+        drillS: z.number().positive(),
+        tubeM: z.number().positive(),
+        cut: z.string(),
+      })
+      .optional(),
+    /** Its owner takes it back (Interact held, data/gadgets.json `pickUpS`). */
+    pickUp: z.boolean(),
+    /** Its box (width, height, depth): what bullets meet and what's drawn. */
+    sizeM,
+    /** What it does when it goes off (blastSchema). */
+    blast: blastSchema.optional(),
+    /**
+     * A stun's flash where it goes off (gadgets/effects.ts): those facing it are blinded for `seconds` within `fullM`
+     * (less, out to `maxM`), those facing away within `behindM`; ears ring within `ringM` whatever the facing. Only in
+     * sight of it (a deployable shield's slits let it through); not those watching a camera or a drone.
+     */
+    stun: z
+      .strictObject({ seconds: z.number().positive(), fullM: z.number().positive(), maxM: z.number().positive(), behindM: z.number().min(0), ringM: z.number().min(0) })
+      .refine((k) => k.maxM >= k.fullM, { message: "maxM must be at least fullM" })
+      .optional(),
+    /** Its smoke where it goes off: it blocks sight (scans, pings), not bullets; a Bulletproof Camera sees through. */
+    cloud: cloudSchema.optional(),
+    /** An EMP where it goes off (DSEG, gadgets/electronics.ts): the other side's electronics and bodies within `radiusM`, for `seconds`. */
+    emp: z.strictObject({ radiusM: z.number().positive(), seconds: z.number().positive() }).optional(),
+    /**
+     * Barbed wire: an enemy body standing in its box moves at `slow` of its speed and can't sprint (an enemy drone at
+     * `droneSlow`), and takes `damage` every `everyS` while it moves; `knifeHits` knife hits destroy it.
+     */
+    wire: z
+      .strictObject({ slow: z.number().gt(0).max(1), droneSlow: z.number().gt(0).max(1), damage: z.number().min(0), everyS: z.number().positive(), knifeHits: z.number().int().min(1) })
+      .optional(),
+    /** A solid box (the deployable shield): bodies, drones, bullets, blasts and throws meet it; a knife hit makes its glass opaque (then it can't be picked up). */
+    solid: z.boolean().default(false),
+    /**
+     * Its box curves round its centre instead (Skopós's idle shell's barrier, Ulo's test): `segments` boxes, each `sizeM`
+     * tall and deep and as wide as its share of the arc, `radiusM` out from the entry's position, spanning `degrees`
+     * centred on its facing (gadgets/hits.ts gadgetBoxes).
+     */
+    arc: z.strictObject({ radiusM: z.number().positive(), degrees: z.number().positive().max(360), segments: z.number().int().min(1).max(16) }).optional(),
+    /** A proximity alarm: it sounds while an enemy body is within `radiusM`, from `armS` after it comes to rest. */
+    alarm: z.strictObject({ radiusM: z.number().positive(), armS: z.number().min(0) }).optional(),
+    /** An observation blocker's barrier, facing its placer's way: up to `widthM` wide (less where walls are closer), `heightM` tall; the other side's observation tools can't see through it. */
+    barrier: z.strictObject({ widthM: z.number().positive(), heightM: z.number().positive() }).optional(),
+    /** The Claymore's lasers (yaws from its facing), how far they reach, and when it's armed after it's placed. */
+    tripwire: z.strictObject({ anglesDeg: z.array(z.number().min(-180).max(180)).min(1), lengthM: z.number().positive(), armS: z.number().min(0) }).optional(),
+    /** One bullet (or any damage) destroys it, without its blast. */
+    fragile: z.boolean().default(false),
+    /**
+     * What Brava's Kludge drone's hack does to it (Phase 8 M8; research/operators/brava.md §3.2): `convert` it switches
+     * sides (it works for the hacker's side), `destroy` it fizzles out a little later (a device it can't control).
+     */
+    hack: z.enum(["convert", "destroy"]).optional(),
+    /**
+     * Mute's Signal Disruptor (Phase 8 M6, gadgets/jammers.ts): while it stands (not in the air, not disabled by an
+     * EMP) it jams the other side's wireless signals within `radiusM` (a sphere): no remote device of theirs in it, or
+     * whose owner is in it, can be set off, and their drones in it lose their drivers; inside `warnM` their drones'
+     * feeds show static. Its reach shows for `showS` once it's placed.
+     */
+    jammer: z.strictObject({ radiusM: z.number().positive(), warnM: z.number().positive(), showS: z.number().min(0) }).optional(),
+    /**
+     * Pulse's Cardiac Sensor (Phase 8 M6, gadgets/sensor.ts): held up, it shows its holder the other side's heartbeats
+     * within `rangeM` of him, through anything, within `fanDeg` of his facing across the floor; a ping while it's up
+     * marks the heartbeat nearest his crosshair within `pingDeg` for his team.
+     */
+    sensor: z.strictObject({ rangeM: z.number().positive(), fanDeg: z.number().gt(0).max(360), pingDeg: z.number().gt(0).max(90) }).optional(),
+    /**
+     * Mira's Black Mirror (Phase 8 M7, gadgets/mirror.ts): placed on a reinforceable wall at standing (`standY`) or
+     * crouched (`crouchY`) height above the floor, it cuts its glass's window (`sizeM`'s width and height) through
+     * every layer and fills it: bulletproof and blast-proof both ways, seen through from its placer's side only; a
+     * knife shatters it (opaque both ways). Its `canister` (a gadget of its own) sits on its placer's side under the
+     * glass: destroyed, it ejects the glass `ejectS` later (an open hole, its frame left). It falls with its wall: when
+     * more than `lossMax` of a band `frameM` wide round its window is gone through every layer.
+     */
+    /**
+     * Brava's Kludge drone (Phase 8 M8, gadgets/hack.ts): driving one, Fire held on an enemy electronic device in view
+     * within `rangeM` (a camera, an alarm, a blocker, a jammer, a Nitro Cell, Skopós's idle shell) hacks it in `hackS`
+     * (it must stay within range; once started it needn't see it), one of its `charges`: a device that can be
+     * controlled switches sides, a Nitro Cell fizzles `destroyS` later, an idle shell overheats `overheatS` later
+     * unless Skopós wakes it. It sees the device within `coneDeg` of its view.
+     */
+    /**
+     * Dokkaebi's tablet (Phase 8 M9, net/room.ts jegeo): held up (Z), Fire sends the Jegeo Payload to the identified
+     * (spotted) defender nearest her crosshair within `aimDeg`, through anything: one of her charges (`startCharges`,
+     * one more every `regenS` up to `maxCharges`); `uploadS` later his phone explodes (`damage`, a `fire` where he
+     * stood) and he loses his observation tools for the round, unless the upload is cut (her tablet put away, her death,
+     * a jammer or an EMP on either, his dismissal: Interact held `dismissS`). Not the same defender again for
+     * `cooldownS`. With no live target, Fire hacks a dead defender's phone instead (`camHacks` a round): the attackers
+     * watch the defenders' cameras for `camS`.
+     */
+    jegeo: z
+      .strictObject({
+        startCharges: z.number().int().min(0),
+        maxCharges: z.number().int().min(1),
+        regenS: z.number().positive(),
+        uploadS: z.number().positive(),
+        cooldownS: z.number().min(0),
+        dismissS: z.number().positive(),
+        damage: z.number().min(0),
+        aimDeg: z.number().positive().max(90),
+        fire: z.strictObject({ radiusM: z.number().positive(), seconds: z.number().positive(), damage: z.number().min(0), everyS: z.number().positive() }),
+        camHacks: z.number().int().min(0),
+        camS: z.number().positive(),
+      })
+      .optional(),
+    kludge: z
+      .strictObject({
+        charges: z.number().int().min(1),
+        rangeM: z.number().positive(),
+        hackS: z.number().positive(),
+        destroyS: z.number().positive(),
+        overheatS: z.number().positive(),
+        coneDeg: z.number().positive().max(45),
+      })
+      .optional(),
+    /**
+     * Lesion's Gu mines (Phase 8 M10, gadgets/serve.ts sting): an enemy body within `radiusM` of one at rest sets it off:
+     * it's gone, and every enemy body within that reach not down is needled: `hit` damage, then `damage` every `everyS`
+     * until he pulls the needle (Interact held `pullS`, standing) or goes down; needled, he can't sprint. A second
+     * needle restarts the timer with its hit and one bite.
+     */
+    gu: z
+      .strictObject({ radiusM: z.number().positive(), hit: z.number().min(0), damage: z.number().min(0), everyS: z.number().positive(), pullS: z.number().positive() })
+      .optional(),
+    /**
+     * A slot 2 item that comes back over time (Phase 8 M10: Lesion's mines): `start` at a life's start, one more every
+     * `everyS`, until `count` have been given (gadgets/hands.ts regenSlot).
+     */
+    regen: z.strictObject({ start: z.number().int().min(0), everyS: z.number().positive() }).optional(),
+    mirror: z
+      .strictObject({
+        standY: z.number().positive(),
+        crouchY: z.number().positive(),
+        frameM: z.number().positive(),
+        lossMax: z.number().gt(0).max(1),
+        ejectS: z.number().positive(),
+        canister: z.string(),
+      })
+      .optional(),
+  })
+  .superRefine((g, ctx) => {
+    const u = g.use;
+    if (u.kind === "throw" && u.flight === "bounce" && u.fuseS === undefined) ctx.addIssue({ code: "custom", path: ["use", "fuseS"], message: "a bouncing gadget needs a fuse" });
+    if (u.kind === "throw" && u.afterHitS !== undefined && u.fuseS === undefined) ctx.addIssue({ code: "custom", path: ["use", "afterHitS"], message: "afterHitS cuts a fuse: give fuseS" });
+    if (u.kind === "throw" && u.maxTravelM !== undefined && u.flight !== "impact") ctx.addIssue({ code: "custom", path: ["use", "maxTravelM"], message: "only an impact gadget goes off in the air" });
+    if (g.remote && (u.kind === "throw" || u.kind === "place") && u.fuseS !== undefined) ctx.addIssue({ code: "custom", path: ["remote"], message: "a remote gadget has no fuse" });
+    if (u.kind === "swing" && u.hitS > u.swingS) ctx.addIssue({ code: "custom", path: ["use", "hitS"], message: "a swing's blow lands within it" });
+    for (const k of ["maxOut", "burnS", "cluster"] as const)
+      if (g[k] !== undefined && !g.remote) ctx.addIssue({ code: "custom", path: [k], message: "only a remote device has this" });
+    if (g.cluster && (g.blast || g.burnS !== undefined)) ctx.addIssue({ code: "custom", path: ["cluster"], message: "a cluster charge's grenades blast, not the charge" });
+    if (u.kind === "place" && u.on.includes("shield") && !g.cluster) ctx.addIssue({ code: "custom", path: ["use", "on"], message: "only a cluster charge drills through a shield" });
+    if ((u.kind === "hold") !== (g.sensor !== undefined || g.jegeo !== undefined)) ctx.addIssue({ code: "custom", path: ["use"], message: "a held item is a sensor or a tablet, and they're held" });
+    if (g.jammer && (u.kind !== "place" || g.jammer.warnM < g.jammer.radiusM)) ctx.addIssue({ code: "custom", path: ["jammer"], message: "a jammer is placed, and warns beyond its reach" });
+    if (g.mirror && (u.kind !== "place" || !u.on.includes("reinforceable") || !g.solid)) ctx.addIssue({ code: "custom", path: ["mirror"], message: "a mirror is solid and placed on a reinforceable wall" });
+    if (g.gu && (u.kind !== "throw" || u.flight !== "settle" || g.remote || g.electronic)) ctx.addIssue({ code: "custom", path: ["gu"], message: "a Gu mine is thrown, settles, and is mechanical" });
+    if (g.regen && g.regen.start > g.count) ctx.addIssue({ code: "custom", path: ["regen", "start"], message: "more at the start than it ever gives" });
+    if ((u.kind === "drone") !== (g.kludge !== undefined)) ctx.addIssue({ code: "custom", path: ["kludge"], message: "a drone item is a Kludge, and a Kludge is a drone item" });
+  });
+export type GadgetData = z.infer<typeof gadgetSchema>;
+
+const throwProfile = z.strictObject({ speedMps: z.number().positive(), upDeg: z.number().min(-45).max(80) });
+
+/** What every gadget shares (data/gadgets.json; gadgets/DESIGN.md §2–§4). Metres, seconds, degrees. */
+export const gadgetRulesSchema = z.strictObject({
+  ...meta,
+  /** Taking a gadget out of its slot (the weapon's own equip time brings the weapon back). */
+  equipS: z.number().positive(),
+  throw: z.strictObject({
+    windupS: z.number().min(0),
+    overhand: throwProfile,
+    underhand: throwProfile,
+    heavy: throwProfile,
+    /** Where a throw leaves from: right, down and ahead of the eye. */
+    fromM: z.strictObject({ right: z.number(), down: z.number(), ahead: z.number().min(0) }),
+    radiusM: z.number().positive().max(0.2),
+    restitution: z.number().min(0).max(1),
+    friction: z.number().min(0).max(1),
+    restMps: z.number().positive(),
+    maxS: z.number().positive(),
+  }),
+  pickUpS: z.number().positive(),
+  pickUpReachM: z.number().positive(),
+  /**
+   * The level's ingredients (gadgets/DESIGN.md §9), each a box (`sizeM`). A fire extinguisher shot, knifed or in a
+   * blast bursts into a `cloud` and concusses bodies within `concuss.radiusM` for `concuss.seconds`. A gas pipe shot
+   * or in a blast throws a flame `jet` along its facing (a cylinder `lengthM` long, `radiusM` round) for its
+   * `seconds`, burning bodies in it and destroying drones and gadgets it touches, then goes off (`blast`) and leaves a
+   * `fire` on the floor round it. A metal detector sounds while an enemy body walks through its frame; any damage
+   * destroys it; it's electronic.
+   */
+  ingredients: z.strictObject({
+    fire_extinguisher: z.strictObject({ sizeM, cloud: cloudSchema, concuss: z.strictObject({ radiusM: z.number().positive(), seconds: z.number().positive() }) }),
+    /**
+     * A gas pipe (Ulo's test): upright, `sizeM` tall from the floor up (drawn to the ceiling), its entry `pointM` up it
+     * where the jet comes out and the blast goes off.
+     */
+    gas_pipe: z.strictObject({
+      sizeM,
+      pointM: z.number().min(0),
+      jet: dotSchema.extend({ lengthM: z.number().positive(), radiusM: z.number().positive(), seconds: z.number().positive() }),
+      blast: blastSchema,
+      fire: dotSchema.extend({ radiusM: z.number().positive(), seconds: z.number().positive() }),
+    }),
+    metal_detector: z.strictObject({ sizeM }),
+  }),
+});
+export type GadgetRules = z.infer<typeof gadgetRulesSchema>;
+export const INGREDIENTS = ["fire_extinguisher", "gas_pipe", "metal_detector"] as const;
+export type IngredientKind = (typeof INGREDIENTS)[number];
 
 
 export const SURFACES = [
@@ -908,12 +1280,16 @@ export const levelSchema = z.strictObject({
     .default([]),
   /** Default cameras (Phase 7 uses them): mount point and view. */
   cameras: z.array(z.strictObject({ id: z.string(), pos: vec3, yawDeg: z.number(), pitchDeg: z.number(), room: z.string().optional() })).default([]),
-  /** Destructible ingredients (Phase 8 gives them behaviour): fire extinguishers and gas pipes. */
+  /**
+   * Destructible ingredients (Phase 8 M3, gadgets/DESIGN.md §9; data/gadgets.json `ingredients`): fire extinguishers,
+   * gas pipes, and the Gadget Lab's metal detector. Each is an entry in the gadget table from the round's start; `pos`
+   * is its box's centre, facing `yawDeg` (a gas pipe's jet goes that way).
+   */
   ingredients: z
     .array(
       z.strictObject({
         id: z.string(),
-        kind: z.enum(["fire_extinguisher", "gas_pipe"]),
+        kind: z.enum(INGREDIENTS),
         pos: vec3,
         yawDeg: z.number(),
         room: z.string().optional(),
@@ -990,6 +1366,8 @@ export const destructionSchema = z.strictObject({
   /** Props by class (a level PROP's `prop`): which stop bullets; the rest a bullet goes through like a panel, without holes. */
   props: z.strictObject({ classes: z.record(z.string(), z.strictObject({ stopsBullets: z.boolean() })) }),
   melee: z.strictObject({ holeDiameterM: metres, bothSkins: z.boolean(), studs: z.boolean(), hatchDamage: z.number().nonnegative(), barricadeDamage: z.number().nonnegative() }),
+  /** The knife of an operator whose `combat.meleeHole` is `large` (Phase 8 M10: Skopós, as Aruni's). */
+  meleeLarge: z.strictObject({ holeDiameterM: metres, bothSkins: z.boolean(), studs: z.boolean(), hatchDamage: z.number().nonnegative(), barricadeDamage: z.number().nonnegative() }),
   explosives: z.record(z.string(), explosiveSchema),
   reinforcement: z.strictObject({
     deploySeconds: secs,

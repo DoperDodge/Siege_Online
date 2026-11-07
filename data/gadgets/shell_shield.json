@@ -1,0 +1,17 @@
+{
+  "_doc": "Skopós's idle shell's barrier (research/operators/skopos.md §3.3; Phase 8 M10; reshaped after Ulo's test): the server stands one round each idle shell (her second shell from the round's start, and the one she leaves when she swaps) and takes it away as she wakes that shell or it dies. It curves round the crouched shell (`arc`: seven segments 0.5 m out, 220° round its front and sides), as tall as the shell and a little more, so a shell put in a corner is covered all round: an attacker has to come right up to it and lean over to shoot the shell. A solid like the deployable shield: bullets, bodies and throws stop at it, but any blast that reaches it, or Sledge's hammer, breaks it (`GFlag.Broken`: no colliders), leaving the shell open. Its entry stands at the shell's centre and is also the idle shell's camera for the defence: the lens just in front of the barrier at the crouched shell's eyes, off while an EMP has it (electronic). Never carried (`dropped`). Its shape and size are placeholders.",
+  "_season": "Y11S3",
+  "_unverified": ["sizeM", "arc"],
+  "id": "shell_shield",
+  "name": "Shell barrier",
+  "side": "defender",
+  "dropped": true,
+  "count": 1,
+  "electronic": true,
+  "use": {"kind": "place", "on": ["floor"], "placeS": 1.0, "reachM": 1.0},
+  "remote": false,
+  "pickUp": false,
+  "sizeM": [1.08, 1.3, 0.08],
+  "arc": {"radiusM": 0.5, "degrees": 220, "segments": 7},
+  "solid": true
+}

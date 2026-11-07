@@ -146,6 +146,9 @@ watched lit, broken ones struck out, teammates' drones in italics. A camera some
   (told so). Fire is let go before the next scan. Marks are drawn over the view (seen through walls), at the screen's
   edge toward what's off it, with whose ping it is and how far. Not built: pinging an enemy's gadget or a camera (its
   icon; gadgets are Phase 8); our pings are named, not numbered.
+- **Built later (Phase 8 M9, D-149):** a ping whose ray meets an enemy body (a capsule of its height, nothing nearer
+  on the way) spots him as a scan does (I:99, the red ping): the team's red mark and his alert, not a yellow ping. A
+  spotted defender is one Dokkaebi can call. Pinging an enemy's gadget built in Phase 8 M3.
 
 ## 7. Spectating when dead
 

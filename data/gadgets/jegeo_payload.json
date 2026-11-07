@@ -1,0 +1,16 @@
+{
+  "_doc": "Dokkaebi's tablet and its Jegeo Payload (research/operators/dokkaebi.md §3; Phase 8 M9): her ability, held in her slot 2 (Z). With it up (no shooting), Fire sends the payload to the identified defender (one her team's scans have spotted, still marked) nearest her crosshair within `jegeo.aimDeg`, through walls: one of her charges (1 at the start, +1 every 25 s up to 5, Y11S2). It uploads for `jegeo.uploadS` (7 s) over a constant connection (Y11S3): her tablet put away, her death or going down, a Mute jammer by her or by him, an EMP on either, or his dismissal (Interact held `jegeo.dismissS`) cut it, and a cut upload does nothing; done, his phone explodes: 40 hp (Y11S2), a fire where he stood (`jegeo.fire`) that hurts anyone in it, and he can't use observation tools (cameras, Skopós's swap and shell camera) until the round ends. Not the same defender again for 14 s (Y11S2.2). A defender inside a jammer can't be targeted. With no live target, Fire hacks a dead defender's phone (or a destroyed shell's circuit board) anywhere instead: the attackers watch the defenders' cameras for 20 s (Y11S2), `jegeo.camHacks` times a round (siege.gg's test server: 2), view only. Its count is unused. The dismissal's time, the fire's size and damage, the aim and its size are placeholders.",
+  "_season": "Y11S3",
+  "_unverified": ["jegeo.dismissS", "jegeo.aimDeg", "jegeo.fire.radiusM", "jegeo.fire.damage", "jegeo.fire.everyS", "jegeo.camHacks", "sizeM"],
+  "id": "jegeo_payload",
+  "name": "Jegeo Payload",
+  "side": "attacker",
+  "operator": "dokkaebi",
+  "count": 1,
+  "electronic": true,
+  "use": {"kind": "hold"},
+  "remote": false,
+  "pickUp": false,
+  "sizeM": [0.25, 0.18, 0.02],
+  "jegeo": {"startCharges": 1, "maxCharges": 5, "regenS": 25, "uploadS": 7, "cooldownS": 14, "dismissS": 1.5, "damage": 40, "aimDeg": 25, "fire": {"radiusM": 1.5, "seconds": 5, "damage": 5, "everyS": 0.5}, "camHacks": 2, "camS": 20}
+}

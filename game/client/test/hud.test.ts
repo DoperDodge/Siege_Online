@@ -123,7 +123,9 @@ describe("what the HUD says", () => {
     expect(deathLine(base, names)).toBe("Killed by Bot [MP5, headshot]");
     expect(deathLine({ ...base, cause: Cause.Bleed }, names)).toBe("You bled out (downed by Bot)");
     expect(deathLine({ ...base, killerCtrl: 0, cause: Cause.Fall }, names)).toBeNull();
-    expect(deathLine({ ...base, killerCtrl: 0, cause: Cause.Lab }, names)).toBe("You died");
+    expect(deathLine({ ...base, killerCtrl: 0, weapon: "", headshot: false, cause: Cause.Lab }, names)).toBe("You died");
+    // A level ingredient's (nobody's; Phase 8 M3) is named.
+    expect(deathLine({ ...base, killerCtrl: 0, weapon: "gas_pipe", headshot: false, cause: Cause.Gadget }, names)).toBe("You died [GAS_PIPE]");
   });
 });
 

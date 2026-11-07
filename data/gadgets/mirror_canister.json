@@ -1,0 +1,16 @@
+{
+  "_doc": "The canister on a Black Mirror's frame (research/operators/mira.md §3.5; Phase 8 M7): on Mira's side, under the glass at its left. Never carried (its `count` and `use` are unused): the server puts it there with its mirror. Any damage destroys it (bullets, the knife, blasts), from either team; then the glass is ejected (data/gadgets/black_mirror.json `mirror.ejectS`). Its size and place are placeholders.",
+  "_season": "Y11S3",
+  "_unverified": ["sizeM"],
+  "id": "mirror_canister",
+  "name": "Black Mirror canister",
+  "side": "defender",
+  "operator": "mira",
+  "count": 2,
+  "electronic": false,
+  "use": {"kind": "place", "on": ["wall"], "placeS": 1.0, "reachM": 1.0},
+  "remote": false,
+  "pickUp": false,
+  "sizeM": [0.1, 0.16, 0.1],
+  "fragile": true
+}

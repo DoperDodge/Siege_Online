@@ -17,6 +17,7 @@ import {
   type GunplayData,
   type Offer,
   type OperatorData,
+  type ShieldData,
   type WeaponClass,
 } from "../data/schemas.js";
 import type { Falloff } from "./damage.js";
@@ -118,16 +119,27 @@ export interface ResolvedLoadout {
   pick: LoadoutPick;
   weapons: [ResolvedWeapon, ResolvedWeapon];
   gadgets: string[];
+  /**
+   * The gadgets in the hands' two slots (Phase 8, gadgets/DESIGN.md §2): slot 1 the secondary gadget, slot 2 a kit's
+   * second gadget (Striker, Sentry) or the operator's own item (their ability: Sledge's hammer, M4); null where
+   * there's none.
+   */
+  slots: [string | null, string | null];
   swapTicks: number;
+  /**
+   * Fuze's Ballistic Shield (Phase 8 M11, player/shield.ts): its numbers when it's the primary pick, else null. Its
+   * loadout holds the secondary pistol in the shield's hand (both slots, which never swap), aimed in the shield's time.
+   */
+  shield: ShieldData["shield"] | null;
 }
 
 const f32 = Math.fround;
 const rad = (deg: number) => f32(deg * DEG);
 
-/** A weapon can be picked in Phase 3 unless it is the shield or the GONNE-6 (DECISIONS D-054). */
+/** A weapon can be picked unless it's the GONNE-6 (DECISIONS D-054; the Ballistic Shield can since Phase 8 M11). */
 export function isPickable(data: GameData, weaponId: string): boolean {
   const w = data.weapons.get(weaponId);
-  return !!w && isGun(w) && w.fire.kind === "hitscan";
+  return !!w && (!isGun(w) || w.fire.kind === "hitscan");
 }
 
 /** The attachment ids of a slot that this operator may fit. */
@@ -144,7 +156,9 @@ function withBonus(math: "divide" | "subtract", value: number, bonus: number): n
 function weaponPickProblem(data: GameData, op: OperatorData, slot: "primaries" | "secondaries", p: WeaponPick): string | null {
   if (!op.loadout[slot].includes(p.weapon)) return `${op.id} can't carry ${p.weapon} as a ${slot === "primaries" ? "primary" : "secondary"}`;
   if (!isPickable(data, p.weapon)) return `${p.weapon} can't be picked yet`;
-  const w = data.weapons.get(p.weapon) as GunData;
+  const any = data.weapons.get(p.weapon)!;
+  if (!isGun(any)) return null; // the shield has no attachments
+  const w = any as GunData;
   const a = w.attachments;
   if (!allowed(a.sights, op.id).includes(p.sight!)) return `${p.weapon} has no ${p.sight} sight for ${op.id}`;
   if (p.barrel !== null && !allowed(a.barrels, op.id).includes(p.barrel)) return `${p.weapon} has no ${p.barrel} for ${op.id}`;
@@ -201,6 +215,12 @@ export function loadoutPickProblem(data: GameData, pick: LoadoutPick): string | 
   );
 }
 
+/** The operator's own item in hand, their ability (Phase 8 M4: a gadget file whose `operator` is them), or null. */
+export function abilityItem(data: GameData, operatorId: string): string | null {
+  const id = data.operators.get(operatorId)?.ability.id;
+  return id !== undefined && data.gadgets.get(id)?.operator === operatorId ? id : null;
+}
+
 /**
  * Resolves a pick. An invalid pick quietly becomes the operator's default loadout (the roster tells the client
  * what it got); an unknown operator throws, since callers check operators first.
@@ -211,11 +231,18 @@ export function resolveLoadout(data: GameData, pick: LoadoutPick): { loadout: Re
   const primary = normalizeWeaponPick(data, p.operator, p.primary);
   const secondary = normalizeWeaponPick(data, p.operator, p.secondary);
   const normalized: LoadoutPick = { operator: p.operator, primary, secondary, gadgets: [...p.gadgets] };
+  // The Ballistic Shield (Phase 8 M11): the pistol in its hand, aimed in the shield's time, in both slots.
+  const first = data.weapons.get(primary.weapon);
+  const shield = first && !isGun(first) ? first.shield : null;
+  const pistol = resolveWeapon(data, secondary);
+  const held: ResolvedWeapon | null = shield ? { ...pistol, ads: { ...pistol.ads, ticks: ticks(shield.pistolAdsS.walk), fromSprintTicks: ticks(shield.pistolAdsS.sprint) } } : null;
   return {
     loadout: {
       pick: normalized,
-      weapons: [resolveWeapon(data, primary), resolveWeapon(data, secondary)],
+      weapons: held ? [held, held] : [resolveWeapon(data, primary), pistol],
+      shield,
       gadgets: normalized.gadgets,
+      slots: [normalized.gadgets[0] ?? null, data.operators.get(p.operator)?.loadout.gadgetKit ? (normalized.gadgets[1] ?? null) : abilityItem(data, p.operator)],
       swapTicks: ticks(data.gunplay.rules.swapS),
     },
     problem,

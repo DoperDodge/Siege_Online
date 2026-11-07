@@ -5,7 +5,7 @@
 import { ByteReader, decodeRoomList, encodeHello, encodeListRooms, isFormat, loadGameData, Msg, Phase, type RoomListEntry, type WeaponPick } from "@redmond/shared";
 import { serverUrl } from "../net/online.js";
 import { escapeHtml } from "../ui/dom.js";
-import { changedPick, loadoutRows, saveLoadout, savedLoadout, type Slot } from "../ui/loadout.js";
+import { changedGadget, changedPick, loadoutRows, saveLoadout, savedLoadout, type Slot } from "../ui/loadout.js";
 import { rankBadge, storedRating } from "../ui/rank.js";
 
 const data = loadGameData();
@@ -115,9 +115,10 @@ opSelect.onchange = () => {
 };
 loadoutBox.addEventListener("change", (e) => {
   const t = e.target as HTMLSelectElement;
-  if (!t.dataset.slot || !t.dataset.part) return;
-  saveLoadout(changedPick(savedLoadout(data, opSelect.value), t.dataset.slot as Slot, t.dataset.part as keyof WeaponPick, t.value));
-  showLoadout(); // another weapon has other attachments
+  if (t.dataset.gadget !== undefined) saveLoadout(changedGadget(data, savedLoadout(data, opSelect.value), Number(t.dataset.gadget), t.value));
+  else if (t.dataset.slot && t.dataset.part) saveLoadout(changedPick(savedLoadout(data, opSelect.value), t.dataset.slot as Slot, t.dataset.part as keyof WeaponPick, t.value));
+  else return;
+  showLoadout(); // another weapon has other attachments; a kit's other gadget may have changed
 });
 
 // ---------------------------------------------------------------- the room list

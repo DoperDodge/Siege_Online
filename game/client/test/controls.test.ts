@@ -110,6 +110,36 @@ describe("weapon buttons (DECISIONS D-055)", () => {
     expect(c.sample(5).buttons & Btn.Swap).toBe(Btn.Swap);
   });
 
+  it("with a gadget in hand (Phase 8): the weapon out comes back with the gadget's own key and Swap together, the other with a swap alone; the gadget key is a press", () => {
+    const c = make({});
+    let state = { slot: 0, equipping: false, gadget: 1 };
+    c.weaponState = () => state;
+    c.press("primary");
+    expect(c.sample(1).buttons & (Btn.Gadget | Btn.Swap)).toBe(Btn.Gadget | Btn.Swap);
+    expect(c.sample(2).buttons & (Btn.Gadget | Btn.Swap)).toBe(0); // once
+    state = { slot: 0, equipping: false, gadget: 2 };
+    c.press("primary");
+    expect(c.sample(3).buttons & (Btn.Ability | Btn.Swap)).toBe(Btn.Ability | Btn.Swap);
+    c.press("secondary");
+    expect(c.sample(4).buttons & (Btn.Ability | Btn.Gadget | Btn.Swap)).toBe(Btn.Swap);
+    // The gadget key held goes out once, not every tick (taking it out and putting it away are presses).
+    c.press("gadget");
+    expect([5, 6, 7].map((n) => c.sample(n).buttons & Btn.Gadget)).toEqual([Btn.Gadget, 0, 0]);
+  });
+
+  it("with one weapon only (Fuze's shield): 2 or the wheel sends nothing, and with a gadget out any weapon key brings the pistol back (the review, M12)", () => {
+    const c = make({});
+    let state: { slot: number; equipping: boolean; gadget?: number; fixed: boolean } = { slot: 0, equipping: false, fixed: true };
+    c.weaponState = () => state;
+    c.press("secondary");
+    c.press("swap");
+    expect([1, 2, 3, 4].map((n) => c.sample(n).buttons & Btn.Swap)).toEqual([0, 0, 0, 0]);
+    state = { slot: 0, equipping: false, gadget: 2, fixed: true };
+    expect(c.sample(5).buttons & (Btn.Ability | Btn.Swap)).toBe(0); // nothing kept from before
+    c.press("secondary");
+    expect(c.sample(6).buttons & (Btn.Ability | Btn.Swap)).toBe(Btn.Ability | Btn.Swap);
+  });
+
   it("a weapon key pressed with no weapon to switch (down, dead, between bodies) is dropped, not sent after the revive", () => {
     const c = make({});
     let state: { slot: number; equipping: boolean } | null = null; // down

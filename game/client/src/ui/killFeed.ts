@@ -41,7 +41,7 @@ export function feedLine(e: GameEvent, n: FeedNames, me: FeedViewer): { text: st
         ? `${killer}${how} ${e.friendly ? "team-killed" : "eliminated"} ${victim}${e.assistCtrl ? ` (finished by ${n.ctrl(e.assistCtrl)})` : ""}${e.cause === Cause.Bleed ? " (bled out)" : ""}`
         : e.cause === Cause.Left
           ? `${victim} left the match`
-          : `${victim} died${e.cause === Cause.Fall ? " (fall)" : e.cause === Cause.Bleed ? " (bled out)" : ""}`;
+          : `${victim} died${how}${e.cause === Cause.Fall ? " (fall)" : e.cause === Cause.Bleed ? " (bled out)" : ""}`;
   return { text, mine: victimCtrl === me.ctrl || e.killerCtrl === me.ctrl };
 }
 
@@ -50,7 +50,8 @@ export function deathLine(e: Extract<GameEvent, { kind: "kill" }>, n: FeedNames)
   const killer = e.killerCtrl ? n.ctrl(e.killerCtrl) : null;
   if (e.cause === Cause.Bleed) return `You bled out${killer ? ` (downed by ${killer})` : ""}`;
   if (killer) return `Killed by ${killer}${weaponTag(e, n)}`;
-  return e.cause === Cause.Fall ? null : "You died";
+  // (Nobody's: a level ingredient, Phase 8 M3, is named.)
+  return e.cause === Cause.Fall ? null : `You died${weaponTag(e, n)}`;
 }
 
 function weaponTag(e: Extract<GameEvent, { kind: "kill" | "shellDestroyed" }>, n: FeedNames): string {
