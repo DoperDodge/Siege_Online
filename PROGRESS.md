@@ -5,7 +5,28 @@ known issues, and what's next.
 
 ---
 
-## Your requests after Phase 8 · in review (PR #10; D-155 to D-157)
+## Phase 9 — Bot Training · 🚧 in progress (branch `claude/phase-9-bots`)
+
+The plan: game/shared/src/bots/DESIGN.md (D-158). Bots are players without a connection: the room asks each bot's
+brain for its keys and mouse every tick and plays them exactly as a player's, so they move, shoot, reinforce and
+breach by the same rules, and they know only what their team could know (what they see, hear and are told).
+
+| M | What | State |
+|---|---|---|
+| M1 | Bots in rooms, the Bot Training format, lobby controls, backfill, offline matches | next |
+| M2 | Navigation on Oregon (grid, vaults, ladders, drops), rebuilt as walls and floors open | |
+| M3 | Sight, hearing (placeholder sounds until Phase 11), team intel; aim and gunfights; difficulty levels | |
+| M4 | Defending bots: reinforce, holes, barricades, gadgets, anchors, roamers, rotations, retakes | |
+| M5 | Attacking bots: drones in prep, routes, breaches, vertical play, rappel, the plant | |
+| M6 | The team planner and every site's plan (data/maps/oregon/bot_strats.json); orders from you on the comm wheel | |
+| M7 | All twelve operators' abilities | |
+| M8 | Bot Training setup and the drills | |
+| M9 | Training feedback after each round: report, killcam, stats | |
+| M10 | Soak tests, the tick budget, browser test, review, report | |
+
+---
+
+## Your requests after Phase 8 · ✅ done (PR #10, squash-merged into `main`; D-155 to D-157)
 
 On top of `main` (Phase 8 merged, PR #9): the camera requests you asked to have done once Phase 8 was, then your look at
 the shields and the bash.
