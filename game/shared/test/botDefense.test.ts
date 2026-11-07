@@ -47,10 +47,17 @@ describe("defending bots (Phase 9 M4)", () => {
     expect(up.length, jobs).toBeGreaterThanOrEqual(2);
     // A rotation hole knifed in a leave-soft wall (it isn't whole any more).
     expect(p("SW-B-05").modified || p("SW-B-06").modified).toBe(true);
-    // Anchors in the site's rooms some seconds into action.
-    expect(until(() => false, 8)).toBe(false);
-    const defenders = m.sides[DEFENSE].map((id) => room.sim.pawns.get(room.bodyOf(id)!.possessedPawnId)!).filter((b) => b.state.mode !== PawnMode.Dead);
-    const inSite = defenders.filter((b) => site.rooms.includes(roomAt(room.sim.level.def, b.state.x, b.state.y + 0.3, b.state.z) ?? ""));
+    // Anchors in the site's rooms some seconds into action (the ones who set gadgets up outside it back in by then).
+    const defenders = () => m.sides[DEFENSE].map((id) => room.sim.pawns.get(room.bodyOf(id)!.possessedPawnId)!).filter((b) => b.state.mode !== PawnMode.Dead);
+    const inSiteNow = () => defenders().filter((b) => site.rooms.includes(roomAt(room.sim.level.def, b.state.x, b.state.y + 0.3, b.state.z) ?? ""));
+    const atSpots = () =>
+      m.sides[DEFENSE].every((id) => {
+        const t = room.defensePlan?.taskOf(id);
+        const b = room.sim.pawns.get(room.bodyOf(id)!.possessedPawnId)!;
+        return t?.kind !== "hold" || b.state.mode === PawnMode.Dead || Math.hypot(b.state.x - t.spot[0], b.state.z - t.spot[2]) < 1.5;
+      });
+    until(() => inSiteNow().length >= 3 && atSpots(), 15);
+    const inSite = inSiteNow();
     const info = m.sides[DEFENSE].map((id) => {
       const b = room.sim.pawns.get(room.bodyOf(id)!.possessedPawnId)!;
       const t = room.defensePlan?.taskOf(id);

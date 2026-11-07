@@ -177,6 +177,12 @@ One **commander** per side, server-side, with the same knowledge rules (its team
 "Counter my pick" (Bot Training): the bots' side picks the roster's answer to the human's operator (Mute against
 Thermite, Brava against Mute, …: a table in data/bots/picks.json, ours).
 
+As built (M7, D-164): one motor, bots/use.ts, uses any gadget by the keys (place, throw or lob on a ballistic arc,
+swing, hold, detonate from cover); the planners hand out the plan's device spots (defense, prep) and breaches (attack,
+before the way in), and the brain adds reactions (Doing.Gadget): Nitro Cells, Lesion's mines in action, Pulse's
+scans, Dokkaebi's payload, pre-entry frags, plant smokes, claymores, Skopós's swaps. Simplified: Skopós moves her idle
+shell once in prep and swaps by need; Brava's Kludge hacks what it sees on its way to the breach, then she's back.
+
 ## 8. Orders from human teammates
 
 The comm wheel gets bot orders (data/intel.json `callouts`): **Go here** and **Hold here** (your last ping's spot),

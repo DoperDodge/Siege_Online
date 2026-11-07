@@ -309,6 +309,26 @@ export class Perception {
         this.spottedUntil.set(e.pawnId, now + e.ticks);
         return;
       }
+      case "ping": {
+        // A teammate's heartbeat ping (Pulse's sensor): an enemy there now (the one there, as its client would draw it).
+        if (!e.heart || e.ctrl === ctrlId) return;
+        let best: Pawn | null = null;
+        let bestD = 2;
+        for (const p of sim.pawns.values()) {
+          if (p.team === me.team || p.kind !== PawnKind.Body || p.state.mode === PawnMode.Dead) continue;
+          const d = Math.hypot(p.state.x - e.pos[0], p.state.z - e.pos[2], (p.state.y + 1 - e.pos[1]) * 0.5);
+          if (d < bestD) [best, bestD] = [p, d];
+        }
+        if (!best) return;
+        const c = this.contacts.get(best.id) ?? blank(best, now);
+        if (c.visible) return;
+        c.pos = [e.pos[0], best.state.y, e.pos[2]];
+        c.at = now;
+        c.source = Source.Told;
+        c.uncertainty = 1.5;
+        this.contacts.set(best.id, c);
+        return;
+      }
       case "kill":
       case "down": {
         const victim = sim.pawns.get(e.victimPawn);
@@ -320,6 +340,28 @@ export class Perception {
         return;
       }
     }
+  }
+
+  /** An enemy sensed where it is (Pulse's sensor shows its heartbeat): known there now, not seen. */
+  sensed(p: Pawn, now: number): void {
+    const c = this.contacts.get(p.id) ?? blank(p, now);
+    if (c.visible) return;
+    c.pos = [p.state.x, p.state.y, p.state.z];
+    c.at = now;
+    c.source = Source.Told;
+    c.uncertainty = 0.5;
+    this.contacts.set(p.id, c);
+  }
+
+  /** A spotted enemy's chest (its mark shows where it is), the one marked latest; null: none marked now. */
+  spottedNow(sim: Sim, now: number): Vec3 | null {
+    let best: { p: Pawn; until: number } | null = null;
+    for (const [id, until] of this.spottedUntil) {
+      const p = sim.pawns.get(id);
+      if (!p || now > until || p.state.mode === PawnMode.Dead || p.kind !== PawnKind.Body) continue;
+      if (!best || until > best.until) best = { p, until };
+    }
+    return best ? [best.p.state.x, best.p.state.y + 1.2, best.p.state.z] : null;
   }
 
   /** An enemy heard at distance `dist`: roughly where it is. */

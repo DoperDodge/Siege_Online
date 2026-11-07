@@ -12,7 +12,7 @@ import { meleeOnPanels } from "../destruction/hits.js";
 import { L_STEEL, type PanelChange, type PanelOp } from "../destruction/panel.js";
 import type { IndexedOp } from "../destruction/panels.js";
 import type { BlastData, BotLevel, DummyDef, GadgetData, ModeData } from "../data/schemas.js";
-import { Bot, type BotWorld } from "../bots/bot.js";
+import { Bot, botLoadout, type BotWorld } from "../bots/bot.js";
 import { NavWorld } from "../bots/nav/world.js";
 import { TeamBoard } from "../bots/perceive.js";
 import { AttackPlanner, DefensePlanner } from "../bots/plan.js";
@@ -499,7 +499,7 @@ export class Room implements DirectorHost {
     } else {
       // A lab room (tests, a lab page): a body at once, the side's first operator.
       const op = [...this.sim.data.operators.values()].find((o) => sideTeam(o.side) === team)!;
-      m.pick = defaultLoadoutPick(this.sim.data, op.id);
+      m.pick = botLoadout(this.sim.data, op.id);
       m.team = team;
       this.members.set(id, m);
       this.spawn(m);
@@ -2407,7 +2407,11 @@ export class Room implements DirectorHost {
         const side = this.director?.match.sideOf(m.id);
         return side === DEFENSE ? (this.defensePlan?.taskOf(m.id) ?? null) : side === ATTACK ? (this.attackPlan?.taskOf(m.id) ?? null) : null;
       },
-      report: (ok) => this.defensePlan?.report(m.id, ok),
+      report: (ok) => {
+        const side = this.director?.match.sideOf(m.id);
+        if (side === DEFENSE) this.defensePlan?.report(m.id, ok);
+        else if (side === ATTACK) this.attackPlan?.report(m.id, ok);
+      },
       pick: (pick) => this.pickLoadout(m.id, pick),
       act: (a) => this.onMatchAction(m.id, a),
     };

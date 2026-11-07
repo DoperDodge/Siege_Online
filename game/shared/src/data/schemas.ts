@@ -766,6 +766,15 @@ export const botDifficultyFileSchema = z.strictObject({
   ...meta,
   levels: z.strictObject({ recruit: botDifficultySchema, normal: botDifficultySchema, hard: botDifficultySchema, elite: botDifficultySchema }),
 });
+/** data/bots/picks.json: each operator's gadgets when a bot plays it, and the operators that counter each one. */
+export const botPicksFileSchema = z.strictObject({
+  ...meta,
+  gadgets: z.record(z.string(), z.array(z.string())),
+  counters: z.record(z.string(), z.array(z.string())),
+  /** A primary a bot sometimes takes in place of the default (Fuze's Ballistic Shield), and how often. */
+  primaries: z.record(z.string(), z.strictObject({ id: z.string(), chance: z.number().min(0).max(1) })).default({}),
+});
+
 /** data/bots/names.json: the callsigns bots are named from (ours; no operator's name). */
 export const botNamesFileSchema = z.strictObject({ ...meta, names: z.array(z.string().min(1).max(12)).min(10) });
 
@@ -775,6 +784,8 @@ export interface BotsData {
   names: string[];
   /** Each level's site plans (data/maps/<level>/bot_strats.json), by level id; a level without any has none. */
   strats: Map<string, BotStrats>;
+  /** Each operator's gadgets for a bot, and its counters (data/bots/picks.json). */
+  picks: { gadgets: Record<string, string[]>; counters: Record<string, string[]>; primaries: Record<string, { id: string; chance: number }> };
 }
 
 /** A camera's view (Phase 7): how far it turns either side of its facing, how far it tilts, how fast, how wide it sees. */

@@ -16,10 +16,10 @@ breach by the same rules, and they know only what their team could know (what th
 | M1 | Bots in rooms, the Bot Training format, lobby controls, backfill, offline matches | ✅ |
 | M2 | Navigation on Oregon (grid, vaults, ladders, drops), rebuilt as walls and floors open | ✅ |
 | M3 | Sight, hearing (placeholder sounds until Phase 11), team intel; aim and gunfights; difficulty levels | ✅ |
-| M4 | Defending bots: reinforce, holes, barricades, gadgets, anchors, roamers, rotations, retakes | ✅ (gadgets: M7) |
-| M5 | Attacking bots: drones in prep, routes, breaches, vertical play, rappel, the plant | ✅ (breach charges and vertical with the gadgets, M7) |
+| M4 | Defending bots: reinforce, holes, barricades, gadgets, anchors, roamers, rotations, retakes | ✅ (gadgets with M7) |
+| M5 | Attacking bots: drones in prep, routes, breaches, vertical play, rappel, the plant | ✅ (breaches and vertical with M7; rappel not yet) |
 | M6 | The team planner and every site's plan (data/maps/oregon/bot_strats.json); orders from you on the comm wheel | plans ✅ (with M4); orders next |
-| M7 | All twelve operators' abilities | |
+| M7 | All twelve operators' abilities, the generic gadgets, Fuze's shield | ✅ |
 | M8 | Bot Training setup and the drills | |
 | M9 | Training feedback after each round: report, killcam, stats | |
 | M10 | Soak tests, the tick budget, browser test, review, report | |
@@ -111,6 +111,41 @@ breach by the same rules, and they know only what their team could know (what th
 - Tests: game/shared/test/botAttack.test.ts (they find the site and beat a lone defender; with nobody in the way the
   carrier plants and the fuse runs out).
 - Known: attackers don't breach walls or play vertically yet (that needs their gadgets: M7), and don't rappel.
+
+### M7: every operator's ability and the gadgets (D-164)
+- **Bots use their gadgets the way you do**: the gadget's key, the equip time, the view on the spot, Fire held to
+  place it (Ads to lob, Fire to throw, Fire held to swing), and a remote charge set off from cover with its detonator.
+  Throws are aimed along the arc that lands them where the bot means (speed, lift, gravity).
+- **Defenders set up in prep** where the site's plan puts each operator's device, after the plan's first two walls
+  have steel: **Mute** his jammers by the reinforced walls and hatches and in the corridor; **Mira** her mirrors in
+  the plan's walls from the site's side, once those walls are reinforced; **Lesion** Gu mines in the stairs and rooms
+  round the site (and in action, one at a way into his room whenever one comes back); **Sentry** wire on the stairs and
+  his shield in the site; **Skopós** walks her other shell into the plan's other room and comes back to the first;
+  impact grenades blow the plan's rotation holes. Everyone's spare gadget (wire, a shield, a camera, an observation
+  blocker, an alarm) goes at the site's doors. In action **Pulse** roams the rooms above or below the site (the plan's)
+  and puts his sensor up every so often: a heartbeat he finds is known to him and his team and pinged for everyone.
+  **Skopós** swaps shells when hers is hurt, or when the attackers are heard by the other one and far from this one.
+  A defender with a **Nitro Cell** throws it where an attacker was just heard close by and sets it off when one comes by.
+- **Attackers breach on their way in**, each breach of the plan to the first of its operators on the team:
+  **Thermite** his Exothermic Charge on the reinforced wall, set off from cover; **Striker** an EMP at the wall first,
+  then her Hard Breach Charge, waited out from cover; **Fuze** a Cluster Charge on the hatch over the site (or a Hard
+  Breach Charge on a wall); **Sledge** opens the hatch from above with his hammer (two blows low and high on a soft
+  wall); anyone with breach charges (**Dokkaebi**) takes a soft breach no one else has. **Brava** throws a Kludge
+  ahead of the team toward the breach's far side and hacks the jammers and cameras it sees, then goes back to her body.
+  **Dokkaebi** sends her payload to a spotted defender. A **frag** goes into the site's room (or down the hatch just
+  opened) before going in; a **smoke** goes on a teammate planting; a **claymore** goes down behind a bot once it's in
+  the site or holding a spot after the plant.
+- **Fuze sometimes takes his Ballistic Shield** (a quarter of the time, data/bots/picks.json) and fights with it.
+- What each bot carries is in data/bots/picks.json (the research's roles: Striker and Sentry's default kits, and so
+  on), which also holds Bot Training's "counter my pick" table for M8.
+- Try it: Bot Training offline. Defend, and watch the walls the bots breach; attack, and drone the site in prep to see
+  their setup (F6 on the Oregon page still shows their map).
+- Tests: game/shared/test/botGadgets.test.ts (the Laundry's defenders set up in prep; the Laundry's attackers breach
+  with Thermite, Striker, Fuze, Dokkaebi and Brava, and Dokkaebi calls a spotted defender; Sledge opens the hatch;
+  Pulse scans and pings, Skopós swaps when hurt; a Nitro Cell thrown at a heard attacker and set off by him, Lesion's
+  mines in action; Sledge's frag, Thermite's smoke on a planter, Brava's claymore; a shield Fuze wins his duels).
+- Known: bots don't rappel or use the drones' cameras for intel beyond pinging; Skopós doesn't fight from her shell's
+  barrier; Brava's Kludge only hacks (no drone scans); Pulse's scans are on a timer, not on sounds.
 
 ---
 

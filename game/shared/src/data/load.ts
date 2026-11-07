@@ -31,6 +31,7 @@ import practiceJson from "../../../../data/modes/practice.json";
 import botTrainingJson from "../../../../data/modes/bot_training.json";
 import botDifficultyJson from "../../../../data/bots/difficulty.json";
 import botNamesJson from "../../../../data/bots/names.json";
+import botPicksJson from "../../../../data/bots/picks.json";
 import oregonStratsJson from "../../../../data/maps/oregon/bot_strats.json";
 import objectiveJson from "../../../../data/objective.json";
 import intelJson from "../../../../data/intel.json";
@@ -42,6 +43,7 @@ import { fnv1a, utf8Encode } from "../net/bytes.js";
 import {
   botDifficultyFileSchema,
   botNamesFileSchema,
+  botPicksFileSchema,
   botStratsSchema,
   combatSchema,
   destructionSchema,
@@ -122,6 +124,7 @@ export const rawData = {
   gadgetRules: gadgetRulesJson as Record<string, unknown>,
   botDifficulty: botDifficultyJson as Record<string, unknown>,
   botNames: botNamesJson as Record<string, unknown>,
+  botPicks: botPicksJson as Record<string, unknown>,
   botStrats: { oregon: oregonStratsJson } as Record<string, Record<string, unknown>>,
 };
 
@@ -187,6 +190,7 @@ export function loadGameData(): GameData {
       levels: parse("data/bots/difficulty.json", botDifficultyFileSchema, rawData.botDifficulty).levels,
       names: parse("data/bots/names.json", botNamesFileSchema, rawData.botNames).names,
       strats: new Map(Object.entries(rawData.botStrats).map(([level, raw]) => [level, parse(`data/maps/${level}/bot_strats.json`, botStratsSchema, raw)])),
+      picks: parse("data/bots/picks.json", botPicksFileSchema, rawData.botPicks),
     },
     dataHash: fnv1a(utf8Encode(JSON.stringify(rawData))),
   };

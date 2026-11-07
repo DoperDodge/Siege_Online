@@ -6,14 +6,16 @@
 // site in the last minute); after a plant everyone goes for the defuser and the nearest disables it.
 import { TICK_HZ } from "../core/constants.js";
 import type { Vec3 } from "../core/math.js";
-import type { LevelDef, SiteStrat } from "../data/schemas.js";
-import type { PanelEntry } from "../destruction/panels.js";
-import { raycastLevel } from "../level/raycast.js";
+import type { SiteStrat } from "../data/schemas.js";
 import { Phase, type Match } from "../match/match.js";
 import { DEFENSE } from "../match/rules.js";
 import type { Sim } from "../sim.js";
 import type { NavWorld } from "./nav/world.js";
 import type { BotRng } from "./rng.js";
+import { floorSpot, hatchSpot, holdSpots, LOOK_H, roomAt, roomSpots, sees, sides, standAt, throwSpot, waysIn, wallSpot, WORK_M, type UseSpot } from "./places.js";
+import type { PanelEntry } from "../destruction/panels.js";
+import { slotGadget } from "../gadgets/hands.js";
+import type { Pawn } from "../player/pawn.js";
 
 /** A job or a role for one bot, as its planner gives it. */
 export type Task =
@@ -36,7 +38,33 @@ export type Task =
   /** Plant the defuser at `spot` (the carrier). */
   | { kind: "plant"; spot: Vec3 }
   /** Pick the dropped defuser up. */
-  | { kind: "pickup"; at: Vec3 };
+  | { kind: "pickup"; at: Vec3 }
+  /** Use a gadget (bots/use.ts). */
+  | GadgetTask
+  /** Skopós: walk her idle shell to `to` (into it, there, and back to the shell she was in). */
+  | { kind: "shell"; to: Vec3 }
+  /** Brava: a Kludge drone thrown and driven toward `to`, hacking the other side's devices it finds on the way. */
+  | { kind: "kludge"; to: Vec3 };
+
+/**
+ * A gadget used as a player does (gadgets/DESIGN.md §2) from slot `slot`, from `stand` (null: where it is) with the
+ * view on `look`: placed (Fire held), thrown (Fire) or lobbed (ADS), swung (Fire held: a blow at each of `spots`, or
+ * at `look`, until panel `panel` is open), held up `seconds`, or a device out set off ("detonate"). A remote device or
+ * a fused charge is then left from `cover` (set off from there, or waited out `seconds`). `tag` names it.
+ */
+export interface GadgetTask {
+  kind: "gadget";
+  slot: 1 | 2;
+  how: "place" | "throw" | "lob" | "swing" | "hold" | "detonate";
+  stand: Vec3 | null;
+  look: Vec3;
+  spots?: Vec3[];
+  panel?: number;
+  cover?: Vec3;
+  seconds?: number;
+  crouch?: boolean;
+  tag: string;
+}
 
 /** A job in the planner's queue: its task, who has it (member id; 0: nobody), done. */
 interface Job {
@@ -45,11 +73,18 @@ interface Job {
   done: boolean;
   /** Tries that failed (it's dropped after two). */
   fails: number;
+  /** Only this bot's (its own gadget's), and not before this panel's reinforcement is done (Mira's mirror). */
+  only?: number;
+  after?: number;
 }
 
-/** Where a body stands working a wall (m from its face), and the height looked at on it. */
-const WORK_M = 0.75;
-const LOOK_H = 1.25;
+/** A bot's own jobs outside the site are left this long before prep ends (s): time to get back in. */
+const OWN_OUT_S = 14;
+/** An anchor's own jobs outside the site are left this long before prep ends (s): its way back is longer. */
+const ANCHOR_OWN_OUT_S = 22;
+/** The plan's first walls (or hatches) are reinforced before the bots' own gadgets go up. */
+const URGENT = 2;
+
 /** Anchors and roamers in a team of five (fewer: anchors first). */
 const ROAMERS_OF_FIVE = 2;
 /** Roamers come back to the site this long before the action phase ends (s; research §5's "last 60 s"). */
@@ -77,113 +112,26 @@ function jobAt(t: Task): Vec3 {
       return t.spot;
     case "pickup":
       return t.at;
+    case "gadget":
+      return t.stand ?? t.look;
+    case "shell":
+    case "kludge":
+      return t.to;
     case "roam":
       return [0, 0, 0];
   }
 }
 
-/** The room a point is in (by the level's room rectangles and storeys), or null. */
-export function roomAt(level: LevelDef, x: number, y: number, z: number): string | null {
-  for (const r of level.rooms) {
-    const st = level.storeys.find((s) => s.id === r.storey);
-    if (!st || y < st.floorY - 0.4 || y > st.ceilingY) continue;
-    for (const q of r.rects) if (x >= Math.min(q[0], q[2]) - 0.05 && x <= Math.max(q[0], q[2]) + 0.05 && z >= Math.min(q[1], q[3]) - 0.05 && z <= Math.max(q[1], q[3]) + 0.05) return r.id;
-  }
-  return null;
+/** A panel's face at floor level on room `room`'s side (0.3 m out), or its middle's foot. */
+function faceIn(level: Sim["level"]["def"], e: PanelEntry, room: string): Vec3 {
+  const s = sides(level, e, 0.3);
+  return (s.find((x) => x.room === room) ?? s[0]).pos;
 }
 
-/** Nav nodes' positions inside a room, about `step` m apart. */
-export function roomSpots(nav: NavWorld, level: LevelDef, roomId: string, step = 0.75): Vec3[] {
-  const room = level.rooms.find((r) => r.id === roomId);
-  const st = room && level.storeys.find((s) => s.id === room.storey);
-  if (!room || !st) return [];
-  const out: Vec3[] = [];
-  for (const q of room.rects) {
-    const [x0, z0, x1, z1] = [Math.min(q[0], q[2]), Math.min(q[1], q[3]), Math.max(q[0], q[2]), Math.max(q[1], q[3])];
-    for (let x = x0 + step / 2; x < x1; x += step)
-      for (let z = z0 + step / 2; z < z1; z += step) {
-        for (const y of [st.floorY, room.anchor[1]]) {
-          const n = nav.grid.nodeNear(x, y, z, step / 2, 0.5);
-          if (n < 0) continue;
-          const p = nav.grid.nodePos(n);
-          if (roomAt(level, p[0], p[1], p[2]) === roomId && !out.some((o) => Math.hypot(o[0] - p[0], o[2] - p[2]) < step * 0.6 && Math.abs(o[1] - p[1]) < 0.5)) out.push(p);
-        }
-      }
-  }
-  return out;
-}
-
-/** A panel's two sides at floor level, `d` m out from its middle (wall panels), and the room each is in. */
-function sides(level: LevelDef, e: PanelEntry, d: number, uOff = 0): { pos: Vec3; room: string | null }[] {
-  const f = e.frame;
-  const floor = f.center[1] - f.h / 2;
-  return [1, -1].map((s) => {
-    const pos: Vec3 = [f.center[0] + f.n[0] * d * s + f.u[0] * uOff, floor, f.center[2] + f.n[2] * d * s + f.u[2] * uOff];
-    return { pos, room: roomAt(level, pos[0], pos[1] + 0.3, pos[2]) };
-  });
-}
-
-/** A place to stand on the nav grid near `p` (within `within` m), or null. */
-function standAt(nav: NavWorld, p: Vec3, within = 0.8): Vec3 | null {
-  const n = nav.grid.nodeNear(p[0], p[1], p[2], within, 0.8);
-  return n >= 0 ? nav.grid.nodePos(n) : null;
-}
-
-/** The ways into a room: its door frames (any barricade frame with a side in it), soft walls and hatches over it. */
-function waysIn(sim: Sim, roomId: string): Vec3[] {
-  const level = sim.level.def;
-  const out: Vec3[] = [];
-  for (const e of sim.level.panels.list) {
-    const k = e.panel.kind;
-    const f = e.frame;
-    if (k === "barricade" || k === "wall") {
-      if (!sides(level, e, 0.5).some((s) => s.room === roomId)) continue;
-      out.push([f.center[0], f.center[1] - f.h / 2 + LOOK_H, f.center[2]]);
-    } else if (k === "hatch") {
-      if (roomAt(level, f.center[0], f.center[1] - 1.2, f.center[2]) === roomId) out.push([f.center[0], f.center[1], f.center[2]]);
-    }
-  }
-  return out;
-}
-
-/** Whether the eye sees `p` (nothing that blocks sight short of it, by 0.35 m). */
-function sees(sim: Sim, eye: Vec3, p: Vec3): boolean {
-  const d: Vec3 = [p[0] - eye[0], p[1] - eye[1], p[2] - eye[2]];
-  const len = Math.hypot(d[0], d[1], d[2]);
-  if (len < 0.5) return true;
-  const hit = raycastLevel(sim, eye, [d[0] / len, d[1] / len, d[2] / len], len);
-  return !hit || hit.t > len - 0.35;
-}
-
-/**
- * Spots to hold in a room, best first: a node whose eye sees the room's ways in, from a fair distance (not on top of
- * one), with a wall at its back; each with the way in it watches. At most `n`, 2 m apart.
- */
-export function holdSpots(sim: Sim, nav: NavWorld, roomId: string, n: number, rng: BotRng): { spot: Vec3; face: Vec3 }[] {
-  const ways = waysIn(sim, roomId);
-  const cands = roomSpots(nav, sim.level.def, roomId, 0.75);
-  const scored = cands.map((c) => {
-    const eye: Vec3 = [c[0], c[1] + 1.6, c[2]];
-    let score = 0;
-    let face: Vec3 | null = null;
-    let best = -Infinity;
-    for (const w of ways) {
-      const d = Math.hypot(w[0] - c[0], w[2] - c[2]);
-      if (!sees(sim, eye, w)) continue;
-      const v = d < 2 ? -1 : d < 3 ? 0.5 : d <= 9 ? 1 : 0.6;
-      score += v;
-      if (v > best) [best, face] = [v, w];
-    }
-    return { spot: c, face: face ?? ways[0] ?? [c[0], c[1] + 1.4, c[2] - 1], score: score + rng.next() * 0.3 };
-  });
-  scored.sort((a, b) => b.score - a.score);
-  const out: { spot: Vec3; face: Vec3 }[] = [];
-  for (const s of scored) {
-    if (out.length >= n) break;
-    if (out.some((o) => Math.hypot(o.spot[0] - s.spot[0], o.spot[2] - s.spot[2]) < 2)) continue;
-    out.push({ spot: s.spot, face: s.face });
-  }
-  return out;
+/** The first way into a room (a door, a wall, a hatch over it), at floor height, or null. */
+function firstWay(sim: Sim, room: string): Vec3 | null {
+  const w = waysIn(sim, room)[0];
+  return w ? [w[0], w[1] - LOOK_H, w[2]] : null;
 }
 
 /** A defending team's planner for one round. */
@@ -194,6 +142,8 @@ export class DefensePlanner {
   /** Each anchor room's hold spots, and who holds each (member id; 0: free). */
   private readonly spots = new Map<string, { spot: Vec3; face: Vec3; by: number }[]>();
   private planted = false;
+  /** Bots whose own gadget jobs are made (once each has a body). */
+  private readonly equipped = new Set<number>();
 
   constructor(
     private readonly sim: Sim,
@@ -215,12 +165,16 @@ export class DefensePlanner {
   taskOf(id: number): Task | null {
     if (this.planted) return this.retake();
     if (this.match.phase === Phase.Prep) {
+      if (!this.equipped.has(id) && this.bodyPawn(id)) {
+        this.equipped.add(id);
+        this.ownJobs(id);
+      }
       const mine = this.jobs.find((j) => j.by === id && !j.done);
       if (mine) return mine.task;
       // A free job in the plan's order: of the next few, the nearest. Barricades only from inside the site, and only
       // once the rest is done or prep is nearly over (a door barricaded early shuts out teammates still working outside).
       const me = this.bodyOf(id);
-      const others = this.jobs.filter((j) => !j.done && j.task.kind !== "barricade" && j.fails < 2 && this.jobFits(j));
+      const others = this.jobs.filter((j) => !j.done && j.only === undefined && j.task.kind !== "barricade" && j.fails < 2 && this.jobFits(j));
       const late = this.match.ticksLeft(this.sim.tick) < BARRICADE_LAST_S * TICK_HZ;
       const inSite = me !== null && this.siteRooms().includes(roomAt(this.sim.level.def, me[0], me[1] + 0.3, me[2]) ?? "");
       // A job outside the site's rooms is a roamer's (it stays out there); an anchor takes one only with time to come back.
@@ -231,10 +185,25 @@ export class DefensePlanner {
         return !this.siteRooms().includes(roomAt(this.sim.level.def, p[0], p[1] + 0.3, p[2]) ?? "");
       };
       const time = this.match.ticksLeft(this.sim.tick) / TICK_HZ;
-      const free = this.jobs
-        .filter((j) => j.by === 0 && !j.done && j.fails < 2 && this.jobFits(j) && (j.task.kind !== "barricade" || (inSite && (late || others.length === 0))) && (roamer || !outside(j) || (!this.hasRoamers() && time > ANCHOR_OUT_S)))
-        .slice(0, 3);
       const near = (j: Job) => (me ? Math.hypot(jobAt(j.task)[0] - me[0], (jobAt(j.task)[1] - me[1]) * 2, jobAt(j.task)[2] - me[2]) : 0) + (outside(j) === roamer ? 0 : 6);
+      // The plan's first walls before anything else (every section of its first URGENT walls: one each, nearest first).
+      const first = [...new Set(this.jobs.filter((j) => j.task.kind === "reinforce").map((j) => (j.task as { panel: number }).panel))].slice(0, URGENT);
+      const urgent = this.jobs.filter((j) => j.task.kind === "reinforce" && first.includes(j.task.panel) && j.by === 0 && !j.done && j.fails < 2 && this.jobFits(j));
+      urgent.sort((a, b) => near(a) - near(b));
+      if (urgent[0]) {
+        urgent[0].by = id;
+        return urgent[0].task;
+      }
+      // Then its own gadgets (the nearest of its next few), then the team's.
+      const own = this.jobs.filter((j) => j.only === id && j.by === 0 && !j.done && j.fails < 2 && this.jobFits(j) && (!outside(j) || time > (roamer ? OWN_OUT_S : ANCHOR_OWN_OUT_S))).slice(0, 3);
+      own.sort((a, b) => near(a) - near(b));
+      if (own[0]) {
+        own[0].by = id;
+        return own[0].task;
+      }
+      const free = this.jobs
+        .filter((j) => j.by === 0 && j.only === undefined && !j.done && j.fails < 2 && this.jobFits(j) && (j.task.kind !== "barricade" || (inSite && (late || others.length === 0))) && (roamer || !outside(j) || (!this.hasRoamers() && time > ANCHOR_OUT_S)))
+        .slice(0, 3);
       free.sort((a, b) => near(a) - near(b));
       if (free[0]) {
         free[0].by = id;
@@ -246,7 +215,7 @@ export class DefensePlanner {
 
   /** The prep jobs as they stand (tests, the overlay): what, who has it, done, fails. */
   jobList(): { kind: Task["kind"]; panel: number; by: number; done: boolean; fails: number }[] {
-    return this.jobs.map((j) => ({ kind: j.task.kind, panel: "panel" in j.task ? j.task.panel : -1, by: j.by, done: j.done, fails: j.fails }));
+    return this.jobs.map((j) => ({ kind: j.task.kind, panel: "panel" in j.task ? (j.task.panel ?? -1) : -1, by: j.by, done: j.done, fails: j.fails }));
   }
 
   /** Bot `id` finished its job (`ok`), or gave up on it. */
@@ -270,6 +239,12 @@ export class DefensePlanner {
   private hasRoamers(): boolean {
     for (const r of this.roles.values()) if (r !== "anchor" && r.kind === "roam") return true;
     return false;
+  }
+
+  /** A bot's body, or null. */
+  private bodyPawn(id: number): Pawn | null {
+    const c = this.sim.controllers.get(this.ctrlOf(id));
+    return (c && this.sim.pawns.get(c.possessedPawnId)) || null;
   }
 
   /** A bot's feet now, or null (no body). */
@@ -314,7 +289,109 @@ export class DefensePlanner {
       const p = this.sim.level.panels.list[t.panel].panel;
       return p.empty || p.broken;
     }
+    if (t.kind === "gadget" && j.only !== undefined) {
+      // Its owner still has one, and (a mirror) the wall's steel is up first: nothing of its reinforcement left to do.
+      const b = this.bodyPawn(j.only);
+      if (!b || (t.slot === 1 ? b.state.g1 : b.state.g2) <= 0) return false;
+      if (j.after !== undefined && this.jobs.some((x) => x.task.kind === "reinforce" && x.task.panel === j.after && !x.done && x.fails < 2 && this.jobFits(x))) return false;
+    }
     return true;
+  }
+
+  /**
+   * A bot's own gadget jobs (M7, bots/DESIGN.md §7.4), once it has a body in prep: its operator's devices where the
+   * site plan puts them (Mute's jammers, Mira's mirrors once their wall has steel, Lesion's mines, Sentry's wire and
+   * shield, Skopós's idle shell into the plan's other room), a defender's impact grenades for the plan's rotation holes,
+   * and its generic gadget at the site's ways in (wire, a shield, a camera, an observation blocker, an alarm).
+   */
+  private ownJobs(id: number) {
+    const sim = this.sim;
+    const body = this.bodyPawn(id);
+    if (!body) return;
+    const level = sim.level.def;
+    const byId = sim.level.panels.byId;
+    const op = this.match.players.get(id)?.operator ?? "";
+    const slots = [slotGadget(sim.data, body.loadout, 1), slotGadget(sim.data, body.loadout, 2)];
+    const slotOf = (gid: string): 1 | 2 | 0 => (slots[0]?.id === gid ? 1 : slots[1]?.id === gid ? 2 : 0);
+    const room = (r: string) => level.rooms.some((x) => x.id === r);
+    let tags = 0;
+    const add = (slot: 1 | 2, how: GadgetTask["how"], at: UseSpot | null, extra: Partial<GadgetTask> = {}, after?: number) => {
+      if (!at) return;
+      const task: GadgetTask = { kind: "gadget", slot, how, stand: at.stand, look: at.look, tag: `${id}.${tags++}`, ...extra };
+      this.jobs.push({ task, by: 0, done: false, fails: 0, only: id, after });
+    };
+    const planned = new Set<string>();
+    for (const spot of this.strat?.defense.gadgets[op] ?? []) {
+      if (op === "skopos") {
+        // Her idle shell into the plan's last room (she anchors in the first).
+        continue;
+      }
+      const gid = spot.gadget ?? slots[1]?.id ?? "";
+      const slot = slotOf(gid);
+      const g = slot ? slots[slot - 1] : null;
+      if (!slot || !g) continue;
+      planned.add(gid);
+      // As many as it carries, or will (a regenerating item: its jobs wait for the next one).
+      const made = this.jobs.filter((j) => j.only === id && j.task.kind === "gadget" && j.task.slot === slot).length;
+      if (made >= Math.max(g.count, slot === 1 ? body.state.g1 : body.state.g2)) continue;
+      const e = spot.panel ? byId.get(spot.panel) : spot.near ? byId.get(spot.near) : undefined;
+      if (g.use.kind === "throw") {
+        if (spot.room && room(spot.room)) add(slot, "throw", throwSpot(sim, this.nav, spot.room, null, this.rng));
+      } else if (g.use.kind === "place" && g.use.on.includes("reinforceable")) {
+        if (e) add(slot, "place", wallSpot(sim, this.nav, e, spot.from ?? null, 0.7, 1.45), {}, e.panel.spec.index);
+      } else if (g.use.kind === "place" && spot.room && room(spot.room)) {
+        const near = e ? faceIn(level, e, spot.room) : null;
+        add(slot, "place", floorSpot(sim, this.nav, spot.room, near, near ?? firstWay(sim, spot.room)));
+      }
+    }
+    if (op === "skopos") {
+      const rooms = (this.strat?.defense.gadgets.skopos ?? []).map((x) => x.room).filter((r): r is string => !!r && room(r));
+      const last = rooms[rooms.length - 1];
+      const spots = last ? roomSpots(this.nav, level, last, 1) : [];
+      const to = spots[Math.floor(spots.length / 2)];
+      if (to) this.jobs.push({ task: { kind: "shell", to }, by: 0, done: false, fails: 0, only: id });
+    }
+    // Impact grenades: the plan's rotation holes blown from a few metres (a knife's job less).
+    const impact = slotOf("impact_grenade");
+    if (impact) {
+      for (const h of (this.strat?.defense.holes ?? []).slice(0, body.state.g1)) {
+        const e = byId.get(h.panel);
+        const at = e ? wallSpot(sim, this.nav, e, h.from, 2.6, 0.9) : null;
+        if (!e || !at) continue;
+        const knife = this.jobs.find((j) => j.task.kind === "hole" && j.task.panel === e.panel.spec.index && j.by === 0 && !j.done);
+        if (knife) knife.done = true;
+        add(impact, "throw", at);
+      }
+    }
+    // Its generic gadget (slot 1), if the plan didn't place it: at the site's ways in, from inside.
+    const g1 = slots[0];
+    if (g1 && !planned.has(g1.id) && g1.id !== "impact_grenade" && g1.id !== "nitro_cell") {
+      const doors = this.siteDoors();
+      for (let k = 0; k < Math.min(body.state.g1, doors.length); k++) {
+        const d = doors[(k + this.bots.indexOf(id)) % doors.length];
+        if (g1.use.kind === "place") add(1, "place", floorSpot(sim, this.nav, d.room, d.at, d.at, g1.id === "deployable_shield" ? 1.4 : 1.0));
+        else if (g1.use.kind === "throw") {
+          const at = floorSpot(sim, this.nav, d.room, d.at, d.at, 1.6);
+          if (at) add(1, "throw", { stand: at.stand, look: [d.at[0], d.at[1] + 1.6, d.at[2]] });
+        }
+      }
+    }
+  }
+
+  /** The site's doors (empty or barricaded frames between a site room and another), each from its site room's side. */
+  private siteDoors(): { room: string; at: Vec3 }[] {
+    const level = this.sim.level.def;
+    const rooms = this.siteRooms();
+    const out: { room: string; at: Vec3 }[] = [];
+    for (const e of this.sim.level.panels.list) {
+      if (e.panel.kind !== "barricade" || e.frame.h < 1.6) continue;
+      const s = sides(level, e, 0.6);
+      const inside = s.find((x) => x.room !== null && rooms.includes(x.room));
+      const other = s.find((x) => x !== inside);
+      if (!inside || !other || (other.room !== null && rooms.includes(other.room))) continue;
+      out.push({ room: inside.room!, at: faceIn(level, e, inside.room!) });
+    }
+    return out;
   }
 
   private makeJobs() {
@@ -400,13 +477,17 @@ export class DefensePlanner {
   private makeRoles() {
     const anchorsRooms = this.strat?.defense.anchors ?? this.siteRooms();
     const roam = this.strat?.defense.roam ?? [];
-    const n = this.bots.length;
+    // Pulse roams the plan's rooms above or below the site, scanning (M7); the rest share out as anchors and roamers.
+    const pulseRooms = (this.strat?.defense.gadgets.pulse ?? []).map((x) => x.room).filter((r): r is string => !!r);
+    const bots = this.bots.filter((id) => !(pulseRooms.length && this.match.players.get(id)?.operator === "pulse"));
+    for (const id of this.bots) if (!bots.includes(id)) this.roles.set(id, { kind: "roam", rooms: pulseRooms });
+    const n = bots.length;
     // Of five, two roam; of fewer, fewer (one roamer from four; none from three or fewer).
     const roamers = roam.length ? Math.max(0, Math.min(ROAMERS_OF_FIVE, n - 3)) : 0;
     const anchors = n - roamers;
     // Hold spots in every anchor room, enough for all the anchors in either.
     for (const r of anchorsRooms) this.spots.set(r, holdSpots(this.sim, this.nav, r, anchors, this.rng).map((h) => ({ ...h, by: 0 })));
-    this.bots.forEach((id, k) => {
+    bots.forEach((id, k) => {
       if (k < anchors) this.roles.set(id, "anchor");
       else {
         const r = roam[(k - anchors) % roam.length];
@@ -425,6 +506,9 @@ export class DefensePlanner {
 export class AttackPlanner {
   /** Each bot's way in this round (spots), worked out when it first asks in action. */
   private readonly ways = new Map<number, Task>();
+  /** Each bot's jobs before its way in (M7: breaches, Brava's Kludge), made for the site it then went for. */
+  private readonly jobs = new Map<number, Job[]>();
+  private jobsFor: string | null = null;
 
   constructor(
     private readonly sim: Sim,
@@ -491,12 +575,153 @@ export class AttackPlanner {
         if (spot) return { kind: "plant", spot };
       }
     }
+    // Its jobs first (a breach on the way in, Brava's Kludge ahead of the team), then its way in.
+    if (this.jobsFor !== site) this.makeJobs(site);
+    const job = this.jobs.get(id)?.find((j) => !j.done && j.fails < 2);
+    if (job) return job.task;
     let way = this.ways.get(id);
     if (!way || (way.kind === "go" && !stInfo.rooms.includes(roomAt(level, way.to[0], way.to[1] + 0.3, way.to[2]) ?? ""))) {
       way = this.wayIn(id, site, me?.pos ?? null);
       this.ways.set(id, way);
     }
     return way;
+  }
+
+  /** Bot `id` finished its job (`ok`), or gave up on it (tried again once). */
+  report(id: number, ok: boolean): void {
+    const j = this.jobs.get(id)?.find((x) => !x.done && x.fails < 2);
+    if (!j) return;
+    if (ok) j.done = true;
+    else j.fails++;
+  }
+
+  /** The jobs as they stand (tests): each bot's, what and done. */
+  jobList(): { by: number; task: Task; done: boolean; fails: number }[] {
+    return [...this.jobs].flatMap(([by, list]) => list.map((j) => ({ by, task: j.task, done: j.done, fails: j.fails })));
+  }
+
+  /**
+   * The team's jobs for `site` (M7, bots/DESIGN.md §7.4): each of the plan's hard breaches to the first bot of its
+   * operators who has the charge (Thermite's Exothermic; Striker's EMP then a Hard Breach Charge; Fuze's Hard Breach
+   * Charge), each soft breach to one too (Sledge's hammer, Fuze's Cluster Charge, else anyone's breach charge), one
+   * breach a bot; Brava's Kludge first, toward the first hard breach's far side.
+   */
+  private makeJobs(site: string) {
+    this.jobsFor = site;
+    const sim = this.sim;
+    const level = sim.level.def;
+    const strat = sim.data.bots.strats.get(level.id)?.sites[site];
+    const st = level.sites.find((x) => x.id === site);
+    // Keep what's done; make the rest afresh.
+    for (const list of this.jobs.values()) for (let i = list.length - 1; i >= 0; i--) if (!list[i].done) list.splice(i, 1);
+    if (!strat || !st) return;
+    const byId = sim.level.panels.byId;
+    const bots = this.bots.map((id) => ({ id, op: this.match.players.get(id)?.operator ?? "", body: this.pawnOf(id) })).filter((b) => b.body !== null) as { id: number; op: string; body: Pawn }[];
+    const busy = new Set<number>();
+    const add = (id: number, task: Task) => {
+      let list = this.jobs.get(id);
+      if (!list) this.jobs.set(id, (list = []));
+      list.push({ task, by: id, done: false, fails: 0 });
+    };
+    const slotOf = (b: Pawn, gid: string): 1 | 2 | 0 => {
+      const g1 = slotGadget(sim.data, b.loadout, 1);
+      const g2 = slotGadget(sim.data, b.loadout, 2);
+      if (g1?.id === gid && b.state.g1 > 0) return 1;
+      return g2?.id === gid && b.state.g2 > 0 ? 2 : 0;
+    };
+    let tag = 0;
+    const gadget = (slot: 1 | 2, how: GadgetTask["how"], at: UseSpot, extra: Partial<GadgetTask> = {}): GadgetTask => ({ kind: "gadget", slot, how, stand: at.stand, look: at.look, tag: `a${site}.${tag++}`, ...extra });
+    // Brava: her Kludge toward the far side of the first hard breach (where the jammers are), else the site.
+    for (const b of bots) {
+      if (b.op !== "brava" || slotGadget(sim.data, b.body.loadout, 2)?.use.kind !== "drone") continue;
+      const hb = strat.attack.hardBreach.map((h) => byId.get(h.panel)).find((e) => e);
+      const far = hb ? sides(level, hb, 1.5).find((x) => x.room !== null && st.rooms.includes(x.room)) : undefined;
+      const to = far?.pos ?? roomSpots(this.nav, level, st.rooms[0], 1.5)[0];
+      if (to) add(b.id, { kind: "kludge", to });
+    }
+    for (const h of strat.attack.hardBreach) {
+      const e = byId.get(h.panel);
+      if (!e) continue;
+      for (const op of h.ops) {
+        const b = bots.find((x) => x.op === op && !busy.has(x.id));
+        const tasks = b ? this.hardBreach(b.body, e, h.from, slotOf, gadget) : [];
+        if (!b || !tasks.length) continue;
+        busy.add(b.id);
+        for (const t of tasks) add(b.id, t);
+        break;
+      }
+    }
+    for (const h of strat.attack.softBreach) {
+      const e = byId.get(h.panel);
+      if (!e) continue;
+      const cands = [...h.ops.map((op) => bots.find((x) => x.op === op && !busy.has(x.id))), ...bots.filter((x) => !busy.has(x.id) && slotOf(x.body, "breach_charge"))];
+      for (const b of cands) {
+        const tasks = b ? this.softBreach(b.body, e, h.from, slotOf, gadget) : [];
+        if (!b || !tasks.length) continue;
+        busy.add(b.id);
+        for (const t of tasks) add(b.id, t);
+        break;
+      }
+    }
+  }
+
+  /** A hard breach of wall `e` from room `from` by this body: its charge on it from close, set off (or waited out) from cover. */
+  private hardBreach(b: Pawn, e: PanelEntry, from: string, slotOf: (b: Pawn, gid: string) => 1 | 2 | 0, gadget: (slot: 1 | 2, how: GadgetTask["how"], at: UseSpot, extra?: Partial<GadgetTask>) => GadgetTask): Task[] {
+    const sim = this.sim;
+    const at = wallSpot(sim, this.nav, e, from, 0.8, 0.9);
+    if (!at || e.panel.kind !== "wall") return [];
+    const cover = this.coverFrom(at);
+    const thermite = slotOf(b, "exothermic_charge");
+    if (thermite) return [gadget(thermite, "place", at, { cover, tag: `therm${e.panel.spec.index}` })];
+    const hbc = slotOf(b, "hard_breach_charge");
+    if (!hbc) return [];
+    const out: Task[] = [];
+    // Striker's EMP at the wall first: a jammer behind it would stop the charge.
+    const emp = slotOf(b, "impact_emp");
+    const far = wallSpot(sim, this.nav, e, from, 3.2, 1.3);
+    if (emp && far) out.push(gadget(emp, "throw", far, { tag: `emp${e.panel.spec.index}` }));
+    out.push(gadget(hbc, "place", { stand: at.stand, look: [at.look[0], at.look[1] + 0.1, at.look[2]] }, { cover, seconds: 5, tag: `hbc${e.panel.spec.index}` }));
+    return out;
+  }
+
+  /**
+   * A soft breach of `e` (a hatch from above, or a wall from room `from`) by this body: Sledge's hammer (a blow, low
+   * and high on a wall), a Cluster Charge or a breach charge on it, set off from cover.
+   */
+  private softBreach(b: Pawn, e: PanelEntry, from: string, slotOf: (b: Pawn, gid: string) => 1 | 2 | 0, gadget: (slot: 1 | 2, how: GadgetTask["how"], at: UseSpot, extra?: Partial<GadgetTask>) => GadgetTask): Task[] {
+    const sim = this.sim;
+    const hatch = e.panel.kind === "hatch";
+    const at = hatch ? hatchSpot(sim, this.nav, e) : wallSpot(sim, this.nav, e, from, 0.7, 0.55);
+    if (!at) return [];
+    const index = e.panel.spec.index;
+    const hammer = slotOf(b, "breaching_hammer");
+    if (hammer) {
+      const spots = hatch ? [at.look] : [at.look, [at.look[0], at.look[1] + 0.95, at.look[2]] as Vec3];
+      return [gadget(hammer, "swing", at, { spots, panel: index, crouch: hatch, tag: `ham${index}` })];
+    }
+    const charge = slotOf(b, "cluster_charge") || slotOf(b, "breach_charge");
+    if (!charge) return [];
+    const put = hatch ? at : wallSpot(sim, this.nav, e, from, 0.8, 1.0);
+    if (!put) return [];
+    return [gadget(charge, "place", put, { cover: this.coverFrom(put, hatch ? 2.5 : 3), tag: `soft${index}` })];
+  }
+
+  /** Cover from a charge: a place to stand `d` m back from where it was put, on the same side (or where it was). */
+  private coverFrom(at: UseSpot, d = 3): Vec3 {
+    const dx = at.stand[0] - at.look[0];
+    const dz = at.stand[2] - at.look[2];
+    const len = Math.hypot(dx, dz) || 1;
+    for (const back of [d, d * 0.75, d * 1.3]) {
+      const p = standAt(this.nav, [at.stand[0] + (dx / len) * back, at.stand[1], at.stand[2] + (dz / len) * back], 0.8);
+      if (p && Math.abs(p[1] - at.stand[1]) < 0.15) return p;
+    }
+    return at.stand;
+  }
+
+  /** A bot's body now, or null. */
+  private pawnOf(id: number): Pawn | null {
+    const c = this.sim.controllers.get(this.ctrlOf(id));
+    return (c && this.sim.pawns.get(c.possessedPawnId)) || null;
   }
 
   /** A spot to plant in a room: a node at least the plant margin and a body's width inside its edges, near `from`. */
