@@ -13,6 +13,7 @@ import { L_STEEL, type PanelChange, type PanelOp } from "../destruction/panel.js
 import type { IndexedOp } from "../destruction/panels.js";
 import type { BlastData, BotLevel, DummyDef, GadgetData, ModeData } from "../data/schemas.js";
 import { Bot, type BotWorld } from "../bots/bot.js";
+import { NavWorld } from "../bots/nav/world.js";
 import { BotRng } from "../bots/rng.js";
 import { DUMMY_STANCE, dummyInput } from "../lab/dummies.js";
 import { spawnAmmo, type Pawn, type PlayerController } from "../player/pawn.js";
@@ -310,6 +311,8 @@ export class Room implements DirectorHost {
   readonly gadgetServer: GadgetServer;
   /** Shots judged this tick, applied together at its end (DECISIONS D-044). */
   private judged: JudgedShot[] = [];
+  /** Bots' navigation (Phase 9 M2): made with the first bot, kept up with the walls and gadgets each tick. */
+  nav: NavWorld | null = null;
   /**
    * Who downed each body that is down now, and in which of its lives (Pawn.life): they get the kill when it
    * dies (research/core_mechanics.md §10.2). A body that came back since (a teleport, the kill plane in the
@@ -472,18 +475,33 @@ export class Room implements DirectorHost {
    * here has. Null when the room or the team is full.
    */
   addBot(team: Team, level: BotLevel): number | null {
-    if (!this.director || this.members.size >= MAX_ROOM_PLAYERS) return null;
+    if (this.members.size >= MAX_ROOM_PLAYERS) return null;
     const id = this.nextMemberId++;
     const names = this.sim.data.bots.names;
     const used = new Set([...this.members.values()].map((m) => m.name));
     const free = names.filter((n) => !used.has(`BOT ${n}`));
     const name = `BOT ${new BotRng(this.seed, id).pick(free.length ? free : names)}`;
+    this.nav ??= new NavWorld(this.sim);
     const m: Member = { ...this.newMember(id, name, NO_CLIENT), bot: new Bot(id, level, this.seed) };
     m.botWorld = this.botWorld(m);
-    if (!this.director.seatBot(id, name, team, level)) return null;
-    this.members.set(id, m);
+    if (this.director) {
+      if (!this.director.seatBot(id, name, team, level)) return null;
+      this.members.set(id, m);
+    } else {
+      // A lab room (tests, a lab page): a body at once, the side's first operator.
+      const op = [...this.sim.data.operators.values()].find((o) => sideTeam(o.side) === team)!;
+      m.pick = defaultLoadoutPick(this.sim.data, op.id);
+      m.team = team;
+      this.members.set(id, m);
+      this.spawn(m);
+    }
     this.broadcastRoster();
     return id;
+  }
+
+  /** A bot member's brain (tests, the overlay), or null. */
+  botOf(memberId: number): Bot | null {
+    return this.members.get(memberId)?.bot ?? null;
   }
 
   /** Take a bot out of the room (the lobby's sizes shrank, a person took its place, the host removed it). */
@@ -795,6 +813,8 @@ export class Room implements DirectorHost {
       this.sendPanelState(m, state);
       m.events.push(this.deployRulesEvent());
     }
+    // The walls as built again: the bots' grid too (gadgets are reset first, D-158).
+    this.nav?.reset();
   }
 
   /** A panel op from outside a tick (a lab tool, a test): applied and sent with the next tick's. */
@@ -2245,7 +2265,9 @@ export class Room implements DirectorHost {
   step(): void {
     const inputs = new Map<number, InputCmd>();
     const active = new Set<number>();
-    // Bots (Phase 9): each brain's input for this tick, queued as a client's would arrive (it sees the present).
+    // Bots (Phase 9): the navigation caught up with last tick's walls and gadgets (a chunk or so a tick), then each
+    // brain's input for this tick, queued as a client's would arrive (it sees the present).
+    this.nav?.step();
     for (const m of this.members.values()) if (m.bot) this.botInput(m);
     for (const m of this.members.values()) {
       m.applied = null;
@@ -2337,6 +2359,9 @@ export class Room implements DirectorHost {
       sim: this.sim,
       get match() {
         return room.director?.match ?? null;
+      },
+      get nav() {
+        return room.nav;
       },
       pick: (pick) => this.pickLoadout(m.id, pick),
       act: (a) => this.onMatchAction(m.id, a),

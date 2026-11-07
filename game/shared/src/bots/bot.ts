@@ -1,6 +1,7 @@
 // A bot's brain (Phase 9, bots/DESIGN.md §1, §5): each tick, the input a player's client would send for its body, and
-// the choices a player makes on the planning screens, from what its team could know. M1: the choices, and a body
-// that stands its ground looking about; moving, seeing and fighting come with M2 and M3.
+// the choices a player makes on the planning screens, from what its team could know. M1: the choices; M2: walking
+// (bots/nav/) to spots about the round (defenders round their site, attackers toward the building), or where a test
+// sends it; seeing and fighting come with M3.
 import { TICK_HZ } from "../core/constants.js";
 import { wrapAngle } from "../core/math.js";
 import type { BotLevel } from "../data/schemas.js";
@@ -11,6 +12,9 @@ import type { MatchAction } from "../net/matchWire.js";
 import type { PlayerController } from "../player/pawn.js";
 import { PawnMode, Stance, type InputCmd } from "../player/types.js";
 import type { Sim } from "../sim.js";
+import type { Vec3 } from "../core/math.js";
+import { FollowState, PathFollower } from "./nav/follow.js";
+import type { NavWorld } from "./nav/world.js";
 import { defaultLoadoutPick, type LoadoutPick } from "../weapons/loadout.js";
 import { BotRng } from "./rng.js";
 
@@ -22,6 +26,8 @@ export interface BotWorld {
   readonly sim: Sim;
   /** The match (a match room), or null in a lab room. */
   readonly match: Match | null;
+  /** The room's navigation (made with its first bot). */
+  readonly nav: NavWorld | null;
   /** An operator and loadout, as PickLoadout would bring it. */
   pick(pick: LoadoutPick): void;
   /** A round's choice, as MatchAction would bring it. */
@@ -46,6 +52,12 @@ export class Bot {
   private lookUntil = 0;
   /** Events its client would have been told since it last thought (M3 reads them). */
   readonly heard: GameEvent[] = [];
+  /** Its legs (M2). */
+  readonly legs = new PathFollower();
+  /** Where it's been sent (a test, later a human teammate's order), or null: its own idea. */
+  order: Vec3 | null = null;
+  /** Its own next spot to walk to, and when it may pick another. */
+  private wanderAt = 0;
 
   constructor(
     readonly memberId: number,
@@ -69,8 +81,21 @@ export class Bot {
     if (!ctrl || !pawn || ctrl.drone !== 0) return null;
     const s = pawn.state;
     if (s.mode === PawnMode.Dead) return null;
-    // M1: stand and look about, turning a little at a time.
     const now = w.sim.tick;
+    // M2: walk to where it's sent, or about the round.
+    if (w.nav && s.mode !== PawnMode.Downed) {
+      if (this.order) this.legs.goTo(this.order, 0.4);
+      else if (w.match && (this.legs.state !== FollowState.Walking || now >= this.wanderAt)) {
+        const spot = this.wanderSpot(w, w.match, pawn.team);
+        if (spot) this.legs.goTo(spot, 0.6);
+        this.wanderAt = now + Math.round(this.rng.range(8, 20) * TICK_HZ);
+      }
+      if (this.legs.state === FollowState.Walking) {
+        const st = this.legs.tick(w.nav, w.sim, pawn, null);
+        return { forward: st.forward, strafe: st.strafe, yaw: st.yaw, pitch: st.pitch ?? s.pitch * 0.9, buttons: st.buttons, stance: st.stance, lean: 0 };
+      }
+    }
+    // Standing: look about, turning a little at a time.
     if (this.lookYaw === null || now >= this.lookUntil) {
       this.lookYaw = wrapAngle(s.yaw + this.rng.range(-1.2, 1.2));
       this.lookUntil = now + Math.round(this.rng.range(1.5, 4) * TICK_HZ);
@@ -78,6 +103,29 @@ export class Bot {
     const d = wrapAngle(this.lookYaw - s.yaw);
     const turn = Math.sign(d) * Math.min(Math.abs(d), (1.5 * Math.PI) / TICK_HZ);
     return { forward: 0, strafe: 0, yaw: wrapAngle(s.yaw + turn), pitch: s.pitch * 0.9, buttons: 0, stance: Stance.Stand, lean: 0 };
+  }
+
+  /**
+   * Somewhere to walk to (M2, until the plans of M4–M6): a defender, a spot in one of its site's rooms or a room next to
+   * them; an attacker, a spot in a room of the building (the site's once its team knows it). Null: none found.
+   */
+  private wanderSpot(w: BotWorld, m: Match, team: number): Vec3 | null {
+    const nav = w.nav!;
+    const level = w.sim.level.def;
+    const site = level.sites.find((st) => st.id === m.site);
+    const known = team === DEFENSE || m.siteRevealed;
+    const rooms = site && known && this.rng.next() < 0.7 ? level.rooms.filter((r) => site.rooms.includes(r.id)) : level.rooms;
+    for (let tries = 0; tries < 8; tries++) {
+      const room = this.rng.pick(rooms);
+      if (!room) return null;
+      const rect = this.rng.pick(room.rects)!;
+      const storey = level.storeys.find((st) => st.id === room.storey);
+      const x = this.rng.range(rect[0], rect[2]);
+      const z = this.rng.range(rect[1], rect[3]);
+      const n = nav.grid.nodeNear(x, storey?.floorY ?? room.anchor[1], z, 1, 0.6);
+      if (n >= 0) return nav.grid.nodePos(n);
+    }
+    return null;
   }
 
   // ------------------------------------------------------------------ the planning screens

@@ -14,8 +14,8 @@ breach by the same rules, and they know only what their team could know (what th
 | M | What | State |
 |---|---|---|
 | M1 | Bots in rooms, the Bot Training format, lobby controls, backfill, offline matches | ✅ |
-| M2 | Navigation on Oregon (grid, vaults, ladders, drops), rebuilt as walls and floors open | next |
-| M3 | Sight, hearing (placeholder sounds until Phase 11), team intel; aim and gunfights; difficulty levels | |
+| M2 | Navigation on Oregon (grid, vaults, ladders, drops), rebuilt as walls and floors open | ✅ |
+| M3 | Sight, hearing (placeholder sounds until Phase 11), team intel; aim and gunfights; difficulty levels | next |
 | M4 | Defending bots: reinforce, holes, barricades, gadgets, anchors, roamers, rotations, retakes | |
 | M5 | Attacking bots: drones in prep, routes, breaches, vertical play, rappel, the plant | |
 | M6 | The team planner and every site's plan (data/maps/oregon/bot_strats.json); orders from you on the comm wheel | |
@@ -41,6 +41,25 @@ breach by the same rules, and they know only what their team could know (what th
 - Tests: game/shared/test/botMatch.test.ts (the lobby filling and shrinking, people taking bots' places, a whole
   match with bots, the fixed site, backfill and Ranked refusing bots), the lobby messages' wire test.
 - Known: a person can't join a match under way when bots have every place (in the lobby they can).
+
+### M2: navigation (D-160)
+- **Bots walk Oregon by their own keys**: stairs, the 2F Tower ladder to the Cat Walk, vaults, drops through holes,
+  and barricaded doors and windows, which they knife down (a different part of the barricade each swing) before
+  walking or vaulting through. In a Bot Training match they now walk about: defenders round their site, attackers
+  into the building (toward the site once they know it). They still don't see or shoot anyone (M3).
+- **They follow the walls as they change**: break a hatch, cut a hole in a wall or knock a barricade down and the
+  bots' map of where they can go is rebuilt there within a tick or two; they use the new way at once.
+- **See it: the Oregon page, F6** draws the bots' map round you: a dot wherever a body can stand (green; yellow where
+  only crouched; blue on the stairs' ramps) and lines for vaults (orange), the ladder (purple), drops (red) and
+  barricades to break (brown). It takes about a second to appear the first time.
+- How it works: a grid of 25 cm columns read from the same collision boxes bodies move against, cut into 4 m chunks;
+  routes are found over the chunks' regions, then the next few metres are worked out step by step as the bot walks
+  (bots/DESIGN.md §3).
+- Tests: game/shared/test/botNav.test.ts (every room reachable; the outside reaches the inside through barricades; a
+  bot walking from the basement to 2F, up the ladder, out through a barricaded window, down an opened hatch, and
+  through a new hole in a wall).
+- Known: rebuilding the map where a wall changed costs the room 6–15 ms that tick (a few times a round); it will be
+  spread over several ticks in M10.
 
 ---
 

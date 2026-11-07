@@ -5,8 +5,8 @@ import { clamp, forwardXZ, quatYawPitchRoll, rightXZ, rotateXZ, DEG, wrapAngle, 
 import { loadGameData, type GameData } from "./data/load.js";
 import { deployAction, deployTicks, DeployKind, type DeployAction, type DeployRules } from "./destruction/deploy.js";
 import { buildLevel, type BuiltLevel } from "./level/builder.js";
-import { GADGET_GROUPS, initRapier, PLAYER_GROUPS, QUERY_DRONE, QUERY_SIGHT, QUERY_SOLID, QUERY_STATIC as QUERY_STATIC_FILTER, refreshBroadPhase, type CharacterController, type Collider, type Rapier, type World } from "./physics/rapier.js";
-import { cancelRappelHold, capsuleFree, movementPrompt, poseCollider, stepPawn, type MoveContext, type MovementPrompt } from "./player/movement.js";
+import { G_PLAYER, GADGET_GROUPS, initRapier, PLAYER_GROUPS, QUERY_DRONE, QUERY_SIGHT, QUERY_SOLID, QUERY_STATIC as QUERY_STATIC_FILTER, refreshBroadPhase, type CharacterController, type Collider, type Rapier, type World } from "./physics/rapier.js";
+import { cancelRappelHold, capsuleFree, movementPrompt, planVault, poseCollider, stepPawn, type MoveContext, type MovementPrompt, type VaultPlan } from "./player/movement.js";
 import { initialPawnState, MAX_CAM_VIEWS, SHELL_VIEW, type Pawn, type PlayerController } from "./player/pawn.js";
 import { droneCollider, droneEye, stepDrone } from "./player/drone.js";
 import { insideAny, zoneBoxes, ZONE_TEST_HEIGHT, type ZoneBox } from "./level/zones.js";
@@ -88,6 +88,8 @@ export class Sim {
    */
   private readonly solids = new Map<number, { cs: Collider[]; key: string }>();
   private solidsAt = -1;
+  /** Bumped whenever a solid gadget's colliders are made or removed (bots' navigation rebuilds round them, Phase 9). */
+  solidsVersion = 0;
   private bpCache: { version: number; list: Gadget[] } = { version: -1, list: [] };
   private shellCache: { version: number; list: Gadget[] } = { version: -1, list: [] };
   /**
@@ -130,6 +132,25 @@ export class Sim {
       solidOnRay: (origin, dir, maxT) => this.solidOnRay(origin, dir, maxT),
     };
     this.building = zoneBoxes(level.def, "building");
+  }
+
+  /** Each solid gadget's colliders now, by gadget id (read-only: bots' navigation). */
+  solidColliders(): Map<number, readonly Collider[]> {
+    return new Map([...this.solids].map(([id, s]) => [id, s.cs]));
+  }
+
+  /**
+   * The vault a standing body at (x, y, z) facing `yaw` would make now, by the movement code's own planner, other
+   * bodies left out (bots' navigation, Phase 9 M2: a vault link is one a body can really make). Read-only.
+   */
+  probeVault(x: number, y: number, z: number, yaw: number, through?: (c: Collider) => boolean): VaultPlan | null {
+    const state = initialPawnState(x, y, z, yaw, 100);
+    state.grounded = true;
+    // No collider of its own: nothing to leave out of the rays, and none is added to the world (it would be the
+    // server's alone, and handles would differ from the clients').
+    const probe = { id: -1, kind: PawnKind.Body, operatorId: "", ownerId: null, collider: undefined as unknown as Collider, state, loadout: null, team: 0, life: 0 } satisfies Pawn;
+    // `through`: colliders it plans as though they weren't there (a barricade a bot means to break first).
+    return planVault(this.ctx, probe, (c) => ((c.collisionGroups() >>> 16) & G_PLAYER) === 0 && !through?.(c));
   }
 
   /** Whether a body's feet (x, y, z) are inside the building (false on a level without building zones). */
@@ -1212,7 +1233,10 @@ export class Sim {
       this.solids.set(id, { cs, key: w.key });
       changed = true;
     }
-    if (changed) refreshBroadPhase(this.world);
+    if (changed) {
+      refreshBroadPhase(this.world);
+      this.solidsVersion++;
+    }
   }
 
   /** The colliders a blast goes through (Phase 8 M10: Skopós's idle shells' barriers, bulletproof but not blast-proof). */

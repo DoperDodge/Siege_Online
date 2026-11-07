@@ -74,3 +74,7 @@ export * from "./gadgets/gu.js";
 export * from "./player/shield.js";
 export * from "./bots/bot.js";
 export * from "./bots/rng.js";
+export * from "./bots/nav/grid.js";
+export * from "./bots/nav/search.js";
+export * from "./bots/nav/world.js";
+export * from "./bots/nav/follow.js";
