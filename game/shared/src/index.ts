@@ -72,3 +72,5 @@ export * from "./gadgets/mirror.js";
 export * from "./gadgets/hack.js";
 export * from "./gadgets/gu.js";
 export * from "./player/shield.js";
+export * from "./bots/bot.js";
+export * from "./bots/rng.js";

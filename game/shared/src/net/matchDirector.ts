@@ -19,7 +19,8 @@ import { ticks, ticksOrZero } from "../weapons/ticks.js";
 import { Match, matchMapOf, NO_END, Phase, type MatchEvent } from "../match/match.js";
 import { inSite, siteArea } from "../match/objective.js";
 import { preSetupOps } from "../match/preSetup.js";
-import { ATTACK, DEFENSE, isFormat, mvp, RATING_MAX, RATING_MIN, reinforcementPool, type FormatMode, type Side } from "../match/rules.js";
+import { ATTACK, DEFENSE, isFormat, mvp, RATING_MAX, RATING_MIN, reinforcementPool, type FormatMode, type Side, type Team } from "../match/rules.js";
+import type { BotLevel } from "../data/schemas.js";
 import { encodeMatchState, MAX_HISTORY, type LobbyAction, type MatchAction, type MatchView, type RoomListEntry } from "./matchWire.js";
 
 /** What the director needs from its room (net/room.ts implements it). */
@@ -51,6 +52,10 @@ export interface DirectorHost {
   kick(memberId: number): void;
   /** Tell one player why a choice of theirs didn't go through. */
   refuse(memberId: number, why: string): void;
+  /** A new bot member (Phase 9) seated on `team` (it calls seatBot), or null: the room is full. */
+  addBot(team: Team, level: BotLevel): number | null;
+  /** Take a bot out of the room (it leaves like a member). */
+  removeBot(memberId: number): void;
 }
 
 /** How often (ticks) the match state goes out when only scores, votes or run-outs changed; phase changes go at once. */
@@ -75,6 +80,8 @@ export class MatchDirector {
   private readonly rulesSent = new Map<number, number>();
   /** Not in the server's room list. */
   private hidden = false;
+  /** syncBots is adding or removing bots (their joins and leaves don't start it again). */
+  private syncing = false;
   /** The hatch the defuser was planted on (a panel index), or null: destroying it deactivates the defuser (research §4 case 8). */
   private plantHatch: number | null = null;
   /**
@@ -112,6 +119,36 @@ export class MatchDirector {
     return true;
   }
 
+  /** A bot member the room made (addBot, Phase 9): its seat on `team`. False when the team is full. */
+  seatBot(memberId: number, name: string, team: Team, level: BotLevel): boolean {
+    if (!this.match.addBot(memberId, name, team, level)) return false;
+    this.changed(true);
+    return true;
+  }
+
+  /**
+   * In the lobby (Phase 9, bots/DESIGN.md §2): each team's bots topped up, or cut back, so that people and bots make
+   * the format's `bots.size` (none without `bots.fill`), at the team's difficulty. People always come first.
+   */
+  syncBots() {
+    if (this.match.phase !== Phase.Lobby || this.syncing) return;
+    this.syncing = true;
+    try {
+      const b = this.mode.match.bots;
+      for (const t of [0, 1] as const) {
+        const on = this.match.team(t);
+        const people = on.filter((p) => p.bot === null).length;
+        const bots = on.filter((p) => p.bot !== null);
+        const want = b?.fill ? Math.max(0, Math.min(b.size[t], this.mode.match.teamSize.max) - people) : 0;
+        for (const p of bots.slice(want).reverse()) this.host.removeBot(p.id);
+        for (const p of bots.slice(0, want)) if (p.bot !== b!.difficulty[t]) (p.bot = b!.difficulty[t]), this.changed(true);
+        for (let n = bots.length; n < want; n++) if (this.host.addBot(t, b!.difficulty[t]) === null) break;
+      }
+    } finally {
+      this.syncing = false;
+    }
+  }
+
   /** A member left: their body dies where it is (D-123), and the match keeps their slot. */
   leave(memberId: number) {
     const body = this.host.bodyOf(memberId);
@@ -127,7 +164,7 @@ export class MatchDirector {
   listing(): RoomListEntry | null {
     if (this.hidden) return null;
     const max = this.mode.match.teamSize.max * 2;
-    return { code: this.host.code, format: this.mode.id, players: [...this.match.players.values()].filter((p) => p.connected).length, maxPlayers: max, phase: this.match.phase, round: this.match.round };
+    return { code: this.host.code, format: this.mode.id, players: [...this.match.players.values()].filter((p) => p.connected && p.bot === null).length, maxPlayers: max, phase: this.match.phase, round: this.match.round };
   }
 
   /** Team damage now: off in prep, the format's rule in action (core_mechanics.md §11). */
@@ -141,6 +178,13 @@ export class MatchDirector {
   lobby(memberId: number, a: LobbyAction) {
     const m = this.match;
     let why: string | null = null;
+    // A person moving onto a team full of bots takes a bot's place (Phase 9).
+    if ((a.kind === "team" || a.kind === "move") && m.phase === Phase.Lobby) {
+      const who = m.players.get(a.kind === "team" ? memberId : a.member);
+      const full = m.team(a.team).length >= this.mode.match.teamSize.max;
+      const bot = full && who && who.bot === null ? m.team(a.team).reverse().find((p) => p.bot !== null) : undefined;
+      if (bot && (a.kind === "team" || memberId === m.hostId)) this.host.removeBot(bot.id);
+    }
     switch (a.kind) {
       case "team":
         why = m.setTeam(memberId, a.team);
@@ -154,11 +198,14 @@ export class MatchDirector {
       case "swapTeams":
         why = m.swapTeams(memberId);
         break;
-      case "kick":
+      case "kick": {
+        const target = m.players.get(a.member);
         if (memberId !== m.hostId) why = "Only the host can do that";
-        else if (a.member === memberId || !m.players.has(a.member)) why = "Can't kick that player";
+        else if (a.member === memberId || !target) why = "Can't kick that player";
+        else if (target.bot !== null) why = this.dropBot(target.id, target.team);
         else this.host.kick(a.member);
         break;
+      }
       case "format": {
         const f = this.formats.get(a.format);
         why = f ? m.setFormat(memberId, f) : "No such format";
@@ -170,6 +217,7 @@ export class MatchDirector {
         if (!why) this.rulesVersion++;
         break;
       case "start": {
+        this.syncBots();
         const r = m.start(memberId, this.host.sim.tick);
         if ("error" in r) why = r.error;
         else this.apply(r);
@@ -199,6 +247,23 @@ export class MatchDirector {
     }
     if (why) this.host.refuse(memberId, why);
     this.changed(true);
+    this.syncBots();
+  }
+
+  /** The host removes a bot: one fewer on its team from now on (the lobby's size for it), or it's gone (backfill). */
+  private dropBot(id: number, team: Team): string | null {
+    if (this.match.phase !== Phase.Lobby) return "Bots leave between matches";
+    if (this.match.base.match.host !== "all") return "This format fills every empty slot: turn its bots off instead";
+    const b = this.mode.match.bots;
+    if (b?.fill) {
+      const size: [number, number] = [b.size[0], b.size[1]];
+      size[team] = Math.max(0, size[team] - 1);
+      const why = this.match.change(this.match.hostId, { kind: "bots", bots: { ...b, size } });
+      if (why) return why;
+      this.rulesVersion++;
+    }
+    this.host.removeBot(id);
+    return null;
   }
 
   action(memberId: number, a: MatchAction) {
@@ -591,7 +656,7 @@ export class MatchDirector {
     this.dirty = false;
     this.urgent = false;
     this.lastSent = tick;
-    for (const id of this.match.players.keys()) if (this.match.players.get(id)!.connected) this.host.send(id, encodeMatchState(this.view(id)));
+    for (const [id, p] of this.match.players) if (p.connected && p.bot === null) this.host.send(id, encodeMatchState(this.view(id)));
   }
 
   /** Who carries the defuser: the owner of its carrier pawn once the round is under way, else the planning screen's choice. */
@@ -643,6 +708,7 @@ export class MatchDirector {
           assists: p.assists,
           rating: p.rating,
           newRating: p.newRating,
+          bot: p.bot,
         };
       });
     const rulesFresh = this.rulesSent.get(you) === this.rulesVersion;

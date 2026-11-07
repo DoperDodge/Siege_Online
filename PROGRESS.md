@@ -13,8 +13,8 @@ breach by the same rules, and they know only what their team could know (what th
 
 | M | What | State |
 |---|---|---|
-| M1 | Bots in rooms, the Bot Training format, lobby controls, backfill, offline matches | next |
-| M2 | Navigation on Oregon (grid, vaults, ladders, drops), rebuilt as walls and floors open | |
+| M1 | Bots in rooms, the Bot Training format, lobby controls, backfill, offline matches | ✅ |
+| M2 | Navigation on Oregon (grid, vaults, ladders, drops), rebuilt as walls and floors open | next |
 | M3 | Sight, hearing (placeholder sounds until Phase 11), team intel; aim and gunfights; difficulty levels | |
 | M4 | Defending bots: reinforce, holes, barricades, gadgets, anchors, roamers, rotations, retakes | |
 | M5 | Attacking bots: drones in prep, routes, breaches, vertical play, rappel, the plant | |
@@ -23,6 +23,24 @@ breach by the same rules, and they know only what their team could know (what th
 | M8 | Bot Training setup and the drills | |
 | M9 | Training feedback after each round: report, killcam, stats | |
 | M10 | Soak tests, the tick budget, browser test, review, report | |
+
+### M1: bots in rooms (D-159)
+- **Play page → Bot Training → "Play vs bots (offline)"**: a match on Oregon in your browser, no server. Bots fill
+  every empty place on both teams (BOT and a callsign, their difficulty beside the name).
+- **The lobby's Bot Training settings** (you're the host): your side (attack and defense alternating every round, the
+  default; attack only; defense only), each team's size (1–5, uneven allowed: people and bots together), each team's
+  difficulty (Recruit, Normal, Hard, Elite), the site (the defenders' vote, or a fixed one), and how bots pick
+  operators. ✕ on a bot removes it (one fewer on that team). Everything else (rounds, timers…) is Custom's.
+- **Online**: create a Bot Training match on the Play page and send the code; each friend who joins takes a bot's
+  place. In Quick Match, Unranked and 1v1 the host can tick "Fill empty slots with bots" (Ranked can't).
+- **What the bots do so far**: the planning screen like a player (an operator: on your team once you've picked, or
+  5 s before the timer ends; the defenders' bots agree on a site; the attackers' choose spawns), and in the round
+  they stand where they spawn and look about. They can't move or fight yet (M2, M3), so rounds end on time.
+- How it works: a bot is a room member with no connection; each tick its brain sends the same input a player's
+  client would, and the room plays it by the same rules (game/shared/src/bots/DESIGN.md §1).
+- Tests: game/shared/test/botMatch.test.ts (the lobby filling and shrinking, people taking bots' places, a whole
+  match with bots, the fixed site, backfill and Ranked refusing bots), the lobby messages' wire test.
+- Known: a person can't join a match under way when bots have every place (in the lobby they can).
 
 ---
 

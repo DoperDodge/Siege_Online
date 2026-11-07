@@ -1,0 +1,31 @@
+{
+  "_doc": "Bot Training (PLAN §15; game/shared/src/bots/DESIGN.md §2): bots fill every empty slot of both teams when the host starts. Its rules start as Unranked's (data/modes/unranked.json says where each comes from) without bans, and the host sets them all: your side (attack only, defense only, or alternating every round: the default), the team sizes (1–5 each, uneven allowed), each team's bot difficulty, the site (the defenders' bots vote for it, or a fixed one), the round count and the bots' operator picks. No local stats or rating: Bot Training keeps its own (DESIGN §11).",
+  "_season": "Y11S3",
+  "_unverified": ["reverseFriendlyFire.thresholdHp", "match.seconds.pick", "match.seconds.roundEnd"],
+  "id": "bot_training",
+  "friendlyFire": { "actionPhase": true, "prepPhase": false, "scale": 1.0 },
+  "reverseFriendlyFire": { "enabled": true, "thresholdHp": 100 },
+  "lastAliveDies": true,
+  "dummyRespawnS": 0,
+  "reinforcements": 10,
+  "defenderToolsForAll": false,
+  "attackerToolsForAll": false,
+  "match": {
+    "name": "Bot Training",
+    "teamSize": { "min": 1, "max": 5 },
+    "rounds": 6,
+    "swapEvery": 1,
+    "firstAttack": "blue",
+    "overtime": { "rounds": 3, "winBy": 2, "swapEvery": 1 },
+    "bans": null,
+    "site": "vote",
+    "siteReveal": "sight",
+    "seconds": { "pick": 30, "pickSameSides": null, "prep": 45, "action": 180, "plant": 7, "fuse": 45, "disable": 7, "roundEnd": 6, "runoutGrace": 1, "attackerSafeguard": 0, "redWallExtension": 0 },
+    "reinforcementScaling": "scaled",
+    "preSetups": false,
+    "attrition": "none",
+    "stats": "none",
+    "host": "all",
+    "bots": { "fill": true, "size": [5, 5], "difficulty": ["normal", "normal"], "picks": "random", "site": null }
+  }
+}

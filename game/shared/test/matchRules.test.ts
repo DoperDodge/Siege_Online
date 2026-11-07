@@ -40,7 +40,7 @@ const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 describe("formats (data/modes)", () => {
   it("every match format loads, in lobby order, and the lab preset isn't one", () => {
     const ids = [...data.modes.values()].filter(isFormat).map((m) => m.id);
-    expect(ids).toEqual(["quick_match", "unranked", "ranked", "one_v_one", "custom", "practice"]);
+    expect(ids).toEqual(["quick_match", "unranked", "ranked", "one_v_one", "custom", "practice", "bot_training"]);
     expect(isFormat(data.modes.get("lab")!)).toBe(false);
   });
 

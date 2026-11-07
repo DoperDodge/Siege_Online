@@ -549,10 +549,34 @@ export const combatSchema = z.strictObject({
 });
 export type CombatData = z.infer<typeof combatSchema>;
 
-/** Settings a format's host may change besides "all" of them (Custom, Practice): PLAN §6.2's toggles. */
-export const HOST_TOGGLES = ["bans", "reinforcementScaling"] as const;
+/**
+ * Settings a format's host may change besides "all" of them (Custom, Practice): PLAN §6.2's toggles, and bots filling
+ * empty slots (Phase 9, D-122).
+ */
+export const HOST_TOGGLES = ["bans", "reinforcementScaling", "bots"] as const;
 export type HostToggle = (typeof HOST_TOGGLES)[number];
 export const MAX_TEAM_SIZE = 5;
+
+/** Bot difficulty levels (PLAN §15.2; data/bots/difficulty.json), easiest first. */
+export const BOT_LEVELS = ["recruit", "normal", "hard", "elite"] as const;
+export type BotLevel = (typeof BOT_LEVELS)[number];
+const botLevel = z.enum(BOT_LEVELS);
+
+/**
+ * Bots in a match (Phase 9, bots/DESIGN.md §2): each team's empty slots are filled with bots up to `size` (Bot
+ * Training always; other formats when the host turns backfill on), at `difficulty`; their operator picks; and the site
+ * (Bot Training's setup: a fixed site the defenders' vote can't change, or null).
+ */
+export const botsRulesSchema = z.strictObject({
+  fill: z.boolean(),
+  /** Each team's players, humans and bots together ([Blue, Orange]). */
+  size: z.tuple([z.number().int().min(0).max(MAX_TEAM_SIZE), z.number().int().min(0).max(MAX_TEAM_SIZE)]),
+  difficulty: z.tuple([botLevel, botLevel]),
+  /** At random, the roster's order (`fixed`), or the answer to the other team's humans' picks (data/bots/picks.json). */
+  picks: z.enum(["random", "fixed", "counter"]),
+  site: z.string().nullable(),
+});
+export type BotsRules = z.infer<typeof botsRulesSchema>;
 
 /**
  * A format's match rules (data/modes/<id>.json `match`; game/shared/src/match/DESIGN.md §3). Seconds in the data,
@@ -615,6 +639,8 @@ export const matchRulesSchema = z
     stats: z.enum(["none", "local", "rated"]),
     /** What the host may change: everything (Custom, Practice) or only these toggles. */
     host: z.union([z.literal("all"), z.array(z.enum(HOST_TOGGLES))]),
+    /** Bots filling empty slots (Phase 9), or null: none. */
+    bots: botsRulesSchema.nullable().default(null),
   })
   .superRefine((m, ctx) => {
     if (m.teamSize.min > m.teamSize.max) ctx.addIssue({ code: "custom", path: ["teamSize"], message: "min is more than max" });
@@ -622,6 +648,7 @@ export const matchRulesSchema = z
       ctx.addIssue({ code: "custom", path: ["overtime", "rounds"], message: "an odd number, so someone always leads after the last one" });
     }
     if (m.rounds === null && m.overtime !== null) ctx.addIssue({ code: "custom", path: ["overtime"], message: "endless rounds have no overtime" });
+    if (m.bots && m.bots.size.some((n) => n > m.teamSize.max)) ctx.addIssue({ code: "custom", path: ["bots", "size"], message: "more than the format's team size" });
   });
 export type MatchRules = z.infer<typeof matchRulesSchema>;
 
@@ -664,6 +691,54 @@ export const objectiveSchema = z.strictObject({
   siteSight: z.strictObject({ rangeM: z.number().positive(), coneDeg: z.number().positive().max(180) }),
 });
 export type ObjectiveData = z.infer<typeof objectiveSchema>;
+
+/** One bot difficulty level (data/bots/difficulty.json; bots/DESIGN.md §9). All ours, tuned by playing. */
+export const botDifficultySchema = z.strictObject({
+  /** From an enemy's detection to the first shot (ms); peripheral sightings take longer. */
+  reactionMs: z.number().positive(),
+  /** The view cone it notices enemies in (degrees across). */
+  fovDeg: z.number().positive().max(180),
+  /** Aim error when it acquires a target (degrees, one standard deviation), settling over `settleMs`. */
+  aimErrorDeg: z.number().nonnegative(),
+  settleMs: z.number().positive(),
+  /** How far behind a moving target its aim follows (ms). */
+  trackLagMs: z.number().nonnegative(),
+  /** Fastest turn (degrees a second). */
+  turnRateDeg: z.number().positive(),
+  /** How much of its weapon's recoil it pulls down (0–1). */
+  recoilControl: z.number().min(0).max(1),
+  /** How often it aims for the head (0–1, less with distance). */
+  headshotBias: z.number().min(0).max(1),
+  /** How it peeks: swinging wide, jiggling, or leaning out of cover. */
+  peekStyle: z.enum(["wide", "jiggle", "lean"]),
+  /** How much it strafes and crouches in a fight (0–1). */
+  strafe: z.number().min(0).max(1),
+  /** How readily it uses gadgets and abilities (0–1). */
+  utilityUse: z.number().min(0).max(1),
+  /** How much it trusts what it hears (0–1). */
+  soundUse: z.number().min(0).max(1),
+  /** How much and how soon it shares what it knows with its team, and follows the team's plan (0–1). */
+  coordination: z.number().min(0).max(1),
+  /** How readily it shoots through soft walls at enemies it heard (0–1). */
+  wallbang: z.number().min(0).max(1),
+  /** How readily it pre-aims the angles enemies come from (0–1). */
+  prefire: z.number().min(0).max(1),
+});
+export type BotDifficulty = z.infer<typeof botDifficultySchema>;
+
+/** data/bots/difficulty.json: the four levels (PLAN §15.2). */
+export const botDifficultyFileSchema = z.strictObject({
+  ...meta,
+  levels: z.strictObject({ recruit: botDifficultySchema, normal: botDifficultySchema, hard: botDifficultySchema, elite: botDifficultySchema }),
+});
+/** data/bots/names.json: the callsigns bots are named from (ours; no operator's name). */
+export const botNamesFileSchema = z.strictObject({ ...meta, names: z.array(z.string().min(1).max(12)).min(10) });
+
+/** Bots' data (data/bots/), as GameData.bots. */
+export interface BotsData {
+  levels: Record<BotLevel, BotDifficulty>;
+  names: string[];
+}
 
 /** A camera's view (Phase 7): how far it turns either side of its facing, how far it tilts, how fast, how wide it sees. */
 const cameraViewSchema = z.strictObject({

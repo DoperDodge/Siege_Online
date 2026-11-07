@@ -37,6 +37,7 @@ const FORMAT_NOTES: Record<string, string> = {
   one_v_one: "One player a side, 6 rounds; the winner of a round can't pick the same operator again.",
   custom: "Every setting is the host's (starts as Unranked).",
   practice: "Rounds without end (the host ends it); one side may be empty.",
+  bot_training: "Online with bots in every empty place: friends with you, against you, or both. Set the sides, sizes and difficulty in the lobby.",
 };
 
 const root = document.getElementById("play")!;
@@ -44,6 +45,10 @@ root.innerHTML = `
   <h1>PLAY</h1>
   <p class="tag">Matches on Oregon: two teams of 1–5, uneven allowed. <a href="/">Home</a></p>
   <section><h2>Your name</h2><div class="row"><input class="name" maxlength="24" placeholder="Player" autocomplete="nickname"></div></section>
+  <section><h2>Bot Training</h2>
+    <div class="row"><button class="primary training">Play vs bots (offline)</button></div>
+    <p class="note">You and bots on Oregon, no server needed: bots fill every empty place on both teams. In the lobby, choose your side (attack, defense or both), the team sizes, each team's difficulty (Recruit, Normal, Hard, Elite) and the site. To bring friends, create a Bot Training match below instead.</p>
+  </section>
   <section><h2>New match</h2>
     <div class="row"><select class="format">${formats.map((m) => `<option value="${m.id}">${escapeHtml(m.match.name)}</option>`).join("")}</select><button class="primary create">Create</button></div>
     <p class="format-note"></p>
@@ -88,6 +93,8 @@ function go(params: Record<string, string>) {
   location.href = `/labs/match.html?${new URLSearchParams(params)}`;
 }
 $(".create").onclick = () => go({ format: formatSelect.value });
+// Bot Training offline (Phase 9): the match room runs in the match page's own worker.
+$(".training").onclick = () => go({ format: "bot_training", offline: "1" });
 const join = (code: string) => {
   const c = code.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
   if (c.length !== 5) {

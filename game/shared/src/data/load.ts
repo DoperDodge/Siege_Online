@@ -28,6 +28,9 @@ import rankedJson from "../../../../data/modes/ranked.json";
 import oneVOneJson from "../../../../data/modes/one_v_one.json";
 import customJson from "../../../../data/modes/custom.json";
 import practiceJson from "../../../../data/modes/practice.json";
+import botTrainingJson from "../../../../data/modes/bot_training.json";
+import botDifficultyJson from "../../../../data/bots/difficulty.json";
+import botNamesJson from "../../../../data/bots/names.json";
 import objectiveJson from "../../../../data/objective.json";
 import intelJson from "../../../../data/intel.json";
 import destructionJson from "../../../../data/destruction.json";
@@ -36,6 +39,8 @@ import { weaponFiles } from "./weaponFiles.js";
 import { gadgetFiles } from "./gadgetFiles.js";
 import { fnv1a, utf8Encode } from "../net/bytes.js";
 import {
+  botDifficultyFileSchema,
+  botNamesFileSchema,
   combatSchema,
   destructionSchema,
   gadgetRulesSchema,
@@ -51,6 +56,7 @@ import {
   objectiveSchema,
   intelSchema,
   weaponSchema,
+  type BotsData,
   type CombatData,
   type Construction,
   type DestructionData,
@@ -88,6 +94,8 @@ export interface GameData {
   gadgets: Map<string, GadgetData>;
   /** What every gadget shares (data/gadgets.json): taking one out, throws, picking up. */
   gadgetRules: GadgetRules;
+  /** Bots (Phase 9, data/bots/): the difficulty levels and their callsigns. */
+  bots: BotsData;
   /**
    * fnv1a of every simulation data file as bundled. The client sends it in Hello; a server built from other
    * data refuses the connection, so a stale tab never predicts with old numbers (DECISIONS D-042).
@@ -104,12 +112,14 @@ export const rawData = {
   weapons: weaponFiles,
   gunplay: gunplayJson as Record<string, unknown>,
   combat: combatJson as Record<string, unknown>,
-  modes: [labModeJson, quickMatchJson, unrankedJson, rankedJson, oneVOneJson, customJson, practiceJson] as Record<string, unknown>[],
+  modes: [labModeJson, quickMatchJson, unrankedJson, rankedJson, oneVOneJson, customJson, practiceJson, botTrainingJson] as Record<string, unknown>[],
   objective: objectiveJson as Record<string, unknown>,
   intel: intelJson as Record<string, unknown>,
   destruction: destructionJson as Record<string, unknown>,
   gadgets: gadgetFiles,
   gadgetRules: gadgetRulesJson as Record<string, unknown>,
+  botDifficulty: botDifficultyJson as Record<string, unknown>,
+  botNames: botNamesJson as Record<string, unknown>,
 };
 
 /** Maps that tools/mapgen compiles (DECISIONS D-070): their LevelDef is level.json, generated from the authoring layout.json. */
@@ -170,6 +180,7 @@ export function loadGameData(): GameData {
     destruction: parse("data/destruction.json", destructionSchema, rawData.destruction),
     gadgets,
     gadgetRules: parse("data/gadgets.json", gadgetRulesSchema, rawData.gadgetRules),
+    bots: { levels: parse("data/bots/difficulty.json", botDifficultyFileSchema, rawData.botDifficulty).levels, names: parse("data/bots/names.json", botNamesFileSchema, rawData.botNames).names },
     dataHash: fnv1a(utf8Encode(JSON.stringify(rawData))),
   };
   const problems = crossFileProblems(data);

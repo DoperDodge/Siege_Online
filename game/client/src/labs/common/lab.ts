@@ -2047,6 +2047,8 @@ export async function startLab(o: LabOptions): Promise<void> {
   function matchRoom(): Promise<OnlineConnection> {
     const code = (params.get("room") ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 5);
     const format = params.get("format");
+    // Bot Training offline (Phase 9, `?offline`): the match room runs in this page's worker, you and the bots, no server.
+    const offline = params.has("offline") && !!format;
     const fail = matchFail;
     if (!code && !format) {
       location.replace("/play.html");
@@ -2064,16 +2066,18 @@ export async function startLab(o: LabOptions): Promise<void> {
       let joined = false;
       const conn: OnlineConnection = new OnlineConnection({
         name: name.trim().slice(0, 24) || "Player",
-        room: code || null,
+        room: offline ? null : code || null,
         format: format ?? undefined,
         levelId: o.levelId,
         conditions: () => conditions,
+        socket: offline ? () => new LocalSocket() : undefined,
         session: {
           onWelcome: () => {
             if (conn.closed) return;
             joined = true;
             void conn.session.loaded().then(() => {
               if (conn.closed) return fail(disconnected ?? "Lost connection to the server.");
+              if (offline) return resolve(conn); // a reload starts a new offline match: the link stays as it is
               const url = new URL(location.href);
               url.searchParams.delete("format");
               url.searchParams.delete("name");

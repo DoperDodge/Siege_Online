@@ -7,6 +7,7 @@ import { Phase, type RoundRecord } from "../match/match.js";
 import { WinReason } from "../match/outcome.js";
 import type { HostChange } from "../match/settings.js";
 import type { Team } from "../match/rules.js";
+import { BOT_LEVELS, type BotLevel } from "../data/schemas.js";
 
 /** Operator, site, spawn-group and format ids. */
 const MAX_ID = 32;
@@ -84,7 +85,13 @@ export type LobbyAction =
   | { kind: "end" };
 
 const LOBBY = { team: 0, ready: 1, move: 2, swapTeams: 3, kick: 4, format: 5, change: 6, start: 7, backToLobby: 8, private: 9, rating: 10, end: 11 } as const;
-const CHANGE = { bans: 0, reinforcementScaling: 1, rules: 2 } as const;
+const CHANGE = { bans: 0, reinforcementScaling: 1, rules: 2, bots: 3 } as const;
+const PICKS = ["random", "fixed", "counter"] as const;
+const level = (v: number): BotLevel => {
+  const l = BOT_LEVELS[v];
+  if (l === undefined) throw new ProtocolError("bad bot level");
+  return l;
+};
 const SCALINGS = ["scaled", "full", "infinite"] as const;
 
 export function encodeLobbyAction(a: LobbyAction): Uint8Array {
@@ -101,7 +108,11 @@ export function encodeLobbyAction(a: LobbyAction): Uint8Array {
     w.u8(CHANGE[c.kind]);
     if (c.kind === "bans") w.u8(c.maxPerSide);
     else if (c.kind === "reinforcementScaling") w.u8(SCALINGS.indexOf(c.value));
-    else w.str(JSON.stringify(c.rules));
+    else if (c.kind === "bots") {
+      const b = c.bots;
+      w.u8(b ? 1 : 0);
+      if (b) w.u8(b.fill ? 1 : 0).u8(b.size[0]).u8(b.size[1]).u8(BOT_LEVELS.indexOf(b.difficulty[0])).u8(BOT_LEVELS.indexOf(b.difficulty[1])).u8(PICKS.indexOf(b.picks)).str((b.site ?? "").slice(0, MAX_ID));
+    } else w.str(JSON.stringify(c.rules));
   }
   return w.finish();
 }
@@ -133,6 +144,15 @@ export function decodeLobbyAction(r: ByteReader): LobbyAction {
         const value = SCALINGS[r.u8()];
         if (!value) throw new ProtocolError("bad scaling");
         return { kind: "change", change: { kind: "reinforcementScaling", value } };
+      }
+      if (c === CHANGE.bots) {
+        if (!bool()) return { kind: "change", change: { kind: "bots", bots: null } };
+        const fill = bool();
+        const size: [number, number] = [r.u8(), r.u8()];
+        const difficulty: [BotLevel, BotLevel] = [level(r.u8()), level(r.u8())];
+        const picks = PICKS[r.u8()];
+        if (!picks) throw new ProtocolError("bad bot picks");
+        return { kind: "change", change: { kind: "bots", bots: { fill, size, difficulty, picks, site: readOpt(r) } } };
       }
       if (c === CHANGE.rules) {
         let rules: unknown;
@@ -221,6 +241,8 @@ export interface MatchViewPlayer {
   rating: number | null;
   /** Ranked, at the match end: the rating after it (D-124), or null. */
   newRating: number | null;
+  /** A bot's difficulty (Phase 9), or null: a person. */
+  bot: BotLevel | null;
 }
 
 /** The match as one player may see it (MatchState). */
@@ -295,6 +317,7 @@ export function encodeMatchState(v: MatchView): Uint8Array {
     w.varu(p.id).str(p.name).u8(p.team).u8((p.ready ? PF.ready : 0) | (p.connected ? PF.connected : 0) | (p.alive ? PF.alive : 0) | (p.safe ? PF.safe : 0)).u8(p.side ?? 2);
     for (const s of [p.operator, p.spawn, p.banVote, p.siteVote, p.locked]) optStr(w, s);
     w.u16(Math.min(0xffff, p.kills)).u16(Math.min(0xffff, p.deaths)).u16(Math.min(0xffff, p.assists)).u16(p.rating ?? NO_RATING).u16(p.newRating ?? NO_RATING);
+    w.u8(p.bot === null ? 0 : BOT_LEVELS.indexOf(p.bot) + 1);
   }
   for (const side of v.bans) {
     w.u8(Math.min(6, side.length));
@@ -343,6 +366,8 @@ export function decodeMatchState(r: ByteReader): MatchView {
     if (pf > 15 || side > 2) throw new ProtocolError("bad player");
     const [operator, spawn, banVote, siteVote, locked] = [readOpt(r), readOpt(r), readOpt(r), readOpt(r), readOpt(r)];
     const [kills, deaths, assists, rating, newRating] = [r.u16(), r.u16(), r.u16(), r.u16(), r.u16()];
+    const b = r.u8();
+    const bot = b === 0 ? null : level(b - 1);
     players.push({
       id,
       name,
@@ -362,6 +387,7 @@ export function decodeMatchState(r: ByteReader): MatchView {
       assists,
       rating: rating === NO_RATING ? null : rating,
       newRating: newRating === NO_RATING ? null : newRating,
+      bot,
     });
   }
   const bans: [string[], string[]] = [[], []];

@@ -1,13 +1,15 @@
 // What a match's host may change about its format (PLAN §6.1, §6.2; match/DESIGN.md §3, §4): the toggles of the
 // fixed formats (bans 0–2, reinforcement scaling), and in Custom and Practice every rule, within bounds that keep a
 // round playable. The bounds are ours, not Siege's.
-import { modeSchema, type MatchRules } from "../data/schemas.js";
+import { botsRulesSchema, modeSchema, type BotsRules, type MatchRules } from "../data/schemas.js";
 import { isFormat, type FormatMode } from "./rules.js";
 
 /** A host's change: one of the toggles, or (Custom, Practice) the rules as edited. */
 export type HostChange =
   | { kind: "bans"; maxPerSide: number }
   | { kind: "reinforcementScaling"; value: MatchRules["reinforcementScaling"] }
+  /** Bots filling empty slots (Phase 9): the whole block, or null for none. */
+  | { kind: "bots"; bots: BotsRules | null }
   | { kind: "rules"; rules: unknown };
 
 /** Seconds the host may set each timer to (inclusive). */
@@ -64,6 +66,21 @@ export function applyHostChange(base: FormatMode, current: FormatMode, change: H
     if (change.value === "infinite" && host !== "all") return "Endless reinforcements are for Custom and Practice";
     if (!["scaled", "full", "infinite"].includes(change.value)) return "Unknown reinforcement setting";
     next.match.reinforcementScaling = change.value;
+    return next;
+  }
+  if (change.kind === "bots") {
+    if (host !== "all" && !host.includes("bots")) return "This format can't have bots";
+    if (change.bots === null) {
+      next.match.bots = null;
+      return next;
+    }
+    const parsed = botsRulesSchema.safeParse(change.bots);
+    if (!parsed.success) return `Bad bot settings: ${parsed.error.issues[0]?.message ?? "invalid"}`;
+    const b = parsed.data;
+    const max = next.match.teamSize.max;
+    if (b.size.some((n) => n > max)) return `At most ${max} a team`;
+    // Formats with the backfill toggle only (D-122): full teams, picks at random, the format's own site rule.
+    next.match.bots = host === "all" ? b : { ...b, size: [max, max], picks: "random", site: null };
     return next;
   }
   if (host !== "all") return "Only Custom and Practice let the host change the rules";

@@ -11,7 +11,9 @@ import { explosiveOps, explosiveReach } from "../destruction/explosives.js";
 import { meleeOnPanels } from "../destruction/hits.js";
 import { L_STEEL, type PanelChange, type PanelOp } from "../destruction/panel.js";
 import type { IndexedOp } from "../destruction/panels.js";
-import type { BlastData, DummyDef, GadgetData, ModeData } from "../data/schemas.js";
+import type { BlastData, BotLevel, DummyDef, GadgetData, ModeData } from "../data/schemas.js";
+import { Bot, type BotWorld } from "../bots/bot.js";
+import { BotRng } from "../bots/rng.js";
 import { DUMMY_STANCE, dummyInput } from "../lab/dummies.js";
 import { spawnAmmo, type Pawn, type PlayerController } from "../player/pawn.js";
 import { eyePose } from "../player/hitboxes.js";
@@ -30,7 +32,7 @@ import { sideTeam } from "../sim.js";
 import { encodeEvents, type GameEvent } from "./events.js";
 import { MatchDirector, type DirectorHost } from "./matchDirector.js";
 import type { LobbyAction, MatchAction, RoomListEntry } from "./matchWire.js";
-import { DEFENSE, isFormat, type FormatMode, type Side } from "../match/rules.js";
+import { DEFENSE, isFormat, type FormatMode, type Side, type Team } from "../match/rules.js";
 import { Phase } from "../match/match.js";
 import { camerasOnRay } from "../intel/cameras.js";
 import { raycastLevel } from "../level/raycast.js";
@@ -123,6 +125,13 @@ interface Member {
   id: number;
   name: string;
   client: RoomClient;
+  /**
+   * A bot's brain (Phase 9, bots/DESIGN.md §1), or null: a person. A bot's client sends nothing and drops what it's
+   * sent: its brain queues its input each tick, the room never predicts or corrects it, and its events go to the brain.
+   */
+  bot: Bot | null;
+  /** What a bot reads and does through the room (made once with it). */
+  botWorld?: BotWorld;
   ctrl: PlayerController | null;
   /** What the member carries (normalized: an invalid pick became the default) and their team. */
   pick: LoadoutPick;
@@ -201,6 +210,9 @@ interface Member {
   gadgetStateAt: number;
   gadgetsStale: boolean;
 }
+
+/** A bot's "connection" (Phase 9): nothing is ever sent down it. */
+const NO_CLIENT: RoomClient = { send() {}, buffered: () => 0 };
 
 /** More ops than this held back for one client: send it the panels' state instead (a message carries at most 4096). */
 const MAX_HELD_OPS = 2048;
@@ -419,8 +431,9 @@ export class Room implements DirectorHost {
     return this.director?.listing() ?? null;
   }
 
+  /** People connected (bots aren't counted: a room with only bots in it is empty, and the server drops it). */
   get size(): number {
-    return this.members.size;
+    return this.people;
   }
 
   /**
@@ -428,15 +441,70 @@ export class Room implements DirectorHost {
    * member gets a body at once; in a match room they join the match (its lobby, or a team mid-match) with none.
    */
   join(name: string, client: RoomClient, operatorId = "sledge"): number | null {
+    // A person takes a bot's place in a full lobby (the lobby's sizes then put the bots right).
+    if (this.members.size >= MAX_ROOM_PLAYERS && this.director?.match.phase === Phase.Lobby) {
+      const bot = [...this.members.values()].reverse().find((b) => b.bot);
+      if (bot) this.removeBot(bot.id);
+    }
     if (this.members.size >= MAX_ROOM_PLAYERS) {
       client.send(encodeError(ErrorCode.RoomFull, `Room ${this.code} is full`));
       return null;
     }
     if (!this.sim.data.operators.has(operatorId)) operatorId = "sledge";
-    const m: Member = {
-      id: this.nextMemberId++,
-      name: name || "Player",
+    const m = this.newMember(this.nextMemberId++, name || "Player", client, operatorId);
+    if (this.director && !this.director.join(m.id, m.name)) {
+      client.send(encodeError(ErrorCode.RoomFull, `Room ${this.code}'s teams are full`));
+      return null;
+    }
+    this.members.set(m.id, m);
+    if (!this.director) this.spawn(m);
+    client.send(encodeWelcome({ roomCode: this.code, tick: this.sim.tick, levelId: this.levelId, controllerId: m.ctrl?.id ?? 0 }));
+    client.send(encodePanelState(this.sim.level.panels)); // the walls as they are now (ops waiting to go included); every later op follows
+    client.send(encodeGadgetState(this.sim.gadgets.list)); // the gadgets too (the ops waiting to go are already in it, and redo nothing)
+    m.events.push(this.deployRulesEvent());
+    this.broadcastRoster();
+    this.director?.syncBots();
+    return m.id;
+  }
+
+  /**
+   * A bot (Phase 9) on a match team, at a difficulty: a member with no connection, named from the callsigns no bot
+   * here has. Null when the room or the team is full.
+   */
+  addBot(team: Team, level: BotLevel): number | null {
+    if (!this.director || this.members.size >= MAX_ROOM_PLAYERS) return null;
+    const id = this.nextMemberId++;
+    const names = this.sim.data.bots.names;
+    const used = new Set([...this.members.values()].map((m) => m.name));
+    const free = names.filter((n) => !used.has(`BOT ${n}`));
+    const name = `BOT ${new BotRng(this.seed, id).pick(free.length ? free : names)}`;
+    const m: Member = { ...this.newMember(id, name, NO_CLIENT), bot: new Bot(id, level, this.seed) };
+    m.botWorld = this.botWorld(m);
+    if (!this.director.seatBot(id, name, team, level)) return null;
+    this.members.set(id, m);
+    this.broadcastRoster();
+    return id;
+  }
+
+  /** Take a bot out of the room (the lobby's sizes shrank, a person took its place, the host removed it). */
+  removeBot(memberId: number): void {
+    if (this.members.get(memberId)?.bot) this.leave(memberId);
+  }
+
+  /** People connected (bots aren't): the server drops a room nobody is in. */
+  get people(): number {
+    let n = 0;
+    for (const m of this.members.values()) if (!m.bot) n++;
+    return n;
+  }
+
+  /** A member's starting state (a person's connection, or a bot's dead end). */
+  private newMember(id: number, name: string, client: RoomClient, operatorId = "sledge"): Member {
+    return {
+      id,
+      name,
       client,
+      bot: null,
       ctrl: null,
       pick: defaultLoadoutPick(this.sim.data, operatorId),
       team: sideTeam(this.sim.data.operators.get(operatorId)!.side),
@@ -476,18 +544,6 @@ export class Room implements DirectorHost {
       gadgetStateAt: -Infinity,
       gadgetsStale: false,
     };
-    if (this.director && !this.director.join(m.id, m.name)) {
-      client.send(encodeError(ErrorCode.RoomFull, `Room ${this.code}'s teams are full`));
-      return null;
-    }
-    this.members.set(m.id, m);
-    if (!this.director) this.spawn(m);
-    client.send(encodeWelcome({ roomCode: this.code, tick: this.sim.tick, levelId: this.levelId, controllerId: m.ctrl?.id ?? 0 }));
-    client.send(encodePanelState(this.sim.level.panels)); // the walls as they are now (ops waiting to go included); every later op follows
-    client.send(encodeGadgetState(this.sim.gadgets.list)); // the gadgets too (the ops waiting to go are already in it, and redo nothing)
-    m.events.push(this.deployRulesEvent());
-    this.broadcastRoster();
-    return m.id;
   }
 
   leave(memberId: number): void {
@@ -498,6 +554,8 @@ export class Room implements DirectorHost {
     if (m.ctrl) this.sim.removePlayer(m.ctrl.id);
     this.members.delete(memberId);
     this.broadcastRoster();
+    // A person leaving the lobby frees a place a bot may take (bots leaving don't start this again).
+    if (!m.bot) this.director?.syncBots();
   }
 
   /**
@@ -556,7 +614,7 @@ export class Room implements DirectorHost {
     if (kludge?.kludge && !drones.some((d) => d.kludge)) for (let i = 0; i < kludge.count; i++) this.sim.addDrone(m.ctrl.id, undefined, true);
     m.queue = [];
     this.force(m);
-    m.newBody = true;
+    m.newBody = m.bot === null;
     m.credit = 0;
     m.held = 0;
     m.stalled = false;
@@ -593,7 +651,7 @@ export class Room implements DirectorHost {
     if (first) this.sim.placeDrone(first.id, sp.pos[0], sp.pos[1] + 0.02, sp.pos[2], sp.yawDeg);
     m.queue = [];
     this.force(m);
-    m.newBody = true;
+    m.newBody = m.bot === null;
     m.credit = 0;
     m.held = 0;
     m.stalled = false;
@@ -656,8 +714,17 @@ export class Room implements DirectorHost {
 
   /** The server changed this member's bodies outside their inputs: correct them at the next snapshot. */
   private force(m: Member) {
+    if (m.bot) return this.settleBot(m);
     m.needCorrection = true;
     m.forced = true;
+  }
+
+  /** A bot's body is the server's from the start: nothing to correct, and its next input counts. */
+  private settleBot(m: Member) {
+    m.newBody = false;
+    m.confirmEpoch = null;
+    m.needCorrection = false;
+    m.forced = false;
   }
 
   onInput(memberId: number, msg: InputMsg): void {
@@ -1291,7 +1358,7 @@ export class Room implements DirectorHost {
 
   private broadcastRoster() {
     const entries = this.roster();
-    for (const m of this.members.values()) m.client.send(encodeRoster(entries, m.ctrl?.id ?? 0));
+    for (const m of this.members.values()) if (!m.bot) m.client.send(encodeRoster(entries, m.ctrl?.id ?? 0));
   }
 
   private take(m: Member): QueuedInput | null {
@@ -1313,7 +1380,7 @@ export class Room implements DirectorHost {
    * and not while one is already on its way: a body the server just changed can't have been predicted).
    */
   private afterInput(m: Member, applied: QueuedInput) {
-    if (!m.ctrl || m.needCorrection || applied.epoch !== (m.epoch & 0xff)) return;
+    if (!m.ctrl || m.bot || m.needCorrection || applied.epoch !== (m.epoch & 0xff)) return;
     if (predictionHash(this.sim, m.ctrl) !== applied.predictedHash) m.needCorrection = true;
     else m.forced = false; // (stepped without input, but it still came out as predicted)
   }
@@ -2178,6 +2245,8 @@ export class Room implements DirectorHost {
   step(): void {
     const inputs = new Map<number, InputCmd>();
     const active = new Set<number>();
+    // Bots (Phase 9): each brain's input for this tick, queued as a client's would arrive (it sees the present).
+    for (const m of this.members.values()) if (m.bot) this.botInput(m);
     for (const m of this.members.values()) {
       m.applied = null;
       if (!m.ctrl) continue;
@@ -2249,6 +2318,31 @@ export class Room implements DirectorHost {
     this.flushEvents();
   }
 
+  /** A bot's input for this tick, queued as its client's would arrive, made with the newest state (no view lag). */
+  private botInput(m: Member) {
+    const bot = m.bot!;
+    const cmd = bot.think(m.botWorld ??= this.botWorld(m), m.ctrl);
+    if (!cmd || !m.ctrl) return;
+    const now = this.sim.tick;
+    m.lastQueuedSeq++;
+    m.lags[m.lagAt] = 0;
+    m.lagAt = (m.lagAt + 1) % LAG_WINDOW;
+    m.queue.push({ cmd: { ...cmd, seq: m.lastQueuedSeq }, predictedHash: 0, epoch: m.epoch & 0xff, snapTick: now & 0xffff, viewBackQ8: 0, receivedTick: now });
+  }
+
+  /** What a bot reads and does through the room: the same choices its member's client could send. */
+  private botWorld(m: Member): BotWorld {
+    const room = this;
+    return {
+      sim: this.sim,
+      get match() {
+        return room.director?.match ?? null;
+      },
+      pick: (pick) => this.pickLoadout(m.id, pick),
+      act: (a) => this.onMatchAction(m.id, a),
+    };
+  }
+
   /** Dead dummies come back dummyRespawnS after they died. */
   private reviveDummies() {
     const wait = Math.round(this.rules.dummyRespawnS * TICK_HZ);
@@ -2263,6 +2357,11 @@ export class Room implements DirectorHost {
   private flushEvents() {
     for (const m of this.members.values()) {
       if (m.events.length === 0) continue;
+      if (m.bot) {
+        m.bot.hear(m.events);
+        m.events = [];
+        continue;
+      }
       if (m.client.buffered() > MAX_BUFFERED_EVENTS) {
         m.client.close?.(1008, "not reading"); // policy violation
         m.events = [];
@@ -2292,6 +2391,13 @@ export class Room implements DirectorHost {
     const gadgetOps = this.sim.gadgets.takeOps();
     let gadgetMsg: Uint8Array | null = null;
     for (const m of this.members.values()) {
+      if (m.bot) {
+        // Nothing goes down a bot's connection: it reads the room itself.
+        m.opsHad = 0;
+        m.opsHeld = [];
+        m.idled = false;
+        continue;
+      }
       const fresh = m.opsHad ? ops.slice(m.opsHad) : ops;
       const mine = m.opsHeld === null ? null : m.opsHeld.length ? m.opsHeld.concat(fresh) : fresh;
       m.opsHad = 0;
