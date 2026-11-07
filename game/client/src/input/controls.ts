@@ -93,8 +93,8 @@ export class Controls {
   private gadgetPulse = false;
   private throwPulse = false;
   /**
-   * On a drone or a camera (Phase 7) the lean keys are held, whatever the lean setting: a new press goes to the previous
-   * / next feed.
+   * On a drone or a camera (Phase 7), or Skopós's shell view (one of her feeds, D-155), the lean keys are held, whatever
+   * the lean setting: a new press goes to the previous / next feed.
    */
   onDrone: () => boolean = () => false;
   /** A lean pressed on a feed, sent for the next tick even if let go before it (−1 / 1; 0: none). */
@@ -288,7 +288,9 @@ export class Controls {
       else this.held.add(action);
       return;
     }
-    if (STANCE_ACTIONS.has(action) && this.stanceLocked()) return;
+    // (A lean on a feed switches the feed, even on Skopós's shell view, where the stance keys are locked: D-155.)
+    const feedLean = (action === "leanLeft" || action === "leanRight") && this.onDrone();
+    if (STANCE_ACTIONS.has(action) && this.stanceLocked() && !feedLean) return;
     const s = this.settings;
     this.held.add(action);
     if (this.onDrone() && FEED_IGNORES.has(action)) {

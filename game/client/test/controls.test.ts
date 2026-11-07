@@ -286,4 +286,24 @@ describe("on a drone or a camera (Phase 7)", () => {
     cmd = c.sample(5);
     expect([cmd.stance, cmd.lean, cmd.buttons & Btn.Swap]).toEqual([Stance.Stand, 0, 0]);
   });
+
+  it("on Skopós's shell view (a feed whose stance keys are locked, D-155) a lean still switches the feed; crouch and aim don't reach the body", () => {
+    const c = make({});
+    let shell = true;
+    c.onDrone = () => shell;
+    c.stanceLocked = () => shell;
+    c.press("leanRight");
+    c.release("leanRight");
+    c.press("crouch");
+    c.release("crouch");
+    c.press("ads");
+    const cmd = c.sample(1);
+    expect([cmd.lean, cmd.stance, cmd.buttons & Btn.Ads]).toEqual([1, Stance.Stand, 0]);
+    c.release("ads");
+    // Locked but not on a feed (mid-swap, or down): a lean is ignored, as before.
+    shell = false;
+    c.stanceLocked = () => true;
+    c.press("leanLeft");
+    expect(c.sample(2).lean).toBe(0);
+  });
 });

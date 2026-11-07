@@ -10,7 +10,7 @@ import { MSG_SNAPSHOT } from "./snapshot.js";
 import { MSG_GADGET_OPS, MSG_GADGET_RESYNC, MSG_GADGET_STATE } from "./gadgetWire.js";
 
 /** Bump when the wire format changes; client and server must match. */
-export const PROTOCOL_VERSION = 15;
+export const PROTOCOL_VERSION = 16;
 
 export const Msg = {
   // client → server

@@ -794,7 +794,7 @@ export function matchFeatures(lab: LabApi): void {
   lab.addHelp(`<kbd>${keyLabel(keys.drop)}</kbd>`, "Drop the defuser (attackers)");
   lab.addHelp(
     `<kbd>${keyLabel(keys.observe)}</kbd>`,
-    `Drones (attackers): go to one of yours out (or a teammate's), and back; on one ${keyLabel(keys.leanLeft)} / ${keyLabel(keys.leanRight)} switch, ${keyLabel(keys.vault)} jumps, ${keyLabel(keys.sprint)} boosts. Cameras (defenders): open them and back; ${keyLabel(keys.leanLeft)} / ${keyLabel(keys.leanRight)} switch`,
+    `Drones (attackers): go to one of yours out (or a teammate's), and back; on one ${keyLabel(keys.leanLeft)} / ${keyLabel(keys.leanRight)} switch, ${keyLabel(keys.vault)} jumps, ${keyLabel(keys.sprint)} boosts. Cameras (defenders): open them on the one you were last on, and back; ${keyLabel(keys.leanLeft)} / ${keyLabel(keys.leanRight)} switch, and each stays looking where you left it (Skopós: your other shell is one of them)`,
   );
   lab.addHelp(`<kbd>${keyLabel(keys.throwDrone)}</kbd>`, "Throw a drone you have in hand, and drive it (attackers)");
   lab.addHelp(

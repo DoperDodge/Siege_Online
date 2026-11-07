@@ -5,6 +5,42 @@ known issues, and what's next.
 
 ---
 
+## Your camera requests after Phase 8 · in review (D-155)
+
+On top of `main` (Phase 8 merged, PR #9): the camera requests you asked to have done once Phase 8 was.
+
+### What's done
+- **Each camera keeps where you left it looking.** Turn a camera, flip to another (Q / E) and back, and it still
+  looks where you turned it. The views are yours alone (a camera's view is each viewer's own, D-134), for the round.
+- **The cameras open on the last one you watched.** Close them (5) and open them again: you're back on that camera,
+  looking where you left it. The first time it's the first camera; if yours broke since, the next working one.
+- **Skopós's other shell is one of her cameras.** 5 opens the cameras for her too, and her other shell is in the list
+  (last, `SH` in the row over the view), so Q / E go round the cameras and her shell; on her shell, F swaps into it
+  as before. Her own shell's barrier camera (the one her teammates watch) isn't in her list twice. In a lab, with no
+  cameras, 5 opens her shell alone. Z still goes straight to her shell (from a camera too) and back.
+- **On mobile, one button:** playing Skopós there's no Ability button any more; Observe does it all.
+- Switching cameras no longer turns the new one a little (about 1°) toward where the last one looked.
+
+### How to test (needs Node 22.12+)
+1. `npm ci`, then `npm run build && npm start`, and open http://localhost:8080 → *Play a match*: *Create* a Custom (or
+   Practice) match on Oregon and defend.
+2. 5 opens the cameras: turn one, E to the next, Q back: it looks where you left it. 5 closes them; 5 again: the
+   same camera, the same view.
+3. As Skopós: 5, then Q from the first camera: her shell (`SH` lit); F swaps into it. From any camera, Z goes to her
+   shell; Z again, back to your body. In the Gadget Lab (no cameras), 5 opens her shell.
+4. On a phone or tablet (or the browser's device toolbar), play Skopós: no Ability button; Observe opens her shell.
+5. `npx vitest run` (1,097 tests); `tools/e2e/match.mjs` now also reopens the cameras on the last feed and, as
+   Skopós, presses E and Q on her shell view (41 checks).
+
+### Known issues
+- None new. Phase 8's still stand (below).
+
+### Next
+Phase 9 — Bot Training (PLAN §17): navmesh, perception, a team planner and every operator played by bots; done when
+you can play a full solo match against five Normal bots on attack and defense.
+
+---
+
 ## Phase 8 — Operators · ✅ complete (PR #9, squash-merged into `main`)
 
 **Done when (PLAN §17):** every row of research/interactions.csv (343) has a passing test. The design is
@@ -323,9 +359,8 @@ the rest are todos), `npm run build`, `node tools/e2e/gadget-lab.mjs`.
 
 ### Next
 Your camera requests from before (each camera keeps where you turned it; the cameras reopen on the last one you watched;
-on mobile, one Observe button with Skopós's shell as one of the cameras), then Phase 9 — Bot Training (PLAN §17):
-navmesh, perception, a team planner and every operator played by bots; done when you can play a full solo match
-against five Normal bots on attack and defense.
+on mobile, one Observe button with Skopós's shell as one of the cameras): done after the merge (above, D-155). Then
+Phase 9 — Bot Training (PLAN §17).
 
 ---
 

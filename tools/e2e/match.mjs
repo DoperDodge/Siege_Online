@@ -236,9 +236,10 @@ try {
   result.checks.defenderSeesTheDrone = await def1
     .waitForFunction((id) => window.__lab.net.remotes.some((r) => r.id === id && r.state !== null), droneId, { timeout: 5000 })
     .then(() => true, () => false);
-  // The defender watches the cameras (Phase 7): 5 opens the first, Q goes round to the last (the level's, or Skopós's
-  // idle shell's after them, Phase 8 M10), 5 closes them. Each key is held until the page shows what it did (its game
-  // ticks run in its frames, slow on a busy runner), then let go for two of its ticks so the next press is a new one.
+  // The defender watches the cameras (Phase 7): 5 opens the first, Q goes round to the last feed (the level's last
+  // camera, or for Skopós her own idle shell's view, D-155), 5 closes them and 5 opens that last feed again (D-155).
+  // Each key is held until the page shows what it did (its game ticks run in its frames, slow on a busy runner), then
+  // let go for two of its ticks so the next press is a new one.
   const OBSERVE = 1 << 14;
   const holdUntil = async (page, input, done, arg) => {
     await page.evaluate((i) => (window.__lab.input = i), input);
@@ -251,11 +252,30 @@ try {
     return ok;
   };
   const opened = await holdUntil(def1, { buttons: OBSERVE }, () => window.__lab.net.cam === 1);
-  const wentRound = await holdUntil(def1, { lean: -1 }, () => window.__lab.net.cam === window.__lab.net.cams && window.__lab.net.cams > 0);
   await def1.screenshot({ path: shot("match-prep-defender-camera.png") });
-  const closed = await holdUntil(def1, { buttons: OBSERVE }, () => window.__lab.net.cam === 0);
-  result.oneVsOne.prep.cameras = { opened, wentRound, closed, level: lvl.cameras.length };
+  const lastFeed = () => {
+    const n = window.__lab.net;
+    return n.cams > 0 && (n.loadout?.operator === "skopos" ? n.shellCam && n.cam === 0 : n.cam === n.cams);
+  };
+  const wentRound = await holdUntil(def1, { lean: -1 }, lastFeed);
+  await def1.screenshot({ path: shot("match-prep-defender-last-feed.png") });
+  const closed = await holdUntil(def1, { buttons: OBSERVE }, () => window.__lab.net.cam === 0 && !window.__lab.net.shellCam);
+  const reopened = await holdUntil(def1, { buttons: OBSERVE }, lastFeed);
+  const operator = await def1.evaluate(() => window.__lab.net.loadout?.operator ?? null);
+  // Skopós's real keys on her shell view (D-155): the page locks her stance keys there, yet E goes round to the first
+  // camera and Q back to her shell.
+  let keysGoRound = null;
+  if (operator === "skopos" && reopened) {
+    const seen = (fn) => def1.waitForFunction(fn, null, { timeout: 10000, polling: 50 }).then(() => true, () => false);
+    await def1.keyboard.press("KeyE");
+    const toFirst = await seen(() => window.__lab.net.cam === 1 && !window.__lab.net.shellCam);
+    await def1.keyboard.press("KeyQ");
+    keysGoRound = toFirst && (await seen(() => window.__lab.net.shellCam && window.__lab.net.cam === 0));
+  }
+  const closedAgain = await holdUntil(def1, { buttons: OBSERVE }, () => window.__lab.net.cam === 0 && !window.__lab.net.shellCam);
+  result.oneVsOne.prep.cameras = { operator, opened, wentRound, closed, reopened, keysGoRound, closedAgain, level: lvl.cameras.length };
   result.checks.defenderWatchesTheCameras = opened && wentRound && closed;
+  result.checks.camerasOpenOnTheLastFeed = reopened && closedAgain && keysGoRound !== false;
   await att1.screenshot({ path: shot("match-prep-attacker.png") });
   await def1.screenshot({ path: shot("match-prep-defender.png") });
 

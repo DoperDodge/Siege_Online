@@ -261,7 +261,8 @@ line goes through it to the shell (`Sim.blastMeets`); reinforcing beside it does
 shell's camera, after the Bulletproof Cameras in the defenders' list (`shellCams`, `shellCamAt`): the lens just in
 front of the barrier at the crouched shell's eyes, the default camera's limits, off while an EMP has it; every client
 lists it from the table (who's in which shell is each player's own), the defence watches it, and so do the attackers
-on a hacked phone's lend. Her knife (`combat.meleeHole: large`) uses `destruction.meleeLarge`: a 0.6 m hole through
+on a hacked phone's lend (Skopós herself goes round to the shell's own view instead, from which she swaps: her list
+leaves her barrier's camera out, D-155, intel/DESIGN.md §5). Her knife (`combat.meleeHole: large`) uses `destruction.meleeLarge`: a 0.6 m hole through
 the studs, a barricade in one hit, a hatch in one. The idle shell starts beside her at the site's defender spawn.
 Reshaped after Ulo's test (D-153): the barrier curves round the crouched shell (data `arc`: seven segments 0.5 m out,
 220° round its front and sides; gadgets/hits.ts `arcBoxes` gives the same segments to its colliders, ray tests and

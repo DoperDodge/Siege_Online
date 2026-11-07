@@ -911,12 +911,12 @@ describe("default cameras in a match (Phase 7 M3)", () => {
     for (let k = 0; k < 4; k++) t.tick();
     expect(t.room.sim.matchRules.camsBroken).toBe(1 << i);
     expect([def.session.match!.camsBroken, atk.session.match!.camsBroken]).toEqual([1 << i, 1 << i]);
-    // Going round, the broken one is skipped: 3 → 5.
+    // Open again: the camera last watched (2, Ulo's D-155). Going round, the broken one is skipped: 3 → 5.
     def.cmd = { ...aim, buttons: Btn.Observe };
     t.tick();
     def.cmd = { ...aim };
-    t.until(() => ctrl.cam === 1, 0.5, "the first camera");
-    for (const want of [2, 3, 5]) {
+    t.until(() => ctrl.cam === 2, 0.5, "the camera last watched");
+    for (const want of [3, 5]) {
       def.cmd = { ...aim, lean: 0 };
       t.tick();
       def.cmd = { ...aim, lean: 1 };

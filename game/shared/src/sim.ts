@@ -7,7 +7,7 @@ import { deployAction, deployTicks, DeployKind, type DeployAction, type DeployRu
 import { buildLevel, type BuiltLevel } from "./level/builder.js";
 import { GADGET_GROUPS, initRapier, PLAYER_GROUPS, QUERY_DRONE, QUERY_SIGHT, QUERY_SOLID, QUERY_STATIC as QUERY_STATIC_FILTER, refreshBroadPhase, type CharacterController, type Collider, type Rapier, type World } from "./physics/rapier.js";
 import { cancelRappelHold, capsuleFree, movementPrompt, poseCollider, stepPawn, type MoveContext, type MovementPrompt } from "./player/movement.js";
-import { initialPawnState, type Pawn, type PlayerController } from "./player/pawn.js";
+import { initialPawnState, MAX_CAM_VIEWS, SHELL_VIEW, type Pawn, type PlayerController } from "./player/pawn.js";
 import { droneCollider, droneEye, stepDrone } from "./player/drone.js";
 import { insideAny, zoneBoxes, ZONE_TEST_HEIGHT, type ZoneBox } from "./level/zones.js";
 import { raycastLevel } from "./level/raycast.js";
@@ -237,6 +237,8 @@ export class Sim {
       camYaw: 0,
       camPitch: 0,
       camEntry: 0,
+      lastCam: 0,
+      camViews: [],
       shellCam: false,
       swapPhase: 0,
       swapT: 0,
@@ -731,6 +733,8 @@ export class Sim {
       camYaw: 0,
       camPitch: 0,
       camEntry: 0,
+      lastCam: 0,
+      camViews: [],
       shellCam: false,
       swapPhase: 0,
       swapT: 0,
@@ -903,17 +907,17 @@ export class Sim {
   }
 
   /**
-   * Default cameras (Phase 7, intel/DESIGN.md §3), for defenders in a match: Observe opens the first working camera and
-   * closes it; a new lean goes to the previous / next working one; the view turns toward the mouse within the camera's
-   * limits at its turn rate (data/intel.json `camera`). A camera broken while watched hands over to the next working
-   * one, or closes when none is left. Down, nothing; going down closes it.
+   * Default cameras (Phase 7, intel/DESIGN.md §3), for defenders in a match, and Skopós's shell view (Ulo, D-155): one
+   * list of feeds, the cameras the team may watch and, for Skopós, her own idle shell in place of its barrier's camera.
+   * Observe opens the feed last watched (the first working one the first time) and closes it; a new lean goes to the
+   * previous / next feed; a camera's view turns toward the mouse within its limits at its turn rate (data/intel.json
+   * `camera`), and each camera keeps where its viewer left it looking. A camera broken while watched hands over to the
+   * next feed, or closes when none is left. Down or EMP'd, nothing; going down closes it. Mid-swap, nothing either.
+   * `watchedBefore`: the camera watched when the tick began (Sim.watched).
    */
-  private updateCams(c: PlayerController, input: InputCmd | undefined, heldBefore: number) {
+  private updateCams(c: PlayerController, input: InputCmd | undefined, heldBefore: number, watchedBefore: number) {
     // A phone Dokkaebi blew up (Phase 8 M9): no cameras for the rest of the round.
-    if (!this.matchRules.cameras || this.camCount() === 0 || c.phoneLost) {
-      c.cam = 0;
-      return;
-    }
+    if (!this.camsOn(c)) c.cam = 0;
     const body = this.pawns.get(c.possessedPawnId);
     const downed = body !== undefined && isDowned(body.state);
     // An EMP on the body (DSEG, Phase 8 M3): no observation tools.
@@ -923,44 +927,155 @@ export class Sim {
     if (c.cam && c.camEntry && this.camEntryAt(c.cam - 1) !== c.camEntry) {
       let at = -1;
       for (let i = 0; i < this.camCount() && at < 0; i++) if (this.camEntryAt(i) === c.camEntry) at = i;
-      // Gone from the list altogether: on to the next working one, as from a broken camera.
-      const next = at >= 0 ? at : this.nextCam(c.team, c.cam - 1, 1);
+      // Gone from the list altogether: on to the next feed, as from a broken camera.
+      const next = at >= 0 ? at : this.nextCamFeed(c, c.cam - 1, 1);
       if (next < 0) c.cam = 0;
       else if (at >= 0) c.cam = at + 1;
-      else this.openCam(c, next);
+      else this.openFeed(c, next);
     }
-    if (c.cam && (downed || jammed || !this.camFor(c.team, c.cam - 1))) {
-      const next = downed || jammed ? -1 : this.nextCam(c.team, c.cam - 1, 1);
+    if (c.cam && (downed || jammed || !this.camFeedOk(c, c.cam - 1))) {
+      const next = downed || jammed ? -1 : this.nextCamFeed(c, c.cam - 1, 1);
       if (next < 0) c.cam = 0;
-      else this.openCam(c, next);
+      else this.openFeed(c, next);
     }
     if (!input) return;
     const lean = Math.sign(input.lean);
     const newLean = lean !== 0 && lean !== c.prevLean ? lean : 0;
     c.prevLean = lean;
+    // Skopós mid-swap: the swap runs its course (updateShells).
+    if (c.swapPhase !== 0) return;
     const pressed = input.buttons & ~heldBefore;
-    if (c.cam) {
+    if (c.cam || c.shellCam) {
       if (pressed & Btn.Observe) {
         c.cam = 0;
+        c.shellCam = false;
         return;
       }
       if (newLean) {
-        const next = this.nextCam(c.team, c.cam - 1, newLean);
-        if (next >= 0) this.openCam(c, next);
+        const at = c.cam ? c.cam - 1 : this.camCount();
+        const next = this.nextCamFeed(c, at, newLean);
+        if (next >= 0 && next !== at) this.openFeed(c, next);
       }
+      // Her shell view turns the shell itself (the step). A camera only just opened looks where it was left: the mouse
+      // still points where the last feed looked.
+      if (!c.cam || this.watched(c) !== watchedBefore) return;
       // Toward the mouse, within the camera's limits, at its turn rate.
       const l = this.camLimits(c.cam - 1);
       const yaw = l.face + clamp(wrapAngle(input.yaw - l.face), -l.half, l.half);
       const pitch = clamp(input.pitch, l.pitchMin, l.pitchMax);
       c.camYaw = Math.fround(wrapAngle(c.camYaw + clamp(wrapAngle(yaw - c.camYaw), -l.turn, l.turn)));
       c.camPitch = Math.fround(c.camPitch + clamp(pitch - c.camPitch, -l.turn, l.turn));
+      this.rememberView(c);
       return;
     }
     if (!(pressed & Btn.Observe) || downed || jammed) return;
     // An attacker's hacked cameras (Phase 8 M8): Observe opens their drones first while any are out (switchDrones).
     if (c.team !== sideTeam("defender") && (c.drone !== 0 || this.feedDrones(c).length > 0)) return;
-    const first = this.nextCam(c.team, -1, 1);
-    if (first >= 0) this.openCam(c, first);
+    const last = this.lastFeed(c);
+    if (last >= 0) this.openFeed(c, last);
+  }
+
+  /** Whether a controller has cameras at all now: a match's (or a lab's that has them), its phone not blown up. */
+  camsOn(c: PlayerController): boolean {
+    return this.matchRules.cameras && this.camCount() > 0 && !c.phoneLost;
+  }
+
+  /**
+   * A camera's key in a controller's memory (D-155): 2(i + 1) for the level's camera i, 2·id + 1 for a gadget entry's
+   * (a Bulletproof Camera, an idle shell's barrier), so it stays its own as the list's numbers shift.
+   */
+  camKey(i: number): number {
+    const e = this.camEntryAt(i);
+    return e ? 2 * e + 1 : 2 * (i + 1);
+  }
+
+  /** The key of the camera a controller watches, as it was opened (its entry, or the level's index); 0 for none. */
+  private watched(c: PlayerController): number {
+    return c.cam === 0 ? 0 : c.camEntry ? 2 * c.camEntry + 1 : 2 * c.cam;
+  }
+
+  /**
+   * Whether feed `slot` is one a controller may go to (D-155): slot i < camCount() is camera i, working and one its team
+   * may watch, but not Skopós's own idle shell's barrier (her shell view takes its place); slot camCount() is her shell
+   * view.
+   */
+  camFeedOk(c: PlayerController, slot: number): boolean {
+    if (slot >= this.camCount()) return this.shellViewOk(c);
+    return this.camsOn(c) && this.camFor(c.team, slot) && this.shellCamAt(slot)?.owner !== c.id;
+  }
+
+  /** The next feed of a controller's from slot `from` going `dir` (±1), round the list (camFeedOk's slots); −1: none. */
+  private nextCamFeed(c: PlayerController, from: number, dir: number): number {
+    const slots = this.camCount() + 1;
+    const start = Math.min(from, slots - 1); // from one no longer in the list (last round's): as if from the last
+    for (let k = 1; k <= slots; k++) {
+      const i = (((start + dir * k) % slots) + slots) % slots;
+      if (this.camFeedOk(c, i)) return i;
+    }
+    return -1;
+  }
+
+  /**
+   * The feed Observe opens (D-155): the one last watched, while it's there to watch; else the next after it (the first
+   * the first time); −1: none.
+   */
+  private lastFeed(c: PlayerController): number {
+    const n = this.camCount();
+    let at = -1;
+    if (c.lastCam === SHELL_VIEW) at = n;
+    else if (c.lastCam) for (let i = 0; i < n && at < 0; i++) if (this.camKey(i) === c.lastCam) at = i;
+    return at >= 0 && this.camFeedOk(c, at) ? at : this.nextCamFeed(c, at, 1);
+  }
+
+  /** Onto feed `slot` (camFeedOk's): a camera, or Skopós's shell view. */
+  private openFeed(c: PlayerController, slot: number) {
+    if (slot >= this.camCount()) this.openShellView(c);
+    else {
+      c.shellCam = false;
+      this.openCam(c, slot);
+    }
+  }
+
+  /**
+   * Whether Skopós's idle shell can be looked through (and swapped into) now (research/operators/skopos.md §3.2): two
+   * shells, the other standing; hers on her feet, or hanging on a rope (Ulo: cameras work on the rope; a lab room lets
+   * her rappel); no EMP on either (DSEG, Phase 8 M3: her shell camera is an observation tool, the idle shell a device),
+   * nor a jammer of the other side (Phase 8 M8: one Brava converted; Mute's own don't mind her); her phone not blown up
+   * by Dokkaebi (Phase 8 M9: no swapping for the rest of the round).
+   */
+  private shellReachable(c: PlayerController): boolean {
+    if (this.bodyIds(c).length < 2 || c.phoneLost) return false;
+    const active = this.pawns.get(c.possessedPawnId);
+    const other = this.otherPawn(c.id);
+    if (!active || !other) return false;
+    const ready = (active.state.mode === PawnMode.Walk && active.state.grounded) || ropeIdle(active.state);
+    return ready && active.state.jammed <= 0 && other.state.jammed <= 0 && !pawnJammed(this, active) && !pawnJammed(this, other);
+  }
+
+  /** Whether Skopós may go onto her shell view now (D-155): it's reachable, and no swap is under way or just done. */
+  private shellViewOk(c: PlayerController): boolean {
+    return c.swapPhase === 0 && c.swapCooldown <= 0 && this.shellReachable(c);
+  }
+
+  /** Skopós onto her idle shell's view, off any camera (her ability key, or the feeds' list: D-155). */
+  private openShellView(c: PlayerController) {
+    c.cam = 0;
+    c.shellCam = true;
+    c.lastCam = SHELL_VIEW;
+  }
+
+  /**
+   * Keep where a controller's camera looks now (D-155), to look there again when it flips back to it: newest last, the
+   * oldest dropped past MAX_CAM_VIEWS.
+   */
+  private rememberView(c: PlayerController) {
+    const key = this.watched(c);
+    const last = c.camViews[c.camViews.length - 1];
+    if (last && last.key === key && last.yaw === c.camYaw && last.pitch === c.camPitch) return;
+    const kept = c.camViews.filter((v) => v.key !== key);
+    if (kept.length >= MAX_CAM_VIEWS) kept.shift();
+    kept.push({ key, yaw: c.camYaw, pitch: c.camPitch });
+    c.camViews = kept;
   }
 
   /** Where a controller looks from now: a camera's lens, its drone's eye, or its body's; null for a dead body. */
@@ -1204,29 +1319,26 @@ export class Sim {
     return [at[0] + fx * ahead, at[1], at[2] + fz * ahead];
   }
 
-  /**
-   * The next working camera of `team`'s from `from` going `dir` (±1), round the list (the defenders' cameras, the ones
-   * a Kludge hacked the attackers', Phase 8 M8); −1 when none works.
-   */
-  private nextCam(team: number, from: number, dir: number): number {
-    const n = this.camCount();
-    const start = Math.min(from, n - 1); // from one no longer in the list (last round's): as if from the last
-    for (let k = 1; k <= n; k++) {
-      const i = (((start + dir * k) % n) + n) % n;
-      if (this.camFor(team, i)) return i;
-    }
-    return -1;
-  }
-
   /** The gadget table entry camera i is (a Bulletproof Camera, an idle shell's barrier), or 0 (one of the level's). */
   private camEntryAt(i: number): number {
     return this.bpCamAt(i)?.id ?? this.shellCamAt(i)?.id ?? 0;
   }
 
+  /** Onto camera i, looking where this viewer left it (Ulo, D-155), or the first time its own way. */
   private openCam(c: PlayerController, i: number) {
     const l = this.camLimits(i);
+    const key = this.camKey(i);
+    const left = c.camViews.find((v) => v.key === key);
     c.cam = i + 1;
     c.camEntry = this.camEntryAt(i);
+    c.lastCam = key;
+    if (left) {
+      // (Within its limits, unless they moved since: an idle shell moved by a lab tool turns its barrier's camera.)
+      const off = wrapAngle(left.yaw - l.face);
+      c.camYaw = Math.abs(off) <= l.half ? left.yaw : Math.fround(wrapAngle(l.face + clamp(off, -l.half, l.half)));
+      c.camPitch = Math.fround(clamp(left.pitch, l.pitchMin, l.pitchMax));
+      return;
+    }
     c.camYaw = Math.fround(wrapAngle(l.face));
     c.camPitch = Math.fround(clamp(this.bpCamAt(i) || this.shellCamAt(i) ? 0 : this.level.def.cameras[i].pitchDeg * DEG, l.pitchMin, l.pitchMax));
   }
@@ -1488,9 +1600,10 @@ export class Sim {
       const viewedBefore = this.viewedPawnId(c.id);
       const onCamBefore = c.shellCam || c.swapPhase !== 0 || c.drone !== 0 || c.cam !== 0;
       const camBefore = c.cam;
+      const watchedBefore = this.watched(c);
       this.updateShells(c, input);
       this.updateDrones(c, input, heldBefore);
-      this.updateCams(c, input, heldBefore);
+      this.updateCams(c, input, heldBefore, watchedBefore);
       if (input && input.buttons & ~heldBefore & Btn.Ping) this.ping(c, input);
       if (c.cam) {
         // Watching a camera (Phase 7): the body, if it stands, idles with its weapon parked.
@@ -1654,18 +1767,14 @@ export class Sim {
     }
 
     const active = this.pawns.get(c.possessedPawnId);
-    // On her feet, or hanging on a rope (Ulo: cameras work on the rope; a lab room lets her rappel).
-    const ready = active !== undefined && ((active.state.mode === PawnMode.Walk && active.state.grounded) || ropeIdle(active.state));
-    // An EMP on either shell (DSEG, Phase 8 M3): her shell camera is an observation tool, the idle shell a device.
-    const other = this.otherPawn(c.id);
-    // A jammer of the other side on either shell too (Phase 8 M8: one Brava converted; Mute's own don't mind her).
-    // Her phone blown up by Dokkaebi (Phase 8 M9): no swapping for the rest of the round.
-    if (!other || !ready || active.state.jammed > 0 || other.state.jammed > 0 || pawnJammed(this, active) || pawnJammed(this, other) || c.phoneLost) {
+    if (!active || !this.shellReachable(c)) {
       c.shellCam = false; // nothing to look through, busy (climbing, vaulting, dead), or EMP'd
       return;
     }
     if (pressed & Btn.Ability) {
-      c.shellCam = !c.shellCam && c.swapCooldown <= 0;
+      // Her ability key: onto her shell view (from her body or a camera: it's one of her feeds, D-155), or back.
+      if (c.shellCam) c.shellCam = false;
+      else if (c.swapCooldown <= 0) this.openShellView(c);
     } else if (c.shellCam && pressed & Btn.Interact && active.state.mode !== PawnMode.Rappel) {
       // No swap off a rope (Ulo): the shell left behind would hang there.
       c.swapPhase = 1;

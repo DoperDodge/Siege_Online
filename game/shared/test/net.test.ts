@@ -7,12 +7,14 @@ import {
   controllerState,
   hashPawnState,
   initialPawnState,
+  MAX_CAM_VIEWS,
   PAWN_F32_FIELDS,
   PAWN_INT_FIELDS,
   PAWN_STATE_BYTES,
   ProtocolError,
   readControllerState,
   readPawnState,
+  SHELL_VIEW,
   Sim,
   Stance,
   writeControllerState,
@@ -91,12 +93,30 @@ describe("PawnState codec", () => {
   });
 
   it("controller state round-trips", () => {
+    // Each camera's view as left and the feed Observe opens again (D-155): a level camera's key, an entry's.
+    const camViews = [
+      { key: 6, yaw: 0.75, pitch: -0.125 },
+      { key: 2 * 517 + 1, yaw: -2.5, pitch: 0.375 },
+    ];
     for (const phoneLost of [false, true]) {
-      const c = { possessedPawnId: 300, shellCam: true, swapPhase: 2 as const, swapT: 0.625, swapCooldown: 0.25, prevButtons: Btn.Ability | Btn.Interact, drone: 302, prevLean: -1, cam: 3, camYaw: 1.5, camPitch: -0.25, camEntry: 517, phoneLost };
+      const c = { possessedPawnId: 300, shellCam: true, swapPhase: 2 as const, swapT: 0.625, swapCooldown: 0.25, prevButtons: Btn.Ability | Btn.Interact, drone: 302, prevLean: -1, cam: 3, camYaw: 1.5, camPitch: -0.25, camEntry: 517, lastCam: 1035, camViews, phoneLost };
       const w = new ByteWriter();
       writeControllerState(w, c);
       expect(readControllerState(new ByteReader(w.finish()))).toEqual(c);
     }
+  });
+
+  it("a controller state with too many camera views, or a view without a camera's key, is refused", () => {
+    const base = { possessedPawnId: 1, shellCam: false, swapPhase: 0 as const, swapT: 0, swapCooldown: 0, prevButtons: 0, drone: 0, prevLean: 0, cam: 0, camYaw: 0, camPitch: 0, camEntry: 0, lastCam: 0, phoneLost: false };
+    const bytes = (camViews: { key: number; yaw: number; pitch: number }[]) => {
+      const w = new ByteWriter();
+      writeControllerState(w, { ...base, camViews });
+      return w.finish();
+    };
+    const view = (key: number) => ({ key, yaw: 0, pitch: 0 });
+    expect(readControllerState(new ByteReader(bytes(Array.from({ length: MAX_CAM_VIEWS }, (_, i) => view(2 + i))))).camViews).toHaveLength(MAX_CAM_VIEWS);
+    expect(() => readControllerState(new ByteReader(bytes(Array.from({ length: MAX_CAM_VIEWS + 1 }, (_, i) => view(2 + i)))))).toThrow(/too many camera views/);
+    expect(() => readControllerState(new ByteReader(bytes([view(SHELL_VIEW)])))).toThrow(/bad camera view/);
   });
 });
 
