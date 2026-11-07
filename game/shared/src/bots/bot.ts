@@ -19,8 +19,11 @@ import type { Vec3 } from "../core/math.js";
 import { fireModeOf, loadedOf } from "../weapons/step.js";
 import { Aim, lookAt, viewGap, type View } from "./aim.js";
 import { FollowState, PathFollower } from "./nav/follow.js";
+import { LinkKind, type NavLink } from "./nav/grid.js";
 import type { NavWorld } from "./nav/world.js";
 import { Perception, Source, type Contact, type TeamBoard } from "./perceive.js";
+import { roomSpots, type Task } from "./plan.js";
+import { DeployKind } from "../destruction/deploy.js";
 import { defaultLoadoutPick, type LoadoutPick } from "../weapons/loadout.js";
 import { BotRng } from "./rng.js";
 
@@ -36,6 +39,10 @@ export interface BotWorld {
   readonly nav: NavWorld | null;
   /** Its team's board (what its bot teammates have seen). */
   board(team: number): TeamBoard;
+  /** What its team's planner has for it now (a job or a role), or null. */
+  taskOf(): Task | null;
+  /** Its job done (`ok`), or given up on. */
+  report(ok: boolean): void;
   /** An operator and loadout, as PickLoadout would bring it. */
   pick(pick: LoadoutPick): void;
   /** A round's choice, as MatchAction would bring it. */
@@ -89,6 +96,11 @@ export class Bot {
   private burstUntil = 0;
   private lastShot = -1e9;
   private lastReload = -1e9;
+  /** The task it's on (its key), since when, and how far through (a hole's blows). */
+  private taskKey = "";
+  private taskSince = 0;
+  private taskStep = 0;
+  private lastSwing = -1e9;
   /** The view it asked for last tick: the weapon's kick since is the body's view less it. */
   private asked: View | null = null;
 
@@ -124,6 +136,8 @@ export class Bot {
     }
     const d = w.sim.data.bots.levels[this.level];
     const now = w.sim.tick;
+    // Defenders go round their own barricades (breaking one only when there's no other way).
+    this.legs.allow = pawn.team === DEFENSE ? notBarricade : undefined;
     const mates = [...w.sim.pawns.values()].filter((p) => p.team === pawn.team && p.id !== pawn.id && p.kind === PawnKind.Body && p.state.mode !== PawnMode.Dead);
     this.senses.update(w.sim, pawn, ctrl.id, d, this.heard, w.board(pawn.team), mates);
     this.heard.length = 0;
@@ -138,15 +152,18 @@ export class Bot {
   // ------------------------------------------------------------------ deciding
 
   /** Score what it could do and take the best (keeping the current one unless beaten by KEEP). */
-  private decide(_w: BotWorld, me: Pawn, mates: readonly Pawn[], d: BotDifficulty, now: number) {
+  private decide(w: BotWorld, me: Pawn, mates: readonly Pawn[], d: BotDifficulty, now: number) {
     const s = me.state;
+    const job = this.order ? null : w.taskOf();
     const target = this.senses.target(me);
     const recent = this.senses.recent(now, SOUND_S);
     const w0 = me.loadout?.weapons[s.slot];
     const loaded = loadedOf(s);
     const low = w0 ? loaded < Math.max(1, w0.ammo.magazine * 0.3) : false;
     const downMate = mates.find((p) => p.state.mode === PawnMode.Downed && Math.hypot(p.state.x - s.x, p.state.z - s.z) < 15);
-    const scores: [Doing, number, Contact | null][] = [[Doing.Task, 0.3, null]];
+    // Its planner's job (setting up in prep, a retake) comes before chasing sounds; a role (hold, roam) after them.
+    const jobScore = job && (job.kind === "reinforce" || job.kind === "barricade" || job.kind === "hole" || job.kind === "retake") ? 0.75 : 0.3;
+    const scores: [Doing, number, Contact | null][] = [[Doing.Task, jobScore, null]];
     if (target) scores.push([Doing.Fight, 1, target]);
     if (loaded === 0) scores.push([Doing.Reload, 0.95, null]);
     else if (low && !target) scores.push([Doing.Reload, 0.6, null]);
@@ -154,8 +171,10 @@ export class Bot {
       const age = (now - recent.at) / TICK_HZ;
       const dist = Math.hypot(recent.pos[0] - s.x, recent.pos[2] - s.z);
       // Just lost from sight: hold the angle. Heard or told: go and look, the more for a trusting ear and the nearer.
+      // An anchor doesn't leave its spot for a sound far from it.
+      const leash = job?.kind === "hold" ? Math.hypot(recent.pos[0] - job.spot[0], recent.pos[2] - job.spot[2]) < 8 : true;
       if (recent.source === Source.Seen && age < HOLD_S) scores.push([Doing.Hold, 0.85, recent]);
-      else if (dist < 30) scores.push([Doing.Investigate, 0.35 + 0.35 * d.soundUse * (1 - dist / 30), recent]);
+      else if (dist < 30 && leash) scores.push([Doing.Investigate, 0.35 + 0.35 * d.soundUse * (1 - dist / 30), recent]);
     }
     if (downMate && !target && !recent) scores.push([Doing.Revive, 0.7, null]);
     if (this.order && !target) scores.push([Doing.Task, 0.8, null]);
@@ -289,9 +308,14 @@ export class Bot {
     return { forward: st.forward, strafe: st.strafe, yaw: st.yaw, pitch: st.pitch ?? s.pitch * 0.9, buttons: st.buttons, stance: st.stance, lean: 0 };
   }
 
-  /** Its task (M2's walking about, or an order; the plans replace it): walking, else standing and looking about. */
+  /** Its task: an order, else its planner's job or role (M4), else walking about; else standing and looking about. */
   private task(w: BotWorld, me: Pawn, now: number): BotInput {
     const s = me.state;
+    const job = this.order ? null : w.taskOf();
+    if (job && w.nav) {
+      const input = this.doTask(w, me, job, now);
+      if (input) return input;
+    }
     if (w.nav) {
       if (this.order) this.legs.goTo(this.order, 0.4);
       else if (w.match && (this.legs.state !== FollowState.Walking || now >= this.wanderAt)) {
@@ -324,6 +348,100 @@ export class Bot {
     const dy = wrapAngle(this.lookYaw - s.yaw);
     const turn = Math.sign(dy) * Math.min(Math.abs(dy), 2.2 / TICK_HZ);
     return { forward: 0, strafe: 0, yaw: wrapAngle(s.yaw + turn), pitch: s.pitch * 0.9, buttons: 0, stance: Stance.Stand, lean: 0 };
+  }
+
+  /** Its planner's job or role: walk to where it's done, then do it. Null: nothing to press (stand and look about). */
+  private doTask(w: BotWorld, me: Pawn, t: Task, now: number): BotInput | null {
+    const s = me.state;
+    const sim = w.sim;
+    const d = sim.data.bots.levels[this.level];
+    const key = taskKey(t);
+    if (key !== this.taskKey) {
+      this.taskKey = key;
+      this.taskSince = now;
+      this.taskStep = 0;
+    }
+    const eye = eyePose(sim.data.movement, sim.data.hitboxes, s).pos;
+    const walk = (to: Vec3, r: number, sprint = false): BotInput | null => {
+      this.legs.goTo(to, r);
+      this.legs.sprint = sprint;
+      if (this.legs.state === FollowState.Failed) return null;
+      if (this.legs.state !== FollowState.Walking) return null;
+      const st = this.legs.tick(w.nav!, sim, me, null);
+      return { forward: st.forward, strafe: st.strafe, yaw: st.yaw, pitch: st.pitch ?? s.pitch * 0.9, buttons: st.buttons, stance: st.stance, lean: 0 };
+    };
+    const at = (p: Vec3, r: number) => Math.hypot(p[0] - s.x, p[2] - s.z) <= r && Math.abs(p[1] - s.y) < 0.8;
+    const look = (p: Vec3, buttons = 0): BotInput => {
+      const v = this.turnTo({ yaw: s.yaw, pitch: s.pitch }, lookAt(eye, p), d);
+      return { forward: 0, strafe: 0, yaw: v.yaw, pitch: v.pitch, buttons, stance: Stance.Stand, lean: 0 };
+    };
+    const aimed = (p: Vec3) => viewGap({ yaw: s.yaw, pitch: s.pitch }, lookAt(eye, p)) < 0.06;
+    const giveUp = (seconds: number) => now - this.taskSince > seconds * TICK_HZ;
+    switch (t.kind) {
+      case "reinforce":
+      case "barricade": {
+        const p = sim.level.panels.list[t.panel].panel;
+        const done = t.kind === "reinforce" ? p.reinforcedBefore(t.section) : !p.empty && !p.broken;
+        if (done) {
+          w.report(true);
+          return null;
+        }
+        if (giveUp(40) || (this.legs.state === FollowState.Failed && !at(t.stand, 0.5))) {
+          w.report(false);
+          this.legs.stop();
+          return null;
+        }
+        if (!at(t.stand, 0.35)) return walk(t.stand, 0.25, true) ?? look(t.look);
+        // There: face it, then hold Use (the body holds still while it works).
+        const working = s.deployKind === DeployKind.Reinforce || s.deployKind === DeployKind.BarricadeUp;
+        return look(t.look, working || aimed(t.look) ? Btn.Interact : 0);
+      }
+      case "hole": {
+        if (this.taskStep >= t.spots.length) {
+          w.report(true);
+          return null;
+        }
+        if (giveUp(40)) {
+          w.report(false);
+          return null;
+        }
+        if (!at(t.stand, 0.35)) return walk(t.stand, 0.25, true) ?? look(t.spots[0]);
+        const spot = t.spots[this.taskStep];
+        if (aimed(spot) && now - this.lastSwing > 0.62 * TICK_HZ) {
+          this.lastSwing = now;
+          this.taskStep++;
+          return look(spot, Btn.Melee);
+        }
+        return look(spot);
+      }
+      case "hold": {
+        if (!at(t.spot, 0.45)) return walk(t.spot, 0.35, now - this.taskSince < 20 * TICK_HZ) ?? look(t.face);
+        // There: watch the way in, a little either side of it now and then.
+        const sway = Math.sin((now + this.memberId * 37) / (2.5 * TICK_HZ)) * 0.25;
+        const f = t.face;
+        const dx = f[0] - s.x;
+        const dz = f[2] - s.z;
+        const p: Vec3 = [s.x + dx * Math.cos(sway) - dz * Math.sin(sway), f[1], s.z + dx * Math.sin(sway) + dz * Math.cos(sway)];
+        return look(p, d.prefire > 0.5 ? Btn.Ads : 0);
+      }
+      case "roam": {
+        if (this.legs.state !== FollowState.Walking || now >= this.wanderAt) {
+          const room = this.rng.pick(t.rooms);
+          const spots = room ? roomSpots(w.nav!, sim.level.def, room, 1.5) : [];
+          const spot = this.rng.pick(spots);
+          if (spot) this.legs.goTo(spot, 0.6);
+          this.wanderAt = now + Math.round(this.rng.range(8, 18) * TICK_HZ);
+        }
+        return walk(this.legs.goal ?? [s.x, s.y, s.z], 0.6);
+      }
+      case "retake": {
+        const def = t.defuser;
+        if (!at(def, 1.2)) return walk(def, 0.9, true) ?? look([def[0], def[1] + 0.2, def[2]]);
+        const target: Vec3 = [def[0], def[1] + 0.15, def[2]];
+        return look(target, aimed(target) || s.deployKind === DeployKind.Disable ? Btn.Interact : 0);
+      }
+    }
+    return null;
   }
 
   /** A view turned toward `want` at its turn rate. */
@@ -407,3 +525,24 @@ export class Bot {
     if (op) w.pick(defaultLoadoutPick(w.sim.data, op));
   }
 }
+
+/** A task's identity (a new one restarts its timers). */
+function taskKey(t: Task): string {
+  switch (t.kind) {
+    case "reinforce":
+      return `r${t.panel}.${t.section}`;
+    case "barricade":
+      return `b${t.panel}`;
+    case "hole":
+      return `h${t.panel}`;
+    case "hold":
+      return `k${t.spot.join()}`;
+    case "roam":
+      return `w${t.rooms.join()}`;
+    case "retake":
+      return "t";
+  }
+}
+
+/** A link that isn't a barricade to break. */
+const notBarricade = (l: NavLink) => l.kind !== LinkKind.Barricade;

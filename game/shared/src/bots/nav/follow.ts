@@ -167,7 +167,8 @@ export class PathFollower {
     }
     if (this.idx >= this.steps.length || this.steps.length === 0) {
       const at = grid.nodeNear(pos[0], pos[1], pos[2], 1, 0.9);
-      const part = at >= 0 ? nav.search.refine(at, this.route, 4, this.allow) : null;
+      // The links it's allowed first; none of them leads there (a defender's own barricades shut it out): any.
+      const part = at >= 0 ? (nav.search.refine(at, this.route, 4, this.allow) ?? (this.allow ? nav.search.refine(at, this.route, 4) : null)) : null;
       if (!part) {
         // Off the route (pushed, fell): a new one from here, at most a few times in a row.
         this.route = null;

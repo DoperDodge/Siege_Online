@@ -726,6 +726,41 @@ export const botDifficultySchema = z.strictObject({
 });
 export type BotDifficulty = z.infer<typeof botDifficultySchema>;
 
+/** A wall or hatch in a bot plan (data/maps/<level>/bot_strats.json): the level's panel id, the room it's worked from. */
+const stratPanel = z.strictObject({ panel: z.string(), from: z.string().optional(), why: z.string().optional() });
+/** Where an operator's device goes in a bot plan: on a panel (from a room), near one (in a room), or in a room. */
+const stratSpot = z.strictObject({ panel: z.string().optional(), from: z.string().optional(), near: z.string().optional(), room: z.string().optional(), gadget: z.string().optional() });
+
+/** Bots' plans for a level's sites (PLAN §15.4; bots/DESIGN.md §6), each from the research's site notes. */
+export const botStratsSchema = z.strictObject({
+  ...meta,
+  sites: z.record(
+    z.string(),
+    z.strictObject({
+      research: z.string(),
+      ev: z.string(),
+      note: z.string().optional(),
+      defense: z.strictObject({
+        reinforce: z.array(stratPanel),
+        holes: z.array(z.strictObject({ panel: z.string(), size: z.enum(["vault", "crouch"]), from: z.string(), why: z.string().optional() })),
+        anchors: z.array(z.string()).min(1),
+        roam: z.array(z.string()),
+        gadgets: z.record(z.string(), z.array(stratSpot)),
+      }),
+      attack: z.strictObject({
+        spawns: z.record(z.string(), z.strictObject({ via: z.array(z.string()), alt: z.array(z.array(z.string())) })),
+        hardBreach: z.array(z.strictObject({ panel: z.string(), from: z.string(), ops: z.array(z.string()) })),
+        softBreach: z.array(z.strictObject({ panel: z.string(), from: z.string(), ops: z.array(z.string()) })),
+        plant: z.array(z.string()).min(1),
+        postPlant: z.array(z.string()),
+        flank: z.array(z.string()),
+      }),
+    }),
+  ),
+});
+export type BotStrats = z.infer<typeof botStratsSchema>;
+export type SiteStrat = BotStrats["sites"][string];
+
 /** data/bots/difficulty.json: the four levels (PLAN §15.2). */
 export const botDifficultyFileSchema = z.strictObject({
   ...meta,
@@ -738,6 +773,8 @@ export const botNamesFileSchema = z.strictObject({ ...meta, names: z.array(z.str
 export interface BotsData {
   levels: Record<BotLevel, BotDifficulty>;
   names: string[];
+  /** Each level's site plans (data/maps/<level>/bot_strats.json), by level id; a level without any has none. */
+  strats: Map<string, BotStrats>;
 }
 
 /** A camera's view (Phase 7): how far it turns either side of its facing, how far it tilts, how fast, how wide it sees. */

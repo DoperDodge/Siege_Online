@@ -161,14 +161,16 @@ describe("bots in match rooms (Phase 9 M1)", () => {
     expect(pawn.state.mode).toBe(PawnMode.Walk);
     expect(Math.abs(pawn.state.yaw - yaw0)).toBeGreaterThan(0.01);
     expect(t.room.memberInfo(botDef.id)!.lastSeq).toBeGreaterThan(64);
-    // No bot is ever corrected (the server's state is theirs) and the person's client never mispredicts.
+    // No bot is ever corrected (the server's state is theirs).
     expect(t.room.memberInfo(botDef.id)!.corrections).toBe(0);
     t.until(() => t.match.phase === Phase.RoundEnd, 40, "the round's end on time");
     expect(t.match.history[0]).toMatchObject({ winner: 1 }); // nobody planted: the defenders win on time
     t.until(() => t.match.phase === Phase.MatchEnd, 60, "the match end");
     expect(t.match.round).toBe(2);
     expect(t.match.history[1].attackers).toBe(1); // alternating
-    expect(you.session.mispredictions).toEqual([]);
+    // Bots walk now (M2): one brushing past the person's body moves it a little as the server has the bot where the
+    // client didn't yet: a correction or two, as with any other player walking into you.
+    expect(you.session.mispredictions.length).toBeLessThanOrEqual(3);
     expect(you.errors).toEqual([]);
   });
 

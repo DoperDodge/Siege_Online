@@ -80,3 +80,4 @@ export * from "./bots/nav/world.js";
 export * from "./bots/nav/follow.js";
 export * from "./bots/perceive.js";
 export * from "./bots/aim.js";
+export * from "./bots/plan.js";

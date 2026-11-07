@@ -15,6 +15,7 @@ import type { BlastData, BotLevel, DummyDef, GadgetData, ModeData } from "../dat
 import { Bot, type BotWorld } from "../bots/bot.js";
 import { NavWorld } from "../bots/nav/world.js";
 import { TeamBoard } from "../bots/perceive.js";
+import { DefensePlanner } from "../bots/plan.js";
 import { BotRng } from "../bots/rng.js";
 import { DUMMY_STANCE, dummyInput } from "../lab/dummies.js";
 import { spawnAmmo, type Pawn, type PlayerController } from "../player/pawn.js";
@@ -316,6 +317,9 @@ export class Room implements DirectorHost {
   nav: NavWorld | null = null;
   /** What each team's bots have seen, shared among them (Phase 9 M3: voice comms). */
   readonly botBoards: [TeamBoard, TeamBoard] = [new TeamBoard(), new TeamBoard()];
+  /** The defending bots' planner this round (Phase 9 M4), made as prep starts; the round it's for. */
+  defensePlan: DefensePlanner | null = null;
+  private planRound = -1;
   /**
    * Who downed each body that is down now, and in which of its lives (Pawn.life): they get the kill when it
    * dies (research/core_mechanics.md §10.2). A body that came back since (a teleport, the kill plane in the
@@ -2271,6 +2275,7 @@ export class Room implements DirectorHost {
     // Bots (Phase 9): the navigation caught up with last tick's walls and gadgets (a chunk or so a tick), then each
     // brain's input for this tick, queued as a client's would arrive (it sees the present).
     this.nav?.step();
+    this.plans();
     for (const m of this.members.values()) if (m.bot) this.botInput(m);
     for (const m of this.members.values()) {
       m.applied = null;
@@ -2343,6 +2348,24 @@ export class Room implements DirectorHost {
     this.flushEvents();
   }
 
+  /** The bots' team planners: a defense plan as each round's prep starts (Phase 9 M4), kept through its action. */
+  private plans() {
+    const m = this.director?.match;
+    if (!m || !this.nav) return;
+    const live = m.phase === Phase.Prep || m.phase === Phase.Action || m.phase === Phase.PostPlant;
+    if (!live) {
+      if (m.phase !== Phase.RoundEnd) this.defensePlan = null;
+      return;
+    }
+    if (this.planRound !== m.round || !this.defensePlan) {
+      this.planRound = m.round;
+      const bots = m.sides[DEFENSE].filter((id) => this.members.get(id)?.bot);
+      const strat = this.sim.data.bots.strats.get(this.levelId)?.sites[m.site ?? ""] ?? null;
+      this.defensePlan = bots.length && m.site ? new DefensePlanner(this.sim, this.nav, m, m.site, strat, bots, new BotRng(this.seed, 0xd3f + m.round), (id) => this.members.get(id)?.ctrl?.id ?? 0) : null;
+    }
+    this.defensePlan?.step();
+  }
+
   /**
    * The snapshots a member's shots are judged against (lag compensation: only those its client drew from); a bot has
    * none sent and sees the world as the room records it (Phase 9).
@@ -2375,6 +2398,8 @@ export class Room implements DirectorHost {
         return room.nav;
       },
       board: (team) => this.botBoards[team === 1 ? 1 : 0],
+      taskOf: () => (this.director?.match.sideOf(m.id) === DEFENSE ? (this.defensePlan?.taskOf(m.id) ?? null) : null),
+      report: (ok) => this.defensePlan?.report(m.id, ok),
       pick: (pick) => this.pickLoadout(m.id, pick),
       act: (a) => this.onMatchAction(m.id, a),
     };

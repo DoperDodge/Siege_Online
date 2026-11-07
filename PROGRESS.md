@@ -16,9 +16,9 @@ breach by the same rules, and they know only what their team could know (what th
 | M1 | Bots in rooms, the Bot Training format, lobby controls, backfill, offline matches | ✅ |
 | M2 | Navigation on Oregon (grid, vaults, ladders, drops), rebuilt as walls and floors open | ✅ |
 | M3 | Sight, hearing (placeholder sounds until Phase 11), team intel; aim and gunfights; difficulty levels | ✅ |
-| M4 | Defending bots: reinforce, holes, barricades, gadgets, anchors, roamers, rotations, retakes | next |
-| M5 | Attacking bots: drones in prep, routes, breaches, vertical play, rappel, the plant | |
-| M6 | The team planner and every site's plan (data/maps/oregon/bot_strats.json); orders from you on the comm wheel | |
+| M4 | Defending bots: reinforce, holes, barricades, gadgets, anchors, roamers, rotations, retakes | ✅ (gadgets: M7) |
+| M5 | Attacking bots: drones in prep, routes, breaches, vertical play, rappel, the plant | next |
+| M6 | The team planner and every site's plan (data/maps/oregon/bot_strats.json); orders from you on the comm wheel | plans ✅ (with M4); orders next |
 | M7 | All twelve operators' abilities | |
 | M8 | Bot Training setup and the drills | |
 | M9 | Training feedback after each round: report, killcam, stats | |
@@ -79,6 +79,24 @@ breach by the same rules, and they know only what their team could know (what th
 - Tests: game/shared/test/botFight.test.ts (nobody known through a wall until they sprint; noticed, shot and finished in
   the open; a teammate told after the comms delay; Elite against Recruit duels).
 - Known: they don't play the objective yet (reinforce, plant, defuse: M4, M5), and use no gadgets (M7).
+
+### M4: defending bots, and every site's plan (D-162)
+- **Defending bots set the site up in prep, the way the plan for that site says** (data/maps/oregon/bot_strats.json,
+  made from the Oregon research's four site write-ups): they reinforce the plan's walls and hatches in order while the
+  team's reinforcements last (a hatch from the room above), knife the rotation holes through the walls the plan
+  leaves soft, and in the last seconds of prep barricade the doors between the site's rooms and the rest, from inside.
+- **Then they take roles**: three anchors hold spots in the site's rooms (each spot chosen from where it sees the
+  room's doors, soft walls and hatches from a fair distance), two roamers walk the rooms the plan gives them and come
+  back to the site for the last minute. Anchors don't leave their spot to chase a far-off sound. Roamers do the jobs
+  outside the site (a hatch from the floor above), so anchors aren't shut outside when the doors are barricaded.
+- **After a plant** they all go for the defuser, and the first there disables it.
+- Try it: Bot Training offline, set your side to **Attack only**, and drone or walk into the site (the bots only
+  defend for now; attacking comes in M5). The Laundry's Freezer and Bunker walls go steel, the doors are barricaded,
+  the Laundry–Supply walls get holes.
+- Tests: game/shared/test/botDefense.test.ts (prep at each of the four sites: the plan's first walls reinforced, doors
+  barricaded, a rotation hole, three anchors in the site at their spots; a plant in the Kitchen disabled by them),
+  botStrats.test.ts (every room, wall, hatch and spawn the plans name is the level's).
+- Known: no gadgets yet (M7); the plans are the research's derivations, not observed play (marked DER).
 
 ---
 

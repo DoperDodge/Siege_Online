@@ -31,6 +31,7 @@ import practiceJson from "../../../../data/modes/practice.json";
 import botTrainingJson from "../../../../data/modes/bot_training.json";
 import botDifficultyJson from "../../../../data/bots/difficulty.json";
 import botNamesJson from "../../../../data/bots/names.json";
+import oregonStratsJson from "../../../../data/maps/oregon/bot_strats.json";
 import objectiveJson from "../../../../data/objective.json";
 import intelJson from "../../../../data/intel.json";
 import destructionJson from "../../../../data/destruction.json";
@@ -41,6 +42,7 @@ import { fnv1a, utf8Encode } from "../net/bytes.js";
 import {
   botDifficultyFileSchema,
   botNamesFileSchema,
+  botStratsSchema,
   combatSchema,
   destructionSchema,
   gadgetRulesSchema,
@@ -120,6 +122,7 @@ export const rawData = {
   gadgetRules: gadgetRulesJson as Record<string, unknown>,
   botDifficulty: botDifficultyJson as Record<string, unknown>,
   botNames: botNamesJson as Record<string, unknown>,
+  botStrats: { oregon: oregonStratsJson } as Record<string, Record<string, unknown>>,
 };
 
 /** Maps that tools/mapgen compiles (DECISIONS D-070): their LevelDef is level.json, generated from the authoring layout.json. */
@@ -180,7 +183,11 @@ export function loadGameData(): GameData {
     destruction: parse("data/destruction.json", destructionSchema, rawData.destruction),
     gadgets,
     gadgetRules: parse("data/gadgets.json", gadgetRulesSchema, rawData.gadgetRules),
-    bots: { levels: parse("data/bots/difficulty.json", botDifficultyFileSchema, rawData.botDifficulty).levels, names: parse("data/bots/names.json", botNamesFileSchema, rawData.botNames).names },
+    bots: {
+      levels: parse("data/bots/difficulty.json", botDifficultyFileSchema, rawData.botDifficulty).levels,
+      names: parse("data/bots/names.json", botNamesFileSchema, rawData.botNames).names,
+      strats: new Map(Object.entries(rawData.botStrats).map(([level, raw]) => [level, parse(`data/maps/${level}/bot_strats.json`, botStratsSchema, raw)])),
+    },
     dataHash: fnv1a(utf8Encode(JSON.stringify(rawData))),
   };
   const problems = crossFileProblems(data);
