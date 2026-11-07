@@ -37,6 +37,8 @@ export type FollowState = (typeof FollowState)[keyof typeof FollowState];
 /** How close counts as at a waypoint (m), at a link's start, and at the goal by default. */
 const NEAR = 0.35;
 const AT_LINK = 0.22;
+/** How near a vault's start a body steps before vaulting (m). */
+const ALIGN_M = 0.08;
 /** No progress toward the waypoint for this long (s): try something; for twice as long: search again; 4×: give up. */
 const STUCK_S = 1.2;
 /** Turn rate while walking (rad/s) when nothing else is looked at. */
@@ -96,6 +98,8 @@ export class PathFollower {
   private retries = 0;
   /** When the barricade a link breaks was gone (its tick of the link; -1: still up). */
   private clearAt = -1;
+  /** Kept inside the building (a defender under the red walls, set by its brain each tick): routes stay inside. */
+  confined = false;
   /** The goal moved while a link was under way: a new route once it's done. */
   private reroute = false;
   /** The sim tick it was last asked for a stride (legs not asked lately aren't walking anywhere, whatever their state). */
@@ -226,7 +230,7 @@ export class PathFollower {
     if (!this.route) {
       // A new route waits its turn when many bots want one this tick.
       if (!nav.takeRoute()) return false;
-      this.route = nav.search.route(pos, this.goal!);
+      this.route = nav.search.route(pos, this.goal!, this.confined);
       this.steps = [];
       if (!this.route) {
         this.fail();
@@ -316,6 +320,15 @@ export class PathFollower {
       return this.leaveLink();
     }
     const end = this.steps[this.idx].pos;
+    // Onto the spot the vault was planned from (a link starts within AT_LINK of it, and a window is narrow: the movement
+    // code won't vault through one from a hand's breadth to its side), facing the way.
+    const start = this.steps[this.idx - 1]?.pos;
+    const aligned = (): Stride | null => {
+      if (!start || dist2([s.x, s.y, s.z], start) <= ALIGN_M) return null;
+      const way = Math.atan2(-(start[0] - s.x), -(start[2] - s.z));
+      const rel = wrapAngle(way - s.yaw);
+      return { ...base, forward: Math.cos(rel) * 0.4, strafe: -Math.sin(rel) * 0.4 };
+    };
     const arrived = () => {
       this.taking = null;
       this.idx = Math.min(this.idx + 1, this.steps.length);
@@ -329,6 +342,10 @@ export class PathFollower {
     switch (l.kind) {
       case LinkKind.Vault:
         if (t > 4 && s.mode === PawnMode.Walk && dist2([s.x, s.y, s.z], end) < 0.6 && Math.abs(s.y - end[1]) < 0.4) return arrived();
+        if (s.mode === PawnMode.Walk) {
+          const step = aligned();
+          if (step) return step;
+        }
         return facing ? { ...base, buttons: vaultTap(t) } : base;
       case LinkKind.Drop: {
         // Down on the floor below (wherever the fall carried it): on with the path.
@@ -386,6 +403,10 @@ export class PathFollower {
         }
         if (l.vault) {
           if (t > 4 && s.mode === PawnMode.Walk && dist2([s.x, s.y, s.z], end) < 0.7) return arrived();
+          if (s.mode === PawnMode.Walk) {
+            const step = aligned();
+            if (step) return step;
+          }
           return facing ? { ...base, buttons: vaultTap(t) } : base;
         }
         if (dist2([s.x, s.y, s.z], end) < NEAR) return arrived();

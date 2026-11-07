@@ -195,6 +195,38 @@ export class NavGrid {
    */
   readonly rebuiltAt = new Map<number, number>();
 
+  /**
+   * Each chunk's nodes inside the building (1) or not (0), and its regions with a node inside (red walls keep a
+   * defender's feet in the building in prep: bots/DESIGN.md §12): worked out when first asked, again after a rebuild.
+   */
+  private readonly insideNodes = new Map<number, { nodes: Uint8Array; regions: Uint8Array }>();
+
+  private insideOfChunk(k: number): { nodes: Uint8Array; regions: Uint8Array } {
+    let had = this.insideNodes.get(k);
+    if (had) return had;
+    const c = this.chunks[k];
+    const nodes = new Uint8Array(c.y.length);
+    const regions = new Uint8Array(REGION_SPAN);
+    for (let n = 0; n < c.y.length; n++) {
+      const [x, y, z] = this.nodePos(k * NODE_SPAN + n);
+      if (!this.sim.insideBuilding(x, y, z)) continue;
+      nodes[n] = 1;
+      regions[c.region[n]] = 1;
+    }
+    this.insideNodes.set(k, (had = { nodes, regions }));
+    return had;
+  }
+
+  /** Whether a node is inside the building. */
+  insideAt(n: number): boolean {
+    return this.insideOfChunk(Math.floor(n / NODE_SPAN)).nodes[n % NODE_SPAN] === 1;
+  }
+
+  /** Whether a region has a node inside the building. */
+  regionInside(r: number): boolean {
+    return this.insideOfChunk(Math.floor(r / REGION_SPAN)).regions[r % REGION_SPAN] === 1;
+  }
+
   /** Whether a route found at `version` through these regions (and from and to these nodes) still holds. */
   routeHolds(version: number, regions: readonly number[], nodes: readonly number[]): boolean {
     if (version === this.version) return true;
@@ -274,7 +306,10 @@ export class NavGrid {
    */
   rebuild(chunks: Iterable<number>): number[] {
     const set = new Set(chunks);
-    for (const k of set) this.buildNodes(k);
+    for (const k of set) {
+      this.buildNodes(k);
+      this.insideNodes.delete(k);
+    }
     const around = new Set<number>();
     for (const k of set) for (const n of this.chunkNeighbours(k, true)) around.add(n);
     // A rebuilt chunk's edge nodes are a neighbour chunk's nodes' neighbours too: its own nodes' lists whole, the

@@ -245,6 +245,34 @@ stats are on the Play page.
   stuck more than 10 s, no crash. Short in CI, long by hand (`npm run soak`).
 - **Browser**: a solo Bot Training match offline vs 5 bots, attack and defense rounds.
 
+**As built (M10, D-168).**
+- **Bench** (`npm run bench:bots`, tools/bench/bots.ts): a Bot Training room, one silent person and nine bots, two
+  rounds; every room step timed by phase, with the bots' brains, the grid's rebuilds and the planners timed apart.
+- **Where the time went, and what keeps it down**: a rebuilt chunk keeps the routes that don't cross it (each chunk
+  notes the grid version it was rebuilt at; a route holds while none of its regions' chunks, nor its links' ends,
+  were rebuilt since it was found); at most three new route searches a tick across the room (a bot asking past that
+  waits a tick); vault probes cached per node and yaw until a change comes within 2.5 m of them; a room's hold
+  spots scored once per level and room (the sight lines are hundreds of rays a room), warmed in the lobby when the
+  room first makes its grid; a chunk's region pairs added to the search graph once; a defender's own-gadget jobs
+  worked out for one bot a tick.
+- **Soak** (tools/soak/soak.ts): a watching ClientSession joins as a player would; panel and gadget hashes are
+  checked on every op it gets (a mismatch is a desync); a bot is stuck when its legs, driven this tick, have been
+  walking (or failing) toward a goal more than 2 m off for 10 s without getting a metre on, on a task, an
+  investigation or a revive. `npm run soak` plays every site (`--site`, `--rounds`, `--dump` for what's round a
+  stuck bot); the unit run plays one round each on the Laundry and the Dorms.
+- **Getting unstuck** (bots/nav/follow.ts), from what the soak found: stuck is the body not getting half a metre
+  across the floor (whatever the waypoints); after 1.2 s it taps vault, after 2.4 s it searches again and wriggles
+  (crouched, stepping either side of the way), after 4.8 s or five failed links it gives up. A drop it can't take
+  (still on the lip after 1.5 s; crouched from 0.75 s, for a staircase over the lip), a vault that doesn't go in 4 s,
+  a barricade not got through 4 s after it's down (10 s in all) come out of the grid for the round. A barricade's
+  walk-through link is only made where a crouched body fits through standing on its sill (a window level with the
+  floor isn't a doorway). A new goal while a link is under way waits for the link (a sound heard again would
+  otherwise restart a barricade's knifing every few ticks). While the red walls are up a defender's routes stay in
+  the building (the grid notes which nodes are inside the building zones; the region search leaves out regions with
+  none inside, the node search nodes outside): without it, prep's shortcuts went out a window and over a roof, and
+  the vault out never started. A hold spot it can't reach is held from where it is;
+  a prep drone's body stays put. Stand spots are at the floor's height where there is one (not up on a table).
+
 ## 13. Milestones
 
 | M | What | Playable after it |

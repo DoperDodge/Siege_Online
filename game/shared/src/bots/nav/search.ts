@@ -20,6 +20,8 @@ export interface NavRoute {
   goal: number;
   /** The grid's version it was found on. */
   version: number;
+  /** Kept inside the building (a defender under the red walls): no region without a node inside, no node outside. */
+  confined?: boolean;
 }
 
 export interface NavPath {
@@ -155,8 +157,8 @@ export class NavSearch {
     }
   }
 
-  /** The region route from one region to another (A* on the region graph), or null. */
-  regionRoute(from: number, to: number): number[] | null {
+  /** The region route from one region to another (A* on the region graph; only through regions `ok` allows), or null. */
+  regionRoute(from: number, to: number, ok?: (r: number) => boolean): number[] | null {
     if (from === to) return [from];
     const goal = this.regionPos(to);
     const h = (r: number) => {
@@ -180,6 +182,7 @@ export class NavSearch {
       closed.add(r);
       const gr = gs.get(r)!;
       for (const [s, cost] of this.adj.get(r) ?? []) {
+        if (ok && !ok(s)) continue;
         const ng = gr + cost;
         if (ng < (gs.get(s) ?? Infinity)) {
           gs.set(s, ng);
@@ -191,14 +194,18 @@ export class NavSearch {
     return null;
   }
 
-  /** A route from `from` to `to` (feet positions): the regions it crosses, its start and goal nodes; null: none. */
-  route(from: Vec3, to: Vec3): NavRoute | null {
+  /**
+   * A route from `from` to `to` (feet positions): the regions it crosses, its start and goal nodes; null: none.
+   * `confined`: inside the building all the way (a defender under the red walls; the goal must be inside).
+   */
+  route(from: Vec3, to: Vec3, confined = false): NavRoute | null {
     const g = this.grid;
     const a = g.nodeNear(from[0], from[1], from[2], 1, 0.9);
     const b = g.nodeNear(to[0], to[1], to[2], 1.5, 1.2);
     if (a < 0 || b < 0) return null;
-    const regions = this.regionRoute(g.regionOf(a), g.regionOf(b));
-    return regions ? { regions, start: a, goal: b, version: g.version } : null;
+    if (confined && !g.insideAt(b)) return null;
+    const regions = this.regionRoute(g.regionOf(a), g.regionOf(b), confined ? (r) => g.regionInside(r) : undefined);
+    return regions ? { regions, start: a, goal: b, version: g.version, ...(confined ? { confined } : {}) } : null;
   }
 
   /**
@@ -215,7 +222,7 @@ export class NavSearch {
     const corridor = new Set<number>(route.regions.slice(Math.max(0, here - 1), last + 1));
     for (const r of route.regions.slice(here, last + 1)) for (const s of this.adj.get(r)?.keys() ?? []) corridor.add(s);
     const target = done ? -1 : route.regions[last];
-    const found = this.nodeSearch(at, done ? route.goal : -1, target, corridor, allow);
+    const found = this.nodeSearch(at, done ? route.goal : -1, target, corridor, allow, route.confined === true);
     if (!found) return null;
     return { steps: this.smooth(found.nodes, found.links), done };
   }
@@ -258,7 +265,7 @@ export class NavSearch {
    * its representative node). Typed arrays indexed by the grid's dense numbering, marked per search, so nothing is
    * cleared or allocated per node.
    */
-  private nodeSearch(a: number, goal: number, target: number, corridor: Set<number>, allow?: (l: NavLink) => boolean): { nodes: number[]; links: (NavLink | null)[] } | null {
+  private nodeSearch(a: number, goal: number, target: number, corridor: Set<number>, allow?: (l: NavLink) => boolean, inside = false): { nodes: number[]; links: (NavLink | null)[] } | null {
     const g = this.grid;
     const total = g.nodeCount;
     if (this.gs.length < total) {
@@ -338,6 +345,7 @@ export class NavSearch {
         const lm = m % NODE_SPAN;
         const cm = km === kn ? cn : chunks[km];
         if (inCorridor[km * REGION_SPAN + cm.region[lm]] !== S) continue;
+        if (inside && !g.insideAt(m)) continue;
         const step = (k < 4 ? NAV_CELL : DIAG) * (stand && cm.flags[lm] & NavFlag.Stand ? 1 : CROUCH_COST);
         const ng = gn + step;
         const dm = offset[km] + lm;
@@ -350,7 +358,7 @@ export class NavSearch {
       }
       for (const at of cn.links) {
         const l = g.links[at];
-        if (!l || l.from !== n || (allow && !allow(l))) continue;
+        if (!l || l.from !== n || (allow && !allow(l)) || (inside && !g.insideAt(l.to))) continue;
         const km = (l.to / NODE_SPAN) | 0;
         const lm = l.to % NODE_SPAN;
         if (inCorridor[km * REGION_SPAN + chunks[km].region[lm]] !== S) continue;

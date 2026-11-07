@@ -92,6 +92,20 @@ describe("bots' navigation (Phase 9 M2)", () => {
     expect(modes.has(PawnMode.Vault)).toBe(true);
   }, 60000);
 
+  it("vaults through a window's barricade from a little to its side (where the soak found bots stuck at 2F.o008)", async () => {
+    const room = await lab();
+    room.addBot(0, "normal");
+    const nav = room.nav!;
+    const panel = room.sim.level.panels.byId.get("2F.o008.bar")!.panel.spec.index;
+    expect(nav.grid.links.some((l) => l?.kind === LinkKind.Barricade && l.vault && l.panel === panel)).toBe(true);
+    // 16 cm off the window's middle, 0.7 m from it: within a link's reach of its start, but not where its vault was planned.
+    const b = botAt(room, [42.47, 3.2, 28.7], 0, 180);
+    const modes = new Set<number>();
+    expect(walk(room, b, [42.63, 3.2, 26.38], 12, modes)).toBe(true);
+    expect(room.sim.level.panels.list[panel].panel.broken).toBe(true);
+    expect(modes.has(PawnMode.Vault)).toBe(true);
+  }, 60000);
+
   it("a hatch broken open: the grid is rebuilt round it, and the bot drops through it to the basement", async () => {
     const room = await lab();
     const b = botAt(room, [38.2, 0, 36.2]);

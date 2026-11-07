@@ -215,8 +215,10 @@ export class Bot {
     }
     const d = w.sim.data.bots.levels[this.level];
     const now = w.sim.tick;
-    // Defenders go round their own barricades (breaking one only when there's no other way).
+    // Defenders go round their own barricades (breaking one only when there's no other way), and stay in the building
+    // while the red walls are up (prep: a step or vault out wouldn't go).
     this.legs.allow = pawn.team === DEFENSE ? notBarricade : undefined;
+    this.legs.confined = pawn.team === DEFENSE && w.sim.matchRules.redWalls && w.sim.building.length > 0;
     this.legs.drone = false;
     const mates = [...w.sim.pawns.values()].filter((p) => p.team === pawn.team && p.id !== pawn.id && p.kind === PawnKind.Body && p.state.mode !== PawnMode.Dead);
     this.senses.update(w.sim, pawn, ctrl.id, d, this.heard, w.board(pawn.team), mates);
@@ -953,6 +955,7 @@ export class Bot {
     if (job?.kind !== "drone" || !w.nav) return { forward: 0, strafe: 0, yaw: s.yaw, pitch: 0, buttons: 0, stance: Stance.Stand, lean: 0 };
     this.legs.allow = droneLink;
     this.legs.drone = true;
+    this.legs.confined = false;
     // Near enough to see the bomb's room; a way it can't drive (no way up a staircase, a body in the way) given up.
     if (this.legs.state !== FollowState.Failed) this.legs.goTo(job.to, 3.5);
     else this.legs.stop();

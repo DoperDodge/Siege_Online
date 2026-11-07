@@ -22,7 +22,7 @@ breach by the same rules, and they know only what their team could know (what th
 | M7 | All twelve operators' abilities, the generic gadgets, Fuze's shield | ✅ |
 | M8 | Bot Training setup and the drills | ✅ |
 | M9 | Training feedback after each round: report, killcam, stats | ✅ |
-| M10 | Soak tests, the tick budget, browser test, review, report | |
+| M10 | Soak tests, the tick budget, browser test, review, report | ✅ (D-168) |
 
 ### M1: bots in rooms (D-159)
 - **Play page → Bot Training → "Play vs bots (offline)"**: a match on Oregon in your browser, no server. Bots fill
@@ -200,6 +200,58 @@ breach by the same rules, and they know only what their team could know (what th
   seen, damage, no time to kill); a browser check of the killcam, the report and the stats.
 - Known: the report and stats come from the server's view of the round (a Bot Training or drill match; in other formats
   you get the report too).
+
+### M10: the checks — soak, tick budget, browser test (D-168)
+- **Bots get unstuck, and don't walk into what no body could**: bots that couldn't get somewhere used to push at it
+  for good. Now a bot that isn't getting on taps vault, then searches again and wriggles (crouched, stepping to either
+  side), then gives up and does something else; a drop, vault or window it can't take is crossed off for the round, for
+  every bot. In prep, defenders no longer try to cut through the outside (the red walls keep them in: they used to
+  stand at a 2F window trying to vault out); a barred window level with the floor (the attic's) is no longer taken for
+  a doorway; low openings are crouched through; a defender who hears you through a barricaded door knifes it down
+  instead of starting over each time you make a sound; a spot it can't reach is held from where it is; a droning
+  attacker's body stays at the spawn.
+- **The Play page's "Play vs bots (offline)" button** had your training stats drawn over its label (M9): fixed.
+- **Soak** (`npm run soak`, tools/soak): five bots against five on every site, a watching client connected as you
+  would be: no crash, no desync (its walls and gadgets never disagree with the server's), no bot stuck more than 10 s.
+  Two rounds a site: the Laundry, Dining and Meeting clean; the Dorms clean but for one Skopós boxed in by a teammate
+  and a gadget for a while. One round each of the Laundry and the Dorms runs with the unit tests.
+- **Tick budget** (`npm run bench:bots`: one silent person and nine bots, two rounds): the room's step takes
+  0.84 ms at the median, 2.4 ms at the 95th percentile and 4.4 ms at the 99th, against PLAN §18's 5 ms; 0.8 % of ticks
+  go over, nearly all in prep (the bots' first thoughts as it starts; a reinforced wall's part of their map rebuilt),
+  the worst 56 ms in prep and 20 ms in action (the map rebuilt after a breach). Before M10 the worst prep tick was
+  337 ms and a rebuild 50–150 ms.
+- **Browser test** (tools/e2e/bot-training.mjs): an offline solo match in Chromium: the lobby with you and nine bots,
+  your picks, attack (through your drone in prep) then defense, the bots getting about and fighting, your report each
+  round, the summary, and both rounds in your training stats (14 checks).
+- **CI**: the whole-match bot test now has 120 s (a runner took longer than the default 20 s), and the match
+  test's spectating check waits on a timer for 20 s with the dead view counted from the death itself (a slow runner's
+  page draws about a frame a second; reproduced with the page's CPU throttled 12 and 40 times).
+
+### How to test (needs Node 22.12+)
+1. `npm ci`, then `npm run build && npm start`, and open http://localhost:8080 → *Play a match* → **Play vs bots
+   (offline)**. In the lobby: your side (attack and defense alternating is the default), sizes, difficulty, site, how
+   bots pick; *Start the match*.
+2. Attack: in prep drive your drone and watch the defenders reinforce and barricade the site; in action follow your
+   bot teammates in (or lead them: ping, then the comm wheel's Go here / Breach this / Follow me / Regroup).
+3. Defend: help reinforce in prep; your anchors take spots in the site, roamers walk the rooms round it.
+4. After each round: your report under the banner (where you died, who saw you first, damage, utility); killed by
+   someone, the killcam first. Your stats on the Play page.
+5. The drills: Play page → Bot Training → Drills (1v1 Aim Duel, Retake, Site Hold, Clear a Floor, Drone and Call,
+   Custom Scenario).
+6. `npx vitest run` (1,148 tests), `npm run soak`, `npm run bench:bots`, `node tools/e2e/bot-training.mjs` (after a
+   build).
+
+### Known issues
+- Bots don't rappel, and Skopós doesn't fight from her shell's barrier.
+- A bot can be boxed in for a while by a teammate's body and a gadget in a narrow spot (the soak's Dorms case); a
+  stuck bot gives up after about 5 s and tries something else, so it's rarely more than that.
+- Spikes over the 5 ms budget in prep (above): a tick or two of hitch, a few times a round; to be spread further.
+- Bot sounds (footsteps, gunshots) are placeholders until the audio phase; bots hear by our numbers, not Siege's.
+
+### Next
+Your requests from before this phase's end: Fuze's shield to the reference pictures (its width and the curve round
+its sides, held flush with crossed arms on its grips), aiming swinging it aside quickly, leaning tilting it with you
+(no stretch), and Skopós's other shell staying still when you look round through it.
 
 ---
 
