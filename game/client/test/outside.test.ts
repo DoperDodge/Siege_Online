@@ -9,17 +9,17 @@ import { buildBackdrop } from "../src/render/backdrop.js";
 import { Kit } from "../src/render/kit.js";
 import { LevelArt } from "../src/render/levelArt.js";
 import { buildOutside, modelFor } from "../src/render/outside.js";
-import type { TextureManifest } from "../src/render/textures.js";
+import type { TextureManifest, TextureSets } from "../src/render/textures.js";
 
 const manifest = JSON.parse(readFileSync(new URL("../public/art/textures/manifest.json", import.meta.url), "utf8")) as TextureManifest;
 const tex = () => new THREE.DataArrayTexture(new Uint8Array(4 * manifest.sets.length), 1, 1, manifest.sets.length);
-const sets = () => ({
+const sets = (): TextureSets => ({
   color: tex(),
   normal: tex(),
   orm: tex(),
   layer: new Map(manifest.sets.map((s, i) => [s.id, i])),
   sizeM: new Map(manifest.sets.map((s) => [s.id, s.sizeM])),
-  mean: new Map(manifest.sets.map((s) => [s.id, s.mean ?? [0.5, 0.5, 0.5]])),
+  mean: new Map(manifest.sets.map((s) => [s.id, s.mean ?? ([0.5, 0.5, 0.5] as [number, number, number])])),
   size: 1,
   gpuBytes: 0,
 });
