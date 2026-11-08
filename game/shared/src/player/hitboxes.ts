@@ -26,7 +26,33 @@ type Seg = [BodyPart, Vec3, Vec3];
 const partRadius = (hb: HitboxData, part: BodyPart) =>
   hb.parts[part.startsWith("arm") ? "arm" : part.startsWith("leg") ? "leg" : (part as "head" | "neck" | "torso" | "pelvis")].radius;
 
-function uprightPose(hb: HitboxData, height: number, eye: number, leanOffset: number): Seg[] {
+/**
+ * Fuze's hands on his raised shield (D-169, Ulo: arms crossed on grips behind it, the plate near flush against him):
+ * crossed behind the plate, just clear of its back; as he aims (`aside`, 0…1) his right hand comes out with the pistol
+ * and his left stays on the plate as it swings aside to his left (`sideM`).
+ */
+export interface ShieldHold {
+  frontM: number;
+  sideM: number;
+  aside: number;
+  /** Crouched (0 standing … 1): his shoulders hunched down and in behind the plate's top part. */
+  hunch: number;
+}
+
+/** How far crouched a body of this height is: 0 standing … 1 crouched (prone and between count as crouched). */
+export function crouchWeight(m: MovementData, height: number): number {
+  const span = m.stance.stand.height - m.stance.crouch.height;
+  return span > 0 ? Math.min(1, Math.max(0, (m.stance.stand.height - height) / span)) : 0;
+}
+
+/** How far a crouched body's shoulders hunch down behind its raised shield (m), and in (a fraction of their width). */
+const HUNCH_DOWN_M = 0.06;
+const HUNCH_IN = 0.12;
+
+/** How far behind the plate's middle a hand on its grips is (m): the plate's own half thickness, an arm's, a little more. */
+const HOLD_BEHIND_M = 0.12;
+
+function uprightPose(hb: HitboxData, height: number, eye: number, leanOffset: number, hold?: ShieldHold): Seg[] {
   const st = hb.standing;
   const hip = height * st.hipHeight;
   const chest = height * st.chestHeight;
@@ -38,13 +64,26 @@ function uprightPose(hb: HitboxData, height: number, eye: number, leanOffset: nu
   const bend = (y: number) => (head > hip ? leanOffset * Math.max(0, (y - hip) / (head - hip)) : 0);
   const p = (x: number, y: number, z: number): Vec3 => [x + bend(y), y, z];
   const hand = hip + st.handAboveHip;
+  // Behind a raised shield, crouched: the shoulders hunched down and in behind its top part.
+  const shoulderY = chest - (hold ? hold.hunch * HUNCH_DOWN_M : 0);
+  const shoulderX = sw * (1 - (hold ? hold.hunch * HUNCH_IN : 0));
+  let left: Vec3 = [-st.handHalfWidth, hand, -st.handForward];
+  let right: Vec3 = [st.handHalfWidth, hand, -st.handForward];
+  if (hold) {
+    // On the grips: crossed (the left hand on the right one), behind the plate's middle, between the hips and chest.
+    const grip = hip + (chest - hip) * 0.6;
+    const z = -Math.max(0.08, hold.frontM - HOLD_BEHIND_M);
+    const a = hold.aside;
+    left = [lerp(st.handHalfWidth * 0.7, -st.handHalfWidth - hold.sideM * 0.7, a), grip, z];
+    right = [lerp(-st.handHalfWidth * 0.7, st.handHalfWidth, a), lerp(grip, hand, a), lerp(z, -st.handForward, a)];
+  }
   return [
     ["head", p(0, head, -st.headForward), p(0, head, -st.headForward)],
     ["neck", p(0, chest + st.neckBaseAboveChest, 0), p(0, neckTop, 0)],
     ["torso", p(0, hip + st.torsoBaseAboveHip, 0), p(0, chest, 0)],
     ["pelvis", p(-hw, hip, 0), p(hw, hip, 0)],
-    ["arm_l", p(-sw, chest, 0), p(-st.handHalfWidth, hand, -st.handForward)],
-    ["arm_r", p(sw, chest, 0), p(st.handHalfWidth, hand, -st.handForward)],
+    ["arm_l", p(-shoulderX, shoulderY, 0), p(left[0], left[1], left[2])],
+    ["arm_r", p(shoulderX, shoulderY, 0), p(right[0], right[1], right[2])],
     ["leg_l", p(-hw, hip, 0), p(-hw, st.footHeight, -st.footForward)],
     ["leg_r", p(hw, hip, 0), p(hw, st.footHeight, -st.footForward)],
   ];
@@ -168,10 +207,11 @@ function toWorld(s: PawnState, p: Vec3, height: number, lift: number): Vec3 {
   return [s.x + x, s.y + ly, s.z + z];
 }
 
-export function poseHitboxes(m: MovementData, hb: HitboxData, s: PawnState): Hitbox[] {
+/** A body's pose as capsules; `hold`: Fuze's hands on his raised shield's grips (see ShieldHold). */
+export function poseHitboxes(m: MovementData, hb: HitboxData, s: PawnState, hold?: ShieldHold): Hitbox[] {
   const leanOffset = s.lean * m.lean.offset;
   const height = currentHeight(m, s);
-  const up = uprightPose(hb, height, currentEyeHeight(m, s), leanOffset);
+  const up = uprightPose(hb, height, currentEyeHeight(m, s), leanOffset, hold);
   const w = proneWeight(s);
   const prone = w > 0 ? pronePoseFlat(hb, m.stance.prone.eye) : null;
   const shift = leanOffset * m.lean.proneOffsetScale;
@@ -195,40 +235,64 @@ export type ShieldPlace = "front" | "back";
 /** The plate's numbers (data/weapons/ballistic_shield.json `shield.plate`). */
 export interface ShieldPlate {
   widthM: number;
+  topWidthM: number;
   heightM: number;
-  chamferM: number;
+  shoulderM: number;
+  cornerM: number;
   curveM: number;
   frontM: number;
   aboveEyeM: number;
-  adsBelowEyeM: number;
+  crouchRaiseM: number;
+  ads: { sideM: number; dropM: number; yawDeg: number };
   window: { widthM: number; heightM: number };
 }
 
-/** How far Fuze's raised shield has slid down for aiming (0 up … 1 down): the body's aiming progress (`adsQ`). */
+/** How far Fuze's raised shield has gone aside for aiming (0 up … 1 aside): the body's aiming progress (`adsQ`). */
 export const shieldLowered = (s: PawnState) => Math.min(1, Math.max(0, s.adsQ / 65535));
 
 /** Where the plate is on a body now: its bottom and top heights over the feet, and a point on it (see shieldFrame). */
 export interface ShieldFrame {
+  /** Its bottom and top over the feet, as held (before a lean tilts it). */
   y0: number;
   y1: number;
-  /** The plate's own height (drawn rigid: as it slides down for aiming its bottom may dip under the floor, y0 doesn't). */
+  /** The plate's own height (its bottom stays over the floor). */
   tall: number;
   /** Half its width. */
   half: number;
+  /** How far down from its top its top part's shoulders are (m, on the plate as it is here). */
+  shoulder: number;
   /**
-   * The world point `u` across it (−1 its left edge … 1 its right) at height `y` over the feet, `out` metres out of its
-   * face (its window's frame stands out of it).
+   * The world point `u` across it (−1 its left edge … 1 its right) at height `y` over the feet as held, `out` metres out
+   * of its face (its window's frame stands out of it).
    */
   at(u: number, y: number, out?: number): Vec3;
 }
 
+/** How far the plate's face at `u` across (−1 … 1) is bent back toward him: flat across its middle, curving round his sides. */
+export function plateBend(k: ShieldPlate, u: number): number {
+  const t = Math.max(0, Math.abs(u) - PLATE_FLAT) / (1 - PLATE_FLAT);
+  return k.curveM * t * t;
+}
+
+/** The middle of the plate that's flat (as a fraction of its half width); it curves back from there to its edges. */
+const PLATE_FLAT = 0.45;
+
+/** Aiming's swing aside, eased (slow at its ends, quick in its middle). */
+const easeAside = (a: number) => a * a * (3 - 2 * a);
+
+/** Fuze's hands on his shield held up in front now (ShieldHold). */
+export function shieldHold(m: MovementData, k: ShieldPlate, s: PawnState): ShieldHold {
+  return { frontM: k.frontM, sideM: k.ads.sideM, aside: easeAside(shieldLowered(s)), hunch: crouchWeight(m, currentHeight(m, s)) };
+}
+
 /**
- * Fuze's Ballistic Shield's plate on a body (Phase 8 M11; the game's model, D-157). In front: a rigid plate `heightM`
- * tall, its middle `frontM` ahead, all but flat (its edges `curveM` nearer him); its top `aboveEyeM` over the eyes,
- * slid down as he aims (`aboveEyeM + adsBelowEyeM` when fully aimed: the head over it), never through the floor (crouched
- * it comes to rest on it, and he aims over its top). On the back: across his back from the hips to the shoulders. It
- * bends with his spine when he leans, as the upper body does (uprightPose). Null while prone (it's on his back then, and
- * a prone body's isn't modelled).
+ * Fuze's Ballistic Shield's plate on a body (Phase 8 M11; the game's model, D-157; Ulo's reference renders, D-169). In
+ * front: a rigid plate `heightM` tall, held close, its middle `frontM` ahead, flat across its middle and curving back round
+ * his sides (its edges `curveM` nearer him); its top `aboveEyeM` over the eyes, so its window is at eye height. Aiming
+ * swings it aside to his left (`ads`: across by `sideM`, turned back round his side by `yawDeg` about its middle, `dropM`
+ * lower; never through the floor), clear of the pistol in his right hand. Leaning tilts it whole with his upper body
+ * (turned about his hips by the spine's angle: no stretch). On the back: across his back from the hips to the
+ * shoulders. Null while prone (it's on his back then, and a prone body's isn't modelled).
  */
 export function shieldFrame(m: MovementData, hb: HitboxData, s: PawnState, k: ShieldPlate, place: ShieldPlace): ShieldFrame | null {
   if (proneWeight(s) > 0) return null;
@@ -237,19 +301,40 @@ export function shieldFrame(m: MovementData, hb: HitboxData, s: PawnState, k: Sh
   const st = hb.standing;
   const hip = height * st.hipHeight;
   const front = place === "front";
-  const top = eye + k.aboveEyeM;
-  const drop = front ? Math.min((k.aboveEyeM + k.adsBelowEyeM) * shieldLowered(s), Math.max(0, top - k.heightM - FLOOR_GAP_M)) : 0;
+  const aside = front ? easeAside(shieldLowered(s)) : 0;
+  // Crouched it's held higher over the eyes (the window stays where it is on the plate, the eyes lower in it), so its
+  // top part's shoulders are over his (Ulo: crouched, the shoulders showed).
+  const top = eye + k.aboveEyeM + k.crouchRaiseM * crouchWeight(m, height);
+  const drop = front ? Math.min(k.ads.dropM * aside, Math.max(0, top - k.heightM - FLOOR_GAP_M)) : 0;
   const y1 = front ? top - drop : height * st.chestHeight + 0.15;
   const y0 = front ? Math.max(FLOOR_GAP_M, y1 - k.heightM) : hip;
   const tall = y1 - y0;
   const half = (front ? k.widthM : k.widthM * 0.85) / 2;
-  const lean = s.lean * m.lean.offset;
+  const shoulder = k.shoulderM * (tall / k.heightM);
+  const torso = hb.parts.torso.radius;
+  // Leaning: turned by the spine's angle (the eyes `lean · offset` across from over the hips: it follows the upper body
+  // from the hips to the head, covering both), and carried across so its window is in front of the eyes, crouched as
+  // standing (Ulo: turned about the hips alone, it fell short of the head and lower, and leaning crouched bared it).
+  const shift = front ? s.lean * m.lean.offset : 0;
+  const roll = front && eye > hip ? Math.atan2(shift, eye - hip) : 0;
+  const [cr, sr] = [Math.cos(roll), Math.sin(roll)];
+  // Aside: across to his left, its left edge drawn back round his side.
+  const side = k.ads.sideM * aside;
+  const yaw = k.ads.yawDeg * DEG * aside;
+  const [cy, sy] = [Math.cos(yaw), Math.sin(yaw)];
   const at = (u: number, y: number, out = 0): Vec3 => {
-    const bend = eye > hip ? lean * Math.max(0, (y - hip) / (eye - hip)) : 0;
-    const z = front ? -k.frontM + k.curveM * u * u - out : 0.22 - k.curveM * u * u + out;
-    return toWorld(s, [u * half + bend, y, z], height, hb.parts.torso.radius);
+    const x = u * half;
+    const bend = plateBend(k, u);
+    if (!front) return toWorld(s, [x, y, 0.22 - bend + out], height, torso);
+    // From the plate's middle (frontM ahead, −z): turned about it, then across to the left.
+    const dz = bend - out;
+    const xa = x * cy + dz * sy - side;
+    const za = -x * sy + dz * cy - k.frontM;
+    // Tilted with the lean about the eyes' height, and across with the head.
+    const ry = y - eye;
+    return toWorld(s, [xa * cr + ry * sr + shift, eye + ry * cr - xa * sr, za], height, torso);
   };
-  return { y0, y1, tall, half, at };
+  return { y0, y1, tall, half, shoulder, at };
 }
 
 /** How far over the floor Fuze's plate's bottom stays (it never goes through it). */
@@ -257,17 +342,18 @@ const FLOOR_GAP_M = 0.02;
 
 /**
  * Fuze's Ballistic Shield as hitboxes (Phase 8 M11): seven vertical capsules side by side along its plate (see
- * shieldFrame), each part "shield", the two at its edges short of its cut top corners; none while prone.
+ * shieldFrame), each part "shield": the outer two, past its narrower top part, only up to its shoulders; none while prone.
  */
 export function shieldHitboxes(m: MovementData, hb: HitboxData, s: PawnState, k: ShieldPlate, place: ShieldPlace): Hitbox[] {
   const f = shieldFrame(m, hb, s, k, place);
   if (!f) return [];
   const n = 7;
   const r = f.half / n;
+  const inTop = k.topWidthM / k.widthM;
   const out: Hitbox[] = [];
   for (let i = 0; i < n; i++) {
     const u = -1 + (2 * i + 1) / n;
-    const top = f.y1 - (i === 0 || i === n - 1 ? k.chamferM : 0) - r;
+    const top = f.y1 - (Math.abs(u) > inTop ? f.shoulder : 0) - r;
     out.push({ part: "shield", a: f.at(u, f.y0 + r), b: f.at(u, Math.max(f.y0 + r, top)), radius: r });
   }
   return out;

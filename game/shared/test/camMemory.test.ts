@@ -102,9 +102,13 @@ describe("Skopós's idle shell is one of her feeds (D-155)", () => {
     step({ yawDeg: cams[0].yawDeg, lean: -1 });
     expect([c.cam, c.shellCam, sim.viewedPawnId(c.id)]).toEqual([0, true, other.id]);
     expect(c.lastCam).toBe(SHELL_VIEW);
-    // Its view is the shell's own facing (the step turns the shell with the mouse after the first tick).
+    // Its view starts where the shell faces and follows the mouse after the first tick, like a camera: the shell itself
+    // (and so its barrier) doesn't turn with it (Ulo, after Phase 9).
+    const shellYaw = other.state.yaw;
+    expect(c.camYaw).toBeCloseTo(shellYaw, 5);
     step({ yawDeg: 25 }, 2);
-    expect(other.state.yaw).toBeCloseTo(25 * DEG, 5);
+    expect(c.camYaw).toBeCloseTo(25 * DEG, 5);
+    expect(other.state.yaw).toBeCloseTo(shellYaw, 5);
     // Right from her shell: round to the first camera, and back.
     step({ yawDeg: 25, lean: 1 });
     expect([c.cam, c.shellCam]).toEqual([1, false]);

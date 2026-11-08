@@ -476,9 +476,10 @@ export async function startLab(o: LabOptions): Promise<void> {
         snapshotAll();
       } else {
         freeCam = null;
-        // Back to the view you left: Skopós' other shell, if you were looking through it.
+        // Back to the view you left: Skopós' other shell (where she was looking through it), if you were on it.
         const v = sim.pawns.get(sim.viewedPawnId(ctrl.id)) ?? p;
-        controls.setView(v.state.yaw, v.state.pitch);
+        const shellView = ctrl.shellCam && ctrl.swapPhase === 0;
+        controls.setView(shellView ? ctrl.camYaw : v.state.yaw, shellView ? ctrl.camPitch : v.state.pitch);
       }
       controls.resetStance(putBody ? Stance.Stand : stanceKeyOf(p.state));
     }
@@ -1074,8 +1075,10 @@ export async function startLab(o: LabOptions): Promise<void> {
       if (!freeCam) controls.setView(v.state.yaw, v.state.pitch);
     } else if (!freeCam && !freeLookFrom && !(v.kind === PawnKind.Drone && !ctrl.pawnIds.includes(v.id))) {
       // (On a teammate's drone the view is yours alone: the drone's own facing is its driver's. In Fuze's free look the
-      // view leaves the body's facing on purpose.)
-      controls.syncView(v.state.yaw, v.state.pitch, tickKick);
+      // view leaves the body's facing on purpose. On Skopós's shell view it's her own view, as on a camera: the shell
+      // doesn't turn with it, D-169, so its facing would pull the view back every tick.)
+      const shellView = ctrl.shellCam && ctrl.swapPhase === 0;
+      controls.syncView(shellView ? ctrl.camYaw : v.state.yaw, shellView ? ctrl.camPitch : v.state.pitch, tickKick);
     }
     prompt = sim.prompt(ctrl.id);
     // Keep toggles and view limits in step with what the simulation decided this tick.
@@ -1811,6 +1814,9 @@ export async function startLab(o: LabOptions): Promise<void> {
           /** Skopós on her own idle shell's view, one of her feeds (D-155), and the feed Observe opens again. */
           shellCam: ctrl.shellCam,
           lastCam: ctrl.lastCam,
+          /** Where a camera or her shell view looks (D-169: it turns, the shell doesn't), and her other shell's facing. */
+          camYaw: ctrl.camYaw,
+          otherYaw: sim.otherPawn(ctrl.id)?.state.yaw ?? null,
           viewedKind: sim.pawns.get(sim.viewedPawnId(ctrl.id))?.kind ?? null,
           /** Pings and spotted enemies marked on the screen (Phase 7). */
           intel: intelHud.count,

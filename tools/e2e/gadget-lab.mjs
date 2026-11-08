@@ -381,6 +381,27 @@ try {
   result.shellBarrier = (await sko.evaluate(() => window.__lab.net.table.filter((g) => g.kind === "shell_shield"))).length;
   await sko.screenshot({ path: shot("gadget-shell-barrier.png") });
   result.checks.idleShellBehindItsBarrier = result.shellBarrier === 1;
+  // Her ability key onto that shell's view, then the mouse (the pointer locked): the view turns, as on a camera, and the
+  // shell (and its barrier) stays as it stands (D-169; Ulo found the view stuck, the page pulling it back to the shell's
+  // facing every tick). The moves are dispatched in the page, to the page's own mouse handler: the headless shell CI
+  // runs gives Playwright's mouse no movement under pointer lock (CI run 42422173297; full Chromium does).
+  await until(sko, () => window.__lab.net.otherYaw !== null, null, 10000);
+  await sko.mouse.click(480, 270);
+  await sleep(300);
+  await sko.keyboard.down("KeyZ");
+  await sleep(150);
+  await sko.keyboard.up("KeyZ");
+  await until(sko, () => window.__lab.net.shellCam, null, 10000);
+  await sleep(500);
+  const look0 = await sko.evaluate(() => ({ cam: window.__lab.net.camYaw, shell: window.__lab.net.otherYaw }));
+  for (let i = 1; i <= 20; i++) {
+    await sko.evaluate(() => window.dispatchEvent(new MouseEvent("mousemove", { movementX: 15, movementY: 0 })));
+    await sleep(30);
+  }
+  await sleep(500);
+  const look1 = await sko.evaluate(() => ({ cam: window.__lab.net.camYaw, shell: window.__lab.net.otherYaw, locked: document.pointerLockElement !== null }));
+  result.shellView = { look0, look1 };
+  result.checks.shellViewLooksRoundTheShellStays = look1.locked && Math.abs(look1.cam - look0.cam) > 0.2 && Math.abs(look1.shell - look0.shell) < 1e-4;
   await sko.close();
 
   // ---- offline (M3): Sledge's stun at his feet, facing it: his screen goes white

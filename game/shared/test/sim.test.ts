@@ -54,8 +54,9 @@ describe("Skopós shell camera and swap", () => {
     run(sim, ctrl, { buttons: Btn.Ability, yawDeg: 0 }, 1 / 64); // open: this tick's view is still A's
     expect(ctrl.shellCam).toBe(true);
     expect(b.state.yaw).toBeCloseTo(90 * DEG, 4);
-    run(sim, ctrl, { yawDeg: 120 }, 0.2); // look around through B
-    expect(b.state.yaw).toBeCloseTo(120 * DEG, 4);
+    run(sim, ctrl, { yawDeg: 120 }, 0.2); // look around through B: the view turns, B (and its barrier) doesn't
+    expect(ctrl.camYaw).toBeCloseTo(120 * DEG, 4);
+    expect(b.state.yaw).toBeCloseTo(90 * DEG, 4);
     run(sim, ctrl, { buttons: Btn.Ability, yawDeg: 120 }, 1 / 64); // close: this tick's view is still B's
     expect(ctrl.shellCam).toBe(false);
     expect(a.state.yaw).toBeCloseTo(0, 4);

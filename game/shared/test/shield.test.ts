@@ -16,6 +16,10 @@ import {
   remoteState,
   resolveLoadout,
   ShieldAt,
+  pawnHitboxes,
+  plateBend,
+  poseHitboxes,
+  shieldFrame,
   shieldHitboxes,
   shieldPlace,
   Sim,
@@ -98,7 +102,7 @@ describe("where the plate is", () => {
 });
 
 describe("the plate's hitboxes", () => {
-  it("stand across him in front (frontM at the middle, curveM nearer at the edges), a rigid heightM down from aboveEyeM over the eyes, the top corners cut; slide down as he aims (crouched, no further than the floor); bend with a lean; on the back behind the torso; none prone", async () => {
+  it("stand across him in front (frontM at the middle, curving back round his sides), a rigid heightM down from aboveEyeM over the eyes, the outer ones only up to the top part's shoulders; swing aside to his left as he aims (never into the floor); tilt whole with a lean; on the back behind the torso; none prone", async () => {
     const { sim, pawn } = await fuze();
     const k = pawn.loadout!.shield!;
     const m = sim.data.movement;
@@ -108,37 +112,47 @@ describe("the plate's hitboxes", () => {
     type Boxes = ReturnType<typeof shieldHitboxes>;
     const top = (boxes: Boxes) => Math.max(...boxes.map((b) => Math.max(b.a[1], b.b[1]) + b.radius));
     const bottom = (boxes: Boxes) => Math.min(...boxes.map((b) => Math.min(b.a[1], b.b[1]) - b.radius));
+    const len = (b: Boxes[number]) => Math.hypot(b.b[0] - b.a[0], b.b[1] - b.a[1], b.b[2] - b.a[2]);
     const front = shieldHitboxes(m, hb, s, k.plate, "front");
     expect(front).toHaveLength(7);
     expect(front.every((b) => b.part === "shield")).toBe(true);
-    // The middle capsule frontM ahead; the outer ones nearer him by the curve (u = ±6/7 across).
+    // The middle capsule frontM ahead; the outer ones nearer him, the plate curving back round his sides (u = ±6/7).
     expect(front[3].a[2]).toBeCloseTo(-k.plate.frontM, 4);
-    expect(front[0].a[2]).toBeCloseTo(-k.plate.frontM + k.plate.curveM * (6 / 7) ** 2, 4);
+    expect(front[0].a[2]).toBeCloseTo(-k.plate.frontM + plateBend(k.plate, 6 / 7), 4);
+    expect(front[0].a[2] - front[3].a[2]).toBeGreaterThan(0.02);
     expect(front[6].a[2]).toBeCloseTo(front[0].a[2], 6);
     const width = Math.max(...front.map((b) => b.a[0] + b.radius)) - Math.min(...front.map((b) => b.a[0] - b.radius));
     expect(width).toBeCloseTo(k.plate.widthM, 4);
     expect(top(front)).toBeCloseTo(eye + k.plate.aboveEyeM, 3);
     expect(bottom(front)).toBeCloseTo(eye + k.plate.aboveEyeM - k.plate.heightM, 3);
-    // Its cut top corners: the edge capsules stop chamferM under the middle's top.
-    const edgeTop = Math.max(front[0].a[1], front[0].b[1]) + front[0].radius;
-    expect(edgeTop).toBeCloseTo(top(front) - k.plate.chamferM, 3);
-    // Fully aimed it has slid down by aboveEye + adsBelowEye (the head over it), all of it; half aimed, half as far.
-    const slide = k.plate.aboveEyeM + k.plate.adsBelowEyeM;
+    // Its narrower top part: the outer capsules (past it) stop at its shoulders, the ones within it go to its top.
+    const topOf = (b: Boxes[number]) => Math.max(b.a[1], b.b[1]) + b.radius;
+    expect(topOf(front[0])).toBeCloseTo(top(front) - k.plate.shoulderM, 3);
+    expect(topOf(front[1])).toBeCloseTo(top(front), 3);
+    // Fully aimed it has swung aside to his left by sideM (the pistol clears its right edge), its left edge drawn back
+    // round his side, dropM lower; half aimed, half way across (the swing is eased: quick in its middle).
     const aimed = shieldHitboxes(m, hb, { ...s, adsQ: 65535 }, k.plate, "front");
-    expect(top(aimed)).toBeCloseTo(eye - k.plate.adsBelowEyeM, 3);
-    expect(bottom(aimed)).toBeCloseTo(eye - k.plate.adsBelowEyeM - k.plate.heightM, 3);
-    expect(top(shieldHitboxes(m, hb, { ...s, adsQ: 32768 }, k.plate, "front"))).toBeCloseTo(eye + k.plate.aboveEyeM - slide * (32768 / 65535), 3);
-    // Crouched and aimed it comes to rest on the floor (it slides no further), and he aims over its top.
+    expect(aimed[3].a[0]).toBeCloseTo(-k.plate.ads.sideM, 3);
+    expect(aimed[0].a[2]).toBeGreaterThan(aimed[6].a[2] + 0.1);
+    expect(top(aimed)).toBeLessThan(top(front) - k.plate.ads.dropM + 0.01);
+    expect(shieldHitboxes(m, hb, { ...s, adsQ: 32768 }, k.plate, "front")[3].a[0]).toBeCloseTo(-k.plate.ads.sideM / 2, 2);
+    // Crouched and aimed it stays over the floor.
     const crouched = { ...s, stance: Stance.Crouch, stanceFrom: Stance.Crouch, stanceT: 1, adsQ: 65535 };
-    const low = shieldHitboxes(m, hb, crouched, k.plate, "front");
-    expect(bottom(low)).toBeCloseTo(0.02, 3);
-    expect(top(low)).toBeCloseTo(0.02 + k.plate.heightM, 3);
-    expect(top(low)).toBeLessThan(eyePose(m, hb, crouched).pos[1]);
-    // Leaning right, it bends with his spine: its top goes right by about the lean's offset (a little more, being over
-    // the eyes), its bottom (under the hips) not at all.
+    expect(bottom(shieldHitboxes(m, hb, crouched, k.plate, "front"))).toBeGreaterThanOrEqual(0.02 - 1e-6);
+    // Leaning right, it tilts whole (as far as the view rolls): its top goes right, its right side dips, nothing on it
+    // stretches, and its window stays in front of the eyes, carried across with the head (lean · offset), standing and
+    // crouched (Ulo: crouched, a lean bared the head).
     const leaning = shieldHitboxes(m, hb, { ...s, lean: 1 }, k.plate, "front");
-    expect(leaning[3].b[0] - front[3].b[0]).toBeGreaterThan(m.lean.offset);
-    expect(leaning[3].a[0] - front[3].a[0]).toBeCloseTo(0, 6);
+    expect(leaning[3].b[0] - front[3].b[0]).toBeGreaterThan(0.1);
+    expect(Math.max(leaning[6].a[1], leaning[6].b[1])).toBeLessThan(Math.max(leaning[0].a[1], leaning[0].b[1]));
+    for (let i = 0; i < 7; i++) expect(len(leaning[i])).toBeCloseTo(len(front[i]), 6);
+    const atEyes = (b: Boxes[number], y: number) => b.a[0] + ((y - b.a[1]) / (b.b[1] - b.a[1])) * (b.b[0] - b.a[0]);
+    expect(atEyes(leaning[3], eye)).toBeCloseTo(m.lean.offset, 4);
+    const crouch = { ...s, stance: Stance.Crouch, stanceFrom: Stance.Crouch, stanceT: 1 };
+    const crouchEye = eyePose(m, hb, crouch).pos[1];
+    expect(atEyes(shieldHitboxes(m, hb, { ...crouch, lean: -1 }, k.plate, "front")[3], crouchEye)).toBeCloseTo(-m.lean.offset, 4);
+    // Crouched it's held crouchRaiseM higher over the eyes (over his shoulders).
+    expect(top(shieldHitboxes(m, hb, crouch, k.plate, "front"))).toBeCloseTo(crouchEye + k.plate.aboveEyeM + k.plate.crouchRaiseM, 3);
     // Facing +x (yaw −90°), its middle is frontM out along +x.
     const turned = shieldHitboxes(m, hb, { ...s, yaw: -90 * DEG }, k.plate, "front");
     expect(turned[3].a[0]).toBeCloseTo(k.plate.frontM, 4);
@@ -146,6 +160,33 @@ describe("the plate's hitboxes", () => {
     expect(back.every((b) => b.a[2] > 0.1)).toBe(true);
     expect(shieldHitboxes(m, hb, { ...s, stance: Stance.Prone, stanceFrom: Stance.Prone, stanceT: 1 }, k.plate, "back")).toEqual([]);
     expect(shieldPlace({ ...s, shieldAt: ShieldAt.None })).toBeNull();
+  });
+
+  it("held up, his hands are on its grips behind it, crossed (no arm out past the plate, so nothing of his is hit through it); aiming, his right hand comes out with the pistol", async () => {
+    const { sim, pawn } = await fuze();
+    const k = pawn.loadout!.shield!;
+    const m = sim.data.movement;
+    const hb = sim.data.hitboxes;
+    const s = { ...pawn.state, yaw: 0, x: 0, y: 0, z: 0, lean: 0, adsQ: 0, shieldAt: ShieldAt.Front as typeof pawn.state.shieldAt };
+    const arms = (st: typeof s) => pawnHitboxes(m, hb, { ...pawn, state: st }).filter((b) => b.part === "arm_l" || b.part === "arm_r");
+    // Facing −z: the plate's back is at −(frontM − its capsules' radius); every arm stays behind it.
+    const plateBack = -k.plate.frontM + k.plate.widthM / 2 / 7;
+    for (const b of arms(s)) expect(Math.min(b.a[2], b.b[2]) - b.radius).toBeGreaterThan(plateBack);
+    // Crossed: the left arm's hand on the right of his middle, the right arm's on the left.
+    const [l, r] = arms(s);
+    expect([l.b[0] > 0, r.b[0] < 0]).toEqual([true, true]);
+    // Aiming, the right hand comes out in front (the pistol) and over to its own side.
+    const aimedR = arms({ ...s, adsQ: 65535 })[1];
+    expect(aimedR.b[0]).toBeGreaterThan(0);
+    expect(aimedR.b[2]).toBeLessThan(r.b[2] - 0.1);
+    // Without the shield up the hands are where any body's are.
+    expect(arms({ ...s, shieldAt: ShieldAt.None })[1].b).toEqual(poseHitboxes(m, hb, s).find((b) => b.part === "arm_r")!.b);
+    // Crouched, his shoulders hunch behind it: each arm's top (at the shoulder) under the plate's top part's shoulders,
+    // so behind its wider body (Ulo: crouched, the shoulders showed); standing they are anyway.
+    for (const st of [s, { ...s, stance: Stance.Crouch, stanceFrom: Stance.Crouch, stanceT: 1 }]) {
+      const f = shieldFrame(m, hb, st, k.plate, "front")!;
+      for (const b of arms(st)) expect(b.a[1] + b.radius).toBeLessThan(f.y1 - f.shoulder);
+    }
   });
 
   it("how far it has slid down goes to others in the remote record (8 steps), with the shield up only", async () => {
