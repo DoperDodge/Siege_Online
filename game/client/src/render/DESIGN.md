@@ -180,6 +180,14 @@ prop, clear of every opening's approach (as D-104's door rule), not on a soft wa
 the height a player could take it for cover unless it is on a prop. Ingredients (extinguishers, gas pipes) and the
 default cameras get models.
 
+**As built (D-176):** furniture.ts fits a model to each prop, closed to the floor (no opening a drone could drive
+into) and, for a metal one, with no gap at all; each faces away from the nearer wall. dressing.ts places each room
+style's kit (`dressing` in art.json: wall items by kind, rugs, clutter) on runs of hard wall found along the edges of
+the room's rectangles (solid at 1.25, 1.6 and 2 m) and on hard floor; clutter is at most 0.32 m tall, 0.9 m from its
+run's ends, with its wall solid to the floor behind it (drone holes stay clear). Things on furniture come with the
+furniture (drawn on High). No chairs: a chair beside a table would be cover that isn't, and the tables are closed.
+test/furniture.test.ts and test/dressing.test.ts hold the rules.
+
 ## 10. Weapons, gadgets, drones (M7)
 
 A **parametric gun kit** in code: per weapon class, side profiles extruded with bevels (receiver, handguard,

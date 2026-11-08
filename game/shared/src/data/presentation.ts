@@ -84,7 +84,19 @@ export const texturesSchema = z
     _doc: z.string(),
     resolution: z.number().int().min(256).max(4096),
     sky: z.strictObject({ source: z.literal("polyhaven"), asset: z.string().min(1), for: z.string() }),
-    sets: z.array(z.strictObject({ id: artId, source: z.enum(["polyhaven", "ambientcg"]), asset: z.string().min(1), for: z.string() })).min(1).max(64),
+    sets: z
+      .array(
+        z.strictObject({
+          id: artId,
+          source: z.enum(["polyhaven", "ambientcg"]),
+          asset: z.string().min(1),
+          /** Which of a Poly Haven asset's colour maps to take, when it has several (e.g. "col_1"); its "Diffuse" otherwise. */
+          variant: z.string().min(1).optional(),
+          for: z.string(),
+        }),
+      )
+      .min(1)
+      .max(64),
   })
   .superRefine((t, ctx) => {
     const seen = new Set<string>();
@@ -131,6 +143,10 @@ export type ArtStyle = z.infer<typeof artStyleSchema>;
 export const GROUND = "ground";
 
 /** data/maps/<map>/art.json: a map's look. */
+/** What hangs on a room's walls (render/dressing.ts). */
+export const DRESSING_WALL = ["picture", "poster", "clock", "shelf", "cross", "board", "mirror", "pegboard"] as const;
+export type DressingWall = (typeof DRESSING_WALL)[number];
+
 export const mapArtSchema = z.strictObject({
   _doc: z.string(),
   styles: z.record(artId, artStyleSchema),
@@ -153,6 +169,21 @@ export const mapArtSchema = z.strictObject({
       base: artId,
       layers: z.array(z.strictObject({ material: artId, softM: z.number().min(0).max(20), rects: z.array(z.tuple([z.number(), z.number(), z.number(), z.number()])).min(1) })).max(3),
     })
+    .optional(),
+  /**
+   * Dressing by room style (render/DESIGN.md §9.2): how many of each item hang on the room's hard walls, how many rugs
+   * lie on its hard floor, how many low things stand against its hard walls. Placed by the client (render/dressing.ts);
+   * drawn only.
+   */
+  dressing: z
+    .record(
+      artId,
+      z.strictObject({
+        wall: z.partialRecord(z.enum(DRESSING_WALL), z.number().int().min(0).max(12)).optional(),
+        rug: z.number().int().min(0).max(3).optional(),
+        clutter: z.number().int().min(0).max(12).optional(),
+      }),
+    )
     .optional(),
 });
 export type MapArt = z.infer<typeof mapArtSchema>;
@@ -194,6 +225,7 @@ export function artProblems(data: ArtData): string[] {
       }
     });
     for (const [cls, s] of Object.entries(art.props)) style(`props.${cls}`, s);
+    for (const id of Object.keys(art.dressing ?? {})) style(`dressing.${id}`, id);
     if (art.ground) {
       mat("ground.base", art.ground.base);
       art.ground.layers.forEach((l, i) => mat(`ground.layers[${i}]`, l.material));

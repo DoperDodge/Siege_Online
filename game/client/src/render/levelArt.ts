@@ -319,7 +319,8 @@ export class LevelArt {
   private readonly items: { re: RegExp; style: number }[] = [];
   private readonly propStyle = new Map<string, number>();
   private readonly solidProp = new Map<string, string>();
-  private readonly map: MapArt | null;
+  /** The map's look (art.json), or null for a lab. */
+  readonly map: MapArt | null;
   /** The probe field's uniforms, once attached (before the materials are made). */
   private probes: Record<string, THREE.IUniform> | null = null;
   /** Each style's id, by index. */

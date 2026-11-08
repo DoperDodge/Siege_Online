@@ -553,6 +553,99 @@
         0.0666,
         0.0479
       ]
+    },
+    {
+      "id": "plaid",
+      "sizeM": [
+        0.562,
+        0.474
+      ],
+      "source": "polyhaven",
+      "asset": "curly_teddy_checkered",
+      "page": "https://polyhaven.com/a/curly_teddy_checkered",
+      "author": "colormass, Rico Cilliers",
+      "license": "CC0 1.0",
+      "files": {
+        "color": "plaid.color.webp",
+        "normal": "plaid.normal.webp",
+        "orm": "plaid.orm.webp"
+      },
+      "bytes": 628380,
+      "mean": [
+        0.3006,
+        0.3494,
+        0.2909
+      ]
+    },
+    {
+      "id": "check",
+      "sizeM": [
+        0.4,
+        0.4
+      ],
+      "source": "polyhaven",
+      "asset": "fabric_pattern_07",
+      "variant": "col_1",
+      "page": "https://polyhaven.com/a/fabric_pattern_07",
+      "author": "Rob Tuytel",
+      "license": "CC0 1.0",
+      "files": {
+        "color": "check.color.webp",
+        "normal": "check.normal.webp",
+        "orm": "check.orm.webp"
+      },
+      "bytes": 811860,
+      "mean": [
+        0.3316,
+        0.1307,
+        0.1109
+      ]
+    },
+    {
+      "id": "fabric",
+      "sizeM": [
+        0.27,
+        0.276
+      ],
+      "source": "polyhaven",
+      "asset": "poly_wool_herringbone",
+      "page": "https://polyhaven.com/a/poly_wool_herringbone",
+      "author": "colormass, Rico Cilliers",
+      "license": "CC0 1.0",
+      "files": {
+        "color": "fabric.color.webp",
+        "normal": "fabric.normal.webp",
+        "orm": "fabric.orm.webp"
+      },
+      "bytes": 918118,
+      "mean": [
+        0.192,
+        0.1789,
+        0.1657
+      ]
+    },
+    {
+      "id": "wood_fine",
+      "sizeM": [
+        1.83,
+        1.83
+      ],
+      "source": "polyhaven",
+      "asset": "oak_veneer_01",
+      "page": "https://polyhaven.com/a/oak_veneer_01",
+      "author": "Jenelle van Heerden",
+      "license": "CC0 1.0",
+      "files": {
+        "color": "wood_fine.color.webp",
+        "normal": "wood_fine.normal.webp",
+        "orm": "wood_fine.orm.webp"
+      },
+      "bytes": 311678,
+      "mean": [
+        0.359,
+        0.21,
+        0.0971
+      ]
     }
   ],
   "sky": {

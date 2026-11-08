@@ -434,15 +434,19 @@ export async function startLab(o: LabOptions): Promise<void> {
   void artView
     .load(preset, renderer, camera)
     .then((ok) => {
-      if (ok) artView.show(!storeyView || storeyView.palette === "art");
+      if (ok) {
+        artView.show(!storeyView || storeyView.palette === "art");
+        markers?.showModelled(!artView.shown);
+      }
     })
     .catch((e) => console.warn("art pass:", e));
   /** Each body's view as drawn this frame (lasers point along it). */
   const drawnView = new Map<number, [number, number]>();
 
   const pawnViews = new Map<number, PawnView>();
-  /** A match's default cameras (Phase 7), drawn whole or broken, and the round's Bulletproof Cameras. */
-  const cameraModels = o.match ? new CameraModels(scene, sim.level.def.cameras) : null;
+  /** The level's default cameras (Phase 7), drawn whole or broken, and the round's Bulletproof Cameras. */
+  // (Drawn on a map's lab page too: they're part of its look.)
+  const cameraModels = sim.level.def.cameras.length ? new CameraModels(scene, sim.level.def.cameras, (from, dir, max) => raycastLevel(sim, from, dir, max)?.t ?? null) : null;
   const bpCameraModels = new BpCameraModels(scene, data.gadgets.get("bulletproof_camera")!.sizeM);
   /** The gadget table (Phase 8): every gadget placed, thrown or dropped; offline, our own server side keeps it. */
   const gadgetModels = new GadgetModels(scene, sim);
@@ -622,6 +626,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     if (v.palette !== undefined) {
       storeyView.setPalette(v.palette);
       artView.show(v.palette === "art");
+      markers?.showModelled(!artView.shown);
     }
     if (!$(".pause").classList.contains("hidden")) renderPause();
   }

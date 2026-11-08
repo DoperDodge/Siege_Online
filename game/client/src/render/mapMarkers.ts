@@ -169,6 +169,18 @@ export class MapMarkers {
     this.batches.clear();
   }
 
+  /**
+   * Show or hide the markers of what the art pass draws as models (the cameras' boxes, the extinguishers, the gas
+   * pipes): hidden while the art shows, their names and the cameras' cones kept.
+   */
+  showModelled(on: boolean): void {
+    for (const group of this.lab.storeys)
+      for (const o of group.children) {
+        const kind = o.userData.marker as string | undefined;
+        if (kind === "camera" || kind === "extinguisher" || kind === "gasPipe") o.visible = on;
+      }
+  }
+
   /** Show or hide the zones view. */
   setZones(on: boolean): void {
     this.zones = on;

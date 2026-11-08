@@ -35,6 +35,10 @@ normal and ORM maps are resized WebP copies of the CC0 source's maps.
 | `game/client/public/art/textures/barricade.*` (polyhaven `weathered_brown_planks`) | https://polyhaven.com/a/weathered_brown_planks | Dimitrios Savva, Rico Cilliers | CC0 1.0 | — (CC0: no credit needed) | 2026-11-08, Phase 10 |
 | `game/client/public/art/textures/studs.*` (polyhaven `rough_wood`) | https://polyhaven.com/a/rough_wood | Rob Tuytel | CC0 1.0 | — (CC0: no credit needed) | 2026-11-08, Phase 10 |
 | `game/client/public/art/textures/steel.*` (polyhaven `metal_plate_02`) | https://polyhaven.com/a/metal_plate_02 | Rob Tuytel | CC0 1.0 | — (CC0: no credit needed) | 2026-11-08, Phase 10 |
+| `game/client/public/art/textures/plaid.*` (polyhaven `curly_teddy_checkered`) | https://polyhaven.com/a/curly_teddy_checkered | colormass, Rico Cilliers | CC0 1.0 | — (CC0: no credit needed) | 2026-11-08, Phase 10 |
+| `game/client/public/art/textures/check.*` (polyhaven `fabric_pattern_07`) | https://polyhaven.com/a/fabric_pattern_07 | Rob Tuytel | CC0 1.0 | — (CC0: no credit needed) | 2026-11-08, Phase 10 |
+| `game/client/public/art/textures/fabric.*` (polyhaven `poly_wool_herringbone`) | https://polyhaven.com/a/poly_wool_herringbone | colormass, Rico Cilliers | CC0 1.0 | — (CC0: no credit needed) | 2026-11-08, Phase 10 |
+| `game/client/public/art/textures/wood_fine.*` (polyhaven `oak_veneer_01`) | https://polyhaven.com/a/oak_veneer_01 | Jenelle van Heerden | CC0 1.0 | — (CC0: no credit needed) | 2026-11-08, Phase 10 |
 | `game/client/public/art/textures/sky.*` (polyhaven HDRI `kloofendal_38d_partly_cloudy_puresky`: the sky backdrop and its light, by `tools/art/sky.mjs`) | https://polyhaven.com/a/kloofendal_38d_partly_cloudy_puresky | Greg Zaal, Jarod Guest | CC0 1.0 | — (CC0: no credit needed) | 2026-11-08, Phase 10 |
 
 ## Research references (NOT shipped, NOT assets)

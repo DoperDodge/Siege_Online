@@ -54,14 +54,14 @@ async function file(url, name, md5) {
   return buf;
 }
 
-/** A Poly Haven texture's maps at 1k, its size in metres and its authors. */
-async function polyhaven(asset) {
+/** A Poly Haven texture's maps at 1k (its colour map by `variant` when it has several), its size in metres and its authors. */
+async function polyhaven(asset, variant) {
   const [info, files] = await Promise.all([json(`https://api.polyhaven.com/info/${asset}`), json(`https://api.polyhaven.com/files/${asset}`)]);
   const get = async (key) => {
     const f = files[key]?.["1k"]?.jpg;
     return f ? file(f.url, `polyhaven/${asset}/${f.url.split("/").pop()}`, f.md5) : null;
   };
-  const [color, normal, arm, rough, ao] = await Promise.all([get("Diffuse"), get("nor_gl"), get("arm"), get("Rough"), get("AO")]);
+  const [color, normal, arm, rough, ao] = await Promise.all([get(variant ?? "Diffuse"), get("nor_gl"), get("arm"), get("Rough"), get("AO")]);
   if (!color || !normal) throw new Error(`${asset}: no 1k colour or normal map`);
   const [w, h] = info.dimensions ?? [2000, 2000];
   return {
@@ -136,7 +136,7 @@ let total = 0;
 for (const set of LIST.sets) {
   const files = { color: `${set.id}.color.webp`, normal: `${set.id}.normal.webp`, orm: `${set.id}.orm.webp` };
   const prev = kept.get(set.id);
-  const fresh = Object.values(files).every((f) => existsSync(join(OUT, f))) && prev?.asset === set.asset;
+  const fresh = Object.values(files).every((f) => existsSync(join(OUT, f))) && prev?.asset === set.asset && prev?.variant === set.variant;
   // Ids named: just those. Otherwise every set not already written from its listed asset (all with --force).
   if (!(only.size ? only.has(set.id) : force || !fresh)) {
     if (prev) {
@@ -145,7 +145,7 @@ for (const set of LIST.sets) {
     }
     continue;
   }
-  const src = set.source === "polyhaven" ? await polyhaven(set.asset) : await ambientcg(set.asset);
+  const src = set.source === "polyhaven" ? await polyhaven(set.asset, set.variant) : await ambientcg(set.asset);
   const write = async (img, name, q) => {
     const out = await img.webp({ quality: q, effort: 6 }).toBuffer();
     writeFileSync(join(OUT, name), out);
@@ -161,6 +161,7 @@ for (const set of LIST.sets) {
     sizeM: src.sizeM.map((v) => Math.round(v * 1000) / 1000),
     source: set.source,
     asset: set.asset,
+    ...(set.variant ? { variant: set.variant } : {}),
     page: src.page,
     author: src.author,
     license: "CC0 1.0",

@@ -26,6 +26,10 @@
     { "id": "asphalt", "source": "polyhaven", "asset": "asphalt_02", "for": "the street" },
     { "id": "barricade", "source": "polyhaven", "asset": "weathered_brown_planks", "for": "barricades" },
     { "id": "studs", "source": "polyhaven", "asset": "rough_wood", "for": "the studs and joists inside walls and floors" },
-    { "id": "steel", "source": "polyhaven", "asset": "metal_plate_02", "for": "reinforcement plates" }
+    { "id": "steel", "source": "polyhaven", "asset": "metal_plate_02", "for": "reinforcement plates" },
+    { "id": "plaid", "source": "polyhaven", "asset": "curly_teddy_checkered", "for": "the plaid sofa, blankets and throws" },
+    { "id": "check", "source": "polyhaven", "asset": "fabric_pattern_07", "variant": "col_1", "for": "tablecloths and kitchen curtains" },
+    { "id": "fabric", "source": "polyhaven", "asset": "poly_wool_herringbone", "for": "upholstery, mattresses and bedding (tinted)" },
+    { "id": "wood_fine", "source": "polyhaven", "asset": "oak_veneer_01", "for": "furniture: tables, cabinets, the bookcase, the wardrobe" }
   ]
 }

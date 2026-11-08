@@ -108,5 +108,27 @@
       { "material": "ground_gravel", "softM": 2.5, "rects": [[-31.5, 31, -1, 57], [51, -10.5, 80.25, 31], [-16, -10.5, 8, 14]] },
       { "material": "asphalt", "softM": 0.6, "rects": [[-31.5, 58.5, 80.25, 66.5], [36, 52, 58, 58.5]] }
     ]
+  },
+  "dressing": {
+    "hall": { "wall": { "picture": 2, "clock": 1 }, "rug": 1 },
+    "dining": { "wall": { "picture": 3, "cross": 1, "clock": 1 }, "rug": 1 },
+    "kitchen": { "wall": { "shelf": 2, "clock": 1, "picture": 1 } },
+    "meeting": { "wall": { "cross": 1, "picture": 3, "poster": 2, "board": 1 } },
+    "showers": { "wall": { "mirror": 2 } },
+    "security": { "wall": { "board": 1, "poster": 2, "clock": 1 } },
+    "classroom": { "wall": { "board": 1, "poster": 3, "clock": 1 } },
+    "armory": { "wall": { "poster": 1, "shelf": 2 }, "clutter": 2 },
+    "garage": { "wall": { "pegboard": 1, "shelf": 2 }, "clutter": 4 },
+    "office": { "wall": { "picture": 2, "shelf": 2, "clock": 1 }, "rug": 1 },
+    "kids": { "wall": { "poster": 4, "picture": 1 }, "rug": 1 },
+    "dorms": { "wall": { "poster": 3, "shelf": 2, "cross": 1 }, "rug": 1 },
+    "game_room": { "wall": { "poster": 2, "picture": 2, "clock": 1 }, "rug": 1 },
+    "closet": { "wall": { "shelf": 3 } },
+    "master": { "wall": { "picture": 3, "cross": 1 }, "rug": 1 },
+    "trophy": { "wall": { "picture": 4, "shelf": 2 } },
+    "attic": { "clutter": 5 },
+    "basement": { "wall": { "shelf": 1 }, "clutter": 3 },
+    "laundry": { "wall": { "shelf": 2 }, "clutter": 1 },
+    "bunker": { "clutter": 2 }
   }
 }

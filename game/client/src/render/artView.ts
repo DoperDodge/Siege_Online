@@ -9,6 +9,8 @@ import * as THREE from "three";
 import { loadArtData, type BuiltLevel } from "@redmond/shared";
 import { Architecture } from "./architecture.js";
 import { buildBackdrop } from "./backdrop.js";
+import { buildDressing } from "./dressing.js";
+import { buildFurniture } from "./furniture.js";
 import { aimSun, DAYLIGHT, storeyOf, type LabScene } from "./labScene.js";
 import { LevelArt } from "./levelArt.js";
 import { buildOutside } from "./outside.js";
@@ -39,6 +41,8 @@ export class ArtView {
   private architecture: Architecture | null = null;
   /** The outside's items as models (outside.ts), and the boxes they stand for: hidden while the art shows. */
   private outside: THREE.Mesh | null = null;
+  /** The cover props as furniture (furniture.ts), one mesh per storey; their boxes hidden too. */
+  private furniture: THREE.Mesh[] = [];
   private readonly hidden: { mesh: THREE.InstancedMesh; index: number; matrix: THREE.Matrix4 }[] = [];
   /** Past the play area: the ground on, the woods, the hills (backdrop.ts). */
   private backdrop: THREE.Mesh[] = [];
@@ -158,6 +162,27 @@ export class ArtView {
     this.outside.visible = false;
     lab.storeys[storeyOf(this.level.def.storeys, 0)].add(this.outside);
     this.modelTriangles = outside.kit.triangles;
+    const furniture = buildFurniture(this.level, art, (r) => storeyOf(this.level.def.storeys, r.center[1] - r.size[1] / 2), preset.dressing === "all");
+    for (const [storey, kit] of furniture.kits) {
+      const mesh = new THREE.Mesh(kit.geometry(), art.staticMaterial());
+      mesh.name = `furniture ${this.level.def.storeys[storey]?.id ?? storey}`;
+      mesh.castShadow = mesh.receiveShadow = true;
+      mesh.visible = false;
+      lab.storeys[storey].add(mesh);
+      this.furniture.push(mesh);
+      this.modelTriangles += kit.triangles;
+    }
+    // The dressing (dressing.ts): walls and rugs on Medium, the low clutter too on High; drawn with the furniture.
+    const dressing = preset.dressing !== "none" && art.map ? buildDressing(this.level, art, art.map, preset.dressing === "all") : null;
+    for (const [storey, kit] of dressing?.kits ?? []) {
+      const mesh = new THREE.Mesh(kit.geometry(), art.staticMaterial());
+      mesh.name = `dressing ${this.level.def.storeys[storey]?.id ?? storey}`;
+      mesh.receiveShadow = true;
+      mesh.visible = false;
+      lab.storeys[storey].add(mesh);
+      this.furniture.push(mesh);
+      this.modelTriangles += kit.triangles;
+    }
     // The street runs on past the bounds east and west: no woods on it.
     const backdrop = buildBackdrop(this.level, art, (_x, z) => z > 56.5 && z < 68.5);
     if (backdrop) {
@@ -172,7 +197,7 @@ export class ArtView {
       const inst = part.mesh as THREE.InstancedMesh;
       if (!inst.isInstancedMesh) continue;
       part.boxes.forEach((r, index) => {
-        if (!outside.ids.has(r.id)) return;
+        if (!outside.ids.has(r.id) && !furniture.ids.has(r.id)) return;
         const matrix = new THREE.Matrix4();
         inst.getMatrixAt(index, matrix);
         this.hidden.push({ mesh: inst, index, matrix });
@@ -194,6 +219,7 @@ export class ArtView {
     this.panels.setMaterialOverride(on ? (key) => art.panelMaterial(key) : null);
     this.architecture?.setVisible(on);
     if (this.outside) this.outside.visible = on;
+    for (const m of this.furniture) m.visible = on;
     for (const m of this.backdrop) m.visible = on;
     // The boxes the models stand for: out of sight (scaled to nothing) while they show, back after.
     const none = new THREE.Matrix4().makeScale(0, 0, 0);
@@ -292,7 +318,7 @@ export class ArtView {
       this.outside.removeFromParent();
       this.outside.geometry.dispose();
     }
-    for (const m of this.backdrop) {
+    for (const m of [...this.backdrop, ...this.furniture]) {
       m.removeFromParent();
       m.geometry.dispose();
     }
