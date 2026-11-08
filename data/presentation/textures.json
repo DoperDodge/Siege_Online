@@ -1,0 +1,30 @@
+{
+  "_doc": "The CC0 texture sets the art pass draws with (Phase 10; render/DESIGN.md §2). tools/art/textures.mjs fetches each from its source at 1k, packs a colour map (sRGB), an OpenGL normal map and an ORM map (R ambient occlusion, G roughness, B metalness), resizes them to `resolution` square, and writes them with a manifest (each set's real size in metres, from the source) to game/client/public/art/textures/. Presentation only: the simulation never reads this file. Every source is CC0 (ASSET_SOURCES.md lists them).",
+  "resolution": 1024,
+  "sets": [
+    { "id": "plaster", "source": "polyhaven", "asset": "painted_plaster_wall", "for": "inside walls and ceilings, tinted per room" },
+    { "id": "beadboard", "source": "polyhaven", "asset": "white_planks_clean", "for": "wainscot, tinted per room" },
+    { "id": "planks_raw", "source": "polyhaven", "asset": "raw_plank_wall", "for": "rough plank walls: the attic, the garage, sheds" },
+    { "id": "concrete_wall", "source": "polyhaven", "asset": "concrete_wall_007", "for": "the basement's walls, foundations, silos" },
+    { "id": "tiles_white", "source": "polyhaven", "asset": "long_white_tiles", "for": "the showers' walls and floor" },
+    { "id": "brick", "source": "polyhaven", "asset": "red_brick", "for": "chimneys" },
+    { "id": "floor_wood", "source": "polyhaven", "asset": "wood_floor_worn", "for": "most rooms' floors" },
+    { "id": "floor_wood_dark", "source": "polyhaven", "asset": "old_wood_floor", "for": "old plank floors: the attic, the tower, porches" },
+    { "id": "floor_checker", "source": "polyhaven", "asset": "floor_tiles_06", "for": "the kitchen's floor" },
+    { "id": "floor_concrete", "source": "polyhaven", "asset": "concrete_floor_worn_001", "for": "the basement's and the garage's floors" },
+    { "id": "carpet", "source": "polyhaven", "asset": "dirty_carpet", "for": "carpeted rooms" },
+    { "id": "linoleum", "source": "polyhaven", "asset": "linoleum_brown", "for": "the laundry and the classroom" },
+    { "id": "siding", "source": "ambientcg", "asset": "WoodSiding013", "for": "the main house's weathered lap siding" },
+    { "id": "barn_boards", "source": "ambientcg", "asset": "PaintedWood003", "for": "the Big Tower's red boards" },
+    { "id": "shingles", "source": "ambientcg", "asset": "RoofingTiles003", "for": "the house's asphalt shingle roofs" },
+    { "id": "corrugated", "source": "ambientcg", "asset": "CorrugatedSteel005", "for": "metal roofs and sheds, tinted (the tower's green roof, the orange sheds)" },
+    { "id": "corrugated_rust", "source": "polyhaven", "asset": "rusty_corrugated_iron", "for": "old sheds and the junkyard" },
+    { "id": "ground_grass", "source": "polyhaven", "asset": "forrest_ground_01", "for": "grass and weeds over dirt" },
+    { "id": "ground_dirt", "source": "polyhaven", "asset": "brown_mud_dry", "for": "the yard's packed dirt" },
+    { "id": "ground_gravel", "source": "polyhaven", "asset": "gravel_floor", "for": "drives and the construction site" },
+    { "id": "asphalt", "source": "polyhaven", "asset": "asphalt_02", "for": "the street" },
+    { "id": "barricade", "source": "polyhaven", "asset": "weathered_brown_planks", "for": "barricades" },
+    { "id": "studs", "source": "polyhaven", "asset": "rough_wood", "for": "the studs and joists inside walls and floors" },
+    { "id": "steel", "source": "polyhaven", "asset": "metal_plate_02", "for": "reinforcement plates" }
+  ]
+}

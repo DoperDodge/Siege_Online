@@ -1,0 +1,438 @@
+{
+  "_doc": "Written by tools/art/textures.mjs from data/presentation/textures.json: do not edit.",
+  "resolution": 1024,
+  "sets": [
+    {
+      "id": "plaster",
+      "sizeM": [
+        2,
+        2
+      ],
+      "source": "polyhaven",
+      "asset": "painted_plaster_wall",
+      "page": "https://polyhaven.com/a/painted_plaster_wall",
+      "author": "Amal Kumar",
+      "license": "CC0 1.0",
+      "files": {
+        "color": "plaster.color.webp",
+        "normal": "plaster.normal.webp",
+        "orm": "plaster.orm.webp"
+      },
+      "bytes": 468438
+    },
+    {
+      "id": "beadboard",
+      "sizeM": [
+        1.8,
+        1.8
+      ],
+      "source": "polyhaven",
+      "asset": "white_planks_clean",
+      "page": "https://polyhaven.com/a/white_planks_clean",
+      "author": "Rob Tuytel",
+      "license": "CC0 1.0",
+      "files": {
+        "color": "beadboard.color.webp",
+        "normal": "beadboard.normal.webp",
+        "orm": "beadboard.orm.webp"
+      },
+      "bytes": 76066
+    },
+    {
+      "id": "planks_raw",
+      "sizeM": [
+        1.87,
+        1.87
+      ],
+      "source": "polyhaven",
+      "asset": "raw_plank_wall",
+      "page": "https://polyhaven.com/a/raw_plank_wall",
+      "author": "Dimitrios Savva",
+      "license": "CC0 1.0",
+      "files": {
+        "color": "planks_raw.color.webp",
+        "normal": "planks_raw.normal.webp",
+        "orm": "planks_raw.orm.webp"
+      },
+      "bytes": 287884
+    },
+    {
+      "id": "concrete_wall",
+      "sizeM": [
+        2.16,
+        2.16
+      ],
+      "source": "polyhaven",
+      "asset": "concrete_wall_007",
+      "page": "https://polyhaven.com/a/concrete_wall_007",
+      "author": "Dario Barresi, Rico Cilliers, Charlotte Baglioni",
+      "license": "CC0 1.0",
+      "files": {
+        "color": "concrete_wall.color.webp",
+        "normal": "concrete_wall.normal.webp",
+        "orm": "concrete_wall.orm.webp"
+      },
+      "bytes": 214496
+    },
+    {
+      "id": "tiles_white",
+      "sizeM": [
+        1.27,
+        1.27
+      ],
+      "source": "polyhaven",
+      "asset": "long_white_tiles",
+      "page": "https://polyhaven.com/a/long_white_tiles",
+      "author": "Jenelle van Heerden, Sergej Majboroda",
+      "license": "CC0 1.0",
+      "files": {
+        "color": "tiles_white.color.webp",
+        "normal": "tiles_white.normal.webp",
+        "orm": "tiles_white.orm.webp"
+      },
+      "bytes": 242144
+    },
+    {
+      "id": "brick",
+      "sizeM": [
+        1.4,
+        1.4
+      ],
+      "source": "polyhaven",
+      "asset": "red_brick",
+      "page": "https://polyhaven.com/a/red_brick",
+      "author": "Rob Tuytel",
+      "license": "CC0 1.0",
+      "files": {
+        "color": "brick.color.webp",
+        "normal": "brick.normal.webp",
+        "orm": "brick.orm.webp"
+      },
+      "bytes": 547994
+    },
+    {
+      "id": "floor_wood",
+      "sizeM": [
+        2,
+        2
+      ],
+      "source": "polyhaven",
+      "asset": "wood_floor_worn",
+      "page": "https://polyhaven.com/a/wood_floor_worn",
+      "author": "Dimitrios Savva",
+      "license": "CC0 1.0",
+      "files": {
+        "color": "floor_wood.color.webp",
+        "normal": "floor_wood.normal.webp",
+        "orm": "floor_wood.orm.webp"
+      },
+      "bytes": 220704
+    },
+    {
+      "id": "floor_wood_dark",
+      "sizeM": [
+        3,
+        3
+      ],
+      "source": "polyhaven",
+      "asset": "old_wood_floor",
+      "page": "https://polyhaven.com/a/old_wood_floor",
+      "author": "Guillaume Monsergent",
+      "license": "CC0 1.0",
+      "files": {
+        "color": "floor_wood_dark.color.webp",
+        "normal": "floor_wood_dark.normal.webp",
+        "orm": "floor_wood_dark.orm.webp"
+      },
+      "bytes": 334458
+    },
+    {
+      "id": "floor_checker",
+      "sizeM": [
+        3,
+        3
+      ],
+      "source": "polyhaven",
+      "asset": "floor_tiles_06",
+      "page": "https://polyhaven.com/a/floor_tiles_06",
+      "author": "Rob Tuytel",
+      "license": "CC0 1.0",
+      "files": {
+        "color": "floor_checker.color.webp",
+        "normal": "floor_checker.normal.webp",
+        "orm": "floor_checker.orm.webp"
+      },
+      "bytes": 94686
+    },
+    {
+      "id": "floor_concrete",
+      "sizeM": [
+        3,
+        3
+      ],
+      "source": "polyhaven",
+      "asset": "concrete_floor_worn_001",
+      "page": "https://polyhaven.com/a/concrete_floor_worn_001",
+      "author": "Dimitrios Savva, Rico Cilliers",
+      "license": "CC0 1.0",
+      "files": {
+        "color": "floor_concrete.color.webp",
+        "normal": "floor_concrete.normal.webp",
+        "orm": "floor_concrete.orm.webp"
+      },
+      "bytes": 183170
+    },
+    {
+      "id": "carpet",
+      "sizeM": [
+        0.6,
+        0.6
+      ],
+      "source": "polyhaven",
+      "asset": "dirty_carpet",
+      "page": "https://polyhaven.com/a/dirty_carpet",
+      "author": "Rohit Seervi",
+      "license": "CC0 1.0",
+      "files": {
+        "color": "carpet.color.webp",
+        "normal": "carpet.normal.webp",
+        "orm": "carpet.orm.webp"
+      },
+      "bytes": 914678
+    },
+    {
+      "id": "linoleum",
+      "sizeM": [
+        2,
+        2
+      ],
+      "source": "polyhaven",
+      "asset": "linoleum_brown",
+      "page": "https://polyhaven.com/a/linoleum_brown",
+      "author": "Rob Tuytel",
+      "license": "CC0 1.0",
+      "files": {
+        "color": "linoleum.color.webp",
+        "normal": "linoleum.normal.webp",
+        "orm": "linoleum.orm.webp"
+      },
+      "bytes": 212882
+    },
+    {
+      "id": "siding",
+      "sizeM": [
+        1.4,
+        1.4
+      ],
+      "source": "ambientcg",
+      "asset": "WoodSiding013",
+      "page": "https://ambientcg.com/view?id=WoodSiding013",
+      "author": "ambientCG (Lennart Demes)",
+      "license": "CC0 1.0",
+      "files": {
+        "color": "siding.color.webp",
+        "normal": "siding.normal.webp",
+        "orm": "siding.orm.webp"
+      },
+      "bytes": 379448
+    },
+    {
+      "id": "barn_boards",
+      "sizeM": [
+        2,
+        2
+      ],
+      "source": "ambientcg",
+      "asset": "PaintedWood003",
+      "page": "https://ambientcg.com/view?id=PaintedWood003",
+      "author": "ambientCG (Lennart Demes)",
+      "license": "CC0 1.0",
+      "files": {
+        "color": "barn_boards.color.webp",
+        "normal": "barn_boards.normal.webp",
+        "orm": "barn_boards.orm.webp"
+      },
+      "bytes": 672802
+    },
+    {
+      "id": "shingles",
+      "sizeM": [
+        2,
+        2
+      ],
+      "source": "ambientcg",
+      "asset": "RoofingTiles003",
+      "page": "https://ambientcg.com/view?id=RoofingTiles003",
+      "author": "ambientCG (Lennart Demes)",
+      "license": "CC0 1.0",
+      "files": {
+        "color": "shingles.color.webp",
+        "normal": "shingles.normal.webp",
+        "orm": "shingles.orm.webp"
+      },
+      "bytes": 766300
+    },
+    {
+      "id": "corrugated",
+      "sizeM": [
+        2,
+        2
+      ],
+      "source": "ambientcg",
+      "asset": "CorrugatedSteel005",
+      "page": "https://ambientcg.com/view?id=CorrugatedSteel005",
+      "author": "ambientCG (Lennart Demes)",
+      "license": "CC0 1.0",
+      "files": {
+        "color": "corrugated.color.webp",
+        "normal": "corrugated.normal.webp",
+        "orm": "corrugated.orm.webp"
+      },
+      "bytes": 225846
+    },
+    {
+      "id": "corrugated_rust",
+      "sizeM": [
+        2,
+        2
+      ],
+      "source": "polyhaven",
+      "asset": "rusty_corrugated_iron",
+      "page": "https://polyhaven.com/a/rusty_corrugated_iron",
+      "author": "Charlotte Baglioni",
+      "license": "CC0 1.0",
+      "files": {
+        "color": "corrugated_rust.color.webp",
+        "normal": "corrugated_rust.normal.webp",
+        "orm": "corrugated_rust.orm.webp"
+      },
+      "bytes": 136512
+    },
+    {
+      "id": "ground_grass",
+      "sizeM": [
+        2,
+        2
+      ],
+      "source": "polyhaven",
+      "asset": "forrest_ground_01",
+      "page": "https://polyhaven.com/a/forrest_ground_01",
+      "author": "Rob Tuytel",
+      "license": "CC0 1.0",
+      "files": {
+        "color": "ground_grass.color.webp",
+        "normal": "ground_grass.normal.webp",
+        "orm": "ground_grass.orm.webp"
+      },
+      "bytes": 1094398
+    },
+    {
+      "id": "ground_dirt",
+      "sizeM": [
+        1.3,
+        1.3
+      ],
+      "source": "polyhaven",
+      "asset": "brown_mud_dry",
+      "page": "https://polyhaven.com/a/brown_mud_dry",
+      "author": "Rob Tuytel",
+      "license": "CC0 1.0",
+      "files": {
+        "color": "ground_dirt.color.webp",
+        "normal": "ground_dirt.normal.webp",
+        "orm": "ground_dirt.orm.webp"
+      },
+      "bytes": 1186622
+    },
+    {
+      "id": "ground_gravel",
+      "sizeM": [
+        2.25,
+        2.25
+      ],
+      "source": "polyhaven",
+      "asset": "gravel_floor",
+      "page": "https://polyhaven.com/a/gravel_floor",
+      "author": "Jenelle van Heerden, Matterfield",
+      "license": "CC0 1.0",
+      "files": {
+        "color": "ground_gravel.color.webp",
+        "normal": "ground_gravel.normal.webp",
+        "orm": "ground_gravel.orm.webp"
+      },
+      "bytes": 1262478
+    },
+    {
+      "id": "asphalt",
+      "sizeM": [
+        3,
+        3
+      ],
+      "source": "polyhaven",
+      "asset": "asphalt_02",
+      "page": "https://polyhaven.com/a/asphalt_02",
+      "author": "Rob Tuytel",
+      "license": "CC0 1.0",
+      "files": {
+        "color": "asphalt.color.webp",
+        "normal": "asphalt.normal.webp",
+        "orm": "asphalt.orm.webp"
+      },
+      "bytes": 1086244
+    },
+    {
+      "id": "barricade",
+      "sizeM": [
+        1.8,
+        1.8
+      ],
+      "source": "polyhaven",
+      "asset": "weathered_brown_planks",
+      "page": "https://polyhaven.com/a/weathered_brown_planks",
+      "author": "Dimitrios Savva, Rico Cilliers",
+      "license": "CC0 1.0",
+      "files": {
+        "color": "barricade.color.webp",
+        "normal": "barricade.normal.webp",
+        "orm": "barricade.orm.webp"
+      },
+      "bytes": 483772
+    },
+    {
+      "id": "studs",
+      "sizeM": [
+        0.5,
+        0.5
+      ],
+      "source": "polyhaven",
+      "asset": "rough_wood",
+      "page": "https://polyhaven.com/a/rough_wood",
+      "author": "Rob Tuytel",
+      "license": "CC0 1.0",
+      "files": {
+        "color": "studs.color.webp",
+        "normal": "studs.normal.webp",
+        "orm": "studs.orm.webp"
+      },
+      "bytes": 555784
+    },
+    {
+      "id": "steel",
+      "sizeM": [
+        2,
+        2
+      ],
+      "source": "polyhaven",
+      "asset": "metal_plate_02",
+      "page": "https://polyhaven.com/a/metal_plate_02",
+      "author": "Rob Tuytel",
+      "license": "CC0 1.0",
+      "files": {
+        "color": "steel.color.webp",
+        "normal": "steel.normal.webp",
+        "orm": "steel.orm.webp"
+      },
+      "bytes": 321634
+    }
+  ]
+}

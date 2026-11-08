@@ -43,6 +43,8 @@ export class PanelView {
   private readonly materials = new Map<string, THREE.MeshStandardMaterial>();
   /** The skins' colour by surface (a map's palette, StoreyView); studs, steel, glass and seams keep their own. */
   private skinColor = (surface: string): number => SURFACE_COLORS[surface as keyof typeof SURFACE_COLORS];
+  /** The art pass's materials by key, in place of the greybox's (null for a key keeps its own: artView.ts). */
+  private override: ((key: string) => THREE.Material | null) | null = null;
 
   constructor(
     scene: THREE.Scene,
@@ -170,7 +172,7 @@ export class PanelView {
       const geo = w.cells && w.geometry(w.cells);
       if (!geo) return;
       geo.boundingSphere = d.bounds;
-      const mesh = new THREE.Mesh(geo, this.material(w.key));
+      const mesh = new THREE.Mesh(geo, this.pick(w.key));
       mesh.name = w.key;
       // Studs sit right behind a 2 cm skin: their shadows only streak the skin (shadow-map precision). A seam
       // is too thin to cast anything.
@@ -182,6 +184,19 @@ export class PanelView {
     g.clear();
     for (const m of d.meshes) if (m) g.add(m);
     return true;
+  }
+
+  /**
+   * Draw with the art pass's materials (`by` gives one per key, or null to keep the greybox's), or with the greybox's
+   * again (null): every panel drawn now changes over, nothing is rebuilt.
+   */
+  setMaterialOverride(by: ((key: string) => THREE.Material | null) | null): void {
+    this.override = by;
+    for (const d of this.drawn) for (const m of d.meshes) if (m) m.material = this.pick(m.name);
+  }
+
+  private pick(key: string): THREE.Material {
+    return this.override?.(key) ?? this.material(key);
   }
 
   private material(key: string): THREE.MeshStandardMaterial {

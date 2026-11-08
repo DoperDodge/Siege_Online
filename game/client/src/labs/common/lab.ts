@@ -84,7 +84,9 @@ import { horizontalFov, keyLabel, loadSettings, saveSettings, type HoldMode, typ
 import { isTouchDevice, mountTouchControls, preventPageZoom } from "../../input/touch.js";
 import { LocalSocket } from "../../net/local.js";
 import { OnlineConnection } from "../../net/online.js";
+import { ArtView } from "../../render/artView.js";
 import { createLabScene, createRenderer, PawnView, updateLabels, warmShaders } from "../../render/labScene.js";
+import { initialQuality, presetFor, QUALITIES, QUALITY_NAMES, type QualitySetting } from "../../render/quality.js";
 import { BpCameraModels, CameraModels } from "../../render/cameraModels.js";
 import { GadgetModels } from "../../render/gadgetModels.js";
 import { PanelView } from "../../render/panelView.js";
@@ -352,8 +354,11 @@ export async function startLab(o: LabOptions): Promise<void> {
   }
 
   const view = $("#view");
-  const renderer = createRenderer(view, params.has("lowgfx"));
-  const labScene = createLabScene(sim.level);
+  /** The graphics preset (Phase 10, render/quality.ts): the link's, the browser tests' greybox, or the setting's. */
+  const quality = initialQuality(params, loadSettings().graphics, { automated: navigator.webdriver, touchOnly: isTouchDevice() });
+  const preset = presetFor(quality, params);
+  const renderer = createRenderer(view, preset);
+  const labScene = createLabScene(sim.level, preset.shadowMap);
   const scene = labScene.scene;
   /** Destructible panels, drawn from their cells and redrawn as they change. */
   const panelView = new PanelView(scene, sim.level.panels);
@@ -363,6 +368,12 @@ export async function startLab(o: LabOptions): Promise<void> {
    */
   const storeyView = sim.level.def.storeys.length ? new StoreyView(labScene, panelView, sim.level, sim.pawns.get(ctrl.possessedPawnId)?.state.y ?? 0) : null;
   storeyView?.setViewport(view.clientWidth, view.clientHeight);
+  /**
+   * The art pass (Phase 10): the textures load after the level is drawn, and the art replaces the greybox once
+   * they're in (on a map, while the palette is "art", the first of P's).
+   */
+  const artView = new ArtView(labScene, panelView, sim.level);
+  if (preset.textures && storeyView) storeyView.palette = "art";
   /** A map's markers (E9 part 2): bombs, cameras, ingredients and spawns, and the zones view (O). */
   const markers = storeyView ? new MapMarkers(labScene, o.match ? { ...sim.level.def, cameras: [], ingredients: [], spawns: [], zones: [] } : sim.level.def) : null;
   /** On a map with a plan, the HUD line: the room, the storey and where you are in the plan's units (amendment 17); a match's, the room only. */
@@ -379,8 +390,14 @@ export async function startLab(o: LabOptions): Promise<void> {
   renderer.info.autoReset = false;
   const stats = new StatsOverlay(app, params.has("stats"), () => [
     `static: ${labScene.staticBoxes} boxes in ${labScene.staticMeshes} meshes · panels: ${panelView.meshCount} meshes`,
-    `${renderer.domElement.width} × ${renderer.domElement.height} px${renderer.shadowMap.enabled ? "" : " · no shadows (?lowgfx)"}`,
+    `${renderer.domElement.width} × ${renderer.domElement.height} px${renderer.shadowMap.enabled ? "" : " · no shadows"}`,
+    artLine(),
   ]);
+  /** The graphics preset, and the textures' size and GPU memory once they're in. */
+  function artLine(): string {
+    const t = artView.textures;
+    return `graphics: ${QUALITY_NAMES[quality]}${t ? ` · textures: ${t.sets} sets at ${t.size} px, ${(t.gpuBytes / 1048576).toFixed(0)} MB${artView.shown ? "" : " (hidden)"}` : preset.textures ? " · textures loading" : ""}`;
+  }
   let settings: Settings = loadSettings();
   const camera = new THREE.PerspectiveCamera(settings.fovVertical, view.clientWidth / view.clientHeight, 0.05, 300);
   camera.rotation.order = "YXZ";
@@ -398,6 +415,13 @@ export async function startLab(o: LabOptions): Promise<void> {
     scene.remove(probe);
     viewmodel.warm(renderer);
   }
+  // The art's textures and shaders, then the art itself (render/artView.ts); the greybox until then.
+  void artView
+    .load(preset.textures, renderer, camera)
+    .then((ok) => {
+      if (ok) artView.show(!storeyView || storeyView.palette === "art");
+    })
+    .catch((e) => console.warn("art pass:", e));
   /** Each body's view as drawn this frame (lasers point along it). */
   const drawnView = new Map<number, [number, number]>();
 
@@ -580,10 +604,19 @@ export async function startLab(o: LabOptions): Promise<void> {
       storeyView.setPlan(v.plan);
       app.classList.toggle("plan-view", v.plan); // no crosshair or sights over the plan
     }
-    if (v.palette !== undefined) storeyView.setPalette(v.palette);
+    if (v.palette !== undefined) {
+      storeyView.setPalette(v.palette);
+      artView.show(v.palette === "art");
+    }
     if (!$(".pause").classList.contains("hidden")) renderPause();
   }
 
+  /** P's round: the art (once its textures are in), the surface classes, neutral. */
+  const PALETTE_NAMES: Record<Palette, string> = { art: "Palette: textures", greybox: "Palette: surface classes", neutral: "Palette: neutral" };
+  function nextPalette(): Palette {
+    const round: Palette[] = artView.ready ? ["art", "greybox", "neutral"] : ["greybox", "neutral"];
+    return round[(round.indexOf(storeyView?.palette ?? "greybox") + 1) % round.length];
+  }
   /** The storey views' switches by name (their keys, and the pause menu's View buttons). */
   const viewToggles: Record<string, () => void> = {};
   if (storeyView && !o.match) {
@@ -598,8 +631,8 @@ export async function startLab(o: LabOptions): Promise<void> {
         if (sv.plan) flash("Plan view: the wheel zooms, M goes back", "info");
       },
       palette: () => {
-        setStoreyView({ palette: sv.palette === "greybox" ? "neutral" : "greybox" });
-        flash(sv.palette === "greybox" ? "Palette: surface classes" : "Palette: neutral", "info");
+        setStoreyView({ palette: nextPalette() });
+        flash(PALETTE_NAMES[sv.palette], "info");
       },
       zones: () => {
         setStoreyView({ zones: !markers?.zones });
@@ -800,7 +833,7 @@ export async function startLab(o: LabOptions): Promise<void> {
           ? `<section><h3>View</h3><div class="goto">
         <button data-view="hideAbove">${storeyView.hideAbove ? "Show the storeys above (H)" : "Hide the storeys above (H)"}</button>
         <button data-view="plan">${storeyView.plan ? "Leave the plan view (M)" : "Plan view (M)"}</button>
-        <button data-view="palette">${storeyView.palette === "greybox" ? "Neutral palette (P)" : "Surface colours (P)"}</button>
+        <button data-view="palette">${PALETTE_NAMES[nextPalette()].replace("Palette: ", "Palette (P): ")}</button>
         <button data-view="zones">${markers?.zones ? "Hide the zones (O)" : "Show the zones (O)"}</button></div></section>`
           : ""
       }
@@ -824,8 +857,18 @@ export async function startLab(o: LabOptions): Promise<void> {
         <label><input type="checkbox" data-bool="rawInput" ${settings.rawInput ? "checked" : ""}> Raw mouse input</label>
         ${modeSel("crouchMode", "Crouch")} ${modeSel("proneMode", "Prone")} ${modeSel("leanMode", "Lean")} ${modeSel("adsMode", "Aim (ADS)")}
       </section>
+      <section><h3>Graphics</h3>
+        <label>Quality <select data-gfx>${(["auto", ...QUALITIES] as QualitySetting[])
+          .map((q) => `<option value="${q}" ${settings.graphics === q ? "selected" : ""}>${q === "auto" ? `Auto (${QUALITY_NAMES[initialQuality(new URLSearchParams(), "auto", { automated: false, touchOnly })]})` : QUALITY_NAMES[q]}</option>`)
+          .join("")}</select></label>
+        <p class="note">Drawing now: ${QUALITY_NAMES[quality]}${params.has("gfx") || params.has("lowgfx") ? " (set by the link)" : ""}. A change takes effect when the page next loads.</p>
+      </section>
       <p class="note">Press <kbd>F1</kbd> for the key list and what to try.</p>`;
     pause.querySelector(".resume")?.addEventListener("click", resume);
+    pause.querySelector<HTMLSelectElement>("select[data-gfx]")?.addEventListener("change", (e) => {
+      settings.graphics = (e.target as HTMLSelectElement).value as QualitySetting;
+      saveSettings(settings);
+    });
     pause.querySelector(".refill")?.addEventListener("click", labRefill);
     pause.querySelector(".free-cam")?.addEventListener("click", (e) => {
       setFreeCam(freeCam === null);
@@ -1930,6 +1973,7 @@ export async function startLab(o: LabOptions): Promise<void> {
           rooms: def.rooms.map((r) => ({ id: r.id, callout: r.callout, storey: r.storey, rects: r.rects, anchor: r.anchor })),
           levelPlan: def.plan ?? null,
           hud: whereHud?.text ?? null,
+          art: { quality, ready: artView.ready, shown: artView.shown },
           ...(storeyView && {
             storey: def.storeys[storeyView.storey].id,
             hideAbove: storeyView.hideAbove,

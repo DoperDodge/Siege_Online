@@ -8,8 +8,11 @@ import { clamp, type BuiltLevel } from "@redmond/shared";
 import { DAYLIGHT, STOREY_SLACK_M, storeyOf, SURFACE_COLORS, TAG, type LabScene } from "./labScene.js";
 import type { PanelView } from "./panelView.js";
 
-/** The greybox palette (surface classes) or the neutral one. */
-export type Palette = "greybox" | "neutral";
+/**
+ * The art pass's textures (Phase 10: artView.ts swaps the materials; the greybox ones keep their surface colours
+ * underneath), the greybox palette (surface classes) or the neutral one.
+ */
+export type Palette = "art" | "greybox" | "neutral";
 
 /** The neutral palette's one colour, a light grey, for every surface. */
 export const NEUTRAL_GREY = 0xc6cacf;
@@ -20,6 +23,7 @@ export const NEUTRAL_GREY = 0xc6cacf;
  */
 export function paletteColor(palette: Palette, surface: string): number {
   if (palette === "neutral") return NEUTRAL_GREY;
+  // The art hides the greybox materials: they keep the surface colours for when it's switched off.
   if (surface === "SOFT_FLOOR") return SURFACE_COLORS.SOFT_WALL;
   return SURFACE_COLORS[surface as keyof typeof SURFACE_COLORS] ?? NEUTRAL_GREY;
 }

@@ -2,6 +2,7 @@
 // drawn instanced per material and storey (tools/mapgen/DESIGN.md E4), labels and a map's room callouts by
 // storey (E9), pawn bodies built from hitbox capsules, and an F3 hitbox visualizer.
 import * as THREE from "three";
+import type { QualityPreset } from "./quality.js";
 import { ShieldModel } from "./shieldModel.js";
 import {
   droneHitboxes,
@@ -37,12 +38,12 @@ export const SURFACE_COLORS: Record<Renderable["surface"], number> = {
   LADDER: 0xe08a2e,
 };
 
-/** `low`: no shadows and no anti-aliasing (`?lowgfx`: slow devices, and the browser tests' software rendering). */
-export function createRenderer(container: HTMLElement, low = false): THREE.WebGLRenderer {
-  const renderer = new THREE.WebGLRenderer({ antialias: !low, powerPreference: "high-performance" });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+/** A renderer for the graphics preset (quality.ts): its antialiasing, pixel ratio and sun shadows. */
+export function createRenderer(container: HTMLElement, preset: QualityPreset): THREE.WebGLRenderer {
+  const renderer = new THREE.WebGLRenderer({ antialias: preset.antialias, powerPreference: "high-performance" });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, preset.maxPixelRatio));
   renderer.setSize(container.clientWidth, container.clientHeight);
-  renderer.shadowMap.enabled = !low;
+  renderer.shadowMap.enabled = preset.shadowMap > 0;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   // Only the level casts shadows, and it changes only when a panel does: the shadow map is drawn when the
   // page asks for it (shadowMap.needsUpdate), not every frame (tools/mapgen/DESIGN.md amendment 8).
@@ -119,6 +120,8 @@ export interface LabScene {
   /** Boxes drawn instanced, and the meshes the static boxes take (a draw call each, per pass). */
   staticBoxes: number;
   staticMeshes: number;
+  /** Each static mesh with the boxes it draws, in instance order (the art pass styles them per box: artView.ts). */
+  staticParts: { mesh: THREE.Mesh; boxes: readonly Renderable[] }[];
 }
 
 /** Every instanced box is this one scaled, turned and moved. */
@@ -131,7 +134,7 @@ const UNIT_BOX = new THREE.BoxGeometry(1, 1, 1);
  * raycasts the scene (shots and the laser ask the shared code's physics), so instancing only has to look
  * the same. The labs' textured floor stays a mesh of its own: its texture repeat is per mesh.
  */
-export function createLabScene(level: BuiltLevel): LabScene {
+export function createLabScene(level: BuiltLevel, shadowMap = 4096): LabScene {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x9fb4c7);
   scene.fog = new THREE.Fog(0x9fb4c7, 60, 140);
@@ -141,7 +144,7 @@ export function createLabScene(level: BuiltLevel): LabScene {
   const sun = new THREE.DirectionalLight(0xfff1dc, DAYLIGHT.sun);
   sun.castShadow = true;
   const box = levelBox(level);
-  fitSun(sun, box);
+  fitSun(sun, box, shadowMap);
   scene.add(sun, sun.target);
 
   const materials = new Map<string, THREE.MeshStandardMaterial>();
@@ -188,6 +191,7 @@ export function createLabScene(level: BuiltLevel): LabScene {
   /** The boxes each instanced mesh draws, by storey and material. */
   const batches = new Map<string, { storey: number; surface: string; material: THREE.Material; boxes: Renderable[] }>();
   let staticMeshes = 0;
+  const staticParts: LabScene["staticParts"] = [];
   for (const r of level.renderables) {
     if (!r.visible) continue;
     if (r.kind === "panel") {
@@ -209,6 +213,7 @@ export function createLabScene(level: BuiltLevel): LabScene {
       mesh.receiveShadow = true; // nothing is under it to cast onto
       storeys[storey].add(mesh);
       staticMeshes++;
+      staticParts.push({ mesh, boxes: [r] });
       continue;
     }
     const key = `${storey}:${r.surface}`;
@@ -232,6 +237,7 @@ export function createLabScene(level: BuiltLevel): LabScene {
     storeys[b.storey].add(mesh);
     staticBoxes += b.boxes.length;
     staticMeshes++;
+    staticParts.push({ mesh, boxes: b.boxes });
   }
 
   // Each room's callout over its anchor, with the room's storey (tools/mapgen/DESIGN.md E9).
@@ -244,7 +250,7 @@ export function createLabScene(level: BuiltLevel): LabScene {
     labels.push(sprite);
     callouts.push(sprite);
   }
-  return { scene, storeys, labelGroups, calloutGroups, labels, callouts, materials, hemi, sun, box, staticBoxes, staticMeshes };
+  return { scene, storeys, labelGroups, calloutGroups, labels, callouts, materials, hemi, sun, box, staticBoxes, staticMeshes, staticParts };
 }
 
 /** A wall that takes reinforcement shows its sections: seams on its faces (PanelView) and a count in its label. */
@@ -304,9 +310,9 @@ function levelBox(level: BuiltLevel): THREE.Box3 {
 /**
  * The sun's shadow camera, just around `box` as the sun sees it, so the whole level casts and receives
  * shadows and no texel is spent outside it (DESIGN amendment 8). A level over 80 m across gets a 4096 map,
- * which keeps its shadows about as sharp as a lab's.
+ * which keeps its shadows about as sharp as a lab's; `most` caps it (the graphics preset's).
  */
-function fitSun(sun: THREE.DirectionalLight, box: THREE.Box3) {
+function fitSun(sun: THREE.DirectionalLight, box: THREE.Box3, most: number) {
   const center = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3());
   sun.target.position.copy(center);
@@ -334,7 +340,7 @@ function fitSun(sun: THREE.DirectionalLight, box: THREE.Box3) {
   cam.near = Math.max(0.1, -hi.z - margin); // the camera looks down -z
   cam.far = -lo.z + margin;
   cam.updateProjectionMatrix();
-  const map = Math.max(size.x, size.z) > 80 ? 4096 : 2048;
+  const map = Math.min(most || 2048, Math.max(size.x, size.z) > 80 ? 4096 : 2048);
   sun.shadow.mapSize.set(map, map);
   // The bias is a fraction of the camera's depth range: keep it the same distance whatever the level's size.
   sun.shadow.bias = -SHADOW_BIAS_M / (cam.far - cam.near);

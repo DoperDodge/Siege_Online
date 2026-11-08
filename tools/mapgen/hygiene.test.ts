@@ -6,7 +6,9 @@
 // not the working tree, so a file staged and then deleted on disk is still checked; a large file kept in Git LFS
 // is checked by its stored content. The only images allowed are our own plan SVGs in research/oregon/compare/
 // (drawn by tools/mapgen from our geometry, never embedding or linking a picture), and Ulo's screenshots in
-// research/oregon/refs/ulo/ once Ulo has made the repo private and removed its .gitignore lines.
+// research/oregon/refs/ulo/ once Ulo has made the repo private and removed its .gitignore lines; and the game's CC0
+// texture sets (D-170, amending D-079): WebP files in game/client/public/art/textures/ named in its staged manifest by a
+// set from Poly Haven or ambientCG under CC0, each listed in ASSET_SOURCES.md.
 // Run it before committing with: npx vitest run tools/mapgen/hygiene.test.ts
 // (.githooks/pre-commit does that; enable with `git config core.hooksPath .githooks`).
 import { execFileSync } from "node:child_process";
@@ -22,6 +24,8 @@ const CARRIER_EXT = /\.(zip|z\d\d|7z|rar|tar|tgz|tbz2?|txz|gz|bz2|xz|zst|lz4|cab
 const PLAN_SVG = /^research\/oregon\/compare\/[\w.-]+\.svg$/;
 const PLAN_MARK = 'data-generator="tools/mapgen"';
 const ULO_DIR = "research/oregon/refs/ulo/";
+const ART_DIR = "game/client/public/art/textures/";
+const CC0_SOURCES = new Set(["polyhaven", "ambientcg"]);
 const LFS_POINTER = "version https://git-lfs.github.com/spec/v1";
 
 // Built from parts so this file doesn't trip its own check.
@@ -74,9 +78,38 @@ function imageBytes(b: Buffer): string | null {
   return null;
 }
 
-/** What is wrong with one tracked file, or null. */
-export function imageProblem(path: string, b: Buffer, uloOpen: boolean): string | null {
+/**
+ * The CC0 texture files the staged texture manifest names (D-170): each set's colour, normal and ORM WebP, when the set
+ * is CC0 from Poly Haven or ambientCG and ASSET_SOURCES.md lists its page; and what's wrong with any set that isn't.
+ */
+export function cc0ArtFiles(manifest: Buffer | null | undefined, assetSources: Buffer | null | undefined): { allowed: Set<string>; problems: string[] } {
+  const allowed = new Set<string>();
+  const problems: string[] = [];
+  if (!manifest) return { allowed, problems };
+  let sets: { id?: string; source?: string; license?: string; page?: string; files?: Record<string, string> }[];
+  try {
+    sets = (JSON.parse(manifest.toString("utf8")) as { sets?: typeof sets }).sets ?? [];
+  } catch {
+    return { allowed, problems: [`${ART_DIR}manifest.json isn't JSON`] };
+  }
+  const log = assetSources?.toString("utf8") ?? "";
+  for (const s of sets) {
+    if (s.license !== "CC0 1.0" || !CC0_SOURCES.has(s.source ?? "")) problems.push(`texture set ${s.id} isn't CC0 from Poly Haven or ambientCG`);
+    else if (!s.page || !log.includes(s.page)) problems.push(`texture set ${s.id} (${s.page}) isn't listed in ASSET_SOURCES.md`);
+    else for (const f of Object.values(s.files ?? {})) if (/^[\w-]+\.(color|normal|orm)\.webp$/.test(f)) allowed.add(ART_DIR + f);
+  }
+  return { allowed, problems };
+}
+
+/** A plain WebP file: RIFF, then WEBP. */
+function isWebp(b: Buffer): boolean {
+  return b.length > 12 && b.toString("latin1", 0, 4) === "RIFF" && b.toString("latin1", 8, 12) === "WEBP";
+}
+
+/** What is wrong with one tracked file, or null (`art`: the CC0 texture files allowed, cc0ArtFiles). */
+export function imageProblem(path: string, b: Buffer, uloOpen: boolean, art: ReadonlySet<string> = new Set()): string | null {
   if (uloOpen && path.startsWith(ULO_DIR)) return null;
+  if (art.has(path)) return isWebp(b) ? null : "is listed as a CC0 texture but isn't a WebP";
   if (IMAGE_EXT.test(path)) {
     if (!PLAN_SVG.test(path)) return "is an image file";
     const text = b.toString("utf8");
@@ -161,13 +194,14 @@ describe("repo hygiene", () => {
     expect(files.length).toBeGreaterThan(100);
     const gitignore = files.find((f) => f.path === ".gitignore")?.bytes;
     const uloOpen = gitignore ? uloFolderOpen(gitignore.toString("utf8")) : false;
-    const problems: string[] = [];
+    const art = cc0ArtFiles(files.find((f) => f.path === `${ART_DIR}manifest.json`)?.bytes, files.find((f) => f.path === "ASSET_SOURCES.md")?.bytes);
+    const problems: string[] = [...art.problems];
     for (const f of files) {
       if (!f.bytes) {
         problems.push(`${f.path} ${f.why}`);
         continue;
       }
-      const p = imageProblem(f.path, f.bytes, uloOpen);
+      const p = imageProblem(f.path, f.bytes, uloOpen, art.allowed);
       if (p) problems.push(`${f.path} ${p}`);
     }
     expect(problems).toEqual([]);
@@ -228,6 +262,21 @@ describe("repo hygiene", () => {
       else expect(got, path).toBeNull();
     }
     expect(imageProblem("research/oregon/refs/ulo/kitchen.png", png, true)).toBeNull();
+  });
+
+  it("allows the CC0 texture sets the manifest names, as WebP in their folder only, and only when ASSET_SOURCES.md lists them (D-170)", () => {
+    const webp = Buffer.concat([Buffer.from("RIFF\0\0\0\0WEBP", "latin1"), Buffer.alloc(32)]);
+    const set = (id: string, more: object = {}) => ({ id, source: "polyhaven", license: "CC0 1.0", page: `https://polyhaven.com/a/${id}`, files: { color: `${id}.color.webp`, normal: `${id}.normal.webp`, orm: `${id}.orm.webp` }, ...more });
+    const manifest = Buffer.from(JSON.stringify({ sets: [set("plaster"), set("odd", { license: "CC-BY 4.0" }), set("stray")] }));
+    const log = Buffer.from("| plaster | https://polyhaven.com/a/plaster | CC0 1.0 |\n| odd | https://polyhaven.com/a/odd |\n");
+    const art = cc0ArtFiles(manifest, log);
+    expect([...art.allowed].sort()).toEqual(["color", "normal", "orm"].map((m) => `game/client/public/art/textures/plaster.${m}.webp`));
+    expect(art.problems).toEqual(["texture set odd isn't CC0 from Poly Haven or ambientCG", "texture set stray (https://polyhaven.com/a/stray) isn't listed in ASSET_SOURCES.md"]);
+    expect(imageProblem("game/client/public/art/textures/plaster.color.webp", webp, false, art.allowed)).toBeNull();
+    expect(imageProblem("game/client/public/art/textures/plaster.color.webp", Buffer.concat([PNG_MAGIC, Buffer.alloc(16)]), false, art.allowed)).toMatch(/isn't a WebP/);
+    expect(imageProblem("game/client/public/art/textures/stray.color.webp", webp, false, art.allowed)).toMatch(/image file/);
+    expect(imageProblem("research/oregon/plaster.color.webp", webp, false, art.allowed)).toMatch(/image file/);
+    expect(cc0ArtFiles(Buffer.from("not json"), log).problems).toEqual(["game/client/public/art/textures/manifest.json isn't JSON"]);
   });
 
   it("reads Ulo's folder rule from the staged .gitignore, and Git LFS pointers by their stored content", () => {

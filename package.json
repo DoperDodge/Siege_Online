@@ -27,7 +27,8 @@
     "bench:bots": "esbuild tools/bench/bots.ts --bundle --platform=node --format=esm --outfile=builds/bench/bots.mjs --log-level=warning && node builds/bench/bots.mjs",
     "soak": "esbuild tools/soak/run.ts --bundle --platform=node --format=esm --outfile=builds/soak/run.mjs --log-level=warning && node builds/soak/run.mjs",
     "check": "npm run typecheck && npm test && npm run build && npm run test:e2e",
-    "e2e:setup": "playwright install chromium"
+    "e2e:setup": "playwright install chromium",
+    "art:textures": "node tools/art/textures.mjs"
   },
   "devDependencies": {
     "@types/node": "^22",
