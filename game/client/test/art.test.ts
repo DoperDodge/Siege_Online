@@ -22,6 +22,7 @@ function fakeSets(): TextureSets {
     orm: tex(),
     layer: new Map(manifest.sets.map((s, i) => [s.id, i])),
     sizeM: new Map(manifest.sets.map((s) => [s.id, s.sizeM])),
+    mean: new Map(manifest.sets.map((s) => [s.id, s.mean ?? [0.5, 0.5, 0.5]])),
     size: 1,
     gpuBytes: 0,
   };

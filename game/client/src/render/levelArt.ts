@@ -11,6 +11,8 @@
 // their faces' normals come from the screen-space slope of the position, snapped to the panel's axes.
 import * as THREE from "three";
 import type { ArtData, ArtStyle, BuiltLevel, MapArt, Renderable } from "@redmond/shared";
+import type { BakeScene, GridSpec } from "./probes/bake.js";
+import { probeGlsl } from "./probes/probeField.js";
 import type { TextureSets } from "./textures.js";
 
 /** Room map resolution (metres a texel), and how far past the rooms (padded zones aside) it reaches. */
@@ -25,6 +27,9 @@ const CROWN_M = 0.07;
  */
 const ZONE_CODE = 200;
 const OUTSIDE_CODE = 240;
+
+/** A lamp of power 1's irradiance at a metre (the sky's units: the sun gives about 4.7 at normal incidence here). */
+const LAMP_BASE = 9;
 
 /** The look of a level with no art file (the labs): painted concrete, concrete floors, a white ceiling. */
 const LAB_STYLE: ArtStyle = { wall: "concrete_painted", floor: "floor_concrete", ceiling: "plaster_white", trim: "concrete_painted", exterior: true };
@@ -50,29 +55,18 @@ vArtNormal = mat3( modelMatrix ) * artN;
 vArtStyle = aArt > 0.5 ? aArt : uArtStyle;
 `;
 
-const FRAGMENT_DECL = /* glsl */ `
+/**
+ * The room maps and the storeys (shared by the level's materials and any material the probes light: litPatch): the
+ * storey a height is on, the room code at a spot, and its probe class (a room's code; anything outside one, 255).
+ */
+const ROOM_DECL = /* glsl */ `
 #define OUTSIDE_CODE_GLSL ${OUTSIDE_CODE}
-uniform highp sampler2DArray tArtColor;
-uniform highp sampler2DArray tArtNormal;
-uniform highp sampler2DArray tArtOrm;
-uniform highp sampler2D tArtMat;
-uniform highp sampler2D tArtStyle;
-uniform highp sampler2D tArtRoomStyle;
 uniform highp sampler2DArray tArtRooms;
 uniform vec4 uArtRoomBox;
 uniform vec2 uArtRoomSize;
 uniform vec4 uArtFloors[ 2 ];
 uniform vec4 uArtCeils[ 2 ];
 uniform int uArtStoreys;
-uniform float uArtGrid;
-uniform mat4 modelMatrix;
-varying vec3 vArtPos;
-varying vec3 vArtNormal;
-varying float vArtStyle;
-
-vec4 artTexel( highp sampler2D t, int x, int y ) {
-  return texelFetch( t, ivec2( x, y ), 0 );
-}
 float artFloorY( int s ) { return uArtFloors[ s / 4 ][ s - 4 * ( s / 4 ) ]; }
 float artCeilY( int s ) { return uArtCeils[ s / 4 ][ s - 4 * ( s / 4 ) ]; }
 // The storey a height is on: the last whose floor is within 10 cm under it.
@@ -90,6 +84,30 @@ int artRoomCode( vec3 q, int s ) {
   if ( t.x < 0.0 || t.y < 0.0 || t.x >= uArtRoomSize.x || t.y >= uArtRoomSize.y ) return 0;
   return int( texelFetch( tArtRooms, ivec3( int( t.x ), int( t.y ), s ), 0 ).r * 255.0 + 0.5 );
 }
+// The probes' room class at q (probes/bake.ts roomClass).
+float artRoomClass( vec3 q ) {
+  int code = artRoomCode( q, artStorey( q.y ) );
+  return code > 0 && code < 200 ? float( code ) : 255.0;
+}
+`;
+
+const FRAGMENT_DECL = /* glsl */ `
+${ROOM_DECL}
+uniform highp sampler2DArray tArtColor;
+uniform highp sampler2DArray tArtNormal;
+uniform highp sampler2DArray tArtOrm;
+uniform highp sampler2D tArtMat;
+uniform highp sampler2D tArtStyle;
+uniform highp sampler2D tArtRoomStyle;
+uniform float uArtGrid;
+uniform mat4 modelMatrix;
+varying vec3 vArtPos;
+varying vec3 vArtNormal;
+varying float vArtStyle;
+
+vec4 artTexel( highp sampler2D t, int x, int y ) {
+  return texelFetch( t, ivec2( x, y ), 0 );
+}
 // How much of the pixel lies on a line every spacing metres (the labs' floor grid: a ruler).
 float artGridLine( vec2 p, float spacing, float px ) {
   vec2 c = p / spacing;
@@ -97,6 +115,29 @@ float artGridLine( vec2 p, float spacing, float px ) {
   vec2 d = abs( fract( c - 0.5 ) - 0.5 ) / w;
   vec2 on = clamp( 0.5 * px + 0.5 - d, 0.0, 1.0 ) * ( 1.0 - smoothstep( 0.1, 0.3, w ) );
   return max( on.x, on.y );
+}
+`;
+
+/** Any lit material the probes light (litPatch): its world position. */
+const LIT_VERTEX_DECL = /* glsl */ `
+varying vec3 vLitPos;
+`;
+const LIT_VERTEX_MAIN = /* glsl */ `
+vec4 litW = vec4( transformed, 1.0 );
+#ifdef USE_INSTANCING
+  litW = instanceMatrix * litW;
+#endif
+vLitPos = ( modelMatrix * litW ).xyz;
+`;
+const LIT_FRAGMENT_MAPS = /* glsl */ `
+if ( uProbeOn > 0.5 ) {
+  // three's normals are in view space: back to the world (the view matrix's rotation, transposed).
+  vec3 litNg = normalize( ( vec4( geometryNormal, 0.0 ) * viewMatrix ).xyz );
+  vec3 litN = normalize( ( vec4( normal, 0.0 ) * viewMatrix ).xyz );
+  vec4 litProbe = probeLight( vLitPos, litNg, litN, artRoomClass( vLitPos + litNg * 0.15 ) );
+  irradiance = vec3( 0.0 );
+  iblIrradiance = litProbe.rgb;
+  radiance = radiance * litProbe.a + ( 1.0 - litProbe.a ) * litProbe.rgb * RECIPROCAL_PI;
 }
 `;
 
@@ -169,6 +210,24 @@ if ( uArtGrid > 0.5 && artNw.y > 0.9 ) {
 }
 `;
 
+/**
+ * After the image-based light (lights_fragment_maps): with the probes in, they give the face its indirect light — the
+ * hemisphere light and the environment's diffuse light are dropped — and reflections show the sky as much as the
+ * probes see it, the room's light for the rest (a metal in a closed room isn't black).
+ */
+const FRAGMENT_PROBES = /* glsl */ `
+#ifdef ART_PROBES
+if ( uProbeOn > 0.5 ) {
+  float artCls = artCode > 0 && artCode < 200 ? float( artCode ) : 255.0;
+  vec4 artProbe = probeLight( artP, artNw, artNormalW, artCls );
+  irradiance = vec3( 0.0 );
+  iblIrradiance = artProbe.rgb;
+  // Reflections: the sky where the probes see it; elsewhere the room, as an even glow of the light the probes hold.
+  radiance = radiance * artProbe.a + ( 1.0 - artProbe.a ) * artProbe.rgb * RECIPROCAL_PI;
+}
+#endif
+`;
+
 const FRAGMENT_ROUGHNESS = /* glsl */ `float roughnessFactor = clamp( artOrm.g * artM1.w, 0.04, 1.0 );`;
 const FRAGMENT_METALNESS = /* glsl */ `float metalnessFactor = artOrm.b;`;
 const FRAGMENT_NORMAL = /* glsl */ `normal = normalize( ( viewMatrix * vec4( artNormalW, 0.0 ) ).xyz );`;
@@ -210,8 +269,12 @@ export class LevelArt {
   private readonly propStyle = new Map<string, number>();
   private readonly solidProp = new Map<string, string>();
   private readonly map: MapArt | null;
+  /** The probe field's uniforms, once attached (before the materials are made). */
+  private probes: Record<string, THREE.IUniform> | null = null;
   /** Each style's id, by index. */
   private readonly styleIds: string[] = [];
+  /** Per material: its albedo (the set's mean colour, tinted and gained), linear rgb. */
+  private readonly albedo: Float32Array;
   /** The room maps' data as the shader reads them (styleAt). */
   private rooms!: { data: Uint8Array; x0: number; z0: number; w: number; h: number; layers: number; codes: Float32Array };
 
@@ -224,9 +287,14 @@ export class LevelArt {
     // The material table: 3 texels per material.
     const mats = Object.entries(data.materials);
     const matData = new Float32Array(mats.length * 3 * 4);
+    this.albedo = new Float32Array(mats.length * 3);
     const c = new THREE.Color();
     mats.forEach(([id, m], i) => {
       this.matIndex.set(id, i);
+      const mean = sets.mean.get(m.set) ?? [0.5, 0.5, 0.5];
+      c.setStyle(m.tint);
+      const gain = m.gain ?? 1;
+      this.albedo.set([Math.min(0.95, mean[0] * c.r * gain), Math.min(0.95, mean[1] * c.g * gain), Math.min(0.95, mean[2] * c.b * gain)], i * 3);
       const size = m.scaleM ?? sets.sizeM.get(m.set) ?? [2, 2];
       c.setStyle(m.tint);
       matData.set([sets.layer.get(m.set) ?? 0, c.r, c.g, c.b, size[0], size[1], m.rotate === 90 ? 1 : 0, m.roughness ?? 1, m.normal ?? 1, m.gain ?? 1, 0, 0], i * 12);
@@ -390,6 +458,65 @@ export class LevelArt {
     return this.styleIds[r.codes[code * 4]];
   }
 
+  /**
+   * The probe bake's scene (probes/bake.ts) for these boxes, grids, sky, sun and lamps: the room maps and their styles'
+   * wall, floor and ceiling materials, each material's albedo, and the storeys' floors.
+   */
+  bakeScene(boxes: Float32Array, grids: GridSpec[], sky: BakeScene["sky"], sun: BakeScene["sun"], lamps: Float32Array, rays: number): BakeScene {
+    const r = this.rooms;
+    const roomStyle = new Int32Array(256);
+    for (let i = 0; i < 256; i++) roomStyle[i] = r.codes[i * 4];
+    const styles = new Int32Array(this.styles.length * 3);
+    this.styles.forEach((s, i) => styles.set([s.wall, s.floor, s.ceiling], i * 3));
+    return {
+      boxes,
+      rooms: { data: r.data, x0: r.x0, z0: r.z0, cell: ROOM_CELL_M, w: r.w, h: r.h, layers: r.layers },
+      floors: this.level.def.storeys.map((s) => s.floorY),
+      roomStyle,
+      styles,
+      albedo: this.albedo,
+      sky,
+      sun,
+      lamps,
+      grids,
+      rays,
+    };
+  }
+
+  /** The room code at a point, by the shader's rule (no normal offset); OUTSIDE_CODE + its storey off the rooms. */
+  codeAt(x: number, y: number, z: number): number {
+    const storeys = this.level.def.storeys;
+    let s = 0;
+    for (let i = 0; i < Math.min(8, storeys.length); i++) if (storeys[i].floorY - 0.1 <= y) s = i;
+    const r = this.rooms;
+    const u = Math.floor((x - r.x0) / ROOM_CELL_M);
+    const v = Math.floor((z - r.z0) / ROOM_CELL_M);
+    return (u < 0 || v < 0 || u >= r.w || v >= r.h ? 0 : r.data[s * r.w * r.h + v * r.w + u]) || OUTSIDE_CODE + s;
+  }
+
+  /** The probes' room class at a point: its room's code, or the outside's class (probes/bake.ts roomClass). */
+  classAt(x: number, y: number, z: number): number {
+    const code = this.codeAt(x, y, z);
+    return code > 0 && code < ZONE_CODE ? code : 255;
+  }
+
+  /**
+   * A room's lamp (probes/scene.ts roomLamps): its style's colour times its power times LAMP_BASE (the irradiance a
+   * lamp of power 1 gives at a metre), linear; inside styles have a warm one unless they say otherwise, outside ones none.
+   */
+  lampOf(roomId: string): [number, number, number] | null {
+    const map = this.map;
+    if (!map) return null;
+    const id = map.rooms[roomId] ?? map.default;
+    const style = map.styles[id];
+    if (!style || style.exterior) return null;
+    const lamp = style.lamp ?? { color: "#fff0dc", power: 1 };
+    if (lamp.power <= 0) return null;
+    const c = new THREE.Color(lamp.color);
+    const k = LAMP_BASE * lamp.power;
+    return [c.r * k, c.g * k, c.b * k];
+  }
+
   /** The style a static box wears whatever room it's in, +1 (0: by its room). */
   styleOf(r: Renderable): number {
     for (const it of this.items) if (it.re.test(r.id)) return it.style + 1;
@@ -401,6 +528,12 @@ export class LevelArt {
   /** The style's index +1 for a fixed material the panels use ("studs", "steel", "barricade"). */
   private fixed(m: string): number {
     return (this.styleIndex.get(`_${m}`) ?? 0) + 1;
+  }
+
+  /** Light the materials with the probe field (probes/probeField.ts): before any material is made. */
+  attachProbes(uniforms: Record<string, THREE.IUniform>): void {
+    if (this.materials.size) throw new Error("attach the probes before the materials are made");
+    this.probes = uniforms;
   }
 
   /** The material the static boxes are drawn with (instanced, their styles per box: aArt). */
@@ -421,24 +554,51 @@ export class LevelArt {
     let m = this.materials.get(key);
     if (m) return m;
     m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, metalness: 0, flatShading: panel });
-    if (panel) m.defines = { ART_PANEL: "" };
+    const probes = this.probes;
+    m.defines = { ...(panel ? { ART_PANEL: "" } : {}), ...(probes ? { ART_PROBES: "" } : {}) };
     const shared = this.uniforms;
     const own = { uArtStyle: { value: style } };
     m.onBeforeCompile = (shader) => {
-      Object.assign(shader.uniforms, shared, own);
+      Object.assign(shader.uniforms, shared, probes ?? {}, own);
       shader.vertexShader = shader.vertexShader.replace("#include <common>", `#include <common>\n${VERTEX_DECL}`).replace("#include <project_vertex>", `#include <project_vertex>\n${VERTEX_MAIN}`);
       shader.fragmentShader = shader.fragmentShader
-        .replace("#include <common>", `#include <common>\n${FRAGMENT_DECL}`)
+        .replace("#include <common>", `#include <common>\n${FRAGMENT_DECL}${probes ? probeGlsl() : ""}`)
         .replace("#include <map_fragment>", FRAGMENT_MAP)
         .replace("#include <roughnessmap_fragment>", FRAGMENT_ROUGHNESS)
         .replace("#include <metalnessmap_fragment>", FRAGMENT_METALNESS)
         .replace("#include <normal_fragment_maps>", FRAGMENT_NORMAL)
+        .replace("#include <lights_fragment_maps>", `#include <lights_fragment_maps>\n${FRAGMENT_PROBES}`)
         .replace("#include <aomap_fragment>", FRAGMENT_AO);
     };
-    m.customProgramCacheKey = () => `level-art${panel ? "-panel" : ""}`;
+    m.customProgramCacheKey = () => `level-art${panel ? "-panel" : ""}${probes ? "-probes" : ""}`;
     m.name = `art:${key}`;
     this.materials.set(key, m);
     return m;
+  }
+
+  /**
+   * Light a material that isn't the level's (a body, a gadget, the glass) by the probes, as the level is: its indirect
+   * light from the probes of the room it's in, the sky's reflection only where they see the sky. Standard materials
+   * only; once each (it keeps any hook the material had). Needs the probes attached.
+   */
+  litPatch(material: THREE.Material): void {
+    const m = material as THREE.MeshStandardMaterial;
+    if (!m.isMeshStandardMaterial || m.userData.artLit || !this.probes || [...this.materials.values()].includes(m)) return;
+    m.userData.artLit = true;
+    const shared = this.uniforms;
+    const probes = this.probes;
+    const before = m.onBeforeCompile;
+    const beforeKey = m.customProgramCacheKey;
+    m.onBeforeCompile = (shader, renderer) => {
+      before.call(m, shader, renderer);
+      Object.assign(shader.uniforms, shared, probes);
+      shader.vertexShader = shader.vertexShader.replace("#include <common>", `#include <common>\n${LIT_VERTEX_DECL}`).replace("#include <project_vertex>", `#include <project_vertex>\n${LIT_VERTEX_MAIN}`);
+      shader.fragmentShader = shader.fragmentShader
+        .replace("#include <common>", `#include <common>\n${ROOM_DECL}\nvarying vec3 vLitPos;\n${probeGlsl()}`)
+        .replace("#include <lights_fragment_maps>", `#include <lights_fragment_maps>\n${LIT_FRAGMENT_MAPS}`);
+    };
+    m.customProgramCacheKey = () => `${beforeKey.call(m)}-art-lit`;
+    m.needsUpdate = true;
   }
 
   /** Every material made so far (to compile them before they show). */

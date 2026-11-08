@@ -42,7 +42,7 @@
     "concrete_blue": {"set": "concrete_wall", "tint": "#93a9c0", "normal": 0.6},
     "metal_yellow": {"set": "steel", "tint": "#e3b23c", "gain": 1.2, "roughness": 1.2},
     "rubber": {"set": "asphalt", "tint": "#4a4a4a", "roughness": 1.1},
-    "fabric_prop": {"set": "carpet", "tint": "#8c8f7a", "gain": 1.2},
+    "fabric_prop": {"set": "plaster", "tint": "#8f8a7c", "normal": 0.5, "roughness": 1.2},
     "roof_tar": {"set": "asphalt", "tint": "#8a8784", "roughness": 1.05}
   }
 }

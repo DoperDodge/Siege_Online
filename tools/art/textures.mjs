@@ -6,8 +6,9 @@
 // For each set: the source's 1k maps (Poly Haven's API, or ambientCG's 1K-JPG zip), cached in builds/art-cache/, are
 // packed into three square WebP maps at the list's resolution — `<id>.color.webp` (sRGB), `<id>.normal.webp`
 // (OpenGL: green up) and `<id>.orm.webp` (R ambient occlusion, G roughness, B metalness, as glTF packs them) — in
-// game/client/public/art/textures/, with manifest.json: each set's real size in metres (the source's), its source
-// and author, and the bytes written. Downloads are checked against the md5 Poly Haven lists. The outputs are
+// game/client/public/art/textures/, with manifest.json: each set's real size in metres (the source's), its mean colour
+// (linear: the probe bake's albedo), its source and author, and the bytes written. The manifest's other entries (the
+// sky: tools/art/sky.mjs) are kept. Downloads are checked against the md5 Poly Haven lists. The outputs are
 // committed (plain git, not LFS: .gitattributes); the cache isn't.
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
@@ -122,6 +123,15 @@ async function orm(src) {
   return sharp(rgb, { raw: { width: RES, height: RES, channels: 3 } });
 }
 
+/** A colour map's mean colour, linear (sRGB decoded per pixel). */
+async function meanColor(img) {
+  const { data, info } = await sharp(img).resize(64, 64, { fit: "fill" }).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  const lin = (c) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+  const sum = [0, 0, 0];
+  for (let i = 0; i < info.width * info.height; i++) for (let k = 0; k < 3; k++) sum[k] += lin(data[i * 3 + k] / 255);
+  return sum.map((v) => Math.round((v / (info.width * info.height)) * 10000) / 10000);
+}
+
 let total = 0;
 for (const set of LIST.sets) {
   const files = { color: `${set.id}.color.webp`, normal: `${set.id}.normal.webp`, orm: `${set.id}.orm.webp` };
@@ -129,7 +139,10 @@ for (const set of LIST.sets) {
   const fresh = Object.values(files).every((f) => existsSync(join(OUT, f))) && prev?.asset === set.asset;
   // Ids named: just those. Otherwise every set not already written from its listed asset (all with --force).
   if (!(only.size ? only.has(set.id) : force || !fresh)) {
-    if (prev) total += prev.bytes;
+    if (prev) {
+      total += prev.bytes;
+      prev.mean ??= await meanColor(readFileSync(join(OUT, files.color)));
+    }
     continue;
   }
   const src = set.source === "polyhaven" ? await polyhaven(set.asset) : await ambientcg(set.asset);
@@ -153,10 +166,12 @@ for (const set of LIST.sets) {
     license: "CC0 1.0",
     files,
     bytes,
+    mean: await meanColor(readFileSync(join(OUT, files.color))),
   });
   console.log(`${set.id.padEnd(16)} ${set.source}/${set.asset} ${src.sizeM.map((v) => v.toFixed(2)).join(" × ")} m  ${(bytes / 1024).toFixed(0)} KB`);
 }
 
 const sets = LIST.sets.map((s) => kept.get(s.id)).filter(Boolean);
-writeFileSync(manifestPath, `${JSON.stringify({ _doc: "Written by tools/art/textures.mjs from data/presentation/textures.json: do not edit.", resolution: RES, sets }, null, 2)}\n`);
+const doc = "Written by tools/art/textures.mjs and tools/art/sky.mjs from data/presentation/textures.json: do not edit.";
+writeFileSync(manifestPath, `${JSON.stringify({ ...old, _doc: doc, resolution: RES, sets }, null, 2)}\n`);
 console.log(`${sets.length} sets, ${(total / 1048576).toFixed(1)} MB`);

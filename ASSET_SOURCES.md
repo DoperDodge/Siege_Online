@@ -35,6 +35,7 @@ normal and ORM maps are resized WebP copies of the CC0 source's maps.
 | `game/client/public/art/textures/barricade.*` (polyhaven `weathered_brown_planks`) | https://polyhaven.com/a/weathered_brown_planks | Dimitrios Savva, Rico Cilliers | CC0 1.0 | — (CC0: no credit needed) | 2026-11-08, Phase 10 |
 | `game/client/public/art/textures/studs.*` (polyhaven `rough_wood`) | https://polyhaven.com/a/rough_wood | Rob Tuytel | CC0 1.0 | — (CC0: no credit needed) | 2026-11-08, Phase 10 |
 | `game/client/public/art/textures/steel.*` (polyhaven `metal_plate_02`) | https://polyhaven.com/a/metal_plate_02 | Rob Tuytel | CC0 1.0 | — (CC0: no credit needed) | 2026-11-08, Phase 10 |
+| `game/client/public/art/textures/sky.*` (polyhaven HDRI `kloofendal_38d_partly_cloudy_puresky`: the sky backdrop and its light, by `tools/art/sky.mjs`) | https://polyhaven.com/a/kloofendal_38d_partly_cloudy_puresky | Greg Zaal, Jarod Guest | CC0 1.0 | — (CC0: no credit needed) | 2026-11-08, Phase 10 |
 
 ## Research references (NOT shipped, NOT assets)
 Reference images and callout maps used to study Oregon are listed in

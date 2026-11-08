@@ -282,15 +282,27 @@ export class StoreyView {
     }
   }
 
+  /**
+   * The art pass's light (Phase 10, probeField.ts): the probes light every storey, so the hemisphere light and the even
+   * fill are off and the sun is `sun` bright everywhere; null goes back to each storey's own light.
+   */
+  setArtLight(sun: number | null): void {
+    this.artSun = sun;
+    this.aimLight();
+    this.blend(Infinity);
+  }
+
+  private artSun: number | null = null;
+
   /** Start blending the lights toward those of the storey you're on. */
   private aimLight(): void {
     const l = storeyLight(this.storeys[this.storey]);
     const t = this.target;
     t.sky.setHex(l.sky);
     t.ground.setHex(l.ground);
-    t.hemi = l.hemi;
-    t.ambient = l.ambient;
-    t.sun = l.sun;
+    t.hemi = this.artSun === null ? l.hemi : 0;
+    t.ambient = this.artSun === null ? l.ambient : 0;
+    t.sun = this.artSun ?? l.sun;
     this.settled = false;
   }
 

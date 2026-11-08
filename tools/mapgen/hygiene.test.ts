@@ -86,9 +86,11 @@ export function cc0ArtFiles(manifest: Buffer | null | undefined, assetSources: B
   const allowed = new Set<string>();
   const problems: string[] = [];
   if (!manifest) return { allowed, problems };
-  let sets: { id?: string; source?: string; license?: string; page?: string; files?: Record<string, string> }[];
+  type Entry = { id?: string; source?: string; license?: string; page?: string; files?: Record<string, string> };
+  let sets: Entry[];
   try {
-    sets = (JSON.parse(manifest.toString("utf8")) as { sets?: typeof sets }).sets ?? [];
+    const m = JSON.parse(manifest.toString("utf8")) as { sets?: Entry[]; sky?: Entry };
+    sets = [...(m.sets ?? []), ...(m.sky ? [m.sky] : [])];
   } catch {
     return { allowed, problems: [`${ART_DIR}manifest.json isn't JSON`] };
   }
@@ -96,7 +98,7 @@ export function cc0ArtFiles(manifest: Buffer | null | undefined, assetSources: B
   for (const s of sets) {
     if (s.license !== "CC0 1.0" || !CC0_SOURCES.has(s.source ?? "")) problems.push(`texture set ${s.id} isn't CC0 from Poly Haven or ambientCG`);
     else if (!s.page || !log.includes(s.page)) problems.push(`texture set ${s.id} (${s.page}) isn't listed in ASSET_SOURCES.md`);
-    else for (const f of Object.values(s.files ?? {})) if (/^[\w-]+\.(color|normal|orm)\.webp$/.test(f)) allowed.add(ART_DIR + f);
+    else for (const f of Object.values(s.files ?? {})) if (/^[\w-]+\.(color|normal|orm|background)\.webp$/.test(f)) allowed.add(ART_DIR + f);
   }
   return { allowed, problems };
 }

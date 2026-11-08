@@ -79,16 +79,23 @@ export class PanelView {
    */
   update(): boolean {
     let changed = false;
+    this.lastChanged.length = 0;
     for (let i = 0; i < this.panels.list.length; i++) {
       const e = this.panels.list[i];
       const d = this.drawn[i];
       if (d.panel === e.panel && d.version === e.panel.version) continue;
       d.panel = e.panel;
       d.version = e.panel.version;
-      if (this.build(e, d, this.groups[i])) changed = true;
+      if (this.build(e, d, this.groups[i])) {
+        changed = true;
+        this.lastChanged.push(i);
+      }
     }
     return changed;
   }
+
+  /** The panels whose drawing changed in the last update (the probes bake again round them: probeField.ts). */
+  readonly lastChanged: number[] = [];
 
   /** Meshes drawn over all the panels now (the stats overlay). */
   get meshCount(): number {

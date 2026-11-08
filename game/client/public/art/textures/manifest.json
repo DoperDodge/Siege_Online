@@ -1,5 +1,5 @@
 {
-  "_doc": "Written by tools/art/textures.mjs from data/presentation/textures.json: do not edit.",
+  "_doc": "Written by tools/art/textures.mjs and tools/art/sky.mjs from data/presentation/textures.json: do not edit.",
   "resolution": 1024,
   "sets": [
     {
@@ -18,7 +18,12 @@
         "normal": "plaster.normal.webp",
         "orm": "plaster.orm.webp"
       },
-      "bytes": 468438
+      "bytes": 468438,
+      "mean": [
+        0.4093,
+        0.3655,
+        0.3512
+      ]
     },
     {
       "id": "beadboard",
@@ -36,7 +41,12 @@
         "normal": "beadboard.normal.webp",
         "orm": "beadboard.orm.webp"
       },
-      "bytes": 76066
+      "bytes": 76066,
+      "mean": [
+        0.4605,
+        0.3849,
+        0.3417
+      ]
     },
     {
       "id": "planks_raw",
@@ -54,7 +64,12 @@
         "normal": "planks_raw.normal.webp",
         "orm": "planks_raw.orm.webp"
       },
-      "bytes": 287884
+      "bytes": 287884,
+      "mean": [
+        0.3841,
+        0.2236,
+        0.0965
+      ]
     },
     {
       "id": "concrete_wall",
@@ -72,7 +87,12 @@
         "normal": "concrete_wall.normal.webp",
         "orm": "concrete_wall.orm.webp"
       },
-      "bytes": 214496
+      "bytes": 214496,
+      "mean": [
+        0.2568,
+        0.2242,
+        0.1571
+      ]
     },
     {
       "id": "tiles_white",
@@ -90,7 +110,12 @@
         "normal": "tiles_white.normal.webp",
         "orm": "tiles_white.orm.webp"
       },
-      "bytes": 242144
+      "bytes": 242144,
+      "mean": [
+        0.6178,
+        0.5691,
+        0.4719
+      ]
     },
     {
       "id": "brick",
@@ -108,7 +133,12 @@
         "normal": "brick.normal.webp",
         "orm": "brick.orm.webp"
       },
-      "bytes": 547994
+      "bytes": 547994,
+      "mean": [
+        0.275,
+        0.1365,
+        0.0832
+      ]
     },
     {
       "id": "floor_wood",
@@ -126,7 +156,12 @@
         "normal": "floor_wood.normal.webp",
         "orm": "floor_wood.orm.webp"
       },
-      "bytes": 220704
+      "bytes": 220704,
+      "mean": [
+        0.2531,
+        0.0992,
+        0.0286
+      ]
     },
     {
       "id": "floor_wood_dark",
@@ -144,7 +179,12 @@
         "normal": "floor_wood_dark.normal.webp",
         "orm": "floor_wood_dark.orm.webp"
       },
-      "bytes": 334458
+      "bytes": 334458,
+      "mean": [
+        0.0947,
+        0.0663,
+        0.0487
+      ]
     },
     {
       "id": "floor_checker",
@@ -162,7 +202,12 @@
         "normal": "floor_checker.normal.webp",
         "orm": "floor_checker.orm.webp"
       },
-      "bytes": 94686
+      "bytes": 94686,
+      "mean": [
+        0.2029,
+        0.1683,
+        0.1545
+      ]
     },
     {
       "id": "floor_concrete",
@@ -180,7 +225,12 @@
         "normal": "floor_concrete.normal.webp",
         "orm": "floor_concrete.orm.webp"
       },
-      "bytes": 183170
+      "bytes": 183170,
+      "mean": [
+        0.0927,
+        0.0952,
+        0.0887
+      ]
     },
     {
       "id": "carpet",
@@ -198,7 +248,12 @@
         "normal": "carpet.normal.webp",
         "orm": "carpet.orm.webp"
       },
-      "bytes": 914678
+      "bytes": 914678,
+      "mean": [
+        0.0362,
+        0.0285,
+        0.0184
+      ]
     },
     {
       "id": "linoleum",
@@ -216,7 +271,12 @@
         "normal": "linoleum.normal.webp",
         "orm": "linoleum.orm.webp"
       },
-      "bytes": 212882
+      "bytes": 212882,
+      "mean": [
+        0.3208,
+        0.1963,
+        0.1015
+      ]
     },
     {
       "id": "siding",
@@ -234,7 +294,12 @@
         "normal": "siding.normal.webp",
         "orm": "siding.orm.webp"
       },
-      "bytes": 379448
+      "bytes": 379448,
+      "mean": [
+        0.1355,
+        0.1,
+        0.0603
+      ]
     },
     {
       "id": "barn_boards",
@@ -252,7 +317,12 @@
         "normal": "barn_boards.normal.webp",
         "orm": "barn_boards.orm.webp"
       },
-      "bytes": 672802
+      "bytes": 672802,
+      "mean": [
+        0.5029,
+        0.0077,
+        0.0026
+      ]
     },
     {
       "id": "shingles",
@@ -270,7 +340,12 @@
         "normal": "shingles.normal.webp",
         "orm": "shingles.orm.webp"
       },
-      "bytes": 766300
+      "bytes": 766300,
+      "mean": [
+        0.0356,
+        0.0381,
+        0.0354
+      ]
     },
     {
       "id": "corrugated",
@@ -288,7 +363,12 @@
         "normal": "corrugated.normal.webp",
         "orm": "corrugated.orm.webp"
       },
-      "bytes": 225846
+      "bytes": 225846,
+      "mean": [
+        0.3219,
+        0.3298,
+        0.3424
+      ]
     },
     {
       "id": "corrugated_rust",
@@ -306,7 +386,12 @@
         "normal": "corrugated_rust.normal.webp",
         "orm": "corrugated_rust.orm.webp"
       },
-      "bytes": 136512
+      "bytes": 136512,
+      "mean": [
+        0.0976,
+        0.0226,
+        0.0096
+      ]
     },
     {
       "id": "ground_grass",
@@ -324,7 +409,12 @@
         "normal": "ground_grass.normal.webp",
         "orm": "ground_grass.orm.webp"
       },
-      "bytes": 1094398
+      "bytes": 1094398,
+      "mean": [
+        0.2842,
+        0.2435,
+        0.1119
+      ]
     },
     {
       "id": "ground_dirt",
@@ -342,7 +432,12 @@
         "normal": "ground_dirt.normal.webp",
         "orm": "ground_dirt.orm.webp"
       },
-      "bytes": 1186622
+      "bytes": 1186622,
+      "mean": [
+        0.1754,
+        0.1057,
+        0.0487
+      ]
     },
     {
       "id": "ground_gravel",
@@ -360,7 +455,12 @@
         "normal": "ground_gravel.normal.webp",
         "orm": "ground_gravel.orm.webp"
       },
-      "bytes": 1262478
+      "bytes": 1262478,
+      "mean": [
+        0.3631,
+        0.2385,
+        0.1298
+      ]
     },
     {
       "id": "asphalt",
@@ -378,7 +478,12 @@
         "normal": "asphalt.normal.webp",
         "orm": "asphalt.orm.webp"
       },
-      "bytes": 1086244
+      "bytes": 1086244,
+      "mean": [
+        0.105,
+        0.1018,
+        0.0914
+      ]
     },
     {
       "id": "barricade",
@@ -396,7 +501,12 @@
         "normal": "barricade.normal.webp",
         "orm": "barricade.orm.webp"
       },
-      "bytes": 483772
+      "bytes": 483772,
+      "mean": [
+        0.1187,
+        0.0724,
+        0.0428
+      ]
     },
     {
       "id": "studs",
@@ -414,7 +524,12 @@
         "normal": "studs.normal.webp",
         "orm": "studs.orm.webp"
       },
-      "bytes": 555784
+      "bytes": 555784,
+      "mean": [
+        0.1487,
+        0.1241,
+        0.0981
+      ]
     },
     {
       "id": "steel",
@@ -432,7 +547,57 @@
         "normal": "steel.normal.webp",
         "orm": "steel.orm.webp"
       },
-      "bytes": 321634
+      "bytes": 321634,
+      "mean": [
+        0.0895,
+        0.0666,
+        0.0479
+      ]
     }
-  ]
+  ],
+  "sky": {
+    "id": "sky",
+    "source": "polyhaven",
+    "asset": "kloofendal_38d_partly_cloudy_puresky",
+    "page": "https://polyhaven.com/a/kloofendal_38d_partly_cloudy_puresky",
+    "author": "Greg Zaal, Jarod Guest",
+    "license": "CC0 1.0",
+    "files": {
+      "background": "sky.background.webp",
+      "env": "sky.env.bin"
+    },
+    "background": {
+      "width": 4096,
+      "height": 1092,
+      "belowDeg": 6,
+      "scale": 3.32854
+    },
+    "env": {
+      "width": 128,
+      "height": 64
+    },
+    "sun": {
+      "dir": [
+        0.6561,
+        0.615,
+        0.4374
+      ],
+      "color": [
+        1,
+        0.9452,
+        0.8483
+      ],
+      "irradiance": [
+        2.937,
+        2.778,
+        2.494
+      ]
+    },
+    "horizon": [
+      0.37476,
+      0.40667,
+      0.43014
+    ],
+    "bytes": 241198
+  }
 }

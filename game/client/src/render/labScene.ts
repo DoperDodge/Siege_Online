@@ -312,11 +312,11 @@ function levelBox(level: BuiltLevel): THREE.Box3 {
  * shadows and no texel is spent outside it (DESIGN amendment 8). A level over 80 m across gets a 4096 map,
  * which keeps its shadows about as sharp as a lab's; `most` caps it (the graphics preset's).
  */
-function fitSun(sun: THREE.DirectionalLight, box: THREE.Box3, most: number) {
+function fitSun(sun: THREE.DirectionalLight, box: THREE.Box3, most: number, dir: THREE.Vector3 = SUN) {
   const center = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3());
   sun.target.position.copy(center);
-  sun.position.copy(center).addScaledVector(SUN, size.length() / 2 + 10);
+  sun.position.copy(center).addScaledVector(dir, size.length() / 2 + 10);
   sun.updateMatrixWorld();
   sun.target.updateMatrixWorld();
   // The camera as the shadow pass places it (LightShadow.updateMatrices), to measure the box from it.
@@ -344,6 +344,14 @@ function fitSun(sun: THREE.DirectionalLight, box: THREE.Box3, most: number) {
   sun.shadow.mapSize.set(map, map);
   // The bias is a fraction of the camera's depth range: keep it the same distance whatever the level's size.
   sun.shadow.bias = -SHADOW_BIAS_M / (cam.far - cam.near);
+}
+
+/**
+ * Turn the sun toward unit direction `dir` (the art pass's sky: sky.ts), its shadow camera fitted round the level
+ * again (a map of up to `most` texels). The page then asks for a new shadow map.
+ */
+export function aimSun(lab: LabScene, dir: THREE.Vector3, most: number): void {
+  fitSun(lab.sun, lab.box, most, dir);
 }
 
 /** A floor's grid lines (sRGB): every metre, and stronger every 5 m, a little lighter than HARD_FLOOR. */

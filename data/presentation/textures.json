@@ -1,6 +1,7 @@
 {
   "_doc": "The CC0 texture sets the art pass draws with (Phase 10; render/DESIGN.md §2). tools/art/textures.mjs fetches each from its source at 1k, packs a colour map (sRGB), an OpenGL normal map and an ORM map (R ambient occlusion, G roughness, B metalness), resizes them to `resolution` square, and writes them with a manifest (each set's real size in metres, from the source) to game/client/public/art/textures/. Presentation only: the simulation never reads this file. Every source is CC0 (ASSET_SOURCES.md lists them).",
   "resolution": 1024,
+  "sky": { "source": "polyhaven", "asset": "kloofendal_38d_partly_cloudy_puresky", "for": "the sky, its light and the sun (tools/art/sky.mjs)" },
   "sets": [
     { "id": "plaster", "source": "polyhaven", "asset": "painted_plaster_wall", "for": "inside walls and ceilings, tinted per room" },
     { "id": "beadboard", "source": "polyhaven", "asset": "white_planks_clean", "for": "wainscot, tinted per room" },

@@ -83,6 +83,7 @@ export const texturesSchema = z
   .strictObject({
     _doc: z.string(),
     resolution: z.number().int().min(256).max(4096),
+    sky: z.strictObject({ source: z.literal("polyhaven"), asset: z.string().min(1), for: z.string() }),
     sets: z.array(z.strictObject({ id: artId, source: z.enum(["polyhaven", "ambientcg"]), asset: z.string().min(1), for: z.string() })).min(1).max(64),
   })
   .superRefine((t, ctx) => {
@@ -121,6 +122,8 @@ export const artStyleSchema = z.strictObject({
   exterior: z.boolean().optional(),
   /** On an outside wall: this material up to this height (world y). */
   foundation: z.strictObject({ material: artId, topY: z.number() }).optional(),
+  /** The room's lamps (render/DESIGN.md §6.6): colour and power (1 by default inside; 0 for none). */
+  lamp: z.strictObject({ color, power: z.number().min(0).max(10) }).optional(),
 });
 export type ArtStyle = z.infer<typeof artStyleSchema>;
 

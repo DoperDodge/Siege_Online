@@ -372,7 +372,7 @@ export async function startLab(o: LabOptions): Promise<void> {
    * The art pass (Phase 10): the textures load after the level is drawn, and the art replaces the greybox once
    * they're in (on a map, while the palette is "art", the first of P's).
    */
-  const artView = new ArtView(labScene, panelView, sim.level);
+  const artView = new ArtView(labScene, panelView, sim.level, storeyView);
   if (preset.textures && storeyView) storeyView.palette = "art";
   /** A map's markers (E9 part 2): bombs, cameras, ingredients and spawns, and the zones view (O). */
   const markers = storeyView ? new MapMarkers(labScene, o.match ? { ...sim.level.def, cameras: [], ingredients: [], spawns: [], zones: [] } : sim.level.def) : null;
@@ -393,10 +393,25 @@ export async function startLab(o: LabOptions): Promise<void> {
     `${renderer.domElement.width} × ${renderer.domElement.height} px${renderer.shadowMap.enabled ? "" : " · no shadows"}`,
     artLine(),
   ]);
+  /**
+   * The gun in hand lit as the world round the eyes is: by the probes once they're in (the art pass), else by the
+   * storey's light (feet at x, y, z).
+   */
+  function setViewmodelLight(x: number, y: number, z: number) {
+    const k = artView.lightAt(x, y + 1.5, z);
+    if (k !== null) viewmodel.setLight(Math.min(1.2, Math.max(0.05, k)));
+    else if (storeyView) viewmodel.setLight(storeyView.light());
+  }
+
+  /** When the exposure last adapted (render/artView.ts adapt), ms. */
+  let lastAdapt = performance.now();
+
   /** The graphics preset, and the textures' size and GPU memory once they're in. */
   function artLine(): string {
     const t = artView.textures;
-    return `graphics: ${QUALITY_NAMES[quality]}${t ? ` · textures: ${t.sets} sets at ${t.size} px, ${(t.gpuBytes / 1048576).toFixed(0)} MB${artView.shown ? "" : " (hidden)"}` : preset.textures ? " · textures loading" : ""}`;
+    const p = artView.probeState;
+    const probes = p ? ` · probes: ${p.ready ? `${p.passes} pass${p.passes === 1 ? "" : "es"} (${(p.firstMs / 1000).toFixed(1)} s first${p.allMs ? `, ${(p.allMs / 1000).toFixed(1)} s all` : ""})` : "baking"}` : "";
+    return `graphics: ${QUALITY_NAMES[quality]}${t ? ` · textures: ${t.sets} sets at ${t.size} px, ${(t.gpuBytes / 1048576).toFixed(0)} MB${artView.shown ? "" : " (hidden)"}` : preset.textures ? " · textures loading" : ""}${probes}`;
   }
   let settings: Settings = loadSettings();
   const camera = new THREE.PerspectiveCamera(settings.fovVertical, view.clientWidth / view.clientHeight, 0.05, 300);
@@ -417,7 +432,7 @@ export async function startLab(o: LabOptions): Promise<void> {
   }
   // The art's textures and shaders, then the art itself (render/artView.ts); the greybox until then.
   void artView
-    .load(preset.textures, renderer, camera)
+    .load(preset, renderer, camera)
     .then((ok) => {
       if (ok) artView.show(!storeyView || storeyView.palette === "art");
     })
@@ -1189,6 +1204,13 @@ export async function startLab(o: LabOptions): Promise<void> {
   /** Render the world, counting a shadow-map redraw if one was asked for. */
   function drawWorld() {
     if (renderer.shadowMap.enabled && renderer.shadowMap.needsUpdate && !renderer.getContext().isContextLost()) shadowDraws++;
+    artView.frame(shownCamera());
+    {
+      const c = shownCamera();
+      const now = performance.now();
+      artView.adapt(renderer, c.position.x, c.position.y, c.position.z, Math.min(0.5, Math.max(0, (now - lastAdapt) / 1000)));
+      lastAdapt = now;
+    }
     renderer.render(scene, shownCamera());
   }
   function frame(now: number) {
@@ -1276,7 +1298,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     if (spec) {
       const [vx, vy, vz] = placeSpectator(spec, renderTick, elapsed);
       if (storeyView?.follow(vx, vy, vz, camera.rotation.y, elapsed)) renderer.shadowMap.needsUpdate = true;
-      if (storeyView) viewmodel.setLight(storeyView.light());
+      setViewmodelLight(vx, vy, vz);
       whereHud?.update(now, storeyView?.storey ?? 0, vx, vz);
       controls.upsideDown = false;
       if (Math.abs(camera.fov - settings.fovVertical) > 1e-4) {
@@ -1292,7 +1314,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       const lens = onCamera ? sim.camLens(ctrl.cam - 1, ctrl.camYaw) : null;
       const [vx, vy, vz] = freeCam ? [freeCam.x, freeCam.y - data.movement.stance.stand.eye, freeCam.z] : lens ? [lens[0], lens[1] - 0.05, lens[2]] : [rs.x, rs.y, rs.z];
       if (storeyView?.follow(vx, vy, vz, controls.yaw, elapsed)) renderer.shadowMap.needsUpdate = true;
-      if (storeyView) viewmodel.setLight(storeyView.light());
+      setViewmodelLight(vx, vy, vz);
       whereHud?.update(now, storeyView?.storey ?? 0, vx, vz);
       // A drone's camera: low at its front, its own field of view (Phase 7).
       const droneView = viewed!.kind === PawnKind.Drone;
@@ -1338,7 +1360,10 @@ export async function startLab(o: LabOptions): Promise<void> {
     updateLabels(labScene.labels, shownCamera());
     // A panel that changed changes the level's shadows too.
     const panelFrom = performance.now();
-    if (panelView.update()) renderer.shadowMap.needsUpdate = true;
+    if (panelView.update()) {
+      renderer.shadowMap.needsUpdate = true;
+      artView.panelsChanged(panelView.lastChanged);
+    }
     const panelMs = performance.now() - panelFrom;
     for (const fn of hooks.frame) fn(now, renderTick);
     intelHud.update(now, shownCamera(), app.clientWidth, app.clientHeight, (id) => {
@@ -1973,7 +1998,7 @@ export async function startLab(o: LabOptions): Promise<void> {
           rooms: def.rooms.map((r) => ({ id: r.id, callout: r.callout, storey: r.storey, rects: r.rects, anchor: r.anchor })),
           levelPlan: def.plan ?? null,
           hud: whereHud?.text ?? null,
-          art: { quality, ready: artView.ready, shown: artView.shown },
+          art: { quality, ready: artView.ready, shown: artView.shown, probes: artView.probeState, exposure: renderer.toneMappingExposure },
           ...(storeyView && {
             storey: def.storeys[storeyView.storey].id,
             hideAbove: storeyView.hideAbove,

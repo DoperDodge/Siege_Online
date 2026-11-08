@@ -19,7 +19,7 @@
     "attic": { "wall": "planks_raw", "floor": "floor_wood_dark", "ceiling": "planks_raw", "trim": "planks_raw", "baseboardM": 0, "crownM": 0 },
     "armory": { "wall": "plaster_grey", "floor": "floor_wood", "ceiling": "plaster_white", "trim": "paint_white", "wainscot": { "material": "beadboard_stain", "heightM": 1.0 } },
     "closet": { "wall": "plaster_white", "floor": "floor_wood", "ceiling": "plaster_white", "trim": "paint_white" },
-    "basement": { "wall": "concrete_wall", "floor": "floor_concrete", "ceiling": "concrete_wall", "trim": "concrete_wall", "baseboardM": 0, "crownM": 0 },
+    "basement": { "wall": "concrete_wall", "floor": "floor_concrete", "ceiling": "concrete_wall", "trim": "concrete_wall", "baseboardM": 0, "crownM": 0, "lamp": { "color": "#f2f0e6", "power": 0.75 } },
     "laundry": { "wall": "concrete_painted", "floor": "linoleum", "ceiling": "concrete_painted", "trim": "concrete_painted", "baseboardM": 0, "crownM": 0 },
     "bunker": { "wall": "concrete_blue", "floor": "floor_concrete", "ceiling": "concrete_wall", "trim": "concrete_blue", "baseboardM": 0, "crownM": 0 },
     "freezer": { "wall": "tiles_white", "floor": "floor_concrete", "ceiling": "concrete_painted", "trim": "tiles_white", "baseboardM": 0, "crownM": 0 },

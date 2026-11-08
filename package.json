@@ -28,7 +28,8 @@
     "soak": "esbuild tools/soak/run.ts --bundle --platform=node --format=esm --outfile=builds/soak/run.mjs --log-level=warning && node builds/soak/run.mjs",
     "check": "npm run typecheck && npm test && npm run build && npm run test:e2e",
     "e2e:setup": "playwright install chromium",
-    "art:textures": "node tools/art/textures.mjs"
+    "art:textures": "node tools/art/textures.mjs",
+    "art:sky": "node tools/art/sky.mjs"
   },
   "devDependencies": {
     "@types/node": "^22",

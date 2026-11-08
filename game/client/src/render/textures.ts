@@ -10,6 +10,8 @@ export interface TextureSetInfo {
   sizeM: [number, number];
   files: { color: string; normal: string; orm: string };
   bytes: number;
+  /** The colour map's mean colour, linear (the probe bake's albedo). */
+  mean?: [number, number, number];
 }
 
 export interface TextureManifest {
@@ -25,6 +27,8 @@ export interface TextureSets {
   layer: ReadonlyMap<string, number>;
   /** Each set's real size in metres, by id. */
   sizeM: ReadonlyMap<string, readonly [number, number]>;
+  /** Each set's mean colour (linear), by id. */
+  mean: ReadonlyMap<string, readonly [number, number, number]>;
   /** The layers' size in pixels. */
   size: number;
   /** GPU memory the three arrays take, mipmaps included (bytes). */
@@ -88,6 +92,7 @@ export async function loadTextureSets(size: number, base = BASE): Promise<Textur
     orm: arrayTexture(orm, size, n, false),
     layer: new Map(manifest.sets.map((s, i) => [s.id, i])),
     sizeM: new Map(manifest.sets.map((s) => [s.id, s.sizeM])),
+    mean: new Map(manifest.sets.map((s) => [s.id, s.mean ?? [0.5, 0.5, 0.5]])),
     size,
     gpuBytes: Math.round((3 * n * size * size * 4 * 4) / 3),
   };
