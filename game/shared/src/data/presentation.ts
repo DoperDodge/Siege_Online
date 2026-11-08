@@ -127,6 +127,9 @@ export const artStyleSchema = z.strictObject({
 });
 export type ArtStyle = z.infer<typeof artStyleSchema>;
 
+/** A style's floor that blends the map's ground layers (mapArtSchema.ground). */
+export const GROUND = "ground";
+
 /** data/maps/<map>/art.json: a map's look. */
 export const mapArtSchema = z.strictObject({
   _doc: z.string(),
@@ -141,6 +144,16 @@ export const mapArtSchema = z.strictObject({
   items: z.array(z.strictObject({ match: z.string(), style: artId })),
   /** A cover prop's style by its class (data/destruction.json props), until its model arrives. */
   props: z.record(z.string(), artId),
+  /**
+   * The ground outside (render/DESIGN.md §8): a style's floor of "ground" blends these — the base everywhere, each
+   * layer over its rects with edges `softM` wide (at most three layers).
+   */
+  ground: z
+    .strictObject({
+      base: artId,
+      layers: z.array(z.strictObject({ material: artId, softM: z.number().min(0).max(20), rects: z.array(z.tuple([z.number(), z.number(), z.number(), z.number()])).min(1) })).max(3),
+    })
+    .optional(),
 });
 export type MapArt = z.infer<typeof mapArtSchema>;
 
@@ -164,7 +177,7 @@ export function artProblems(data: ArtData): string[] {
       if (!(id in art.styles)) out.push(`${mapId} ${where}: no style ${id}`);
     };
     for (const [id, s] of Object.entries(art.styles)) {
-      for (const k of ["wall", "floor", "ceiling", "trim"] as const) mat(`style ${id}.${k}`, s[k]);
+      for (const k of ["wall", "floor", "ceiling", "trim"] as const) if (!(k === "floor" && s[k] === GROUND && art.ground)) mat(`style ${id}.${k}`, s[k]);
       if (s.wainscot) mat(`style ${id}.wainscot`, s.wainscot.material);
       if (s.foundation) mat(`style ${id}.foundation`, s.foundation.material);
     }
@@ -181,6 +194,10 @@ export function artProblems(data: ArtData): string[] {
       }
     });
     for (const [cls, s] of Object.entries(art.props)) style(`props.${cls}`, s);
+    if (art.ground) {
+      mat("ground.base", art.ground.base);
+      art.ground.layers.forEach((l, i) => mat(`ground.layers[${i}]`, l.material));
+    }
   }
   return out;
 }

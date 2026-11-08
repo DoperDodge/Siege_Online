@@ -8,10 +8,12 @@
 import * as THREE from "three";
 import { loadArtData, type BuiltLevel } from "@redmond/shared";
 import { Architecture } from "./architecture.js";
-import { aimSun, DAYLIGHT, type LabScene } from "./labScene.js";
+import { buildBackdrop } from "./backdrop.js";
+import { aimSun, DAYLIGHT, storeyOf, type LabScene } from "./labScene.js";
 import { LevelArt } from "./levelArt.js";
+import { buildOutside } from "./outside.js";
 import type { PanelView } from "./panelView.js";
-import { ProbeField } from "./probes/probeField.js";
+import { openSkySH, ProbeField } from "./probes/probeField.js";
 import { roomLamps, staticBoxes } from "./probes/scene.js";
 import type { QualityPreset } from "./quality.js";
 import { loadSky, SkyView } from "./sky.js";
@@ -35,6 +37,14 @@ export class ArtView {
   private shownNow = false;
   /** Frames, glazing bars, hatch borders and lamp fixtures (architecture.ts). */
   private architecture: Architecture | null = null;
+  /** The outside's items as models (outside.ts), and the boxes they stand for: hidden while the art shows. */
+  private outside: THREE.Mesh | null = null;
+  private readonly hidden: { mesh: THREE.InstancedMesh; index: number; matrix: THREE.Matrix4 }[] = [];
+  /** Past the play area: the ground on, the woods, the hills (backdrop.ts). */
+  private backdrop: THREE.Mesh[] = [];
+  private renderer: THREE.WebGLRenderer | null = null;
+  /** Triangles in the models (the stats overlay). */
+  modelTriangles = 0;
   /** Each static mesh's greybox material, to put back. */
   private readonly grey = new Map<THREE.Mesh, THREE.Material | THREE.Material[]>();
   /** The open sky's irradiance on a face up (the sun and the sky): what "daylight" means for lightAt. */
@@ -101,6 +111,8 @@ export class ArtView {
         const sun = { dir: [...info.sun.dir] as [number, number, number], irradiance: info.sun.irradiance.map((v) => v * SUN_GAIN) as [number, number, number] };
         const env = { w: info.env.width, h: info.env.height, data: skyData.env, scale: 1 };
         this.probes = new ProbeField(this.level, (boxes, grids) => art.bakeScene(boxes, grids, env, sun, lamps, RAYS), staticBoxes(this.level, (r) => art.styleOf(r)));
+        const up = sun.irradiance.map((v) => v * Math.max(0, sun.dir[1]));
+        this.probes.uniforms.uSkySH.value = openSkySH(skyData.env, info.env.width, info.env.height, up, 0.3);
         art.attachProbes(this.probes.uniforms);
       }
     }
@@ -139,6 +151,34 @@ export class ArtView {
     this.sets = sets;
     this.architecture = new Architecture(lab, this.level, art, lamps);
     this.architecture.setVisible(false);
+    const outside = buildOutside(this.level, art);
+    this.outside = new THREE.Mesh(outside.kit.geometry(), art.staticMaterial());
+    this.outside.name = "outside";
+    this.outside.castShadow = this.outside.receiveShadow = true;
+    this.outside.visible = false;
+    lab.storeys[storeyOf(this.level.def.storeys, 0)].add(this.outside);
+    this.modelTriangles = outside.kit.triangles;
+    // The street runs on past the bounds east and west: no woods on it.
+    const backdrop = buildBackdrop(this.level, art, (_x, z) => z > 56.5 && z < 68.5);
+    if (backdrop) {
+      this.backdrop = backdrop.meshes;
+      for (const m of backdrop.meshes) {
+        m.visible = false;
+        lab.scene.add(m);
+      }
+      this.modelTriangles += backdrop.triangles;
+    }
+    for (const part of lab.staticParts) {
+      const inst = part.mesh as THREE.InstancedMesh;
+      if (!inst.isInstancedMesh) continue;
+      part.boxes.forEach((r, index) => {
+        if (!outside.ids.has(r.id)) return;
+        const matrix = new THREE.Matrix4();
+        inst.getMatrixAt(index, matrix);
+        this.hidden.push({ mesh: inst, index, matrix });
+      });
+    }
+    this.renderer = renderer;
     renderer.shadowMap.needsUpdate = true;
     // The probes bake in the background; their first pass switches the light over.
     if (this.probes) void this.probes.bake(2, () => this.applyLight());
@@ -153,6 +193,17 @@ export class ArtView {
     for (const [mesh, grey] of this.grey) mesh.material = on ? art.staticMaterial() : grey;
     this.panels.setMaterialOverride(on ? (key) => art.panelMaterial(key) : null);
     this.architecture?.setVisible(on);
+    if (this.outside) this.outside.visible = on;
+    for (const m of this.backdrop) m.visible = on;
+    // The boxes the models stand for: out of sight (scaled to nothing) while they show, back after.
+    const none = new THREE.Matrix4().makeScale(0, 0, 0);
+    const touched = new Set<THREE.InstancedMesh>();
+    for (const h of this.hidden) {
+      h.mesh.setMatrixAt(h.index, on ? none : h.matrix);
+      touched.add(h.mesh);
+    }
+    for (const m of touched) m.instanceMatrix.needsUpdate = true;
+    if (this.renderer) this.renderer.shadowMap.needsUpdate = true;
     this.applyLight();
   }
 
@@ -237,6 +288,14 @@ export class ArtView {
     this.show(false);
     this.probes?.dispose();
     this.architecture?.dispose();
+    if (this.outside) {
+      this.outside.removeFromParent();
+      this.outside.geometry.dispose();
+    }
+    for (const m of this.backdrop) {
+      m.removeFromParent();
+      m.geometry.dispose();
+    }
     this.sky?.dispose();
     this.art?.dispose();
     for (const t of this.sets ? [this.sets.color, this.sets.normal, this.sets.orm] : []) t.dispose();

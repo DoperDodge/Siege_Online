@@ -5,7 +5,7 @@
 import * as THREE from "three";
 import type { BuiltLevel } from "@redmond/shared";
 import { BOX_STRIDE } from "./bvh.js";
-import { evalField, PROBE_STRIDE, probeCount, type BakeScene, type GridSpec } from "./bake.js";
+import { evalField, PROBE_STRIDE, probeCount, SH_Y0, SH_Y1, type BakeScene, type GridSpec } from "./bake.js";
 import { bakeGrids, joinBoxes, panelBoxes } from "./scene.js";
 
 /** Probes per job a worker takes. */
@@ -66,6 +66,8 @@ vec4 probeGrid${S}( vec3 P, vec3 Ng, vec3 N, float cls ) {
 `;
   return /* glsl */ `
 uniform float uProbeOn;
+// The open sky's light (L1: c0, then y, z, x), the ground under it included: what lights a face past every probe.
+uniform vec3 uSkySH[ 4 ];
 // L1 spherical harmonics to irradiance for normal N, per channel: the mean (π Y0 c0) plus the directional part, that
 // part limited so the dimmest facing keeps 15 % of the mean (a lamp right over a probe would make the face under it
 // pitch black: L1 rings).
@@ -79,13 +81,14 @@ vec3 shIrradiance( vec3 c0, vec3 cy, vec3 cz, vec3 cx, vec3 N ) {
 ${grid("A")}
 ${grid("B")}
 // The light the probes give a face at P (geometric normal Ng, shading normal N) in room class cls: the fine grid, then
-// the coarse one; failing both (a face whose room has no probe near), any room's; failing that, a dim fill.
+// the coarse one; failing both (a face whose room has no probe near), any room's; past them all, the open sky's.
 vec4 probeLight( vec3 P, vec3 Ng, vec3 N, float cls ) {
   vec4 r = probeGridA( P, Ng, N, cls );
   if ( r.x < 0.0 ) r = probeGridB( P, Ng, N, cls );
   if ( r.x < 0.0 ) r = probeGridA( P, Ng, N, -1.0 );
   if ( r.x < 0.0 ) r = probeGridB( P, Ng, N, -1.0 );
-  if ( r.x < 0.0 ) r = vec4( 0.03, 0.03, 0.035, 0.0 );
+  // (Half the sphere is sky out in the open: the ground hides the rest, as the yard's probes find.)
+  if ( r.x < 0.0 ) r = vec4( shIrradiance( uSkySH[ 0 ], uSkySH[ 1 ], uSkySH[ 2 ], uSkySH[ 3 ], N ), 0.5 );
   return r;
 }
 `;
@@ -121,6 +124,39 @@ function skySeen(f: Float32Array, grid: GridSpec, gx: number, gy: number, gz: nu
     }
   }
   return Math.max(0, best);
+}
+
+/**
+ * The open sky's light as L1 spherical harmonics (c0, cy, cz, cx per channel: probes/bake.ts's layout): the sky's
+ * radiance above the horizon (`env`: RGBA floats, rows from the zenith), and below it the ground, lit by the sky and the
+ * sun (`sunIrradiance` on a face up) with albedo `groundAlbedo`.
+ */
+export function openSkySH(env: Float32Array, w: number, h: number, sunIrradiance: readonly number[], groundAlbedo: number): THREE.Vector3[] {
+  const sh = [0, 1, 2, 3].map(() => [0, 0, 0]);
+  // The sky's irradiance on a face up, for the ground's light.
+  const skyUp = [0, 0, 0];
+  for (let y = 0; y < h / 2; y++) {
+    const el = (0.5 - (y + 0.5) / h) * Math.PI;
+    const dOmega = ((2 * Math.PI) / w) * (Math.PI / h) * Math.cos(el);
+    for (let x = 0; x < w; x++) for (let k = 0; k < 3; k++) skyUp[k] += env[(y * w + x) * 4 + k] * Math.sin(el) * dOmega;
+  }
+  const ground = [0, 1, 2].map((k) => (groundAlbedo * (skyUp[k] + sunIrradiance[k])) / Math.PI);
+  for (let y = 0; y < h; y++) {
+    const el = (0.5 - (y + 0.5) / h) * Math.PI;
+    const dOmega = ((2 * Math.PI) / w) * (Math.PI / h) * Math.cos(el);
+    for (let x = 0; x < w; x++) {
+      const az = ((x + 0.5) / w - 0.5) * 2 * Math.PI;
+      const d = [Math.cos(el) * Math.cos(az), Math.sin(el), Math.cos(el) * Math.sin(az)];
+      for (let k = 0; k < 3; k++) {
+        const L = el >= 0 ? env[(y * w + x) * 4 + k] : ground[k];
+        sh[0][k] += L * SH_Y0 * dOmega;
+        sh[1][k] += L * SH_Y1 * d[1] * dOmega;
+        sh[2][k] += L * SH_Y1 * d[2] * dOmega;
+        sh[3][k] += L * SH_Y1 * d[0] * dOmega;
+      }
+    }
+  }
+  return sh.map((c) => new THREE.Vector3(c[0], c[1], c[2]));
 }
 
 /** A grid's four textures (16 floats a probe split four ways) from its field. */
@@ -205,7 +241,12 @@ export class ProbeField {
       [`uProbe${S}Spacing`]: { value: new THREE.Vector3(...g.spacing) },
       [`uProbe${S}Dims`]: { value: new THREE.Vector3(...g.dims) },
     });
-    this.uniforms = { uProbeOn: { value: 0 }, ...u("A", A, this.textures[0]), ...u("B", B, this.textures[1].length ? this.textures[1] : this.textures[0]) };
+    this.uniforms = {
+      uProbeOn: { value: 0 },
+      uSkySH: { value: [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()] },
+      ...u("A", A, this.textures[0]),
+      ...u("B", B, this.textures[1].length ? this.textures[1] : this.textures[0]),
+    };
   }
 
   private boxes(): Float32Array {

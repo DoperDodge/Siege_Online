@@ -24,8 +24,8 @@
     "bunker": { "wall": "concrete_blue", "floor": "floor_concrete", "ceiling": "concrete_wall", "trim": "concrete_blue", "baseboardM": 0, "crownM": 0 },
     "freezer": { "wall": "tiles_white", "floor": "floor_concrete", "ceiling": "concrete_painted", "trim": "tiles_white", "baseboardM": 0, "crownM": 0 },
 
-    "house_out": { "wall": "siding_house", "floor": "ground_dirt", "ceiling": "paint_white", "trim": "paint_white", "exterior": true, "foundation": { "material": "concrete_wall", "topY": 0.35 } },
-    "tower_out": { "wall": "barn_red", "floor": "ground_dirt", "ceiling": "paint_white", "trim": "paint_white", "exterior": true, "foundation": { "material": "concrete_wall", "topY": 0.35 } },
+    "house_out": { "wall": "siding_house", "floor": "ground", "ceiling": "paint_white", "trim": "paint_white", "exterior": true, "foundation": { "material": "concrete_wall", "topY": 0.35 } },
+    "tower_out": { "wall": "barn_red", "floor": "ground", "ceiling": "paint_white", "trim": "paint_white", "exterior": true, "foundation": { "material": "concrete_wall", "topY": 0.35 } },
     "below_out": { "wall": "concrete_wall", "floor": "floor_concrete", "ceiling": "concrete_wall", "trim": "concrete_wall", "exterior": true },
 
     "roof": { "wall": "paint_white", "floor": "shingles", "ceiling": "paint_white", "trim": "paint_white", "exterior": true },
@@ -100,5 +100,13 @@
     { "match": "^EXT_HOUSE", "style": "house_frame" },
     { "match": "^EXT_(BUNKER|TOWER_STAIRS)", "style": "stairs_concrete" }
   ],
-  "props": { "wood": "prop_wood", "soft": "prop_soft", "metal": "prop_metal" }
+  "props": { "wood": "prop_wood", "soft": "prop_soft", "metal": "prop_metal" },
+  "ground": {
+    "base": "ground_grass",
+    "layers": [
+      { "material": "ground_dirt", "softM": 3, "rects": [[-6, 1, 57, 57]] },
+      { "material": "ground_gravel", "softM": 2.5, "rects": [[-31.5, 31, -1, 57], [51, -10.5, 80.25, 31], [-16, -10.5, 8, 14]] },
+      { "material": "asphalt", "softM": 0.6, "rects": [[-31.5, 58.5, 80.25, 66.5], [36, 52, 58, 58.5]] }
+    ]
+  }
 }

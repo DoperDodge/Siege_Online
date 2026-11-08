@@ -396,24 +396,24 @@
     {
       "id": "ground_grass",
       "sizeM": [
-        2,
-        2
+        1.4,
+        1.4
       ],
-      "source": "polyhaven",
-      "asset": "forrest_ground_01",
-      "page": "https://polyhaven.com/a/forrest_ground_01",
-      "author": "Rob Tuytel",
+      "source": "ambientcg",
+      "asset": "Grass004",
+      "page": "https://ambientcg.com/view?id=Grass004",
+      "author": "ambientCG (Lennart Demes)",
       "license": "CC0 1.0",
       "files": {
         "color": "ground_grass.color.webp",
         "normal": "ground_grass.normal.webp",
         "orm": "ground_grass.orm.webp"
       },
-      "bytes": 1094398,
+      "bytes": 1275568,
       "mean": [
-        0.2842,
-        0.2435,
-        0.1119
+        0.119,
+        0.1529,
+        0.0303
       ]
     },
     {

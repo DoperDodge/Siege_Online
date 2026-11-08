@@ -28,7 +28,7 @@ normal and ORM maps are resized WebP copies of the CC0 source's maps.
 | `game/client/public/art/textures/shingles.*` (ambientcg `RoofingTiles003`) | https://ambientcg.com/view?id=RoofingTiles003 | ambientCG (Lennart Demes) | CC0 1.0 | — (CC0: no credit needed) | 2026-11-08, Phase 10 |
 | `game/client/public/art/textures/corrugated.*` (ambientcg `CorrugatedSteel005`) | https://ambientcg.com/view?id=CorrugatedSteel005 | ambientCG (Lennart Demes) | CC0 1.0 | — (CC0: no credit needed) | 2026-11-08, Phase 10 |
 | `game/client/public/art/textures/corrugated_rust.*` (polyhaven `rusty_corrugated_iron`) | https://polyhaven.com/a/rusty_corrugated_iron | Charlotte Baglioni | CC0 1.0 | — (CC0: no credit needed) | 2026-11-08, Phase 10 |
-| `game/client/public/art/textures/ground_grass.*` (polyhaven `forrest_ground_01`) | https://polyhaven.com/a/forrest_ground_01 | Rob Tuytel | CC0 1.0 | — (CC0: no credit needed) | 2026-11-08, Phase 10 |
+| `game/client/public/art/textures/ground_grass.*` (ambientcg `Grass004`) | https://ambientcg.com/view?id=Grass004 | ambientCG (Lennart Demes) | CC0 1.0 | — (CC0: no credit needed) | 2026-11-08, Phase 10 |
 | `game/client/public/art/textures/ground_dirt.*` (polyhaven `brown_mud_dry`) | https://polyhaven.com/a/brown_mud_dry | Rob Tuytel | CC0 1.0 | — (CC0: no credit needed) | 2026-11-08, Phase 10 |
 | `game/client/public/art/textures/ground_gravel.*` (polyhaven `gravel_floor`) | https://polyhaven.com/a/gravel_floor | Jenelle van Heerden, Matterfield | CC0 1.0 | — (CC0: no credit needed) | 2026-11-08, Phase 10 |
 | `game/client/public/art/textures/asphalt.*` (polyhaven `asphalt_02`) | https://polyhaven.com/a/asphalt_02 | Rob Tuytel | CC0 1.0 | — (CC0: no credit needed) | 2026-11-08, Phase 10 |

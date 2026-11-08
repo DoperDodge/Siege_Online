@@ -10,7 +10,7 @@
 // above the storey's floor: baseboard, wainscot with its rail, crown. Destructible panels' boxes carry no normals:
 // their faces' normals come from the screen-space slope of the position, snapped to the panel's axes.
 import * as THREE from "three";
-import type { ArtData, ArtStyle, BuiltLevel, MapArt, Renderable } from "@redmond/shared";
+import { GROUND, type ArtData, type ArtStyle, type BuiltLevel, type MapArt, type Renderable } from "@redmond/shared";
 import type { BakeScene, GridSpec } from "./probes/bake.js";
 import { probeGlsl } from "./probes/probeField.js";
 import type { TextureSets } from "./textures.js";
@@ -28,8 +28,10 @@ const CROWN_M = 0.07;
 const ZONE_CODE = 200;
 const OUTSIDE_CODE = 240;
 
-/** Materials every face of a box can wear whatever room it's in (panels' parts, architecture.ts's pieces): fixedStyle. */
-const FIXED = ["studs", "steel", "barricade", "paint_white", "floor_wood_dark"];
+/** The style table's material index for a floor that blends the ground layers (the shader reads anything under -1.5). */
+const GROUND_MAT = -2;
+/** The ground map's resolution (metres a texel). */
+const GROUND_CELL_M = 0.5;
 
 /** A lamp of power 1's irradiance at a metre (the sky's units: the sun gives about 4.7 at normal incidence here). */
 const LAMP_BASE = 9;
@@ -110,6 +112,38 @@ varying float vArtStyle;
 
 vec4 artTexel( highp sampler2D t, int x, int y ) {
   return texelFetch( t, ivec2( x, y ), 0 );
+}
+uniform highp sampler2D tArtGround;
+uniform vec4 uArtGroundBox;
+uniform vec4 uArtGroundMats;
+// Material mi at world point P on a face whose normal is N: its albedo (tinted, gained), ORM, shading normal (world)
+// and roughness multiplier. Textures by position on the face's plane (box mapping).
+void artSample( int mi, vec3 P, vec3 N, out vec3 albedo, out vec3 orm, out vec3 nW, out float roughMul ) {
+  vec4 m0 = artTexel( tArtMat, 0, mi );
+  vec4 m1 = artTexel( tArtMat, 1, mi );
+  vec4 m2 = artTexel( tArtMat, 2, mi );
+  vec3 T = abs( N.y ) < 0.999 ? normalize( cross( vec3( 0.0, 1.0, 0.0 ), N ) ) : vec3( 1.0, 0.0, 0.0 );
+  vec3 B = cross( N, T );
+  if ( m1.z > 0.5 ) {
+    vec3 t0 = T;
+    T = B;
+    B = -t0;
+  }
+  vec3 tc = vec3( dot( P, T ) / m1.x, -dot( P, B ) / m1.y, m0.x );
+  albedo = texture( tArtColor, tc ).rgb * m0.yzw * m2.y;
+  orm = texture( tArtOrm, tc ).rgb;
+  vec3 nt = texture( tArtNormal, tc ).xyz * 2.0 - 1.0;
+  nt.xy *= m2.x;
+  nW = normalize( T * nt.x + B * nt.y + N * max( nt.z, 0.05 ) );
+  roughMul = m1.w;
+}
+// Smooth value noise (0..1) over a plane: the ground's edges broken up.
+float artHash( vec2 p ) { return fract( sin( dot( p, vec2( 127.1, 311.7 ) ) ) * 43758.5453 ); }
+float artNoise( vec2 p ) {
+  vec2 i = floor( p );
+  vec2 f = fract( p );
+  vec2 u = f * f * ( 3.0 - 2.0 * f );
+  return mix( mix( artHash( i ), artHash( i + vec2( 1.0, 0.0 ) ), u.x ), mix( artHash( i + vec2( 0.0, 1.0 ) ), artHash( i + vec2( 1.0, 1.0 ) ), u.x ), u.y );
 }
 // How much of the pixel lies on a line every spacing metres (the labs' floor grid: a ruler).
 float artGridLine( vec2 p, float spacing, float px ) {
@@ -194,25 +228,33 @@ if ( artTrim ) {
   artMat = artS2.x;
   artBevel = 0.0;
 }
-int artMi = int( artMat + 0.5 );
-vec4 artM0 = artTexel( tArtMat, 0, artMi );
-vec4 artM1 = artTexel( tArtMat, 1, artMi );
-vec4 artM2 = artTexel( tArtMat, 2, artMi );
-vec3 artT = abs( artNw.y ) < 0.999 ? normalize( cross( vec3( 0.0, 1.0, 0.0 ), artNw ) ) : vec3( 1.0, 0.0, 0.0 );
-vec3 artB = cross( artNw, artT );
-if ( artM1.z > 0.5 ) {
-  vec3 artT0 = artT;
-  artT = artB;
-  artB = -artT0;
-}
-vec3 artTc = vec3( dot( artP, artT ) / artM1.x, -dot( artP, artB ) / artM1.y, artM0.x );
-vec4 artAlbedo = texture( tArtColor, artTc );
-vec3 artOrm = texture( tArtOrm, artTc ).rgb;
-vec3 artNt = texture( tArtNormal, artTc ).xyz * 2.0 - 1.0;
-artNt.xy *= artM2.x;
-vec3 artNormalW = normalize( artT * artNt.x + artB * artNt.y + artNw * max( artNt.z, 0.05 ) );
+vec3 artAlb;
+vec3 artOrm;
+vec3 artNormalW;
+float artRough;
+if ( artMat < -1.5 ) {
+  // The ground: the base, then each layer over it by its weight (the ground map), the edges broken up by noise.
+  artSample( int( uArtGroundMats.x ), artP, artNw, artAlb, artOrm, artNormalW, artRough );
+  vec2 artGq = ( artP.xz - uArtGroundBox.xy ) / uArtGroundBox.zw;
+  vec3 artGw = all( greaterThanEqual( artGq, vec2( 0.0 ) ) ) && all( lessThanEqual( artGq, vec2( 1.0 ) ) ) ? texture( tArtGround, artGq ).rgb : vec3( 0.0 );
+  float artGn = artNoise( artP.xz * 0.45 ) * 0.65 + artNoise( artP.xz * 1.9 ) * 0.35 - 0.5;
+  artGw = clamp( ( artGw - 0.5 + artGn * 0.9 ) * 2.2 + 0.5, 0.0, 1.0 ) * step( 0.001, artGw );
+  for ( int k = 0; k < 3; k++ ) {
+    float w = artGw[ k ];
+    if ( w < 0.01 ) continue;
+    vec3 a2;
+    vec3 o2;
+    vec3 n2;
+    float r2;
+    artSample( int( uArtGroundMats[ k + 1 ] ), artP, artNw, a2, o2, n2, r2 );
+    artAlb = mix( artAlb, a2, w );
+    artOrm = mix( artOrm, o2, w );
+    artNormalW = normalize( mix( artNormalW, n2, w ) );
+    artRough = mix( artRough, r2, w );
+  }
+} else artSample( int( artMat + 0.5 ), artP, artNw, artAlb, artOrm, artNormalW, artRough );
 artNormalW = normalize( artNormalW + vec3( 0.0, artBevel * 0.9, 0.0 ) );
-diffuseColor.rgb *= artAlbedo.rgb * artM0.yzw * artM2.y;
+diffuseColor.rgb *= artAlb;
 if ( uArtGrid > 0.5 && artNw.y > 0.9 ) {
   diffuseColor.rgb *= 1.0 - 0.35 * artGridLine( artP.xz, 1.0, 1.0 );
   diffuseColor.rgb *= 1.0 - 0.45 * artGridLine( artP.xz, 5.0, 1.5 );
@@ -237,7 +279,7 @@ if ( uProbeOn > 0.5 ) {
 #endif
 `;
 
-const FRAGMENT_ROUGHNESS = /* glsl */ `float roughnessFactor = clamp( artOrm.g * artM1.w, 0.04, 1.0 );`;
+const FRAGMENT_ROUGHNESS = /* glsl */ `float roughnessFactor = clamp( artOrm.g * artRough, 0.04, 1.0 );`;
 const FRAGMENT_METALNESS = /* glsl */ `float metalnessFactor = artOrm.b;`;
 const FRAGMENT_NORMAL = /* glsl */ `normal = normalize( ( viewMatrix * vec4( artNormalW, 0.0 ) ).xyz );`;
 /** Replaces aomap_fragment: the texture's occlusion darkens the indirect light, as three's own map does. */
@@ -318,7 +360,8 @@ export class LevelArt {
       const inside = !s.exterior;
       this.styles.push({
         wall: mat(s.wall),
-        floor: mat(s.floor),
+        // A floor of "ground" blends the map's ground layers (the shader's material -2).
+        floor: s.floor === GROUND && this.map?.ground ? GROUND_MAT : mat(s.floor),
         ceiling: mat(s.ceiling),
         exterior: !!s.exterior,
         wainscot: s.wainscot ? mat(s.wainscot.material) : -1,
@@ -332,7 +375,9 @@ export class LevelArt {
     };
     if (this.map) for (const [id, s] of Object.entries(this.map.styles)) add(id, s);
     else add("lab", LAB_STYLE);
-    for (const m of FIXED) if (m in data.materials) add(`_${m}`, { wall: m, floor: m, ceiling: m, trim: m, exterior: true });
+    // A style per material that every face of a box wears whatever room it's in (panels' parts, architecture and
+    // models: fixedStyle).
+    for (const m of Object.keys(data.materials)) add(`_${m}`, { wall: m, floor: m, ceiling: m, trim: m, exterior: true });
     const styleData = new Float32Array(this.styles.length * 4 * 4);
     this.styles.forEach((s, i) =>
       styleData.set([s.wall, s.floor, s.ceiling, s.exterior ? 1 : 0, s.wainscot, s.wainscotH, s.baseboardH, s.crownH, s.trim, s.foundation, s.foundationY, 0, 0, 0, 0, 0], i * 16),
@@ -368,7 +413,53 @@ export class LevelArt {
       uArtCeils: { value: ceils },
       uArtStoreys: { value: Math.max(1, Math.min(8, storeys.length)) },
       uArtGrid: { value: this.map ? 0 : 1 },
+      ...this.groundUniforms(),
     };
+  }
+
+  /**
+   * The ground (mapArtSchema.ground): the base's and up to three layers' materials, and a map over the level's bounds,
+   * 50 cm a texel, of each layer's weight (1 well inside its rects, half at their edge, none `softM` / 2 out).
+   */
+  private groundUniforms(): Record<string, THREE.IUniform> {
+    const g = this.map?.ground;
+    const b = this.level.def.bounds;
+    const mat = (id: string) => this.matIndex.get(id) ?? 0;
+    const base = g ? mat(g.base) : 0;
+    const mats = new THREE.Vector4(base, base, base, base);
+    g?.layers.forEach((l, i) => mats.setComponent(i + 1, mat(l.material)));
+    if (!g || !b) {
+      const t = new THREE.DataTexture(new Uint8Array(4), 1, 1, THREE.RGBAFormat);
+      t.needsUpdate = true;
+      this.owned.push(t);
+      return { tArtGround: { value: t }, uArtGroundBox: { value: new THREE.Vector4(0, 0, 1, 1) }, uArtGroundMats: { value: mats } };
+    }
+    const [x0, z0] = [b.min[0], b.min[2]];
+    const w = Math.ceil((b.max[0] - x0) / GROUND_CELL_M);
+    const h = Math.ceil((b.max[2] - z0) / GROUND_CELL_M);
+    const data = new Uint8Array(w * h * 4);
+    g.layers.forEach((layer, k) => {
+      const soft = Math.max(0.05, layer.softM);
+      for (let v = 0; v < h; v++)
+        for (let u = 0; u < w; u++) {
+          const x = x0 + (u + 0.5) * GROUND_CELL_M;
+          const z = z0 + (v + 0.5) * GROUND_CELL_M;
+          let best = 0;
+          for (const [rx0, rz0, rx1, rz1] of layer.rects) {
+            // Signed distance to the rect's edge (negative inside).
+            const dx = Math.max(rx0 - x, x - rx1);
+            const dz = Math.max(rz0 - z, z - rz1);
+            const d = dx > 0 || dz > 0 ? Math.hypot(Math.max(dx, 0), Math.max(dz, 0)) : Math.max(dx, dz);
+            best = Math.max(best, Math.min(1, Math.max(0, 0.5 - d / soft)));
+          }
+          data[(v * w + u) * 4 + k] = Math.round(best * 255);
+        }
+    });
+    const t = new THREE.DataTexture(data, w, h, THREE.RGBAFormat);
+    t.magFilter = t.minFilter = THREE.LinearFilter;
+    t.needsUpdate = true;
+    this.owned.push(t);
+    return { tArtGround: { value: t }, uArtGroundBox: { value: new THREE.Vector4(x0, z0, w * GROUND_CELL_M, h * GROUND_CELL_M) }, uArtGroundMats: { value: mats } };
   }
 
   /** A float table the shader reads texel by texel (row per entry). */
@@ -476,7 +567,8 @@ export class LevelArt {
     const roomStyle = new Int32Array(256);
     for (let i = 0; i < 256; i++) roomStyle[i] = r.codes[i * 4];
     const styles = new Int32Array(this.styles.length * 3);
-    this.styles.forEach((s, i) => styles.set([s.wall, s.floor, s.ceiling], i * 3));
+    const groundBase = this.map?.ground ? (this.matIndex.get(this.map.ground.base) ?? 0) : 0;
+    this.styles.forEach((s, i) => styles.set([s.wall, s.floor === GROUND_MAT ? groundBase : s.floor, s.ceiling], i * 3));
     return {
       boxes,
       rooms: { data: r.data, x0: r.x0, z0: r.z0, cell: ROOM_CELL_M, w: r.w, h: r.h, layers: r.layers },
@@ -534,7 +626,7 @@ export class LevelArt {
     return s !== undefined ? s + 1 : 0;
   }
 
-  /** The style's index +1 for a fixed material (FIXED: panels' parts, architecture's pieces): every face wears it. */
+  /** The style's index +1 that wears material `m` on every face (panels' parts, architecture, models); 1 (the first) if unknown. */
   fixedStyle(m: string): number {
     return (this.styleIndex.get(`_${m}`) ?? 0) + 1;
   }

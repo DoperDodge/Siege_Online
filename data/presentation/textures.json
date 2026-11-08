@@ -20,7 +20,7 @@
     { "id": "shingles", "source": "ambientcg", "asset": "RoofingTiles003", "for": "the house's asphalt shingle roofs" },
     { "id": "corrugated", "source": "ambientcg", "asset": "CorrugatedSteel005", "for": "metal roofs and sheds, tinted (the tower's green roof, the orange sheds)" },
     { "id": "corrugated_rust", "source": "polyhaven", "asset": "rusty_corrugated_iron", "for": "old sheds and the junkyard" },
-    { "id": "ground_grass", "source": "polyhaven", "asset": "forrest_ground_01", "for": "grass and weeds over dirt" },
+    { "id": "ground_grass", "source": "ambientcg", "asset": "Grass004", "for": "the dry grass round the compound and on to the hills" },
     { "id": "ground_dirt", "source": "polyhaven", "asset": "brown_mud_dry", "for": "the yard's packed dirt" },
     { "id": "ground_gravel", "source": "polyhaven", "asset": "gravel_floor", "for": "drives and the construction site" },
     { "id": "asphalt", "source": "polyhaven", "asset": "asphalt_02", "for": "the street" },
