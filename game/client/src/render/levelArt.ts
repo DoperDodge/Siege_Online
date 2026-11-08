@@ -28,6 +28,9 @@ const CROWN_M = 0.07;
 const ZONE_CODE = 200;
 const OUTSIDE_CODE = 240;
 
+/** Materials every face of a box can wear whatever room it's in (panels' parts, architecture.ts's pieces): fixedStyle. */
+const FIXED = ["studs", "steel", "barricade", "paint_white", "floor_wood_dark"];
+
 /** A lamp of power 1's irradiance at a metre (the sky's units: the sun gives about 4.7 at normal incidence here). */
 const LAMP_BASE = 9;
 
@@ -52,7 +55,7 @@ vec3 artN = objectNormal;
 artW = modelMatrix * artW;
 vArtPos = artW.xyz;
 vArtNormal = mat3( modelMatrix ) * artN;
-vArtStyle = aArt > 0.5 ? aArt : uArtStyle;
+vArtStyle = abs( aArt ) > 0.5 ? aArt : uArtStyle;
 `;
 
 /**
@@ -161,6 +164,8 @@ int artSt = artStorey( artQ.y );
 int artCode = artRoomCode( artQ, artSt );
 if ( artCode == 0 ) artCode = OUTSIDE_CODE_GLSL + artSt;
 int artS = vArtStyle > 0.5 ? int( vArtStyle + 0.5 ) - 1 : int( artTexel( tArtRoomStyle, artCode, 0 ).r + 0.5 );
+// A style of -1: the room's trim on every face (door and window frames: architecture.ts).
+bool artTrim = vArtStyle < -0.5;
 vec4 artS0 = artTexel( tArtStyle, 0, artS );
 vec4 artS1 = artTexel( tArtStyle, 1, artS );
 vec4 artS2 = artTexel( tArtStyle, 2, artS );
@@ -184,6 +189,10 @@ else if ( artS0.w < 0.5 ) {
   }
 } else if ( artS2.y >= 0.0 && artP.y < artS2.z ) {
   artMat = artS2.y;
+}
+if ( artTrim ) {
+  artMat = artS2.x;
+  artBevel = 0.0;
 }
 int artMi = int( artMat + 0.5 );
 vec4 artM0 = artTexel( tArtMat, 0, artMi );
@@ -323,7 +332,7 @@ export class LevelArt {
     };
     if (this.map) for (const [id, s] of Object.entries(this.map.styles)) add(id, s);
     else add("lab", LAB_STYLE);
-    for (const m of ["studs", "steel", "barricade"]) add(`_${m}`, { wall: m, floor: m, ceiling: m, trim: m, exterior: true });
+    for (const m of FIXED) if (m in data.materials) add(`_${m}`, { wall: m, floor: m, ceiling: m, trim: m, exterior: true });
     const styleData = new Float32Array(this.styles.length * 4 * 4);
     this.styles.forEach((s, i) =>
       styleData.set([s.wall, s.floor, s.ceiling, s.exterior ? 1 : 0, s.wainscot, s.wainscotH, s.baseboardH, s.crownH, s.trim, s.foundation, s.foundationY, 0, 0, 0, 0, 0], i * 16),
@@ -525,8 +534,8 @@ export class LevelArt {
     return s !== undefined ? s + 1 : 0;
   }
 
-  /** The style's index +1 for a fixed material the panels use ("studs", "steel", "barricade"). */
-  private fixed(m: string): number {
+  /** The style's index +1 for a fixed material (FIXED: panels' parts, architecture's pieces): every face wears it. */
+  fixedStyle(m: string): number {
     return (this.styleIndex.get(`_${m}`) ?? 0) + 1;
   }
 
@@ -543,10 +552,12 @@ export class LevelArt {
 
   /** A panel part's material by PanelView's key, or null to keep its own (glass, seams). */
   panelMaterial(key: string): THREE.MeshStandardMaterial | null {
-    if (key === "skin:BARRICADE") return this.material("barricade", true, this.fixed("barricade"));
+    if (key === "skin:BARRICADE") return this.material("barricade", true, this.fixedStyle("barricade"));
+    if (key === "skin:HATCH") return this.material("hatch", true, this.fixedStyle("floor_wood_dark"));
+    if (key === "glass") return this.glass();
     if (key.startsWith("skin:")) return this.material("skin", true, 0);
-    if (key === "core:wood") return this.material("studs", true, this.fixed("studs"));
-    if (key === "core:metal" || key === "steel") return this.material("steel", true, this.fixed("steel"));
+    if (key === "core:wood") return this.material("studs", true, this.fixedStyle("studs"));
+    if (key === "core:metal" || key === "steel") return this.material("steel", true, this.fixedStyle("steel"));
     return null;
   }
 
@@ -601,12 +612,25 @@ export class LevelArt {
     m.needsUpdate = true;
   }
 
+  private glassMat: THREE.MeshStandardMaterial | null = null;
+
+  /** Window glass: clear with a faint green, glossy, reflecting the sky where the probes see it (litPatch). */
+  private glass(): THREE.MeshStandardMaterial {
+    if (this.glassMat) return this.glassMat;
+    const g = new THREE.MeshStandardMaterial({ color: 0xd6e2dc, roughness: 0.04, metalness: 0, transparent: true, opacity: 0.16, depthWrite: false, flatShading: true });
+    g.name = "art:glass";
+    this.glassMat = g;
+    this.litPatch(g);
+    return g;
+  }
+
   /** Every material made so far (to compile them before they show). */
   allMaterials(): THREE.Material[] {
     return [...this.materials.values()];
   }
 
   dispose(): void {
+    this.glassMat?.dispose();
     for (const m of this.materials.values()) m.dispose();
     for (const t of this.owned) t.dispose();
   }

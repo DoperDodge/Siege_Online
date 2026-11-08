@@ -6,7 +6,10 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { artProblems, loadArtData, Sim, type BuiltLevel } from "@redmond/shared";
+import { Architecture } from "../src/render/architecture.js";
+import type { LabScene } from "../src/render/labScene.js";
 import { LevelArt } from "../src/render/levelArt.js";
+import { roomLamps } from "../src/render/probes/scene.js";
 import { initialQuality, PRESETS, presetFor } from "../src/render/quality.js";
 import type { TextureManifest, TextureSets } from "../src/render/textures.js";
 
@@ -128,7 +131,7 @@ describe("faces wear the style of the room they face (render/DESIGN.md §5.2)", 
     const art = new LevelArt(level, fakeSets(), loadArtData());
     expect(art.styleAt([0, 0, 0], [0, 1, 0])).toBe("lab");
     expect(art.panelMaterial("skin:SOFT_WALL")).not.toBeNull();
-    expect(art.panelMaterial("glass")).toBeNull();
+    expect(art.panelMaterial("glass")?.transparent).toBe(true);
     expect(art.panelMaterial("seam")).toBeNull();
   });
 });
@@ -156,3 +159,38 @@ describe("graphics presets (render/DESIGN.md §3)", () => {
     expect(presetFor("greybox", new URLSearchParams())).toBe(PRESETS.greybox);
   });
 });
+
+describe("architecture (render/DESIGN.md §7)", () => {
+  it("frames every door and window once (a window's glass and barricade together), keeps the doorway clear but for thin linings, and puts a fixture over every lamp", async () => {
+    const { level, art } = await oregonArt();
+    const lab = { storeys: level.def.storeys.map(() => new THREE.Group()) } as unknown as LabScene;
+    const lamps = roomLamps(level, (id) => art.lampOf(id));
+    const arch = new Architecture(lab, level, art, lamps);
+    const ids = new Set(level.panels.list.filter((e) => ["barricade", "glass"].includes(e.panel.spec.construction.kind)).map((e) => e.panel.spec.id.replace(/\.(bar|glass)$/, "")));
+    expect(arch.framed.length).toBe(ids.size);
+    expect(arch.framed.filter((o) => o.glazed).length).toBe(level.panels.list.filter((e) => e.panel.spec.construction.kind === "glass").length);
+    expect(arch.framed.every((o) => o.wall >= 0.15 && o.wall <= 0.45)).toBe(true);
+    expect(arch.fixtureCount).toBe(lamps.length / 7);
+    expect(arch.pieces).toBe(arch.placed.length);
+    // Inside each door's opening (2 cm in from its sides and head, through its wall), no piece but the linings.
+    const inv = new THREE.Matrix4();
+    const corner = new THREE.Vector3();
+    for (const o of arch.framed.filter((f) => !f.window)) {
+      inv.makeBasis(o.u, o.v, o.u.clone().cross(o.v)).setPosition(o.center).invert();
+      for (const p of arch.placed) {
+        // The piece's eight corners in the opening's frame: inside the clear box if all lie within it on u and v.
+        let lo = [Infinity, Infinity, Infinity];
+        let hi = [-Infinity, -Infinity, -Infinity];
+        for (let c = 0; c < 8; c++) {
+          corner.set(((c & 1) - 0.5) * p.size.x, (((c >> 1) & 1) - 0.5) * p.size.y, (((c >> 2) & 1) - 0.5) * p.size.z).applyQuaternion(p.quat).add(p.center).applyMatrix4(inv);
+          lo = lo.map((v, k) => Math.min(v, corner.getComponent(k)));
+          hi = hi.map((v, k) => Math.max(v, corner.getComponent(k)));
+        }
+        const clear = [o.w / 2 - 0.02, o.h / 2 - 0.02, o.wall / 2];
+        const overlaps = [0, 1, 2].every((k) => lo[k] < clear[k] && hi[k] > -clear[k]);
+        expect(overlaps, `${o.id}: a piece inside the doorway`).toBe(false);
+      }
+    }
+  });
+});
+

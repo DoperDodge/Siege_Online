@@ -7,6 +7,7 @@
 // The greybox stays until the textures arrive.
 import * as THREE from "three";
 import { loadArtData, type BuiltLevel } from "@redmond/shared";
+import { Architecture } from "./architecture.js";
 import { aimSun, DAYLIGHT, type LabScene } from "./labScene.js";
 import { LevelArt } from "./levelArt.js";
 import type { PanelView } from "./panelView.js";
@@ -32,6 +33,8 @@ export class ArtView {
   /** The probe field (Medium, High), once the art is loading. */
   probes: ProbeField | null = null;
   private shownNow = false;
+  /** Frames, glazing bars, hatch borders and lamp fixtures (architecture.ts). */
+  private architecture: Architecture | null = null;
   /** Each static mesh's greybox material, to put back. */
   private readonly grey = new Map<THREE.Mesh, THREE.Material | THREE.Material[]>();
   /** The open sky's irradiance on a face up (the sun and the sky): what "daylight" means for lightAt. */
@@ -75,6 +78,7 @@ export class ArtView {
     const [sets, skyData] = await Promise.all([loadTextureSets(preset.textures), loadSky()]);
     const art = new LevelArt(this.level, sets, loadArtData());
     const lab = this.lab;
+    const lamps = roomLamps(this.level, (id) => art.lampOf(id));
     if (skyData) {
       const sky = new SkyView(skyData, renderer, preset.probes);
       this.sky = sky;
@@ -96,7 +100,6 @@ export class ArtView {
         const info = skyData.info;
         const sun = { dir: [...info.sun.dir] as [number, number, number], irradiance: info.sun.irradiance.map((v) => v * SUN_GAIN) as [number, number, number] };
         const env = { w: info.env.width, h: info.env.height, data: skyData.env, scale: 1 };
-        const lamps = roomLamps(this.level, (id) => art.lampOf(id));
         this.probes = new ProbeField(this.level, (boxes, grids) => art.bakeScene(boxes, grids, env, sun, lamps, RAYS), staticBoxes(this.level, (r) => art.styleOf(r)));
         art.attachProbes(this.probes.uniforms);
       }
@@ -126,12 +129,17 @@ export class ArtView {
       o.frustumCulled = false;
     }
     if (this.sky) probes.add(new THREE.Mesh(this.sky.dome.geometry, this.sky.dome.material));
+    const glass = art.panelMaterial("glass");
+    if (glass) probes.add(new THREE.Mesh(flat, glass));
     await renderer.compileAsync(probes, camera, lab.scene);
     box.dispose();
     flat.dispose();
     one.geometry.dispose();
     this.art = art;
     this.sets = sets;
+    this.architecture = new Architecture(lab, this.level, art, lamps);
+    this.architecture.setVisible(false);
+    renderer.shadowMap.needsUpdate = true;
     // The probes bake in the background; their first pass switches the light over.
     if (this.probes) void this.probes.bake(2, () => this.applyLight());
     return true;
@@ -144,6 +152,7 @@ export class ArtView {
     this.shownNow = on;
     for (const [mesh, grey] of this.grey) mesh.material = on ? art.staticMaterial() : grey;
     this.panels.setMaterialOverride(on ? (key) => art.panelMaterial(key) : null);
+    this.architecture?.setVisible(on);
     this.applyLight();
   }
 
@@ -227,6 +236,7 @@ export class ArtView {
   dispose(): void {
     this.show(false);
     this.probes?.dispose();
+    this.architecture?.dispose();
     this.sky?.dispose();
     this.art?.dispose();
     for (const t of this.sets ? [this.sets.color, this.sets.normal, this.sets.orm] : []) t.dispose();
