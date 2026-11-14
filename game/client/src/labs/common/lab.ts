@@ -84,7 +84,9 @@ import { horizontalFov, keyLabel, loadSettings, saveSettings, type HoldMode, typ
 import { isTouchDevice, mountTouchControls, preventPageZoom } from "../../input/touch.js";
 import { LocalSocket } from "../../net/local.js";
 import { OnlineConnection } from "../../net/online.js";
+import { ArtView } from "../../render/artView.js";
 import { createLabScene, createRenderer, PawnView, updateLabels, warmShaders } from "../../render/labScene.js";
+import { initialQuality, presetFor, PRESETS, QUALITIES, QUALITY_NAMES, type QualityPreset, type QualitySetting } from "../../render/quality.js";
 import { BpCameraModels, CameraModels } from "../../render/cameraModels.js";
 import { GadgetModels } from "../../render/gadgetModels.js";
 import { PanelView } from "../../render/panelView.js";
@@ -352,8 +354,13 @@ export async function startLab(o: LabOptions): Promise<void> {
   }
 
   const view = $("#view");
-  const renderer = createRenderer(view, params.has("lowgfx"));
-  const labScene = createLabScene(sim.level);
+  /** The graphics preset (Phase 10, render/quality.ts): the link's, the browser tests' greybox, or the setting's. */
+  const quality = initialQuality(params, loadSettings().graphics, { automated: navigator.webdriver, touchOnly: isTouchDevice() });
+  /** Why the art didn't load as asked, if it didn't (shown in the stats overlay; tests read it). */
+  let artProblem = "";
+  const preset = presetFor(quality, params);
+  const renderer = createRenderer(view, preset);
+  const labScene = createLabScene(sim.level, preset.shadowMap);
   const scene = labScene.scene;
   /** Destructible panels, drawn from their cells and redrawn as they change. */
   const panelView = new PanelView(scene, sim.level.panels);
@@ -363,6 +370,12 @@ export async function startLab(o: LabOptions): Promise<void> {
    */
   const storeyView = sim.level.def.storeys.length ? new StoreyView(labScene, panelView, sim.level, sim.pawns.get(ctrl.possessedPawnId)?.state.y ?? 0) : null;
   storeyView?.setViewport(view.clientWidth, view.clientHeight);
+  /**
+   * The art pass (Phase 10): the textures load after the level is drawn, and the art replaces the greybox once
+   * they're in (on a map, while the palette is "art", the first of P's).
+   */
+  const artView = new ArtView(labScene, panelView, sim.level, storeyView);
+  if (preset.textures && storeyView) storeyView.palette = "art";
   /** A map's markers (E9 part 2): bombs, cameras, ingredients and spawns, and the zones view (O). */
   const markers = storeyView ? new MapMarkers(labScene, o.match ? { ...sim.level.def, cameras: [], ingredients: [], spawns: [], zones: [] } : sim.level.def) : null;
   /** On a map with a plan, the HUD line: the room, the storey and where you are in the plan's units (amendment 17); a match's, the room only. */
@@ -379,8 +392,29 @@ export async function startLab(o: LabOptions): Promise<void> {
   renderer.info.autoReset = false;
   const stats = new StatsOverlay(app, params.has("stats"), () => [
     `static: ${labScene.staticBoxes} boxes in ${labScene.staticMeshes} meshes · panels: ${panelView.meshCount} meshes`,
-    `${renderer.domElement.width} × ${renderer.domElement.height} px${renderer.shadowMap.enabled ? "" : " · no shadows (?lowgfx)"}`,
+    `${renderer.domElement.width} × ${renderer.domElement.height} px${renderer.shadowMap.enabled ? "" : " · no shadows"}`,
+    artLine(),
   ]);
+  /**
+   * The gun in hand lit as the world round the eyes is: by the probes once they're in (the art pass), else by the
+   * storey's light (feet at x, y, z).
+   */
+  function setViewmodelLight(x: number, y: number, z: number) {
+    const k = artView.lightAt(x, y + 1.5, z);
+    if (k !== null) viewmodel.setLight(Math.min(1.2, Math.max(0.05, k)));
+    else if (storeyView) viewmodel.setLight(storeyView.light());
+  }
+
+  /** When the exposure last adapted (render/artView.ts adapt), ms. */
+  let lastAdapt = performance.now();
+
+  /** The graphics preset, and the textures' size and GPU memory once they're in. */
+  function artLine(): string {
+    const t = artView.textures;
+    const p = artView.probeState;
+    const probes = p ? ` · probes: ${p.ready ? `${p.passes} pass${p.passes === 1 ? "" : "es"} (${(p.firstMs / 1000).toFixed(1)} s first${p.allMs ? `, ${(p.allMs / 1000).toFixed(1)} s all` : ""})` : "baking"}` : "";
+    return `graphics: ${QUALITY_NAMES[quality]}${t ? ` · textures: ${t.sets} sets at ${t.size} px, ${(t.gpuBytes / 1048576).toFixed(0)} MB${artView.shown ? "" : " (hidden)"}` : preset.textures ? " · textures loading" : ""}${probes}${artProblem ? ` · ${artProblem}` : ""}`;
+  }
   let settings: Settings = loadSettings();
   const camera = new THREE.PerspectiveCamera(settings.fovVertical, view.clientWidth / view.clientHeight, 0.05, 300);
   camera.rotation.order = "YXZ";
@@ -398,12 +432,35 @@ export async function startLab(o: LabOptions): Promise<void> {
     scene.remove(probe);
     viewmodel.warm(renderer);
   }
+  // The art's textures and shaders, then the art itself (render/artView.ts); the greybox until then.
+  async function loadArt(p: QualityPreset, quality: string): Promise<void> {
+    try {
+      if (!(await artView.load(p, renderer, camera))) return;
+      artView.show(!storeyView || storeyView.palette === "art");
+      markers?.showModelled(!artView.shown);
+      viewmodel.setEnvironment(artView.environment);
+    } catch (e) {
+      // A GPU that can't build a preset's shaders (or ran out of memory for its textures) gets the next one down,
+      // and says so: never a page that just doesn't load.
+      console.error(`art pass (${quality}):`, e);
+      artProblem = `${quality} graphics didn't load on this device (${String((e as Error)?.message ?? e).slice(0, 160)})`;
+      if (quality !== "low" && quality !== "greybox") {
+        flash(`${quality[0].toUpperCase()}${quality.slice(1)} graphics didn't load on this device: using Low`, "bad");
+        // As Low is: no sun shadows (without the probes' light, rooms under a shadowed sun would be dark).
+        renderer.shadowMap.enabled = PRESETS.low.shadowMap > 0;
+        labScene.sun.castShadow = renderer.shadowMap.enabled;
+        await loadArt(PRESETS.low, "low");
+      } else flash("The textures didn't load on this device: showing the plain view", "bad");
+    }
+  }
+  void loadArt(preset, quality);
   /** Each body's view as drawn this frame (lasers point along it). */
   const drawnView = new Map<number, [number, number]>();
 
   const pawnViews = new Map<number, PawnView>();
-  /** A match's default cameras (Phase 7), drawn whole or broken, and the round's Bulletproof Cameras. */
-  const cameraModels = o.match ? new CameraModels(scene, sim.level.def.cameras) : null;
+  /** The level's default cameras (Phase 7), drawn whole or broken, and the round's Bulletproof Cameras. */
+  // (Drawn on a map's lab page too: they're part of its look.)
+  const cameraModels = sim.level.def.cameras.length ? new CameraModels(scene, sim.level.def.cameras, (from, dir, max) => raycastLevel(sim, from, dir, max)?.t ?? null) : null;
   const bpCameraModels = new BpCameraModels(scene, data.gadgets.get("bulletproof_camera")!.sizeM);
   /** The gadget table (Phase 8): every gadget placed, thrown or dropped; offline, our own server side keeps it. */
   const gadgetModels = new GadgetModels(scene, sim);
@@ -580,10 +637,20 @@ export async function startLab(o: LabOptions): Promise<void> {
       storeyView.setPlan(v.plan);
       app.classList.toggle("plan-view", v.plan); // no crosshair or sights over the plan
     }
-    if (v.palette !== undefined) storeyView.setPalette(v.palette);
+    if (v.palette !== undefined) {
+      storeyView.setPalette(v.palette);
+      artView.show(v.palette === "art");
+      markers?.showModelled(!artView.shown);
+    }
     if (!$(".pause").classList.contains("hidden")) renderPause();
   }
 
+  /** P's round: the art (once its textures are in), the surface classes, neutral. */
+  const PALETTE_NAMES: Record<Palette, string> = { art: "Palette: textures", greybox: "Palette: surface classes", neutral: "Palette: neutral" };
+  function nextPalette(): Palette {
+    const round: Palette[] = artView.ready ? ["art", "greybox", "neutral"] : ["greybox", "neutral"];
+    return round[(round.indexOf(storeyView?.palette ?? "greybox") + 1) % round.length];
+  }
   /** The storey views' switches by name (their keys, and the pause menu's View buttons). */
   const viewToggles: Record<string, () => void> = {};
   if (storeyView && !o.match) {
@@ -598,8 +665,8 @@ export async function startLab(o: LabOptions): Promise<void> {
         if (sv.plan) flash("Plan view: the wheel zooms, M goes back", "info");
       },
       palette: () => {
-        setStoreyView({ palette: sv.palette === "greybox" ? "neutral" : "greybox" });
-        flash(sv.palette === "greybox" ? "Palette: surface classes" : "Palette: neutral", "info");
+        setStoreyView({ palette: nextPalette() });
+        flash(PALETTE_NAMES[sv.palette], "info");
       },
       zones: () => {
         setStoreyView({ zones: !markers?.zones });
@@ -800,7 +867,7 @@ export async function startLab(o: LabOptions): Promise<void> {
           ? `<section><h3>View</h3><div class="goto">
         <button data-view="hideAbove">${storeyView.hideAbove ? "Show the storeys above (H)" : "Hide the storeys above (H)"}</button>
         <button data-view="plan">${storeyView.plan ? "Leave the plan view (M)" : "Plan view (M)"}</button>
-        <button data-view="palette">${storeyView.palette === "greybox" ? "Neutral palette (P)" : "Surface colours (P)"}</button>
+        <button data-view="palette">${PALETTE_NAMES[nextPalette()].replace("Palette: ", "Palette (P): ")}</button>
         <button data-view="zones">${markers?.zones ? "Hide the zones (O)" : "Show the zones (O)"}</button></div></section>`
           : ""
       }
@@ -824,8 +891,18 @@ export async function startLab(o: LabOptions): Promise<void> {
         <label><input type="checkbox" data-bool="rawInput" ${settings.rawInput ? "checked" : ""}> Raw mouse input</label>
         ${modeSel("crouchMode", "Crouch")} ${modeSel("proneMode", "Prone")} ${modeSel("leanMode", "Lean")} ${modeSel("adsMode", "Aim (ADS)")}
       </section>
+      <section><h3>Graphics</h3>
+        <label>Quality <select data-gfx>${(["auto", ...QUALITIES] as QualitySetting[])
+          .map((q) => `<option value="${q}" ${settings.graphics === q ? "selected" : ""}>${q === "auto" ? `Auto (${QUALITY_NAMES[initialQuality(new URLSearchParams(), "auto", { automated: false, touchOnly })]})` : QUALITY_NAMES[q]}</option>`)
+          .join("")}</select></label>
+        <p class="note">Drawing now: ${QUALITY_NAMES[quality]}${params.has("gfx") || params.has("lowgfx") ? " (set by the link)" : ""}. A change takes effect when the page next loads.</p>
+      </section>
       <p class="note">Press <kbd>F1</kbd> for the key list and what to try.</p>`;
     pause.querySelector(".resume")?.addEventListener("click", resume);
+    pause.querySelector<HTMLSelectElement>("select[data-gfx]")?.addEventListener("change", (e) => {
+      settings.graphics = (e.target as HTMLSelectElement).value as QualitySetting;
+      saveSettings(settings);
+    });
     pause.querySelector(".refill")?.addEventListener("click", labRefill);
     pause.querySelector(".free-cam")?.addEventListener("click", (e) => {
       setFreeCam(freeCam === null);
@@ -1146,6 +1223,13 @@ export async function startLab(o: LabOptions): Promise<void> {
   /** Render the world, counting a shadow-map redraw if one was asked for. */
   function drawWorld() {
     if (renderer.shadowMap.enabled && renderer.shadowMap.needsUpdate && !renderer.getContext().isContextLost()) shadowDraws++;
+    artView.frame(shownCamera());
+    {
+      const c = shownCamera();
+      const now = performance.now();
+      artView.adapt(renderer, c.position.x, c.position.y, c.position.z, Math.min(0.5, Math.max(0, (now - lastAdapt) / 1000)));
+      lastAdapt = now;
+    }
     renderer.render(scene, shownCamera());
   }
   function frame(now: number) {
@@ -1233,7 +1317,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     if (spec) {
       const [vx, vy, vz] = placeSpectator(spec, renderTick, elapsed);
       if (storeyView?.follow(vx, vy, vz, camera.rotation.y, elapsed)) renderer.shadowMap.needsUpdate = true;
-      if (storeyView) viewmodel.setLight(storeyView.light());
+      setViewmodelLight(vx, vy, vz);
       whereHud?.update(now, storeyView?.storey ?? 0, vx, vz);
       controls.upsideDown = false;
       if (Math.abs(camera.fov - settings.fovVertical) > 1e-4) {
@@ -1249,7 +1333,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       const lens = onCamera ? sim.camLens(ctrl.cam - 1, ctrl.camYaw) : null;
       const [vx, vy, vz] = freeCam ? [freeCam.x, freeCam.y - data.movement.stance.stand.eye, freeCam.z] : lens ? [lens[0], lens[1] - 0.05, lens[2]] : [rs.x, rs.y, rs.z];
       if (storeyView?.follow(vx, vy, vz, controls.yaw, elapsed)) renderer.shadowMap.needsUpdate = true;
-      if (storeyView) viewmodel.setLight(storeyView.light());
+      setViewmodelLight(vx, vy, vz);
       whereHud?.update(now, storeyView?.storey ?? 0, vx, vz);
       // A drone's camera: low at its front, its own field of view (Phase 7).
       const droneView = viewed!.kind === PawnKind.Drone;
@@ -1295,7 +1379,10 @@ export async function startLab(o: LabOptions): Promise<void> {
     updateLabels(labScene.labels, shownCamera());
     // A panel that changed changes the level's shadows too.
     const panelFrom = performance.now();
-    if (panelView.update()) renderer.shadowMap.needsUpdate = true;
+    if (panelView.update()) {
+      renderer.shadowMap.needsUpdate = true;
+      artView.panelsChanged(panelView.lastChanged);
+    }
     const panelMs = performance.now() - panelFrom;
     for (const fn of hooks.frame) fn(now, renderTick);
     intelHud.update(now, shownCamera(), app.clientWidth, app.clientHeight, (id) => {
@@ -1352,10 +1439,10 @@ export async function startLab(o: LabOptions): Promise<void> {
       v.wire.visible = drawn && showHitboxes;
       if (!rs) continue;
       const w = pawn.loadout?.weapons[rs.slot];
-      v.setWeapon(w ? { class: w.class, pick: w.pick } : null);
+      v.setWeapon(w ? { id: w.id, class: w.class, pick: w.pick } : null);
       // A gadget in its hands instead (Phase 8): drawn as its greybox; a detonator small and dark.
       const held = heldGadget(pawn, rs);
-      v.setHeld(held ? (held.detonator ? [0.05, 0.09, 0.03] : held.data.sizeM) : null, !!held && !held.detonator && held.data.use.kind === "hold");
+      v.setHeld(held ? (held.detonator ? { id: "detonator", size: [0.05, 0.09, 0.03] } : { id: held.data.id, size: held.data.sizeM }) : null, !!held && !held.detonator && held.data.use.kind === "hold");
       v.setShield(pawn.loadout?.shield?.plate ?? null);
       // The body whose eyes we see through, in first person, faces the view itself (the mouse's, as the camera does), so
       // Fuze's shield doesn't trail the view by a tick when he turns (the review, M12); in free look the body keeps its
@@ -1930,6 +2017,7 @@ export async function startLab(o: LabOptions): Promise<void> {
           rooms: def.rooms.map((r) => ({ id: r.id, callout: r.callout, storey: r.storey, rects: r.rects, anchor: r.anchor })),
           levelPlan: def.plan ?? null,
           hud: whereHud?.text ?? null,
+          art: { quality, ready: artView.ready, shown: artView.shown, probes: artView.probeState, exposure: renderer.toneMappingExposure, problem: artProblem },
           ...(storeyView && {
             storey: def.storeys[storeyView.storey].id,
             hideAbove: storeyView.hideAbove,

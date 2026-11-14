@@ -1,0 +1,282 @@
+// The art pass's data and materials (Phase 10 M1–M2, render/DESIGN.md §2, §3, §5), without a GPU: the art files are
+// whole (every material's set packed, every style's materials listed, the shipped textures within budget), every
+// Oregon room has a style, faces wear the style of the room they face (inside walls and floors, outside zones round
+// the Big Tower and below ground), boxes with a style of their own keep it, and the graphics presets.
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+import * as THREE from "three";
+import { artProblems, loadArtData, Sim, type BuiltLevel } from "@redmond/shared";
+import { Architecture } from "../src/render/architecture.js";
+import type { LabScene } from "../src/render/labScene.js";
+import { LevelArt } from "../src/render/levelArt.js";
+import { ProbeField, refill } from "../src/render/probes/probeField.js";
+import { roomLamps } from "../src/render/probes/scene.js";
+import { initialQuality, PRESETS, presetFor } from "../src/render/quality.js";
+import type { TextureManifest, TextureSets } from "../src/render/textures.js";
+
+const TEXTURES = new URL("../public/art/textures/", import.meta.url);
+const manifest = JSON.parse(readFileSync(new URL("manifest.json", TEXTURES), "utf8")) as TextureManifest;
+
+/** The sets as the page would have them, each layer one pixel (no GPU here). */
+function fakeSets(): TextureSets {
+  const tex = () => new THREE.DataArrayTexture(new Uint8Array(4 * manifest.sets.length), 1, 1, manifest.sets.length);
+  return {
+    color: tex(),
+    normal: tex(),
+    orm: tex(),
+    layer: new Map(manifest.sets.map((s, i) => [s.id, i])),
+    sizeM: new Map(manifest.sets.map((s) => [s.id, s.sizeM])),
+    mean: new Map(manifest.sets.map((s) => [s.id, s.mean ?? [0.5, 0.5, 0.5]])),
+    size: 1,
+    gpuBytes: 0,
+  };
+}
+
+let oregon: BuiltLevel | null = null;
+async function oregonArt() {
+  oregon ??= (await Sim.create("oregon")).level;
+  return { level: oregon, art: new LevelArt(oregon, fakeSets(), loadArtData()) };
+}
+
+describe("the art data (render/DESIGN.md §2)", () => {
+  it("is whole: every material's set is packed, every style's materials and every match exist; the textures fit the 40 MB budget", () => {
+    const data = loadArtData();
+    expect(artProblems(data)).toEqual([]);
+    const packed = new Set(manifest.sets.map((s) => s.id));
+    expect(data.textures.sets.map((s) => s.id).filter((id) => !packed.has(id))).toEqual([]);
+    let bytes = 0;
+    for (const s of manifest.sets) {
+      expect(s.sizeM.every((v) => v > 0.1 && v < 10), s.id).toBe(true);
+      for (const f of Object.values(s.files)) {
+        const at = new URL(f, TEXTURES);
+        expect(existsSync(at), f).toBe(true);
+        bytes += statSync(at).size;
+      }
+    }
+    expect(bytes).toBeLessThan(40 * 1024 * 1024);
+  });
+
+  it("finds what's wrong: a material on a missing set, a style naming a missing material, a bad pattern", () => {
+    const data = loadArtData();
+    const oregonArt = data.maps.get("oregon")!;
+    const broken = {
+      ...data,
+      materials: { ...data.materials, odd: { set: "nope", tint: "#ffffff" } },
+      maps: new Map([["oregon", { ...oregonArt, styles: { ...oregonArt.styles, hall: { ...oregonArt.styles.hall, floor: "missing" } }, items: [{ match: "(", style: "hall" }] }]]),
+    };
+    const problems = artProblems(broken).join("\n");
+    expect(problems).toContain("material odd: no texture set nope");
+    expect(problems).toContain("style hall.floor: no material missing");
+    expect(problems).toContain("bad pattern (");
+  });
+
+  it("gives every Oregon room a style, and names no room Oregon doesn't have", async () => {
+    const { level } = await oregonArt();
+    const rooms = Object.keys(loadArtData().maps.get("oregon")!.rooms);
+    const ids = level.def.rooms.map((r) => r.id);
+    expect(ids.filter((id) => !rooms.includes(id))).toEqual([]);
+    expect(rooms.filter((id) => !ids.includes(id))).toEqual([]);
+  });
+});
+
+describe("faces wear the style of the room they face (render/DESIGN.md §5.2)", () => {
+  it("each room's floor and ceiling, at its anchor", async () => {
+    const { level, art } = await oregonArt();
+    const styles = loadArtData().maps.get("oregon")!.rooms;
+    for (const r of level.def.rooms) {
+      const storey = level.def.storeys.find((s) => s.id === r.storey)!;
+      // A spot inside one of its rects (the anchor can sit on its edge): the first rect's middle.
+      const [x0, z0, x1, z1] = r.rects[0];
+      const [x, z] = [(x0 + x1) / 2, (z0 + z1) / 2];
+      expect(art.styleAt([x, storey.floorY, z], [0, 1, 0]), `${r.id} floor`).toBe(styles[r.id]);
+      expect(art.styleAt([x, storey.ceilingY, z], [0, -1, 0]), `${r.id} ceiling`).toBe(styles[r.id]);
+    }
+  });
+
+  it("a wall's two faces wear the two rooms' styles; outside faces their zone's: the Big Tower red, the house's siding, below ground concrete", async () => {
+    const { level, art } = await oregonArt();
+    const room = (id: string) => level.def.rooms.find((r) => r.id === id)!;
+    // The Kitchen's west edge from inside: facing east (+x), into the Kitchen.
+    const k = room("1F_KITCHEN").rects[0];
+    expect(art.styleAt([k[0], 1.5, (k[1] + k[3]) / 2], [1, 0, 0])).toBe("kitchen");
+    // Just north of the Big Tower's 1F rect, facing north (−z): outside, the tower's zone.
+    const t = room("1F_TOWER").rects[0];
+    expect(art.styleAt([(t[0] + t[2]) / 2, 1.5, t[1] - 0.1], [0, 0, -1])).toBe("tower_out");
+    // Far out in the yard: the outside style; and under the ground there, below_out.
+    expect(art.styleAt([-20, 0, 60], [0, 1, 0])).toBe("house_out");
+    expect(art.styleAt([-20, -1.5, 60], [1, 0, 0])).toBe("below_out");
+  });
+
+  it("boxes with a style of their own keep it: roofs, stairs, rails, the ladder, cover props by class, outside items; walls go by their room", async () => {
+    const { level, art } = await oregonArt();
+    const styleOf = (id: string) => {
+      const r = level.renderables.find((x) => x.id === id);
+      expect(r, id).toBeDefined();
+      return art.styleAt(r!.center, [0, 1, 0], art.styleOf(r!));
+    };
+    expect(styleOf("RF_TOWER.W")).toBe("roof_tower");
+    expect(styleOf("RF_DORMS.N")).toBe("roof");
+    expect(styleOf("RF_DINING#0")).toBe("roof_flat");
+    expect(styleOf(level.renderables.find((r) => r.kind === "stair_step" && !r.id.startsWith("S1:B>1F"))!.id)).toBe("stairs");
+    expect(styleOf(level.renderables.find((r) => r.kind === "ladder_rung")!.id)).toBe("ladder");
+    expect(styleOf("PROP_DINING_BENCH")).toBe("prop_soft");
+    expect(styleOf("PROP_DINING_CABINET")).toBe("prop_wood");
+    expect(styleOf("EXT_BUS")).toBe("bus");
+    expect(styleOf("EXT_SILO_N")).toBe("silo");
+    const wall = level.renderables.find((r) => r.id === "1F.w000#0")!;
+    expect(art.styleOf(wall)).toBe(0);
+  });
+
+  it("a level without an art file wears the lab look", async () => {
+    const level = (await Sim.create("movement_lab")).level;
+    const art = new LevelArt(level, fakeSets(), loadArtData());
+    expect(art.styleAt([0, 0, 0], [0, 1, 0])).toBe("lab");
+    expect(art.panelMaterial("skin:SOFT_WALL")).not.toBeNull();
+    expect(art.panelMaterial("glass")?.transparent).toBe(true);
+    expect(art.panelMaterial("seam")).toBeNull();
+  });
+});
+
+describe("the level's shader keeps to what every GPU allows (Ulo's report: Medium and High didn't load)", () => {
+  /** The level material's shader as three would get it: its own code patched into three's chunks (not expanded here). */
+  function patched(m: THREE.Material): { fragment: string; uniforms: Record<string, THREE.IUniform> } {
+    const shader = {
+      uniforms: {} as Record<string, THREE.IUniform>,
+      vertexShader: "#include <common>\n#include <project_vertex>",
+      fragmentShader: ["common", "map_fragment", "roughnessmap_fragment", "metalnessmap_fragment", "normal_fragment_maps", "lights_fragment_maps", "aomap_fragment"].map((c) => `#include <${c}>`).join("\n"),
+    };
+    m.onBeforeCompile(shader as unknown as THREE.WebGLProgramParametersWithUniforms, null as unknown as THREE.WebGLRenderer);
+    return { fragment: shader.fragmentShader, uniforms: shader.uniforms };
+  }
+  const samplers = (glsl: string) => [...glsl.matchAll(/uniform\s+(?:highp\s+|mediump\s+|lowp\s+)?sampler\w+\s+(\w+)\s*;/g)].map((x) => x[1]);
+  /** A fragment shader may use 16 textures on most GPUs; three adds its own (the environment, its lookup table, a shadow map a light): ours take at most 10. */
+  const OURS_AT_MOST = 10;
+
+  it("with the probes on, the level's and the panels' shaders declare few enough textures", async () => {
+    oregon ??= (await Sim.create("oregon")).level;
+    const art = new LevelArt(oregon, fakeSets(), loadArtData());
+    const probes = new ProbeField(oregon, () => ({}) as never, new Float32Array(0), 0);
+    art.attachProbes(probes.uniforms);
+    for (const m of [art.staticMaterial(), art.panelMaterial("skin:SOFT_WALL")!, art.panelMaterial("core:wood")!]) {
+      const { fragment, uniforms } = patched(m);
+      const names = samplers(fragment);
+      expect(names.length, `${m.name}: ${names.join(" ")}`).toBeLessThanOrEqual(OURS_AT_MOST);
+      expect(new Set(names).size).toBe(names.length);
+      // Each one it declares has its texture (a missing one would read black).
+      for (const n of names) expect((uniforms[n]?.value as THREE.Texture | undefined)?.isTexture, `${m.name}: ${n}`).toBe(true);
+      expect(names).toContain("tProbeA");
+      // Every texture read says its own level of detail: none with implicit derivatives, which GLSL leaves undefined
+      // inside the branches and loops these are in (and Direct3D refuses or flattens).
+      expect(fragment).not.toMatch(/\btexture\s*\(/);
+      expect(fragment).toMatch(/textureGrad\s*\(\s*tArtColor/);
+    }
+    // A body, a gadget or the glass, lit by the probes: fewer still.
+    const body = new THREE.MeshStandardMaterial();
+    art.litPatch(body);
+    expect(samplers(patched(body).fragment).length).toBeLessThanOrEqual(4);
+    probes.dispose();
+  });
+
+  it("the one lookup table has each room's style, each material and each style where the shader reads them", async () => {
+    const { level, art } = await oregonArt();
+    const t = art.uniforms.tArtTables.value as THREE.DataTexture;
+    const { width, height } = t.image;
+    const data = t.image.data as Float32Array;
+    expect(width).toBe(256);
+    expect(height).toBeLessThanOrEqual(2048);
+    const texel = (x: number, y: number) => Array.from(data.subarray((y * width + x) * 4, (y * width + x) * 4 + 4));
+    const art2 = loadArtData();
+    const map = art2.maps.get("oregon")!;
+    const mats = Object.keys(art2.materials);
+    const styles = [...Object.keys(map.styles), ...mats.map((m) => `_${m}`)];
+    // A material's row: its texture set's layer, its tint; its tile size.
+    mats.forEach((id, mi) => {
+      const m0 = texel(0, mi + 1);
+      const m1 = texel(1, mi + 1);
+      expect(m0[0], id).toBe(manifest.sets.findIndex((x) => x.id === art2.materials[id].set));
+      expect(m1[0], id).toBeGreaterThan(0);
+      expect(m1[1], id).toBeGreaterThan(0);
+    });
+    // A style's row: its wall's, floor's and ceiling's materials.
+    styles.forEach((id, si) => {
+      const s0 = texel(4, si + 1);
+      const wall = id.startsWith("_") ? id.slice(1) : map.styles[id].wall;
+      expect(s0[0], id).toBe(mats.indexOf(wall));
+    });
+    // Row 0: a room's code to its style (codes from 1, in the level's order).
+    level.def.rooms.forEach((r, i) => expect(texel(i + 1, 0)[0], r.id).toBe(styles.indexOf(map.rooms[r.id] ?? map.default)));
+    // And the probes' texture: a probe's four quarters stacked up its y.
+    const grid = { origin: [0, 0, 0] as [number, number, number], spacing: [1, 1, 1] as [number, number, number], dims: [3, 2, 2] as [number, number, number] };
+    const field = Float32Array.from({ length: 3 * 2 * 2 * 16 }, (_, i) => i);
+    const tex = new THREE.Data3DTexture(new Float32Array(3 * 8 * 2 * 4), 3, 8, 2);
+    refill(tex, grid, field);
+    const d = tex.image.data as Float32Array;
+    for (let k = 0; k < 2; k++)
+      for (let j = 0; j < 2; j++)
+        for (let i = 0; i < 3; i++)
+          for (let q = 0; q < 4; q++) {
+            const at = ((k * 8 + j + q * 2) * 3 + i) * 4;
+            const from = (k * 6 + j * 3 + i) * 16 + q * 4;
+            expect(Array.from(d.subarray(at, at + 4))).toEqual([from, from + 1, from + 2, from + 3]);
+          }
+  });
+});
+
+describe("graphics presets (render/DESIGN.md §3)", () => {
+  const env = { automated: false, touchOnly: false };
+  const q = (search: string, setting: Parameters<typeof initialQuality>[1] = "auto", e = env) => initialQuality(new URLSearchParams(search), setting, e);
+
+  it("a link's ?gfx wins; ?lowgfx and the browser tests get the greybox; then the setting; auto is High on a desktop, Low on a phone", () => {
+    expect(q("gfx=medium", "low", { automated: true, touchOnly: true })).toBe("medium");
+    expect(q("lowgfx", "high")).toBe("greybox");
+    expect(q("", "high", { automated: true, touchOnly: false })).toBe("greybox");
+    expect(q("", "low")).toBe("low");
+    expect(q("")).toBe("high");
+    expect(q("", "auto", { automated: false, touchOnly: true })).toBe("low");
+    expect(q("gfx=nonsense")).toBe("high");
+  });
+
+  it("each preset draws what §3 says, and ?lowgfx drops the greybox's shadows and antialiasing", () => {
+    expect(PRESETS.greybox.textures).toBe(0);
+    expect(PRESETS.low).toMatchObject({ textures: 512, shadowMap: 0, probes: false, ao: false });
+    expect(PRESETS.medium).toMatchObject({ textures: 1024, shadowMap: 2048, probes: true, ao: false });
+    expect(PRESETS.high).toMatchObject({ textures: 1024, shadowMap: 4096, probes: true, ao: true });
+    expect(presetFor("greybox", new URLSearchParams("lowgfx"))).toMatchObject({ shadowMap: 0, antialias: false, maxPixelRatio: 1 });
+    expect(presetFor("greybox", new URLSearchParams())).toBe(PRESETS.greybox);
+  });
+});
+
+describe("architecture (render/DESIGN.md §7)", () => {
+  it("frames every door and window once (a window's glass and barricade together), keeps the doorway clear but for thin linings, and puts a fixture over every lamp", async () => {
+    const { level, art } = await oregonArt();
+    const lab = { storeys: level.def.storeys.map(() => new THREE.Group()) } as unknown as LabScene;
+    const lamps = roomLamps(level, (id) => art.lampOf(id));
+    const arch = new Architecture(lab, level, art, lamps);
+    const ids = new Set(level.panels.list.filter((e) => ["barricade", "glass"].includes(e.panel.spec.construction.kind)).map((e) => e.panel.spec.id.replace(/\.(bar|glass)$/, "")));
+    expect(arch.framed.length).toBe(ids.size);
+    expect(arch.framed.filter((o) => o.glazed).length).toBe(level.panels.list.filter((e) => e.panel.spec.construction.kind === "glass").length);
+    expect(arch.framed.every((o) => o.wall >= 0.15 && o.wall <= 0.45)).toBe(true);
+    expect(arch.fixtureCount).toBe(lamps.length / 7);
+    expect(arch.pieces).toBe(arch.placed.length);
+    // Inside each door's opening (2 cm in from its sides and head, through its wall), no piece but the linings.
+    const inv = new THREE.Matrix4();
+    const corner = new THREE.Vector3();
+    for (const o of arch.framed.filter((f) => !f.window)) {
+      inv.makeBasis(o.u, o.v, o.u.clone().cross(o.v)).setPosition(o.center).invert();
+      for (const p of arch.placed) {
+        // The piece's eight corners in the opening's frame: inside the clear box if all lie within it on u and v.
+        let lo = [Infinity, Infinity, Infinity];
+        let hi = [-Infinity, -Infinity, -Infinity];
+        for (let c = 0; c < 8; c++) {
+          corner.set(((c & 1) - 0.5) * p.size.x, (((c >> 1) & 1) - 0.5) * p.size.y, (((c >> 2) & 1) - 0.5) * p.size.z).applyQuaternion(p.quat).add(p.center).applyMatrix4(inv);
+          lo = lo.map((v, k) => Math.min(v, corner.getComponent(k)));
+          hi = hi.map((v, k) => Math.max(v, corner.getComponent(k)));
+        }
+        const clear = [o.w / 2 - 0.02, o.h / 2 - 0.02, o.wall / 2];
+        const overlaps = [0, 1, 2].every((k) => lo[k] < clear[k] && hi[k] > -clear[k]);
+        expect(overlaps, `${o.id}: a piece inside the doorway`).toBe(false);
+      }
+    }
+  });
+});
+
