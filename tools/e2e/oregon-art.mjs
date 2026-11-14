@@ -98,25 +98,43 @@ function readGl() {
   return { programs, textures: window.__gl.textures, here: gl ? { samplers: gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS), renderer: gl.getParameter(gl.RENDERER) } : null };
 }
 
+/** How long a wait may take on a slow runner (ms): the art's textures and shaders, a probe pass, a frame, a screenshot. */
+const WAIT = { art: 300000, pass: 420000, frames: 240000, screenshot: 240000 };
+
 async function load(gfx, refuse = "") {
   const errors = [];
-  const ctx = await browser.newContext({ viewport: { width: 640, height: 360 } });
+  const t0 = Date.now();
+  const at = () => `${((Date.now() - t0) / 1000).toFixed(1)} s`;
+  const name = `${gfx}${refuse ? " (probes refused)" : ""}`;
+  // Small: the software renderer shades every pixel on the CPU (a frame at High takes seconds on a CI runner), and
+  // nothing checked here depends on the size.
+  const ctx = await browser.newContext({ viewport: { width: 384, height: 216 } });
   const page = await ctx.newPage();
   page.on("pageerror", (e) => errors.push(String(e)));
   page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
   await page.addInitScript(watchGl, refuse);
   await page.goto(`${BASE}/labs/oregon.html?autotest=1&gfx=${gfx}&op=sledge`);
   await page.waitForFunction(() => window.__lab?.net?.ready, null, { timeout: 60000 });
-  await page.waitForFunction(() => window.__lab.view.art?.ready, null, { timeout: 180000, polling: 250 });
-  // The probes' first pass switches the light over (Medium and High; none on Low, or after a fallback to it).
+  await page.waitForFunction(() => window.__lab.view.art?.ready, null, { timeout: WAIT.art, polling: 250 });
+  console.log(`  ${name}: the art is in at ${at()}`);
+  // The probes' first pass switches the light over (Medium and High; none on Low, or after a fallback to it); the
+  // second adds the bounce. Both in before anything is measured: the picture is then the finished one, and the
+  // bake's workers are no longer competing with the renderer for the runner's few cores.
   const wantsProbes = await page.evaluate(() => window.__lab.view.art.probes !== null);
-  if (wantsProbes) await page.waitForFunction(() => window.__lab.view.art.probes.passes >= 1, null, { timeout: 240000, polling: 500 });
+  if (wantsProbes) {
+    await page.waitForFunction(() => window.__lab.view.art.probes.passes >= 1, null, { timeout: WAIT.pass, polling: 500 });
+    console.log(`  ${name}: the probes' first pass at ${at()}`);
+    await page.waitForFunction(() => window.__lab.view.art.probes.passes >= 2, null, { timeout: WAIT.pass, polling: 500 });
+    console.log(`  ${name}: their second at ${at()}`);
+  }
   // In the kitchen, looking across it: a few frames drawn with everything on.
   const kitchen = await page.evaluate(() => window.__lab.view.rooms.find((r) => r.id === "1F_KITCHEN").anchor);
   await page.evaluate((a) => window.__lab.fly([a[0], a[1] + 1.6, a[2], 40, -8]), kitchen);
   const f0 = await page.evaluate(() => window.__lab.frames);
-  await page.waitForFunction((t) => window.__lab.frames >= t, f0 + 6, { timeout: 120000, polling: 100 });
-  const png = await page.screenshot({ path: join(OUT, `art-${gfx}${refuse ? "-fallback" : ""}.png`) });
+  await page.waitForFunction((t) => window.__lab.frames >= t, f0 + 6, { timeout: WAIT.frames, polling: 100 });
+  console.log(`  ${name}: six frames in the kitchen at ${at()}`);
+  const png = await page.screenshot({ path: join(OUT, `art-${gfx}${refuse ? "-fallback" : ""}.png`), timeout: WAIT.screenshot });
+  console.log(`  ${name}: its screenshot at ${at()}`);
   // How bright the picture is where no HUD is drawn (its lower left: the island's top and the floor), 0..255.
   const brightness = await page.evaluate(async (b64) => {
     const img = await createImageBitmap(new Blob([Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0))], { type: "image/png" }));
@@ -170,7 +188,7 @@ try {
     result.presets[gfx] = summary;
     result.here ??= r.gl.here;
     result.checks[`${gfx}Shown`] = r.art.ready && r.art.shown && r.art.problem === "";
-    result.checks[`${gfx}Probes`] = gfx === "low" ? r.art.probes === null : (r.art.probes?.passes ?? 0) >= 1;
+    result.checks[`${gfx}Probes`] = gfx === "low" ? r.art.probes === null : (r.art.probes?.passes ?? 0) >= 2;
     result.checks[`${gfx}EveryProgramLinked`] = summary.programs > 5 && summary.notLinked === 0;
     result.checks[`${gfx}SamplersWithinWebGL2`] = summary.maxSamplers <= GUARANTEED.samplers;
     result.checks[`${gfx}UniformsWithinWebGL2`] = summary.maxUniformVectors <= GUARANTEED.uniformVectors;
