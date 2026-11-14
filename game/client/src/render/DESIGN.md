@@ -196,6 +196,12 @@ keep working (gun_kit.json gains shape parameters per weapon). The same meshes s
 simplified, the third. Gadgets and the drone get shaped models (gadgetModels.ts, cameraModels.ts, shieldModel.ts
 keep their sizes and anchors).
 
+**As built (D-177):** gunKit.ts has 13 base forms; each of the 40 weapons names one with its parameters in
+gun_kit.json. A gun is 0.5–2.6k triangles, so the third person uses the same model (no simplified copy needed).
+Irons and optics stand on the sight line the viewmodel aims along (tested with rays). gadgetShapes.ts shapes the 22
+gadget kinds, the drones, what's carried in the hands (big placed gadgets packed) and the knife; each gadget keeps to
+its hit box (tested).
+
 ## 11. Operators (M8)
 
 Bodies stay driven by the hitbox pose (poseHitboxes): what's drawn is where the hitboxes are. A body is a

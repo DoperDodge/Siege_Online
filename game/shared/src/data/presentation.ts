@@ -16,20 +16,32 @@ const tube = z.strictObject({ radius: z.number().positive(), length: z.number().
 const all = <K extends string, V extends z.ZodType>(keys: readonly K[], value: V) =>
   z.strictObject(Object.fromEntries(keys.map((k) => [k, value])) as Record<K, V>);
 
-const gunShape = z.strictObject({
-  receiver: size,
-  receiverZ: z.number(),
-  barrel: tube,
-  stock: size.nullable(),
-  mag: size,
-  magZ: z.number(),
-  magTilt: z.number(),
-  color,
+/** A gun's base form (render/gunKit.ts builds each): the family its silhouette comes from. */
+export const GUN_BASES = ["ar", "ak", "bullpup", "chassis", "smg", "mpistol", "pump", "semi_shotgun", "revolver_shotgun", "double", "pistol", "flare", "lmg"] as const;
+export type GunBase = (typeof GUN_BASES)[number];
+
+/** How a weapon looks (Phase 10 M7): its base form and that form's parameters. */
+export const gunLookSchema = z.strictObject({
+  base: z.enum(GUN_BASES),
+  /** How far the barrel runs on past the receiver (or a pistol's slide), metres. */
+  barrel: z.number().min(0).max(0.8),
+  /** Its colours: the metal, the furniture (stock, grip, handguard). */
+  finish: z.enum(["black", "tan", "grey", "olive", "wood", "silver", "two_tone"]),
+  stock: z.enum(["collapsible", "fixed", "skeleton", "folding", "wood", "none"]).optional(),
+  fore: z.enum(["rail", "mlok", "round", "wood", "pump", "ribbed"]).optional(),
+  mag: z.enum(["stanag", "308", "ak", "pistol", "smg", "curved", "box", "tube"]).optional(),
+  /** The whole gun's size against its base's (a bigger calibre, a compact). */
+  scale: z.number().min(0.6).max(1.6).optional(),
+  /** A base's sub-form (a pistol's "1911", an SMG's "vector"…). */
+  variant: z.string().min(1).optional(),
 });
+export type GunLookData = z.infer<typeof gunLookSchema>;
 
 export const gunKitSchema = z.strictObject({
   _doc: z.string(),
-  classes: all([...WEAPON_CLASSES, "shield"] as const, gunShape),
+  /** Each weapon's look by its id; a weapon not listed looks like its class's. */
+  weapons: z.record(z.string(), gunLookSchema),
+  byClass: all([...WEAPON_CLASSES, "shield"] as const, gunLookSchema),
   sights: all(SIGHTS, z.union([
     z.strictObject({ kind: z.literal("posts"), height: z.number().positive() }),
     z.strictObject({ kind: z.literal("box"), size, reticle: z.enum(["dot", "cross"]) }),
@@ -38,7 +50,7 @@ export const gunKitSchema = z.strictObject({
   barrels: all(BARRELS, tube),
   grips: all(GRIPS, size),
   underbarrel: all(UNDERBARRELS, size),
-  colors: z.strictObject({ attachment: color, laser: color, knife: color }),
+  colors: z.strictObject({ attachment: color, laser: color }),
   viewmodel: z.strictObject({
     fovDeg: z.number().min(30).max(100),
     hip: v3,

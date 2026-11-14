@@ -22,6 +22,7 @@ import {
   L_FRONT,
   levelSchema,
   loadGameData,
+  loadPresentationData,
   Msg,
   offerId,
   QUERY_BULLET,
@@ -44,17 +45,65 @@ import { createLabScene, PawnView, storeyOf, SURFACE_COLORS, updateLabels, type 
 
 const data = loadGameData();
 
-describe("placeholder guns (gun_kit.json)", () => {
+describe("the guns (gun_kit.json, render/gunKit.ts)", () => {
+  it("every weapon has its own look, within the first-person budget with every attachment on", () => {
+    const kit = loadPresentationData().gunKit;
+    for (const w of data.weapons.values()) {
+      expect(kit.weapons[w.id], `${w.id} has a look`).toBeDefined();
+      if (!isGun(w)) continue;
+      const full: GunLook["pick"] = { sight: w.attachments.sights.map(offerId).at(-1) ?? null, barrel: w.attachments.barrels.map(offerId)[0] ?? null, grip: w.attachments.grips.map(offerId)[0] ?? null, underbarrel: w.attachments.underbarrel.map(offerId)[0] ?? null };
+      const g = buildGun({ id: w.id, class: w.class, pick: full });
+      expect(g.triangles, `${w.id}'s triangles`).toBeLessThan(25_000);
+      expect(g.triangles, `${w.id}'s triangles`).toBeGreaterThan(300);
+      g.dispose();
+    }
+  });
+
+  it("down the sights the view is clear: irons line up on the sight line, a red dot's window is open", () => {
+    // Rays from behind the gun along the barrel (−z), at the sight line's height and just over and under it.
+    const ray = new THREE.Raycaster();
+    const hitAlong = (g: ReturnType<typeof buildGun>, dy: number, dx = 0) => {
+      g.group.updateMatrixWorld(true);
+      ray.set(new THREE.Vector3(g.sight.x + dx, g.sight.y + dy, 1), new THREE.Vector3(0, 0, -1));
+      return ray.intersectObject(g.group, true)[0] ?? null;
+    };
+    const problems: string[] = [];
+    for (const w of data.weapons.values()) {
+      if (!isGun(w)) continue;
+      const bare: GunLook["pick"] = { sight: null, barrel: null, grip: null, underbarrel: null };
+      const irons = buildGun({ id: w.id, class: w.class, pick: bare });
+      expect(irons.reticle).toBe("posts");
+      // Just over the line: nothing in the way (the eye sees the target over the front post).
+      const over = hitAlong(irons, 0.0012);
+      if (over) problems.push(`${w.id}: something stands over its sight line at z ${over.point.z.toFixed(3)}`);
+      // Just under it: the front sight's tip (ahead of the rear sight), and nothing nearer the eye.
+      const post = hitAlong(irons, -0.0012);
+      if (!post) problems.push(`${w.id}: no front sight on its sight line`);
+      else if (post.point.z > irons.sight.z - 0.05) problems.push(`${w.id}: its sight line is blocked near the rear sight (z ${post.point.z.toFixed(3)}, the rear at ${irons.sight.z.toFixed(3)})`);
+      irons.dispose();
+      if (w.attachments.sights.map(offerId).includes("nonmag")) {
+        const dot = buildGun({ id: w.id, class: w.class, pick: { ...bare, sight: "nonmag" } });
+        expect(dot.reticle).not.toBe("posts");
+        for (const [dx, dy] of [[0, 0], [0.004, 0.004], [-0.004, -0.004], [0.006, 0], [0, 0.007]]) {
+          const hit = hitAlong(dot, dy, dx);
+          if (hit) problems.push(`${w.id}: its red dot's window is blocked at (${dx}, ${dy}), z ${hit.point.z.toFixed(3)}`);
+        }
+        dot.dispose();
+      }
+    }
+    expect(problems.join("\n")).toBe("");
+  });
+
   it("every weapon builds bare and with each attachment it offers; the muzzle is ahead of the sight", () => {
     let built = 0;
     for (const w of data.weapons.values()) {
       if (!isGun(w)) continue; // the shield has its own look (Phase 8)
       const offers = { sight: w.attachments.sights.map(offerId), barrel: w.attachments.barrels.map(offerId), grip: w.attachments.grips.map(offerId), underbarrel: w.attachments.underbarrel.map(offerId) };
       const bare: GunLook["pick"] = { sight: null, barrel: null, grip: null, underbarrel: null };
-      const looks: GunLook[] = [{ class: w.class, pick: bare }, ...(Object.entries(offers) as [keyof GunLook["pick"], string[]][]).flatMap(([slot, ids]) => ids.map((id) => ({ class: w.class, pick: { ...bare, [slot]: id } })))];
+      const looks: GunLook[] = [{ id: w.id, class: w.class, pick: bare }, ...(Object.entries(offers) as [keyof GunLook["pick"], string[]][]).flatMap(([slot, ids]) => ids.map((id) => ({ id: w.id, class: w.class, pick: { ...bare, [slot]: id } })))];
       for (const look of looks) {
         const g = buildGun(look);
-        expect(g.group.children.length).toBeGreaterThan(3);
+        expect(g.group.children.length).toBeGreaterThan(2);
         expect(g.muzzle.z).toBeLessThan(g.sight.z);
         expect(g.laser !== null).toBe(look.pick.underbarrel === "laser");
         // A barrel attachment sits on the end: the muzzle moves forward.
@@ -79,6 +128,7 @@ describe("placeholder guns (gun_kit.json)", () => {
     const a: GunLook = { class: "smg", pick: { sight: "nonmag", barrel: null, grip: null, underbarrel: null } };
     expect(gunKey(a)).not.toBe(gunKey({ ...a, pick: { ...a.pick, barrel: "suppressor" } }));
     expect(gunKey(a)).not.toBe(gunKey({ ...a, class: "lmg" }));
+    expect(gunKey({ ...a, id: "ump45" })).not.toBe(gunKey({ ...a, id: "mp5k" }));
   });
 });
 

@@ -61,6 +61,11 @@ export class ArtView {
     private readonly storeyView: StoreyView | null,
   ) {}
 
+  /** The sky's environment map (PMREM), once the art has loaded with it: what the guns in hand reflect. */
+  get environment(): THREE.Texture | null {
+    return this.sky?.env ?? null;
+  }
+
   /** The textures are in and the materials compiled. */
   get ready(): boolean {
     return this.art !== null;

@@ -437,6 +437,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       if (ok) {
         artView.show(!storeyView || storeyView.palette === "art");
         markers?.showModelled(!artView.shown);
+        viewmodel.setEnvironment(artView.environment);
       }
     })
     .catch((e) => console.warn("art pass:", e));
@@ -1425,10 +1426,10 @@ export async function startLab(o: LabOptions): Promise<void> {
       v.wire.visible = drawn && showHitboxes;
       if (!rs) continue;
       const w = pawn.loadout?.weapons[rs.slot];
-      v.setWeapon(w ? { class: w.class, pick: w.pick } : null);
+      v.setWeapon(w ? { id: w.id, class: w.class, pick: w.pick } : null);
       // A gadget in its hands instead (Phase 8): drawn as its greybox; a detonator small and dark.
       const held = heldGadget(pawn, rs);
-      v.setHeld(held ? (held.detonator ? [0.05, 0.09, 0.03] : held.data.sizeM) : null, !!held && !held.detonator && held.data.use.kind === "hold");
+      v.setHeld(held ? (held.detonator ? { id: "detonator", size: [0.05, 0.09, 0.03] } : { id: held.data.id, size: held.data.sizeM }) : null, !!held && !held.detonator && held.data.use.kind === "hold");
       v.setShield(pawn.loadout?.shield?.plate ?? null);
       // The body whose eyes we see through, in first person, faces the view itself (the mouse's, as the camera does), so
       // Fuze's shield doesn't trail the view by a tick when he turns (the review, M12); in free look the body keeps its

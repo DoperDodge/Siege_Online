@@ -9,6 +9,7 @@
 // works, and its reach shows for a moment once it's placed. M7: Mira's Black Mirror is its frame and its glass, clear from
 // her side and black from the other (two one-sided sheets), grey once shattered, gone once ejected.
 import * as THREE from "three";
+import { gadgetShape, SHAPE_MATERIALS, type ShapeMat } from "./gadgetShapes.js";
 import {
   barrierOf,
   behindOf,
@@ -143,9 +144,9 @@ export class GadgetModels {
   }
 
   /** A shared material, made once by its key. */
-  private sharedMat(key: string, colour: number, roughness: number, metalness = 0): THREE.Material {
+  private sharedMat(key: string, colour: number, roughness: number, metalness = 0, emissive = 0): THREE.Material {
     let m = this.materials.get(key);
-    if (!m) this.materials.set(key, (m = new THREE.MeshStandardMaterial({ color: colour, roughness, metalness })));
+    if (!m) this.materials.set(key, (m = new THREE.MeshStandardMaterial({ color: colour, roughness, metalness, emissive })));
     return m;
   }
 
@@ -223,11 +224,38 @@ export class GadgetModels {
     return group;
   }
 
+  /** Each kind's shaped parts (gadgetShapes.ts), made once; null for a kind drawn otherwise. */
+  private readonly shapes = new Map<string, Map<ShapeMat, THREE.BufferGeometry> | null>();
+
+  /** A gadget's shaped model (Phase 10 M7), all of it "body"; null if it has none. */
+  private shaped(id: string, kind: number): THREE.Group | null {
+    let parts = this.shapes.get(id);
+    if (parts === undefined) {
+      const size = sizeOf(this.sim.data, kind);
+      parts = size ? gadgetShape(id, size) : null;
+      this.shapes.set(id, parts);
+      // Shared: disposeOwn leaves them.
+      for (const [m, g] of parts ?? []) this.geometry.set(`shape:${id}:${m}`, g);
+    }
+    if (!parts) return null;
+    const body = new THREE.Group();
+    body.name = "body";
+    for (const [m, g] of parts) {
+      const p = SHAPE_MATERIALS[m];
+      body.add(new THREE.Mesh(g, this.sharedMat(`shape:${m}`, p.color, p.roughness, p.metalness, p.emissive)));
+    }
+    const group = new THREE.Group();
+    group.add(body);
+    return group;
+  }
+
   /** A kind's mesh (shared geometry and material per kind). */
   private model(kind: number): THREE.Object3D {
     const id = kindId(kind) ?? "";
     if (id === "fire_extinguisher") return this.extinguisher();
     if (id === "gas_pipe") return this.gasPipe();
+    const shaped = this.shaped(id, kind);
+    if (shaped) return shaped;
     const d = this.dataOf(kind);
     const [w, h, depth] = sizeOf(this.sim.data, kind) ?? [0.1, 0.1, 0.1];
     let geo = this.geometry.get(id);
@@ -311,7 +339,8 @@ export class GadgetModels {
   /** Pose an object as an entry stands: at its centre, facing its way, a charge lying flat on its floor. */
   private pose(obj: THREE.Object3D, pos: Vec3, yaw: number, flags: number) {
     obj.position.set(pos[0], pos[1], pos[2]);
-    obj.rotation.set(flags & GFlag.Flat ? -Math.PI / 2 : 0, yaw, 0, "YXZ");
+    // Lying flat: its depth is up, its room side (−z, as on a wall) upward.
+    obj.rotation.set(flags & GFlag.Flat ? Math.PI / 2 : 0, yaw, 0, "YXZ");
   }
 
   /** Our own prediction threw or placed something (fresh ticks only): draw it now. `now`: the server tick it is. */

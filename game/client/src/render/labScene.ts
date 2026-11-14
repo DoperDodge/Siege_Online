@@ -21,6 +21,7 @@ import {
   type Renderable,
   type ShieldPlate,
 } from "@redmond/shared";
+import { droneShape, heldShape, SHAPE_MATERIALS, shapeModel, type ShapeMat, type ShapeModel } from "./gadgetShapes.js";
 import { buildGun, gunKey, type GunLook, type GunModel } from "./gunKit.js";
 
 export const SURFACE_COLORS: Record<Renderable["surface"], number> = {
@@ -489,7 +490,8 @@ export class PawnView {
   private hot = false;
   private gun: GunModel | null = null;
   /** A gadget in its hands (Phase 8): a box of its size (at most a hand's), drawn instead of the gun. */
-  private held: THREE.Mesh | null = null;
+  private held: THREE.Object3D | null = null;
+  private heldModel: ShapeModel | null = null;
   /** Fuze's Ballistic Shield (Phase 8 M11): its curved plate and window where its state says (your own too). */
   private shield: ShieldModel | null = null;
   private plate: ShieldPlate | null = null;
@@ -498,8 +500,11 @@ export class PawnView {
   private gunVisible = false;
   /** The rope a body on one hangs from (Phase 5 M8): from over its body up to the rope's top. */
   private readonly rope: THREE.Line;
-  /** A drone (Phase 7): a box on two wheels, in place of the capsules (greybox until the art pass). */
+  /** A drone (Phase 7): its model in place of the capsules; its wheels, turned by how far it has rolled. */
   private readonly drone: THREE.Group | null = null;
+  private readonly droneWheels: THREE.Object3D[] = [];
+  private droneR = 0.06;
+  private droneLast: { x: number; z: number } | null = null;
   private firstPerson = false;
 
   /** `name` puts a name tag over the head (other players online); `wireColor` colours the hitbox view. */
@@ -533,15 +538,34 @@ export class PawnView {
       this.body.add(this.tag);
     }
     if (kind === PawnKind.Drone) {
-      const [w, h, l] = droneSize;
+      // The drone's model (gadgetShapes.ts, Phase 10 M7): its hull, and two wheels that turn as it drives; its team's
+      // colour on the stripe and hubs; all of it glows in a thermal view.
+      const [w, h] = droneSize;
+      const shape = droneShape(droneSize, w > 0.26);
+      const mats = new Map<ShapeMat, THREE.MeshStandardMaterial>();
+      const matOf = (m: ShapeMat) => {
+        if (m === "team") return mat;
+        let x = mats.get(m);
+        if (!x) {
+          const p = SHAPE_MATERIALS[m];
+          x = new THREE.MeshStandardMaterial({ color: p.color, roughness: p.roughness, metalness: p.metalness, emissive: p.emissive ?? 0x000000 });
+          mats.set(m, x);
+          this.materials.push(x);
+          if (!p.emissive) this.skin.push(x);
+        }
+        return x;
+      };
       const drone = new THREE.Group();
-      drone.add(new THREE.Mesh(new THREE.BoxGeometry(w * 0.55, h * 0.7, l), mat));
+      for (const [m, g] of shape.hull) drone.add(new THREE.Mesh(g, matOf(m)));
+      const tyre = w * 0.18;
       for (const side of [-1, 1]) {
-        const wheel = new THREE.Mesh(new THREE.CylinderGeometry(h / 2, h / 2, w * 0.2, 12), headMat);
-        wheel.rotation.z = Math.PI / 2;
-        wheel.position.x = (side * (w - w * 0.2)) / 2;
+        const wheel = new THREE.Group();
+        for (const [m, g] of shape.wheel) wheel.add(new THREE.Mesh(g, matOf(m)));
+        wheel.position.x = side * (w / 2 - tyre / 2);
         drone.add(wheel);
+        this.droneWheels.push(wheel);
       }
+      this.droneR = h / 2;
       this.shape.visible = false;
       this.body.add(drone);
       this.drone = drone;
@@ -610,21 +634,21 @@ export class PawnView {
   /** Alive and not down, as its last update had it (what it holds shows only then). */
   private armed = true;
 
-  /** The gadget in its hands (its box size; `up`: held up to the face), or none: the gun shows again. */
-  setHeld(size: readonly number[] | null, up = false) {
+  /**
+   * The gadget in its hands (its id, or "detonator", and its data's size; `up`: held up to the face), or none: the
+   * gun shows again. Its shaped model (gadgetShapes.ts), no bigger than a hand holds.
+   */
+  setHeld(held: { id: string; size: readonly number[] } | null, up = false) {
     this.heldUp = up;
-    const key = size ? size.join(",") : "";
+    const key = held ? `${held.id}:${held.size.join(",")}` : "";
     if (key === this.heldKey) return;
     this.heldKey = key;
-    if (this.held) {
-      this.body.remove(this.held);
-      this.held.geometry.dispose();
-      (this.held.material as THREE.Material).dispose();
-      this.held = null;
-    }
-    if (!size) return;
-    const [w, h, d] = size.map((v) => Math.min(v, 0.25));
-    this.held = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color: 0x4b5563, roughness: 0.6, metalness: 0.3 }));
+    this.heldModel?.dispose();
+    this.heldModel = null;
+    this.held = null;
+    if (!held) return;
+    this.heldModel = shapeModel(heldShape(held.id, [held.size[0], held.size[1], held.size[2]], 0.3).parts);
+    this.held = this.heldModel.group;
     this.body.add(this.held);
   }
 
@@ -635,6 +659,12 @@ export class PawnView {
     drone.visible = state.mode !== PawnMode.Held && !this.firstPerson;
     drone.position.set(state.x, state.y + d.sizeM[1] / 2, state.z);
     drone.rotation.set(0, state.yaw, state.mode === PawnMode.Dead ? 1.2 : 0, "YXZ");
+    // The wheels roll with it: by how far it moved along its facing since it was last drawn.
+    if (this.droneLast) {
+      const along = -(state.x - this.droneLast.x) * Math.sin(state.yaw) - (state.z - this.droneLast.z) * Math.cos(state.yaw);
+      if (Math.abs(along) < 1) for (const wh of this.droneWheels) wh.rotation.x -= along / this.droneR;
+    }
+    this.droneLast = { x: state.x, z: state.z };
     const boxes = droneHitboxes(d, state);
     this.wireParts.forEach((w, i) => (i < boxes.length ? w.place(boxes[i], 1.02) : w.hide()));
     if (this.tag) this.tag.position.set(state.x, state.y + d.sizeM[1] + 0.2, state.z);

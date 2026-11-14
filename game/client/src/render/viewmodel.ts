@@ -1,9 +1,10 @@
 // The first-person gun (Phase 3 M9): drawn in its own scene after the world with the depth cleared, so it
 // never pokes into walls, by its own camera with a fixed field of view. Pose and motion come from the
 // predicted body state each frame (hip, aiming, sprinting, swapping, reloading, the knife) plus cosmetic
-// kick and sway; none of it feeds back into the simulation. Shapes are placeholders (gun_kit.json).
+// kick and sway; none of it feeds back into the simulation. The guns are gunKit.ts's (gun_kit.json).
 import * as THREE from "three";
 import { DEG, GadgetAct, isDowned, lerp, loadPresentationData, PawnMode, ReloadKind, ticks, WeaponAct, WFlag, type GadgetData, type GameData, type GunKit, type PawnState, type ResolvedWeapon } from "@redmond/shared";
+import { heldShape, knifeShape, shapeModel, type ShapeModel } from "./gadgetShapes.js";
 import { buildGun, gunKey, type GunModel } from "./gunKit.js";
 import { warmShaders } from "./labScene.js";
 
@@ -11,6 +12,10 @@ const smooth = (t: number) => t * t * (3 - 2 * t);
 /** The gun's own lights in daylight: a sky fill and a key from above right. */
 const VIEWMODEL_FILL = 1.6;
 const VIEWMODEL_KEY = 1.8;
+/** And the sky's reflections on it, once the art has the sky (setEnvironment). */
+const VIEWMODEL_ENV = 0.6;
+/** How many guns stay built (the primary, the secondary, one more after a loadout change). */
+const GUNS_KEPT = 3;
 
 export class Viewmodel {
   readonly scene = new THREE.Scene();
@@ -19,9 +24,12 @@ export class Viewmodel {
   private readonly rig = new THREE.Group();
   private gun: GunModel | null = null;
   private key = "";
-  private readonly knife: THREE.Mesh;
-  /** A gadget in hand (Phase 8): its box, or a detonator; rebuilt when what's held changes. */
-  private held: THREE.Mesh | null = null;
+  /** The guns built, by their key (gunKit.ts gunKey), the one in hand last. */
+  private readonly guns = new Map<string, GunModel>();
+  private readonly knife: THREE.Object3D;
+  /** A gadget in hand (Phase 8): its shaped model (gadgetShapes.ts), or a detonator; rebuilt when what's held changes. */
+  private held: THREE.Object3D | null = null;
+  private heldModel: ShapeModel | null = null;
   /** A held-up item's screen (Pulse's sensor, Dokkaebi's tablet): lit, facing the eye. */
   private screen: THREE.Mesh | null = null;
   private heldKey = "";
@@ -44,8 +52,7 @@ export class Viewmodel {
     this.keyLight.position.set(0.6, 1, 0.4);
     this.scene.add(this.fill, this.keyLight, this.camera);
     this.camera.add(this.rig);
-    const blade = new THREE.BoxGeometry(0.012, 0.03, 0.2);
-    this.knife = new THREE.Mesh(blade, new THREE.MeshStandardMaterial({ color: this.kit.colors.knife, metalness: 0.8, roughness: 0.25 }));
+    this.knife = shapeModel(knifeShape()).group;
     this.knife.visible = false;
     this.camera.add(this.knife);
     const c = document.createElement("canvas");
@@ -94,13 +101,26 @@ export class Viewmodel {
       this.aim = 0;
       return;
     }
-    const look = { class: w.class, pick: w.pick };
-    if (gunKey(look) !== this.key) {
-      this.gun?.dispose();
-      this.gun = buildGun(look, this.kit);
-      this.key = gunKey(look);
-      this.reticle = this.gun.reticle;
-      this.rig.add(this.gun.group);
+    const look = { id: w.id, class: w.class, pick: w.pick };
+    const key = gunKey(look);
+    if (key !== this.key) {
+      // The last few guns in hand stay built (a swap back and forth builds nothing): the newest last.
+      if (this.gun) this.gun.group.visible = false;
+      let built = this.guns.get(key);
+      if (built) this.guns.delete(key);
+      else {
+        built = buildGun(look, this.kit);
+        this.rig.add(built.group);
+      }
+      this.guns.set(key, built);
+      for (const [k, g] of this.guns) {
+        if (this.guns.size <= GUNS_KEPT) break;
+        g.dispose();
+        this.guns.delete(k);
+      }
+      this.gun = built;
+      this.key = key;
+      this.reticle = built.reticle;
     }
     const gun = this.gun!;
     // Aiming: the sight line comes onto the view axis, adsDistance in front of the eye.
@@ -158,19 +178,16 @@ export class Viewmodel {
   }
 
   /**
-   * A gadget in hand (Phase 8, gadgets/hands.ts), greybox: its box at most a hand's size, low on the right; it comes
-   * up as it's taken out, draws back for a throw and goes down while it's being placed. A detonator is a small dark box.
+   * A gadget in hand (Phase 8, gadgets/hands.ts): its model at most a hand's size (a big placed one packed), low on
+   * the right; it comes up as it's taken out, draws back for a throw and goes down while it's being placed.
    */
   private poseHeld(gadget: { data: GadgetData; detonator: boolean } | null, s: PawnState) {
     const key = gadget ? `${gadget.data.id}:${gadget.detonator}` : "";
     if (key !== this.heldKey) {
       this.heldKey = key;
-      if (this.held) {
-        this.camera.remove(this.held);
-        this.held.geometry.dispose();
-        (this.held.material as THREE.Material).dispose();
-        this.held = null;
-      }
+      this.heldModel?.dispose();
+      this.heldModel = null;
+      this.held = null;
       if (this.screen) {
         this.screen.geometry.dispose();
         (this.screen.material as THREE.Material).dispose();
@@ -178,9 +195,11 @@ export class Viewmodel {
       }
       if (gadget) {
         // A swung item (Sledge's hammer, Phase 8 M4) is drawn long; anything else no bigger than a hand holds.
-        const cap = gadget.data.use.kind === "swing" ? 0.6 : 0.25;
-        const [w, h, d] = gadget.detonator ? [0.05, 0.09, 0.03] : gadget.data.sizeM.map((v) => Math.min(v, cap));
-        this.held = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color: gadget.detonator ? 0x1f2937 : 0x4b5563, roughness: 0.6, metalness: 0.3 }));
+        const cap = gadget.data.use.kind === "swing" ? 0.6 : 0.3;
+        const shape = heldShape(gadget.detonator ? "detonator" : gadget.data.id, gadget.data.sizeM, cap);
+        const [w, h, d] = shape.size;
+        this.heldModel = shapeModel(shape.parts);
+        this.held = this.heldModel.group;
         this.camera.add(this.held);
         if (!gadget.detonator && gadget.data.use.kind === "hold") {
           // Its screen, on the face toward the eye once it's up (green: Pulse's heartbeats; blue: Dokkaebi's tablet).
@@ -219,6 +238,12 @@ export class Viewmodel {
   setLight(k: number) {
     this.fill.intensity = VIEWMODEL_FILL * k;
     this.keyLight.intensity = VIEWMODEL_KEY * k;
+    this.scene.environmentIntensity = VIEWMODEL_ENV * k;
+  }
+
+  /** The sky's environment (the art pass, Phase 10 M7): the gun's metal reflects it, as the light at the eye dims it. */
+  setEnvironment(env: THREE.Texture | null) {
+    this.scene.environment = env;
   }
 
   /** Draw over the world (call after rendering the world scene; clears depth first). */
