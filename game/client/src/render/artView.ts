@@ -30,6 +30,22 @@ const RAYS = 64;
 const EXPOSURE_POWER = 0.6;
 const EXPOSURE_MAX = 3.2;
 
+/**
+ * Shader programs the GPU refused to build, each with its reason (three reports one only when it's first drawn; this
+ * asks right after compiling). A real GPU is stricter than the software one the tests run on: a fragment shader may
+ * use only 16 textures on most of them, for one.
+ */
+export function failedPrograms(renderer: THREE.WebGLRenderer): string[] {
+  const gl = renderer.getContext();
+  const out: string[] = [];
+  for (const p of renderer.info.programs ?? []) {
+    const program = (p as unknown as { program?: WebGLProgram }).program;
+    if (!program || gl.getProgramParameter(program, gl.LINK_STATUS)) continue;
+    out.push(`${p.name || "program"}: ${(gl.getProgramInfoLog(program) ?? "").trim().slice(0, 400) || "link failed"}`);
+  }
+  return out;
+}
+
 export class ArtView {
   private art: LevelArt | null = null;
   private sets: TextureSets | null = null;
@@ -98,6 +114,9 @@ export class ArtView {
     const art = new LevelArt(this.level, sets, loadArtData());
     const lab = this.lab;
     const lamps = roomLamps(this.level, (id) => art.lampOf(id));
+    // What the scene was, to put back if this GPU can't build the art's shaders (abandon).
+    const fog = lab.scene.fog instanceof THREE.Fog ? lab.scene.fog : null;
+    const was = { fog: fog && { color: fog.color.clone(), near: fog.near, far: fog.far }, sun: lab.sun.color.clone(), env: lab.scene.environment, envIntensity: lab.scene.environmentIntensity };
     if (skyData) {
       const sky = new SkyView(skyData, renderer, preset.probes);
       this.sky = sky;
@@ -129,7 +148,8 @@ export class ArtView {
       this.grey.set(part.mesh, part.mesh.material);
       const inst = part.mesh as THREE.InstancedMesh;
       if (!inst.isInstancedMesh) continue;
-      const geo = part.mesh.geometry.clone();
+      // (Its own copy already, if a higher preset was tried first and this GPU refused it.)
+      const geo = part.mesh.geometry.getAttribute("aArt") ? part.mesh.geometry : part.mesh.geometry.clone();
       geo.setAttribute("aArt", new THREE.InstancedBufferAttribute(Float32Array.from(part.boxes, (r) => art.styleOf(r)), 1));
       part.mesh.geometry = geo;
     }
@@ -156,6 +176,27 @@ export class ArtView {
     box.dispose();
     flat.dispose();
     one.geometry.dispose();
+    // Did this GPU build them? If not, nothing of the art is shown: the scene goes back as it was, and the caller
+    // may load a lower preset.
+    const failed = failedPrograms(renderer);
+    if (failed.length) {
+      this.sky?.dome.removeFromParent();
+      this.sky?.dispose();
+      this.sky = null;
+      this.probes?.dispose();
+      this.probes = null;
+      if (fog && was.fog) {
+        fog.color.copy(was.fog.color);
+        fog.near = was.fog.near;
+        fog.far = was.fog.far;
+      }
+      lab.sun.color.copy(was.sun);
+      lab.scene.environment = was.env;
+      lab.scene.environmentIntensity = was.envIntensity;
+      art.dispose();
+      for (const t of [sets.color, sets.normal, sets.orm]) t.dispose();
+      throw new Error(`this GPU couldn't build the art's shaders (${failed.length}): ${failed[0]}`);
+    }
     this.art = art;
     this.sets = sets;
     this.architecture = new Architecture(lab, this.level, art, lamps);

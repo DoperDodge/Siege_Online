@@ -9,6 +9,7 @@ import { artProblems, loadArtData, Sim, type BuiltLevel } from "@redmond/shared"
 import { Architecture } from "../src/render/architecture.js";
 import type { LabScene } from "../src/render/labScene.js";
 import { LevelArt } from "../src/render/levelArt.js";
+import { ProbeField, refill } from "../src/render/probes/probeField.js";
 import { roomLamps } from "../src/render/probes/scene.js";
 import { initialQuality, PRESETS, presetFor } from "../src/render/quality.js";
 import type { TextureManifest, TextureSets } from "../src/render/textures.js";
@@ -133,6 +134,91 @@ describe("faces wear the style of the room they face (render/DESIGN.md §5.2)", 
     expect(art.panelMaterial("skin:SOFT_WALL")).not.toBeNull();
     expect(art.panelMaterial("glass")?.transparent).toBe(true);
     expect(art.panelMaterial("seam")).toBeNull();
+  });
+});
+
+describe("the level's shader keeps to what every GPU allows (Ulo's report: Medium and High didn't load)", () => {
+  /** The level material's shader as three would get it: its own code patched into three's chunks (not expanded here). */
+  function patched(m: THREE.Material): { fragment: string; uniforms: Record<string, THREE.IUniform> } {
+    const shader = {
+      uniforms: {} as Record<string, THREE.IUniform>,
+      vertexShader: "#include <common>\n#include <project_vertex>",
+      fragmentShader: ["common", "map_fragment", "roughnessmap_fragment", "metalnessmap_fragment", "normal_fragment_maps", "lights_fragment_maps", "aomap_fragment"].map((c) => `#include <${c}>`).join("\n"),
+    };
+    m.onBeforeCompile(shader as unknown as THREE.WebGLProgramParametersWithUniforms, null as unknown as THREE.WebGLRenderer);
+    return { fragment: shader.fragmentShader, uniforms: shader.uniforms };
+  }
+  const samplers = (glsl: string) => [...glsl.matchAll(/uniform\s+(?:highp\s+|mediump\s+|lowp\s+)?sampler\w+\s+(\w+)\s*;/g)].map((x) => x[1]);
+  /** A fragment shader may use 16 textures on most GPUs; three adds its own (the environment, its lookup table, a shadow map a light): ours take at most 10. */
+  const OURS_AT_MOST = 10;
+
+  it("with the probes on, the level's and the panels' shaders declare few enough textures", async () => {
+    oregon ??= (await Sim.create("oregon")).level;
+    const art = new LevelArt(oregon, fakeSets(), loadArtData());
+    const probes = new ProbeField(oregon, () => ({}) as never, new Float32Array(0), 0);
+    art.attachProbes(probes.uniforms);
+    for (const m of [art.staticMaterial(), art.panelMaterial("skin:SOFT_WALL")!, art.panelMaterial("core:wood")!]) {
+      const { fragment, uniforms } = patched(m);
+      const names = samplers(fragment);
+      expect(names.length, `${m.name}: ${names.join(" ")}`).toBeLessThanOrEqual(OURS_AT_MOST);
+      expect(new Set(names).size).toBe(names.length);
+      // Each one it declares has its texture (a missing one would read black).
+      for (const n of names) expect((uniforms[n]?.value as THREE.Texture | undefined)?.isTexture, `${m.name}: ${n}`).toBe(true);
+      expect(names).toContain("tProbeA");
+      // Every texture read says its own level of detail: none with implicit derivatives, which GLSL leaves undefined
+      // inside the branches and loops these are in (and Direct3D refuses or flattens).
+      expect(fragment).not.toMatch(/\btexture\s*\(/);
+      expect(fragment).toMatch(/textureGrad\s*\(\s*tArtColor/);
+    }
+    // A body, a gadget or the glass, lit by the probes: fewer still.
+    const body = new THREE.MeshStandardMaterial();
+    art.litPatch(body);
+    expect(samplers(patched(body).fragment).length).toBeLessThanOrEqual(4);
+    probes.dispose();
+  });
+
+  it("the one lookup table has each room's style, each material and each style where the shader reads them", async () => {
+    const { level, art } = await oregonArt();
+    const t = art.uniforms.tArtTables.value as THREE.DataTexture;
+    const { width, height } = t.image;
+    const data = t.image.data as Float32Array;
+    expect(width).toBe(256);
+    expect(height).toBeLessThanOrEqual(2048);
+    const texel = (x: number, y: number) => Array.from(data.subarray((y * width + x) * 4, (y * width + x) * 4 + 4));
+    const art2 = loadArtData();
+    const map = art2.maps.get("oregon")!;
+    const mats = Object.keys(art2.materials);
+    const styles = [...Object.keys(map.styles), ...mats.map((m) => `_${m}`)];
+    // A material's row: its texture set's layer, its tint; its tile size.
+    mats.forEach((id, mi) => {
+      const m0 = texel(0, mi + 1);
+      const m1 = texel(1, mi + 1);
+      expect(m0[0], id).toBe(manifest.sets.findIndex((x) => x.id === art2.materials[id].set));
+      expect(m1[0], id).toBeGreaterThan(0);
+      expect(m1[1], id).toBeGreaterThan(0);
+    });
+    // A style's row: its wall's, floor's and ceiling's materials.
+    styles.forEach((id, si) => {
+      const s0 = texel(4, si + 1);
+      const wall = id.startsWith("_") ? id.slice(1) : map.styles[id].wall;
+      expect(s0[0], id).toBe(mats.indexOf(wall));
+    });
+    // Row 0: a room's code to its style (codes from 1, in the level's order).
+    level.def.rooms.forEach((r, i) => expect(texel(i + 1, 0)[0], r.id).toBe(styles.indexOf(map.rooms[r.id] ?? map.default)));
+    // And the probes' texture: a probe's four quarters stacked up its y.
+    const grid = { origin: [0, 0, 0] as [number, number, number], spacing: [1, 1, 1] as [number, number, number], dims: [3, 2, 2] as [number, number, number] };
+    const field = Float32Array.from({ length: 3 * 2 * 2 * 16 }, (_, i) => i);
+    const tex = new THREE.Data3DTexture(new Float32Array(3 * 8 * 2 * 4), 3, 8, 2);
+    refill(tex, grid, field);
+    const d = tex.image.data as Float32Array;
+    for (let k = 0; k < 2; k++)
+      for (let j = 0; j < 2; j++)
+        for (let i = 0; i < 3; i++)
+          for (let q = 0; q < 4; q++) {
+            const at = ((k * 8 + j + q * 2) * 3 + i) * 4;
+            const from = (k * 6 + j * 3 + i) * 16 + q * 4;
+            expect(Array.from(d.subarray(at, at + 4))).toEqual([from, from + 1, from + 2, from + 3]);
+          }
   });
 });
 

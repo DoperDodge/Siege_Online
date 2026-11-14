@@ -32,6 +32,9 @@ const OUTSIDE_CODE = 240;
 const GROUND_MAT = -2;
 /** The ground map's resolution (metres a texel). */
 const GROUND_CELL_M = 0.5;
+/** The lookup table's width (a texel a room code in its first row) and the most rows it may have (WebGL2 guarantees 2048). */
+const TABLE_W = 256;
+const TABLE_ROWS_MAX = 2048;
 
 /** A lamp of power 1's irradiance at a metre (the sky's units: the sun gives about 4.7 at normal incidence here). */
 const LAMP_BASE = 9;
@@ -101,27 +104,30 @@ ${ROOM_DECL}
 uniform highp sampler2DArray tArtColor;
 uniform highp sampler2DArray tArtNormal;
 uniform highp sampler2DArray tArtOrm;
-uniform highp sampler2D tArtMat;
-uniform highp sampler2D tArtStyle;
-uniform highp sampler2D tArtRoomStyle;
+// One table for every lookup (a fragment shader may use only 16 textures on most GPUs): row 0, the style of each
+// room code; from row 1, a material a row in columns 0–2 and a style a row in columns 4–6 (LevelArt.tables).
+uniform highp sampler2D tArtTables;
 uniform float uArtGrid;
 uniform mat4 modelMatrix;
 varying vec3 vArtPos;
 varying vec3 vArtNormal;
 varying float vArtStyle;
 
-vec4 artTexel( highp sampler2D t, int x, int y ) {
-  return texelFetch( t, ivec2( x, y ), 0 );
-}
+vec4 artMatTexel( int x, int mi ) { return texelFetch( tArtTables, ivec2( x, mi + 1 ), 0 ); }
+vec4 artStyleTexel( int x, int si ) { return texelFetch( tArtTables, ivec2( 4 + x, si + 1 ), 0 ); }
+float artRoomStyle( int code ) { return texelFetch( tArtTables, ivec2( code, 0 ), 0 ).r; }
 uniform highp sampler2D tArtGround;
 uniform vec4 uArtGroundBox;
 uniform vec4 uArtGroundMats;
 // Material mi at world point P on a face whose normal is N: its albedo (tinted, gained), ORM, shading normal (world)
-// and roughness multiplier. Textures by position on the face's plane (box mapping).
-void artSample( int mi, vec3 P, vec3 N, out vec3 albedo, out vec3 orm, out vec3 nW, out float roughMul ) {
-  vec4 m0 = artTexel( tArtMat, 0, mi );
-  vec4 m1 = artTexel( tArtMat, 1, mi );
-  vec4 m2 = artTexel( tArtMat, 2, mi );
+// and roughness multiplier. Textures by position on the face's plane (box mapping). dPdx and dPdy are P's screen
+// derivatives, taken once outside any branch: the textures are read with explicit gradients, so this may be called
+// from inside branches and loops (implicit derivatives there are undefined in GLSL, and Direct3D refuses or
+// flattens them).
+void artSample( int mi, vec3 P, vec3 N, vec3 dPdx, vec3 dPdy, out vec3 albedo, out vec3 orm, out vec3 nW, out float roughMul ) {
+  vec4 m0 = artMatTexel( 0, mi );
+  vec4 m1 = artMatTexel( 1, mi );
+  vec4 m2 = artMatTexel( 2, mi );
   vec3 T = abs( N.y ) < 0.999 ? normalize( cross( vec3( 0.0, 1.0, 0.0 ), N ) ) : vec3( 1.0, 0.0, 0.0 );
   vec3 B = cross( N, T );
   if ( m1.z > 0.5 ) {
@@ -130,9 +136,11 @@ void artSample( int mi, vec3 P, vec3 N, out vec3 albedo, out vec3 orm, out vec3 
     B = -t0;
   }
   vec3 tc = vec3( dot( P, T ) / m1.x, -dot( P, B ) / m1.y, m0.x );
-  albedo = texture( tArtColor, tc ).rgb * m0.yzw * m2.y;
-  orm = texture( tArtOrm, tc ).rgb;
-  vec3 nt = texture( tArtNormal, tc ).xyz * 2.0 - 1.0;
+  vec2 gx = vec2( dot( dPdx, T ) / m1.x, -dot( dPdx, B ) / m1.y );
+  vec2 gy = vec2( dot( dPdy, T ) / m1.x, -dot( dPdy, B ) / m1.y );
+  albedo = textureGrad( tArtColor, tc, gx, gy ).rgb * m0.yzw * m2.y;
+  orm = textureGrad( tArtOrm, tc, gx, gy ).rgb;
+  vec3 nt = textureGrad( tArtNormal, tc, gx, gy ).xyz * 2.0 - 1.0;
   nt.xy *= m2.x;
   nW = normalize( T * nt.x + B * nt.y + N * max( nt.z, 0.05 ) );
   roughMul = m1.w;
@@ -145,10 +153,11 @@ float artNoise( vec2 p ) {
   vec2 u = f * f * ( 3.0 - 2.0 * f );
   return mix( mix( artHash( i ), artHash( i + vec2( 1.0, 0.0 ) ), u.x ), mix( artHash( i + vec2( 0.0, 1.0 ) ), artHash( i + vec2( 1.0, 1.0 ) ), u.x ), u.y );
 }
-// How much of the pixel lies on a line every spacing metres (the labs' floor grid: a ruler).
-float artGridLine( vec2 p, float spacing, float px ) {
+// How much of the pixel lies on a line every spacing metres (the labs' floor grid: a ruler); fw is fwidth( p ), taken
+// outside any branch.
+float artGridLine( vec2 p, vec2 fw, float spacing, float px ) {
   vec2 c = p / spacing;
-  vec2 w = max( fwidth( c ), vec2( 1e-6 ) );
+  vec2 w = max( fw / spacing, vec2( 1e-6 ) );
   vec2 d = abs( fract( c - 0.5 ) - 0.5 ) / w;
   vec2 on = clamp( 0.5 * px + 0.5 - d, 0.0, 1.0 ) * ( 1.0 - smoothstep( 0.1, 0.3, w ) );
   return max( on.x, on.y );
@@ -181,8 +190,12 @@ if ( uProbeOn > 0.5 ) {
 /** Replaces map_fragment: picks the face's material and samples it (the results feed the chunks below). */
 const FRAGMENT_MAP = /* glsl */ `
 vec3 artP = vArtPos;
+// The position's screen derivatives, once, before any branch (artSample, the grid's lines).
+vec3 artDPdx = dFdx( artP );
+vec3 artDPdy = dFdy( artP );
+vec2 artFw = abs( artDPdx.xz ) + abs( artDPdy.xz );
 #ifdef ART_PANEL
-  vec3 artDn = normalize( cross( dFdx( artP ), dFdy( artP ) ) );
+  vec3 artDn = normalize( cross( artDPdx, artDPdy ) );
   vec3 artAx = normalize( modelMatrix[ 0 ].xyz );
   vec3 artAy = normalize( modelMatrix[ 1 ].xyz );
   vec3 artAz = normalize( modelMatrix[ 2 ].xyz );
@@ -197,12 +210,12 @@ vec3 artQ = artP + artNw * 0.15;
 int artSt = artStorey( artQ.y );
 int artCode = artRoomCode( artQ, artSt );
 if ( artCode == 0 ) artCode = OUTSIDE_CODE_GLSL + artSt;
-int artS = vArtStyle > 0.5 ? int( vArtStyle + 0.5 ) - 1 : int( artTexel( tArtRoomStyle, artCode, 0 ).r + 0.5 );
+int artS = vArtStyle > 0.5 ? int( vArtStyle + 0.5 ) - 1 : int( artRoomStyle( artCode ) + 0.5 );
 // A style of -1: the room's trim on every face (door and window frames: architecture.ts).
 bool artTrim = vArtStyle < -0.5;
-vec4 artS0 = artTexel( tArtStyle, 0, artS );
-vec4 artS1 = artTexel( tArtStyle, 1, artS );
-vec4 artS2 = artTexel( tArtStyle, 2, artS );
+vec4 artS0 = artStyleTexel( 0, artS );
+vec4 artS1 = artStyleTexel( 1, artS );
+vec4 artS2 = artStyleTexel( 2, artS );
 float artMat = artS0.x;
 float artBevel = 0.0;
 if ( artNw.y > 0.7 ) artMat = artS0.y;
@@ -234,9 +247,9 @@ vec3 artNormalW;
 float artRough;
 if ( artMat < -1.5 ) {
   // The ground: the base, then each layer over it by its weight (the ground map), the edges broken up by noise.
-  artSample( int( uArtGroundMats.x ), artP, artNw, artAlb, artOrm, artNormalW, artRough );
+  artSample( int( uArtGroundMats.x ), artP, artNw, artDPdx, artDPdy, artAlb, artOrm, artNormalW, artRough );
   vec2 artGq = ( artP.xz - uArtGroundBox.xy ) / uArtGroundBox.zw;
-  vec3 artGw = all( greaterThanEqual( artGq, vec2( 0.0 ) ) ) && all( lessThanEqual( artGq, vec2( 1.0 ) ) ) ? texture( tArtGround, artGq ).rgb : vec3( 0.0 );
+  vec3 artGw = all( greaterThanEqual( artGq, vec2( 0.0 ) ) ) && all( lessThanEqual( artGq, vec2( 1.0 ) ) ) ? textureLod( tArtGround, artGq, 0.0 ).rgb : vec3( 0.0 );
   float artGn = artNoise( artP.xz * 0.45 ) * 0.65 + artNoise( artP.xz * 1.9 ) * 0.35 - 0.5;
   artGw = clamp( ( artGw - 0.5 + artGn * 0.9 ) * 2.2 + 0.5, 0.0, 1.0 ) * step( 0.001, artGw );
   for ( int k = 0; k < 3; k++ ) {
@@ -246,18 +259,18 @@ if ( artMat < -1.5 ) {
     vec3 o2;
     vec3 n2;
     float r2;
-    artSample( int( uArtGroundMats[ k + 1 ] ), artP, artNw, a2, o2, n2, r2 );
+    artSample( int( uArtGroundMats[ k + 1 ] ), artP, artNw, artDPdx, artDPdy, a2, o2, n2, r2 );
     artAlb = mix( artAlb, a2, w );
     artOrm = mix( artOrm, o2, w );
     artNormalW = normalize( mix( artNormalW, n2, w ) );
     artRough = mix( artRough, r2, w );
   }
-} else artSample( int( artMat + 0.5 ), artP, artNw, artAlb, artOrm, artNormalW, artRough );
+} else artSample( int( artMat + 0.5 ), artP, artNw, artDPdx, artDPdy, artAlb, artOrm, artNormalW, artRough );
 artNormalW = normalize( artNormalW + vec3( 0.0, artBevel * 0.9, 0.0 ) );
 diffuseColor.rgb *= artAlb;
 if ( uArtGrid > 0.5 && artNw.y > 0.9 ) {
-  diffuseColor.rgb *= 1.0 - 0.35 * artGridLine( artP.xz, 1.0, 1.0 );
-  diffuseColor.rgb *= 1.0 - 0.45 * artGridLine( artP.xz, 5.0, 1.5 );
+  diffuseColor.rgb *= 1.0 - 0.35 * artGridLine( artP.xz, artFw, 1.0, 1.0 );
+  diffuseColor.rgb *= 1.0 - 0.45 * artGridLine( artP.xz, artFw, 5.0, 1.5 );
 }
 `;
 
@@ -351,7 +364,6 @@ export class LevelArt {
       c.setStyle(m.tint);
       matData.set([sets.layer.get(m.set) ?? 0, c.r, c.g, c.b, size[0], size[1], m.rotate === 90 ? 1 : 0, m.roughness ?? 1, m.normal ?? 1, m.gain ?? 1, 0, 0], i * 12);
     });
-    const matTable = this.table(matData, 3, mats.length);
 
     // Styles: the map's (or the lab look), then one per fixed material the panels use.
     const add = (id: string, s: ArtStyle) => {
@@ -383,7 +395,6 @@ export class LevelArt {
     this.styles.forEach((s, i) =>
       styleData.set([s.wall, s.floor, s.ceiling, s.exterior ? 1 : 0, s.wainscot, s.wainscotH, s.baseboardH, s.crownH, s.trim, s.foundation, s.foundationY, 0, 0, 0, 0, 0], i * 16),
     );
-    const styleTable = this.table(styleData, 4, this.styles.length);
 
     // Explicit styles by renderable id, and the cover props' by class.
     if (this.map) {
@@ -404,9 +415,7 @@ export class LevelArt {
       tArtColor: { value: sets.color },
       tArtNormal: { value: sets.normal },
       tArtOrm: { value: sets.orm },
-      tArtMat: { value: matTable },
-      tArtStyle: { value: styleTable },
-      tArtRoomStyle: { value: rooms.styles },
+      tArtTables: { value: this.tables(rooms.codes, matData, mats.length, styleData, this.styles.length) },
       tArtRooms: { value: rooms.maps },
       uArtRoomBox: { value: new THREE.Vector4(rooms.x0, rooms.z0, ROOM_CELL_M, 0) },
       uArtRoomSize: { value: new THREE.Vector2(rooms.w, rooms.h) },
@@ -463,9 +472,18 @@ export class LevelArt {
     return { tArtGround: { value: t }, uArtGroundBox: { value: new THREE.Vector4(x0, z0, w * GROUND_CELL_M, h * GROUND_CELL_M) }, uArtGroundMats: { value: mats } };
   }
 
-  /** A float table the shader reads texel by texel (row per entry). */
-  private table(data: Float32Array, width: number, rows: number): THREE.DataTexture {
-    const t = new THREE.DataTexture(data, width, Math.max(1, rows), THREE.RGBAFormat, THREE.FloatType);
+  /**
+   * The one float table the shader reads texel by texel (FRAGMENT_DECL): row 0, the style of each room code (256 of
+   * them); from row 1, a material a row in columns 0–2 (3 texels each) and a style a row in columns 4–7 (4 each).
+   */
+  private tables(codes: Float32Array, matData: Float32Array, mats: number, styleData: Float32Array, styles: number): THREE.DataTexture {
+    const rows = 1 + Math.max(mats, styles);
+    if (rows > TABLE_ROWS_MAX) throw new Error(`art tables: ${rows} rows (at most ${TABLE_ROWS_MAX}: a texture's guaranteed size)`);
+    const data = new Float32Array(TABLE_W * rows * 4);
+    data.set(codes.subarray(0, TABLE_W * 4), 0);
+    for (let i = 0; i < mats; i++) data.set(matData.subarray(i * 12, i * 12 + 12), (i + 1) * TABLE_W * 4);
+    for (let i = 0; i < styles; i++) data.set(styleData.subarray(i * 16, i * 16 + 16), ((i + 1) * TABLE_W + 4) * 4);
+    const t = new THREE.DataTexture(data, TABLE_W, rows, THREE.RGBAFormat, THREE.FloatType);
     t.magFilter = t.minFilter = THREE.NearestFilter;
     t.needsUpdate = true;
     this.owned.push(t);
@@ -535,11 +553,7 @@ export class LevelArt {
       codes[(OUTSIDE_CODE + i) * 4] = zone ? (this.styleIndex.get(zone.style) ?? outside) : outside;
     });
     this.rooms = { data, x0, z0, w, h, layers: storeys.length, codes };
-    const styles = new THREE.DataTexture(codes, 256, 1, THREE.RGBAFormat, THREE.FloatType);
-    styles.magFilter = styles.minFilter = THREE.NearestFilter;
-    styles.needsUpdate = true;
-    this.owned.push(styles);
-    return { maps, styles, x0, z0, w, h };
+    return { maps, codes, x0, z0, w, h };
   }
 
   /**

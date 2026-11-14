@@ -86,7 +86,7 @@ import { LocalSocket } from "../../net/local.js";
 import { OnlineConnection } from "../../net/online.js";
 import { ArtView } from "../../render/artView.js";
 import { createLabScene, createRenderer, PawnView, updateLabels, warmShaders } from "../../render/labScene.js";
-import { initialQuality, presetFor, QUALITIES, QUALITY_NAMES, type QualitySetting } from "../../render/quality.js";
+import { initialQuality, presetFor, PRESETS, QUALITIES, QUALITY_NAMES, type QualityPreset, type QualitySetting } from "../../render/quality.js";
 import { BpCameraModels, CameraModels } from "../../render/cameraModels.js";
 import { GadgetModels } from "../../render/gadgetModels.js";
 import { PanelView } from "../../render/panelView.js";
@@ -356,6 +356,8 @@ export async function startLab(o: LabOptions): Promise<void> {
   const view = $("#view");
   /** The graphics preset (Phase 10, render/quality.ts): the link's, the browser tests' greybox, or the setting's. */
   const quality = initialQuality(params, loadSettings().graphics, { automated: navigator.webdriver, touchOnly: isTouchDevice() });
+  /** Why the art didn't load as asked, if it didn't (shown in the stats overlay; tests read it). */
+  let artProblem = "";
   const preset = presetFor(quality, params);
   const renderer = createRenderer(view, preset);
   const labScene = createLabScene(sim.level, preset.shadowMap);
@@ -411,7 +413,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     const t = artView.textures;
     const p = artView.probeState;
     const probes = p ? ` · probes: ${p.ready ? `${p.passes} pass${p.passes === 1 ? "" : "es"} (${(p.firstMs / 1000).toFixed(1)} s first${p.allMs ? `, ${(p.allMs / 1000).toFixed(1)} s all` : ""})` : "baking"}` : "";
-    return `graphics: ${QUALITY_NAMES[quality]}${t ? ` · textures: ${t.sets} sets at ${t.size} px, ${(t.gpuBytes / 1048576).toFixed(0)} MB${artView.shown ? "" : " (hidden)"}` : preset.textures ? " · textures loading" : ""}${probes}`;
+    return `graphics: ${QUALITY_NAMES[quality]}${t ? ` · textures: ${t.sets} sets at ${t.size} px, ${(t.gpuBytes / 1048576).toFixed(0)} MB${artView.shown ? "" : " (hidden)"}` : preset.textures ? " · textures loading" : ""}${probes}${artProblem ? ` · ${artProblem}` : ""}`;
   }
   let settings: Settings = loadSettings();
   const camera = new THREE.PerspectiveCamera(settings.fovVertical, view.clientWidth / view.clientHeight, 0.05, 300);
@@ -431,16 +433,27 @@ export async function startLab(o: LabOptions): Promise<void> {
     viewmodel.warm(renderer);
   }
   // The art's textures and shaders, then the art itself (render/artView.ts); the greybox until then.
-  void artView
-    .load(preset, renderer, camera)
-    .then((ok) => {
-      if (ok) {
-        artView.show(!storeyView || storeyView.palette === "art");
-        markers?.showModelled(!artView.shown);
-        viewmodel.setEnvironment(artView.environment);
-      }
-    })
-    .catch((e) => console.warn("art pass:", e));
+  async function loadArt(p: QualityPreset, quality: string): Promise<void> {
+    try {
+      if (!(await artView.load(p, renderer, camera))) return;
+      artView.show(!storeyView || storeyView.palette === "art");
+      markers?.showModelled(!artView.shown);
+      viewmodel.setEnvironment(artView.environment);
+    } catch (e) {
+      // A GPU that can't build a preset's shaders (or ran out of memory for its textures) gets the next one down,
+      // and says so: never a page that just doesn't load.
+      console.error(`art pass (${quality}):`, e);
+      artProblem = `${quality} graphics didn't load on this device (${String((e as Error)?.message ?? e).slice(0, 160)})`;
+      if (quality !== "low" && quality !== "greybox") {
+        flash(`${quality[0].toUpperCase()}${quality.slice(1)} graphics didn't load on this device: using Low`, "bad");
+        // As Low is: no sun shadows (without the probes' light, rooms under a shadowed sun would be dark).
+        renderer.shadowMap.enabled = PRESETS.low.shadowMap > 0;
+        labScene.sun.castShadow = renderer.shadowMap.enabled;
+        await loadArt(PRESETS.low, "low");
+      } else flash("The textures didn't load on this device: showing the plain view", "bad");
+    }
+  }
+  void loadArt(preset, quality);
   /** Each body's view as drawn this frame (lasers point along it). */
   const drawnView = new Map<number, [number, number]>();
 
@@ -2004,7 +2017,7 @@ export async function startLab(o: LabOptions): Promise<void> {
           rooms: def.rooms.map((r) => ({ id: r.id, callout: r.callout, storey: r.storey, rects: r.rects, anchor: r.anchor })),
           levelPlan: def.plan ?? null,
           hud: whereHud?.text ?? null,
-          art: { quality, ready: artView.ready, shown: artView.shown, probes: artView.probeState, exposure: renderer.toneMappingExposure },
+          art: { quality, ready: artView.ready, shown: artView.shown, probes: artView.probeState, exposure: renderer.toneMappingExposure, problem: artProblem },
           ...(storeyView && {
             storey: def.storeys[storeyView.storey].id,
             hideAbove: storeyView.hideAbove,

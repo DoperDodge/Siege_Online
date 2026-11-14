@@ -131,6 +131,14 @@ the face, by the room maps; outside counts as a room) and by facing (a probe beh
 are thinner than the probe spacing, so without the room weight an inside wall next to the bright yard would glow;
 with it, light comes in only through the openings the rays found. Probes inside solids are dropped.
 
+**A real GPU's limits (D-178).** A fragment shader may use only 16 textures on most GPUs (WebGL2's guaranteed
+minimum, and exactly what Chrome and Edge on Windows and most phones give); the software renderer the tests run on
+allows 32. So each grid is **one** texture (a probe's four texels stacked along y) and the level's lookups are one
+table: the level's shader uses 11 at High (6 of its own, 2 grids, the environment, three's lookup table, the shadow
+map). Every texture read gives its own level of detail (`textureGrad`, `textureLod`, `texelFetch`): implicit
+derivatives are undefined inside the branches and loops the reads are in. `tools/e2e/oregon-art.mjs` holds every
+program to WebGL2's minimums, and if a GPU still can't build a preset's shaders the page loads Low and says why.
+
 ### 6.4 Destruction and the light
 When a panel changes, the probes within a few metres of it are baked again in the workers (a hole lets light into
 a room within a fraction of a second); the sun's shadow map is redrawn as today.
@@ -224,7 +232,10 @@ equip and melee, gadget use per operator, all keyframed in code from the weapon'
   every opening gets a frame that fits it; props and outside models fit their boxes; the dressing validator;
   presets toggle what §3 says; a panel's redraw stays within budget.
 - **Browser:** oregon-perf.mjs gains the art's numbers (draws, triangles, texture memory) at High and Low; a new
-  `oregon-art.mjs` takes fixed screenshots (each site, the yard from each spawn, a breach) at High for review and
+  `oregon-art.mjs` (its own CI job) loads High, Medium and Low and holds every shader program to what WebGL2
+  guarantees on any device (16 textures a shader, 224 uniform vectors, 3D textures to 256), then makes the browser
+  refuse the probes' shaders and checks High comes up as Low and says so; it also
+  takes fixed screenshots (each site, the yard from each spawn, a breach) at High for review and
   checks the page logs no error; everything else keeps `?lowgfx`. CI's 30 min limit is close: the slowest tests
   may move to a second job.
 - **Ulo's PC:** F8 at 1080p High: the frame rate in the worst views, for the done-when.

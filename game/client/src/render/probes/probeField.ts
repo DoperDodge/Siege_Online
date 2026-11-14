@@ -13,55 +13,76 @@ const CHUNK = 1536;
 /** How far round a changed panel probes are baked again (m). */
 const REBAKE_M = 4;
 
-/** The GLSL a material adds to read the probes: probeLight(P, Ng, N, cls) → irradiance (rgb) and sky seen (a). */
+/**
+ * The GLSL a material adds to read the probes: probeLight(P, Ng, N, cls) → irradiance (rgb) and sky seen (a).
+ *
+ * One texture a grid (two samplers in all): a fragment shader may use only 16 textures on most GPUs (WebGL2's
+ * guaranteed minimum; Chrome and Edge on Windows and most phones give exactly that), and the level's material needs
+ * its own, the shadow map and the environment besides. A probe's 16 floats are four texels, their quarters stacked
+ * along the texture's y (gridTexture). Every read is a texelFetch: no filtering, so float textures work everywhere.
+ */
 export function probeGlsl(): string {
   const grid = (S: string) => /* glsl */ `
-uniform highp sampler3D tProbe${S}0;
-uniform highp sampler3D tProbe${S}1;
-uniform highp sampler3D tProbe${S}2;
-uniform highp sampler3D tProbe${S}3;
+uniform highp sampler3D tProbe${S};
 uniform vec3 uProbe${S}Origin;
 uniform vec3 uProbe${S}Spacing;
 uniform vec3 uProbe${S}Dims;
-// The probes round P in grid ${S} that are in the open, of room class cls (any if cls < 0) and not behind the face
-// (normal Ng), trilinearly weighted; their irradiance for the face's shading normal N, and the sky they see.
-vec4 probeGrid${S}( vec3 P, vec3 Ng, vec3 N, float cls ) {
+// The probes round P in grid ${S} that are in the open and not behind the face (normal Ng), trilinearly weighted:
+// rSame from those of room class cls (all of them if cls < 0), rAny from all of them. Each is the irradiance for the
+// face's shading normal N (rgb) and the sky they see (a); x < 0 when there are none.
+void probeGrid${S}( vec3 P, vec3 Ng, vec3 N, float cls, out vec4 rSame, out vec4 rAny ) {
+  rSame = vec4( -1.0 );
+  rAny = vec4( -1.0 );
   vec3 g = ( P + Ng * 0.1 - uProbe${S}Origin ) / uProbe${S}Spacing;
   // Within a cell of the grid's edge, read its edge (a floor under the lowest layer); farther out, not this grid.
-  if ( any( lessThan( g, vec3( -1.0 ) ) ) || any( greaterThan( g, uProbe${S}Dims ) ) ) return vec4( -1.0 );
+  if ( any( lessThan( g, vec3( -1.0 ) ) ) || any( greaterThan( g, uProbe${S}Dims ) ) ) return;
   g = clamp( g, vec3( 0.0 ), uProbe${S}Dims - 1.0 );
   vec3 bf = min( floor( g ), uProbe${S}Dims - 2.0 );
   ivec3 b = ivec3( bf );
   vec3 f = g - bf;
-  vec3 c0 = vec3( 0.0 );
-  vec3 cy = vec3( 0.0 );
-  vec3 cz = vec3( 0.0 );
-  vec3 cx = vec3( 0.0 );
-  float sky = 0.0;
-  float wsum = 0.0;
+  int ny = int( uProbe${S}Dims.y + 0.5 );
+  vec3 s0 = vec3( 0.0 );
+  vec3 sy = vec3( 0.0 );
+  vec3 sz = vec3( 0.0 );
+  vec3 sx = vec3( 0.0 );
+  float sSky = 0.0;
+  float sW = 0.0;
+  vec3 a0 = vec3( 0.0 );
+  vec3 ay = vec3( 0.0 );
+  vec3 az = vec3( 0.0 );
+  vec3 ax = vec3( 0.0 );
+  float aSky = 0.0;
+  float aW = 0.0;
   for ( int c = 0; c < 8; c++ ) {
     ivec3 o = ivec3( c & 1, ( c >> 1 ) & 1, ( c >> 2 ) & 1 );
     ivec3 q = b + o;
-    vec4 a2 = texelFetch( tProbe${S}2, q, 0 );
-    if ( a2.w < 0.5 ) continue;
-    vec4 a1 = texelFetch( tProbe${S}1, q, 0 );
-    if ( cls >= 0.0 && abs( a1.w - cls ) > 0.5 ) continue;
+    vec4 t2 = texelFetch( tProbe${S}, ivec3( q.x, q.y + 2 * ny, q.z ), 0 );
+    if ( t2.w < 0.5 ) continue;
     vec3 pp = uProbe${S}Origin + vec3( q ) * uProbe${S}Spacing - P;
     if ( dot( pp, Ng ) < -0.05 ) continue;
     vec3 wv = mix( 1.0 - f, f, vec3( o ) );
     float w = wv.x * wv.y * wv.z;
     if ( w <= 0.0 ) continue;
-    vec4 a0 = texelFetch( tProbe${S}0, q, 0 );
-    vec4 a3 = texelFetch( tProbe${S}3, q, 0 );
-    c0 += a0.rgb * w;
-    sky += a0.a * w;
-    cy += a1.rgb * w;
-    cz += a2.rgb * w;
-    cx += a3.rgb * w;
-    wsum += w;
+    vec4 t0 = texelFetch( tProbe${S}, q, 0 );
+    vec4 t1 = texelFetch( tProbe${S}, ivec3( q.x, q.y + ny, q.z ), 0 );
+    vec4 t3 = texelFetch( tProbe${S}, ivec3( q.x, q.y + 3 * ny, q.z ), 0 );
+    a0 += t0.rgb * w;
+    aSky += t0.a * w;
+    ay += t1.rgb * w;
+    az += t2.rgb * w;
+    ax += t3.rgb * w;
+    aW += w;
+    if ( cls < 0.0 || abs( t1.w - cls ) <= 0.5 ) {
+      s0 += t0.rgb * w;
+      sSky += t0.a * w;
+      sy += t1.rgb * w;
+      sz += t2.rgb * w;
+      sx += t3.rgb * w;
+      sW += w;
+    }
   }
-  if ( wsum < 1e-4 ) return vec4( -1.0 );
-  return vec4( shIrradiance( c0, cy, cz, cx, N ) / wsum, sky / wsum );
+  if ( sW >= 1e-4 ) rSame = vec4( shIrradiance( s0, sy, sz, sx, N ) / sW, sSky / sW );
+  if ( aW >= 1e-4 ) rAny = vec4( shIrradiance( a0, ay, az, ax, N ) / aW, aSky / aW );
 }
 `;
   return /* glsl */ `
@@ -80,16 +101,22 @@ vec3 shIrradiance( vec3 c0, vec3 cy, vec3 cz, vec3 cx, vec3 N ) {
 }
 ${grid("A")}
 ${grid("B")}
-// The light the probes give a face at P (geometric normal Ng, shading normal N) in room class cls: the fine grid, then
-// the coarse one; failing both (a face whose room has no probe near), any room's; past them all, the open sky's.
+// The light the probes give a face at P (geometric normal Ng, shading normal N) in room class cls: the fine grid's
+// probes of its room, then the coarse one's; failing both (a face whose room has no probe near), any room's; past them
+// all, the open sky's.
 vec4 probeLight( vec3 P, vec3 Ng, vec3 N, float cls ) {
-  vec4 r = probeGridA( P, Ng, N, cls );
-  if ( r.x < 0.0 ) r = probeGridB( P, Ng, N, cls );
-  if ( r.x < 0.0 ) r = probeGridA( P, Ng, N, -1.0 );
-  if ( r.x < 0.0 ) r = probeGridB( P, Ng, N, -1.0 );
+  vec4 sameA;
+  vec4 anyA;
+  probeGridA( P, Ng, N, cls, sameA, anyA );
+  if ( sameA.x >= 0.0 ) return sameA;
+  vec4 sameB;
+  vec4 anyB;
+  probeGridB( P, Ng, N, cls, sameB, anyB );
+  if ( sameB.x >= 0.0 ) return sameB;
+  if ( anyA.x >= 0.0 ) return anyA;
+  if ( anyB.x >= 0.0 ) return anyB;
   // (Half the sphere is sky out in the open: the ground hides the rest, as the yard's probes find.)
-  if ( r.x < 0.0 ) r = vec4( shIrradiance( uSkySH[ 0 ], uSkySH[ 1 ], uSkySH[ 2 ], uSkySH[ 3 ], N ), 0.5 );
-  return r;
+  return vec4( shIrradiance( uSkySH[ 0 ], uSkySH[ 1 ], uSkySH[ 2 ], uSkySH[ 3 ], N ), 0.5 );
 }
 `;
 }
@@ -159,38 +186,43 @@ export function openSkySH(env: Float32Array, w: number, h: number, sunIrradiance
   return sh.map((c) => new THREE.Vector3(c[0], c[1], c[2]));
 }
 
-/** A grid's four textures (16 floats a probe split four ways) from its field. */
-function gridTextures(grid: GridSpec, field: Float32Array | null): THREE.Data3DTexture[] {
+/** How many texels a probe's record takes (PROBE_STRIDE floats, four a texel). */
+const QUARTERS = PROBE_STRIDE / 4;
+
+/**
+ * A grid's texture from its field: w × (4 h) × d texels, the probe at (i, j, k) at (i, j + q h, k) for its record's
+ * quarter q (the shader's probeGrid reads them so). Floats, read texel by texel (no filtering).
+ */
+function gridTexture(grid: GridSpec, field: Float32Array | null): THREE.Data3DTexture {
   const [w, h, d] = grid.dims;
-  const n = w * h * d;
-  return [0, 1, 2, 3].map((t) => {
-    const data = new Float32Array(n * 4);
-    if (field) for (let p = 0; p < n; p++) data.set(field.subarray(p * PROBE_STRIDE + t * 4, p * PROBE_STRIDE + t * 4 + 4), p * 4);
-    const tex = new THREE.Data3DTexture(data, w, h, d);
-    tex.format = THREE.RGBAFormat;
-    tex.type = THREE.FloatType;
-    tex.magFilter = tex.minFilter = THREE.NearestFilter;
-    tex.generateMipmaps = false;
-    tex.unpackAlignment = 1;
-    tex.needsUpdate = true;
-    return tex;
-  });
+  const tex = new THREE.Data3DTexture(new Float32Array(w * h * QUARTERS * d * 4), w, h * QUARTERS, d);
+  tex.format = THREE.RGBAFormat;
+  tex.type = THREE.FloatType;
+  tex.magFilter = tex.minFilter = THREE.NearestFilter;
+  tex.generateMipmaps = false;
+  tex.unpackAlignment = 1;
+  if (field) refill(tex, grid, field);
+  tex.needsUpdate = true;
+  return tex;
 }
 
-/** A field's floats into its textures' data (the same split), for a new upload. */
-function refill(textures: THREE.Data3DTexture[], field: Float32Array): void {
-  textures.forEach((tex, t) => {
-    const data = tex.image.data as Float32Array;
-    const n = data.length / 4;
-    for (let p = 0; p < n; p++) {
-      const o = p * PROBE_STRIDE + t * 4;
-      data[p * 4] = field[o];
-      data[p * 4 + 1] = field[o + 1];
-      data[p * 4 + 2] = field[o + 2];
-      data[p * 4 + 3] = field[o + 3];
-    }
-    tex.needsUpdate = true;
-  });
+/** A field's floats into its grid's texture (gridTexture's layout), for a new upload. */
+export function refill(tex: THREE.Data3DTexture, grid: GridSpec, field: Float32Array): void {
+  const [w, h, d] = grid.dims;
+  const data = tex.image.data as Float32Array;
+  for (let k = 0; k < d; k++)
+    for (let j = 0; j < h; j++)
+      for (let i = 0; i < w; i++) {
+        const o = (k * w * h + j * w + i) * PROBE_STRIDE;
+        for (let q = 0; q < QUARTERS; q++) {
+          const t = ((k * h * QUARTERS + (j + q * h)) * w + i) * 4;
+          data[t] = field[o + q * 4];
+          data[t + 1] = field[o + q * 4 + 1];
+          data[t + 2] = field[o + q * 4 + 2];
+          data[t + 3] = field[o + q * 4 + 3];
+        }
+      }
+  tex.needsUpdate = true;
 }
 
 interface Job {
@@ -209,7 +241,8 @@ export class ProbeField {
   /** Passes finished, and how long the first and all took (ms). */
   passes = 0;
   timing = { first: 0, all: 0 };
-  private readonly textures: THREE.Data3DTexture[][];
+  /** A texture a grid (the labs' one grid serves both of the shader's). */
+  private readonly textures: THREE.Data3DTexture[];
   private readonly workers: Worker[] = [];
   private readonly statics: Float32Array;
   private readonly panels: number[][];
@@ -231,12 +264,9 @@ export class ProbeField {
     // Two grids always (a lab's one grid serves twice): the shader reads A then B.
     const A = this.grids[0];
     const B = this.grids[1] ?? this.grids[0];
-    this.textures = [gridTextures(A, null), this.grids[1] ? gridTextures(B, null) : []];
-    const u = (S: string, g: GridSpec, tex: THREE.Data3DTexture[]) => ({
-      [`tProbe${S}0`]: { value: tex[0] },
-      [`tProbe${S}1`]: { value: tex[1] },
-      [`tProbe${S}2`]: { value: tex[2] },
-      [`tProbe${S}3`]: { value: tex[3] },
+    this.textures = this.grids.slice(0, 2).map((g) => gridTexture(g, null));
+    const u = (S: string, g: GridSpec, tex: THREE.Data3DTexture) => ({
+      [`tProbe${S}`]: { value: tex },
       [`uProbe${S}Origin`]: { value: new THREE.Vector3(...g.origin) },
       [`uProbe${S}Spacing`]: { value: new THREE.Vector3(...g.spacing) },
       [`uProbe${S}Dims`]: { value: new THREE.Vector3(...g.dims) },
@@ -245,7 +275,7 @@ export class ProbeField {
       uProbeOn: { value: 0 },
       uSkySH: { value: [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()] },
       ...u("A", A, this.textures[0]),
-      ...u("B", B, this.textures[1].length ? this.textures[1] : this.textures[0]),
+      ...u("B", B, this.textures[1] ?? this.textures[0]),
     };
   }
 
@@ -311,7 +341,7 @@ export class ProbeField {
 
   private upload(): void {
     this.fields.forEach((f, g) => {
-      if (f && this.textures[g]?.length) refill(this.textures[g], f);
+      if (f && this.textures[g]) refill(this.textures[g], this.grids[g], f);
     });
   }
 
@@ -417,6 +447,6 @@ export class ProbeField {
   dispose(): void {
     this.disposed = true;
     for (const w of this.workers) w.terminate();
-    for (const set of this.textures) for (const t of set) t.dispose();
+    for (const t of this.textures) t.dispose();
   }
 }
