@@ -1439,16 +1439,20 @@ export async function startLab(o: LabOptions): Promise<void> {
       v.wire.visible = drawn && showHitboxes;
       if (!rs) continue;
       const w = pawn.loadout?.weapons[rs.slot];
-      v.setWeapon(w ? { id: w.id, class: w.class, pick: w.pick } : null);
+      v.setWeapon(w ? { id: w.id, class: w.class, pick: w.pick } : null, w ?? null);
       // A gadget in its hands instead (Phase 8): drawn as its greybox; a detonator small and dark.
       const held = heldGadget(pawn, rs);
-      v.setHeld(held ? (held.detonator ? { id: "detonator", size: [0.05, 0.09, 0.03] } : { id: held.data.id, size: held.data.sizeM }) : null, !!held && !held.detonator && held.data.use.kind === "hold");
+      v.setHeld(
+        held ? (held.detonator ? { id: "detonator", size: [0.05, 0.09, 0.03] } : { id: held.data.id, size: held.data.sizeM }) : null,
+        !!held && !held.detonator && held.data.use.kind === "hold",
+        held && !held.detonator && held.data.use.kind === "swing" ? held.data.use : null,
+      );
       v.setShield(pawn.loadout?.shield?.plate ?? null);
       // The body whose eyes we see through, in first person, faces the view itself (the mouse's, as the camera does), so
       // Fuze's shield doesn't trail the view by a tick when he turns (the review, M12); in free look the body keeps its
       // own facing (that's the point of it).
       const fpYaw = pawn.id === eyesId && !outside && !freeLookFrom && !pawn.proxy && rs.mode !== PawnMode.Dead && rs.mode !== PawnMode.Knocked;
-      v.update(sim.data, rs.mode === PawnMode.Dead ? corpse(rs) : fpYaw ? { ...rs, yaw: controls.yaw } : rs);
+      v.update(sim.data, rs.mode === PawnMode.Dead ? corpse(rs) : fpYaw ? { ...rs, yaw: controls.yaw } : rs, performance.now() / 1000, pawn.loadout?.swapTicks ?? 30);
       // On a rope: drawn from the body's middle (its harness) up to where the rope is fixed (a swing takes the body
       // out from under it).
       const m = sim.data.movement;
@@ -2458,7 +2462,7 @@ export async function startLab(o: LabOptions): Promise<void> {
         // Brava's Kludge drones (Phase 8 M8) are bigger, and greener.
         const size = pawn.kludge ? (data.gadgets.get("kludge_drone")?.sizeM ?? data.intel.drone.sizeM) : data.intel.drone.sizeM;
         const color = pawn.kludge ? 0x65a30d : pawn.proxy ? 0xf97316 : 0x3b82f6;
-        pawnViews.set(pawn.id, pawn.proxy ? new PawnView(scene, color, nameOfPawn(pawn.id) || undefined, undefined, pawn.kind, size) : new PawnView(scene, color, undefined, undefined, pawn.kind, size));
+        pawnViews.set(pawn.id, new PawnView(scene, color, pawn.proxy ? nameOfPawn(pawn.id) || undefined : undefined, undefined, pawn.kind, size, pawn.operatorId));
       }
   }
 
@@ -2528,7 +2532,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       // Where the server judged the target to be (rewound to what we saw): a green wireframe.
       const was = net!.session.remoteAt(shot.hit.pawnId, shot.rewoundTick);
       if (was) {
-        ghost = new PawnView(scene, 0x22c55e, undefined, 0x22c55e);
+        ghost = new PawnView(scene, 0x22c55e, undefined, 0x22c55e, undefined, undefined, null);
         ghost.update(sim.data, was);
         ghost.body.visible = false;
       }
@@ -2740,8 +2744,10 @@ export async function startLab(o: LabOptions): Promise<void> {
     }
   }
 
-  /** A remote player's gun position as drawn now (eye height, a little forward). */
+  /** Where a remote player's shots are seen to leave: the end of the gun in its hands as drawn now (else by its eye). */
   function remoteMuzzle(pawnId: number): THREE.Vector3 | null {
+    const drawn = pawnViews.get(pawnId)?.muzzle();
+    if (drawn) return drawn;
     const st = net?.session.remoteAt(pawnId, shownRenderTick);
     if (!st) return null;
     const eye = eyePose(data.movement, data.hitboxes, st).pos;

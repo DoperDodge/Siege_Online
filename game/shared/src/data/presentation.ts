@@ -4,6 +4,7 @@ import { z } from "zod";
 import oregonArtJson from "../../../../data/maps/oregon/art.json";
 import gunKitJson from "../../../../data/presentation/gun_kit.json";
 import materialsJson from "../../../../data/presentation/materials.json";
+import operatorLooksJson from "../../../../data/presentation/operator_looks.json";
 import ranksJson from "../../../../data/presentation/ranks.json";
 import texturesJson from "../../../../data/presentation/textures.json";
 import { BARRELS, GRIPS, SIGHTS, UNDERBARRELS, WEAPON_CLASSES } from "./schemas.js";
@@ -77,13 +78,42 @@ export const ranksSchema = z
   });
 export type Ranks = z.infer<typeof ranksSchema>;
 
+/** How an operator's body is dressed (data/presentation/operator_looks.json; render/bodyModel.ts). */
+export const operatorLookSchema = z.strictObject({
+  uniform: color,
+  trousers: color,
+  vest: color,
+  gear: color,
+  boots: color,
+  gloves: color,
+  skin: color,
+  hair: color,
+  accent: color,
+  head: z.enum(["helmet", "cap", "beanie", "hood", "bare", "visor"]),
+  headColor: color,
+  face: z.enum(["none", "goggles", "glasses", "gasmask", "shield"]),
+  ears: z.boolean(),
+  sleeves: z.enum(["long", "short"]),
+  vestKind: z.enum(["plate", "heavy", "light"]),
+  pads: z.boolean(),
+  back: z.enum(["none", "pack", "hammer", "roll", "radio", "jammer", "drone", "tube"]),
+});
+export type OperatorLook = z.infer<typeof operatorLookSchema>;
+export const operatorLooksSchema = z.strictObject({
+  _doc: z.string(),
+  looks: z.record(z.string(), operatorLookSchema).refine((l) => "default" in l, "a `default` look"),
+});
+export type OperatorLooks = z.infer<typeof operatorLooksSchema>;
+
 let kit: GunKit | null = null;
+let looks: OperatorLooks | null = null;
 let ranks: Ranks | null = null;
 /** data/presentation/*, validated once. */
-export function loadPresentationData(): { gunKit: GunKit; ranks: Ranks } {
+export function loadPresentationData(): { gunKit: GunKit; ranks: Ranks; operatorLooks: OperatorLooks } {
   kit ??= gunKitSchema.parse(gunKitJson);
   ranks ??= ranksSchema.parse(ranksJson);
-  return { gunKit: kit, ranks };
+  looks ??= operatorLooksSchema.parse(operatorLooksJson);
+  return { gunKit: kit, ranks, operatorLooks: looks };
 }
 
 // ---- The art pass (Phase 10, game/client/src/render/DESIGN.md §2, §5) ----

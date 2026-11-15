@@ -31,6 +31,12 @@ export interface GunModel {
   readonly laser: THREE.Vector3 | null;
   /** What the sight shows at full ADS. */
   readonly reticle: "posts" | "dot" | "cross";
+  /**
+   * Where it's held (gun frame; a body's hands, render/bodyPose.ts): the middle of the hand on its grip; the middle
+   * of the other hand under its handguard or on a grip fitted there (null: both hands on the one grip); how far back
+   * its butt reaches (z); and the middle of its magazine (null: none that comes out).
+   */
+  readonly hold: { grip: THREE.Vector3; fore: THREE.Vector3 | null; back: number; mag: THREE.Vector3 | null };
   /** Triangles in the model (the budget: PLAN §12.2). */
   readonly triangles: number;
   dispose(): void;
@@ -64,6 +70,8 @@ class Builder {
   readonly magParts = new Map<Mat, THREE.BufferGeometry[]>();
   /** Parts go to the magazine while this is set. */
   intoMag = false;
+  /** Where the hand on its grip is (u, v): the last grip built, or a classic stock's wrist. */
+  hand: P = [0, 0];
 
   private put(mat: Mat, g: THREE.BufferGeometry): void {
     const into = this.intoMag ? this.magParts : this.parts;
@@ -172,6 +180,7 @@ function grip(b: Builder, mat: Mat, u: number, vTop: number, rake = 18, len = 0.
   const t = Math.tan(rake * DEG);
   const fb = u + depth / 2;
   const bb = u - depth / 2;
+  b.hand = [u - t * len * 0.45, vTop - len * 0.48];
   b.side(
     mat,
     [
@@ -233,6 +242,7 @@ function stock(b: Builder, kind: NonNullable<GunLookData["stock"]>, uBack: numbe
 /** A shotgun's stock behind uBack: the comb from the receiver's top (vTop) back to the heel, the butt, the toe and a
  * narrow wrist rising to under the receiver (vBottom) — the wrist is the grip. */
 function classicStock(b: Builder, mat: Mat, uBack: number, vTop: number, vBottom: number): void {
+  b.hand = [uBack - 0.02, vBottom + 0.012];
   b.side(
     mat,
     [
@@ -985,6 +995,9 @@ export function buildGun(look: GunLook, kit: GunKit = loadPresentationData().gun
   }
   const muzzleU = muzzleDevice(b, pick.barrel, a, kit);
   if (pick.grip && a.under) foregrip(b, pick.grip, a.under);
+  // The other hand: on a grip fitted under the handguard, else cupped under it.
+  const foreDrop = !pick.grip ? 0.024 : pick.grip === "vertical" ? 0.05 : pick.grip === "angled" ? 0.032 : 0.028;
+  const fore = a.under ? new THREE.Vector3(0, a.under[1] - foreDrop, -a.under[0]) : null;
   let laser: THREE.Vector3 | null = null;
   if (pick.underbarrel === "laser" && a.side) {
     const s = a.side;
@@ -1051,8 +1064,21 @@ export function buildGun(look: GunLook, kit: GunKit = loadPresentationData().gun
     geoms.push(dot.geometry);
     group.add(dot);
   }
+  const bounds = new THREE.Box3();
+  for (const g of geoms) {
+    g.computeBoundingBox();
+    bounds.union(g.boundingBox!);
+  }
+  const magBox = new THREE.Box3();
+  for (const m of mag.children) magBox.union((m as THREE.Mesh).geometry.boundingBox!);
   return {
     group,
+    hold: {
+      grip: new THREE.Vector3(0, b.hand[1], -b.hand[0]).multiplyScalar(scale),
+      fore: fore ? fore.multiplyScalar(scale) : null,
+      back: bounds.max.z,
+      mag: magBox.isEmpty() ? null : magBox.getCenter(new THREE.Vector3()),
+    },
     sight: new THREE.Vector3(0, sightV, -sightU).multiplyScalar(scale),
     muzzle: new THREE.Vector3(0, a.muzzle[1], -muzzleU).multiplyScalar(scale),
     mag,

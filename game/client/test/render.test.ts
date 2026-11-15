@@ -529,14 +529,16 @@ describe("shadows", () => {
       meshes++;
       expect(o.castShadow).toBe(false);
     });
-    expect(meshes).toBeGreaterThan(100);
+    expect(meshes).toBeGreaterThan(60);
     const drawnMeshes = () => {
       const out: THREE.Object3D[] = [];
       view.body.traverseVisible((o) => void ((o as THREE.Mesh).isMesh && out.push(o)));
       return out;
     };
-    expect(drawnMeshes().length).toBeGreaterThan(20);
-    // First person: neither the capsules nor the gun it holds are drawn, but the body stays, laser and all.
+    // The body (one mesh), what's on its back, and the gun's parts.
+    expect(drawnMeshes().length).toBeGreaterThan(4);
+    expect(drawnMeshes().some((o) => (o as THREE.SkinnedMesh).isSkinnedMesh)).toBe(true);
+    // First person: neither the body nor the gun it holds are drawn, but the body stays, laser and all.
     view.setFirstPerson(true);
     expect(drawnMeshes()).toEqual([]);
     expect(view.body.visible).toBe(true);

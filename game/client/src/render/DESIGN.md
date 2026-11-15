@@ -220,6 +220,17 @@ parts; **B**, a CC0 base mesh (MakeHuman's CC0 output) rigged in Blender and shi
 (PLAN §12.3) are procedural from the state: locomotion, stances and lean (already in the pose), vault, ladder,
 rappel, DBNO crawl, revive, plant/defuse, throw, place, melee, the shield set, and a ragdoll on death (drawn only).
 
+**As built (D-179):** option **A**. bodyRig.ts solves 15 rigid bones from the capsules (the head, shoulders, hips and
+pelvis are the capsules' own points; the spine and neck stretch to them; two-bone IK finds elbows and knees).
+bodyModel.ts builds each body from lofted parts, one bone each, with balls at the joints: one skinned mesh and one
+draw, 5.5–7.4k triangles, colour and roughness per vertex, dressed from operator_looks.json; what's on the back is
+its own mesh (gone while it's in the hands or used up). bodyPose.ts computes every pose from the state: the gun
+shouldered and on the view's line (hip, aimed, any pitch), both hands on it, sprint, swap, reload on the weapon's
+timings, the knife, gadgets, a stride that doesn't slide, crouch and prone, ladder, rope, knocked, down, and hands
+at work. bodyRagdoll.ts drops a dead body from the pose it died in. No LODs (the body is a sixth of the budget).
+The limits (the limb hitboxes are straight, so drawn elbows, knees and striding feet can be outside them) are in
+D-179 for Ulo.
+
 ## 12. First person (M9)
 
 Gloved arms in code, posed by the viewmodel: per-weapon idle, ADS, fire, reload (tactical and empty), sprint,

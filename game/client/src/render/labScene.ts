@@ -6,7 +6,7 @@ import type { QualityPreset } from "./quality.js";
 import { ShieldModel } from "./shieldModel.js";
 import {
   droneHitboxes,
-  eyePose,
+  handSlot,
   isDowned,
   PawnKind,
   PawnMode,
@@ -19,9 +19,13 @@ import {
   type PanelSpec,
   type PawnState,
   type Renderable,
+  type ResolvedWeapon,
   type ShieldPlate,
 } from "@redmond/shared";
-import { droneShape, heldShape, SHAPE_MATERIALS, shapeModel, type ShapeMat, type ShapeModel } from "./gadgetShapes.js";
+import { BodyModel, operatorLook } from "./bodyModel.js";
+import { Gait, pistolHeld, poseBody, type HeldItem } from "./bodyPose.js";
+import { Ragdoll } from "./bodyRagdoll.js";
+import { droneShape, heldShape, knifeShape, SHAPE_MATERIALS, shapeModel, type ShapeMat, type ShapeModel } from "./gadgetShapes.js";
 import { buildGun, gunKey, type GunLook, type GunModel } from "./gunKit.js";
 
 export const SURFACE_COLORS: Record<Renderable["surface"], number> = {
@@ -472,16 +476,24 @@ export function labelSprite(text: string, x: number, y: number, z: number, style
 }
 
 /**
- * A pawn drawn as capsules around its hitboxes (placeholder body until the art pass), plus a wireframe.
- * Nothing of it casts a shadow: the shadow map is only redrawn when the level changes (createRenderer), so a
- * moving body's shadow would stay behind where the map was last drawn.
+ * A pawn: an operator's body (Phase 10 M8, render/DESIGN.md §11: bodyModel.ts on the skeleton bodyRig.ts solves from
+ * its hitboxes, posed by bodyPose.ts; a dead one falls, bodyRagdoll.ts) with what it holds, or a drone; plus the
+ * hitboxes' wireframe (F3). Nothing of it casts a shadow: the shadow map is only redrawn when the level changes
+ * (createRenderer), so a moving body's shadow would stay behind where the map was last drawn.
  */
 export class PawnView {
   readonly body = new THREE.Group();
   readonly wire = new THREE.Group();
-  /** The body's capsules (the body group also holds the name tag and the gun). */
+  /** The body itself (the body group also holds the name tag, the gun and what else it holds). */
   private readonly shape = new THREE.Group();
-  private readonly bodyParts: CapsuleParts[] = [];
+  private readonly model: BodyModel | null = null;
+  private readonly gait = new Gait();
+  private ragdoll: Ragdoll | null = null;
+  /** Its speed as it was last alive (a dead body falls on with it), and when it was last drawn (seconds). */
+  private readonly lastVel = new THREE.Vector3();
+  private lastAt = -1;
+  /** Posed at least once (a body first seen dead falls from where its hitboxes lie). */
+  private posed = false;
   private readonly wireParts: CapsuleParts[] = [];
   private readonly tag: THREE.Sprite | null;
   private readonly materials: THREE.Material[];
@@ -489,9 +501,15 @@ export class PawnView {
   private readonly skin: THREE.MeshStandardMaterial[];
   private hot = false;
   private gun: GunModel | null = null;
-  /** A gadget in its hands (Phase 8): a box of its size (at most a hand's), drawn instead of the gun. */
+  /** The weapon the gun is (its reload's timings), and whether it's held like a pistol. */
+  private weapon: ResolvedWeapon | null = null;
+  private pistol = false;
+  /** A gadget in its hands (Phase 8): its shaped model, drawn instead of the gun. */
   private held: THREE.Object3D | null = null;
   private heldModel: ShapeModel | null = null;
+  private heldItem: HeldItem | null = null;
+  /** The knife, drawn while it stabs. */
+  private knife: ShapeModel | null = null;
   /** Fuze's Ballistic Shield (Phase 8 M11): its curved plate and window where its state says (your own too). */
   private shield: ShieldModel | null = null;
   private plate: ShieldPlate | null = null;
@@ -507,7 +525,11 @@ export class PawnView {
   private droneLast: { x: number; z: number } | null = null;
   private firstPerson = false;
 
-  /** `name` puts a name tag over the head (other players online); `wireColor` colours the hitbox view. */
+  /**
+   * `name` puts a name tag over the head (other players online); `wireColor` colours the hitbox view; `color` a
+   * drone's stripe; `operatorId` dresses a body (data/presentation/operator_looks.json), null for none at all: only
+   * its hitboxes' wireframe (where the server judged a hit body to be).
+   */
   constructor(
     private readonly scene: THREE.Scene,
     color: number,
@@ -515,15 +537,17 @@ export class PawnView {
     wireColor = 0xff3b3b,
     kind = PawnKind.Body,
     droneSize: readonly [number, number, number] = [0.22, 0.12, 0.18],
+    operatorId?: string | null,
   ) {
     const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.6 });
-    const headMat = new THREE.MeshStandardMaterial({ color: 0x2b2f36, roughness: 0.5 });
     const wireMat = new THREE.MeshBasicMaterial({ color: wireColor, wireframe: true, depthTest: false, transparent: true, opacity: 0.75 });
-    this.materials = [mat, headMat, wireMat];
-    this.skin = [mat, headMat];
-    for (let i = 0; i < 8; i++) {
-      this.bodyParts.push(new CapsuleParts(this.shape, i === 0 ? headMat : mat, true));
-      this.wireParts.push(new CapsuleParts(this.wire, wireMat, false));
+    this.materials = [mat, wireMat];
+    this.skin = [mat];
+    for (let i = 0; i < 8; i++) this.wireParts.push(new CapsuleParts(this.wire, wireMat, false));
+    if (kind === PawnKind.Body && operatorId !== null) {
+      this.model = new BodyModel(operatorLook(operatorId));
+      this.shape.add(this.model.group);
+      this.skin.push(this.model.material);
     }
     this.body.add(this.shape);
     const ropeMat = new THREE.LineBasicMaterial({ color: 0xd8c08a });
@@ -580,35 +604,95 @@ export class PawnView {
     for (const m of this.skin) m.emissive.setHex(on ? 0xffffff : 0x000000);
   }
 
-  update(data: GameData, state: PawnState) {
+  /**
+   * Pose the body for a state and place what it holds; `now` (seconds, any clock that runs on) moves its stride and a
+   * dead body's fall; `swapTicks` is its loadout's swap time.
+   */
+  update(data: GameData, state: PawnState, now = performance.now() / 1000, swapTicks = 30) {
     if (this.drone) return this.updateDrone(data, state);
     // Fuze with his shield up in front: his hands on its grips behind it (D-169).
-    const parts = poseHitboxes(data.movement, data.hitboxes, state, this.plate && shieldPlace(state) === "front" ? shieldHold(data.movement, this.plate, state) : undefined);
-    parts.forEach((hb, i) => {
-      this.bodyParts[i].place(hb, 1);
-      this.wireParts[i].place(hb, 1.02);
-    });
-    if (this.tag) {
-      const head = parts[0]; // the head capsule comes first
-      this.tag.position.set(head.b[0], Math.max(head.a[1], head.b[1]) + head.radius + 0.3, head.b[2]);
-    }
-    // The gun it holds: in front of the chest along the view (placeholder until the art pass); none while
-    // down, knocked down (D-156) or dead.
-    const armed = state.mode !== PawnMode.Dead && state.mode !== PawnMode.Knocked && !isDowned(state);
+    const shieldUp = this.plate !== null && shieldPlace(state) === "front";
+    const parts = poseHitboxes(data.movement, data.hitboxes, state, shieldUp ? shieldHold(data.movement, this.plate!, state) : undefined);
+    parts.forEach((hb, i) => this.wireParts[i].place(hb, 1.02));
+    const model = this.model;
+    if (!model) return;
+    const rig = model.rig;
+    const dt = this.lastAt < 0 ? 0 : Math.min(0.1, Math.max(0, now - this.lastAt));
+    this.lastAt = now;
+    // What it holds shows while it's up: none while down, knocked down (D-156) or dead.
+    const dead = state.mode === PawnMode.Dead;
+    const armed = !dead && state.mode !== PawnMode.Knocked && !isDowned(state);
     this.armed = armed;
-    this.gunVisible = this.gun !== null && armed && this.held === null;
-    const eye = eyePose(data.movement, data.hitboxes, state).pos;
-    const rot = new THREE.Euler(state.pitch, state.yaw, 0, "YXZ");
+    let gunAt: ReturnType<typeof poseBody>["gun"] = null;
+    let knifeAt: ReturnType<typeof poseBody>["knife"] = null;
+    if (dead) {
+      // It falls from the pose it died in (bodyRagdoll.ts) onto the floor the state has it on (the lab's corpse).
+      if (!this.ragdoll) {
+        if (!this.posed) {
+          rig.frame(parts);
+          rig.solve({ flatFeet: false, legScale: rig.lyingLegs() });
+        }
+        // Tipped back and a little to a side (which, by where it stood).
+        const back = new THREE.Vector3(Math.sin(state.yaw), 0, Math.cos(state.yaw));
+        const side = Math.sin(state.x * 12.9898 + state.z * 78.233) * 0.5;
+        const push = back.multiplyScalar(0.9).add(new THREE.Vector3(Math.cos(state.yaw) * side, 0, -Math.sin(state.yaw) * side));
+        this.ragdoll = new Ragdoll(rig.joints, this.lastVel, push, state.y);
+      }
+      this.ragdoll.step(dt);
+      this.ragdoll.write(rig);
+    } else {
+      this.ragdoll = null;
+      this.lastVel.set(state.vx, state.vy, state.vz).clampLength(0, 7);
+      rig.frame(parts);
+      const hands = armed && this.held === null;
+      const posed = poseBody({
+        data,
+        s: state,
+        parts,
+        rig,
+        gun: hands ? this.gun : null,
+        pistol: this.pistol,
+        reload: this.weapon?.reload ?? null,
+        held: armed ? this.heldItem : null,
+        shieldUp,
+        gait: this.gait,
+        now,
+        swapTicks,
+      });
+      rig.solve(posed.pose);
+      gunAt = posed.gun;
+      knifeAt = posed.knife;
+      if (this.held && posed.held) {
+        this.held.position.copy(posed.held.position);
+        this.held.quaternion.copy(posed.held.quaternion);
+      }
+    }
+    this.posed = true;
+    model.sync();
+    // What's on its back: there until it's in the hands, a device until the last one is used.
+    const back = model.look.back;
+    model.showBack(back === "pack" || back === "radio" || (handSlot(state.hand) !== 2 && (back === "hammer" || state.g2 > 0)));
+    if (this.tag) this.tag.position.set(rig.joints.head.x, rig.joints.head.y + 0.42, rig.joints.head.z);
+    this.gunVisible = this.gun !== null && gunAt !== null;
     if (this.gun) {
       this.gun.group.visible = this.gunVisible && !this.firstPerson;
-      this.gun.group.position.set(...eye).add(new THREE.Vector3(0.16, -0.22, -0.2).applyEuler(rot));
-      this.gun.group.rotation.copy(rot);
+      if (gunAt) {
+        this.gun.group.position.copy(gunAt.position);
+        this.gun.group.quaternion.copy(gunAt.quaternion);
+        this.gun.mag.visible = gunAt.magIn;
+      }
     }
-    if (this.held) {
-      this.held.visible = armed && !this.firstPerson;
-      // A held-up item (Pulse's sensor, Dokkaebi's tablet) is at the face, as the viewmodel has it; the rest at the hip.
-      this.held.position.set(...eye).add((this.heldUp ? new THREE.Vector3(0, -0.06, -0.24) : new THREE.Vector3(0.2, -0.3, -0.3)).applyEuler(rot));
-      this.held.rotation.copy(rot);
+    if (this.held) this.held.visible = armed && !this.firstPerson;
+    if (knifeAt && !this.knife) {
+      this.knife = shapeModel(knifeShape());
+      this.body.add(this.knife.group);
+    }
+    if (this.knife) {
+      this.knife.group.visible = knifeAt !== null && !this.firstPerson;
+      if (knifeAt) {
+        this.knife.group.position.copy(knifeAt.position);
+        this.knife.group.quaternion.copy(knifeAt.quaternion);
+      }
     }
     // Fuze's shield (Phase 8 M11): in your own first person too, where you look through its window.
     this.shield?.update(data, state, shieldPlace(state));
@@ -629,25 +713,26 @@ export class PawnView {
     }
   }
 
-  /** Whether the gadget in its hands is held up to the face (a `hold` item). */
-  private heldUp = false;
   /** Alive and not down, as its last update had it (what it holds shows only then). */
   private armed = true;
 
   /**
-   * The gadget in its hands (its id, or "detonator", and its data's size; `up`: held up to the face), or none: the
-   * gun shows again. Its shaped model (gadgetShapes.ts), no bigger than a hand holds.
+   * The gadget in its hands (its id, or "detonator", and its data's size; `up`: held up to the face; `swing`: swung
+   * in both hands, Sledge's hammer, with its swing's timing), or none: the gun shows again. Its shaped model
+   * (gadgetShapes.ts), no bigger than a hand holds (a swung one its own length).
    */
-  setHeld(held: { id: string; size: readonly number[] } | null, up = false) {
-    this.heldUp = up;
-    const key = held ? `${held.id}:${held.size.join(",")}` : "";
+  setHeld(held: { id: string; size: readonly number[] } | null, up = false, swing: HeldItem["swing"] = null) {
+    const key = held ? `${held.id}:${held.size.join(",")}:${up}:${swing !== null}` : "";
     if (key === this.heldKey) return;
     this.heldKey = key;
     this.heldModel?.dispose();
     this.heldModel = null;
     this.held = null;
+    this.heldItem = null;
     if (!held) return;
-    this.heldModel = shapeModel(heldShape(held.id, [held.size[0], held.size[1], held.size[2]], 0.3).parts);
+    const shape = heldShape(held.id, [held.size[0], held.size[1], held.size[2]], swing ? 1.2 : 0.3);
+    this.heldModel = shapeModel(shape.parts);
+    this.heldItem = { size: shape.size, up, swing };
     this.held = this.heldModel.group;
     this.body.add(this.held);
   }
@@ -680,14 +765,23 @@ export class PawnView {
     pos.needsUpdate = true;
   }
 
-  /** The gun this body holds (from the roster's loadout), or none. */
-  setWeapon(look: GunLook | null) {
+  /** The gun this body holds (from the roster's loadout; `weapon`: its timings, for its reload), or none. */
+  setWeapon(look: GunLook | null, weapon: ResolvedWeapon | null = null) {
+    this.weapon = weapon;
+    this.pistol = look ? pistolHeld(look.class) : false;
     const key = look ? gunKey(look) : "";
     if (key === this.gunLook) return;
     this.gun?.dispose();
     this.gun = look ? buildGun(look) : null;
     this.gunLook = key;
     if (this.gun) this.body.add(this.gun.group);
+  }
+
+  /** Where the gun in this body's hands ends, in the world (null without one drawn): where its shots are seen to leave. */
+  muzzle(): THREE.Vector3 | null {
+    if (!this.gun || !this.gunVisible || !this.body.visible) return null;
+    this.gun.group.updateMatrixWorld();
+    return this.gun.muzzle.clone().applyMatrix4(this.gun.group.matrixWorld);
   }
 
   /** Where this body's laser leaves from, in the world (null without a visible laser). */
@@ -712,6 +806,7 @@ export class PawnView {
     if (this.gun) this.gun.group.visible = this.gunVisible && !on;
     // (Only while armed, as update has it: a body killed holding a gadget doesn't keep it by its head, the review, M12.)
     if (this.held) this.held.visible = !on && this.armed;
+    if (this.knife && on) this.knife.group.visible = false;
   }
 
   /** Remove from the scene and free the GPU resources it owns. */
@@ -719,6 +814,8 @@ export class PawnView {
     this.gun?.dispose();
     this.setHeld(null);
     this.setShield(null);
+    this.model?.dispose();
+    this.knife?.dispose();
     this.rope.geometry.dispose();
     this.drone?.traverse((o) => (o as THREE.Mesh).geometry?.dispose());
     this.scene.remove(this.body, this.wire);

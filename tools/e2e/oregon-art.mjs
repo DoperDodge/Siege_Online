@@ -147,6 +147,15 @@ async function load(gfx, refuse = "") {
     for (let i = 0; i < d.length; i += 4) sum += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
     return sum / (d.length / 4);
   }, png.toString("base64"));
+  // Then your own body from behind for a few frames (third person), so an operator's shader (skinned, and lit by the
+  // probes where they're on) is among the programs checked.
+  await page.evaluate(() => {
+    window.__lab.fly(null);
+    window.__lab.view = { thirdPerson: true };
+  });
+  const f1 = await page.evaluate(() => window.__lab.frames);
+  await page.waitForFunction((t) => window.__lab.frames >= t, f1 + 3, { timeout: WAIT.frames, polling: 100 });
+  console.log(`  ${name}: three frames behind the body at ${at()}`);
   const out = { art: await page.evaluate(() => window.__lab.view.art), gl: await page.evaluate(readGl), errors, brightness };
   await ctx.close();
   return out;
@@ -168,6 +177,8 @@ try {
     const r = await load(gfx);
     const linked = r.gl.programs.filter((p) => p.linked);
     const worst = [...linked].sort((a, b) => b.samplers - a.samplers)[0];
+    // An operator's body is the one skinned mesh: its program reads its bones from a texture.
+    const body = linked.filter((p) => p.names.includes("boneTexture")).sort((a, b) => b.samplers - a.samplers)[0];
     const t3 = r.gl.textures.filter((t) => t.kind === "3d");
     const arrays = r.gl.textures.filter((t) => t.kind === "array");
     const summary = {
@@ -178,6 +189,7 @@ try {
       notLinked: r.gl.programs.length - linked.length,
       maxSamplers: worst?.samplers ?? 0,
       worstSamplers: worst?.names.join(" ") ?? "",
+      bodySamplers: body?.names.join(" ") ?? "",
       maxUniformVectors: Math.max(0, ...linked.map((p) => p.vectors)),
       max3D: Math.max(0, ...t3.map((t) => Math.max(t.w, t.h, t.d))),
       maxLayers: Math.max(0, ...arrays.map((t) => t.d)),
@@ -191,6 +203,8 @@ try {
     result.checks[`${gfx}Probes`] = gfx === "low" ? r.art.probes === null : (r.art.probes?.passes ?? 0) >= 2;
     result.checks[`${gfx}EveryProgramLinked`] = summary.programs > 5 && summary.notLinked === 0;
     result.checks[`${gfx}SamplersWithinWebGL2`] = summary.maxSamplers <= GUARANTEED.samplers;
+    // The body's shader was among them (lit by the probes at Medium and High).
+    result.checks[`${gfx}BodyShaderBuilt`] = body !== undefined && (gfx === "low" || body.names.includes("tProbeA"));
     result.checks[`${gfx}UniformsWithinWebGL2`] = summary.maxUniformVectors <= GUARANTEED.uniformVectors;
     result.checks[`${gfx}TexturesWithinWebGL2`] = summary.max3D <= GUARANTEED.size3D && summary.maxLayers <= GUARANTEED.arrayLayers && summary.maxArraySide <= GUARANTEED.size2D;
     result.checks[`${gfx}NoConsoleErrors`] = r.errors.length === 0;
