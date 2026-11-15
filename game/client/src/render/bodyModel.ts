@@ -732,11 +732,19 @@ export function operatorLook(operatorId: string | undefined): OperatorLook {
   return (operatorId ? looks[operatorId] : undefined) ?? looks.default;
 }
 
-/** The body's one material: colours and roughness from the vertices (cloth, rubber, a lens). */
+/**
+ * The body's one material: colours and roughness from the vertices (cloth, rubber, a lens). Its skinning is the
+ * body's own: a vertex rides one bone whole, and the bones are in the world, so one bone's matrix places it (three's
+ * blends four, a bone's matrix read for each: four times the work a vertex for nothing here).
+ */
 export function bodyMaterial(): THREE.MeshStandardMaterial {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 });
   m.name = "body";
   m.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <skinbase_vertex>", "#ifdef USE_SKINNING\n\tmat4 boneMatX = getBoneMatrix( skinIndex.x );\n#endif")
+      .replace("#include <skinnormal_vertex>", "#ifdef USE_SKINNING\n\tobjectNormal = ( boneMatX * vec4( objectNormal, 0.0 ) ).xyz;\n#endif")
+      .replace("#include <skinning_vertex>", "#ifdef USE_SKINNING\n\ttransformed = ( boneMatX * vec4( transformed, 1.0 ) ).xyz;\n#endif");
     shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nattribute float aRough;\nvarying float vBodyRough;").replace("#include <begin_vertex>", "#include <begin_vertex>\nvBodyRough = aRough;");
     shader.fragmentShader = shader.fragmentShader
       .replace("#include <common>", "#include <common>\nvarying float vBodyRough;")
