@@ -56,7 +56,12 @@ export const gunKitSchema = z.strictObject({
     fovDeg: z.number().min(30).max(100),
     hip: v3,
     sprint: z.strictObject({ offset: v3, yawDeg: z.number(), pitchDeg: z.number() }),
-    downFor: z.strictObject({ equip: z.number().nonnegative(), reload: z.number().nonnegative() }),
+    downFor: z.strictObject({ equip: z.number().nonnegative() }),
+    /**
+     * A reload (Phase 10 M9): the gun comes up and in by `offset` and tips over (muzzle up, in, rolled onto its side),
+     * so the hand at its magazine is in the picture; a shotgun fed a shell at a time rolls `shellRollDeg` further.
+     */
+    reload: z.strictObject({ offset: v3, pitchDeg: z.number(), yawDeg: z.number(), rollDeg: z.number(), shellRollDeg: z.number() }),
     adsDistance: z.number().positive(),
     kickBack: z.number().nonnegative(),
     kickPitchDeg: z.number().nonnegative(),

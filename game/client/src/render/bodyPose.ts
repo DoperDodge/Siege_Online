@@ -468,15 +468,15 @@ function gadget(i: PoseIn, pose: RigPose, out: PoseOut, f: Frame & { qView: THRE
       const hit = held.swing.hitS / Math.max(1e-3, held.swing.swingS);
       blow = p < hit ? smooth(p / Math.max(1e-3, hit)) : 1 - smooth((p - hit) / Math.max(1e-3, 1 - hit));
     }
-    const tip = lerp(1.9, -0.5, blow);
-    q.copy(f.qBody).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(tip - Math.PI / 2, 0.25 * (1 - blow), 0, "YXZ")));
-    const grip = f.at(j.chest, 0.1, lerp(-0.12, -0.2, blow), lerp(0.22, 0.4, blow));
-    // Its handle runs along its length (z, the head at −z): the hands a third and two thirds up it.
-    const len = Math.max(held.size[0], held.size[1], held.size[2]);
-    const along = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
-    item = grip.clone().addScaledVector(along, len * 0.28);
-    pose.handR = grip.clone().addScaledVector(along, len * 0.1);
-    pose.handL = grip.clone().addScaledVector(along, -len * 0.16);
+    // Its handle stands along its own y, the head at the top: tipped back over the shoulder, then over and down ahead.
+    q.copy(f.qBody).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(lerp(0.5, -1.45, blow), 0.2 * (1 - blow), 0, "YXZ")));
+    const along = new THREE.Vector3(0, 1, 0).applyQuaternion(q);
+    // The right hand low on its wrapped grip, ahead of the chest; the left a third of the way up it.
+    const low = -h / 2 + h * 0.12;
+    const grip = f.at(j.chest, 0.08, lerp(-0.2, -0.26, blow), lerp(0.24, 0.42, blow));
+    item = grip.clone().addScaledVector(along, -low);
+    pose.handR = grip;
+    pose.handL = grip.clone().addScaledVector(along, h * 0.3);
   } else if (held.up) {
     // Held up in both hands to look at.
     item = f.E.clone().add(new THREE.Vector3(0, -0.07, -0.3).applyQuaternion(f.qView));

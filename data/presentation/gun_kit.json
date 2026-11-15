@@ -1,5 +1,5 @@
 {
-  "_doc": "How the guns look in the first- and third-person views (Phase 3 M9, Phase 10 M7; PLAN \u00a710 presentation): each weapon by id is a base form (render/gunKit.ts builds it in code from extruded side profiles, turned barrels, rails and sights) with that form's parameters \u2014 barrel length, finish, stock, handguard, magazine, a size, a variant; a weapon not listed looks like its class's. Metres, in the gun's own frame: +x right, +y up, -z toward the muzzle; the origin is the hand on the grip. The sights, barrels, grips and underbarrel sizes are each attachment's. Presentation only: the simulation never reads this file and it is not part of the data hash. `viewmodel` places the gun in front of the camera (hip, sprint and ADS poses) and sets the viewmodel's own field of view.",
+  "_doc": "How the guns look in the first- and third-person views (Phase 3 M9, Phase 10 M7; PLAN \u00a710 presentation): each weapon by id is a base form (render/gunKit.ts builds it in code from extruded side profiles, turned barrels, rails and sights) with that form's parameters \u2014 barrel length, finish, stock, handguard, magazine, a size, a variant; a weapon not listed looks like its class's. Metres, in the gun's own frame: +x right, +y up, -z toward the muzzle; the origin is the hand on the grip. The sights, barrels, grips and underbarrel sizes are each attachment's. Presentation only: the simulation never reads this file and it is not part of the data hash. `viewmodel` places the gun in front of the camera (hip, sprint and ADS poses) and sets the viewmodel's own field of view; `viewmodel.reload` is how far it comes up and in and how it tips (muzzle up, in, rolled onto its side; a shotgun fed shells a little further over) so the hand at its magazine is in the picture (Phase 10 M9).",
   "weapons": {
     "m4": { "base": "ar", "barrel": 0.29, "finish": "black", "stock": "collapsible", "fore": "rail", "mag": "stanag" },
     "556xi": { "base": "ar", "barrel": 0.31, "finish": "tan", "stock": "folding", "fore": "mlok", "mag": "stanag", "variant": "piston" },
@@ -88,8 +88,14 @@
       "pitchDeg": -18
     },
     "downFor": {
-      "equip": 0.25,
-      "reload": 0.08
+      "equip": 0.25
+    },
+    "reload": {
+      "offset": [ -0.07, 0.075, 0.03 ],
+      "pitchDeg": 24,
+      "yawDeg": 14,
+      "rollDeg": -34,
+      "shellRollDeg": -30
     },
     "adsDistance": 0.24,
     "kickBack": 0.035,

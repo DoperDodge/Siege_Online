@@ -9,242 +9,8 @@
 // limb away from the body and, hanging, x right and z forward (its front is +z); a foot's is the trunk's (toes to −z).
 import * as THREE from "three";
 import { loadPresentationData, type OperatorLook } from "@redmond/shared";
-import { BONE, BONES, BodyRig, LEN, type BoneName } from "./bodyRig.js";
-
-type V3 = readonly [number, number, number];
-
-/** One cross-section of a lofted part: its centre, its two half axes, and how square it is (2 round … 8 a box). */
-interface Ring {
-  c: V3;
-  u: V3;
-  v: V3;
-  n: number;
-  color?: string;
-}
-
-interface RingOpts {
-  x?: number;
-  y?: number;
-  z?: number;
-  n?: number;
-  /** A ring across y: how much lower its back (+z) is than its front, per metre of depth (a helmet's rim). */
-  tilt?: number;
-  color?: string;
-}
-
-/** A ring across y (a limb's, the trunk's): half sizes rx across and rz deep, centred at (x, y, z). */
-const ringY = (y: number, rx: number, rz: number, o: RingOpts = {}): Ring => ({ c: [o.x ?? 0, y, o.z ?? 0], u: [rx, 0, 0], v: [0, -(o.tilt ?? 0) * rz, rz], n: o.n ?? 2, color: o.color });
-/** A ring across z (a boot's, a snout's): half sizes rx across and ry up, centred at (x, y, z). */
-const ringZ = (z: number, rx: number, ry: number, o: RingOpts = {}): Ring => ({ c: [o.x ?? 0, o.y ?? 0, z], u: [rx, 0, 0], v: [0, ry, 0], n: o.n ?? 2, color: o.color });
-
-const COLORS = new Map<string, THREE.Color>();
-const colorOf = (hex: string): THREE.Color => {
-  let c = COLORS.get(hex);
-  if (!c) COLORS.set(hex, (c = new THREE.Color(hex)));
-  return c;
-};
-
-const A = new THREE.Vector3();
-const B = new THREE.Vector3();
-const C = new THREE.Vector3();
-const N = new THREE.Vector3();
-
-/** Collects a body's parts: positions, smooth normals, colours, roughness and the bone each vertex rides. */
-class Shaper {
-  readonly pos: number[] = [];
-  readonly nor: number[] = [];
-  readonly col: number[] = [];
-  readonly rough: number[] = [];
-  readonly bone: number[] = [];
-  readonly index: number[] = [];
-  private b = 0;
-  private color = "#808080";
-  private r = 0.85;
-  private m: THREE.Matrix4 | null = null;
-
-  /** Parts from here on ride this bone. */
-  on(bone: BoneName): this {
-    this.b = BONE[bone];
-    return this;
-  }
-
-  /** Parts from here on are this colour, this rough (cloth 0.85 … a lens 0.15). */
-  paint(color: string, rough = 0.85): this {
-    this.color = color;
-    this.r = rough;
-    return this;
-  }
-
-  /** Parts added by `fn` are turned and moved by `m` (in the bone's frame). */
-  with(m: THREE.Matrix4, fn: () => void): void {
-    const was = this.m;
-    this.m = was ? was.clone().multiply(m) : m;
-    fn();
-    this.m = was;
-  }
-
-  /** A skin over the rings in order, `segs` round; its ends closed flat if asked. Normals are smooth along it. */
-  loft(rings: readonly Ring[], segs = 12, cap0 = false, cap1 = false): void {
-    const pts: THREE.Vector3[] = [];
-    const cols: string[] = [];
-    const tris: number[] = [];
-    const add = (p: THREE.Vector3, color: string) => {
-      if (this.m) p.applyMatrix4(this.m);
-      pts.push(p);
-      cols.push(color);
-      return pts.length - 1;
-    };
-    const ringPoint = (ring: Ring, j: number): THREE.Vector3 => {
-      const a = (j / segs) * Math.PI * 2;
-      const e = 2 / ring.n;
-      const cu = Math.sign(Math.cos(a)) * Math.abs(Math.cos(a)) ** e;
-      const cv = Math.sign(Math.sin(a)) * Math.abs(Math.sin(a)) ** e;
-      return new THREE.Vector3(ring.c[0] + ring.u[0] * cu + ring.v[0] * cv, ring.c[1] + ring.u[1] * cu + ring.v[1] * cv, ring.c[2] + ring.u[2] * cu + ring.v[2] * cv);
-    };
-    rings.forEach((ring) => {
-      for (let j = 0; j < segs; j++) add(ringPoint(ring, j), ring.color ?? this.color);
-    });
-    for (let i = 0; i + 1 < rings.length; i++)
-      for (let j = 0; j < segs; j++) {
-        const a = i * segs + j;
-        const b = i * segs + ((j + 1) % segs);
-        const c = (i + 1) * segs + ((j + 1) % segs);
-        const d = (i + 1) * segs + j;
-        tris.push(a, b, c, a, c, d);
-      }
-    // The ends: their own vertices (a hard edge), wound as the sides' edges ask.
-    const cap = (ring: Ring, start: boolean) => {
-      const centre = add(new THREE.Vector3(ring.c[0], ring.c[1], ring.c[2]), ring.color ?? this.color);
-      const first = pts.length;
-      for (let j = 0; j < segs; j++) add(ringPoint(ring, j), ring.color ?? this.color);
-      for (let j = 0; j < segs; j++) {
-        const p = first + j;
-        const q = first + ((j + 1) % segs);
-        if (start) tris.push(centre, q, p);
-        else tris.push(centre, p, q);
-      }
-    };
-    if (cap0) cap(rings[0], true);
-    if (cap1) cap(rings[rings.length - 1], false);
-    this.emit(pts, cols, tris);
-  }
-
-  /** Vertices and triangles into the body: faces turned outward (by the part's volume), normals summed per vertex. */
-  private emit(pts: readonly THREE.Vector3[], cols: readonly string[], tris: number[]): void {
-    const g = new THREE.Vector3();
-    for (const p of pts) g.add(p);
-    g.divideScalar(pts.length);
-    let vol = 0;
-    for (let t = 0; t < tris.length; t += 3) {
-      A.subVectors(pts[tris[t]], g);
-      B.subVectors(pts[tris[t + 1]], g);
-      C.subVectors(pts[tris[t + 2]], g);
-      vol += A.dot(N.crossVectors(B, C));
-    }
-    if (vol < 0) for (let t = 0; t < tris.length; t += 3) [tris[t + 1], tris[t + 2]] = [tris[t + 2], tris[t + 1]];
-    const normals = pts.map(() => new THREE.Vector3());
-    for (let t = 0; t < tris.length; t += 3) {
-      A.subVectors(pts[tris[t + 1]], pts[tris[t]]);
-      B.subVectors(pts[tris[t + 2]], pts[tris[t]]);
-      N.crossVectors(A, B);
-      normals[tris[t]].add(N);
-      normals[tris[t + 1]].add(N);
-      normals[tris[t + 2]].add(N);
-    }
-    const base = this.pos.length / 3;
-    pts.forEach((p, i) => {
-      const n = normals[i];
-      if (n.lengthSq() < 1e-20) n.subVectors(p, g);
-      if (n.lengthSq() < 1e-20) n.set(0, 1, 0);
-      n.normalize();
-      const c = colorOf(cols[i]);
-      this.pos.push(p.x, p.y, p.z);
-      this.nor.push(n.x, n.y, n.z);
-      this.col.push(c.r, c.g, c.b);
-      this.rough.push(this.r);
-      this.bone.push(this.b);
-    });
-    for (const i of tris) this.index.push(base + i);
-  }
-
-  /** A ball (or an egg: a radius per axis). */
-  ball(c: V3, r: number | V3, segs = 10, stacks = 6): void {
-    const [rx, ry, rz] = typeof r === "number" ? [r, r, r] : r;
-    const rings: Ring[] = [];
-    for (let k = 0; k <= stacks; k++) {
-      const phi = -Math.PI / 2 + (Math.PI * k) / stacks;
-      const w = Math.max(1e-4, Math.cos(phi));
-      rings.push({ c: [c[0], c[1] + ry * Math.sin(phi), c[2]], u: [rx * w, 0, 0], v: [0, 0, rz * w], n: 2 });
-    }
-    this.loft(rings, segs);
-  }
-
-  /** A box with soft edges, centred at c: skinned along its thinnest side, its outline rounded (n: 2 an oval … 8 square). */
-  box(c: V3, size: V3, n = 5, bevel = 0.004, segs = 12): void {
-    const t = size[0] <= size[1] && size[0] <= size[2] ? 0 : size[1] <= size[2] ? 1 : 2;
-    const [ua, va] = t === 0 ? [1, 2] : t === 1 ? [0, 2] : [0, 1];
-    const h = size[t] / 2;
-    const bv = Math.min(bevel, h * 0.9, size[ua] * 0.3, size[va] * 0.3);
-    const ring = (at: number, inset: number): Ring => {
-      const cc = [c[0], c[1], c[2]];
-      cc[t] += at;
-      const u = [0, 0, 0];
-      const v = [0, 0, 0];
-      u[ua] = size[ua] / 2 - inset;
-      v[va] = size[va] / 2 - inset;
-      return { c: cc as unknown as V3, u: u as unknown as V3, v: v as unknown as V3, n };
-    };
-    this.loft([ring(-h, bv), ring(-h + bv, 0), ring(h - bv, 0), ring(h, bv)], segs, true, true);
-  }
-
-  /** A round bar from a to b (r at a, r1 at b). */
-  bar(a: V3, b: V3, r: number, r1 = r, segs = 8, caps = true): void {
-    const dir = new THREE.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]).normalize();
-    const u = new THREE.Vector3().crossVectors(dir, Math.abs(dir.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0)).normalize();
-    const v = new THREE.Vector3().crossVectors(dir, u);
-    const ring = (p: V3, rr: number): Ring => ({ c: p, u: [u.x * rr, u.y * rr, u.z * rr], v: [v.x * rr, v.y * rr, v.z * rr], n: 2 });
-    this.loft([ring(a, r), ring(b, r1)], segs, caps, caps);
-  }
-
-  /** A flat strap along a path: `width` across it (a vector), `thick` through it. */
-  strap(path: readonly V3[], width: V3, thick: number): void {
-    const w = new THREE.Vector3(width[0], width[1], width[2]);
-    const rings: Ring[] = path.map((p, k) => {
-      const a = path[Math.max(0, k - 1)];
-      const b = path[Math.min(path.length - 1, k + 1)];
-      const t = new THREE.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]).normalize();
-      const out = new THREE.Vector3().crossVectors(t, w).normalize().multiplyScalar(thick / 2);
-      return { c: p, u: [w.x / 2, w.y / 2, w.z / 2], v: [out.x, out.y, out.z], n: 6 };
-    });
-    this.loft(rings, 8, true, true);
-  }
-
-  get triangles(): number {
-    return this.index.length / 3;
-  }
-
-  /** The parts as one geometry; `skinned`: each vertex bound whole to its bone. */
-  geometry(skinned: boolean): THREE.BufferGeometry {
-    const g = new THREE.BufferGeometry();
-    g.setAttribute("position", new THREE.Float32BufferAttribute(this.pos, 3));
-    g.setAttribute("normal", new THREE.Float32BufferAttribute(this.nor, 3));
-    g.setAttribute("color", new THREE.Float32BufferAttribute(this.col, 3));
-    g.setAttribute("aRough", new THREE.Float32BufferAttribute(this.rough, 1));
-    if (skinned) {
-      const n = this.bone.length;
-      const idx = new Uint16Array(n * 4);
-      const w = new Float32Array(n * 4);
-      for (let i = 0; i < n; i++) {
-        idx[i * 4] = this.bone[i];
-        w[i * 4] = 1;
-      }
-      g.setAttribute("skinIndex", new THREE.Uint16BufferAttribute(idx, 4));
-      g.setAttribute("skinWeight", new THREE.Float32BufferAttribute(w, 4));
-    }
-    g.setIndex(this.index);
-    return g;
-  }
-}
+import { BONE, BONES, BodyRig, LEN } from "./bodyRig.js";
+import { ringY, ringZ, Shaper, type V3 } from "./loft.js";
 
 // ---------------------------------------------------------------------------------------------------------------------
 // The body's parts. Sizes in metres, for a body 1.8 m tall standing (the hitboxes' own joints: bodyRig.ts).
@@ -256,7 +22,7 @@ const STEEL = "#7d8389";
 
 /** The trunk: hips and belt, the belly between, the ribs and shoulders, the neck. */
 function trunk(s: Shaper, L: OperatorLook): void {
-  s.on("pelvis").paint(L.trousers);
+  s.on(BONE.pelvis).paint(L.trousers);
   s.loft([ringY(-0.14, 0.11, 0.09), ringY(-0.09, 0.172, 0.114), ringY(-0.02, 0.18, 0.12), ringY(0.05, 0.168, 0.113), ringY(0.1, 0.156, 0.106)], 14, true);
   // The belt, a buckle, and what hangs on it: pouches on the left, a dump pouch behind.
   s.paint(L.gear, 0.7);
@@ -266,23 +32,23 @@ function trunk(s: Shaper, L: OperatorLook): void {
   s.box([-0.176, 0.0, 0.04], [0.03, 0.1, 0.06]);
   s.box([-0.07, -0.005, 0.126], [0.13, 0.12, 0.04], 4, 0.008);
 
-  s.on("spine").paint(L.uniform);
+  s.on(BONE.spine).paint(L.uniform);
   s.loft([ringY(0.05, 0.158, 0.107), ringY(0.16, 0.154, 0.104), ringY(0.3, 0.166, 0.112), ringY(0.42, 0.176, 0.119)], 14);
 
-  s.on("chest").paint(L.uniform);
+  s.on(BONE.chest).paint(L.uniform);
   s.loft(
     [ringY(-0.34, 0.156, 0.106), ringY(-0.24, 0.168, 0.114), ringY(-0.12, 0.186, 0.124), ringY(-0.03, 0.192, 0.122), ringY(0.022, 0.176, 0.11), ringY(0.052, 0.118, 0.088), ringY(0.072, 0.066, 0.066)],
     14,
   );
 
   const hooded = L.head === "hood";
-  s.on("neck").paint(L.head === "visor" ? L.gear : hooded ? L.headColor : L.skin);
+  s.on(BONE.neck).paint(L.head === "visor" ? L.gear : hooded ? L.headColor : L.skin);
   s.loft([ringY(-0.035, 0.064, 0.064), ringY(0.05, 0.056, 0.058), ringY(LEN.neck + 0.03, 0.054, 0.058)], 10);
 }
 
 /** The vest: plates front and back with a band round the ribs and straps over the shoulders, or a light chest rig. */
 function vest(s: Shaper, L: OperatorLook): void {
-  s.on("chest");
+  s.on(BONE.chest);
   const heavy = L.vestKind === "heavy";
   const strapsOver = (x: number, front: number, back: number, color: string) => {
     s.paint(color, 0.8);
@@ -323,9 +89,9 @@ function vest(s: Shaper, L: OperatorLook): void {
   if (heavy) {
     // A collar round the neck and a flap over the groin.
     s.loft([ringY(0.025, 0.118, 0.105), ringY(0.06, 0.1, 0.098), ringY(0.11, 0.09, 0.092), ringY(0.113, 0.078, 0.08)], 12);
-    s.on("pelvis");
+    s.on(BONE.pelvis);
     s.box([0, -0.03, -0.122], [0.2, 0.19, 0.03], 4, 0.008);
-    s.on("chest");
+    s.on(BONE.chest);
   }
   // Magazine pouches low on the front (the magazines' ends showing), a flat pouch over them, a radio at the left.
   const z = heavy ? -0.178 : -0.17;
@@ -342,7 +108,7 @@ function vest(s: Shaper, L: OperatorLook): void {
 function leg(s: Shaper, L: OperatorLook, side: -1 | 1): void {
   const left = side < 0;
   const robot = L.head === "visor";
-  s.on(left ? "thighL" : "thighR");
+  s.on(left ? BONE.thighL : BONE.thighR);
   s.paint(robot ? L.gear : L.trousers);
   s.ball([0, 0, 0], 0.104, 12, 6);
   s.paint(L.trousers);
@@ -361,7 +127,7 @@ function leg(s: Shaper, L: OperatorLook, side: -1 | 1): void {
     s.box([-0.102, 0.15, 0.0], [0.04, 0.13, 0.1]);
   }
 
-  s.on(left ? "shinL" : "shinR").paint(L.trousers);
+  s.on(left ? BONE.shinL : BONE.shinR).paint(L.trousers);
   s.loft([ringY(0.0, 0.071, 0.075), ringY(0.09, 0.07, 0.078, { z: -0.006 }), ringY(0.22, 0.06, 0.066, { z: -0.003 }), ringY(0.315, 0.054, 0.058)], 12);
   s.paint(L.boots, 0.6);
   s.loft([ringY(0.29, 0.06, 0.064), ringY(0.36, 0.058, 0.062), ringY(LEN.shin + 0.02, 0.054, 0.062)], 12, true);
@@ -371,7 +137,7 @@ function leg(s: Shaper, L: OperatorLook, side: -1 | 1): void {
   }
 
   // The boot: heel to toe along z, its sole under it.
-  s.on(left ? "footL" : "footR").paint(L.boots, 0.6);
+  s.on(left ? BONE.footL : BONE.footR).paint(L.boots, 0.6);
   s.loft(
     [
       ringZ(0.088, 0.04, 0.042, { y: -0.034, n: 3 }),
@@ -394,7 +160,7 @@ function arm(s: Shaper, L: OperatorLook, side: -1 | 1): void {
   const left = side < 0;
   const short = L.sleeves === "short";
   const robot = L.head === "visor";
-  s.on(left ? "upperArmL" : "upperArmR").paint(robot ? L.gear : L.uniform);
+  s.on(left ? BONE.upperArmL : BONE.upperArmR).paint(robot ? L.gear : L.uniform);
   s.ball([0, 0, 0], 0.07, 10, 6);
   s.paint(L.uniform);
   if (short) {
@@ -415,7 +181,7 @@ function arm(s: Shaper, L: OperatorLook, side: -1 | 1): void {
     s.box([side * 0.058, 0.05, 0.0], [0.045, 0.17, 0.125], 3, 0.012);
   }
 
-  s.on(left ? "foreArmL" : "foreArmR").paint(short ? L.skin : L.uniform, short ? 0.7 : 0.85);
+  s.on(left ? BONE.foreArmL : BONE.foreArmR).paint(short ? L.skin : L.uniform, short ? 0.7 : 0.85);
   s.loft([ringY(0.0, 0.049, 0.05), ringY(0.07, 0.05, 0.051), ringY(0.19, 0.042, 0.043), ringY(0.25, 0.036, 0.037)], 10);
   if (L.pads) {
     s.paint(L.gear, 0.55);
@@ -434,7 +200,7 @@ function arm(s: Shaper, L: OperatorLook, side: -1 | 1): void {
 
 /** The head and what's on it. */
 function head(s: Shaper, L: OperatorLook): void {
-  s.on("head");
+  s.on(BONE.head);
   const robot = L.head === "visor";
   if (robot) {
     // Skopós: a smooth shell with a band of glass across the eyes.
@@ -628,7 +394,7 @@ function head(s: Shaper, L: OperatorLook): void {
 
 /** What's on the back (its own mesh, in the chest's frame: it goes when it's in the hands, or used up). */
 function backItem(s: Shaper, L: OperatorLook): void {
-  s.on("chest");
+  s.on(BONE.chest);
   const z = L.vestKind === "light" ? 0.122 : 0.15;
   switch (L.back) {
     case "none":

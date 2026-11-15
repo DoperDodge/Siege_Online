@@ -1395,6 +1395,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     if (rs && viewed && me) {
       // (Knocked down, D-156: nothing in hand until you're up.)
       const inHand = viewed.id === me.id && !outside && !onCamera && !ctrl.shellCam && ctrl.swapPhase === 0 && rs.mode !== PawnMode.Knocked ? (viewed.loadout?.weapons[rs.slot] ?? null) : null;
+      viewmodel.setOperator(viewed.operatorId);
       viewmodel.update(now, elapsed, inHand, rs, viewed.loadout?.swapTicks ?? 1, inHand ? heldGadget(viewed, rs) : null, !!viewed.loadout?.shield && rs.shieldAt === 1);
       viewmodel.render(renderer);
       const held = viewed.loadout?.weapons[rs.slot];

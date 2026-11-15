@@ -236,6 +236,15 @@ D-179 for Ulo.
 Gloved arms in code, posed by the viewmodel: per-weapon idle, ADS, fire, reload (tactical and empty), sprint,
 equip and melee, gadget use per operator, all keyframed in code from the weapon's own timings (data/weapons).
 
+**As built (D-180):** fpArms.ts draws two hands (six rigid poses, a left the mirror of a right) and the sleeves
+behind them, dressed as the operator. The viewmodel places each hand by a frame on what it holds (the grip, under
+the handguard or on a fitted grip, both on a pistol's) and the forearm runs back out of the picture; there are no
+shoulders to solve to. A reload brings the gun up onto its side (gun_kit.json `viewmodel.reload`) and takes the
+left hand to the magazine, away with it and back with the next at the ticks the simulation has it out and in, then
+(from empty) to the bolt's release; a shotgun takes a shell at a time. The knife is in the right fist; a gadget
+lies in the right palm, is held up by its corners in both hands, or (the hammer) swung in both. Fingers don't
+articulate and nothing on the gun cycles: see D-180.
+
 ## 13. Performance and tests
 
 - **Unit tests:** materials and art data validate; every room has a style; the room map gives each face of a wall
