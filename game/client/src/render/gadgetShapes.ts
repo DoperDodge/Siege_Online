@@ -287,6 +287,13 @@ export function gadgetShape(id: string, size: V3): Map<ShapeMat, THREE.BufferGeo
       p.box("dark", [w * 0.62, h * 0.025, d * 1.02], [0, h / 2 - h * 0.05, 0]);
       break;
     }
+    case "dropped_phone": {
+      // A phone, its screen up: a slim black slab, the screen lit, a camera bump on its back.
+      p.box("black", [w * 0.94, h * 0.45, d * 0.96], [0, -h * 0.05, 0]);
+      p.box("blueGlow", [w * 0.82, h * 0.05, d * 0.84], [0, h * 0.19, 0]);
+      p.box("dark", [w * 0.3, h * 0.12, d * 0.16], [-w * 0.22, -h * 0.32, -d * 0.34]);
+      break;
+    }
     default:
       return null;
   }

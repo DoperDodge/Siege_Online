@@ -29,7 +29,7 @@ export class DownedHud {
     destruction?: DestructionData,
     movement?: MovementData,
     holds?: { plantTicks: number; disableTicks: number } | null,
-    gadget: { name: string; placeTicks: number; takeBack: string; takeBackTicks: number; needleTicks?: number } | null = null,
+    gadget: { name: string; placeTicks: number; takeBack: string; takeBackTicks: number; needleTicks?: number; phoneTicks?: number } | null = null,
   ) {
     const $ = this.$;
     const pool = combat.dbno.hp;
@@ -69,6 +69,7 @@ export class DownedHud {
       const defuser = s.deployKind === DeployKind.Plant || s.deployKind === DeployKind.Disable;
       const takeBack = s.deployKind === DeployKind.PickUp;
       const needle = s.deployKind === DeployKind.Needle;
+      const phone = s.deployKind === DeployKind.Phone;
       const total = Math.max(
         1,
         defuser
@@ -77,10 +78,14 @@ export class DownedHud {
             ? (gadget?.takeBackTicks ?? 1)
             : needle
               ? (gadget?.needleTicks ?? 1)
-              : deployTicks(destruction, s.deployKind),
+              : phone
+                ? (gadget?.phoneTicks ?? 1)
+                : deployTicks(destruction, s.deployKind),
       );
       const what = needle
         ? "PULLING THE NEEDLE"
+        : phone
+        ? "TURNING YOUR PHONE OFF"
         : takeBack
         ? `PICKING UP THE ${(gadget?.takeBack ?? "gadget").toUpperCase()}`
         : s.deployKind === DeployKind.Reinforce

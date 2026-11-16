@@ -16,6 +16,7 @@ import {
   defaultLoadoutPick,
   encodePickLoadout,
   encodeCallout,
+  encodeJegeoPick,
   droneEye,
   eyePose,
   GRIPS,
@@ -47,6 +48,7 @@ import {
   zoneBoxes,
   type IndexedOp,
   type InputCmd,
+  type JegeoPick,
   type Pawn,
   type PanelChange,
   type PawnState,
@@ -61,9 +63,12 @@ import {
   type WeaponPick,
   WeaponAct,
   GadgetServer,
+  DeployKind,
   GadgetAct,
   GFlag,
+  Hand,
   kindId,
+  kindOf,
   handSlot,
   isDetonator,
   forwardXZ,
@@ -251,6 +256,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     <div class="flash"></div>
     <div class="stun-white"></div><div class="emp-static hidden"></div>
     <div class="sensor hidden"><div class="sensor-fan"></div><div class="sensor-blips"></div><div class="sensor-title"></div></div>
+    <div class="tablet hidden"><div class="tablet-title"></div><div class="tablet-list"></div><div class="tablet-help"></div></div>
     <div class="prompt hidden"></div>
     <div class="needle-ui hidden"></div>
     <div class="jegeo-bar hidden"><div class="jegeo-title"></div><div class="jegeo-fill"><div></div></div></div>
@@ -499,6 +505,18 @@ export async function startLab(o: LabOptions): Promise<void> {
   // The comm wheel (Phase 7) needs a room to send its callouts to.
   controls.wheelSize = () => (net ? data.intel.callouts.length : 0);
   controls.onCallout = (id) => net?.send(encodeCallout(id));
+  // Dokkaebi's tablet up: the wheel moves her pick instead of switching weapons.
+  {
+    const taken = controls.wheelTaken;
+    controls.wheelTaken = () => tabletUp || taken();
+    renderer.domElement.addEventListener(
+      "wheel",
+      (e) => {
+        if (tabletUp && document.pointerLockElement === renderer.domElement && e.deltaY !== 0) moveTabletPick(e.deltaY > 0 ? 1 : -1);
+      },
+      { passive: true },
+    );
+  }
   controls.stanceLocked = () => {
     const p = sim.pawns.get(ctrl.possessedPawnId);
     return ctrl.shellCam || ctrl.swapPhase !== 0 || (p !== undefined && isDowned(p.state)); // down: the body decides
@@ -1351,6 +1369,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     updateCombatHud(now);
     updateStunHud(now);
     updateSensorHud();
+    updateTablet();
     updateLasers();
 
     let rs: PawnState | null = null;
@@ -1436,11 +1455,14 @@ export async function startLab(o: LabOptions): Promise<void> {
       // (Knocked down, D-156: nothing in hand until you're up. On a ladder or with the hands at work — a revive, a
       // reinforcement, a barricade, the defuser — the gun can't fire and isn't in the hands: none drawn, as the body
       // others see has it slung.)
-      const busy = rs.mode === PawnMode.Ladder || rs.reviveTarget !== 0 || rs.deployKind !== 0;
+      // A ringing phone being turned off (Dokkaebi's call) is in the hands instead of the gun.
+      const phoneOut = rs.deployKind === DeployKind.Phone;
+      const busy = rs.mode === PawnMode.Ladder || rs.reviveTarget !== 0 || (rs.deployKind !== 0 && !phoneOut);
       const inHand = viewed.id === me.id && !outside && !onCamera && !ctrl.shellCam && ctrl.swapPhase === 0 && rs.mode !== PawnMode.Knocked && !busy ? (viewed.loadout?.weapons[rs.slot] ?? null) : null;
       // (Your arms dressed as you: made again only when there are arms to draw, not for each body or drone you look through.)
       if (inHand) viewmodel.setOperator(viewed.operatorId);
-      viewmodel.update(now, elapsed, inHand, rs, viewed.loadout?.swapTicks ?? 1, inHand ? heldGadget(viewed, rs) : null, !!viewed.loadout?.shield && rs.shieldAt === 1);
+      const phone = phoneOut ? data.gadgets.get("dropped_phone") : undefined;
+      viewmodel.update(now, elapsed, inHand, rs, viewed.loadout?.swapTicks ?? 1, !inHand ? null : phone ? { data: phone, detonator: false } : heldGadget(viewed, rs), !!viewed.loadout?.shield && rs.shieldAt === 1);
       viewmodel.render(renderer);
       const held = viewed.loadout?.weapons[rs.slot];
       const aimed = inHand !== null && viewmodel.aim > 0.9;
@@ -1657,6 +1679,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       takeBack: backData?.name ?? "gadget",
       takeBackTicks: ticks(data.gadgetRules.pickUpS),
       needleTicks: ticks(guData(data)?.pullS ?? 1),
+      phoneTicks: ticks(data.gadgets.get("jegeo_payload")?.jegeo?.dismissS ?? 1),
     });
     app.querySelectorAll<HTMLElement>(".stances span").forEach((el) => el.classList.toggle("on", Number(el.dataset.s) === s.stance));
     $(".stance-bar div").style.width = `${s.stanceT * 100}%`;
@@ -1754,7 +1777,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     jegeoBar.classList.toggle("hidden", jegeoRun === null);
     if (jegeoRun) {
       jegeoBar.classList.toggle("ringing", jegeoRun.ringing);
-      $(".jegeo-title").textContent = jegeoRun.ringing ? `Phone ringing: hold ${keyLabel(settings.keys.interact)} to dismiss` : "Uploading the payload";
+      $(".jegeo-title").textContent = jegeoRun.ringing ? `Your phone's ringing (Dokkaebi): hold ${keyLabel(settings.keys.interact)} to take it out and turn it off before it blows` : "Uploading the payload";
       ($(".jegeo-fill").firstElementChild as HTMLElement).style.width = `${Math.min(100, ((performance.now() - jegeoRun.start) / jegeoRun.ms) * 100).toFixed(0)}%`;
     }
     // A Kludge's hack under way (Phase 8 M8): its bar filling.
@@ -2653,8 +2676,16 @@ export async function startLab(o: LabOptions): Promise<void> {
           if (e.stage === 0) flash(`Uploading to ${who}: keep the tablet up (${secs} s) · ${e.charges} left`, "info");
           else if (e.stage === 1) flash(ctrl.pawnIds.includes(e.pawnId) ? "Your phone exploded: no cameras for the rest of the round" : `Payload delivered to ${who}`, ctrl.pawnIds.includes(e.pawnId) ? "bad" : "info");
           else if (e.stage === 2) flash(ctrl.pawnIds.includes(e.pawnId) ? "The call's gone" : "Upload cut", "info");
-          else if (e.stage === 3) flash(`Your phone's ringing: hold ${keyLabel(settings.keys.interact)} to dismiss it within ${secs} s`, "bad");
+          else if (e.stage === 3) flash(`Your phone's ringing: hold ${keyLabel(settings.keys.interact)} to take it out and turn it off within ${secs} s`, "bad");
           else flash(`Phone hacked: your team watches the defenders' cameras for ${secs} s`, "info");
+          // Her tablet's list: a target she called rests his cooldown from now; a phone hacked is gone from it.
+          const cool = data.gadgets.get("jegeo_payload")?.jegeo?.cooldownS ?? 0;
+          if (e.stage !== 3) jegeoCharges = e.charges;
+          if (e.stage === 1 || e.stage === 2) jegeoCooldownUntil.set(e.pawnId, now + cool * 1000);
+          if (e.stage === 4) {
+            phonesHacked.add(e.pawnId);
+            hacksMade++;
+          }
         }
         if (e.kind === "ping") {
           // An enemy gadget pinged (Phase 8 M3) is named with it, a heartbeat on Pulse's sensor (M6) too.
@@ -2668,7 +2699,10 @@ export async function startLab(o: LabOptions): Promise<void> {
         }
         else if (e.kind === "spotted") {
           if (ctrl.pawnIds.includes(e.pawnId)) flash("You've been spotted", "bad");
-          else intelHud.spotted(e, now);
+          else {
+            intelHud.spotted(e, now);
+            identifiedUntil.set(e.pawnId, Math.max(identifiedUntil.get(e.pawnId) ?? 0, now + e.ticks * DT * 1000));
+          }
         } else if (e.kind === "callout") killFeed.push({ text: `${e.name}: ${data.intel.callouts[e.id] ?? "?"}`, mine: false, callout: true }, now);
       }
     }
@@ -2679,10 +2713,94 @@ export async function startLab(o: LabOptions): Promise<void> {
   let hackRun: { start: number; ms: number } | null = null;
   /** Dokkaebi's upload under way (Phase 8 M9), or the call ringing on our phone: its bar. */
   let jegeoRun: { start: number; ms: number; ringing: boolean } | null = null;
+  /**
+   * Dokkaebi's tablet (Ulo's request after Phase 10): the defenders her team has identified (spotted, until when: ms),
+   * the ones she's called resting their cooldown, the dead defenders' phones hacked, and her pick among them (the wheel
+   * moves it; the room is told each change, and Fire sends to it).
+   */
+  const identifiedUntil = new Map<number, number>();
+  const jegeoCooldownUntil = new Map<number, number>();
+  const phonesHacked = new Set<number>();
+  let hacksMade = 0;
+  let tabletUp = false;
+  let tabletPick = "";
+  let tabletSent = "";
+  let tabletKey = "";
+  let tabletEntries: { key: string; label: string; note: string; ok: boolean; pick: JegeoPick }[] = [];
+  /** Her charges, as her last payload event said. */
+  let jegeoCharges: number | null = null;
 
   /** The heartbeats Pulse's sensor last showed (Phase 8 M6): kept, frozen, while an EMP has him. */
   let heartsShown: { x: number; y: number }[] = [];
   let heartsKey = "";
+
+  /**
+   * Dokkaebi's tablet up: the defenders her team has identified (their operator and player, how long they stay
+   * identified, or their cooldown after a call) and the dead defenders' phones she can still hack, one picked (the wheel
+   * moves it). The pick is the room's to check when she presses Fire (net/room.ts jegeo).
+   */
+  function updateTablet() {
+    const body = livingBody();
+    const onFeed = ctrl.cam !== 0 || ctrl.drone !== 0 || ctrl.shellCam || ctrl.swapPhase !== 0;
+    const t = body ? slotGadget(data, body.loadout, 2)?.jegeo : undefined;
+    tabletUp = !!body && !!t && !onFeed && body.state.hand === Hand.Ability && body.state.gAct !== GadgetAct.Equip;
+    $(".tablet").classList.toggle("hidden", !tabletUp);
+    if (!tabletUp || !body || !t) return;
+    const now = performance.now();
+    const roster = net?.session.roster ?? [];
+    const opName = (id: string) => data.operators.get(id)?.name ?? id;
+    const entries: typeof tabletEntries = [];
+    for (const [id, until] of identifiedUntil) {
+      const p = sim.pawns.get(id);
+      if (until <= now || !p || p.state.mode === PawnMode.Dead) {
+        identifiedUntil.delete(id);
+        continue;
+      }
+      const r = roster.find((e) => e.pawnIds.includes(id));
+      const cool = (jegeoCooldownUntil.get(id) ?? 0) - now;
+      entries.push({
+        key: `d:${id}`,
+        label: r ? `${opName(r.operatorId)} (${r.name})` : "Defender",
+        note: cool > 0 ? `calls again in ${Math.ceil(cool / 1000)} s` : `identified · ${Math.ceil((until - now) / 1000)} s`,
+        ok: cool <= 0,
+        pick: { kind: "defender", pawnId: id },
+      });
+    }
+    const phoneKind = kindOf("dropped_phone");
+    for (const g of sim.gadgets.list) {
+      if (g.kind !== phoneKind || g.team === body.team || phonesHacked.has(g.id)) continue;
+      const r = roster.find((e) => e.controllerId === g.owner);
+      entries.push({
+        key: `p:${g.id}`,
+        label: `${r ? `${opName(r.operatorId)}'s` : "A dead defender's"} phone`,
+        note: hacksMade < t.camHacks ? `hack the cameras (${t.camS} s)` : "no hacks left",
+        ok: hacksMade < t.camHacks,
+        pick: { kind: "phone", gadgetId: g.id },
+      });
+    }
+    tabletEntries = entries;
+    if (!entries.some((e) => e.key === tabletPick)) tabletPick = entries[0]?.key ?? "";
+    if (tabletPick !== tabletSent) {
+      tabletSent = tabletPick;
+      net?.send(encodeJegeoPick(entries.find((e) => e.key === tabletPick)?.pick ?? { kind: "none" }));
+    }
+    const charges = jegeoCharges ?? t.startCharges;
+    const key = `${tabletPick}|${charges}|${entries.map((e) => `${e.key}:${e.note}`).join(",")}`;
+    if (key === tabletKey) return;
+    tabletKey = key;
+    $(".tablet-title").textContent = `JEGEO PAYLOAD · ${charges} charge${charges === 1 ? "" : "s"}`;
+    $(".tablet-list").innerHTML = entries.length
+      ? entries.map((e) => `<div class="${e.key === tabletPick ? "on" : ""}${e.ok ? "" : " off"}"><b>${escapeHtml(e.label)}</b><span>${escapeHtml(e.note)}</span></div>`).join("")
+      : `<div class="empty">No defender identified: drone, ping or scan one</div>`;
+    $(".tablet-help").textContent = entries.length ? `wheel: pick · fire: ${tabletPick.startsWith("p:") ? "hack the cameras" : "send the payload"}` : "";
+  }
+
+  /** Dokkaebi's tablet: the wheel moves her pick down (or up) its list. */
+  function moveTabletPick(step: number) {
+    if (!tabletEntries.length) return;
+    const at = Math.max(0, tabletEntries.findIndex((e) => e.key === tabletPick));
+    tabletPick = tabletEntries[(at + step + tabletEntries.length) % tabletEntries.length].key;
+  }
 
   /**
    * Pulse's sensor up (Phase 8 M6): the attackers' heartbeats in front of him as blips on a fan, nearer the bottom the

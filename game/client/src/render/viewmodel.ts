@@ -471,6 +471,13 @@ export class Viewmodel {
       const hit = u.hitS / u.swingS;
       strike = p < hit ? smooth(p / hit) : 1 - smooth((p - hit) / Math.max(1e-6, 1 - hit));
     }
+    if (gadget?.data.id === "dropped_phone") {
+      // A phone out of the pocket to turn a call off (Dokkaebi's): up in front in the right hand, its screen to the eye.
+      this.held.position.set(0.05, -0.13, -0.3);
+      this.held.rotation.set(1.2, -0.12, 0.08);
+      this.holdHeld("palm");
+      return;
+    }
     if (u?.kind === "hold" && !gadget?.detonator) {
       // Held up to the face like a scope (Pulse's sensor, Ulo's test; Dokkaebi's tablet the same): it comes up from the
       // hip over its equip time to just under the eyes, its screen toward them.

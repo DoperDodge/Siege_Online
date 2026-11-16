@@ -615,6 +615,25 @@ export class Sim {
     return true; // still this tick
   }
 
+  /**
+   * A ringing phone being turned off (Dokkaebi's Jegeo Payload): out in the hand, the gun away, switched off once
+   * Interact has been held the payload's `dismissS`; let go sooner, it goes back in the pocket still ringing. The room
+   * sees the ringing stop and cuts her upload (net/room.ts jegeo).
+   */
+  private holdPhone(pawn: Pawn, held: boolean): boolean {
+    const s = pawn.state;
+    const k = this.data.gadgets.get("jegeo_payload")?.jegeo;
+    if (!k || !held || !s.ringing) {
+      endDeploy(pawn);
+      return false;
+    }
+    s.deployTicks = Math.min(0xffff, s.deployTicks + 1);
+    if (s.deployTicks < ticks(k.dismissS)) return true;
+    s.ringing = false;
+    endDeploy(pawn);
+    return true; // still this tick
+  }
+
   /** The carrier's Drop key: the defuser falls to the floor under the body (off a rope or a ladder too). */
   private dropDefuser(pawn: Pawn, input: InputCmd) {
     const o = this.objective;
@@ -648,6 +667,7 @@ export class Sim {
     const s = pawn.state;
     const held = (input.buttons & Btn.Interact) !== 0;
     if (s.deployKind === DeployKind.Needle) return this.holdNeedle(pawn, held);
+    if (s.deployKind === DeployKind.Phone) return this.holdPhone(pawn, held);
     if (s.deployKind === DeployKind.PickUp) return this.holdPickUp(pawn, held);
     if (s.deployKind === DeployKind.Plant || s.deployKind === DeployKind.Disable) return this.holdDefuser(pawn, held);
     if (s.deployKind !== DeployKind.None) {
@@ -673,8 +693,14 @@ export class Sim {
       s.deploySection = 0;
       return true;
     }
-    // Dokkaebi's call ringing: the press is the dismissal's (the room counts it held), before anything else on F.
-    if (s.ringing) return false;
+    // Dokkaebi's call ringing: the press takes the phone out to turn it off, before anything else on F.
+    if (s.ringing) {
+      s.deployKind = DeployKind.Phone;
+      s.deployPanel = 0;
+      s.deployTicks = 1;
+      s.deploySection = 0;
+      return true;
+    }
     const d = this.defuserActionFor(pawn);
     if (d === "pickUp") {
       this.objective!.carrier = pawn.id;

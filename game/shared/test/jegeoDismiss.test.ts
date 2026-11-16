@@ -31,4 +31,39 @@ describe("dismissing Dokkaebi's call at a reinforceable wall", () => {
     expect(s.clients[0].events.some((e) => e.kind === "jegeo" && e.stage === 2)).toBe(true);
     expect([s.body(1).state.ringing, wall.reinforced]).toEqual([false, 0]);
   });
+
+  it("the phone comes out into his hands (no shooting meanwhile); let go too soon, it goes back still ringing; held, it's off", async () => {
+    const s = await scene(["dokkaebi", "mute"], "gadget_lab");
+    s.park();
+    s.teleport(1, 1.6, 0, -2.0, 0);
+    s.teleport(0, 1.6, 0, 1.0, 0);
+    s.room.spot(s.body(1).id, 60);
+    const look = s.aimAt(0, heartOf(s.sim, s.body(1)));
+    s.handOut(0, Hand.Ability, look);
+    s.press(0, Btn.Fire, look);
+    s.wait(2);
+    expect(s.body(1).state.ringing).toBe(true);
+    const t = s.sim.data.gadgets.get("jegeo_payload")!.jegeo!;
+    const loaded = () => s.body(1).state.w1;
+    // Out in the hand, the trigger pulled too: the phone's being turned off, nothing fires.
+    const before = loaded();
+    s.clients[1].cmd = { buttons: Btn.Interact | Btn.Fire };
+    s.wait(Math.floor(ticks(t.dismissS) / 2));
+    expect(s.body(1).state.deployKind).toBe(DeployKind.Phone);
+    expect(loaded()).toBe(before);
+    // Let go half way: back in the pocket, still ringing, the upload still on.
+    s.clients[1].cmd = {};
+    s.wait(2);
+    expect(s.body(1).state.deployKind).toBe(DeployKind.None);
+    expect(s.body(1).state.ringing).toBe(true);
+    expect(s.clients[0].events.some((e) => e.kind === "jegeo" && e.stage === 2)).toBe(false);
+    // Held its whole time: off, and her upload is cut (no explosion).
+    s.clients[1].cmd = { buttons: Btn.Interact };
+    s.wait(ticks(t.dismissS) + 3);
+    s.clients[1].cmd = {};
+    s.wait(2);
+    expect(s.body(1).state.ringing).toBe(false);
+    expect(s.clients[0].events.some((e) => e.kind === "jegeo" && e.stage === 2)).toBe(true);
+    expect(s.clients[0].events.some((e) => e.kind === "jegeo" && e.stage === 1)).toBe(false);
+  });
 });
