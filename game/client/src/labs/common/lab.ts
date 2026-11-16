@@ -5,6 +5,10 @@
 // about it (startLab's options). A map (a level with storeys) also gets the storey views, a HUD line with
 // the room and plan position, and Go to by storey and room (tools/mapgen/DESIGN.md E9).
 import * as THREE from "three";
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { GTAOPass } from "three/examples/jsm/postprocessing/GTAOPass.js";
+import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
+import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import {
   applyDamage,
   Btn,
@@ -71,13 +75,12 @@ import {
   kindOf,
   handSlot,
   isDetonator,
-  forwardXZ,
   heartbeats,
+  heartOf,
   guData,
   suppressed,
   kludgeOf,
   pawnJammed,
-  rightXZ,
   sensorUp,
   placeSpotFor,
   slotGadget,
@@ -255,7 +258,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     <div class="lean-ind lean-l">◀</div><div class="lean-ind lean-r">▶</div>
     <div class="flash"></div>
     <div class="stun-white"></div><div class="emp-static hidden"></div>
-    <div class="sensor hidden"><div class="sensor-fan"></div><div class="sensor-blips"></div><div class="sensor-title"></div></div>
+    <div class="pulse hidden"><div class="pulse-glass"><div class="pulse-tint"></div><div class="pulse-scan"></div><div class="pulse-hearts"></div><div class="pulse-title"></div></div></div>
     <div class="tablet hidden"><div class="tablet-title"></div><div class="tablet-list"></div><div class="tablet-help"></div></div>
     <div class="prompt hidden"></div>
     <div class="needle-ui hidden"></div>
@@ -931,6 +934,7 @@ export async function startLab(o: LabOptions): Promise<void> {
           .map((q) => `<option value="${q}" ${settings.graphics === q ? "selected" : ""}>${q === "auto" ? `Auto (${QUALITY_NAMES[initialQuality(new URLSearchParams(), "auto", { automated: false, touchOnly })]})` : QUALITY_NAMES[q]}</option>`)
           .join("")}</select></label>
         <p class="note">Drawing now: ${QUALITY_NAMES[quality]}${params.has("gfx") || params.has("lowgfx") ? " (set by the link)" : ""}. A change takes effect when the page next loads.</p>
+        <label><input type="checkbox" data-bool="ambientOcclusion" ${settings.ambientOcclusion ? "checked" : ""}> Ambient occlusion: darker where surfaces meet, at once (costs frame rate)</label>
       </section>
       <p class="note">Press <kbd>F1</kbd> for the key list and what to try.</p>`;
     pause.querySelector(".resume")?.addEventListener("click", resume);
@@ -1268,7 +1272,12 @@ export async function startLab(o: LabOptions): Promise<void> {
       artView.adapt(renderer, cam.position.x, cam.position.y, cam.position.z, Math.min(0.5, Math.max(0, (now - lastAdapt) / 1000)));
       lastAdapt = now;
     }
-    if (prepassOn && artView.shown) {
+    if (settings.ambientOcclusion) {
+      // Ambient occlusion on (Settings → Graphics): the world through GTAO (render/DESIGN.md §6.5), then tone mapped
+      // onto the page as before; the depth pre-pass isn't used with it.
+      const a = aoPipeline(cam);
+      a.composer.render();
+    } else if (prepassOn && artView.shown) {
       // The depth pre-pass (render/DESIGN.md §13): the level's opaque surfaces into the depth buffer alone (pushed a
       // hair back, so the same surface shaded next still passes), then everything, the depth kept. The level's heavy
       // shader then runs only where its surface is the nearest. The shadow map isn't touched by the first.
@@ -1287,6 +1296,38 @@ export async function startLab(o: LabOptions): Promise<void> {
     } else renderer.render(scene, cam);
     drawMs += performance.now() - drawFrom;
   }
+  /**
+   * Ambient occlusion (Ulo's request after Phase 10): the world drawn into a target, GTAO over it (the darkening where
+   * surfaces meet, which the probes are too coarse for), then tone mapped and put on the page (OutputPass). Made when
+   * first wanted; its targets follow the drawing buffer's size; antialiased as the preset is.
+   */
+  let ao: { composer: EffectComposer; render: RenderPass; gtao: GTAOPass; w: number; h: number } | null = null;
+  function aoPipeline(cam: THREE.Camera) {
+    const size = renderer.getSize(new THREE.Vector2());
+    if (!ao) {
+      const px = renderer.getDrawingBufferSize(new THREE.Vector2());
+      const target = new THREE.WebGLRenderTarget(px.x, px.y, { type: THREE.HalfFloatType, samples: preset.antialias ? 4 : 0 });
+      const composer = new EffectComposer(renderer, target);
+      const render = new RenderPass(scene, cam);
+      const gtao = new GTAOPass(scene, cam, px.x, px.y);
+      gtao.updateGtaoMaterial({ radius: 0.45, distanceExponent: 1.6, thickness: 1.2, scale: 1, samples: 16 });
+      composer.addPass(render);
+      composer.addPass(gtao);
+      composer.addPass(new OutputPass());
+      ao = { composer, render, gtao, w: size.x, h: size.y };
+      composer.setSize(size.x, size.y);
+    }
+    if (ao.w !== size.x || ao.h !== size.y) {
+      ao.w = size.x;
+      ao.h = size.y;
+      ao.composer.setPixelRatio(renderer.getPixelRatio());
+      ao.composer.setSize(size.x, size.y);
+    }
+    ao.render.camera = cam;
+    ao.gtao.camera = cam;
+    return ao;
+  }
+
   /** The depth pre-pass's material: depth only, a hair back (drawWorld). */
   const depthFirst = new THREE.MeshBasicMaterial({ colorWrite: false, fog: false, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
   function frame(now: number) {
@@ -2730,9 +2771,13 @@ export async function startLab(o: LabOptions): Promise<void> {
   /** Her charges, as her last payload event said. */
   let jegeoCharges: number | null = null;
 
-  /** The heartbeats Pulse's sensor last showed (Phase 8 M6): kept, frozen, while an EMP has him. */
-  let heartsShown: { x: number; y: number }[] = [];
-  let heartsKey = "";
+  /**
+   * The heartbeats Pulse's sensor last showed (Phase 8 M6), by the body they beat in: where on its screen (px from its
+   * top left) and how far (m); kept, frozen, while an EMP has him. Each its own element (its beat runs on).
+   */
+  let heartsShown = new Map<number, { x: number; y: number; d: number }>();
+  const heartEls = new Map<number, HTMLElement>();
+  let pulseTitle = "";
 
   /**
    * Dokkaebi's tablet up: the defenders her team has identified (their operator and player, how long they stay
@@ -2803,35 +2848,67 @@ export async function startLab(o: LabOptions): Promise<void> {
   }
 
   /**
-   * Pulse's sensor up (Phase 8 M6): the attackers' heartbeats in front of him as blips on a fan, nearer the bottom the
-   * closer (only he sees them); an EMP on him freezes it.
+   * Pulse's sensor up (Phase 8 M6; as in the game, Ulo's request after Phase 10): held up before his face, he looks
+   * through its screen, red-tinted, and each heartbeat it picks up (within its range and fan, through anything) beats
+   * on it where that body is, with how far; only he sees them. An EMP on him freezes it.
    */
   function updateSensorHud() {
     const body = livingBody();
     // Not over a feed (a camera, a drone, Skopós's shell): his sensor reads round his body (the review, M12).
     const onFeed = ctrl.cam !== 0 || ctrl.drone !== 0 || ctrl.shellCam || ctrl.swapPhase !== 0;
     const k = body && !onFeed ? sensorUp(data, body) : null;
-    $(".sensor").classList.toggle("hidden", !k);
-    if (!k || !body) return;
+    const corners = k ? viewmodel.sensorScreen() : null;
+    $(".pulse").classList.toggle("hidden", !corners);
+    if (!k || !body || !corners) return;
+    const W = app.clientWidth;
+    const H = app.clientHeight;
+    const xs = corners.map((c) => c[0] * W);
+    const ys = corners.map((c) => c[1] * H);
+    const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+    const glass = $(".pulse-glass");
+    glass.style.left = `${x0.toFixed(1)}px`;
+    glass.style.top = `${y0.toFixed(1)}px`;
+    glass.style.width = `${(x1 - x0).toFixed(1)}px`;
+    glass.style.height = `${(y1 - y0).toFixed(1)}px`;
     const frozen = body.state.jammed > 0;
     if (!frozen) {
-      const eye = body.state;
-      heartsShown = heartbeats(sim, body).map((p) => {
-        const dx = p.state.x - eye.x;
-        const dz = p.state.z - eye.z;
-        const [fx, fz] = forwardXZ(eye.yaw);
-        const [rx, rz] = rightXZ(eye.yaw);
-        const r = Math.min(1, Math.hypot(dx, dz, p.state.y - eye.y) / k.rangeM);
-        const a = Math.atan2(dx * rx + dz * rz, dx * fx + dz * fz);
-        return { x: 50 + Math.sin(a) * r * 50, y: 100 - Math.cos(a) * r * 100 };
-      });
+      const eye = camera.position;
+      const shown = new Map<number, { x: number; y: number; d: number }>();
+      for (const p of heartbeats(sim, body)) {
+        const at = heartOf(sim, p);
+        const v = new THREE.Vector3(at[0], at[1], at[2]).project(camera);
+        if (v.z > 1) continue; // behind him
+        const x = ((v.x + 1) / 2) * W - x0;
+        const y = ((1 - v.y) / 2) * H - y0;
+        if (x < 0 || y < 0 || x > x1 - x0 || y > y1 - y0) continue; // not on the screen he's looking through
+        shown.set(p.id, { x, y, d: Math.hypot(at[0] - eye.x, at[1] - eye.y, at[2] - eye.z) });
+      }
+      heartsShown = shown;
     }
-    const key = heartsShown.map((h) => `${h.x.toFixed(0)},${h.y.toFixed(0)}`).join(";") + (frozen ? "f" : "");
-    if (key === heartsKey) return;
-    heartsKey = key;
-    $(".sensor-blips").innerHTML = heartsShown.map((h) => `<i style="left:${h.x.toFixed(1)}%;top:${h.y.toFixed(1)}%"></i>`).join("");
-    $(".sensor-title").textContent = frozen ? "CARDIAC SENSOR · EMP: frozen" : `CARDIAC SENSOR · ${heartsShown.length} heartbeat${heartsShown.length === 1 ? "" : "s"} within ${k.rangeM} m · ping to share`;
-    $(".sensor").classList.toggle("frozen", frozen);
+    const layer = $(".pulse-hearts");
+    for (const [id, el] of heartEls) {
+      if (heartsShown.has(id)) continue;
+      el.remove();
+      heartEls.delete(id);
+    }
+    for (const [id, h] of heartsShown) {
+      let el = heartEls.get(id);
+      if (!el) {
+        el = document.createElement("i");
+        el.innerHTML = `<svg viewBox="0 0 24 22"><path d="M12 21.3s-8.6-5.2-10.6-10.4C-0.1 6.6 2.6 1.6 7 1.6c2.3 0 3.9 1.3 5 3 1.1-1.7 2.7-3 5-3 4.4 0 7.1 5 5.6 9.3-2 5.2-10.6 10.4-10.6 10.4z"/></svg><b></b>`;
+        layer.appendChild(el);
+        heartEls.set(id, el);
+      }
+      el.style.left = `${h.x.toFixed(1)}px`;
+      el.style.top = `${h.y.toFixed(1)}px`;
+      el.querySelector("b")!.textContent = `${h.d.toFixed(0)} m`;
+    }
+    const title = frozen ? "HB-5 · EMP: frozen" : `HB-5 · ${heartsShown.size} heartbeat${heartsShown.size === 1 ? "" : "s"} · ${k.rangeM} m · ping to share`;
+    if (title !== pulseTitle) {
+      pulseTitle = title;
+      $(".pulse-title").textContent = title;
+    }
+    $(".pulse").classList.toggle("frozen", frozen);
   }
 
   /**

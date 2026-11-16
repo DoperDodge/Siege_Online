@@ -126,6 +126,8 @@ export class Viewmodel {
   private heldModel: ShapeModel | null = null;
   /** Its size as drawn (across, up, deep). */
   private heldSize: [number, number, number] = [0, 0, 0];
+  /** Pulse's sensor all the way up: looked through (sensorScreen). */
+  private sensorUp = false;
   /** Where the palm under it is, its own frame: how low it comes there, and how far back (gadgetShapes.ts restsAt). */
   private heldRest = { y: 0, z: 0 };
   /** A held-up item's screen (Pulse's sensor, Dokkaebi's tablet): lit, facing the eye. */
@@ -458,6 +460,7 @@ export class Viewmodel {
         }
       }
     }
+    this.sensorUp = false;
     if (!this.held) return;
     const equip = this.data.gadgetRules.equipS * 64;
     const up = s.gAct === GadgetAct.Equip ? Math.min(1, s.gTicks / Math.max(1, equip)) : 1;
@@ -480,11 +483,16 @@ export class Viewmodel {
     }
     if (u?.kind === "hold" && !gadget?.detonator) {
       // Held up to the face like a scope (Pulse's sensor, Ulo's test; Dokkaebi's tablet the same): it comes up from the
-      // hip over its equip time to just under the eyes, its screen toward them.
+      // hip over its equip time to just under the eyes, its screen toward them. Pulse's comes up closer, its screen
+      // filling the middle of the view, and once it's up he looks through it: the device isn't drawn, the page draws
+      // its see-through screen where it is (sensorScreen) with the heartbeats on it.
       const k = smooth(up);
-      this.held.position.set(lerp(0.2, 0, k), lerp(-0.42, -0.06, k), lerp(-0.45, -0.24, k));
-      this.held.rotation.set(lerp(-0.9, -0.08, k), lerp(-0.4, 0, k), 0);
+      const sensor = gadget?.data.sensor !== undefined;
+      this.held.position.set(lerp(0.2, 0, k), lerp(-0.42, sensor ? -0.035 : -0.06, k), lerp(-0.45, sensor ? -0.2 : -0.24, k));
+      this.held.rotation.set(lerp(-0.9, sensor ? -0.03 : -0.08, k), lerp(-0.4, 0, k), 0);
       this.holdHeld("up");
+      this.sensorUp = sensor && up >= 1;
+      this.held.visible = !this.sensorUp;
       return;
     }
     this.held.position.set(0.2 + windup * 0.06, -0.2 - (1 - smooth(up)) * 0.25 - placing * 0.12 + windup * 0.08 - strike * 0.1, -0.45 + windup * 0.12 - strike * 0.15);
@@ -514,6 +522,28 @@ export class Viewmodel {
       this.arms.setHand("right", on(handFrame(new THREE.Matrix4(), v(0, -h / 2 + h * 0.12, 0), v(0, -1, 0), v(0, 0, -1))), "grip");
       this.arms.setHand("left", on(handFrame(new THREE.Matrix4(), v(0, -h / 2 + h * 0.36, 0), v(0, 1, 0), v(0, 0, -1))), "grip");
     }
+  }
+
+  /**
+   * Pulse's sensor all the way up: where its screen is on the view (0..1 across from the left, 0..1 down from the top),
+   * its four corners in order round it (top left, top right, bottom right, bottom left), for the page to draw the
+   * see-through screen there; null otherwise.
+   */
+  sensorScreen(): [number, number][] | null {
+    if (!this.sensorUp || !this.held || !this.screen) return null;
+    this.held.updateMatrixWorld(true);
+    this.camera.updateMatrixWorld(true);
+    const g = this.screen.geometry as THREE.PlaneGeometry;
+    const { width: w, height: h } = g.parameters;
+    return [
+      [-w / 2, h / 2],
+      [w / 2, h / 2],
+      [w / 2, -h / 2],
+      [-w / 2, -h / 2],
+    ].map(([x, y]) => {
+      const p = new THREE.Vector3(x, y, 0).applyMatrix4(this.screen!.matrixWorld).project(this.camera);
+      return [(p.x + 1) / 2, (1 - p.y) / 2];
+    });
   }
 
   /** Light the gun as the world around it is lit: `k` of daylight (a map's basement is darker). */

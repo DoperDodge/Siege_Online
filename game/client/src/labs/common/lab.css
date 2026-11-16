@@ -132,12 +132,20 @@ html, body { overflow: hidden; overscroll-behavior: none; touch-action: none; us
 .emp-static { position: fixed; left: 50%; top: 50%; width: 38vmin; height: 38vmin; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(200, 210, 220, 0.35) 0 2px, rgba(0, 0, 0, 0.45) 2px 4px); animation: jam 0.12s steps(2) infinite; }
 @keyframes jam { 50% { background-position: 0 3px; } }
 /* Pulse's sensor (Phase 8 M6): a fan of blips at the bottom of the screen while it's up. */
-.sensor { position: fixed; left: 50%; bottom: 14vh; width: 260px; height: 150px; transform: translateX(-50%); pointer-events: none; z-index: 4; }
-.sensor-fan { position: absolute; inset: 0 0 20px 0; border-radius: 130px 130px 0 0; background: radial-gradient(circle at 50% 100%, rgba(34, 197, 94, 0.22), rgba(6, 30, 16, 0.55)); border: 1px solid rgba(74, 222, 128, 0.45); }
-.sensor-blips { position: absolute; inset: 0 0 20px 0; }
-.sensor-blips i { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 0 2px #fff, 0 0 8px #ef4444; }
-.sensor-title { position: absolute; left: 0; right: 0; bottom: 0; text-align: center; font: 600 11px var(--mono); color: #bbf7d0; text-shadow: 0 1px 2px #000; }
-.sensor.frozen .sensor-fan { filter: grayscale(1); }
+/* Pulse's sensor up (Ulo's request after Phase 10): looked through, its screen red over the world, the heartbeats on it
+   where they beat. (The page places .pulse-glass where the held sensor's screen is: Viewmodel.sensorScreen.) */
+.pulse { position: fixed; inset: 0; pointer-events: none; z-index: 4; }
+.pulse-glass { position: absolute; border-radius: 12px; overflow: hidden; box-shadow: 0 0 0 9px #15181d, 0 0 0 11px #343a44, 0 6px 24px 10px rgba(0, 0, 0, 0.45), inset 0 0 46px rgba(110, 0, 0, 0.6); }
+.pulse-tint { position: absolute; inset: 0; background: rgba(255, 60, 60, 0.55); mix-blend-mode: multiply; }
+.pulse-scan { position: absolute; inset: 0; background: repeating-linear-gradient(0deg, rgba(255, 90, 90, 0.1) 0 2px, transparent 2px 4px), radial-gradient(ellipse at 50% 50%, rgba(255, 40, 40, 0.08), rgba(80, 0, 0, 0.35)); }
+.pulse-title { position: absolute; top: 7px; left: 0; right: 0; text-align: center; font: 700 10px var(--mono); letter-spacing: 0.06em; color: #fecaca; text-shadow: 0 0 6px #ef4444; }
+.pulse-hearts { position: absolute; inset: 0; }
+.pulse-hearts i { position: absolute; width: 26px; height: 24px; margin: -12px 0 0 -13px; animation: pulse-beat 0.85s ease-out infinite; filter: drop-shadow(0 0 6px #ff1f1f) drop-shadow(0 0 2px #fff); }
+.pulse-hearts svg { width: 26px; height: 24px; fill: #ff2b2b; stroke: #ffe4e4; stroke-width: 1.4; }
+.pulse-hearts b { position: absolute; left: 50%; top: 26px; transform: translateX(-50%); font: 700 10px var(--mono); color: #fff; text-shadow: 0 0 4px #b91c1c, 0 1px 2px #000; white-space: nowrap; }
+@keyframes pulse-beat { 0%, 100% { transform: scale(1); } 12% { transform: scale(1.35); } 24% { transform: scale(1); } 36% { transform: scale(1.2); } 50% { transform: scale(1); } }
+.pulse.frozen .pulse-hearts i { animation: none; filter: grayscale(1); }
+.pulse.frozen .pulse-tint { background: rgba(160, 160, 160, 0.6); }
 /* Dokkaebi's tablet (Ulo's request after Phase 10): the identified defenders and the dead ones' phones, one picked. */
 .tablet { position: fixed; left: 50%; bottom: 12vh; width: 330px; transform: translateX(-50%); pointer-events: none; z-index: 4; padding: 10px 12px; border-radius: 10px; background: rgba(8, 24, 44, 0.84); border: 1px solid rgba(96, 165, 250, 0.55); box-shadow: 0 0 18px rgba(59, 130, 246, 0.35); font: 600 12px var(--mono); color: #dbeafe; }
 .tablet-title { font-size: 11px; letter-spacing: 0.08em; color: #93c5fd; margin-bottom: 6px; }
