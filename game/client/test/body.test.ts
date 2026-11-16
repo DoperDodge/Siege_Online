@@ -7,6 +7,7 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import {
+  Btn,
   defaultLoadoutPick,
   eyePose,
   Hand,
@@ -371,7 +372,17 @@ describe("the stride", () => {
     // The left foot ahead (−z is the way it faces).
     expect(at0.pose.footL!.z).toBeLessThan(at0.pose.footR!.z - 0.1);
 
-    for (const [speed, sprinting] of [[2.85, false], [1.4, false], [4.6, true]] as const) {
+    // Forward at three speeds; sideways, at an angle and backward (the body facing −z, yaw 0: x is its right).
+    const ways: [number, boolean, number, number][] = [
+      [2.85, false, 0, -1],
+      [1.4, false, 0, -1],
+      [4.6, true, 0, -1],
+      [2.5, false, 1, 0],
+      [2.5, false, -1, 0],
+      [2.85, false, Math.SQRT1_2, -Math.SQRT1_2],
+      [2.0, false, 0, 1],
+    ];
+    for (const [speed, sprinting, dx, dz] of ways) {
       const g = new Gait();
       const dt = 1 / 120;
       let planted: THREE.Vector3 | null = null;
@@ -381,7 +392,7 @@ describe("the stride", () => {
       let wasDown = false;
       for (let i = 0; i < 120 * 6; i++) {
         const t = i * dt;
-        const s = state({ z: -speed * t, vz: -speed, sprinting });
+        const s = state({ x: dx * speed * t, z: dz * speed * t, vx: dx * speed, vz: dz * speed, sprinting });
         const parts = poseHitboxes(m, hbData, s);
         rig.frame(parts);
         const out = poseBody({ data, s, parts, rig, gun: null, pistol: false, reload: null, held: null, shieldUp: false, gait: g, now: t, swapTicks: 30 });
@@ -401,14 +412,45 @@ describe("the stride", () => {
         // The legs reach: no more than a hair past their length.
         expect(rig.joints.hipL.distanceTo(rig.joints.ankleL) / (LEN.thigh + LEN.shin), `at ${speed} m/s`).toBeLessThan(1.03);
       }
-      expect(steps, `steps at ${speed} m/s`).toBeGreaterThan(3);
-      expect(slid, `a planted foot slid at ${speed} m/s`).toBeLessThan(0.02);
-      expect(lifted, `the swing's lift at ${speed} m/s`).toBeGreaterThan(0.05);
+      const way = `at ${speed} m/s toward (${dx.toFixed(2)}, ${dz.toFixed(2)})`;
+      expect(steps, `steps ${way}`).toBeGreaterThan(3);
+      expect(slid, `a planted foot slid ${way}`).toBeLessThan(0.02);
+      expect(lifted, `the swing's lift ${way}`).toBeGreaterThan(0.05);
     }
   });
 });
 
 describe("a dead body falls (render/bodyRagdoll.ts)", () => {
+  it("a joint that starts under the floor (a body that lay on a slope) is set on it, not thrown up; a floor blown away under it, it falls again", () => {
+    const rig = new BodyRig();
+    const s = state({ stance: Stance.Prone, stanceFrom: Stance.Prone, tiltB: 0.5, y: 1 });
+    const parts = poseHitboxes(m, hbData, s);
+    rig.frame(parts);
+    rig.solve({ flatFeet: false, legScale: rig.lyingLegs() });
+    // (Lying uphill on stairs: its legs are well under the flat floor the corpse rule finds at its feet.)
+    expect(Math.min(rig.joints.ankleL.y, rig.joints.ankleR.y)).toBeLessThan(1 - 0.2);
+    const doll = new Ragdoll(rig.joints, new THREE.Vector3(), new THREE.Vector3(), 1);
+    let top = 0;
+    for (let i = 0; i < 60 * 6; i++) {
+      doll.step(1 / 60);
+      top = Math.max(top, doll.at("pelvis").y);
+    }
+    expect(top - 1).toBeLessThan(0.4);
+    expect(doll.asleep).toBe(true);
+    expect(doll.at("pelvis").y - 1).toBeLessThan(0.3);
+    // The floor goes 3 m down: awake, it falls onto the new one.
+    doll.setFloor(-2);
+    expect(doll.asleep).toBe(false);
+    for (let i = 0; i < 60 * 6; i++) doll.step(1 / 60);
+    expect(doll.at("pelvis").y + 2).toBeLessThan(0.3);
+    expect(doll.at("pelvis").y + 2).toBeGreaterThan(0);
+    // Settled at once (a body first seen dead): at rest on the floor in one go.
+    const now = new Ragdoll(rig.joints, new THREE.Vector3(), new THREE.Vector3(), 1);
+    now.settle();
+    expect(now.asleep).toBe(true);
+    expect(now.at("head").y - 1).toBeLessThan(0.35);
+  });
+
   it("from standing it comes to rest on the floor near where it died, its bones their length, and lies still", () => {
     const rig = new BodyRig();
     const s = state({ x: 3, y: 1.5, z: -2, yaw: 0.4 });
@@ -527,6 +569,54 @@ describe("the pawn view draws the body (render/labScene.ts)", () => {
       expect(new THREE.Vector3(0, 0, -1).applyQuaternion(out.gun!.quaternion).distanceTo(new THREE.Vector3(0, 0, -1))).toBeLessThan(1e-9);
     }
     gun.dispose();
+  });
+
+  it("another player's body (its snapshots carry no speed or progress) strides as it moves, aims, and reloads from when it began", () => {
+    const scene = new THREE.Scene();
+    const view = new PawnView(scene, 0xf97316, undefined, undefined, undefined, undefined, "thermite");
+    view.remote = true;
+    const { loadout } = resolveLoadout(data, defaultLoadoutPick(data, "thermite"));
+    const w = loadout.weapons[0];
+    view.setWeapon({ id: w.id, class: w.class, pick: w.pick }, w);
+    const mesh = () => {
+      let found: THREE.SkinnedMesh | null = null;
+      view.body.traverse((o) => void ((o as THREE.SkinnedMesh).isSkinnedMesh && (found = o as THREE.SkinnedMesh)));
+      return found as unknown as THREE.SkinnedMesh;
+    };
+    const boneAt = (b: number) => new THREE.Vector3().setFromMatrixPosition(mesh().skeleton.bones[b].matrixWorld);
+    // As a snapshot gives it: no velocity, though it moves 2.5 m/s along -z. Its feet go up and down (a stride).
+    let lowest = Infinity;
+    let highest = -Infinity;
+    for (let i = 0; i < 180; i++) {
+      const t = i / 60;
+      view.update(data, state({ z: -2.5 * t }), t);
+      if (t > 1) {
+        lowest = Math.min(lowest, boneAt(BONE.footL).y);
+        highest = Math.max(highest, boneAt(BONE.footL).y);
+      }
+    }
+    expect(highest - lowest).toBeGreaterThan(0.05);
+    // Aiming (the aiming bit): the gun comes up to the eye over a few frames.
+    const gunY = () => {
+      let g: THREE.Object3D | null = null;
+      view.body.traverse((o) => void (o.name === "magazine" && (g = o.parent)));
+      return (g as unknown as THREE.Object3D).position.y;
+    };
+    for (let i = 0; i < 60; i++) view.update(data, state({ z: -7.5 }), 3 + i / 60);
+    const hip = gunY();
+    for (let i = 0; i < 60; i++) view.update(data, state({ z: -7.5, prevButtons: Btn.Ads }), 4 + i / 60);
+    expect(gunY()).toBeGreaterThan(hip + 0.05);
+    // Reloading (the reloading bit): the left hand goes down for the magazine as the weapon's timings say it would.
+    expect(w.reload.kind).toBe("magazine");
+    if (w.reload.kind !== "magazine") return;
+    const handL = () => new THREE.Vector3(0, LEN.foreArm, 0).applyMatrix4(mesh().skeleton.bones[BONE.foreArmL].matrixWorld);
+    view.update(data, state({ z: -7.5 }), 6);
+    const before = handL().y;
+    const mid = (w.reload.magOutTacticalTicks + w.reload.refillTacticalTicks) / 2 / 64;
+    view.update(data, state({ z: -7.5, wAct: WeaponAct.Reload }), 6.01);
+    view.update(data, state({ z: -7.5, wAct: WeaponAct.Reload }), 6.01 + mid);
+    expect(handL().y).toBeLessThan(before - 0.15);
+    view.dispose();
   });
 
   it("a body drawn only as its hitboxes (where the server judged a hit one to be) builds no model", () => {

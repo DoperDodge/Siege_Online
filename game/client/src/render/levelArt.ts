@@ -328,6 +328,8 @@ export class LevelArt {
   private readonly styleIndex = new Map<string, number>();
   private readonly styles: StyleRow[] = [];
   private readonly materials = new Map<string, THREE.MeshStandardMaterial>();
+  /** The same materials, to tell the level's own apart quickly (litPatch). */
+  private readonly own = new Set<THREE.Material>();
   private readonly owned: THREE.Texture[] = [];
   private readonly items: { re: RegExp; style: number }[] = [];
   private readonly propStyle = new Map<string, number>();
@@ -691,6 +693,7 @@ export class LevelArt {
     m.customProgramCacheKey = () => `level-art${panel ? "-panel" : ""}${probes ? "-probes" : ""}`;
     m.name = `art:${key}`;
     this.materials.set(key, m);
+    this.own.add(m);
     return m;
   }
 
@@ -701,12 +704,14 @@ export class LevelArt {
    */
   litPatch(material: THREE.Material): void {
     const m = material as THREE.MeshStandardMaterial;
-    if (!m.isMeshStandardMaterial || m.userData.artLit || !this.probes || [...this.materials.values()].includes(m)) return;
+    if (!m.isMeshStandardMaterial || m.userData.artLit || !this.probes || this.own.has(m)) return;
     m.userData.artLit = true;
     const shared = this.uniforms;
     const probes = this.probes;
     const before = m.onBeforeCompile;
-    const beforeKey = m.customProgramCacheKey;
+    // Its key as it is now: three's default key is the hook's source, which is about to be this patch's for every
+    // material patched (and then they'd share one program, the review, M10).
+    const beforeKey = m.customProgramCacheKey.call(m);
     m.onBeforeCompile = (shader, renderer) => {
       before.call(m, shader, renderer);
       Object.assign(shader.uniforms, shared, probes);
@@ -715,7 +720,7 @@ export class LevelArt {
         .replace("#include <common>", `#include <common>\n${ROOM_DECL}\nvarying vec3 vLitPos;\n${probeGlsl()}`)
         .replace("#include <lights_fragment_maps>", `#include <lights_fragment_maps>\n${LIT_FRAGMENT_MAPS}`);
     };
-    m.customProgramCacheKey = () => `${beforeKey.call(m)}-art-lit`;
+    m.customProgramCacheKey = () => `${beforeKey}-art-lit`;
     m.needsUpdate = true;
   }
 

@@ -21,6 +21,8 @@ export class Gait {
   air = 0;
   /** Sprinting: 0 … 1. */
   sprint = 0;
+  /** The left hand on a rope (moving along it): 0 … 1. */
+  rope = 0;
   /** Which way it moves in its own frame (forward, right). */
   dirF = 1;
   dirR = 0;
@@ -94,7 +96,7 @@ const CROUCH = { l: v(-0.14, FOOT_Y, 0.17), r: v(0.15, FOOT_Y, -0.15) };
 const UNDER = { l: v(-0.115, FOOT_Y, 0.0), r: v(0.115, FOOT_Y, 0.0) };
 /** How far a foot gets ahead of and behind its place in a stride (half its span), and to the side when stepping across. */
 const STRIDE_HALF_M = 0.29;
-const SIDE_HALF_M = 0.1;
+const SIDE_HALF_M = 0.2;
 /** From the ankle to the ball of the foot (a heel up lifts the ankle by this times the tip's sine). */
 const BALL_M = 0.13;
 
@@ -209,13 +211,19 @@ export function poseBody(i: PoseIn): PoseOut {
       gait.dirR = THREE.MathUtils.damp(gait.dirR, vR / speed, 12, dt);
     }
     const st = strideFor(speed);
-    gait.phase = (gait.phase + (dt * speed) / st.cycle) % 1;
+    // Stepping sideways the steps are shorter and come quicker (the same share of each on the ground): the sweep of a
+    // planted foot is always the way the body moves and as long as it goes meanwhile, so the foot stays put.
+    const dl = Math.hypot(gait.dirF, gait.dirR) || 1;
+    const dF = gait.dirF / dl;
+    const dR = gait.dirR / dl;
+    const half = lerp(STRIDE_HALF_M, SIDE_HALF_M, Math.abs(dR));
+    gait.phase = (gait.phase + (dt * speed) / (st.cycle * (half / STRIDE_HALF_M))) % 1;
     const lift = lerp(0.07, 0.17, gait.sprint) * lerp(1, 0.7, crouch);
     const idle = { l: STAND.l.clone().lerp(CROUCH.l, crouch), r: STAND.r.clone().lerp(CROUCH.r, crouch) };
     for (const left of [true, false]) {
       const c = footCycle((gait.phase + (left ? 0 : 0.5)) % 1, st.stance, lift);
       const base = left ? UNDER.l : UNDER.r;
-      const stride = v(base.x + gait.dirR * c.along * SIDE_HALF_M, base.y + c.up + Math.sin(Math.max(0, c.pitch)) * BALL_M, base.z + gait.dirF * c.along * STRIDE_HALF_M);
+      const stride = v(base.x + dR * c.along * half, base.y + c.up + Math.sin(Math.max(0, c.pitch)) * BALL_M, base.z + dF * c.along * half);
       const p = (left ? idle.l : idle.r).clone().lerp(stride, gait.amp);
       // In the air the legs hang a little bent.
       p.lerp(v(base.x, FOOT_Y + 0.1, -0.06), gait.air);
@@ -305,12 +313,20 @@ export function poseBody(i: PoseIn): PoseOut {
   // Sprinting: the gun down across the body. Swapping: the new one comes up. Reloading: tipped over, the other hand to
   // its magazine and the pouch. The knife: the gun drops as the blade goes in.
   let magIn = true;
-  let leftOff: THREE.Vector3 | null = null;
   let rightOff: THREE.Vector3 | null = null;
   /** A reload's left hand, given where it holds the gun and where the magazine is (both in the world). */
   let reloadHand: ((fore: THREE.Vector3, atMag: THREE.Vector3) => THREE.Vector3) | null = null;
-  // Going along a rope, onto it or over on it: the left hand on the rope over the harness.
-  if (s.mode === PawnMode.Rappel && !ropeIdle(s)) leftOff = v(s.x, s.y + m.stance.stand.height / 2 + (s.ropeTurn > 0.5 ? 0.05 : 0.62), s.z).addScaledVector(F, 0.16);
+  // Going along a rope, onto it or over on it: the left hand on the rope (it hangs straight from over the harness),
+  // where it's nearest the shoulder, and no further than the arm reaches; eased on and off.
+  gait.rope = THREE.MathUtils.damp(gait.rope, s.mode === PawnMode.Rappel && !ropeIdle(s) ? 1 : 0, 10, dt);
+  let ropeAt: THREE.Vector3 | null = null;
+  if (gait.rope > 0.01 && s.mode === PawnMode.Rappel) {
+    const sh = j.shoulderL;
+    ropeAt = v(s.x, Math.max(sh.y, s.y + m.stance.stand.height / 2), s.z).addScaledVector(F, 0.16);
+    const reach = (LEN.upperArm + LEN.foreArm) * 0.95;
+    const d = ropeAt.distanceTo(sh);
+    if (d > reach) ropeAt.lerp(sh, 1 - reach / d);
+  }
   if (!slung) {
     if (gait.sprint > 0.001 && !i.shieldUp) {
       const q = qBody.clone().multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(pistol ? -0.9 : -0.5, pistol ? 0.1 : 0.75, 0.15, "YXZ")));
@@ -379,9 +395,9 @@ export function poseBody(i: PoseIn): PoseOut {
         const reach = (LEN.upperArm + LEN.foreArm) * 0.97;
         for (let k = 0; k < 24 && onGun(fore).distanceTo(j.shoulderL) > reach && fore.z < gun.hold.grip.z - 0.07; k++) fore.z += 0.02;
       } else fore = v(gun.hold.grip.x - 0.028, gun.hold.grip.y - 0.012, gun.hold.grip.z - 0.012);
-      if (leftOff) pose.handL = leftOff;
-      else if (reloadHand) pose.handL = reloadHand(onGun(fore), onGun(gun.hold.mag ?? v(0, gun.hold.grip.y + 0.02, gun.hold.grip.z - 0.1)));
+      if (reloadHand) pose.handL = reloadHand(onGun(fore), onGun(gun.hold.mag ?? v(0, gun.hold.grip.y + 0.02, gun.hold.grip.z - 0.1)));
       else pose.handL = onGun(fore);
+      if (ropeAt) pose.handL.lerp(ropeAt, smooth(gait.rope));
     }
     // Aiming down a long gun, the head goes over to its stock.
     if (!pistol && aim > 0) pose.lookUp = U.clone().addScaledVector(R, 0.2 * aim);
@@ -429,15 +445,25 @@ function ladder(i: PoseIn, pose: RigPose, at: Frame["at"], out: PoseOut): void {
   const { s, rig } = i;
   const j = rig.joints;
   const RUNG = 0.3;
-  // Rungs are at their heights in the world; each hand and foot takes the one nearest where it wants to be, the left
-  // and right a rung apart.
-  const rung = (y: number, odd: boolean) => (Math.round((y - (odd ? RUNG : 0)) / (2 * RUNG)) * 2 + (odd ? 1 : 0)) * RUNG;
+  // Rungs are at their heights in the world, the left and right a rung apart. Each hand and foot holds a rung for the
+  // first half of its cycle (as the body climbs two rungs), then moves up to the next through the second, lifting off
+  // it a little on the way: climbing down plays the same backwards. No limb jumps from rung to rung.
+  const climb = (y: number, odd: boolean): { y: number; off: number } => {
+    const t = (y - (odd ? RUNG : 0)) / (2 * RUNG);
+    const base = Math.floor(t);
+    const k = smooth((t - base - 0.5) / 0.5);
+    return { y: (base * 2 + (odd ? 1 : 0)) * RUNG + 2 * RUNG * k, off: Math.sin(Math.PI * k) * 0.07 };
+  };
   const hands = j.chest.y + 0.18;
   const feetY = s.y + 0.2;
-  pose.handL = at(j.shoulderL, 0.04, 0, 0.36).setY(rung(hands, false));
-  pose.handR = at(j.shoulderR, -0.04, 0, 0.36).setY(rung(hands, true));
-  pose.footL = at(j.hipL, -0.02, 0, 0.3).setY(rung(feetY, true) + 0.08);
-  pose.footR = at(j.hipR, 0.02, 0, 0.3).setY(rung(feetY, false) + 0.08);
+  const hL = climb(hands, false);
+  const hR = climb(hands, true);
+  const fL = climb(feetY, true);
+  const fR = climb(feetY, false);
+  pose.handL = at(j.shoulderL, 0.04, 0, 0.36 - hL.off).setY(hL.y);
+  pose.handR = at(j.shoulderR, -0.04, 0, 0.36 - hR.off).setY(hR.y);
+  pose.footL = at(j.hipL, -0.02, 0, 0.3 - fL.off).setY(fL.y + 0.08);
+  pose.footR = at(j.hipR, 0.02, 0, 0.3 - fR.off).setY(fR.y + 0.08);
   pose.kneeL = rig.forward.clone().addScaledVector(rig.right, -0.35);
   pose.kneeR = rig.forward.clone().addScaledVector(rig.right, 0.35);
   pose.look = rig.forward.clone().addScaledVector(rig.up, 0.35).normalize();

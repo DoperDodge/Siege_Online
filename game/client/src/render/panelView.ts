@@ -7,6 +7,7 @@
 // build), so a shot-up wall redraws within PLAN §8.2's main-thread budget. On a map, the storey views hide
 // the panels of the storeys above you and can recolour the skins (render/storeyView.ts).
 import * as THREE from "three";
+import { PREPASS_LAYER } from "./labScene.js";
 import { greedyRects, L_BACK, L_CORE, L_FRONT, L_STEEL, layerSlab, STEEL_PLATE_M, type Panel, type PanelEntry, type PanelSet } from "@redmond/shared";
 import { showsSections, SURFACE_COLORS } from "./labScene.js";
 
@@ -185,6 +186,9 @@ export class PanelView {
       // is too thin to cast anything.
       mesh.castShadow = w.key !== "glass" && w.key !== "seam" && !w.key.startsWith("core:");
       mesh.receiveShadow = true;
+      // A panel's faces stop the eye: drawn into the depth first (PREPASS_LAYER). Not the glass (seen through), nor
+      // the studs and seams (inside it or on it: their own draws would cost more than the pixels they save).
+      if (w.key.startsWith("skin:") || w.key === "steel") mesh.layers.enable(PREPASS_LAYER);
       d.meshes[slot] = mesh;
     });
     if (!changed) return false;

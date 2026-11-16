@@ -6,7 +6,7 @@
 // instanced meshes per storey (in the storey's group, so it hides with it).
 import * as THREE from "three";
 import { type BuiltLevel, type PanelEntry } from "@redmond/shared";
-import { storeyOf, type LabScene } from "./labScene.js";
+import { PREPASS_LAYER, storeyOf, type LabScene } from "./labScene.js";
 import type { LevelArt } from "./levelArt.js";
 import { LAMP_STRIDE } from "./probes/bake.js";
 
@@ -213,6 +213,7 @@ export class Architecture {
       mesh.computeBoundingSphere();
       mesh.castShadow = mesh.receiveShadow = true;
       mesh.name = "architecture";
+      mesh.layers.enable(PREPASS_LAYER);
       this.lab.storeys[storey].add(mesh);
       this.meshes.push(mesh);
       this.pieces += list.length;
@@ -236,6 +237,7 @@ export class Architecture {
       list.forEach((p, i) => mesh.setMatrixAt(i, m.compose(p, q, one)));
       mesh.computeBoundingSphere();
       mesh.name = "lamps";
+      mesh.layers.enable(PREPASS_LAYER);
       this.lab.storeys[storey].add(mesh);
       this.meshes.push(mesh);
       this.fixtureCount += list.length;

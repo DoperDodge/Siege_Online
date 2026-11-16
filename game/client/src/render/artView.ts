@@ -11,7 +11,7 @@ import { Architecture } from "./architecture.js";
 import { buildBackdrop } from "./backdrop.js";
 import { buildDressing } from "./dressing.js";
 import { buildFurniture } from "./furniture.js";
-import { aimSun, DAYLIGHT, storeyOf, type LabScene } from "./labScene.js";
+import { aimSun, DAYLIGHT, PREPASS_LAYER, storeyOf, type LabScene } from "./labScene.js";
 import { LevelArt } from "./levelArt.js";
 import { buildOutside } from "./outside.js";
 import type { PanelView } from "./panelView.js";
@@ -38,6 +38,8 @@ const EXPOSURE_MAX = 3.2;
 export function failedPrograms(renderer: THREE.WebGLRenderer): string[] {
   const gl = renderer.getContext();
   const out: string[] = [];
+  // A lost context answers nothing (null for every program): that's not a GPU refusing the shaders.
+  if (gl.isContextLost()) return out;
   for (const p of renderer.info.programs ?? []) {
     const program = (p as unknown as { program?: WebGLProgram }).program;
     if (!program || gl.getProgramParameter(program, gl.LINK_STATUS)) continue;
@@ -97,11 +99,26 @@ export class ArtView {
     return this.sets && { size: this.sets.size, sets: this.sets.layer.size, gpuBytes: this.sets.gpuBytes };
   }
 
-  /** The probes' state for the stats overlay and tests: none, baking, or the passes done and how long they took. */
-  get probeState(): { passes: number; ready: boolean; firstMs: number; allMs: number } | null {
+  /** The probes' state for the stats overlay and tests: none, baking, the passes done and how long they took, or why they stopped. */
+  get probeState(): { passes: number; ready: boolean; firstMs: number; allMs: number; failed: string | null } | null {
     const p = this.probes;
-    return p && { passes: p.passes, ready: p.ready, firstMs: Math.round(p.timing.first), allMs: Math.round(p.timing.all) };
+    return p && { passes: p.passes, ready: p.ready, firstMs: Math.round(p.timing.first), allMs: Math.round(p.timing.all), failed: p.failed };
   }
+
+  /** Called after a lost GPU context came back and the sky's environment was made again (the gun in hand reflects it). */
+  onRestore: (() => void) | null = null;
+
+  /** A lost GPU context came back: the sky's prefiltered environment again (the rest three uploads again itself). */
+  private readonly restored = () => {
+    const sky = this.sky;
+    const renderer = this.renderer;
+    if (!sky || !renderer) return;
+    const old = sky.env;
+    const env = sky.rebuildEnv(renderer);
+    if (old && this.lab.scene.environment === old) this.lab.scene.environment = env;
+    renderer.shadowMap.needsUpdate = true;
+    this.onRestore?.();
+  };
 
   /**
    * Load the preset's textures and the sky, build the materials (and the probe field, Medium and High) and compile
@@ -117,6 +134,53 @@ export class ArtView {
     // What the scene was, to put back if this GPU can't build the art's shaders (abandon).
     const fog = lab.scene.fog instanceof THREE.Fog ? lab.scene.fog : null;
     const was = { fog: fog && { color: fog.color.clone(), near: fog.near, far: fog.far }, sun: lab.sun.color.clone(), env: lab.scene.environment, envIntensity: lab.scene.environmentIntensity };
+    try {
+      await this.build(preset, renderer, camera, art, sets, skyData, lamps);
+    } catch (e) {
+      // Nothing of it stays: the scene goes back as it was, and the caller may load a lower preset (or the same, once
+      // a lost GPU context is back).
+      this.sky?.dome.removeFromParent();
+      this.sky?.dispose();
+      this.sky = null;
+      this.probes?.dispose();
+      this.probes = null;
+      this.architecture?.dispose();
+      this.architecture = null;
+      for (const m of [...(this.outside ? [this.outside] : []), ...this.backdrop, ...this.furniture]) {
+        m.removeFromParent();
+        m.geometry.dispose();
+      }
+      this.outside = null;
+      this.backdrop = [];
+      this.furniture = [];
+      this.hidden.length = 0;
+      this.modelTriangles = 0;
+      if (fog && was.fog) {
+        fog.color.copy(was.fog.color);
+        fog.near = was.fog.near;
+        fog.far = was.fog.far;
+      }
+      lab.sun.color.copy(was.sun);
+      lab.scene.environment = was.env;
+      lab.scene.environmentIntensity = was.envIntensity;
+      art.dispose();
+      for (const t of [sets.color, sets.normal, sets.orm]) t.dispose();
+      throw e;
+    }
+    return true;
+  }
+
+  /** The art's parts, after `load` has the textures (it undoes them all if this throws). */
+  private async build(
+    preset: QualityPreset,
+    renderer: THREE.WebGLRenderer,
+    camera: THREE.Camera,
+    art: LevelArt,
+    sets: TextureSets,
+    skyData: Awaited<ReturnType<typeof loadSky>>,
+    lamps: ReturnType<typeof roomLamps>,
+  ): Promise<void> {
+    const lab = this.lab;
     if (skyData) {
       const sky = new SkyView(skyData, renderer, preset.probes);
       this.sky = sky;
@@ -176,29 +240,11 @@ export class ArtView {
     box.dispose();
     flat.dispose();
     one.geometry.dispose();
-    // Did this GPU build them? If not, nothing of the art is shown: the scene goes back as it was, and the caller
-    // may load a lower preset.
+    // Did this GPU build them? If not, nothing of the art is shown (load undoes it), and the caller may load a lower
+    // preset. A context lost meanwhile isn't a refusal: it's thrown as such, to load again once it's back.
+    if (renderer.getContext().isContextLost()) throw new Error("the GPU context was lost while the art loaded");
     const failed = failedPrograms(renderer);
-    if (failed.length) {
-      this.sky?.dome.removeFromParent();
-      this.sky?.dispose();
-      this.sky = null;
-      this.probes?.dispose();
-      this.probes = null;
-      if (fog && was.fog) {
-        fog.color.copy(was.fog.color);
-        fog.near = was.fog.near;
-        fog.far = was.fog.far;
-      }
-      lab.sun.color.copy(was.sun);
-      lab.scene.environment = was.env;
-      lab.scene.environmentIntensity = was.envIntensity;
-      art.dispose();
-      for (const t of [sets.color, sets.normal, sets.orm]) t.dispose();
-      throw new Error(`this GPU couldn't build the art's shaders (${failed.length}): ${failed[0]}`);
-    }
-    this.art = art;
-    this.sets = sets;
+    if (failed.length) throw new Error(`this GPU couldn't build the art's shaders (${failed.length}): ${failed[0]}`);
     this.architecture = new Architecture(lab, this.level, art, lamps);
     this.architecture.setVisible(false);
     const outside = buildOutside(this.level, art);
@@ -206,6 +252,7 @@ export class ArtView {
     this.outside.name = "outside";
     this.outside.castShadow = this.outside.receiveShadow = true;
     this.outside.visible = false;
+    this.outside.layers.enable(PREPASS_LAYER);
     lab.storeys[storeyOf(this.level.def.storeys, 0)].add(this.outside);
     this.modelTriangles = outside.kit.triangles;
     const furniture = buildFurniture(this.level, art, (r) => storeyOf(this.level.def.storeys, r.center[1] - r.size[1] / 2), preset.dressing === "all");
@@ -214,6 +261,7 @@ export class ArtView {
       mesh.name = `furniture ${this.level.def.storeys[storey]?.id ?? storey}`;
       mesh.castShadow = mesh.receiveShadow = true;
       mesh.visible = false;
+      mesh.layers.enable(PREPASS_LAYER);
       lab.storeys[storey].add(mesh);
       this.furniture.push(mesh);
       this.modelTriangles += kit.triangles;
@@ -225,6 +273,7 @@ export class ArtView {
       mesh.name = `dressing ${this.level.def.storeys[storey]?.id ?? storey}`;
       mesh.receiveShadow = true;
       mesh.visible = false;
+      mesh.layers.enable(PREPASS_LAYER);
       lab.storeys[storey].add(mesh);
       this.furniture.push(mesh);
       this.modelTriangles += kit.triangles;
@@ -235,6 +284,7 @@ export class ArtView {
       this.backdrop = backdrop.meshes;
       for (const m of backdrop.meshes) {
         m.visible = false;
+        m.layers.enable(PREPASS_LAYER);
         lab.scene.add(m);
       }
       this.modelTriangles += backdrop.triangles;
@@ -249,11 +299,14 @@ export class ArtView {
         this.hidden.push({ mesh: inst, index, matrix });
       });
     }
+    // All built: the art is loaded (ready) only now.
+    this.art = art;
+    this.sets = sets;
     this.renderer = renderer;
+    renderer.domElement.addEventListener("webglcontextrestored", this.restored);
     renderer.shadowMap.needsUpdate = true;
     // The probes bake in the background; their first pass switches the light over.
     if (this.probes) void this.probes.bake(2, () => this.applyLight());
-    return true;
   }
 
   /** Draw the art (true) or the greybox (false). Nothing changes before the art is ready. */
@@ -301,7 +354,7 @@ export class ArtView {
    */
   frame(camera: THREE.Camera): void {
     this.sky?.follow(camera);
-    if (this.probes && this.art && this.frames++ % 15 === 0) {
+    if (this.probes && this.art && this.frames++ % 4 === 0) {
       const art = this.art;
       this.lab.scene.traverse((o) => {
         const mat = (o as THREE.Mesh).material;
@@ -327,8 +380,11 @@ export class ArtView {
     // Round the point (a lamp overhead or a window beside it shouldn't set the whole room's look).
     const l = { irradiance: 0, sky: 0 };
     let n = 0;
+    const cls = this.art.classAt(x, y, z);
     for (const [dx, dz] of [[0, 0], [1.2, 0], [-1.2, 0], [0, 1.2], [0, -1.2]]) {
-      const at = this.probes.lightAt(x + dx, y, z + dz, this.art.classAt(x, y, z));
+      // Only round the point in the same room: past a wall is another room's light (the yard's, say).
+      if ((dx || dz) && this.art.classAt(x + dx, y, z + dz) !== cls) continue;
+      const at = this.probes.lightAt(x + dx, y, z + dz, cls);
       if (!at) continue;
       l.irradiance += at.irradiance;
       l.sky += at.sky;
@@ -358,6 +414,7 @@ export class ArtView {
 
   dispose(): void {
     this.show(false);
+    this.renderer?.domElement.removeEventListener("webglcontextrestored", this.restored);
     this.probes?.dispose();
     this.architecture?.dispose();
     if (this.outside) {

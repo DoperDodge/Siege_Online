@@ -85,7 +85,7 @@ import { isTouchDevice, mountTouchControls, preventPageZoom } from "../../input/
 import { LocalSocket } from "../../net/local.js";
 import { OnlineConnection } from "../../net/online.js";
 import { ArtView } from "../../render/artView.js";
-import { createLabScene, createRenderer, PawnView, updateLabels, warmShaders } from "../../render/labScene.js";
+import { createLabScene, createRenderer, PawnView, PREPASS_LAYER, updateLabels, warmShaders } from "../../render/labScene.js";
 import { initialQuality, presetFor, PRESETS, QUALITIES, QUALITY_NAMES, type QualityPreset, type QualitySetting } from "../../render/quality.js";
 import { BpCameraModels, CameraModels } from "../../render/cameraModels.js";
 import { GadgetModels } from "../../render/gadgetModels.js";
@@ -412,7 +412,7 @@ export async function startLab(o: LabOptions): Promise<void> {
   function artLine(): string {
     const t = artView.textures;
     const p = artView.probeState;
-    const probes = p ? ` · probes: ${p.ready ? `${p.passes} pass${p.passes === 1 ? "" : "es"} (${(p.firstMs / 1000).toFixed(1)} s first${p.allMs ? `, ${(p.allMs / 1000).toFixed(1)} s all` : ""})` : "baking"}` : "";
+    const probes = p ? ` · probes: ${p.failed ? `stopped (${p.failed})` : p.ready ? `${p.passes} pass${p.passes === 1 ? "" : "es"} (${(p.firstMs / 1000).toFixed(1)} s first${p.allMs ? `, ${(p.allMs / 1000).toFixed(1)} s all` : ""})` : "baking"}` : "";
     return `graphics: ${QUALITY_NAMES[quality]}${t ? ` · textures: ${t.sets} sets at ${t.size} px, ${(t.gpuBytes / 1048576).toFixed(0)} MB${artView.shown ? "" : " (hidden)"}` : preset.textures ? " · textures loading" : ""}${probes}${artProblem ? ` · ${artProblem}` : ""}`;
   }
   let settings: Settings = loadSettings();
@@ -440,19 +440,31 @@ export async function startLab(o: LabOptions): Promise<void> {
       markers?.showModelled(!artView.shown);
       viewmodel.setEnvironment(artView.environment);
     } catch (e) {
+      // The GPU context was lost meanwhile (a phone switching apps): the same preset again once it's back.
+      if (renderer.getContext().isContextLost()) {
+        renderer.domElement.addEventListener("webglcontextrestored", () => void loadArt(p, quality), { once: true });
+        return;
+      }
       // A GPU that can't build a preset's shaders (or ran out of memory for its textures) gets the next one down,
       // and says so: never a page that just doesn't load.
       console.error(`art pass (${quality}):`, e);
       artProblem = `${quality} graphics didn't load on this device (${String((e as Error)?.message ?? e).slice(0, 160)})`;
       if (quality !== "low" && quality !== "greybox") {
         flash(`${quality[0].toUpperCase()}${quality.slice(1)} graphics didn't load on this device: using Low`, "bad");
-        // As Low is: no sun shadows (without the probes' light, rooms under a shadowed sun would be dark).
+        // As Low is: no sun shadows (without the probes' light, rooms under a shadowed sun would be dark), and the
+        // shadow map already drawn freed (128 MB at High's size).
         renderer.shadowMap.enabled = PRESETS.low.shadowMap > 0;
         labScene.sun.castShadow = renderer.shadowMap.enabled;
+        if (!labScene.sun.castShadow && labScene.sun.shadow.map) {
+          labScene.sun.shadow.map.dispose();
+          labScene.sun.shadow.map = null;
+        }
         await loadArt(PRESETS.low, "low");
       } else flash("The textures didn't load on this device: showing the plain view", "bad");
     }
   }
+  // After a lost GPU context came back, the gun in hand reflects the sky made again.
+  artView.onRestore = () => viewmodel.setEnvironment(artView.environment);
   void loadArt(preset, quality);
   /** Each body's view as drawn this frame (lasers point along it). */
   const drawnView = new Map<number, [number, number]>();
@@ -1223,15 +1235,33 @@ export async function startLab(o: LabOptions): Promise<void> {
   /** Render the world, counting a shadow-map redraw if one was asked for. */
   function drawWorld() {
     if (renderer.shadowMap.enabled && renderer.shadowMap.needsUpdate && !renderer.getContext().isContextLost()) shadowDraws++;
-    artView.frame(shownCamera());
+    const cam = shownCamera();
+    artView.frame(cam);
     {
-      const c = shownCamera();
       const now = performance.now();
-      artView.adapt(renderer, c.position.x, c.position.y, c.position.z, Math.min(0.5, Math.max(0, (now - lastAdapt) / 1000)));
+      artView.adapt(renderer, cam.position.x, cam.position.y, cam.position.z, Math.min(0.5, Math.max(0, (now - lastAdapt) / 1000)));
       lastAdapt = now;
     }
-    renderer.render(scene, shownCamera());
+    if (preset.prepass && artView.shown) {
+      // The depth pre-pass (render/DESIGN.md §13): the level's opaque surfaces into the depth buffer alone (pushed a
+      // hair back, so the same surface shaded next still passes), then everything, the depth kept. The level's heavy
+      // shader then runs only where its surface is the nearest. The shadow map isn't touched by the first.
+      const mask = cam.layers.mask;
+      const shadows = renderer.shadowMap.needsUpdate;
+      renderer.shadowMap.needsUpdate = false;
+      cam.layers.set(PREPASS_LAYER);
+      scene.overrideMaterial = depthFirst;
+      renderer.render(scene, cam);
+      scene.overrideMaterial = null;
+      cam.layers.mask = mask;
+      renderer.shadowMap.needsUpdate = shadows;
+      renderer.autoClearDepth = false;
+      renderer.render(scene, cam);
+      renderer.autoClearDepth = true;
+    } else renderer.render(scene, cam);
   }
+  /** The depth pre-pass's material: depth only, a hair back (drawWorld). */
+  const depthFirst = new THREE.MeshBasicMaterial({ colorWrite: false, fog: false, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
   function frame(now: number) {
     const workFrom = performance.now();
     renderer.info.reset();
@@ -2463,7 +2493,9 @@ export async function startLab(o: LabOptions): Promise<void> {
         // Brava's Kludge drones (Phase 8 M8) are bigger, and greener.
         const size = pawn.kludge ? (data.gadgets.get("kludge_drone")?.sizeM ?? data.intel.drone.sizeM) : data.intel.drone.sizeM;
         const color = pawn.kludge ? 0x65a30d : pawn.proxy ? 0xf97316 : 0x3b82f6;
-        pawnViews.set(pawn.id, new PawnView(scene, color, pawn.proxy ? nameOfPawn(pawn.id) || undefined : undefined, undefined, pawn.kind, size, pawn.operatorId));
+        const view = new PawnView(scene, color, pawn.proxy ? nameOfPawn(pawn.id) || undefined : undefined, undefined, pawn.kind, size, pawn.operatorId);
+        view.remote = !!pawn.proxy;
+        pawnViews.set(pawn.id, view);
       }
   }
 

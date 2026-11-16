@@ -69,7 +69,9 @@ void main() {
 export class SkyView {
   readonly dome: THREE.Mesh;
   /** The sky as an environment map (prefiltered for roughness), or null on Low. */
-  readonly env: THREE.Texture | null;
+  env: THREE.Texture | null;
+  /** The prefiltered environment's render target (what `env` is the texture of: disposed with it). */
+  private envTarget: THREE.WebGLRenderTarget | null = null;
   readonly sunDir: THREE.Vector3;
   readonly sunColor: THREE.Color;
   /** The sun's irradiance at normal incidence (the brightest channel): the DirectionalLight's intensity. */
@@ -118,10 +120,20 @@ export class SkyView {
     tex.magFilter = tex.minFilter = THREE.LinearFilter;
     tex.needsUpdate = true;
     const pmrem = new THREE.PMREMGenerator(renderer);
-    const out = pmrem.fromEquirectangular(tex).texture;
+    this.envTarget?.dispose();
+    this.envTarget = pmrem.fromEquirectangular(tex);
     pmrem.dispose();
     tex.dispose();
-    return out;
+    return this.envTarget.texture;
+  }
+
+  /**
+   * The prefiltered environment again, after a lost GPU context came back (a render target's contents are lost with
+   * it, and three can't upload them again: reflections would be black). Null if there's none.
+   */
+  rebuildEnv(renderer: THREE.WebGLRenderer): THREE.Texture | null {
+    if (this.env) this.env = this.envMap(renderer);
+    return this.env;
   }
 
   /**
@@ -155,6 +167,7 @@ export class SkyView {
     this.dome.geometry.dispose();
     (this.dome.material as THREE.Material).dispose();
     this.data.background.dispose();
-    this.env?.dispose();
+    this.envTarget?.dispose();
+    this.envTarget = null;
   }
 }

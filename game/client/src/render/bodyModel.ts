@@ -562,7 +562,6 @@ export class BodyModel {
       this.back.name = "body-back";
       this.back.matrixAutoUpdate = false;
       this.back.receiveShadow = true;
-      this.back.frustumCulled = false;
       this.group.add(this.back);
     }
   }

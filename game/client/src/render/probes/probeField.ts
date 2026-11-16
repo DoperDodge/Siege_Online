@@ -206,6 +206,26 @@ function gridTexture(grid: GridSpec, field: Float32Array | null): THREE.Data3DTe
   return tex;
 }
 
+/** Some probes' floats (by index) into their grid's texture (gridTexture's layout), for a new upload. */
+export function refillProbes(tex: THREE.Data3DTexture, grid: GridSpec, field: Float32Array, probes: Int32Array): void {
+  const [w, h] = grid.dims;
+  const data = tex.image.data as Float32Array;
+  for (const p of probes) {
+    const i = p % w;
+    const j = Math.floor(p / w) % h;
+    const k = Math.floor(p / (w * h));
+    const o = p * PROBE_STRIDE;
+    for (let q = 0; q < QUARTERS; q++) {
+      const t = ((k * h * QUARTERS + (j + q * h)) * w + i) * 4;
+      data[t] = field[o + q * 4];
+      data[t + 1] = field[o + q * 4 + 1];
+      data[t + 2] = field[o + q * 4 + 2];
+      data[t + 3] = field[o + q * 4 + 3];
+    }
+  }
+  tex.needsUpdate = true;
+}
+
 /** A field's floats into its grid's texture (gridTexture's layout), for a new upload. */
 export function refill(tex: THREE.Data3DTexture, grid: GridSpec, field: Float32Array): void {
   const [w, h, d] = grid.dims;
@@ -249,6 +269,10 @@ export class ProbeField {
   private busy = false;
   private pending = new Set<number>();
   private disposed = false;
+  /** Why the bake stopped, if a worker failed (its script didn't load, say): the probes stay off. */
+  failed: string | null = null;
+  /** The jobs' waits, ended when a worker fails. */
+  private readonly stoppers = new Set<() => void>();
 
   constructor(
     private readonly level: BuiltLevel,
@@ -289,9 +313,21 @@ export class ProbeField {
     const scene = this.makeScene(this.boxes(), this.grids);
     for (let i = 0; i < this.workerCount; i++) {
       const w = new Worker(new URL("./probes.worker.ts", import.meta.url), { type: "module" });
+      const fail = (e: Event) => this.fail((e as ErrorEvent).message || "a probe worker failed");
+      w.addEventListener("error", fail);
+      w.addEventListener("messageerror", fail);
       w.postMessage({ kind: "init", scene });
       this.workers.push(w);
     }
+  }
+
+  /** A worker failed: every wait ends, nothing more is baked, and the probes never switch on. */
+  private fail(why: string): void {
+    if (this.failed) return;
+    this.failed = why;
+    console.error(`probe bake: ${why}`);
+    for (const stop of this.stoppers) stop();
+    this.stoppers.clear();
   }
 
   /** Run the jobs on the workers; each result lands in its grid's field. */
@@ -304,8 +340,9 @@ export class ProbeField {
       this.workers.map(
         (w) =>
           new Promise<void>((resolve) => {
+            this.stoppers.add(resolve);
             const take = () => {
-              if (this.disposed || next >= jobs.length) return resolve();
+              if (this.disposed || this.failed || next >= jobs.length) return resolve();
               const job = jobs[next++];
               const mine = ++id;
               const on = (e: MessageEvent<{ id: number; out: Float32Array }>) => {
@@ -334,9 +371,37 @@ export class ProbeField {
     return jobs;
   }
 
-  /** The fields to every worker, for the next pass's bounce. */
+  /** The fields to every worker, for the next pass's bounce: a copy each, handed over (not copied again on the way). */
   private shareFields(): void {
-    for (const w of this.workers) w.postMessage({ kind: "fields", fields: this.fields.map((f) => f && f.slice()) });
+    for (const w of this.workers) {
+      const fields = this.fields.map((f) => f && f.slice());
+      const transfer: ArrayBuffer[] = [];
+      for (const f of fields) if (f) transfer.push(f.buffer as ArrayBuffer);
+      w.postMessage({ kind: "fields", fields }, transfer);
+    }
+  }
+
+  /**
+   * After a rebake, only the probes it changed (each grid's, by index): into the textures, and to every worker for the
+   * next rebake's bounce. (The whole fields, 6 MB on Oregon, copied for every worker on the page's thread, took longer
+   * than a frame at every breach: the review, M10.)
+   */
+  private shareChanged(jobs: readonly Job[]): void {
+    this.grids.forEach((grid, g) => {
+      const f = this.fields[g];
+      const mine = jobs.filter((j) => j.grid === g);
+      if (!f || !mine.length) return;
+      const probes = new Int32Array(mine.reduce((n, j) => n + j.probes.length, 0));
+      let n = 0;
+      for (const j of mine) {
+        probes.set(j.probes, n);
+        n += j.probes.length;
+      }
+      const data = new Float32Array(probes.length * PROBE_STRIDE);
+      probes.forEach((p, i) => data.set(f.subarray(p * PROBE_STRIDE, (p + 1) * PROBE_STRIDE), i * PROBE_STRIDE));
+      if (this.textures[g]) refillProbes(this.textures[g], grid, f, probes);
+      for (const w of this.workers) w.postMessage({ kind: "patch", grid: g, probes, data });
+    });
   }
 
   private upload(): void {
@@ -353,6 +418,7 @@ export class ProbeField {
     for (let p = 0; p < passes && !this.disposed; p++) {
       if (p > 0) this.shareFields();
       await this.run(this.allJobs());
+      if (this.failed) break;
       this.upload();
       this.passes = p + 1;
       if (p === 0) {
@@ -403,8 +469,8 @@ export class ProbeField {
       for (let from = 0; from < list.length; from += CHUNK) jobs.push({ grid: gi, probes: Int32Array.from(list.slice(from, from + CHUNK)) });
     });
     await this.run(jobs);
-    this.upload();
-    this.shareFields();
+    if (this.failed) return;
+    this.shareChanged(jobs);
     this.busy = false;
     if (this.pending.size) void this.rebake();
   }

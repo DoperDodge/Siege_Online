@@ -52,13 +52,27 @@ function decode(urls: string[], size: number): Promise<Uint8Array> {
   const w = worker;
   const id = ++jobs;
   return new Promise((resolve, reject) => {
+    const done = () => {
+      w.removeEventListener("message", on);
+      w.removeEventListener("error", fail);
+      w.removeEventListener("messageerror", fail);
+    };
     const on = (e: MessageEvent<{ id: number; data?: Uint8Array; error?: string }>) => {
       if (e.data.id !== id) return;
-      w.removeEventListener("message", on);
+      done();
       if (e.data.data) resolve(e.data.data);
       else reject(new Error(e.data.error ?? "texture decode failed"));
     };
+    // The worker itself failed (its script didn't load, say): this load fails, and the next makes a new one.
+    const fail = (e: Event) => {
+      done();
+      if (worker === w) worker = null;
+      w.terminate();
+      reject(new Error(`the texture worker failed${(e as ErrorEvent).message ? `: ${(e as ErrorEvent).message}` : ""}`));
+    };
     w.addEventListener("message", on);
+    w.addEventListener("error", fail);
+    w.addEventListener("messageerror", fail);
     w.postMessage({ id, urls, size });
   });
 }

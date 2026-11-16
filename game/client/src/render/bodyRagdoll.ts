@@ -105,6 +105,8 @@ const FLOOR_GRIP = 0.55;
 const PASSES = 8;
 /** Seconds until it lies still. */
 const SETTLE_S = 5;
+/** The most a joint moves in a step (m): 9 m/s. Nothing a fall does is faster; a constraint's correction can be. */
+const MAX_STEP_M = 0.15;
 
 export class Ragdoll {
   private readonly p = new Float64Array(JOINTS.length * 3);
@@ -116,13 +118,40 @@ export class Ragdoll {
    * From a body's joints as it died, moving at `vel` (m/s), its upper body pushed by `push` (m/s: what tips it over);
    * `floorY` is the floor under it.
    */
-  constructor(joints: BodyRig["joints"], vel: THREE.Vector3, push: THREE.Vector3, private readonly floorY: number) {
+  constructor(joints: BodyRig["joints"], vel: THREE.Vector3, push: THREE.Vector3, private floorY: number) {
     JOINTS.forEach((name, i) => {
       const j = joints[name];
       const high = name === "head" || name === "neck" || name === "chest" || name.startsWith("shoulder") ? 1 : name === "pelvis" || name.startsWith("hip") ? 0.3 : 0;
-      this.p.set([j.x, j.y, j.z], i * 3);
-      this.prev.set([j.x - (vel.x + push.x * high) * STEP_S, j.y - (vel.y + push.y * high) * STEP_S, j.z - (vel.z + push.z * high) * STEP_S], i * 3);
+      // A joint starting under the floor (a body that lay on a slope, the floor found under it flat) starts on it,
+      // still: verlet would make the step up a leap.
+      const y = Math.max(j.y, floorY + RADIUS[name]);
+      this.p.set([j.x, y, j.z], i * 3);
+      this.prev.set([j.x - (vel.x + push.x * high) * STEP_S, y - (vel.y + push.y * high) * STEP_S, j.z - (vel.z + push.z * high) * STEP_S], i * 3);
     });
+  }
+
+  /** Step until it lies still (a body first seen dead: drawn at rest, not falling). */
+  settle(): void {
+    while (!this.asleep) {
+      this.age += STEP_S;
+      this.tick();
+    }
+  }
+
+  /**
+   * The floor under it now (the corpse rule casts for it every frame): lower (a hatch blown under it) and it falls
+   * again onto the new one; higher, it's lifted onto it.
+   */
+  setFloor(y: number): void {
+    if (Math.abs(y - this.floorY) < 0.02) return;
+    const up = y - this.floorY;
+    this.floorY = y;
+    this.age = 0;
+    if (up > 0)
+      for (let i = 0; i < JOINTS.length; i++) {
+        this.p[i * 3 + 1] += up;
+        this.prev[i * 3 + 1] += up;
+      }
   }
 
   /** Still (it stopped stepping). */
@@ -149,9 +178,16 @@ export class Ragdoll {
       const floor = this.floorY + RADIUS[JOINTS[i]];
       const down = p[o + 1] <= floor + 1e-3;
       const grip = down ? FLOOR_GRIP : DRAG;
-      const vx = (p[o] - prev[o]) * grip;
-      const vy = (p[o + 1] - prev[o + 1]) * DRAG + GRAVITY * STEP_S * STEP_S;
-      const vz = (p[o + 2] - prev[o + 2]) * grip;
+      let vx = (p[o] - prev[o]) * grip;
+      let vy = (p[o + 1] - prev[o + 1]) * DRAG + GRAVITY * STEP_S * STEP_S;
+      let vz = (p[o + 2] - prev[o + 2]) * grip;
+      const step = Math.hypot(vx, vy, vz);
+      if (step > MAX_STEP_M) {
+        const k = MAX_STEP_M / step;
+        vx *= k;
+        vy *= k;
+        vz *= k;
+      }
       prev[o] = p[o];
       prev[o + 1] = p[o + 1];
       prev[o + 2] = p[o + 2];
@@ -176,9 +212,10 @@ export class Ragdoll {
         p[b + 1] -= dy * f;
         p[b + 2] -= dz * f;
       }
+      // Out of the floor, and no faster up for it (moving the point alone would be a velocity up: verlet).
       for (let i = 0; i < n; i++) {
         const floor = this.floorY + RADIUS[JOINTS[i]];
-        if (p[i * 3 + 1] < floor) p[i * 3 + 1] = floor;
+        if (p[i * 3 + 1] < floor) p[i * 3 + 1] = prev[i * 3 + 1] = floor;
       }
     }
   }

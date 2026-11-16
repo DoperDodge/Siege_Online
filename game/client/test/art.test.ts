@@ -9,7 +9,7 @@ import { artProblems, loadArtData, Sim, type BuiltLevel } from "@redmond/shared"
 import { Architecture } from "../src/render/architecture.js";
 import type { LabScene } from "../src/render/labScene.js";
 import { LevelArt } from "../src/render/levelArt.js";
-import { ProbeField, refill } from "../src/render/probes/probeField.js";
+import { ProbeField, refill, refillProbes } from "../src/render/probes/probeField.js";
 import { roomLamps } from "../src/render/probes/scene.js";
 import { initialQuality, PRESETS, presetFor } from "../src/render/quality.js";
 import type { TextureManifest, TextureSets } from "../src/render/textures.js";
@@ -219,6 +219,19 @@ describe("the level's shader keeps to what every GPU allows (Ulo's report: Mediu
             const from = (k * 6 + j * 3 + i) * 16 + q * 4;
             expect(Array.from(d.subarray(at, at + 4))).toEqual([from, from + 1, from + 2, from + 3]);
           }
+    // After a rebake, only the probes it changed are written, each to the same texels a full refill puts it in.
+    const changed = Int32Array.from([0, 4, 11]);
+    const again = field.map((v) => v + 1000);
+    const part = new THREE.Data3DTexture(Float32Array.from(d), 3, 8, 2);
+    refillProbes(part, grid, again, changed);
+    const whole = new THREE.Data3DTexture(new Float32Array(3 * 8 * 2 * 4), 3, 8, 2);
+    refill(whole, grid, again);
+    const pd = part.image.data as Float32Array;
+    const wd = whole.image.data as Float32Array;
+    for (let at = 0; at < pd.length; at += 4) {
+      const probe = Math.floor(at / 4) % 3 + 3 * ((Math.floor(at / 12) % 8) % 2) + 6 * Math.floor(at / 96);
+      expect(Array.from(pd.subarray(at, at + 4)), `texel ${at / 4}`).toEqual(Array.from((changed.includes(probe) ? wd : d).subarray(at, at + 4)));
+    }
   });
 });
 
@@ -243,6 +256,12 @@ describe("graphics presets (render/DESIGN.md §3)", () => {
     expect(PRESETS.high).toMatchObject({ textures: 1024, shadowMap: 4096, probes: true, ao: true });
     expect(presetFor("greybox", new URLSearchParams("lowgfx"))).toMatchObject({ shadowMap: 0, antialias: false, maxPixelRatio: 1 });
     expect(presetFor("greybox", new URLSearchParams())).toBe(PRESETS.greybox);
+    // The depth pre-pass on Medium and High; a link turns it, or the antialiasing, off or on (to compare on a GPU).
+    expect([PRESETS.greybox.prepass, PRESETS.low.prepass, PRESETS.medium.prepass, PRESETS.high.prepass]).toEqual([false, false, true, true]);
+    expect(presetFor("high", new URLSearchParams("prepass=0")).prepass).toBe(false);
+    expect(presetFor("low", new URLSearchParams("prepass=1")).prepass).toBe(true);
+    expect(presetFor("high", new URLSearchParams("aa=0")).antialias).toBe(false);
+    expect(presetFor("high", new URLSearchParams("prepass=maybe"))).toBe(PRESETS.high);
   });
 });
 
