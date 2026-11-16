@@ -1227,13 +1227,16 @@ export async function startLab(o: LabOptions): Promise<void> {
 
   let frames = 0;
   /** A performance capture's frames while one runs (tools/e2e/oregon-perf.mjs): each one's work, draws and panel redraw. */
-  let perfLog: { workMs: number; calls: number; triangles: number; panelMs: number }[] | null = null;
+  let perfLog: { workMs: number; calls: number; triangles: number; panelMs: number; drawMs: number }[] | null = null;
+  /** This frame's time drawing the world: three's own work and its calls into WebGL (part of workMs; the perf capture). */
+  let drawMs = 0;
   let fpsFrames = 0;
   let fpsAt = performance.now();
   /** Shadow-map redraws so far (they happen on request only: createRenderer). */
   let shadowDraws = 0;
   /** Render the world, counting a shadow-map redraw if one was asked for. */
   function drawWorld() {
+    const drawFrom = performance.now();
     if (renderer.shadowMap.enabled && renderer.shadowMap.needsUpdate && !renderer.getContext().isContextLost()) shadowDraws++;
     const cam = shownCamera();
     artView.frame(cam);
@@ -1259,11 +1262,13 @@ export async function startLab(o: LabOptions): Promise<void> {
       renderer.render(scene, cam);
       renderer.autoClearDepth = true;
     } else renderer.render(scene, cam);
+    drawMs += performance.now() - drawFrom;
   }
   /** The depth pre-pass's material: depth only, a hair back (drawWorld). */
   const depthFirst = new THREE.MeshBasicMaterial({ colorWrite: false, fog: false, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
   function frame(now: number) {
     const workFrom = performance.now();
+    drawMs = 0;
     renderer.info.reset();
     // The frame's timestamp can predate the code that ran just before it (a page busy for seconds
     // starting up gets a first frame stamped from before): never step time backwards.
@@ -1279,7 +1284,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       acc = 0;
       if (o.match && disconnected && !app.classList.contains("disconnected")) matchFail(disconnected);
       drawWorld();
-      stats.frame(now, performance.now() - workFrom + (net?.takeHandleMs() ?? 0), renderer.info.render.calls, renderer.info.render.triangles);
+      stats.frame(now, performance.now() - workFrom + (net?.takeHandleMs() ?? 0), renderer.info.render.calls, renderer.info.render.triangles, drawMs);
       $(".center-msg").textContent = disconnected ?? "Waiting for the server…";
       $(".center-msg").classList.remove("hidden");
       requestAnimationFrame(frame);
@@ -1453,8 +1458,8 @@ export async function startLab(o: LabOptions): Promise<void> {
     if (me && !spec) updateHud(me);
     else spectatorHud();
     const workMs = performance.now() - workFrom + (net?.takeHandleMs() ?? 0);
-    stats.frame(now, workMs, renderer.info.render.calls, renderer.info.render.triangles);
-    perfLog?.push({ workMs, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, panelMs });
+    stats.frame(now, workMs, renderer.info.render.calls, renderer.info.render.triangles, drawMs);
+    perfLog?.push({ workMs, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, panelMs, drawMs });
     requestAnimationFrame(frame);
   }
 
@@ -2056,7 +2061,7 @@ export async function startLab(o: LabOptions): Promise<void> {
           rooms: def.rooms.map((r) => ({ id: r.id, callout: r.callout, storey: r.storey, rects: r.rects, anchor: r.anchor })),
           levelPlan: def.plan ?? null,
           hud: whereHud?.text ?? null,
-          art: { quality, ready: artView.ready, shown: artView.shown, probes: artView.probeState, exposure: renderer.toneMappingExposure, problem: artProblem },
+          art: { quality, ready: artView.ready, shown: artView.shown, probes: artView.probeState, exposure: renderer.toneMappingExposure, problem: artProblem, textures: artView.textures },
           ...(storeyView && {
             storey: def.storeys[storeyView.storey].id,
             hideAbove: storeyView.hideAbove,

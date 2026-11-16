@@ -32,8 +32,8 @@ export class StatsOverlay {
   private readonly el: HTMLElement;
   /** When the last frame started (-1: no frame yet). */
   private last = -1;
-  /** The frames since the numbers were last written: how many, their summed and longest time, work, draws, triangles. */
-  private sum = { start: 0, frames: 0, ms: 0, maxMs: 0, workMs: 0, calls: 0, triangles: 0 };
+  /** The frames since the numbers were last written: how many, their summed and longest time, work, drawing, draws, triangles. */
+  private sum = { start: 0, frames: 0, ms: 0, maxMs: 0, workMs: 0, drawMs: 0, calls: 0, triangles: 0 };
   /** The last LOW_MS of frame times and work times, and when each of those frames started. */
   private readonly times: number[] = [];
   private readonly works: number[] = [];
@@ -58,15 +58,15 @@ export class StatsOverlay {
   /**
    * Once a frame, at its end: when the frame started (its requestAnimationFrame time), how long the page worked
    * on it (ms: the frame's own code and the messages handled since the last frame, on the main thread; not the
-   * graphics card, nor the browser laying out and painting the page), and its draw calls and triangles over
-   * every render call in it. Frames are counted while the overlay is hidden too, so it has its numbers the
-   * moment it shows.
+   * graphics card, nor the browser laying out and painting the page), the part of it spent drawing the world
+   * (three's own work and its calls into WebGL), and its draw calls and triangles over every render call in it.
+   * Frames are counted while the overlay is hidden too, so it has its numbers the moment it shows.
    */
-  frame(now: number, workMs: number, calls: number, triangles: number): void {
+  frame(now: number, workMs: number, calls: number, triangles: number, drawMs = 0): void {
     const ms = this.last < 0 ? Infinity : now - this.last;
     this.last = now;
     if (!(ms >= 0 && ms <= GAP_MS)) {
-      this.sum = { start: now, frames: 0, ms: 0, maxMs: 0, workMs: 0, calls: 0, triangles: 0 };
+      this.sum = { start: now, frames: 0, ms: 0, maxMs: 0, workMs: 0, drawMs: 0, calls: 0, triangles: 0 };
       return;
     }
     const s = this.sum;
@@ -74,6 +74,7 @@ export class StatsOverlay {
     s.ms += ms;
     s.maxMs = Math.max(s.maxMs, ms);
     s.workMs += workMs;
+    s.drawMs += drawMs;
     s.calls += calls;
     s.triangles += triangles;
     this.times.push(ms);
@@ -89,11 +90,11 @@ export class StatsOverlay {
     this.el.textContent = [
       `${((s.frames * 1000) / s.ms).toFixed(0)} FPS · ${(s.ms / s.frames).toFixed(2)} ms a frame, ${s.maxMs.toFixed(1)} ms max (last 1 s)`,
       `1% low ${onePercentLowFps(this.times).toFixed(0)} FPS (last ${span} s)`,
-      `work ${(s.workMs / s.frames).toFixed(2)} ms avg, ${slowestOnePercentMs(this.works).toFixed(1)} ms slowest 1% (the page's own, on the main thread)`,
+      `work ${(s.workMs / s.frames).toFixed(2)} ms avg (drawing ${(s.drawMs / s.frames).toFixed(2)}), ${slowestOnePercentMs(this.works).toFixed(1)} ms slowest 1% (the page's own, on the main thread)`,
       `${Math.round(s.calls / s.frames)} draw calls · ${tris >= 10_000 ? `${(tris / 1000).toFixed(0)}k` : Math.round(tris)} triangles a frame`,
       ...this.about(),
       PASS_BAR,
     ].join("\n");
-    this.sum = { start: now, frames: 0, ms: 0, maxMs: 0, workMs: 0, calls: 0, triangles: 0 };
+    this.sum = { start: now, frames: 0, ms: 0, maxMs: 0, workMs: 0, drawMs: 0, calls: 0, triangles: 0 };
   }
 }

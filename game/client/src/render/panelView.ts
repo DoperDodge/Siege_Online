@@ -151,18 +151,23 @@ export class PanelView {
     const skin = c.kind === "glass" ? "glass" : `skin:${c.kind === "barricade" ? "BARRICADE" : e.info.surface}`;
     const front = p.layers[L_FRONT];
     const back = p.layers[L_BACK];
-    /** Per slot: the cells it draws (null: nothing), its material, and the geometry for those cells. */
-    const wanted: { cells: Uint8Array | null; key: string; geometry: (cells: Uint8Array) => THREE.BufferGeometry | null }[] = [
-      { cells: hidePlate(front, plates?.[0]), key: skin, geometry: (cells) => boxes(e, cells, layerSlab(p, e.frame, L_FRONT)) },
+    /**
+     * Per slot: the cells it draws (null: nothing), its material, the geometry for those cells, and whether it's drawn
+     * into the depth first (PREPASS_LAYER): a face that stops the eye, not the glass (seen through), and not what's
+     * inside a panel or along its edges (the core and studs, the caps, the seams: a draw each costs more than the few
+     * pixels they'd save).
+     */
+    const wanted: { cells: Uint8Array | null; key: string; geometry: (cells: Uint8Array) => THREE.BufferGeometry | null; face?: true }[] = [
+      { cells: hidePlate(front, plates?.[0]), key: skin, face: true, geometry: (cells) => boxes(e, cells, layerSlab(p, e.frame, L_FRONT)) },
       {
         cells: p.layers[L_CORE] && exposed(p.layers[L_CORE], front, back, p.w, p.h),
         key: p.coreMetal ? "core:metal" : "core:wood",
         geometry: (cells) => boxes(e, cells, layerSlab(p, e.frame, L_CORE)),
       },
-      { cells: hidePlate(back, plates?.[1]), key: skin, geometry: (cells) => boxes(e, cells, layerSlab(p, e.frame, L_BACK)) },
+      { cells: hidePlate(back, plates?.[1]), key: skin, face: true, geometry: (cells) => boxes(e, cells, layerSlab(p, e.frame, L_BACK)) },
       // Each plate just proud of its face.
-      { cells: plates?.[0] ?? null, key: "steel", geometry: (cells) => boxes(e, cells, [-half - STEEL_PLATE_M, -half + 0.002]) },
-      { cells: plates?.[1] ?? null, key: "steel", geometry: (cells) => boxes(e, cells, [half - 0.002, half + STEEL_PLATE_M]) },
+      { cells: plates?.[0] ?? null, key: "steel", face: true, geometry: (cells) => boxes(e, cells, [-half - STEEL_PLATE_M, -half + 0.002]) },
+      { cells: plates?.[1] ?? null, key: "steel", face: true, geometry: (cells) => boxes(e, cells, [half - 0.002, half + STEEL_PLATE_M]) },
       // Between two skins (walls, floors, hatches), across the core's depth.
       { cells: front && back ? edgeCaps(front, back, p.w, p.h) : null, key: skin, geometry: (cells) => capBoxes(e, cells, layerSlab(p, e.frame, L_CORE)) },
       // Where one reinforcement section meets the next, on both faces, reinforced or not, so the sections can
@@ -186,9 +191,7 @@ export class PanelView {
       // is too thin to cast anything.
       mesh.castShadow = w.key !== "glass" && w.key !== "seam" && !w.key.startsWith("core:");
       mesh.receiveShadow = true;
-      // A panel's faces stop the eye: drawn into the depth first (PREPASS_LAYER). Not the glass (seen through), nor
-      // the studs and seams (inside it or on it: their own draws would cost more than the pixels they save).
-      if (w.key.startsWith("skin:") || w.key === "steel") mesh.layers.enable(PREPASS_LAYER);
+      if (w.face && w.key !== "glass") mesh.layers.enable(PREPASS_LAYER);
       d.meshes[slot] = mesh;
     });
     if (!changed) return false;

@@ -25,6 +25,8 @@ mkdirSync(OUT, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 /** What WebGL2 guarantees on every device (the spec's minimums). */
 const GUARANTEED = { samplers: 16, uniformVectors: 224, size3D: 256, arrayLayers: 256, size2D: 2048 };
+/** The art's budgets at every preset (render/DESIGN.md §4): draw calls a frame (shadow passes included), triangles a frame, textures' GPU memory. */
+const BUDGET = { calls: 1500, triangles: 3_000_000, textureMB: 600 };
 
 const server = spawn(process.execPath, [SERVER], { env: { ...process.env, PORT: String(PORT) }, stdio: ["ignore", "ignore", "inherit"] });
 const result = { checks: {}, presets: {} };
@@ -127,9 +129,11 @@ async function load(gfx, refuse = "") {
     await page.waitForFunction(() => window.__lab.view.art.probes.passes >= 2, null, { timeout: WAIT.pass, polling: 500 });
     console.log(`  ${name}: their second at ${at()}`);
   }
-  // In the kitchen, looking across it: a few frames drawn with everything on.
+  // In the kitchen, looking across it: a few frames drawn with everything on (each frame's draws and triangles kept
+  // from here on, for the budgets).
   const kitchen = await page.evaluate(() => window.__lab.view.rooms.find((r) => r.id === "1F_KITCHEN").anchor);
   await page.evaluate((a) => window.__lab.fly([a[0], a[1] + 1.6, a[2], 40, -8]), kitchen);
+  await page.evaluate(() => window.__lab.perf.start());
   const f0 = await page.evaluate(() => window.__lab.frames);
   await page.waitForFunction((t) => window.__lab.frames >= t, f0 + 6, { timeout: WAIT.frames, polling: 100 });
   console.log(`  ${name}: six frames in the kitchen at ${at()}`);
@@ -147,6 +151,13 @@ async function load(gfx, refuse = "") {
     for (let i = 0; i < d.length; i += 4) sum += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
     return sum / (d.length / 4);
   }, png.toString("base64"));
+  // Then the yard, looking over the compound at the building: the view with the most to draw.
+  await page.evaluate(() => window.__lab.fly([30, 1.6, 50, 0, -4]));
+  const fy = await page.evaluate(() => window.__lab.frames);
+  await page.waitForFunction((t) => window.__lab.frames >= t, fy + 2, { timeout: WAIT.frames, polling: 100 });
+  const perf = await page.evaluate(() => window.__lab.perf.stop());
+  console.log(`  ${name}: two frames in the yard at ${at()}`);
+  const counts = { calls: Math.max(0, ...perf.map((f) => f.calls)), triangles: Math.max(0, ...perf.map((f) => f.triangles)) };
   // Then your own body from behind for a few frames (third person), so an operator's shader (skinned, and lit by the
   // probes where they're on) is among the programs checked.
   await page.evaluate(() => {
@@ -156,7 +167,7 @@ async function load(gfx, refuse = "") {
   const f1 = await page.evaluate(() => window.__lab.frames);
   await page.waitForFunction((t) => window.__lab.frames >= t, f1 + 3, { timeout: WAIT.frames, polling: 100 });
   console.log(`  ${name}: three frames behind the body at ${at()}`);
-  const out = { art: await page.evaluate(() => window.__lab.view.art), gl: await page.evaluate(readGl), errors, brightness };
+  const out = { art: await page.evaluate(() => window.__lab.view.art), gl: await page.evaluate(readGl), errors, brightness, counts };
   await ctx.close();
   return out;
 }
@@ -195,6 +206,9 @@ try {
       maxLayers: Math.max(0, ...arrays.map((t) => t.d)),
       maxArraySide: Math.max(0, ...arrays.map((t) => Math.max(t.w, t.h))),
       brightness: Math.round(r.brightness * 10) / 10,
+      calls: r.counts.calls,
+      triangles: r.counts.triangles,
+      textureMB: Math.round((r.art.textures?.gpuBytes ?? 0) / 1048576),
       errors: r.errors,
     };
     result.presets[gfx] = summary;
@@ -210,6 +224,8 @@ try {
     result.checks[`${gfx}NoConsoleErrors`] = r.errors.length === 0;
     // A lit room, not a black or blown-out picture.
     result.checks[`${gfx}RoomIsLit`] = r.brightness > 45 && r.brightness < 235;
+    // Within the budgets, in the kitchen and the yard (the draws counted in a frame at all: not none).
+    result.checks[`${gfx}WithinBudgets`] = summary.calls > 20 && summary.calls <= BUDGET.calls && summary.triangles <= BUDGET.triangles && summary.textureMB > 0 && summary.textureMB <= BUDGET.textureMB;
   }
   // The probes in use at High (or the check above would pass for the wrong reason).
   result.checks.highUsesTheProbes = /tProbeA/.test(result.presets.high.worstSamplers) && result.presets.high.max3D > 0;
@@ -231,9 +247,10 @@ try {
   server.kill();
 }
 result.guaranteed = GUARANTEED;
+result.budget = BUDGET;
 writeFileSync(join(OUT, "oregon-art.json"), JSON.stringify(result, null, 1) + "\n");
 for (const [gfx, s] of Object.entries(result.presets))
-  console.log(`oregon-art ${gfx}: ${s.programs} programs (${s.notLinked} not linked), at most ${s.maxSamplers} of ${GUARANTEED.samplers} samplers [${s.worstSamplers}], ${s.maxUniformVectors} uniform vectors, 3D textures to ${s.max3D}, ${s.maxLayers} layers`);
+  console.log(`oregon-art ${gfx}: ${s.programs} programs (${s.notLinked} not linked), at most ${s.maxSamplers} of ${GUARANTEED.samplers} samplers [${s.worstSamplers}], ${s.maxUniformVectors} uniform vectors, 3D textures to ${s.max3D}, ${s.maxLayers} layers; at most ${s.calls} draws and ${Math.round(s.triangles / 1000)}k triangles a frame, ${s.textureMB} MB of textures`);
 if (result.here) console.log(`  (this browser: ${result.here.renderer}, ${result.here.samplers} samplers a shader)`);
 if (result.fallback) console.log(`  fallback: ${result.fallback.problem}`);
 console.log(JSON.stringify({ ok, checks: result.checks, error: result.error }, null, 1));

@@ -13,8 +13,6 @@ export interface QualityPreset {
   shadowMap: number;
   /** Indirect light from the probes (render/DESIGN.md §6.3); without, each storey's even fill. */
   probes: boolean;
-  /** Screen-space ambient occlusion (§6.5). */
-  ao: boolean;
   /** Multisampled antialiasing, and the most device pixels per CSS pixel drawn (both take effect at the next load). */
   antialias: boolean;
   maxPixelRatio: number;
@@ -28,10 +26,10 @@ export interface QualityPreset {
 }
 
 export const PRESETS: Record<Quality, QualityPreset> = {
-  greybox: { textures: 0, shadowMap: 4096, probes: false, ao: false, antialias: true, maxPixelRatio: 2, dressing: "none", prepass: false },
-  low: { textures: 512, shadowMap: 0, probes: false, ao: false, antialias: false, maxPixelRatio: 1, dressing: "none", prepass: false },
-  medium: { textures: 1024, shadowMap: 2048, probes: true, ao: false, antialias: true, maxPixelRatio: 1.5, dressing: "some", prepass: true },
-  high: { textures: 1024, shadowMap: 4096, probes: true, ao: true, antialias: true, maxPixelRatio: 2, dressing: "all", prepass: true },
+  greybox: { textures: 0, shadowMap: 4096, probes: false, antialias: true, maxPixelRatio: 2, dressing: "none", prepass: false },
+  low: { textures: 512, shadowMap: 0, probes: false, antialias: false, maxPixelRatio: 1, dressing: "none", prepass: false },
+  medium: { textures: 1024, shadowMap: 2048, probes: true, antialias: true, maxPixelRatio: 1.5, dressing: "some", prepass: true },
+  high: { textures: 1024, shadowMap: 4096, probes: true, antialias: true, maxPixelRatio: 2, dressing: "all", prepass: true },
 };
 
 /** What the Graphics setting holds: a quality, or "auto" (decided by the device: initialQuality). */

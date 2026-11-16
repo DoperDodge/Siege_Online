@@ -251,9 +251,9 @@ describe("graphics presets (render/DESIGN.md §3)", () => {
 
   it("each preset draws what §3 says, and ?lowgfx drops the greybox's shadows and antialiasing", () => {
     expect(PRESETS.greybox.textures).toBe(0);
-    expect(PRESETS.low).toMatchObject({ textures: 512, shadowMap: 0, probes: false, ao: false });
-    expect(PRESETS.medium).toMatchObject({ textures: 1024, shadowMap: 2048, probes: true, ao: false });
-    expect(PRESETS.high).toMatchObject({ textures: 1024, shadowMap: 4096, probes: true, ao: true });
+    expect(PRESETS.low).toMatchObject({ textures: 512, shadowMap: 0, probes: false });
+    expect(PRESETS.medium).toMatchObject({ textures: 1024, shadowMap: 2048, probes: true });
+    expect(PRESETS.high).toMatchObject({ textures: 1024, shadowMap: 4096, probes: true });
     expect(presetFor("greybox", new URLSearchParams("lowgfx"))).toMatchObject({ shadowMap: 0, antialias: false, maxPixelRatio: 1 });
     expect(presetFor("greybox", new URLSearchParams())).toBe(PRESETS.greybox);
     // The depth pre-pass on Medium and High; a link turns it, or the antialiasing, off or on (to compare on a GPU).
