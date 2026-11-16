@@ -62,12 +62,13 @@ Settings → Graphics: **Low / Medium / High** (default High on desktop, Low on 
 
 | | Low | Medium | High |
 |---|---|---|---|
-| Textures | half size (512 px) | 1024 px | 1024 px (2048 for hero surfaces) |
+| Textures | half size (512 px) | 1024 px | 1024 px (2048 for hero surfaces: not built) |
 | Sun shadows | off | 2048 map | 4096 map |
 | Indirect light (§6.3) | storey fill (as now) | probes | probes |
-| Ambient occlusion (§6.5) | off | off | on |
+| Ambient occlusion (§6.5) | off | off | not built (D-181) |
 | Dressing (§9.2), foliage (§8) | cover props only | most | all |
 | Antialiasing, pixel ratio | off, 1 | on, ≤ 1.5 | on, ≤ 2 |
+| Depth pre-pass (§13, M10) | off | on | on |
 
 ## 4. Budgets (High, Oregon, the worst view)
 
@@ -146,6 +147,10 @@ a room within a fraction of a second); the sun's shadow map is redrawn as today.
 ### 6.5 Ambient occlusion
 Screen-space AO on High (the darkening where things meet, which the probes are too coarse for), applied to the
 world before the first-person view is drawn over it.
+
+**Not built (D-181).** The frame is bound by shading pixels already (§13), the texture sets carry their own
+occlusion (the ORM maps' red) and the probes darken rooms and corners at 0.75 m. A screen-space pass can come with
+Phase 12's performance pass if the frame rate on Ulo's PC leaves room for it.
 
 ### 6.6 Lamps
 Ceiling lamps per room (art.json): an emissive fixture, and a light in the bake. No realtime point lights (three
@@ -260,6 +265,20 @@ articulate and nothing on the gun cycles: see D-180.
   may move to a second job.
 - **Ulo's PC:** F8 at 1080p High: the frame rate in the worst views, for the done-when.
 
+**As built (D-181):** Medium and High draw the level's static opaque surfaces into the depth buffer first
+(`PREPASS_LAYER`: the level's boxes, the frames, the outside's and the furniture's models, a panel's faces and
+plates; not its glass, core, studs, edge caps or seams), then everything as before, so the level's shader runs about
+once a pixel; `?prepass=0|1` and `?aa=0|1` on a link override the preset. In the software renderer here (384 × 216,
+where a frame's time grows with the pixels shaded: antialiasing alone is half of High's) it takes High from 2.5 to
+2.0 s a frame in the meeting hall and from 3.3 to 2.9 s in the yard, the kitchen unchanged. It costs 40–60 % more draw
+calls (the yard 625 → 872) and so more of the page's time drawing: here up to 5 ms more in the dining
+and meeting halls, none in the yard. F8 now shows how much of the page's work is drawing. Six views at High: 139–872
+draw calls, 630–660k triangles, 448 MB of textures, the probes' two passes in 13–15 s; Medium the same but a little
+less dressing; Low at most 622 draws, about 300k triangles, 112 MB. `oregon-art.mjs` holds every preset to §4's
+budgets in the kitchen and the yard. `oregon-perf.mjs` stays on the greybox: the page's work a frame can't be read at
+High here (a frame takes 1–3 s in software, and the page then plays every tick in between). No LODs (§11: a body is
+5.5–7.4k triangles; the triangles are a fifth of the budget) and no ambient occlusion (§6.5).
+
 ## 14. Milestones
 
 | M | What |
@@ -274,3 +293,6 @@ articulate and nothing on the gun cycles: see D-180.
 | M8 | Operators: bodies, gear per operator, third-person animation, ragdoll |
 | M9 | First person: arms and per-weapon animation, gadget use |
 | M10 | Performance pass, LODs, the checks, the review, docs, report, merge |
+
+All ten are done (D-170 to D-181). Not built: ambient occlusion (§6.5), 2048 px textures for hero surfaces (§3),
+LODs (not needed, §13).

@@ -17,10 +17,13 @@ Rainbow Six Siege, played on a full recreation of **Oregon**. It runs **in the w
 
 ## Current status
 
-**Phase 6 — matches: built on PR #7, waiting for your test.** Play a match on Oregon in any format (Quick Match,
-Unranked, Ranked, 1v1, Custom, Practice) with friends: the Play page creates a room, and the others join by its code.
-Phases 1–5 (movement, online play, gunplay, destruction, the Oregon greybox) are merged; the labs are still there for
-each. `PROGRESS.md` says what to test in each phase; Phase 7 (drones, cameras, pinging) is next.
+**Phase 10 — the art pass: done (PR #13), waiting for your look at 1080p High.** Oregon is textured and lit (a real
+sky, the sun, light bounced round the rooms and baked in your browser), with door and window frames, furniture,
+each room's dressing and the outside; every weapon, gadget and operator is modelled, and you see your own arms in
+first person. Settings → Graphics picks High, Medium, Low or the greybox; F8 shows the frame rate and what's drawn.
+Phases 1–9 (movement, online play, gunplay, destruction, the Oregon greybox, matches, intel, operators and gadgets,
+Bot Training) are merged; the labs are still there for each. `PROGRESS.md` says what to test in each phase; Phase 11
+(audio) is next.
 
 ## Repository layout
 
@@ -56,7 +59,9 @@ Once the game is deployed (Phase 2), everyone just opens the game's **Railway UR
 one person creates a lobby, and the others join with the **room code**. No installs, no port
 forwarding, no VPN. For offline practice and solo Bot Training, the server runs inside your browser tab.
 
-## Manual asset steps (from Phase 10)
+## Art assets (Phase 10)
 
-Mixamo characters/animations must be downloaded by hand (an AI can't log in to Mixamo). Exact file
-names and settings will be listed here when the art pass starts.
+None to download by hand: the models and their animation are built in code (D-179: no Mixamo characters). The only
+art files are CC0 photo textures and a CC0 sky, already committed under `game/client/public/art/` and listed in
+[`ASSET_SOURCES.md`](ASSET_SOURCES.md). To fetch and pack them again: `npm --prefix tools/art install` once, then
+`npm run art:textures` and `npm run art:sky`.

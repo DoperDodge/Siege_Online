@@ -5,7 +5,154 @@ known issues, and what's next.
 
 ---
 
-## Your requests after Phase 9 · 🚧 in review (D-169)
+## Phase 10 — Art pass · ✅ complete (PR #13, squash-merged into `main`)
+
+The plan: game/client/src/render/DESIGN.md (D-170). Everything you see is built in code when the page loads, from the
+level and the art data (data/presentation/, data/maps/oregon/art.json); the only art files are 28 CC0 photo-texture
+sets and one CC0 sky, each listed in ASSET_SOURCES.md. The art is looks only: what you bump into, stand on and shoot through is exactly what it
+was, and the tests hold every model to the box it stands for (a chair isn't drawn where a bullet would pass, nothing
+hangs in a doorway).
+
+| M | What | State |
+|---|---|---|
+| M1 | The pipeline, the textures, Settings → Graphics, the budgets on F8 | ✅ (D-170, D-171) |
+| M2 | The level's materials: each room's walls, floors, ceilings and trims; the panels | ✅ (D-172) |
+| M3 | Light: the sky and sun, light bounced round the rooms (baked in your browser, again round a hole), lamps, exposure | ✅ (D-173; no ambient occlusion, see Known issues) |
+| M4 | Door and window frames, glass, hatches, lamp fittings | ✅ (D-174) |
+| M5 | The outside: vehicles, sheds, silos, fences, the ground, woods and hills past the bounds | ✅ (D-175) |
+| M6 | Furniture for the cover, each room's dressing, the cameras, the ingredients | ✅ (D-176) |
+| M7 | Every weapon its own look with sights that work, the gadgets, the drone | ✅ (D-177) |
+| M8 | Operators: bodies, each one's gear, every pose in third person, ragdolls | ✅ (D-179) |
+| M9 | First person: your arms and hands, reloads on each weapon's timings, gadgets in hand | ✅ (D-180) |
+| M10 | Performance, the review, the checks, this report | ✅ (D-181) |
+
+Between M7 and M8: your report that Medium and High wouldn't load on any of your devices (D-178).
+
+### M1–M2: the textures and the materials (D-170 to D-172)
+- **Settings → Graphics**: Auto (High on a desktop, Low on a phone), High, Medium, Low, Greybox. A change takes effect
+  when the page loads again. F8 shows the preset, the textures' size and memory, and the probes' bake.
+- **28 CC0 texture sets** (Poly Haven, ambientCG): plaster, beadboard, brick, concrete, tiles, wood, checkered and
+  concrete floors, carpet, linoleum, siding, barn boards, shingles, corrugated metal, grass, dirt, gravel, asphalt,
+  studs, steel, fabrics…, fetched and packed by `npm run art:textures`.
+- **Each room has a style**: its walls, floor and ceiling, and inside walls get a baseboard, a wainscot and a crown
+  moulding. A wall's two faces wear the two rooms they face. Walls you can destroy show plasterboard over studs, steel
+  on a reinforced one, planks on a barricade.
+
+### M3: light (D-173)
+- A real sky (a CC0 photo of one) with the sun where the greybox had it, haze to the horizon.
+- **Light that bounces**: about 96,000 light probes over Oregon are baked in your browser when it loads (in the
+  background, about 15 s here; faster on a real PC). Rooms are lit by what they can see: windows, doors, the sun on
+  the floor, their lamps; a closed room is dark and a basement is dim. Open a wall and the light comes in: the probes
+  round a change are baked again.
+- Your eyes adapt: a dark room brightens over half a second, the yard dims.
+
+### M4–M6: the building, the outside and the rooms (D-174 to D-176)
+- **Every door and window has its frame** (casings, linings, sills), glass with glazing bars, hatches their tops, lamps
+  their fittings.
+- **The outside**: picket fences, sheds, the booth, silos and tanks, trailers, the container, the bus wreck, vans,
+  the box truck, cars, wrecks, the excavator, the generator, cable reels, lumber, tyre stacks, garden beds, the
+  greenhouse; grass, dirt, gravel and the street's asphalt; pine woods and a ring of hills past the map's edge.
+- **Furniture** for the 29 cover props (tables, pews, sofas, the kitchen counters and island, bookcases, washers,
+  freezers, beds and bunks…), each the size of the cover it stands for (within 3 cm). **Dressing**: pictures, posters,
+  shelves, clocks, rugs and low clutter by room, never in a doorway, on a wall you can destroy, or in front of
+  furniture.
+- The cameras and the defuser's ingredients are modelled.
+
+### M7: weapons, gadgets, the drone (D-177)
+- **Every weapon has its own look**, one of 13 kinds built in code (rifles, an AK, bullpups, SMGs, machine pistols,
+  pump, semi, revolver and double shotguns, pistols, LMGs…), with its own barrel, stock, handguard and magazine, and
+  every attachment (sights, muzzles, grips, the laser). **The sights work as sights**: the iron sights' post and ring
+  sit exactly on the line you aim along, and a red dot's window is clear.
+- **Every gadget** (22 kinds) and both drones are modelled at the size they're hit by; a big placed gadget is carried
+  packed (a rolled charge, a folded shield, coiled wire), and the drone's wheels turn as it drives.
+
+### Between: Medium and High not loading (your report, D-178)
+- The level's shader used 19 textures; real graphics cards (and Windows' Direct3D) allow 16, the software renderer
+  here allows 32, so it only failed on real devices. Now 11 at High. A browser test holds every shader to what every
+  graphics card must allow, and a preset that still can't load falls back to Low and says so.
+
+### M8: operators (D-179)
+- **Bodies built round the hitboxes**, so what you see is what you hit: a head, a chest, arms and legs that bend with
+  every stance, crouch, prone and lean. Each of the 12 operators has their own colours and gear: helmets, caps and
+  hoods, goggles and gas masks, vests, pads, and what they carry on their backs.
+- **Every pose from the game's state**: the gun shouldered and pointed exactly where they look, aimed down the
+  sights, sprinting, swapping, reloading on the weapon's timings, the knife; gadgets carried, thrown, placed, held up,
+  the hammer swung; walking and running in any direction without feet sliding; ladders, the rope, knocked down,
+  reviving, reinforcing, planting. **Dying**: a ragdoll falls from the pose they died in.
+
+### M9: first person (D-180)
+- **Your own arms and gloved hands**, dressed as your operator: the right on the grip, the left under the handguard
+  (or on a front grip). **Reloads on each weapon's timings**: the gun comes up and over, your hand takes the magazine
+  out and brings the next, and slaps the bolt release from empty; shotguns are fed a shell at a time. The knife in
+  your fist; gadgets in your palm, held up in both hands, or the hammer swung.
+
+### M10: performance, the review, the checks (D-181)
+- **A depth pre-pass** (Medium and High): the walls, floors and furniture are drawn once into the depth buffer before
+  the full picture, so the expensive lighting is worked out once a pixel rather than once for every wall behind it.
+  In the software renderer here it takes 15–20 % off High's frame in the busy rooms. It costs 40–60 % more draw
+  calls (more of your CPU's time each frame), so it's yours to compare on your PC: add `?prepass=0` to the
+  Oregon lab's link (and `?aa=0` for antialiasing off).
+- **The numbers** at High in six views of Oregon: 139–872 draw calls (the budget is 1,500), about 650k triangles
+  (3 M), 448 MB of textures (600 MB); at Low at most 622 draws, about 300k triangles, 112 MB. The art's browser test
+  now fails if a preset goes over. **F8** also shows how much of the page's work each frame is drawing.
+- **No LODs**: the triangles are a fifth of the budget and aren't what costs; a body is 5.5–7.4k triangles.
+- **Blowing a hole relights faster**: the rebake no longer copies all the light data (73 MB) on the page's thread,
+  only what changed.
+- **The review** (a reviewer for each area, and every finding fixed but one):
+  - Light: falling back to Low frees High's shadow map; a graphics context lost while the art loads is waited out
+    and the art loaded again (it was taken for a card that can't do High); anything failing part way undoes the
+    whole load; the sky's reflections come back after the context is restored (they went black); a failed texture
+    or light-baking worker stops the load and says why instead of waiting for ever; the eye adapts only to the room
+    you're in.
+  - Bodies: **other players now stride, aim, reload and knife** as yours does (two spare bits in the snapshot say
+    when someone is reloading or knifing); a ragdoll no longer leaps out of a floor, a body first seen dead lies still
+    at once and falls again if the floor under it is blown away; no sliding feet strafing; hands and feet go rung to
+    rung on a ladder.
+  - Weapons and first person: shotguns no longer pull a hidden tube out of the gun: shells go in at the loading
+    port (the BOSG's into its breech, the SIX12's into its cylinder); your hand takes a magazine by its side, not from
+    inside it; front grips (the MP5K's, the Scorpion's, the Vector's magazine, a fitted vertical grip) get your hand;
+    reloads ease in and out, and aiming during one keeps the gun straight; no gun in your hands on a ladder or while
+    reinforcing, reviving, barricading or planting (you can't shoot then); a gadget rests in your palm instead of
+    floating over it.
+  - Level models: reviewed; the fixes are in progress, and this line will say what they changed when they land.
+- **Not done**: ambient occlusion on High (the extra darkening where surfaces meet). The frame is already limited by
+  lighting the pixels; it can come in Phase 12 if your frame rate leaves room.
+
+### How to test (needs Node 22.12+)
+1. `npm ci`, then `npm run build && npm start`.
+2. **The done-when, on your PC at 1080p**: open http://localhost:8080/labs/oregon.html full screen, Settings →
+   Graphics → High (Auto picks High on a desktop), reload, and press F8. Wait for "probes: 2 passes" on F8 (a few
+   seconds), then look at the FPS (target ≥ 120) and the work line in the worst views: the yard looking at the
+   building, the dining and meeting halls, the dorms. Then the same with `?prepass=0` and with `?aa=0` on the link,
+   and tell me which is faster.
+3. **Medium and High on your other devices** (your report): each should load; if a device can't, the page falls back
+   to Low and F8 says why.
+4. **The looks**: walk Oregon at High (rooms, frames, furniture, the outside, the lamps' light, a hole blown in a
+   wall letting light in); the Range and Gadget labs for every weapon and gadget in your hands (reloads, shotguns'
+   shells, gadgets in your palm); a match against bots (*Play vs bots (offline)*) for other operators' bodies: watch
+   them walk, aim, reload, knife and fall.
+5. `npx vitest run`, and after a build `node tools/e2e/oregon-art.mjs` (every preset's shaders within what every
+   graphics card allows, the budgets, the fallback, screenshots in builds/e2e/).
+
+### Known issues
+- The 120 FPS done-when can only be read on your PC: here the graphics are drawn in software (a High frame takes
+  seconds).
+- No ambient occlusion; no 2048 px textures for close-up surfaces (High uses 1024 px like Medium).
+- Fingers don't move (a hand changes pose between holds), a pistol's slide and a rifle's bolt don't cycle.
+- Drawn elbows, knees and a stride's feet can go a little outside the straight arm and leg hitboxes (the trunk and
+  head stay inside theirs, tested); limbs are hit where the hitboxes are. **Your call:** should the limb hitboxes bend
+  with the drawn limbs? That changes what gets hit (a rule, not the art), so I haven't.
+- A body on screen makes about 20 KB of garbage a frame (more for the browser to collect; no leak).
+- The light probes take about 15 s to bake here when a level loads (less on a real PC); until the first pass the
+  rooms use the simpler storey light.
+
+### Next
+Phase 11 — Audio (PLAN §17): materials, sound travelling through the building and blocked by it, every cue; done
+when you can locate an enemy by sound through a floor.
+
+---
+
+## Your requests after Phase 9 · ✅ done (PR #12, squash-merged into `main`; D-169)
 
 ### What's done
 - **Fuze's shield, copied from your reference pictures**: the narrower top part with rounded corners round the window
