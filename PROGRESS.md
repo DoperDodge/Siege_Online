@@ -5,6 +5,42 @@ known issues, and what's next.
 
 ---
 
+## Your requests after Phase 10 · 🚧 in review (PR #14; D-182)
+
+### What's done
+- **Pulse's sensor, looked through**: held up, it comes close to his face and you look **through** its screen: the
+  world grey behind it, a red band sweeping across, and every heartbeat it picks up (10.5 m, in front of him, through
+  walls and floors) **lights up as the band passes over it**: a ring round a red dot where that person is (the dot
+  bigger the closer they are), fading until the next sweep. No numbers, no crosshair, no hands in the way. The green
+  radar fan under the view is gone. An EMP stops it (NO SIGNAL); pinging with it up still shares a heartbeat with
+  your team.
+- **Dokkaebi picks her target**: with her tablet up it lists the defenders your team has identified (drone, camera,
+  ping or scan: their operator and player, how long they stay identified, and a called one's cooldown) and the dead
+  defenders' phones she can still hack. The **mouse wheel** moves the pick; **Fire** sends the Jegeo Payload to the
+  picked defender wherever she's looking, or hacks the picked phone (his team's cameras for 20 s).
+- **The called defender has to turn the phone off**: his phone rings; holding **Interact** takes it out (his gun goes,
+  the phone is in his hands) and after 1.5 s it's off and the payload is cancelled. Let go too soon and it goes back in
+  his pocket still ringing. Not off within the 7 s: it explodes (40 damage and a pool of fire for 5 s where he stood),
+  and he can't use cameras for the rest of the round.
+- **Ambient occlusion**: Settings → Graphics → Ambient occlusion (off by default, takes effect at once): corners,
+  creases and contact shadows darker where surfaces meet. It costs frame rate.
+- **The stairs and hatches you couldn't see through**: that was the ground beyond the map lying under the whole map,
+  fixed with Phase 10 (#13). Looking down the stairwells shows the stairs now.
+
+### How to test
+1. `npm run build && npm start`, http://localhost:8080 → the Gadget Lab.
+2. **Pulse**: pick Pulse, Z to raise the sensor, look at the attacker dummy (or a friend in a second window): the
+   band sweeps across the grey screen and lights its heartbeat where it stands, through a wall too.
+3. **Dokkaebi**: pick Dokkaebi, ping a defender (or drone him), Z for the tablet: he's on the list; the wheel picks,
+   Fire sends. In a second window as that defender: hold F when it rings to take the phone out and turn it off, or don't
+   and watch it blow.
+4. **Ambient occlusion**: Esc → Settings → Graphics → tick Ambient occlusion; corners and creases darken.
+
+### Next
+Phase 11 — Audio, unless you want more changes here first.
+
+---
+
 ## Phase 10 — Art pass · ✅ complete (PR #13, squash-merged into `main`)
 
 The plan: game/client/src/render/DESIGN.md (D-170). Everything you see is built in code when the page loads, from the

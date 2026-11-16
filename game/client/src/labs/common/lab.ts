@@ -258,7 +258,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     <div class="lean-ind lean-l">◀</div><div class="lean-ind lean-r">▶</div>
     <div class="flash"></div>
     <div class="stun-white"></div><div class="emp-static hidden"></div>
-    <div class="pulse hidden"><div class="pulse-glass"><div class="pulse-tint"></div><div class="pulse-scan"></div><div class="pulse-hearts"></div><div class="pulse-title"></div></div></div>
+    <div class="pulse hidden"><div class="pulse-glass"><div class="pulse-grey"></div><div class="pulse-wash"></div><div class="pulse-band"></div><div class="pulse-hearts"></div><div class="pulse-state"></div></div></div>
     <div class="tablet hidden"><div class="tablet-title"></div><div class="tablet-list"></div><div class="tablet-help"></div></div>
     <div class="prompt hidden"></div>
     <div class="needle-ui hidden"></div>
@@ -2772,12 +2772,16 @@ export async function startLab(o: LabOptions): Promise<void> {
   let jegeoCharges: number | null = null;
 
   /**
-   * The heartbeats Pulse's sensor last showed (Phase 8 M6), by the body they beat in: where on its screen (px from its
-   * top left) and how far (m); kept, frozen, while an EMP has him. Each its own element (its beat runs on).
+   * The heartbeats Pulse's sensor has picked up (Phase 8 M6), by the body they beat in: where it was when the sweep
+   * last passed over it (the mark stays there as he looks round, until the next pass), when, and how near (0 at the
+   * range's edge … 1 on him); kept, frozen, while an EMP has him. Each its own element.
    */
-  let heartsShown = new Map<number, { x: number; y: number; d: number }>();
+  const heartsSeen = new Map<number, { at: THREE.Vector3; t: number; near: number }>();
   const heartEls = new Map<number, HTMLElement>();
-  let pulseTitle = "";
+  /** The sweep's place across the screen last frame (0 its left edge … 1 its right). */
+  let sweepWas = 0;
+  /** A sweep across the sensor's screen, left to right (ms). */
+  const SWEEP_MS = 1600;
 
   /**
    * Dokkaebi's tablet up: the defenders her team has identified (their operator and player, how long they stay
@@ -2849,8 +2853,11 @@ export async function startLab(o: LabOptions): Promise<void> {
 
   /**
    * Pulse's sensor up (Phase 8 M6; as in the game, Ulo's request after Phase 10): held up before his face, he looks
-   * through its screen, red-tinted, and each heartbeat it picks up (within its range and fan, through anything) beats
-   * on it where that body is, with how far; only he sees them. An EMP on him freezes it.
+   * through its display: the world grey through it, a bright red band sweeping across it left to right with the view
+   * washed dark red behind it, and each heartbeat it picks up (within its range and fan, through anything) lit where
+   * that body is as the band passes over it: a red dot in a thin white ring, the dot bigger the nearer, fading until the
+   * next pass, the mark staying where he was as Pulse looks round. No numbers, no crosshair. Only he sees it; an EMP on
+   * him freezes it.
    */
   function updateSensorHud() {
     const body = livingBody();
@@ -2859,56 +2866,70 @@ export async function startLab(o: LabOptions): Promise<void> {
     const k = body && !onFeed ? sensorUp(data, body) : null;
     const corners = k ? viewmodel.sensorScreen() : null;
     $(".pulse").classList.toggle("hidden", !corners);
-    if (!k || !body || !corners) return;
+    app.classList.toggle("sensor-up", !!corners);
+    if (!k || !body || !corners) {
+      heartsSeen.clear();
+      for (const el of heartEls.values()) el.remove();
+      heartEls.clear();
+      return;
+    }
     const W = app.clientWidth;
     const H = app.clientHeight;
     const xs = corners.map((c) => c[0] * W);
     const ys = corners.map((c) => c[1] * H);
     const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+    const [gw, gh] = [x1 - x0, y1 - y0];
     const glass = $(".pulse-glass");
     glass.style.left = `${x0.toFixed(1)}px`;
     glass.style.top = `${y0.toFixed(1)}px`;
-    glass.style.width = `${(x1 - x0).toFixed(1)}px`;
-    glass.style.height = `${(y1 - y0).toFixed(1)}px`;
+    glass.style.width = `${gw.toFixed(1)}px`;
+    glass.style.height = `${gh.toFixed(1)}px`;
+    const now = performance.now();
     const frozen = body.state.jammed > 0;
+    const onScreen = (p: THREE.Vector3) => {
+      const v = p.clone().project(camera);
+      return { x: ((v.x + 1) / 2) * W - x0, y: ((1 - v.y) / 2) * H - y0, ahead: v.z <= 1 };
+    };
     if (!frozen) {
-      const eye = camera.position;
-      const shown = new Map<number, { x: number; y: number; d: number }>();
+      // The band: across a little past each edge in SWEEP_MS. A heartbeat is picked up as it passes over where it is.
+      const sweep = -0.15 + 1.3 * ((now % SWEEP_MS) / SWEEP_MS);
+      const passed = (x: number) => (sweepWas <= sweep ? x > sweepWas && x <= sweep : x > sweepWas || x <= sweep);
       for (const p of heartbeats(sim, body)) {
-        const at = heartOf(sim, p);
-        const v = new THREE.Vector3(at[0], at[1], at[2]).project(camera);
-        if (v.z > 1) continue; // behind him
-        const x = ((v.x + 1) / 2) * W - x0;
-        const y = ((1 - v.y) / 2) * H - y0;
-        if (x < 0 || y < 0 || x > x1 - x0 || y > y1 - y0) continue; // not on the screen he's looking through
-        shown.set(p.id, { x, y, d: Math.hypot(at[0] - eye.x, at[1] - eye.y, at[2] - eye.z) });
+        const h = heartOf(sim, p);
+        const at = new THREE.Vector3(h[0], h[1], h[2]);
+        const s = onScreen(at);
+        if (!s.ahead || !passed(s.x / gw)) continue;
+        const d = at.distanceTo(camera.position);
+        heartsSeen.set(p.id, { at, t: now, near: Math.max(0, Math.min(1, 1 - d / k.rangeM)) });
       }
-      heartsShown = shown;
+      sweepWas = sweep;
+      $(".pulse-band").style.transform = `translateX(${(sweep * gw - gw / 12).toFixed(1)}px)`;
+      $(".pulse-wash").style.width = `${Math.max(0, sweep * gw).toFixed(1)}px`;
     }
     const layer = $(".pulse-hearts");
-    for (const [id, el] of heartEls) {
-      if (heartsShown.has(id)) continue;
-      el.remove();
-      heartEls.delete(id);
-    }
-    for (const [id, h] of heartsShown) {
+    const ring = Math.min(gh * 0.3, H * 0.18);
+    for (const [id, seen] of heartsSeen) {
+      const fade = frozen ? 1 : Math.exp(-(now - seen.t) / 900);
+      const s = onScreen(seen.at);
+      if (fade < 0.04) {
+        heartsSeen.delete(id);
+        heartEls.get(id)?.remove();
+        heartEls.delete(id);
+        continue;
+      }
       let el = heartEls.get(id);
       if (!el) {
         el = document.createElement("i");
-        el.innerHTML = `<svg viewBox="0 0 24 22"><path d="M12 21.3s-8.6-5.2-10.6-10.4C-0.1 6.6 2.6 1.6 7 1.6c2.3 0 3.9 1.3 5 3 1.1-1.7 2.7-3 5-3 4.4 0 7.1 5 5.6 9.3-2 5.2-10.6 10.4-10.6 10.4z"/></svg><b></b>`;
+        el.innerHTML = "<s></s><u></u>";
         layer.appendChild(el);
         heartEls.set(id, el);
       }
-      el.style.left = `${h.x.toFixed(1)}px`;
-      el.style.top = `${h.y.toFixed(1)}px`;
-      el.querySelector("b")!.textContent = `${h.d.toFixed(0)} m`;
+      const dot = ring * (0.08 + 0.14 * seen.near);
+      el.style.cssText = `left:${s.x.toFixed(1)}px;top:${s.y.toFixed(1)}px;opacity:${fade.toFixed(3)};--ring:${ring.toFixed(1)}px;--dot:${dot.toFixed(1)}px;display:${s.ahead ? "block" : "none"}`;
     }
-    const title = frozen ? "HB-5 · EMP: frozen" : `HB-5 · ${heartsShown.size} heartbeat${heartsShown.size === 1 ? "" : "s"} · ${k.rangeM} m · ping to share`;
-    if (title !== pulseTitle) {
-      pulseTitle = title;
-      $(".pulse-title").textContent = title;
-    }
+    $(".pulse").dataset.hearts = String(heartsSeen.size);
     $(".pulse").classList.toggle("frozen", frozen);
+    $(".pulse-state").textContent = frozen ? "NO SIGNAL" : "";
   }
 
   /**

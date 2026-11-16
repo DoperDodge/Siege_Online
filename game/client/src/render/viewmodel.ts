@@ -13,7 +13,7 @@ import { DEG, GadgetAct, isDowned, lerp, loadPresentationData, PawnMode, ReloadK
 import { operatorLook } from "./bodyModel.js";
 import { pistolHeld, shellCycle } from "./bodyPose.js";
 import { FpArms, handFrame, PALM, PALM_SURFACE_Z } from "./fpArms.js";
-import { heldShape, knifeShape, restsAt, shapeModel, type ShapeModel } from "./gadgetShapes.js";
+import { heldShape, knifeShape, restsAt, SENSOR_DISPLAY, shapeModel, type ShapeModel } from "./gadgetShapes.js";
 import { buildGun, gunKey, type GunModel } from "./gunKit.js";
 import { warmShaders } from "./labScene.js";
 
@@ -454,8 +454,16 @@ export class Viewmodel {
         this.camera.add(this.held);
         if (!gadget.detonator && gadget.data.use.kind === "hold") {
           // Its screen, on the face toward the eye once it's up (green: Pulse's heartbeats; blue: Dokkaebi's tablet).
-          this.screen = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.82, h * 0.72), new THREE.MeshBasicMaterial({ color: gadget.data.sensor ? 0x0f5132 : 0x0c4a6e }));
-          this.screen.position.set(0, h * 0.06, d / 2 + 0.001);
+          // (Pulse's sensor's display is open, looked through: its plane only says where it is, for the page to draw
+          // the screen there.)
+          const S = SENSOR_DISPLAY;
+          this.screen = gadget.data.sensor
+            ? new THREE.Mesh(new THREE.PlaneGeometry(S.w, S.h), new THREE.MeshBasicMaterial())
+            : new THREE.Mesh(new THREE.PlaneGeometry(w * 0.82, h * 0.72), new THREE.MeshBasicMaterial({ color: 0x0c4a6e }));
+          if (gadget.data.sensor) {
+            this.screen.position.set(S.cx, S.cy, S.z);
+            this.screen.visible = false;
+          } else this.screen.position.set(0, h * 0.06, d / 2 + 0.001);
           this.held.add(this.screen);
         }
       }
@@ -487,12 +495,20 @@ export class Viewmodel {
       // filling the middle of the view, and once it's up he looks through it: the device isn't drawn, the page draws
       // its see-through screen where it is (sensorScreen) with the heartbeats on it.
       const k = smooth(up);
-      const sensor = gadget?.data.sensor !== undefined;
-      this.held.position.set(lerp(0.2, 0, k), lerp(-0.42, sensor ? -0.035 : -0.06, k), lerp(-0.45, sensor ? -0.2 : -0.24, k));
-      this.held.rotation.set(lerp(-0.9, sensor ? -0.03 : -0.08, k), lerp(-0.4, 0, k), 0);
+      if (gadget?.data.sensor) {
+        // Pulse's HB-5 as the game holds it: up before his face, its display over the middle of the view a little left
+        // of centre (about 21–70 % across, 18–85 % down at 16:9), the frame down to the bottom of the view; looked
+        // through once it's up. (In his hands by its lower corners as it comes up; once up his hands are out of the
+        // picture, as the game's are but the thumb on its handle: fingers behind an open display would show through it.)
+        this.held.position.set(lerp(0.2, -0.0084, k), lerp(-0.42, -0.0065, k), lerp(-0.45, -0.18, k));
+        this.held.rotation.set(lerp(-0.9, 0, k), lerp(-0.4, 0, k), 0);
+        this.sensorUp = up >= 1;
+        if (!this.sensorUp) this.holdHeld("up");
+        return;
+      }
+      this.held.position.set(lerp(0.2, 0, k), lerp(-0.42, -0.06, k), lerp(-0.45, -0.24, k));
+      this.held.rotation.set(lerp(-0.9, -0.08, k), lerp(-0.4, 0, k), 0);
       this.holdHeld("up");
-      this.sensorUp = sensor && up >= 1;
-      this.held.visible = !this.sensorUp;
       return;
     }
     this.held.position.set(0.2 + windup * 0.06, -0.2 - (1 - smooth(up)) * 0.25 - placing * 0.12 + windup * 0.08 - strike * 0.1, -0.45 + windup * 0.12 - strike * 0.15);

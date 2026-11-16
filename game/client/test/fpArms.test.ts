@@ -411,12 +411,33 @@ describe("the hands on what's held (render/viewmodel.ts)", () => {
     const ready = new THREE.Vector3().setFromMatrixPosition(p.hand("right")!.frame);
     vm.update(0, 1 / 60, w, state({ hand: 1, gAct: GadgetAct.Throw, gTicks: 200 }), 30, gadget("frag"));
     expect(new THREE.Vector3().setFromMatrixPosition(parts(vm).hand("right")!.frame).z).toBeGreaterThan(ready.z + 0.05);
-    vm.update(0, 1 / 60, w, state({ hand: 3 }), 30, gadget("cardiac_sensor"));
+    vm.update(0, 1 / 60, w, state({ hand: 3 }), 30, gadget("jegeo_payload"));
     p = parts(vm);
     expect(p.hand("right")!.pose).toBe("edge");
     expect(p.hand("left")!.pose).toBe("edge");
     // One hand each side of it.
     expect(new THREE.Vector3().setFromMatrixPosition(p.hand("left")!.frame).x).toBeLessThan(new THREE.Vector3().setFromMatrixPosition(p.hand("right")!.frame).x - 0.05);
+    // Pulse's sensor all the way up is looked through: no hands in the picture (fingers would show through its open
+    // display), its display where the game has it (about 21–70 % across and 18–85 % down at 16:9).
+    vm.setAspect(16 / 9);
+    vm.update(0, 1 / 60, w, state({ hand: 3 }), 30, gadget("cardiac_sensor"));
+    p = parts(vm);
+    expect(p.hand("right")).toBeNull();
+    expect(p.hand("left")).toBeNull();
+    const screen = vm.sensorScreen()!;
+    expect(screen).not.toBeNull();
+    const xs = screen.map((c) => c[0]);
+    const ys = screen.map((c) => c[1]);
+    expect(Math.min(...xs)).toBeGreaterThan(0.17);
+    expect(Math.max(...xs)).toBeLessThan(0.74);
+    expect(Math.min(...ys)).toBeGreaterThan(0.14);
+    expect(Math.max(...ys)).toBeLessThan(0.89);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(0.44);
+    expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThan(0.6);
+    // Coming up it isn't looked through yet, and his hands are on it.
+    vm.update(0, 1 / 60, w, state({ hand: 3, gAct: GadgetAct.Equip, gTicks: 1 }), 30, gadget("cardiac_sensor"));
+    expect(vm.sensorScreen()).toBeNull();
+    expect(parts(vm).hand("right")).not.toBeNull();
     vm.update(0, 1 / 60, w, state({ hand: 3 }), 30, gadget("breaching_hammer"));
     p = parts(vm);
     expect(p.hand("right")!.pose).toBe("grip");
