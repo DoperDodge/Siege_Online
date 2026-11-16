@@ -35,7 +35,11 @@ export class CameraModels {
   private readonly bracket = new THREE.MeshStandardMaterial({ color: 0xbfc5cb, roughness: 0.55, metalness: 0.4 });
   private shown = "";
 
-  constructor(scene: THREE.Scene, cams: readonly { pos: readonly number[]; yawDeg: number; pitchDeg: number }[], reach?: Reach) {
+  /**
+   * `parentAt`: what a camera at a height goes into (its storey's group, so hiding the storeys above, or the plan view,
+   * hides it with them); the scene by default.
+   */
+  constructor(scene: THREE.Scene, cams: readonly { pos: readonly number[]; yawDeg: number; pitchDeg: number }[], reach?: Reach, parentAt: (y: number) => THREE.Object3D = () => scene) {
     const along = (g: THREE.BufferGeometry) => g.rotateX(Math.PI / 2);
     const housing = along(new THREE.CylinderGeometry(0.046, 0.05, 0.19, 18));
     const hood = new THREE.BoxGeometry(0.118, 0.008, 0.225);
@@ -67,7 +71,7 @@ export class CameraModels {
       const ball = new THREE.Mesh(joint, this.bracket);
       ball.position.set(...JOINT);
       group.add(head, ball, ...this.mount(c, reach));
-      scene.add(group);
+      parentAt(c.pos[1]).add(group);
       this.items.push({ head, shell: [body, top], light: on });
     }
   }

@@ -5,7 +5,7 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { artProblems, loadArtData, Sim, type BuiltLevel } from "@redmond/shared";
+import { artProblems, L_FRONT, loadArtData, raycastLevel, Sim, type BuiltLevel } from "@redmond/shared";
 import { Architecture } from "../src/render/architecture.js";
 import type { LabScene } from "../src/render/labScene.js";
 import { LevelArt } from "../src/render/levelArt.js";
@@ -33,9 +33,11 @@ function fakeSets(): TextureSets {
 }
 
 let oregon: BuiltLevel | null = null;
+let oregonSim: Sim | null = null;
 async function oregonArt() {
-  oregon ??= (await Sim.create("oregon")).level;
-  return { level: oregon, art: new LevelArt(oregon, fakeSets(), loadArtData()) };
+  oregonSim ??= await Sim.create("oregon");
+  oregon ??= oregonSim.level;
+  return { level: oregon, art: new LevelArt(oregon, fakeSets(), loadArtData()), sim: oregonSim };
 }
 
 describe("the art data (render/DESIGN.md §2)", () => {
@@ -275,7 +277,7 @@ describe("architecture (render/DESIGN.md §7)", () => {
     expect(arch.framed.length).toBe(ids.size);
     expect(arch.framed.filter((o) => o.glazed).length).toBe(level.panels.list.filter((e) => e.panel.spec.construction.kind === "glass").length);
     expect(arch.framed.every((o) => o.wall >= 0.15 && o.wall <= 0.45)).toBe(true);
-    expect(arch.fixtureCount).toBe(lamps.length / 7);
+    expect(arch.fixtureCount).toBeLessThanOrEqual(lamps.length / 7);
     expect(arch.pieces).toBe(arch.placed.length);
     // Inside each door's opening (2 cm in from its sides and head, through its wall), no piece but the linings.
     const inv = new THREE.Matrix4();
@@ -296,6 +298,64 @@ describe("architecture (render/DESIGN.md §7)", () => {
         expect(overlaps, `${o.id}: a piece inside the doorway`).toBe(false);
       }
     }
+  });
+
+  it("hangs each fixture on the ceiling over its lamp; what hangs on a panel goes with it and comes back with it; no hatch border on a floor that breaks", async () => {
+    const { level, art, sim } = await oregonArt();
+    const lab = { storeys: level.def.storeys.map(() => new THREE.Group()) } as unknown as LabScene;
+    const lamps = roomLamps(level, (id) => art.lampOf(id));
+    const arch = new Architecture(lab, level, art, lamps);
+    expect(arch.fixtureCount).toBe(arch.fixtureAt.length);
+    expect(arch.fixtureCount).toBeGreaterThan(0.85 * (lamps.length / 7));
+    // The level's own ray (the physics world and the panels' cells): a ceiling within 2 cm over each fixture's top, and
+    // nothing of the level from 20 cm under its middle up to it (not in a solid, not out of a stair).
+    for (const f of arch.fixtureAt) {
+      const where = `a fixture at (${f.at.x.toFixed(2)}, ${f.at.y.toFixed(2)}, ${f.at.z.toFixed(2)})`;
+      expect(raycastLevel(sim, [f.at.x, f.at.y + 0.02, f.at.z], [0, 1, 0], 0.03), `${where}: nothing over it`).not.toBeNull();
+      expect(raycastLevel(sim, [f.at.x, f.at.y - 0.2, f.at.z], [0, 1, 0], 0.2), `${where}: in something`).toBeNull();
+    }
+    const hiddenIn = (name: string) => {
+      let n = 0;
+      const m = new THREE.Matrix4();
+      for (const g of lab.storeys) {
+        for (const o of g.children) {
+          if (o.name !== name) continue;
+          const inst = o as THREE.InstancedMesh;
+          for (let i = 0; i < inst.count; i++) {
+            inst.getMatrixAt(i, m);
+            if (m.determinant() === 0) n++;
+          }
+        }
+      }
+      return n;
+    };
+    // Glass broken: its window's two bars go; whole again (a new round), they're back.
+    const glass = level.panels.list.findIndex((e) => e.panel.spec.construction.kind === "glass");
+    const pane = level.panels.list[glass].panel.layers[L_FRONT]!;
+    const keep = pane.slice();
+    expect(hiddenIn("architecture")).toBe(0);
+    pane.fill(0);
+    arch.panelsChanged([glass]);
+    expect(hiddenIn("architecture")).toBe(2);
+    pane.set(keep);
+    arch.panelsChanged([glass]);
+    expect(hiddenIn("architecture")).toBe(0);
+    // A fixture under a soft floor or a hatch: the floor blown away over it, it goes; whole again, it's back.
+    const under = arch.fixtureAt.find((f) => f.panel >= 0)!;
+    expect(under).toBeDefined();
+    const layers = level.panels.list[under.panel].panel.layers;
+    const kept = layers.map((l) => l?.slice() ?? null);
+    for (const l of layers) l?.fill(0);
+    arch.panelsChanged([under.panel]);
+    expect(hiddenIn("lamps")).toBe(arch.fixtureAt.filter((f) => f.panel === under.panel).length);
+    layers.forEach((l, i) => l?.set(kept[i]!));
+    arch.panelsChanged([under.panel]);
+    expect(hiddenIn("lamps")).toBe(0);
+    // Hatch borders (the dark wood strips round a hatch) lie only on floors that can't be destroyed.
+    const wood = art.fixedStyle("floor_wood_dark");
+    const strips = arch.placed.filter((p) => p.art === wood && Math.abs(p.size.y - 0.012) < 1e-6);
+    expect(strips.length).toBeGreaterThan(4);
+    for (const p of strips) expect(level.panels.firstSolid([p.center.x, p.center.y + 0.1, p.center.z], [0, -1, 0], 0.3), `a hatch border at (${p.center.x.toFixed(2)}, ${p.center.z.toFixed(2)})`).toBeNull();
   });
 });
 

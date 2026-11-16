@@ -3,6 +3,7 @@
 // of low hills in the distance. All of it in the level's material (the ground blends as the yard does; the woods and
 // hills in their own materials) and lit as the open sky lights it (probeField.ts: past the probes).
 import * as THREE from "three";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { BuiltLevel } from "@redmond/shared";
 import { Kit } from "./kit.js";
 import type { LevelArt } from "./levelArt.js";
@@ -60,11 +61,25 @@ export function buildBackdrop(level: BuiltLevel, art: LevelArt, keepClear: (x: n
   const cz = (z0 + z1) / 2;
   const meshes: THREE.Mesh[] = [];
 
-  // The ground on to the horizon: one big quad (its style by the room maps: the outside, whose floor is the ground).
-  const ground = new THREE.PlaneGeometry(GROUND_HALF_M * 2, GROUND_HALF_M * 2, 1, 1);
-  ground.rotateX(-Math.PI / 2);
-  ground.translate(cx, -GROUND_DROP_M, cz);
-  ground.setAttribute("aArt", new THREE.Float32BufferAttribute(new Float32Array(4), 1));
+  // The ground on to the horizon, round the bounds and not under them (its style by the room maps: the outside, whose
+  // floor is the ground). Inside the bounds the level's own ground is the ground: a plane under it would close every
+  // opening below it (stairwells, a broken hatch, the bunker's outside stairs) 4 cm down.
+  const [gx0, gz0, gx1, gz1] = [cx - GROUND_HALF_M, cz - GROUND_HALF_M, cx + GROUND_HALF_M, cz + GROUND_HALF_M];
+  const strips: [number, number, number, number][] = [
+    [gx0, gz0, gx1, z0], // north of the bounds (−z), the whole width
+    [gx0, z1, gx1, gz1], // south (+z)
+    [gx0, z0, x0, z1], // west, between them
+    [x1, z0, gx1, z1], // east
+  ];
+  const ground = mergeGeometries(
+    strips.map(([ax, az, bx, bz]) => {
+      const g = new THREE.PlaneGeometry(bx - ax, bz - az, 1, 1);
+      g.rotateX(-Math.PI / 2);
+      g.translate((ax + bx) / 2, -GROUND_DROP_M, (az + bz) / 2);
+      return g;
+    }),
+  )!;
+  ground.setAttribute("aArt", new THREE.Float32BufferAttribute(new Float32Array(ground.getAttribute("position").count), 1));
   const groundMesh = new THREE.Mesh(ground, art.staticMaterial());
   groundMesh.name = "backdrop ground";
   groundMesh.receiveShadow = true;
@@ -124,7 +139,7 @@ export function buildBackdrop(level: BuiltLevel, art: LevelArt, keepClear: (x: n
   hillMesh.name = "hills";
   meshes.push(hillMesh);
   for (const m of meshes) m.frustumCulled = false;
-  return { meshes, trees, triangles: kit.triangles + hills.triangles + 2 };
+  return { meshes, trees, triangles: kit.triangles + hills.triangles + 8 };
 }
 
 /** A pine: a trunk, and tiers of needles narrowing to its top. */

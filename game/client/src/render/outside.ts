@@ -83,11 +83,13 @@ const fence: Model = (k, s, m, r) =>
     const count = Math.max(1, Math.floor(len / pitch));
     for (let i = 0; i < count; i++) {
       const x = -len / 2 + (i + 0.5) * (len / count);
-      // A little ragged: pickets of slightly different heights, the odd one missing.
-      if ((i * 7919) % 23 === 0) continue;
+      // A little ragged: pickets of slightly different heights.
       const hh = h - 0.04 - ((i * 37) % 5) * 0.012;
       k.box([x, y0 + hh / 2, depth * 0.2], [0.12, hh, 0.025], wood);
     }
+    // Boarded behind, up to the lowest picket's top: the fence stops bullets, so nothing shows between its pickets.
+    const board = h - 0.04 - 4 * 0.012 - 0.01;
+    k.box([0, y0 + board / 2, depth * 0.2 - 0.02], [len, board, 0.012], wood);
   });
 
 const blockWall: Model = (k, s, m) => {
@@ -172,8 +174,8 @@ const bus: Model = (k, s, m) => {
   const yellow = m("paint_bus");
   const black = m("paint_black");
   const glass = m("glass_dark");
-  // The body (its "up" along -z: the roof toward -z), a little clear of the ground.
-  k.box([0.6, 0.02, 0.15], [len - 1.4, h - 0.1, w - 0.6], yellow);
+  // The body (its "up" along -z: the roof toward -z), lying on the ground.
+  k.box([0.6, -0.01, 0.15], [len - 1.4, h - 0.02, w - 0.6], yellow);
   // The hood at the front (+x), lower.
   k.box([len / 2 - 0.65, 0.02, 0.55], [1.3, h - 0.5, w - 1.4], yellow);
   // The roof: a lighter band along -z.
@@ -201,6 +203,16 @@ function van(k: Kit, s: readonly [number, number, number], m: (x: string) => num
   }
   k.box([len / 2 + 0.02, y0 + 0.45, 0], [0.08, 0.25, w], m("paint_black"));
   k.box([-len / 2 - 0.02, y0 + 0.45, 0], [0.08, 0.25, w], m("paint_black"));
+  underbody(k, len, w, y0, 0.35, 0.075, m);
+}
+
+/**
+ * What's under a vehicle down to the ground, dark (the underside in its shadow): its box stops bullets and drones
+ * all the way down, so nothing shows through under it. Just inside the wheels' outer faces (`wheelIn`: how far in
+ * from the side they are), so the wheels stand in front of it.
+ */
+function underbody(k: Kit, len: number, w: number, y0: number, height: number, wheelIn: number, m: (x: string) => number): void {
+  k.box([0, y0 + height / 2, 0], [len - 0.1, height, w - 2 * (wheelIn + 0.01)], m("paint_black"));
 }
 
 const truck: Model = (k, s, m) => {
@@ -211,6 +223,7 @@ const truck: Model = (k, s, m) => {
   k.box([len / 2 - 0.8, y0 + 0.4 + 0.85, 0], [1.6, 1.7, w - 0.1], m("paint_red"));
   k.box([len / 2 - 0.25, y0 + 1.6, 0], [0.05, 0.6, w - 0.2], m("glass_dark"));
   for (const side of [-1, 1]) for (const x of [len / 2 - 0.9, -len / 2 + 1.0, -len / 2 + 2.0]) k.cylinder([x, y0 + 0.42, side * (w / 2 - 0.2)], 0.42, 0.28, "z", m("rubber"), 14);
+  underbody(k, len, w, y0, 0.4, 0.06, m);
 };
 
 function car(k: Kit, s: readonly [number, number, number], m: (x: string) => number, paint: string, wreck: boolean): void {
@@ -231,6 +244,7 @@ function car(k: Kit, s: readonly [number, number, number], m: (x: string) => num
     k.box([len / 2 + 0.02, y0 + 0.4, 0], [0.06, 0.18, w], m("paint_black"));
     k.box([-len / 2 - 0.02, y0 + 0.4, 0], [0.06, 0.18, w], m("paint_black"));
   }
+  underbody(k, len, w, y0, 0.22, 0.04, m);
 }
 
 const junkStack: Model = (k, s, m) => {
@@ -247,6 +261,8 @@ const excavator: Model = (k, s, m) => {
   const yellow = m("paint_bus");
   // Two tracks along z, the turntable and body, the cab with its glass, the counterweight.
   for (const sx of [-1, 1]) k.box([sx * (w / 2 - 0.45), y0 + 0.45, 0], [0.9, 0.9, d], m("paint_black"));
+  // The track frame between them, down to the ground (the box stops bullets and drones under it).
+  k.box([0, y0 + 0.46, 0], [w - 1.78, 0.88, d * 0.7], m("paint_black"));
   k.box([0, y0 + 1.05, 0], [w * 0.7, 0.3, d * 0.6], m("steel"));
   k.box([0, y0 + 1.65, -0.3], [w - 0.2, 0.9, d * 0.7], yellow);
   k.box([w / 2 - 0.85, y0 + 2.5, d * 0.12], [1.4, 0.95, 1.6], yellow);
@@ -277,12 +293,17 @@ const generator: Model = (k, s, m) => {
 const reel: Model = (k, s, m) => {
   const [w, h, d] = s;
   const y0 = -h / 2;
-  const r = h / 2;
-  // Two cable reels on their sides, their axles along z.
-  for (const x of [-w / 4, w / 4]) {
-    for (const z of [-d / 2 + 0.06, d / 2 - 0.06]) k.cylinder([x, y0 + r, z], r, 0.08, "z", m("lumber"), 16);
-    k.cylinder([x, y0 + r, 0], r * 0.55, d - 0.14, "z", m("paint_black"), 14);
+  // Two cable reels on their sides, their axles along z, side by side on a pallet, wound nearly full; the dark between
+  // them (and under the cable) closes the gaps round the drums, since the box stops bullets.
+  const pallet = Math.min(0.12, Math.max(0.04, h - w / 2));
+  const r = Math.min((h - pallet) / 2, w / 4);
+  const cy = y0 + pallet + r;
+  k.box([0, y0 + pallet / 2, 0], [w, pallet, d], m("lumber"));
+  for (const x of [-r, r]) {
+    for (const z of [-d / 2 + 0.06, d / 2 - 0.06]) k.cylinder([x, cy, z], r, 0.08, "z", m("lumber"), 16);
+    k.cylinder([x, cy, 0], r * 0.9, d - 0.14, "z", m("paint_black"), 14);
   }
+  k.box([0, cy, 0], [r * 0.7, r * 1.8, d - 0.14], m("paint_black"));
 };
 
 const lumber: Model = (k, s, m, r) =>
@@ -294,17 +315,21 @@ const lumber: Model = (k, s, m, r) =>
       const jitter = ((i * 31 + j * 17) % 7) * 0.02;
       k.box([jitter - 0.06, y0 + (j + 0.5) * (h / rows), -dep / 2 + (i + 0.5) * (dep / per)], [len - 0.15, h / rows - 0.008, dep / per - 0.01], m("lumber"));
     }
+    // The stack's middle, behind the slits between the boards (the box stops bullets).
+    k.box([-0.06, 0, 0], [len - 0.3, h - 0.03, dep - 0.04], m("lumber"));
   });
 
 const tyres: Model = (k, s, m, r) =>
   lengthwise(k, s, r, (len, h, dep) => {
     const y0 = -h / 2;
-    // A row of stacks along its length, as wide as it is deep, stacked to its height.
-    const rad = Math.min(dep / 2, 0.45);
+    // A row of stacks along its length, as wide as it is deep (a tyre at least 30 cm across, however thin the box),
+    // stacked to its height, with rubber between them (the box stops bullets).
+    const rad = Math.max(0.15, Math.min(dep / 2, 0.45));
     const stacks = Math.max(1, Math.floor(len / (2 * rad)));
     const n = Math.max(1, Math.round(h / 0.22));
     for (let j = 0; j < stacks; j++)
-      for (let i = 0; i < n - (j % 3 === 1 ? 1 : 0); i++) k.cylinder([-len / 2 + (j + 0.5) * (len / stacks), y0 + (i + 0.5) * (h / n), ((i * 13 + j * 7) % 3) * 0.02 - 0.02], rad * 0.95, h / n - 0.01, "y", m("rubber"), 14);
+      for (let i = 0; i < n; i++) k.cylinder([-len / 2 + (j + 0.5) * (len / stacks), y0 + (i + 0.5) * (h / n), ((i * 13 + j * 7) % 3) * 0.02 - 0.02], rad * 0.95, h / n - 0.01, "y", m("rubber"), 14);
+    k.box([0, 0, 0], [Math.max(0.01, len - 2 * rad), h - 0.02, rad], m("rubber"));
   });
 
 const gardenBed: Model = (k, s, m) => {

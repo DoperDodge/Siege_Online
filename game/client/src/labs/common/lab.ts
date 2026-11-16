@@ -85,7 +85,7 @@ import { isTouchDevice, mountTouchControls, preventPageZoom } from "../../input/
 import { LocalSocket } from "../../net/local.js";
 import { OnlineConnection } from "../../net/online.js";
 import { ArtView } from "../../render/artView.js";
-import { createLabScene, createRenderer, PawnView, PREPASS_LAYER, updateLabels, warmShaders } from "../../render/labScene.js";
+import { createLabScene, createRenderer, PawnView, PREPASS_LAYER, storeyOf, updateLabels, warmShaders } from "../../render/labScene.js";
 import { initialQuality, presetFor, PRESETS, QUALITIES, QUALITY_NAMES, type QualityPreset, type QualitySetting } from "../../render/quality.js";
 import { BpCameraModels, CameraModels } from "../../render/cameraModels.js";
 import { GadgetModels } from "../../render/gadgetModels.js";
@@ -359,6 +359,8 @@ export async function startLab(o: LabOptions): Promise<void> {
   /** Why the art didn't load as asked, if it didn't (shown in the stats overlay; tests read it). */
   let artProblem = "";
   const preset = presetFor(quality, params);
+  /** Whether the world is drawn into the depth first (§13): the preset in use's, Low's after a fallback to it. */
+  let prepassOn = preset.prepass;
   const renderer = createRenderer(view, preset);
   const labScene = createLabScene(sim.level, preset.shadowMap);
   const scene = labScene.scene;
@@ -459,6 +461,7 @@ export async function startLab(o: LabOptions): Promise<void> {
           labScene.sun.shadow.map.dispose();
           labScene.sun.shadow.map = null;
         }
+        prepassOn = PRESETS.low.prepass;
         await loadArt(PRESETS.low, "low");
       } else flash("The textures didn't load on this device: showing the plain view", "bad");
     }
@@ -472,7 +475,9 @@ export async function startLab(o: LabOptions): Promise<void> {
   const pawnViews = new Map<number, PawnView>();
   /** The level's default cameras (Phase 7), drawn whole or broken, and the round's Bulletproof Cameras. */
   // (Drawn on a map's lab page too: they're part of its look.)
-  const cameraModels = sim.level.def.cameras.length ? new CameraModels(scene, sim.level.def.cameras, (from, dir, max) => raycastLevel(sim, from, dir, max)?.t ?? null) : null;
+  const cameraModels = sim.level.def.cameras.length
+    ? new CameraModels(scene, sim.level.def.cameras, (from, dir, max) => raycastLevel(sim, from, dir, max)?.t ?? null, (y) => labScene.storeys[storeyOf(sim.level.def.storeys, y - 0.5)] ?? scene)
+    : null;
   const bpCameraModels = new BpCameraModels(scene, data.gadgets.get("bulletproof_camera")!.sizeM);
   /** The gadget table (Phase 8): every gadget placed, thrown or dropped; offline, our own server side keeps it. */
   const gadgetModels = new GadgetModels(scene, sim);
@@ -1245,7 +1250,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       artView.adapt(renderer, cam.position.x, cam.position.y, cam.position.z, Math.min(0.5, Math.max(0, (now - lastAdapt) / 1000)));
       lastAdapt = now;
     }
-    if (preset.prepass && artView.shown) {
+    if (prepassOn && artView.shown) {
       // The depth pre-pass (render/DESIGN.md §13): the level's opaque surfaces into the depth buffer alone (pushed a
       // hair back, so the same surface shaded next still passes), then everything, the depth kept. The level's heavy
       // shader then runs only where its surface is the nearest. The shadow map isn't touched by the first.

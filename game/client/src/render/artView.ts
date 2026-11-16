@@ -365,9 +365,14 @@ export class ArtView {
     }
   }
 
-  /** Panels whose drawing changed (PanelView.lastChanged): the probes bake again round them. */
+  /**
+   * Panels whose drawing changed (PanelView.lastChanged): the probes bake again round them, and what hangs on them
+   * (glazing bars, a fixture under a soft floor) goes with them, or comes back in a new round.
+   */
   panelsChanged(indices: readonly number[]): void {
-    if (indices.length) this.probes?.panelsChanged(indices);
+    if (!indices.length) return;
+    this.probes?.panelsChanged(indices);
+    this.architecture?.panelsChanged(indices);
   }
 
   /**

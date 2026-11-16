@@ -236,6 +236,9 @@ try {
   // And it looks as Low does (its own light and no sun shadows: not High's shadows without High's light).
   result.checks.fallbackLooksLikeLow = Math.abs(f.brightness - result.presets.low.brightness) < 0.08 * result.presets.low.brightness;
   result.checks.fallbackShowsLow = f.art.ready && f.art.shown && f.art.probes === null;
+  // And draws as Low does: no depth pre-pass (High's) on top (as many draw calls as Low's, not 40-60 % more).
+  result.fallback.calls = f.counts.calls;
+  result.checks.fallbackDrawsAsLow = f.counts.calls <= result.presets.low.calls * 1.1;
   result.checks.fallbackSaysSo = /High graphics didn't load on this device/i.test(f.art.problem);
   // Its own report of the failure is the only error.
   result.checks.fallbackOnlyReportsItself = f.errors.length > 0 && f.errors.every((e) => /art pass \(high\)|THREE\.WebGLProgram|Shader Error|VALIDATE_STATUS/.test(e));

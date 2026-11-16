@@ -5,7 +5,7 @@
 // face looks into (the level material's trim mode: aArt -1), bars and fixtures their own materials. All of it is a few
 // instanced meshes per storey (in the storey's group, so it hides with it).
 import * as THREE from "three";
-import { type BuiltLevel, type PanelEntry } from "@redmond/shared";
+import { L_FRONT, type BuiltLevel, type PanelEntry } from "@redmond/shared";
 import { PREPASS_LAYER, storeyOf, type LabScene } from "./labScene.js";
 import type { LevelArt } from "./levelArt.js";
 import { LAMP_STRIDE } from "./probes/bake.js";
@@ -37,7 +37,24 @@ export interface Piece {
   quat: THREE.Quaternion;
   /** The level material's per-box style: -1 the room's trim, else a fixed style + 1. */
   art: number;
+  /** What it hangs on, if that can be destroyed: a panel (its index in the level's list) and whether it still holds. */
+  on?: { panel: number; holds: () => boolean };
 }
+
+/** A drawn instance that hangs on a panel: shown while what holds it is there, hidden once it's gone. */
+interface Hung {
+  mesh: THREE.InstancedMesh;
+  index: number;
+  matrix: THREE.Matrix4;
+  holds: () => boolean;
+  shown: boolean;
+}
+
+/** An instance not drawn. */
+const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
+/** Where a lamp's ceiling is looked for: up from this far over its storey's floor (in the room's air, over a stair), up to CEILING_MAX_M. */
+const CEILING_FROM_M = 1.9;
+const CEILING_MAX_M = 12;
 
 /** An opening's place: its frame (the panel's), whether it's a window, its wall's thickness. */
 export interface Opening {
@@ -51,6 +68,8 @@ export interface Opening {
   wall: number;
   window: boolean;
   glazed: boolean;
+  /** The glass panel's index in the level's list (its bars go with it). */
+  glass: number | null;
 }
 
 export class Architecture {
@@ -63,6 +82,12 @@ export class Architecture {
   readonly placed: Piece[] = [];
   /** Fixtures placed. */
   fixtureCount = 0;
+  /** Fixtures placed, and the panel each hangs under (-1: a ceiling that can't be destroyed) (tests). */
+  readonly fixtureAt: { at: THREE.Vector3; panel: number }[] = [];
+  /** What hangs on each panel (by its index): bars on glass, fixtures under a soft floor or a hatch. */
+  private readonly hung = new Map<number, Hung[]>();
+  /** The level's static boxes as a ray meets them (their inverse turns), made when first needed. */
+  private solids: { c: THREE.Vector3; h: number[]; inv: THREE.Quaternion }[] | null = null;
   private readonly fixtureGeo = new THREE.CylinderGeometry(FIXTURE_R, FIXTURE_R * 0.9, FIXTURE_T, 20);
   private readonly fixtureMat = new THREE.MeshStandardMaterial({ color: 0xf4efe4, emissive: 0xfff1d8, emissiveIntensity: 2.2, roughness: 0.5 });
 
@@ -89,23 +114,26 @@ export class Architecture {
   /** The openings: each barricade's or glass panel's frame, one per opening (a window's glass and barricade together). */
   private openings(): Opening[] {
     const byId = new Map<string, Opening>();
-    for (const e of this.level.panels.list) {
+    this.level.panels.list.forEach((e, index) => {
       const kind = e.panel.spec.construction.kind;
-      if (kind !== "barricade" && kind !== "glass") continue;
+      if (kind !== "barricade" && kind !== "glass") return;
       const id = e.panel.spec.id.replace(/\.(bar|glass)$/, "");
       const f = e.frame;
       const prev = byId.get(id);
       if (prev) {
-        if (kind === "glass") prev.glazed = true;
-        continue;
+        if (kind === "glass") {
+          prev.glazed = true;
+          prev.glass = index;
+        }
+        return;
       }
       const center = new THREE.Vector3(...f.center);
       const u = new THREE.Vector3(...f.u);
       const v = new THREE.Vector3(...f.v);
       const n = new THREE.Vector3(...f.n);
       const floor = this.level.def.storeys.length ? this.level.def.storeys[this.storey(e.min[1] + 0.05)].floorY : 0;
-      byId.set(id, { id, center, u, v, n, w: f.w, h: f.h, wall: this.wallAt(center, u, n, f.w), window: e.min[1] - floor > 0.3, glazed: kind === "glass" });
-    }
+      byId.set(id, { id, center, u, v, n, w: f.w, h: f.h, wall: this.wallAt(center, u, n, f.w), window: e.min[1] - floor > 0.3, glazed: kind === "glass", glass: kind === "glass" ? index : null });
+    });
     return [...byId.values()];
   }
 
@@ -170,11 +198,15 @@ export class Architecture {
     add(w / 2 - LINING_T / 2, 0, 0, LINING_T, h, wall + 0.004);
     add(0, h / 2 - LINING_T / 2, 0, w, LINING_T, wall + 0.004);
     if (o.window) add(0, -h / 2 + LINING_T / 2, 0, w, LINING_T, wall + 0.004);
-    if (o.glazed) {
-      // Glazing bars: one across the middle, one up the middle (four panes), on the glass's plane.
+    if (o.glazed && o.glass !== null) {
+      // Glazing bars: one across the middle, one up the middle (four panes), on the glass's plane; gone with the glass.
       const paint = this.art.fixedStyle("paint_white");
+      const glass = o.glass;
+      const on = { panel: glass, holds: () => this.intact(glass) };
       add(0, 0, 0, w, BAR_W, BAR_D, paint);
+      out[out.length - 1].on = on;
       add(0, 0, 0, BAR_W, h, BAR_D, paint);
+      out[out.length - 1].on = on;
     }
   }
 
@@ -191,6 +223,8 @@ export class Architecture {
     const y = top + 0.006;
     const add = (du: number, dv: number, su: number, sv: number) => {
       const at = c.clone().addScaledVector(u, du).addScaledVector(v, dv);
+      // Not on a floor that can be destroyed beside it (a soft floor): the strip would be left over the hole.
+      if (this.level.panels.firstSolid([at.x, top + 0.1, at.z], [0, -1, 0], 0.3)) return;
       at.y = y;
       out.push({ storey, center: at, size: new THREE.Vector3(su, 0.012, sv), quat, art: wood });
     };
@@ -209,7 +243,10 @@ export class Architecture {
       const geo = new THREE.BoxGeometry(1, 1, 1);
       geo.setAttribute("aArt", new THREE.InstancedBufferAttribute(Float32Array.from(list, (p) => p.art), 1));
       const mesh = new THREE.InstancedMesh(geo, this.art.staticMaterial(), list.length);
-      list.forEach((p, i) => mesh.setMatrixAt(i, m.compose(p.center, p.quat, p.size)));
+      list.forEach((p, i) => {
+        mesh.setMatrixAt(i, m.compose(p.center, p.quat, p.size));
+        if (p.on) this.hang(p.on.panel, { mesh, index: i, matrix: m.clone(), holds: p.on.holds, shown: true });
+      });
       mesh.computeBoundingSphere();
       mesh.castShadow = mesh.receiveShadow = true;
       mesh.name = "architecture";
@@ -220,21 +257,34 @@ export class Architecture {
     }
   }
 
-  /** A fixture on the ceiling over each lamp. */
+  /**
+   * A fixture on the ceiling over each lamp: the first face up from the room's air over it (a stairwell's is the one
+   * at its top, a tall hall's its own roof), none where there's nothing over it. One under a soft floor or a hatch
+   * goes when the cell it hangs from does.
+   */
   private fixtures(lamps: Float32Array): void {
-    const byStorey = new Map<number, THREE.Vector3[]>();
+    const byStorey = new Map<number, { at: THREE.Vector3; panel: number }[]>();
     for (let i = 0; i < lamps.length; i += LAMP_STRIDE) {
       const storey = this.storey(lamps[i + 1] - 2);
       const st = this.level.def.storeys[storey];
-      const at = new THREE.Vector3(lamps[i], (st?.ceilingY ?? lamps[i + 1]) - FIXTURE_T / 2, lamps[i + 2]);
-      (byStorey.get(storey) ?? byStorey.set(storey, []).get(storey)!).push(at);
+      const from = new THREE.Vector3(lamps[i], (st?.floorY ?? lamps[i + 1] - 2.4) + CEILING_FROM_M, lamps[i + 2]);
+      const up = this.upTo(from, CEILING_MAX_M);
+      if (!up) continue;
+      const fixture = { at: new THREE.Vector3(from.x, from.y + up.t - FIXTURE_T / 2, from.z), panel: up.panel };
+      (byStorey.get(storey) ?? byStorey.set(storey, []).get(storey)!).push(fixture);
+      this.fixtureAt.push(fixture);
     }
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
     const one = new THREE.Vector3(1, 1, 1);
     for (const [storey, list] of byStorey) {
       const mesh = new THREE.InstancedMesh(this.fixtureGeo, this.fixtureMat, list.length);
-      list.forEach((p, i) => mesh.setMatrixAt(i, m.compose(p, q, one)));
+      list.forEach((f, i) => {
+        mesh.setMatrixAt(i, m.compose(f.at, q, one));
+        if (f.panel < 0) return;
+        const [x, y, z] = [f.at.x, f.at.y + FIXTURE_T / 2, f.at.z];
+        this.hang(f.panel, { mesh, index: i, matrix: m.clone(), holds: () => this.level.panels.firstSolid([x, y - 0.05, z], [0, 1, 0], 0.15) !== null, shown: true });
+      });
       mesh.computeBoundingSphere();
       mesh.name = "lamps";
       mesh.layers.enable(PREPASS_LAYER);
@@ -242,6 +292,64 @@ export class Architecture {
       this.meshes.push(mesh);
       this.fixtureCount += list.length;
     }
+  }
+
+  /** Panels whose cells changed (destroyed, or whole again in a new round): what hangs on them shows while it holds. */
+  panelsChanged(indices: readonly number[]): void {
+    for (const i of indices) {
+      for (const h of this.hung.get(i) ?? []) {
+        const on = h.holds();
+        if (on === h.shown) continue;
+        h.shown = on;
+        h.mesh.setMatrixAt(h.index, on ? h.matrix : HIDDEN);
+        h.mesh.instanceMatrix.needsUpdate = true;
+      }
+    }
+  }
+
+  private hang(panel: number, h: Hung): void {
+    (this.hung.get(panel) ?? this.hung.set(panel, []).get(panel)!).push(h);
+  }
+
+  /** Whether a glass panel is still there (it breaks whole: D-062). */
+  private intact(panel: number): boolean {
+    const cells = this.level.panels.list[panel]?.panel.layers[L_FRONT];
+    return !!cells && cells.some((c) => c !== 0);
+  }
+
+  /**
+   * How far straight up from `from` the first face is, within `max`: the level's static boxes (one it starts inside,
+   * a stair step, doesn't count) and panel cells with material in them; the panel's index if it was one (else -1).
+   */
+  private upTo(from: THREE.Vector3, max: number): { t: number; panel: number } | null {
+    this.solids ??= this.level.renderables
+      .filter((r) => r.kind === "solid" && r.visible)
+      .map((r) => ({ c: new THREE.Vector3(...r.center), h: [r.size[0] / 2, r.size[1] / 2, r.size[2] / 2], inv: new THREE.Quaternion(...r.quat).invert() }));
+    let best = max;
+    const o = new THREE.Vector3();
+    const d = new THREE.Vector3();
+    for (const s of this.solids) {
+      o.copy(from).sub(s.c).applyQuaternion(s.inv);
+      d.set(0, 1, 0).applyQuaternion(s.inv);
+      let t0 = -Infinity;
+      let t1 = Infinity;
+      for (let a = 0; a < 3 && t0 <= t1; a++) {
+        const oa = o.getComponent(a);
+        const da = d.getComponent(a);
+        if (Math.abs(da) < 1e-9) {
+          if (Math.abs(oa) > s.h[a]) t0 = Infinity;
+          continue;
+        }
+        const ta = (-s.h[a] - oa) / da;
+        const tb = (s.h[a] - oa) / da;
+        t0 = Math.max(t0, Math.min(ta, tb));
+        t1 = Math.min(t1, Math.max(ta, tb));
+      }
+      if (t0 <= t1 && t0 > 0 && t0 < best) best = t0;
+    }
+    const ph = this.level.panels.firstSolid([from.x, from.y, from.z], [0, 1, 0], best);
+    if (ph && ph.crossing.face < best) return { t: ph.crossing.face, panel: this.level.panels.list.indexOf(ph.entry) };
+    return best < max ? { t: best, panel: -1 } : null;
   }
 
   /** Show or hide it all (the greybox palette hides the art's details). */
