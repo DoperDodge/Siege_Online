@@ -455,6 +455,40 @@ export function heldShape(id: string, size: V3, cap: number): { parts: Map<Shape
   return { parts, size: [s.x * k, s.y * k, s.z * k] };
 }
 
+const UNDERSIDE = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+const UP = new THREE.Vector3(0, 1, 0);
+/**
+ * Where an item rests on a palm under it (its own frame; the palm round x 0 and `z`, 3 cm about): how low its
+ * underside comes there (a charge's case, not its box's lowest corner). Over a hole (a coil of wire) the palm goes
+ * to the nearest of it, its near side first. Its box's bottom (`fallback`) under `z` if nothing of it is near.
+ */
+export function restsAt(parts: Map<ShapeMat, THREE.BufferGeometry>, z: number, fallback: number): { y: number; z: number } {
+  const meshes = [...parts.values()].map((g) => new THREE.Mesh(g, UNDERSIDE));
+  const ray = new THREE.Raycaster();
+  // (Up through its faces over the palm, and its own points there: a thin leg the rays go either side of.)
+  const lowest = (at: number) => {
+    let low = Infinity;
+    for (let i = -2; i <= 2; i++) {
+      for (let k = -2; k <= 2; k++) {
+        ray.set(new THREE.Vector3(i * 0.015, -10, at + k * 0.015), UP);
+        const hit = ray.intersectObjects(meshes, false)[0];
+        if (hit) low = Math.min(low, hit.point.y);
+      }
+    }
+    for (const g of parts.values()) {
+      const p = g.getAttribute("position");
+      for (let n = 0; n < p.count; n++) if (Math.abs(p.getX(n)) <= 0.03 && Math.abs(p.getZ(n) - at) <= 0.03) low = Math.min(low, p.getY(n));
+    }
+    return low;
+  };
+  for (let step = 0; step <= 10; step++) {
+    const at = z + (step % 2 === 1 ? 1 : -1) * Math.ceil(step / 2) * 0.03;
+    const low = lowest(at);
+    if (Number.isFinite(low)) return { y: low, z: at };
+  }
+  return { y: fallback, z };
+}
+
 /** The knife (a melee swing): its blade along −z with a clipped point and a fuller, the guard, the wrapped handle. */
 export function knifeShape(): Map<ShapeMat, THREE.BufferGeometry> {
   const p = new Parts();

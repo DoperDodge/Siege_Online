@@ -1423,9 +1423,13 @@ export async function startLab(o: LabOptions): Promise<void> {
     intelHud.showScan(scanTicks && !spec ? Math.min(1, scanTicks / ticks(data.intel.scan.holdS)) : null);
     drawWorld();
     if (rs && viewed && me) {
-      // (Knocked down, D-156: nothing in hand until you're up.)
-      const inHand = viewed.id === me.id && !outside && !onCamera && !ctrl.shellCam && ctrl.swapPhase === 0 && rs.mode !== PawnMode.Knocked ? (viewed.loadout?.weapons[rs.slot] ?? null) : null;
-      viewmodel.setOperator(viewed.operatorId);
+      // (Knocked down, D-156: nothing in hand until you're up. On a ladder or with the hands at work — a revive, a
+      // reinforcement, a barricade, the defuser — the gun can't fire and isn't in the hands: none drawn, as the body
+      // others see has it slung.)
+      const busy = rs.mode === PawnMode.Ladder || rs.reviveTarget !== 0 || rs.deployKind !== 0;
+      const inHand = viewed.id === me.id && !outside && !onCamera && !ctrl.shellCam && ctrl.swapPhase === 0 && rs.mode !== PawnMode.Knocked && !busy ? (viewed.loadout?.weapons[rs.slot] ?? null) : null;
+      // (Your arms dressed as you: made again only when there are arms to draw, not for each body or drone you look through.)
+      if (inHand) viewmodel.setOperator(viewed.operatorId);
       viewmodel.update(now, elapsed, inHand, rs, viewed.loadout?.swapTicks ?? 1, inHand ? heldGadget(viewed, rs) : null, !!viewed.loadout?.shield && rs.shieldAt === 1);
       viewmodel.render(renderer);
       const held = viewed.loadout?.weapons[rs.slot];

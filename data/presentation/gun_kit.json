@@ -1,5 +1,5 @@
 {
-  "_doc": "How the guns look in the first- and third-person views (Phase 3 M9, Phase 10 M7; PLAN \u00a710 presentation): each weapon by id is a base form (render/gunKit.ts builds it in code from extruded side profiles, turned barrels, rails and sights) with that form's parameters \u2014 barrel length, finish, stock, handguard, magazine, a size, a variant; a weapon not listed looks like its class's. Metres, in the gun's own frame: +x right, +y up, -z toward the muzzle; the origin is the hand on the grip. The sights, barrels, grips and underbarrel sizes are each attachment's. Presentation only: the simulation never reads this file and it is not part of the data hash. `viewmodel` places the gun in front of the camera (hip, sprint and ADS poses) and sets the viewmodel's own field of view; `viewmodel.reload` is how far it comes up and in and how it tips (muzzle up, in, rolled onto its side; a shotgun fed shells a little further over) so the hand at its magazine is in the picture (Phase 10 M9).",
+  "_doc": "How the guns look in the first- and third-person views (Phase 3 M9, Phase 10 M7; PLAN \u00a710 presentation): each weapon by id is a base form (render/gunKit.ts builds it in code from extruded side profiles, turned barrels, rails and sights) with that form's parameters \u2014 barrel length, finish, stock, handguard, magazine, a size, a variant; a weapon not listed looks like its class's. Metres, in the gun's own frame: +x right, +y up, -z toward the muzzle; the origin is the hand on the grip. Each sight's reticle (what it shows at full aim) and each barrel attachment's size; the attachments' shapes are built in code (render/gunKit.ts). Presentation only: the simulation never reads this file and it is not part of the data hash. `viewmodel` places the gun in front of the camera (hip, sprint and ADS poses) and sets the viewmodel's own field of view; `viewmodel.reload` is how far it comes up and in and how it tips (muzzle up, in, rolled onto its side; a shotgun fed shells a little further over) so the hand at its magazine is in the picture (Phase 10 M9).",
   "weapons": {
     "m4": { "base": "ar", "barrel": 0.29, "finish": "black", "stock": "collapsible", "fore": "rail", "mag": "stanag" },
     "556xi": { "base": "ar", "barrel": 0.31, "finish": "tan", "stock": "folding", "fore": "mlok", "mag": "stanag", "variant": "piston" },
@@ -55,10 +55,10 @@
     "shield": { "base": "pistol", "barrel": 0.0, "finish": "black", "variant": "sig" }
   },
   "sights": {
-    "iron": { "kind": "posts", "height": 0.022 },
-    "nonmag": { "kind": "box", "size": [ 0.036, 0.042, 0.06 ], "reticle": "dot" },
-    "magnified": { "kind": "tube", "radius": 0.021, "length": 0.15, "reticle": "cross" },
-    "telescopic": { "kind": "tube", "radius": 0.025, "length": 0.21, "reticle": "cross" }
+    "iron": { "reticle": "posts" },
+    "nonmag": { "reticle": "dot" },
+    "magnified": { "reticle": "cross" },
+    "telescopic": { "reticle": "cross" }
   },
   "barrels": {
     "suppressor": { "radius": 0.021, "length": 0.17 },
@@ -66,14 +66,6 @@
     "muzzle_brake": { "radius": 0.018, "length": 0.05 },
     "compensator": { "radius": 0.016, "length": 0.045 },
     "flash_hider": { "radius": 0.015, "length": 0.055 }
-  },
-  "grips": {
-    "vertical": [ 0.024, 0.075, 0.026 ],
-    "angled": [ 0.024, 0.04, 0.07 ],
-    "horizontal": [ 0.02, 0.02, 0.06 ]
-  },
-  "underbarrel": {
-    "laser": [ 0.022, 0.024, 0.05 ]
   },
   "colors": {
     "attachment": "#3a3e44",

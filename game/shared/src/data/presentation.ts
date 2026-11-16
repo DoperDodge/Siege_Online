@@ -7,10 +7,9 @@ import materialsJson from "../../../../data/presentation/materials.json";
 import operatorLooksJson from "../../../../data/presentation/operator_looks.json";
 import ranksJson from "../../../../data/presentation/ranks.json";
 import texturesJson from "../../../../data/presentation/textures.json";
-import { BARRELS, GRIPS, SIGHTS, UNDERBARRELS, WEAPON_CLASSES } from "./schemas.js";
+import { BARRELS, SIGHTS, WEAPON_CLASSES } from "./schemas.js";
 
 const v3 = z.tuple([z.number(), z.number(), z.number()]);
-const size = z.tuple([z.number().positive(), z.number().positive(), z.number().positive()]);
 const color = z.string().regex(/^#[0-9a-f]{6}$/i);
 const tube = z.strictObject({ radius: z.number().positive(), length: z.number().positive() });
 /** Every key of `keys` present (a gun can't miss a part the data offers), nothing else. */
@@ -43,14 +42,9 @@ export const gunKitSchema = z.strictObject({
   /** Each weapon's look by its id; a weapon not listed looks like its class's. */
   weapons: z.record(z.string(), gunLookSchema),
   byClass: all([...WEAPON_CLASSES, "shield"] as const, gunLookSchema),
-  sights: all(SIGHTS, z.union([
-    z.strictObject({ kind: z.literal("posts"), height: z.number().positive() }),
-    z.strictObject({ kind: z.literal("box"), size, reticle: z.enum(["dot", "cross"]) }),
-    z.strictObject({ kind: z.literal("tube"), radius: z.number().positive(), length: z.number().positive(), reticle: z.enum(["dot", "cross"]) }),
-  ])),
+  /** What each sight shows at full aim (its shape is render/gunKit.ts's). */
+  sights: all(SIGHTS, z.strictObject({ reticle: z.enum(["posts", "dot", "cross"]) })),
   barrels: all(BARRELS, tube),
-  grips: all(GRIPS, size),
-  underbarrel: all(UNDERBARRELS, size),
   colors: z.strictObject({ attachment: color, laser: color }),
   viewmodel: z.strictObject({
     fovDeg: z.number().min(30).max(100),

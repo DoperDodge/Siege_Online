@@ -86,6 +86,35 @@ const smooth = (x: number) => {
 const lerp = THREE.MathUtils.lerp;
 const v = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 
+/**
+ * The first point on the way from `a` to `b` within `reach` of `s` (all in one frame), or the nearest to it of the
+ * way's points if none is: smoothly, so a hand drawn back along a gun as the arm runs short doesn't jump.
+ */
+export function firstWithin(a: THREE.Vector3, b: THREE.Vector3, s: THREE.Vector3, reach: number): THREE.Vector3 {
+  const d = b.clone().sub(a);
+  const w = a.clone().sub(s);
+  const dd = d.lengthSq();
+  const ww = w.lengthSq();
+  if (ww <= reach * reach || dd < 1e-12) return a.clone();
+  const wd = w.dot(d);
+  const disc = wd * wd - dd * (ww - reach * reach);
+  const t = disc >= 0 ? (-wd - Math.sqrt(disc)) / dd : -wd / dd;
+  return a.clone().addScaledVector(d, Math.min(1, Math.max(0, t)));
+}
+
+/**
+ * A shell-at-a-time reload's hand at a tick (here and the viewmodel): k 0 at the pouch … 1 at the port, and whether a
+ * shell is in it. From empty the simulation's overhead comes first (the hand up to the port with one); then each
+ * shell's cycle (down, back up with the next, in) ends as the simulation counts it in.
+ */
+export function shellCycle(actTicks: number, empty: boolean, r: { perShellTicks: number; emptyExtraTicks: number }): { k: number; shell: boolean } {
+  const per = Math.max(1, r.perShellTicks);
+  const t = actTicks - (empty ? r.emptyExtraTicks : 0);
+  if (t < 0) return { k: smooth((actTicks / Math.max(1, r.emptyExtraTicks) - 0.2) / 0.7), shell: true };
+  const ph = (t % per) / per;
+  return ph < 0.3 ? { k: 1 - smooth(ph / 0.3), shell: false } : { k: smooth((ph - 0.3) / 0.62), shell: ph < 0.95 };
+}
+
 /** Held like a pistol: at arm's length in both hands (no stock to shoulder). */
 export const pistolHeld = (weaponClass: string) => weaponClass === "handgun" || weaponClass === "machine_pistol" || weaponClass === "hand_cannon";
 
@@ -315,7 +344,7 @@ export function poseBody(i: PoseIn): PoseOut {
   let magIn = true;
   let rightOff: THREE.Vector3 | null = null;
   /** A reload's left hand, given where it holds the gun and where the magazine is (both in the world). */
-  let reloadHand: ((fore: THREE.Vector3, atMag: THREE.Vector3) => THREE.Vector3) | null = null;
+  let reloadHand: ((fore: THREE.Vector3, atMag: THREE.Vector3, atPort: THREE.Vector3) => THREE.Vector3) | null = null;
   // Going along a rope, onto it or over on it: the left hand on the rope (it hangs straight from over the harness),
   // where it's nearest the shoulder, and no further than the arm reaches; eased on and off.
   gait.rope = THREE.MathUtils.damp(gait.rope, s.mode === PawnMode.Rappel && !ropeIdle(s) ? 1 : 0, 10, dt);
@@ -361,11 +390,10 @@ export function poseBody(i: PoseIn): PoseOut {
           return atMag.lerp(fore, smooth((t - tIn) / Math.max(0.01, (1 - tIn) * 0.8)));
         };
       } else {
-        // A shell at a time: from the pouch to the port and back.
-        const per = Math.max(1, r.perShellTicks);
-        const t = (s.actTicks % per) / per;
+        // A shell at a time: from the pouch up to the port and in (shellCycle).
+        const c = shellCycle(s.actTicks, s.reloadKind === ReloadKind.Empty, r);
         qGun.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0.12, 0, 0.5)));
-        reloadHand = (_fore, atMag) => pouch.lerp(atMag, Math.sin(Math.PI * t));
+        reloadHand = (_fore, _mag, atPort) => pouch.lerp(atPort, c.k);
       }
     }
     if (s.meleeTicks > 0) {
@@ -387,15 +415,20 @@ export function poseBody(i: PoseIn): PoseOut {
   if (!slung) {
     pose.handR = rightOff ?? onGun(gun.hold.grip);
     if (!i.shieldUp) {
-      // Where the left hand holds it: under the handguard, drawn back toward the grip until the arm reaches (the body
-      // stands square on, as its hitboxes do: the hand of a long gun ends up at its magazine well).
+      // Where the left hand holds it: under the handguard (or on a grip there), drawn back toward the grip until the
+      // arm reaches (the body stands square on, as its hitboxes do: the hand of a long gun ends up at its magazine
+      // well; a machine pistol's front grip, held out at arm's length, gives way to the other hand round the grip).
+      const wrap = v(gun.hold.grip.x - 0.028, gun.hold.grip.y - 0.012, gun.hold.grip.z - 0.012);
       let fore: THREE.Vector3;
-      if (gun.hold.fore && !pistol) {
-        fore = gun.hold.fore.clone();
-        const reach = (LEN.upperArm + LEN.foreArm) * 0.97;
-        for (let k = 0; k < 24 && onGun(fore).distanceTo(j.shoulderL) > reach && fore.z < gun.hold.grip.z - 0.07; k++) fore.z += 0.02;
-      } else fore = v(gun.hold.grip.x - 0.028, gun.hold.grip.y - 0.012, gun.hold.grip.z - 0.012);
-      if (reloadHand) pose.handL = reloadHand(onGun(fore), onGun(gun.hold.mag ?? v(0, gun.hold.grip.y + 0.02, gun.hold.grip.z - 0.1)));
+      if (gun.hold.fore && (!pistol || gun.hold.foreGrip)) {
+        const back = pistol ? wrap : v(gun.hold.fore.x, gun.hold.fore.y, Math.max(gun.hold.fore.z, gun.hold.grip.z - 0.06));
+        const shoulder = j.shoulderL.clone().sub(origin).applyQuaternion(qGun.clone().invert());
+        fore = firstWithin(gun.hold.fore, back, shoulder, (LEN.upperArm + LEN.foreArm) * 0.97);
+      } else fore = wrap;
+      if (reloadHand) {
+        const port = onGun(gun.hold.port ?? v(0, gun.hold.grip.y + 0.02, gun.hold.grip.z - 0.1));
+        pose.handL = reloadHand(onGun(fore), gun.hold.mag ? onGun(gun.hold.mag) : port.clone(), port);
+      }
       else pose.handL = onGun(fore);
       if (ropeAt) pose.handL.lerp(ropeAt, smooth(gait.rope));
     }

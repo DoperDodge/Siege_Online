@@ -32,11 +32,20 @@ export interface GunModel {
   /** What the sight shows at full ADS. */
   readonly reticle: "posts" | "dot" | "cross";
   /**
-   * Where it's held (gun frame; a body's hands, render/bodyPose.ts): the middle of the hand on its grip; the middle
-   * of the other hand under its handguard or on a grip fitted there (null: both hands on the one grip); how far back
-   * its butt reaches (z); and the middle of its magazine (null: none that comes out).
+   * Where it's held (gun frame; a body's hands, render/bodyPose.ts, viewmodel.ts): the middle of the hand on its grip;
+   * the middle of the other hand under its handguard or on a grip there (null: both hands on the one grip), and
+   * whether that's an upright grip (a vertical one fitted or built on, a Vector's magazine); how far back its butt
+   * reaches (z); its magazine's middle and box (null: none that comes out); where shells go in (null: none).
    */
-  readonly hold: { grip: THREE.Vector3; fore: THREE.Vector3 | null; back: number; mag: THREE.Vector3 | null };
+  readonly hold: {
+    grip: THREE.Vector3;
+    fore: THREE.Vector3 | null;
+    foreGrip: boolean;
+    back: number;
+    mag: THREE.Vector3 | null;
+    magBox: THREE.Box3 | null;
+    port: THREE.Vector3 | null;
+  };
   /** Triangles in the model (the budget: PLAN §12.2). */
   readonly triangles: number;
   dispose(): void;
@@ -169,6 +178,10 @@ interface Anchors {
   barrelR: number;
   /** Under the handguard (a grip), and on its right side (a laser): null where there's no room. */
   under: P | null;
+  /** A front grip built on (an MP5K's, an Evo's) or the magazine held as one (a Vector's): the other hand's, upright. */
+  foreGrip?: P;
+  /** Where shells go in (a shotgun's loading port, a double's breech, a revolver's cylinder): a reload's hand goes there. */
+  port?: P;
   side: { u: number; v: number; x: number } | null;
 }
 
@@ -558,8 +571,11 @@ function smg(b: Builder, L: GunLookData): Anchors {
     irons: { line: railTop + 0.024, rear: -0.05, front: front - 0.025, built: "none" },
     muzzle: [front + Math.max(0.02, L.barrel), vb],
     barrelR: 0.0095,
-    under: v === "mp5k" ? null : [front - 0.04, 0.034],
+    // The Vector's front rakes down round its magazine (no room under it: the other hand holds the magazine); the
+    // MP5K has its own grip.
+    under: v === "mp5k" || v === "vector" ? null : [front - 0.04, 0.034],
     side: { u: front - 0.04, v: vb, x: 0.023 },
+    ...(v === "vector" ? { foreGrip: [0.17, -0.045] as P } : v === "mp5k" ? { foreGrip: [0.165, -0.004] as P } : {}),
   };
 }
 
@@ -599,6 +615,7 @@ function mpistol(b: Builder, L: GunLookData): Anchors {
     barrelR: 0.009,
     under: evo ? null : [front - 0.04, 0.034],
     side: { u: front - 0.04, v: vb - 0.012, x: 0.02 },
+    ...(evo ? { foreGrip: [front - 0.035, 0.012] as P } : {}),
   };
 }
 
@@ -636,6 +653,7 @@ function pump(b: Builder, L: GunLookData): Anchors {
     barrelR: 0.0118,
     under: [(fu0 + fu1) / 2, vb - 0.044],
     side: { u: fu1 + 0.03, v: vb, x: 0.016 },
+    port: [0.08, 0.0335],
   };
 }
 
@@ -670,6 +688,8 @@ function semiShotgun(b: Builder, L: GunLookData): Anchors {
     barrelR: 0.0118,
     under: [u0 + lh * 0.5, vb - 0.04],
     side: { u: u0 + lh * 0.8, v: vb, x: 0.031 },
+    // A tube's loading port under the receiver, ahead of the trigger guard.
+    ...(box ? {} : { port: [0.125, 0.034] as P }),
   };
 }
 
@@ -690,7 +710,7 @@ function revolverShotgun(b: Builder, L: GunLookData): Anchors {
   b.tube("furniture", 0.024, 0.22, 0.21 + L.barrel - 0.02, vb, 0, 18);
   for (let s = 0.24; s < 0.21 + L.barrel - 0.04; s += 0.03) b.tube("dark", 0.0245, s, s + 0.005, vb, 0, 18);
   stock(b, L.stock ?? "fixed", -0.06, top - 0.004, 0.08);
-  magazine(b, "tube", 0.12, vb + 0.03);
+  // (No magazine: its cylinder is loaded where it is.)
   return {
     top: { u0: -0.04, u1: 0.2, v: railTop },
     optic: 0.08,
@@ -699,6 +719,7 @@ function revolverShotgun(b: Builder, L: GunLookData): Anchors {
     barrelR: 0.0125,
     under: [0.21 + L.barrel * 0.4, vb - 0.024],
     side: { u: 0.21 + L.barrel * 0.6, v: vb, x: 0.026 },
+    port: [0.12, vb - 0.006],
   };
 }
 
@@ -715,7 +736,7 @@ function double(b: Builder, L: GunLookData): Anchors {
   classicStock(b, "wood", -0.042, 0.112, 0.034);
   // Just a bead on the rib's end: the eye runs along the rib to it.
   b.post("accent", 0.003, 0.006, u0 + L.barrel - 0.01, vb + 0.048, 0, 8);
-  magazine(b, "tube", 0.05, 0.06);
+  // (No magazine: shells go into the breech.)
   return {
     top: { u0: 0.0, u1: 0.09, v: 0.112 },
     optic: 0.05,
@@ -724,6 +745,7 @@ function double(b: Builder, L: GunLookData): Anchors {
     barrelR: 0.0125,
     under: [u0 + 0.12, vb - 0.022],
     side: { u: u0 + 0.16, v: vb, x: 0.022 },
+    port: [u0, vb + 0.013],
   };
 }
 
@@ -984,8 +1006,7 @@ export function buildGun(look: GunLook, kit: GunKit = loadPresentationData().gun
   if (opticV !== null && sightKind) {
     sightV = opticV;
     sightU = a.optic;
-    const s = kit.sights[sightKind as keyof GunKit["sights"]];
-    reticle = s && "reticle" in s ? s.reticle : "dot";
+    reticle = kit.sights[sightKind as keyof GunKit["sights"]]?.reticle ?? "dot";
   } else {
     // The irons: flip-ups on the rail for what the base didn't build itself.
     if (a.irons.built !== "both") rearAperture(b, a.irons.rear, a.top.v, a.irons.line);
@@ -995,9 +1016,11 @@ export function buildGun(look: GunLook, kit: GunKit = loadPresentationData().gun
   }
   const muzzleU = muzzleDevice(b, pick.barrel, a, kit);
   if (pick.grip && a.under) foregrip(b, pick.grip, a.under);
-  // The other hand: on a grip fitted under the handguard, else cupped under it.
+  // The other hand: on a grip built on (or the magazine held as one), on one fitted under the handguard, else cupped
+  // under it.
   const foreDrop = !pick.grip ? 0.024 : pick.grip === "vertical" ? 0.05 : pick.grip === "angled" ? 0.032 : 0.028;
-  const fore = a.under ? new THREE.Vector3(0, a.under[1] - foreDrop, -a.under[0]) : null;
+  const fore = a.foreGrip ? new THREE.Vector3(0, a.foreGrip[1], -a.foreGrip[0]) : a.under ? new THREE.Vector3(0, a.under[1] - foreDrop, -a.under[0]) : null;
+  const foreGrip = a.foreGrip !== undefined || (pick.grip === "vertical" && a.under !== null);
   let laser: THREE.Vector3 | null = null;
   if (pick.underbarrel === "laser" && a.side) {
     const s = a.side;
@@ -1076,8 +1099,11 @@ export function buildGun(look: GunLook, kit: GunKit = loadPresentationData().gun
     hold: {
       grip: new THREE.Vector3(0, b.hand[1], -b.hand[0]).multiplyScalar(scale),
       fore: fore ? fore.multiplyScalar(scale) : null,
+      foreGrip,
       back: bounds.max.z,
       mag: magBox.isEmpty() ? null : magBox.getCenter(new THREE.Vector3()),
+      magBox: magBox.isEmpty() ? null : magBox,
+      port: a.port ? new THREE.Vector3(0, a.port[1], -a.port[0]).multiplyScalar(scale) : null,
     },
     sight: new THREE.Vector3(0, sightV, -sightU).multiplyScalar(scale),
     muzzle: new THREE.Vector3(0, a.muzzle[1], -muzzleU).multiplyScalar(scale),
