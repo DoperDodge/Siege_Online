@@ -58,6 +58,9 @@ try {
     await page.evaluate(([x, z, yawDeg]) => window.__lab.teleport(x, 0, z, yawDeg), [x, z, yawDeg]);
     await input({ lean, buttons: 8 /* Ads */ });
     await sleep(1300);
+    // Leaning: until the body has leaned over (a page slowed by a busy machine takes longer than the wait above), so
+    // the aim is worked out from the leaned eye.
+    if (lean !== 0) await page.waitForFunction((l) => Math.sign(l) * (window.__lab.net.own?.lean ?? 0) >= 0.9, lean, { timeout: 10000 }).catch(() => {});
     const aim = await page.evaluate(([id, part]) => window.__lab.aimAt(id, part), [pawnId, part]);
     if (!aim) return { shot: null, hits: [], panel: "" };
     await input({ yaw: aim.yaw, pitch: aim.pitch, lean, buttons: 8 });
