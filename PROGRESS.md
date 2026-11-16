@@ -98,7 +98,7 @@ Between M7 and M8: your report that Medium and High wouldn't load on any of your
 - **No LODs**: the triangles are a fifth of the budget and aren't what costs; a body is 5.5–7.4k triangles.
 - **Blowing a hole relights faster**: the rebake no longer copies all the light data (73 MB) on the page's thread,
   only what changed.
-- **The review** (a reviewer for each area, and every finding fixed but one):
+- **The review** (a reviewer for each area; every finding fixed but the small ones under Known issues):
   - Light: falling back to Low frees High's shadow map; a graphics context lost while the art loads is waited out
     and the art loaded again (it was taken for a card that can't do High); anything failing part way undoes the
     whole load; the sky's reflections come back after the context is restored (they went black); a failed texture
@@ -114,7 +114,12 @@ Between M7 and M8: your report that Medium and High wouldn't load on any of your
     reloads ease in and out, and aiming during one keeps the gun straight; no gun in your hands on a ladder or while
     reinforcing, reviving, barricading or planting (you can't shoot then); a gadget rests in your palm instead of
     floating over it.
-  - Level models: reviewed; the fixes are in progress, and this line will say what they changed when they land.
+  - Level models: the ground past the map no longer covers the stairwells, the bunker's outside stairs and broken
+    hatches into the basement (you saw a floor there); vehicles, fences, tyres, lumber and the cable reels are closed
+    down to the ground where they stop bullets and drones (no more seeing feet under a car you can't shoot under);
+    lamp fittings hang on the real ceiling and go when the ceiling over them is blown; glazing bars go with the glass;
+    no hatch border is left over a blown floor; cameras hide with their storey in the Oregon lab's views; a fallback to
+    Low no longer draws the picture twice.
 - **Not done**: ambient occlusion on High (the extra darkening where surfaces meet). The frame is already limited by
   lighting the pixels; it can come in Phase 12 if your frame rate leaves room.
 
@@ -142,7 +147,12 @@ Between M7 and M8: your report that Medium and High wouldn't load on any of your
 - Drawn elbows, knees and a stride's feet can go a little outside the straight arm and leg hitboxes (the trunk and
   head stay inside theirs, tested); limbs are hit where the hitboxes are. **Your call:** should the limb hitboxes bend
   with the drawn limbs? That changes what gets hit (a rule, not the art), so I haven't.
-- A body on screen makes about 20 KB of garbage a frame (more for the browser to collect; no leak).
+- A body on screen makes about 20 KB of garbage a frame, and the light lookup a couple of hundred small objects (more
+  for the browser to collect; no leak).
+- Above half a metre a car's collision box stands over its hood, and the excavator's over its arm: shots there stop
+  in the air. The boxes are coarser than the shapes; fixing that means changing the boxes (a rule, not the art).
+- In the Oregon lab's storey views (H, M), placed gadgets and the gas pipes and extinguishers still show over a
+  cut-away storey.
 - The light probes take about 15 s to bake here when a level loads (less on a real PC); until the first pass the
   rooms use the simpler storey light.
 

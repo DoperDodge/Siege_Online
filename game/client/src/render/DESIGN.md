@@ -169,6 +169,10 @@ lamps and no sky.
 - **Outside walls:** as §5.2; corner boards and trim at the building's edges; the Big Tower's cupola and
   weathervane (above anything a body can reach; drawn only).
 
+**As built, M10 (D-181):** a lamp's fixture hangs on the first face up from the room's air over it (a stairwell's at
+its top), none where there's nothing over it; what hangs on a panel (glazing bars on their glass, a fixture under a
+soft floor or a hatch) goes with it and comes back with it in a new round; no hatch border on a floor that breaks.
+
 ## 8. The outside (M5)
 
 Ground materials by area (grass, dirt, gravel, the street's asphalt) blended on the ground plane; trees (pines and
@@ -178,6 +182,11 @@ already blocked); the outside items as models fitted to their boxes: the school 
 trailers, sheds and the booth, silos and tanks, the greenhouse, the container, the excavator, the generator,
 lumber, tyres, cinder blocks, fences (wooden planks, chain-link, cinder-block walls), the garden beds; power poles
 and lines, the windmill and the pylon beyond the bounds; hills and a tree line all round.
+
+**As built, M10 (D-181):** the far ground lies round the bounds, not under them (it had closed the stairwells, the
+bunker's outside stairs and broken hatches 4 cm down). Where an outside item's box stops bullets and drones, the item
+is closed from the ground to half a metre up: vehicles have a dark underbody inside their wheels, fences are boarded
+behind their pickets, tyre rows, lumber and the reels are filled behind; a test casts rays through each.
 
 ## 9. Inside (M6)
 
