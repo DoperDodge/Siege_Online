@@ -8,8 +8,11 @@ import { clamp, type BuiltLevel } from "@redmond/shared";
 import { DAYLIGHT, STOREY_SLACK_M, storeyOf, SURFACE_COLORS, TAG, type LabScene } from "./labScene.js";
 import type { PanelView } from "./panelView.js";
 
-/** The greybox palette (surface classes) or the neutral one. */
-export type Palette = "greybox" | "neutral";
+/**
+ * The art pass's textures (Phase 10: artView.ts swaps the materials; the greybox ones keep their surface colours
+ * underneath), the greybox palette (surface classes) or the neutral one.
+ */
+export type Palette = "art" | "greybox" | "neutral";
 
 /** The neutral palette's one colour, a light grey, for every surface. */
 export const NEUTRAL_GREY = 0xc6cacf;
@@ -20,6 +23,7 @@ export const NEUTRAL_GREY = 0xc6cacf;
  */
 export function paletteColor(palette: Palette, surface: string): number {
   if (palette === "neutral") return NEUTRAL_GREY;
+  // The art hides the greybox materials: they keep the surface colours for when it's switched off.
   if (surface === "SOFT_FLOOR") return SURFACE_COLORS.SOFT_WALL;
   return SURFACE_COLORS[surface as keyof typeof SURFACE_COLORS] ?? NEUTRAL_GREY;
 }
@@ -278,15 +282,27 @@ export class StoreyView {
     }
   }
 
+  /**
+   * The art pass's light (Phase 10, probeField.ts): the probes light every storey, so the hemisphere light and the even
+   * fill are off and the sun is `sun` bright everywhere; null goes back to each storey's own light.
+   */
+  setArtLight(sun: number | null): void {
+    this.artSun = sun;
+    this.aimLight();
+    this.blend(Infinity);
+  }
+
+  private artSun: number | null = null;
+
   /** Start blending the lights toward those of the storey you're on. */
   private aimLight(): void {
     const l = storeyLight(this.storeys[this.storey]);
     const t = this.target;
     t.sky.setHex(l.sky);
     t.ground.setHex(l.ground);
-    t.hemi = l.hemi;
-    t.ambient = l.ambient;
-    t.sun = l.sun;
+    t.hemi = this.artSun === null ? l.hemi : 0;
+    t.ambient = this.artSun === null ? l.ambient : 0;
+    t.sun = this.artSun ?? l.sun;
     this.settled = false;
   }
 

@@ -29,3 +29,26 @@ jobs:
         with:
           name: e2e-screenshots
           path: builds/e2e/
+
+  # The art pass at High, Medium and Low against what every WebGL2 device guarantees (tools/e2e/oregon-art.mjs): its
+  # own job, beside the others (they take most of their 30 minutes).
+  art:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e:art
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: art-screenshots
+          path: builds/e2e/

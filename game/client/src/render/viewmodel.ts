@@ -1,27 +1,133 @@
 // The first-person gun (Phase 3 M9): drawn in its own scene after the world with the depth cleared, so it
 // never pokes into walls, by its own camera with a fixed field of view. Pose and motion come from the
 // predicted body state each frame (hip, aiming, sprinting, swapping, reloading, the knife) plus cosmetic
-// kick and sway; none of it feeds back into the simulation. Shapes are placeholders (gun_kit.json).
+// kick and sway; none of it feeds back into the simulation. The guns are gunKit.ts's (gun_kit.json).
+//
+// Your arms (Phase 10 M9, render/DESIGN.md §12; fpArms.ts): the right hand closed round the gun's grip and the left
+// cupped under its handguard (or on a grip fitted there, or both on a pistol's), riding the gun through everything it
+// does. A reload takes the left hand to the magazine, down out of the picture with it and back with the next on the
+// weapon's own timings (from empty, on to the bolt's release); a shotgun's shells go in one at a time. The knife is in
+// the right fist; a gadget lies in the right palm, is held up in both hands, or (a hammer) swung in both.
 import * as THREE from "three";
-import { DEG, GadgetAct, isDowned, lerp, loadPresentationData, PawnMode, ReloadKind, ticks, WeaponAct, WFlag, type GadgetData, type GameData, type GunKit, type PawnState, type ResolvedWeapon } from "@redmond/shared";
+import { DEG, GadgetAct, isDowned, lerp, loadPresentationData, PawnMode, ReloadKind, ticks, WeaponAct, type GadgetData, type GameData, type GunKit, type PawnState, type ResolvedWeapon } from "@redmond/shared";
+import { operatorLook } from "./bodyModel.js";
+import { pistolHeld, shellCycle } from "./bodyPose.js";
+import { FpArms, handFrame, PALM, PALM_SURFACE_Z } from "./fpArms.js";
+import { heldShape, knifeShape, restsAt, shapeModel, type ShapeModel } from "./gadgetShapes.js";
 import { buildGun, gunKey, type GunModel } from "./gunKit.js";
 import { warmShaders } from "./labScene.js";
 
 const smooth = (t: number) => t * t * (3 - 2 * t);
+const clamp01 = (t: number) => Math.min(1, Math.max(0, t));
+/** Progress 0…1 of `t` through [a, b], eased. */
+const through = (t: number, a: number, b: number) => smooth(clamp01((t - a) / Math.max(1e-6, b - a)));
+
+/** Where the hands are on a gun, in its own frame: the right on its grip; the left; on its magazine; on its bolt's release. */
+interface GunHands {
+  right: THREE.Matrix4;
+  left: THREE.Matrix4;
+  leftPose: "fore" | "grip";
+  mag: THREE.Matrix4;
+  /** Whether the magazine comes out with the hand (a double's breech and a revolver's cylinder are loaded in place). */
+  magMoves: boolean;
+  bolt: THREE.Matrix4;
+  /** Where a shell goes in (a shotgun's port, a double's breech, a revolver's cylinder), for the hand that feeds it. */
+  port: THREE.Matrix4;
+}
+
+/** A reload under way: how far through it is and (a magazine's) when it's out and in; a shell at a time, its cycle. */
+interface Reload {
+  t: number;
+  out: number;
+  in: number;
+  empty: boolean;
+  shells: { k: number; shell: boolean } | null;
+}
+
+/** How far a grip leans back as it goes down (most of ours: 15°). */
+const GRIP_RAKE = 15 * DEG;
+
+/** The hands' frames on a gun (gun frame: x right, y up, z back). */
+function gunHands(gun: GunModel, pistol: boolean): GunHands {
+  const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+  const grip = gun.hold.grip;
+  // The right hand: its x down the grip, its fingers forward round the front of it, its back to the right.
+  const right = handFrame(new THREE.Matrix4(), grip, v(0, -Math.cos(GRIP_RAKE), Math.sin(GRIP_RAKE)), v(0, -0.25, -1));
+  // A left hand closed round something upright (a grip under the handguard, a pistol's grip from the left, a
+  // magazine): its thumb side up, fingers forward, its back to the left.
+  const upright = (at: THREE.Vector3, palm: { x: number; y: number; z: number } = PALM) => handFrame(new THREE.Matrix4(), at, v(0, 1, 0), v(0, 0, -1), palm);
+  let left: THREE.Matrix4;
+  let leftPose: GunHands["leftPose"] = "fore";
+  if (gun.hold.fore && gun.hold.foreGrip) {
+    // On an upright grip ahead (fitted or built on, a Vector's magazine): a machine pistol's too.
+    left = upright(gun.hold.fore);
+    leftPose = "grip";
+  } else if (pistol || !gun.hold.fore) {
+    // Both hands on the one grip: the left wrapped over the right's fingers from its side.
+    left = upright(v(grip.x - 0.014, grip.y - 0.016, grip.z - 0.004));
+    leftPose = "grip";
+  } else {
+    // Cupped under the handguard: its thumb side forward, fingers across under it to the right, its back down.
+    left = handFrame(new THREE.Matrix4(), gun.hold.fore, v(0, 0, -1), v(1, 0.3, 0), { x: 0, y: PALM.y, z: 0.014 });
+  }
+  // A shotgun's port (or a double's breech, a revolver's cylinder): the hand comes up under it, its fingertips there.
+  const portAt = gun.hold.port ?? v(0, grip.y + 0.012, grip.z - 0.1);
+  const port = handFrame(new THREE.Matrix4(), portAt, v(0, 0, -1), v(1, 0.5, 0), { x: 0, y: 0.1, z: PALM_SURFACE_Z - 0.006 });
+  // The magazine: the palm on its left face, round its lower part (what shows of a pistol's under its butt; an LMG's
+  // box by its side). One that doesn't come out: the hand goes to where shells go in instead.
+  const box = gun.hold.magBox;
+  const mag = box ? upright(v(box.min.x, box.min.y + (box.max.y - box.min.y) * 0.4, (box.min.z + box.max.z) / 2), { x: 0, y: PALM.y, z: PALM_SURFACE_Z }) : port.clone();
+  // The bolt's release, on the left of the receiver over the magazine: slapped with the flat of the hand.
+  // (Its fingers along the receiver, forward and a little up; its back to the left: the axis is their cross.)
+  const along = v(0, 0.3, -0.95).normalize();
+  const bolt = handFrame(new THREE.Matrix4(), v(-0.022, grip.y + 0.065, grip.z - 0.075), along.clone().cross(v(-1, 0, 0)), along, { x: 0, y: 0.03, z: PALM_SURFACE_Z });
+  return { right, left, leftPose, mag, magMoves: box !== null, bolt, port };
+}
+
+const P0 = new THREE.Vector3();
+const P1 = new THREE.Vector3();
+const Q0 = new THREE.Quaternion();
+const Q1 = new THREE.Quaternion();
+const S0 = new THREE.Vector3();
+/** A frame part way from one to another (their places in a line, their turns the short way). */
+function between(out: THREE.Matrix4, a: THREE.Matrix4, b: THREE.Matrix4, t: number): THREE.Matrix4 {
+  a.decompose(P0, Q0, S0);
+  b.decompose(P1, Q1, S0);
+  return out.compose(P0.lerp(P1, t), Q0.slerp(Q1, t), S0.set(1, 1, 1));
+}
 /** The gun's own lights in daylight: a sky fill and a key from above right. */
 const VIEWMODEL_FILL = 1.6;
 const VIEWMODEL_KEY = 1.8;
+/** And the sky's reflections on it, once the art has the sky (setEnvironment). */
+const VIEWMODEL_ENV = 0.6;
+/** Where under an item lying in the palm the palm is (its own frame: a little behind its middle). */
+const HELD_PALM_Z = 0.01;
+/** How many guns stay built (the primary, the secondary, one more after a loadout change). */
+const GUNS_KEPT = 3;
 
 export class Viewmodel {
   readonly scene = new THREE.Scene();
   readonly camera: THREE.PerspectiveCamera;
   private readonly kit: GunKit;
   private readonly rig = new THREE.Group();
+  /** Your arms (fpArms.ts), in the camera's space as the gun is. */
+  private readonly arms: FpArms;
+  /** The hands' frames on the gun in hand (its own frame), rebuilt with it. */
+  private hands: GunHands | null = null;
+  /** A shotgun's shell in the left hand as it's fed in. */
+  private readonly shell: THREE.Mesh;
   private gun: GunModel | null = null;
   private key = "";
-  private readonly knife: THREE.Mesh;
-  /** A gadget in hand (Phase 8): its box, or a detonator; rebuilt when what's held changes. */
-  private held: THREE.Mesh | null = null;
+  /** The guns built, by their key (gunKit.ts gunKey), the one in hand last. */
+  private readonly guns = new Map<string, GunModel>();
+  private readonly knife: THREE.Object3D;
+  /** A gadget in hand (Phase 8): its shaped model (gadgetShapes.ts), or a detonator; rebuilt when what's held changes. */
+  private held: THREE.Object3D | null = null;
+  private heldModel: ShapeModel | null = null;
+  /** Its size as drawn (across, up, deep). */
+  private heldSize: [number, number, number] = [0, 0, 0];
+  /** Where the palm under it is, its own frame: how low it comes there, and how far back (gadgetShapes.ts restsAt). */
+  private heldRest = { y: 0, z: 0 };
   /** A held-up item's screen (Pulse's sensor, Dokkaebi's tablet): lit, facing the eye. */
   private screen: THREE.Mesh | null = null;
   private heldKey = "";
@@ -31,6 +137,9 @@ export class Viewmodel {
   private flashUntil = 0;
   private kick = 0;
   private sprintW = 0;
+  /** How far the gun is tipped over for a reload, and for a shotgun's shells (eased). */
+  private reloadW = 0;
+  private shellW = 0;
   private bob = 0;
   /** Aiming progress as last drawn (0 hip … 1 down the sights) and what the sight shows. */
   aim = 0;
@@ -44,10 +153,18 @@ export class Viewmodel {
     this.keyLight.position.set(0.6, 1, 0.4);
     this.scene.add(this.fill, this.keyLight, this.camera);
     this.camera.add(this.rig);
-    const blade = new THREE.BoxGeometry(0.012, 0.03, 0.2);
-    this.knife = new THREE.Mesh(blade, new THREE.MeshStandardMaterial({ color: this.kit.colors.knife, metalness: 0.8, roughness: 0.25 }));
+    this.knife = shapeModel(knifeShape()).group;
     this.knife.visible = false;
     this.camera.add(this.knife);
+    this.arms = new FpArms(operatorLook(undefined));
+    this.camera.add(this.arms.group);
+    // A shell: its hull along its own y, a brass head at the bottom.
+    const hull = new THREE.CylinderGeometry(0.0102, 0.0102, 0.062, 10);
+    hull.setAttribute("color", new THREE.Float32BufferAttribute(Array.from({ length: hull.getAttribute("position").count }, (_, i) => (hull.getAttribute("position").getY(i) < -0.018 ? [0.72, 0.55, 0.2] : [0.5, 0.06, 0.05])).flat(), 3));
+    this.shell = new THREE.Mesh(hull, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.2 }));
+    this.shell.visible = false;
+    this.shell.matrixAutoUpdate = false;
+    this.camera.add(this.shell);
     const c = document.createElement("canvas");
     c.width = c.height = 64;
     const g = c.getContext("2d")!;
@@ -62,6 +179,11 @@ export class Viewmodel {
     this.flash.scale.setScalar(0.16);
     this.flash.visible = false;
     this.rig.add(this.flash);
+  }
+
+  /** Whose arms these are: their sleeves, skin and gloves (data/presentation/operator_looks.json). */
+  setOperator(operatorId: string | undefined) {
+    this.arms.setLook(operatorLook(operatorId));
   }
 
   setAspect(aspect: number) {
@@ -88,19 +210,38 @@ export class Viewmodel {
     const vm = this.kit.viewmodel;
     const show = w !== null && s.mode !== PawnMode.Dead && !isDowned(s);
     this.knife.visible = false;
+    this.shell.visible = false;
+    this.arms.setHand("left", null);
+    this.arms.setHand("right", null);
     this.poseHeld(show ? gadget : null, s);
     this.rig.visible = show && !gadget;
     if (!show || !w || gadget) {
       this.aim = 0;
+      this.arms.update();
       return;
     }
-    const look = { class: w.class, pick: w.pick };
-    if (gunKey(look) !== this.key) {
-      this.gun?.dispose();
-      this.gun = buildGun(look, this.kit);
-      this.key = gunKey(look);
-      this.reticle = this.gun.reticle;
-      this.rig.add(this.gun.group);
+    const look = { id: w.id, class: w.class, pick: w.pick };
+    const key = gunKey(look);
+    if (key !== this.key) {
+      // The last few guns in hand stay built (a swap back and forth builds nothing): the newest last.
+      if (this.gun) this.gun.group.visible = false;
+      let built = this.guns.get(key);
+      if (built) this.guns.delete(key);
+      else {
+        built = buildGun(look, this.kit);
+        this.rig.add(built.group);
+      }
+      this.guns.set(key, built);
+      for (const [k, g] of this.guns) {
+        if (this.guns.size <= GUNS_KEPT) break;
+        g.dispose();
+        this.guns.delete(k);
+      }
+      this.gun = built;
+      this.key = key;
+      this.reticle = built.reticle;
+      this.hands = gunHands(built, pistolHeld(w.class));
+      this.leftKnown = false;
     }
     const gun = this.gun!;
     // Aiming: the sight line comes onto the view axis, adsDistance in front of the eye.
@@ -118,20 +259,39 @@ export class Viewmodel {
     rot.x += vm.sprint.pitchDeg * DEG * this.sprintW;
     // Swapping: the new weapon comes up from below; reloading: a dip and a roll, the magazine out and back.
     gun.mag.position.copy(gun.magHome);
+    /** A reload under way: how far through it is, and (a magazine's) when the magazine comes out and when the next is in. */
+    let reload: Reload | null = null;
+    let tilt = 0;
     if (s.wAct === WeaponAct.Equip) {
       const p = Math.min(1, s.actTicks / Math.max(1, swapTicks));
       pos.y -= (1 - smooth(p)) * vm.downFor.equip;
       rot.x -= (1 - smooth(p)) * 0.6;
     } else if (s.wAct === WeaponAct.Reload && w.reload.kind !== "none") {
-      const total = w.reload.kind === "magazine" ? (s.reloadKind === ReloadKind.Tactical ? w.reload.tacticalTicks : w.reload.emptyTicks) : w.reload.perShellTicks;
-      const t = w.reload.kind === "magazine" ? Math.min(1, s.actTicks / Math.max(1, total)) : (s.actTicks % Math.max(1, total)) / Math.max(1, total);
-      const dip = Math.sin(Math.PI * t);
-      pos.y -= dip * vm.downFor.reload;
-      rot.z += dip * 0.35;
-      rot.x += dip * 0.15;
-      if (w.reload.kind === "magazine" && s.wflags & WFlag.MagOut && !(s.wflags & WFlag.Refilled)) gun.mag.position.y -= 0.18; // out, not yet back
+      const r = w.reload;
+      if (r.kind === "magazine") {
+        const tac = s.reloadKind === ReloadKind.Tactical;
+        const total = Math.max(1, tac ? r.tacticalTicks : r.emptyTicks);
+        const t = Math.min(1, s.actTicks / total);
+        reload = { t, out: (tac ? r.magOutTacticalTicks : r.magOutEmptyTicks) / total, in: (tac ? r.refillTacticalTicks : r.refillEmptyTicks) / total, empty: !tac, shells: null };
+        tilt = through(t, 0, 0.14) * (1 - through(t, 0.86, 1));
+      } else {
+        reload = { t: 0, out: 0, in: 1, empty: false, shells: shellCycle(s.actTicks, s.reloadKind === ReloadKind.Empty, r) };
+        tilt = 1;
+      }
+    }
+    // Up, in and tipped over for the hand that works it (gun_kit.json `viewmodel.reload`), eased on and off (a reload
+    // cut short, the last shell in); aimed through it, the gun stays on the eye's line (its reticle is drawn there).
+    this.reloadW = THREE.MathUtils.damp(this.reloadW, tilt * (1 - this.aim), 12, dt);
+    this.shellW = THREE.MathUtils.damp(this.shellW, reload?.shells ? 1 : 0, 12, dt);
+    {
+      const k = this.reloadW;
+      pos.add(new THREE.Vector3(...vm.reload.offset).multiplyScalar(k));
+      rot.x += k * vm.reload.pitchDeg * DEG;
+      rot.y += k * vm.reload.yawDeg * DEG;
+      rot.z += k * (vm.reload.rollDeg + this.shellW * vm.reload.shellRollDeg) * DEG;
     }
     // The knife: the gun drops away and a blade sweeps right to left.
+    let stab = false;
     if (s.meleeTicks > 0) {
       const cycle = ticks(this.data.combat.melee.cycleSeconds);
       const p = Math.min(1, (s.meleeTicks - 1) / cycle);
@@ -139,6 +299,7 @@ export class Viewmodel {
       this.knife.visible = true;
       this.knife.position.set(lerp(0.25, -0.2, smooth(Math.min(1, p * 1.6))), -0.12, -0.32);
       this.knife.rotation.set(0, lerp(0.9, -0.6, p), -0.4);
+      stab = true;
     }
     // Cosmetic kick (the real recoil moves the view itself, D-041) and a little walking sway.
     this.kick = Math.max(0, this.kick - dt * 14);
@@ -149,28 +310,130 @@ export class Viewmodel {
     const sway = (1 - this.aim * 0.85) * Math.min(1, speed / 3);
     pos.x += Math.sin(this.bob) * 0.006 * sway;
     pos.y += Math.abs(Math.cos(this.bob)) * 0.006 * sway;
+    // Standing still it's never quite still: a breath's rise and fall, less down the sights.
+    const breath = (1 - this.aim * 0.7) * (1 - Math.min(1, speed / 1.5));
+    pos.y += Math.sin(now * 0.0019) * 0.0016 * breath;
+    rot.z += Math.sin(now * 0.0011) * 0.004 * breath;
     gun.group.position.copy(pos);
     gun.group.rotation.copy(rot);
     // Magnified sights: once fully aimed, the scope overlay replaces the gun (see the lab's .scope).
     gun.group.visible = !(w.ads.zoom > 1 && this.aim > 0.92);
     this.flash.visible = now < this.flashUntil && gun.group.visible;
     if (this.flash.visible) this.flash.position.copy(gun.muzzle).applyEuler(rot).add(pos);
+    if (this.rig.visible && gun.group.visible && this.hands) this.poseArms(gun, this.hands, new THREE.Matrix4().compose(pos, new THREE.Quaternion().setFromEuler(rot), new THREE.Vector3(1, 1, 1)), reload, behindShield, dt);
+    else this.leftKnown = false;
+    if (stab) {
+      // The knife in the right fist (whether or not the gun is drawn): its handle across the palm, the blade out past
+      // the thumb.
+      this.knife.updateMatrix();
+      const handle = handFrame(new THREE.Matrix4(), new THREE.Vector3(0, -0.001, 0.052), new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, -1, 0));
+      this.arms.setHand("right", new THREE.Matrix4().multiplyMatrices(this.knife.matrix, handle), "fist");
+    }
+    this.arms.update();
+  }
+
+  /** Where the left hand goes out of the picture to (a magazine dropped in a pouch, the next one taken), camera space. */
+  private static readonly AWAY = new THREE.Vector3(-0.1, -0.56, -0.12);
+
+  /** The left hand as it was last drawn, in the gun's frame (a hold that changes at once is eased over: a reload cut short). */
+  private readonly leftInGun = new THREE.Matrix4();
+  private leftKnown = false;
+
+  /**
+   * The hands on the gun (`at`: its place in the camera's space): the right on its grip; the left under its handguard
+   * (or on a grip there), or working a reload: to the magazine, away with it and back with the next (which it carries:
+   * a double's breech and a revolver's cylinder are loaded in place, a shell in the hand), then (from empty) the bolt's
+   * release; a shell at a time into a shotgun. The left eases over in the gun's frame when its hold jumps.
+   */
+  private poseArms(gun: GunModel, hands: GunHands, at: THREE.Matrix4, reload: Reload | null, oneHanded: boolean, dt: number) {
+    const onGun = (m: THREE.Matrix4) => new THREE.Matrix4().multiplyMatrices(at, m);
+    this.arms.setHand("right", onGun(hands.right), "grip");
+    // Fuze's other hand is on his shield.
+    if (oneHanded) {
+      this.leftKnown = false;
+      return;
+    }
+    const fore = onGun(hands.left);
+    const hand = new THREE.Matrix4();
+    let pose: "fore" | "grip" | "hold" | "flat" = hands.leftPose;
+    let shell = false;
+    if (!reload) hand.copy(fore);
+    else {
+      const mag = onGun(hands.mag);
+      // Away: the hand as it holds the magazine, down out of the picture.
+      const away = mag.clone().setPosition(Viewmodel.AWAY);
+      if (reload.shells) {
+        // From the pouch with a shell up to the port, in, and down for the next (bodyPose.ts shellCycle).
+        const port = onGun(hands.port);
+        between(hand, away.copy(port).setPosition(Viewmodel.AWAY), port, reload.shells.k);
+        pose = "hold";
+        shell = reload.shells.shell;
+      } else {
+        // A magazine: to it, off with it, back with the next, home; then the bolt's release (from empty) and the handguard.
+        const { t } = reload;
+        const down = reload.out + (reload.in - reload.out) * 0.4;
+        const up = reload.out + (reload.in - reload.out) * 0.58;
+        pose = "hold";
+        if (t < reload.out) {
+          const k = through(t, 0, reload.out * 0.8);
+          between(hand, fore, mag, k);
+          pose = k < 0.5 ? hands.leftPose : "hold";
+        } else if (t < down) between(hand, mag, away, through(t, reload.out, down));
+        else if (t < up) hand.copy(away);
+        else if (t < reload.in) {
+          between(hand, away, mag, through(t, up, reload.in));
+          // Loaded in place (a breech, a cylinder): it brings shells, not a magazine.
+          shell = !hands.magMoves;
+        } else if (reload.empty) {
+          const slap = reload.in + (1 - reload.in) * 0.45;
+          const bolt = onGun(hands.bolt);
+          if (t < slap) {
+            between(hand, mag, bolt, through(t, reload.in, slap));
+            pose = "flat";
+          } else {
+            const k = through(t, slap + (1 - slap) * 0.15, 1);
+            between(hand, bolt, fore, k);
+            pose = k < 0.5 ? "flat" : hands.leftPose;
+          }
+        } else {
+          const k = through(t, reload.in, reload.in + (1 - reload.in) * 0.8);
+          between(hand, mag, fore, k);
+          pose = k < 0.5 ? "hold" : hands.leftPose;
+        }
+      }
+    }
+    // Eased in the gun's frame (the gun's own motion carries it at once; only a change of hold is eased).
+    const toGun = new THREE.Matrix4().copy(at).invert();
+    const target = new THREE.Matrix4().multiplyMatrices(toGun, hand);
+    if (this.leftKnown) between(this.leftInGun, this.leftInGun, target, 1 - Math.exp(-dt * 30));
+    else this.leftInGun.copy(target);
+    this.leftKnown = true;
+    hand.multiplyMatrices(at, this.leftInGun);
+    this.arms.setHand("left", hand, pose);
+    if (shell) {
+      // A shell along the fingers until it's pushed in.
+      this.shell.visible = true;
+      this.shell.matrix.copy(hand).multiply(new THREE.Matrix4().makeTranslation(0, 0.105, PALM_SURFACE_Z - 0.012));
+      this.shell.matrixWorldNeedsUpdate = true;
+    }
+    // The magazine goes with the hand while it's out of the gun.
+    if (reload && !reload.shells && hands.magMoves && reload.t >= reload.out && reload.t < reload.in) {
+      const moved = new THREE.Vector3().setFromMatrixPosition(this.leftInGun).sub(new THREE.Vector3().setFromMatrixPosition(hands.mag));
+      gun.mag.position.copy(gun.magHome).add(moved);
+    }
   }
 
   /**
-   * A gadget in hand (Phase 8, gadgets/hands.ts), greybox: its box at most a hand's size, low on the right; it comes
-   * up as it's taken out, draws back for a throw and goes down while it's being placed. A detonator is a small dark box.
+   * A gadget in hand (Phase 8, gadgets/hands.ts): its model at most a hand's size (a big placed one packed), low on
+   * the right; it comes up as it's taken out, draws back for a throw and goes down while it's being placed.
    */
   private poseHeld(gadget: { data: GadgetData; detonator: boolean } | null, s: PawnState) {
     const key = gadget ? `${gadget.data.id}:${gadget.detonator}` : "";
     if (key !== this.heldKey) {
       this.heldKey = key;
-      if (this.held) {
-        this.camera.remove(this.held);
-        this.held.geometry.dispose();
-        (this.held.material as THREE.Material).dispose();
-        this.held = null;
-      }
+      this.heldModel?.dispose();
+      this.heldModel = null;
+      this.held = null;
       if (this.screen) {
         this.screen.geometry.dispose();
         (this.screen.material as THREE.Material).dispose();
@@ -178,9 +441,14 @@ export class Viewmodel {
       }
       if (gadget) {
         // A swung item (Sledge's hammer, Phase 8 M4) is drawn long; anything else no bigger than a hand holds.
-        const cap = gadget.data.use.kind === "swing" ? 0.6 : 0.25;
-        const [w, h, d] = gadget.detonator ? [0.05, 0.09, 0.03] : gadget.data.sizeM.map((v) => Math.min(v, cap));
-        this.held = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color: gadget.detonator ? 0x1f2937 : 0x4b5563, roughness: 0.6, metalness: 0.3 }));
+        const cap = gadget.data.use.kind === "swing" ? 0.6 : 0.3;
+        const shape = heldShape(gadget.detonator ? "detonator" : gadget.data.id, gadget.data.sizeM, cap);
+        const [w, h, d] = shape.size;
+        this.heldSize = [w, h, d];
+        this.heldRest = restsAt(shape.parts, HELD_PALM_Z, -h / 2);
+        this.heldModel = shapeModel(shape.parts);
+        this.held = this.heldModel.group;
+        this.held.name = "held";
         this.camera.add(this.held);
         if (!gadget.detonator && gadget.data.use.kind === "hold") {
           // Its screen, on the face toward the eye once it's up (green: Pulse's heartbeats; blue: Dokkaebi's tablet).
@@ -209,16 +477,48 @@ export class Viewmodel {
       const k = smooth(up);
       this.held.position.set(lerp(0.2, 0, k), lerp(-0.42, -0.06, k), lerp(-0.45, -0.24, k));
       this.held.rotation.set(lerp(-0.9, -0.08, k), lerp(-0.4, 0, k), 0);
+      this.holdHeld("up");
       return;
     }
     this.held.position.set(0.2 + windup * 0.06, -0.2 - (1 - smooth(up)) * 0.25 - placing * 0.12 + windup * 0.08 - strike * 0.1, -0.45 + windup * 0.12 - strike * 0.15);
     this.held.rotation.set(-0.2 - windup * 0.8 + (u?.kind === "swing" ? 0.7 - strike * 1.8 : 0), -0.3, 0);
+    this.holdHeld(u?.kind === "swing" && !gadget?.detonator ? "swing" : "palm");
+  }
+
+  /**
+   * The hands on the gadget in them: lying in the right palm; held up by its sides in both; or (a hammer, its handle
+   * standing along its own y) the right low on its grip and the left a little up it.
+   */
+  private holdHeld(how: "palm" | "up" | "swing") {
+    const held = this.held!;
+    held.updateMatrix();
+    const [w, h] = this.heldSize;
+    const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+    const on = (m: THREE.Matrix4) => new THREE.Matrix4().multiplyMatrices(held.matrix, m);
+    if (how === "palm") {
+      // Palm up under it, where it rests, the thumb to the outside, the fingers closed up round it.
+      this.arms.setHand("right", on(handFrame(new THREE.Matrix4(), v(0, this.heldRest.y, this.heldRest.z), v(-1, 0, 0), v(0, 0.2, -1), { x: 0, y: PALM.y, z: PALM_SURFACE_Z })), "hold");
+    } else if (how === "up") {
+      // By its lower corners: palms in, fingers behind it, thumbs up along its face's edges (clear of its screen).
+      const palm = { x: 0, y: 0.05, z: -0.014 };
+      this.arms.setHand("right", on(handFrame(new THREE.Matrix4(), v(w / 2, -h * 0.36, 0), v(0, -0.3, -0.9), v(-0.12, 0.95, -0.3), palm)), "edge");
+      this.arms.setHand("left", on(handFrame(new THREE.Matrix4(), v(-w / 2, -h * 0.36, 0), v(0, 0.3, 0.9), v(0.12, 0.95, -0.3), palm)), "edge");
+    } else {
+      this.arms.setHand("right", on(handFrame(new THREE.Matrix4(), v(0, -h / 2 + h * 0.12, 0), v(0, -1, 0), v(0, 0, -1))), "grip");
+      this.arms.setHand("left", on(handFrame(new THREE.Matrix4(), v(0, -h / 2 + h * 0.36, 0), v(0, 1, 0), v(0, 0, -1))), "grip");
+    }
   }
 
   /** Light the gun as the world around it is lit: `k` of daylight (a map's basement is darker). */
   setLight(k: number) {
     this.fill.intensity = VIEWMODEL_FILL * k;
     this.keyLight.intensity = VIEWMODEL_KEY * k;
+    this.scene.environmentIntensity = VIEWMODEL_ENV * k;
+  }
+
+  /** The sky's environment (the art pass, Phase 10 M7): the gun's metal reflects it, as the light at the eye dims it. */
+  setEnvironment(env: THREE.Texture | null) {
+    this.scene.environment = env;
   }
 
   /** Draw over the world (call after rendering the world scene; clears depth first). */

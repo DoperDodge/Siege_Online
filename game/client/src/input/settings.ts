@@ -1,6 +1,8 @@
 // Player settings (PLAN §7, §14): sensitivity, FOV, and separate toggle/hold modes for crouch, prone,
 // lean and ADS. Stored per browser in localStorage; everything still works if storage is unavailable.
 
+import type { QualitySetting } from "../render/quality.js";
+
 export type HoldMode = "hold" | "toggle";
 
 export interface Keybinds {
@@ -54,6 +56,8 @@ export interface Settings {
   adsMode: HoldMode;
   rawInput: boolean;
   keys: Keybinds;
+  /** Graphics quality (Phase 10, render/quality.ts): a preset, or "auto" (High on a desktop, Low on a phone). */
+  graphics: QualitySetting;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -66,6 +70,7 @@ export const DEFAULT_SETTINGS: Settings = {
   leanMode: "toggle",
   adsMode: "hold",
   rawInput: true,
+  graphics: "auto",
   keys: {
     forward: "KeyW",
     back: "KeyS",

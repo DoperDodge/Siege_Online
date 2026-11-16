@@ -11,12 +11,14 @@ import {
   PawnMode,
   ProtocolError,
   quantizeRemote,
+  ReloadKind,
   remoteState,
   REVIVER_UNKNOWN,
   Sim,
   SnapshotDecoder,
   SnapshotEncoder,
   Stance,
+  WeaponAct,
   type InputCmd,
   type RemoteQ,
 } from "../src/index.js";
@@ -99,10 +101,27 @@ describe("snapshot codec", () => {
     expect([lying.mode, lying.ropeTurn]).toEqual([PawnMode.Knocked, 0]);
     expect(lying.knockLie).toBeCloseTo(0.7, 2);
     // (Bits 9–10 are Fuze's shield's place, Phase 8 M11: 3 isn't one; 11–13 how far it's slid down; nothing past them.)
-    for (const flags of [quantizeRemote(s).flags | (3 << 9), quantizeRemote(s).flags | 16384]) {
+    // (Bit 14 is knifing since Phase 10 M10: bit 15 is the one never sent.)
+    for (const flags of [quantizeRemote(s).flags | (3 << 9), quantizeRemote(s).flags | 32768]) {
       const bad = { ...quantizeRemote(s), flags };
       expect(() => new SnapshotDecoder().decode(new SnapshotEncoder().encode({ tick: 2, ackSeq: 0, idled: false, queueDepth: 2 }, null, new Map([[5, bad]])))).toThrow(ProtocolError);
     }
+  });
+
+  it("others see that a body reloads or knifes (Phase 10 M10: its body draws the reload and the stab), and nothing else of it", () => {
+    const s = initialPawnState(1, 0, 2, 0, 100);
+    const reloading = remoteState(quantizeRemote({ ...s, wAct: WeaponAct.Reload, actTicks: 40, reloadKind: ReloadKind.Empty }));
+    expect([reloading.wAct, reloading.actTicks, reloading.reloadKind]).toEqual([WeaponAct.Reload, 0, ReloadKind.None]);
+    expect(remoteState(quantizeRemote({ ...s, wAct: WeaponAct.Equip })).wAct).toBe(WeaponAct.Ready);
+    expect(remoteState(quantizeRemote({ ...s, meleeTicks: 20 })).meleeTicks).toBe(1);
+    expect(remoteState(quantizeRemote(s)).meleeTicks).toBe(0);
+    // Both through the encoder and decoder, as a delta.
+    const dec = new SnapshotDecoder();
+    const enc = new SnapshotEncoder();
+    dec.decode(enc.encode({ tick: 2, ackSeq: 0, idled: false, queueDepth: 2 }, null, new Map([[5, quantizeRemote(s)]])));
+    dec.decode(enc.encode({ tick: 4, ackSeq: 0, idled: false, queueDepth: 2 }, null, new Map([[5, quantizeRemote({ ...s, wAct: WeaponAct.Reload, meleeTicks: 3 })]])));
+    const got = remoteState(dec.have.get(5)!);
+    expect([got.wAct, got.meleeTicks]).toEqual([WeaponAct.Reload, 1]);
   });
 
   it("others see which weapon is in hand and whether it's aimed (Phase 3 M9: the gun drawn on a body)", () => {

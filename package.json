@@ -26,8 +26,11 @@
     "bench:oregon": "esbuild tools/bench/oregon.ts --bundle --platform=node --format=esm --outfile=builds/bench/oregon.mjs --log-level=warning && node builds/bench/oregon.mjs",
     "bench:bots": "esbuild tools/bench/bots.ts --bundle --platform=node --format=esm --outfile=builds/bench/bots.mjs --log-level=warning && node builds/bench/bots.mjs",
     "soak": "esbuild tools/soak/run.ts --bundle --platform=node --format=esm --outfile=builds/soak/run.mjs --log-level=warning && node builds/soak/run.mjs",
-    "check": "npm run typecheck && npm test && npm run build && npm run test:e2e",
-    "e2e:setup": "playwright install chromium"
+    "test:e2e:art": "node tools/e2e/oregon-art.mjs",
+    "check": "npm run typecheck && npm test && npm run build && npm run test:e2e && npm run test:e2e:art",
+    "e2e:setup": "playwright install chromium",
+    "art:textures": "node tools/art/textures.mjs",
+    "art:sky": "node tools/art/sky.mjs"
   },
   "devDependencies": {
     "@types/node": "^22",

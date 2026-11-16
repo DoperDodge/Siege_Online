@@ -84,6 +84,10 @@ try {
   await input(off, { pitch: -0.15 });
   result.thrown = await state(off);
   await off.screenshot({ path: shot("gadget-frag-flying.png") });
+  // One fewer in hand: the count comes with the body's state, which a busy page can have a snapshot behind the
+  // gadget's own news, so it's waited for on its own.
+  await until(off, () => window.__lab.net.gadgets === 1, null, 10000).catch(() => {});
+  result.thrown.g1 = (await state(off)).g1;
   await until(off, () => window.__lab.net.table.some((g) => g.kind === "frag" && !(g.flags & 1)));
   result.landed = (await state(off)).table[0];
   await off.screenshot({ path: shot("gadget-frag-resting.png") });

@@ -9,6 +9,7 @@
 // works, and its reach shows for a moment once it's placed. M7: Mira's Black Mirror is its frame and its glass, clear from
 // her side and black from the other (two one-sided sheets), grey once shattered, gone once ejected.
 import * as THREE from "three";
+import { gadgetShape, SHAPE_MATERIALS, type ShapeMat } from "./gadgetShapes.js";
 import {
   barrierOf,
   behindOf,
@@ -135,9 +136,126 @@ export class GadgetModels {
     return this.sim.data.gadgets.get(kindId(kind) ?? "");
   }
 
+  /** A shared geometry, made once by its key (disposeOwn leaves it). */
+  private shared(key: string, make: () => THREE.BufferGeometry): THREE.BufferGeometry {
+    let g = this.geometry.get(key);
+    if (!g) this.geometry.set(key, (g = make()));
+    return g;
+  }
+
+  /** A shared material, made once by its key. */
+  private sharedMat(key: string, colour: number, roughness: number, metalness = 0, emissive = 0): THREE.Material {
+    let m = this.materials.get(key);
+    if (!m) this.materials.set(key, (m = new THREE.MeshStandardMaterial({ color: colour, roughness, metalness, emissive })));
+    return m;
+  }
+
+  /** A part of a shaped model: a shared geometry placed (and turned about x, then z). */
+  private part(key: string, make: () => THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number, rx = 0, rz = 0): THREE.Mesh {
+    const m = new THREE.Mesh(this.shared(key, make), mat);
+    m.position.set(x, y, z);
+    m.rotation.set(rx, 0, rz);
+    return m;
+  }
+
+  /**
+   * A fire extinguisher on its wall bracket (Phase 10 M6, render/DESIGN.md §9.2): the red can under a dome, its label,
+   * the valve with its lever and gauge, the hose down its side, the strap and the bracket behind (the wall's side, +z);
+   * within its 18 × 50 × 18 cm box. All of it is "body" (a broken one shrinks).
+   */
+  private extinguisher(): THREE.Group {
+    const red = this.sharedMat("ext:red", 0x8f1712, 0.45, 0.1);
+    const black = this.sharedMat("ext:black", 0x1a1b1d, 0.55);
+    const chrome = this.sharedMat("ext:chrome", 0xc9ced3, 0.25, 0.9);
+    const white = this.sharedMat("ext:white", 0xeeeeea, 0.6);
+    const body = new THREE.Group();
+    body.name = "body";
+    body.add(
+      this.part("ext:can", () => new THREE.CylinderGeometry(0.075, 0.075, 0.34, 20), red, 0, -0.08, 0),
+      this.part("ext:dome", () => new THREE.SphereGeometry(0.075, 20, 8, 0, Math.PI * 2, 0, Math.PI / 2), red, 0, 0.09, 0),
+      this.part("ext:foot", () => new THREE.CylinderGeometry(0.073, 0.07, 0.02, 20), black, 0, -0.24, 0),
+      this.part("ext:label", () => new THREE.CylinderGeometry(0.0765, 0.0765, 0.11, 20, 1, true), white, 0, -0.07, 0),
+      this.part("ext:strap", () => new THREE.CylinderGeometry(0.078, 0.078, 0.018, 20, 1, true), black, 0, 0.03, 0),
+      this.part("ext:neck", () => new THREE.CylinderGeometry(0.02, 0.024, 0.035, 12), chrome, 0, 0.18, 0),
+      this.part("ext:valve", () => new THREE.BoxGeometry(0.045, 0.035, 0.05), black, 0, 0.212, 0),
+      this.part("ext:lever", () => new THREE.BoxGeometry(0.028, 0.01, 0.11), chrome, 0, 0.238, -0.035, 0.14),
+      this.part("ext:grip", () => new THREE.BoxGeometry(0.028, 0.01, 0.1), black, 0, 0.196, -0.04),
+      this.part("ext:gauge", () => new THREE.CylinderGeometry(0.015, 0.015, 0.01, 14), white, 0.028, 0.212, -0.012, 0, Math.PI / 2),
+      this.part("ext:hoseTop", () => new THREE.CylinderGeometry(0.009, 0.009, 0.07, 8), black, 0.05, 0.2, 0, 0, Math.PI / 2),
+      this.part("ext:hose", () => new THREE.CylinderGeometry(0.009, 0.009, 0.3, 8), black, 0.082, 0.05, 0),
+      this.part("ext:nozzle", () => new THREE.CylinderGeometry(0.012, 0.016, 0.05, 10), black, 0.082, -0.125, 0),
+      this.part("ext:bracket", () => new THREE.BoxGeometry(0.05, 0.16, 0.01), black, 0, 0, 0.084),
+    );
+    const group = new THREE.Group();
+    group.add(body);
+    return group;
+  }
+
+  /**
+   * A gas pipe (Phase 10 M6): the yellow-painted pipe ("body", its unit length stretched floor to ceiling by pipeRun),
+   * flanges where it meets the floor and the ceiling and couplings along it (placed by pipeRun), and at the entry's
+   * point its valve with a red handwheel.
+   */
+  private gasPipe(): THREE.Group {
+    const paint = this.sharedMat("pipe:paint", 0xd4a020, 0.45, 0.35);
+    const iron = this.sharedMat("pipe:iron", 0x3b3e42, 0.6, 0.5);
+    const wheel = this.sharedMat("pipe:wheel", 0xb91c1c, 0.4, 0.2);
+    const group = new THREE.Group();
+    const body = this.part("gas_pipe", () => new THREE.CylinderGeometry(0.05, 0.05, 1, 14), paint, 0, 0, 0);
+    body.name = "body";
+    group.add(body);
+    for (const name of ["flangeTop", "flangeBottom"]) {
+      const f = this.part("pipe:flange", () => new THREE.CylinderGeometry(0.085, 0.085, 0.025, 16), iron, 0, 0, 0);
+      f.name = name;
+      group.add(f);
+    }
+    for (const name of ["couplingUp", "couplingDown"]) {
+      const c = this.part("pipe:coupling", () => new THREE.CylinderGeometry(0.06, 0.06, 0.06, 14), iron, 0, 0, 0);
+      c.name = name;
+      group.add(c);
+    }
+    group.add(
+      this.part("pipe:valve", () => new THREE.BoxGeometry(0.11, 0.1, 0.11), iron, 0, 0, 0),
+      this.part("pipe:stem", () => new THREE.CylinderGeometry(0.012, 0.012, 0.05, 8), iron, 0, 0, -0.075, Math.PI / 2),
+      this.part("pipe:wheel", () => new THREE.TorusGeometry(0.045, 0.008, 6, 18), wheel, 0, 0, -0.1),
+      this.part("pipe:spokeA", () => new THREE.BoxGeometry(0.09, 0.008, 0.008), wheel, 0, 0, -0.1),
+      this.part("pipe:spokeB", () => new THREE.BoxGeometry(0.008, 0.09, 0.008), wheel, 0, 0, -0.1),
+    );
+    return group;
+  }
+
+  /** Each kind's shaped parts (gadgetShapes.ts), made once; null for a kind drawn otherwise. */
+  private readonly shapes = new Map<string, Map<ShapeMat, THREE.BufferGeometry> | null>();
+
+  /** A gadget's shaped model (Phase 10 M7), all of it "body"; null if it has none. */
+  private shaped(id: string, kind: number): THREE.Group | null {
+    let parts = this.shapes.get(id);
+    if (parts === undefined) {
+      const size = sizeOf(this.sim.data, kind);
+      parts = size ? gadgetShape(id, size) : null;
+      this.shapes.set(id, parts);
+      // Shared: disposeOwn leaves them.
+      for (const [m, g] of parts ?? []) this.geometry.set(`shape:${id}:${m}`, g);
+    }
+    if (!parts) return null;
+    const body = new THREE.Group();
+    body.name = "body";
+    for (const [m, g] of parts) {
+      const p = SHAPE_MATERIALS[m];
+      body.add(new THREE.Mesh(g, this.sharedMat(`shape:${m}`, p.color, p.roughness, p.metalness, p.emissive)));
+    }
+    const group = new THREE.Group();
+    group.add(body);
+    return group;
+  }
+
   /** A kind's mesh (shared geometry and material per kind). */
   private model(kind: number): THREE.Object3D {
     const id = kindId(kind) ?? "";
+    if (id === "fire_extinguisher") return this.extinguisher();
+    if (id === "gas_pipe") return this.gasPipe();
+    const shaped = this.shaped(id, kind);
+    if (shaped) return shaped;
     const d = this.dataOf(kind);
     const [w, h, depth] = sizeOf(this.sim.data, kind) ?? [0.1, 0.1, 0.1];
     let geo = this.geometry.get(id);
@@ -203,18 +321,26 @@ export class GadgetModels {
    * A gas pipe's run (Ulo's test: "from the ground to the roof"): its unit cylinder stretched from the floor under its
    * entry to the ceiling over it (the level's, within 6 m; else its data's height from the floor).
    */
-  private pipeRun(body: THREE.Object3D, g: Gadget) {
+  private pipeRun(obj: THREE.Object3D, g: Gadget) {
     const k = this.sim.data.gadgetRules.ingredients.gas_pipe;
     const down = raycastLevel(this.sim, g.pos, [0, -1, 0], 6)?.t ?? k.pointM;
     const up = raycastLevel(this.sim, g.pos, [0, 1, 0], 6)?.t ?? k.sizeM[1] - k.pointM;
-    body.scale.set(1, down + up, 1);
-    body.position.set(0, (up - down) / 2, 0);
+    const body = obj.getObjectByName("body");
+    body?.scale.set(1, down + up, 1);
+    body?.position.set(0, (up - down) / 2, 0);
+    // Its flanges at the floor and the ceiling, a coupling either side of the valve.
+    const at = (name: string, y: number) => obj.getObjectByName(name)?.position.set(0, y, 0);
+    at("flangeTop", up - 0.0125);
+    at("flangeBottom", -down + 0.0125);
+    at("couplingUp", Math.max(0.12, Math.min(up - 0.25, 0.8)));
+    at("couplingDown", -Math.max(0.12, Math.min(down - 0.25, 0.8)));
   }
 
   /** Pose an object as an entry stands: at its centre, facing its way, a charge lying flat on its floor. */
   private pose(obj: THREE.Object3D, pos: Vec3, yaw: number, flags: number) {
     obj.position.set(pos[0], pos[1], pos[2]);
-    obj.rotation.set(flags & GFlag.Flat ? -Math.PI / 2 : 0, yaw, 0, "YXZ");
+    // Lying flat: its depth is up, its room side (−z, as on a wall) upward.
+    obj.rotation.set(flags & GFlag.Flat ? Math.PI / 2 : 0, yaw, 0, "YXZ");
   }
 
   /** Our own prediction threw or placed something (fresh ticks only): draw it now. `now`: the server tick it is. */
@@ -275,7 +401,7 @@ export class GadgetModels {
       it.key = key;
       this.pose(it.obj, g.pos, g.yaw, g.flags);
       const body = it.obj.getObjectByName("body") as THREE.Mesh | undefined;
-      if (kindId(g.kind) === "gas_pipe" && body) this.pipeRun(body, g);
+      if (kindId(g.kind) === "gas_pipe") this.pipeRun(it.obj, g);
       else body?.scale.setScalar(isIngredient(g.kind) && g.flags & GFlag.Broken ? 0.7 : 1);
       // Skopós's idle shell's barrier broken by a blast (M10): gone (its entry stays as the shell's camera).
       it.obj.visible = !(g.kind === KIND_SHELL_SHIELD && g.flags & GFlag.Broken);

@@ -84,7 +84,9 @@ import { horizontalFov, keyLabel, loadSettings, saveSettings, type HoldMode, typ
 import { isTouchDevice, mountTouchControls, preventPageZoom } from "../../input/touch.js";
 import { LocalSocket } from "../../net/local.js";
 import { OnlineConnection } from "../../net/online.js";
-import { createLabScene, createRenderer, PawnView, updateLabels, warmShaders } from "../../render/labScene.js";
+import { ArtView } from "../../render/artView.js";
+import { createLabScene, createRenderer, PawnView, PREPASS_LAYER, storeyOf, updateLabels, warmShaders } from "../../render/labScene.js";
+import { initialQuality, presetFor, PRESETS, QUALITIES, QUALITY_NAMES, type QualityPreset, type QualitySetting } from "../../render/quality.js";
 import { BpCameraModels, CameraModels } from "../../render/cameraModels.js";
 import { GadgetModels } from "../../render/gadgetModels.js";
 import { PanelView } from "../../render/panelView.js";
@@ -352,8 +354,15 @@ export async function startLab(o: LabOptions): Promise<void> {
   }
 
   const view = $("#view");
-  const renderer = createRenderer(view, params.has("lowgfx"));
-  const labScene = createLabScene(sim.level);
+  /** The graphics preset (Phase 10, render/quality.ts): the link's, the browser tests' greybox, or the setting's. */
+  const quality = initialQuality(params, loadSettings().graphics, { automated: navigator.webdriver, touchOnly: isTouchDevice() });
+  /** Why the art didn't load as asked, if it didn't (shown in the stats overlay; tests read it). */
+  let artProblem = "";
+  const preset = presetFor(quality, params);
+  /** Whether the world is drawn into the depth first (§13): the preset in use's, Low's after a fallback to it. */
+  let prepassOn = preset.prepass;
+  const renderer = createRenderer(view, preset);
+  const labScene = createLabScene(sim.level, preset.shadowMap);
   const scene = labScene.scene;
   /** Destructible panels, drawn from their cells and redrawn as they change. */
   const panelView = new PanelView(scene, sim.level.panels);
@@ -363,6 +372,12 @@ export async function startLab(o: LabOptions): Promise<void> {
    */
   const storeyView = sim.level.def.storeys.length ? new StoreyView(labScene, panelView, sim.level, sim.pawns.get(ctrl.possessedPawnId)?.state.y ?? 0) : null;
   storeyView?.setViewport(view.clientWidth, view.clientHeight);
+  /**
+   * The art pass (Phase 10): the textures load after the level is drawn, and the art replaces the greybox once
+   * they're in (on a map, while the palette is "art", the first of P's).
+   */
+  const artView = new ArtView(labScene, panelView, sim.level, storeyView);
+  if (preset.textures && storeyView) storeyView.palette = "art";
   /** A map's markers (E9 part 2): bombs, cameras, ingredients and spawns, and the zones view (O). */
   const markers = storeyView ? new MapMarkers(labScene, o.match ? { ...sim.level.def, cameras: [], ingredients: [], spawns: [], zones: [] } : sim.level.def) : null;
   /** On a map with a plan, the HUD line: the room, the storey and where you are in the plan's units (amendment 17); a match's, the room only. */
@@ -379,8 +394,29 @@ export async function startLab(o: LabOptions): Promise<void> {
   renderer.info.autoReset = false;
   const stats = new StatsOverlay(app, params.has("stats"), () => [
     `static: ${labScene.staticBoxes} boxes in ${labScene.staticMeshes} meshes · panels: ${panelView.meshCount} meshes`,
-    `${renderer.domElement.width} × ${renderer.domElement.height} px${renderer.shadowMap.enabled ? "" : " · no shadows (?lowgfx)"}`,
+    `${renderer.domElement.width} × ${renderer.domElement.height} px${renderer.shadowMap.enabled ? "" : " · no shadows"}`,
+    artLine(),
   ]);
+  /**
+   * The gun in hand lit as the world round the eyes is: by the probes once they're in (the art pass), else by the
+   * storey's light (feet at x, y, z).
+   */
+  function setViewmodelLight(x: number, y: number, z: number) {
+    const k = artView.lightAt(x, y + 1.5, z);
+    if (k !== null) viewmodel.setLight(Math.min(1.2, Math.max(0.05, k)));
+    else if (storeyView) viewmodel.setLight(storeyView.light());
+  }
+
+  /** When the exposure last adapted (render/artView.ts adapt), ms. */
+  let lastAdapt = performance.now();
+
+  /** The graphics preset, and the textures' size and GPU memory once they're in. */
+  function artLine(): string {
+    const t = artView.textures;
+    const p = artView.probeState;
+    const probes = p ? ` · probes: ${p.failed ? `stopped (${p.failed})` : p.ready ? `${p.passes} pass${p.passes === 1 ? "" : "es"} (${(p.firstMs / 1000).toFixed(1)} s first${p.allMs ? `, ${(p.allMs / 1000).toFixed(1)} s all` : ""})` : "baking"}` : "";
+    return `graphics: ${QUALITY_NAMES[quality]}${t ? ` · textures: ${t.sets} sets at ${t.size} px, ${(t.gpuBytes / 1048576).toFixed(0)} MB${artView.shown ? "" : " (hidden)"}` : preset.textures ? " · textures loading" : ""}${probes}${artProblem ? ` · ${artProblem}` : ""}`;
+  }
   let settings: Settings = loadSettings();
   const camera = new THREE.PerspectiveCamera(settings.fovVertical, view.clientWidth / view.clientHeight, 0.05, 300);
   camera.rotation.order = "YXZ";
@@ -398,12 +434,50 @@ export async function startLab(o: LabOptions): Promise<void> {
     scene.remove(probe);
     viewmodel.warm(renderer);
   }
+  // The art's textures and shaders, then the art itself (render/artView.ts); the greybox until then.
+  async function loadArt(p: QualityPreset, quality: string): Promise<void> {
+    try {
+      if (!(await artView.load(p, renderer, camera))) return;
+      artView.show(!storeyView || storeyView.palette === "art");
+      markers?.showModelled(!artView.shown);
+      viewmodel.setEnvironment(artView.environment);
+    } catch (e) {
+      // The GPU context was lost meanwhile (a phone switching apps): the same preset again once it's back.
+      if (renderer.getContext().isContextLost()) {
+        renderer.domElement.addEventListener("webglcontextrestored", () => void loadArt(p, quality), { once: true });
+        return;
+      }
+      // A GPU that can't build a preset's shaders (or ran out of memory for its textures) gets the next one down,
+      // and says so: never a page that just doesn't load.
+      console.error(`art pass (${quality}):`, e);
+      artProblem = `${quality} graphics didn't load on this device (${String((e as Error)?.message ?? e).slice(0, 160)})`;
+      if (quality !== "low" && quality !== "greybox") {
+        flash(`${quality[0].toUpperCase()}${quality.slice(1)} graphics didn't load on this device: using Low`, "bad");
+        // As Low is: no sun shadows (without the probes' light, rooms under a shadowed sun would be dark), and the
+        // shadow map already drawn freed (128 MB at High's size).
+        renderer.shadowMap.enabled = PRESETS.low.shadowMap > 0;
+        labScene.sun.castShadow = renderer.shadowMap.enabled;
+        if (!labScene.sun.castShadow && labScene.sun.shadow.map) {
+          labScene.sun.shadow.map.dispose();
+          labScene.sun.shadow.map = null;
+        }
+        prepassOn = PRESETS.low.prepass;
+        await loadArt(PRESETS.low, "low");
+      } else flash("The textures didn't load on this device: showing the plain view", "bad");
+    }
+  }
+  // After a lost GPU context came back, the gun in hand reflects the sky made again.
+  artView.onRestore = () => viewmodel.setEnvironment(artView.environment);
+  void loadArt(preset, quality);
   /** Each body's view as drawn this frame (lasers point along it). */
   const drawnView = new Map<number, [number, number]>();
 
   const pawnViews = new Map<number, PawnView>();
-  /** A match's default cameras (Phase 7), drawn whole or broken, and the round's Bulletproof Cameras. */
-  const cameraModels = o.match ? new CameraModels(scene, sim.level.def.cameras) : null;
+  /** The level's default cameras (Phase 7), drawn whole or broken, and the round's Bulletproof Cameras. */
+  // (Drawn on a map's lab page too: they're part of its look.)
+  const cameraModels = sim.level.def.cameras.length
+    ? new CameraModels(scene, sim.level.def.cameras, (from, dir, max) => raycastLevel(sim, from, dir, max)?.t ?? null, (y) => labScene.storeys[storeyOf(sim.level.def.storeys, y - 0.5)] ?? scene)
+    : null;
   const bpCameraModels = new BpCameraModels(scene, data.gadgets.get("bulletproof_camera")!.sizeM);
   /** The gadget table (Phase 8): every gadget placed, thrown or dropped; offline, our own server side keeps it. */
   const gadgetModels = new GadgetModels(scene, sim);
@@ -580,10 +654,20 @@ export async function startLab(o: LabOptions): Promise<void> {
       storeyView.setPlan(v.plan);
       app.classList.toggle("plan-view", v.plan); // no crosshair or sights over the plan
     }
-    if (v.palette !== undefined) storeyView.setPalette(v.palette);
+    if (v.palette !== undefined) {
+      storeyView.setPalette(v.palette);
+      artView.show(v.palette === "art");
+      markers?.showModelled(!artView.shown);
+    }
     if (!$(".pause").classList.contains("hidden")) renderPause();
   }
 
+  /** P's round: the art (once its textures are in), the surface classes, neutral. */
+  const PALETTE_NAMES: Record<Palette, string> = { art: "Palette: textures", greybox: "Palette: surface classes", neutral: "Palette: neutral" };
+  function nextPalette(): Palette {
+    const round: Palette[] = artView.ready ? ["art", "greybox", "neutral"] : ["greybox", "neutral"];
+    return round[(round.indexOf(storeyView?.palette ?? "greybox") + 1) % round.length];
+  }
   /** The storey views' switches by name (their keys, and the pause menu's View buttons). */
   const viewToggles: Record<string, () => void> = {};
   if (storeyView && !o.match) {
@@ -598,8 +682,8 @@ export async function startLab(o: LabOptions): Promise<void> {
         if (sv.plan) flash("Plan view: the wheel zooms, M goes back", "info");
       },
       palette: () => {
-        setStoreyView({ palette: sv.palette === "greybox" ? "neutral" : "greybox" });
-        flash(sv.palette === "greybox" ? "Palette: surface classes" : "Palette: neutral", "info");
+        setStoreyView({ palette: nextPalette() });
+        flash(PALETTE_NAMES[sv.palette], "info");
       },
       zones: () => {
         setStoreyView({ zones: !markers?.zones });
@@ -800,7 +884,7 @@ export async function startLab(o: LabOptions): Promise<void> {
           ? `<section><h3>View</h3><div class="goto">
         <button data-view="hideAbove">${storeyView.hideAbove ? "Show the storeys above (H)" : "Hide the storeys above (H)"}</button>
         <button data-view="plan">${storeyView.plan ? "Leave the plan view (M)" : "Plan view (M)"}</button>
-        <button data-view="palette">${storeyView.palette === "greybox" ? "Neutral palette (P)" : "Surface colours (P)"}</button>
+        <button data-view="palette">${PALETTE_NAMES[nextPalette()].replace("Palette: ", "Palette (P): ")}</button>
         <button data-view="zones">${markers?.zones ? "Hide the zones (O)" : "Show the zones (O)"}</button></div></section>`
           : ""
       }
@@ -824,8 +908,18 @@ export async function startLab(o: LabOptions): Promise<void> {
         <label><input type="checkbox" data-bool="rawInput" ${settings.rawInput ? "checked" : ""}> Raw mouse input</label>
         ${modeSel("crouchMode", "Crouch")} ${modeSel("proneMode", "Prone")} ${modeSel("leanMode", "Lean")} ${modeSel("adsMode", "Aim (ADS)")}
       </section>
+      <section><h3>Graphics</h3>
+        <label>Quality <select data-gfx>${(["auto", ...QUALITIES] as QualitySetting[])
+          .map((q) => `<option value="${q}" ${settings.graphics === q ? "selected" : ""}>${q === "auto" ? `Auto (${QUALITY_NAMES[initialQuality(new URLSearchParams(), "auto", { automated: false, touchOnly })]})` : QUALITY_NAMES[q]}</option>`)
+          .join("")}</select></label>
+        <p class="note">Drawing now: ${QUALITY_NAMES[quality]}${params.has("gfx") || params.has("lowgfx") ? " (set by the link)" : ""}. A change takes effect when the page next loads.</p>
+      </section>
       <p class="note">Press <kbd>F1</kbd> for the key list and what to try.</p>`;
     pause.querySelector(".resume")?.addEventListener("click", resume);
+    pause.querySelector<HTMLSelectElement>("select[data-gfx]")?.addEventListener("change", (e) => {
+      settings.graphics = (e.target as HTMLSelectElement).value as QualitySetting;
+      saveSettings(settings);
+    });
     pause.querySelector(".refill")?.addEventListener("click", labRefill);
     pause.querySelector(".free-cam")?.addEventListener("click", (e) => {
       setFreeCam(freeCam === null);
@@ -1138,18 +1232,48 @@ export async function startLab(o: LabOptions): Promise<void> {
 
   let frames = 0;
   /** A performance capture's frames while one runs (tools/e2e/oregon-perf.mjs): each one's work, draws and panel redraw. */
-  let perfLog: { workMs: number; calls: number; triangles: number; panelMs: number }[] | null = null;
+  let perfLog: { workMs: number; calls: number; triangles: number; panelMs: number; drawMs: number }[] | null = null;
+  /** This frame's time drawing the world: three's own work and its calls into WebGL (part of workMs; the perf capture). */
+  let drawMs = 0;
   let fpsFrames = 0;
   let fpsAt = performance.now();
   /** Shadow-map redraws so far (they happen on request only: createRenderer). */
   let shadowDraws = 0;
   /** Render the world, counting a shadow-map redraw if one was asked for. */
   function drawWorld() {
+    const drawFrom = performance.now();
     if (renderer.shadowMap.enabled && renderer.shadowMap.needsUpdate && !renderer.getContext().isContextLost()) shadowDraws++;
-    renderer.render(scene, shownCamera());
+    const cam = shownCamera();
+    artView.frame(cam);
+    {
+      const now = performance.now();
+      artView.adapt(renderer, cam.position.x, cam.position.y, cam.position.z, Math.min(0.5, Math.max(0, (now - lastAdapt) / 1000)));
+      lastAdapt = now;
+    }
+    if (prepassOn && artView.shown) {
+      // The depth pre-pass (render/DESIGN.md §13): the level's opaque surfaces into the depth buffer alone (pushed a
+      // hair back, so the same surface shaded next still passes), then everything, the depth kept. The level's heavy
+      // shader then runs only where its surface is the nearest. The shadow map isn't touched by the first.
+      const mask = cam.layers.mask;
+      const shadows = renderer.shadowMap.needsUpdate;
+      renderer.shadowMap.needsUpdate = false;
+      cam.layers.set(PREPASS_LAYER);
+      scene.overrideMaterial = depthFirst;
+      renderer.render(scene, cam);
+      scene.overrideMaterial = null;
+      cam.layers.mask = mask;
+      renderer.shadowMap.needsUpdate = shadows;
+      renderer.autoClearDepth = false;
+      renderer.render(scene, cam);
+      renderer.autoClearDepth = true;
+    } else renderer.render(scene, cam);
+    drawMs += performance.now() - drawFrom;
   }
+  /** The depth pre-pass's material: depth only, a hair back (drawWorld). */
+  const depthFirst = new THREE.MeshBasicMaterial({ colorWrite: false, fog: false, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
   function frame(now: number) {
     const workFrom = performance.now();
+    drawMs = 0;
     renderer.info.reset();
     // The frame's timestamp can predate the code that ran just before it (a page busy for seconds
     // starting up gets a first frame stamped from before): never step time backwards.
@@ -1165,7 +1289,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       acc = 0;
       if (o.match && disconnected && !app.classList.contains("disconnected")) matchFail(disconnected);
       drawWorld();
-      stats.frame(now, performance.now() - workFrom + (net?.takeHandleMs() ?? 0), renderer.info.render.calls, renderer.info.render.triangles);
+      stats.frame(now, performance.now() - workFrom + (net?.takeHandleMs() ?? 0), renderer.info.render.calls, renderer.info.render.triangles, drawMs);
       $(".center-msg").textContent = disconnected ?? "Waiting for the server…";
       $(".center-msg").classList.remove("hidden");
       requestAnimationFrame(frame);
@@ -1233,7 +1357,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     if (spec) {
       const [vx, vy, vz] = placeSpectator(spec, renderTick, elapsed);
       if (storeyView?.follow(vx, vy, vz, camera.rotation.y, elapsed)) renderer.shadowMap.needsUpdate = true;
-      if (storeyView) viewmodel.setLight(storeyView.light());
+      setViewmodelLight(vx, vy, vz);
       whereHud?.update(now, storeyView?.storey ?? 0, vx, vz);
       controls.upsideDown = false;
       if (Math.abs(camera.fov - settings.fovVertical) > 1e-4) {
@@ -1249,7 +1373,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       const lens = onCamera ? sim.camLens(ctrl.cam - 1, ctrl.camYaw) : null;
       const [vx, vy, vz] = freeCam ? [freeCam.x, freeCam.y - data.movement.stance.stand.eye, freeCam.z] : lens ? [lens[0], lens[1] - 0.05, lens[2]] : [rs.x, rs.y, rs.z];
       if (storeyView?.follow(vx, vy, vz, controls.yaw, elapsed)) renderer.shadowMap.needsUpdate = true;
-      if (storeyView) viewmodel.setLight(storeyView.light());
+      setViewmodelLight(vx, vy, vz);
       whereHud?.update(now, storeyView?.storey ?? 0, vx, vz);
       // A drone's camera: low at its front, its own field of view (Phase 7).
       const droneView = viewed!.kind === PawnKind.Drone;
@@ -1295,7 +1419,10 @@ export async function startLab(o: LabOptions): Promise<void> {
     updateLabels(labScene.labels, shownCamera());
     // A panel that changed changes the level's shadows too.
     const panelFrom = performance.now();
-    if (panelView.update()) renderer.shadowMap.needsUpdate = true;
+    if (panelView.update()) {
+      renderer.shadowMap.needsUpdate = true;
+      artView.panelsChanged(panelView.lastChanged);
+    }
     const panelMs = performance.now() - panelFrom;
     for (const fn of hooks.frame) fn(now, renderTick);
     intelHud.update(now, shownCamera(), app.clientWidth, app.clientHeight, (id) => {
@@ -1306,8 +1433,13 @@ export async function startLab(o: LabOptions): Promise<void> {
     intelHud.showScan(scanTicks && !spec ? Math.min(1, scanTicks / ticks(data.intel.scan.holdS)) : null);
     drawWorld();
     if (rs && viewed && me) {
-      // (Knocked down, D-156: nothing in hand until you're up.)
-      const inHand = viewed.id === me.id && !outside && !onCamera && !ctrl.shellCam && ctrl.swapPhase === 0 && rs.mode !== PawnMode.Knocked ? (viewed.loadout?.weapons[rs.slot] ?? null) : null;
+      // (Knocked down, D-156: nothing in hand until you're up. On a ladder or with the hands at work — a revive, a
+      // reinforcement, a barricade, the defuser — the gun can't fire and isn't in the hands: none drawn, as the body
+      // others see has it slung.)
+      const busy = rs.mode === PawnMode.Ladder || rs.reviveTarget !== 0 || rs.deployKind !== 0;
+      const inHand = viewed.id === me.id && !outside && !onCamera && !ctrl.shellCam && ctrl.swapPhase === 0 && rs.mode !== PawnMode.Knocked && !busy ? (viewed.loadout?.weapons[rs.slot] ?? null) : null;
+      // (Your arms dressed as you: made again only when there are arms to draw, not for each body or drone you look through.)
+      if (inHand) viewmodel.setOperator(viewed.operatorId);
       viewmodel.update(now, elapsed, inHand, rs, viewed.loadout?.swapTicks ?? 1, inHand ? heldGadget(viewed, rs) : null, !!viewed.loadout?.shield && rs.shieldAt === 1);
       viewmodel.render(renderer);
       const held = viewed.loadout?.weapons[rs.slot];
@@ -1331,8 +1463,8 @@ export async function startLab(o: LabOptions): Promise<void> {
     if (me && !spec) updateHud(me);
     else spectatorHud();
     const workMs = performance.now() - workFrom + (net?.takeHandleMs() ?? 0);
-    stats.frame(now, workMs, renderer.info.render.calls, renderer.info.render.triangles);
-    perfLog?.push({ workMs, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, panelMs });
+    stats.frame(now, workMs, renderer.info.render.calls, renderer.info.render.triangles, drawMs);
+    perfLog?.push({ workMs, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, panelMs, drawMs });
     requestAnimationFrame(frame);
   }
 
@@ -1352,16 +1484,20 @@ export async function startLab(o: LabOptions): Promise<void> {
       v.wire.visible = drawn && showHitboxes;
       if (!rs) continue;
       const w = pawn.loadout?.weapons[rs.slot];
-      v.setWeapon(w ? { class: w.class, pick: w.pick } : null);
+      v.setWeapon(w ? { id: w.id, class: w.class, pick: w.pick } : null, w ?? null);
       // A gadget in its hands instead (Phase 8): drawn as its greybox; a detonator small and dark.
       const held = heldGadget(pawn, rs);
-      v.setHeld(held ? (held.detonator ? [0.05, 0.09, 0.03] : held.data.sizeM) : null, !!held && !held.detonator && held.data.use.kind === "hold");
+      v.setHeld(
+        held ? (held.detonator ? { id: "detonator", size: [0.05, 0.09, 0.03] } : { id: held.data.id, size: held.data.sizeM }) : null,
+        !!held && !held.detonator && held.data.use.kind === "hold",
+        held && !held.detonator && held.data.use.kind === "swing" ? held.data.use : null,
+      );
       v.setShield(pawn.loadout?.shield?.plate ?? null);
       // The body whose eyes we see through, in first person, faces the view itself (the mouse's, as the camera does), so
       // Fuze's shield doesn't trail the view by a tick when he turns (the review, M12); in free look the body keeps its
       // own facing (that's the point of it).
       const fpYaw = pawn.id === eyesId && !outside && !freeLookFrom && !pawn.proxy && rs.mode !== PawnMode.Dead && rs.mode !== PawnMode.Knocked;
-      v.update(sim.data, rs.mode === PawnMode.Dead ? corpse(rs) : fpYaw ? { ...rs, yaw: controls.yaw } : rs);
+      v.update(sim.data, rs.mode === PawnMode.Dead ? corpse(rs) : fpYaw ? { ...rs, yaw: controls.yaw } : rs, performance.now() / 1000, pawn.loadout?.swapTicks ?? 30);
       // On a rope: drawn from the body's middle (its harness) up to where the rope is fixed (a swing takes the body
       // out from under it).
       const m = sim.data.movement;
@@ -1930,6 +2066,7 @@ export async function startLab(o: LabOptions): Promise<void> {
           rooms: def.rooms.map((r) => ({ id: r.id, callout: r.callout, storey: r.storey, rects: r.rects, anchor: r.anchor })),
           levelPlan: def.plan ?? null,
           hud: whereHud?.text ?? null,
+          art: { quality, ready: artView.ready, shown: artView.shown, probes: artView.probeState, exposure: renderer.toneMappingExposure, problem: artProblem, textures: artView.textures },
           ...(storeyView && {
             storey: def.storeys[storeyView.storey].id,
             hideAbove: storeyView.hideAbove,
@@ -2370,7 +2507,9 @@ export async function startLab(o: LabOptions): Promise<void> {
         // Brava's Kludge drones (Phase 8 M8) are bigger, and greener.
         const size = pawn.kludge ? (data.gadgets.get("kludge_drone")?.sizeM ?? data.intel.drone.sizeM) : data.intel.drone.sizeM;
         const color = pawn.kludge ? 0x65a30d : pawn.proxy ? 0xf97316 : 0x3b82f6;
-        pawnViews.set(pawn.id, pawn.proxy ? new PawnView(scene, color, nameOfPawn(pawn.id) || undefined, undefined, pawn.kind, size) : new PawnView(scene, color, undefined, undefined, pawn.kind, size));
+        const view = new PawnView(scene, color, pawn.proxy ? nameOfPawn(pawn.id) || undefined : undefined, undefined, pawn.kind, size, pawn.operatorId);
+        view.remote = !!pawn.proxy;
+        pawnViews.set(pawn.id, view);
       }
   }
 
@@ -2440,7 +2579,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       // Where the server judged the target to be (rewound to what we saw): a green wireframe.
       const was = net!.session.remoteAt(shot.hit.pawnId, shot.rewoundTick);
       if (was) {
-        ghost = new PawnView(scene, 0x22c55e, undefined, 0x22c55e);
+        ghost = new PawnView(scene, 0x22c55e, undefined, 0x22c55e, undefined, undefined, null);
         ghost.update(sim.data, was);
         ghost.body.visible = false;
       }
@@ -2652,8 +2791,10 @@ export async function startLab(o: LabOptions): Promise<void> {
     }
   }
 
-  /** A remote player's gun position as drawn now (eye height, a little forward). */
+  /** Where a remote player's shots are seen to leave: the end of the gun in its hands as drawn now (else by its eye). */
   function remoteMuzzle(pawnId: number): THREE.Vector3 | null {
+    const drawn = pawnViews.get(pawnId)?.muzzle();
+    if (drawn) return drawn;
     const st = net?.session.remoteAt(pawnId, shownRenderTick);
     if (!st) return null;
     const eye = eyePose(data.movement, data.hitboxes, st).pos;

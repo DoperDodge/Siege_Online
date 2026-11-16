@@ -1,0 +1,10 @@
+{
+  "name": "redmond-art-tools",
+  "private": true,
+  "type": "module",
+  "description": "Asset tools for the art pass (Phase 10): fetch and pack the CC0 texture sets. Kept out of the root workspaces so CI and the game's install don't need them: run `npm --prefix tools/art install` once, then `npm run art:textures` from the root.",
+  "dependencies": {
+    "fflate": "0.8.2",
+    "sharp": "0.34.4"
+  }
+}

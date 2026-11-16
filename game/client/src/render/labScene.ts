@@ -2,10 +2,16 @@
 // drawn instanced per material and storey (tools/mapgen/DESIGN.md E4), labels and a map's room callouts by
 // storey (E9), pawn bodies built from hitbox capsules, and an F3 hitbox visualizer.
 import * as THREE from "three";
+import type { QualityPreset } from "./quality.js";
 import { ShieldModel } from "./shieldModel.js";
 import {
+  Btn,
   droneHitboxes,
-  eyePose,
+  handSlot,
+  ReloadKind,
+  TICK_HZ,
+  WeaponAct,
+  WFlag,
   isDowned,
   PawnKind,
   PawnMode,
@@ -18,9 +24,22 @@ import {
   type PanelSpec,
   type PawnState,
   type Renderable,
+  type ResolvedWeapon,
   type ShieldPlate,
 } from "@redmond/shared";
+import { BodyModel, operatorLook } from "./bodyModel.js";
+import { Gait, pistolHeld, poseBody, type HeldItem } from "./bodyPose.js";
+import { Ragdoll } from "./bodyRagdoll.js";
+import { droneShape, heldShape, knifeShape, SHAPE_MATERIALS, shapeModel, type ShapeMat, type ShapeModel } from "./gadgetShapes.js";
 import { buildGun, gunKey, type GunLook, type GunModel } from "./gunKit.js";
+
+/**
+ * The render layer of the level's opaque surfaces (the art's static boxes, architecture, furniture, the outside,
+ * panels other than glass): drawn into the depth buffer alone before each frame on Medium and High (the depth
+ * pre-pass, render/DESIGN.md §13, lab.ts drawWorld), so the level's heavy shader then runs once a pixel. Everything
+ * else (glass, bodies, effects, labels, the sky) stays off it.
+ */
+export const PREPASS_LAYER = 2;
 
 export const SURFACE_COLORS: Record<Renderable["surface"], number> = {
   SOFT_WALL: 0xe6c34a,
@@ -37,12 +56,12 @@ export const SURFACE_COLORS: Record<Renderable["surface"], number> = {
   LADDER: 0xe08a2e,
 };
 
-/** `low`: no shadows and no anti-aliasing (`?lowgfx`: slow devices, and the browser tests' software rendering). */
-export function createRenderer(container: HTMLElement, low = false): THREE.WebGLRenderer {
-  const renderer = new THREE.WebGLRenderer({ antialias: !low, powerPreference: "high-performance" });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+/** A renderer for the graphics preset (quality.ts): its antialiasing, pixel ratio and sun shadows. */
+export function createRenderer(container: HTMLElement, preset: QualityPreset): THREE.WebGLRenderer {
+  const renderer = new THREE.WebGLRenderer({ antialias: preset.antialias, powerPreference: "high-performance" });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, preset.maxPixelRatio));
   renderer.setSize(container.clientWidth, container.clientHeight);
-  renderer.shadowMap.enabled = !low;
+  renderer.shadowMap.enabled = preset.shadowMap > 0;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   // Only the level casts shadows, and it changes only when a panel does: the shadow map is drawn when the
   // page asks for it (shadowMap.needsUpdate), not every frame (tools/mapgen/DESIGN.md amendment 8).
@@ -119,6 +138,8 @@ export interface LabScene {
   /** Boxes drawn instanced, and the meshes the static boxes take (a draw call each, per pass). */
   staticBoxes: number;
   staticMeshes: number;
+  /** Each static mesh with the boxes it draws, in instance order (the art pass styles them per box: artView.ts). */
+  staticParts: { mesh: THREE.Mesh; boxes: readonly Renderable[] }[];
 }
 
 /** Every instanced box is this one scaled, turned and moved. */
@@ -131,7 +152,7 @@ const UNIT_BOX = new THREE.BoxGeometry(1, 1, 1);
  * raycasts the scene (shots and the laser ask the shared code's physics), so instancing only has to look
  * the same. The labs' textured floor stays a mesh of its own: its texture repeat is per mesh.
  */
-export function createLabScene(level: BuiltLevel): LabScene {
+export function createLabScene(level: BuiltLevel, shadowMap = 4096): LabScene {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x9fb4c7);
   scene.fog = new THREE.Fog(0x9fb4c7, 60, 140);
@@ -141,7 +162,7 @@ export function createLabScene(level: BuiltLevel): LabScene {
   const sun = new THREE.DirectionalLight(0xfff1dc, DAYLIGHT.sun);
   sun.castShadow = true;
   const box = levelBox(level);
-  fitSun(sun, box);
+  fitSun(sun, box, shadowMap);
   scene.add(sun, sun.target);
 
   const materials = new Map<string, THREE.MeshStandardMaterial>();
@@ -188,6 +209,7 @@ export function createLabScene(level: BuiltLevel): LabScene {
   /** The boxes each instanced mesh draws, by storey and material. */
   const batches = new Map<string, { storey: number; surface: string; material: THREE.Material; boxes: Renderable[] }>();
   let staticMeshes = 0;
+  const staticParts: LabScene["staticParts"] = [];
   for (const r of level.renderables) {
     if (!r.visible) continue;
     if (r.kind === "panel") {
@@ -207,8 +229,10 @@ export function createLabScene(level: BuiltLevel): LabScene {
       mesh.quaternion.set(r.quat[0], r.quat[1], r.quat[2], r.quat[3]);
       (mesh.material as THREE.MeshStandardMaterial).map!.repeat.set(r.size[0] / 2, r.size[2] / 2);
       mesh.receiveShadow = true; // nothing is under it to cast onto
+      mesh.layers.enable(PREPASS_LAYER);
       storeys[storey].add(mesh);
       staticMeshes++;
+      staticParts.push({ mesh, boxes: [r] });
       continue;
     }
     const key = `${storey}:${r.surface}`;
@@ -229,9 +253,11 @@ export function createLabScene(level: BuiltLevel): LabScene {
     mesh.computeBoundingSphere();
     mesh.castShadow = mesh.receiveShadow = true;
     mesh.name = b.surface;
+    mesh.layers.enable(PREPASS_LAYER);
     storeys[b.storey].add(mesh);
     staticBoxes += b.boxes.length;
     staticMeshes++;
+    staticParts.push({ mesh, boxes: b.boxes });
   }
 
   // Each room's callout over its anchor, with the room's storey (tools/mapgen/DESIGN.md E9).
@@ -244,7 +270,7 @@ export function createLabScene(level: BuiltLevel): LabScene {
     labels.push(sprite);
     callouts.push(sprite);
   }
-  return { scene, storeys, labelGroups, calloutGroups, labels, callouts, materials, hemi, sun, box, staticBoxes, staticMeshes };
+  return { scene, storeys, labelGroups, calloutGroups, labels, callouts, materials, hemi, sun, box, staticBoxes, staticMeshes, staticParts };
 }
 
 /** A wall that takes reinforcement shows its sections: seams on its faces (PanelView) and a count in its label. */
@@ -304,13 +330,13 @@ function levelBox(level: BuiltLevel): THREE.Box3 {
 /**
  * The sun's shadow camera, just around `box` as the sun sees it, so the whole level casts and receives
  * shadows and no texel is spent outside it (DESIGN amendment 8). A level over 80 m across gets a 4096 map,
- * which keeps its shadows about as sharp as a lab's.
+ * which keeps its shadows about as sharp as a lab's; `most` caps it (the graphics preset's).
  */
-function fitSun(sun: THREE.DirectionalLight, box: THREE.Box3) {
+function fitSun(sun: THREE.DirectionalLight, box: THREE.Box3, most: number, dir: THREE.Vector3 = SUN) {
   const center = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3());
   sun.target.position.copy(center);
-  sun.position.copy(center).addScaledVector(SUN, size.length() / 2 + 10);
+  sun.position.copy(center).addScaledVector(dir, size.length() / 2 + 10);
   sun.updateMatrixWorld();
   sun.target.updateMatrixWorld();
   // The camera as the shadow pass places it (LightShadow.updateMatrices), to measure the box from it.
@@ -334,10 +360,18 @@ function fitSun(sun: THREE.DirectionalLight, box: THREE.Box3) {
   cam.near = Math.max(0.1, -hi.z - margin); // the camera looks down -z
   cam.far = -lo.z + margin;
   cam.updateProjectionMatrix();
-  const map = Math.max(size.x, size.z) > 80 ? 4096 : 2048;
+  const map = Math.min(most || 2048, Math.max(size.x, size.z) > 80 ? 4096 : 2048);
   sun.shadow.mapSize.set(map, map);
   // The bias is a fraction of the camera's depth range: keep it the same distance whatever the level's size.
   sun.shadow.bias = -SHADOW_BIAS_M / (cam.far - cam.near);
+}
+
+/**
+ * Turn the sun toward unit direction `dir` (the art pass's sky: sky.ts), its shadow camera fitted round the level
+ * again (a map of up to `most` texels). The page then asks for a new shadow map.
+ */
+export function aimSun(lab: LabScene, dir: THREE.Vector3, most: number): void {
+  fitSun(lab.sun, lab.box, most, dir);
 }
 
 /** A floor's grid lines (sRGB): every metre, and stronger every 5 m, a little lighter than HARD_FLOOR. */
@@ -457,16 +491,36 @@ export function labelSprite(text: string, x: number, y: number, z: number, style
 }
 
 /**
- * A pawn drawn as capsules around its hitboxes (placeholder body until the art pass), plus a wireframe.
- * Nothing of it casts a shadow: the shadow map is only redrawn when the level changes (createRenderer), so a
- * moving body's shadow would stay behind where the map was last drawn.
+ * A pawn: an operator's body (Phase 10 M8, render/DESIGN.md §11: bodyModel.ts on the skeleton bodyRig.ts solves from
+ * its hitboxes, posed by bodyPose.ts; a dead one falls, bodyRagdoll.ts) with what it holds, or a drone; plus the
+ * hitboxes' wireframe (F3). Nothing of it casts a shadow: the shadow map is only redrawn when the level changes
+ * (createRenderer), so a moving body's shadow would stay behind where the map was last drawn.
  */
 export class PawnView {
   readonly body = new THREE.Group();
   readonly wire = new THREE.Group();
-  /** The body's capsules (the body group also holds the name tag and the gun). */
+  /** The body itself (the body group also holds the name tag, the gun and what else it holds). */
   private readonly shape = new THREE.Group();
-  private readonly bodyParts: CapsuleParts[] = [];
+  private readonly model: BodyModel | null = null;
+  private readonly gait = new Gait();
+  private ragdoll: Ragdoll | null = null;
+  /** Its speed as it was last alive (a dead body falls on with it), and when it was last drawn (seconds). */
+  private readonly lastVel = new THREE.Vector3();
+  private lastAt = -1;
+  /** When it was last drawn alive (seconds): a ragdoll starts from that pose only if it was just now. */
+  private aliveAt = -1;
+  /** Its ragdoll at rest and drawn so (nothing more to do for it). */
+  private restDrawn = false;
+  /** Whether its held gadget was placed this frame (the pose says where; on a ladder or at work it isn't). */
+  private heldPlaced = false;
+  /**
+   * Another player's body (drawn from snapshots, which carry neither its speed nor how far along its acts are): those
+   * are worked out here from how it moves and when each act began. Set by its page.
+   */
+  remote = false;
+  private readonly est = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, aim: 0, at: -1, reloadFrom: -1, meleeFrom: -1 };
+  /** Posed at least once (a body first seen dead falls from where its hitboxes lie). */
+  private posed = false;
   private readonly wireParts: CapsuleParts[] = [];
   private readonly tag: THREE.Sprite | null;
   private readonly materials: THREE.Material[];
@@ -474,8 +528,15 @@ export class PawnView {
   private readonly skin: THREE.MeshStandardMaterial[];
   private hot = false;
   private gun: GunModel | null = null;
-  /** A gadget in its hands (Phase 8): a box of its size (at most a hand's), drawn instead of the gun. */
-  private held: THREE.Mesh | null = null;
+  /** The weapon the gun is (its reload's timings), and whether it's held like a pistol. */
+  private weapon: ResolvedWeapon | null = null;
+  private pistol = false;
+  /** A gadget in its hands (Phase 8): its shaped model, drawn instead of the gun. */
+  private held: THREE.Object3D | null = null;
+  private heldModel: ShapeModel | null = null;
+  private heldItem: HeldItem | null = null;
+  /** The knife, drawn while it stabs. */
+  private knife: ShapeModel | null = null;
   /** Fuze's Ballistic Shield (Phase 8 M11): its curved plate and window where its state says (your own too). */
   private shield: ShieldModel | null = null;
   private plate: ShieldPlate | null = null;
@@ -484,11 +545,18 @@ export class PawnView {
   private gunVisible = false;
   /** The rope a body on one hangs from (Phase 5 M8): from over its body up to the rope's top. */
   private readonly rope: THREE.Line;
-  /** A drone (Phase 7): a box on two wheels, in place of the capsules (greybox until the art pass). */
+  /** A drone (Phase 7): its model in place of the capsules; its wheels, turned by how far it has rolled. */
   private readonly drone: THREE.Group | null = null;
+  private readonly droneWheels: THREE.Object3D[] = [];
+  private droneR = 0.06;
+  private droneLast: { x: number; z: number } | null = null;
   private firstPerson = false;
 
-  /** `name` puts a name tag over the head (other players online); `wireColor` colours the hitbox view. */
+  /**
+   * `name` puts a name tag over the head (other players online); `wireColor` colours the hitbox view; `color` a
+   * drone's stripe; `operatorId` dresses a body (data/presentation/operator_looks.json), null for none at all: only
+   * its hitboxes' wireframe (where the server judged a hit body to be).
+   */
   constructor(
     private readonly scene: THREE.Scene,
     color: number,
@@ -496,15 +564,17 @@ export class PawnView {
     wireColor = 0xff3b3b,
     kind = PawnKind.Body,
     droneSize: readonly [number, number, number] = [0.22, 0.12, 0.18],
+    operatorId?: string | null,
   ) {
     const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.6 });
-    const headMat = new THREE.MeshStandardMaterial({ color: 0x2b2f36, roughness: 0.5 });
     const wireMat = new THREE.MeshBasicMaterial({ color: wireColor, wireframe: true, depthTest: false, transparent: true, opacity: 0.75 });
-    this.materials = [mat, headMat, wireMat];
-    this.skin = [mat, headMat];
-    for (let i = 0; i < 8; i++) {
-      this.bodyParts.push(new CapsuleParts(this.shape, i === 0 ? headMat : mat, true));
-      this.wireParts.push(new CapsuleParts(this.wire, wireMat, false));
+    this.materials = [mat, wireMat];
+    this.skin = [mat];
+    for (let i = 0; i < 8; i++) this.wireParts.push(new CapsuleParts(this.wire, wireMat, false));
+    if (kind === PawnKind.Body && operatorId !== null) {
+      this.model = new BodyModel(operatorLook(operatorId));
+      this.shape.add(this.model.group);
+      this.skin.push(this.model.material);
     }
     this.body.add(this.shape);
     const ropeMat = new THREE.LineBasicMaterial({ color: 0xd8c08a });
@@ -519,15 +589,34 @@ export class PawnView {
       this.body.add(this.tag);
     }
     if (kind === PawnKind.Drone) {
-      const [w, h, l] = droneSize;
+      // The drone's model (gadgetShapes.ts, Phase 10 M7): its hull, and two wheels that turn as it drives; its team's
+      // colour on the stripe and hubs; all of it glows in a thermal view.
+      const [w, h] = droneSize;
+      const shape = droneShape(droneSize, w > 0.26);
+      const mats = new Map<ShapeMat, THREE.MeshStandardMaterial>();
+      const matOf = (m: ShapeMat) => {
+        if (m === "team") return mat;
+        let x = mats.get(m);
+        if (!x) {
+          const p = SHAPE_MATERIALS[m];
+          x = new THREE.MeshStandardMaterial({ color: p.color, roughness: p.roughness, metalness: p.metalness, emissive: p.emissive ?? 0x000000 });
+          mats.set(m, x);
+          this.materials.push(x);
+          if (!p.emissive) this.skin.push(x);
+        }
+        return x;
+      };
       const drone = new THREE.Group();
-      drone.add(new THREE.Mesh(new THREE.BoxGeometry(w * 0.55, h * 0.7, l), mat));
+      for (const [m, g] of shape.hull) drone.add(new THREE.Mesh(g, matOf(m)));
+      const tyre = w * 0.18;
       for (const side of [-1, 1]) {
-        const wheel = new THREE.Mesh(new THREE.CylinderGeometry(h / 2, h / 2, w * 0.2, 12), headMat);
-        wheel.rotation.z = Math.PI / 2;
-        wheel.position.x = (side * (w - w * 0.2)) / 2;
+        const wheel = new THREE.Group();
+        for (const [m, g] of shape.wheel) wheel.add(new THREE.Mesh(g, matOf(m)));
+        wheel.position.x = side * (w / 2 - tyre / 2);
         drone.add(wheel);
+        this.droneWheels.push(wheel);
       }
+      this.droneR = h / 2;
       this.shape.visible = false;
       this.body.add(drone);
       this.drone = drone;
@@ -542,38 +631,151 @@ export class PawnView {
     for (const m of this.skin) m.emissive.setHex(on ? 0xffffff : 0x000000);
   }
 
-  update(data: GameData, state: PawnState) {
+  /**
+   * Pose the body for a state and place what it holds; `now` (seconds, any clock that runs on) moves its stride and a
+   * dead body's fall; `swapTicks` is its loadout's swap time.
+   */
+  update(data: GameData, state: PawnState, now = performance.now() / 1000, swapTicks = 30) {
     if (this.drone) return this.updateDrone(data, state);
     // Fuze with his shield up in front: his hands on its grips behind it (D-169).
-    const parts = poseHitboxes(data.movement, data.hitboxes, state, this.plate && shieldPlace(state) === "front" ? shieldHold(data.movement, this.plate, state) : undefined);
-    parts.forEach((hb, i) => {
-      this.bodyParts[i].place(hb, 1);
-      this.wireParts[i].place(hb, 1.02);
-    });
-    if (this.tag) {
-      const head = parts[0]; // the head capsule comes first
-      this.tag.position.set(head.b[0], Math.max(head.a[1], head.b[1]) + head.radius + 0.3, head.b[2]);
-    }
-    // The gun it holds: in front of the chest along the view (placeholder until the art pass); none while
-    // down, knocked down (D-156) or dead.
-    const armed = state.mode !== PawnMode.Dead && state.mode !== PawnMode.Knocked && !isDowned(state);
+    const shieldUp = this.plate !== null && shieldPlace(state) === "front";
+    const parts = poseHitboxes(data.movement, data.hitboxes, state, shieldUp ? shieldHold(data.movement, this.plate!, state) : undefined);
+    parts.forEach((hb, i) => this.wireParts[i].place(hb, 1.02));
+    const model = this.model;
+    if (!model) return;
+    const rig = model.rig;
+    const dt = this.lastAt < 0 ? 0 : Math.min(0.1, Math.max(0, now - this.lastAt));
+    this.lastAt = now;
+    // What it holds shows while it's up: none while down, knocked down (D-156) or dead.
+    const dead = state.mode === PawnMode.Dead;
+    const armed = !dead && state.mode !== PawnMode.Knocked && !isDowned(state);
     this.armed = armed;
-    this.gunVisible = this.gun !== null && armed && this.held === null;
-    const eye = eyePose(data.movement, data.hitboxes, state).pos;
-    const rot = new THREE.Euler(state.pitch, state.yaw, 0, "YXZ");
+    let gunAt: ReturnType<typeof poseBody>["gun"] = null;
+    let knifeAt: ReturnType<typeof poseBody>["knife"] = null;
+    this.heldPlaced = false;
+    if (dead) {
+      // It falls from the pose it died in (bodyRagdoll.ts) onto the floor the state has it on (the lab's corpse) — if it
+      // was drawn alive just now, here. Else (first seen dead, after a killcam's replay, a jump) it lies where its
+      // hitboxes do, at rest at once.
+      if (!this.ragdoll) {
+        const fresh = this.posed && now - this.aliveAt < 0.5 && Math.hypot(rig.joints.pelvis.x - state.x, rig.joints.pelvis.z - state.z) < 2.5;
+        if (!fresh) {
+          rig.frame(parts);
+          const up = new THREE.Vector3(0, 1, 0);
+          rig.solve({ flatFeet: false, legScale: rig.lyingLegs(), kneeL: up, kneeR: up });
+        }
+        // Tipped back and a little to a side (which, by where it stood).
+        const back = new THREE.Vector3(Math.sin(state.yaw), 0, Math.cos(state.yaw));
+        const side = Math.sin(state.x * 12.9898 + state.z * 78.233) * 0.5;
+        const push = back.multiplyScalar(0.9).add(new THREE.Vector3(Math.cos(state.yaw) * side, 0, -Math.sin(state.yaw) * side));
+        this.ragdoll = fresh ? new Ragdoll(rig.joints, this.lastVel, push, state.y) : new Ragdoll(rig.joints, new THREE.Vector3(), new THREE.Vector3(), state.y);
+        if (!fresh) this.ragdoll.settle();
+        this.restDrawn = false;
+      }
+      // The floor under it as the corpse rule finds it now (a hatch blown under it: it falls again).
+      this.ragdoll.setFloor(state.y);
+      if (!this.ragdoll.asleep || !this.restDrawn) {
+        this.ragdoll.step(dt);
+        this.ragdoll.write(rig);
+        this.restDrawn = this.ragdoll.asleep;
+      }
+    } else {
+      this.ragdoll = null;
+      this.aliveAt = now;
+      const s = this.remote ? this.estimated(state, now, dt) : state;
+      this.lastVel.set(s.vx, s.vy, s.vz).clampLength(0, 7);
+      rig.frame(parts);
+      const hands = armed && this.held === null;
+      const posed = poseBody({
+        data,
+        s,
+        parts,
+        rig,
+        gun: hands ? this.gun : null,
+        pistol: this.pistol,
+        reload: this.weapon?.reload ?? null,
+        held: armed ? this.heldItem : null,
+        shieldUp,
+        gait: this.gait,
+        now,
+        swapTicks,
+      });
+      rig.solve(posed.pose);
+      gunAt = posed.gun;
+      knifeAt = posed.knife;
+      if (this.held && posed.held) {
+        this.held.position.copy(posed.held.position);
+        this.held.quaternion.copy(posed.held.quaternion);
+        this.heldPlaced = true;
+      }
+    }
+    this.posed = true;
+    // What's on its back: there unless it's the item in its hands (Sledge's hammer, Thermite's charge, ...). (Before the
+    // bones are copied: the item placed with them on the frame it comes back.)
+    const back = model.look.back;
+    model.showBack(back === "pack" || back === "radio" || handSlot(state.hand) !== 2);
+    model.sync();
+    if (this.tag) this.tag.position.set(rig.joints.head.x, rig.joints.head.y + 0.42, rig.joints.head.z);
+    this.gunVisible = this.gun !== null && gunAt !== null;
     if (this.gun) {
       this.gun.group.visible = this.gunVisible && !this.firstPerson;
-      this.gun.group.position.set(...eye).add(new THREE.Vector3(0.16, -0.22, -0.2).applyEuler(rot));
-      this.gun.group.rotation.copy(rot);
+      if (gunAt) {
+        this.gun.group.position.copy(gunAt.position);
+        this.gun.group.quaternion.copy(gunAt.quaternion);
+        this.gun.mag.visible = gunAt.magIn;
+      }
     }
-    if (this.held) {
-      this.held.visible = armed && !this.firstPerson;
-      // A held-up item (Pulse's sensor, Dokkaebi's tablet) is at the face, as the viewmodel has it; the rest at the hip.
-      this.held.position.set(...eye).add((this.heldUp ? new THREE.Vector3(0, -0.06, -0.24) : new THREE.Vector3(0.2, -0.3, -0.3)).applyEuler(rot));
-      this.held.rotation.copy(rot);
+    if (this.held) this.held.visible = armed && !this.firstPerson && this.heldPlaced;
+    if (knifeAt && !this.knife) {
+      this.knife = shapeModel(knifeShape());
+      this.body.add(this.knife.group);
+    }
+    if (this.knife) {
+      this.knife.group.visible = knifeAt !== null && !this.firstPerson;
+      if (knifeAt) {
+        this.knife.group.position.copy(knifeAt.position);
+        this.knife.group.quaternion.copy(knifeAt.quaternion);
+      }
     }
     // Fuze's shield (Phase 8 M11): in your own first person too, where you look through its window.
     this.shield?.update(data, state, shieldPlace(state));
+  }
+
+  /**
+   * Another player's state with what its snapshots don't carry worked out (render/DESIGN.md §11): its velocity from how
+   * it moved between frames; how far it aims, eased, from the aiming bit; how far along a reload or a stab is, from
+   * when the bit for it came on (a reload timed as a tactical one, its magazine out and in by the weapon's timings).
+   */
+  private estimated(state: PawnState, now: number, dt: number): PawnState {
+    const e = this.est;
+    const gap = e.at < 0 ? Infinity : now - e.at;
+    const jumped = Math.hypot(state.x - e.x, state.z - e.z) > 3;
+    if (gap > 1e-4 && gap < 0.5 && !jumped) {
+      const k = 1 - Math.exp(-gap * 12);
+      e.vx += ((state.x - e.x) / gap - e.vx) * k;
+      e.vy += ((state.y - e.y) / gap - e.vy) * k;
+      e.vz += ((state.z - e.z) / gap - e.vz) * k;
+    } else if (gap >= 0.5 || jumped) e.vx = e.vy = e.vz = 0;
+    e.x = state.x;
+    e.y = state.y;
+    e.z = state.z;
+    e.at = now;
+    // (Fuze's shield sends its own aiming: how far down it has slid.)
+    const aimTo = state.shieldAt === 1 ? state.adsQ / 65535 : state.prevButtons & Btn.Ads ? 1 : 0;
+    e.aim += (aimTo - e.aim) * (1 - Math.exp(-dt * 9));
+    if (state.wAct === WeaponAct.Reload) e.reloadFrom = e.reloadFrom < 0 ? now : e.reloadFrom;
+    else e.reloadFrom = -1;
+    if (state.meleeTicks > 0) e.meleeFrom = e.meleeFrom < 0 ? now : e.meleeFrom;
+    else e.meleeFrom = -1;
+    const s = { ...state, vx: e.vx, vy: e.vy, vz: e.vz, adsQ: Math.round(e.aim * 65535) };
+    if (e.reloadFrom >= 0) {
+      s.actTicks = Math.floor((now - e.reloadFrom) * TICK_HZ);
+      s.reloadKind = ReloadKind.Tactical;
+      const r = this.weapon?.reload;
+      s.wflags = r?.kind === "magazine" ? (s.actTicks >= r.magOutTacticalTicks ? WFlag.MagOut : 0) | (s.actTicks >= r.refillTacticalTicks ? WFlag.Refilled : 0) : 0;
+    }
+    if (e.meleeFrom >= 0) s.meleeTicks = 1 + Math.floor((now - e.meleeFrom) * TICK_HZ);
+    return s;
   }
 
   /** Fuze's Ballistic Shield's plate on this body (its loadout's), or none (Phase 8 M11). */
@@ -591,26 +793,27 @@ export class PawnView {
     }
   }
 
-  /** Whether the gadget in its hands is held up to the face (a `hold` item). */
-  private heldUp = false;
   /** Alive and not down, as its last update had it (what it holds shows only then). */
   private armed = true;
 
-  /** The gadget in its hands (its box size; `up`: held up to the face), or none: the gun shows again. */
-  setHeld(size: readonly number[] | null, up = false) {
-    this.heldUp = up;
-    const key = size ? size.join(",") : "";
+  /**
+   * The gadget in its hands (its id, or "detonator", and its data's size; `up`: held up to the face; `swing`: swung
+   * in both hands, Sledge's hammer, with its swing's timing), or none: the gun shows again. Its shaped model
+   * (gadgetShapes.ts), no bigger than a hand holds (a swung one its own length).
+   */
+  setHeld(held: { id: string; size: readonly number[] } | null, up = false, swing: HeldItem["swing"] = null) {
+    const key = held ? `${held.id}:${held.size.join(",")}:${up}:${swing !== null}` : "";
     if (key === this.heldKey) return;
     this.heldKey = key;
-    if (this.held) {
-      this.body.remove(this.held);
-      this.held.geometry.dispose();
-      (this.held.material as THREE.Material).dispose();
-      this.held = null;
-    }
-    if (!size) return;
-    const [w, h, d] = size.map((v) => Math.min(v, 0.25));
-    this.held = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color: 0x4b5563, roughness: 0.6, metalness: 0.3 }));
+    this.heldModel?.dispose();
+    this.heldModel = null;
+    this.held = null;
+    this.heldItem = null;
+    if (!held) return;
+    const shape = heldShape(held.id, [held.size[0], held.size[1], held.size[2]], swing ? 1.2 : 0.3);
+    this.heldModel = shapeModel(shape.parts);
+    this.heldItem = { size: shape.size, up, swing };
+    this.held = this.heldModel.group;
     this.body.add(this.held);
   }
 
@@ -621,6 +824,12 @@ export class PawnView {
     drone.visible = state.mode !== PawnMode.Held && !this.firstPerson;
     drone.position.set(state.x, state.y + d.sizeM[1] / 2, state.z);
     drone.rotation.set(0, state.yaw, state.mode === PawnMode.Dead ? 1.2 : 0, "YXZ");
+    // The wheels roll with it: by how far it moved along its facing since it was last drawn.
+    if (this.droneLast) {
+      const along = -(state.x - this.droneLast.x) * Math.sin(state.yaw) - (state.z - this.droneLast.z) * Math.cos(state.yaw);
+      if (Math.abs(along) < 1) for (const wh of this.droneWheels) wh.rotation.x -= along / this.droneR;
+    }
+    this.droneLast = { x: state.x, z: state.z };
     const boxes = droneHitboxes(d, state);
     this.wireParts.forEach((w, i) => (i < boxes.length ? w.place(boxes[i], 1.02) : w.hide()));
     if (this.tag) this.tag.position.set(state.x, state.y + d.sizeM[1] + 0.2, state.z);
@@ -636,14 +845,23 @@ export class PawnView {
     pos.needsUpdate = true;
   }
 
-  /** The gun this body holds (from the roster's loadout), or none. */
-  setWeapon(look: GunLook | null) {
+  /** The gun this body holds (from the roster's loadout; `weapon`: its timings, for its reload), or none. */
+  setWeapon(look: GunLook | null, weapon: ResolvedWeapon | null = null) {
+    this.weapon = weapon;
+    this.pistol = look ? pistolHeld(look.class) : false;
     const key = look ? gunKey(look) : "";
     if (key === this.gunLook) return;
     this.gun?.dispose();
     this.gun = look ? buildGun(look) : null;
     this.gunLook = key;
     if (this.gun) this.body.add(this.gun.group);
+  }
+
+  /** Where the gun in this body's hands ends, in the world (null without one drawn): where its shots are seen to leave. */
+  muzzle(): THREE.Vector3 | null {
+    if (!this.gun || !this.gunVisible || !this.body.visible) return null;
+    this.gun.group.updateMatrixWorld();
+    return this.gun.muzzle.clone().applyMatrix4(this.gun.group.matrixWorld);
   }
 
   /** Where this body's laser leaves from, in the world (null without a visible laser). */
@@ -668,6 +886,7 @@ export class PawnView {
     if (this.gun) this.gun.group.visible = this.gunVisible && !on;
     // (Only while armed, as update has it: a body killed holding a gadget doesn't keep it by its head, the review, M12.)
     if (this.held) this.held.visible = !on && this.armed;
+    if (this.knife && on) this.knife.group.visible = false;
   }
 
   /** Remove from the scene and free the GPU resources it owns. */
@@ -675,6 +894,8 @@ export class PawnView {
     this.gun?.dispose();
     this.setHeld(null);
     this.setShield(null);
+    this.model?.dispose();
+    this.knife?.dispose();
     this.rope.geometry.dispose();
     this.drone?.traverse((o) => (o as THREE.Mesh).geometry?.dispose());
     this.scene.remove(this.body, this.wire);
