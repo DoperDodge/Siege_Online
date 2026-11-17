@@ -466,10 +466,7 @@ export class GadgetServer {
       return;
     }
     const readyAt = d.alarm ? this.sim.tick + ticksOrZero(d.alarm.armS) : g.readyAt;
-    // One that goes off after it rests (Ohm's pucks): its time from the tick it stopped.
-    const rested = use.restS !== undefined ? g.launchTick + end.after + ticks(use.restS) : 0;
-    const fuseEnd = rested !== 0 && (g.fuseEnd === 0 || rested < g.fuseEnd) ? rested : g.fuseEnd;
-    this.sim.gadgets.update(g.id, { pos: end.pos, yaw, flags: (g.flags & ~GFlag.Flying) | (onFloor || end.how !== "stick" ? GFlag.OnFloor : 0), panel: end.panel, vel: [0, 0, 0], readyAt, fuseEnd });
+    this.sim.gadgets.update(g.id, { pos: end.pos, yaw, flags: (g.flags & ~GFlag.Flying) | (onFloor || end.how !== "stick" ? GFlag.OnFloor : 0), panel: end.panel, vel: [0, 0, 0], readyAt });
   }
 
   /** An entry whose DSEG has worn off is on again. */

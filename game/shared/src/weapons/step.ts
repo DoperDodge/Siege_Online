@@ -77,6 +77,11 @@ export type SimEvent =
    */
   /** (`spent`: the simulation spent a charge on it, for the level, a panel or a gadget in reach; bodies are the room's.) */
   | { kind: "swing"; pawnId: number; seq: number; slot: 1 | 2; gadget: string; yaw: number; pitch: number; origin: Vec3; spent: boolean }
+  /**
+   * A round shot from a gadget in the hands (R3, Ohm's Brownout Pistol) from the body's eye along its view: the room
+   * judges where it stops, rewound as a bullet.
+   */
+  | { kind: "gshot"; pawnId: number; seq: number; slot: 1 | 2; gadget: string; yaw: number; pitch: number; origin: Vec3 }
   /** `gadget`: the kind of the enemy gadget pinged (Phase 8 M3), or −1. */
   | { kind: "ping"; ctrlId: number; pos: Vec3; gadget: number; heart?: boolean }
   /**

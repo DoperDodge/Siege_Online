@@ -248,6 +248,26 @@ export function stepHands(ctx: HandsContext, pawn: Pawn, input: InputCmd, presse
     }
     return;
   }
+  if (g.use.kind === "shoot") {
+    // Ohm's Brownout Pistol (R3): Fire shoots a round (the room judges where it stops), then the next is loaded over
+    // its reload time; with none left it's put away.
+    const u = g.use;
+    if (s.gAct === GadgetAct.Shoot) {
+      s.gTicks = Math.min(0xffff, s.gTicks + 1);
+      if (s.gTicks < Math.max(1, ticks(u.reloadS))) return;
+      s.gAct = GadgetAct.Ready;
+      s.gTicks = 0;
+      if (left(s, slot) === 0) putAway(s);
+      return;
+    }
+    if (!(pressed & Btn.Fire) || left(s, slot) === 0) return;
+    if (slot === 1) s.g1--;
+    else s.g2--;
+    s.gAct = GadgetAct.Shoot;
+    s.gTicks = 0;
+    ctx.events.push({ kind: "gshot", pawnId: pawn.id, seq: input.seq, slot, gadget: g.id, yaw: s.yaw, pitch: s.pitch, origin: eyePose(ctx.data.movement, ctx.data.hitboxes, s).pos });
+    return;
+  }
   if (g.use.kind === "swing") {
     // Fire held swings it, one swing after another; the blow lands `hitS` in, a charge spent if it meets something
     // (the room judges what), and the next can start when the swing's over (Phase 8 M4).

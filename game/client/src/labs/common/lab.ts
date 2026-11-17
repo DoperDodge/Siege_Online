@@ -82,6 +82,9 @@ import {
   kludgeOf,
   pawnJammed,
   sensorUp,
+  empTargets,
+  roundStop,
+  viewDir,
   placeSpotFor,
   slotGadget,
   type GadgetData,
@@ -259,6 +262,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     <div class="flash"></div>
     <div class="stun-white"></div><div class="emp-static hidden"></div>
     <div class="pulse hidden"><div class="pulse-tint"></div><div class="pulse-hearts"></div><div class="pulse-glass"><svg class="pulse-trace" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,21 10,21 14,19 18,9 22,6 26,12 30,17 34,15 38,18 46,21 56,21 60,19 64,9 68,6 72,12 76,17 80,15 84,18 92,21 100,21" /></svg><div class="pulse-count"></div><div class="pulse-state"></div></div></div>
+    <div class="ohm-scope hidden"><div class="ohm-dots"></div><div class="ohm-reticle"></div><div class="ohm-count"></div></div>
     <div class="tablet hidden"><div class="tablet-title"></div><div class="tablet-list"></div><div class="tablet-help"></div></div>
     <div class="prompt hidden"></div>
     <div class="needle-ui hidden"></div>
@@ -1146,6 +1150,24 @@ export async function startLab(o: LabOptions): Promise<void> {
     scripted = { forward: 1, yaw: Math.atan2(-dx, -dz) };
   }
 
+  /** The buttons this tick's input held (what the page shows for them: Ohm's scope, R3). */
+  let heldButtons = 0;
+
+  /**
+   * Offline, a round from a gadget in the hands (R3, Ohm's Brownout Pistol): it stops at the level (no bodies offline),
+   * and its EMP goes off there, as the room's judge would have it; the streak and burst drawn as the room would tell us.
+   */
+  function offlineRound(e: Extract<SimEvent, { kind: "gshot" }>) {
+    const g = data.gadgets.get(e.gadget);
+    const shooter = sim.pawns.get(e.pawnId);
+    if (!g || g.use.kind !== "shoot" || !shooter) return;
+    const dir = viewDir(e.yaw, e.pitch);
+    const at = roundStop(sim, e.origin, dir, g.use.rangeM);
+    const end = at ?? [e.origin[0] + dir[0] * g.use.rangeM, e.origin[1] + dir[1] * g.use.rangeM, e.origin[2] + dir[2] * g.use.rangeM];
+    if (at && g.emp) offlineGadgets?.emp(shooter.team, at, g.emp.radiusM, g.emp.seconds);
+    fx.server(sim.tick, [{ kind: "gshot", pawnId: e.pawnId, gadget: kindOf(g.id), end, burst: at !== null && g.emp !== undefined }]);
+  }
+
   function tick() {
     snapshotAll();
     tickKick.yaw = tickKick.pitch = 0;
@@ -1154,6 +1176,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       const sampled = controls.sample(++seq);
       // Test scripts add buttons to what the controls sample (a click still fires while a script holds ADS).
       const input = freeLook(still(scripted ? { ...sampled, ...scripted, buttons: sampled.buttons | (scripted.buttons ?? 0) } : sampled));
+      heldButtons = input.buttons;
       // Predicts locally and sends the input; a shot claims the frame that was on screen when you clicked.
       const sent = net.session.tick(input, clickViewTick ?? undefined);
       if (sent) claims.set(sent.seq & 0xffff, { viewTick: net.session.lastViewTick, weapon: heldWeapon() });
@@ -1165,10 +1188,15 @@ export async function startLab(o: LabOptions): Promise<void> {
       scanTicks = input.buttons & Btn.Fire && controls.onDrone() && !ctrl.shellCam && !kludge ? scanTicks + 1 : 0;
     } else {
       const input = freeLook(still(script ? autoInput(++seq) : controls.sample(++seq)));
+      heldButtons = input.buttons;
       sim.step(new Map([[ctrl.id, input]]));
       onWeaponEvents(sim.events);
-      // Offline the page is the server for gadgets too (Phase 8): the step's gadget events into the table.
-      for (const e of sim.events) offlineGadgets?.onEvent(e);
+      // Offline the page is the server for gadgets too (Phase 8): the step's gadget events into the table, and a round
+      // from Ohm's pistol (R3) judged against the level alone.
+      for (const e of sim.events) {
+        offlineGadgets?.onEvent(e);
+        if (e.kind === "gshot") offlineRound(e);
+      }
       offlineGadgets?.step();
     }
     const p = possessed();
@@ -1410,6 +1438,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     updateCombatHud(now);
     updateStunHud(now);
     updateSensorHud();
+    updateOhmScope();
     updateTablet();
     updateLasers();
 
@@ -1695,8 +1724,8 @@ export async function startLab(o: LabOptions): Promise<void> {
   /** Aiming, drawn from the body you look through: a magnified sight narrows the field of view as ADS comes in. Returns the field of view. */
   function aim(p: Pawn, rs: PawnState): number {
     const w = p.loadout?.weapons[rs.slot];
-    // An EMP on the body (DSEG, Phase 8 M3): its optics are static, no magnification.
-    const fov = w ? adsFov(settings.fovVertical, rs.jammed > 0 ? 1 : w.ads.zoom, rs.adsQ / 65535) : settings.fovVertical;
+    // An EMP on the body (DSEG, Phase 8 M3): its optics are static, no magnification. Ohm's scope up (R3): its own.
+    const fov = scopeUp ? adsFov(settings.fovVertical, OHM_SCOPE_ZOOM, 1) : w ? adsFov(settings.fovVertical, rs.jammed > 0 ? 1 : w.ads.zoom, rs.adsQ / 65535) : settings.fovVertical;
     if (Math.abs(camera.fov - fov) > 1e-4) {
       camera.fov = fov;
       camera.updateProjectionMatrix();
@@ -2848,6 +2877,53 @@ export async function startLab(o: LabOptions): Promise<void> {
     if (!tabletEntries.length) return;
     const at = Math.max(0, tabletEntries.findIndex((e) => e.key === tabletPick));
     tabletPick = tabletEntries[(at + step + tabletEntries.length) % tabletEntries.length].key;
+  }
+
+  /** Ohm's scope's magnification (R3). */
+  const OHM_SCOPE_ZOOM = 1.6;
+  /** Ohm's scope is up this frame (R3): his pistol out and ready, ADS held, not on a feed, no EMP on him. */
+  let scopeUp = false;
+  const scopeDots: HTMLElement[] = [];
+
+  /**
+   * Ohm's Brownout Pistol aimed (R3, Ulo's design): through its scope the view is tinted blue and magnified a little,
+   * and every device of the other side's that a round could turn off (gadgets/electronics.ts empTargets: within its
+   * range, through anything) has a blue dot on it: a dot, never its outline (Dowser's coil outlines). How many rounds
+   * are left shows under the reticle. An EMP on him takes the scope away.
+   */
+  function updateOhmScope() {
+    const body = livingBody();
+    const onFeed = ctrl.cam !== 0 || ctrl.drone !== 0 || ctrl.shellCam || ctrl.swapPhase !== 0;
+    const g = body && handSlot(body.state.hand) === 2 && !isDetonator(body.state.hand) ? slotGadget(data, body.loadout, 2) : null;
+    scopeUp = !!body && !!g && g.use.kind === "shoot" && !onFeed && body.state.gAct !== GadgetAct.Equip && body.state.jammed === 0 && (heldButtons & Btn.Ads) !== 0;
+    viewmodel.scoped = scopeUp;
+    $(".ohm-scope").classList.toggle("hidden", !scopeUp);
+    app.classList.toggle("ohm-scoped", scopeUp);
+    if (!scopeUp || !body || !g || g.use.kind !== "shoot") {
+      for (const el of scopeDots) el.style.display = "none";
+      return;
+    }
+    const W = app.clientWidth;
+    const H = app.clientHeight;
+    const marks = empTargets(sim, body.team, [camera.position.x, camera.position.y, camera.position.z], g.use.rangeM);
+    const layer = $(".ohm-dots");
+    let n = 0;
+    for (const m of marks) {
+      const v = new THREE.Vector3(m[0], m[1], m[2]).project(camera);
+      if (v.z > 1 || Math.abs(v.x) > 1.05 || Math.abs(v.y) > 1.05) continue;
+      let el = scopeDots[n];
+      if (!el) {
+        el = document.createElement("i");
+        layer.appendChild(el);
+        scopeDots.push(el);
+      }
+      const near = Math.max(0, 1 - camera.position.distanceTo(new THREE.Vector3(m[0], m[1], m[2])) / g.use.rangeM);
+      el.style.cssText = `left:${(((v.x + 1) / 2) * W).toFixed(1)}px;top:${(((1 - v.y) / 2) * H).toFixed(1)}px;--dot:${(8 + 10 * near).toFixed(1)}px;display:block`;
+      n++;
+    }
+    for (let i = n; i < scopeDots.length; i++) scopeDots[i].style.display = "none";
+    const left = body.state.g2;
+    $(".ohm-count").textContent = body.state.gAct === GadgetAct.Shoot ? `RELOADING · ${left} left` : `${left} round${left === 1 ? "" : "s"}`;
   }
 
   /**

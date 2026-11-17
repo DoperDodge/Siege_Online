@@ -51,13 +51,14 @@ export type Task =
 /**
  * A gadget used as a player does (gadgets/DESIGN.md §2) from slot `slot`, from `stand` (null: where it is) with the
  * view on `look`: placed (Fire held), thrown (Fire) or lobbed (ADS), swung (Fire held: a blow at each of `spots`, or
- * at `look`, until panel `panel` is open), held up `seconds`, or a device out set off ("detonate"). A remote device or
- * a fused charge is then left from `cover` (set off from there, or waited out `seconds`). `tag` names it.
+ * at `look`, until panel `panel` is open), shot (R3, Ohm's pistol: a round at each of `spots`, the devices its scope
+ * marks near `look` first), held up `seconds`, or a device out set off ("detonate"). A remote device or a fused charge
+ * is then left from `cover` (set off from there, or waited out `seconds`). `tag` names it.
  */
 export interface GadgetTask {
   kind: "gadget";
   slot: 1 | 2;
-  how: "place" | "throw" | "lob" | "swing" | "hold" | "detonate";
+  how: "place" | "throw" | "lob" | "swing" | "hold" | "detonate" | "shoot";
   stand: Vec3 | null;
   look: Vec3;
   spots?: Vec3[];
@@ -736,7 +737,7 @@ export class AttackPlanner {
    * The team's jobs for `site` (M7, bots/DESIGN.md §7.4): each of the plan's hard breaches to the first bot of its
    * operators who has the charge (Thermite's Exothermic; Striker's EMP then a Hard Breach Charge; Fuze's Hard Breach
    * Charge), each soft breach to one too (Sledge's hammer, Fuze's Cluster Charge, else anyone's breach charge), one
-   * breach a bot; Brava's Kludge first, toward the first hard breach's far side; Ohm's puck at that wall (R3).
+   * breach a bot; Brava's Kludge first, toward the first hard breach's far side; Ohm's pistol at that wall (R3).
    */
   private makeJobs(site: string) {
     this.jobsFor = site;
@@ -776,17 +777,18 @@ export class AttackPlanner {
         break;
       }
     }
-    // Ohm (R3): a Brownout Puck lobbed to the foot of the first hard breach's wall from its near side; its pulse reaches
-    // through the wall to the defenders' devices behind it (a Damper there would stop the charge).
-    const first = strat.attack.hardBreach.find((h) => byId.get(h.panel));
+    // Ohm (R3): his Brownout Pistol at the first hard breach's wall from its near side, 3 m off: a round at each device
+    // his scope marks behind it (a Damper there would stop the charge), else two at the wall low and high, whose bursts
+    // reach through it.
+    const first = strat.attack.hardBreach.find((h) => byId.get(h.panel)?.panel.kind === "wall");
     const firstWall = first && byId.get(first.panel);
     for (const b of bots) {
-      const puck = slotOf(b.body, "brownout_puck");
-      if (b.op !== "ohm" || busy.has(b.id) || !puck || !first || !firstWall) continue;
-      const at = wallSpot(sim, this.nav, firstWall, first.from, 3.2, 0.05);
+      const pistol = slotOf(b.body, "brownout_pistol");
+      if (b.op !== "ohm" || busy.has(b.id) || !pistol || !first || !firstWall) continue;
+      const at = wallSpot(sim, this.nav, firstWall, first.from, 3.0, 0.5);
       if (!at) continue;
       busy.add(b.id);
-      add(b.id, gadgetTask(puck, "lob", at, `puck${firstWall.panel.spec.index}`));
+      add(b.id, gadgetTask(pistol, "shoot", at, `emp${firstWall.panel.spec.index}`, { spots: [at.look, [at.look[0], at.look[1] + 0.8, at.look[2]]] }));
     }
     for (const h of strat.attack.softBreach) {
       const e = byId.get(h.panel);

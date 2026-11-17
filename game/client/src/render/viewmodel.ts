@@ -128,6 +128,8 @@ export class Viewmodel {
   private heldSize: [number, number, number] = [0, 0, 0];
   /** Murmur's Blood Oxygen Sensor all the way up: the page draws its readout (sensorScreen). */
   private sensorUp = false;
+  /** Ohm's pistol aimed (R3): the page's scope is up, and the pistol comes in under the eye. Set by the page each frame. */
+  scoped = false;
   /** Where the palm under it is, its own frame: how low it comes there, and how far back (gadgetShapes.ts restsAt). */
   private heldRest = { y: 0, z: 0 };
   /** A held-up item's screen (Pulse's sensor, Dokkaebi's tablet): lit, facing the eye. */
@@ -485,6 +487,21 @@ export class Viewmodel {
       // A phone out of the pocket to turn a call off (Dokkaebi's): up in front in the right hand, its screen to the eye.
       this.held.position.set(0.05, -0.13, -0.3);
       this.held.rotation.set(1.2, -0.12, 0.08);
+      this.holdHeld("palm");
+      return;
+    }
+    if (u?.kind === "shoot" && !gadget?.detonator) {
+      // Ohm's Brownout Pistol (R3): held out in the right hand like a sidearm; aimed (the page's scope up: `scoped`) it
+      // comes in under the eye; a round kicks it up, and its reload tips it down and back.
+      const k = smooth(up);
+      const since = s.gAct === GadgetAct.Shoot ? s.gTicks : Infinity;
+      const kick = Math.max(0, 1 - since / 8);
+      const reloadTicks = Math.max(9, u.reloadS * 64);
+      const reload = since > 8 && since < reloadTicks ? Math.sin((Math.PI * (since - 8)) / (reloadTicks - 8)) : 0;
+      // At the hip it's low on the right, its muzzle turned in a little toward the middle (its side to the eye).
+      const [ax, ay, az] = this.scoped ? [0, -0.21, -0.32] : [0.19, -0.23, -0.44];
+      this.held.position.set(lerp(0.2, ax, k), lerp(-0.42, ay, k) - reload * 0.06, lerp(-0.45, az, k) + kick * 0.03);
+      this.held.rotation.set(lerp(-0.9, 0, k) + kick * 0.25 - reload * 0.5, this.scoped ? 0 : 0.22, reload * 0.3);
       this.holdHeld("palm");
       return;
     }

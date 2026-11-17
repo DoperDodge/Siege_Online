@@ -1,0 +1,14 @@
+{
+  "_doc": "Ohm's Brownout Pistol (Project Redmond R3, gadgets/R3_OPERATORS.md §2; Ulo's design): his ability, the item in his slot 2 (Z). A heavy pistol that fires one EMP round a magazine: `count` magazines a round, each reloaded in `use.reloadS`. A round flies straight from the eye (judged as a bullet, rewound), stops at the first wall, floor, prop, body or shield within `use.rangeM`, and bursts just short of it: the defenders' electronic devices and bodies within `emp.radiusM` (a sphere, through walls and floors) are off and jammed for `emp.seconds`. Aiming (ADS) looks through its scope: the view tinted blue and a blue dot on every device of theirs a round could turn off (gadgets/electronics.ts empTargets; dots, never outlines). Its numbers are ours.",
+  "id": "brownout_pistol",
+  "name": "Brownout Pistol",
+  "side": "attacker",
+  "operator": "ohm",
+  "count": 7,
+  "electronic": false,
+  "use": {"kind": "shoot", "reloadS": 0.8, "rangeM": 40},
+  "remote": false,
+  "pickUp": false,
+  "sizeM": [0.06, 0.15, 0.27],
+  "emp": {"radiusM": 1.5, "seconds": 10}
+}

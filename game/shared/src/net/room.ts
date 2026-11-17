@@ -992,6 +992,31 @@ export class Room implements DirectorHost {
     );
   }
 
+  /**
+   * A round from a gadget in the hands (R3, Ohm's Brownout Pistol; gadgets/R3_OPERATORS.md §2): from the eye along the
+   * view, against everyone as the shooter's client drew them, as a bullet that goes into no wall and stops in the first
+   * body or shield, out to its range. Where it stops (just short of what stopped it) its EMP goes off: the other side's
+   * electronics and bodies within its reach, through walls and floors. Past its range it's spent, with nothing. Everyone
+   * sees the round's streak.
+   */
+  private judgeGadgetShot(m: Member, applied: QueuedInput, e: Extract<SimEvent, { kind: "gshot" }>) {
+    const shooter = this.sim.pawns.get(e.pawnId);
+    const g = this.sim.data.gadgets.get(e.gadget);
+    if (!m.ctrl || !shooter || !g || g.use.kind !== "shoot") return;
+    const { rewoundTick } = this.viewTimeFor(m, applied);
+    const ignore = new Set(m.ctrl.pawnIds);
+    for (const p of this.sim.pawns.values()) if (p.state.mode === PawnMode.Dead) ignore.add(p.id);
+    const dir = viewDir(e.yaw, e.pitch);
+    const [path] = tracePellets(this.sim, this.history, e.origin, [dir], rewoundTick, "none", ignore, this.sentOf(m));
+    const range = g.use.rangeM;
+    const met = path.end < range;
+    const t = met ? Math.max(0, path.end - 0.05) : range;
+    const at: Vec3 = [e.origin[0] + dir[0] * t, e.origin[1] + dir[1] * t, e.origin[2] + dir[2] * t];
+    const fx: GameEvent = { kind: "gshot", pawnId: shooter.id, gadget: kindOf(g.id), end: at, burst: met && g.emp !== undefined };
+    for (const other of this.members.values()) other.events.push(fx);
+    if (met && g.emp) this.dseg(shooter.team, at, g.emp.radiusM, g.emp.seconds);
+  }
+
   /** The body a pellet entered, or else the one whose torso it passed closest to (within 2 m, before the wall), as rewound. */
   private shotTarget(origin: Vec3, dir: Vec3, hitId: number | null, wall: number, tick: number, ignore: ReadonlySet<number>, sent: SentRing | undefined): ShotResult["target"] {
     const posed = this.history.at(tick, sent);
@@ -2367,7 +2392,7 @@ export class Room implements DirectorHost {
     this.shellShields();
     for (const e of this.sim.events) {
       if (e.kind === "ping") this.ping(e.ctrlId, e.pos, e.gadget, e.heart ?? false);
-      if (e.kind !== "shot" && e.kind !== "meleeImpact" && e.kind !== "swing") continue;
+      if (e.kind !== "shot" && e.kind !== "meleeImpact" && e.kind !== "swing" && e.kind !== "gshot") continue;
       const owner = this.sim.pawns.get(e.pawnId)?.ownerId;
       if (owner === undefined || owner === null) continue;
       const a = applied.get(owner);
@@ -2375,6 +2400,8 @@ export class Room implements DirectorHost {
       // on a tick without one (it was swung earlier), judged with the last input's view time.
       if (e.kind === "shot") {
         if (a) this.judgeShot(a.m, a.input, e);
+      } else if (e.kind === "gshot") {
+        if (a) this.judgeGadgetShot(a.m, a.input, e);
       } else {
         const m = a?.m ?? this.memberOf(owner);
         const input = a?.input ?? m?.lastApplied;

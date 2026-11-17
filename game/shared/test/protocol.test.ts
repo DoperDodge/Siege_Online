@@ -166,6 +166,9 @@ describe("lobby, clock, error and debug messages round-trip", () => {
       { kind: "jegeo", stage: 4, pawnId: 7, ticks: 1280, charges: 2 },
       { kind: "alarm", gadget: 41, pos: [2, 0.05, 15], on: false, pawnId: 0 },
       { kind: "kill", victimPawn: 8, victimCtrl: 5, killerCtrl: 4, assistCtrl: 0, weapon: "barbed_wire", cause: 8, headshot: false, friendly: false },
+      // R3: Ohm's pistol rounds, one that burst and one that was spent.
+      { kind: "gshot", pawnId: 6, gadget: 30, end: [1, 0.5, -5.84375], burst: true },
+      { kind: "gshot", pawnId: 6, gadget: 30, end: [-20.5, 40, 3.25], burst: false },
     ];
     // (Float32 positions; a stun's blindness in 255ths.)
     for (const e of events) if (e.kind === "ping" || e.kind === "blast" || e.kind === "alarm") e.pos = [Math.fround(e.pos[0]), Math.fround(e.pos[1]), Math.fround(e.pos[2])];

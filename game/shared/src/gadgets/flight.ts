@@ -73,15 +73,12 @@ export function stepFlight(ctx: FlightContext, use: Extract<GadgetData["use"], {
       v[2] = 0;
       v[1] = Math.min(v[1], 0);
     } else {
-      // A bounce: `restitution` of the speed into the surface comes back out, `friction` of the speed along it is lost
-      // (the gadget's own, else every throw's: Ohm's pucks skid).
+      // A bounce: `restitution` of the speed into the surface comes back out, `friction` of the speed along it is lost.
       const vn = v[0] * n[0] + v[1] * n[1] + v[2] * n[2];
-      const back = use.restitution ?? t.restitution;
-      const lost = use.friction ?? t.friction;
       if (vn < 0) {
         for (let i = 0; i < 3; i++) {
           const along = v[i] - vn * n[i];
-          v[i] = along * (1 - lost) - back * vn * n[i];
+          v[i] = along * (1 - t.friction) - t.restitution * vn * n[i];
         }
       }
       if (n[1] >= FLOOR_NY && Math.hypot(v[0], v[1], v[2]) < t.restMps) end("rest", n, panel);

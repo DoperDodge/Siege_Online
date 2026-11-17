@@ -296,6 +296,8 @@ export enum GadgetAct {
   Place = 4,
   /** Swinging (Sledge's hammer, Phase 8 M4): its blow lands partway through. */
   Swing = 5,
+  /** Just shot (Ohm's Brownout Pistol, R3): the next can't go until it's reloaded. */
+  Shoot = 6,
 }
 
 export const NEUTRAL_INPUT: Readonly<Omit<InputCmd, "seq" | "yaw" | "pitch">> = {

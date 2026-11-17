@@ -70,12 +70,17 @@ export type GameEvent =
    */
   | { kind: "jegeo"; stage: 0 | 1 | 2 | 3 | 4; pawnId: number; ticks: number; charges: number }
   /**
+   * To everyone (R3): a round from a gadget in body `pawnId`'s hands (Ohm's Brownout Pistol; `gadget` its kind) went to
+   * `end`, and burst there (`burst`: its EMP went off) or was spent.
+   */
+  | { kind: "gshot"; pawnId: number; gadget: number; end: Vec3; burst: boolean }
+  /**
    * To a joining player, and to everyone when it changes: who may reinforce and barricade, and the reinforcements
    * left (Phase 4 M6), and who may rappel (Phase 5 M8).
    */
   | { kind: "deployRules"; anyone: boolean; rappel: boolean; pools: [number, number] };
 
-const KIND = { shotFx: 1, hitConfirm: 2, damageTaken: 3, down: 4, kill: 5, shellDestroyed: 6, reviveStart: 7, reviveEnd: 8, deployRules: 10, droneDestroyed: 11, ping: 12, spotted: 13, callout: 14, emp: 15, blast: 16, stunned: 17, alarm: 18, hack: 19, overheat: 20, jegeo: 21 } as const;
+const KIND = { shotFx: 1, hitConfirm: 2, damageTaken: 3, down: 4, kill: 5, shellDestroyed: 6, reviveStart: 7, reviveEnd: 8, deployRules: 10, droneDestroyed: 11, ping: 12, spotted: 13, callout: 14, emp: 15, blast: 16, stunned: 17, alarm: 18, hack: 19, overheat: 20, jegeo: 21, gshot: 22 } as const;
 // 9 Threat (Phase 11) is reserved.
 
 /** Pellet end points travel at 1/32 m in i16: ±1024 m, more than any level. */
@@ -154,6 +159,10 @@ export function encodeEvents(tick: number, events: readonly GameEvent[]): Uint8A
         break;
       case "jegeo":
         w.u8(e.stage).varu(e.pawnId).u16(Math.min(0xffff, e.ticks)).u8(Math.min(255, e.charges));
+        break;
+      case "gshot":
+        w.varu(e.pawnId).u8(e.gadget).u8(e.burst ? 1 : 0);
+        writePos(w, e.end);
         break;
       case "deployRules":
         w.u8((e.anyone ? 1 : 0) | (e.rappel ? 2 : 0)).varu(e.pools[0]).varu(e.pools[1]);
@@ -277,6 +286,12 @@ export function decodeEvents(r: ByteReader): { tick: number; events: GameEvent[]
       const stage = r.u8();
       if (stage > 4) throw new ProtocolError("bad jegeo");
       events.push({ kind: "jegeo", stage: stage as 0 | 1 | 2 | 3 | 4, pawnId: r.varu(), ticks: r.u16(), charges: r.u8() });
+    } else if (k === KIND.gshot) {
+      const pawnId = r.varu();
+      const gadget = r.u8();
+      const burst = r.u8();
+      if (gadget >= GADGET_KINDS.length || burst > 1) throw new ProtocolError("bad gadget shot");
+      events.push({ kind: "gshot", pawnId, gadget, end: readPos(r), burst: burst === 1 });
     } else if (k === KIND.droneDestroyed) {
       events.push({ kind: "droneDestroyed", pawnId: r.varu(), ownerCtrl: r.varu(), killerCtrl: r.varu() });
     } else if (k === KIND.deployRules) {

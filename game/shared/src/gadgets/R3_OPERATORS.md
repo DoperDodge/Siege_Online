@@ -1,114 +1,123 @@
-# Project Redmond R3: eight operators of our own
+# Project Redmond R3: eight new operators
 
 Ulo asked for eight more operators in roles he named (a remote breacher, an EMP thrower, an electronics scout, a
-full-body shield; electrified defences, a shield with a stun prod, a door trapper, a medic). They are our own people with
-our own names, looks and devices: the roles are the genre's (the old game had people in them), the names, the designs,
-the numbers and the details are ours (D-183's rule: nothing named, drawn or numbered after the old game).
+full-body shield; electrified defences, a shield with a stun prod, a door trapper, a medic). They are our own people:
+our names, looks and models. Each keeps the role Ulo asked for, and its device works his way, tweaked from the
+operator it's modelled on (D-188: his calls after the first plan, D-187, followed those operators' gadgets too closely).
 
 Each ability is built on Phase 8's framework (gadgets/DESIGN.md): its own gadget file in data/gadgets (an operator item
 in slot 2, the Z key), a module in `gadgets/` where it needs one, the hands and the wire as for the other items, the
-bots' use (bots/DESIGN.md §7.4), its model and first-person view (render/), and interaction tests.
+bots' use (bots/DESIGN.md §7.4), its model and first-person view (render/), and tests.
 
 ## 1. The roster
 
-| | Name | Role | Health / speed | Primaries | Secondaries | Generics (2 of) | Ability |
+| | Name | Role | Health / speed | Primaries | Secondaries | Generics (one of) | Ability |
 |---|---|---|---|---|---|---|---|
 | A | **Rivet** | remote breacher | 2 / 2 | `ump45`, `commando_9` | `p229`, `usp40` | `stun`, `claymore`, `breach_charge` | **Stud Driver** |
-| A | **Ohm** | EMP | 2 / 2 | `ak_12`, `m870` | `gsh_18`, `pmm` | `frag`, `smoke`, `breach_charge` | **Brownout Pucks** |
+| A | **Ohm** | EMP | 2 / 2 | `ak_12`, `m870` | `gsh_18`, `pmm` | `frag`, `smoke`, `breach_charge` | **Brownout Pistol** |
 | A | **Dowser** | electronics scout | 1 / 3 | `l85a2`, `t_5_smg` | `c75_auto`, `p226_mk_25` | `smoke`, `claymore`, `breach_charge` | **Divining Coil** |
 | A | **Hull** | full-body shield | 3 / 1 | the **Hull Plate** | `p229`, `5_7_usg` | `smoke`, `impact_emp`, `hard_breach_charge` | the Hull Plate's brace |
-| D | **Shunt** | electrified walls | 2 / 2 | `mp5k`, `m1014` | `p226_mk_25`, `q_929` | `barbed_wire`, `nitro_cell` | **Arc Packs** |
-| D | **Bailiff** | shield and prod | 3 / 1 | the **Bailiff Shield** | `smg_11`, `p229` | `barbed_wire`, `impact_grenade` | the Bailiff Shield's prod |
-| D | **Latch** | door trapper | 2 / 2 | `vector_45_acp`, `six12_sd` | `c75_auto`, `smg_12` | `nitro_cell`, `proximity_alarm` | **Trip Latches** |
-| D | **Tonic** | medic | 3 / 1 | `ump45`, `m590a1` | `p229`, `usp40` | `bulletproof_camera`, `barbed_wire` | **Tonic's Dart Gun** |
+| D | **Shunt** | anti hard breach | 2 / 2 | `mp5k`, `m1014` | `p226_mk_25`, `q_929` | `barbed_wire`, `nitro_cell` | **Arc Packs** |
+| D | **Bailiff** | shield and prod | 3 / 1 | the **Bailiff Shield** | `smg_11`, `p229` | `barbed_wire`, `impact_grenade` | the shield's prod, set down |
+| D | **Latch** | door trapper | 2 / 2 | `vector_45_acp`, `six12_sd` | `c75_auto`, `smg_12` | `nitro_cell`, `proximity_alarm` | **Snare Latches** |
+| D | **Tonic** | medic | 3 / 1 | `ump45`, `m590a1` | `p229`, `usp40` | `bulletproof_camera`, `barbed_wire` | **Second Wind** |
 
 ## 2. The abilities
 
-**Rivet: the Stud Driver.** A compact launcher (slot 2): Fire shoots an explosive stud, fast and nearly flat, that
-sticks in what it meets out to 30 m: any surface; a body or a drone takes 2 and it falls. 12 studs a round, 3 a second
-at most. The ability key with studs stuck sets them all off together (a remote device: a Damper in reach or an EMP on
-Rivet stops the press; a stud on an electrified surface is burnt out within 0.5 s; each stud is 1 hp). A stud blows a
-0.45 m hole through a soft wall's skins, a barricade or a soft floor, and 15 hp to a body within 1 m. On steel: studs
-set off together within 0.6 m of each other, three or more, melt a 0.75 m hole through every layer at their middle (a
-hatch: four make it go whole); fewer do nothing to steel. Studs keep sticking where they hit until set off or shot.
+**Ohm: the Brownout Pistol** (Ulo's design; built, §6). A heavy pistol with seven single-round magazines: Fire shoots a
+round, then it's reloaded in 0.8 s. A round flies straight from the eye (judged as a bullet, rewound) and stops at the
+first wall, floor, prop, body or shield within 40 m; it bursts just short of it: every defenders' electronic device and
+body within 1.5 m (a sphere, through walls and floors) is off and jammed for 10 s. Past its range it's spent. Aimed (ADS)
+he looks through its scope: the view tinted blue and magnified a little, and a blue dot on every device of theirs a
+round could turn off (within its range, through anything). A dot, never the device's outline: outlines are Dowser's.
 
-**Ohm: Brownout Pucks.** 3 a round, thrown low (they skid along the floor instead of bouncing: friction high,
-restitution low). 1.5 s after it stops it pulses once: every defenders' electronic device within 4.5 m (through walls
-and floors, a sphere) is off for 12 s (gadgets/DESIGN.md §6's EMP, longer and wider than the Impact EMP's), drones
-included; an Arc Pack, a Trip Latch, a camera or a Damper hit counts as off from the pulse. 1 hp before it pulses.
+**Tonic: Second Wind** (the medic's updated version, Ulo's pick). Every operator on Tonic's team wears a patch from the
+round's start. His wrist monitor (slot 2, held up like a tablet) lists his teammates and himself with their health; the
+wheel moves his pick and Fire sets the picked one's patch off, from anywhere: on a teammate on his feet it heals 45 over
+6 s (up to his most); on a downed teammate it stops his bleeding and gets him up 2.5 s later with 25. Only one
+teammate's patch at a time: while one is working no other teammate's can start. His own is apart from that: he can set
+it off any time, a teammate's working or not, and when he's down the ability key sets it off and gets him up. Five
+patches a round in all. Electronic: an EMP on Tonic stops the monitor; one on a patched body stops its patch.
 
-**Dowser: the Divining Coil.** A hold item like Murmur's sensor: out of slot 2 and up, it shows the other side's
-electronic devices (gadgets marked `electronic`, the level's cameras, Bulletproof Cameras, Arc Packs, Trip Latches,
-Dampers, drones) within 18 m in a 100° fan, through anything, as outlines only Dowser sees; a ping while it's up marks
-the device nearest his crosshair (within 20°) for his team. No weapon while it's up; walking speed unchanged. An EMP on
-him empties it (as the sensor).
+**Bailiff: the Bailiff Shield.** A full-height shield (1.7 m) with a prod at its edge: Fire, shield up, discharges the
+prod in a 4 m cone of 15°: an attacker hit takes 4 a hit and is slowed (0.6× speed, no sprint, no vault) for 1.2 s, 3
+hits a second while Fire is held, 8 s of charge that refills at 1 s a second after 1 s off it. Shield up: walk only
+(0.7× speed). The ability key sets it down (0.6 s) as standing cover where she faces, its viewport and all, and she
+draws her sidearm; Interact held 0.8 s picks it up again (a shield set down doesn't prod). An EMP reaching the shield
+while she holds it shocks her: she's stunned for 1.5 s (can't move or fire, her view jolts and flashes) and the prod is
+off for the EMP's time. Explosions knock its holder back; the prod is electronic.
 
-**Hull: the Hull Plate.** A primary like Hail's Ballistic Shield (gadgets/DESIGN.md §8) but taller (1.55 m) and wider
-(0.70 m), with the sidearm alongside it unbraced (fire from the hip only). The ability key braces it: over 0.4 s two
-side wings and a top flap fold out, the plate covers a standing body front edge to edge, head to feet (the viewport
-stays); braced: walk only (0.55× speed), no sprint, no weapon, the knife becomes a shove. Unbracing takes 0.3 s. Every
-explosive's blast on its front side is stopped by it (the body behind takes the blast's behind-a-wall fraction).
+**Shunt: Arc Packs** (anti hard breach; tricking works). 4 a round, put down on the floor (0.8 s) within 0.4 m of a
+reinforced wall section, a barricade, a deployable shield or barbed wire: the pack is live at once, electrifying what it
+touches (a reinforced wall: its whole section), sparking and humming while it is. Any attacker device on a live surface
+is burnt out within 0.5 s: one placed or stuck on it while it's live, **and one already on it when a pack goes live**
+(a Breach or Heavy Breach Charge, a Burn Frame, a Hailstone Drill, Rivet's studs, a claymore against it). So a defender
+can pull the pack (Interact held 0.5 s), let the wall go quiet, and put the pack back once the attacker's charge is on
+it. A device already set off (burning, drilling) isn't stopped. A body touching it with the knife or a shove takes 10
+and is pushed back; a drone touching it is jammed for 2 s. Electronic (an EMP turns it off for its seconds), 25 hp.
 
-**Shunt: Arc Packs.** 4 a round, placed on the floor (2 s) within 0.3 m of a reinforced wall section, a barricade, a
-deployable shield or barbed wire: the pack electrifies what it touches (a reinforced wall: its whole section; a
-barricade: itself; wire and shields: themselves), arcing every 1 s. While live: an attacker's device placed on or
-stuck in it is burnt out within 0.5 s (Breach and Hard Breach Charges, Burn Frames, Hailstone Drills, Studs, Claymores
-against it); a body touching it with the knife or a shove takes 12 and is pushed back; a drone touching it is jammed
-for 2 s. Electronic (an EMP turns it off for its seconds; Patch's Crossover Drone can hack it off), 25 hp, picked up
-again.
+**Latch: Snare Latches** (a trapper that does damage). 4 a round. Placed on a door's or window's frame (1.2 s, either
+side), it arms after 1.5 s and stretches a thin wire across the opening at shin height (a window's: along its sill);
+the first attacker body through it springs it: the latch snaps shut on his leg, 35 at once and then 5 a second (no
+sprint, 0.7× speed) until he pulls it off (Interact held 1.5 s) or goes down; the snap is loud. Drones pass under it.
+Mechanical: no EMP stops it and neither Ohm's scope nor Dowser's coil shows it; one bullet into the latch breaks it.
+Picked up again before it's sprung.
 
-**Bailiff: the Bailiff Shield.** A full-height shield (1.7 m) with a prod mounted at its edge: Fire, shield up, discharges
-the prod in a 4 m cone of 15°: an attacker hit takes 4 a hit and is slowed (0.6× speed, no sprint, no vault) for 1.2 s,
-3 hits a second while Fire is held, 8 s of charge that refills at 1 s a second after 1 s off it. Shield up: walk only
-(0.7× speed); the secondary lowers it (0.4 s). Explosions knock its holder back; the prod is electronic (an EMP stops it).
+**Rivet: the Stud Driver** (hard breaches in three shapes, Ulo's design). A compact launcher (slot 2). Fire lays a
+salvo of explosive studs on the surface the aim meets, out to 25 m, in the pattern chosen with the reload key while it's
+out: **Ring** (a circle), **Spine** (a vertical line) or **Cross** (an X). Up to 3 salvos a round wait on their
+surfaces; the detonator sets them all off together, and each cuts its shape through every layer (soft or reinforced; a
+hatch goes whole): the Ring a round hole 1.0 m across, the Spine a slot 0.7 m wide and 1.9 m tall, the Cross a hole 1.2 m
+across along its two arms. Every shape is a hole a body vaults (or walks) through: a salvo is laid with its bottom edge
+low enough for that. A remote device: a Damper in reach (or an EMP on Rivet) stops the set-off; a live Arc Pack burns
+out a salvo on its surface; one bullet into a salvo destroys it.
 
-**Latch: Trip Latches.** 5 a round. Placed on a door's or window's frame (1.2 s, either side), it arms after 1.5 s and
-stretches a faint beam across the opening at shin height; the first attacker body through it sets it off: 65 to that
-body (to a body within 0.5 m of the beam, 30), the latch gone. Drones and bodies crouched under 0.5 m don't trip it.
-Electronic (EMP: off; Dowser sees it), 1 hp, picked up again before it's armed.
+**Dowser: the Divining Coil.** A hold item: out of slot 2 and up, it shows the other side's electronic devices
+(gadgets marked `electronic`, the level's cameras, Arc Packs, Dampers, drones) within 18 m in a 100° fan, through
+anything, as outlines only Dowser sees; a ping while it's up marks the device nearest his crosshair (within 20°) for his
+team. No weapon while it's up; walking speed unchanged. An EMP on him empties it.
 
-**Tonic: the Dart Gun.** 4 darts a round in slot 2. Fire shoots a dart (fast, falls a little) that sticks in what it hits:
-a teammate takes +40 hp, past 100 to 125 at most (the extra drains at 2 hp a second); a downed teammate gets up with
-40; an enemy takes 6 and nothing else. Aimed at his own feet (pitch below −60°) Fire jabs himself (+40). Not electronic.
+**Hull: the Hull Plate.** A primary shield taller (1.55 m) and wider (0.70 m) than the Ballistic Shield, with the sidearm
+alongside it unbraced (fire from the hip only). The ability key braces it: over 0.4 s two side wings and a top flap fold
+out and the plate covers a standing body front edge to edge, head to feet (the viewport stays); braced: walk only (0.55×
+speed), no sprint, no weapon, the knife becomes a shove. Unbracing takes 0.3 s. Every explosive's blast on its front
+side is stopped by it (the body behind takes the blast's behind-a-wall fraction).
 
-## 3. Interactions (each gets a test, as Phase 8's did)
+## 3. Interactions (each gets a test)
 
-- Ohm's pulse turns off Arc Packs, Trip Latches, Dampers, cameras, Bulletproof Cameras, the Bailiff Shield's prod and
-  Murmur's sensor in reach; Rivet's studs and the attackers' own devices aren't touched.
-- Arc Packs burn out Studs, Breach and Hard Breach Charges, Burn Frames and Hailstone Drills on their surface; Cleave's
-  Maul on a live surface: the swing is spent and the swinger takes 12; Kiln's Burn Frame placed beside an off pack
-  burns as usual.
-- Dampers jam Rivet's set-off within reach (a stud in reach doesn't go; the others do).
-- Dowser's coil shows Arc Packs, Trip Latches, Dampers, the level's cameras, Bulletproof Cameras and Twain's idle frame (a camera to her side).
-- Latch's beam ignores drones and Patch's Crossover Drones; Hull braced trips it (and takes the blast on his plate if it
-  faces it).
-- Tonic's dart heals a body standing behind Hull's or Bailiff's shield only round its edge (the shield stops darts).
+- Ohm's rounds turn off Arc Packs, Dampers, the level's cameras, Armoured Cameras and the Bailiff Shield's prod (and
+  shock Bailiff if she's holding it) in reach; Rivet's salvos, Latch's snares and the attackers' own devices aren't
+  touched. His scope dots exactly those an EMP would reach.
+- Arc Packs burn out Breach and Heavy Breach Charges, Burn Frames, Hailstone Drills and Rivet's salvos on their surface,
+  placed before or after the pack goes live; not one already set off.
+- Dampers jam Rivet's set-off within reach (a salvo in reach doesn't go; the others do).
+- Dowser's coil shows Arc Packs, Dampers, the level's cameras, Armoured Cameras and Twain's idle frame; not Latch's snares.
+- Latch's snare ignores drones; Hull braced springs it.
+- Tonic's patch on a downed teammate being revived by hand gets him up at the sooner of the two.
 
 ## 4. Looks (data/presentation/operator_looks.json)
 
-Rivet: slate overalls, an orange hood up under a welder's flip-up visor (new `visor` head), tool pouches. Ohm: dark
-blue work jacket with copper trim, a wool beanie, a battery pack on the back. Dowser: field green, a wide-brimmed hat
-(the `brim` head), a slim pack with an aerial. Hull: heavy grey plate carrier and helmet with a face guard (new `guard`
-head). Shunt: yellow-black hi-vis tabard over navy, an electrician's cap (new `cap` head). Bailiff: black with white
-piping, a peaked helmet. Latch: rust brown, a balaclava and goggles. Tonic: white and teal, a soft cap, a sling bag with
-a cross of our own (a teal plus, not a red cross).
+Rivet: slate overalls, an orange hood up under a welder's flip-up visor, tool pouches. Ohm (built): dark blue work jacket
+with copper trim, a grey wool beanie, a battery pack on the back. Dowser: field green, a wide-brimmed hat, a slim pack
+with an aerial. Hull: heavy grey plate carrier and helmet with a face guard. Shunt: yellow-black hi-vis tabard over
+navy, an electrician's cap. Bailiff: black with white piping, a peaked helmet. Latch: rust brown, a balaclava and
+goggles. Tonic: white and teal, a soft cap, a sling bag with a teal plus of our own (not a red cross).
 
 ## 5. Milestones
 
 | | What | Done when |
 |---|---|---|
-| R3 M1 | This plan; the eight operator files, their ability gadget files, looks; pickable with their generics | the loadout tests pass with 20 operators; the pick screen lists them |
-| R3 M2 | Tonic's Dart Gun | heal, overheal and decay, revive at range, self-jab, enemy hit; bots heal a hurt or downed teammate |
-| R3 M3 | Latch's Trip Latches | placing on frames, arming, the beam, tripping, drones and crouch under, EMP, pickup; bots trap the site's doors |
-| R3 M4 | Shunt's Arc Packs | electrifying walls, barricades, wire, shields; burning out devices; the shock; EMP and hack; bots on the plan's walls |
-| R3 M5 | Ohm's Brownout Pucks | the skid, the pulse, every device off for 12 s; bots before a hard breach |
+| R3 M5 | Ohm's Brownout Pistol | ✅ fire and reload, the burst, the scope's dots; bots shoot the devices behind a hard breach |
+| R3 M2 | Tonic's Second Wind | heal over time, revive, one at a time, his own apart, down and up; bots patch the hurt and the downed |
+| R3 M4 | Shunt's Arc Packs | electrifying, burning out before and after, tricking, the shock, EMP; bots on the plan's walls |
+| R3 M3 | Latch's Snare Latches | placing, arming, the snare, the pull, drones under; bots trap the site's doors |
+| R3 M8 | Bailiff's shield; Hull's plate | the prod's stun and slow, setting it down, the EMP shock; braced cover, blasts stopped; bots carry them |
+| R3 M7 | Rivet's Stud Driver | three shapes, vaultable holes through steel, Dampers and packs; bots breach with it |
 | R3 M6 | Dowser's Divining Coil | the fan, the outlines, the ping; bots ping devices for their team |
-| R3 M7 | Rivet's Stud Driver | studs stuck, set off together, holes in soft and the cluster through steel; burnt out by packs; bots breach with it |
-| R3 M8 | Hull's Hull Plate and Bailiff's Shield | braced cover, blasts stopped, the prod's slow; bots carry them |
-| R3 M9 | Models, first person, HUD for all eight; the interaction tests (§3); soak; browser tests; review; docs | every check green |
+| R3 M9 | Models, first person, HUD for all eight; the interactions (§3); soak; browser tests; review; docs | every check green |
 
 ## 6. As built
 
 | | Operator | Done | Notes |
 |---|---|---|---|
-| R3 M5 | **Ohm** | ✅ | data/operators/ohm.json, data/gadgets/brownout_puck.json; the throw's own `restitution` 0.15 and `friction` 0.06 (a touch a tick while it slides) and `restS` 1.5 (gadgets/flight.ts, serve.ts `fly`); the pulse is the room's EMP (`goOff` → `dseg`), so everything an Impact EMP turns off, it turns off. Bots: the attack planner's job for an Ohm bot (bots/plan.ts `makeJobs`). Look: `battery` on the back (render/bodyModel.ts); model: render/gadgetShapes.ts. Tests: test/brownout.test.ts. |
+| R3 M5 | **Ohm** | ✅ | data/operators/ohm.json, data/gadgets/brownout_pistol.json (`use.kind: "shoot"`: `reloadS`, `rangeM`; its `emp`). The hands (gadgets/hands.ts): Fire shoots (a `gshot` event), `GadgetAct.Shoot` while it reloads, put away after the last. The room judges a round as a bullet that goes into no wall (net/room.ts `judgeGadgetShot`, tracePellets with no penetration) and sets its EMP off there (`dseg`); everyone gets a `gshot` event (the streak, the burst). Offline the page stops it at the level (electronics.ts `roundStop`). The scope: electronics.ts `empTargets`, drawn by the lab page (`updateOhmScope`, a 1.6× zoom). Bots: the attack planner's job for an Ohm bot, its rounds at what the scope marks behind the first hard breach wall (bots/use.ts `shotMarks`). Look: `battery` on the back (render/bodyModel.ts); the pistol's model in render/gadgetShapes.ts. Tests: test/ohm.test.ts. (The first build's Brownout Pucks, e46a18e, are gone.) |

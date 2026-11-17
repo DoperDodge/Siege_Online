@@ -63,6 +63,8 @@ class Pool<T extends THREE.Object3D> {
 
 export class FxBus {
   private readonly pending: { tick: number; e: Extract<GameEvent, { kind: "shotFx" }> }[] = [];
+  /** Rounds from a gadget in the hands (R3, Ohm's pistol) the server judged: drawn the next frame from the shooter's hand. */
+  private readonly rounds: Extract<GameEvent, { kind: "gshot" }>[] = [];
   private readonly decals: THREE.Mesh[];
   private nextDecal = 0;
   private readonly tracers: Pool<THREE.Line>;
@@ -250,6 +252,7 @@ export class FxBus {
       } else if (e.kind === "dry") this.audio.play("dry");
       else if (e.kind === "reload") this.audio.play("reload");
       else if (e.kind === "meleeImpact") this.audio.play("knife", e.origin);
+      else if (e.kind === "gshot") this.audio.play("suppressedShot", e.origin);
     }
   }
 
@@ -265,6 +268,7 @@ export class FxBus {
         ball.position.set(e.pos[0], e.pos[1], e.pos[2]);
         ball.scale.setScalar(this.sim.data.intel.bulletproofCamera.dartRadiusM);
       } else if (e.kind === "blast") this.blast(e.gadget, e.pos, performance.now());
+      else if (e.kind === "gshot") this.rounds.push(e);
     }
   }
 
@@ -289,6 +293,17 @@ export class FxBus {
         this.light(from, now);
         this.audio.play("shot", [from.x, from.y, from.z]);
       }
+    }
+    // A round's streak from the shooter's hand to where it stopped, and its EMP's burst there (R3, Ohm's pistol).
+    for (const e of this.rounds.splice(0)) {
+      const own = ownPawns.includes(e.pawnId);
+      const from = own ? ownMuzzle() : muzzleOf(e.pawnId);
+      if (from) this.tracer(from, e.end, own, now);
+      if (from && !own) this.audio.play("suppressedShot", [from.x, from.y, from.z]);
+      if (!e.burst) continue;
+      const ball = this.emps.take(now, EMP_MS);
+      ball.position.set(e.end[0], e.end[1], e.end[2]);
+      ball.scale.setScalar(this.sim.data.gadgets.get(kindId(e.gadget) ?? "")?.emp?.radiusM ?? 1);
     }
     this.tracers.update(now);
     this.flashes.update(now);

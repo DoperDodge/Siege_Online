@@ -129,14 +129,23 @@ export function gadgetShape(id: string, size: V3): Map<ShapeMat, THREE.BufferGeo
       p.lathe("dark", [[r, h * 0.12], [r * 0.9, h * 0.28], [r * 0.5, h * 0.42], [0.001, h * 0.48]]);
       break;
     }
-    case "brownout_puck": {
-      // Ohm's puck (R3; our own design): a squat dark disc with a rubber rim to skid on, a copper coil ring round its
-      // top and a blue lens in the middle.
-      const r = Math.min(w, d) / 2 - 0.002;
-      p.cyl("rubber", r, h * 0.45, [0, -h / 2 + h * 0.225, 0], [0, 0, 0], 20);
-      p.cyl("dark", r * 0.94, h * 0.5, [0, h * 0.2, 0], [0, 0, 0], 20);
-      p.torus("yellow", r * 0.66, 0.0035, [0, h / 2 - 0.001, 0], [HALF_PI, 0, 0]);
-      p.cyl("blueGlow", r * 0.24, 0.004, [0, h / 2, 0], [0, 0, 0], 14);
+    case "brownout_pistol": {
+      // Ohm's Brownout Pistol (R3; our own design): a squat, heavy pistol with a fat barrel shroud ringed by copper coils
+      // and a blue emitter at the muzzle, a boxy scope on top with a blue lens, and a short grip under its back. Its
+      // front toward −z; its grip at the bottom of its box.
+      const grip = h * 0.42;
+      const bodyH = h - grip - 0.012;
+      const top = h / 2;
+      const yBody = top - 0.026 - bodyH / 2;
+      p.box("dark", [w * 0.92, bodyH, d * 0.62], [0, yBody, d * 0.12]);
+      p.cyl("dark", w * 0.36, d * 0.42, [0, yBody + bodyH * 0.08, -d * 0.27], [HALF_PI, 0, 0], 16);
+      for (let i = 0; i < 4; i++) p.torus("yellow", w * 0.37, 0.0028, [0, yBody + bodyH * 0.08, -d * 0.12 - i * d * 0.07], [0, 0, 0]);
+      p.cyl("blueGlow", w * 0.22, 0.006, [0, yBody + bodyH * 0.08, -d / 2 + 0.003], [HALF_PI, 0, 0], 14);
+      p.box("black", [w * 0.62, 0.026, d * 0.36], [0, top - 0.013, d * 0.05]);
+      p.cyl("blueGlow", 0.008, 0.004, [0, top - 0.013, d * 0.05 - d * 0.18 - 0.002], [HALF_PI, 0, 0], 12);
+      // (Tilted back, its corners reach past its own height: set up a little so they stay in the box.)
+      p.box("rubber", [w * 0.7, grip - 0.012, d * 0.2], [0, -h / 2 + grip / 2 + 0.006, d * 0.28], [-0.22, 0, 0]);
+      p.box("black", [w * 0.5, 0.01, d * 0.18], [0, yBody - bodyH / 2 - 0.005, d * 0.06]);
       break;
     }
     case "cluster_grenade": {
