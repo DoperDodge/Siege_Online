@@ -7,6 +7,7 @@ import rangeLabJson from "../../../../data/maps/range_lab/layout.json";
 import destructionLabJson from "../../../../data/maps/destruction_lab/layout.json";
 import gadgetLabJson from "../../../../data/maps/gadget_lab/layout.json";
 import oregonJson from "../../../../data/maps/oregon/level.json";
+import millraceJson from "../../../../data/maps/millrace/level.json";
 import brava from "../../../../data/operators/brava.json";
 import fuze from "../../../../data/operators/fuze.json";
 import thermite from "../../../../data/operators/thermite.json";
@@ -39,6 +40,7 @@ import botDifficultyJson from "../../../../data/bots/difficulty.json";
 import botNamesJson from "../../../../data/bots/names.json";
 import botPicksJson from "../../../../data/bots/picks.json";
 import oregonStratsJson from "../../../../data/maps/oregon/bot_strats.json";
+import millraceStratsJson from "../../../../data/maps/millrace/bot_strats.json";
 import objectiveJson from "../../../../data/objective.json";
 import intelJson from "../../../../data/intel.json";
 import destructionJson from "../../../../data/destruction.json";
@@ -118,7 +120,7 @@ export const rawData = {
   movement: movementJson as Record<string, unknown>,
   hitboxes: hitboxJson as Record<string, unknown>,
   operators: [brava, fuze, thermite, striker, dokkaebi, sledge, sentry, skopos, mira, lesion, pulse, mute] as Record<string, unknown>[],
-  levels: [movementLabJson, rangeLabJson, destructionLabJson, gadgetLabJson, oregonJson] as Record<string, unknown>[],
+  levels: [movementLabJson, rangeLabJson, destructionLabJson, gadgetLabJson, oregonJson, millraceJson] as Record<string, unknown>[],
   weapons: weaponFiles,
   gunplay: gunplayJson as Record<string, unknown>,
   combat: combatJson as Record<string, unknown>,
@@ -131,11 +133,11 @@ export const rawData = {
   botDifficulty: botDifficultyJson as Record<string, unknown>,
   botNames: botNamesJson as Record<string, unknown>,
   botPicks: botPicksJson as Record<string, unknown>,
-  botStrats: { oregon: oregonStratsJson } as Record<string, Record<string, unknown>>,
+  botStrats: { oregon: oregonStratsJson, millrace: millraceStratsJson } as Record<string, Record<string, unknown>>,
 };
 
 /** Maps that tools/mapgen compiles (DECISIONS D-070): their LevelDef is level.json, generated from the authoring layout.json. */
-const COMPILED_MAPS = new Set(["oregon"]);
+const COMPILED_MAPS = new Set(["oregon", "millrace"]);
 /** The file a level comes from, for error messages. */
 export const levelFile = (id: string) => `data/maps/${id}/${COMPILED_MAPS.has(id) ? "level" : "layout"}.json`;
 

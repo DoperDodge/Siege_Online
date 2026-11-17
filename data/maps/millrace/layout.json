@@ -1,0 +1,1598 @@
+{
+  "_doc": "Millrace (Project Redmond's map, R2, D-183): the authoring root; data/maps/millrace/DESIGN.md has the plan. Hand-drawn in world u (0.15 m), x east, z south. Compiled by `npm run mapgen -- --map millrace` to level.json.",
+  "_unverified": [],
+  "_sources": {
+    "design": "data/maps/millrace/DESIGN.md (ours)"
+  },
+  "id": "millrace",
+  "name": "Millrace",
+  "emit": [
+    "B",
+    "1F",
+    "2F"
+  ],
+  "parts": [
+    "walls_B.json",
+    "walls_1F.json",
+    "walls_2F.json",
+    "exterior.json"
+  ],
+  "units": {
+    "mPerU": 0.15,
+    "snapM": 0.05
+  },
+  "frames": {
+    "B": {
+      "ax": 1,
+      "bx": 0,
+      "ay": 1,
+      "by": 0,
+      "status": "assumed",
+      "use": "main",
+      "note": "Millrace is drawn by hand in one frame (world u)"
+    },
+    "1F": {
+      "ax": 1,
+      "bx": 0,
+      "ay": 1,
+      "by": 0,
+      "status": "assumed",
+      "use": "main",
+      "note": "Millrace is drawn by hand in one frame (world u)"
+    },
+    "2F": {
+      "ax": 1,
+      "bx": 0,
+      "ay": 1,
+      "by": 0,
+      "status": "assumed",
+      "use": "main",
+      "note": "Millrace is drawn by hand in one frame (world u)"
+    },
+    "3F": {
+      "ax": 1,
+      "bx": 0,
+      "ay": 1,
+      "by": 0,
+      "status": "assumed",
+      "use": "main",
+      "note": "Millrace is drawn by hand in one frame (world u)"
+    },
+    "world": {
+      "ax": 1,
+      "bx": 0,
+      "ay": 1,
+      "by": 0,
+      "status": "reference",
+      "use": "main",
+      "note": "Millrace is drawn by hand in one frame (world u)"
+    }
+  },
+  "storeys": [
+    {
+      "id": "B",
+      "floorY": -3.2,
+      "slabM": 0.2,
+      "underground": true
+    },
+    {
+      "id": "1F",
+      "floorY": 0,
+      "slabM": 0.2
+    },
+    {
+      "id": "2F",
+      "floorY": 3.2,
+      "slabM": 0.2
+    }
+  ],
+  "defaults": {
+    "wallM": {
+      "int": 0.2,
+      "ext": 0.3
+    },
+    "wallHeightM": 3,
+    "door": {
+      "headM": 2.1,
+      "barricadeM": 0.1
+    },
+    "window": {
+      "sillM": 0.9,
+      "headM": 2.1,
+      "glass": true,
+      "glassM": 0.02,
+      "barricadeM": 0.06
+    },
+    "open": {
+      "headM": 2.1
+    },
+    "droneHole": {
+      "wM": 0.4,
+      "hM": 0.2
+    },
+    "softFloor": {
+      "tileMaxM": 4
+    },
+    "rail": {
+      "hM": 1
+    },
+    "stairs": {
+      "riserMaxM": 0.2,
+      "treadM": 0.3,
+      "headroomM": 2
+    },
+    "boundary": {
+      "hM": 4,
+      "thickM": 0.5
+    },
+    "killDepthM": 30,
+    "junctionU": 1,
+    "site": {
+      "plantMarginM": 0.5
+    },
+    "camera": {
+      "belowCeilingM": 0.3,
+      "pitchDeg": -20,
+      "reachM": 2,
+      "postM": 3
+    },
+    "ingredient": {
+      "fireExtinguisherM": 1,
+      "gasPipeM": 1.2,
+      "reachM": 1.5
+    },
+    "zone": {
+      "depthM": 1.5
+    }
+  },
+  "spawns": [
+    {
+      "id": "lab",
+      "side": "lab",
+      "group": "LAB",
+      "level": "EXT",
+      "frame": "world",
+      "at": [
+        200.0,
+        -66.667
+      ],
+      "facing": 0,
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "A_RIVERBANK",
+      "side": "attack",
+      "group": "A_RIVERBANK",
+      "level": "EXT",
+      "frame": "world",
+      "at": [
+        -133.333,
+        40.0
+      ],
+      "facing": "building",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "A_RIVERBANK_2",
+      "side": "attack",
+      "group": "A_RIVERBANK",
+      "level": "EXT",
+      "frame": "world",
+      "at": [
+        -133.333,
+        53.333
+      ],
+      "facing": "building",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "A_RIVERBANK_3",
+      "side": "attack",
+      "group": "A_RIVERBANK",
+      "level": "EXT",
+      "frame": "world",
+      "at": [
+        -133.333,
+        66.667
+      ],
+      "facing": "building",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "A_RIVERBANK_4",
+      "side": "attack",
+      "group": "A_RIVERBANK",
+      "level": "EXT",
+      "frame": "world",
+      "at": [
+        -133.333,
+        80.0
+      ],
+      "facing": "building",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "A_RIVERBANK_5",
+      "side": "attack",
+      "group": "A_RIVERBANK",
+      "level": "EXT",
+      "frame": "world",
+      "at": [
+        -133.333,
+        93.333
+      ],
+      "facing": "building",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "B_RAIL_SIDING",
+      "side": "attack",
+      "group": "B_RAIL_SIDING",
+      "level": "EXT",
+      "frame": "world",
+      "at": [
+        173.333,
+        -146.667
+      ],
+      "facing": "building",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "B_RAIL_SIDING_2",
+      "side": "attack",
+      "group": "B_RAIL_SIDING",
+      "level": "EXT",
+      "frame": "world",
+      "at": [
+        186.667,
+        -146.667
+      ],
+      "facing": "building",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "B_RAIL_SIDING_3",
+      "side": "attack",
+      "group": "B_RAIL_SIDING",
+      "level": "EXT",
+      "frame": "world",
+      "at": [
+        200.0,
+        -146.667
+      ],
+      "facing": "building",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "B_RAIL_SIDING_4",
+      "side": "attack",
+      "group": "B_RAIL_SIDING",
+      "level": "EXT",
+      "frame": "world",
+      "at": [
+        213.333,
+        -146.667
+      ],
+      "facing": "building",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "B_RAIL_SIDING_5",
+      "side": "attack",
+      "group": "B_RAIL_SIDING",
+      "level": "EXT",
+      "frame": "world",
+      "at": [
+        226.667,
+        -146.667
+      ],
+      "facing": "building",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "C_YARD_GATE",
+      "side": "attack",
+      "group": "C_YARD_GATE",
+      "level": "EXT",
+      "frame": "world",
+      "at": [
+        493.333,
+        320.0
+      ],
+      "facing": "building",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "C_YARD_GATE_2",
+      "side": "attack",
+      "group": "C_YARD_GATE",
+      "level": "EXT",
+      "frame": "world",
+      "at": [
+        503.333,
+        310.0
+      ],
+      "facing": "building",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "C_YARD_GATE_3",
+      "side": "attack",
+      "group": "C_YARD_GATE",
+      "level": "EXT",
+      "frame": "world",
+      "at": [
+        513.333,
+        300.0
+      ],
+      "facing": "building",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "C_YARD_GATE_4",
+      "side": "attack",
+      "group": "C_YARD_GATE",
+      "level": "EXT",
+      "frame": "world",
+      "at": [
+        523.333,
+        290.0
+      ],
+      "facing": "building",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "C_YARD_GATE_5",
+      "side": "attack",
+      "group": "C_YARD_GATE",
+      "level": "EXT",
+      "frame": "world",
+      "at": [
+        533.333,
+        280.0
+      ],
+      "facing": "building",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "SITE_BOILER",
+      "side": "defense",
+      "group": "SITE_BOILER",
+      "level": "B",
+      "frame": "world",
+      "at": [
+        66.667,
+        186.667
+      ],
+      "facing": "site",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "SITE_BOILER_2",
+      "side": "defense",
+      "group": "SITE_BOILER",
+      "level": "B",
+      "frame": "world",
+      "at": [
+        80.0,
+        186.667
+      ],
+      "facing": "site",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "SITE_BOILER_3",
+      "side": "defense",
+      "group": "SITE_BOILER",
+      "level": "B",
+      "frame": "world",
+      "at": [
+        93.333,
+        190.0
+      ],
+      "facing": "site",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "SITE_BOILER_4",
+      "side": "defense",
+      "group": "SITE_BOILER",
+      "level": "B",
+      "frame": "world",
+      "at": [
+        66.667,
+        236.667
+      ],
+      "facing": "site",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "SITE_BOILER_5",
+      "side": "defense",
+      "group": "SITE_BOILER",
+      "level": "B",
+      "frame": "world",
+      "at": [
+        83.333,
+        240.0
+      ],
+      "facing": "site",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "SITE_MILL",
+      "side": "defense",
+      "group": "SITE_MILL",
+      "level": "1F",
+      "frame": "world",
+      "at": [
+        193.333,
+        20.0
+      ],
+      "facing": "site",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "SITE_MILL_2",
+      "side": "defense",
+      "group": "SITE_MILL",
+      "level": "1F",
+      "frame": "world",
+      "at": [
+        206.667,
+        53.333
+      ],
+      "facing": "site",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "SITE_MILL_3",
+      "side": "defense",
+      "group": "SITE_MILL",
+      "level": "1F",
+      "frame": "world",
+      "at": [
+        233.333,
+        26.667
+      ],
+      "facing": "site",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "SITE_MILL_4",
+      "side": "defense",
+      "group": "SITE_MILL",
+      "level": "1F",
+      "frame": "world",
+      "at": [
+        193.333,
+        100.0
+      ],
+      "facing": "site",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "SITE_MILL_5",
+      "side": "defense",
+      "group": "SITE_MILL",
+      "level": "1F",
+      "frame": "world",
+      "at": [
+        233.333,
+        113.333
+      ],
+      "facing": "site",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "SITE_DISPATCH",
+      "side": "defense",
+      "group": "SITE_DISPATCH",
+      "level": "1F",
+      "frame": "world",
+      "at": [
+        333.333,
+        80.0
+      ],
+      "facing": "site",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "SITE_DISPATCH_2",
+      "side": "defense",
+      "group": "SITE_DISPATCH",
+      "level": "1F",
+      "frame": "world",
+      "at": [
+        353.333,
+        106.667
+      ],
+      "facing": "site",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "SITE_DISPATCH_3",
+      "side": "defense",
+      "group": "SITE_DISPATCH",
+      "level": "1F",
+      "frame": "world",
+      "at": [
+        380.0,
+        80.0
+      ],
+      "facing": "site",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "SITE_DISPATCH_4",
+      "side": "defense",
+      "group": "SITE_DISPATCH",
+      "level": "1F",
+      "frame": "world",
+      "at": [
+        333.333,
+        146.667
+      ],
+      "facing": "site",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "SITE_DISPATCH_5",
+      "side": "defense",
+      "group": "SITE_DISPATCH",
+      "level": "1F",
+      "frame": "world",
+      "at": [
+        380.0,
+        166.667
+      ],
+      "facing": "site",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "SITE_OFFICES",
+      "side": "defense",
+      "group": "SITE_OFFICES",
+      "level": "2F",
+      "frame": "world",
+      "at": [
+        333.333,
+        40.0
+      ],
+      "facing": "site",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "SITE_OFFICES_2",
+      "side": "defense",
+      "group": "SITE_OFFICES",
+      "level": "2F",
+      "frame": "world",
+      "at": [
+        360.0,
+        60.0
+      ],
+      "facing": "site",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "SITE_OFFICES_3",
+      "side": "defense",
+      "group": "SITE_OFFICES",
+      "level": "2F",
+      "frame": "world",
+      "at": [
+        380.0,
+        40.0
+      ],
+      "facing": "site",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "SITE_OFFICES_4",
+      "side": "defense",
+      "group": "SITE_OFFICES",
+      "level": "2F",
+      "frame": "world",
+      "at": [
+        333.333,
+        106.667
+      ],
+      "facing": "site",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "SITE_OFFICES_5",
+      "side": "defense",
+      "group": "SITE_OFFICES",
+      "level": "2F",
+      "frame": "world",
+      "at": [
+        380.0,
+        120.0
+      ],
+      "facing": "site",
+      "src": "hand",
+      "_unverified": []
+    }
+  ],
+  "rooms": [
+    {
+      "id": "B_MILLRACE",
+      "floor": "B",
+      "callout": "Millrace",
+      "seed": [
+        -26.667,
+        13.333
+      ],
+      "frame": "world"
+    },
+    {
+      "id": "B_WHEEL_PIT",
+      "floor": "B",
+      "callout": "Wheel Pit",
+      "seed": [
+        26.667,
+        66.667
+      ],
+      "frame": "world"
+    },
+    {
+      "id": "B_DYE_VATS",
+      "floor": "B",
+      "callout": "Dye Vats",
+      "seed": [
+        106.667,
+        66.667
+      ],
+      "frame": "world"
+    },
+    {
+      "id": "B_CLOTH_STORE",
+      "floor": "B",
+      "callout": "Cloth Store",
+      "seed": [
+        213.333,
+        66.667
+      ],
+      "frame": "world"
+    },
+    {
+      "id": "B_CELLAR_STAIRS",
+      "floor": "B",
+      "callout": "Cellar Stairs",
+      "seed": [
+        303.333,
+        100.0
+      ],
+      "frame": "world"
+    },
+    {
+      "id": "B_PUMP_ROOM",
+      "floor": "B",
+      "callout": "Pump Room",
+      "seed": [
+        360.0,
+        46.667
+      ],
+      "frame": "world"
+    },
+    {
+      "id": "B_STRONGROOM",
+      "floor": "B",
+      "callout": "Strongroom",
+      "seed": [
+        360.0,
+        140.0
+      ],
+      "frame": "world"
+    },
+    {
+      "id": "B_TUNNEL",
+      "floor": "B",
+      "callout": "Tunnel",
+      "seed": [
+        100.0,
+        153.333
+      ],
+      "frame": "world"
+    },
+    {
+      "id": "B_BOILER_ROOM",
+      "floor": "B",
+      "callout": "Boiler Room",
+      "seed": [
+        80.0,
+        206.667
+      ],
+      "frame": "world"
+    },
+    {
+      "id": "B_COAL_STORE",
+      "floor": "B",
+      "callout": "Coal Store",
+      "seed": [
+        100.0,
+        236.667
+      ],
+      "frame": "world"
+    },
+    {
+      "id": "1F_LOOM_HALL",
+      "floor": "1F",
+      "callout": "Loom Hall",
+      "seed": [
+        86.667,
+        80.0
+      ],
+      "frame": "world"
+    },
+    {
+      "id": "1F_SPINNING",
+      "floor": "1F",
+      "callout": "Spinning Room",
+      "seed": [
+        220.0,
+        33.333
+      ],
+      "frame": "world"
+    },
+    {
+      "id": "1F_MENDING",
+      "floor": "1F",
+      "callout": "Mending Room",
+      "seed": [
+        220.0,
+        106.667
+      ],
+      "frame": "world"
+    },
+    {
+      "id": "1F_STAIR_HALL",
+      "floor": "1F",
+      "callout": "Stair Hall",
+      "seed": [
+        303.333,
+        100.0
+      ],
+      "frame": "world"
+    },
+    {
+      "id": "1F_RECEPTION",
+      "floor": "1F",
+      "callout": "Reception",
+      "seed": [
+        360.0,
+        40.0
+      ],
+      "frame": "world"
+    },
+    {
+      "id": "1F_DISPATCH",
+      "floor": "1F",
+      "callout": "Dispatch Office",
+      "seed": [
+        360.0,
+        93.333
+      ],
+      "frame": "world"
+    },
+    {
+      "id": "1F_BALE_STORE",
+      "floor": "1F",
+      "callout": "Bale Store",
+      "seed": [
+        360.0,
+        153.333
+      ],
+      "frame": "world"
+    },
+    {
+      "id": "1F_FIRING_FLOOR",
+      "floor": "1F",
+      "callout": "Firing Floor",
+      "seed": [
+        93.333,
+        213.333
+      ],
+      "frame": "world"
+    },
+    {
+      "id": "2F_GALLERY",
+      "floor": "2F",
+      "callout": "Gallery",
+      "seed": [
+        86.667,
+        10.0
+      ],
+      "frame": "world"
+    },
+    {
+      "id": "2F_CARD_ROOM",
+      "floor": "2F",
+      "callout": "Card Room",
+      "seed": [
+        220.0,
+        66.667
+      ],
+      "frame": "world"
+    },
+    {
+      "id": "2F_UPPER_STAIRS",
+      "floor": "2F",
+      "callout": "Upper Stairs",
+      "seed": [
+        303.333,
+        100.0
+      ],
+      "frame": "world"
+    },
+    {
+      "id": "2F_DRAFTING",
+      "floor": "2F",
+      "callout": "Drafting Room",
+      "seed": [
+        360.0,
+        40.0
+      ],
+      "frame": "world"
+    },
+    {
+      "id": "2F_PAYROLL",
+      "floor": "2F",
+      "callout": "Payroll",
+      "seed": [
+        360.0,
+        106.667
+      ],
+      "frame": "world"
+    },
+    {
+      "id": "2F_ARCHIVE",
+      "floor": "2F",
+      "callout": "Archive",
+      "seed": [
+        360.0,
+        160.0
+      ],
+      "frame": "world"
+    }
+  ],
+  "splits": [],
+  "softFloors": [
+    {
+      "id": "SF-2F-01",
+      "floor": "2F",
+      "frame": "world",
+      "rects": [
+        [
+          0.0,
+          0.0,
+          173.333,
+          20.0
+        ]
+      ],
+      "src": "hand",
+      "note": "the Gallery's boards",
+      "_unverified": []
+    },
+    {
+      "id": "SF-2F-02",
+      "floor": "2F",
+      "frame": "world",
+      "rects": [
+        [
+          220.0,
+          0.0,
+          266.667,
+          133.333
+        ]
+      ],
+      "src": "hand",
+      "note": "the Card Room's east half",
+      "_unverified": []
+    },
+    {
+      "id": "SF-2F-03",
+      "floor": "2F",
+      "frame": "world",
+      "rects": [
+        [
+          320.0,
+          133.333,
+          400.0,
+          186.667
+        ]
+      ],
+      "src": "hand",
+      "note": "the Archive",
+      "_unverified": []
+    },
+    {
+      "id": "SF-1F-01",
+      "floor": "1F",
+      "frame": "world",
+      "rects": [
+        [
+          320.0,
+          120.0,
+          360.0,
+          186.667
+        ]
+      ],
+      "src": "hand",
+      "note": "the Bale Store's west part, over the Strongroom",
+      "_unverified": []
+    }
+  ],
+  "hatches": [
+    {
+      "id": "H1",
+      "frame": "world",
+      "rect": [
+        220.0,
+        93.333,
+        228.0,
+        101.333
+      ],
+      "top": "2F_CARD_ROOM",
+      "bottom": "1F_MENDING",
+      "_unverified": []
+    },
+    {
+      "id": "H2",
+      "frame": "world",
+      "rect": [
+        346.667,
+        93.333,
+        354.667,
+        101.333
+      ],
+      "top": "2F_PAYROLL",
+      "bottom": "1F_DISPATCH",
+      "_unverified": []
+    },
+    {
+      "id": "H3",
+      "frame": "world",
+      "rect": [
+        200.0,
+        33.333,
+        208.0,
+        41.333
+      ],
+      "top": "1F_SPINNING",
+      "bottom": "B_CLOTH_STORE",
+      "_unverified": []
+    },
+    {
+      "id": "H4",
+      "frame": "world",
+      "rect": [
+        73.333,
+        193.333,
+        81.333,
+        201.333
+      ],
+      "top": "1F_FIRING_FLOOR",
+      "bottom": "B_BOILER_ROOM",
+      "_unverified": []
+    }
+  ],
+  "floorShifts": [],
+  "wells": [
+    {
+      "id": "W-2F-01",
+      "floor": "2F",
+      "frame": "world",
+      "rects": [
+        [
+          0.0,
+          20.0,
+          173.333,
+          133.333
+        ]
+      ],
+      "note": "the Loom Hall, open to the roof",
+      "_unverified": []
+    },
+    {
+      "id": "W-1F-01",
+      "floor": "1F",
+      "frame": "world",
+      "rects": [
+        [
+          -53.333,
+          -40.0,
+          0.0,
+          226.667
+        ]
+      ],
+      "note": "the millrace, open to the sky",
+      "_unverified": []
+    }
+  ],
+  "stairs": [
+    {
+      "id": "ST_MAIN",
+      "names": [
+        "Main Stairs"
+      ],
+      "runs": [
+        {
+          "from": "B",
+          "to": "1F",
+          "plan": "switchback",
+          "shaft": [
+            273.333,
+            6.667,
+            296.0,
+            37.333
+          ],
+          "up": "S",
+          "turn": "right",
+          "_unverified": []
+        },
+        {
+          "from": "1F",
+          "to": "2F",
+          "plan": "switchback",
+          "shaft": [
+            273.333,
+            6.667,
+            296.0,
+            37.333
+          ],
+          "up": "S",
+          "turn": "right",
+          "_unverified": []
+        }
+      ]
+    },
+    {
+      "id": "ST_OFFICE",
+      "names": [
+        "Office Stairs"
+      ],
+      "runs": [
+        {
+          "from": "1F",
+          "to": "2F",
+          "plan": "straight",
+          "shaft": [
+            342.667,
+            2.667,
+            390.667,
+            14.0
+          ],
+          "up": "E",
+          "widthM": 1.2,
+          "_unverified": []
+        }
+      ]
+    },
+    {
+      "id": "ST_FIRING",
+      "names": [
+        "Boiler Stairs"
+      ],
+      "runs": [
+        {
+          "from": "B",
+          "to": "1F",
+          "plan": "straight",
+          "shaft": [
+            133.333,
+            180.0,
+            144.667,
+            218.667
+          ],
+          "up": "N",
+          "widthM": 1.2,
+          "_unverified": []
+        }
+      ]
+    },
+    {
+      "id": "ST_GALLERY",
+      "names": [
+        "Gallery Stairs"
+      ],
+      "runs": [
+        {
+          "from": "1F",
+          "to": "2F",
+          "plan": "straight",
+          "shaft": [
+            2.0,
+            21.333,
+            13.333,
+            66.667
+          ],
+          "up": "N",
+          "widthM": 1.2,
+          "_unverified": []
+        }
+      ]
+    },
+    {
+      "id": "ST_RACE",
+      "names": [
+        "Millrace Steps"
+      ],
+      "runs": [
+        {
+          "from": "B",
+          "to": "EXT",
+          "plan": "straight",
+          "shaft": [
+            -40.0,
+            182.667,
+            -13.333,
+            222.667
+          ],
+          "up": "S",
+          "widthM": 2.0,
+          "_unverified": []
+        }
+      ]
+    }
+  ],
+  "ladders": [],
+  "roofs": [
+    {
+      "id": "RF_MILL",
+      "callout": "Mill Roof",
+      "rects": [
+        [
+          0.0,
+          0.0,
+          320.0,
+          133.333
+        ]
+      ],
+      "shape": "gable",
+      "eaveY": 6.2,
+      "walkable": true,
+      "ridge": "EW",
+      "pitchDeg": 22,
+      "_unverified": []
+    },
+    {
+      "id": "RF_OFFICE",
+      "callout": "Office Roof",
+      "rects": [
+        [
+          320.0,
+          0.0,
+          400.0,
+          186.667
+        ]
+      ],
+      "shape": "flat",
+      "eaveY": 6.2,
+      "walkable": true,
+      "_unverified": []
+    },
+    {
+      "id": "RF_BOILER",
+      "callout": "Boiler House Roof",
+      "rects": [
+        [
+          53.333,
+          173.333,
+          146.667,
+          253.333
+        ]
+      ],
+      "shape": "flat",
+      "eaveY": 3.2,
+      "walkable": true,
+      "_unverified": []
+    }
+  ],
+  "sites": [
+    {
+      "id": "SITE_BOILER",
+      "name": "B Boiler Room / Coal Store",
+      "number": 1,
+      "rooms": [
+        "B_BOILER_ROOM",
+        "B_COAL_STORE"
+      ],
+      "bombs": [
+        {
+          "id": "1A",
+          "room": "B_BOILER_ROOM",
+          "frame": "world",
+          "at": [
+            73.333,
+            184.0
+          ]
+        },
+        {
+          "id": "1B",
+          "room": "B_COAL_STORE",
+          "frame": "world",
+          "at": [
+            73.333,
+            243.333
+          ]
+        }
+      ],
+      "preSetup": {
+        "reinforce": [
+          {
+            "panel": "H4"
+          }
+        ],
+        "holes": [],
+        "research": "ours (D-183)"
+      },
+      "_unverified": []
+    },
+    {
+      "id": "SITE_MILL",
+      "name": "1F Spinning Room / Mending Room",
+      "number": 2,
+      "rooms": [
+        "1F_SPINNING",
+        "1F_MENDING"
+      ],
+      "bombs": [
+        {
+          "id": "2A",
+          "room": "1F_SPINNING",
+          "frame": "world",
+          "at": [
+            246.667,
+            13.333
+          ]
+        },
+        {
+          "id": "2B",
+          "room": "1F_MENDING",
+          "frame": "world",
+          "at": [
+            246.667,
+            120.0
+          ]
+        }
+      ],
+      "preSetup": {
+        "reinforce": [
+          {
+            "panel": "SW-1F-01",
+            "from": "1F_SPINNING"
+          },
+          {
+            "panel": "SW-1F-02",
+            "from": "1F_MENDING"
+          }
+        ],
+        "holes": [
+          {
+            "panel": "SW-1F-04",
+            "size": "vault"
+          }
+        ],
+        "research": "ours (D-183)"
+      },
+      "_unverified": []
+    },
+    {
+      "id": "SITE_DISPATCH",
+      "name": "1F Dispatch Office / Bale Store",
+      "number": 3,
+      "rooms": [
+        "1F_DISPATCH",
+        "1F_BALE_STORE"
+      ],
+      "bombs": [
+        {
+          "id": "3A",
+          "room": "1F_DISPATCH",
+          "frame": "world",
+          "at": [
+            383.333,
+            100.0
+          ]
+        },
+        {
+          "id": "3B",
+          "room": "1F_BALE_STORE",
+          "frame": "world",
+          "at": [
+            383.333,
+            173.333
+          ]
+        }
+      ],
+      "preSetup": {
+        "reinforce": [
+          {
+            "panel": "SW-1F-06",
+            "from": "1F_DISPATCH"
+          },
+          {
+            "panel": "H2"
+          }
+        ],
+        "holes": [],
+        "research": "ours (D-183)"
+      },
+      "_unverified": []
+    },
+    {
+      "id": "SITE_OFFICES",
+      "name": "2F Drafting Room / Payroll",
+      "number": 4,
+      "rooms": [
+        "2F_DRAFTING",
+        "2F_PAYROLL"
+      ],
+      "bombs": [
+        {
+          "id": "4A",
+          "room": "2F_DRAFTING",
+          "frame": "world",
+          "at": [
+            340.0,
+            60.0
+          ]
+        },
+        {
+          "id": "4B",
+          "room": "2F_PAYROLL",
+          "frame": "world",
+          "at": [
+            383.333,
+            120.0
+          ]
+        }
+      ],
+      "preSetup": {
+        "reinforce": [
+          {
+            "panel": "SW-2F-06",
+            "from": "2F_PAYROLL"
+          }
+        ],
+        "holes": [
+          {
+            "panel": "SW-2F-04",
+            "size": "vault"
+          }
+        ],
+        "research": "ours (D-183)"
+      },
+      "_unverified": []
+    }
+  ],
+  "cameras": [
+    {
+      "id": "CAM1",
+      "level": "EXT",
+      "frame": "world",
+      "at": [
+        200.0,
+        -93.333
+      ],
+      "_unverified": []
+    },
+    {
+      "id": "CAM2",
+      "level": "EXT",
+      "frame": "world",
+      "at": [
+        233.333,
+        200.0
+      ],
+      "_unverified": []
+    },
+    {
+      "id": "CAM3",
+      "level": "1F",
+      "frame": "world",
+      "at": [
+        86.667,
+        130.667
+      ],
+      "room": "1F_LOOM_HALL",
+      "_unverified": []
+    },
+    {
+      "id": "CAM4",
+      "level": "1F",
+      "frame": "world",
+      "at": [
+        317.333,
+        120.0
+      ],
+      "room": "1F_STAIR_HALL",
+      "_unverified": []
+    },
+    {
+      "id": "CAM5",
+      "level": "1F",
+      "frame": "world",
+      "at": [
+        322.667,
+        53.333
+      ],
+      "room": "1F_RECEPTION",
+      "_unverified": []
+    },
+    {
+      "id": "CAM6",
+      "level": "2F",
+      "frame": "world",
+      "at": [
+        176.0,
+        120.0
+      ],
+      "room": "2F_CARD_ROOM",
+      "_unverified": []
+    },
+    {
+      "id": "CAM7",
+      "level": "2F",
+      "frame": "world",
+      "at": [
+        317.333,
+        13.333
+      ],
+      "room": "2F_UPPER_STAIRS",
+      "_unverified": []
+    },
+    {
+      "id": "CAM8",
+      "level": "B",
+      "frame": "world",
+      "at": [
+        56.0,
+        120.0
+      ],
+      "room": "B_DYE_VATS",
+      "_unverified": []
+    }
+  ],
+  "ingredients": [
+    {
+      "id": "ING1",
+      "kind": "fire_extinguisher",
+      "level": "1F",
+      "room": "1F_STAIR_HALL",
+      "frame": "world",
+      "at": [
+        269.333,
+        80.0
+      ],
+      "_unverified": []
+    },
+    {
+      "id": "ING2",
+      "kind": "fire_extinguisher",
+      "level": "B",
+      "room": "B_DYE_VATS",
+      "frame": "world",
+      "at": [
+        157.333,
+        13.333
+      ],
+      "_unverified": []
+    },
+    {
+      "id": "ING3",
+      "kind": "gas_pipe",
+      "level": "B",
+      "room": "B_CLOTH_STORE",
+      "frame": "world",
+      "at": [
+        264.0,
+        120.0
+      ],
+      "_unverified": []
+    },
+    {
+      "id": "ING4",
+      "kind": "fire_extinguisher",
+      "level": "2F",
+      "room": "2F_UPPER_STAIRS",
+      "frame": "world",
+      "at": [
+        317.333,
+        80.0
+      ],
+      "_unverified": []
+    },
+    {
+      "id": "ING5",
+      "kind": "gas_pipe",
+      "level": "1F",
+      "room": "1F_LOOM_HALL",
+      "frame": "world",
+      "at": [
+        160.0,
+        2.667
+      ],
+      "_unverified": []
+    }
+  ],
+  "zones": [
+    {
+      "id": "PEEK_A",
+      "kind": "spawn_peek",
+      "openings": [
+        "1F.o022",
+        "1F.o024",
+        "2F.o019"
+      ],
+      "faces": "A_RIVERBANK",
+      "_unverified": []
+    },
+    {
+      "id": "PEEK_B",
+      "kind": "spawn_peek",
+      "openings": [
+        "1F.o003",
+        "1F.o006",
+        "1F.o007",
+        "2F.o004",
+        "2F.o005"
+      ],
+      "faces": "B_RAIL_SIDING",
+      "_unverified": []
+    },
+    {
+      "id": "PEEK_C",
+      "kind": "spawn_peek",
+      "openings": [
+        "1F.o010",
+        "1F.o011",
+        "1F.o013",
+        "2F.o009"
+      ],
+      "faces": "C_YARD_GATE",
+      "_unverified": []
+    }
+  ],
+  "rappel": {
+    "refuse": []
+  }
+}

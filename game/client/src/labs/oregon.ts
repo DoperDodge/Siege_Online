@@ -11,7 +11,9 @@ import { startLab } from "./common/lab.js";
 import { destructionFeatures } from "./destructionFeatures.js";
 import { navOverlay } from "./navOverlay.js";
 
-const level = loadGameData().levels.get("oregon")!;
+// `?map=millrace` shows Project Redmond's own map (R2, D-183) in this lab instead of Oregon.
+const MAP = new URLSearchParams(location.search).get("map") === "millrace" ? "millrace" : "oregon";
+const level = loadGameData().levels.get(MAP)!;
 /** Metres from the plan's u (the level's plan.mPerU). */
 const U = level.plan?.mPerU ?? 0.15;
 const at = (name: string, x: number, y: number, yawDeg = 0): [string, number, number, number, number] => [name, x * U, 0, y * U, yawDeg];
@@ -23,8 +25,8 @@ const rooms = level.rooms.length > 0;
 const spawns = level.spawns.filter((s, i, all) => s.side === "attack" && all.findIndex((o) => o.group === s.group) === i);
 
 await startLab({
-  levelId: "oregon",
-  title: "Oregon (greybox)",
+  levelId: MAP,
+  title: MAP === "millrace" ? "Millrace" : "Oregon (greybox)",
   page: "/labs/oregon.html",
   offline: "local",
   goTo: [

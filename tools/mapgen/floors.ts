@@ -222,10 +222,11 @@ export function compileFloors(layout: Layout, fr: Frames, wallSolids: Solid[], r
       count.hatches++;
     }
     if (storey === groundStorey) {
-      // ---- The ground: the whole play area, less the hatches and the stairwells (and, with the outside, the
-      // bunker's trench).
+      // ---- The ground: the whole play area, less the hatches, the stairwells (and, with the outside, the
+      // bunker's trench) and the ground's own wells (a sunken space open to the sky: Millrace's millrace, D-183).
       const [px0, pz0, px1, pz1] = playable.map((u) => u * k);
-      subtractRects([px0, pz0, px1, pz1], [...groundHoles, ...(stairHoles.get(floor) ?? [])]).forEach((r, i) => solids.push(slab(`ground#${i}`, r, y0, y1, { surface: "HARD_FLOOR" })));
+      const groundWells = layout.wells.filter((w) => w.floor === floor).flatMap((w) => w.rects.map((r) => toM(w.frame, r)));
+      subtractRects([px0, pz0, px1, pz1], [...groundHoles, ...(stairHoles.get(floor) ?? []), ...groundWells]).forEach((r, i) => solids.push(slab(`ground#${i}`, r, y0, y1, { surface: "HARD_FLOOR" })));
       count.slabs = solids.filter((s) => s.id.startsWith("ground#")).length;
       continue;
     }

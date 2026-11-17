@@ -1,0 +1,268 @@
+{
+  "_doc": "Millrace's outside (ours, D-183): the playable ground and the yard's items, and the rooms' cover props, in world u.",
+  "playable": [
+    -200.0,
+    -200.0,
+    600.0,
+    466.667
+  ],
+  "items": [
+    {
+      "id": "EXT_DOCK",
+      "kind": "box",
+      "level": "EXT",
+      "frame": "world",
+      "rect": [
+        80.0,
+        -26.667,
+        266.667,
+        -1.333
+      ],
+      "yawDeg": 0,
+      "hM": 1.0,
+      "surface": "HARD_FLOOR",
+      "vaultable": true,
+      "label": "loading dock",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "EXT_TRUCK",
+      "kind": "box",
+      "level": "EXT",
+      "frame": "world",
+      "rect": [
+        133.333,
+        -73.333,
+        183.333,
+        -56.667
+      ],
+      "yawDeg": 0,
+      "hM": 3.0,
+      "surface": "HARD_WALL",
+      "vaultable": false,
+      "label": "box truck",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "EXT_CONTAINER_1",
+      "kind": "box",
+      "level": "EXT",
+      "frame": "world",
+      "rect": [
+        440.0,
+        226.667,
+        480.0,
+        242.667
+      ],
+      "yawDeg": 0,
+      "hM": 2.6,
+      "surface": "HARD_WALL",
+      "vaultable": false,
+      "label": "container",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "EXT_CONTAINER_2",
+      "kind": "box",
+      "level": "EXT",
+      "frame": "world",
+      "rect": [
+        200.0,
+        266.667,
+        240.0,
+        282.667
+      ],
+      "yawDeg": 0,
+      "hM": 2.6,
+      "surface": "HARD_WALL",
+      "vaultable": false,
+      "label": "container",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "EXT_SHED",
+      "kind": "box",
+      "level": "EXT",
+      "frame": "world",
+      "rect": [
+        333.333,
+        -133.333,
+        373.333,
+        -100.0
+      ],
+      "yawDeg": 0,
+      "hM": 2.6,
+      "surface": "HARD_WALL",
+      "vaultable": false,
+      "label": "shed",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "EXT_BALES_1",
+      "kind": "box",
+      "level": "EXT",
+      "frame": "world",
+      "rect": [
+        400.0,
+        213.333,
+        416.0,
+        224.0
+      ],
+      "yawDeg": 0,
+      "hM": 1.2,
+      "surface": "HARD_WALL",
+      "vaultable": true,
+      "label": "bales",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "EXT_BALES_2",
+      "kind": "box",
+      "level": "EXT",
+      "frame": "world",
+      "rect": [
+        266.667,
+        173.333,
+        282.667,
+        184.0
+      ],
+      "yawDeg": 0,
+      "hM": 1.2,
+      "surface": "HARD_WALL",
+      "vaultable": true,
+      "label": "bales",
+      "src": "hand",
+      "_unverified": []
+    }
+  ],
+  "props": [
+    {
+      "id": "PROP_FOOTBRIDGE",
+      "kind": "box",
+      "level": "B",
+      "frame": "world",
+      "rect": [
+        -50.667,
+        140.0,
+        -2.667,
+        153.333
+      ],
+      "yawDeg": 0,
+      "hM": 0.3,
+      "surface": "PROP",
+      "vaultable": false,
+      "label": "footbridge",
+      "src": "hand",
+      "baseY": -0.3,
+      "prop": "wood",
+      "_unverified": []
+    },
+    {
+      "id": "PROP_LOOM_1",
+      "kind": "box",
+      "level": "1F",
+      "frame": "world",
+      "rect": [
+        33.333,
+        40.0,
+        60.0,
+        50.667
+      ],
+      "yawDeg": 0,
+      "hM": 1.3,
+      "surface": "PROP",
+      "vaultable": true,
+      "label": "loom",
+      "src": "hand",
+      "prop": "metal",
+      "_unverified": []
+    },
+    {
+      "id": "PROP_LOOM_2",
+      "kind": "box",
+      "level": "1F",
+      "frame": "world",
+      "rect": [
+        80.0,
+        40.0,
+        106.667,
+        50.667
+      ],
+      "yawDeg": 0,
+      "hM": 1.3,
+      "surface": "PROP",
+      "vaultable": true,
+      "label": "loom",
+      "src": "hand",
+      "prop": "metal",
+      "_unverified": []
+    },
+    {
+      "id": "PROP_LOOM_3",
+      "kind": "box",
+      "level": "1F",
+      "frame": "world",
+      "rect": [
+        33.333,
+        86.667,
+        60.0,
+        97.333
+      ],
+      "yawDeg": 0,
+      "hM": 1.3,
+      "surface": "PROP",
+      "vaultable": true,
+      "label": "loom",
+      "src": "hand",
+      "prop": "metal",
+      "_unverified": []
+    },
+    {
+      "id": "PROP_LOOM_4",
+      "kind": "box",
+      "level": "1F",
+      "frame": "world",
+      "rect": [
+        80.0,
+        86.667,
+        106.667,
+        97.333
+      ],
+      "yawDeg": 0,
+      "hM": 1.3,
+      "surface": "PROP",
+      "vaultable": true,
+      "label": "loom",
+      "src": "hand",
+      "prop": "metal",
+      "_unverified": []
+    },
+    {
+      "id": "PROP_LOOM_5",
+      "kind": "box",
+      "level": "1F",
+      "frame": "world",
+      "rect": [
+        126.667,
+        60.0,
+        153.333,
+        70.667
+      ],
+      "yawDeg": 0,
+      "hM": 1.3,
+      "surface": "PROP",
+      "vaultable": true,
+      "label": "loom",
+      "src": "hand",
+      "prop": "metal",
+      "_unverified": []
+    }
+  ],
+  "_unverified": []
+}

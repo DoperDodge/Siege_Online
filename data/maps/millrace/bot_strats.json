@@ -1,0 +1,638 @@
+{
+  "_doc": "Bots' plans for Millrace's four sites (Project Redmond's own map, R2, D-183; game/shared/src/bots/DESIGN.md §6): our own, by the same rules as Oregon's: `reinforce` spent top-down (each wall from the room named, its steel facing the site; a hatch from above), `holes` from the room named, `anchors` the rooms anchors hold, `roam` the roamers' areas; attack per spawn group the rooms the way in goes through, the walls and hatches to breach, where to plant, hold after the plant and the flanks to watch. `gadgets` places each operator's devices.",
+  "_season": "ours",
+  "_unverified": [],
+  "sites": {
+    "SITE_BOILER": {
+      "research": "ours (D-183): B Boiler Room / Coal Store",
+      "ev": "ours",
+      "defense": {
+        "reinforce": [
+          {
+            "panel": "H4",
+            "why": "the Firing Floor's hatch drops into the Boiler Room"
+          }
+        ],
+        "holes": [
+          {
+            "panel": "SW-B-01",
+            "size": "vault",
+            "from": "B_BOILER_ROOM",
+            "why": "rotation Boiler Room–Coal Store"
+          }
+        ],
+        "anchors": [
+          "B_BOILER_ROOM",
+          "B_COAL_STORE"
+        ],
+        "roam": [
+          "B_TUNNEL",
+          "B_DYE_VATS",
+          "1F_FIRING_FLOOR",
+          "B_WHEEL_PIT"
+        ],
+        "gadgets": {
+          "mira": [],
+          "mute": [
+            {
+              "room": "B_TUNNEL"
+            },
+            {
+              "room": "B_BOILER_ROOM"
+            }
+          ],
+          "lesion": [
+            {
+              "room": "B_TUNNEL"
+            },
+            {
+              "room": "1F_FIRING_FLOOR"
+            },
+            {
+              "room": "B_DYE_VATS"
+            }
+          ],
+          "sentry": [
+            {
+              "gadget": "barbed_wire",
+              "room": "B_TUNNEL"
+            },
+            {
+              "gadget": "deployable_shield",
+              "room": "B_BOILER_ROOM"
+            }
+          ],
+          "skopos": [
+            {
+              "room": "B_COAL_STORE"
+            },
+            {
+              "room": "B_BOILER_ROOM"
+            }
+          ],
+          "pulse": [
+            {
+              "room": "1F_FIRING_FLOOR"
+            },
+            {
+              "room": "B_DYE_VATS"
+            }
+          ]
+        }
+      },
+      "attack": {
+        "spawns": {
+          "A_RIVERBANK": {
+            "via": [
+              "B_MILLRACE",
+              "B_WHEEL_PIT",
+              "B_DYE_VATS",
+              "B_TUNNEL"
+            ],
+            "alt": [
+              [
+                "1F_LOOM_HALL"
+              ]
+            ]
+          },
+          "B_RAIL_SIDING": {
+            "via": [
+              "1F_STAIR_HALL",
+              "B_CELLAR_STAIRS",
+              "B_CLOTH_STORE",
+              "B_DYE_VATS",
+              "B_TUNNEL"
+            ],
+            "alt": [
+              [
+                "1F_LOOM_HALL"
+              ]
+            ]
+          },
+          "C_YARD_GATE": {
+            "via": [
+              "1F_FIRING_FLOOR"
+            ],
+            "alt": [
+              [
+                "1F_BALE_STORE",
+                "1F_STAIR_HALL",
+                "B_CELLAR_STAIRS"
+              ]
+            ]
+          }
+        },
+        "hardBreach": [
+          {
+            "panel": "H4",
+            "from": "1F_FIRING_FLOOR",
+            "ops": [
+              "thermite",
+              "fuze"
+            ]
+          }
+        ],
+        "softBreach": [],
+        "plant": [
+          "B_BOILER_ROOM",
+          "B_COAL_STORE"
+        ],
+        "postPlant": [
+          "B_TUNNEL",
+          "1F_FIRING_FLOOR",
+          "B_DYE_VATS"
+        ],
+        "flank": [
+          "B_DYE_VATS",
+          "B_CLOTH_STORE",
+          "1F_FIRING_FLOOR"
+        ]
+      }
+    },
+    "SITE_MILL": {
+      "research": "ours (D-183): 1F Spinning Room / Mending Room",
+      "ev": "ours",
+      "defense": {
+        "reinforce": [
+          {
+            "panel": "SW-1F-01",
+            "from": "1F_SPINNING",
+            "why": "the Loom Hall's breach into Spinning"
+          },
+          {
+            "panel": "SW-1F-02",
+            "from": "1F_MENDING",
+            "why": "the Loom Hall's breach into Mending"
+          },
+          {
+            "panel": "H1",
+            "why": "the Card Room's hatch drops into Mending"
+          },
+          {
+            "panel": "H3",
+            "why": "the Cloth Store comes up into Spinning"
+          }
+        ],
+        "holes": [
+          {
+            "panel": "SW-1F-04",
+            "size": "vault",
+            "from": "1F_SPINNING",
+            "why": "rotation to the Stair Hall"
+          }
+        ],
+        "anchors": [
+          "1F_SPINNING",
+          "1F_MENDING"
+        ],
+        "roam": [
+          "2F_CARD_ROOM",
+          "1F_LOOM_HALL",
+          "B_CLOTH_STORE",
+          "1F_STAIR_HALL"
+        ],
+        "gadgets": {
+          "mira": [
+            {
+              "panel": "SW-1F-01",
+              "from": "1F_SPINNING"
+            },
+            {
+              "panel": "SW-1F-02",
+              "from": "1F_MENDING"
+            }
+          ],
+          "mute": [
+            {
+              "near": "SW-1F-01",
+              "room": "1F_SPINNING"
+            },
+            {
+              "near": "SW-1F-02",
+              "room": "1F_MENDING"
+            }
+          ],
+          "lesion": [
+            {
+              "room": "1F_LOOM_HALL"
+            },
+            {
+              "room": "1F_STAIR_HALL"
+            },
+            {
+              "room": "2F_CARD_ROOM"
+            }
+          ],
+          "sentry": [
+            {
+              "gadget": "barbed_wire",
+              "room": "1F_STAIR_HALL"
+            },
+            {
+              "gadget": "deployable_shield",
+              "room": "1F_MENDING"
+            }
+          ],
+          "skopos": [
+            {
+              "room": "1F_MENDING"
+            },
+            {
+              "room": "1F_SPINNING"
+            }
+          ],
+          "pulse": [
+            {
+              "room": "2F_CARD_ROOM"
+            },
+            {
+              "room": "1F_STAIR_HALL"
+            }
+          ]
+        }
+      },
+      "attack": {
+        "spawns": {
+          "A_RIVERBANK": {
+            "via": [
+              "1F_LOOM_HALL"
+            ],
+            "alt": [
+              [
+                "2F_GALLERY",
+                "2F_CARD_ROOM"
+              ]
+            ]
+          },
+          "B_RAIL_SIDING": {
+            "via": [
+              "1F_LOOM_HALL"
+            ],
+            "alt": [
+              [
+                "1F_SPINNING"
+              ]
+            ]
+          },
+          "C_YARD_GATE": {
+            "via": [
+              "1F_RECEPTION",
+              "1F_STAIR_HALL"
+            ],
+            "alt": [
+              [
+                "1F_LOOM_HALL"
+              ]
+            ]
+          }
+        },
+        "hardBreach": [
+          {
+            "panel": "SW-1F-01",
+            "from": "1F_LOOM_HALL",
+            "ops": [
+              "thermite",
+              "striker",
+              "fuze"
+            ]
+          },
+          {
+            "panel": "SW-1F-02",
+            "from": "1F_LOOM_HALL",
+            "ops": [
+              "thermite",
+              "striker",
+              "fuze"
+            ]
+          }
+        ],
+        "softBreach": [
+          {
+            "panel": "H1",
+            "from": "2F_CARD_ROOM",
+            "ops": [
+              "sledge"
+            ]
+          }
+        ],
+        "plant": [
+          "1F_SPINNING",
+          "1F_MENDING"
+        ],
+        "postPlant": [
+          "1F_LOOM_HALL",
+          "2F_CARD_ROOM",
+          "1F_STAIR_HALL"
+        ],
+        "flank": [
+          "1F_STAIR_HALL",
+          "2F_CARD_ROOM",
+          "B_CLOTH_STORE"
+        ]
+      }
+    },
+    "SITE_DISPATCH": {
+      "research": "ours (D-183): 1F Dispatch Office / Bale Store",
+      "ev": "ours",
+      "defense": {
+        "reinforce": [
+          {
+            "panel": "SW-1F-06",
+            "from": "1F_DISPATCH",
+            "why": "Reception's wall"
+          },
+          {
+            "panel": "H2",
+            "why": "Payroll's hatch drops into Dispatch"
+          }
+        ],
+        "holes": [
+          {
+            "panel": "SW-1F-07",
+            "size": "vault",
+            "from": "1F_DISPATCH",
+            "why": "rotation Dispatch–Bale Store"
+          }
+        ],
+        "anchors": [
+          "1F_DISPATCH",
+          "1F_BALE_STORE"
+        ],
+        "roam": [
+          "1F_RECEPTION",
+          "2F_PAYROLL",
+          "1F_STAIR_HALL",
+          "B_STRONGROOM"
+        ],
+        "gadgets": {
+          "mira": [
+            {
+              "panel": "SW-1F-06",
+              "from": "1F_DISPATCH"
+            }
+          ],
+          "mute": [
+            {
+              "near": "SW-1F-06",
+              "room": "1F_DISPATCH"
+            },
+            {
+              "room": "1F_BALE_STORE"
+            }
+          ],
+          "lesion": [
+            {
+              "room": "1F_RECEPTION"
+            },
+            {
+              "room": "1F_STAIR_HALL"
+            }
+          ],
+          "sentry": [
+            {
+              "gadget": "barbed_wire",
+              "room": "1F_RECEPTION"
+            },
+            {
+              "gadget": "deployable_shield",
+              "room": "1F_BALE_STORE"
+            }
+          ],
+          "skopos": [
+            {
+              "room": "1F_DISPATCH"
+            },
+            {
+              "room": "1F_BALE_STORE"
+            }
+          ],
+          "pulse": [
+            {
+              "room": "2F_PAYROLL"
+            },
+            {
+              "room": "1F_RECEPTION"
+            }
+          ]
+        }
+      },
+      "attack": {
+        "spawns": {
+          "C_YARD_GATE": {
+            "via": [
+              "1F_BALE_STORE"
+            ],
+            "alt": [
+              [
+                "1F_RECEPTION"
+              ]
+            ]
+          },
+          "B_RAIL_SIDING": {
+            "via": [
+              "1F_RECEPTION"
+            ],
+            "alt": [
+              [
+                "1F_STAIR_HALL"
+              ]
+            ]
+          },
+          "A_RIVERBANK": {
+            "via": [
+              "1F_LOOM_HALL",
+              "1F_STAIR_HALL"
+            ],
+            "alt": [
+              [
+                "1F_FIRING_FLOOR",
+                "1F_BALE_STORE"
+              ]
+            ]
+          }
+        },
+        "hardBreach": [
+          {
+            "panel": "SW-1F-06",
+            "from": "1F_RECEPTION",
+            "ops": [
+              "thermite",
+              "striker",
+              "fuze"
+            ]
+          }
+        ],
+        "softBreach": [
+          {
+            "panel": "H2",
+            "from": "2F_PAYROLL",
+            "ops": [
+              "sledge"
+            ]
+          }
+        ],
+        "plant": [
+          "1F_DISPATCH",
+          "1F_BALE_STORE"
+        ],
+        "postPlant": [
+          "1F_RECEPTION",
+          "2F_PAYROLL",
+          "1F_STAIR_HALL"
+        ],
+        "flank": [
+          "1F_STAIR_HALL",
+          "2F_PAYROLL",
+          "B_STRONGROOM"
+        ]
+      }
+    },
+    "SITE_OFFICES": {
+      "research": "ours (D-183): 2F Drafting Room / Payroll",
+      "ev": "ours",
+      "defense": {
+        "reinforce": [
+          {
+            "panel": "SW-2F-06",
+            "from": "2F_PAYROLL",
+            "why": "the Archive's wall"
+          }
+        ],
+        "holes": [
+          {
+            "panel": "SW-2F-04",
+            "size": "vault",
+            "from": "2F_DRAFTING",
+            "why": "rotation Drafting–Payroll"
+          }
+        ],
+        "anchors": [
+          "2F_DRAFTING",
+          "2F_PAYROLL"
+        ],
+        "roam": [
+          "2F_ARCHIVE",
+          "2F_UPPER_STAIRS",
+          "1F_RECEPTION",
+          "2F_CARD_ROOM"
+        ],
+        "gadgets": {
+          "mira": [
+            {
+              "panel": "SW-2F-06",
+              "from": "2F_PAYROLL"
+            }
+          ],
+          "mute": [
+            {
+              "near": "SW-2F-06",
+              "room": "2F_PAYROLL"
+            },
+            {
+              "room": "2F_DRAFTING"
+            }
+          ],
+          "lesion": [
+            {
+              "room": "2F_UPPER_STAIRS"
+            },
+            {
+              "room": "2F_ARCHIVE"
+            }
+          ],
+          "sentry": [
+            {
+              "gadget": "barbed_wire",
+              "room": "2F_UPPER_STAIRS"
+            },
+            {
+              "gadget": "deployable_shield",
+              "room": "2F_DRAFTING"
+            }
+          ],
+          "skopos": [
+            {
+              "room": "2F_PAYROLL"
+            },
+            {
+              "room": "2F_DRAFTING"
+            }
+          ],
+          "pulse": [
+            {
+              "room": "1F_DISPATCH"
+            },
+            {
+              "room": "2F_ARCHIVE"
+            }
+          ]
+        }
+      },
+      "attack": {
+        "spawns": {
+          "B_RAIL_SIDING": {
+            "via": [
+              "1F_RECEPTION"
+            ],
+            "alt": [
+              [
+                "1F_STAIR_HALL",
+                "2F_UPPER_STAIRS"
+              ]
+            ]
+          },
+          "C_YARD_GATE": {
+            "via": [
+              "1F_RECEPTION"
+            ],
+            "alt": [
+              [
+                "2F_ARCHIVE"
+              ]
+            ]
+          },
+          "A_RIVERBANK": {
+            "via": [
+              "1F_LOOM_HALL",
+              "2F_GALLERY",
+              "2F_CARD_ROOM",
+              "2F_UPPER_STAIRS"
+            ],
+            "alt": [
+              [
+                "1F_STAIR_HALL",
+                "2F_UPPER_STAIRS"
+              ]
+            ]
+          }
+        },
+        "hardBreach": [
+          {
+            "panel": "SW-2F-06",
+            "from": "2F_ARCHIVE",
+            "ops": [
+              "thermite",
+              "striker",
+              "fuze"
+            ]
+          }
+        ],
+        "softBreach": [],
+        "plant": [
+          "2F_DRAFTING",
+          "2F_PAYROLL"
+        ],
+        "postPlant": [
+          "2F_ARCHIVE",
+          "2F_UPPER_STAIRS",
+          "1F_RECEPTION"
+        ],
+        "flank": [
+          "2F_UPPER_STAIRS",
+          "2F_ARCHIVE",
+          "1F_RECEPTION"
+        ]
+      }
+    }
+  }
+}

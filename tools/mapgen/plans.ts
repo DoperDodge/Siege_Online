@@ -61,8 +61,8 @@ const f2 = (x: number) => Math.round(x * 100) / 100;
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 /** The plan SVG of one storey (our geometry only), in the floor image's own u. */
-export function planSvg(root: string, level: Record<string, unknown>, floor: Floor): string {
-  const { layout, exterior } = loadInputs(root);
+export function planSvg(root: string, level: Record<string, unknown>, floor: Floor, mapId = "oregon"): string {
+  const { layout, exterior } = loadInputs(root, mapId);
   const fr = frames(layout);
   const k = layout.units.mPerU;
   const storey = layout.storeys.find((s) => s.id === floor)!;
@@ -218,13 +218,15 @@ apply();
 `;
 }
 
-export function writePlans(root: string, level: Record<string, unknown>) {
-  const { layout } = loadInputs(root);
+export function writePlans(root: string, level: Record<string, unknown>, mapId = "oregon") {
+  const { layout } = loadInputs(root, mapId);
   const out: { floor: Floor; svg: string }[] = [];
+  // Oregon's plans are committed for comparing with its blueprints (research/oregon/compare); every map's go to builds.
+  const committed = mapId === "oregon" ? [join(root, "research", "oregon", "compare")] : [];
   for (const floor of layout.emit) {
-    const svg = planSvg(root, level, floor);
+    const svg = planSvg(root, level, floor, mapId);
     out.push({ floor, svg });
-    for (const dir of [join(root, "research", "oregon", "compare"), join(root, "builds", "mapgen", "plans")]) {
+    for (const dir of [...committed, join(root, "builds", "mapgen", "plans", mapId)]) {
       mkdirSync(dir, { recursive: true });
       writeFileSync(join(dir, `${floor}.svg`), svg);
     }
@@ -232,5 +234,5 @@ export function writePlans(root: string, level: Record<string, unknown>) {
   const page = join(root, "builds", "mapgen", "compare", "index.html");
   mkdirSync(join(root, "builds", "mapgen", "compare"), { recursive: true });
   writeFileSync(page, comparePage(out));
-  console.log(`plans: research/oregon/compare/{${layout.emit.join(",")}}.svg; overlay page (local images): ${page}`);
+  console.log(`plans: builds/mapgen/plans/${mapId}/{${layout.emit.join(",")}}.svg${committed.length ? " and research/oregon/compare" : ""}; overlay page (local images): ${page}`);
 }

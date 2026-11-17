@@ -1,0 +1,666 @@
+{
+  "_doc": "Millrace's ground floor and the boiler house's Firing Floor (ours, D-183): wall lines in world u.",
+  "floor": "1F",
+  "frame": "world",
+  "walls": [
+    {
+      "id": "1F.N",
+      "axis": "H",
+      "at": 0.0,
+      "span": [
+        0.0,
+        400.0
+      ],
+      "weight": "ext",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "WINDOW",
+          "id": "1F.o001",
+          "at": [
+            26.667,
+            40.0
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "WINDOW",
+          "id": "1F.o002",
+          "at": [
+            66.667,
+            80.0
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "DOOR",
+          "id": "1F.o003",
+          "at": [
+            110.0,
+            123.333
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "WINDOW",
+          "id": "1F.o004",
+          "at": [
+            146.667,
+            160.0
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "WINDOW",
+          "id": "1F.o005",
+          "at": [
+            193.333,
+            206.667
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "DOOR",
+          "id": "1F.o006",
+          "at": [
+            226.667,
+            240.0
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "DOOR",
+          "id": "1F.o007",
+          "at": [
+            286.667,
+            300.0
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "WINDOW",
+          "id": "1F.o008",
+          "at": [
+            328.0,
+            338.667
+          ],
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "the mill's and the office wing's north wall, on the dock",
+      "_unverified": []
+    },
+    {
+      "id": "1F.E",
+      "axis": "V",
+      "at": 400.0,
+      "span": [
+        0.0,
+        186.667
+      ],
+      "weight": "ext",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "DOOR",
+          "id": "1F.o010",
+          "at": [
+            26.667,
+            40.0
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "WINDOW",
+          "id": "1F.o011",
+          "at": [
+            86.667,
+            100.0
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "WINDOW",
+          "id": "1F.o012",
+          "at": [
+            140.0,
+            153.333
+          ],
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "the office wing's east front",
+      "_unverified": []
+    },
+    {
+      "id": "1F.SO",
+      "axis": "H",
+      "at": 186.667,
+      "span": [
+        320.0,
+        400.0
+      ],
+      "weight": "ext",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "DOOR",
+          "id": "1F.o013",
+          "at": [
+            343.333,
+            360.0
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "WINDOW",
+          "id": "1F.o014",
+          "at": [
+            376.667,
+            390.0
+          ],
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "the Bale Store's south wall on the yard",
+      "_unverified": []
+    },
+    {
+      "id": "1F.WO",
+      "axis": "V",
+      "at": 320.0,
+      "span": [
+        133.333,
+        186.667
+      ],
+      "weight": "ext",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "WINDOW",
+          "id": "1F.o015",
+          "at": [
+            153.333,
+            166.667
+          ],
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "the office wing's west wall south of the mill",
+      "_unverified": []
+    },
+    {
+      "id": "1F.S",
+      "axis": "H",
+      "at": 133.333,
+      "span": [
+        0.0,
+        320.0
+      ],
+      "weight": "ext",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "WINDOW",
+          "id": "1F.o016",
+          "at": [
+            20.0,
+            33.333
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "DOOR",
+          "id": "1F.o017",
+          "at": [
+            80.0,
+            93.333
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "WINDOW",
+          "id": "1F.o018",
+          "at": [
+            133.333,
+            146.667
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "WINDOW",
+          "id": "1F.o019",
+          "at": [
+            200.0,
+            213.333
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "WINDOW",
+          "id": "1F.o020",
+          "at": [
+            240.0,
+            253.333
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "WINDOW",
+          "id": "1F.o021",
+          "at": [
+            286.667,
+            300.0
+          ],
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "the mill's south wall",
+      "_unverified": []
+    },
+    {
+      "id": "1F.W",
+      "axis": "V",
+      "at": 0.0,
+      "span": [
+        0.0,
+        133.333
+      ],
+      "weight": "ext",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "WINDOW",
+          "id": "1F.o022",
+          "at": [
+            20.0,
+            33.333
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "WINDOW",
+          "id": "1F.o024",
+          "at": [
+            100.0,
+            113.333
+          ],
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "the mill's west wall over the millrace",
+      "_unverified": []
+    },
+    {
+      "id": "1F.w026",
+      "axis": "V",
+      "at": 173.333,
+      "span": [
+        0.0,
+        133.333
+      ],
+      "weight": "int",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "SOFT",
+          "id": "SW-1F-01",
+          "at": [
+            6.667,
+            33.333
+          ],
+          "sections": 2,
+          "_unverified": []
+        },
+        {
+          "kind": "DOOR",
+          "id": "1F.o030",
+          "at": [
+            40.0,
+            50.0
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "SOFT",
+          "id": "SW-1F-02",
+          "at": [
+            80.0,
+            106.667
+          ],
+          "sections": 2,
+          "_unverified": []
+        },
+        {
+          "kind": "DOOR",
+          "id": "1F.o031",
+          "at": [
+            116.667,
+            126.667
+          ],
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "Loom Hall | Spinning, Mending",
+      "_unverified": []
+    },
+    {
+      "id": "1F.w011",
+      "axis": "H",
+      "at": 73.333,
+      "span": [
+        173.333,
+        266.667
+      ],
+      "weight": "int",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "DOOR",
+          "id": "1F.o032",
+          "at": [
+            206.667,
+            216.667
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "SOFT",
+          "id": "SW-1F-03",
+          "at": [
+            226.667,
+            253.333
+          ],
+          "sections": 2,
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "Spinning | Mending",
+      "_unverified": []
+    },
+    {
+      "id": "1F.w040",
+      "axis": "V",
+      "at": 266.667,
+      "span": [
+        0.0,
+        133.333
+      ],
+      "weight": "int",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "DOOR",
+          "id": "1F.o033",
+          "at": [
+            20.0,
+            30.0
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "SOFT",
+          "id": "SW-1F-04",
+          "at": [
+            40.0,
+            66.667
+          ],
+          "sections": 2,
+          "_unverified": []
+        },
+        {
+          "kind": "SOFT",
+          "id": "SW-1F-05",
+          "at": [
+            80.0,
+            106.667
+          ],
+          "sections": 2,
+          "_unverified": []
+        },
+        {
+          "kind": "DOOR",
+          "id": "1F.o034",
+          "at": [
+            113.333,
+            123.333
+          ],
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "Spinning, Mending | Stair Hall",
+      "_unverified": []
+    },
+    {
+      "id": "1F.w048",
+      "axis": "V",
+      "at": 320.0,
+      "span": [
+        0.0,
+        133.333
+      ],
+      "weight": "int",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "DOOR",
+          "id": "1F.o035",
+          "at": [
+            26.667,
+            36.667
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "DOOR",
+          "id": "1F.o036",
+          "at": [
+            86.667,
+            96.667
+          ],
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "Stair Hall | Reception, Dispatch",
+      "_unverified": []
+    },
+    {
+      "id": "1F.w010",
+      "axis": "H",
+      "at": 66.667,
+      "span": [
+        320.0,
+        400.0
+      ],
+      "weight": "int",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "DOOR",
+          "id": "1F.o038",
+          "at": [
+            330.0,
+            340.0
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "SOFT",
+          "id": "SW-1F-06",
+          "at": [
+            353.333,
+            380.0
+          ],
+          "sections": 2,
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "Reception | Dispatch",
+      "_unverified": []
+    },
+    {
+      "id": "1F.w018",
+      "axis": "H",
+      "at": 120.0,
+      "span": [
+        320.0,
+        400.0
+      ],
+      "weight": "int",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "SOFT",
+          "id": "SW-1F-07",
+          "at": [
+            326.667,
+            353.333
+          ],
+          "sections": 2,
+          "_unverified": []
+        },
+        {
+          "kind": "DOOR",
+          "id": "1F.o039",
+          "at": [
+            360.0,
+            370.0
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "SOFT",
+          "id": "SW-1F-08",
+          "at": [
+            376.667,
+            396.667
+          ],
+          "sections": 2,
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "Dispatch | Bale Store",
+      "_unverified": []
+    },
+    {
+      "id": "1F.BN",
+      "axis": "H",
+      "at": 173.333,
+      "span": [
+        53.333,
+        146.667
+      ],
+      "weight": "ext",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "DOOR",
+          "id": "1F.o040",
+          "at": [
+            80.0,
+            90.0
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "WINDOW",
+          "id": "1F.o041",
+          "at": [
+            106.667,
+            120.0
+          ],
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "the boiler house's north wall, facing the mill",
+      "_unverified": []
+    },
+    {
+      "id": "1F.BW",
+      "axis": "V",
+      "at": 53.333,
+      "span": [
+        173.333,
+        253.333
+      ],
+      "weight": "ext",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "WINDOW",
+          "id": "1F.o042",
+          "at": [
+            186.667,
+            200.0
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "DOOR",
+          "id": "1F.o043",
+          "at": [
+            220.0,
+            230.0
+          ],
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "the boiler house's west wall",
+      "_unverified": []
+    },
+    {
+      "id": "1F.BE",
+      "axis": "V",
+      "at": 146.667,
+      "span": [
+        173.333,
+        253.333
+      ],
+      "weight": "ext",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "WINDOW",
+          "id": "1F.o044",
+          "at": [
+            233.333,
+            246.667
+          ],
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "the boiler house's east wall",
+      "_unverified": []
+    },
+    {
+      "id": "1F.BS",
+      "axis": "H",
+      "at": 253.333,
+      "span": [
+        53.333,
+        146.667
+      ],
+      "weight": "ext",
+      "kind": "wall",
+      "spans": [],
+      "src": "hand",
+      "note": "the boiler house's south wall",
+      "_unverified": []
+    }
+  ]
+}

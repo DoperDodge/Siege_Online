@@ -1,0 +1,442 @@
+{
+  "_doc": "Millrace's look (Project Redmond's own map, R2, D-183; game/client/src/render/DESIGN.md §5): which materials (data/presentation/materials.json) each room's walls, wainscot, floor, ceiling and trim wear, the outside faces' styles, and explicit styles for what isn't a room's face (roofs, the ground, stairs, outside items), matched by renderable id. Our own design: a brick mill with plain cellars and painted offices. Presentation only: the simulation never reads this file.",
+  "styles": {
+    "mill": {
+      "wall": "brick",
+      "floor": "floor_wood_dark",
+      "ceiling": "planks_raw",
+      "trim": "wood_dark",
+      "baseboardM": 0,
+      "crownM": 0,
+      "lamp": {
+        "color": "#f4e2c0",
+        "power": 0.9
+      }
+    },
+    "loom": {
+      "wall": "brick",
+      "floor": "floor_wood",
+      "ceiling": "planks_raw",
+      "trim": "wood_dark",
+      "baseboardM": 0,
+      "crownM": 0,
+      "lamp": {
+        "color": "#f4e2c0",
+        "power": 1.0
+      }
+    },
+    "store": {
+      "wall": "brick",
+      "floor": "floor_concrete",
+      "ceiling": "planks_raw",
+      "trim": "wood_dark",
+      "baseboardM": 0,
+      "crownM": 0
+    },
+    "stairwell": {
+      "wall": "brick",
+      "floor": "floor_concrete",
+      "ceiling": "plaster_grey",
+      "trim": "paint_black",
+      "baseboardM": 0,
+      "crownM": 0
+    },
+    "reception": {
+      "wall": "plaster_cream",
+      "floor": "floor_checker",
+      "ceiling": "plaster_white",
+      "trim": "paint_white",
+      "wainscot": {
+        "material": "beadboard_stain",
+        "heightM": 1.0
+      }
+    },
+    "office": {
+      "wall": "plaster_sage",
+      "floor": "linoleum",
+      "ceiling": "plaster_white",
+      "trim": "wood_stain",
+      "wainscot": {
+        "material": "wood_dark",
+        "heightM": 0.9
+      }
+    },
+    "drafting": {
+      "wall": "plaster_white",
+      "floor": "floor_wood",
+      "ceiling": "plaster_white",
+      "trim": "wood_stain"
+    },
+    "archive": {
+      "wall": "plaster_grey",
+      "floor": "carpet_brown",
+      "ceiling": "plaster_white",
+      "trim": "wood_stain"
+    },
+    "cellar": {
+      "wall": "concrete_wall",
+      "floor": "floor_concrete",
+      "ceiling": "concrete_wall",
+      "trim": "concrete_wall",
+      "baseboardM": 0,
+      "crownM": 0,
+      "lamp": {
+        "color": "#f2f0e6",
+        "power": 0.7
+      }
+    },
+    "dye": {
+      "wall": "tiles_white",
+      "floor": "floor_concrete",
+      "ceiling": "concrete_wall",
+      "trim": "concrete_wall",
+      "baseboardM": 0,
+      "crownM": 0,
+      "lamp": {
+        "color": "#e8f0f2",
+        "power": 0.75
+      }
+    },
+    "boiler": {
+      "wall": "brick",
+      "floor": "floor_concrete",
+      "ceiling": "concrete_wall",
+      "trim": "metal_rust",
+      "baseboardM": 0,
+      "crownM": 0,
+      "lamp": {
+        "color": "#ffd8a8",
+        "power": 0.8
+      }
+    },
+    "race": {
+      "wall": "concrete_wall",
+      "floor": "floor_concrete",
+      "ceiling": "concrete_wall",
+      "trim": "concrete_wall",
+      "baseboardM": 0,
+      "crownM": 0
+    },
+    "mill_out": {
+      "wall": "brick",
+      "floor": "ground",
+      "ceiling": "paint_white",
+      "trim": "paint_white",
+      "exterior": true,
+      "foundation": {
+        "material": "concrete_wall",
+        "topY": 0.35
+      }
+    },
+    "office_out": {
+      "wall": "plaster_cream",
+      "floor": "ground",
+      "ceiling": "paint_white",
+      "trim": "paint_white",
+      "exterior": true,
+      "foundation": {
+        "material": "concrete_wall",
+        "topY": 0.35
+      }
+    },
+    "below_out": {
+      "wall": "concrete_wall",
+      "floor": "floor_concrete",
+      "ceiling": "concrete_wall",
+      "trim": "concrete_wall",
+      "exterior": true
+    },
+    "roof": {
+      "wall": "paint_white",
+      "floor": "shingles",
+      "ceiling": "paint_white",
+      "trim": "paint_white",
+      "exterior": true
+    },
+    "roof_flat": {
+      "wall": "paint_white",
+      "floor": "roof_tar",
+      "ceiling": "paint_white",
+      "trim": "paint_white",
+      "exterior": true
+    },
+    "stairs": {
+      "wall": "paint_white",
+      "floor": "floor_wood_dark",
+      "ceiling": "paint_white",
+      "trim": "paint_white",
+      "exterior": true
+    },
+    "stairs_concrete": {
+      "wall": "concrete_wall",
+      "floor": "floor_concrete",
+      "ceiling": "concrete_wall",
+      "trim": "concrete_wall",
+      "exterior": true
+    },
+    "rails": {
+      "wall": "paint_white",
+      "floor": "paint_white",
+      "ceiling": "paint_white",
+      "trim": "paint_white",
+      "exterior": true
+    },
+    "prop_wood": {
+      "wall": "wood_prop",
+      "floor": "wood_prop",
+      "ceiling": "wood_prop",
+      "trim": "wood_prop",
+      "exterior": true
+    },
+    "prop_soft": {
+      "wall": "fabric_prop",
+      "floor": "fabric_prop",
+      "ceiling": "fabric_prop",
+      "trim": "fabric_prop",
+      "exterior": true
+    },
+    "prop_metal": {
+      "wall": "metal_galvanized",
+      "floor": "steel",
+      "ceiling": "steel",
+      "trim": "steel",
+      "exterior": true
+    },
+    "shed": {
+      "wall": "metal_rust",
+      "floor": "metal_galvanized",
+      "ceiling": "planks_raw",
+      "trim": "metal_rust",
+      "exterior": true
+    },
+    "container": {
+      "wall": "metal_green",
+      "floor": "metal_green",
+      "ceiling": "metal_green",
+      "trim": "metal_green",
+      "exterior": true
+    },
+    "vehicle": {
+      "wall": "metal_galvanized",
+      "floor": "metal_galvanized",
+      "ceiling": "rubber",
+      "trim": "metal_galvanized",
+      "exterior": true
+    },
+    "machine": {
+      "wall": "metal_yellow",
+      "floor": "metal_yellow",
+      "ceiling": "rubber",
+      "trim": "metal_yellow",
+      "exterior": true
+    },
+    "dock": {
+      "wall": "concrete_wall",
+      "floor": "floor_concrete",
+      "ceiling": "concrete_wall",
+      "trim": "concrete_wall",
+      "exterior": true
+    },
+    "bales": {
+      "wall": "cardboard",
+      "floor": "cardboard",
+      "ceiling": "cardboard",
+      "trim": "cardboard",
+      "exterior": true
+    }
+  },
+  "default": "mill",
+  "outside": "mill_out",
+  "rooms": {
+    "B_MILLRACE": "race",
+    "B_WHEEL_PIT": "race",
+    "B_DYE_VATS": "dye",
+    "B_CLOTH_STORE": "cellar",
+    "B_CELLAR_STAIRS": "cellar",
+    "B_PUMP_ROOM": "cellar",
+    "B_STRONGROOM": "cellar",
+    "B_TUNNEL": "cellar",
+    "B_BOILER_ROOM": "boiler",
+    "B_COAL_STORE": "boiler",
+    "1F_LOOM_HALL": "loom",
+    "1F_SPINNING": "mill",
+    "1F_MENDING": "mill",
+    "1F_STAIR_HALL": "stairwell",
+    "1F_RECEPTION": "reception",
+    "1F_DISPATCH": "office",
+    "1F_BALE_STORE": "store",
+    "1F_FIRING_FLOOR": "boiler",
+    "2F_GALLERY": "loom",
+    "2F_CARD_ROOM": "mill",
+    "2F_UPPER_STAIRS": "stairwell",
+    "2F_DRAFTING": "drafting",
+    "2F_PAYROLL": "office",
+    "2F_ARCHIVE": "archive"
+  },
+  "zones": [
+    {
+      "style": "office_out",
+      "rooms": [
+        "1F_RECEPTION",
+        "1F_DISPATCH",
+        "1F_BALE_STORE",
+        "2F_DRAFTING",
+        "2F_PAYROLL",
+        "2F_ARCHIVE"
+      ],
+      "padM": 0.7
+    },
+    {
+      "style": "below_out",
+      "storeys": [
+        "B"
+      ]
+    }
+  ],
+  "items": [
+    {
+      "match": "^RF_MILL\\.",
+      "style": "roof"
+    },
+    {
+      "match": "^RF_[A-Z_]+\\.[NSEW]$",
+      "style": "roof"
+    },
+    {
+      "match": "^RF_(OFFICE|BOILER)(#|\\.|$)",
+      "style": "roof_flat"
+    },
+    {
+      "match": "^EXT_DOCK",
+      "style": "dock"
+    },
+    {
+      "match": "^EXT_BALES",
+      "style": "bales"
+    },
+    {
+      "match": "^EXT_SHED",
+      "style": "shed"
+    },
+    {
+      "match": "^EXT_CONTAINER",
+      "style": "container"
+    },
+    {
+      "match": "^EXT_TRUCK",
+      "style": "vehicle"
+    },
+    {
+      "match": "^ST_RACE",
+      "style": "stairs_concrete"
+    },
+    {
+      "match": "^ST_FIRING",
+      "style": "stairs_concrete"
+    },
+    {
+      "match": "_step\\d+$",
+      "style": "stairs"
+    },
+    {
+      "match": "^PROP_LOOM",
+      "style": "machine"
+    }
+  ],
+  "props": {
+    "wood": "prop_wood",
+    "soft": "prop_soft",
+    "metal": "prop_metal"
+  },
+  "ground": {
+    "base": "ground_grass",
+    "layers": [
+      {
+        "material": "ground_gravel",
+        "softM": 2.5,
+        "rects": [
+          [
+            8,
+            -16,
+            44,
+            -0.2
+          ],
+          [
+            44,
+            28,
+            80,
+            52
+          ],
+          [
+            -2,
+            20,
+            48,
+            44
+          ]
+        ]
+      },
+      {
+        "material": "ground_dirt",
+        "softM": 2.0,
+        "rects": [
+          [
+            -16,
+            -8,
+            -8,
+            40
+          ]
+        ]
+      },
+      {
+        "material": "asphalt",
+        "softM": 0.6,
+        "rects": [
+          [
+            60,
+            4,
+            90,
+            10
+          ],
+          [
+            78,
+            10,
+            84,
+            60
+          ]
+        ]
+      }
+    ]
+  },
+  "dressing": {
+    "reception": {
+      "wall": {
+        "picture": 2,
+        "clock": 1
+      },
+      "rug": 1
+    },
+    "office": {
+      "wall": {
+        "picture": 1,
+        "clock": 1,
+        "shelf": 1
+      }
+    },
+    "drafting": {
+      "wall": {
+        "picture": 2,
+        "shelf": 1
+      }
+    },
+    "archive": {
+      "wall": {
+        "shelf": 2
+      }
+    },
+    "mill": {
+      "wall": {
+        "shelf": 1
+      }
+    }
+  }
+}
