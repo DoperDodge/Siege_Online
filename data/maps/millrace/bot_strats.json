@@ -27,9 +27,9 @@
         ],
         "roam": [
           "B_TUNNEL",
-          "B_DYE_VATS",
+          "B_VALVE_ROOM",
           "1F_FIRING_FLOOR",
-          "B_WHEEL_PIT"
+          "B_LYE_STORE"
         ],
         "gadgets": {
           "mira": [],
@@ -49,7 +49,7 @@
               "room": "1F_FIRING_FLOOR"
             },
             {
-              "room": "B_DYE_VATS"
+              "room": "B_CORRIDOR"
             }
           ],
           "sentry": [
@@ -75,7 +75,7 @@
               "room": "1F_FIRING_FLOOR"
             },
             {
-              "room": "B_DYE_VATS"
+              "room": "B_CORRIDOR"
             }
           ]
         }
@@ -86,7 +86,7 @@
             "via": [
               "B_MILLRACE",
               "B_WHEEL_PIT",
-              "B_DYE_VATS",
+              "B_CORRIDOR",
               "B_TUNNEL"
             ],
             "alt": [
@@ -99,8 +99,7 @@
             "via": [
               "1F_STAIR_HALL",
               "B_CELLAR_STAIRS",
-              "B_CLOTH_STORE",
-              "B_DYE_VATS",
+              "B_CORRIDOR",
               "B_TUNNEL"
             ],
             "alt": [
@@ -115,9 +114,7 @@
             ],
             "alt": [
               [
-                "1F_BALE_STORE",
-                "1F_STAIR_HALL",
-                "B_CELLAR_STAIRS"
+                "1F_ENGINE_ROOM"
               ]
             ]
           }
@@ -140,12 +137,12 @@
         "postPlant": [
           "B_TUNNEL",
           "1F_FIRING_FLOOR",
-          "B_DYE_VATS"
+          "B_CORRIDOR"
         ],
         "flank": [
-          "B_DYE_VATS",
-          "B_CLOTH_STORE",
-          "1F_FIRING_FLOOR"
+          "B_CORRIDOR",
+          "B_VALVE_ROOM",
+          "1F_ENGINE_ROOM"
         ]
       }
     },
@@ -157,20 +154,25 @@
           {
             "panel": "SW-1F-01",
             "from": "1F_SPINNING",
-            "why": "the Loom Hall's breach into Spinning"
+            "why": "the Warping Room's breach"
           },
           {
             "panel": "SW-1F-02",
             "from": "1F_MENDING",
-            "why": "the Loom Hall's breach into Mending"
+            "why": "the Foreman's Office's breach"
+          },
+          {
+            "panel": "SW-1F-05",
+            "from": "1F_MENDING",
+            "why": "the Mill Corridor"
           },
           {
             "panel": "H1",
-            "why": "the Card Room's hatch drops into Mending"
+            "why": "the Carding Store's hatch drops into Mending"
           },
           {
             "panel": "H3",
-            "why": "the Cloth Store comes up into Spinning"
+            "why": "the Bolt Store comes up into Spinning"
           }
         ],
         "holes": [
@@ -178,7 +180,7 @@
             "panel": "SW-1F-04",
             "size": "vault",
             "from": "1F_SPINNING",
-            "why": "rotation to the Stair Hall"
+            "why": "rotation to the Mill Corridor"
           }
         ],
         "anchors": [
@@ -186,10 +188,11 @@
           "1F_MENDING"
         ],
         "roam": [
-          "2F_CARD_ROOM",
-          "1F_LOOM_HALL",
-          "B_CLOTH_STORE",
-          "1F_STAIR_HALL"
+          "2F_CARDING_STORE",
+          "1F_WARPING",
+          "1F_FOREMAN",
+          "B_BOLT_STORE",
+          "1F_MILL_CORRIDOR"
         ],
         "gadgets": {
           "mira": [
@@ -214,19 +217,19 @@
           ],
           "lesion": [
             {
-              "room": "1F_LOOM_HALL"
+              "room": "1F_WARPING"
             },
             {
-              "room": "1F_STAIR_HALL"
+              "room": "1F_MILL_CORRIDOR"
             },
             {
-              "room": "2F_CARD_ROOM"
+              "room": "2F_CARDING_STORE"
             }
           ],
           "sentry": [
             {
               "gadget": "barbed_wire",
-              "room": "1F_STAIR_HALL"
+              "room": "1F_MILL_CORRIDOR"
             },
             {
               "gadget": "deployable_shield",
@@ -243,10 +246,10 @@
           ],
           "pulse": [
             {
-              "room": "2F_CARD_ROOM"
+              "room": "2F_CARDING_STORE"
             },
             {
-              "room": "1F_STAIR_HALL"
+              "room": "1F_MILL_CORRIDOR"
             }
           ]
         }
@@ -255,33 +258,36 @@
         "spawns": {
           "A_RIVERBANK": {
             "via": [
-              "1F_LOOM_HALL"
+              "1F_LOOM_HALL",
+              "1F_WARPING"
             ],
             "alt": [
               [
                 "2F_GALLERY",
-                "2F_CARD_ROOM"
+                "2F_OVERLOOK"
               ]
             ]
           },
           "B_RAIL_SIDING": {
             "via": [
-              "1F_LOOM_HALL"
+              "1F_SPINNING"
             ],
             "alt": [
               [
-                "1F_SPINNING"
+                "1F_LOOM_HALL",
+                "1F_WARPING"
               ]
             ]
           },
           "C_YARD_GATE": {
             "via": [
-              "1F_RECEPTION",
-              "1F_STAIR_HALL"
+              "1F_STAIR_HALL",
+              "1F_MILL_CORRIDOR"
             ],
             "alt": [
               [
-                "1F_LOOM_HALL"
+                "1F_LOOM_HALL",
+                "1F_FOREMAN"
               ]
             ]
           }
@@ -289,7 +295,7 @@
         "hardBreach": [
           {
             "panel": "SW-1F-01",
-            "from": "1F_LOOM_HALL",
+            "from": "1F_WARPING",
             "ops": [
               "thermite",
               "striker",
@@ -298,7 +304,7 @@
           },
           {
             "panel": "SW-1F-02",
-            "from": "1F_LOOM_HALL",
+            "from": "1F_FOREMAN",
             "ops": [
               "thermite",
               "striker",
@@ -309,7 +315,7 @@
         "softBreach": [
           {
             "panel": "H1",
-            "from": "2F_CARD_ROOM",
+            "from": "2F_CARDING_STORE",
             "ops": [
               "sledge"
             ]
@@ -320,14 +326,14 @@
           "1F_MENDING"
         ],
         "postPlant": [
-          "1F_LOOM_HALL",
-          "2F_CARD_ROOM",
-          "1F_STAIR_HALL"
+          "1F_WARPING",
+          "1F_FOREMAN",
+          "1F_MILL_CORRIDOR"
         ],
         "flank": [
-          "1F_STAIR_HALL",
-          "2F_CARD_ROOM",
-          "B_CLOTH_STORE"
+          "1F_MILL_CORRIDOR",
+          "2F_CARDING_STORE",
+          "B_BOLT_STORE"
         ]
       }
     },
@@ -340,6 +346,16 @@
             "panel": "SW-1F-06",
             "from": "1F_DISPATCH",
             "why": "Reception's wall"
+          },
+          {
+            "panel": "SW-1F-11",
+            "from": "1F_DISPATCH",
+            "why": "the Office Hall"
+          },
+          {
+            "panel": "SW-1F-12",
+            "from": "1F_BALE_STORE",
+            "why": "the Office Hall"
           },
           {
             "panel": "H2",
@@ -360,8 +376,8 @@
         ],
         "roam": [
           "1F_RECEPTION",
+          "1F_OFFICE_HALL",
           "2F_PAYROLL",
-          "1F_STAIR_HALL",
           "B_STRONGROOM"
         ],
         "gadgets": {
@@ -369,11 +385,15 @@
             {
               "panel": "SW-1F-06",
               "from": "1F_DISPATCH"
+            },
+            {
+              "panel": "SW-1F-11",
+              "from": "1F_DISPATCH"
             }
           ],
           "mute": [
             {
-              "near": "SW-1F-06",
+              "near": "SW-1F-11",
               "room": "1F_DISPATCH"
             },
             {
@@ -385,13 +405,13 @@
               "room": "1F_RECEPTION"
             },
             {
-              "room": "1F_STAIR_HALL"
+              "room": "1F_OFFICE_HALL"
             }
           ],
           "sentry": [
             {
               "gadget": "barbed_wire",
-              "room": "1F_RECEPTION"
+              "room": "1F_OFFICE_HALL"
             },
             {
               "gadget": "deployable_shield",
@@ -411,7 +431,7 @@
               "room": "2F_PAYROLL"
             },
             {
-              "room": "1F_RECEPTION"
+              "room": "1F_OFFICE_HALL"
             }
           ]
         }
@@ -434,14 +454,17 @@
             ],
             "alt": [
               [
-                "1F_STAIR_HALL"
+                "1F_STAIR_HALL",
+                "1F_OFFICE_HALL"
               ]
             ]
           },
           "A_RIVERBANK": {
             "via": [
               "1F_LOOM_HALL",
-              "1F_STAIR_HALL"
+              "1F_MILL_CORRIDOR",
+              "1F_STAIR_HALL",
+              "1F_OFFICE_HALL"
             ],
             "alt": [
               [
@@ -455,6 +478,15 @@
           {
             "panel": "SW-1F-06",
             "from": "1F_RECEPTION",
+            "ops": [
+              "thermite",
+              "striker",
+              "fuze"
+            ]
+          },
+          {
+            "panel": "SW-1F-11",
+            "from": "1F_OFFICE_HALL",
             "ops": [
               "thermite",
               "striker",
@@ -477,11 +509,11 @@
         ],
         "postPlant": [
           "1F_RECEPTION",
-          "2F_PAYROLL",
-          "1F_STAIR_HALL"
+          "1F_OFFICE_HALL",
+          "2F_PAYROLL"
         ],
         "flank": [
-          "1F_STAIR_HALL",
+          "1F_OFFICE_HALL",
           "2F_PAYROLL",
           "B_STRONGROOM"
         ]
@@ -496,6 +528,16 @@
             "panel": "SW-2F-06",
             "from": "2F_PAYROLL",
             "why": "the Archive's wall"
+          },
+          {
+            "panel": "SW-2F-11",
+            "from": "2F_PAYROLL",
+            "why": "the Upper Office Hall"
+          },
+          {
+            "panel": "SW-2F-10",
+            "from": "2F_DRAFTING",
+            "why": "the Upper Office Hall"
           }
         ],
         "holes": [
@@ -512,15 +554,19 @@
         ],
         "roam": [
           "2F_ARCHIVE",
-          "2F_UPPER_STAIRS",
+          "2F_OFFICE_HALL",
           "1F_RECEPTION",
-          "2F_CARD_ROOM"
+          "2F_UPPER_STAIRS"
         ],
         "gadgets": {
           "mira": [
             {
               "panel": "SW-2F-06",
               "from": "2F_PAYROLL"
+            },
+            {
+              "panel": "SW-2F-10",
+              "from": "2F_DRAFTING"
             }
           ],
           "mute": [
@@ -534,7 +580,7 @@
           ],
           "lesion": [
             {
-              "room": "2F_UPPER_STAIRS"
+              "room": "2F_OFFICE_HALL"
             },
             {
               "room": "2F_ARCHIVE"
@@ -543,7 +589,7 @@
           "sentry": [
             {
               "gadget": "barbed_wire",
-              "room": "2F_UPPER_STAIRS"
+              "room": "2F_OFFICE_HALL"
             },
             {
               "gadget": "deployable_shield",
@@ -577,7 +623,8 @@
             "alt": [
               [
                 "1F_STAIR_HALL",
-                "2F_UPPER_STAIRS"
+                "2F_UPPER_STAIRS",
+                "2F_OFFICE_HALL"
               ]
             ]
           },
@@ -595,7 +642,9 @@
             "via": [
               "1F_LOOM_HALL",
               "2F_GALLERY",
+              "2F_OVERLOOK",
               "2F_CARD_ROOM",
+              "2F_UPPER_CORRIDOR",
               "2F_UPPER_STAIRS"
             ],
             "alt": [
@@ -615,6 +664,15 @@
               "striker",
               "fuze"
             ]
+          },
+          {
+            "panel": "SW-2F-10",
+            "from": "2F_OFFICE_HALL",
+            "ops": [
+              "thermite",
+              "striker",
+              "fuze"
+            ]
           }
         ],
         "softBreach": [],
@@ -624,8 +682,8 @@
         ],
         "postPlant": [
           "2F_ARCHIVE",
-          "2F_UPPER_STAIRS",
-          "1F_RECEPTION"
+          "2F_OFFICE_HALL",
+          "2F_UPPER_STAIRS"
         ],
         "flank": [
           "2F_UPPER_STAIRS",

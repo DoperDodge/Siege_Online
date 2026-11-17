@@ -21,67 +21,60 @@ in metres: one frame (`world`, 1 u = 1 m), x east, z south, y up.
 | Office wing | 48 – 60 | 0 – 28 | B, 1F, 2F |
 | Boiler house | 8 – 22 | 26 – 38 | B, 1F; its chimney to 14 m |
 | Tunnel | 13.5 – 16.5 | 20 – 26 | B |
-| Loading dock | 12 – 40 | −4 – 0 | a platform 1 m up along the mill's north wall |
-| Millrace | −8 – −2 | −12 – 44 | an open channel at basement depth, a footbridge over it at z 22 |
+| Loading platform | 10 – 38 | −14 – −11 | 1.1 m up, by the rail line (the apron along the mill is at ground level) |
+| Millrace | −5 – 0 | −6 – 34 | an open channel at basement depth, a footbridge over it at z 22 |
 | Playable ground | −30 – 90 | −30 – 70 | |
 
 Storeys: B floor −3.2, 1F 0, 2F 3.2, eaves 6.2 (the mill's gable roof and the office wing's flat roof, both
 walkable), the boiler house's roof at 3.2 sloping down to the north.
 
-## Rooms
+## Rooms (version 2)
 
-| Storey | Room (id, callout) | x | z |
-|---|---|---|---|
-| B | `B_WHEEL_PIT` Wheel Pit (opens on the millrace through an arch) | 0 – 8 | 4 – 16 |
-| B | `B_DYE_VATS` Dye Vats | 8 – 24 | 0 – 20 |
-| B | `B_CLOTH_STORE` Cloth Store | 24 – 40 | 0 – 20 |
-| B | `B_CELLAR_STAIRS` Cellar Stairs | 40 – 48 | 0 – 20 |
-| B | `B_PUMP_ROOM` Pump Room | 48 – 60 | 0 – 14 |
-| B | `B_STRONGROOM` Strongroom | 48 – 60 | 14 – 28 |
-| B | `B_TUNNEL` Tunnel | 13.5 – 16.5 | 20 – 26 |
-| B | `B_BOILER_ROOM` Boiler Room | 8 – 22 | 26 – 33 |
-| B | `B_COAL_STORE` Coal Store | 8 – 22 | 33 – 38 |
-| 1F | `1F_LOOM_HALL` Loom Hall (open to the roof) | 0 – 26 | 0 – 20 |
-| 1F | `1F_SPINNING` Spinning Room | 26 – 40 | 0 – 11 |
-| 1F | `1F_MENDING` Mending Room | 26 – 40 | 11 – 20 |
-| 1F | `1F_STAIR_HALL` Stair Hall | 40 – 48 | 0 – 20 |
-| 1F | `1F_RECEPTION` Reception (the front door, east) | 48 – 60 | 0 – 10 |
-| 1F | `1F_DISPATCH` Dispatch Office | 48 – 60 | 10 – 18 |
-| 1F | `1F_BALE_STORE` Bale Store (a wide door south to the yard) | 48 – 60 | 18 – 28 |
-| 1F | `1F_FIRING_FLOOR` Firing Floor (the boiler house) | 8 – 22 | 26 – 38 |
-| 2F | `2F_GALLERY` Gallery (a walkway over the Loom Hall's north side) | 0 – 26 | 0 – 3 |
-| 2F | `2F_CARD_ROOM` Card Room | 26 – 40 | 0 – 20 |
-| 2F | `2F_UPPER_STAIRS` Upper Stairs | 40 – 48 | 0 – 20 |
-| 2F | `2F_DRAFTING` Drafting Room | 48 – 60 | 0 – 12 |
-| 2F | `2F_PAYROLL` Payroll | 48 – 60 | 12 – 20 |
-| 2F | `2F_ARCHIVE` Archive | 48 – 60 | 20 – 28 |
+Version 1 had a few very large rooms (a 26 m Loom Hall, 16 × 20 m cellars, an 8 m-wide channel): long, empty
+sightlines that favoured whoever held them. Version 2 cuts the building into smaller rooms joined by corridors, so a
+fight crosses a few short sightlines rather than one long one.
+
+| Storey | Rooms (id, callout) |
+|---|---|
+| B | `B_MILLRACE` Millrace (5 m wide now, a sluice gate and debris in it); `B_PIT_STORES` Pit Stores, `B_WHEEL_PIT` Wheel Pit (the wheel as cover, a 3.5 m arch onto the millrace), `B_SLUICE` Sluice Room; `B_DYE_VATS` Dye Vats, `B_RINSE` Rinse Room, `B_BOLT_STORE` Bolt Store, `B_WORKSHOP` Workshop north of `B_CORRIDOR` the Cellar Corridor (3 m wide, west to east); `B_VALVE_ROOM` Valve Room, `B_TUNNEL` Tunnel (from the corridor to the boiler house), `B_LYE_STORE` Lye Store, `B_SORTING` Sorting Room south of it; `B_CELLAR_STAIRS` Cellar Stairs; `B_PUMP_ROOM` Pump Room, `B_STRONGROOM` Strongroom; `B_BOILER_ROOM` Boiler Room, `B_COAL_STORE` Coal Store |
+| 1F | `1F_LOOM_HALL` Loom Hall (18 × 20 m, open to the roof, four pillars and rows of looms); `1F_WARPING` Warping Room, `1F_FOREMAN` Foreman's Office; `1F_SPINNING` Spinning Room, `1F_MENDING` Mending Room; `1F_MILL_CORRIDOR` Mill Corridor (2 m, between the site and the stairs); `1F_STAIR_HALL` Stair Hall; `1F_OFFICE_HALL` Office Hall (3 m, down the office wing's west side); `1F_RECEPTION` Reception, `1F_DISPATCH` Dispatch Office, `1F_BALE_STORE` Bale Store; `1F_FIRING_FLOOR` Firing Floor, `1F_ENGINE_ROOM` Engine Room (the boiler house) |
+| 2F | `2F_GALLERY` Gallery (over the Loom Hall's north side); `2F_OVERLOOK` Overlook, `2F_PATTERN_ROOM` Pattern Room; `2F_CARD_ROOM` Card Room, `2F_CARDING_STORE` Carding Store; `2F_UPPER_CORRIDOR` Upper Corridor; `2F_UPPER_STAIRS` Upper Stairs; `2F_OFFICE_HALL` Upper Office Hall; `2F_DRAFTING` Drafting Room, `2F_PAYROLL` Payroll, `2F_ARCHIVE` Archive |
 
 ## Sites
 
-| Site | Rooms |
-|---|---|
-| `SITE_BOILER` | B Boiler Room / Coal Store |
-| `SITE_MILL` | 1F Spinning Room / Mending Room |
-| `SITE_DISPATCH` | 1F Dispatch Office / Bale Store |
-| `SITE_OFFICES` | 2F Drafting Room / Payroll |
+| Site | Rooms | Ways in |
+|---|---|---|
+| `SITE_BOILER` | B Boiler Room / Coal Store | the Tunnel, the boiler stairs from the Engine Room, the Firing Floor's hatch |
+| `SITE_MILL` | 1F Spinning Room / Mending Room | soft walls from the Warping Room, the Foreman's Office and the Mill Corridor; doors from each; the dock door; hatches from the Carding Store above and into the Bolt Store below |
+| `SITE_DISPATCH` | 1F Dispatch Office / Bale Store | soft walls and doors from the Office Hall and Reception; the yard door; Payroll's hatch above |
+| `SITE_OFFICES` | 2F Drafting Room / Payroll | the office stairs, soft walls and doors from the Upper Office Hall, the Archive's wall, windows on two sides |
+
+## What version 2 follows
+
+General principles of well-liked maps in this genre (our reading of players' and designers' writing, not any one
+map's layout):
+
+- **Short sightlines.** Rooms of 6 to 12 m and corridors of 2 to 3 m between them, so no one holds a long empty lane;
+  big spaces (the Loom Hall) get pillars and machines to break them up.
+- **Chokepoints that can be contested.** Each corridor meets the sites through a door and a soft wall at least, with
+  cover on both sides, so a choke has counter-angles and a second way round.
+- **Several ways into every site**, including vertical ones (hatches from above and below, soft floors) and soft walls
+  that attackers can open themselves.
+- **Spawns screened from the building.** Each attacker spawn stands behind solid cover taller than a head (the river
+  wall, two rows of wagons, the yard wall and its gatehouse), and the windows that looked straight at a spawn are fewer.
+- **Nothing in front of an opening.** The loading platform stands by the rail line, away from the walls; the apron
+  along the mill is at ground level, its doors and windows clear.
 
 ## Ways in, up and down
 
-- **Attacker spawns:** `A_RIVERBANK` west across the millrace, `B_RAIL_SIDING` north beyond the dock, `C_YARD_GATE`
-  south-east at the yard's gate.
-- **Doors:** two dock doors and the Stair Hall's north door on the mill's north side; the front door into Reception
-  (east); the Bale Store's wide south door; the Firing Floor's north and west doors; the Wheel Pit's arch onto the
-  millrace (basement level, reached down the channel's steps at its south end).
-- **Windows:** along both long walls of the mill on both floors, the office wing's east and south walls, the boiler
-  house's west wall.
-- **Stairs:** the main stairs (B, 1F, 2F) in the Stair Hall; the office stairs (1F Reception to 2F Drafting); the boiler
-  house stairs (Firing Floor down to the Boiler Room); the Gallery stairs up the Loom Hall's west wall; outdoor steps
-  down into the millrace. A ladder from the Wheel Pit up into the Loom Hall.
-- **Hatches:** Card Room → Mending Room, Payroll → Dispatch Office, Spinning Room → Cloth Store, Firing Floor → Boiler
-  Room.
-- **Soft floors:** the Gallery's boards, the Card Room's east half, the Archive, the Bale Store's west part.
-- **Soft walls:** every wall between a site's rooms and its neighbours, the Loom Hall's partitions, the office wing's
-  inner walls, the tunnel's ends.
+- **Attacker spawns:** `A_RIVERBANK` west behind the river wall, `B_RAIL_SIDING` north behind the wagons, `C_YARD_GATE`
+  south-east behind the yard wall and gatehouse.
+- **Stairs:** the main stairs (B, 1F, 2F) in the Stair Hall; the office stairs (Reception up to the Drafting Room); the
+  boiler stairs (Engine Room down to the Boiler Room); the Gallery stairs up the Loom Hall's west wall; outdoor steps
+  down into the millrace's south end.
+- **Hatches:** Carding Store → Mending Room, Payroll → Dispatch Office, Spinning Room → Bolt Store, Firing Floor →
+  Boiler Room, Overlook → Warping Room.
+- **Soft floors:** the Gallery, the Card Room's east part, the Pattern Room, the Archive, the Bale Store's west part.
 
 ## Milestones
 

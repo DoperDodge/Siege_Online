@@ -13,16 +13,73 @@
       "level": "EXT",
       "frame": "world",
       "rect": [
-        80.0,
-        -26.667,
-        266.667,
-        -1.333
+        66.667,
+        -93.333,
+        253.333,
+        -73.333
       ],
       "yawDeg": 0,
-      "hM": 1.0,
+      "hM": 1.1,
       "surface": "HARD_FLOOR",
       "vaultable": true,
-      "label": "loading dock",
+      "label": "loading platform",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "EXT_CONTAINER_W1",
+      "kind": "box",
+      "level": "EXT",
+      "frame": "world",
+      "rect": [
+        26.667,
+        -140.0,
+        106.667,
+        -124.0
+      ],
+      "yawDeg": 0,
+      "hM": 3.2,
+      "surface": "HARD_WALL",
+      "vaultable": false,
+      "label": "wagon",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "EXT_CONTAINER_W2",
+      "kind": "box",
+      "level": "EXT",
+      "frame": "world",
+      "rect": [
+        133.333,
+        -140.0,
+        213.333,
+        -124.0
+      ],
+      "yawDeg": 0,
+      "hM": 3.2,
+      "surface": "HARD_WALL",
+      "vaultable": false,
+      "label": "wagon",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "EXT_CONTAINER_W3",
+      "kind": "box",
+      "level": "EXT",
+      "frame": "world",
+      "rect": [
+        240.0,
+        -140.0,
+        320.0,
+        -124.0
+      ],
+      "yawDeg": 0,
+      "hM": 3.2,
+      "surface": "HARD_WALL",
+      "vaultable": false,
+      "label": "wagon",
       "src": "hand",
       "_unverified": []
     },
@@ -32,16 +89,168 @@
       "level": "EXT",
       "frame": "world",
       "rect": [
-        133.333,
-        -73.333,
-        183.333,
-        -56.667
+        273.333,
+        -66.667,
+        323.333,
+        -50.0
       ],
       "yawDeg": 0,
       "hM": 3.0,
       "surface": "HARD_WALL",
       "vaultable": false,
       "label": "box truck",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "EXT_BALES_N1",
+      "kind": "box",
+      "level": "EXT",
+      "frame": "world",
+      "rect": [
+        20.0,
+        -60.0,
+        36.0,
+        -49.333
+      ],
+      "yawDeg": 0,
+      "hM": 1.2,
+      "surface": "HARD_WALL",
+      "vaultable": true,
+      "label": "bales",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "EXT_BALES_N2",
+      "kind": "box",
+      "level": "EXT",
+      "frame": "world",
+      "rect": [
+        333.333,
+        -40.0,
+        349.333,
+        -29.333
+      ],
+      "yawDeg": 0,
+      "hM": 1.2,
+      "surface": "HARD_WALL",
+      "vaultable": true,
+      "label": "bales",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "EXT_WALL_RIVER",
+      "kind": "box",
+      "level": "EXT",
+      "frame": "world",
+      "rect": [
+        -140.0,
+        -53.333,
+        -136.0,
+        146.667
+      ],
+      "yawDeg": 0,
+      "hM": 3.0,
+      "surface": "HARD_WALL",
+      "vaultable": false,
+      "label": "river wall",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "EXT_SHED_PUMP",
+      "kind": "box",
+      "level": "EXT",
+      "frame": "world",
+      "rect": [
+        -106.667,
+        160.0,
+        -73.333,
+        186.667
+      ],
+      "yawDeg": 0,
+      "hM": 2.6,
+      "surface": "HARD_WALL",
+      "vaultable": false,
+      "label": "pump shed",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "EXT_BALES_W1",
+      "kind": "box",
+      "level": "EXT",
+      "frame": "world",
+      "rect": [
+        -80.0,
+        13.333,
+        -64.0,
+        24.0
+      ],
+      "yawDeg": 0,
+      "hM": 1.2,
+      "surface": "HARD_WALL",
+      "vaultable": true,
+      "label": "bales",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "EXT_BALES_W2",
+      "kind": "box",
+      "level": "EXT",
+      "frame": "world",
+      "rect": [
+        -86.667,
+        80.0,
+        -70.667,
+        90.667
+      ],
+      "yawDeg": 0,
+      "hM": 1.2,
+      "surface": "HARD_WALL",
+      "vaultable": true,
+      "label": "bales",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "EXT_WALL_YARD",
+      "kind": "box",
+      "level": "EXT",
+      "frame": "world",
+      "rect": [
+        413.333,
+        333.333,
+        600.0,
+        337.333
+      ],
+      "yawDeg": 0,
+      "hM": 3.0,
+      "surface": "HARD_WALL",
+      "vaultable": false,
+      "label": "yard wall",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "EXT_BOOTH_GATE",
+      "kind": "box",
+      "level": "EXT",
+      "frame": "world",
+      "rect": [
+        453.333,
+        340.0,
+        480.0,
+        363.333
+      ],
+      "yawDeg": 0,
+      "hM": 2.8,
+      "surface": "HARD_WALL",
+      "vaultable": false,
+      "label": "gatehouse",
       "src": "hand",
       "_unverified": []
     },
@@ -74,6 +283,25 @@
         266.667,
         240.0,
         282.667
+      ],
+      "yawDeg": 0,
+      "hM": 2.6,
+      "surface": "HARD_WALL",
+      "vaultable": false,
+      "label": "container",
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "EXT_CONTAINER_3",
+      "kind": "box",
+      "level": "EXT",
+      "frame": "world",
+      "rect": [
+        426.667,
+        280.0,
+        442.667,
+        320.0
       ],
       "yawDeg": 0,
       "hM": 2.6,
@@ -148,7 +376,7 @@
       "level": "B",
       "frame": "world",
       "rect": [
-        -50.667,
+        -30.667,
         140.0,
         -2.667,
         153.333
@@ -164,15 +392,155 @@
       "_unverified": []
     },
     {
+      "id": "PROP_SLUICE_GATE",
+      "kind": "box",
+      "level": "B",
+      "frame": "world",
+      "rect": [
+        -30.667,
+        26.667,
+        -17.333,
+        30.667
+      ],
+      "yawDeg": 0,
+      "hM": 1.6,
+      "surface": "PROP",
+      "vaultable": true,
+      "label": "sluice gate",
+      "src": "hand",
+      "prop": "metal",
+      "_unverified": []
+    },
+    {
+      "id": "PROP_RACE_DEBRIS",
+      "kind": "box",
+      "level": "B",
+      "frame": "world",
+      "rect": [
+        -22.667,
+        100.0,
+        -8.0,
+        109.333
+      ],
+      "yawDeg": 0,
+      "hM": 1.0,
+      "surface": "PROP",
+      "vaultable": true,
+      "label": "debris",
+      "src": "hand",
+      "prop": "wood",
+      "_unverified": []
+    },
+    {
+      "id": "PROP_WHEEL",
+      "kind": "box",
+      "level": "B",
+      "frame": "world",
+      "rect": [
+        13.333,
+        43.333,
+        42.667,
+        50.667
+      ],
+      "yawDeg": 0,
+      "hM": 2.4,
+      "surface": "PROP",
+      "vaultable": false,
+      "label": "water wheel",
+      "src": "hand",
+      "prop": "wood",
+      "_unverified": []
+    },
+    {
+      "id": "PROP_VAT_1",
+      "kind": "box",
+      "level": "B",
+      "frame": "world",
+      "rect": [
+        66.667,
+        13.333,
+        82.667,
+        29.333
+      ],
+      "yawDeg": 0,
+      "hM": 1.1,
+      "surface": "PROP",
+      "vaultable": true,
+      "label": "dye vat",
+      "src": "hand",
+      "prop": "metal",
+      "_unverified": []
+    },
+    {
+      "id": "PROP_VAT_2",
+      "kind": "box",
+      "level": "B",
+      "frame": "world",
+      "rect": [
+        93.333,
+        40.0,
+        109.333,
+        56.0
+      ],
+      "yawDeg": 0,
+      "hM": 1.1,
+      "surface": "PROP",
+      "vaultable": true,
+      "label": "dye vat",
+      "src": "hand",
+      "prop": "metal",
+      "_unverified": []
+    },
+    {
+      "id": "PROP_BOILER_1",
+      "kind": "box",
+      "level": "B",
+      "frame": "world",
+      "rect": [
+        60.0,
+        177.333,
+        83.333,
+        186.667
+      ],
+      "yawDeg": 0,
+      "hM": 1.8,
+      "surface": "PROP",
+      "vaultable": false,
+      "label": "boiler",
+      "src": "hand",
+      "prop": "metal",
+      "_unverified": []
+    },
+    {
+      "id": "PROP_BOLTS_1",
+      "kind": "box",
+      "level": "B",
+      "frame": "world",
+      "rect": [
+        180.0,
+        13.333,
+        206.667,
+        21.333
+      ],
+      "yawDeg": 0,
+      "hM": 1.4,
+      "surface": "PROP",
+      "vaultable": true,
+      "label": "cloth bolts",
+      "src": "hand",
+      "prop": "soft",
+      "_unverified": []
+    },
+    {
       "id": "PROP_LOOM_1",
       "kind": "box",
       "level": "1F",
       "frame": "world",
       "rect": [
-        33.333,
-        40.0,
-        60.0,
-        50.667
+        16.667,
+        63.333,
+        43.333,
+        74.0
       ],
       "yawDeg": 0,
       "hM": 1.3,
@@ -189,10 +557,10 @@
       "level": "1F",
       "frame": "world",
       "rect": [
-        80.0,
-        40.0,
-        106.667,
-        50.667
+        60.0,
+        63.333,
+        86.667,
+        74.0
       ],
       "yawDeg": 0,
       "hM": 1.3,
@@ -209,10 +577,10 @@
       "level": "1F",
       "frame": "world",
       "rect": [
-        33.333,
-        86.667,
-        60.0,
-        97.333
+        16.667,
+        110.0,
+        43.333,
+        120.667
       ],
       "yawDeg": 0,
       "hM": 1.3,
@@ -229,10 +597,10 @@
       "level": "1F",
       "frame": "world",
       "rect": [
-        80.0,
+        60.0,
+        110.0,
         86.667,
-        106.667,
-        97.333
+        120.667
       ],
       "yawDeg": 0,
       "hM": 1.3,
@@ -249,16 +617,136 @@
       "level": "1F",
       "frame": "world",
       "rect": [
-        126.667,
-        60.0,
-        153.333,
-        70.667
+        93.333,
+        26.667,
+        110.667,
+        37.333
       ],
       "yawDeg": 0,
       "hM": 1.3,
       "surface": "PROP",
       "vaultable": true,
       "label": "loom",
+      "src": "hand",
+      "prop": "metal",
+      "_unverified": []
+    },
+    {
+      "id": "PROP_SPINNER_1",
+      "kind": "box",
+      "level": "1F",
+      "frame": "world",
+      "rect": [
+        186.667,
+        50.667,
+        220.0,
+        58.667
+      ],
+      "yawDeg": 0,
+      "hM": 1.4,
+      "surface": "PROP",
+      "vaultable": true,
+      "label": "spinning frame",
+      "src": "hand",
+      "prop": "metal",
+      "_unverified": []
+    },
+    {
+      "id": "PROP_TABLE_MEND",
+      "kind": "box",
+      "level": "1F",
+      "frame": "world",
+      "rect": [
+        193.333,
+        93.333,
+        220.0,
+        104.0
+      ],
+      "yawDeg": 0,
+      "hM": 0.9,
+      "surface": "PROP",
+      "vaultable": true,
+      "label": "mending table",
+      "src": "hand",
+      "prop": "wood",
+      "_unverified": []
+    },
+    {
+      "id": "PROP_BALES_STORE",
+      "kind": "box",
+      "level": "1F",
+      "frame": "world",
+      "rect": [
+        373.333,
+        140.0,
+        389.333,
+        150.667
+      ],
+      "yawDeg": 0,
+      "hM": 1.3,
+      "surface": "PROP",
+      "vaultable": true,
+      "label": "bales",
+      "src": "hand",
+      "prop": "soft",
+      "_unverified": []
+    },
+    {
+      "id": "PROP_DESK_DISPATCH",
+      "kind": "box",
+      "level": "1F",
+      "frame": "world",
+      "rect": [
+        353.333,
+        80.0,
+        369.333,
+        86.667
+      ],
+      "yawDeg": 0,
+      "hM": 0.8,
+      "surface": "PROP",
+      "vaultable": true,
+      "label": "desk",
+      "src": "hand",
+      "prop": "wood",
+      "_unverified": []
+    },
+    {
+      "id": "PROP_DESK_DRAFT",
+      "kind": "box",
+      "level": "2F",
+      "frame": "world",
+      "rect": [
+        360.0,
+        33.333,
+        380.0,
+        41.333
+      ],
+      "yawDeg": 0,
+      "hM": 0.9,
+      "surface": "PROP",
+      "vaultable": true,
+      "label": "drafting table",
+      "src": "hand",
+      "prop": "wood",
+      "_unverified": []
+    },
+    {
+      "id": "PROP_CARDER",
+      "kind": "box",
+      "level": "2F",
+      "frame": "world",
+      "rect": [
+        186.667,
+        20.0,
+        206.667,
+        30.667
+      ],
+      "yawDeg": 0,
+      "hM": 1.4,
+      "surface": "PROP",
+      "vaultable": true,
+      "label": "carding machine",
       "src": "hand",
       "prop": "metal",
       "_unverified": []

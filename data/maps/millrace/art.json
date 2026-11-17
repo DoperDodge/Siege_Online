@@ -250,36 +250,56 @@
   "rooms": {
     "B_MILLRACE": "race",
     "B_WHEEL_PIT": "race",
-    "B_DYE_VATS": "dye",
-    "B_CLOTH_STORE": "cellar",
+    "B_SLUICE": "race",
+    "B_PIT_STORES": "cellar",
+    "B_BOLT_STORE": "cellar",
+    "B_WORKSHOP": "cellar",
+    "B_CORRIDOR": "cellar",
+    "B_VALVE_ROOM": "cellar",
+    "B_TUNNEL": "cellar",
+    "B_LYE_STORE": "cellar",
+    "B_SORTING": "cellar",
     "B_CELLAR_STAIRS": "cellar",
     "B_PUMP_ROOM": "cellar",
     "B_STRONGROOM": "cellar",
-    "B_TUNNEL": "cellar",
+    "B_DYE_VATS": "dye",
+    "B_RINSE": "dye",
     "B_BOILER_ROOM": "boiler",
     "B_COAL_STORE": "boiler",
+    "1F_FIRING_FLOOR": "boiler",
+    "1F_ENGINE_ROOM": "boiler",
     "1F_LOOM_HALL": "loom",
+    "2F_GALLERY": "loom",
+    "1F_WARPING": "mill",
     "1F_SPINNING": "mill",
     "1F_MENDING": "mill",
-    "1F_STAIR_HALL": "stairwell",
-    "1F_RECEPTION": "reception",
-    "1F_DISPATCH": "office",
-    "1F_BALE_STORE": "store",
-    "1F_FIRING_FLOOR": "boiler",
-    "2F_GALLERY": "loom",
+    "2F_OVERLOOK": "mill",
     "2F_CARD_ROOM": "mill",
-    "2F_UPPER_STAIRS": "stairwell",
-    "2F_DRAFTING": "drafting",
+    "2F_CARDING_STORE": "mill",
+    "1F_FOREMAN": "office",
+    "1F_DISPATCH": "office",
     "2F_PAYROLL": "office",
+    "1F_MILL_CORRIDOR": "stairwell",
+    "1F_STAIR_HALL": "stairwell",
+    "2F_UPPER_CORRIDOR": "stairwell",
+    "2F_UPPER_STAIRS": "stairwell",
+    "1F_RECEPTION": "reception",
+    "1F_OFFICE_HALL": "reception",
+    "2F_OFFICE_HALL": "reception",
+    "1F_BALE_STORE": "store",
+    "2F_DRAFTING": "drafting",
+    "2F_PATTERN_ROOM": "drafting",
     "2F_ARCHIVE": "archive"
   },
   "zones": [
     {
       "style": "office_out",
       "rooms": [
+        "1F_OFFICE_HALL",
         "1F_RECEPTION",
         "1F_DISPATCH",
         "1F_BALE_STORE",
+        "2F_OFFICE_HALL",
         "2F_DRAFTING",
         "2F_PAYROLL",
         "2F_ARCHIVE"
@@ -319,10 +339,6 @@
       "style": "shed"
     },
     {
-      "match": "^EXT_CONTAINER",
-      "style": "container"
-    },
-    {
       "match": "^EXT_TRUCK",
       "style": "vehicle"
     },
@@ -341,6 +357,18 @@
     {
       "match": "^PROP_LOOM",
       "style": "machine"
+    },
+    {
+      "match": "^EXT_CONTAINER",
+      "style": "container"
+    },
+    {
+      "match": "^EXT_WALL_",
+      "style": "dock"
+    },
+    {
+      "match": "^EXT_BOOTH",
+      "style": "shed"
     }
   ],
   "props": {
@@ -356,16 +384,16 @@
         "softM": 2.5,
         "rects": [
           [
-            8,
-            -16,
-            44,
+            0,
+            -24,
+            50,
             -0.2
           ],
           [
             44,
             28,
-            80,
-            52
+            88,
+            50
           ],
           [
             -2,
@@ -380,9 +408,9 @@
         "softM": 2.0,
         "rects": [
           [
-            -16,
-            -8,
-            -8,
+            -30,
+            -10,
+            -5,
             40
           ]
         ]
@@ -398,10 +426,10 @@
             10
           ],
           [
-            78,
+            74,
             10,
-            84,
-            60
+            80,
+            66
           ]
         ]
       }
