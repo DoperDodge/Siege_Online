@@ -1,0 +1,15 @@
+{
+  "_doc": "Shunt's Arc Packs (Project Redmond R3, gadgets/R3_OPERATORS.md §2; anti hard breach, and tricking works, Ulo's): his ability, slot 2 (Z). Put down on a floor (`use.placeS`; within `arc.snapM` of a reinforced wall's or a barricade's face it goes against its foot, its prongs in), a pack is live at once and electrifies what it stands by within `arc.reachM` (gadgets/arcs.ts): a reinforced wall section (all of it) or a barricade, and any deployable shield or barbed wire of his side's. Any device of the attackers' on a live surface is burnt out `arc.burnS` after it's first found there: placed while it's live, or there already when the pack went live, so a pack picked up (Interact held) and put back catches a charge put on meanwhile. One already set off (burning, drilling) isn't stopped. An attacker's knife on a live surface shocks him (`arc.shock`, pushed back at `arc.pushMps`); an attacker's drone by a pack is jammed for `arc.droneJamS`. Electronic: an EMP turns it off for its seconds. One bullet destroys it. Its numbers are ours.",
+  "id": "arc_pack",
+  "name": "Arc Pack",
+  "side": "defender",
+  "operator": "shunt",
+  "count": 4,
+  "electronic": true,
+  "use": {"kind": "place", "on": ["floor"], "placeS": 0.8, "reachM": 2.0},
+  "remote": false,
+  "pickUp": true,
+  "sizeM": [0.2, 0.15, 0.13],
+  "arc": {"reachM": 0.4, "snapM": 1.0, "burnS": 0.5, "shock": 10, "pushMps": 6, "droneJamS": 2},
+  "fragile": true
+}

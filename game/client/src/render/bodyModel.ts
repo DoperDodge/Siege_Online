@@ -514,6 +514,15 @@ function backItem(s: Shaper, L: OperatorLook): void {
       s.box([0.02, -0.2, z + 0.0915], [0.075, 0.02, 0.006], 4, 0.002);
       s.box([0.02, -0.2, z + 0.0915], [0.02, 0.075, 0.006], 4, 0.002);
       return;
+    case "reel":
+      // Shunt's (R3): a cable reel on its side across the back, its flanges dark, its cable the accent, on a strap.
+      s.paint(DARK, 0.6);
+      for (const x of [-0.1, 0.085]) s.bar([x, -0.19, z + 0.07], [x + 0.015, -0.19, z + 0.07], 0.072, 0.072, 14);
+      s.paint(L.accent, 0.55);
+      s.bar([-0.085, -0.19, z + 0.07], [0.085, -0.19, z + 0.07], 0.058, 0.058, 14);
+      s.paint(L.gear, 0.8);
+      s.bar([-0.12, -0.13, z + 0.02], [0.1, 0.1, z + 0.015], 0.012, 0.012, 6);
+      return;
     case "tube":
       // A canister upright at the right, a hose over the shoulder.
       s.paint(L.gear, 0.5);

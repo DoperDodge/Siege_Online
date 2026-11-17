@@ -33,6 +33,7 @@ import { gadgetOnRay } from "./hits.js";
 import { pointJammed } from "./jammers.js";
 import { canisterSpot, mirrorHeld, mirrorOf, windowOps } from "./mirror.js";
 import { isIngredient, KIND_BP_CAMERA, KIND_SHELL_SHIELD, kindId, kindOf } from "./kinds.js";
+import { arcData, liveSurfaces, onLiveSurface, packLive } from "./arcs.js";
 import { detonatable, GFlag, type Gadget } from "./table.js";
 
 const KIND_WIRE = kindOf("barbed_wire");
@@ -126,6 +127,10 @@ export class GadgetServer {
   inPrep: () => boolean = () => false;
   /** The room: panel ops made here (a cluster charge's hole, Phase 8 M5), applied with this tick's. */
   cut: (ops: IndexedOp[]) => void = () => {};
+  /** The room: a device burnt out on a live surface by Shunt's pack (R3), as it leaves the table. */
+  onBurnt: (g: Gadget, pack: Gadget) => void = () => {};
+  /** Devices on live surfaces (Shunt's packs, R3), by entry id: the tick each was first found there. */
+  private readonly burning = new Map<number, number>();
   /** How many grenades each set-off cluster charge has let out (by entry id; the server's alone). */
   private readonly released = new Map<number, number>();
   /** Each Black Mirror's canister's entry id: its mirror's (the server's alone; M7). */
@@ -172,8 +177,8 @@ export class GadgetServer {
     if (e.kind === "detonate") {
       const pawn = sim.pawns.get(e.pawnId);
       // Its owner's oldest working one of that kind out (the controller's: Skopós's shells share theirs), not one inside
-      // an enemy jammer (Phase 8 M6).
-      const g = pawn && detonatable(sim.gadgets.list, pawn.ownerId ?? 0, kindOf(e.gadget), (x) => !pointJammed(sim, x.team, x.pos));
+      // an enemy jammer (Phase 8 M6), nor one on a surface Shunt's pack makes live (R3).
+      const g = pawn && detonatable(sim.gadgets.list, pawn.ownerId ?? 0, kindOf(e.gadget), (x) => !pointJammed(sim, x.team, x.pos) && !onLiveSurface(sim, x));
       if (g) this.detonated(g);
       return;
     }
@@ -366,6 +371,7 @@ export class GadgetServer {
     }
     this.wires();
     this.bites();
+    this.arcs();
     this.flights.prune((id) => {
       const g = sim.gadgets.get(id);
       return g !== undefined && isFlying(g);
@@ -467,6 +473,45 @@ export class GadgetServer {
     }
     const readyAt = d.alarm ? this.sim.tick + ticksOrZero(d.alarm.armS) : g.readyAt;
     this.sim.gadgets.update(g.id, { pos: end.pos, yaw, flags: (g.flags & ~GFlag.Flying) | (onFloor || end.how !== "stick" ? GFlag.OnFloor : 0), panel: end.panel, vel: [0, 0, 0], readyAt });
+  }
+
+  /**
+   * Shunt's Arc Packs (R3, gadgets/arcs.ts): every device of the other side's on a live surface (a panel a pack
+   * electrifies) is burnt out `burnS` after it's first found there, whether it was put on while the surface was live or
+   * was there already when a pack went live (a pack picked up and put back again catches it); one already set off
+   * (burning, drilling) isn't stopped. An enemy drone by a live pack is jammed for `droneJamS`.
+   */
+  private arcs() {
+    const sim = this.sim;
+    const k = arcData(sim.data);
+    if (!k) return;
+    const live = liveSurfaces(sim).panels;
+    const tick = sim.tick;
+    const seen = new Set<number>();
+    if (live.size)
+      for (const g of [...sim.gadgets.list]) {
+        if (g.panel < 0 || g.flags & (GFlag.Flying | GFlag.Active) || isIngredient(g.kind)) continue;
+        const pack = live.get(g.panel);
+        const d = this.dataOf(g);
+        if (!pack || g.team === pack.team || !d || d.arc) continue;
+        seen.add(g.id);
+        const since = this.burning.get(g.id);
+        if (since === undefined) this.burning.set(g.id, tick);
+        else if (tick - since >= ticks(k.burnS)) {
+          this.burning.delete(g.id);
+          this.onBurnt(g, pack);
+          this.destroy(g);
+        }
+      }
+    for (const id of this.burning.keys()) if (!seen.has(id)) this.burning.delete(id);
+    if (k.droneJamS <= 0) return;
+    for (const pack of sim.gadgets.list) {
+      if (!packLive(sim, pack)) continue;
+      for (const p of sim.pawns.values()) {
+        if (p.kind !== PawnKind.Drone || p.team === pack.team || p.state.mode === PawnMode.Dead) continue;
+        if (Math.hypot(p.state.x - pack.pos[0], p.state.y - pack.pos[1], p.state.z - pack.pos[2]) <= 0.6) p.state.jammed = Math.max(p.state.jammed, ticks(k.droneJamS));
+      }
+    }
   }
 
   /** An entry whose DSEG has worn off is on again. */

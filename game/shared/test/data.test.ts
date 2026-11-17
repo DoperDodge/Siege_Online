@@ -27,7 +27,7 @@ describe("data files", () => {
   const data = loadGameData();
 
   it("all data files validate", () => {
-    expect(data.operators.size).toBe(14); // the twelve, Ohm and Tonic (R3)
+    expect(data.operators.size).toBe(15); // the twelve, Ohm, Tonic and Shunt (R3)
     expect(data.levels.has("movement_lab")).toBe(true);
     expect(data.weapons.size).toBe(40);
     expect(data.modes.has("lab")).toBe(true);

@@ -177,6 +177,7 @@ One **commander** per side, server-side, with the same knowledge rules (its team
 | Pulse | Roams above or below the site, scans through the floor and pings what it finds |
 | Lesion | Gu mines on stair bottoms, hatch drops and doors (the plan's spots) |
 | Tonic (R3) | His monitor up and Fire (its Auto pick) when a teammate's down, or (out of a fight) one's badly hurt, or he is; down, the ability key gets him up |
+| Shunt (R3) | His Arc Packs on the floor at the foot of the plan's reinforced walls (from the side it reinforces them from), each once its wall is reinforced: standing back on the nav grid, looking down at the spot |
 | Ohm (R3) | His Brownout Pistol at the plan's first hard breach wall from its near side, before the push: a round at each device his scope marks behind it, else two at the wall |
 | Generic | Frags and stuns into rooms before entry, smokes for the plant, claymores on flanks; defenders' wire, shields, Nitro Cells (thrown at heard attackers), alarms, Bulletproof Cameras, Observation Blockers per the plan |
 

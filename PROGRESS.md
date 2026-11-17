@@ -76,7 +76,8 @@ and Tonic defending. One at a time, each complete.
   knock out, through walls (dots, not outlines: outlines are Dowser's). His look: a dark blue work jacket with copper trim, a grey beanie, a battery pack on his back. A bot
   playing Ohm shoots the devices behind the plan's first hard breach wall before the charge goes on.
 - **How to test Ohm**: the Gadget Lab or the greybox lab, pick Ohm (Esc), Z, hold right mouse to look through the
-  sight; put a Damper down as a defender behind a wall first to see its dot and then knock it out.
+  sight; put a Damper down as a defender behind a wall first to see its dot and then knock it out. In Play vs bots,
+  attack the Mill with an Ohm bot on your team.
 - **Tonic** (defender, the medic; health and speed 3 / 1; UMP45 or M590A1, P229 or USP40, an armoured camera or barbed
   wire): **Second Wind**, the medic's updated version you pointed at. Every teammate wears a patch. Z raises his wrist
   monitor: it lists Auto, you and your teammates with their health (or DOWN); the mouse wheel picks, Fire sets that
@@ -89,11 +90,23 @@ and Tonic defending. One at a time, each complete.
   Play vs bots, defending with a Tonic bot: go down near your teammates and watch him bring you back.
 - **Bots don't freeze or block each other in a doorway any more** (found while adding Tonic): a bot that had once
   stalled could give up on every goal after it and stand still for the rest of the round, and two teammates could wedge
-  each other where only one fits. Every map's soak runs clean again. In Play vs bots,
-  attacking the Mill with an Ohm bot.
+  each other where only one fits. Every map's soak runs clean again.
+- **Shunt** (defender, against hard breaches; health and speed 2 / 2; MP5K or M1014, P226 or Q-929, barbed wire or a
+  Nitro Cell): four **Arc Packs** in slot 2 (Z), put down on the floor (0.8 s); aimed at the floor up to a metre short
+  of a reinforced wall or a barricade, a pack goes against its foot. A pack there makes it live: it flickers blue and crackles on both sides, for everyone to see (barbed wire and
+  shields of his side's by it too). An attacker's charge on a live surface can't be set off and is burnt out half a
+  second after it's on it, whether it went on while the surface was live or was there already when the pack went live.
+  So **tricking works**: pick the pack up (hold F on it), let the attacker see the wall go quiet and put his charge on,
+  and put the pack back before he sets it off. Once a charge is set off (burning, drilling) it's too late. An attacker
+  knifing a live surface takes 10 and is thrown back, and does nothing to it; a drone by a pack is jammed. An EMP (Ohm's
+  pistol) turns a pack off for its seconds; one bullet destroys it. His look: steel blue shirt, a hi-vis vest, a cap and
+  safety glasses, amber gloves, a cable reel on his back. A bot playing Shunt puts his packs at the foot of the walls
+  his team reinforces, once they're reinforced.
+- **How to test Shunt**: the Gadget Lab, pick Shunt, Z, look at the floor just in front of the Reinforced wall and hold
+  left mouse (the pack goes to the wall and the wall lights up); switch to Thermite and put his charge on it. For tricking: put the charge on with the pack picked up, then put it back.
 
 ### Next
-- **R3**: the other six, in this order: Shunt, Latch, Bailiff, Rivet, Dowser, Hull.
+- **R3**: the other five, in this order: Latch, Bailiff, Rivet, Dowser, Hull.
 - **R4**: the rest of the tests moved from Oregon to Millrace, Oregon taken off this branch, the code's internal names
   and the docs brought in line.
 

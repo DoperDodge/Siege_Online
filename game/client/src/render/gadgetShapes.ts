@@ -181,6 +181,27 @@ export function gadgetShape(id: string, size: V3): Map<ShapeMat, THREE.BufferGeo
       p.box("black", [w * 0.5, h * 0.2, d * 0.3], [0, 0, -d / 2 + d * 0.15]);
       break;
     }
+    case "arc_pack": {
+      // Shunt's Arc Pack (R3; our own design): a squat rugged cell in a rubber skirt with a yellow band round it, a coil
+      // of copper cable on its lid under a carry handle, a blue lamp at the back of the lid, and two copper prongs out
+      // its front (−z: toward the wall it's put by), blue at their tips.
+      const caseH = h * 0.66;
+      const lid = -h / 2 + caseH;
+      const z0 = d * 0.06;
+      p.box("dark", [w * 0.9, caseH, d * 0.8], [0, -h / 2 + caseH / 2, z0]);
+      p.box("rubber", [w, h * 0.12, d * 0.86], [0, -h / 2 + h * 0.06, z0]);
+      p.box("yellow", [w * 0.91, h * 0.09, d * 0.81], [0, -h / 2 + caseH * 0.62, z0]);
+      p.torus("yellow", Math.min(w, d * 0.8) * 0.3, 0.007, [0, lid + 0.008, z0], [HALF_PI, 0, 0]);
+      const post = h - caseH - 0.012;
+      for (const x of [-1, 1]) p.box("black", [0.012, post, 0.012], [x * w * 0.3, lid + post / 2, z0]);
+      p.box("black", [w * 0.6 + 0.012, 0.012, 0.016], [0, h / 2 - 0.006, z0]);
+      p.cyl("blueGlow", 0.011, 0.01, [w * 0.33, lid + 0.005, d * 0.34], [0, 0, 0], 10);
+      for (const x of [-1, 1]) {
+        p.cyl("yellow", 0.008, d * 0.12, [x * w * 0.24, -h / 2 + caseH * 0.4, -d / 2 + d * 0.06 + 0.003], [HALF_PI, 0, 0], 8);
+        p.cyl("blueGlow", 0.0085, 0.006, [x * w * 0.24, -h / 2 + caseH * 0.4, -d / 2 + 0.004], [HALF_PI, 0, 0], 8);
+      }
+      break;
+    }
     case "cluster_grenade": {
       const r = Math.min(w, h, d) / 2 - 0.002;
       p.lathe("dark", [[0.001, -r], [r * 0.7, -r * 0.7], [r, 0], [r * 0.7, r * 0.7], [0.001, r]]);

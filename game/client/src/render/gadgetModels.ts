@@ -7,7 +7,8 @@
 // the level's ingredients are entries too. M5: Thermite's charge burning shows sparks on both sides of its surface,
 // Fuze's set off shows its tube through it (its grenades are thrown entries). M6: Mute's jammer lights up while it
 // works, and its reach shows for a moment once it's placed. M7: Mira's Black Mirror is its frame and its glass, clear from
-// her side and black from the other (two one-sided sheets), grey once shattered, gone once ejected.
+// her side and black from the other (two one-sided sheets), grey once shattered, gone once ejected. R3: Shunt's live
+// surfaces (gadgets/arcs.ts) flicker blue and crackle, on both sides, for everyone to see.
 import * as THREE from "three";
 import { gadgetShape, SHAPE_MATERIALS, type ShapeMat } from "./gadgetShapes.js";
 import {
@@ -25,6 +26,7 @@ import {
   KIND_SHELL_SHIELD,
   kindId,
   kindOf,
+  liveSurfaces,
   raycastLevel,
   sizeOf,
   TUBE_HALF_M,
@@ -68,6 +70,7 @@ const COLOURS: Record<string, number> = {
   shell_shield: 0x475569,
   brownout_pistol: 0x1e3a5f,
   second_wind: 0x0f766e,
+  arc_pack: 0x27303a,
 };
 
 /**
@@ -121,6 +124,18 @@ export class GadgetModels {
   /** A Claymore's lasers (Phase 8 M2): red, once it's armed. */
   private readonly laserMat = new THREE.LineBasicMaterial({ color: 0xff2020, transparent: true, opacity: 0.7 });
   private readonly ghosts: Ghost[] = [];
+  /**
+   * Shunt's live surfaces (R3): a sheet over each face of an electrified panel, flickering, and crackle (jagged blue
+   * lines, new ones every few frames) across them and round an electrified shield or wire.
+   */
+  private readonly arcSheetMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.1, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending });
+  private readonly arcLineMat = new THREE.LineBasicMaterial({ color: 0xbae6fd, transparent: true, opacity: 0.9, depthWrite: false });
+  private readonly arcSheetGeo = new THREE.PlaneGeometry(1, 1);
+  private readonly arcSheets: THREE.Mesh[] = [];
+  private readonly arcLines = new THREE.LineSegments(new THREE.BufferGeometry(), this.arcLineMat);
+  /** When the crackle was last drawn anew (performance.now), and what was live then. */
+  private arcAt = 0;
+  private arcKey = "";
   /** Our own throws, by entry id: the server tick their flight is drawn from (the ghost's, so it doesn't jump back). */
   private readonly ownStart = new Map<number, number>();
   private readonly flights: Flights;
@@ -132,6 +147,9 @@ export class GadgetModels {
     private readonly sim: Sim,
   ) {
     this.flights = new Flights({ q: sim, rules: sim.data.gadgetRules, gravity: sim.data.movement.gravity });
+    this.arcLines.frustumCulled = false;
+    this.arcLines.visible = false;
+    scene.add(this.arcLines);
   }
 
   private dataOf(kind: number): GadgetData | undefined {
@@ -443,6 +461,93 @@ export class GadgetModels {
       const g = { id: -1 - x.seq, kind: x.kind, owner: me, team: 0, pos: x.pos, yaw: x.yaw, vel: x.vel, flags: x.flags, panel: -1, launchTick: 0, fuseEnd: 0, signalEnd: 0, readyAt: 0, offEnd: 0, seq: x.seq };
       this.pose(x.obj, x.flags & GFlag.Flying && use?.kind === "throw" ? this.flightAt(g, use, now - x.at) : x.pos, x.yaw, x.flags);
     }
+    this.showArcs();
+  }
+
+  /**
+   * Shunt's live surfaces (R3, gadgets/arcs.ts), as the table and panels are now: a flickering sheet just off each face
+   * of every electrified panel; crackle across them and over each electrified shield or wire, drawn anew every 70 ms.
+   */
+  private showArcs() {
+    const live = liveSurfaces(this.sim);
+    const t = performance.now();
+    const panels = this.sim.level.panels.list;
+    let n = 0;
+    for (const idx of live.panels.keys()) {
+      const f = panels[idx]?.frame;
+      if (!f) continue;
+      for (const side of [-1, 1]) {
+        let m = this.arcSheets[n];
+        if (!m) {
+          m = new THREE.Mesh(this.arcSheetGeo, this.arcSheetMat);
+          m.renderOrder = 2;
+          this.scene.add(m);
+          this.arcSheets.push(m);
+        }
+        m.visible = true;
+        const off = side * (f.t / 2 + 0.012);
+        m.position.set(f.center[0] + f.n[0] * off, f.center[1] + f.n[1] * off, f.center[2] + f.n[2] * off);
+        m.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3(...f.u), new THREE.Vector3(...f.v), new THREE.Vector3(...f.n)));
+        m.scale.set(f.w, f.h, 1);
+        n++;
+      }
+    }
+    for (let i = n; i < this.arcSheets.length; i++) this.arcSheets[i].visible = false;
+    // A flicker: two beats at once, never quite dark.
+    this.arcSheetMat.opacity = 0.06 + 0.07 * Math.abs(Math.sin(t * 0.021) * Math.sin(t * 0.0067 + 1.3));
+    const key = `${[...live.panels.keys()].join(",")}|${[...live.gadgets.keys()].join(",")}`;
+    if (key === this.arcKey && t - this.arcAt < 70) return;
+    this.arcKey = key;
+    this.arcAt = t;
+    const pts: number[] = [];
+    // A jagged line from a to b, in `k` steps, each step's middle thrown off by up to `j` along `off1` and `off2`.
+    const bolt = (a: Vec3, b: Vec3, k: number, j: number, off1: Vec3, off2: Vec3) => {
+      let prev = a;
+      for (let s = 1; s <= k; s++) {
+        const u = s / k;
+        const r1 = s === k ? 0 : (Math.random() * 2 - 1) * j;
+        const r2 = s === k ? 0 : (Math.random() * 2 - 1) * j;
+        const p: Vec3 = [a[0] + (b[0] - a[0]) * u + off1[0] * r1 + off2[0] * r2, a[1] + (b[1] - a[1]) * u + off1[1] * r1 + off2[1] * r2, a[2] + (b[2] - a[2]) * u + off1[2] * r1 + off2[2] * r2];
+        pts.push(prev[0], prev[1], prev[2], p[0], p[1], p[2]);
+        prev = p;
+      }
+    };
+    for (const idx of live.panels.keys()) {
+      const f = panels[idx]?.frame;
+      if (!f) continue;
+      const at = (x: number, y: number, side: number): Vec3 => {
+        const o = side * (f.t / 2 + 0.016);
+        return [f.center[0] + f.u[0] * x + f.v[0] * y + f.n[0] * o, f.center[1] + f.u[1] * x + f.v[1] * y + f.n[1] * o, f.center[2] + f.u[2] * x + f.v[2] * y + f.n[2] * o];
+      };
+      for (const side of [-1, 1])
+        for (let i = 0; i < 3; i++) {
+          const x0 = (Math.random() - 0.5) * f.w;
+          const y0 = (Math.random() - 0.5) * f.h;
+          const x1 = Math.max(-f.w / 2, Math.min(f.w / 2, x0 + (Math.random() - 0.5) * 1.2));
+          const y1 = Math.max(-f.h / 2, Math.min(f.h / 2, y0 + (Math.random() - 0.5) * 1.2));
+          bolt(at(x0, y0, side), at(x1, y1, side), 6, 0.06, f.u, f.v);
+        }
+    }
+    for (const id of live.gadgets.keys()) {
+      const g = this.sim.gadgets.get(id);
+      const d = g && this.dataOf(g.kind);
+      if (!g || !d) continue;
+      const [w, h] = d.sizeM;
+      const [fx, fz] = forwardXZ(g.yaw);
+      const across: Vec3 = [fz, 0, -fx];
+      for (let i = 0; i < 2; i++) {
+        const x0 = (Math.random() - 0.5) * w;
+        const x1 = (Math.random() - 0.5) * w;
+        // An entry's position is its box's middle.
+        const a: Vec3 = [g.pos[0] + across[0] * x0, g.pos[1] + (Math.random() - 0.5) * h, g.pos[2] + across[2] * x0];
+        const b: Vec3 = [g.pos[0] + across[0] * x1, g.pos[1] + (Math.random() - 0.5) * h, g.pos[2] + across[2] * x1];
+        bolt(a, b, 5, 0.05, [0, 1, 0], [fx, 0, fz]);
+      }
+    }
+    const geo = this.arcLines.geometry;
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3));
+    geo.computeBoundingSphere();
+    this.arcLines.visible = pts.length > 0;
   }
 
   /**
@@ -675,6 +780,13 @@ export class GadgetModels {
       }
     }
     this.laserMat.dispose();
+    for (const m of this.arcSheets) this.scene.remove(m);
+    this.arcSheets.length = 0;
+    this.scene.remove(this.arcLines);
+    this.arcLines.geometry.dispose();
+    this.arcSheetGeo.dispose();
+    this.arcSheetMat.dispose();
+    this.arcLineMat.dispose();
     for (const x of this.ghosts) {
       this.scene.remove(x.obj);
       this.disposeOwn(x.obj);

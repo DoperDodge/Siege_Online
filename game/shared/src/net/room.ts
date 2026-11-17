@@ -52,6 +52,7 @@ import { hackTargetFor, hackTargetPos, kludgeOf, type HackTarget, type KludgeDat
 import { pawnJammed, pointJammed } from "../gadgets/jammers.js";
 import { heartOf } from "../gadgets/sensor.js";
 import { patchWorking, startPatch, stopPatch, type PatchData } from "../gadgets/patch.js";
+import { arcData, liveSurfaces, type ArcData } from "../gadgets/arcs.js";
 import { GadgetServer, type IngredientStage } from "../gadgets/serve.js";
 import { blastEffects, isCloud, pawnDistance } from "../gadgets/blast.js";
 import { hammerOps } from "../gadgets/hammer.js";
@@ -354,6 +355,11 @@ export class Room implements DirectorHost {
   ) {
     this.history = new HitboxHistory(sim, 32);
     this.gadgetServer = new GadgetServer(sim, (g, at) => this.goOff(g, at));
+    // A device burnt out by Shunt's pack (R3): everyone sees its sparks go.
+    this.gadgetServer.onBurnt = (g) => {
+      const ev: GameEvent = { kind: "emp", pos: [g.pos[0], g.pos[1], g.pos[2]] };
+      for (const m of this.members.values()) m.events.push(ev);
+    };
     // Phase 8 M3: wire and fire hurt over time, alarms sound, ingredients go through their stages; no alarm outdoors in prep.
     this.gadgetServer.hurt = (g, pawn, amount) => this.gadgetHurt(g, pawn, amount);
     this.gadgetServer.onAlarm = (g, by) => this.alarm(g, by);
@@ -1080,6 +1086,18 @@ export class Room implements DirectorHost {
       this.gadgetServer.breakCams(knifed);
       return;
     }
+    // A live surface in reach (R3, Shunt's packs): the other side's knife on it shocks its wielder, and does nothing to it.
+    const live = liveSurfaces(this.sim);
+    const k = arcData(this.sim.data);
+    if (k && (live.panels.size || live.gadgets.size)) {
+      const onGadget = gadgetOnRay(this.sim.gadgets, this.sim.data, hit.origin, dir, plain + 0.02, (g) => live.gadgets.has(g.id));
+      const panel = this.sim.level.panels.firstSolid(hit.origin, dir, reach);
+      const pack = (onGadget ? live.gadgets.get(onGadget.g.id) : undefined) ?? (panel ? live.panels.get(panel.entry.panel.spec.index) : undefined);
+      if (pack && pack.team !== attacker.team) {
+        this.shock(attacker, pack, k, dir);
+        return;
+      }
+    }
     // A gadget in reach (Phase 8 M2, M3): a fragile one is destroyed, barbed wire takes a hit (the next destroys it), a
     // deployable shield's glass goes opaque, a fire extinguisher bursts, a metal detector is destroyed.
     const struck = gadgetOnRay(this.sim.gadgets, this.sim.data, hit.origin, dir, plain + 0.02, (g) => this.knifeable(g));
@@ -1092,6 +1110,23 @@ export class Room implements DirectorHost {
     const d = this.sim.data.destruction;
     const onPanel = meleeOnPanels(this.sim.level.panels, d, hit.origin, dir, reach, plain, { tick: panelTick, history: this.panelHistory }, large ? d.meleeLarge : d.melee);
     if (onPanel) this.judged.push({ ...base, bodies: [], lives: new Map(), panelOps: onPanel.ops.map(({ panel, op }) => ({ panel, op })) });
+  }
+
+  /**
+   * A knife on a live surface (R3, Shunt's packs): its wielder takes the shock, credited to the pack's owner, and is
+   * pushed back off it (his client corrected).
+   */
+  private shock(body: Pawn, pack: Gadget, k: ArcData, dir: Vec3) {
+    const attacker: Attacker = { ctrlId: pack.owner, team: pack.team, weaponId: "arc_pack", origin: [pack.pos[0], pack.pos[1], pack.pos[2]] };
+    this.hurt(body, { amount: k.shock, kill: false }, { cause: Cause.Gadget, attacker, headshot: false });
+    const s = body.state;
+    const len = Math.hypot(dir[0], dir[2]) || 1;
+    s.vx = Math.fround((-dir[0] / len) * k.pushMps);
+    s.vz = Math.fround((-dir[2] / len) * k.pushMps);
+    const owner = body.ownerId !== null ? this.memberOf(body.ownerId) : null;
+    if (owner) this.force(owner);
+    const ev: GameEvent = { kind: "emp", pos: [s.x + (dir[0] / len) * 0.6, s.y + 1.2, s.z + (dir[2] / len) * 0.6] };
+    for (const m of this.members.values()) m.events.push(ev);
   }
 
   /**

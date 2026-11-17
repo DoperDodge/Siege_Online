@@ -11,6 +11,7 @@ import { raycastLevel, type LevelQuery } from "../level/raycast.js";
 import { L_STEEL } from "../destruction/panel.js";
 import { FLOOR_NY } from "./flight.js";
 import { windowFits } from "./mirror.js";
+import { packSnap } from "./arcs.js";
 
 /** A surface steeper than a floor and no steeper than this is a wall (its normal's height, either way). */
 export const WALL_NY = 0.3;
@@ -84,9 +85,12 @@ export function placeSpot(q: PlaceQuery, g: PlaceData, eye: Vec3, dir: Vec3, yaw
   const panel = hit.panel ? hit.panel.entry.panel.spec.index : -1;
   const [w, h, d] = g.sizeM;
   if (floor) {
-    // A gadget meant for floors stands on one; a charge on a breakable floor lies on it.
+    // A gadget meant for floors stands on one; a charge on a breakable floor lies on it. Shunt's pack (R3) put near a
+    // reinforced wall or a barricade goes against its foot.
     const flat = !g.use.on.includes("floor");
-    return { pos: [at[0], at[1] + (flat ? d : h) / 2, at[2]], yaw, onFloor: true, flat, panel };
+    const pos: Vec3 = [at[0], at[1] + (flat ? d : h) / 2, at[2]];
+    const snap = g.arc ? packSnap(q, g.sizeM, pos, g.arc.snapM) : null;
+    return snap ? { pos: snap.pos, yaw: snap.yaw, onFloor: true, flat, panel: snap.panel } : { pos, yaw, onFloor: true, flat, panel };
   }
   const len = Math.hypot(nx, nz);
   if (g.mirror && hit.panel) {

@@ -1170,6 +1170,15 @@ export const gadgetSchema = z
       .strictObject({ radiusM: z.number().positive(), hit: z.number().min(0), damage: z.number().min(0), everyS: z.number().positive(), pullS: z.number().positive() })
       .optional(),
     /**
+     * Shunt's Arc Packs (R3, gadgets/arcs.ts): a pack standing electrifies the reinforced wall section or barricade (and
+     * its side's shields and wire) within `reachM`; an enemy device on a live surface is burnt out `burnS` after it's
+     * found there; an enemy's knife on one takes `shock` and is pushed back at `pushMps`; an enemy drone by a pack is
+     * jammed `droneJamS`. Put on the floor within `snapM` of such a surface's face, a pack goes against its foot.
+     */
+    arc: z
+      .strictObject({ reachM: z.number().positive(), snapM: z.number().min(0), burnS: z.number().positive(), shock: z.number().min(0), pushMps: z.number().min(0), droneJamS: z.number().min(0) })
+      .optional(),
+    /**
      * Tonic's Second Wind (R3, gadgets/patch.ts, net/room.ts patches): a patch set off on a body on its feet heals
      * `heal` over `healS` (up to its most); on a downed one it stops the bleeding and gets him up `reviveS` later with
      * `reviveHp`.
@@ -1208,6 +1217,7 @@ export const gadgetSchema = z
     if (g.gu && (u.kind !== "throw" || u.flight !== "settle" || g.remote || g.electronic)) ctx.addIssue({ code: "custom", path: ["gu"], message: "a Gu mine is thrown, settles, and is mechanical" });
     if (g.regen && g.regen.start > g.count) ctx.addIssue({ code: "custom", path: ["regen", "start"], message: "more at the start than it ever gives" });
     if ((u.kind === "drone") !== (g.kludge !== undefined)) ctx.addIssue({ code: "custom", path: ["kludge"], message: "a drone item is a Kludge, and a Kludge is a drone item" });
+    if (g.arc && (u.kind !== "place" || !u.on.includes("floor") || !g.electronic)) ctx.addIssue({ code: "custom", path: ["arc"], message: "an arc pack is electronic and put down on a floor" });
     if (u.kind === "shoot" && !g.emp) ctx.addIssue({ code: "custom", path: ["use"], message: "a shot item's round does something where it stops (emp)" });
   });
 export type GadgetData = z.infer<typeof gadgetSchema>;

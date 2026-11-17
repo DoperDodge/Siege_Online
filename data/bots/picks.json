@@ -45,6 +45,9 @@
     ],
     "tonic": [
       "bulletproof_camera"
+    ],
+    "shunt": [
+      "barbed_wire"
     ]
   },
   "counters": {
@@ -80,19 +83,19 @@
       "thermite"
     ],
     "thermite": [
+      "shunt",
       "mute",
-      "mira",
-      "lesion"
+      "mira"
     ],
     "striker": [
+      "shunt",
       "mute",
-      "sentry",
-      "skopos"
+      "sentry"
     ],
     "fuze": [
+      "shunt",
       "mute",
-      "lesion",
-      "sentry"
+      "lesion"
     ],
     "brava": [
       "mira",
@@ -118,6 +121,11 @@
       "ohm",
       "dokkaebi",
       "striker"
+    ],
+    "shunt": [
+      "ohm",
+      "striker",
+      "sledge"
     ]
   },
   "primaries": {
