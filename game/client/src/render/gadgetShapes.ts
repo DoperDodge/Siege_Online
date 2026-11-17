@@ -118,6 +118,21 @@ export function gadgetShape(id: string, size: V3, studs: readonly (readonly [num
       }
       break;
     }
+    case "divining_coil": {
+      // Dowser's Divining Coil (R3; our own design): a flat search coil, a ring wound in the accent's brass, at the top of
+      // a short handle, a small housing where they meet with an amber lamp, a rubber grip low on the handle. The coil's
+      // face toward −z (it's held out ahead of him).
+      const r = w / 2 - 0.009;
+      const cy = h / 2 - r - 0.009;
+      p.torus("yellow", r, 0.008, [0, cy, 0], [0, 0, 0]);
+      p.torus("dark", r * 0.62, 0.005, [0, cy, 0], [0, 0, 0]);
+      p.box("dark", [0.012, r * 1.3, 0.006], [0, cy, 0]);
+      p.box("dark", [0.05, 0.04, d * 0.8], [0, cy - r - 0.012, 0]);
+      p.cyl("orange", 0.006, 0.004, [0, cy - r - 0.012, -d * 0.4 - 0.002], [HALF_PI, 0, 0], 8);
+      p.cyl("metal", 0.011, cy - r - 0.03 + h / 2, [0, (cy - r - 0.032 - h / 2) / 2, 0], [0, 0, 0], 10);
+      p.cyl("rubber", 0.015, 0.1, [0, -h / 2 + 0.05, 0], [0, 0, 0], 12);
+      break;
+    }
     case "stud_driver": {
       // Rivet's Stud Driver (R3; our own design), as others see it in his hand: a fat barrel along its top with an
       // orange band round its muzzle, a three-round drum across under it, a pistol grip raked back, a guard. Front −z.

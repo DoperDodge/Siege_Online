@@ -43,6 +43,7 @@ export const GADGET_KINDS = [
   "stud_ring",
   "stud_spine",
   "stud_cross",
+  "divining_coil",
 ] as const;
 
 const index = new Map<string, number>(GADGET_KINDS.map((k, i) => [k, i]));

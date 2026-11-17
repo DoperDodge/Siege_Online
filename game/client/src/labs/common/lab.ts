@@ -92,6 +92,8 @@ import {
   laidBy,
   salvoCut,
   studPoints,
+  coilMarks,
+  coilUp,
   slotGadget,
   type GadgetData,
   type RoundReport,
@@ -1445,6 +1447,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     updateCombatHud(now);
     updateStunHud(now);
     updateSensorHud();
+    updateCoilOutlines();
     updateOhmScope();
     updateTablet();
     updateLasers();
@@ -1983,7 +1986,9 @@ export async function startLab(o: LabOptions): Promise<void> {
       const count = g.use.kind === "hold" && !g.patch ? "" : ` ×${g.use.kind === "drone" ? kludges : left}`;
       // Rivet's driver (R3): the salvo it lays now, and the key that picks the next.
       const laid = g.use.kind === "launch" ? laidBy(data, g, s.pattern) : null;
-      const pick = laid ? ` · ${laid.name.toUpperCase()} (${keyLabel(k.reload)}: next)` : "";
+      // Dowser's coil up (R3): how many devices it reads, and the key that marks one for his team.
+      const coil = g.coil && s.hand === Hand.Ability && s.gAct !== GadgetAct.Equip ? (s.jammed > 0 ? " · NO SIGNAL" : ` · ${coilShown} READ (${keyLabel(k.ping)}: mark one)`) : "";
+      const pick = laid ? ` · ${laid.name.toUpperCase()} (${keyLabel(k.reload)}: next)` : coil;
       return `${g.name.toUpperCase()}${count}${pick}${out ? ` · ${out} out (detonator)` : ""} · ${keyLabel(key)}`;
     };
     const gadgetText = dead ? "" : [slotText(1, k.gadget), slotText(2, k.ability)].filter(Boolean).join("   ");
@@ -3132,6 +3137,45 @@ export async function startLab(o: LabOptions): Promise<void> {
     $(".pulse").classList.toggle("frozen", frozen);
     $(".pulse-count").textContent = `${heartsSeen.size} READ`;
     $(".pulse-state").textContent = frozen ? "NO SIGNAL" : "";
+  }
+
+  /**
+   * Dowser's coil up (R3, gadgets/coil.ts): the other side's electronic devices it reads (within its range and fan,
+   * through anything) outlined where they are, amber edges over everything, breathing; only he sees them. Not over a
+   * feed; an EMP on him empties it.
+   */
+  const coilOutlines = new Map<string, THREE.LineSegments>();
+  const coilEdges = new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1));
+  const coilLine = new THREE.LineBasicMaterial({ color: 0xf5b03b, transparent: true, opacity: 0.9, depthTest: false });
+  let coilShown = 0;
+  function updateCoilOutlines() {
+    const body = livingBody();
+    const onFeed = ctrl.cam !== 0 || ctrl.drone !== 0 || ctrl.shellCam || ctrl.swapPhase !== 0;
+    const marks = body && !onFeed && coilUp(data, body) ? coilMarks(sim, body) : [];
+    coilShown = marks.length;
+    const seen = new Set<string>();
+    coilLine.opacity = 0.65 + 0.3 * Math.sin(performance.now() / 260);
+    for (const m of marks) {
+      seen.add(m.key);
+      let o = coilOutlines.get(m.key);
+      if (!o) {
+        o = new THREE.LineSegments(coilEdges, coilLine);
+        o.renderOrder = 11;
+        o.frustumCulled = false;
+        scene.add(o);
+        coilOutlines.set(m.key, o);
+      }
+      // A little bigger than its box, so the edges stand clear of it; a small device's at least a hand across, to be seen.
+      const edge = (v: number) => Math.max(0.3, v + 0.04);
+      o.scale.set(edge(m.size[0]), edge(m.flat ? m.size[2] : m.size[1]), edge(m.flat ? m.size[1] : m.size[2]));
+      o.position.set(...m.pos);
+      o.rotation.set(0, m.yaw, 0);
+    }
+    for (const [key, o] of coilOutlines) {
+      if (seen.has(key)) continue;
+      scene.remove(o);
+      coilOutlines.delete(key);
+    }
   }
 
   /**

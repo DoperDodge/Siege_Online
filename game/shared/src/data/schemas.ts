@@ -1148,6 +1148,12 @@ export const gadgetSchema = z
      */
     sensor: z.strictObject({ rangeM: z.number().positive(), fanDeg: z.number().gt(0).max(360), pingDeg: z.number().gt(0).max(90) }).optional(),
     /**
+     * Dowser's Divining Coil (R3, gadgets/coil.ts): held up, it shows him alone the other side's electronic devices
+     * within `rangeM` of his eye through anything, within `fanDeg` of his facing across the floor, as outlines; a ping
+     * while it's up marks the one nearest his crosshair within `pingDeg` for his team.
+     */
+    coil: z.strictObject({ rangeM: z.number().positive(), fanDeg: z.number().gt(0).max(360), pingDeg: z.number().gt(0).max(90) }).optional(),
+    /**
      * Mira's Black Mirror (Phase 8 M7, gadgets/mirror.ts): placed on a reinforceable wall at standing (`standY`) or
      * crouched (`crouchY`) height above the floor, it cuts its glass's window (`sizeM`'s width and height) through
      * every layer and fills it: bulletproof and blast-proof both ways, seen through from its placer's side only; a
@@ -1271,7 +1277,7 @@ export const gadgetSchema = z
       if (g[k] !== undefined && !g.remote) ctx.addIssue({ code: "custom", path: [k], message: "only a remote device has this" });
     if (g.cluster && (g.blast || g.burnS !== undefined)) ctx.addIssue({ code: "custom", path: ["cluster"], message: "a cluster charge's grenades blast, not the charge" });
     if (u.kind === "place" && u.on.includes("shield") && !g.cluster) ctx.addIssue({ code: "custom", path: ["use", "on"], message: "only a cluster charge drills through a shield" });
-    if ((u.kind === "hold") !== (g.sensor !== undefined || g.jegeo !== undefined || g.patch !== undefined)) ctx.addIssue({ code: "custom", path: ["use"], message: "a held item is a sensor, a tablet or a patch monitor, and they're held" });
+    if ((u.kind === "hold") !== (g.sensor !== undefined || g.jegeo !== undefined || g.patch !== undefined || g.coil !== undefined)) ctx.addIssue({ code: "custom", path: ["use"], message: "a held item is a sensor, a tablet, a patch monitor or a coil, and they're held" });
     if (g.jammer && (u.kind !== "place" || g.jammer.warnM < g.jammer.radiusM)) ctx.addIssue({ code: "custom", path: ["jammer"], message: "a jammer is placed, and warns beyond its reach" });
     if (g.mirror && (u.kind !== "place" || !u.on.includes("reinforceable") || !g.solid)) ctx.addIssue({ code: "custom", path: ["mirror"], message: "a mirror is solid and placed on a reinforceable wall" });
     if (g.gu && (u.kind !== "throw" || u.flight !== "settle" || g.remote || g.electronic)) ctx.addIssue({ code: "custom", path: ["gu"], message: "a Gu mine is thrown, settles, and is mechanical" });

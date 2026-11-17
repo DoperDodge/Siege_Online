@@ -135,6 +135,20 @@ and Tonic defending. One at a time, each complete.
   going (the others do); a live Arc Pack burns one out; a bullet into one of its studs destroys it. His look: slate
   overalls, an orange hood, a dark visor, a drum of spare studs on his back. A bot playing Rivet lays a Spine on the
   plan's hard breach wall and sets it off from cover.
+- **Dowser** (attacker, the electronics scout; health and speed 1 / 3; L85A2 or T-5 SMG, C75 Auto or P226, a smoke,
+  claymore or breach charge): the **Divining Coil** in slot 2 (Z), a brass search coil on a short handle held out ahead.
+  While it's up, every electronic device of the defenders' within 18 m in a 100° fan ahead of him (Arc Packs, Dampers,
+  armoured cameras, alarms, Nitro Cells, the level's cameras, Twain's idle frame) shows as an amber outline, through
+  walls and floors, for him alone; the gadget line says how many it reads. **Ping (T) while it's up marks the one nearest
+  your crosshair for your team.** Mechanical things never show (Latch's snares, barbed wire). No weapon while it's up;
+  an EMP on him empties it (NO SIGNAL). His look: field green, a wide-brimmed hat, a slim pack with a whip aerial. A bot
+  playing Dowser raises the coil now and then on his way in and pings each device it finds.
+- **How to test Dowser**: the Gadget Lab, pick Mute and put a Damper down behind a soft wall; pick Dowser, stand in front
+  of the wall, Z: its outline shows through the wall; press T to mark it. Turn round to see the lab's camera outlined.
+- **Found by the soak**: a Brava bot's Kludge drone could hover at the foot of a stair for the rest of the round when a
+  device it wanted to hack flickered in and out of its sights at the edge of its reach: it let go of Fire each time
+  (so the hack never finished) and counted each glimpse as getting on. It now holds Fire through the whole hack once one
+  starts, and leaves a device it has tried twice.
 - **How to test Rivet**: the Gadget Lab, pick Rivet, Z, aim at the soft walls and press left mouse (R between presses
   for the other shapes), then Z and left mouse to set them all off; walk up to the Ring or the Cross and press Space to
   vault through, or walk through the Spine. Try one on the Reinforced wall too.
@@ -146,7 +160,7 @@ and Tonic defending. One at a time, each complete.
   left mouse (the pack goes to the wall and the wall lights up); switch to Thermite and put his charge on it. For tricking: put the charge on with the pack picked up, then put it back.
 
 ### Next
-- **R3**: the other two, in this order: Dowser, Hull.
+- **R3**: the last one, Hull.
 - **R4**: the rest of the tests moved from Oregon to Millrace, Oregon taken off this branch, the code's internal names
   and the docs brought in line.
 

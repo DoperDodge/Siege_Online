@@ -69,6 +69,7 @@ export * from "./gadgets/patch.js";
 export * from "./gadgets/arcs.js";
 export * from "./gadgets/snare.js";
 export * from "./gadgets/studs.js";
+export * from "./gadgets/coil.js";
 export * from "./player/prod.js";
 export * from "./gadgets/cluster.js";
 export * from "./gadgets/jammers.js";

@@ -27,7 +27,7 @@ describe("data files", () => {
   const data = loadGameData();
 
   it("all data files validate", () => {
-    expect(data.operators.size).toBe(18); // the twelve, Ohm, Tonic, Shunt, Latch, Bailiff and Rivet (R3)
+    expect(data.operators.size).toBe(19); // the twelve, Ohm, Tonic, Shunt, Latch, Bailiff, Rivet and Dowser (R3)
     expect(data.levels.has("movement_lab")).toBe(true);
     expect(data.weapons.size).toBe(41); // research/weapons.csv's 40 and the Bailiff Shield (R3, ours)
     expect(data.modes.has("lab")).toBe(true);

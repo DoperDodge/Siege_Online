@@ -57,12 +57,16 @@
     ],
     "rivet": [
       "claymore"
+    ],
+    "dowser": [
+      "smoke"
     ]
   },
   "counters": {
     "mute": [
       "brava",
       "ohm",
+      "dowser",
       "striker",
       "fuze"
     ],
@@ -134,6 +138,7 @@
     ],
     "shunt": [
       "ohm",
+      "dowser",
       "striker",
       "sledge"
     ],
@@ -151,6 +156,11 @@
       "shunt",
       "mute",
       "bailiff"
+    ],
+    "dowser": [
+      "latch",
+      "pulse",
+      "sentry"
     ]
   },
   "primaries": {

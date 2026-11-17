@@ -80,7 +80,7 @@ const OPERATORS = [...data.operators.keys()];
 describe("the operators' looks and bodies (operator_looks.json, render/bodyModel.ts)", () => {
   it("every operator has a look of its own, and a body within the budget, bound a vertex to a bone", () => {
     const looks = loadPresentationData().operatorLooks.looks;
-    expect(OPERATORS.length).toBe(18); // the twelve, Ohm, Tonic, Shunt, Latch, Bailiff and Rivet (R3)
+    expect(OPERATORS.length).toBe(19); // the twelve, Ohm, Tonic, Shunt, Latch, Bailiff, Rivet and Dowser (R3)
     const seen = new Set<string>();
     for (const id of [...OPERATORS, "default"]) {
       expect(looks[id], `${id} has a look`).toBeDefined();
@@ -237,11 +237,11 @@ describe("what's drawn is where it's hit", () => {
         expect(head, `${id} ${name}: the head past its hitbox`).toBeLessThan(0.06);
         expect(trunk, `${id} ${name}: the trunk past its hitboxes`).toBeLessThan(0.1);
         // What's carried on the back is kit, not body: a pack keeps as close; only Sledge's hammer (its head over his
-        // shoulder) and a radio's aerial stand off it.
+        // shoulder) and an aerial (a radio's, Dowser's pack's: R3) stand off it.
         if (g.back) {
           const back = posed(g.back, rig.matrices, BONE.chest);
           verts.push(...back);
-          expect(Math.max(...back.map(({ p }) => past(p))), `${id} ${name}: what's on its back`).toBeLessThan(operatorLook(id).back === "hammer" || operatorLook(id).back === "radio" ? 0.2 : 0.1);
+          expect(Math.max(...back.map(({ p }) => past(p))), `${id} ${name}: what's on its back`).toBeLessThan(["hammer", "radio", "aerial"].includes(operatorLook(id).back) ? 0.2 : 0.1);
         }
         // Upright on the floor: nothing over the capsule the body moves in, nothing under the floor.
         if (name === "stand" || name === "crouch" || name === "leanLeft" || name === "halfCrouched") {

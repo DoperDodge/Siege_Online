@@ -18,6 +18,8 @@ import { slotGadget } from "../gadgets/hands.js";
 import { kindId, kindOf } from "../gadgets/kinds.js";
 import { hackTargetFor, kludgeOf, type KludgeData } from "../gadgets/hack.js";
 import { heartbeats, heartOf } from "../gadgets/sensor.js";
+import { coilMarks } from "../gadgets/coil.js";
+import { ticks } from "../weapons/ticks.js";
 import { patchWorking } from "../gadgets/patch.js";
 import { prodLeft } from "../player/prod.js";
 import { shieldUp } from "../player/shield.js";
@@ -122,6 +124,9 @@ export class Bot {
   private taskStep = 0;
   private lastSwing = -1e9;
   private lastPing = -1e9;
+  /** What its coil's pings marked this round (Dowser's, R3: each device once). */
+  private dowsed = new Set<string>();
+  private dowsedRound = -1;
   /** A count a task started with (Brava's Kludge drones out). */
   private taskCount = 0;
   /** Brava's Kludge: what's in its sights (its key) and when Fire may be held on it, when it last saw a device. */
@@ -134,6 +139,9 @@ export class Bot {
   /** How near its Kludge has got to where it's going, and when it last got a metre nearer. */
   private kludgeBest = Infinity;
   private kludgeAt = 0;
+  /** A hack it holds Fire for (its target's key, the tick it began), and how many times it has begun one on each target. */
+  private hackRun: { key: string; from: number } | null = null;
+  private readonly hackTries = new Map<string, number>();
   /** A task whose place it couldn't get to (it does it from where it is), by its key. */
   private unreachable = "";
   /** Its planner's gadget job under way (by the task's key). */
@@ -433,6 +441,25 @@ export class Bot {
       // Nothing yet: a slow turn round (the sensor sees a fan ahead of it).
       return { ...input, yaw: wrapAngle(s.yaw + 1.6 / TICK_HZ), pitch: 0 };
     }
+    if (r.task.tag === "dowse" && input && r.ready(me)) {
+      // Dowser's coil up (R3): a ping on each device it shows that it hasn't marked this round, nearest first.
+      const round = w.match?.round ?? 0;
+      if (round !== this.dowsedRound) [this.dowsed, this.dowsedRound] = [new Set(), round];
+      const next = coilMarks(w.sim, me).find((m) => !this.dowsed.has(m.key));
+      if (next) {
+        const eye = eyePose(w.sim.data.movement, w.sim.data.hitboxes, s).pos;
+        const want = lookAt(eye, next.pos);
+        const v = this.turnTo({ yaw: s.yaw, pitch: s.pitch }, want, d);
+        const ping = viewGap(v, want) < 0.04 && now - this.lastPing > 0.8 * TICK_HZ;
+        if (ping) {
+          this.lastPing = now;
+          this.dowsed.add(next.key);
+        }
+        return { ...input, yaw: v.yaw, pitch: v.pitch, buttons: input.buttons | (ping ? Btn.Ping : 0) };
+      }
+      // Nothing (new) yet: a slow turn round (the coil sees a fan ahead of it).
+      return { ...input, yaw: wrapAngle(s.yaw + 1.6 / TICK_HZ), pitch: 0 };
+    }
     return input;
   }
 
@@ -548,6 +575,12 @@ export class Bot {
     if (tablet && !target && since("jegeo") > 10) {
       const spotted = this.senses.spottedNow(sim, now);
       if (spotted) return { task: { kind: "gadget", slot: tablet, how: "hold", stand: null, look: spotted, seconds: 3, tag: "jegeo" }, score: 0.8 * keen };
+    }
+    // Dowser (R3): the coil up for a few seconds every so often on his way in (not in a fight), pinging what it shows.
+    const coil = slotOf("divining_coil");
+    if (coil && !target && !recent && since("dowse") > 10 + (this.memberId % 5)) {
+      const ahead: Vec3 = [s.x - Math.sin(s.yaw) * 6, s.y + 1.4, s.z - Math.cos(s.yaw) * 6];
+      return { task: { kind: "gadget", slot: coil, how: "hold", stand: null, look: ahead, seconds: 4, tag: "dowse" }, score: 0.5 };
     }
     // A grenade into the site's room just before its way goes in (a door, a hole, a hatch it broke), once a round.
     const grenade = slotOf("frag", "stun");
@@ -1077,6 +1110,8 @@ export class Bot {
       this.hackSeen = now;
       this.kludgeBest = Infinity;
       this.kludgeAt = now;
+      this.hackRun = null;
+      this.hackTries.clear();
       this.legs.stop();
     }
     // The other side's devices it sees within reach, nearest first (looked for a few times a second: each is a sight
@@ -1096,10 +1131,24 @@ export class Bot {
       this.hackKey = key;
       this.hackFrom = now + 2;
     }
-    // Getting nowhere (stuck on a step, no way in) is as done as having got there.
-    // Getting on: a metre nearer where it's going, or a hack running (a device merely in view it can't get to isn't).
+    // A hack: once its target's in the sights, Fire held for the hack's time (the room runs it while Fire's held and the
+    // Kludge is in reach: the sights may come and go meanwhile, at the edge of its reach or through a gap), then let go
+    // for a fresh press. A target begun twice is left (a hack that doesn't take, or one it can't keep in reach of).
+    if (this.hackRun && now - this.hackRun.from >= ticks(k.hackS) + 8) {
+      this.hackRun = null;
+      this.hackFrom = now + 2;
+    }
     const toGo = Math.hypot(to[0] - s.x, to[2] - s.z);
-    if (toGo < this.kludgeBest - 1 || (sights !== null && now >= this.hackFrom)) [this.kludgeBest, this.kludgeAt] = [Math.min(toGo, this.kludgeBest), now];
+    const tries = this.hackTries.get(key) ?? 0;
+    // Getting nowhere (stuck on a step, no way in) is as done as having got there. Getting on: a metre nearer where
+    // it's going, or a hack begun (a device merely in view isn't, nor one flickering in and out of its sights: Ulo's
+    // soak found a Kludge at a stair's foot doing that for ever).
+    if (!this.hackRun && sights !== null && now >= this.hackFrom && tries < 2) {
+      this.hackRun = { key, from: now };
+      this.hackTries.set(key, tries + 1);
+      [this.kludgeBest, this.kludgeAt] = [Math.min(toGo, this.kludgeBest), now];
+    }
+    if (toGo < this.kludgeBest - 1) [this.kludgeBest, this.kludgeAt] = [toGo, now];
     const done = now - this.taskSince > 25 * TICK_HZ || now - this.kludgeAt > 6 * TICK_HZ || this.legs.state === FollowState.Failed || (this.legs.state !== FollowState.Walking && now - this.hackSeen > 5 * TICK_HZ && !devices.length);
     if (done) {
       const job = this.ordered(now) ?? w.taskOf();
@@ -1121,7 +1170,7 @@ export class Bot {
         const st = this.legs.tick(w.nav, sim, drone, v.yaw);
         [forward, strafe] = [st.forward, st.strafe];
       }
-      return { forward, strafe, yaw: v.yaw, pitch: v.pitch, buttons: sights && now >= this.hackFrom ? Btn.Fire : 0, stance: Stance.Stand, lean: 0 };
+      return { forward, strafe, yaw: v.yaw, pitch: v.pitch, buttons: this.hackRun ? Btn.Fire : 0, stance: Stance.Stand, lean: 0 };
     }
     if (!w.nav) return { forward: 0, strafe: 0, yaw: s.yaw, pitch: 0, buttons: 0, stance: Stance.Stand, lean: 0 };
     this.legs.goTo(to, 1.5);

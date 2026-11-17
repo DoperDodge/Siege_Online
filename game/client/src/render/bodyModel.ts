@@ -534,6 +534,16 @@ function backItem(s: Shaper, L: OperatorLook): void {
         s.box([x, -0.18, z + 0.0915], [0.064, 0.006, 0.01], 2, 0.001);
       }
       return;
+    case "aerial":
+      // Dowser's (R3): a slim pack high on the back, a whip aerial up from its left shoulder, its tip in the accent.
+      s.paint(L.gear, 0.75);
+      s.box([0.01, -0.13, z + 0.04], [0.17, 0.24, 0.07], 4, 0.016);
+      s.paint(DARK, 0.5);
+      s.bar([-0.06, -0.02, z + 0.045], [-0.07, 0.24, z + 0.05], 0.006, 0.003, 6);
+      s.paint(L.accent, 0.4);
+      s.bar([-0.069, 0.22, z + 0.05], [-0.07, 0.26, z + 0.05], 0.009, 0.009, 6);
+      s.box([0.01, -0.06, z + 0.0755], [0.1, 0.02, 0.006], 4, 0.002);
+      return;
     case "studs":
       // Rivet's (R3): a squat drum of spare studs across the back, banded in the accent, on a strap over the left
       // shoulder, a tool pouch under it.

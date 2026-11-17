@@ -22,6 +22,7 @@ import { mirrorOf, sightPast } from "./gadgets/mirror.js";
 import { barrierOf, crossesBarrier, smokeOnSegment, wireSlow } from "./gadgets/areas.js";
 import { gadgetOnRay, partBoxes } from "./gadgets/hits.js";
 import { salvosOut } from "./gadgets/studs.js";
+import { coilMarks, coilUp, type CoilMark } from "./gadgets/coil.js";
 import { emptySlots, moveStock, placeSpotFor, slotGadget, stockSlots } from "./gadgets/hands.js";
 import { guData } from "./gadgets/gu.js";
 import { CAMERA_HALF_M } from "./intel/cameras.js";
@@ -1241,6 +1242,20 @@ export class Sim {
       }
       if (best) {
         this.ctx.events.push({ kind: "ping", ctrlId: c.id, pos: best.at, gadget: -1, heart: true });
+        return;
+      }
+    }
+    // Dowser's coil up (R3): the device it shows nearest the crosshair, within its `pingDeg`, is what's pinged.
+    const coil = body && c.pawnIds.includes(body.id) ? coilUp(this.data, body) : null;
+    if (body && coil) {
+      let best: { m: CoilMark; cos: number } | null = null;
+      for (const m of coilMarks(this, body)) {
+        const w = [m.pos[0] - v.pos[0], m.pos[1] - v.pos[1], m.pos[2] - v.pos[2]];
+        const cos = (w[0] * dir[0] + w[1] * dir[1] + w[2] * dir[2]) / Math.max(1e-6, Math.hypot(w[0], w[1], w[2]));
+        if (cos >= Math.cos(coil.pingDeg * DEG) && (!best || cos > best.cos)) best = { m, cos };
+      }
+      if (best) {
+        this.ctx.events.push({ kind: "ping", ctrlId: c.id, pos: [best.m.pos[0], best.m.pos[1], best.m.pos[2]], gadget: best.m.kind });
         return;
       }
     }

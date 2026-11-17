@@ -520,7 +520,8 @@ export class Viewmodel {
         this.held = this.heldModel.group;
         this.held.name = "held";
         this.camera.add(this.held);
-        if (!gadget.detonator && gadget.data.use.kind === "hold") {
+        // (Dowser's coil, R3, has no screen: what it reads is outlined where it is, the page's.)
+        if (!gadget.detonator && gadget.data.use.kind === "hold" && !gadget.data.coil) {
           // Its screen, on the face toward the eye once it's up (blue: Relay's tablet). (Murmur's Blood Oxygen Sensor's
           // screen: its plane only says where it is, for the page to draw the readout there.)
           const S = SENSOR_DISPLAY;
@@ -562,6 +563,14 @@ export class Viewmodel {
       // emitter forward and its little screen tilted up to his eyes; once it's up the page draws its readout there
       // (sensorScreen) and the people it reads where they are.
       const k = smooth(up);
+      if (gadget?.data.coil) {
+        // Dowser's Divining Coil (R3): in the right hand, held out ahead and low on the right, its coil leaning forward
+        // over what it reads (its outlines are the page's).
+        this.held.position.set(lerp(0.2, 0.13, k), lerp(-0.42, -0.2, k), lerp(-0.45, -0.42, k));
+        this.held.rotation.set(lerp(-0.9, -0.55, k), lerp(-0.4, -0.12, k), 0);
+        this.holdHeld("palm");
+        return;
+      }
       if (gadget?.data.sensor) {
         // Our own (D-183): in the right hand, low on the right, its top leaning away so the screen faces the eyes.
         this.held.position.set(lerp(0.2, 0.12, k), lerp(-0.42, -0.145, k), lerp(-0.45, -0.36, k));
