@@ -59,7 +59,7 @@ export function readPawnState(r: ByteReader): PawnState {
   for (const k of PAWN_U16_FIELDS) f[k] = r.u16();
   for (const k of PAWN_U32_FIELDS) f[k] = r.u32();
   if (f.slot > 1 || f.wAct > 2 || f.reloadKind > 3) throw new ProtocolError("bad pawn weapon state");
-  if (f.deployKind > 7 || f.deploySection > 2) throw new ProtocolError("bad pawn deploy state");
+  if (f.deployKind > 8 || f.deploySection > 2) throw new ProtocolError("bad pawn deploy state");
   if (f.hand > 4 || f.gAct > 5) throw new ProtocolError("bad pawn gadget state");
   if (rappel < -1 || f.rappelFlags > 31) throw new ProtocolError("bad pawn rappel state");
   return {

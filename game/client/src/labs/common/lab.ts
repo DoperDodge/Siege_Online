@@ -5,6 +5,10 @@
 // about it (startLab's options). A map (a level with storeys) also gets the storey views, a HUD line with
 // the room and plan position, and Go to by storey and room (tools/mapgen/DESIGN.md E9).
 import * as THREE from "three";
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { GTAOPass } from "three/examples/jsm/postprocessing/GTAOPass.js";
+import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
+import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import {
   applyDamage,
   Btn,
@@ -16,6 +20,7 @@ import {
   defaultLoadoutPick,
   encodePickLoadout,
   encodeCallout,
+  encodeJegeoPick,
   droneEye,
   eyePose,
   GRIPS,
@@ -47,6 +52,7 @@ import {
   zoneBoxes,
   type IndexedOp,
   type InputCmd,
+  type JegeoPick,
   type Pawn,
   type PanelChange,
   type PawnState,
@@ -61,18 +67,20 @@ import {
   type WeaponPick,
   WeaponAct,
   GadgetServer,
+  DeployKind,
   GadgetAct,
   GFlag,
+  Hand,
   kindId,
+  kindOf,
   handSlot,
   isDetonator,
-  forwardXZ,
   heartbeats,
+  heartOf,
   guData,
   suppressed,
   kludgeOf,
   pawnJammed,
-  rightXZ,
   sensorUp,
   placeSpotFor,
   slotGadget,
@@ -250,7 +258,8 @@ export async function startLab(o: LabOptions): Promise<void> {
     <div class="lean-ind lean-l">◀</div><div class="lean-ind lean-r">▶</div>
     <div class="flash"></div>
     <div class="stun-white"></div><div class="emp-static hidden"></div>
-    <div class="sensor hidden"><div class="sensor-fan"></div><div class="sensor-blips"></div><div class="sensor-title"></div></div>
+    <div class="pulse hidden"><div class="pulse-glass"><div class="pulse-grey"></div><div class="pulse-wash"></div><div class="pulse-band"></div><div class="pulse-hearts"></div><div class="pulse-state"></div></div></div>
+    <div class="tablet hidden"><div class="tablet-title"></div><div class="tablet-list"></div><div class="tablet-help"></div></div>
     <div class="prompt hidden"></div>
     <div class="needle-ui hidden"></div>
     <div class="jegeo-bar hidden"><div class="jegeo-title"></div><div class="jegeo-fill"><div></div></div></div>
@@ -499,6 +508,18 @@ export async function startLab(o: LabOptions): Promise<void> {
   // The comm wheel (Phase 7) needs a room to send its callouts to.
   controls.wheelSize = () => (net ? data.intel.callouts.length : 0);
   controls.onCallout = (id) => net?.send(encodeCallout(id));
+  // Dokkaebi's tablet up: the wheel moves her pick instead of switching weapons.
+  {
+    const taken = controls.wheelTaken;
+    controls.wheelTaken = () => tabletUp || taken();
+    renderer.domElement.addEventListener(
+      "wheel",
+      (e) => {
+        if (tabletUp && document.pointerLockElement === renderer.domElement && e.deltaY !== 0) moveTabletPick(e.deltaY > 0 ? 1 : -1);
+      },
+      { passive: true },
+    );
+  }
   controls.stanceLocked = () => {
     const p = sim.pawns.get(ctrl.possessedPawnId);
     return ctrl.shellCam || ctrl.swapPhase !== 0 || (p !== undefined && isDowned(p.state)); // down: the body decides
@@ -913,6 +934,7 @@ export async function startLab(o: LabOptions): Promise<void> {
           .map((q) => `<option value="${q}" ${settings.graphics === q ? "selected" : ""}>${q === "auto" ? `Auto (${QUALITY_NAMES[initialQuality(new URLSearchParams(), "auto", { automated: false, touchOnly })]})` : QUALITY_NAMES[q]}</option>`)
           .join("")}</select></label>
         <p class="note">Drawing now: ${QUALITY_NAMES[quality]}${params.has("gfx") || params.has("lowgfx") ? " (set by the link)" : ""}. A change takes effect when the page next loads.</p>
+        <label><input type="checkbox" data-bool="ambientOcclusion" ${settings.ambientOcclusion ? "checked" : ""}> Ambient occlusion: darker where surfaces meet, at once (costs frame rate)</label>
       </section>
       <p class="note">Press <kbd>F1</kbd> for the key list and what to try.</p>`;
     pause.querySelector(".resume")?.addEventListener("click", resume);
@@ -1250,7 +1272,12 @@ export async function startLab(o: LabOptions): Promise<void> {
       artView.adapt(renderer, cam.position.x, cam.position.y, cam.position.z, Math.min(0.5, Math.max(0, (now - lastAdapt) / 1000)));
       lastAdapt = now;
     }
-    if (prepassOn && artView.shown) {
+    if (settings.ambientOcclusion) {
+      // Ambient occlusion on (Settings → Graphics): the world through GTAO (render/DESIGN.md §6.5), then tone mapped
+      // onto the page as before; the depth pre-pass isn't used with it.
+      const a = aoPipeline(cam);
+      a.composer.render();
+    } else if (prepassOn && artView.shown) {
       // The depth pre-pass (render/DESIGN.md §13): the level's opaque surfaces into the depth buffer alone (pushed a
       // hair back, so the same surface shaded next still passes), then everything, the depth kept. The level's heavy
       // shader then runs only where its surface is the nearest. The shadow map isn't touched by the first.
@@ -1269,6 +1296,38 @@ export async function startLab(o: LabOptions): Promise<void> {
     } else renderer.render(scene, cam);
     drawMs += performance.now() - drawFrom;
   }
+  /**
+   * Ambient occlusion (Ulo's request after Phase 10): the world drawn into a target, GTAO over it (the darkening where
+   * surfaces meet, which the probes are too coarse for), then tone mapped and put on the page (OutputPass). Made when
+   * first wanted; its targets follow the drawing buffer's size; antialiased as the preset is.
+   */
+  let ao: { composer: EffectComposer; render: RenderPass; gtao: GTAOPass; w: number; h: number } | null = null;
+  function aoPipeline(cam: THREE.Camera) {
+    const size = renderer.getSize(new THREE.Vector2());
+    if (!ao) {
+      const px = renderer.getDrawingBufferSize(new THREE.Vector2());
+      const target = new THREE.WebGLRenderTarget(px.x, px.y, { type: THREE.HalfFloatType, samples: preset.antialias ? 4 : 0 });
+      const composer = new EffectComposer(renderer, target);
+      const render = new RenderPass(scene, cam);
+      const gtao = new GTAOPass(scene, cam, px.x, px.y);
+      gtao.updateGtaoMaterial({ radius: 0.45, distanceExponent: 1.6, thickness: 1.2, scale: 1, samples: 16 });
+      composer.addPass(render);
+      composer.addPass(gtao);
+      composer.addPass(new OutputPass());
+      ao = { composer, render, gtao, w: size.x, h: size.y };
+      composer.setSize(size.x, size.y);
+    }
+    if (ao.w !== size.x || ao.h !== size.y) {
+      ao.w = size.x;
+      ao.h = size.y;
+      ao.composer.setPixelRatio(renderer.getPixelRatio());
+      ao.composer.setSize(size.x, size.y);
+    }
+    ao.render.camera = cam;
+    ao.gtao.camera = cam;
+    return ao;
+  }
+
   /** The depth pre-pass's material: depth only, a hair back (drawWorld). */
   const depthFirst = new THREE.MeshBasicMaterial({ colorWrite: false, fog: false, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
   function frame(now: number) {
@@ -1351,6 +1410,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     updateCombatHud(now);
     updateStunHud(now);
     updateSensorHud();
+    updateTablet();
     updateLasers();
 
     let rs: PawnState | null = null;
@@ -1436,11 +1496,14 @@ export async function startLab(o: LabOptions): Promise<void> {
       // (Knocked down, D-156: nothing in hand until you're up. On a ladder or with the hands at work — a revive, a
       // reinforcement, a barricade, the defuser — the gun can't fire and isn't in the hands: none drawn, as the body
       // others see has it slung.)
-      const busy = rs.mode === PawnMode.Ladder || rs.reviveTarget !== 0 || rs.deployKind !== 0;
+      // A ringing phone being turned off (Dokkaebi's call) is in the hands instead of the gun.
+      const phoneOut = rs.deployKind === DeployKind.Phone;
+      const busy = rs.mode === PawnMode.Ladder || rs.reviveTarget !== 0 || (rs.deployKind !== 0 && !phoneOut);
       const inHand = viewed.id === me.id && !outside && !onCamera && !ctrl.shellCam && ctrl.swapPhase === 0 && rs.mode !== PawnMode.Knocked && !busy ? (viewed.loadout?.weapons[rs.slot] ?? null) : null;
       // (Your arms dressed as you: made again only when there are arms to draw, not for each body or drone you look through.)
       if (inHand) viewmodel.setOperator(viewed.operatorId);
-      viewmodel.update(now, elapsed, inHand, rs, viewed.loadout?.swapTicks ?? 1, inHand ? heldGadget(viewed, rs) : null, !!viewed.loadout?.shield && rs.shieldAt === 1);
+      const phone = phoneOut ? data.gadgets.get("dropped_phone") : undefined;
+      viewmodel.update(now, elapsed, inHand, rs, viewed.loadout?.swapTicks ?? 1, !inHand ? null : phone ? { data: phone, detonator: false } : heldGadget(viewed, rs), !!viewed.loadout?.shield && rs.shieldAt === 1);
       viewmodel.render(renderer);
       const held = viewed.loadout?.weapons[rs.slot];
       const aimed = inHand !== null && viewmodel.aim > 0.9;
@@ -1657,6 +1720,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       takeBack: backData?.name ?? "gadget",
       takeBackTicks: ticks(data.gadgetRules.pickUpS),
       needleTicks: ticks(guData(data)?.pullS ?? 1),
+      phoneTicks: ticks(data.gadgets.get("jegeo_payload")?.jegeo?.dismissS ?? 1),
     });
     app.querySelectorAll<HTMLElement>(".stances span").forEach((el) => el.classList.toggle("on", Number(el.dataset.s) === s.stance));
     $(".stance-bar div").style.width = `${s.stanceT * 100}%`;
@@ -1754,7 +1818,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     jegeoBar.classList.toggle("hidden", jegeoRun === null);
     if (jegeoRun) {
       jegeoBar.classList.toggle("ringing", jegeoRun.ringing);
-      $(".jegeo-title").textContent = jegeoRun.ringing ? `Phone ringing: hold ${keyLabel(settings.keys.interact)} to dismiss` : "Uploading the payload";
+      $(".jegeo-title").textContent = jegeoRun.ringing ? `Your phone's ringing (Dokkaebi): hold ${keyLabel(settings.keys.interact)} to take it out and turn it off before it blows` : "Uploading the payload";
       ($(".jegeo-fill").firstElementChild as HTMLElement).style.width = `${Math.min(100, ((performance.now() - jegeoRun.start) / jegeoRun.ms) * 100).toFixed(0)}%`;
     }
     // A Kludge's hack under way (Phase 8 M8): its bar filling.
@@ -2653,8 +2717,16 @@ export async function startLab(o: LabOptions): Promise<void> {
           if (e.stage === 0) flash(`Uploading to ${who}: keep the tablet up (${secs} s) · ${e.charges} left`, "info");
           else if (e.stage === 1) flash(ctrl.pawnIds.includes(e.pawnId) ? "Your phone exploded: no cameras for the rest of the round" : `Payload delivered to ${who}`, ctrl.pawnIds.includes(e.pawnId) ? "bad" : "info");
           else if (e.stage === 2) flash(ctrl.pawnIds.includes(e.pawnId) ? "The call's gone" : "Upload cut", "info");
-          else if (e.stage === 3) flash(`Your phone's ringing: hold ${keyLabel(settings.keys.interact)} to dismiss it within ${secs} s`, "bad");
+          else if (e.stage === 3) flash(`Your phone's ringing: hold ${keyLabel(settings.keys.interact)} to take it out and turn it off within ${secs} s`, "bad");
           else flash(`Phone hacked: your team watches the defenders' cameras for ${secs} s`, "info");
+          // Her tablet's list: a target she called rests his cooldown from now; a phone hacked is gone from it.
+          const cool = data.gadgets.get("jegeo_payload")?.jegeo?.cooldownS ?? 0;
+          if (e.stage !== 3) jegeoCharges = e.charges;
+          if (e.stage === 1 || e.stage === 2) jegeoCooldownUntil.set(e.pawnId, now + cool * 1000);
+          if (e.stage === 4) {
+            phonesHacked.add(e.pawnId);
+            hacksMade++;
+          }
         }
         if (e.kind === "ping") {
           // An enemy gadget pinged (Phase 8 M3) is named with it, a heartbeat on Pulse's sensor (M6) too.
@@ -2668,7 +2740,10 @@ export async function startLab(o: LabOptions): Promise<void> {
         }
         else if (e.kind === "spotted") {
           if (ctrl.pawnIds.includes(e.pawnId)) flash("You've been spotted", "bad");
-          else intelHud.spotted(e, now);
+          else {
+            intelHud.spotted(e, now);
+            identifiedUntil.set(e.pawnId, Math.max(identifiedUntil.get(e.pawnId) ?? 0, now + e.ticks * DT * 1000));
+          }
         } else if (e.kind === "callout") killFeed.push({ text: `${e.name}: ${data.intel.callouts[e.id] ?? "?"}`, mine: false, callout: true }, now);
       }
     }
@@ -2679,41 +2754,182 @@ export async function startLab(o: LabOptions): Promise<void> {
   let hackRun: { start: number; ms: number } | null = null;
   /** Dokkaebi's upload under way (Phase 8 M9), or the call ringing on our phone: its bar. */
   let jegeoRun: { start: number; ms: number; ringing: boolean } | null = null;
-
-  /** The heartbeats Pulse's sensor last showed (Phase 8 M6): kept, frozen, while an EMP has him. */
-  let heartsShown: { x: number; y: number }[] = [];
-  let heartsKey = "";
+  /**
+   * Dokkaebi's tablet (Ulo's request after Phase 10): the defenders her team has identified (spotted, until when: ms),
+   * the ones she's called resting their cooldown, the dead defenders' phones hacked, and her pick among them (the wheel
+   * moves it; the room is told each change, and Fire sends to it).
+   */
+  const identifiedUntil = new Map<number, number>();
+  const jegeoCooldownUntil = new Map<number, number>();
+  const phonesHacked = new Set<number>();
+  let hacksMade = 0;
+  let tabletUp = false;
+  let tabletPick = "";
+  let tabletSent = "";
+  let tabletKey = "";
+  let tabletEntries: { key: string; label: string; note: string; ok: boolean; pick: JegeoPick }[] = [];
+  /** Her charges, as her last payload event said. */
+  let jegeoCharges: number | null = null;
 
   /**
-   * Pulse's sensor up (Phase 8 M6): the attackers' heartbeats in front of him as blips on a fan, nearer the bottom the
-   * closer (only he sees them); an EMP on him freezes it.
+   * The heartbeats Pulse's sensor has picked up (Phase 8 M6), by the body they beat in: where it was when the sweep
+   * last passed over it (the mark stays there as he looks round, until the next pass), when, and how near (0 at the
+   * range's edge … 1 on him); kept, frozen, while an EMP has him. Each its own element.
+   */
+  const heartsSeen = new Map<number, { at: THREE.Vector3; t: number; near: number }>();
+  const heartEls = new Map<number, HTMLElement>();
+  /** The sweep's place across the screen last frame (0 its left edge … 1 its right). */
+  let sweepWas = 0;
+  /** A sweep across the sensor's screen, left to right (ms). */
+  const SWEEP_MS = 1600;
+
+  /**
+   * Dokkaebi's tablet up: the defenders her team has identified (their operator and player, how long they stay
+   * identified, or their cooldown after a call) and the dead defenders' phones she can still hack, one picked (the wheel
+   * moves it). The pick is the room's to check when she presses Fire (net/room.ts jegeo).
+   */
+  function updateTablet() {
+    const body = livingBody();
+    const onFeed = ctrl.cam !== 0 || ctrl.drone !== 0 || ctrl.shellCam || ctrl.swapPhase !== 0;
+    const t = body ? slotGadget(data, body.loadout, 2)?.jegeo : undefined;
+    tabletUp = !!body && !!t && !onFeed && body.state.hand === Hand.Ability && body.state.gAct !== GadgetAct.Equip;
+    $(".tablet").classList.toggle("hidden", !tabletUp);
+    if (!tabletUp || !body || !t) return;
+    const now = performance.now();
+    const roster = net?.session.roster ?? [];
+    const opName = (id: string) => data.operators.get(id)?.name ?? id;
+    const entries: typeof tabletEntries = [];
+    for (const [id, until] of identifiedUntil) {
+      const p = sim.pawns.get(id);
+      if (until <= now || !p || p.state.mode === PawnMode.Dead) {
+        identifiedUntil.delete(id);
+        continue;
+      }
+      const r = roster.find((e) => e.pawnIds.includes(id));
+      const cool = (jegeoCooldownUntil.get(id) ?? 0) - now;
+      entries.push({
+        key: `d:${id}`,
+        label: r ? `${opName(r.operatorId)} (${r.name})` : "Defender",
+        note: cool > 0 ? `calls again in ${Math.ceil(cool / 1000)} s` : `identified · ${Math.ceil((until - now) / 1000)} s`,
+        ok: cool <= 0,
+        pick: { kind: "defender", pawnId: id },
+      });
+    }
+    const phoneKind = kindOf("dropped_phone");
+    for (const g of sim.gadgets.list) {
+      if (g.kind !== phoneKind || g.team === body.team || phonesHacked.has(g.id)) continue;
+      const r = roster.find((e) => e.controllerId === g.owner);
+      entries.push({
+        key: `p:${g.id}`,
+        label: `${r ? `${opName(r.operatorId)}'s` : "A dead defender's"} phone`,
+        note: hacksMade < t.camHacks ? `hack the cameras (${t.camS} s)` : "no hacks left",
+        ok: hacksMade < t.camHacks,
+        pick: { kind: "phone", gadgetId: g.id },
+      });
+    }
+    tabletEntries = entries;
+    if (!entries.some((e) => e.key === tabletPick)) tabletPick = entries[0]?.key ?? "";
+    if (tabletPick !== tabletSent) {
+      tabletSent = tabletPick;
+      net?.send(encodeJegeoPick(entries.find((e) => e.key === tabletPick)?.pick ?? { kind: "none" }));
+    }
+    const charges = jegeoCharges ?? t.startCharges;
+    const key = `${tabletPick}|${charges}|${entries.map((e) => `${e.key}:${e.note}`).join(",")}`;
+    if (key === tabletKey) return;
+    tabletKey = key;
+    $(".tablet-title").textContent = `JEGEO PAYLOAD · ${charges} charge${charges === 1 ? "" : "s"}`;
+    $(".tablet-list").innerHTML = entries.length
+      ? entries.map((e) => `<div class="${e.key === tabletPick ? "on" : ""}${e.ok ? "" : " off"}"><b>${escapeHtml(e.label)}</b><span>${escapeHtml(e.note)}</span></div>`).join("")
+      : `<div class="empty">No defender identified: drone, ping or scan one</div>`;
+    $(".tablet-help").textContent = entries.length ? `wheel: pick · fire: ${tabletPick.startsWith("p:") ? "hack the cameras" : "send the payload"}` : "";
+  }
+
+  /** Dokkaebi's tablet: the wheel moves her pick down (or up) its list. */
+  function moveTabletPick(step: number) {
+    if (!tabletEntries.length) return;
+    const at = Math.max(0, tabletEntries.findIndex((e) => e.key === tabletPick));
+    tabletPick = tabletEntries[(at + step + tabletEntries.length) % tabletEntries.length].key;
+  }
+
+  /**
+   * Pulse's sensor up (Phase 8 M6; as in the game, Ulo's request after Phase 10): held up before his face, he looks
+   * through its display: the world grey through it, a bright red band sweeping across it left to right with the view
+   * washed dark red behind it, and each heartbeat it picks up (within its range and fan, through anything) lit where
+   * that body is as the band passes over it: a red dot in a thin white ring, the dot bigger the nearer, fading until the
+   * next pass, the mark staying where he was as Pulse looks round. No numbers, no crosshair. Only he sees it; an EMP on
+   * him freezes it.
    */
   function updateSensorHud() {
     const body = livingBody();
     // Not over a feed (a camera, a drone, Skopós's shell): his sensor reads round his body (the review, M12).
     const onFeed = ctrl.cam !== 0 || ctrl.drone !== 0 || ctrl.shellCam || ctrl.swapPhase !== 0;
     const k = body && !onFeed ? sensorUp(data, body) : null;
-    $(".sensor").classList.toggle("hidden", !k);
-    if (!k || !body) return;
-    const frozen = body.state.jammed > 0;
-    if (!frozen) {
-      const eye = body.state;
-      heartsShown = heartbeats(sim, body).map((p) => {
-        const dx = p.state.x - eye.x;
-        const dz = p.state.z - eye.z;
-        const [fx, fz] = forwardXZ(eye.yaw);
-        const [rx, rz] = rightXZ(eye.yaw);
-        const r = Math.min(1, Math.hypot(dx, dz, p.state.y - eye.y) / k.rangeM);
-        const a = Math.atan2(dx * rx + dz * rz, dx * fx + dz * fz);
-        return { x: 50 + Math.sin(a) * r * 50, y: 100 - Math.cos(a) * r * 100 };
-      });
+    const corners = k ? viewmodel.sensorScreen() : null;
+    $(".pulse").classList.toggle("hidden", !corners);
+    app.classList.toggle("sensor-up", !!corners);
+    if (!k || !body || !corners) {
+      heartsSeen.clear();
+      for (const el of heartEls.values()) el.remove();
+      heartEls.clear();
+      return;
     }
-    const key = heartsShown.map((h) => `${h.x.toFixed(0)},${h.y.toFixed(0)}`).join(";") + (frozen ? "f" : "");
-    if (key === heartsKey) return;
-    heartsKey = key;
-    $(".sensor-blips").innerHTML = heartsShown.map((h) => `<i style="left:${h.x.toFixed(1)}%;top:${h.y.toFixed(1)}%"></i>`).join("");
-    $(".sensor-title").textContent = frozen ? "CARDIAC SENSOR · EMP: frozen" : `CARDIAC SENSOR · ${heartsShown.length} heartbeat${heartsShown.length === 1 ? "" : "s"} within ${k.rangeM} m · ping to share`;
-    $(".sensor").classList.toggle("frozen", frozen);
+    const W = app.clientWidth;
+    const H = app.clientHeight;
+    const xs = corners.map((c) => c[0] * W);
+    const ys = corners.map((c) => c[1] * H);
+    const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+    const [gw, gh] = [x1 - x0, y1 - y0];
+    const glass = $(".pulse-glass");
+    glass.style.left = `${x0.toFixed(1)}px`;
+    glass.style.top = `${y0.toFixed(1)}px`;
+    glass.style.width = `${gw.toFixed(1)}px`;
+    glass.style.height = `${gh.toFixed(1)}px`;
+    const now = performance.now();
+    const frozen = body.state.jammed > 0;
+    const onScreen = (p: THREE.Vector3) => {
+      const v = p.clone().project(camera);
+      return { x: ((v.x + 1) / 2) * W - x0, y: ((1 - v.y) / 2) * H - y0, ahead: v.z <= 1 };
+    };
+    if (!frozen) {
+      // The band: across a little past each edge in SWEEP_MS. A heartbeat is picked up as it passes over where it is.
+      const sweep = -0.15 + 1.3 * ((now % SWEEP_MS) / SWEEP_MS);
+      const passed = (x: number) => (sweepWas <= sweep ? x > sweepWas && x <= sweep : x > sweepWas || x <= sweep);
+      for (const p of heartbeats(sim, body)) {
+        const h = heartOf(sim, p);
+        const at = new THREE.Vector3(h[0], h[1], h[2]);
+        const s = onScreen(at);
+        if (!s.ahead || !passed(s.x / gw)) continue;
+        const d = at.distanceTo(camera.position);
+        heartsSeen.set(p.id, { at, t: now, near: Math.max(0, Math.min(1, 1 - d / k.rangeM)) });
+      }
+      sweepWas = sweep;
+      $(".pulse-band").style.transform = `translateX(${(sweep * gw - gw / 12).toFixed(1)}px)`;
+      $(".pulse-wash").style.width = `${Math.max(0, sweep * gw).toFixed(1)}px`;
+    }
+    const layer = $(".pulse-hearts");
+    const ring = Math.min(gh * 0.3, H * 0.18);
+    for (const [id, seen] of heartsSeen) {
+      const fade = frozen ? 1 : Math.exp(-(now - seen.t) / 900);
+      const s = onScreen(seen.at);
+      if (fade < 0.04) {
+        heartsSeen.delete(id);
+        heartEls.get(id)?.remove();
+        heartEls.delete(id);
+        continue;
+      }
+      let el = heartEls.get(id);
+      if (!el) {
+        el = document.createElement("i");
+        el.innerHTML = "<s></s><u></u>";
+        layer.appendChild(el);
+        heartEls.set(id, el);
+      }
+      const dot = ring * (0.08 + 0.14 * seen.near);
+      el.style.cssText = `left:${s.x.toFixed(1)}px;top:${s.y.toFixed(1)}px;opacity:${fade.toFixed(3)};--ring:${ring.toFixed(1)}px;--dot:${dot.toFixed(1)}px;display:${s.ahead ? "block" : "none"}`;
+    }
+    $(".pulse").dataset.hearts = String(heartsSeen.size);
+    $(".pulse").classList.toggle("frozen", frozen);
+    $(".pulse-state").textContent = frozen ? "NO SIGNAL" : "";
   }
 
   /**

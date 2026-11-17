@@ -13,7 +13,7 @@ import { DEG, GadgetAct, isDowned, lerp, loadPresentationData, PawnMode, ReloadK
 import { operatorLook } from "./bodyModel.js";
 import { pistolHeld, shellCycle } from "./bodyPose.js";
 import { FpArms, handFrame, PALM, PALM_SURFACE_Z } from "./fpArms.js";
-import { heldShape, knifeShape, restsAt, shapeModel, type ShapeModel } from "./gadgetShapes.js";
+import { heldShape, knifeShape, restsAt, SENSOR_DISPLAY, shapeModel, type ShapeModel } from "./gadgetShapes.js";
 import { buildGun, gunKey, type GunModel } from "./gunKit.js";
 import { warmShaders } from "./labScene.js";
 
@@ -126,6 +126,8 @@ export class Viewmodel {
   private heldModel: ShapeModel | null = null;
   /** Its size as drawn (across, up, deep). */
   private heldSize: [number, number, number] = [0, 0, 0];
+  /** Pulse's sensor all the way up: looked through (sensorScreen). */
+  private sensorUp = false;
   /** Where the palm under it is, its own frame: how low it comes there, and how far back (gadgetShapes.ts restsAt). */
   private heldRest = { y: 0, z: 0 };
   /** A held-up item's screen (Pulse's sensor, Dokkaebi's tablet): lit, facing the eye. */
@@ -452,12 +454,21 @@ export class Viewmodel {
         this.camera.add(this.held);
         if (!gadget.detonator && gadget.data.use.kind === "hold") {
           // Its screen, on the face toward the eye once it's up (green: Pulse's heartbeats; blue: Dokkaebi's tablet).
-          this.screen = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.82, h * 0.72), new THREE.MeshBasicMaterial({ color: gadget.data.sensor ? 0x0f5132 : 0x0c4a6e }));
-          this.screen.position.set(0, h * 0.06, d / 2 + 0.001);
+          // (Pulse's sensor's display is open, looked through: its plane only says where it is, for the page to draw
+          // the screen there.)
+          const S = SENSOR_DISPLAY;
+          this.screen = gadget.data.sensor
+            ? new THREE.Mesh(new THREE.PlaneGeometry(S.w, S.h), new THREE.MeshBasicMaterial())
+            : new THREE.Mesh(new THREE.PlaneGeometry(w * 0.82, h * 0.72), new THREE.MeshBasicMaterial({ color: 0x0c4a6e }));
+          if (gadget.data.sensor) {
+            this.screen.position.set(S.cx, S.cy, S.z);
+            this.screen.visible = false;
+          } else this.screen.position.set(0, h * 0.06, d / 2 + 0.001);
           this.held.add(this.screen);
         }
       }
     }
+    this.sensorUp = false;
     if (!this.held) return;
     const equip = this.data.gadgetRules.equipS * 64;
     const up = s.gAct === GadgetAct.Equip ? Math.min(1, s.gTicks / Math.max(1, equip)) : 1;
@@ -471,10 +482,30 @@ export class Viewmodel {
       const hit = u.hitS / u.swingS;
       strike = p < hit ? smooth(p / hit) : 1 - smooth((p - hit) / Math.max(1e-6, 1 - hit));
     }
+    if (gadget?.data.id === "dropped_phone") {
+      // A phone out of the pocket to turn a call off (Dokkaebi's): up in front in the right hand, its screen to the eye.
+      this.held.position.set(0.05, -0.13, -0.3);
+      this.held.rotation.set(1.2, -0.12, 0.08);
+      this.holdHeld("palm");
+      return;
+    }
     if (u?.kind === "hold" && !gadget?.detonator) {
       // Held up to the face like a scope (Pulse's sensor, Ulo's test; Dokkaebi's tablet the same): it comes up from the
-      // hip over its equip time to just under the eyes, its screen toward them.
+      // hip over its equip time to just under the eyes, its screen toward them. Pulse's comes up closer, its screen
+      // filling the middle of the view, and once it's up he looks through it: the device isn't drawn, the page draws
+      // its see-through screen where it is (sensorScreen) with the heartbeats on it.
       const k = smooth(up);
+      if (gadget?.data.sensor) {
+        // Pulse's HB-5 as the game holds it: up before his face, its display over the middle of the view a little left
+        // of centre (about 21–70 % across, 18–85 % down at 16:9), the frame down to the bottom of the view; looked
+        // through once it's up. (In his hands by its lower corners as it comes up; once up his hands are out of the
+        // picture, as the game's are but the thumb on its handle: fingers behind an open display would show through it.)
+        this.held.position.set(lerp(0.2, -0.0084, k), lerp(-0.42, -0.0065, k), lerp(-0.45, -0.18, k));
+        this.held.rotation.set(lerp(-0.9, 0, k), lerp(-0.4, 0, k), 0);
+        this.sensorUp = up >= 1;
+        if (!this.sensorUp) this.holdHeld("up");
+        return;
+      }
       this.held.position.set(lerp(0.2, 0, k), lerp(-0.42, -0.06, k), lerp(-0.45, -0.24, k));
       this.held.rotation.set(lerp(-0.9, -0.08, k), lerp(-0.4, 0, k), 0);
       this.holdHeld("up");
@@ -507,6 +538,28 @@ export class Viewmodel {
       this.arms.setHand("right", on(handFrame(new THREE.Matrix4(), v(0, -h / 2 + h * 0.12, 0), v(0, -1, 0), v(0, 0, -1))), "grip");
       this.arms.setHand("left", on(handFrame(new THREE.Matrix4(), v(0, -h / 2 + h * 0.36, 0), v(0, 1, 0), v(0, 0, -1))), "grip");
     }
+  }
+
+  /**
+   * Pulse's sensor all the way up: where its screen is on the view (0..1 across from the left, 0..1 down from the top),
+   * its four corners in order round it (top left, top right, bottom right, bottom left), for the page to draw the
+   * see-through screen there; null otherwise.
+   */
+  sensorScreen(): [number, number][] | null {
+    if (!this.sensorUp || !this.held || !this.screen) return null;
+    this.held.updateMatrixWorld(true);
+    this.camera.updateMatrixWorld(true);
+    const g = this.screen.geometry as THREE.PlaneGeometry;
+    const { width: w, height: h } = g.parameters;
+    return [
+      [-w / 2, h / 2],
+      [w / 2, h / 2],
+      [w / 2, -h / 2],
+      [-w / 2, -h / 2],
+    ].map(([x, y]) => {
+      const p = new THREE.Vector3(x, y, 0).applyMatrix4(this.screen!.matrixWorld).project(this.camera);
+      return [(p.x + 1) / 2, (1 - p.y) / 2];
+    });
   }
 
   /** Light the gun as the world around it is lit: `k` of daylight (a map's basement is darker). */

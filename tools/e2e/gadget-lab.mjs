@@ -283,10 +283,11 @@ try {
   await sleep(600);
   await pul.keyboard.press("KeyZ");
   await until(pul, () => window.__lab.net.hand === 3);
-  await until(pul, () => document.querySelectorAll(".sensor:not(.hidden) .sensor-blips i").length > 0, null, 10000);
-  result.sensor = await pul.evaluate(() => ({ blips: document.querySelectorAll(".sensor-blips i").length, title: document.querySelector(".sensor-title")?.textContent ?? "" }));
+  // Up, he looks through its screen: the dummy's heartbeat beats on it where he stands.
+  await until(pul, () => document.querySelectorAll(".pulse:not(.hidden) .pulse-hearts i").length > 0, null, 10000);
+  result.sensor = await pul.evaluate(() => ({ blips: document.querySelectorAll(".pulse-hearts i").length, hearts: Number(document.querySelector(".pulse")?.dataset.hearts ?? 0) }));
   await pul.screenshot({ path: shot("gadget-sensor.png") });
-  result.checks.sensorShowsTheAttackerDummy = result.sensor.blips === 1 && /1 heartbeat\b/.test(result.sensor.title);
+  result.checks.sensorShowsTheAttackerDummy = result.sensor.blips === 1 && result.sensor.hearts === 1;
   await pul.close();
 
   // ---- offline (M7): Mira's Black Mirror (Z) in the reinforceable wall: 5 s held, its window cut and its canister on

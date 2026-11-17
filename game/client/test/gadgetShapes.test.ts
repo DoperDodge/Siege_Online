@@ -8,7 +8,7 @@ import { droneShape, gadgetShape, heldShape, knifeShape, shapeModel, type ShapeM
 
 const data = loadGameData();
 /** Drawn their own way: the Black Mirror's frame and glass, the Bulletproof Camera, Skopós's shell (its parts), a dropped phone, Brava's drone (a pawn). */
-const OTHERWISE = new Set(["black_mirror", "bulletproof_camera", "shell_shield", "dropped_phone", "kludge_drone"]);
+const OTHERWISE = new Set(["black_mirror", "bulletproof_camera", "shell_shield", "kludge_drone"]);
 
 function bounds(parts: Map<ShapeMat, THREE.BufferGeometry>): THREE.Box3 {
   const box = new THREE.Box3();

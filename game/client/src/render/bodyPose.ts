@@ -467,6 +467,11 @@ function work(i: PoseIn, pose: RigPose, f: Frame): void {
   } else if (kind === DeployKind.Needle) {
     pose.handR = f.at(j.shoulderL, 0.02, -0.2 + 0.02 * beat, 0.14);
     pose.handL = f.at(j.shoulderL, -0.02, -0.32, 0.22);
+  } else if (kind === DeployKind.Phone) {
+    // A ringing phone out to be turned off: in the right hand before the chest, the left hand's thumb at it, eyes down on it.
+    pose.handR = f.at(j.chest, 0.07, 0.06, 0.32);
+    pose.handL = f.at(j.chest, -0.01, 0.04 + 0.01 * beat, 0.3);
+    pose.look = f.F.clone().addScaledVector(f.U, -0.55).normalize();
   } else {
     pose.handL = f.at(j.chest, -0.13, -0.02 + 0.05 * beat, 0.5);
     pose.handR = f.at(j.chest, 0.13, -0.06 - 0.05 * beat, 0.5);

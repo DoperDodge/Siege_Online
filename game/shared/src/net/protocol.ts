@@ -9,8 +9,8 @@ import { MSG_PANEL_OPS, MSG_PANEL_RESYNC, MSG_PANEL_STATE } from "./panels.js";
 import { MSG_SNAPSHOT } from "./snapshot.js";
 import { MSG_GADGET_OPS, MSG_GADGET_RESYNC, MSG_GADGET_STATE } from "./gadgetWire.js";
 
-/** Bump when the wire format changes; client and server must match (19: a snapshot says who is reloading or knifing, Phase 10 M10). */
-export const PROTOCOL_VERSION = 19;
+/** Bump when the wire format changes; client and server must match (20: a phone out to turn a call off is a deploy kind). */
+export const PROTOCOL_VERSION = 20;
 
 export const Msg = {
   // client → server
@@ -34,6 +34,8 @@ export const Msg = {
   MatchAction: 0x0e,
   /** A callout off the comm wheel (Phase 7): its number in data/intel.json `callouts`. */
   Callout: 0x0f,
+  /** Dokkaebi's pick on her tablet: an identified defender to send the Jegeo Payload to, or a dead defender's phone to hack. */
+  JegeoPick: 0x20,
   // server → client
   Snapshot: MSG_SNAPSHOT,
   Welcome: 0x11,
@@ -420,6 +422,25 @@ export function decodeLabTool(r: ByteReader): LabTool {
   if (k === LAB_KIND.resetPanels) return { kind: "resetPanels" };
   if (k === LAB_KIND.clearGadgets) return { kind: "clearGadgets" };
   throw new ProtocolError("bad lab tool");
+}
+
+/**
+ * Dokkaebi's pick on her tablet: an identified defender (his body's pawn id) to send the Jegeo Payload to, a dead
+ * defender's phone (its gadget id) to hack his cameras with, or nothing. The room checks it when she presses Fire.
+ */
+export type JegeoPick = { kind: "none" } | { kind: "defender"; pawnId: number } | { kind: "phone"; gadgetId: number };
+export function encodeJegeoPick(p: JegeoPick): Uint8Array {
+  const w = new ByteWriter().u8(Msg.JegeoPick);
+  if (p.kind === "none") return w.u8(0).finish();
+  return p.kind === "defender" ? w.u8(1).varu(p.pawnId).finish() : w.u8(2).varu(p.gadgetId).finish();
+}
+export function decodeJegeoPick(r: ByteReader): JegeoPick {
+  const k = r.u8();
+  if (k === 0) return { kind: "none" };
+  const id = r.varu();
+  if (k === 1) return { kind: "defender", pawnId: id };
+  if (k === 2) return { kind: "phone", gadgetId: id };
+  throw new ProtocolError("bad jegeo pick");
 }
 
 /** A callout off the comm wheel (Phase 7, intel/DESIGN.md §6): its number in data/intel.json `callouts`. */

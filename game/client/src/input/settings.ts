@@ -58,6 +58,8 @@ export interface Settings {
   keys: Keybinds;
   /** Graphics quality (Phase 10, render/quality.ts): a preset, or "auto" (High on a desktop, Low on a phone). */
   graphics: QualitySetting;
+  /** Ambient occlusion (Ulo's request after Phase 10): the world darker where surfaces meet (GTAO); costs frame rate. */
+  ambientOcclusion: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -71,6 +73,7 @@ export const DEFAULT_SETTINGS: Settings = {
   adsMode: "hold",
   rawInput: true,
   graphics: "auto",
+  ambientOcclusion: false,
   keys: {
     forward: "KeyW",
     back: "KeyS",

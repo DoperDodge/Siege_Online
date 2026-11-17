@@ -60,7 +60,7 @@ import { GFlag, type Gadget } from "../gadgets/table.js";
 import { deviceLost, emptySlots, slotGadget, stockSlots } from "../gadgets/hands.js";
 import { encodeGadgetOps, encodeGadgetState } from "./gadgetWire.js";
 import { ticks, ticksOrZero } from "../weapons/ticks.js";
-import { encodeError, encodePong, encodeRoster, encodeShotResult, encodeWelcome, ErrorCode, unwrap16, type InputMsg, type LabTool, type RosterEntry, type ShotResult } from "./protocol.js";
+import { encodeError, encodePong, encodeRoster, encodeShotResult, encodeWelcome, ErrorCode, unwrap16, type InputMsg, type JegeoPick, type LabTool, type RosterEntry, type ShotResult } from "./protocol.js";
 import { encodePanelOps, encodePanelState, wireOp } from "./panels.js";
 import { MAX_INTERP_MS, quantizeRemote, SNAPSHOT_EVERY, SnapshotEncoder, type RemoteQ } from "./snapshot.js";
 
@@ -1546,24 +1546,30 @@ export class Room implements DirectorHost {
   }
 
   /**
-   * Dokkaebi's call ringing on a player's phone (Phase 8 M9; the review, M12): `ringing` on the body he's in, so his
-   * simulation leaves a fresh Interact press to the dismissal, and off on his others; his owner corrected on a change.
+   * Dokkaebi's call ringing on a player's phone (Phase 8 M9; the review, M12): `ringing` on the body he's in, so a
+   * fresh Interact press takes the phone out to turn it off (sim.ts holdPhone), and off on his others; his owner
+   * corrected on a change. Returns the body it's ringing on (0: none), whose ringing stopping is his turning it off.
    */
-  private ringing(tm: Member | null, called: Pawn | undefined, on: boolean) {
+  private ringing(tm: Member | null, called: Pawn | undefined, on: boolean): number {
     const ids = tm?.ctrl ? tm.ctrl.pawnIds : called ? [called.id] : [];
     let changed = false;
+    let rang = 0;
     for (const id of ids) {
       const p = this.sim.pawns.get(id);
       const want = on && (!tm?.ctrl || id === tm.ctrl.possessedPawnId);
+      if (want && p) rang = id;
       if (!p || p.state.ringing === want) continue;
       p.state.ringing = want;
       changed = true;
     }
     if (changed && tm) this.force(tm);
+    return rang;
   }
 
   /** Dokkaebi's tablet (Phase 8 M9), by her body's pawn id: her charges, when the next comes, the upload under way, her phone hacks. */
-  private readonly jegeoState = new Map<number, { charges: number; next: number; upload: { target: number; start: number; dismiss: number } | null; held: boolean; hacks: number }>();
+  private readonly jegeoState = new Map<number, { charges: number; next: number; upload: { target: number; start: number; rang: number } | null; held: boolean; hacks: number }>();
+  /** What each Dokkaebi (by her controller) has picked on her tablet (none: Fire goes by her aim, as a bot's does). */
+  private readonly jegeoPicks = new Map<number, JegeoPick>();
   /** Each defender's next tick Dokkaebi may send to him again. */
   private readonly jegeoCooldown = new Map<number, number>();
   /** Dead defenders' phones (and Skopós's circuit boards) hacked already, by their entries' ids. */
@@ -1608,8 +1614,9 @@ export class Room implements DirectorHost {
         const tm = called && called.ownerId !== null ? this.memberOf(called.ownerId) : null;
         // The phone is the player's: on Skopós, in whichever shell he is now.
         const target = tm?.ctrl ? this.sim.pawns.get(tm.ctrl.possessedPawnId) : called;
-        const ti = tm?.ctrl ? applied.get(tm.ctrl.id)?.input : undefined;
-        if (ti) u.dismiss = ti.cmd.buttons & Btn.Interact ? u.dismiss + 1 : 0;
+        // Turned off: the body the room set ringing has had its phone out and switched off (sim.ts holdPhone).
+        const rang = u.rang !== 0 ? this.sim.pawns.get(u.rang) : undefined;
+        const dismissed = rang !== undefined && !rang.state.ringing;
         const heart = target ? heartOf(this.sim, target) : null;
         const cut =
           !up ||
@@ -1621,7 +1628,7 @@ export class Room implements DirectorHost {
           target.state.jammed > 0 ||
           (tm?.ctrl?.phoneLost ?? false) ||
           pointJammed(this.sim, body.team, heart) ||
-          u.dismiss >= ticks(t.dismissS);
+          dismissed;
         if (cut) {
           st.upload = null;
           this.ringing(tm ?? null, called, false);
@@ -1631,7 +1638,7 @@ export class Room implements DirectorHost {
           continue;
         }
         // (By the tick it started: this runs again for every catch-up step, the review found, M12.)
-        this.ringing(tm ?? null, called, tick - u.start < ticks(t.uploadS));
+        u.rang = this.ringing(tm ?? null, called, tick - u.start < ticks(t.uploadS));
         if (tick - u.start < ticks(t.uploadS)) continue;
         st.upload = null;
         this.jegeoCooldown.set(u.target, tick + ticks(t.cooldownS));
@@ -1646,23 +1653,25 @@ export class Room implements DirectorHost {
       if (!fire) st.held = false;
       if (!fire || st.held || !up) continue;
       st.held = true;
-      const target = this.jegeoTarget(body, t);
+      // Her pick on the tablet (a defender, or a dead one's phone), else (a bot) the one her aim is on.
+      const pick = this.jegeoPicks.get(c.id) ?? { kind: "none" };
+      const target = pick.kind === "defender" ? this.jegeoCallable(body, pick.pawnId) : pick.kind === "none" ? this.jegeoTarget(body, t) : null;
       if (target) {
         // Not while she's jammed or EMP'd herself (the connection would be cut at once).
         if (st.charges <= 0 || s.jammed > 0 || pawnJammed(this.sim, body)) continue;
         st.charges--;
-        st.upload = { target: target.id, start: tick, dismiss: 0 };
+        st.upload = { target: target.id, start: tick, rang: 0 };
         tell(0, target.id, ticks(t.uploadS));
         const tm = target.ownerId !== null ? this.memberOf(target.ownerId) : null;
-        this.ringing(tm, target, true);
+        st.upload.rang = this.ringing(tm, target, true);
         tm?.events.push({ kind: "jegeo", stage: 3, pawnId: target.id, ticks: ticks(t.uploadS), charges: 0 });
         continue;
       }
       // No live target: a dead defender's phone (Skopós's circuit board), the oldest not hacked yet, from anywhere (a
       // jammer doesn't stop it: research/interactions.csv, ours).
-      if (st.hacks >= t.camHacks) continue;
+      if (st.hacks >= t.camHacks || pick.kind === "defender") continue;
       const phoneKind = kindOf("dropped_phone");
-      const phone = this.sim.gadgets.list.find((g) => g.kind === phoneKind && g.team !== body.team && !this.phonesHacked.has(g.id));
+      const phone = this.sim.gadgets.list.find((g) => g.kind === phoneKind && g.team !== body.team && !this.phonesHacked.has(g.id) && (pick.kind !== "phone" || g.id === pick.gadgetId));
       if (!phone) continue;
       this.phonesHacked.add(phone.id);
       st.hacks++;
@@ -1703,10 +1712,29 @@ export class Room implements DirectorHost {
     this.sim.gadgets.add({ kind: kindOf(d.id), owner: victim.ownerId ?? 0, team: victim.team, pos: [s.x, floor + d.sizeM[1] / 2, s.z], yaw: s.yaw, vel: [0, 0, 0], flags: GFlag.OnFloor, panel: -1, launchTick: 0, fuseEnd: 0, signalEnd: 0, readyAt: 0, offEnd: 0, seq: 0 });
   }
 
+  /** Dokkaebi's pick on her tablet (a message of hers): checked when she presses Fire. */
+  onJegeoPick(memberId: number, pick: JegeoPick): void {
+    const c = this.members.get(memberId)?.ctrl;
+    if (c) this.jegeoPicks.set(c.id, pick);
+  }
+
   /**
-   * The identified defender Dokkaebi's tablet sends to: the one nearest her crosshair within `aimDeg`, through anything
-   * (spotted by her team's scans, alive and not Skopós's idle shell, his phone whole, not on his cooldown, not inside a
-   * jammer of his side's), or null.
+   * Whether this pawn is a defender Dokkaebi can send the Jegeo Payload to now: an enemy body, alive and not Skopós's
+   * idle shell, identified (spotted by her team), not on his cooldown, his phone whole, not inside a jammer of his
+   * side's. The pawn, or null.
+   */
+  private jegeoCallable(body: Pawn, pawnId: number): Pawn | null {
+    const p = this.sim.pawns.get(pawnId);
+    if (!p || p.kind !== PawnKind.Body || p.team === body.team || p.state.mode === PawnMode.Dead || isIdleShell(this.sim, p)) return null;
+    if ((this.spottedUntil.get(p.id) ?? 0) <= this.sim.tick || (this.jegeoCooldown.get(p.id) ?? 0) > this.sim.tick) return null;
+    // No phone left to call (another payload blew it up).
+    if (p.ownerId !== null && this.sim.controllers.get(p.ownerId)?.phoneLost) return null;
+    return pointJammed(this.sim, body.team, heartOf(this.sim, p)) ? null : p;
+  }
+
+  /**
+   * With nothing picked on the tablet (a bot), the defender it sends to: the callable one nearest her crosshair within
+   * `aimDeg`, through anything, or null.
    */
   private jegeoTarget(body: Pawn, t: JegeoData): Pawn | null {
     const eye = eyePose(this.sim.data.movement, this.sim.data.hitboxes, body.state).pos;
@@ -1714,12 +1742,8 @@ export class Room implements DirectorHost {
     const cone = Math.cos(t.aimDeg * DEG);
     let best: { p: Pawn; cos: number } | null = null;
     for (const p of this.sim.pawns.values()) {
-      if (p.kind !== PawnKind.Body || p.team === body.team || p.state.mode === PawnMode.Dead || isIdleShell(this.sim, p)) continue;
-      if ((this.spottedUntil.get(p.id) ?? 0) <= this.sim.tick || (this.jegeoCooldown.get(p.id) ?? 0) > this.sim.tick) continue;
-      // No phone left to call (another payload blew it up).
-      if (p.ownerId !== null && this.sim.controllers.get(p.ownerId)?.phoneLost) continue;
+      if (!this.jegeoCallable(body, p.id)) continue;
       const h = heartOf(this.sim, p);
-      if (pointJammed(this.sim, body.team, h)) continue;
       const d = [h[0] - eye[0], h[1] - eye[1], h[2] - eye[2]];
       const len = Math.hypot(d[0], d[1], d[2]);
       const cos = len < 1e-6 ? 1 : (d[0] * look[0] + d[1] * look[1] + d[2] * look[2]) / len;
@@ -2196,6 +2220,7 @@ export class Room implements DirectorHost {
       if (called) this.ringing(called.ownerId !== null ? this.memberOf(called.ownerId) : null, called, false);
     }
     this.jegeoState.clear();
+    this.jegeoPicks.clear();
     this.jegeoCooldown.clear();
     this.spottedUntil.clear();
     this.phonesHacked.clear();
