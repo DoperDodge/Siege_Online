@@ -34,6 +34,7 @@ import { pointJammed } from "./jammers.js";
 import { canisterSpot, mirrorHeld, mirrorOf, windowOps } from "./mirror.js";
 import { isIngredient, KIND_BP_CAMERA, KIND_SHELL_SHIELD, kindId, kindOf } from "./kinds.js";
 import { arcData, liveSurfaces, onLiveSurface, packLive } from "./arcs.js";
+import { wireLength, type SnareData } from "./snare.js";
 import { detonatable, GFlag, type Gadget } from "./table.js";
 
 const KIND_WIRE = kindOf("barbed_wire");
@@ -127,6 +128,13 @@ export class GadgetServer {
   inPrep: () => boolean = () => false;
   /** The room: panel ops made here (a cluster charge's hole, Phase 8 M5), applied with this tick's. */
   cut: (ops: IndexedOp[]) => void = () => {};
+  /**
+   * The room: a Snare Latch (`g`) shut on this body (R3), or came off it (pulled, down, broken: `g` null): its
+   * `snared` changed, so its owner needs a correction; caught, the other side is shown where he is.
+   */
+  onSnare: (pawn: Pawn, g: Gadget | null) => void = () => {};
+  /** Snares shut on bodies (R3; by pawn id): the latch's entry, and the tick of its next bite. */
+  private readonly snares = new Map<number, { id: number; next: number }>();
   /** The room: a device burnt out on a live surface by Shunt's pack (R3), as it leaves the table. */
   onBurnt: (g: Gadget, pack: Gadget) => void = () => {};
   /** Devices on live surfaces (Shunt's packs, R3), by entry id: the tick each was first found there. */
@@ -359,7 +367,11 @@ export class GadgetServer {
       }
       const off = (now.flags & GFlag.Off) !== 0;
       if (now.fuseEnd !== 0 && tick >= now.fuseEnd) this.trigger(now, null);
-      else if (d.tripwire && !off && !isFlying(now) && tick >= now.readyAt && this.tripped(now, d.tripwire)) this.trigger(now, null);
+      else if (d.snare) {
+        // A Snare Latch (R3): armed and not yet sprung, the first enemy body on its feet across its wire springs it.
+        const by = d.tripwire && !(now.flags & GFlag.Active) && !isFlying(now) && tick >= now.readyAt ? this.crossing(now, d.tripwire, true, wireLength(sim, now, d)) : null;
+        if (by) this.snap(now, by, d.snare);
+      } else if (d.tripwire && !off && !isFlying(now) && tick >= now.readyAt && this.tripped(now, d.tripwire)) this.trigger(now, null);
       else if (d.gu && !isFlying(now)) {
         // A Gu mine at rest (Phase 8 M10): an enemy body within reach (a downed one too) sets it off.
         const r = d.gu.radiusM;
@@ -371,6 +383,7 @@ export class GadgetServer {
     }
     this.wires();
     this.bites();
+    this.snared();
     this.arcs();
     this.flights.prune((id) => {
       const g = sim.gadgets.get(id);
@@ -393,23 +406,72 @@ export class GadgetServer {
    * (it fires when she wakes that shell).
    */
   private tripped(g: Gadget, t: Tripwire): boolean {
+    return this.crossing(g, t) !== null;
+  }
+
+  /**
+   * The first enemy body across one of a tripwire's lasers (see tripped), or null; `standing`: not one that's down;
+   * `length`: how far each runs, if not to what stops sight (a snare's wire, R3: across its opening).
+   */
+  private crossing(g: Gadget, t: Tripwire, standing = false, length?: number): Pawn | null {
     const sim = this.sim;
     const m = sim.data.movement;
     const r = m.stance.collisionRadius;
-    const bodies = [...sim.pawns.values()].filter((p) => p.kind === PawnKind.Body && p.team !== g.team && p.state.mode !== PawnMode.Dead && p.state.mode !== PawnMode.Held && !isIdleShell(sim, p));
-    if (bodies.length === 0) return false;
+    const bodies = [...sim.pawns.values()].filter(
+      (p) => p.kind === PawnKind.Body && p.team !== g.team && p.state.mode !== PawnMode.Dead && p.state.mode !== PawnMode.Held && !isIdleShell(sim, p) && !(standing && isDowned(p.state)),
+    );
+    if (bodies.length === 0) return null;
     for (const deg of t.anglesDeg) {
       const [fx, fz] = forwardXZ(g.yaw + deg * DEG);
       const dir: Vec3 = [fx, 0, fz];
-      const len = raycastLevel(sim, g.pos, dir, t.lengthM)?.t ?? t.lengthM;
+      const len = length ?? raycastLevel(sim, g.pos, dir, t.lengthM)?.t ?? t.lengthM;
       const end: Vec3 = [g.pos[0] + fx * len, g.pos[1], g.pos[2] + fz * len];
       for (const p of bodies) {
         const s = p.state;
         const top = Math.max(r, currentHeight(m, s) - r);
-        if (segSeg(g.pos, end, [s.x, s.y + r, s.z], [s.x, s.y + top, s.z]).dist <= r) return true;
+        if (segSeg(g.pos, end, [s.x, s.y + r, s.z], [s.x, s.y + top, s.z]).dist <= r) return p;
       }
     }
-    return false;
+    return null;
+  }
+
+  /**
+   * A Snare Latch sprung (R3): it shuts on the leg of the body that crossed its wire: `hit` at once, then `damage` every
+   * `everyS` until it's pulled off or he's down (snared). Its entry goes with him, at his foot, until it's spent.
+   */
+  private snap(g: Gadget, p: Pawn, k: SnareData) {
+    p.state.snared = true;
+    this.snares.set(p.id, { id: g.id, next: this.sim.tick + ticks(k.everyS) });
+    this.sim.gadgets.update(g.id, { flags: g.flags | GFlag.Active, pos: ankle(p) });
+    this.onSnare(p, g);
+    this.hurt(g, p, k.hit);
+  }
+
+  /**
+   * The snared (R3): bitten every `everyS`, the latch kept at the foot. Once it's off (pulled off: the body's own step;
+   * the body down or dead; the latch broken) it's spent: gone from the table, and the body free.
+   */
+  private snared() {
+    const tick = this.sim.tick;
+    for (const [id, n] of this.snares) {
+      const p = this.sim.pawns.get(id);
+      const g = this.sim.gadgets.get(n.id);
+      const k = g ? this.dataOf(g)?.snare : undefined;
+      if (!p || !g || !k || !p.state.snared || p.state.mode === PawnMode.Dead || isDowned(p.state)) {
+        this.snares.delete(id);
+        if (g) this.sim.gadgets.remove(g.id);
+        if (p?.state.snared) {
+          p.state.snared = false;
+          this.onSnare(p, null);
+        }
+        continue;
+      }
+      const at = ankle(p);
+      if (Math.hypot(at[0] - g.pos[0], at[1] - g.pos[1], at[2] - g.pos[2]) > 0.02) this.sim.gadgets.update(g.id, { pos: at });
+      if (tick < n.next) continue;
+      n.next = tick + ticks(k.everyS);
+      this.hurt(g, p, k.damage);
+    }
   }
 
   /**
@@ -764,4 +826,10 @@ export class GadgetServer {
     this.sim.gadgets.clear();
     for (const g of lost) this.onLost(g, this.dataOf(g)!);
   }
+}
+
+/** Where a snared body's latch is: at its foot. */
+function ankle(p: Pawn): Vec3 {
+  const s = p.state;
+  return [s.x, s.y + 0.1, s.z];
 }

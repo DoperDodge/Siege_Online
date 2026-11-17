@@ -261,6 +261,11 @@ export interface PawnState {
    * Interact press is the dismissal's, so nothing else starts on it (the review, M12).
    */
   ringing: boolean;
+  /**
+   * Latch's Snare Latch shut on this body's leg (R3; the server's, its owner corrected): slowed, no sprint, bitten by the
+   * server until it's pulled off (an Interact hold, sim.ts holdSnare) or the body is down.
+   */
+  snared: boolean;
   regenMade: number;
   regenTicks: number;
   // Fuze's Ballistic Shield (Phase 8 M11, player/shield.ts): ticks it's knocked aside (a guard break, or Sledge's

@@ -202,6 +202,22 @@ export function gadgetShape(id: string, size: V3): Map<ShapeMat, THREE.BufferGeo
       }
       break;
     }
+    case "snare_latch": {
+      // Latch's Snare Latch (R3; our own design): an L bracket (a mounting plate against the jamb, +z, and a foot along
+      // its underside), a squat spring housing on it, two serrated steel jaws held open above and below its mouth, and a
+      // small wire spool at its front (−z), where its wire leaves across the opening. No lights: it's mechanical.
+      p.box("dark", [w * 0.9, h * 0.9, d * 0.14], [0, h * 0.04, d / 2 - d * 0.07]);
+      p.box("dark", [w * 0.7, 0.008, d], [0, -h / 2 + 0.004, 0]);
+      p.box("olive", [w * 0.62, h * 0.42, d * 0.5], [0, 0, d * 0.13]);
+      p.cyl("metal", h * 0.12, w * 0.7, [0, 0, d * 0.13], [0, 0, HALF_PI], 12);
+      for (const s of [-1, 1]) {
+        p.box("metal", [w * 0.84, 0.006, d * 0.46], [0, s * h * 0.3, -d * 0.12], [s * 0.42, 0, 0]);
+        for (let i = 0; i < 4; i++) p.box("metal", [0.008, 0.012, 0.006], [(i - 1.5) * w * 0.2, s * h * 0.36, -d * 0.31]);
+      }
+      p.cyl("black", 0.014, d * 0.12, [0, 0, -d / 2 + d * 0.07], [HALF_PI, 0, 0], 10);
+      p.cyl("metal", 0.006, d * 0.13, [0, 0, -d / 2 + d * 0.065], [HALF_PI, 0, 0], 8);
+      break;
+    }
     case "cluster_grenade": {
       const r = Math.min(w, h, d) / 2 - 0.002;
       p.lathe("dark", [[0.001, -r], [r * 0.7, -r * 0.7], [r, 0], [r * 0.7, r * 0.7], [0.001, r]]);

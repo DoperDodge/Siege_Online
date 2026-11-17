@@ -1,0 +1,16 @@
+{
+  "_doc": "Latch's Snare Latches (Project Redmond R3, gadgets/R3_OPERATORS.md §2; a trapper that does damage, Ulo's): his ability, slot 2 (Z). Aimed at a door's or window's opening within reach (gadgets/place.ts frameSpot: its barricade or glass, the floor or sill in it, a jamb, or past it), held Fire `use.placeS`: it goes on the jamb nearer the aim, on his side, at shin height over a door's foot (a window's: just over its sill), facing across, and arms `tripwire.armS` later: then its thin wire runs across the opening to the other jamb. The first attacker body through the wire springs it: it snaps shut on his leg, `snare.hit` at once, then `snare.damage` every `snare.everyS`, and he's slowed to `snare.speedMul` (no sprint), until he pulls it off (Interact held `snare.pullS`, any stance) or goes down; then it's spent. The snap is loud: the defenders are told where he is. Drones pass under it. Mechanical: no EMP stops it and Ohm's sight doesn't show it; one bullet breaks it. Latch picks his own back up before it's sprung (F). Its numbers are ours.",
+  "id": "snare_latch",
+  "name": "Snare Latch",
+  "side": "defender",
+  "operator": "latch",
+  "count": 4,
+  "electronic": false,
+  "use": {"kind": "place", "on": ["frame"], "placeS": 1.2, "reachM": 2.0},
+  "remote": false,
+  "pickUp": true,
+  "sizeM": [0.1, 0.12, 0.08],
+  "tripwire": {"anglesDeg": [0], "lengthM": 2.6, "armS": 1.5},
+  "snare": {"hit": 35, "damage": 5, "everyS": 1, "speedMul": 0.7, "pullS": 1.5, "spotS": 3},
+  "fragile": true
+}

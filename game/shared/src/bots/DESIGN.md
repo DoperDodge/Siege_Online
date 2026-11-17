@@ -178,6 +178,7 @@ One **commander** per side, server-side, with the same knowledge rules (its team
 | Lesion | Gu mines on stair bottoms, hatch drops and doors (the plan's spots) |
 | Tonic (R3) | His monitor up and Fire (its Auto pick) when a teammate's down, or (out of a fight) one's badly hurt, or he is; down, the ability key gets him up |
 | Shunt (R3) | His Arc Packs on the floor at the foot of the plan's reinforced walls (from the side it reinforces them from), each once its wall is reinforced: standing back on the nav grid, looking down at the spot |
+| Latch (R3) | His Snare Latches on the site's doors, from the site's side (aimed at the floor in the doorway; a latch goes on its jamb), as many as he carries. Any attacking bot with a latch on its leg pulls it off when nothing's in sight |
 | Ohm (R3) | His Brownout Pistol at the plan's first hard breach wall from its near side, before the push: a round at each device his scope marks behind it, else two at the wall |
 | Generic | Frags and stuns into rooms before entry, smokes for the plant, claymores on flanks; defenders' wire, shields, Nitro Cells (thrown at heard attackers), alarms, Bulletproof Cameras, Observation Blockers per the plan |
 

@@ -78,6 +78,7 @@ import {
   heartbeats,
   heartOf,
   guData,
+  snareData,
   suppressed,
   kludgeOf,
   pawnJammed,
@@ -1754,6 +1755,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       takeBack: backData?.name ?? "gadget",
       takeBackTicks: ticks(data.gadgetRules.pickUpS),
       needleTicks: ticks(guData(data)?.pullS ?? 1),
+      snareTicks: ticks(snareData(data)?.pullS ?? 1),
       phoneTicks: ticks(data.gadgets.get("jegeo_payload")?.jegeo?.dismissS ?? 1),
     });
     app.querySelectorAll<HTMLElement>(".stances span").forEach((el) => el.classList.toggle("on", Number(el.dataset.s) === s.stance));

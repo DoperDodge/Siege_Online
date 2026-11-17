@@ -28,6 +28,7 @@ import {
   kindOf,
   liveSurfaces,
   raycastLevel,
+  wireLength,
   sizeOf,
   TUBE_HALF_M,
   tubeBox,
@@ -71,6 +72,7 @@ const COLOURS: Record<string, number> = {
   brownout_pistol: 0x1e3a5f,
   second_wind: 0x0f766e,
   arc_pack: 0x27303a,
+  snare_latch: 0x4a3b2f,
 };
 
 /**
@@ -123,6 +125,8 @@ export class GadgetModels {
   };
   /** A Claymore's lasers (Phase 8 M2): red, once it's armed. */
   private readonly laserMat = new THREE.LineBasicMaterial({ color: 0xff2020, transparent: true, opacity: 0.7 });
+  /** A Snare Latch's wire (R3): thin grey steel across its opening, once it's armed; gone once it's sprung. */
+  private readonly wireMat = new THREE.LineBasicMaterial({ color: 0xa8a29e, transparent: true, opacity: 0.5 });
   private readonly ghosts: Ghost[] = [];
   /**
    * Shunt's live surfaces (R3): a sheet over each face of an electrified panel, flickering, and crackle (jagged blue
@@ -409,8 +413,9 @@ export class GadgetModels {
       }
       this.ownStart.delete(g.id);
       this.showReach(it, g);
-      // A tripwire's lasers show from the moment it's armed (its `readyAt`, a server tick), and not while it's off.
-      for (const l of it.lasers) l.visible = now >= g.readyAt && !(g.flags & GFlag.Off);
+      // A tripwire's lasers show from the moment it's armed (its `readyAt`, a server tick), and not while it's off (nor a
+      // snare's wire once it's sprung).
+      for (const l of it.lasers) l.visible = now >= g.readyAt && !(g.flags & (GFlag.Off | GFlag.Active));
       const key = `${g.pos.join(",")},${g.yaw},${g.flags}`;
       const extraKey = `${key},${this.view.thermal},${this.view.team},${this.view.tool}`;
       if (extraKey !== it.extraKey) {
@@ -737,13 +742,16 @@ export class GadgetModels {
       l.geometry.dispose();
     }
     it.lasers = [];
-    const t = this.dataOf(g.kind)?.tripwire;
-    if (!t) return;
+    const d = this.dataOf(g.kind);
+    const t = d?.tripwire;
+    // A snare sprung on a leg has no wire left.
+    if (!d || !t || (d.snare && g.flags & GFlag.Active)) return;
     for (const deg of t.anglesDeg) {
       const [fx, fz] = forwardXZ(g.yaw + deg * DEG);
-      const len = raycastLevel(this.sim, g.pos, [fx, 0, fz], t.lengthM)?.t ?? t.lengthM;
+      // A snare's wire runs across its opening to the far jamb (gadgets/snare.ts), the same as the server's.
+      const len = d.snare ? wireLength(this.sim, g, d) : (raycastLevel(this.sim, g.pos, [fx, 0, fz], t.lengthM)?.t ?? t.lengthM);
       const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(...g.pos), new THREE.Vector3(g.pos[0] + fx * len, g.pos[1], g.pos[2] + fz * len)]);
-      const line = new THREE.Line(geo, this.laserMat);
+      const line = new THREE.Line(geo, d.snare ? this.wireMat : this.laserMat);
       line.visible = false;
       this.scene.add(line);
       it.lasers.push(line);
@@ -780,6 +788,7 @@ export class GadgetModels {
       }
     }
     this.laserMat.dispose();
+    this.wireMat.dispose();
     for (const m of this.arcSheets) this.scene.remove(m);
     this.arcSheets.length = 0;
     this.scene.remove(this.arcLines);

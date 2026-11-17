@@ -368,6 +368,14 @@ export class Room implements DirectorHost {
       const owner = pawn.ownerId !== null ? this.memberOf(pawn.ownerId) : null;
       if (owner) this.force(owner);
     };
+    // Latch's snare (R3) shut on a body or come off it: its owner's next correction carries it. Shut, the snap is loud:
+    // the latch's side is shown where he is for its `spotS`.
+    this.gadgetServer.onSnare = (pawn, g) => {
+      const owner = pawn.ownerId !== null ? this.memberOf(pawn.ownerId) : null;
+      if (owner) this.force(owner);
+      const k = g ? this.sim.data.gadgets.get(kindId(g.kind) ?? "")?.snare : undefined;
+      if (g && k && k.spotS > 0) this.spotted(pawn, g.owner, g.team, k.spotS);
+    };
     this.gadgetServer.onIngredient = (g, stage) => this.ingredientStage(g, stage);
     this.gadgetServer.inPrep = () => this.director?.match.phase === Phase.Prep;
     // Phase 8 M5: a cluster charge's hole goes in with this tick's panel ops.
@@ -1543,10 +1551,13 @@ export class Room implements DirectorHost {
     return best?.p ?? null;
   }
 
-  /** An enemy body spotted (a scan, a red ping): a red mark for the spotter's team, and he's told. */
-  private spotted(p: Pawn, byCtrl: number, team: number) {
-    const e: GameEvent = { kind: "spotted", pawnId: p.id, by: byCtrl, ticks: ticks(this.sim.data.intel.ping.seconds) };
-    this.spot(p.id, this.sim.data.intel.ping.seconds);
+  /**
+   * An enemy body spotted (a scan, a red ping, a snare's snap): a red mark for the spotter's team for `seconds` (a ping's
+   * by default), and he's told.
+   */
+  private spotted(p: Pawn, byCtrl: number, team: number, seconds = this.sim.data.intel.ping.seconds) {
+    const e: GameEvent = { kind: "spotted", pawnId: p.id, by: byCtrl, ticks: ticks(seconds) };
+    this.spot(p.id, seconds);
     this.director?.onSpotted(p, team === ATTACK ? ATTACK : DEFENSE);
     for (const o of this.members.values()) if (this.teamOf(o) === team || o.ctrl?.id === p.ownerId) o.events.push(e);
   }

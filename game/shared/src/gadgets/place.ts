@@ -6,7 +6,7 @@
 import type { Vec3 } from "../core/math.js";
 import type { GadgetData, PlaceOn } from "../data/schemas.js";
 import type { Panel } from "../destruction/panel.js";
-import type { PanelHit } from "../destruction/panels.js";
+import type { PanelEntry, PanelHit } from "../destruction/panels.js";
 import { raycastLevel, type LevelQuery } from "../level/raycast.js";
 import { L_STEEL } from "../destruction/panel.js";
 import { FLOOR_NY } from "./flight.js";
@@ -72,6 +72,7 @@ export interface PlaceQuery extends LevelQuery {
  * view meets nothing within reach, a ceiling, a slope, or a surface the gadget can't go on.
  */
 export function placeSpot(q: PlaceQuery, g: PlaceData, eye: Vec3, dir: Vec3, yaw: number, crouched = false): PlaceSpot | null {
+  if (g.use.on.includes("frame")) return frameSpot(q, g, eye, dir);
   const hit = raycastLevel(q, eye, dir, g.use.reachM);
   if (!hit) return null;
   const at: Vec3 = [eye[0] + dir[0] * hit.t, eye[1] + dir[1] * hit.t, eye[2] + dir[2] * hit.t];
@@ -122,4 +123,52 @@ function floorHeight(q: PlaceQuery, g: PlaceData, pos: Vec3, n: Vec3, panel: num
   const from: Vec3 = [pos[0] + n[0] * 0.3, y, pos[2] + n[2] * 0.3];
   const back = raycastLevel(q, from, [-n[0], 0, -n[2]], 0.6);
   return back?.panel && back.panel.entry.panel.spec.index === panel && allowed(g.use.on, false, back.panel, false, [-n[0], 0, -n[2]]) ? y : null;
+}
+
+/** How far round a door's or window's opening the aim may land for a frame item to go on it: across, up and down, through. */
+const FRAME_GRACE = { u: 0.3, v: 0.3, n: 0.7 } as const;
+/** A frame item's height over a door's foot (shin height), and over a window's sill. */
+const SHIN_M = 0.2;
+const SILL_M = 0.03;
+
+/**
+ * Where a frame item goes (Latch's Snare Latch, R3): aimed at a door's or window's opening within reach (the view
+ * meeting its barricade or glass, the floor or sill in it, a jamb, or what's past it: anywhere within the opening's box
+ * grown by FRAME_GRACE), it goes on the jamb nearer the aim, on the placer's side of the opening, at shin height over a
+ * door's foot or just over a window's sill, facing across the opening (its wire runs to the other jamb). An opening is
+ * a barricade's frame or a window's glass (doors and windows; a barricade up or not). Null when the view meets none.
+ */
+function frameSpot(q: PlaceQuery, g: PlaceData, eye: Vec3, dir: Vec3): PlaceSpot | null {
+  const reach = g.use.reachM;
+  const t = raycastLevel(q, eye, dir, reach)?.t ?? reach;
+  const at: Vec3 = [eye[0] + dir[0] * t, eye[1] + dir[1] * t, eye[2] + dir[2] * t];
+  let best: { e: PanelEntry; u: number; n: number } | null = null;
+  for (const e of q.level.panels.list) {
+    const k = e.panel.kind;
+    if (k !== "barricade" && k !== "glass") continue;
+    const f = e.frame;
+    const rel = [at[0] - f.center[0], at[1] - f.center[1], at[2] - f.center[2]];
+    const u = rel[0] * f.u[0] + rel[1] * f.u[1] + rel[2] * f.u[2];
+    const v = rel[0] * f.v[0] + rel[1] * f.v[1] + rel[2] * f.v[2];
+    const n = rel[0] * f.n[0] + rel[1] * f.n[1] + rel[2] * f.n[2];
+    if (Math.abs(u) > f.w / 2 + FRAME_GRACE.u || Math.abs(v) > f.h / 2 + FRAME_GRACE.v || Math.abs(n) > f.t / 2 + FRAME_GRACE.n) continue;
+    if (!best || Math.abs(n) < Math.abs(best.n)) best = { e, u, n };
+  }
+  if (!best) return null;
+  const f = best.e.frame;
+  const [w, h, d] = g.sizeM;
+  // The placer's side of the opening, and the jamb nearer the aim.
+  const side = (eye[0] - f.center[0]) * f.n[0] + (eye[2] - f.center[2]) * f.n[2] < 0 ? -1 : 1;
+  const jamb = best.u < 0 ? -1 : 1;
+  const along = f.w / 2 - d / 2 - 0.005;
+  const out = f.t / 2 + w / 2 + 0.01;
+  const x = f.center[0] + f.u[0] * jamb * along + f.n[0] * side * out;
+  const z = f.center[2] + f.u[2] * jamb * along + f.n[2] * side * out;
+  const foot = f.center[1] - f.h / 2;
+  // A door's foot is the floor there; a window's sill is above the floor.
+  const floor = raycastLevel(q, [x, foot + 0.3, z], [0, -1, 0], 0.6);
+  const door = floor !== null && Math.abs(foot + 0.3 - floor.t - foot) < 0.25;
+  const y = (door ? foot + 0.3 - floor!.t + SHIN_M : foot + SILL_M) + h / 2;
+  // Facing across the opening, toward the other jamb.
+  return { pos: [x, y, z], yaw: Math.atan2(jamb * f.u[0], jamb * f.u[2]), onFloor: false, flat: false, panel: -1 };
 }

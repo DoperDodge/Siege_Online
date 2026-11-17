@@ -48,6 +48,9 @@
     ],
     "shunt": [
       "barbed_wire"
+    ],
+    "latch": [
+      "proximity_alarm"
     ]
   },
   "counters": {
@@ -103,9 +106,9 @@
       "skopos"
     ],
     "sledge": [
+      "latch",
       "pulse",
-      "sentry",
-      "mute"
+      "sentry"
     ],
     "dokkaebi": [
       "mute",
@@ -126,6 +129,11 @@
       "ohm",
       "striker",
       "sledge"
+    ],
+    "latch": [
+      "brava",
+      "sledge",
+      "striker"
     ]
   },
   "primaries": {

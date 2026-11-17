@@ -29,7 +29,7 @@ export class DownedHud {
     destruction?: DestructionData,
     movement?: MovementData,
     holds?: { plantTicks: number; disableTicks: number } | null,
-    gadget: { name: string; placeTicks: number; takeBack: string; takeBackTicks: number; needleTicks?: number; phoneTicks?: number } | null = null,
+    gadget: { name: string; placeTicks: number; takeBack: string; takeBackTicks: number; needleTicks?: number; phoneTicks?: number; snareTicks?: number } | null = null,
   ) {
     const $ = this.$;
     const pool = combat.dbno.hp;
@@ -42,10 +42,13 @@ export class DownedHud {
     // A Gu needle in you (Phase 8 M10): the view sickly green at its edges, and how to pull it. (Nothing of a body's own
     // holds or needle once it's dead: a lethal fall left them on the death screen, the review found, M12.)
     const alive = s.mode !== PawnMode.Dead;
+    // Latch's snare on your leg (R3): the same line, its own words.
     const needled = alive && s.needled;
-    this.root.classList.toggle("needled", needled);
-    $(".needle-ui").classList.toggle("hidden", !needled || s.deployKind === DeployKind.Needle);
+    const snared = alive && s.snared;
+    this.root.classList.toggle("needled", needled || snared);
+    $(".needle-ui").classList.toggle("hidden", !(needled || snared) || s.deployKind === DeployKind.Needle || s.deployKind === DeployKind.Snare);
     if (needled) $(".needle-ui").textContent = `BURR BARB · no sprinting · stand and hold ${interactKey} to pull it`;
+    else if (snared) $(".needle-ui").textContent = `SNARE LATCH · slowed, no sprinting · hold ${interactKey} to pull it off`;
     if (down) {
       $(".down-title").textContent = s.revivedBy
         ? "BEING REVIVED — hold still"
@@ -70,6 +73,7 @@ export class DownedHud {
       const takeBack = s.deployKind === DeployKind.PickUp;
       const needle = s.deployKind === DeployKind.Needle;
       const phone = s.deployKind === DeployKind.Phone;
+      const snare = s.deployKind === DeployKind.Snare;
       const total = Math.max(
         1,
         defuser
@@ -78,12 +82,16 @@ export class DownedHud {
             ? (gadget?.takeBackTicks ?? 1)
             : needle
               ? (gadget?.needleTicks ?? 1)
+              : snare
+              ? (gadget?.snareTicks ?? 1)
               : phone
                 ? (gadget?.phoneTicks ?? 1)
                 : deployTicks(destruction, s.deployKind),
       );
       const what = needle
         ? "PULLING THE BARB"
+        : snare
+        ? "PULLING THE LATCH OFF"
         : phone
         ? "TURNING YOUR PHONE OFF"
         : takeBack

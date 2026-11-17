@@ -15,6 +15,7 @@ import { detonatable, GadgetTable, GFlag, type Gadget } from "./gadgets/table.js
 import { isIngredient, KIND_BP_CAMERA, KIND_SHELL_SHIELD, kindId, kindOf } from "./gadgets/kinds.js";
 import { pawnJammed, pointJammed } from "./gadgets/jammers.js";
 import { onLiveSurface } from "./gadgets/arcs.js";
+import { snareData, snareSlow } from "./gadgets/snare.js";
 import { heartbeats, heartOf, sensorUp } from "./gadgets/sensor.js";
 import { mirrorOf, sightPast } from "./gadgets/mirror.js";
 import { barrierOf, crossesBarrier, smokeOnSegment, wireSlow } from "./gadgets/areas.js";
@@ -123,7 +124,8 @@ export class Sim {
       level,
       events: [],
       canRappel: (pawn) => pawn.team === sideTeam("attacker") || this.deployRules.rappel,
-      slowOf: (pawn) => wireSlow(data, this.gadgets, pawn, pawn.kind === PawnKind.Drone),
+      // Barbed wire (Phase 8 M3), and Latch's snare on a leg (R3).
+      slowOf: (pawn) => wireSlow(data, this.gadgets, pawn, pawn.kind === PawnKind.Drone) * snareSlow(data, pawn),
       // Skopós's shells through her own barriers (D-157): a shell waking stands up under its canopy.
       passes: (pawn, c) => pawn.ownerId !== null && this.barrierOwner.get(c.handle) === pawn.ownerId,
       // Phase 8 M6: not while the body, or the device, is inside an enemy jammer.
@@ -569,7 +571,8 @@ export class Sim {
     const hit = gadgetOnRay(this.gadgets, this.data, eye, dir, plain + 0.05, (g) => {
       const id = this.data.gadgets.get(kindId(g.kind) ?? "");
       // Not one a Kludge hacked over to the other side (Phase 8 M8).
-      return g.owner === pawn.ownerId && g.team === pawn.team && !(g.flags & GFlag.Flying) && id !== undefined && id.pickUp && slots.includes(id.id) && !(id.solid && g.flags & GFlag.Hit);
+      // Nor a snare sprung on someone's leg (R3).
+      return g.owner === pawn.ownerId && g.team === pawn.team && !(g.flags & GFlag.Flying) && id !== undefined && id.pickUp && slots.includes(id.id) && !(id.solid && g.flags & GFlag.Hit) && !(id.snare && g.flags & GFlag.Active);
     });
     return hit?.g ?? null;
   }
@@ -588,6 +591,30 @@ export class Sim {
     if (id === slotGadget(this.data, pawn.loadout, 1)?.id) s.g1++;
     else s.g2++;
     this.ctx.events.push({ kind: "pickUpGadget", pawnId: pawn.id, gadgetId: g.id });
+    endDeploy(pawn);
+    return true; // still this tick
+  }
+
+  /** Whether a body can pull a snare off its leg now: snared, on its feet, not mid-swing (R3). */
+  private canPullSnare(pawn: Pawn): boolean {
+    const s = pawn.state;
+    return s.snared && s.mode === PawnMode.Walk && s.meleeTicks === 0;
+  }
+
+  /**
+   * A snare being pulled off (R3, Latch's): Interact held, in any stance, for its `pullS`; then the body's free (the
+   * server sees it and the latch is spent). Let go sooner, it stays shut.
+   */
+  private holdSnare(pawn: Pawn, held: boolean): boolean {
+    const s = pawn.state;
+    const k = snareData(this.data);
+    if (!k || !held || !this.canPullSnare(pawn)) {
+      endDeploy(pawn);
+      return false;
+    }
+    s.deployTicks = Math.min(0xffff, s.deployTicks + 1);
+    if (s.deployTicks < ticks(k.pullS)) return true;
+    s.snared = false;
     endDeploy(pawn);
     return true; // still this tick
   }
@@ -668,6 +695,7 @@ export class Sim {
     const s = pawn.state;
     const held = (input.buttons & Btn.Interact) !== 0;
     if (s.deployKind === DeployKind.Needle) return this.holdNeedle(pawn, held);
+    if (s.deployKind === DeployKind.Snare) return this.holdSnare(pawn, held);
     if (s.deployKind === DeployKind.Phone) return this.holdPhone(pawn, held);
     if (s.deployKind === DeployKind.PickUp) return this.holdPickUp(pawn, held);
     if (s.deployKind === DeployKind.Plant || s.deployKind === DeployKind.Disable) return this.holdDefuser(pawn, held);
@@ -689,6 +717,15 @@ export class Sim {
     if (s.needled) {
       if (!this.canPullNeedle(pawn)) return false;
       s.deployKind = DeployKind.Needle;
+      s.deployPanel = 0;
+      s.deployTicks = 1;
+      s.deploySection = 0;
+      return true;
+    }
+    // Latch's snare on his leg (R3): pulling it off comes next, in any stance, held still.
+    if (s.snared) {
+      if (!this.canPullSnare(pawn)) return false;
+      s.deployKind = DeployKind.Snare;
       s.deployPanel = 0;
       s.deployTicks = 1;
       s.deploySection = 0;
@@ -1782,7 +1819,7 @@ export class Sim {
                 ? d.plantLocksBody
                 : k === DeployKind.Disable
                   ? d.disableLocksBody
-                  : k === DeployKind.PickUp || (k !== DeployKind.None && k !== DeployKind.Needle && this.data.destruction.reinforcement.locksReinforcer));
+                  : k === DeployKind.PickUp || k === DeployKind.Snare || (k !== DeployKind.None && k !== DeployKind.Needle && this.data.destruction.reinforcement.locksReinforcer));
             // A standing body crouches for the defuser's holds where the data says so (prone stays prone); it stands
             // back up when the hold ends, as its stance key says.
             const kneel = !reviving && input.stance === Stance.Stand && (k === DeployKind.Plant ? d.plantCrouches : k === DeployKind.Disable && d.disableCrouches);

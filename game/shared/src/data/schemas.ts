@@ -886,10 +886,11 @@ export type IntelData = z.infer<typeof intelSchema>;
 /**
  * Where a placed gadget may go (gadgets/place.ts): something flat enough to stand on, a wall, a breakable surface
  * that isn't reinforced where it goes (a soft wall, a floor, a hatch, a barricade), a reinforced section, a
- * deployable shield's front (Fuze's Cluster Charge, Phase 8 M5), or a reinforceable wall, from its steel's side if
- * it's reinforced (Mira's Black Mirror, M7).
+ * deployable shield's front (Fuze's Cluster Charge, Phase 8 M5), a reinforceable wall, from its steel's side if
+ * it's reinforced (Mira's Black Mirror, M7), or a door's or window's frame (Latch's Snare Latch, R3: gadgets/place.ts
+ * frameSpot).
  */
-export const PLACE_ON = ["floor", "wall", "soft", "steel", "shield", "reinforceable"] as const;
+export const PLACE_ON = ["floor", "wall", "soft", "steel", "shield", "reinforceable", "frame"] as const;
 export type PlaceOn = (typeof PLACE_ON)[number];
 
 const sizeM = z.tuple([z.number().positive(), z.number().positive(), z.number().positive()]);
@@ -1177,6 +1178,14 @@ export const gadgetSchema = z
      */
     arc: z
       .strictObject({ reachM: z.number().positive(), snapM: z.number().min(0), burnS: z.number().positive(), shock: z.number().min(0), pushMps: z.number().min(0), droneJamS: z.number().min(0) })
+      .optional(),
+    /**
+     * Latch's Snare Latch (R3, gadgets/snare.ts, gadgets/serve.ts snap): sprung by an enemy body crossing its wire (its
+     * `tripwire`), it shuts on his leg: `hit` at once, `damage` every `everyS`, his speed × `speedMul` (no sprint),
+     * until he pulls it off (Interact held `pullS`) or goes down; the other side is shown where he is for `spotS`.
+     */
+    snare: z
+      .strictObject({ hit: z.number().min(0), damage: z.number().min(0), everyS: z.number().positive(), speedMul: z.number().positive().max(1), pullS: z.number().positive(), spotS: z.number().min(0) })
       .optional(),
     /**
      * Tonic's Second Wind (R3, gadgets/patch.ts, net/room.ts patches): a patch set off on a body on its feet heals

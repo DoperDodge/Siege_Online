@@ -469,6 +469,15 @@ export class DefensePlanner {
         add(2, "place", spot && { stand: spot.stand, look: [foot![0], foot![1] + 0.02, foot![2]] }, {}, e.panel.spec.index);
       }
     }
+    // Latch (R3): his Snare Latches on the site's doors, from the site's side (aimed at the floor in the doorway, a latch
+    // goes on its jamb); as many as he carries.
+    const snare = slots[1]?.snare ? slots[1] : null;
+    if (snare && !planned.has(snare.id)) {
+      for (const door of this.siteDoors().slice(0, snare.count)) {
+        const spot = floorSpot(sim, this.nav, door.room, door.at, door.at, 1.0);
+        add(2, "place", spot && { stand: spot.stand, look: [door.at[0], door.at[1] + 0.02, door.at[2]] });
+      }
+    }
     if (op === "skopos") {
       const rooms = (this.strat?.defense.gadgets.skopos ?? []).map((x) => x.room).filter((r): r is string => !!r && room(r));
       const last = rooms[rooms.length - 1];

@@ -102,11 +102,22 @@ and Tonic defending. One at a time, each complete.
   pistol) turns a pack off for its seconds; one bullet destroys it. His look: steel blue shirt, a hi-vis vest, a cap and
   safety glasses, amber gloves, a cable reel on his back. A bot playing Shunt puts his packs at the foot of the walls
   his team reinforces, once they're reinforced.
+- **Latch** (defender, the trapper; health and speed 2 / 2; Vector or SIX12 SD, C75 or SMG-12, a Nitro Cell or a
+  proximity alarm): four **Snare Latches** in slot 2 (Z). Look at a door's or window's opening and hold left mouse
+  (1.2 s): the latch goes on the nearer side of the frame at shin height (a window's: on its sill) and 1.5 s later a thin
+  grey wire runs across the opening. The first attacker through it is caught by the leg: 35 at once and 5 a second, slowed
+  to 0.7 and no sprinting, until he holds F for 1.5 s to pull it off (or goes down). The snap is loud: the defenders see
+  where he is for 3 s. Drones pass under it and defenders walk through it; it's mechanical, so an EMP doesn't stop it
+  and Ohm's sight doesn't show it; one bullet breaks it; Latch can take his own back (F) before it's sprung. His look:
+  rust brown, a dark hood and goggles, a satchel with spare latches. A bot playing Latch traps the site's doors in prep,
+  and attacking bots pull a latch off their leg when nothing's in sight.
+- **How to test Latch**: the Gadget Lab, pick Latch, Z, look at the empty door frame and hold left mouse; switch to an
+  attacker and walk through it.
 - **How to test Shunt**: the Gadget Lab, pick Shunt, Z, look at the floor just in front of the Reinforced wall and hold
   left mouse (the pack goes to the wall and the wall lights up); switch to Thermite and put his charge on it. For tricking: put the charge on with the pack picked up, then put it back.
 
 ### Next
-- **R3**: the other five, in this order: Latch, Bailiff, Rivet, Dowser, Hull.
+- **R3**: the other four, in this order: Bailiff, Rivet, Dowser, Hull.
 - **R4**: the rest of the tests moved from Oregon to Millrace, Oregon taken off this branch, the code's internal names
   and the docs brought in line.
 

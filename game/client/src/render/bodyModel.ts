@@ -523,6 +523,17 @@ function backItem(s: Shaper, L: OperatorLook): void {
       s.paint(L.gear, 0.8);
       s.bar([-0.12, -0.13, z + 0.02], [0.1, 0.1, z + 0.015], 0.012, 0.012, 6);
       return;
+    case "traps":
+      // Latch's (R3): a canvas satchel low on the back, two spare latches' steel jaws clipped to its flap in the accent.
+      s.paint(L.gear, 0.85);
+      s.box([0, -0.22, z + 0.045], [0.22, 0.14, 0.09], 4, 0.02);
+      s.bar([-0.1, -0.15, z + 0.04], [0.12, 0.13, z + 0.02], 0.01, 0.01, 6);
+      s.paint(L.accent, 0.45);
+      for (const x of [-0.055, 0.055]) {
+        s.box([x, -0.2, z + 0.0915], [0.06, 0.04, 0.008], 4, 0.003);
+        s.box([x, -0.18, z + 0.0915], [0.064, 0.006, 0.01], 2, 0.001);
+      }
+      return;
     case "tube":
       // A canister upright at the right, a hose over the shoulder.
       s.paint(L.gear, 0.5);
