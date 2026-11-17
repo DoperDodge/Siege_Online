@@ -1,7 +1,8 @@
 // The Bailiff Shield's prod (Project Redmond R3, gadgets/R3_OPERATORS.md §2; data/weapons/bailiff_shield.json
-// `shield.prod`; Ulo's: the stun and the slow). The body's own step runs it (predicted): held up and not aimed, Fire
-// keeps it on while its charge lasts, a jolt every `everyS` (a `prod` event the room judges: net/room.ts judgeProd); off,
-// its charge refills once it's been off `refillDelayS`. A body it jolts is slowed for `slowS` (its own step counts it
+// `shield.prod`; Ulo's: the stun and the slow, a click of Fire switching it on and off). The body's own step runs it
+// (predicted): held up and not aimed, a click of Fire switches it on, and on it jolts every `everyS` while its charge
+// lasts (a `prod` event the room judges: net/room.ts judgeProd); another click, aiming, the shield going down or its
+// charge running out switch it off, and off its charge refills once it's been off `refillDelayS`. A body it jolts is slowed for `slowS` (its own step counts it
 // down: no sprint, no vault, its speed × `slowMul`). An EMP on Bailiff turns it off (her `jammed`); one reaching her
 // with it up shocks her (`shocked`: no moving, no hands; the room sets it, player/movement.ts holds her still).
 import { DEG, type Vec3 } from "../core/math.js";
@@ -30,17 +31,18 @@ export function prodReady(pawn: Pawn, input: InputCmd): boolean {
 }
 
 /**
- * A tick of a body's prod (its own step): Fire held while it's ready keeps it on, using its charge, with a jolt at
- * once and every `everyS` after (a `prod` event); off (Fire let go, or aimed, or the shield not up), the next press
- * jolts at once, and once it's been off `refillDelayS` its charge comes back a second a second. Held on with none left
- * it doesn't refill.
+ * A tick of a body's prod (its own step; `pressed`: the buttons pressed this tick). A click of Fire with the shield up
+ * and not aiming switches it on or off (Ulo's). On, it uses its charge, with a jolt at once and every `everyS` after (a
+ * `prod` event); it goes off by itself when it can't jolt (aimed, the shield not up, an EMP, a shock) or its charge is
+ * spent. Off, once it's been off `refillDelayS` its charge comes back a second a second.
  */
-export function stepProd(pawn: Pawn, input: InputCmd, events: { push(e: { kind: "prod"; pawnId: number; seq: number; yaw: number; pitch: number }): void }): void {
+export function stepProd(pawn: Pawn, input: InputCmd, pressed: number, events: { push(e: { kind: "prod"; pawnId: number; seq: number; yaw: number; pitch: number }): void }): void {
   const k = pawn.loadout?.shield?.prod;
   if (!k) return;
   const s = pawn.state;
-  const trying = (input.buttons & Btn.Fire) !== 0 && !(input.buttons & Btn.Ads) && shieldUp(s);
-  if (trying && prodReady(pawn, input)) {
+  if (pressed & Btn.Fire && !(input.buttons & Btn.Ads) && shieldUp(s) && s.hand === Hand.Weapon) s.prodOn = !s.prodOn;
+  if (s.prodOn && !prodReady(pawn, input)) s.prodOn = false;
+  if (s.prodOn) {
     s.prodIdle = 0;
     s.prodUsed = Math.min(0xffff, s.prodUsed + 1);
     if (s.prodNext === 0) {
@@ -48,14 +50,10 @@ export function stepProd(pawn: Pawn, input: InputCmd, events: { push(e: { kind: 
       s.prodNext = Math.max(1, ticks(k.everyS));
     }
     s.prodNext--;
+    if (s.prodUsed >= ticks(k.chargeS)) s.prodOn = false;
     return;
   }
   s.prodNext = 0;
-  // Held on with none left (or off under an EMP), it isn't off: its charge waits until Fire's let go.
-  if (trying) {
-    s.prodIdle = 0;
-    return;
-  }
   s.prodIdle = Math.min(0xffff, s.prodIdle + 1);
   if (s.prodIdle >= ticks(k.refillDelayS) && s.prodUsed > 0) s.prodUsed--;
 }

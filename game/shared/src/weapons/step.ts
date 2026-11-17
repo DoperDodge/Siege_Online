@@ -84,6 +84,8 @@ export type SimEvent =
   | { kind: "gshot"; pawnId: number; seq: number; slot: 1 | 2; gadget: string; yaw: number; pitch: number; origin: Vec3 }
   /** The Bailiff Shield's prod jolting along the view (R3, player/prod.ts): the room judges who it meets. */
   | { kind: "prod"; pawnId: number; seq: number; yaw: number; pitch: number }
+  /** Bailiff's ability key with her shield set down (R3): its shock switched on or off (gadgets/serve.ts). */
+  | { kind: "postToggle"; pawnId: number; seq: number }
   /** `gadget`: the kind of the enemy gadget pinged (Phase 8 M3), or −1. */
   | { kind: "ping"; ctrlId: number; pos: Vec3; gadget: number; heart?: boolean }
   /**

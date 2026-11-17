@@ -51,12 +51,19 @@ function faceOff(s: Scene, dist = 2.5, side = 0) {
   return look;
 }
 
-/** Bailiff holds Fire (not aimed) for `n` ticks, looking `look`. */
-function prod(s: Scene, look: { yaw: number; pitch: number }, n: number) {
+/** A click of Fire (not aimed), looking `look`: Bailiff's prod switched on, or off. */
+function click(s: Scene, look: { yaw: number; pitch: number }) {
   s.clients[1].cmd = { ...look, buttons: Btn.Fire };
-  s.wait(n);
+  s.wait(1);
   s.clients[1].cmd = { ...look };
   s.wait(1);
+}
+
+/** Bailiff's prod on for about `n` ticks, looking `look`: a click on, and (if it's still on) a click off. */
+function prod(s: Scene, look: { yaw: number; pitch: number }, n: number) {
+  click(s, look);
+  s.wait(Math.max(0, n - 2));
+  if (s.body(1).state.prodOn) click(s, look);
 }
 
 /** An attackers' EMP at `at` (1.5 m, `seconds`), as the room sets one off. */
@@ -73,17 +80,23 @@ describe("Bailiff and her shield (R3)", () => {
     expect([b.loadout!.shield?.prod?.rangeM, b.loadout!.shieldDown, b.state.g2, b.state.shieldAt]).toEqual([k.rangeM, true, 1, ShieldAt.Front]);
   });
 
-  it("not aimed, Fire holds the prod on: a jolt now and every third of a second into the attacker in front (4 each, slowed)", async () => {
+  it("not aimed, a click of Fire switches the prod on: a jolt now and every third of a second into the attacker in front (4 each, slowed); another click switches it off", async () => {
     const s = await lab();
     const look = faceOff(s);
     const hp = s.body(0).state.hp;
-    prod(s, look, 8);
+    click(s, look);
+    s.wait(6);
+    expect(s.body(1).state.prodOn).toBe(true);
     expect(s.body(0).state.hp).toBe(hp - k.damage);
     expect(s.body(0).state.slowed).toBeGreaterThan(ticks(k.slowS) - 12);
-    // Held on: one more every `everyS`.
-    s.wait(every);
-    prod(s, look, every * 3 - 4);
+    // On without Fire held: one more every `everyS`.
+    s.wait(every * 3 - 8 + 2);
     expect(s.body(0).state.hp).toBe(hp - k.damage * 4);
+    click(s, look);
+    expect(s.body(1).state.prodOn).toBe(false);
+    const after = s.body(0).state.hp;
+    s.wait(every * 2);
+    expect(s.body(0).state.hp).toBe(after);
   });
 
   it("a jolted attacker is slowed to 0.6, can't sprint and can't vault, until it wears off", async () => {
@@ -119,9 +132,17 @@ describe("Bailiff and her shield (R3)", () => {
     expect(s.body(0).state.hp).toBe(hp);
   });
 
-  it("aimed, Fire fires her sidearm and not the prod", async () => {
+  it("aiming switches the prod off; aimed, Fire fires her sidearm and not the prod", async () => {
     const s = await lab();
     const look = faceOff(s, 3);
+    click(s, look);
+    expect(s.body(1).state.prodOn).toBe(true);
+    s.clients[1].cmd = { ...look, buttons: Btn.Ads };
+    s.wait(2);
+    expect(s.body(1).state.prodOn).toBe(false);
+    s.wait(ticks(k.refillDelayS) + ticks(1));
+    s.body(1).state.prodUsed = 0;
+    s.body(0).state.slowed = 0;
     s.clients[1].cmd = { ...look, buttons: Btn.Ads };
     s.wait(64);
     const ammo = s.body(1).state.reserve0;
@@ -136,13 +157,15 @@ describe("Bailiff and her shield (R3)", () => {
     void ammo;
   });
 
-  it("8 s of charge (a jolt every third of a second while it lasts, held on): then none; off a second, it comes back a second a second", async () => {
+  it("8 s of charge (a jolt every third of a second while it lasts): then it's off by itself; off a second, it comes back a second a second", async () => {
     const s = await lab();
     const look = faceOff(s, 2.5);
     const hp = s.body(0).state.hp;
     s.body(0).state.hp = s.body(0).state.maxHp = 400; // (he'd go down first)
-    prod(s, look, ticks(k.chargeS) + every * 4);
-    expect(s.body(1).state.prodUsed).toBe(ticks(k.chargeS));
+    click(s, look);
+    // (Just after it runs out: a second later it starts coming back.)
+    s.wait(ticks(k.chargeS) + 4);
+    expect([s.body(1).state.prodOn, s.body(1).state.prodUsed]).toEqual([false, ticks(k.chargeS)]);
     expect(400 - s.body(0).state.hp).toBe(k.damage * Math.ceil(ticks(k.chargeS) / every));
     void hp;
     s.wait(ticks(k.refillDelayS) + TICK_HZ * 2);
@@ -199,6 +222,37 @@ describe("Bailiff and her shield (R3)", () => {
     expect(Math.hypot(b.state.x - at.x, b.state.z - at.z)).toBeGreaterThan(0.01);
     expect(s.body(0).state.hp).toBe(hp);
     s.clients[1].cmd = { ...look };
+  });
+
+  it("set down, her ability key switches its shock on: it jolts the attacker in front of it (4, slowed) until it's switched off; an EMP switches it off", async () => {
+    const s = await lab();
+    s.teleport(1, 0, 0, 12, 0);
+    const post = s.plant(1, [0, 0, 10.8])!;
+    expect(post.kind).toBe(kindOf("bailiff_post"));
+    s.teleport(0, 0, 0, 8.6, 180);
+    s.wait(4);
+    const hp = s.body(0).state.hp;
+    s.press(1, Btn.Ability);
+    s.wait(4);
+    expect(s.sim.gadgets.get(post.id)!.flags & GFlag.Active).toBe(GFlag.Active);
+    expect(s.body(0).state.hp).toBe(hp - k.damage);
+    expect(s.body(0).state.slowed).toBeGreaterThan(0);
+    s.wait(every * 2);
+    expect(s.body(0).state.hp).toBe(hp - k.damage * 3);
+    s.press(1, Btn.Ability);
+    expect(s.sim.gadgets.get(post.id)!.flags & GFlag.Active).toBe(0);
+    const after = s.body(0).state.hp;
+    s.wait(every * 2);
+    expect(s.body(0).state.hp).toBe(after);
+    // On again, then an EMP on it: off.
+    s.press(1, Btn.Ability);
+    expect(s.sim.gadgets.get(post.id)!.flags & GFlag.Active).toBe(GFlag.Active);
+    emp(s, [post.pos[0], post.pos[1], post.pos[2]], 6);
+    s.wait(2);
+    expect(s.sim.gadgets.get(post.id)!.flags & (GFlag.Active | GFlag.Off)).toBe(GFlag.Off);
+    const later = s.body(0).state.hp;
+    s.wait(every * 2);
+    expect(s.body(0).state.hp).toBe(later);
   });
 
   it("set down, an EMP doesn't shock her", async () => {

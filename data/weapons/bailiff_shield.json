@@ -1,5 +1,5 @@
 {
-  "_doc": "The Bailiff Shield (Project Redmond R3, gadgets/R3_OPERATORS.md §2; Ulo's: the stun and the slow, set down, and the EMP shock that makes it hers): Bailiff's primary. A full-height plate held with her sidearm, as Fuze's is (the sidearm fires aimed only). Not aimed, Fire holds its prod out at the plate's edge: a jolt every `prod.everyS` into the first body of the other side within `prod.rangeM` and `prod.halfDeg` of the view (in sight): `prod.damage`, and slowed to `prod.slowMul` (no sprint, no vault) for `prod.slowS`; the prod runs on `prod.chargeS` of charge that refills at a second a second once it's been off `prod.refillDelayS`. The prod is electronic: an EMP on her turns it off for its seconds, and one reaching her while she holds the shield up shocks her: she can't move or use her hands for `prod.shockS`. Her ability item sets the shield down as standing cover where she faces (data/gadgets/bailiff_post.json), and she picks it up again (F). Its plate and every number of the prod are ours.",
+  "_doc": "The Bailiff Shield (Project Redmond R3, gadgets/R3_OPERATORS.md §2; Ulo's: the stun and the slow, set down, and the EMP shock that makes it hers): Bailiff's primary. A full-height plate held with her sidearm, as Fuze's is (the sidearm fires aimed only): floor to over her head, wide, curving back round her sides, its top bent back over her (`plate.topWrap`), so none of her shows past it, feet included. Not aimed, a click of Fire switches its prod on and off (Ulo's): on, a jolt every `prod.everyS` into the first body of the other side within `prod.rangeM` and `prod.halfDeg` of the view (in sight): `prod.damage`, and slowed to `prod.slowMul` (no sprint, no vault) for `prod.slowS`; the prod runs on `prod.chargeS` of charge that refills at a second a second once it's been off `prod.refillDelayS`. Set down, its ability key switches the shield's own shock on and off (Ulo's): on, it jolts the nearest of the other side in front of it within `prod.rangeM` and `prod.postHalfDeg` the same way, on a charge of its own. The prod is electronic: an EMP on her turns it off for its seconds, and one reaching her while she holds the shield up shocks her: she can't move or use her hands for `prod.shockS`. Her ability item sets the shield down as standing cover where she faces (data/gadgets/bailiff_post.json), and she picks it up again (F). Its plate and every number of the prod are ours.",
   "_ours": true,
   "id": "bailiff_shield",
   "name": "Bailiff Shield",
@@ -11,20 +11,21 @@
     "suppression": {"hitsToTrigger": 6, "hitsToMax": 20, "falloffS": 6},
     "bashDamage": 0,
     "plate": {
-      "widthM": 0.56,
-      "topWidthM": 0.5,
-      "heightM": 1.62,
-      "shoulderM": 0.3,
-      "cornerM": 0.06,
-      "curveM": 0.03,
-      "frontM": 0.32,
-      "aboveEyeM": 0.12,
+      "widthM": 0.76,
+      "topWidthM": 0.76,
+      "heightM": 1.9,
+      "shoulderM": 0.0,
+      "cornerM": 0.1,
+      "curveM": 0.26,
+      "frontM": 0.36,
+      "aboveEyeM": 0.27,
       "crouchRaiseM": 0.0,
-      "ads": {"sideM": 0.32, "dropM": 0.05, "yawDeg": 24},
-      "window": {"widthM": 0.28, "heightM": 0.09}
+      "ads": {"sideM": 0.42, "dropM": 0.04, "yawDeg": 26},
+      "window": {"widthM": 0.3, "heightM": 0.1},
+      "topWrap": {"bandM": 0.2, "backM": 0.2}
     },
     "absorb": 0.7,
     "guardBreak": {"blastHp": 35, "seconds": 1.0},
-    "prod": {"rangeM": 4, "halfDeg": 10, "damage": 4, "everyS": 0.33, "slowMul": 0.6, "slowS": 1.2, "chargeS": 8, "refillDelayS": 1, "shockS": 1.5}
+    "prod": {"rangeM": 4, "halfDeg": 10, "postHalfDeg": 35, "damage": 4, "everyS": 0.33, "slowMul": 0.6, "slowS": 1.2, "chargeS": 8, "refillDelayS": 1, "shockS": 1.5}
   }
 }

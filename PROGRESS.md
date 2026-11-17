@@ -112,16 +112,18 @@ and Tonic defending. One at a time, each complete.
   rust brown, a dark hood and goggles, a satchel with spare latches. A bot playing Latch traps the site's doors in prep,
   and attacking bots pull a latch off their leg when nothing's in sight.
 - **Bailiff** (defender, shield and prod; health and speed 3 / 1; the **Bailiff Shield** with an SMG-11 or P229,
-  barbed wire or an impact grenade): a full-height dark slate shield held with her sidearm (aim to fire it). With the
-  shield up and not aiming, **hold Fire for its prod**: a jolt every third of a second into the nearest attacker within
-  4 m in front of you: 4 damage, and he's slowed to 0.6 with no sprinting or vaulting for 1.2 s. The prod has 8 s of
-  charge (shown on the shield line) that comes back once you let go for a second. **Z** takes out its set-down: hold
-  Fire and the shield goes down on the floor as solid cover with its viewport, and you have your sidearm alone; hold F
-  on it to pick it back up. **The twist**: an EMP that reaches her while she holds the shield up shocks her: 1.5 s she
+  barbed wire or an impact grenade): a dark slate shield from the floor to over her head, wrapping round her sides and
+  over the top, so nothing of her shows past it (feet included), held with her sidearm (aim to fire it). With the
+  shield up and not aiming, **click Fire to switch its prod on** (click again to switch it off): it jolts the nearest
+  attacker within 4 m in front of you every third of a second: 4 damage, and he's slowed to 0.6 with no sprinting or
+  vaulting for 1.2 s. The prod has 8 s of charge (on the shield line) that comes back once it's been off a second.
+  **Z** takes out its set-down: hold Fire and the shield goes down on the floor as solid cover with its viewport, and
+  you have your sidearm alone; hold F on it to pick it back up. **Set down, Z switches the shield's own shock on and
+  off**: it jolts any attacker who comes in front of it the same way (on its own charge; an EMP switches it off). **The twist**: an EMP that reaches her while she holds the shield up shocks her: 1.5 s she
   can't move, shoot or use anything, and the prod stays off for the EMP's time (set down, it doesn't). Her look: black
   with white piping, a helmet with a face shield. A bot playing Bailiff prods attackers who come close.
-- **How to test Bailiff**: the Gadget Lab, pick Bailiff; walk up to the attacker dummy and hold left mouse; Z and hold
-  left mouse to set the shield down. Then switch to Ohm and shoot an EMP round at her with the shield up.
+- **How to test Bailiff**: the Gadget Lab, pick Bailiff; walk up to the attacker dummy and click left mouse; Z and hold
+  left mouse to set the shield down, then Z to switch its shock on. Then switch to Ohm and shoot an EMP round at her with the shield up.
 - **How to test Latch**: the Gadget Lab, pick Latch, Z, look at the empty door frame and hold left mouse; switch to an
   attacker and walk through it.
 - **How to test Shunt**: the Gadget Lab, pick Shunt, Z, look at the floor just in front of the Reinforced wall and hold

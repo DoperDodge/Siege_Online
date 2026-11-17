@@ -241,6 +241,8 @@ export class Bot {
     if (swapping) return swapping;
     if ((now + this.memberId) % 4 === 0) this.decide(w, pawn, ctrl, mates, d, now);
     const input = this.makeWay(pawn, mates, this.hands(s, this.act(w, pawn, mates, d, now), now), now);
+    // Its prod on with nothing in sight (R3, Bailiff): a click switches it off.
+    if (s.prodOn && !this.about?.visible) input.buttons = s.prevButtons & Btn.Fire ? input.buttons & ~Btn.Fire : input.buttons | Btn.Fire;
     this.asked = { yaw: input.yaw, pitch: input.pitch };
     return input;
   }
@@ -668,10 +670,12 @@ export class Bot {
     const dist = Math.hypot(a.point[0] - eye[0], a.point[1] - eye[1], a.point[2] - eye[2]);
     const ready = now - c.spottedAt >= ((d.reactionMs / 1000) * 0.4 * TICK_HZ);
     const onIt = a.off < a.size * 1.4 + 0.004;
-    // The Bailiff Shield's prod (R3): up close with it up and charge left, Fire (not aimed) holds it on, stepping in.
+    // The Bailiff Shield's prod (R3): up close with it up and charge left, a click of Fire (not aimed) switches it on,
+    // and it steps in while it jolts; farther off, aiming its sidearm switches it off.
     const prod = me.loadout?.shield?.prod;
     if (prod && ready && shieldUp(s) && dist <= prod.rangeM - 0.2 && (prodLeft(me) ?? 0) > 0.05 && s.jammed === 0) {
-      return { forward: dist > 2 ? 0.6 : 0, strafe: 0, yaw: a.view.yaw, pitch: a.view.pitch, buttons: Btn.Fire, stance: Stance.Stand, lean: 0 };
+      const click = !s.prodOn && !(s.prevButtons & Btn.Fire) ? Btn.Fire : 0;
+      return { forward: dist > 2 ? 0.6 : 0, strafe: 0, yaw: a.view.yaw, pitch: a.view.pitch, buttons: click, stance: Stance.Stand, lean: 0 };
     }
     let buttons = 0;
     // Down the sights past a few metres (or always, for the better bots).

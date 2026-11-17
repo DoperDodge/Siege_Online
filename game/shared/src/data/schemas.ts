@@ -397,6 +397,11 @@ const shieldSchema = z.strictObject({
       crouchRaiseM: z.number().min(0),
       ads: z.strictObject({ sideM: z.number().min(0), dropM: z.number().min(0), yawDeg: z.number() }),
       window: z.strictObject({ widthM: z.number().positive(), heightM: z.number().positive() }),
+      /**
+       * Its top bent back over the head (R3, the Bailiff Shield): over its top `bandM` the plate curves back toward its
+       * carrier, its top edge `backM` nearer him.
+       */
+      topWrap: z.strictObject({ bandM: z.number().positive(), backM: z.number().min(0) }).optional(),
     }),
     absorb: z.number().min(0).max(1),
     guardBreak: z.strictObject({ blastHp: z.number().positive(), seconds: secs }),
@@ -411,6 +416,8 @@ const shieldSchema = z.strictObject({
       .strictObject({
         rangeM: z.number().positive(),
         halfDeg: z.number().positive().max(90),
+        /** Its cone set down (its shock switched on with the ability key: it can't aim, so it's wider). */
+        postHalfDeg: z.number().positive().max(90),
         damage: z.number().min(0),
         everyS: secs,
         slowMul: z.number().positive().max(1),

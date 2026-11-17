@@ -1945,20 +1945,25 @@ export async function startLab(o: LabOptions): Promise<void> {
     }
     $(".flash").classList.toggle("show", performance.now() < flashUntil);
 
-    // Bailiff's shield (R3): its prod's charge, and set down, off her arm.
+    // Bailiff's shield (R3): its prod switched on or off and its charge; set down, its own shock on or off (the key).
     const prodPct = p.loadout?.shield?.prod ? Math.round(100 * (prodLeft(p) ?? 0)) : null;
+    const post = p.loadout?.shieldDown && s.g2 === 0 ? sim.gadgets.list.find((g) => g.owner === ctrl.id && data.gadgets.get(kindId(g.kind) ?? "")?.setsDownShield) : undefined;
     const shieldText = !p.loadout?.shield
       ? ""
       : s.shieldAt === 1
         ? prodPct !== null
-          ? `SHIELD UP · hold fire to prod (${s.jammed > 0 ? "OFF: EMP" : `${prodPct}%`}), aim to fire`
+          ? s.jammed > 0
+            ? "SHIELD UP · PROD OFF: EMP · aim to fire"
+            : s.prodOn
+              ? `SHIELD UP · PROD ON (${prodPct}%) · click fire to switch it off, aim to fire`
+              : `SHIELD UP · click fire for the prod (${prodPct}%), aim to fire`
           : freeLookFrom
             ? "SHIELD UP · FREE LOOK"
             : "SHIELD UP · aim to fire, hold fire to look round"
         : s.shieldAt === 2
           ? "SHIELD ON YOUR BACK"
           : p.loadout.shieldDown && s.g2 === 0
-            ? "SHIELD SET DOWN · F on it to take it back"
+            ? `SHIELD SET DOWN · ${keyLabel(k.ability)}: its shock ${post && post.flags & GFlag.Off ? "OFF (EMP)" : post && post.flags & GFlag.Active ? "ON" : "OFF"} · F on it to take it back`
             : "SHIELD KNOCKED ASIDE";
     ammoHud.update(p.loadout?.weapons[s.slot], s, dead || onCam, keyLabel(k.fireMode), shieldText);
     // Fuze's shield suppressed (Phase 8 M11): the edges of the view blur, and no sprinting (alive only: the review, M12).

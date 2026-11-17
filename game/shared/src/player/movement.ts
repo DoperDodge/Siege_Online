@@ -104,8 +104,8 @@ export function stepPawn(ctx: MoveContext, pawn: Pawn, input: InputCmd, weapons 
   if (weapons && !down) {
     // The gadget in hand first (Phase 8): a key that takes one out puts the weapon away this same tick.
     stepHands(ctx, pawn, input, pressed, s.meleeTicks === 0 && s.reviveTarget === 0 && s.deployKind === DeployKind.None, live);
-    // The Bailiff Shield's prod (R3): Fire with it up and not aimed (the sidearm fires only aimed with it up).
-    if (live) stepProd(pawn, input, ctx.events);
+    // The Bailiff Shield's prod (R3): a click of Fire with it up and not aimed switches it (the sidearm fires only aimed).
+    if (live) stepProd(pawn, input, pressed, ctx.events);
     stepWeapon(ctx, pawn, input, pressed);
   } else {
     parkWeapon(s);

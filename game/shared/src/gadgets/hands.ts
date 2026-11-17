@@ -204,7 +204,9 @@ export function stepHands(ctx: HandsContext, pawn: Pawn, input: InputCmd, presse
   if (pressed & Btn.Gadget && one) toggle(s, 1, one);
   // Brava's Kludge drones (Phase 8 M8, a `drone` item) are thrown by the drone code, never taken in hand.
   const two = slotGadget(ctx.data, lo, 2);
-  if (pressed & Btn.Ability && two && two.use.kind !== "drone") toggle(s, 2, two);
+  // Bailiff's shield set down (R3, Ulo's): the ability key switches its shock on and off.
+  if (pressed & Btn.Ability && two?.setsDownShield && s.g2 === 0) ctx.events.push({ kind: "postToggle", pawnId: pawn.id, seq: input.seq });
+  else if (pressed & Btn.Ability && two && two.use.kind !== "drone") toggle(s, 2, two);
   // Taken out this tick: its equip time starts next tick (as a weapon swap's does, weapons/step.ts).
   if (s.hand !== before && s.hand !== Hand.Weapon) return;
   // The other weapon's key puts the gadget away; the weapon's step swaps to it and brings it up. (The key of the

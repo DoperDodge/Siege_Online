@@ -18,6 +18,8 @@ const FRAME_OUT_M = 0.03;
 const BOLT_M = 0.032;
 /** Segments in each rounded corner, and the most a column of the face spans across (its curve shows in columns). */
 const ARC_SEGS = 5;
+/** Rows across a plate's top bend (`topWrap`). */
+const WRAP_ROWS = 6;
 const COLUMN_M = 0.035;
 
 /** An outline (anticlockwise, x right and y up) moved in by `r` all round (its corners where the moved edges meet). */
@@ -82,14 +84,21 @@ class PlateShape {
       }
     };
     const q = Math.PI / 2;
+    // A plate one width to its top (the Bailiff Shield's, R3) has no shoulders: its sides go straight up to its top
+    // corners. (Drawn with them, its outline doubled back on itself there and its rim's inset shot out in spikes.)
+    const step = S > 1e-6 && tw < w - 1e-6;
     out.push(new THREE.Vector2(0, -H));
     arc(w - R, -H + R, -q, 0); // bottom right
-    arc(w - R, -S - R, 0, q); // right shoulder
-    out.push(new THREE.Vector2(tw, -S)); // into the top part
+    if (step) {
+      arc(w - R, -S - R, 0, q); // right shoulder
+      out.push(new THREE.Vector2(tw, -S)); // into the top part
+    }
     arc(tw - R, -R, 0, q); // top right
     arc(-tw + R, -R, q, 2 * q); // top left
-    out.push(new THREE.Vector2(-tw, -S));
-    arc(-w + R, -S - R, q, 2 * q); // left shoulder
+    if (step) {
+      out.push(new THREE.Vector2(-tw, -S));
+      arc(-w + R, -S - R, q, 2 * q); // left shoulder
+    }
     arc(-w + R, -H + R, 2 * q, 3 * q); // bottom left
     // (Points that fall together where an arc ends on a straight edge: one of each.)
     return out.filter((p, i) => i === 0 || p.distanceTo(out[i - 1]) > 1e-6);
@@ -113,9 +122,11 @@ export class ShieldModel {
     face = 0x857654,
   ) {
     const w = k.widthM / 2;
-    const tw = Math.min(w, k.topWidthM / 2);
     const H = k.heightM;
-    const S = Math.min(k.shoulderM, H * 0.6);
+    let tw = Math.min(w, k.topWidthM / 2);
+    let S = Math.min(k.shoulderM, H * 0.6);
+    // No shoulders, or a top part as wide as its body: one width to the top (PlateShape.outline).
+    if (S <= 1e-6 || tw >= w - 1e-6) [tw, S] = [w, 0];
     const R = Math.min(k.cornerM, tw * 0.4, (H - S) * 0.4);
     const shape = new PlateShape(w, tw, S, H, R);
     // The window across the top part at eye height (its top `aboveEyeM` over the eyes).
@@ -132,12 +143,26 @@ export class ShieldModel {
     // A patch of the face from (x0, y0..y1 at x0) to (x1, y..y at x1), on vertices of its own for each side so each keeps
     // its own shading: anticlockwise across the plate (x right, y up) faces its carrier (the plate's local z is backward):
     // that's its inside; its face winds the other way.
-    const patch = (x0: number, b0: number, t0: number, x1: number, b1: number, t1: number) => {
+    // A plate whose top bends back over the head (`topWrap`, R3) is cut in rows across that band, so the bend shows.
+    const rows: number[] = [];
+    if (k.topWrap) for (let i = 1; i < WRAP_ROWS; i++) rows.push(-(k.topWrap.bandM * i) / WRAP_ROWS);
+    const quadPatch = (x0: number, b0: number, t0: number, x1: number, b1: number, t1: number) => {
       if (t0 - b0 < 1e-5 && t1 - b1 < 1e-5) return;
       const o = [add(x0, b0, 0), add(x1, b1, 0), add(x1, t1, 0), add(x0, t0, 0)];
       const i = [add(x0, b0, 0), add(x1, b1, 0), add(x1, t1, 0), add(x0, t0, 0)];
       faceIn.push(i[0], i[1], i[2], i[0], i[2], i[3]);
       faceOut.push(o[0], o[2], o[1], o[0], o[3], o[2]);
+    };
+    const patch = (x0: number, b0: number, t0: number, x1: number, b1: number, t1: number) => {
+      const cuts = rows.filter((y) => y > Math.min(b0, b1) + 1e-4 && y < Math.max(t0, t1) - 1e-4);
+      if (!cuts.length) return quadPatch(x0, b0, t0, x1, b1, t1);
+      let [p0, p1] = [b0, b1];
+      for (const y of cuts.sort((a, b) => a - b)) {
+        const [q0, q1] = [Math.min(Math.max(y, b0), t0), Math.min(Math.max(y, b1), t1)];
+        quadPatch(x0, p0, q0, x1, p1, q1);
+        [p0, p1] = [q0, q1];
+      }
+      quadPatch(x0, p0, t0, x1, p1, t1);
     };
 
     // The face in columns (its curve round his sides shows column by column), cut where its shape changes: the rounded

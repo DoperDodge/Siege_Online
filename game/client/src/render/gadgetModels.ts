@@ -501,7 +501,9 @@ export class GadgetModels {
     for (let i = n; i < this.arcSheets.length; i++) this.arcSheets[i].visible = false;
     // A flicker: two beats at once, never quite dark.
     this.arcSheetMat.opacity = 0.06 + 0.07 * Math.abs(Math.sin(t * 0.021) * Math.sin(t * 0.0067 + 1.3));
-    const key = `${[...live.panels.keys()].join(",")}|${[...live.gadgets.keys()].join(",")}`;
+    // Bailiff's set-down shields with their shock on (R3) crackle across their face too.
+    const posts = this.sim.gadgets.list.filter((g) => g.flags & GFlag.Active && !(g.flags & GFlag.Off) && this.dataOf(g.kind)?.setsDownShield);
+    const key = `${[...live.panels.keys()].join(",")}|${[...live.gadgets.keys()].join(",")}|${posts.map((g) => g.id).join(",")}`;
     if (key === this.arcKey && t - this.arcAt < 70) return;
     this.arcKey = key;
     this.arcAt = t;
@@ -548,6 +550,17 @@ export class GadgetModels {
         const a: Vec3 = [g.pos[0] + across[0] * x0, g.pos[1] + (Math.random() - 0.5) * h, g.pos[2] + across[2] * x0];
         const b: Vec3 = [g.pos[0] + across[0] * x1, g.pos[1] + (Math.random() - 0.5) * h, g.pos[2] + across[2] * x1];
         bolt(a, b, 5, 0.05, [0, 1, 0], [fx, 0, fz]);
+      }
+    }
+    for (const g of posts) {
+      const d = this.dataOf(g.kind)!;
+      const [w, h, dep] = d.sizeM;
+      const [fx, fz] = forwardXZ(g.yaw);
+      const across: Vec3 = [fz, 0, -fx];
+      const front = dep / 2 + 0.01;
+      for (let i = 0; i < 4; i++) {
+        const at = (x: number, y: number): Vec3 => [g.pos[0] + across[0] * x + fx * front, g.pos[1] + y, g.pos[2] + across[2] * x + fz * front];
+        bolt(at((Math.random() - 0.5) * w, (Math.random() - 0.5) * h), at((Math.random() - 0.5) * w, (Math.random() - 0.5) * h), 6, 0.05, [0, 1, 0], across);
       }
     }
     const geo = this.arcLines.geometry;

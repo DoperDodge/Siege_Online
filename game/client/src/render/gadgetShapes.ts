@@ -598,12 +598,13 @@ const UP = new THREE.Vector3(0, 1, 0);
 export function restsAt(parts: Map<ShapeMat, THREE.BufferGeometry>, z: number, fallback: number): { y: number; z: number } {
   const meshes = [...parts.values()].map((g) => new THREE.Mesh(g, UNDERSIDE));
   const ray = new THREE.Raycaster();
-  // (Up through its faces over the palm, and its own points there: a thin leg the rays go either side of.)
+  // (Up through its faces over the palm every 5 mm, and its own points there: a thin leg the rays go either side of.
+  // Every 15 mm, a set-down Bailiff Shield's foot, under a centimetre deep in the hand, fell between them.)
   const lowest = (at: number) => {
     let low = Infinity;
-    for (let i = -2; i <= 2; i++) {
-      for (let k = -2; k <= 2; k++) {
-        ray.set(new THREE.Vector3(i * 0.015, -10, at + k * 0.015), UP);
+    for (let i = -6; i <= 6; i++) {
+      for (let k = -6; k <= 6; k++) {
+        ray.set(new THREE.Vector3(i * 0.005, -10, at + k * 0.005), UP);
         const hit = ray.intersectObjects(meshes, false)[0];
         if (hit) low = Math.min(low, hit.point.y);
       }

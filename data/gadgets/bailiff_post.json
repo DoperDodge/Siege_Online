@@ -1,15 +1,15 @@
 {
-  "_doc": "Bailiff's shield set down (Project Redmond R3, gadgets/R3_OPERATORS.md §2; Ulo's: she can place it down): her ability item, slot 2 (Z). Held Fire `use.placeS` with it out, her shield goes down on the floor where she faces as standing cover (its viewport and all: solid, as a deployable shield is), and she has her sidearm; while it's down she has no shield. She picks it up again (Interact held, as any device) and it's back on her arm. A shield set down doesn't prod. Its size is the Bailiff Shield's plate.",
+  "_doc": "Bailiff's shield set down (Project Redmond R3, gadgets/R3_OPERATORS.md §2; Ulo's: she can place it down): her ability item, slot 2 (Z). Held Fire `use.placeS` with it out, her shield goes down on the floor where she faces as standing cover (its viewport and all: solid, as a deployable shield is), and she has her sidearm; while it's down she has no shield. She picks it up again (Interact held, as any device) and it's back on her arm. Set down, her ability key switches its shock on and off (Ulo's): on, it jolts the nearest attacker in front of it as her prod does (data/weapons/bailiff_shield.json `prod`, its `postHalfDeg`), on a charge of its own; an EMP turns it off. Its size is the Bailiff Shield's plate.",
   "id": "bailiff_post",
   "name": "Shield",
   "side": "defender",
   "operator": "bailiff",
   "count": 1,
-  "electronic": false,
+  "electronic": true,
   "use": {"kind": "place", "on": ["floor"], "placeS": 0.6, "reachM": 2.2},
   "remote": false,
   "pickUp": true,
-  "sizeM": [0.56, 1.62, 0.1],
+  "sizeM": [0.76, 1.9, 0.12],
   "solid": true,
   "setsDownShield": true
 }

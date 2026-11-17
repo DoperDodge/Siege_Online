@@ -377,6 +377,13 @@ export class Room implements DirectorHost {
       const k = g ? this.sim.data.gadgets.get(kindId(g.kind) ?? "")?.snare : undefined;
       if (g && k && k.spotS > 0) this.spotted(pawn, g.owner, g.team, k.spotS);
     };
+    // A set-down Bailiff Shield's shock jolted a body (R3): slowed there; its player corrected, the spark for everyone.
+    this.gadgetServer.onJolt = (pawn, _g, at) => {
+      const owner = pawn.ownerId !== null ? this.memberOf(pawn.ownerId) : null;
+      if (owner) this.force(owner);
+      const ev: GameEvent = { kind: "emp", pos: [at[0], at[1], at[2]] };
+      for (const m of this.members.values()) m.events.push(ev);
+    };
     this.gadgetServer.onIngredient = (g, stage) => this.ingredientStage(g, stage);
     this.gadgetServer.inPrep = () => this.director?.match.phase === Phase.Prep;
     // Phase 8 M5: a cluster charge's hole goes in with this tick's panel ops.
@@ -1433,8 +1440,9 @@ export class Room implements DirectorHost {
         if (p) this.announceDeath(p, 0, "", e.cause === "bleed" ? Cause.Bleed : Cause.Fall, false, false, e.life);
       } else if (e.kind === "deploy") {
         this.completeDeploy(e);
-      } else if (e.kind === "throw" || e.kind === "place" || e.kind === "detonate" || e.kind === "pickUpGadget") {
+      } else if (e.kind === "throw" || e.kind === "place" || e.kind === "detonate" || e.kind === "pickUpGadget" || e.kind === "postToggle") {
         if (e.kind === "throw" || e.kind === "place") this.reporter.gadget(this.sim.pawns.get(e.pawnId)?.ownerId ?? 0, e.gadget);
+        // (Bailiff's set-down shield's shock switched, R3, is the gadget server's too.)
         this.gadgetServer.onEvent(e);
       } else if (e.kind === "rappelBreach") {
         this.completeBreach(e);

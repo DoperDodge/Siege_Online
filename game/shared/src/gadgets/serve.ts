@@ -35,6 +35,8 @@ import { canisterSpot, mirrorHeld, mirrorOf, windowOps } from "./mirror.js";
 import { isIngredient, KIND_BP_CAMERA, KIND_SHELL_SHIELD, kindId, kindOf } from "./kinds.js";
 import { arcData, liveSurfaces, onLiveSurface, packLive } from "./arcs.js";
 import { wireLength, type SnareData } from "./snare.js";
+import { prodData, prodTarget } from "../player/prod.js";
+import { pawnHitboxes } from "../player/shield.js";
 import { detonatable, GFlag, type Gadget } from "./table.js";
 
 const KIND_WIRE = kindOf("barbed_wire");
@@ -135,6 +137,10 @@ export class GadgetServer {
   onSnare: (pawn: Pawn, g: Gadget | null) => void = () => {};
   /** Snares shut on bodies (R3; by pawn id): the latch's entry, and the tick of its next bite. */
   private readonly snares = new Map<number, { id: number; next: number }>();
+  /** The room: a set-down Bailiff Shield's shock (R3) jolted this body (slowed here): its owner corrected, the spark shown. */
+  onJolt: (pawn: Pawn, g: Gadget, at: Vec3) => void = () => {};
+  /** Set-down Bailiff Shields' shocks (R3; by entry id): ticks of charge used, ticks to the next jolt, ticks off. */
+  private readonly posts = new Map<number, { used: number; next: number; idle: number }>();
   /** The room: a device burnt out on a live surface by Shunt's pack (R3), as it leaves the table. */
   onBurnt: (g: Gadget, pack: Gadget) => void = () => {};
   /** Devices on live surfaces (Shunt's packs, R3), by entry id: the tick each was first found there. */
@@ -188,6 +194,18 @@ export class GadgetServer {
       // an enemy jammer (Phase 8 M6), nor one on a surface Shunt's pack makes live (R3).
       const g = pawn && detonatable(sim.gadgets.list, pawn.ownerId ?? 0, kindOf(e.gadget), (x) => !pointJammed(sim, x.team, x.pos) && !onLiveSurface(sim, x));
       if (g) this.detonated(g);
+      return;
+    }
+    if (e.kind === "postToggle") {
+      // Bailiff's shield set down (R3): its shock on (with charge left, not off under an EMP) or off.
+      const pawn = sim.pawns.get(e.pawnId);
+      const g = pawn ? sim.gadgets.list.find((x) => x.owner === pawn.ownerId && this.dataOf(x)?.setsDownShield) : undefined;
+      const k = prodData(sim.data);
+      if (!g || !k) return;
+      const st = this.post(g.id);
+      const on = !(g.flags & GFlag.Active) && !(g.flags & GFlag.Off) && st.used < ticks(k.chargeS);
+      sim.gadgets.update(g.id, { flags: on ? g.flags | GFlag.Active : g.flags & ~GFlag.Active });
+      st.next = 0;
       return;
     }
     if (e.kind === "pickUpGadget") {
@@ -384,6 +402,7 @@ export class GadgetServer {
     this.wires();
     this.bites();
     this.snared();
+    this.postShocks();
     this.arcs();
     this.flights.prune((id) => {
       const g = sim.gadgets.get(id);
@@ -574,6 +593,67 @@ export class GadgetServer {
         if (Math.hypot(p.state.x - pack.pos[0], p.state.y - pack.pos[1], p.state.z - pack.pos[2]) <= 0.6) p.state.jammed = Math.max(p.state.jammed, ticks(k.droneJamS));
       }
     }
+  }
+
+  /** A set-down shield's shock's state (R3), made as it's first wanted. */
+  private post(id: number): { used: number; next: number; idle: number } {
+    let st = this.posts.get(id);
+    if (!st) this.posts.set(id, (st = { used: 0, next: 0, idle: 0 }));
+    return st;
+  }
+
+  /**
+   * Set-down Bailiff Shields' shocks (R3, Ulo's): one switched on uses its own charge and jolts, at once and every
+   * `everyS`, the nearest body of the other side in front of it (from its top's middle, straight out of its face) within
+   * `rangeM` and `postHalfDeg`, in sight: the prod's damage, slowed for `slowS`. An EMP (Off) or its charge running out
+   * switches it off; off, its charge refills once it's been off `refillDelayS`.
+   */
+  private postShocks() {
+    const sim = this.sim;
+    const k = prodData(sim.data);
+    if (!k) return;
+    for (const g of sim.gadgets.list) {
+      const d = this.dataOf(g);
+      if (!d?.setsDownShield) continue;
+      const st = this.post(g.id);
+      const on = (g.flags & GFlag.Active) !== 0;
+      if (on && (g.flags & GFlag.Off || st.used >= ticks(k.chargeS))) {
+        sim.gadgets.update(g.id, { flags: g.flags & ~GFlag.Active });
+        continue;
+      }
+      if (!on) {
+        st.next = 0;
+        st.idle = Math.min(0xffff, st.idle + 1);
+        if (st.idle >= ticks(k.refillDelayS) && st.used > 0) st.used--;
+        continue;
+      }
+      st.idle = 0;
+      st.used++;
+      if (st.next > 0) {
+        st.next--;
+        continue;
+      }
+      st.next = Math.max(1, ticks(k.everyS)) - 1;
+      const [fx, fz] = forwardXZ(g.yaw);
+      const out = d.sizeM[2] / 2 + 0.05;
+      const eye: Vec3 = [g.pos[0] + fx * out, g.pos[1] + d.sizeM[1] / 2 - 0.35, g.pos[2] + fz * out];
+      const bodies = new Map<number, Hitbox[]>();
+      for (const p of sim.pawns.values())
+        if (p.kind === PawnKind.Body && p.team !== g.team && p.state.mode !== PawnMode.Dead && p.state.mode !== PawnMode.Held && !isIdleShell(sim, p)) bodies.set(p.id, pawnHitboxes(sim.data.movement, sim.data.hitboxes, p));
+      const blocked = (a: Vec3, b: Vec3) => {
+        const v: Vec3 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+        const len = Math.hypot(v[0], v[1], v[2]);
+        const hit = len > 1e-4 ? raycastLevel(sim, a, [v[0] / len, v[1] / len, v[2] / len], len) : null;
+        return hit !== null && hit.t < len - 0.05;
+      };
+      const hit = prodTarget(eye, g.yaw, 0, bodies, new Set(), { ...k, halfDeg: k.postHalfDeg }, blocked);
+      const target = hit ? sim.pawns.get(hit.pawnId) : undefined;
+      if (!hit || !target) continue;
+      this.hurt(g, target, k.damage);
+      target.state.slowed = ticks(k.slowS);
+      this.onJolt(target, g, hit.point);
+    }
+    for (const id of this.posts.keys()) if (!sim.gadgets.get(id)) this.posts.delete(id);
   }
 
   /** An entry whose DSEG has worn off is on again. */

@@ -276,6 +276,8 @@ export interface PawnState {
    * server until it's pulled off (an Interact hold, sim.ts holdSnare) or the body is down.
    */
   snared: boolean;
+  /** The Bailiff Shield's prod switched on (R3, player/prod.ts: a click of Fire with it up switches it). */
+  prodOn: boolean;
   regenMade: number;
   regenTicks: number;
   // Fuze's Ballistic Shield (Phase 8 M11, player/shield.ts): ticks it's knocked aside (a guard break, or Sledge's
