@@ -36,6 +36,10 @@ export const NavFlag = {
   Stand: 1,
   /** On a ramp (a staircase's invisible slope, any tilted box's top): joined to flat floor only where they meet level. */
   Ramp: 2,
+  /** On a staircase (its slope, or a step's top where that's higher): joined to the rest of it by a step either way. */
+  Stair: 4,
+  /** A staircase's flight that runs along x (else along z): it's got on and off by a step only along its run. */
+  StairX: 8,
 } as const;
 /** How far a ramp's node and a flat one may differ in height and still join (you get onto stairs at their ends). */
 const RAMP_JOIN = 0.12;
@@ -111,6 +115,8 @@ interface Box {
   max: [number, number, number];
   /** A body vaults onto it or over it (the level's tag). */
   vault: boolean;
+  /** A staircase's step or slope (the level's tag): 0, or which way its flight runs (1 along x, 2 along z). */
+  stair: number;
   /** Its collider's handle. */
   handle: number;
 }
@@ -515,22 +521,32 @@ export class NavGrid {
    * too, so no corner is cut), as [node, metres] pairs pushed onto `out`.
    */
   private computeNeighbours(id: number, out: [number, number][]): void {
-    const ramp = this.nodeFlags(id) & NavFlag.Ramp;
-    // Onto a ramp from flat floor (or off it) only where the two are level: no stepping onto stairs from their side.
-    const joins = (n: number) => n >= 0 && ((this.nodeFlags(n) & NavFlag.Ramp) === ramp || Math.abs(this.nodeY(n) - this.nodeY(id)) <= RAMP_JOIN);
-    const [i, j] = this.nodeColumn(id);
+    const f = this.nodeFlags(id);
     const y = this.nodeY(id);
+    // Any two level ones join. A staircase's own nodes join by a step, whichever is on its slope and whichever on a
+    // step's top (a column whose square takes in a step's front edge has that step's top a little over the slope, which
+    // runs through the nosings). On and off a staircase by a step only at its ends, along its run: not onto its side
+    // from the floor beside it (a body walks into the steps' side there). Else (no staircase) a ramp's and flat floor's
+    // only where they meet level; two of a kind by a step.
+    const joins = (n: number, alongX: boolean | null) => {
+      if (n < 0) return false;
+      const g = this.nodeFlags(n);
+      if (Math.abs(this.nodeY(n) - y) <= RAMP_JOIN || f & g & NavFlag.Stair) return true;
+      if ((f | g) & NavFlag.Stair) return alongX !== null && ((f & NavFlag.Stair ? f : g) & NavFlag.StairX ? alongX : !alongX);
+      return (g & NavFlag.Ramp) === (f & NavFlag.Ramp);
+    };
+    const [i, j] = this.nodeColumn(id);
     const ortho: number[] = [-1, -1, -1, -1];
     const D = DIRS4;
     for (let k = 0; k < 4; k++) {
       const n = this.nodeAt(i + D[k][0], j + D[k][1], y);
-      ortho[k] = joins(n) ? n : -1;
+      ortho[k] = joins(n, D[k][0] !== 0) ? n : -1;
       if (ortho[k] >= 0) out.push([n, NAV_CELL]);
     }
     for (const [di, dj, a, b] of DIAG) {
       if (ortho[a] < 0 || ortho[b] < 0) continue;
       const n = this.nodeAt(i + di, j + dj, y);
-      if (joins(n)) out.push([n, NAV_CELL * Math.SQRT2]);
+      if (joins(n, null)) out.push([n, NAV_CELL * Math.SQRT2]);
     }
   }
 
@@ -562,6 +578,8 @@ export class NavGrid {
         min: [t.x - ext[0], t.y - ext[1], t.z - ext[2]],
         max: [t.x + ext[0], t.y + ext[1], t.z + ext[2]],
         vault: sim.level.solids.get(col.handle)?.vaultable === true,
+        // A step's run (its depth) and a slope's are along the box's own z.
+        stair: sim.level.solids.get(col.handle)?.stair !== true ? 0 : Math.abs(axes[2][0]) > Math.abs(axes[2][2]) ? 1 : 2,
         handle: col.handle,
       });
       return true;
@@ -639,7 +657,7 @@ export class NavGrid {
     const spanFirst = new Int32Array(CHUNK * CHUNK + 1);
     const sy0: number[] = [];
     const sy1: number[] = [];
-    const spans: [number, number, boolean, boolean][] = [];
+    const spans: [number, number, boolean, boolean, number][] = [];
     for (let lj = 0; lj < CHUNK; lj++) {
       for (let li = 0; li < CHUNK; li++) {
         const col = lj * CHUNK + li;
@@ -655,30 +673,32 @@ export class NavGrid {
         spans.length = 0;
         for (const b of boxes) {
           if (b.max[0] < x - c / 2 || b.min[0] > x + c / 2 || b.max[2] < z - c / 2 || b.min[2] > z + c / 2) continue;
-          let hit: [number, number, boolean, boolean] | null = null;
+          let hit: [number, number, boolean, boolean, number] | null = null;
           if (b.up >= 0) {
             const ap = b.axes[b.p];
             const aq = b.axes[b.q];
             const dx = x - b.t[0];
             const dz = z - b.t[2];
-            if (Math.abs(dx * ap[0] + dz * ap[2]) <= b.he[b.p] + (c / 2) * (Math.abs(ap[0]) + Math.abs(ap[2])) && Math.abs(dx * aq[0] + dz * aq[2]) <= b.he[b.q] + (c / 2) * (Math.abs(aq[0]) + Math.abs(aq[2]))) hit = [b.min[1], b.max[1], true, false];
+            if (Math.abs(dx * ap[0] + dz * ap[2]) <= b.he[b.p] + (c / 2) * (Math.abs(ap[0]) + Math.abs(ap[2])) && Math.abs(dx * aq[0] + dz * aq[2]) <= b.he[b.q] + (c / 2) * (Math.abs(aq[0]) + Math.abs(aq[2]))) hit = [b.min[1], b.max[1], true, false, b.stair];
           } else {
             const cr = this.crossing(b, x, z);
-            if (cr) hit = [cr[0], cr[1], cr[2], true];
+            if (cr) hit = [cr[0], cr[1], cr[2], true, b.stair];
           }
           if (hit) spans.push(hit);
         }
         spans.sort((a, b) => a[0] - b[0]);
-        const merged: [number, number, boolean, boolean][] = [];
+        // [bottom, top, walkable top, on a slope, on a staircase (Box.stair)]
+        const merged: [number, number, boolean, boolean, number][] = [];
         for (const s of spans) {
           const last = merged[merged.length - 1];
           if (last && s[0] <= last[1] + 0.01) {
-            if (s[1] > last[1] + 1e-4) [last[1], last[2], last[3]] = [s[1], s[2], s[3]];
+            if (s[1] > last[1] + 1e-4) [last[1], last[2], last[3], last[4]] = [s[1], s[2], s[3], s[4]];
             else if (s[1] > last[1] - 1e-4) {
               last[2] ||= s[2];
               last[3] &&= s[3];
+              last[4] ||= s[4];
             }
-          } else merged.push([s[0], s[1], s[2], s[3]]);
+          } else merged.push([s[0], s[1], s[2], s[3], s[4]]);
         }
         for (const m of merged) {
           sy0.push(m[0]);
@@ -698,7 +718,8 @@ export class NavGrid {
           }
           if (!crouch) continue;
           ys.push(y);
-          fl.push((stand ? NavFlag.Stand : 0) | (merged[n][3] ? NavFlag.Ramp : 0));
+          const st = merged[n][4];
+          fl.push((stand ? NavFlag.Stand : 0) | (merged[n][3] ? NavFlag.Ramp : 0) | (st ? NavFlag.Stair : 0) | (st === 1 ? NavFlag.StairX : 0));
           cols.push(col);
         }
       }

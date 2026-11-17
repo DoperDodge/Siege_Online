@@ -263,6 +263,8 @@
             20.0,
             33.333
           ],
+          "sillM": 1.6,
+          "headM": 2.3,
           "_unverified": []
         },
         {
@@ -272,11 +274,13 @@
             100.0,
             113.333
           ],
+          "sillM": 1.6,
+          "headM": 2.3,
           "_unverified": []
         }
       ],
       "src": "hand",
-      "note": "the mill's west wall over the millrace",
+      "note": "the mill's west wall over the millrace: high windows, nobody climbs out of them into the channel",
       "_unverified": []
     },
     {

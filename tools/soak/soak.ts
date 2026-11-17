@@ -23,13 +23,13 @@ export interface SoakReport {
 const STUCK_S = 10;
 const STUCK_M = 1;
 
-export async function soak(site: string, rounds: number, seed = 5, onStuck?: (room: Room, id: number) => void): Promise<SoakReport> {
+export async function soak(site: string, rounds: number, seed = 5, onStuck?: (room: Room, id: number) => void, level = "oregon"): Promise<SoakReport> {
   const data = loadGameData();
   const bt = data.modes.get("bot_training")!;
   if (!isFormat(bt)) throw new Error("bot_training");
   const mode: FormatMode = bt;
   const t0 = performance.now();
-  const room = await Room.create("SOAK", "oregon", { format: "bot_training", seed });
+  const room = await Room.create("SOAK", level, { format: "bot_training", seed });
   const clock = { t: 0 };
   const toServer: Uint8Array[] = [];
   const errors: string[] = [];

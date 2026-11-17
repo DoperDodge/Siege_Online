@@ -119,7 +119,7 @@
     "stairs": {
       "riserMaxM": 0.2,
       "treadM": 0.3,
-      "headroomM": 2
+      "headroomM": 2.4
     },
     "boundary": {
       "hM": 4,
@@ -1249,10 +1249,10 @@
           -33.333,
           -40.0,
           0.0,
-          226.667
+          222.667
         ]
       ],
-      "note": "the millrace, open to the sky",
+      "note": "the millrace, open to the sky (to the top of its steps)",
       "_unverified": []
     }
   ],
@@ -1269,9 +1269,9 @@
           "plan": "switchback",
           "shaft": [
             273.333,
-            6.667,
-            296.0,
-            37.333
+            13.333,
+            300.0,
+            46.667
           ],
           "up": "S",
           "turn": "right",
@@ -1283,9 +1283,9 @@
           "plan": "switchback",
           "shaft": [
             273.333,
-            6.667,
-            296.0,
-            37.333
+            13.333,
+            300.0,
+            46.667
           ],
           "up": "S",
           "turn": "right",
@@ -1304,9 +1304,9 @@
           "to": "2F",
           "plan": "straight",
           "shaft": [
-            346.667,
+            347.333,
             2.667,
-            390.667,
+            388.0,
             14.0
           ],
           "up": "E",
@@ -1327,11 +1327,11 @@
           "plan": "straight",
           "shaft": [
             133.333,
-            180.0,
+            184.0,
             144.667,
             218.667
           ],
-          "up": "N",
+          "up": "S",
           "widthM": 1.2,
           "_unverified": []
         }
@@ -1349,7 +1349,7 @@
           "plan": "straight",
           "shaft": [
             2.0,
-            21.333,
+            20.0,
             13.333,
             66.667
           ],

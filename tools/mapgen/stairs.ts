@@ -26,6 +26,11 @@ const LANDING_M = 0.2;
 /** Where the foot (before the first riser, clear of the ramp's toe) and the arrival (past the top) are checked. */
 const FOOT_CHECK_M = 0.6;
 const TOP_CHECK_M = 0.3;
+/** The way on at the foot and off at the top: a strip this far out from the first riser and from the top, a body's
+ * width (and a margin) across the flight's middle, clear of everything from the floor to a standing head. */
+const STAND_M = 0.9;
+const STAND_HALF_M = 0.3;
+const STAND_HEAD_M = 1.8;
 /**
  * A body's radius and a margin (data/movement.json stance.collisionRadius 0.3): climbing, a body's head reaches
  * this far back under the slab it is leaving, so the hole starts that much sooner.
@@ -59,6 +64,9 @@ export interface CompiledRun {
   /** Before the first riser on the floor below (FOOT_CHECK_M), and past the top on the floor above (TOP_CHECK_M). */
   foot: [number, number, number];
   top: [number, number, number];
+  /** The way on at the foot and off at the top (STAND_M out), metres [x0, z0, x1, z1]. */
+  footClear: Rect;
+  topClear: Rect;
   footRoom?: string;
   topRoom?: string;
   flights: Flight[];
@@ -80,6 +88,11 @@ export interface StairsResult {
 }
 
 const r4 = (v: number) => Math.round(v * 1e4) / 1e4;
+/** The strip out from (x, z) along (dx, dz), STAND_M long and a body's width across: [x0, z0, x1, z1]. */
+function strip(x: number, z: number, dx: number, dz: number): Rect {
+  const pts = [0.05, STAND_M].flatMap((t) => [-STAND_HALF_M, STAND_HALF_M].map((s) => [x + dx * t - dz * s, z + dz * t + dx * s]));
+  return [Math.min(...pts.map((p) => p[0])), Math.min(...pts.map((p) => p[1])), Math.max(...pts.map((p) => p[0])), Math.max(...pts.map((p) => p[1]))].map(r4) as Rect;
+}
 const snap = (v: number) => Math.round(v / CELL_M) * CELL_M;
 
 /** Steps and the boxes they stand in, as the builder makes them (open: two risers deep). */
@@ -268,6 +281,8 @@ export function compileStairs(layout: Layout, fr: Frames): StairsResult {
         to,
         foot: [r4(first.start[0] - ffx * FOOT_CHECK_M), y0, r4(first.start[2] - ffz * FOOT_CHECK_M)],
         top: [r4(end[0] + lx * TOP_CHECK_M), y1, r4(end[1] + lz * TOP_CHECK_M)],
+        footClear: strip(first.start[0], first.start[2], -ffx, -ffz),
+        topClear: strip(end[0], end[1], lx, lz),
         ...(run.foot ? { footRoom: run.foot } : {}),
         ...(run.top ? { topRoom: run.top } : {}),
         flights,
@@ -473,6 +488,11 @@ export function checkStairs(layout: Layout, stairs: StairsResult, solids: Box[],
   for (const run of stairs.runs) {
     if (run.footRoom && !inRoom(run.footRoom, run.foot[0], run.foot[2])) errors.push(`${run.id}: its foot (${run.foot[0]}, ${run.foot[2]}) isn't in ${run.footRoom}`);
     if (run.topRoom && !inRoom(run.topRoom, run.top[0], run.top[2])) errors.push(`${run.id}: it arrives at (${run.top[0]}, ${run.top[2]}), not in ${run.topRoom}`);
+    // Room at either end: a flight whose first step is against a wall can't be got onto (bots' and players').
+    for (const [where, r, y] of [["foot", run.footClear, run.foot[1]], ["top", run.topClear, run.top[1]]] as const) {
+      const b = things.find((b) => !own.has(b.id) && overlap(r, b) && lo(b, 1) < y + STAND_HEAD_M && hi(b, 1) > y + 0.05);
+      if (b) errors.push(`${run.id}: no way ${where === "foot" ? "on at its foot" : "off at its top"} (${r.join(", ")}): ${b.id} is in the way`);
+    }
   }
   for (const { f, boxes } of steps) {
     boxes.forEach((s, i) => {

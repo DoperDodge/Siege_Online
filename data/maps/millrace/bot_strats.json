@@ -593,6 +593,7 @@
             },
             {
               "gadget": "deployable_shield",
+              "near": "2F.o037.bar",
               "room": "2F_DRAFTING"
             }
           ],
@@ -601,7 +602,7 @@
               "room": "2F_PAYROLL"
             },
             {
-              "room": "2F_DRAFTING"
+              "room": "2F_ARCHIVE"
             }
           ],
           "pulse": [

@@ -43,9 +43,24 @@ The game as it was before this is kept, untouched, on the `siege_online_classic`
 2. **Murmur**: Z raises the Blood Oxygen Sensor; look toward the attacker dummy (through a wall too).
 3. **Hail**: pick the Ballistic Shield as his primary; **Twain**: her idle frame behind its new barrier.
 
+### In progress (R2: Millrace, our own map)
+- **The map** (data/maps/millrace, its DESIGN.md): a closed textile mill by a river: the mill block over a basement,
+  the office wing, the boiler house joined to the cellars by a tunnel, the yard, and the dry millrace along the west.
+  Four sites (Boiler Room / Coal Store, Spinning / Mending, Dispatch / Bale Store, Drafting / Payroll), three attacker
+  spawns. Version 2 (after Ulo's walk): smaller rooms and corridors instead of the big open halls, nothing in front of
+  the doors and windows, spawns tucked out of sight lines.
+- **Bots on Millrace**: every staircase now works both ways for them. On Millrace none could be climbed; Oregon's
+  worked only because their flights had an open side. Two flights started against a wall and now have room at the
+  bottom, and the map generator refuses a staircase without room to step on and off (D-184). The bot soak plays a
+  round on each of the four sites with no bot stuck. Fixes it took on the way: attackers no longer change their guess
+  at the site back and forth, drones route only where a drone can drive, and a bot back from its drone sets off
+  straight away.
+- **How to test now**: the main menu's **Millrace** card (the greybox lab on Millrace; Go to, the free camera, the plan
+  view), or **Millrace online** to walk it with a friend. Matches and Bot Training still play Oregon until the next step.
+
 ### Next
-- **R2**: an original map in place of Oregon: a building of the same kind (a basement and two floors, four bomb sites,
-  lots of destructible walls and floors, several ways in) with its own floor plan, art and bot plans.
+- **R2, the rest**: matches and Bot Training on Millrace; the tests moved from Oregon to Millrace; Oregon taken off this
+  branch.
 - **R3**: eight new operators of our own (a remote breacher, an EMP specialist, an electronics scout, a full-body
   shield, electrified defences, a shield with a stun prod, a door trapper, a medic).
 - **R4**: the code's internal names and the docs brought in line.

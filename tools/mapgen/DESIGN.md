@@ -578,7 +578,9 @@ explicit metres of a pillar), with its spans sorted:
   greedy rectangles (the panel drawing uses the same algorithm, D-069(3)). Expect 20–60 rectangles per storey.
 - **Stairwell holes**: each stair run cuts its `hole` (default: the shaft minus the strip where the top flight
   arrives) from the slab above; the check is headroom, not shape: every step needs at least `headroomM`
-  (2.0 m) of clearance under any slab, else the run errors.
+  (2.0 m) of clearance under any slab, else the run errors. A run also needs a way on and off: a strip a body wide
+  (0.6 m) from its first riser 0.9 m out, and from its top 0.9 m on, clear of everything from the floor to head
+  height (D-184: two of Millrace's first flights started against a wall).
 - **Soft floors**: each region (world u) minus wall footprints and hatches, split into rectangles, then each
   rectangle into an even grid of tiles no larger than `tileMaxM` (4 m), sized in whole joist spacings (0.4 m)
   where possible so the joist pattern doesn't jump at seams. Each tile is a SOFT_FLOOR panel, slab-thick

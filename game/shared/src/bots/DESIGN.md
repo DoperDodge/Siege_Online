@@ -63,6 +63,9 @@ like the map generator's walk graph (tools/mapgen/walkgraph.ts, its head start),
   standing body fits (else bots crouch through it).
 - **Edges**: a node joins its 8 neighbours' nodes within a step (0.35 m), diagonals only where both sides join (no
   corner cutting). Computed when asked, from the heights, so rebuilding a chunk never leaves stale edges in another.
+  A ramp's nodes and flat ones join only where they're level (0.12 m). A staircase's nodes (on its steps or its
+  invisible slope: the level tags both) join each other by a step whichever is which, and join the floor by a step only
+  along the flight's run, at its ends: never from the floor beside it onto its side (D-184).
 - **Links**, each with the input that takes it: **vault** (over a sill, a rail, a hole's lip; onto a ledge) found by
   running the movement code's own vault planner from candidate nodes facing vaultable boxes; **ladder** (up and down);
   **drop** (off a ledge, through a hatch or floor hole: one way, ≤ 3.4 m, the fall's damage in its cost); **rappel**
@@ -71,7 +74,8 @@ like the map generator's walk graph (tools/mapgen/walkgraph.ts, its head start),
   reinforced wall or hatch (a hard breach): only plans that allow it use them (§6).
 - **Search**: the grid is cut into **chunks** of 16 × 16 columns (4 m); each chunk's nodes split into **regions**
   (connected within the chunk). A* runs over regions (a few thousand), then over nodes inside the regions on that
-  route (and their neighbours), then the path is pulled straight where a straight walk stays on nodes. Searches are
+  route (and their neighbours), then the path is pulled straight where a straight walk stays on nodes (and crosses
+  no staircase's edge the grid doesn't join). Searches are
   budgeted per tick (a bot waits a tick or two for a long one).
 - **Following** (`bots/nav/follow.ts`): yaw and forward/strafe toward the next point (the body can look one way and
   walk another), crouch on crouch-only nodes, each link's input at its start (face the sill and Vault; Interact at a

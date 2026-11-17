@@ -608,6 +608,9 @@ export class DefensePlanner {
   }
 }
 
+/** How much nearer (m) another site's bomb must be before a bot changes its guess at the site (AttackPlanner.site). */
+const GUESS_KEEP_M = 5;
+
 /**
  * An attacking team's planner for one round (Phase 9 M5). Prep: each bot's drone toward a bomb of a site it could be
  * (spread over the four, all to the found one once it's found). Action: each bot in through its spawn group's way in
@@ -633,20 +636,30 @@ export class AttackPlanner {
     private readonly ctrlOf: (memberId: number) => number,
   ) {}
 
-  /** The site, as the attackers know it: found, or a guess (the nearest to the bot's spawn) until then. */
-  private site(from: Vec3 | null): string | null {
+  /**
+   * The site, as bot `id` knows it: found, or a guess until then, the one whose bomb is nearest it; it keeps its guess
+   * until another's is GUESS_KEEP_M nearer. (Without that, a bot walking along the line halfway between two sites'
+   * bombs swapped its guess back and forth, and its jobs with it, every few ticks: it walked one way and the other.)
+   */
+  private site(id: number, from: Vec3 | null): string | null {
     const level = this.sim.level.def;
     if (this.match.siteRevealed && this.match.site) return this.match.site;
-    if (!from) return level.sites[0]?.id ?? null;
+    const had = this.guesses.get(id) ?? null;
+    if (!from) return had ?? level.sites[0]?.id ?? null;
+    const near = (st: (typeof level.sites)[number]) => Math.min(...st.bombs.map((b) => Math.hypot(b.pos[0] - from[0], b.pos[1] - from[1], b.pos[2] - from[2])));
     let best: string | null = null;
     let bestD = Infinity;
-    for (const st of level.sites)
-      for (const b of st.bombs) {
-        const d = Math.hypot(b.pos[0] - from[0], b.pos[1] - from[1], b.pos[2] - from[2]);
-        if (d < bestD) [best, bestD] = [st.id, d];
-      }
+    for (const st of level.sites) {
+      const d = near(st);
+      if (d < bestD) [best, bestD] = [st.id, d];
+    }
+    const kept = had ? level.sites.find((st) => st.id === had) : undefined;
+    if (kept && near(kept) <= bestD + GUESS_KEEP_M) return had;
+    if (best) this.guesses.set(id, best);
     return best;
   }
+  /** Each bot's guess at the site (site()). */
+  private readonly guesses = new Map<number, string>();
 
   private body(id: number): { pos: Vec3; pawnId: number } | null {
     const ctrlId = this.ctrlOf(id);
@@ -677,7 +690,7 @@ export class AttackPlanner {
       const nearest = this.bots.map((b) => ({ b, at: this.body(b) })).filter((x) => x.at).sort((a, b) => dist(a.at!.pos, d) - dist(b.at!.pos, d))[0];
       if (nearest?.b === id) return { kind: "pickup", at: [d[0], d[1], d[2]] };
     }
-    const site = this.site(me?.pos ?? null);
+    const site = this.site(id, me?.pos ?? null);
     if (!site) return null;
     const stInfo = level.sites.find((x) => x.id === site)!;
     // The carrier plants as soon as it's in one of the site's rooms (a spot clear of the room's edges).
