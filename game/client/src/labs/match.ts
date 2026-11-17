@@ -1,11 +1,11 @@
-// A match on Oregon (Phase 6, match/DESIGN.md §11): the game client (labs/common/lab.ts) with `match` on, in a room
+// A match on Millrace (Phase 6, match/DESIGN.md §11; the map since Project Redmond R2): the game client (labs/common/lab.ts) with `match` on, in a room
 // the Play page (play.html) created or joined; the lobby, planning, HUD, scoreboard and summaries are matchFeatures.ts.
 import { startLab } from "./common/lab.js";
 import { matchFeatures } from "./matchFeatures.js";
 
 await startLab({
-  levelId: "oregon",
-  title: "Match · Oregon",
+  levelId: "millrace",
+  title: "Match · Millrace",
   page: "/play.html",
   goTo: [],
   help: {

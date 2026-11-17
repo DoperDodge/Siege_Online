@@ -141,7 +141,7 @@ try {
   };
 
   // ---- offline: walk in through the Main Entrance
-  const off = await open(`${BASE}/labs/oregon.html?autotest=1&lowgfx&op=sledge`, { width: 960, height: 540 });
+  const off = await open(`${BASE}/labs/oregon.html?map=oregon&autotest=1&lowgfx&op=sledge`, { width: 960, height: 540 });
   const start = await own(off);
   result.start = { x: start.x, z: start.z };
   result.checks.startsOutsideTheMainEntrance = Math.abs(start.x - 37.95) < 0.3 && start.z > DOOR_Z + 1;
@@ -474,7 +474,7 @@ try {
   await menu(off, false);
   result.offline.spawns = [];
   for (const sp of spawnSpots) {
-    const entry = gotoEntries.find(([, text]) => text === `Attacker spawn ${sp.group.replace("_", " ")}`);
+    const entry = gotoEntries.find(([, text]) => text === `Attacker spawn ${sp.group.replace(/_/g, " ").replace(/(?<=\w)(\w*)/g, (w) => w.toLowerCase())}`);
     if (!entry) {
       result.offline.spawns.push({ group: sp.group, entry: false });
       continue;
@@ -599,7 +599,7 @@ try {
   await off.close();
 
   // ---- shadows on: a lost and restored WebGL context draws the shadow map again
-  const gfx = await open(`${BASE}/labs/oregon.html?autotest=1&op=sledge`);
+  const gfx = await open(`${BASE}/labs/oregon.html?map=oregon&autotest=1&op=sledge`);
   await sleep(500);
   const drawsBefore = await gfx.evaluate(() => window.__lab.shadowDraws);
   // Chrome allows a restore only once the lost event has been handled (three prevents its default), so the
@@ -631,9 +631,9 @@ try {
   await gfx.close();
 
   // ---- online: what one player breaks, the other sees
-  const a = await open(`${BASE}/labs/oregon.html?online&autotest=1&lowgfx&op=sledge&lag=${LAG}`);
+  const a = await open(`${BASE}/labs/oregon.html?map=oregon&online&autotest=1&lowgfx&op=sledge&lag=${LAG}`);
   const room = (await a.evaluate(() => window.__lab.net)).room;
-  const b = await open(`${BASE}/labs/oregon.html?room=${room}&autotest=1&lowgfx&op=mute&lag=${LAG}`);
+  const b = await open(`${BASE}/labs/oregon.html?map=oregon&room=${room}&autotest=1&lowgfx&op=mute&lag=${LAG}`);
   await a.waitForFunction(() => window.__lab.net.players.length === 2, null, { timeout: 10000 });
   await a.evaluate(() => window.__lab.teleport(37.95, 0, 43.2, 0));
   await b.evaluate(() => window.__lab.teleport(39.5, 0, 46, 30));

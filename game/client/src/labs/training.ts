@@ -1,7 +1,7 @@
 // Training feedback in the browser (Phase 9 M9, bots/DESIGN.md §11; PLAN §15.5): your round report, drawn on the
 // round's end screen, and the stats kept from every report in this browser (localStorage), per drill and per operator,
 // shown on the Play page so you can see yourself improve.
-import type { GameData, RoundReport } from "@redmond/shared";
+import type { GameData, LevelDef, RoundReport } from "@redmond/shared";
 import { escapeHtml } from "../ui/dom.js";
 
 /** Where the stats live, and how many of your last rounds are kept for the "lately" strips. */
@@ -79,8 +79,7 @@ export function saveReport(r: RoundReport, now = Date.now()): TrainingStats {
 const time = (s: number) => (s < 60 ? `${s.toFixed(1)} s` : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`);
 
 /** What a report says, for the round's end screen: your death and who saw you first, damage, the objective, utility, the drill's numbers. */
-export function reportHtml(r: RoundReport, data: GameData): string {
-  const level = data.levels.get("oregon");
+export function reportHtml(r: RoundReport, data: GameData, level: LevelDef | undefined): string {
   const room = (id: string | null) => (id ? (level?.rooms.find((x) => x.id === id)?.callout ?? id) : "outside");
   const weapon = (id: string) => data.weapons.get(id)?.name ?? data.gadgets.get(id)?.name ?? id;
   const gadget = (id: string) => data.gadgets.get(id)?.name ?? id;

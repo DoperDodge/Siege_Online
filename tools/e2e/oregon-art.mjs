@@ -115,7 +115,7 @@ async function load(gfx, refuse = "") {
   page.on("pageerror", (e) => errors.push(String(e)));
   page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
   await page.addInitScript(watchGl, refuse);
-  await page.goto(`${BASE}/labs/oregon.html?autotest=1&gfx=${gfx}&op=sledge`);
+  await page.goto(`${BASE}/labs/oregon.html?map=oregon&autotest=1&gfx=${gfx}&op=sledge`);
   await page.waitForFunction(() => window.__lab?.net?.ready, null, { timeout: 60000 });
   await page.waitForFunction(() => window.__lab.view.art?.ready, null, { timeout: WAIT.art, polling: 250 });
   console.log(`  ${name}: the art is in at ${at()}`);

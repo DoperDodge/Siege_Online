@@ -1,5 +1,5 @@
 {
-  "_doc": "A Bot Training drill (PLAN §15.1; bots/DESIGN.md §10; Phase 9 M8): Bot Training's rules with a `drill` block the match director reads to set rounds up; the host can still change sizes, difficulty and the rest in the lobby. Clear a floor: five defender bots spread over Oregon's first floor, one a room, no defuser; you go in and clear it before the time's up. Score: time to clear, deaths (ours).",
+  "_doc": "A Bot Training drill (PLAN §15.1; bots/DESIGN.md §10; Phase 9 M8): Bot Training's rules with a `drill` block the match director reads to set rounds up; the host can still change sizes, difficulty and the rest in the lobby. Clear a floor: five defender bots spread over the map's first floor, one a room, no defuser; you go in and clear it before the time's up. Score: time to clear, deaths (ours).",
   "_season": "Y11S3",
   "_unverified": [
     "reverseFriendlyFire.thresholdHp",

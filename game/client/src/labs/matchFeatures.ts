@@ -847,7 +847,7 @@ export function matchFeatures(lab: LabApi): void {
     banner.classList.toggle("hidden", !showBanner);
     if (showBanner) {
       const mine = me ? me.team === last.winner : null;
-      const report = lastReport && lastReport.round === last.round ? reportHtml(lastReport, lab.data) : "";
+      const report = lastReport && lastReport.round === last.round ? reportHtml(lastReport, lab.data, lab.sim.level.def) : "";
       const html = `<div class="title team-${last.winner}">${TEAM_NAMES[last.winner].toUpperCase()} WINS ROUND ${last.round}</div><div class="why">${reasonText(last)}</div>${
         mine === null ? "" : `<div class="you ${mine ? "won" : "lost"}">${mine ? "Round won" : "Round lost"}</div>`
       }${report}`;

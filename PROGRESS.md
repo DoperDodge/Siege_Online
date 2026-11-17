@@ -55,12 +55,13 @@ The game as it was before this is kept, untouched, on the `siege_online_classic`
   round on each of the four sites with no bot stuck. Fixes it took on the way: attackers no longer change their guess
   at the site back and forth, drones route only where a drone can drive, and a bot back from its drone sets off
   straight away.
-- **How to test now**: the main menu's **Millrace** card (the greybox lab on Millrace; Go to, the free camera, the plan
-  view), or **Millrace online** to walk it with a friend. Matches and Bot Training still play Oregon until the next step.
+- **Matches and Bot Training are on Millrace now**: Play → Play vs bots (offline), a drill, or a match on the server.
+  The greybox lab opens Millrace too (Oregon's still there as the menu's Oregon cards until it's taken off).
+- **How to test now**: Play → **Play vs bots**, pick a site in the lobby and play a round; or the main menu's
+  **Millrace** card (the greybox lab: Go to, the free camera, the plan view), or **Millrace online** with a friend.
 
 ### Next
-- **R2, the rest**: matches and Bot Training on Millrace; the tests moved from Oregon to Millrace; Oregon taken off this
-  branch.
+- **R2, the rest**: the tests that still use Oregon moved to Millrace, then Oregon taken off this branch.
 - **R3**: eight new operators of our own (a remote breacher, an EMP specialist, an electronics scout, a full-body
   shield, electrified defences, a shield with a stun prod, a door trapper, a medic).
 - **R4**: the code's internal names and the docs brought in line.

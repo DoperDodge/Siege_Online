@@ -3,10 +3,10 @@
 // joins by its code. In the lobby the joiner lands on the other team, the host sets the rules (one field through its
 // input, and Blue to attack first through its select), both ready up and the host starts. Each team bans one of the
 // other side's operators; on the planning screen the banned one is greyed out, each player picks an operator (the
-// defender one, then 160 ms later another, over a slow link: the second stays), the defender votes for the Dining site
-// and the attacker picks the B Street spawn and takes the defuser. In prep the defender is at that site and the
+// defender one, then 160 ms later another, over a slow link: the second stays), the defender votes for the Dispatch site
+// and the attacker picks the B Rail Siding spawn and takes the defuser. In prep the defender is at that site and the
 // attacker drives their first drone from the spawn (the defender's page has it), and the defender goes round the
-// cameras; in action the attacker is at B Street carrying the defuser, pings (their page marks it, the defender's has
+// cameras; in action the attacker is at B Rail Siding carrying the defuser, pings (their page marks it, the defender's has
 // nothing) and throws their second drone (6); the defenders win on time, the banner says so, the sides swap for round 2
 // (where the new defender places a Bulletproof Camera and watches it), and after it the summary has both rounds; the
 // host takes everyone back to the lobby. 2v3: five players (three on Blue, two on Orange; some never pick and get an
@@ -28,11 +28,11 @@ const SERVER = fileURLToPath(new URL("../../game/server/dist/main.js", import.me
 const shot = (name) => join(OUT, name);
 mkdirSync(OUT, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const lvl = JSON.parse(readFileSync(fileURLToPath(new URL("../../data/maps/oregon/level.json", import.meta.url)), "utf8"));
+const lvl = JSON.parse(readFileSync(fileURLToPath(new URL("../../data/maps/millrace/level.json", import.meta.url)), "utf8"));
 /** Phases (match/match.ts). */
 const P = { Lobby: 0, Ban: 1, Planning: 2, Prep: 3, Action: 4, PostPlant: 5, RoundEnd: 6, MatchEnd: 7 };
-const SITE = "SITE_DINING";
-const SPAWN = "B_STREET";
+const SITE = "SITE_DISPATCH";
+const SPAWN = "B_RAIL_SIDING";
 
 const server = spawn(process.execPath, [SERVER], { env: { ...process.env, PORT: String(PORT) }, stdio: ["ignore", "ignore", "inherit"] });
 const result = { checks: {}, oneVsOne: {}, twoVsThree: {} };
@@ -279,7 +279,7 @@ try {
   await att1.screenshot({ path: shot("match-prep-attacker.png") });
   await def1.screenshot({ path: shot("match-prep-defender.png") });
 
-  // Action: the attacker at B Street, carrying the defuser, told so on the HUD.
+  // Action: the attacker at B Rail Siding, carrying the defuser, told so on the HUD.
   await phase(a, P.Action, 30000);
   // Their body (in prep they were their drone, which has no loadout: a wait on any pawn of theirs reads it on a page
   // the body hasn't reached yet).
@@ -386,7 +386,7 @@ try {
   await host.waitForFunction(() => window.__match.view.players.every((p) => p.ready), null, { timeout: 10000 });
   await host.click(".match-screen [data-act=start]");
   await phase(host, P.Planning, 15000);
-  // Some pick, the rest get one when the timer runs out; defenders vote for the Dining site.
+  // Some pick, the rest get one when the timer runs out; defenders vote for the Dispatch site.
   const sides = await Promise.all(pages.map(async (p) => me(await view(p)).side));
   const defenders = pages.filter((_, i) => sides[i] === 1);
   await pages[0].click(".match-screen [data-act=op]:not([disabled])");
@@ -413,7 +413,7 @@ try {
   await holdUntil(watcher, { buttons: OBSERVE }, () => window.__lab.net.drone === 0);
   result.twoVsThree.feedList = { mateDrones, onOwn, onMates };
   result.checks.attackerWatchesATeammatesDrone = onMates;
-  // A defender shoots a teammate in the head: the two first defender spawns at the Dining site share the room. Down the
+  // A defender shoots a teammate in the head: the two first defender spawns at the Dispatch site share the room. Down the
   // sights, once they are fully up: a bullet then goes where the view points (from the hip, more than half the shots at
   // 3.6 m miss, and on a slow runner the tries ran out before one landed).
   const [shooter, victim] = defenders;
