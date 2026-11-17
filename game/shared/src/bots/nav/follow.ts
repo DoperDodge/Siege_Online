@@ -147,13 +147,16 @@ export class PathFollower {
     this.retries = 0;
     this.taking = null;
     this.reroute = false;
+    // A new goal's walk starts its stuck clock afresh (one stall must not count against every goal after it).
+    this.anchor = null;
   }
 
-  /** Given up on the goal (stuck, or no way there). */
+  /** Given up on the goal (stuck, or no way there). The next walk starts its stuck clock afresh. */
   private fail(): void {
     this.state = FollowState.Failed;
     this.failedGoal = this.goal;
     this.failedAt = this.ticks;
+    this.anchor = null;
   }
 
   stop(): void {
@@ -278,8 +281,9 @@ export class PathFollower {
     const len = Math.hypot(dx, dz);
     const way = Math.atan2(-dx, -dz);
     // Stuck: the body trying to walk but not getting half a metre on (whatever the waypoints: a new route from the
-    // same place is still stuck), for how long.
-    const now = this.tickCount++;
+    // same place is still stuck), for how long. (The simulation's ticks: counting only the ticks it walked, a pause in
+    // walking never showed as one, and a stall carried over to every goal after it: the Oregon soak's frozen Patch.)
+    const now = this.tickedAt;
     // (Across the floor: bobbing up and down, a jump or a vault tap that goes nowhere, isn't getting on.)
     if (!this.anchor || Math.hypot(pos[0] - this.anchor[0], pos[2] - this.anchor[2]) > UNSTUCK_M || now - this.lastWalk > 2) {
       this.anchor = [pos[0], pos[1], pos[2]];
@@ -316,7 +320,6 @@ export class PathFollower {
     if (this.sprint && !low && !side && look === null && Math.abs(rel) < 0.3 && len > 2) buttons |= Btn.Sprint;
     return { forward, strafe, yaw, pitch: null, buttons, stance: low || side ? Stance.Crouch : Stance.Stand };
   }
-  private tickCount = 0;
   /** Its ticks (every tick asked, walking or not). */
   private ticks = 0;
 

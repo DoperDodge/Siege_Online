@@ -25,6 +25,7 @@ import { BotRng } from "../bots/rng.js";
 import { DUMMY_STANCE, dummyInput } from "../lab/dummies.js";
 import { spawnAmmo, type Pawn, type PlayerController } from "../player/pawn.js";
 import { eyePose } from "../player/hitboxes.js";
+import { isDowned } from "../player/downed.js";
 import { currentHeight } from "../player/stance.js";
 import { knockShield, shieldHit, shieldUp } from "../player/shield.js";
 import { Btn, GadgetAct, Hand, PawnKind, PawnMode, type InputCmd, type PawnState } from "../player/types.js";
@@ -50,6 +51,7 @@ import { mirrorOf, sightPast } from "../gadgets/mirror.js";
 import { hackTargetFor, hackTargetPos, kludgeOf, type HackTarget, type KludgeData } from "../gadgets/hack.js";
 import { pawnJammed, pointJammed } from "../gadgets/jammers.js";
 import { heartOf } from "../gadgets/sensor.js";
+import { patchWorking, startPatch, stopPatch, type PatchData } from "../gadgets/patch.js";
 import { GadgetServer, type IngredientStage } from "../gadgets/serve.js";
 import { blastEffects, isCloud, pawnDistance } from "../gadgets/blast.js";
 import { hammerOps } from "../gadgets/hammer.js";
@@ -1737,6 +1739,89 @@ export class Room implements DirectorHost {
     this.sim.gadgets.add({ kind: kindOf(d.id), owner: victim.ownerId ?? 0, team: victim.team, pos: [s.x, floor + d.sizeM[1] / 2, s.z], yaw: s.yaw, vel: [0, 0, 0], flags: GFlag.OnFloor, panel: -1, launchTick: 0, fuseEnd: 0, signalEnd: 0, readyAt: 0, offEnd: 0, seq: 0 });
   }
 
+  /** Tonic's monitor (R3), by his body's pawn id: the teammate his patch is working on (one at a time), his keys as last held. */
+  private readonly patchState = new Map<number, { mate: number; fire: boolean; ability: boolean }>();
+
+  /**
+   * Tonic's Second Wind (R3, gadgets/R3_OPERATORS.md §2, gadgets/patch.ts): with his monitor up (in hand and ready, his
+   * view his own), Fire sets off the patch of the body he's picked on it (a teammate, himself, or Auto: a downed
+   * teammate, the nearest to bleeding out first, else the most hurt, else himself if he's hurt). A teammate's only while
+   * no other teammate's is working; his own any time, and when he's down his ability key sets it off. One of his patches
+   * each; none while an EMP has him. Twice a second (and when he sets one off) his client hears his team as his monitor
+   * lists it.
+   */
+  private patches(applied: ReadonlyMap<number, { m: Member; input: QueuedInput }>) {
+    const tick = this.sim.tick;
+    for (const m of this.members.values()) {
+      const c = m.ctrl;
+      const body = c ? this.sim.pawns.get(c.possessedPawnId) : undefined;
+      const k = body && body.kind === PawnKind.Body ? slotGadget(this.sim.data, body.loadout, 2)?.patch : undefined;
+      if (!c || !body || !k) continue;
+      let st = this.patchState.get(body.id);
+      if (!st) {
+        st = { mate: 0, fire: false, ability: false };
+        this.patchState.set(body.id, st);
+      }
+      const s = body.state;
+      const team = this.patchBodies(body);
+      const mate = st.mate ? this.sim.pawns.get(st.mate) : undefined;
+      if (!mate || mate.state.mode === PawnMode.Dead || !patchWorking(mate.state)) st.mate = 0;
+      if (tick % 32 === 0) this.tellVitals(m, team, st.mate !== 0);
+      // His keys as of an input of his this step (a catch-up step for someone else has none).
+      const input = applied.get(c.id)?.input;
+      if (!input) continue;
+      const fire = (input.cmd.buttons & Btn.Fire) !== 0;
+      const ability = (input.cmd.buttons & Btn.Ability) !== 0;
+      const firePressed = fire && !st.fire;
+      const abilityPressed = ability && !st.ability;
+      st.fire = fire;
+      st.ability = ability;
+      if (s.g2 <= 0 || s.jammed > 0 || pawnJammed(this.sim, body) || s.mode === PawnMode.Dead) continue;
+      if (s.mode === PawnMode.Downed) {
+        // Down: the ability key sets his own patch off (it gets him up).
+        if (abilityPressed && !patchWorking(s)) this.setPatch(m, body, body, k, team, st);
+        continue;
+      }
+      const up = s.hand === Hand.Ability && s.gAct !== GadgetAct.Equip && c.cam === 0 && c.drone === 0 && !c.shellCam;
+      if (!firePressed || !up) continue;
+      const pick = this.jegeoPicks.get(c.id);
+      const target = pick?.kind === "patch" ? (team.find((p) => p.id === pick.pawnId) ?? null) : autoPatch(body, team, st.mate !== 0);
+      if (!target || target.state.mode === PawnMode.Dead || patchWorking(target.state)) continue;
+      if (target.id !== body.id && st.mate !== 0) continue; // one teammate's at a time
+      this.setPatch(m, body, target, k, team, st);
+    }
+  }
+
+  /** A patch of Tonic's set off on `target` (R3): one of his gone, both bodies' owners corrected, his monitor told. */
+  private setPatch(m: Member, tonic: Pawn, target: Pawn, k: PatchData, team: Pawn[], st: { mate: number }) {
+    startPatch(k, target.state);
+    tonic.state.g2--;
+    if (target.id !== tonic.id) st.mate = target.id;
+    this.force(m);
+    const owner = target.ownerId !== null ? this.memberOf(target.ownerId) : null;
+    if (owner && owner !== m) this.force(owner);
+    this.reporter.gadget(m.ctrl?.id ?? 0, "second_wind");
+    this.tellVitals(m, team, st.mate !== 0);
+  }
+
+  /** Tonic's team as his monitor lists it (R3): every body of his side's, his own first, the idle shell left out. */
+  private patchBodies(tonic: Pawn): Pawn[] {
+    const out: Pawn[] = [tonic];
+    for (const c of this.sim.controllers.values()) {
+      const p = this.sim.pawns.get(c.possessedPawnId);
+      if (p && p !== tonic && p.kind === PawnKind.Body && p.team === tonic.team && !isIdleShell(this.sim, p)) out.push(p);
+    }
+    return out;
+  }
+
+  private tellVitals(m: Member, team: Pawn[], busy: boolean) {
+    m.events.push({
+      kind: "vitals",
+      busy,
+      bodies: team.map((p) => ({ pawnId: p.id, ctrl: p.ownerId ?? 0, hp: p.state.mode === PawnMode.Dead ? 0 : isDowned(p.state) ? Math.ceil(p.state.downHp) : p.state.hp, maxHp: p.state.maxHp, down: isDowned(p.state), patched: patchWorking(p.state) })),
+    });
+  }
+
   /** Dokkaebi's pick on her tablet (a message of hers): checked when she presses Fire. */
   onJegeoPick(memberId: number, pick: JegeoPick): void {
     const c = this.members.get(memberId)?.ctrl;
@@ -2168,6 +2253,8 @@ export class Room implements DirectorHost {
   private dseg(team: number, at: Vec3, radiusM: number, seconds: number) {
     const hit = this.gadgetServer.emp(team, at, radiusM, seconds);
     for (const p of hit.pawns) {
+      // A patch working on the body stops (Tonic's Second Wind, R3): down, it bleeds again.
+      stopPatch(p.state);
       const owner = p.ownerId !== null ? this.memberOf(p.ownerId) : null;
       if (owner) this.force(owner);
     }
@@ -2246,6 +2333,7 @@ export class Room implements DirectorHost {
     }
     this.jegeoState.clear();
     this.jegeoPicks.clear();
+    this.patchState.clear();
     this.jegeoCooldown.clear();
     this.spottedUntil.clear();
     this.phonesHacked.clear();
@@ -2389,6 +2477,7 @@ export class Room implements DirectorHost {
     this.hacks(applied);
     this.overheating();
     this.jegeo(applied);
+    this.patches(applied);
     this.shellShields();
     for (const e of this.sim.events) {
       if (e.kind === "ping") this.ping(e.ctrlId, e.pos, e.gadget, e.heart ?? false);
@@ -2681,3 +2770,17 @@ export class Room implements DirectorHost {
 
 /** Seconds of simulated time per room tick (for callers pacing a room loop). */
 export const ROOM_TICK_SECONDS = DT;
+
+/**
+ * Tonic's Auto pick (R3): a downed teammate with no patch working, the nearest to bleeding out first; else the teammate
+ * most hurt (by the share of his most he has); else Tonic himself if he's hurt. With a teammate's patch already working
+ * (`busy`), only himself.
+ */
+export function autoPatch(tonic: Pawn, team: readonly Pawn[], busy: boolean): Pawn | null {
+  const others = busy ? [] : team.filter((p) => p.id !== tonic.id && p.state.mode !== PawnMode.Dead && !patchWorking(p.state));
+  const down = others.filter((p) => p.state.mode === PawnMode.Downed).sort((a, b) => a.state.downHp - b.state.downHp || a.id - b.id);
+  if (down.length) return down[0];
+  const hurt = others.filter((p) => !isDowned(p.state) && p.state.hp < p.state.maxHp).sort((a, b) => a.state.hp / a.state.maxHp - b.state.hp / b.state.maxHp || a.id - b.id);
+  if (hurt.length) return hurt[0];
+  return tonic.state.hp < tonic.state.maxHp && !patchWorking(tonic.state) ? tonic : null;
+}

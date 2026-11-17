@@ -221,6 +221,13 @@ export interface PawnState {
   reviveTicks: number;
   reviveTarget: number;
   revivedBy: number;
+  /**
+   * Tonic's Second Wind on this body (R3, gadgets/patch.ts): health still to come from a patch healing it, and ticks
+   * into that heal; ticks left until a patch gets it up from down.
+   */
+  healLeft: number;
+  healTicks: number;
+  patchTicks: number;
   // reinforcing and barricades (Phase 4 M6; destruction/deploy.ts): what the body is putting up or taking
   // down (DeployKind, 0 = nothing), on which panel and section, and for how many ticks it has held Interact
   deployKind: number;

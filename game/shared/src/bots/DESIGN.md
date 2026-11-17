@@ -176,11 +176,16 @@ One **commander** per side, server-side, with the same knowledge rules (its team
 | Sentry | Barbed Wire + Deployable Shield by default, on the plan's spots |
 | Pulse | Roams above or below the site, scans through the floor and pings what it finds |
 | Lesion | Gu mines on stair bottoms, hatch drops and doors (the plan's spots) |
+| Tonic (R3) | His monitor up and Fire (its Auto pick) when a teammate's down, or (out of a fight) one's badly hurt, or he is; down, the ability key gets him up |
 | Ohm (R3) | His Brownout Pistol at the plan's first hard breach wall from its near side, before the push: a round at each device his scope marks behind it, else two at the wall |
 | Generic | Frags and stuns into rooms before entry, smokes for the plant, claymores on flanks; defenders' wire, shields, Nitro Cells (thrown at heard attackers), alarms, Bulletproof Cameras, Observation Blockers per the plan |
 
 "Counter my pick" (Bot Training): the bots' side picks the roster's answer to the human's operator (Mute against
 Thermite, Brava against Mute, …: a table in data/bots/picks.json, ours).
+
+Getting by each other (R3, D-189): a bot standing still beside a teammate who's been trying to move and not getting on
+(a second and a half all told) steps away from him for a moment; the follower's stuck clock runs on the simulation's
+ticks and starts afresh for each goal and after giving up.
 
 As built (M7, D-164): one motor, bots/use.ts, uses any gadget by the keys (place, throw or lob on a ballistic arc,
 swing, hold, detonate from cover); the planners hand out the plan's device spots (defense, prep) and breaches (attack,

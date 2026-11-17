@@ -18,6 +18,7 @@ import { slotGadget } from "../gadgets/hands.js";
 import { kindId, kindOf } from "../gadgets/kinds.js";
 import { hackTargetFor, kludgeOf, type KludgeData } from "../gadgets/hack.js";
 import { heartbeats, heartOf } from "../gadgets/sensor.js";
+import { patchWorking } from "../gadgets/patch.js";
 import { GFlag } from "../gadgets/table.js";
 import type { GameData } from "../data/load.js";
 import type { Sim } from "../sim.js";
@@ -61,6 +62,8 @@ export interface BotWorld {
 
 /** How often (ticks) a bot looks at the planning screens. */
 const CHOOSE_EVERY = 8;
+/** A teammate stuck beside a standing bot this long (s, pauses leaking it away at half the rate) makes it step aside (makeWay). */
+const MAKE_WAY_S = 1.5;
 /** On a team with people, bots pick once those have, or this long before the timer ends (s): people choose first. */
 const PICK_LATE_S = 5;
 
@@ -225,18 +228,72 @@ export class Bot {
     this.heard.length = 0;
     // Who it has just noticed (in sight), for the round report.
     if (w.noticed) for (const c of this.senses.contacts.values()) if (c.detected && c.spottedAt === now && c.kind === PawnKind.Body) w.noticed(c.pawnId);
+    // Tonic down (R3): his own patch gets him up, off the ability key (pressed now and then: the room takes a press).
+    if (s.mode === PawnMode.Downed && s.g2 > 0 && !patchWorking(s) && slotGadget(w.sim.data, pawn.loadout, 2)?.patch) return { ...this.still(s), buttons: now % 8 < 4 ? Btn.Ability : 0 };
     // Down: nothing a downed body can usefully press (crawling to cover comes with the plans).
     if (s.mode === PawnMode.Downed || s.mode === PawnMode.Knocked) return this.still(s);
     // Skopós between shells: the keys of the swap and nothing else.
     const swapping = this.swapStep(ctrl, s, now);
     if (swapping) return swapping;
     if ((now + this.memberId) % 4 === 0) this.decide(w, pawn, ctrl, mates, d, now);
-    const input = this.hands(s, this.act(w, pawn, mates, d, now), now);
+    const input = this.makeWay(pawn, mates, this.hands(s, this.act(w, pawn, mates, d, now), now), now);
     this.asked = { yaw: input.yaw, pitch: input.pitch };
     return input;
   }
 
+  /** Stepping out of a teammate's way until this tick, which way (world x, z). */
+  private wayUntil = -1;
+  private wayDir: [number, number] = [0, 0];
+  /**
+   * Each teammate stuck beside it: where he was when it started counting, and for how long he's tried to move there
+   * without getting on (ticks: one more while he tries, half a tick less while he pauses, so a body that keeps trying
+   * still adds up).
+   */
+  private readonly stuckBeside = new Map<number, { x: number; z: number; t: number }>();
+
+  /**
+   * A teammate beside it trying to move and not getting on, for a second and a half all told (brushing past is
+   * nothing), while it stands still (holding a spot, waiting, looking about; not in a fight): it steps away from him for
+   * a moment, to give him room. Two bodies can't pass where one fits (the Oregon soak's dorms: a defender stood where
+   * another, cutting round a bunk's corner, needed to slide, and that one tried for good).
+   */
+  private makeWay(me: Pawn, mates: readonly Pawn[], input: BotInput, now: number): BotInput {
+    const s = me.state;
+    for (const p of mates) {
+      const near = Math.hypot(s.x - p.state.x, s.z - p.state.z) < 0.9 && Math.abs(p.state.y - s.y) < 0.5;
+      const trying = Math.hypot(p.state.vx, p.state.vz) > 0.5;
+      const e = this.stuckBeside.get(p.id);
+      if (near && trying) {
+        // Getting on (a quarter metre from where the count began): the count starts again.
+        if (!e || Math.hypot(p.state.x - e.x, p.state.z - e.z) > 0.25) this.stuckBeside.set(p.id, { x: p.state.x, z: p.state.z, t: 1 });
+        else e.t++;
+      } else if (e) {
+        e.t -= 0.5;
+        if (e.t <= 0 || !near) this.stuckBeside.delete(p.id);
+      }
+    }
+    for (const id of [...this.stuckBeside.keys()]) if (!mates.some((p) => p.id === id)) this.stuckBeside.delete(id);
+    if (this.doing === Doing.Fight || s.mode !== PawnMode.Walk) return input;
+    const stepping = now < this.wayUntil;
+    if (!stepping && (input.forward !== 0 || input.strafe !== 0)) return input;
+    if (!stepping) {
+      const stuck = mates.find((p) => (this.stuckBeside.get(p.id)?.t ?? 0) >= MAKE_WAY_S * TICK_HZ);
+      if (!stuck) return input;
+      this.stuckBeside.delete(stuck.id);
+      // Straight away from him (his room is where this body is).
+      const dx = s.x - stuck.state.x;
+      const dz = s.z - stuck.state.z;
+      const d = Math.hypot(dx, dz) || 1;
+      this.wayDir = [dx / d, dz / d];
+      this.wayUntil = now + Math.round(0.7 * TICK_HZ);
+    }
+    // The step as the keys give it: its way against the facing.
+    const rel = wrapAngle(Math.atan2(-this.wayDir[0], -this.wayDir[1]) - input.yaw);
+    return { ...input, forward: Math.cos(rel), strafe: -Math.sin(rel) };
+  }
+
   // ------------------------------------------------------------------ deciding
+
 
   /** Score what it could do and take the best (keeping the current one unless beaten by KEEP). */
   private decide(w: BotWorld, me: Pawn, ctrl: PlayerController, mates: readonly Pawn[], d: BotDifficulty, now: number) {
@@ -331,6 +388,15 @@ export class Bot {
    */
   private extras(w: BotWorld, me: Pawn, r: GadgetUse, input: BotInput | null, d: BotDifficulty, now: number): BotInput | null {
     const s = me.state;
+    // Tonic's monitor (R3): up and ready, Fire once (the room's Auto picks who), then put away.
+    if (r.task.tag === "patch" && input && r.ready(me)) {
+      if (r.firedAt >= 0) {
+        if (now - r.firedAt > 0.5 * TICK_HZ) r.finish(true);
+        return input;
+      }
+      r.firedAt = now;
+      return { ...input, buttons: input.buttons | Btn.Fire };
+    }
     if (r.task.tag === "jegeo" && input && r.ready(me)) {
       if (r.firedAt >= 0) {
         if (now - r.firedAt > 1.5 * TICK_HZ) r.finish(true);
@@ -433,6 +499,20 @@ export class Bot {
     const inSite = !!site && here !== null && site.rooms.includes(here);
     if (!inSite) this.cameFrom = [s.x, s.y, s.z];
     if (me.team === DEFENSE) {
+      // Tonic (R3): his monitor up and a patch set off (its Auto pick) when a teammate's down, or (out of a fight) one's
+      // badly hurt, or he is; never while a teammate's patch is working, which only his own can join.
+      const monitor = slotOf("second_wind");
+      if (monitor && left(monitor) > 0 && since("patch") > 2) {
+        const mates = [...sim.pawns.values()].filter((p) => p.team === me.team && p.id !== me.id && p.kind === PawnKind.Body && p.state.mode !== PawnMode.Dead);
+        const busy = mates.some((p) => patchWorking(p.state));
+        const down = !busy && mates.some((p) => p.state.mode === PawnMode.Downed);
+        const hurt = !busy && mates.some((p) => p.state.mode === PawnMode.Walk && p.state.hp < p.state.maxHp * 0.6);
+        const self = !patchWorking(s) && s.hp < s.maxHp * 0.5;
+        if (down || (!target && (hurt || self))) {
+          const ahead: Vec3 = [s.x - Math.sin(s.yaw) * 4, s.y + 1.2, s.z - Math.cos(s.yaw) * 4];
+          return { task: { kind: "gadget", slot: monitor, how: "hold", stand: null, look: ahead, seconds: 1.5, tag: "patch" }, score: down ? 0.92 : 0.7 };
+        }
+      }
       // A Nitro Cell thrown where an enemy was just heard, close (round a corner: as near it as it can see).
       if (nitro && left(nitro) > 0 && out(nitro) === 0 && recent && recent.kind === PawnKind.Body && recent.source !== Source.Seen) {
         const dist = Math.hypot(recent.pos[0] - s.x, recent.pos[2] - s.z);

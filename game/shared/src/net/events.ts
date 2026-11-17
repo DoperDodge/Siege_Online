@@ -11,6 +11,16 @@ import { MAX_NAME, Msg } from "./protocol.js";
 
 export const ZONES: readonly Zone[] = ["head", "neck", "torso", "pelvis", "arm", "leg"];
 
+/** One body on Tonic's monitor (R3): its pawn, its controller, health and its most, down, a patch working on it. */
+export interface Vital {
+  pawnId: number;
+  ctrl: number;
+  hp: number;
+  maxHp: number;
+  down: boolean;
+  patched: boolean;
+}
+
 export type GameEvent =
   /** A shot others should see and hear: the shooter's muzzle flash, and where each pellet ended (tracers, impacts). */
   | { kind: "shotFx"; pawnId: number; slot: number; suppressed: boolean; ends: Vec3[] }
@@ -75,12 +85,17 @@ export type GameEvent =
    */
   | { kind: "gshot"; pawnId: number; gadget: number; end: Vec3; burst: boolean }
   /**
+   * To Tonic's client (R3), twice a second: his team's bodies (his own too) as his monitor shows them: health and its
+   * most, down or not, a patch working on it or not; and whether his teammate's patch is busy (one at a time).
+   */
+  | { kind: "vitals"; bodies: Vital[]; busy: boolean }
+  /**
    * To a joining player, and to everyone when it changes: who may reinforce and barricade, and the reinforcements
    * left (Phase 4 M6), and who may rappel (Phase 5 M8).
    */
   | { kind: "deployRules"; anyone: boolean; rappel: boolean; pools: [number, number] };
 
-const KIND = { shotFx: 1, hitConfirm: 2, damageTaken: 3, down: 4, kill: 5, shellDestroyed: 6, reviveStart: 7, reviveEnd: 8, deployRules: 10, droneDestroyed: 11, ping: 12, spotted: 13, callout: 14, emp: 15, blast: 16, stunned: 17, alarm: 18, hack: 19, overheat: 20, jegeo: 21, gshot: 22 } as const;
+const KIND = { shotFx: 1, hitConfirm: 2, damageTaken: 3, down: 4, kill: 5, shellDestroyed: 6, reviveStart: 7, reviveEnd: 8, deployRules: 10, droneDestroyed: 11, ping: 12, spotted: 13, callout: 14, emp: 15, blast: 16, stunned: 17, alarm: 18, hack: 19, overheat: 20, jegeo: 21, gshot: 22, vitals: 23 } as const;
 // 9 Threat (Phase 11) is reserved.
 
 /** Pellet end points travel at 1/32 m in i16: ±1024 m, more than any level. */
@@ -163,6 +178,10 @@ export function encodeEvents(tick: number, events: readonly GameEvent[]): Uint8A
       case "gshot":
         w.varu(e.pawnId).u8(e.gadget).u8(e.burst ? 1 : 0);
         writePos(w, e.end);
+        break;
+      case "vitals":
+        w.u8((e.busy ? 1 : 0)).u8(Math.min(16, e.bodies.length));
+        for (const b of e.bodies.slice(0, 16)) w.varu(b.pawnId).varu(b.ctrl).u16(Math.min(0xffff, Math.max(0, Math.round(b.hp)))).u16(Math.min(0xffff, b.maxHp)).u8((b.down ? 1 : 0) | (b.patched ? 2 : 0));
         break;
       case "deployRules":
         w.u8((e.anyone ? 1 : 0) | (e.rappel ? 2 : 0)).varu(e.pools[0]).varu(e.pools[1]);
@@ -286,6 +305,21 @@ export function decodeEvents(r: ByteReader): { tick: number; events: GameEvent[]
       const stage = r.u8();
       if (stage > 4) throw new ProtocolError("bad jegeo");
       events.push({ kind: "jegeo", stage: stage as 0 | 1 | 2 | 3 | 4, pawnId: r.varu(), ticks: r.u16(), charges: r.u8() });
+    } else if (k === KIND.vitals) {
+      const busy = r.u8();
+      const n = r.u8();
+      if (busy > 1 || n > 16) throw new ProtocolError("bad vitals");
+      const bodies: Vital[] = [];
+      for (let i = 0; i < n; i++) {
+        const pawnId = r.varu();
+        const ctrl = r.varu();
+        const hp = r.u16();
+        const maxHp = r.u16();
+        const f = r.u8();
+        if (f > 3) throw new ProtocolError("bad vitals");
+        bodies.push({ pawnId, ctrl, hp, maxHp, down: (f & 1) !== 0, patched: (f & 2) !== 0 });
+      }
+      events.push({ kind: "vitals", bodies, busy: busy === 1 });
     } else if (k === KIND.gshot) {
       const pawnId = r.varu();
       const gadget = r.u8();

@@ -42,6 +42,9 @@
     ],
     "ohm": [
       "breach_charge"
+    ],
+    "tonic": [
+      "bulletproof_camera"
     ]
   },
   "counters": {
@@ -110,6 +113,11 @@
       "sentry",
       "lesion",
       "pulse"
+    ],
+    "tonic": [
+      "ohm",
+      "dokkaebi",
+      "striker"
     ]
   },
   "primaries": {

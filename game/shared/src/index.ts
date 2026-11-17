@@ -65,6 +65,7 @@ export * from "./net/gadgetWire.js";
 export * from "./gadgets/blast.js";
 export * from "./gadgets/areas.js";
 export * from "./gadgets/electronics.js";
+export * from "./gadgets/patch.js";
 export * from "./gadgets/cluster.js";
 export * from "./gadgets/jammers.js";
 export * from "./gadgets/sensor.js";

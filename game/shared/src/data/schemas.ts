@@ -1170,6 +1170,12 @@ export const gadgetSchema = z
       .strictObject({ radiusM: z.number().positive(), hit: z.number().min(0), damage: z.number().min(0), everyS: z.number().positive(), pullS: z.number().positive() })
       .optional(),
     /**
+     * Tonic's Second Wind (R3, gadgets/patch.ts, net/room.ts patches): a patch set off on a body on its feet heals
+     * `heal` over `healS` (up to its most); on a downed one it stops the bleeding and gets him up `reviveS` later with
+     * `reviveHp`.
+     */
+    patch: z.strictObject({ heal: z.number().int().min(1).max(200), healS: z.number().positive(), reviveS: z.number().positive(), reviveHp: z.number().int().min(1) }).optional(),
+    /**
      * A slot 2 item that comes back over time (Phase 8 M10: Lesion's mines): `start` at a life's start, one more every
      * `everyS`, until `count` have been given (gadgets/hands.ts regenSlot).
      */
@@ -1196,7 +1202,7 @@ export const gadgetSchema = z
       if (g[k] !== undefined && !g.remote) ctx.addIssue({ code: "custom", path: [k], message: "only a remote device has this" });
     if (g.cluster && (g.blast || g.burnS !== undefined)) ctx.addIssue({ code: "custom", path: ["cluster"], message: "a cluster charge's grenades blast, not the charge" });
     if (u.kind === "place" && u.on.includes("shield") && !g.cluster) ctx.addIssue({ code: "custom", path: ["use", "on"], message: "only a cluster charge drills through a shield" });
-    if ((u.kind === "hold") !== (g.sensor !== undefined || g.jegeo !== undefined)) ctx.addIssue({ code: "custom", path: ["use"], message: "a held item is a sensor or a tablet, and they're held" });
+    if ((u.kind === "hold") !== (g.sensor !== undefined || g.jegeo !== undefined || g.patch !== undefined)) ctx.addIssue({ code: "custom", path: ["use"], message: "a held item is a sensor, a tablet or a patch monitor, and they're held" });
     if (g.jammer && (u.kind !== "place" || g.jammer.warnM < g.jammer.radiusM)) ctx.addIssue({ code: "custom", path: ["jammer"], message: "a jammer is placed, and warns beyond its reach" });
     if (g.mirror && (u.kind !== "place" || !u.on.includes("reinforceable") || !g.solid)) ctx.addIssue({ code: "custom", path: ["mirror"], message: "a mirror is solid and placed on a reinforceable wall" });
     if (g.gu && (u.kind !== "throw" || u.flight !== "settle" || g.remote || g.electronic)) ctx.addIssue({ code: "custom", path: ["gu"], message: "a Gu mine is thrown, settles, and is mechanical" });

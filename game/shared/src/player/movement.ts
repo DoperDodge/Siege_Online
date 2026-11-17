@@ -17,6 +17,7 @@ import { bleedTick, isDowned } from "./downed.js";
 import { ticks } from "../weapons/ticks.js";
 import { DeployKind } from "../destruction/deploy.js";
 import { parkHands, putAway, regenSlot, stepHands } from "../gadgets/hands.js";
+import { stepPatch } from "../gadgets/patch.js";
 import { placeShield, shieldUp, stepShield, suppressed } from "./shield.js";
 
 export interface MoveContext {
@@ -67,6 +68,8 @@ export function stepPawn(ctx: MoveContext, pawn: Pawn, input: InputCmd, weapons 
   // An EMP on the body (DSEG, Phase 8 M3) wears off.
   if (s.jammed > 0) s.jammed--;
   if (s.mode === PawnMode.Dead) return;
+  // Tonic's Second Wind on this body (R3): its heal, or getting it up from down (a revive of its own, for the room).
+  if (stepPatch(ctx.data, s)) ctx.events.push({ kind: "reviveEnd", reviverPawn: pawn.id, targetPawn: pawn.id, completed: true });
   // Lesion's next mine comes (Phase 8 M10); Fuze's shield's guard break and suppression wear off (M11).
   regenSlot(ctx.data, pawn);
   stepShield(pawn);
@@ -574,7 +577,8 @@ function stepDowned(ctx: MoveContext, pawn: Pawn, input: InputCmd) {
   stepWalk(ctx, pawn, { ...input, buttons: 0, lean: 0, stance }, 0);
   if (s.mode !== PawnMode.Downed) return; // a fall finished it
   if (s.invulnTicks > 0) s.invulnTicks--;
-  if (s.revivedBy === 0 && bleedTick(ctx.data.combat, s, Math.hypot(s.vx, s.vz) > ctx.data.combat.dbno.movingSpeed)) {
+  // (Not while a teammate revives it, nor while a patch gets it up: R3.)
+  if (s.revivedBy === 0 && s.patchTicks === 0 && bleedTick(ctx.data.combat, s, Math.hypot(s.vx, s.vz) > ctx.data.combat.dbno.movingSpeed)) {
     ctx.events.push({ kind: "death", pawnId: pawn.id, cause: "bleed", life: pawn.life });
   }
 }

@@ -428,10 +428,16 @@ export function decodeLabTool(r: ByteReader): LabTool {
  * Dokkaebi's pick on her tablet: an identified defender (his body's pawn id) to send the Jegeo Payload to, a dead
  * defender's phone (its gadget id) to hack his cameras with, or nothing. The room checks it when she presses Fire.
  */
-export type JegeoPick = { kind: "none" } | { kind: "defender"; pawnId: number } | { kind: "phone"; gadgetId: number };
+/**
+ * A held tablet's pick (a player's message, checked when they press Fire): Dokkaebi's (Phase 8 M9: an identified
+ * defender, or a dead one's phone), or Tonic's monitor's (R3: the body whose patch Fire sets off). None: by her aim (a
+ * bot's), or (Tonic's) Auto.
+ */
+export type JegeoPick = { kind: "none" } | { kind: "defender"; pawnId: number } | { kind: "phone"; gadgetId: number } | { kind: "patch"; pawnId: number };
 export function encodeJegeoPick(p: JegeoPick): Uint8Array {
   const w = new ByteWriter().u8(Msg.JegeoPick);
   if (p.kind === "none") return w.u8(0).finish();
+  if (p.kind === "patch") return w.u8(3).varu(p.pawnId).finish();
   return p.kind === "defender" ? w.u8(1).varu(p.pawnId).finish() : w.u8(2).varu(p.gadgetId).finish();
 }
 export function decodeJegeoPick(r: ByteReader): JegeoPick {
@@ -440,6 +446,7 @@ export function decodeJegeoPick(r: ByteReader): JegeoPick {
   const id = r.varu();
   if (k === 1) return { kind: "defender", pawnId: id };
   if (k === 2) return { kind: "phone", gadgetId: id };
+  if (k === 3) return { kind: "patch", pawnId: id };
   throw new ProtocolError("bad jegeo pick");
 }
 

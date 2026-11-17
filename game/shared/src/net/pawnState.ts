@@ -20,6 +20,7 @@ export const PAWN_U8_FIELDS = [
 export const PAWN_U16_FIELDS = [
   "hp", "maxHp", "lastFallDamage", "actTicks", "reserve0", "reserve1", "cycle", "adsQ", "shotIdx", "sinceShot", "reviveTicks",
   "deployPanel", "deployTicks", "rappelTicks", "jumpCd", "boostTicks", "boostCd", "jammed", "gTicks", "regenTicks", "guard", "suppressT", "knockTicks",
+  "healLeft", "healTicks", "patchTicks",
 ] as const satisfies readonly (keyof PawnState)[];
 export const PAWN_U32_FIELDS = ["rng", "reviveTarget", "revivedBy", "gTarget"] as const satisfies readonly (keyof PawnState)[];
 

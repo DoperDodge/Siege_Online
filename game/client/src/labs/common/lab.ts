@@ -82,6 +82,7 @@ import {
   kludgeOf,
   pawnJammed,
   sensorUp,
+  patchWorking,
   empTargets,
   roundStop,
   viewDir,
@@ -1745,6 +1746,8 @@ export async function startLab(o: LabOptions): Promise<void> {
     const inHand = slotGadget(data, p.loadout, (handSlot(s.hand) || 1) as 1 | 2);
     const back = s.gTarget ? sim.gadgets.get(s.gTarget) : undefined;
     const backData = back ? data.gadgets.get(kindId(back.kind) ?? "") : undefined;
+    // A patch of Tonic's working on you (R3): the bar goes teal.
+    $(".hp").classList.toggle("patched", patchWorking(s));
     downedHud.update(s, data.combat, keyLabel(settings.keys.interact), nameOfPawn, data.destruction, data.movement, sim.objective, {
       name: inHand?.name ?? "",
       placeTicks: inHand?.use.kind === "place" ? ticks(inHand.use.placeS) : 1,
@@ -1948,7 +1951,8 @@ export async function startLab(o: LabOptions): Promise<void> {
       const out = slot === 1 ? s.w1 : s.w2;
       // A held item (Pulse's sensor, Phase 8 M6) is never used up: no count. Brava's Kludges (M8): how many she holds.
       const kludges = g.use.kind === "drone" ? sim.dronesOf(ctrl).filter((d) => d.kludge && d.state.mode === PawnMode.Held).length : 0;
-      const count = g.use.kind === "hold" ? "" : ` ×${g.use.kind === "drone" ? kludges : left}`;
+      // (Tonic's monitor, R3, counts its patches.)
+      const count = g.use.kind === "hold" && !g.patch ? "" : ` ×${g.use.kind === "drone" ? kludges : left}`;
       return `${g.name.toUpperCase()}${count}${out ? ` · ${out} out (detonator)` : ""} · ${keyLabel(key)}`;
     };
     const gadgetText = dead ? "" : [slotText(1, k.gadget), slotText(2, k.ability)].filter(Boolean).join("   ");
@@ -2740,6 +2744,8 @@ export async function startLab(o: LabOptions): Promise<void> {
           hackRun = e.stage === 0 ? { start: now, ms: e.ticks * DT * 1000 } : null;
           if (e.stage === 1) flash(`Hacked · ${e.left} hack${e.left === 1 ? "" : "s"} left on this Kludge`, "info");
         } else if (e.kind === "overheat") flash(`A Kludge is overheating your idle shell: swap into it within ${(e.ticks * DT).toFixed(0)} s or lose it`, "bad");
+        // Tonic's monitor (R3): his team as the room last listed it.
+        else if (e.kind === "vitals") vitals = e;
         // Dokkaebi's Jegeo Payload (Phase 8 M9): her upload and phone hacks; its target's ringing phone.
         else if (e.kind === "jegeo") {
           const secs = (e.ticks * DT).toFixed(0);
@@ -2801,6 +2807,8 @@ export async function startLab(o: LabOptions): Promise<void> {
   let tabletEntries: { key: string; label: string; note: string; ok: boolean; pick: JegeoPick }[] = [];
   /** Her charges, as her last payload event said. */
   let jegeoCharges: number | null = null;
+  /** Tonic's team as his monitor shows it (R3): the room's last word. */
+  let vitals: Extract<GameEvent, { kind: "vitals" }> | null = null;
 
   /**
    * The people Murmur's Blood Oxygen Sensor has read (Phase 8 M6; its look our own design, D-183), by the body: where they
@@ -2822,9 +2830,15 @@ export async function startLab(o: LabOptions): Promise<void> {
     const body = livingBody();
     const onFeed = ctrl.cam !== 0 || ctrl.drone !== 0 || ctrl.shellCam || ctrl.swapPhase !== 0;
     const t = body ? slotGadget(data, body.loadout, 2)?.jegeo : undefined;
-    tabletUp = !!body && !!t && !onFeed && body.state.hand === Hand.Ability && body.state.gAct !== GadgetAct.Equip;
+    const patch = body ? slotGadget(data, body.loadout, 2)?.patch : undefined;
+    tabletUp = !!body && (!!t || !!patch) && !onFeed && body.state.hand === Hand.Ability && body.state.gAct !== GadgetAct.Equip;
     $(".tablet").classList.toggle("hidden", !tabletUp);
-    if (!tabletUp || !body || !t) return;
+    if (!tabletUp || !body) return;
+    if (patch) {
+      monitorList(body);
+      return;
+    }
+    if (!t) return;
     const now = performance.now();
     const roster = net?.session.roster ?? [];
     const opName = (id: string) => data.operators.get(id)?.name ?? id;
@@ -2872,6 +2886,40 @@ export async function startLab(o: LabOptions): Promise<void> {
       ? entries.map((e) => `<div class="${e.key === tabletPick ? "on" : ""}${e.ok ? "" : " off"}"><b>${escapeHtml(e.label)}</b><span>${escapeHtml(e.note)}</span></div>`).join("")
       : `<div class="empty">No defender identified: drone, ping or scan one</div>`;
     $(".tablet-help").textContent = entries.length ? `wheel: pick · fire: ${tabletPick.startsWith("p:") ? "hack the cameras" : "send the payload"}` : "";
+  }
+
+  /**
+   * Tonic's monitor up (R3, Second Wind): Auto first (a downed teammate, else the most hurt, else him: the room picks),
+   * then his team as the room last listed it, himself first: each one's health (or down, and how long his blood lasts),
+   * a patch working on them, or out. The wheel moves his pick; Fire sets the picked one's patch off (net/room.ts patches:
+   * a teammate's only while no other teammate's is working).
+   */
+  function monitorList(body: Pawn) {
+    const roster = net?.session.roster ?? [];
+    const opName = (id: string) => data.operators.get(id)?.name ?? id;
+    const v = vitals;
+    const entries: typeof tabletEntries = [{ key: "auto", label: "Auto", note: "a downed teammate first, else the most hurt", ok: true, pick: { kind: "none" } }];
+    for (const b of v?.bodies ?? []) {
+      const self = ctrl.pawnIds.includes(b.pawnId);
+      const r = roster.find((e) => e.pawnIds.includes(b.pawnId));
+      const label = self ? "You" : r ? `${opName(r.operatorId)} (${r.name})` : nameOfPawn(b.pawnId) || "Teammate";
+      const out = !b.down && b.hp <= 0;
+      const note = out ? "out" : b.patched ? "patch working" : b.down ? `DOWN · ${b.hp}` : `${b.hp} / ${b.maxHp}`;
+      entries.push({ key: `p:${b.pawnId}`, label, note, ok: !out && !b.patched && (self || !v!.busy), pick: { kind: "patch", pawnId: b.pawnId } });
+    }
+    tabletEntries = entries;
+    if (!entries.some((e) => e.key === tabletPick)) tabletPick = "auto";
+    if (tabletPick !== tabletSent) {
+      tabletSent = tabletPick;
+      net?.send(encodeJegeoPick(entries.find((e) => e.key === tabletPick)?.pick ?? { kind: "none" }));
+    }
+    const left = body.state.g2;
+    const key = `m|${tabletPick}|${left}|${v?.busy ?? false}|${entries.map((e) => `${e.key}:${e.note}:${e.ok}`).join(",")}`;
+    if (key === tabletKey) return;
+    tabletKey = key;
+    $(".tablet-title").textContent = `SECOND WIND · ${left} patch${left === 1 ? "" : "es"}`;
+    $(".tablet-list").innerHTML = entries.map((e) => `<div class="${e.key === tabletPick ? "on" : ""}${e.ok ? "" : " off"}"><b>${escapeHtml(e.label)}</b><span>${escapeHtml(e.note)}</span></div>`).join("");
+    $(".tablet-help").textContent = left > 0 ? `wheel: pick · fire: set the patch off${v?.busy ? " · a teammate's patch is working" : ""}` : "no patches left";
   }
 
   /** Dokkaebi's tablet: the wheel moves her pick down (or up) its list. */

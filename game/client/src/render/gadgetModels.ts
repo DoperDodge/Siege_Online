@@ -67,6 +67,7 @@ const COLOURS: Record<string, number> = {
   gu_mine: 0x65a30d,
   shell_shield: 0x475569,
   brownout_pistol: 0x1e3a5f,
+  second_wind: 0x0f766e,
 };
 
 /**

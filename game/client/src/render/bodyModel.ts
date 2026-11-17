@@ -505,6 +505,15 @@ function backItem(s: Shaper, L: OperatorLook): void {
       s.bar([-0.06, -0.03, z + 0.045], [-0.1, 0.06, z + 0.02], 0.007, 0.007, 6);
       s.bar([-0.1, 0.06, z + 0.02], [-0.11, 0.1, -0.02], 0.007, 0.007, 6);
       return;
+    case "medbag":
+      // Tonic's (R3): a sling bag across the back, its strap over the right shoulder, a teal plus of ours on its flap.
+      s.paint(L.gear, 0.8);
+      s.box([0.02, -0.2, z + 0.045], [0.24, 0.16, 0.09], 4, 0.025);
+      s.bar([0.12, -0.12, z + 0.03], [0.05, 0.12, z + 0.02], 0.012, 0.012, 6);
+      s.paint(L.accent, 0.5);
+      s.box([0.02, -0.2, z + 0.0915], [0.075, 0.02, 0.006], 4, 0.002);
+      s.box([0.02, -0.2, z + 0.0915], [0.02, 0.075, 0.006], 4, 0.002);
+      return;
     case "tube":
       // A canister upright at the right, a hose over the shoulder.
       s.paint(L.gear, 0.5);

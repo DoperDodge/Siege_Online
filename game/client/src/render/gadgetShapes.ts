@@ -171,6 +171,16 @@ export function gadgetShape(id: string, size: V3): Map<ShapeMat, THREE.BufferGeo
       p.cyl("blueGlow", hoodR * 0.9, 0.002, [0, hoodY, back - d * 0.22], [HALF_PI, 0, 0], 18);
       break;
     }
+    case "second_wind": {
+      // Tonic's monitor (R3; our own design): a slim handheld in a rubber bumper, its screen facing him (+z) with a
+      // teal plus in its corner, a strap loop down its back.
+      p.box("rubber", [w, h, d * 0.7], [0, 0, -d * 0.15]);
+      p.box("dark", [w * 0.9, h * 0.84, d * 0.3], [0, 0, d * 0.35]);
+      p.box("greenGlow", [w * 0.12, h * 0.05, 0.002], [w * 0.36, h * 0.33, d / 2]);
+      p.box("greenGlow", [w * 0.04, h * 0.16, 0.002], [w * 0.36, h * 0.33, d / 2]);
+      p.box("black", [w * 0.5, h * 0.2, d * 0.3], [0, 0, -d / 2 + d * 0.15]);
+      break;
+    }
     case "cluster_grenade": {
       const r = Math.min(w, h, d) / 2 - 0.002;
       p.lathe("dark", [[0.001, -r], [r * 0.7, -r * 0.7], [r, 0], [r * 0.7, r * 0.7], [0.001, r]]);

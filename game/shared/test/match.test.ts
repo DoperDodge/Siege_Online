@@ -14,6 +14,7 @@ import {
   WinReason,
   type FormatMode,
   type MatchEvent,
+  type MatchMap,
   type Team,
 } from "../src/index.js";
 
@@ -26,8 +27,8 @@ const format = (id: string): FormatMode => {
 };
 
 /** A match with players already in it: `blue` and `orange` names, everyone ready; the first is the host. */
-function lobby(id: string, blue: number, orange: number, seed = 7) {
-  const match = new Match(format(id), map, seed);
+function lobby(id: string, blue: number, orange: number, seed = 7, on: MatchMap = map) {
+  const match = new Match(format(id), on, seed);
   let next = 1;
   for (let i = 0; i < Math.max(blue, orange); i++) {
     if (i < blue) match.addPlayer(next++, `b${i}`);
@@ -217,7 +218,11 @@ describe("bans, sites and picks", () => {
   });
 
   it("at two bans per side, a 5-player side keeps 5 operators: the second ban on it doesn't count", () => {
-    const m = lobby("ranked", 5, 5);
+    // (On a roster of six defenders, as the game had before R3 grew it: two bans would leave four.)
+    const six: MatchMap = { ...map, roster: [map.roster[ATTACK], map.roster[DEFENSE].slice(0, 6)] };
+    expect(six.roster[DEFENSE]).toContain("mute");
+    expect(six.roster[DEFENSE]).toContain("pulse");
+    const m = lobby("ranked", 5, 5, 7, six);
     m.change(m.hostId, { kind: "bans", maxPerSide: 2 });
     for (const p of m.players.values()) m.setReady(p.id, true);
     const at = { tick: 0 };

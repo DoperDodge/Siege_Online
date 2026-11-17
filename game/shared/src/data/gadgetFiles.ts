@@ -29,5 +29,6 @@ import g_dropped_phone from "../../../../data/gadgets/dropped_phone.json";
 import g_gu_mine from "../../../../data/gadgets/gu_mine.json";
 import g_shell_shield from "../../../../data/gadgets/shell_shield.json";
 import g_brownout_pistol from "../../../../data/gadgets/brownout_pistol.json";
+import g_second_wind from "../../../../data/gadgets/second_wind.json";
 
-export const gadgetFiles: Record<string, unknown>[] = [g_breach_charge, g_hard_breach_charge, g_claymore, g_frag, g_stun, g_smoke, g_impact_emp, g_barbed_wire, g_bulletproof_camera, g_deployable_shield, g_observation_blocker, g_impact_grenade, g_nitro_cell, g_proximity_alarm, g_breaching_hammer, g_exothermic_charge, g_cluster_charge, g_cluster_grenade, g_signal_disruptor, g_cardiac_sensor, g_black_mirror, g_mirror_canister, g_kludge_drone, g_jegeo_payload, g_dropped_phone, g_gu_mine, g_shell_shield, g_brownout_pistol];
+export const gadgetFiles: Record<string, unknown>[] = [g_breach_charge, g_hard_breach_charge, g_claymore, g_frag, g_stun, g_smoke, g_impact_emp, g_barbed_wire, g_bulletproof_camera, g_deployable_shield, g_observation_blocker, g_impact_grenade, g_nitro_cell, g_proximity_alarm, g_breaching_hammer, g_exothermic_charge, g_cluster_charge, g_cluster_grenade, g_signal_disruptor, g_cardiac_sensor, g_black_mirror, g_mirror_canister, g_kludge_drone, g_jegeo_payload, g_dropped_phone, g_gu_mine, g_shell_shield, g_brownout_pistol, g_second_wind];
