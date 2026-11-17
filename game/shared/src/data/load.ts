@@ -25,6 +25,7 @@ import tonic from "../../../../data/operators/tonic.json";
 import shunt from "../../../../data/operators/shunt.json";
 import latch from "../../../../data/operators/latch.json";
 import bailiff from "../../../../data/operators/bailiff.json";
+import rivet from "../../../../data/operators/rivet.json";
 import gunplayJson from "../../../../data/gunplay.json";
 import combatJson from "../../../../data/combat.json";
 import labModeJson from "../../../../data/modes/lab.json";
@@ -124,7 +125,7 @@ export interface GameData {
 export const rawData = {
   movement: movementJson as Record<string, unknown>,
   hitboxes: hitboxJson as Record<string, unknown>,
-  operators: [brava, fuze, thermite, striker, dokkaebi, sledge, sentry, skopos, mira, lesion, pulse, mute, ohm, tonic, shunt, latch, bailiff] as Record<string, unknown>[],
+  operators: [brava, fuze, thermite, striker, dokkaebi, sledge, sentry, skopos, mira, lesion, pulse, mute, ohm, tonic, shunt, latch, bailiff, rivet] as Record<string, unknown>[],
   levels: [movementLabJson, rangeLabJson, destructionLabJson, gadgetLabJson, oregonJson, millraceJson] as Record<string, unknown>[],
   weapons: weaponFiles,
   gunplay: gunplayJson as Record<string, unknown>,
@@ -227,6 +228,11 @@ export function crossFileProblems(data: Pick<GameData, "operators" | "weapons" |
         const c = data.gadgets.get(g.mirror.canister);
         if (!c || !c.fragile || c.side !== g.side || c.operator !== g.operator) out.push(`data/gadgets/${g.id}.json: mirror.canister names "${g.mirror.canister}", which isn't a fragile gadget of its own on its side and its operator's`);
       }
+      // Rivet's Stud Driver (R3): what it lays are salvos of their own, on its side and its operator's.
+      for (const id of g.driver?.lays ?? []) {
+        const k = data.gadgets.get(id);
+        if (!k?.salvo || k.side !== g.side || k.operator !== g.operator) out.push(`data/gadgets/${g.id}.json: driver.lays names "${id}", which isn't a salvo of its own on its side and its operator's`);
+      }
       if (!g.cluster) continue;
       const k = data.gadgets.get(g.cluster.grenade);
       if (!k || k.use.kind !== "throw" || k.use.fuseS === undefined || !k.blast || k.side !== g.side || k.operator !== g.operator)
@@ -250,7 +256,7 @@ export function crossFileProblems(data: Pick<GameData, "operators" | "weapons" |
       if (!g.operator) continue;
       const op = data.operators.get(g.operator);
       const ability = op && data.gadgets.get(op.ability.id);
-      const part = ability !== undefined && (ability.cluster?.grenade === g.id || ability.mirror?.canister === g.id);
+      const part = ability !== undefined && (ability.cluster?.grenade === g.id || ability.mirror?.canister === g.id || (ability.driver?.lays.includes(g.id) ?? false));
       if (!op) out.push(`data/gadgets/${g.id}.json: operator "${g.operator}" doesn't exist`);
       else if ((op.ability.id !== g.id && !part) || op.side !== g.side) out.push(`data/gadgets/${g.id}.json: it isn't ${op.id}'s ability (${op.ability.id}) or part of it, on their side`);
     }

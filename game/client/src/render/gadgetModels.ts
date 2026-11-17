@@ -28,6 +28,8 @@ import {
   kindOf,
   liveSurfaces,
   raycastLevel,
+  salvoCut,
+  studPoints,
   wireLength,
   sizeOf,
   TUBE_HALF_M,
@@ -74,6 +76,10 @@ const COLOURS: Record<string, number> = {
   arc_pack: 0x27303a,
   snare_latch: 0x4a3b2f,
   bailiff_post: 0x2f3540,
+  stud_driver: 0x3f3f46,
+  stud_ring: 0xea580c,
+  stud_spine: 0xea580c,
+  stud_cross: 0xea580c,
 };
 
 /**
@@ -257,7 +263,10 @@ export class GadgetModels {
     let parts = this.shapes.get(id);
     if (parts === undefined) {
       const size = sizeOf(this.sim.data, kind);
-      parts = size ? gadgetShape(id, size) : null;
+      // A salvo of Rivet's (R3): its studs where they are (gadgets/studs.ts).
+      const d = this.sim.data.gadgets.get(id);
+      const ex = d && salvoCut(this.sim.data, d);
+      parts = size ? gadgetShape(id, size, ex ? studPoints(ex) : []) : null;
       this.shapes.set(id, parts);
       // Shared: disposeOwn leaves them.
       for (const [m, g] of parts ?? []) this.geometry.set(`shape:${id}:${m}`, g);

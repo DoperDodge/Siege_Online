@@ -54,6 +54,9 @@
     ],
     "bailiff": [
       "barbed_wire"
+    ],
+    "rivet": [
+      "claymore"
     ]
   },
   "counters": {
@@ -65,6 +68,7 @@
     ],
     "mira": [
       "fuze",
+      "rivet",
       "sledge",
       "dokkaebi"
     ],
@@ -142,6 +146,11 @@
       "ohm",
       "striker",
       "fuze"
+    ],
+    "rivet": [
+      "shunt",
+      "mute",
+      "bailiff"
     ]
   },
   "primaries": {

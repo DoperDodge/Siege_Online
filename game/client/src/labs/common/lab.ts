@@ -89,6 +89,9 @@ import {
   roundStop,
   viewDir,
   placeSpotFor,
+  laidBy,
+  salvoCut,
+  studPoints,
   slotGadget,
   type GadgetData,
   type RoundReport,
@@ -1978,7 +1981,10 @@ export async function startLab(o: LabOptions): Promise<void> {
       const kludges = g.use.kind === "drone" ? sim.dronesOf(ctrl).filter((d) => d.kludge && d.state.mode === PawnMode.Held).length : 0;
       // (Tonic's monitor, R3, counts its patches.)
       const count = g.use.kind === "hold" && !g.patch ? "" : ` ×${g.use.kind === "drone" ? kludges : left}`;
-      return `${g.name.toUpperCase()}${count}${out ? ` · ${out} out (detonator)` : ""} · ${keyLabel(key)}`;
+      // Rivet's driver (R3): the salvo it lays now, and the key that picks the next.
+      const laid = g.use.kind === "launch" ? laidBy(data, g, s.pattern) : null;
+      const pick = laid ? ` · ${laid.name.toUpperCase()} (${keyLabel(k.reload)}: next)` : "";
+      return `${g.name.toUpperCase()}${count}${pick}${out ? ` · ${out} out (detonator)` : ""} · ${keyLabel(key)}`;
     };
     const gadgetText = dead ? "" : [slotText(1, k.gadget), slotText(2, k.ability)].filter(Boolean).join("   ");
     if ($(".gadget-line").textContent !== gadgetText) $(".gadget-line").textContent = gadgetText;
@@ -2654,6 +2660,18 @@ export async function startLab(o: LabOptions): Promise<void> {
   function poseOutline() {
     const p = possessed();
     const spot = p && p.state.gAct !== GadgetAct.Equip && !ctrl.cam && !ctrl.drone ? placeSpotFor(sim, p) : null;
+    const held = spot && p ? slotGadget(data, p.loadout, handSlot(p.state.hand) as 1 | 2) : null;
+    // Rivet's driver (R3): its salvo's studs where Fire would lay them, the one picked (gadgets/studs.ts).
+    const laid = held?.use.kind === "launch" && p ? laidBy(data, held, p.state.pattern) : null;
+    for (const [id, marks] of salvoMarks) marks.visible = laid?.id === id;
+    if (laid && spot) {
+      const marks = salvoMarksFor(laid);
+      marks.visible = true;
+      marks.position.set(...spot.pos);
+      marks.rotation.set(spot.flat ? Math.PI / 2 : 0, spot.yaw, 0, "YXZ");
+      outline.visible = false;
+      return;
+    }
     outline.visible = spot !== null;
     if (!spot || !p) return;
     const g = slotGadget(data, p.loadout, handSlot(p.state.hand) as 1 | 2)!;
@@ -2661,6 +2679,27 @@ export async function startLab(o: LabOptions): Promise<void> {
     outline.scale.set(w, spot.flat ? d : h, spot.flat ? h : d);
     outline.position.set(...spot.pos);
     outline.rotation.set(0, spot.yaw, 0);
+  }
+
+  /** A salvo's studs as the aim shows them (Rivet's, R3), made as each is first wanted: green marks over its face. */
+  const salvoMarks = new Map<string, THREE.Group>();
+  function salvoMarksFor(laid: GadgetData): THREE.Group {
+    let marks = salvoMarks.get(laid.id);
+    if (marks) return marks;
+    marks = new THREE.Group();
+    const ex = salvoCut(data, laid);
+    const mat = new THREE.MeshBasicMaterial({ color: 0x4ade80, transparent: true, opacity: 0.85, depthTest: false });
+    const geo = new THREE.SphereGeometry(0.035, 10, 8);
+    for (const [x, y] of ex ? studPoints(ex) : []) {
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set(x, y, -laid.sizeM[2] / 2);
+      m.renderOrder = 10;
+      marks.add(m);
+    }
+    marks.visible = false;
+    scene.add(marks);
+    salvoMarks.set(laid.id, marks);
+    return marks;
   }
 
   /** The gadget in a body's hands as the viewmodel draws it, or null (the weapon). */
@@ -2970,7 +3009,9 @@ export async function startLab(o: LabOptions): Promise<void> {
     const body = livingBody();
     const onFeed = ctrl.cam !== 0 || ctrl.drone !== 0 || ctrl.shellCam || ctrl.swapPhase !== 0;
     const g = body && handSlot(body.state.hand) === 2 && !isDetonator(body.state.hand) ? slotGadget(data, body.loadout, 2) : null;
-    scopeUp = !!body && !!g && g.use.kind === "shoot" && !onFeed && body.state.gAct !== GadgetAct.Equip && (heldButtons & Btn.Ads) !== 0;
+    // (Rivet's driver, R3, comes up to the eye the same way, down its irons: it has no lens.)
+    const gun = g?.use.kind === "shoot" || g?.use.kind === "launch";
+    scopeUp = !!body && gun && !onFeed && body.state.gAct !== GadgetAct.Equip && (heldButtons & Btn.Ads) !== 0;
     viewmodel.scoped = scopeUp;
     const lens = scopeUp ? viewmodel.lensScreen() : null;
     const el = $(".ohm-scope");

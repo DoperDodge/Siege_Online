@@ -1030,6 +1030,12 @@ export const gadgetSchema = z
        * What a round does where it stops is the file's (`emp`).
        */
       z.strictObject({ kind: z.literal("shoot"), reloadS: z.number().positive(), rangeM: z.number().positive() }),
+      /**
+       * Launched from the hands (Rivet's Stud Driver, R3: gadgets/studs.ts): Fire lays a salvo (its `driver.lays`, the
+       * one the reload key picked) on the surface the view meets out to `reachM`, if it may go `on` that; the next can
+       * go `cycleS` later.
+       */
+      z.strictObject({ kind: z.literal("launch"), on: z.array(z.enum(PLACE_ON)).min(1), reachM: z.number().positive(), cycleS: z.number().positive() }),
     ]),
     /** Waits for its owner's detonator once it's out. */
     remote: z.boolean(),
@@ -1214,6 +1220,17 @@ export const gadgetSchema = z
      */
     setsDownShield: z.boolean().optional(),
     /**
+     * Rivet's Stud Driver (R3, gadgets/studs.ts): the salvos it lays (gadget files of their own, each a `salvo`), the
+     * one it lays picked with the reload key while it's out; its detonator sets off every one of them out together.
+     */
+    driver: z.strictObject({ lays: z.array(z.string()).min(1).max(4) }).optional(),
+    /**
+     * A salvo of Rivet's studs (R3, gadgets/studs.ts): laid by a `driver`, never carried. On a wall it goes with its
+     * hole's bottom `ledgeM` over the floor below (0: from the floor), so a body gets through it; a bullet that meets
+     * one of its studs destroys it.
+     */
+    salvo: z.strictObject({ ledgeM: z.number().min(0) }).optional(),
+    /**
      * Latch's Snare Latch (R3, gadgets/snare.ts, gadgets/serve.ts snap): sprung by an enemy body crossing its wire (its
      * `tripwire`), it shuts on his leg: `hit` at once, `damage` every `everyS`, his speed × `speedMul` (no sprint),
      * until he pulls it off (Interact held `pullS`) or goes down; the other side is shown where he is for `spotS`.
@@ -1262,6 +1279,8 @@ export const gadgetSchema = z
     if ((u.kind === "drone") !== (g.kludge !== undefined)) ctx.addIssue({ code: "custom", path: ["kludge"], message: "a drone item is a Kludge, and a Kludge is a drone item" });
     if (g.arc && (u.kind !== "place" || !u.on.includes("floor") || !g.electronic)) ctx.addIssue({ code: "custom", path: ["arc"], message: "an arc pack is electronic and put down on a floor" });
     if (u.kind === "shoot" && !g.emp) ctx.addIssue({ code: "custom", path: ["use"], message: "a shot item's round does something where it stops (emp)" });
+    if ((u.kind === "launch") !== (g.driver !== undefined) || (g.driver && !g.remote)) ctx.addIssue({ code: "custom", path: ["driver"], message: "a launched item is a driver, which lays salvos that wait for its detonator" });
+    if (g.salvo && (!g.remote || !g.blast?.cut || u.kind !== "place")) ctx.addIssue({ code: "custom", path: ["salvo"], message: "a salvo is a remote device placed where its driver lays it, and its blast cuts a shape" });
   });
 export type GadgetData = z.infer<typeof gadgetSchema>;
 
@@ -1588,6 +1607,11 @@ const explosiveCommon = {
 export const explosiveSchema = z.union([
   z.strictObject({ ...explosiveCommon, shape: z.literal("rect"), wM: metres, hM: metres }),
   z.strictObject({ ...explosiveCommon, shape: z.literal("disc"), diameterM: metres }),
+  /**
+   * An X (Rivet's Cross, R3): two arms `armM` wide along its diagonals, their middles' ends `spanM` apart across and up
+   * (rounded ends), over a round middle `hubM` across (the hole a body vaults through where they cross).
+   */
+  z.strictObject({ ...explosiveCommon, shape: z.literal("cross"), spanM: metres, armM: metres, hubM: metres }),
 ]);
 export type ExplosiveData = z.infer<typeof explosiveSchema>;
 export const destructionSchema = z.strictObject({

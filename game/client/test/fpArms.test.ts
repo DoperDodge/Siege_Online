@@ -471,8 +471,8 @@ describe("the hands on what's held (render/viewmodel.ts)", () => {
     const solid = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
     let checked = 0;
     for (const g of data.gadgets.values()) {
-      // (A shot item is a gun in the hands, R3: Ohm's pistol, below.)
-      if (g.use.kind === "swing" || g.use.kind === "hold" || g.use.kind === "shoot") continue;
+      // (A shot or launched item is a gun in the hands, R3: Ohm's pistol, below; Rivet's driver.)
+      if (g.use.kind === "swing" || g.use.kind === "hold" || g.use.kind === "shoot" || g.use.kind === "launch") continue;
       for (const detonator of [false, true]) {
         if (detonator && g.use.kind !== "place") continue;
         vm.update(0, 1 / 60, w, state({ hand: 1 }), 30, { data: g, detonator });

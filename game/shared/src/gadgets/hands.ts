@@ -14,13 +14,16 @@ import type { ResolvedLoadout } from "../weapons/loadout.js";
 import { viewDir } from "../weapons/spread.js";
 import type { SimEvent } from "../weapons/step.js";
 import { ticks } from "../weapons/ticks.js";
-import { isPlaced, placeSpot, type PlaceQuery, type PlaceSpot } from "./place.js";
+import { isPlaced, placeSpot, salvoSpot, type PlaceQuery, type PlaceSpot } from "./place.js";
+import { driverOf, laidBy, salvoCut } from "./studs.js";
 
 export interface HandsContext extends PlaceQuery {
   data: GameData;
   events: SimEvent[];
   /** Whether a body's detonator has a device of `gadget` out to set off (not one an EMP disabled); unset: yes. */
   canDetonate?(pawn: Pawn, gadget: string): boolean;
+  /** How many of a driver's salvos its detonator sets off now (Rivet's, R3: every one that can go); unset: all waiting. */
+  salvosReady?(pawn: Pawn, gadget: string): number;
   /**
    * Whether a swing's blow from this body's eye along its view meets the level, a panel or a gadget within `reachM` (it
    * costs a charge here; a body or a drone it meets is the room's to judge and charge, rewound); unset: yes.
@@ -127,7 +130,9 @@ function afterUse(s: PawnState, slot: 1 | 2, g: GadgetData) {
  */
 export function deviceLost(data: GameData, pawn: Pawn, gadget: string): boolean {
   const s = pawn.state;
-  const slot = slotGadget(data, pawn.loadout, 1)?.id === gadget ? 1 : slotGadget(data, pawn.loadout, 2)?.id === gadget ? 2 : 0;
+  // A salvo (Rivet's, R3) waits for its driver's detonator.
+  const id = driverOf(data, gadget)?.id ?? gadget;
+  const slot = slotGadget(data, pawn.loadout, 1)?.id === id ? 1 : slotGadget(data, pawn.loadout, 2)?.id === id ? 2 : 0;
   if (slot === 0 || waiting(s, slot) === 0) return false;
   if (slot === 1) s.w1--;
   else s.w2--;
@@ -145,6 +150,8 @@ export function deviceLost(data: GameData, pawn: Pawn, gadget: string): boolean 
 function toggle(s: PawnState, slot: 1 | 2, g: GadgetData) {
   if (handSlot(s.hand) === slot) {
     if (isDetonator(s.hand) && left(s, slot) > 0 && waiting(s, slot) < (g.maxOut ?? Infinity)) takeOut(s, deviceHand(slot));
+    // Rivet's driver (R3): with salvos of it waiting, its key goes from the driver to their detonator.
+    else if (!isDetonator(s.hand) && g.driver && waiting(s, slot) > 0) takeOut(s, detonatorHand(slot));
     else putAway(s);
     return;
   }
@@ -176,6 +183,13 @@ export function placeSpotFor(q: PlaceQuery & { data: GameData }, pawn: Pawn): Pl
   const slot = handSlot(s.hand);
   if (slot === 0 || isDetonator(s.hand) || s.mode !== PawnMode.Walk || !s.grounded) return null;
   const g = slotGadget(q.data, pawn.loadout, slot);
+  if (g?.use.kind === "launch") {
+    // Rivet's driver (R3): its salvo, the one picked, where the view meets a surface it may go on.
+    const laid = laidBy(q.data, g, s.pattern);
+    const ex = laid && salvoCut(q.data, laid);
+    if (!laid || !ex) return null;
+    return salvoSpot(q, laid, ex, g.use.on, g.use.reachM, eyePose(q.data.movement, q.data.hitboxes, s).pos, viewDir(s.yaw, s.pitch), s.yaw);
+  }
   if (!g || !isPlaced(g)) return null;
   // Mira's mirror goes at her head height standing or crouched, never prone (Phase 8 M7).
   if (g.mirror && s.stance === Stance.Prone) return null;
@@ -240,13 +254,44 @@ export function stepHands(ctx: HandsContext, pawn: Pawn, input: InputCmd, presse
   if (isDetonator(s.hand)) {
     // An EMP on the body (DSEG), or on every device of it out: the press does nothing (Phase 8 M3).
     if (pressed & Btn.Fire && waiting(s, slot) > 0 && s.jammed === 0 && (ctx.canDetonate?.(pawn, g.id) ?? true)) {
-      if (slot === 1) s.w1--;
-      else s.w2--;
+      // Rivet's driver (R3): every salvo of his that can go, together (one in a Damper's reach stays, waiting).
+      const n = g.driver ? Math.max(1, Math.min(waiting(s, slot), ctx.salvosReady?.(pawn, g.id) ?? waiting(s, slot))) : 1;
+      if (slot === 1) s.w1 -= n;
+      else s.w2 -= n;
       ctx.events.push({ kind: "detonate", pawnId: pawn.id, seq: input.seq, slot, gadget: g.id });
       if (waiting(s, slot) === 0) {
         if (left(s, slot) > 0) takeOut(s, deviceHand(slot));
         else putAway(s);
       }
+    }
+    return;
+  }
+  if (g.use.kind === "launch") {
+    // Rivet's Stud Driver (R3): the reload key picks the next of its salvos; Fire lays the one picked where the view
+    // meets a surface it may go on (the room puts it in the table), and the next can go `cycleS` later. A miss lays
+    // nothing. With none left, or as many out as may wait, its detonator comes out.
+    const u = g.use;
+    const lays = g.driver?.lays.length ?? 0;
+    if (pressed & Btn.Reload && lays > 0) s.pattern = (s.pattern + 1) % lays;
+    if (s.gAct === GadgetAct.Shoot) {
+      s.gTicks = Math.min(0xffff, s.gTicks + 1);
+      if (s.gTicks < Math.max(1, ticks(u.cycleS))) return;
+      s.gAct = GadgetAct.Ready;
+      s.gTicks = 0;
+    }
+    const most = g.maxOut ?? Infinity;
+    if (!(pressed & Btn.Fire) || left(s, slot) === 0 || waiting(s, slot) >= most) return;
+    const spot = placeSpotFor(ctx, pawn);
+    const laid = laidBy(ctx.data, g, s.pattern);
+    if (!spot || !laid) return;
+    ctx.events.push({ kind: "place", pawnId: pawn.id, seq: input.seq, slot, gadget: laid.id, ...spot });
+    if (slot === 1) [s.g1, s.w1] = [s.g1 - 1, s.w1 + 1];
+    else [s.g2, s.w2] = [s.g2 - 1, s.w2 + 1];
+    s.gTicks = 0;
+    if (left(s, slot) > 0 && waiting(s, slot) < most) s.gAct = GadgetAct.Shoot;
+    else {
+      s.hand = detonatorHand(slot);
+      s.gAct = GadgetAct.Ready;
     }
     return;
   }

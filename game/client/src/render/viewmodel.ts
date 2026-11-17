@@ -224,8 +224,10 @@ export class Viewmodel {
     this.shell.visible = false;
     this.arms.setHand("left", null);
     this.arms.setHand("right", null);
-    // A gadget that's a gun (R3, Ohm's Brownout Pistol: a "shoot" item) is posed as a gun is; any other as a gadget.
-    const gadgetGun = show && gadget !== null && !gadget.detonator && gadget.data.use.kind === "shoot" ? gadget.data : null;
+    // A gadget that's a gun (R3: Ohm's Brownout Pistol, a "shoot" item; Rivet's Stud Driver, a "launch" one) is posed as
+    // a gun is; any other as a gadget.
+    const isGun = gadget?.data.use.kind === "shoot" || gadget?.data.use.kind === "launch";
+    const gadgetGun = show && gadget !== null && !gadget.detonator && isGun ? gadget.data : null;
     this.gadgetGun = gadgetGun !== null;
     this.poseHeld(show && !gadgetGun ? gadget : null, s);
     this.rig.visible = show && (!gadget || gadgetGun !== null);
@@ -268,14 +270,16 @@ export class Viewmodel {
 
   /**
    * Ohm's Brownout Pistol (R3, Ulo's design) as a gun: the gun kit's big-slide pistol with its coil shroud and its
-   * curved sight (gunKit.ts). Aimed (the page's `scoped`: ADS held with it out) it comes up to the eye over a pistol's
+   * curved sight (gunKit.ts); Rivet's Stud Driver too, the kit's hand cannon with its drum. Aimed (the page's `scoped`: ADS held with it out) it comes up to the eye over a pistol's
    * aiming time; a round kicks it; then the magazine's changed over the reload time (the 5.7's, Ulo): the left hand
    * takes the empty one off the bottom of the grip, down out of the picture, and back with the next, as a pistol's
    * reload goes. Taken out, it comes up from below.
    */
   private poseGadgetGun(now: number, dt: number, data: GadgetData, s: PawnState) {
-    if (data.use.kind !== "shoot") return;
-    const look = { id: data.id, class: "handgun", pick: { sight: "emp", barrel: null, grip: null, underbarrel: null } };
+    const u = data.use;
+    if (u.kind !== "shoot" && u.kind !== "launch") return;
+    // (Rivet's driver, R3: its own irons; a salvo's kick, then the next loaded over its cycle as a magazine's changed.)
+    const look = { id: data.id, class: "handgun", pick: { sight: u.kind === "shoot" ? "emp" : null, barrel: null, grip: null, underbarrel: null } };
     const gun = this.useGun(`g:${gunKey(look)}`, () => buildGun(look, this.kit), true);
     this.reticle = "posts";
     // Aiming, eased over a pistol's ADS time (it's the page's, not the simulation's).
@@ -288,7 +292,7 @@ export class Viewmodel {
     else if (s.gAct === GadgetAct.Shoot) {
       // The round's kick as it goes; then the magazine changed over the rest (out a quarter of the way, in by half).
       if (s.gTicks < this.lastShootTicks || !this.shooting) this.kick = 1;
-      const total = Math.max(1, ticks(data.use.reloadS));
+      const total = Math.max(1, ticks(u.kind === "shoot" ? u.reloadS : u.cycleS));
       const t = Math.min(1, s.gTicks / total);
       reload = { t, out: 0.25, in: 0.5, empty: false, shells: null };
       tilt = through(t, 0.04, 0.16) * (1 - through(t, 0.86, 1));

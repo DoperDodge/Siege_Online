@@ -21,6 +21,7 @@ import { heartbeats, heartOf, sensorUp } from "./gadgets/sensor.js";
 import { mirrorOf, sightPast } from "./gadgets/mirror.js";
 import { barrierOf, crossesBarrier, smokeOnSegment, wireSlow } from "./gadgets/areas.js";
 import { gadgetOnRay, partBoxes } from "./gadgets/hits.js";
+import { salvosOut } from "./gadgets/studs.js";
 import { emptySlots, moveStock, placeSpotFor, slotGadget, stockSlots } from "./gadgets/hands.js";
 import { guData } from "./gadgets/gu.js";
 import { CAMERA_HALF_M } from "./intel/cameras.js";
@@ -131,7 +132,8 @@ export class Sim {
       // Skopós's shells through her own barriers (D-157): a shell waking stands up under its canopy.
       passes: (pawn, c) => pawn.ownerId !== null && this.barrierOwner.get(c.handle) === pawn.ownerId,
       // Phase 8 M6: not while the body, or the device, is inside an enemy jammer.
-      canDetonate: (pawn, gadget) => !pawnJammed(this, pawn) && detonatable(this.gadgets.list, pawn.ownerId ?? 0, kindOf(gadget), (g) => !pointJammed(this, g.team, g.pos) && !onLiveSurface(this, g)) !== undefined,
+      canDetonate: (pawn, gadget) => this.detonations(pawn, gadget) > 0,
+      salvosReady: (pawn, gadget) => this.detonations(pawn, gadget),
       droneJammed: (pawn) => pawnJammed(this, pawn),
       swingMeets: (pawn, reachM) => this.swingMeets(pawn, reachM),
       solidOnRay: (origin, dir, maxT) => this.solidOnRay(origin, dir, maxT),
@@ -1328,6 +1330,19 @@ export class Sim {
    * `reachM` (Phase 8 M4: it spends a charge, predicted). Bodies and drones aren't asked here: where they are now isn't
    * where the swinger saw them, so the room judges and charges those, rewound (net/room.ts judgeSwing).
    */
+  /**
+   * How many devices of `gadget` a body's detonator sets off now: its oldest working one, or every working salvo of a
+   * driver's (Rivet's, R3); none while the body, or the device, is in an enemy jammer's reach (Phase 8 M6), or on a
+   * surface Shunt's pack makes live (R3).
+   */
+  detonations(pawn: Pawn, gadget: string): number {
+    if (pawnJammed(this, pawn)) return 0;
+    const ok = (g: Gadget) => !pointJammed(this, g.team, g.pos) && !onLiveSurface(this, g);
+    const d = this.data.gadgets.get(gadget);
+    if (d?.driver) return salvosOut(this.gadgets.list, pawn.ownerId ?? 0, d, ok).length;
+    return detonatable(this.gadgets.list, pawn.ownerId ?? 0, kindOf(gadget), ok) ? 1 : 0;
+  }
+
   private swingMeets(pawn: Pawn, reachM: number): boolean {
     const s = pawn.state;
     const eye = eyePose(this.data.movement, this.data.hitboxes, s).pos;

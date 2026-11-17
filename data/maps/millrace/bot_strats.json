@@ -129,6 +129,7 @@
             "from": "1F_FIRING_FLOOR",
             "ops": [
               "thermite",
+              "rivet",
               "fuze"
             ]
           }
@@ -302,6 +303,7 @@
             "from": "1F_WARPING",
             "ops": [
               "thermite",
+              "rivet",
               "striker",
               "fuze"
             ]
@@ -311,6 +313,7 @@
             "from": "1F_FOREMAN",
             "ops": [
               "thermite",
+              "rivet",
               "striker",
               "fuze"
             ]
@@ -484,6 +487,7 @@
             "from": "1F_RECEPTION",
             "ops": [
               "thermite",
+              "rivet",
               "striker",
               "fuze"
             ]
@@ -493,6 +497,7 @@
             "from": "1F_OFFICE_HALL",
             "ops": [
               "thermite",
+              "rivet",
               "striker",
               "fuze"
             ]
@@ -666,6 +671,7 @@
             "from": "2F_ARCHIVE",
             "ops": [
               "thermite",
+              "rivet",
               "striker",
               "fuze"
             ]
@@ -675,6 +681,7 @@
             "from": "2F_OFFICE_HALL",
             "ops": [
               "thermite",
+              "rivet",
               "striker",
               "fuze"
             ]

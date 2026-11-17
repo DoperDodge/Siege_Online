@@ -10,7 +10,7 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 
-export type ShapeMat = "olive" | "dark" | "metal" | "black" | "tan" | "red" | "yellow" | "white" | "glass" | "rubber" | "blueGlow" | "greenGlow" | "redGlow" | "team";
+export type ShapeMat = "olive" | "dark" | "metal" | "black" | "tan" | "red" | "yellow" | "white" | "glass" | "rubber" | "blueGlow" | "greenGlow" | "redGlow" | "team" | "orange";
 
 /** Each shape material's look (the gadget models make one of each, shared). */
 export const SHAPE_MATERIALS: Record<ShapeMat, { color: number; roughness: number; metalness: number; emissive?: number }> = {
@@ -28,6 +28,8 @@ export const SHAPE_MATERIALS: Record<ShapeMat, { color: number; roughness: numbe
   greenGlow: { color: 0x37ff6a, roughness: 0.4, metalness: 0, emissive: 0x24c94f },
   redGlow: { color: 0xff3030, roughness: 0.4, metalness: 0, emissive: 0xff2020 },
   team: { color: 0xffffff, roughness: 0.55, metalness: 0.1 },
+  // Rivet's studs' heads and his driver's muzzle band (R3): a hot orange, lit a little so a salvo shows on a wall.
+  orange: { color: 0xea580c, roughness: 0.45, metalness: 0.2, emissive: 0x7c2d12 },
 };
 
 type V3 = readonly [number, number, number];
@@ -94,10 +96,48 @@ function fuse(p: Parts, y: number, r: number): void {
  */
 export const SENSOR_DISPLAY = { w: 0.05, h: 0.034, cx: 0, cy: 0.03, z: 0.0182 } as const;
 
-export function gadgetShape(id: string, size: V3): Map<ShapeMat, THREE.BufferGeometry> | null {
+/**
+ * `studs`: a salvo's studs (Rivet's, R3: gadgets/studs.ts studPoints), across and up its face from its middle; the
+ * page's data gives them, a shape alone can't.
+ */
+export function gadgetShape(id: string, size: V3, studs: readonly (readonly [number, number])[] = []): Map<ShapeMat, THREE.BufferGeometry> | null {
   const [w, h, d] = size;
   const p = new Parts();
   switch (id) {
+    case "stud_ring":
+    case "stud_spine":
+    case "stud_cross": {
+      // A salvo of Rivet's studs (R3; our own design): each a squat steel stud driven into the surface (the back of its
+      // box, +z), its domed head out (−z) with a hot orange band. (No studs given: no shape of its own.)
+      if (!studs.length) return null;
+      const back = d / 2;
+      for (const [x, y] of studs) {
+        p.cyl("metal", 0.016, d * 0.5, [x, y, back - d * 0.25], [HALF_PI, 0, 0], 10);
+        p.cyl("orange", 0.026, 0.008, [x, y, back - d * 0.5 - 0.004], [HALF_PI, 0, 0], 12);
+        p.lathe("dark", [[0.022, 0], [0.016, 0.006], [0.001, 0.01]], [x, y, back - d * 0.5 - 0.008], 10, [-HALF_PI, 0, 0]);
+      }
+      break;
+    }
+    case "stud_driver": {
+      // Rivet's Stud Driver (R3; our own design), as others see it in his hand: a fat barrel along its top with an
+      // orange band round its muzzle, a three-round drum across under it, a pistol grip raked back, a guard. Front −z.
+      const barrelR = w * 0.38;
+      const by = h / 2 - barrelR * 1.08;
+      p.cyl("dark", barrelR, d * 0.9, [0, by, -d * 0.04], [HALF_PI, 0, 0], 14);
+      p.cyl("orange", barrelR * 1.08, 0.02, [0, by, -d / 2 + 0.026], [HALF_PI, 0, 0], 14);
+      p.cyl("black", barrelR * 0.62, 0.004, [0, by, -d * 0.49 - 0.002], [HALF_PI, 0, 0], 12);
+      const drumR = w * 0.42;
+      const dy = by - barrelR - drumR * 0.55;
+      p.cyl("metal", drumR, w * 0.9, [0, dy, -d * 0.12], [0, 0, HALF_PI], 14);
+      for (let i = 0; i < 3; i++) {
+        const a = (i * 2 * Math.PI) / 3;
+        for (const x of [-1, 1]) p.cyl("orange", drumR * 0.22, 0.004, [x * w * 0.45, dy + Math.sin(a) * drumR * 0.5, -d * 0.12 + Math.cos(a) * drumR * 0.5], [0, 0, HALF_PI], 8);
+      }
+      const gripH = h / 2 + by - barrelR;
+      p.box("black", [w * 0.6, gripH, d * 0.17], [0, -h / 2 + gripH / 2, d * 0.3]);
+      p.box("dark", [w * 0.3, 0.012, d * 0.3], [0, -h / 2 + gripH * 0.55, d * 0.1]);
+      break;
+    }
     case "frag": {
       const r = Math.min(w, d) / 2 - 0.002;
       const by = -h / 2;

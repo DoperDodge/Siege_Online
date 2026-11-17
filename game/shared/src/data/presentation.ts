@@ -96,7 +96,7 @@ export const operatorLookSchema = z.strictObject({
   sleeves: z.enum(["long", "short"]),
   vestKind: z.enum(["plate", "heavy", "light"]),
   pads: z.boolean(),
-  back: z.enum(["none", "pack", "hammer", "roll", "radio", "jammer", "drone", "tube", "battery", "medbag", "reel", "traps"]),
+  back: z.enum(["none", "pack", "hammer", "roll", "radio", "jammer", "drone", "tube", "battery", "medbag", "reel", "traps", "studs"]),
 });
 export type OperatorLook = z.infer<typeof operatorLookSchema>;
 export const operatorLooksSchema = z.strictObject({

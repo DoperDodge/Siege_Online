@@ -37,6 +37,8 @@ export interface MoveContext {
   slowOf?(pawn: Pawn): number;
   /** Whether a body's detonator has a device of `gadget` out to set off (Phase 8 M3: not one an EMP disabled). */
   canDetonate?(pawn: Pawn, gadget: string): boolean;
+  /** How many of a driver's salvos its detonator sets off now (R3, Rivet's: every one that can go). */
+  salvosReady?(pawn: Pawn, gadget: string): number;
   /** Whether a swing's blow from this body's eye along its view meets something within `reachM` (Phase 8 M4: it costs a charge). */
   swingMeets?(pawn: Pawn, reachM: number): boolean;
   /** How far along a ray the first solid gadget is (Phase 8 M5: a deployable shield Fuze's charge goes on), or null. */

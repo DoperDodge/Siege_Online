@@ -37,6 +37,7 @@ import { arcData, liveSurfaces, onLiveSurface, packLive } from "./arcs.js";
 import { wireLength, type SnareData } from "./snare.js";
 import { prodData, prodTarget } from "../player/prod.js";
 import { pawnHitboxes } from "../player/shield.js";
+import { salvosOut } from "./studs.js";
 import { detonatable, GFlag, type Gadget } from "./table.js";
 
 const KIND_WIRE = kindOf("barbed_wire");
@@ -192,7 +193,20 @@ export class GadgetServer {
       const pawn = sim.pawns.get(e.pawnId);
       // Its owner's oldest working one of that kind out (the controller's: Skopós's shells share theirs), not one inside
       // an enemy jammer (Phase 8 M6), nor one on a surface Shunt's pack makes live (R3).
-      const g = pawn && detonatable(sim.gadgets.list, pawn.ownerId ?? 0, kindOf(e.gadget), (x) => !pointJammed(sim, x.team, x.pos) && !onLiveSurface(sim, x));
+      const ok = (x: Gadget) => !pointJammed(sim, x.team, x.pos) && !onLiveSurface(sim, x);
+      const driver = sim.data.gadgets.get(e.gadget);
+      if (pawn && driver?.driver) {
+        // Rivet's driver (R3): every salvo of his that can go, together. Each is set off before any goes, so one's blast
+        // reaching another doesn't count it lost (his detonator counted it).
+        const go = salvosOut(sim.gadgets.list, pawn.ownerId ?? 0, driver, ok);
+        for (const x of go) sim.gadgets.update(x.id, { flags: x.flags | GFlag.Active });
+        for (const x of go) {
+          const now = sim.gadgets.get(x.id);
+          if (now) this.trigger(now, null);
+        }
+        return;
+      }
+      const g = pawn && detonatable(sim.gadgets.list, pawn.ownerId ?? 0, kindOf(e.gadget), ok);
       if (g) this.detonated(g);
       return;
     }

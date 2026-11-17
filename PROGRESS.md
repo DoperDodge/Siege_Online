@@ -122,6 +122,22 @@ and Tonic defending. One at a time, each complete.
   off**: it jolts any attacker who comes in front of it the same way (on its own charge; an EMP switches it off). **The twist**: an EMP that reaches her while she holds the shield up shocks her: 1.5 s she
   can't move, shoot or use anything, and the prod stays off for the EMP's time (set down, it doesn't). Her look: black
   with white piping, a helmet with a face shield. A bot playing Bailiff prods attackers who come close.
+- **Rivet** (attacker, the remote hard breacher; health and speed 2 / 2; UMP45 or Commando 9, P229 or USP40, a stun,
+  claymore or breach charge): the **Stud Driver** in slot 2 (Z), a stubby launcher with a drum. **Your design: his hard
+  breaches come in a circle, a vertical line and an X, and each is a hole you can get through.** Fire lays a salvo of
+  explosive studs where you aim, on a wall, floor or hatch (soft or reinforced) up to 25 m away; **R picks the shape**
+  while it's out (the HUD says which, and green dots show where the studs will go): the **Ring** (a round hole 1.4 m
+  across), the **Spine** (a slot 0.8 m wide and 2 m tall) or the **Cross** (an X with a round middle). On a wall the
+  salvo lines itself up whatever height you aim at: the Ring's and the Cross's bottom edge goes 0.45 m over the floor, a
+  ledge you vault through (Space), and the Spine runs up from the floor, a slot you walk through. Three salvos a round,
+  all three can wait at once; Z gives the detonator and **one press sets them all off together**, each cutting its
+  shape through every layer, steel included (a hatch goes whole). A Damper in reach of one salvo keeps that one from
+  going (the others do); a live Arc Pack burns one out; a bullet into one of its studs destroys it. His look: slate
+  overalls, an orange hood, a dark visor, a drum of spare studs on his back. A bot playing Rivet lays a Spine on the
+  plan's hard breach wall and sets it off from cover.
+- **How to test Rivet**: the Gadget Lab, pick Rivet, Z, aim at the soft walls and press left mouse (R between presses
+  for the other shapes), then Z and left mouse to set them all off; walk up to the Ring or the Cross and press Space to
+  vault through, or walk through the Spine. Try one on the Reinforced wall too.
 - **How to test Bailiff**: the Gadget Lab, pick Bailiff; walk up to the attacker dummy and click left mouse; Z and hold
   left mouse to set the shield down, then Z to switch its shock on. Then switch to Ohm and shoot an EMP round at her with the shield up.
 - **How to test Latch**: the Gadget Lab, pick Latch, Z, look at the empty door frame and hold left mouse; switch to an
@@ -130,7 +146,7 @@ and Tonic defending. One at a time, each complete.
   left mouse (the pack goes to the wall and the wall lights up); switch to Thermite and put his charge on it. For tricking: put the charge on with the pack picked up, then put it back.
 
 ### Next
-- **R3**: the other three, in this order: Rivet, Dowser, Hull.
+- **R3**: the other two, in this order: Dowser, Hull.
 - **R4**: the rest of the tests moved from Oregon to Millrace, Oregon taken off this branch, the code's internal names
   and the docs brought in line.
 

@@ -534,6 +534,17 @@ function backItem(s: Shaper, L: OperatorLook): void {
         s.box([x, -0.18, z + 0.0915], [0.064, 0.006, 0.01], 2, 0.001);
       }
       return;
+    case "studs":
+      // Rivet's (R3): a squat drum of spare studs across the back, banded in the accent, on a strap over the left
+      // shoulder, a tool pouch under it.
+      s.paint(L.gear, 0.6);
+      s.bar([-0.11, -0.16, z + 0.065], [0.11, -0.16, z + 0.065], 0.062, 0.062, 14);
+      s.paint(L.accent, 0.45);
+      for (const x of [-0.085, 0, 0.085]) s.bar([x - 0.009, -0.16, z + 0.065], [x + 0.009, -0.16, z + 0.065], 0.065, 0.065, 14);
+      s.paint(L.gear, 0.85);
+      s.box([0.03, -0.29, z + 0.04], [0.16, 0.08, 0.06], 4, 0.012);
+      s.bar([0.11, -0.12, z + 0.03], [-0.1, 0.1, z + 0.02], 0.012, 0.012, 6);
+      return;
     case "tube":
       // A canister upright at the right, a hose over the shoulder.
       s.paint(L.gear, 0.5);

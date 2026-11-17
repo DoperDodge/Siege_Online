@@ -1,0 +1,16 @@
+{
+  "_doc": "Rivet's Stud Driver (Project Redmond R3, gadgets/R3_OPERATORS.md §2; Ulo's design: his hard breaches in a circle, a vertical line and an X, each a hole a body gets through once it's set off). His ability, a compact launcher in slot 2 (Z). Fire lays a salvo of explosive studs on the breakable surface the view meets (soft or reinforced: a wall, a floor, a hatch) out to `use.reachM`, the next `use.cycleS` later; the reload key picks which while it's out (`driver.lays`: the Ring, the Spine, the Cross, data/gadgets/stud_*.json). On a wall a salvo goes where the view meets it across the wall, at the height that puts its hole's bottom its `salvo.ledgeM` over the floor (gadgets/studs.ts salvoSpot). Up to `maxOut` wait at once; with one waiting the ability key gives the detonator, which sets off every one of them together (each cuts its own shape). Mechanical studs and a wireless detonator: a Damper in reach of a salvo (or an EMP on him) stops its set-off. Our own design and numbers.",
+  "_ours": true,
+  "id": "stud_driver",
+  "name": "Stud Driver",
+  "side": "attacker",
+  "operator": "rivet",
+  "count": 3,
+  "electronic": false,
+  "use": {"kind": "launch", "on": ["soft", "steel"], "reachM": 25, "cycleS": 0.7},
+  "remote": true,
+  "maxOut": 3,
+  "pickUp": false,
+  "sizeM": [0.08, 0.16, 0.3],
+  "driver": {"lays": ["stud_ring", "stud_spine", "stud_cross"]}
+}

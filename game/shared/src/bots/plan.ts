@@ -58,7 +58,7 @@ export type Task =
 export interface GadgetTask {
   kind: "gadget";
   slot: 1 | 2;
-  how: "place" | "throw" | "lob" | "swing" | "hold" | "detonate" | "shoot";
+  how: "place" | "throw" | "lob" | "swing" | "hold" | "detonate" | "shoot" | "launch";
   stand: Vec3 | null;
   look: Vec3;
   spots?: Vec3[];
@@ -66,6 +66,8 @@ export interface GadgetTask {
   cover?: Vec3;
   seconds?: number;
   crouch?: boolean;
+  /** A driver's salvo to lay (R3, Rivet's: its `driver.lays` index, picked with the reload key first). */
+  pattern?: number;
   tag: string;
 }
 
@@ -150,13 +152,22 @@ export function coverFrom(nav: NavWorld, at: UseSpot, d = 3): Vec3 {
 }
 
 /**
- * A hard breach of wall `e` from room `from` by this body (M7): Thermite's Exothermic Charge, set off from cover; else
- * a Hard Breach Charge (Striker's EMP at the wall first), waited out from cover. None: it has neither.
+ * A hard breach of wall `e` from room `from` by this body (M7): Rivet's Stud Driver (R3), a Spine laid on the wall (a
+ * slot from the floor to walk through) or a salvo on a hatch from above, set off from cover; Thermite's Exothermic
+ * Charge, set off from cover; else a Hard Breach Charge (Striker's EMP at the wall first), waited out from cover.
+ * None: it has none of them.
  */
 export function hardBreachTasks(sim: Sim, nav: NavWorld, b: Pawn, e: PanelEntry, from: string | null): Task[] {
+  const index = e.panel.spec.index;
+  const driver = slotWith(sim, b, "stud_driver");
+  if (driver) {
+    const spot = e.panel.kind === "hatch" ? hatchSpot(sim, nav, e) : e.panel.kind === "wall" ? wallSpot(sim, nav, e, from, 1.2, 1.0) : null;
+    if (!spot) return [];
+    const lays = slotGadget(sim.data, b.loadout, driver)?.driver?.lays ?? [];
+    return [gadgetTask(driver, "launch", spot, `stud${index}`, { cover: coverFrom(nav, spot, 3), pattern: Math.max(0, lays.indexOf("stud_spine")) })];
+  }
   const at = wallSpot(sim, nav, e, from, 0.8, 0.9);
   if (!at || e.panel.kind !== "wall") return [];
-  const index = e.panel.spec.index;
   const cover = coverFrom(nav, at);
   const thermite = slotWith(sim, b, "exothermic_charge");
   if (thermite) return [gadgetTask(thermite, "place", at, `therm${index}`, { cover })];

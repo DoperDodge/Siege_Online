@@ -121,7 +121,7 @@ export class GadgetUse {
     if (this.state === UseState.Going) {
       if (t.how === "detonate" ? out === 0 : left === 0) return this.end(t.how === "detonate");
       if (t.stand) {
-        const near = t.how === "throw" || t.how === "lob" || t.how === "shoot" ? 1.2 : 0.35;
+        const near = t.how === "throw" || t.how === "lob" || t.how === "shoot" || t.how === "launch" ? 1.2 : 0.35;
         if (Math.hypot(t.stand[0] - s.x, t.stand[2] - s.z) > near || Math.abs(t.stand[1] - s.y) > 0.8) {
           const w = ctx.walk(t.stand, near * 0.7, t.how !== "detonate");
           if (w) return { ...w, buttons: w.buttons & ~(Btn.Fire | Btn.Ads) };
@@ -168,7 +168,7 @@ export class GadgetUse {
         this.usedAt = now;
         this.state = UseState.After;
       } else {
-        const look = t.how === "place" ? nudged(t.look, this.nudge) : t.look;
+        const look = t.how === "place" || t.how === "launch" ? nudged(t.look, this.nudge) : t.look;
         if (s.hand !== DEVICE[t.slot] || s.gAct === GadgetAct.Equip) return takeOut(DEVICE[t.slot], look);
         switch (t.how) {
           case "hold":
@@ -187,6 +187,18 @@ export class GadgetUse {
             const on = viewGap({ yaw: s.yaw, pitch: s.pitch }, want) < 0.03;
             const b = on && every(10) && s.gAct === GadgetAct.Ready ? (t.how === "throw" ? Btn.Fire : Btn.Ads) : 0;
             return { forward: 0, strafe: 0, yaw: v.yaw, pitch: v.pitch, buttons: b, stance, lean: 0 };
+          }
+          case "launch": {
+            // A driver's salvo (R3, Rivet's): its pick first (the reload key), then a press of Fire with the aim on the
+            // spot (if it doesn't take, the aim moves a little: a few tries, then it gives up).
+            if (t.pattern !== undefined && s.pattern !== t.pattern) return aim(look, every(6) ? Btn.Reload : 0);
+            if (s.gAct !== GadgetAct.Ready || !aimed(look, 0.02)) return aim(look, 0);
+            if (this.heldFrom < 0) this.heldFrom = now;
+            if (now - this.heldFrom > NUDGE_S * TICK_HZ) {
+              this.heldFrom = -1;
+              if (++this.nudge >= NUDGES.length) return this.end(false);
+            }
+            return aim(look, every(4) ? Btn.Fire : 0);
           }
           case "place": {
             if (s.gAct === GadgetAct.Place) {

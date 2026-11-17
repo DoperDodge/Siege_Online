@@ -56,7 +56,7 @@ export interface GunModel {
   dispose(): void;
 }
 
-type Mat = "metal" | "furniture" | "wood" | "attach" | "dark" | "glass" | "accent" | "copper" | "emitter" | "lens";
+type Mat = "metal" | "furniture" | "wood" | "attach" | "dark" | "glass" | "accent" | "copper" | "emitter" | "lens" | "stud";
 type P = [number, number];
 const DEG = Math.PI / 180;
 /** Picatinny: the rail's base height and width, its teeth's height and pitch. */
@@ -821,10 +821,28 @@ function flare(b: Builder, L: GunLookData): Anchors {
   b.tube("metal", 0.024, 0.04, 0.06 + L.barrel + 0.08, vb, 0, 18);
   b.tube("dark", 0.019, 0.06 + L.barrel + 0.075, 0.06 + L.barrel + 0.081, vb, 0, 18);
   b.pin("metal", 0.007, 0.036, 0.05, vb - 0.022);
-  b.side("metal", [[-0.05, 0.075], [-0.035, 0.08], [-0.042, 0.1], [-0.056, 0.098]], 0.008);
+  // Its hammer (none on Rivet's driver, R3: aimed, it stood in the middle of the view down its irons).
+  if (L.variant !== "rivet") b.side("metal", [[-0.05, 0.075], [-0.035, 0.08], [-0.042, 0.1], [-0.056, 0.098]], 0.008);
   triggerGuard(b, 0.025, 0.085, 0.03, "furniture");
   grip(b, "furniture", 0.0, 0.03, 14, 0.105, 0.04, 0.032);
-  magazine(b, "tube", 0.0, 0.06);
+  // (Rivet's driver's magazine is its drum, below.)
+  if (L.variant !== "rivet") magazine(b, "tube", 0.0, 0.06);
+  if (L.variant === "rivet") {
+    // Rivet's Stud Driver (R3; our own design): an orange band round its muzzle, a three-round drum across under its
+    // barrel's front, its studs' orange heads in either face.
+    const mu = 0.06 + L.barrel + 0.08;
+    b.tube("stud", 0.0262, mu - 0.018, mu - 0.006, vb, 0, 18);
+    const du = 0.06 + L.barrel * 0.55;
+    const dv = vb - 0.046;
+    // The drum is its magazine (a reload takes it off and puts the next on).
+    b.intoMag = true;
+    b.pin("metal", 0.024, 0.05, du, dv, 0, 16);
+    for (let i = 0; i < 3; i++) {
+      const a = (i * 2 * Math.PI) / 3;
+      for (const x of [-0.025, 0.025]) b.pin("stud", 0.0055, 0.004, du + Math.cos(a) * 0.012, dv + Math.sin(a) * 0.012, x);
+    }
+    b.intoMag = false;
+  }
   // A blade at the muzzle, a notch over the breech: their tops on the line.
   const line = vb + 0.032;
   b.block("metal", [0.004, 0.009, 0.006], 0.06 + L.barrel + 0.07, line - 0.0045);
@@ -1084,6 +1102,8 @@ export function buildGun(look: GunLook, kit: GunKit = loadPresentationData().gun
     accent: { color: "#c9c3a8", metalness: 0.8, roughness: 0.3 },
     copper: { color: "#b06a35", metalness: 0.85, roughness: 0.35 },
     emitter: { color: "#4ea3ff", emissive: "#2f7dff", metalness: 0, roughness: 0.4 },
+    // Rivet's studs' orange (R3): his driver's muzzle band, its drum's studs.
+    stud: { color: "#ea580c", emissive: "#7c2d12", metalness: 0.2, roughness: 0.45 },
     // A lens you see through (Ohm's sight): the world behind it tinted blue.
     lens: { color: "#2f7dff", transparent: true, opacity: 0.32, metalness: 0, roughness: 0.05, depthWrite: false },
   };

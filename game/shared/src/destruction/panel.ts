@@ -51,7 +51,11 @@ export interface PanelSpec {
 const HP_EPSILON = 1e-9;
 
 /** A disc around a hit point given in quarter cells (`r4`: radius in quarter cells), or a rectangle of cells. */
-export type CutShape = { kind: "disc"; u4: number; v4: number; r4: number } | { kind: "rect"; u0: number; v0: number; u1: number; v1: number };
+export type CutShape =
+  | { kind: "disc"; u4: number; v4: number; r4: number }
+  | { kind: "rect"; u0: number; v0: number; u1: number; v1: number }
+  /** A thick segment (an arm of Rivet's Cross, R3): every cell whose centre is within `r4` of a–b (quarter cells). */
+  | { kind: "line"; u4a: number; v4a: number; u4b: number; v4b: number; r4: number };
 
 export type PanelOp =
   /** Remove cells of one layer. Steel only goes to a `hard` cut (thermal or hard breach); metal never does. */
@@ -338,6 +342,27 @@ export class Panel {
   }
 
   private cutCells(l: Uint8Array, shape: CutShape, removed: number[]) {
+    if (shape.kind === "line") {
+      // Every cell whose centre is within r4 of the segment (whole quarter cells: the same on every machine).
+      const { u4a, v4a, u4b, v4b, r4 } = shape;
+      const du = u4b - u4a;
+      const dv = v4b - v4a;
+      const len2 = du * du + dv * dv;
+      const reach = (r4 >> 2) + 1;
+      const r2 = r4 * r4;
+      for (let v = Math.max(0, (Math.min(v4a, v4b) >> 2) - reach); v <= Math.min(this.h - 1, (Math.max(v4a, v4b) >> 2) + reach); v++)
+        for (let u = Math.max(0, (Math.min(u4a, u4b) >> 2) - reach); u <= Math.min(this.w - 1, (Math.max(u4a, u4b) >> 2) + reach); u++) {
+          const pu = 4 * u + 2 - u4a;
+          const pv = 4 * v + 2 - v4a;
+          const t = len2 > 0 ? Math.max(0, Math.min(1, (pu * du + pv * dv) / len2)) : 0;
+          const eu = pu - t * du;
+          const ev = pv - t * dv;
+          if (eu * eu + ev * ev > r2) continue;
+          const i = v * this.w + u;
+          if (l[i]) (l[i] = 0), removed.push(i);
+        }
+      return;
+    }
     if (shape.kind === "rect") {
       const u0 = Math.max(0, shape.u0);
       const v0 = Math.max(0, shape.v0);

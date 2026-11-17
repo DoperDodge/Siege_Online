@@ -278,6 +278,8 @@ export interface PawnState {
   snared: boolean;
   /** The Bailiff Shield's prod switched on (R3, player/prod.ts: a click of Fire with it up switches it). */
   prodOn: boolean;
+  /** Rivet's Stud Driver (R3, gadgets/studs.ts): which of its salvos Fire lays (its `driver.lays`), picked with the reload key. */
+  pattern: number;
   regenMade: number;
   regenTicks: number;
   // Fuze's Ballistic Shield (Phase 8 M11, player/shield.ts): ticks it's knocked aside (a guard break, or Sledge's
