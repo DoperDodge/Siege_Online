@@ -8,6 +8,8 @@ const meta = {
   _season: z.string().optional(),
   /** Dot-paths of placeholder values that still need verification (PLAN §0.2). */
   _unverified: z.array(z.string()).default([]),
+  /** Of our own design (Project Redmond R3): no research behind it, so no row in research/weapons.csv. */
+  _ours: z.boolean().optional(),
 };
 
 const byRating = z.object({ "1": z.number().positive(), "2": z.number().positive(), "3": z.number().positive() });
@@ -398,6 +400,26 @@ const shieldSchema = z.strictObject({
     }),
     absorb: z.number().min(0).max(1),
     guardBreak: z.strictObject({ blastHp: z.number().positive(), seconds: secs }),
+    /**
+     * Its prod (R3, Bailiff's shield; player/prod.ts): held up and not aimed, Fire jolts the first body of the other
+     * side within `rangeM` and `halfDeg` of the view (in sight) every `everyS`: `damage`, and slowed to `slowMul` (no
+     * sprint, no vault) for `slowS`. It runs on `chargeS` of charge, which refills a second a second once it's been off
+     * `refillDelayS`. An EMP turns it off; one reaching its holder with it up shocks her for `shockS` (no moving, no
+     * hands).
+     */
+    prod: z
+      .strictObject({
+        rangeM: z.number().positive(),
+        halfDeg: z.number().positive().max(90),
+        damage: z.number().min(0),
+        everyS: secs,
+        slowMul: z.number().positive().max(1),
+        slowS: secs,
+        chargeS: secs,
+        refillDelayS: z.number().min(0),
+        shockS: secs,
+      })
+      .optional(),
   }),
 });
 
@@ -1179,6 +1201,11 @@ export const gadgetSchema = z
     arc: z
       .strictObject({ reachM: z.number().positive(), snapM: z.number().min(0), burnS: z.number().positive(), shock: z.number().min(0), pushMps: z.number().min(0), droneJamS: z.number().min(0) })
       .optional(),
+    /**
+     * Bailiff's shield set down (R3, player/shield.ts): this item, put down, is her shield standing as cover; while it's
+     * out (none left in its slot) her shield isn't on her arm.
+     */
+    setsDownShield: z.boolean().optional(),
     /**
      * Latch's Snare Latch (R3, gadgets/snare.ts, gadgets/serve.ts snap): sprung by an enemy body crossing its wire (its
      * `tripwire`), it shuts on his leg: `hit` at once, `damage` every `everyS`, his speed × `speedMul` (no sprint),

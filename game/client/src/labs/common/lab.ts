@@ -79,6 +79,7 @@ import {
   heartOf,
   guData,
   snareData,
+  prodLeft,
   suppressed,
   kludgeOf,
   pawnJammed,
@@ -608,12 +609,13 @@ export async function startLab(o: LabOptions): Promise<void> {
    */
   /**
    * Fuze's free look (Phase 8 M11, Ulo's test): Fire held with his shield up and not aiming turns the view (the mouse)
-   * and not the body. The input keeps the body facing where it did, without Fire; letting go turns the view back.
+   * and not the body. The input keeps the body facing where it did, without Fire; letting go turns the view back. (Not
+   * Bailiff's: there Fire is her shield's prod, R3.)
    */
   let freeLookFrom: { yaw: number; pitch: number } | null = null;
   function freeLook(input: InputCmd): InputCmd {
     const p = sim.pawns.get(ctrl.possessedPawnId);
-    const on = !!p?.loadout?.shield && p.state.shieldAt === 1 && !ctrl.cam && !ctrl.drone && !ctrl.shellCam && !freeCam && (input.buttons & Btn.Fire) !== 0 && !(input.buttons & Btn.Ads);
+    const on = !!p?.loadout?.shield && !p.loadout.shield.prod && p.state.shieldAt === 1 && !ctrl.cam && !ctrl.drone && !ctrl.shellCam && !freeCam && (input.buttons & Btn.Fire) !== 0 && !(input.buttons & Btn.Ads);
     if (on) {
       freeLookFrom ??= { yaw: p!.state.yaw, pitch: p!.state.pitch };
       return { ...input, yaw: freeLookFrom.yaw, pitch: freeLookFrom.pitch, buttons: input.buttons & ~Btn.Fire };
@@ -1587,7 +1589,8 @@ export async function startLab(o: LabOptions): Promise<void> {
         !!held && !held.detonator && held.data.use.kind === "hold",
         held && !held.detonator && held.data.use.kind === "swing" ? held.data.use : null,
       );
-      v.setShield(pawn.loadout?.shield?.plate ?? null);
+      // Bailiff's (R3, the shield with a prod): its own dark slate.
+      v.setShield(pawn.loadout?.shield?.plate ?? null, pawn.loadout?.shield?.prod ? 0x2f3540 : undefined);
       // The body whose eyes we see through, in first person, faces the view itself (the mouse's, as the camera does), so
       // Fuze's shield doesn't trail the view by a tick when he turns (the review, M12); in free look the body keeps its
       // own facing (that's the point of it).
@@ -1942,7 +1945,22 @@ export async function startLab(o: LabOptions): Promise<void> {
     }
     $(".flash").classList.toggle("show", performance.now() < flashUntil);
 
-    ammoHud.update(p.loadout?.weapons[s.slot], s, dead || onCam, keyLabel(k.fireMode), p.loadout?.shield ? (s.shieldAt === 1 ? (freeLookFrom ? "SHIELD UP · FREE LOOK" : "SHIELD UP · aim to fire, hold fire to look round") : s.shieldAt === 2 ? "SHIELD ON YOUR BACK" : "SHIELD KNOCKED ASIDE") : "");
+    // Bailiff's shield (R3): its prod's charge, and set down, off her arm.
+    const prodPct = p.loadout?.shield?.prod ? Math.round(100 * (prodLeft(p) ?? 0)) : null;
+    const shieldText = !p.loadout?.shield
+      ? ""
+      : s.shieldAt === 1
+        ? prodPct !== null
+          ? `SHIELD UP · hold fire to prod (${s.jammed > 0 ? "OFF: EMP" : `${prodPct}%`}), aim to fire`
+          : freeLookFrom
+            ? "SHIELD UP · FREE LOOK"
+            : "SHIELD UP · aim to fire, hold fire to look round"
+        : s.shieldAt === 2
+          ? "SHIELD ON YOUR BACK"
+          : p.loadout.shieldDown && s.g2 === 0
+            ? "SHIELD SET DOWN · F on it to take it back"
+            : "SHIELD KNOCKED ASIDE";
+    ammoHud.update(p.loadout?.weapons[s.slot], s, dead || onCam, keyLabel(k.fireMode), shieldText);
     // Fuze's shield suppressed (Phase 8 M11): the edges of the view blur, and no sprinting (alive only: the review, M12).
     app.classList.toggle("suppressed", !dead && suppressed(p.loadout ?? null, s));
     // The gadgets in the two slots (Phase 8): how many are left, on which key; a detonator's devices waiting.

@@ -38,6 +38,7 @@ export const GADGET_KINDS = [
   "second_wind",
   "arc_pack",
   "snare_latch",
+  "bailiff_post",
 ] as const;
 
 const index = new Map<string, number>(GADGET_KINDS.map((k, i) => [k, i]));

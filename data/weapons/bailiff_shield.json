@@ -1,0 +1,30 @@
+{
+  "_doc": "The Bailiff Shield (Project Redmond R3, gadgets/R3_OPERATORS.md §2; Ulo's: the stun and the slow, set down, and the EMP shock that makes it hers): Bailiff's primary. A full-height plate held with her sidearm, as Fuze's is (the sidearm fires aimed only). Not aimed, Fire holds its prod out at the plate's edge: a jolt every `prod.everyS` into the first body of the other side within `prod.rangeM` and `prod.halfDeg` of the view (in sight): `prod.damage`, and slowed to `prod.slowMul` (no sprint, no vault) for `prod.slowS`; the prod runs on `prod.chargeS` of charge that refills at a second a second once it's been off `prod.refillDelayS`. The prod is electronic: an EMP on her turns it off for its seconds, and one reaching her while she holds the shield up shocks her: she can't move or use her hands for `prod.shockS`. Her ability item sets the shield down as standing cover where she faces (data/gadgets/bailiff_post.json), and she picks it up again (F). Its plate and every number of the prod are ours.",
+  "_ours": true,
+  "id": "bailiff_shield",
+  "name": "Bailiff Shield",
+  "class": "shield",
+  "shield": {
+    "pistolAdsS": {"walk": 0.55, "sprint": 0.6},
+    "hipFire": false,
+    "moveSpeedMult": 0.7,
+    "suppression": {"hitsToTrigger": 6, "hitsToMax": 20, "falloffS": 6},
+    "bashDamage": 0,
+    "plate": {
+      "widthM": 0.56,
+      "topWidthM": 0.5,
+      "heightM": 1.62,
+      "shoulderM": 0.3,
+      "cornerM": 0.06,
+      "curveM": 0.03,
+      "frontM": 0.32,
+      "aboveEyeM": 0.12,
+      "crouchRaiseM": 0.0,
+      "ads": {"sideM": 0.32, "dropM": 0.05, "yawDeg": 24},
+      "window": {"widthM": 0.28, "heightM": 0.09}
+    },
+    "absorb": 0.7,
+    "guardBreak": {"blastHp": 35, "seconds": 1.0},
+    "prod": {"rangeM": 4, "halfDeg": 10, "damage": 4, "everyS": 0.33, "slowMul": 0.6, "slowS": 1.2, "chargeS": 8, "refillDelayS": 1, "shockS": 1.5}
+  }
+}

@@ -19,6 +19,7 @@ import { DeployKind } from "../destruction/deploy.js";
 import { parkHands, putAway, regenSlot, stepHands } from "../gadgets/hands.js";
 import { stepPatch } from "../gadgets/patch.js";
 import { placeShield, shieldUp, stepShield, suppressed } from "./shield.js";
+import { stepProd } from "./prod.js";
 
 export interface MoveContext {
   R: Rapier;
@@ -62,11 +63,17 @@ const PRONE_TOLERANCE = 0.005;
  */
 export function stepPawn(ctx: MoveContext, pawn: Pawn, input: InputCmd, weapons = true, live = true): void {
   const s = pawn.state;
+  // Bailiff shocked (R3: an EMP reached her raised shield): no moving and no hands until it wears off.
+  if (s.shocked > 0 && s.mode !== PawnMode.Dead) {
+    s.shocked--;
+    input = { ...input, forward: 0, strafe: 0, buttons: 0 };
+  }
   const pressed = input.buttons & ~s.prevButtons;
   s.prevButtons = input.buttons;
   s.lastFallDamage = 0;
-  // An EMP on the body (DSEG, Phase 8 M3) wears off.
+  // An EMP on the body (DSEG, Phase 8 M3) wears off, and so does a prod's jolt (R3).
   if (s.jammed > 0) s.jammed--;
+  if (s.slowed > 0) s.slowed--;
   if (s.mode === PawnMode.Dead) return;
   // Tonic's Second Wind on this body (R3): its heal, or getting it up from down (a revive of its own, for the room).
   if (stepPatch(ctx.data, s)) ctx.events.push({ kind: "reviveEnd", reviverPawn: pawn.id, targetPawn: pawn.id, completed: true });
@@ -97,6 +104,8 @@ export function stepPawn(ctx: MoveContext, pawn: Pawn, input: InputCmd, weapons 
   if (weapons && !down) {
     // The gadget in hand first (Phase 8): a key that takes one out puts the weapon away this same tick.
     stepHands(ctx, pawn, input, pressed, s.meleeTicks === 0 && s.reviveTarget === 0 && s.deployKind === DeployKind.None, live);
+    // The Bailiff Shield's prod (R3): Fire with it up and not aimed (the sidearm fires only aimed with it up).
+    if (live) stepProd(pawn, input, ctx.events);
     stepWeapon(ctx, pawn, input, pressed);
   } else {
     parkWeapon(s);
@@ -206,7 +215,8 @@ function stepWalk(ctx: MoveContext, pawn: Pawn, input: InputCmd, pressed: number
   // Contextual actions first: ladders (interact or vault key; from the top, interact only) and vaulting (held
   // vault key is buffered).
   if ((pressed & Btn.Interact || input.buttons & Btn.Vault) && tryAttachLadder(ctx, pawn, (pressed & Btn.Interact) !== 0)) return;
-  if (input.buttons & Btn.Vault && s.grounded && s.stance !== Stance.Prone && s.stanceT >= 1 && tryVault(ctx, pawn)) return;
+  // (Not while a prod's jolt slows it: R3.)
+  if (input.buttons & Btn.Vault && s.grounded && s.stance !== Stance.Prone && s.stanceT >= 1 && s.slowed === 0 && tryVault(ctx, pawn)) return;
 
   // Speed for this tick. The weapon in hand scales it (LMGs slower, the horizontal grip faster; which
   // speeds it scales is data, gunplay.rules.moveMultScope).

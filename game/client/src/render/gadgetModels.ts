@@ -73,6 +73,7 @@ const COLOURS: Record<string, number> = {
   second_wind: 0x0f766e,
   arc_pack: 0x27303a,
   snare_latch: 0x4a3b2f,
+  bailiff_post: 0x2f3540,
 };
 
 /**

@@ -21,6 +21,8 @@ export const ShieldAt = { None: 0, Front: 1, Back: 2 } as const;
  */
 function placeFor(lo: ResolvedLoadout | null, s: PawnState): number {
   if (!lo?.shield || s.mode === PawnMode.Dead || s.mode === PawnMode.Knocked || isDowned(s) || s.guard > 0) return ShieldAt.None;
+  // Bailiff's set down as cover (R3): not on her while it's out.
+  if (lo.shieldDown && s.g2 === 0) return ShieldAt.None;
   if (s.hand !== Hand.Weapon || s.deployKind !== DeployKind.None || s.mode === PawnMode.Rappel || s.mode === PawnMode.Ladder || s.stance === Stance.Prone) return ShieldAt.Back;
   return ShieldAt.Front;
 }

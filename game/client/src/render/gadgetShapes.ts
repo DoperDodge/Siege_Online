@@ -218,6 +218,22 @@ export function gadgetShape(id: string, size: V3): Map<ShapeMat, THREE.BufferGeo
       p.cyl("metal", 0.006, d * 0.13, [0, 0, -d / 2 + d * 0.065], [HALF_PI, 0, 0], 8);
       break;
     }
+    case "bailiff_post": {
+      // Bailiff's shield set down (R3; our own design): the plate standing on its foot as cover, dark slate, its edges
+      // trimmed, a narrow viewport of glass high in it, a white band across it at waist height, and a fold-out foot
+      // behind it (+z) holding it up. (Its face set back a few millimetres: what's on it stays in its box.)
+      const t = d * 0.5;
+      const front = -d / 2;
+      p.box("dark", [w, h * 0.97, t - 0.006], [0, h * 0.015, front + 0.006 + (t - 0.006) / 2]);
+      for (const x of [-1, 1]) p.box("black", [0.02, h * 0.97, t - 0.003], [x * (w / 2 - 0.01), h * 0.015, front + 0.003 + (t - 0.003) / 2]);
+      p.box("black", [w, 0.02, t - 0.003], [0, h / 2 - 0.01, front + 0.003 + (t - 0.003) / 2]);
+      p.box("glass", [w * 0.5, h * 0.06, 0.003], [0, h * 0.36, front + 0.0035]);
+      for (const y of [1, -1]) p.box("black", [w * 0.56, 0.012, 0.004], [0, h * 0.36 + y * (h * 0.03 + 0.006), front + 0.003]);
+      p.box("white", [w * 0.98, 0.03, 0.003], [0, -h * 0.08, front + 0.0035]);
+      p.box("black", [w * 0.7, 0.02, d - t], [0, -h / 2 + 0.01, front + t + (d - t) / 2]);
+      for (const x of [-1, 1]) p.box("metal", [0.02, h * 0.3, 0.012], [x * w * 0.3, -h / 2 + h * 0.15, d / 2 - 0.008]);
+      break;
+    }
     case "cluster_grenade": {
       const r = Math.min(w, h, d) / 2 - 0.002;
       p.lathe("dark", [[0.001, -r], [r * 0.7, -r * 0.7], [r, 0], [r * 0.7, r * 0.7], [0.001, r]]);

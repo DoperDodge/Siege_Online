@@ -778,8 +778,11 @@ export class PawnView {
     return s;
   }
 
-  /** Fuze's Ballistic Shield's plate on this body (its loadout's), or none (Phase 8 M11). */
-  setShield(plate: ShieldPlate | null) {
+  /**
+   * Fuze's Ballistic Shield's plate on this body (its loadout's), or none (Phase 8 M11); `face` its colour (Bailiff's,
+   * R3: a dark slate plate).
+   */
+  setShield(plate: ShieldPlate | null, face?: number) {
     if (plate === this.plate) return;
     this.plate = plate;
     if (this.shield) {
@@ -788,7 +791,7 @@ export class PawnView {
       this.shield = null;
     }
     if (plate) {
-      this.shield = new ShieldModel(plate);
+      this.shield = new ShieldModel(plate, face);
       this.body.add(this.shield.mesh);
     }
   }

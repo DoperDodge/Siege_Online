@@ -19,6 +19,8 @@ import { kindId, kindOf } from "../gadgets/kinds.js";
 import { hackTargetFor, kludgeOf, type KludgeData } from "../gadgets/hack.js";
 import { heartbeats, heartOf } from "../gadgets/sensor.js";
 import { patchWorking } from "../gadgets/patch.js";
+import { prodLeft } from "../player/prod.js";
+import { shieldUp } from "../player/shield.js";
 import { GFlag } from "../gadgets/table.js";
 import type { GameData } from "../data/load.js";
 import type { Sim } from "../sim.js";
@@ -666,6 +668,11 @@ export class Bot {
     const dist = Math.hypot(a.point[0] - eye[0], a.point[1] - eye[1], a.point[2] - eye[2]);
     const ready = now - c.spottedAt >= ((d.reactionMs / 1000) * 0.4 * TICK_HZ);
     const onIt = a.off < a.size * 1.4 + 0.004;
+    // The Bailiff Shield's prod (R3): up close with it up and charge left, Fire (not aimed) holds it on, stepping in.
+    const prod = me.loadout?.shield?.prod;
+    if (prod && ready && shieldUp(s) && dist <= prod.rangeM - 0.2 && (prodLeft(me) ?? 0) > 0.05 && s.jammed === 0) {
+      return { forward: dist > 2 ? 0.6 : 0, strafe: 0, yaw: a.view.yaw, pitch: a.view.pitch, buttons: Btn.Fire, stance: Stance.Stand, lean: 0 };
+    }
     let buttons = 0;
     // Down the sights past a few metres (or always, for the better bots).
     if (dist > 6 || d.peekStyle !== "wide") buttons |= Btn.Ads;

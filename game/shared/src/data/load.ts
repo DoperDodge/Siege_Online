@@ -24,6 +24,7 @@ import ohm from "../../../../data/operators/ohm.json";
 import tonic from "../../../../data/operators/tonic.json";
 import shunt from "../../../../data/operators/shunt.json";
 import latch from "../../../../data/operators/latch.json";
+import bailiff from "../../../../data/operators/bailiff.json";
 import gunplayJson from "../../../../data/gunplay.json";
 import combatJson from "../../../../data/combat.json";
 import labModeJson from "../../../../data/modes/lab.json";
@@ -123,7 +124,7 @@ export interface GameData {
 export const rawData = {
   movement: movementJson as Record<string, unknown>,
   hitboxes: hitboxJson as Record<string, unknown>,
-  operators: [brava, fuze, thermite, striker, dokkaebi, sledge, sentry, skopos, mira, lesion, pulse, mute, ohm, tonic, shunt, latch] as Record<string, unknown>[],
+  operators: [brava, fuze, thermite, striker, dokkaebi, sledge, sentry, skopos, mira, lesion, pulse, mute, ohm, tonic, shunt, latch, bailiff] as Record<string, unknown>[],
   levels: [movementLabJson, rangeLabJson, destructionLabJson, gadgetLabJson, oregonJson, millraceJson] as Record<string, unknown>[],
   weapons: weaponFiles,
   gunplay: gunplayJson as Record<string, unknown>,

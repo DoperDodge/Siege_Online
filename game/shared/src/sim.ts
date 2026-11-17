@@ -16,6 +16,7 @@ import { isIngredient, KIND_BP_CAMERA, KIND_SHELL_SHIELD, kindId, kindOf } from 
 import { pawnJammed, pointJammed } from "./gadgets/jammers.js";
 import { onLiveSurface } from "./gadgets/arcs.js";
 import { snareData, snareSlow } from "./gadgets/snare.js";
+import { prodSlow } from "./player/prod.js";
 import { heartbeats, heartOf, sensorUp } from "./gadgets/sensor.js";
 import { mirrorOf, sightPast } from "./gadgets/mirror.js";
 import { barrierOf, crossesBarrier, smokeOnSegment, wireSlow } from "./gadgets/areas.js";
@@ -125,7 +126,8 @@ export class Sim {
       events: [],
       canRappel: (pawn) => pawn.team === sideTeam("attacker") || this.deployRules.rappel,
       // Barbed wire (Phase 8 M3), and Latch's snare on a leg (R3).
-      slowOf: (pawn) => wireSlow(data, this.gadgets, pawn, pawn.kind === PawnKind.Drone) * snareSlow(data, pawn),
+      // ... and a prod's jolt (R3).
+      slowOf: (pawn) => wireSlow(data, this.gadgets, pawn, pawn.kind === PawnKind.Drone) * snareSlow(data, pawn) * prodSlow(data, pawn),
       // Skopós's shells through her own barriers (D-157): a shell waking stands up under its canopy.
       passes: (pawn, c) => pawn.ownerId !== null && this.barrierOwner.get(c.handle) === pawn.ownerId,
       // Phase 8 M6: not while the body, or the device, is inside an enemy jammer.

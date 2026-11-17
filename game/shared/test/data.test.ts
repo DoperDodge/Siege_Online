@@ -27,9 +27,9 @@ describe("data files", () => {
   const data = loadGameData();
 
   it("all data files validate", () => {
-    expect(data.operators.size).toBe(16); // the twelve, Ohm, Tonic, Shunt and Latch (R3)
+    expect(data.operators.size).toBe(17); // the twelve, Ohm, Tonic, Shunt, Latch and Bailiff (R3)
     expect(data.levels.has("movement_lab")).toBe(true);
-    expect(data.weapons.size).toBe(40);
+    expect(data.weapons.size).toBe(41); // research/weapons.csv's 40 and the Bailiff Shield (R3, ours)
     expect(data.modes.has("lab")).toBe(true);
     expect(crossFileProblems(data)).toEqual([]);
   });
@@ -127,8 +127,8 @@ describe("weapon data agrees with research/weapons.csv (DECISIONS D-039)", () =>
   // A path counts as marked when it, or a parent of it, is in _unverified.
   const marked = (w: WeaponData, path: string) => w._unverified.some((u) => path === u || path.startsWith(u + "."));
 
-  it("has one file per CSV row", () => {
-    expect(csv.map((r) => r.weapon_id).sort()).toEqual([...data.weapons.keys()].sort());
+  it("has one file per CSV row (our own R3 weapons apart: `_ours`)", () => {
+    expect(csv.map((r) => r.weapon_id).sort()).toEqual([...data.weapons.values()].filter((w) => !w._ours).map((w) => w.id).sort());
     for (const r of csv) expect(data.weapons.get(r.weapon_id)!.name, r.weapon_id).toBe(r.name);
   });
 

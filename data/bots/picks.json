@@ -51,6 +51,9 @@
     ],
     "latch": [
       "proximity_alarm"
+    ],
+    "bailiff": [
+      "barbed_wire"
     ]
   },
   "counters": {
@@ -134,6 +137,11 @@
       "brava",
       "sledge",
       "striker"
+    ],
+    "bailiff": [
+      "ohm",
+      "striker",
+      "fuze"
     ]
   },
   "primaries": {

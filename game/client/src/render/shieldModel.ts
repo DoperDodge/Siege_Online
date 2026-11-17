@@ -107,7 +107,11 @@ export class ShieldModel {
   private readonly glass: THREE.MeshStandardMaterial;
   private place: ShieldPlace | null = null;
 
-  constructor(private readonly k: ShieldPlate) {
+  /** `face`: the plate's colour (the Bailiff Shield's is its own, R3). */
+  constructor(
+    private readonly k: ShieldPlate,
+    face = 0x857654,
+  ) {
     const w = k.widthM / 2;
     const tw = Math.min(w, k.topWidthM / 2);
     const H = k.heightM;
@@ -202,7 +206,7 @@ export class ShieldModel {
     }
     // Flat shaded: its vertices move every frame, and the faces' own slopes are all the light needs (its curve round the
     // sides reads in the columns' shading).
-    this.face = new THREE.MeshStandardMaterial({ color: 0x857654, roughness: 0.7, metalness: 0.18, flatShading: true });
+    this.face = new THREE.MeshStandardMaterial({ color: face, roughness: 0.7, metalness: 0.18, flatShading: true });
     this.inside = new THREE.MeshStandardMaterial({ color: 0x3d4349, roughness: 0.8, metalness: 0.1, flatShading: true });
     this.trim = new THREE.MeshStandardMaterial({ color: 0x3a3f44, roughness: 0.42, metalness: 0.65, flatShading: true, side: THREE.DoubleSide });
     this.glass = new THREE.MeshStandardMaterial({ color: 0xa8d4f0, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide });

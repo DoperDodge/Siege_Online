@@ -53,6 +53,7 @@ import { pawnJammed, pointJammed } from "../gadgets/jammers.js";
 import { heartOf } from "../gadgets/sensor.js";
 import { patchWorking, startPatch, stopPatch, type PatchData } from "../gadgets/patch.js";
 import { arcData, liveSurfaces, type ArcData } from "../gadgets/arcs.js";
+import { prodTarget } from "../player/prod.js";
 import { GadgetServer, type IngredientStage } from "../gadgets/serve.js";
 import { blastEffects, isCloud, pawnDistance } from "../gadgets/blast.js";
 import { hammerOps } from "../gadgets/hammer.js";
@@ -1015,6 +1016,39 @@ export class Room implements DirectorHost {
    * electronics and bodies within its reach, through walls and floors. Past its range it's spent, with nothing. Everyone
    * sees the round's streak.
    */
+  /**
+   * A jolt of the Bailiff Shield's prod (R3, player/prod.ts), judged against everyone as its holder saw them: the
+   * nearest body of the other side in its cone and reach, in sight, takes its damage (credited to her, the shield) and is
+   * slowed for `slowS` (its player corrected); everyone sees the spark where it lands.
+   */
+  private judgeProd(m: Member, applied: QueuedInput, e: Extract<SimEvent, { kind: "prod" }>) {
+    const by = this.sim.pawns.get(e.pawnId);
+    const k = by?.loadout?.shield?.prod;
+    if (!m.ctrl || !by || !k) return;
+    const { rewoundTick } = this.viewTimeFor(m, applied);
+    const ignore = new Set(m.ctrl.pawnIds);
+    const ff = this.friendlyFireOn();
+    for (const p of this.sim.pawns.values()) if (p.state.mode === PawnMode.Dead || p.kind !== PawnKind.Body || (p.team === by.team && !ff)) ignore.add(p.id);
+    const eye = eyePose(this.sim.data.movement, this.sim.data.hitboxes, by.state).pos;
+    const blocked = (from: Vec3, to: Vec3) => {
+      const d: Vec3 = [to[0] - from[0], to[1] - from[1], to[2] - from[2]];
+      const len = Math.hypot(d[0], d[1], d[2]);
+      if (len < 1e-4) return false;
+      const hit = raycastLevel(this.sim, from, [d[0] / len, d[1] / len, d[2] / len], len);
+      return hit !== null && hit.t < len - 0.05;
+    };
+    const hit = prodTarget(eye, e.yaw, e.pitch, this.history.at(rewoundTick, this.sentOf(m)), ignore, k, blocked);
+    const target = hit ? this.sim.pawns.get(hit.pawnId) : undefined;
+    if (!hit || !target) return;
+    const attacker: Attacker = { ctrlId: m.ctrl.id, team: by.team, weaponId: "bailiff_shield", origin: eye };
+    this.hurt(target, { amount: k.damage, kill: false }, { cause: Cause.Gadget, attacker, headshot: false });
+    target.state.slowed = ticks(k.slowS);
+    const owner = target.ownerId !== null ? this.memberOf(target.ownerId) : null;
+    if (owner) this.force(owner);
+    const ev: GameEvent = { kind: "emp", pos: [hit.point[0], hit.point[1], hit.point[2]] };
+    for (const o of this.members.values()) o.events.push(ev);
+  }
+
   private judgeGadgetShot(m: Member, applied: QueuedInput, e: Extract<SimEvent, { kind: "gshot" }>) {
     const shooter = this.sim.pawns.get(e.pawnId);
     const g = this.sim.data.gadgets.get(e.gadget);
@@ -1938,7 +1972,7 @@ export class Room implements DirectorHost {
       return;
     }
     if (this.knockOver(target, by)) {
-      if (k.bashDamage > 0) this.hurt(target, { amount: k.bashDamage, kill: false }, { cause: Cause.Melee, attacker: { ctrlId: by.ownerId ?? 0, team: by.team, weaponId: "ballistic_shield", origin: [by.state.x, by.state.y, by.state.z] }, headshot: false });
+      if (k.bashDamage > 0) this.hurt(target, { amount: k.bashDamage, kill: false }, { cause: Cause.Melee, attacker: { ctrlId: by.ownerId ?? 0, team: by.team, weaponId: by.loadout?.pick.primary.weapon ?? "ballistic_shield", origin: [by.state.x, by.state.y, by.state.z] }, headshot: false });
       return;
     }
     const s = target.state;
@@ -2302,6 +2336,12 @@ export class Room implements DirectorHost {
       // A patch working on the body stops (Tonic's Second Wind, R3): down, it bleeds again.
       stopPatch(p.state);
       const owner = p.ownerId !== null ? this.memberOf(p.ownerId) : null;
+      // Bailiff with her shield up (R3, Ulo's): the EMP reaches its prod and shocks her (the prod's off with the rest).
+      const prod = p.loadout?.shield?.prod;
+      if (prod && shieldUp(p.state) && p.state.mode !== PawnMode.Dead) {
+        p.state.shocked = ticks(prod.shockS);
+        owner?.events.push({ kind: "stunned", seconds: prod.shockS, blind: 0, ring: false, concuss: true });
+      }
       if (owner) this.force(owner);
     }
     const end = this.sim.tick + ticks(seconds);
@@ -2527,7 +2567,7 @@ export class Room implements DirectorHost {
     this.shellShields();
     for (const e of this.sim.events) {
       if (e.kind === "ping") this.ping(e.ctrlId, e.pos, e.gadget, e.heart ?? false);
-      if (e.kind !== "shot" && e.kind !== "meleeImpact" && e.kind !== "swing" && e.kind !== "gshot") continue;
+      if (e.kind !== "shot" && e.kind !== "meleeImpact" && e.kind !== "swing" && e.kind !== "gshot" && e.kind !== "prod") continue;
       const owner = this.sim.pawns.get(e.pawnId)?.ownerId;
       if (owner === undefined || owner === null) continue;
       const a = applied.get(owner);
@@ -2537,6 +2577,8 @@ export class Room implements DirectorHost {
         if (a) this.judgeShot(a.m, a.input, e);
       } else if (e.kind === "gshot") {
         if (a) this.judgeGadgetShot(a.m, a.input, e);
+      } else if (e.kind === "prod") {
+        if (a) this.judgeProd(a.m, a.input, e);
       } else {
         const m = a?.m ?? this.memberOf(owner);
         const input = a?.input ?? m?.lastApplied;

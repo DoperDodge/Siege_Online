@@ -111,13 +111,24 @@ and Tonic defending. One at a time, each complete.
   and Ohm's sight doesn't show it; one bullet breaks it; Latch can take his own back (F) before it's sprung. His look:
   rust brown, a dark hood and goggles, a satchel with spare latches. A bot playing Latch traps the site's doors in prep,
   and attacking bots pull a latch off their leg when nothing's in sight.
+- **Bailiff** (defender, shield and prod; health and speed 3 / 1; the **Bailiff Shield** with an SMG-11 or P229,
+  barbed wire or an impact grenade): a full-height dark slate shield held with her sidearm (aim to fire it). With the
+  shield up and not aiming, **hold Fire for its prod**: a jolt every third of a second into the nearest attacker within
+  4 m in front of you: 4 damage, and he's slowed to 0.6 with no sprinting or vaulting for 1.2 s. The prod has 8 s of
+  charge (shown on the shield line) that comes back once you let go for a second. **Z** takes out its set-down: hold
+  Fire and the shield goes down on the floor as solid cover with its viewport, and you have your sidearm alone; hold F
+  on it to pick it back up. **The twist**: an EMP that reaches her while she holds the shield up shocks her: 1.5 s she
+  can't move, shoot or use anything, and the prod stays off for the EMP's time (set down, it doesn't). Her look: black
+  with white piping, a helmet with a face shield. A bot playing Bailiff prods attackers who come close.
+- **How to test Bailiff**: the Gadget Lab, pick Bailiff; walk up to the attacker dummy and hold left mouse; Z and hold
+  left mouse to set the shield down. Then switch to Ohm and shoot an EMP round at her with the shield up.
 - **How to test Latch**: the Gadget Lab, pick Latch, Z, look at the empty door frame and hold left mouse; switch to an
   attacker and walk through it.
 - **How to test Shunt**: the Gadget Lab, pick Shunt, Z, look at the floor just in front of the Reinforced wall and hold
   left mouse (the pack goes to the wall and the wall lights up); switch to Thermite and put his charge on it. For tricking: put the charge on with the pack picked up, then put it back.
 
 ### Next
-- **R3**: the other four, in this order: Bailiff, Rivet, Dowser, Hull.
+- **R3**: the other three, in this order: Rivet, Dowser, Hull.
 - **R4**: the rest of the tests moved from Oregon to Millrace, Oregon taken off this branch, the code's internal names
   and the docs brought in line.
 

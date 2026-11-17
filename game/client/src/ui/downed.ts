@@ -42,13 +42,15 @@ export class DownedHud {
     // A Gu needle in you (Phase 8 M10): the view sickly green at its edges, and how to pull it. (Nothing of a body's own
     // holds or needle once it's dead: a lethal fall left them on the death screen, the review found, M12.)
     const alive = s.mode !== PawnMode.Dead;
-    // Latch's snare on your leg (R3): the same line, its own words.
+    // Latch's snare on your leg (R3), or a jolt of Bailiff's prod (R3, for a moment): the same line, its own words.
     const needled = alive && s.needled;
     const snared = alive && s.snared;
+    const jolted = alive && s.slowed > 0;
     this.root.classList.toggle("needled", needled || snared);
-    $(".needle-ui").classList.toggle("hidden", !(needled || snared) || s.deployKind === DeployKind.Needle || s.deployKind === DeployKind.Snare);
+    $(".needle-ui").classList.toggle("hidden", !(needled || snared || jolted) || s.deployKind === DeployKind.Needle || s.deployKind === DeployKind.Snare);
     if (needled) $(".needle-ui").textContent = `BURR BARB · no sprinting · stand and hold ${interactKey} to pull it`;
     else if (snared) $(".needle-ui").textContent = `SNARE LATCH · slowed, no sprinting · hold ${interactKey} to pull it off`;
+    else if (jolted) $(".needle-ui").textContent = "JOLTED · slowed, no sprinting or vaulting";
     if (down) {
       $(".down-title").textContent = s.revivedBy
         ? "BEING REVIVED — hold still"

@@ -228,6 +228,16 @@ export interface PawnState {
   healLeft: number;
   healTicks: number;
   patchTicks: number;
+  /**
+   * The Bailiff Shield's prod (R3, player/prod.ts): ticks of its charge used, ticks to its next jolt while it's held on,
+   * and ticks since it was last on (its refill waits for them). A body jolted by one is slowed for `slowed` ticks;
+   * Bailiff shocked by an EMP on her raised shield can't move or use her hands for `shocked` ticks.
+   */
+  prodUsed: number;
+  prodNext: number;
+  prodIdle: number;
+  slowed: number;
+  shocked: number;
   // reinforcing and barricades (Phase 4 M6; destruction/deploy.ts): what the body is putting up or taking
   // down (DeployKind, 0 = nothing), on which panel and section, and for how many ticks it has held Interact
   deployKind: number;
