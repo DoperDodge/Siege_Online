@@ -2,7 +2,8 @@
 // simulation (roundState in movement.ts), so float32 on the wire restores the state bit-for-bit — what
 // reconciliation needs to replay a client's prediction from the server's state.
 import { MAX_CAM_VIEWS, type CamView, type PlayerController } from "../player/pawn.js";
-import { PawnMode, type PawnState } from "../player/types.js";
+import { DeployKind } from "../destruction/deploy.js";
+import { GadgetAct, Hand, PawnMode, type PawnState } from "../player/types.js";
 import { ByteReader, ByteWriter, fnv1a, ProtocolError } from "./bytes.js";
 
 /** Continuous fields, in wire order. */
@@ -45,6 +46,12 @@ export function writePawnState(w: ByteWriter, s: PawnState): void {
   for (const k of PAWN_U32_FIELDS) w.u32(s[k]);
 }
 
+/** An enum's highest value: anything past it on the wire is a bad message (and a new value is let through by itself). */
+const highest = (e: object) => Math.max(...Object.values(e).filter((v): v is number => typeof v === "number"));
+const DEPLOY_MAX = highest(DeployKind);
+const HAND_MAX = highest(Hand);
+const GACT_MAX = highest(GadgetAct);
+
 export function readPawnState(r: ByteReader): PawnState {
   const f: Record<string, number> = {};
   for (const k of PAWN_F32_FIELDS) f[k] = r.finite();
@@ -60,8 +67,8 @@ export function readPawnState(r: ByteReader): PawnState {
   for (const k of PAWN_U16_FIELDS) f[k] = r.u16();
   for (const k of PAWN_U32_FIELDS) f[k] = r.u32();
   if (f.slot > 1 || f.wAct > 2 || f.reloadKind > 3) throw new ProtocolError("bad pawn weapon state");
-  if (f.deployKind > 8 || f.deploySection > 2) throw new ProtocolError("bad pawn deploy state");
-  if (f.hand > 4 || f.gAct > 5) throw new ProtocolError("bad pawn gadget state");
+  if (f.deployKind > DEPLOY_MAX || f.deploySection > 2) throw new ProtocolError("bad pawn deploy state");
+  if (f.hand > HAND_MAX || f.gAct > GACT_MAX) throw new ProtocolError("bad pawn gadget state");
   if (rappel < -1 || f.rappelFlags > 31) throw new ProtocolError("bad pawn rappel state");
   return {
     ...(f as Record<(typeof PAWN_F32_FIELDS)[number] | (typeof PAWN_U8_FIELDS)[number] | (typeof PAWN_U16_FIELDS)[number] | (typeof PAWN_U32_FIELDS)[number], number>),
