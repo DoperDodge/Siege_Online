@@ -39,11 +39,15 @@
     ],
     "lesion": [
       "observation_blocker"
+    ],
+    "ohm": [
+      "breach_charge"
     ]
   },
   "counters": {
     "mute": [
       "brava",
+      "ohm",
       "striker",
       "fuze"
     ],
@@ -101,6 +105,11 @@
       "mute",
       "mira",
       "lesion"
+    ],
+    "ohm": [
+      "sentry",
+      "lesion",
+      "pulse"
     ]
   },
   "primaries": {

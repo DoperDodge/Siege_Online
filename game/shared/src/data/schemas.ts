@@ -960,6 +960,15 @@ export const gadgetSchema = z
         afterHitS: z.number().positive().optional(),
         /** An impact gadget that meets nothing goes off in the air after this far. */
         maxTravelM: z.number().positive().optional(),
+        /** Goes off this long after it comes to rest, however long that took (Ohm's Brownout Pucks, R3). */
+        restS: z.number().positive().optional(),
+        /**
+         * Its own bounce in place of data/gadgets.json `throw`'s: of the speed into a surface, what comes back; of the
+         * speed along it, what's lost at each touch (a tick sliding on a floor is a touch). Ohm's pucks skid: little
+         * comes back, little is lost along.
+         */
+        restitution: z.number().min(0).max(1).optional(),
+        friction: z.number().min(0).max(1).optional(),
       }),
       z.strictObject({
         kind: z.literal("place"),
@@ -1180,7 +1189,9 @@ export const gadgetSchema = z
   })
   .superRefine((g, ctx) => {
     const u = g.use;
-    if (u.kind === "throw" && u.flight === "bounce" && u.fuseS === undefined) ctx.addIssue({ code: "custom", path: ["use", "fuseS"], message: "a bouncing gadget needs a fuse" });
+    if (u.kind === "throw" && u.flight === "bounce" && u.fuseS === undefined && u.restS === undefined) ctx.addIssue({ code: "custom", path: ["use", "fuseS"], message: "a bouncing gadget needs a fuse (or restS)" });
+    if (u.kind === "throw" && u.restS !== undefined && (u.flight !== "bounce" || g.remote)) ctx.addIssue({ code: "custom", path: ["use", "restS"], message: "only a bouncing gadget with no detonator goes off after it rests" });
+    if (u.kind === "throw" && (u.restitution !== undefined || u.friction !== undefined) && u.flight !== "bounce") ctx.addIssue({ code: "custom", path: ["use", "restitution"], message: "only a bouncing gadget has a bounce of its own" });
     if (u.kind === "throw" && u.afterHitS !== undefined && u.fuseS === undefined) ctx.addIssue({ code: "custom", path: ["use", "afterHitS"], message: "afterHitS cuts a fuse: give fuseS" });
     if (u.kind === "throw" && u.maxTravelM !== undefined && u.flight !== "impact") ctx.addIssue({ code: "custom", path: ["use", "maxTravelM"], message: "only an impact gadget goes off in the air" });
     if (g.remote && (u.kind === "throw" || u.kind === "place") && u.fuseS !== undefined) ctx.addIssue({ code: "custom", path: ["remote"], message: "a remote gadget has no fuse" });

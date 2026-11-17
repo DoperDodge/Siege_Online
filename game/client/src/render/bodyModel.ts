@@ -494,6 +494,17 @@ function backItem(s: Shaper, L: OperatorLook): void {
       s.paint(L.accent, 0.4);
       s.box([0, -0.1, z + 0.082], [0.09, 0.03, 0.006], 4, 0.002);
       return;
+    case "battery":
+      // Ohm's (R3): a squat battery pack, copper terminals on top, a cable from it over the left shoulder.
+      s.paint(L.gear, 0.6);
+      s.box([0, -0.17, z + 0.045], [0.22, 0.24, 0.09], 4, 0.014);
+      s.paint(L.accent, 0.35);
+      s.box([0, -0.17, z + 0.0915], [0.16, 0.035, 0.006], 4, 0.002);
+      for (const x of [-0.06, 0.06]) s.bar([x, -0.05, z + 0.045], [x, -0.03, z + 0.045], 0.014, 0.012, 8);
+      s.paint(DARK, 0.6);
+      s.bar([-0.06, -0.03, z + 0.045], [-0.1, 0.06, z + 0.02], 0.007, 0.007, 6);
+      s.bar([-0.1, 0.06, z + 0.02], [-0.11, 0.1, -0.02], 0.007, 0.007, 6);
+      return;
     case "tube":
       // A canister upright at the right, a hose over the shoulder.
       s.paint(L.gear, 0.5);

@@ -78,7 +78,8 @@ something flat** (Gu mines; a wall drops it, lesion.md). The server alone also c
 and its ops say where an item came to rest, stuck or went off, so drift never lasts. Fuses (G§3): frag 4 s, 2 s
 after the first bounce; stun 3 s (placeholder), 2 s after the first bounce; smoke 3 s, 2 s after the first hit;
 none can be cooked. A client draws a projectile at the same moment it draws its thrower (the path is kept by tick),
-and its own throws at once.
+and its own throws at once. A gadget's own `restitution` and `friction` replace the shared ones, and `restS` starts
+its fuse when it comes to rest (R3: Ohm's Brownout Pucks skid, and pulse 1.5 s after they stop).
 
 ## 5. Explosions
 

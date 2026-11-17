@@ -176,6 +176,7 @@ One **commander** per side, server-side, with the same knowledge rules (its team
 | Sentry | Barbed Wire + Deployable Shield by default, on the plan's spots |
 | Pulse | Roams above or below the site, scans through the floor and pings what it finds |
 | Lesion | Gu mines on stair bottoms, hatch drops and doors (the plan's spots) |
+| Ohm (R3) | A Brownout Puck lobbed to the foot of the plan's first hard breach wall, its near side, before the push: the pulse reaches the Dampers behind it |
 | Generic | Frags and stuns into rooms before entry, smokes for the plant, claymores on flanks; defenders' wire, shields, Nitro Cells (thrown at heard attackers), alarms, Bulletproof Cameras, Observation Blockers per the plan |
 
 "Counter my pick" (Bot Training): the bots' side picks the roster's answer to the human's operator (Mute against

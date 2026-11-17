@@ -129,6 +129,16 @@ export function gadgetShape(id: string, size: V3): Map<ShapeMat, THREE.BufferGeo
       p.lathe("dark", [[r, h * 0.12], [r * 0.9, h * 0.28], [r * 0.5, h * 0.42], [0.001, h * 0.48]]);
       break;
     }
+    case "brownout_puck": {
+      // Ohm's puck (R3; our own design): a squat dark disc with a rubber rim to skid on, a copper coil ring round its
+      // top and a blue lens in the middle.
+      const r = Math.min(w, d) / 2 - 0.002;
+      p.cyl("rubber", r, h * 0.45, [0, -h / 2 + h * 0.225, 0], [0, 0, 0], 20);
+      p.cyl("dark", r * 0.94, h * 0.5, [0, h * 0.2, 0], [0, 0, 0], 20);
+      p.torus("yellow", r * 0.66, 0.0035, [0, h / 2 - 0.001, 0], [HALF_PI, 0, 0]);
+      p.cyl("blueGlow", r * 0.24, 0.004, [0, h / 2, 0], [0, 0, 0], 14);
+      break;
+    }
     case "cluster_grenade": {
       const r = Math.min(w, h, d) / 2 - 0.002;
       p.lathe("dark", [[0.001, -r], [r * 0.7, -r * 0.7], [r, 0], [r * 0.7, r * 0.7], [0.001, r]]);

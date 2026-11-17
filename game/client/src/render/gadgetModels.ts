@@ -66,6 +66,7 @@ const COLOURS: Record<string, number> = {
   dropped_phone: 0x0f172a,
   gu_mine: 0x65a30d,
   shell_shield: 0x475569,
+  brownout_puck: 0x1e3a5f,
 };
 
 /**

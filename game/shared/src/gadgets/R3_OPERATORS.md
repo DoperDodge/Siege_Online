@@ -106,3 +106,9 @@ a cross of our own (a teal plus, not a red cross).
 | R3 M7 | Rivet's Stud Driver | studs stuck, set off together, holes in soft and the cluster through steel; burnt out by packs; bots breach with it |
 | R3 M8 | Hull's Hull Plate and Bailiff's Shield | braced cover, blasts stopped, the prod's slow; bots carry them |
 | R3 M9 | Models, first person, HUD for all eight; the interaction tests (§3); soak; browser tests; review; docs | every check green |
+
+## 6. As built
+
+| | Operator | Done | Notes |
+|---|---|---|---|
+| R3 M5 | **Ohm** | ✅ | data/operators/ohm.json, data/gadgets/brownout_puck.json; the throw's own `restitution` 0.15 and `friction` 0.06 (a touch a tick while it slides) and `restS` 1.5 (gadgets/flight.ts, serve.ts `fly`); the pulse is the room's EMP (`goOff` → `dseg`), so everything an Impact EMP turns off, it turns off. Bots: the attack planner's job for an Ohm bot (bots/plan.ts `makeJobs`). Look: `battery` on the back (render/bodyModel.ts); model: render/gadgetShapes.ts. Tests: test/brownout.test.ts. |

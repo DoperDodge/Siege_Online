@@ -1,0 +1,15 @@
+{
+  "_doc": "Ohm's Brownout Pucks (Project Redmond R3, gadgets/R3_OPERATORS.md §2; our own device): his ability, the item in his slot 2 (Z). A flat puck thrown (Fire) or lobbed (ADS) that skids along the floor instead of bouncing (little comes back off a surface, little is lost along it at each touch). `use.restS` after it comes to rest it pulses once: every defenders' electronic device and body within `emp.radiusM` (a sphere, through walls and floors) is off and jammed for `emp.seconds` (gadgets/DESIGN.md §6's EMP: longer and wider than the Impact EMP Grenade's). One bullet destroys it before it pulses (fragile). 3 a round. Its numbers are ours.",
+  "id": "brownout_puck",
+  "name": "Brownout Puck",
+  "side": "attacker",
+  "operator": "ohm",
+  "count": 3,
+  "electronic": false,
+  "use": {"kind": "throw", "flight": "bounce", "restS": 1.5, "restitution": 0.15, "friction": 0.06},
+  "remote": false,
+  "pickUp": false,
+  "sizeM": [0.09, 0.028, 0.09],
+  "emp": {"radiusM": 4.5, "seconds": 12},
+  "fragile": true
+}

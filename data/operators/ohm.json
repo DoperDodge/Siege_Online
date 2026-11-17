@@ -1,0 +1,18 @@
+{
+  "_doc": "Ohm (Project Redmond R3, gadgets/R3_OPERATORS.md §1): an attacker who throws EMPs. Our own operator: name, look and ability (Brownout Pucks). Health and speed 2 / 2.",
+  "id": "ohm",
+  "name": "Ohm",
+  "side": "attacker",
+  "healthRating": 2,
+  "speedRating": 2,
+  "loadout": {
+    "primaries": ["ak_12", "m870"],
+    "secondaries": ["gsh_18", "pmm"],
+    "gadgets": ["frag", "smoke", "breach_charge"]
+  },
+  "ability": {
+    "id": "brownout_puck",
+    "name": "Brownout Pucks"
+  },
+  "pawns": 1
+}

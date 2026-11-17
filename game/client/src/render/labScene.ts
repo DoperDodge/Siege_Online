@@ -713,7 +713,7 @@ export class PawnView {
     // What's on its back: there unless it's the item in its hands (Sledge's hammer, Thermite's charge, ...). (Before the
     // bones are copied: the item placed with them on the frame it comes back.)
     const back = model.look.back;
-    model.showBack(back === "pack" || back === "radio" || handSlot(state.hand) !== 2);
+    model.showBack(back === "pack" || back === "radio" || back === "battery" || handSlot(state.hand) !== 2);
     model.sync();
     if (this.tag) this.tag.position.set(rig.joints.head.x, rig.joints.head.y + 0.42, rig.joints.head.z);
     this.gunVisible = this.gun !== null && gunAt !== null;

@@ -736,7 +736,7 @@ export class AttackPlanner {
    * The team's jobs for `site` (M7, bots/DESIGN.md §7.4): each of the plan's hard breaches to the first bot of its
    * operators who has the charge (Thermite's Exothermic; Striker's EMP then a Hard Breach Charge; Fuze's Hard Breach
    * Charge), each soft breach to one too (Sledge's hammer, Fuze's Cluster Charge, else anyone's breach charge), one
-   * breach a bot; Brava's Kludge first, toward the first hard breach's far side.
+   * breach a bot; Brava's Kludge first, toward the first hard breach's far side; Ohm's puck at that wall (R3).
    */
   private makeJobs(site: string) {
     this.jobsFor = site;
@@ -775,6 +775,18 @@ export class AttackPlanner {
         for (const t of tasks) add(b.id, t);
         break;
       }
+    }
+    // Ohm (R3): a Brownout Puck lobbed to the foot of the first hard breach's wall from its near side; its pulse reaches
+    // through the wall to the defenders' devices behind it (a Damper there would stop the charge).
+    const first = strat.attack.hardBreach.find((h) => byId.get(h.panel));
+    const firstWall = first && byId.get(first.panel);
+    for (const b of bots) {
+      const puck = slotOf(b.body, "brownout_puck");
+      if (b.op !== "ohm" || busy.has(b.id) || !puck || !first || !firstWall) continue;
+      const at = wallSpot(sim, this.nav, firstWall, first.from, 3.2, 0.05);
+      if (!at) continue;
+      busy.add(b.id);
+      add(b.id, gadgetTask(puck, "lob", at, `puck${firstWall.panel.spec.index}`));
     }
     for (const h of strat.attack.softBreach) {
       const e = byId.get(h.panel);

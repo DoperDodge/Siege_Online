@@ -80,7 +80,7 @@ const OPERATORS = [...data.operators.keys()];
 describe("the operators' looks and bodies (operator_looks.json, render/bodyModel.ts)", () => {
   it("every operator has a look of its own, and a body within the budget, bound a vertex to a bone", () => {
     const looks = loadPresentationData().operatorLooks.looks;
-    expect(OPERATORS.length).toBe(12);
+    expect(OPERATORS.length).toBe(13); // the twelve, and Ohm (R3)
     const seen = new Set<string>();
     for (const id of [...OPERATORS, "default"]) {
       expect(looks[id], `${id} has a look`).toBeDefined();

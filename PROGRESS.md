@@ -63,13 +63,23 @@ The game as it was before this is kept, untouched, on the `siege_online_classic`
 - **More for Millrace**: drone holes (nine slots at floor level: into the building and between rooms on every storey)
   and a second hatch into the boiler site (from the Engine Room down into the Coal Store).
 
+### In progress (R3: eight new operators of our own)
+The plan: game/shared/src/gadgets/R3_OPERATORS.md. Rivet, Ohm, Dowser and Hull attacking; Shunt, Bailiff, Latch and
+Tonic defending. One at a time, each complete.
+- **Ohm** (attacker, EMP; health and speed 2 / 2; AK-12 or M870, GSh-18 or PMM, a frag, smoke or breach charge): his
+  **Brownout Pucks**, 3 a round in slot 2 (Z). Thrown (Fire) or lobbed (ADS), a puck skids along the floor instead
+  of bouncing; 1.5 s after it stops it pulses once, and every defender's electronic device and body within 4.5 m,
+  through walls and floors, is off and jammed for 12 s (the Impact EMP's is 2 m for 9 s). One bullet destroys a puck
+  before it pulses. His look: a dark blue work jacket with copper trim, a grey beanie, a battery pack on his back. A bot
+  playing Ohm lobs a puck to the foot of the plan's first hard breach wall, so the Dampers behind it are off when
+  the charge goes.
+- **How to test Ohm**: the Gadget Lab or the greybox lab, pick Ohm (Esc), Z, then Fire or ADS at the floor; put a
+  Damper as a defender behind a wall to watch it go dark. In Play vs bots, attacking the Mill with an Ohm bot.
+
 ### Next
-- **R3: eight new operators of our own** (the plan: game/shared/src/gadgets/R3_OPERATORS.md): Rivet, Ohm, Dowser and Hull
-  attacking; Shunt, Bailiff, Latch and Tonic defending. One at a time, each complete.
-- **R4**: the rest of the tests moved from Oregon to Millrace, Oregon taken off this branch, the clean-up.
-- **R3**: eight new operators of our own (a remote breacher, an EMP specialist, an electronics scout, a full-body
-  shield, electrified defences, a shield with a stun prod, a door trapper, a medic).
-- **R4**: the code's internal names and the docs brought in line.
+- **R3**: the other seven: Tonic, Latch, Shunt, Dowser, Rivet, Hull, Bailiff.
+- **R4**: the rest of the tests moved from Oregon to Millrace, Oregon taken off this branch, the code's internal names
+  and the docs brought in line.
 
 ---
 
