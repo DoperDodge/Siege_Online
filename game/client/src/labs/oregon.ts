@@ -13,6 +13,7 @@ import { navOverlay } from "./navOverlay.js";
 
 // `?map=millrace` shows Project Redmond's own map (R2, D-183) in this lab instead of Oregon.
 const MAP = new URLSearchParams(location.search).get("map") === "millrace" ? "millrace" : "oregon";
+if (MAP === "millrace") document.title = "Millrace";
 const level = loadGameData().levels.get(MAP)!;
 /** Metres from the plan's u (the level's plan.mPerU). */
 const U = level.plan?.mPerU ?? 0.15;
