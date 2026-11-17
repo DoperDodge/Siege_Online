@@ -562,6 +562,15 @@
           "_unverified": []
         },
         {
+          "kind": "DRONE_HOLE",
+          "id": "2F.dt1",
+          "at": [
+            73.333,
+            76.0
+          ],
+          "_unverified": []
+        },
+        {
           "kind": "DOOR",
           "id": "2F.o038",
           "at": [

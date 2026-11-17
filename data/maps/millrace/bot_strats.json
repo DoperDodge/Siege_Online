@@ -11,6 +11,10 @@
           {
             "panel": "H4",
             "why": "the Firing Floor's hatch drops into the Boiler Room"
+          },
+          {
+            "panel": "H6",
+            "why": "the Engine Room's hatch drops into the Coal Store"
           }
         ],
         "holes": [

@@ -1,5 +1,5 @@
 // The match state machine (match/match.ts): the lobby, a round's phases and timers, votes, picks, the defuser's
-// carrier, outcomes, the score, overtime and the end, against the formats in data/modes and Oregon's sites.
+// carrier, outcomes, the score, overtime and the end, against the formats in data/modes and Millrace's sites.
 import { describe, expect, it } from "vitest";
 import {
   ATTACK,
@@ -18,7 +18,7 @@ import {
 } from "../src/index.js";
 
 const data = loadGameData();
-const map = matchMapOf(data.levels.get("oregon")!, data.operators.values());
+const map = matchMapOf(data.levels.get("millrace")!, data.operators.values());
 const format = (id: string): FormatMode => {
   const m = data.modes.get(id)!;
   if (!isFormat(m)) throw new Error(id);
@@ -237,11 +237,11 @@ describe("bans, sites and picks", () => {
     const { match, at } = started("ranked", 2, 2);
     finishPhase(match, at); // bans
     const [d1, d2] = match.sides[DEFENSE];
-    expect(match.voteSite(match.sides[ATTACK][0], "SITE_DORMS")).toMatch(/Not voting/);
-    expect(match.voteSite(d1, "SITE_LAUNDRY")).toBeNull();
-    expect(match.voteSite(d2, "SITE_LAUNDRY")).toBeNull();
+    expect(match.voteSite(match.sides[ATTACK][0], "SITE_OFFICES")).toMatch(/Not voting/);
+    expect(match.voteSite(d1, "SITE_BOILER")).toBeNull();
+    expect(match.voteSite(d2, "SITE_BOILER")).toBeNull();
     finishPhase(match, at);
-    expect([match.site, match.siteRevealed]).toEqual(["SITE_LAUNDRY", false]);
+    expect([match.site, match.siteRevealed]).toEqual(["SITE_BOILER", false]);
     match.siteFound();
     expect(match.siteRevealed).toBe(true);
     const q = started("quick_match", 1, 1);
@@ -261,13 +261,13 @@ describe("bans, sites and picks", () => {
     expect(match.players.get(atk)!.operator).toBe(map.roster[ATTACK][0]);
     expect(match.players.get(def)!.operator).toBe("mira");
     expect(match.pickOperator(atk, "sledge")).toBeNull();
-    expect(match.chooseSpawn(atk, "B_STREET")).toBeNull();
+    expect(match.chooseSpawn(atk, "B_RAIL_SIDING")).toBeNull();
     expect(match.pickOperator(def, "mute")).toMatch(/Not picking/);
     winRound(match, at, match.attackers);
     // Round 2: same sides, nobody picks; each keeps last round's operator.
     finishPhase(match, at);
     expect(match.players.get(atk)!.operator).toBe("sledge");
-    expect(match.players.get(atk)!.spawn).toBe("B_STREET");
+    expect(match.players.get(atk)!.spawn).toBe("B_RAIL_SIDING");
     expect(match.players.get(def)!.operator).toBe("mira");
   });
 

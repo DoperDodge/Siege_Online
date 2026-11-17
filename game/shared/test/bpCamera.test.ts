@@ -7,11 +7,14 @@ import { describe, expect, it } from "vitest";
 import { bpCamsBroken, Btn, dartBurst, DEFENSE, DEG, GadgetAct, GadgetServer, GFlag, Hand, KIND_BP_CAMERA, Sim, ticks, wrapAngle, type Gadget, type InputCmd, type SimEvent } from "../src/index.js";
 import { input } from "./helpers.js";
 
-/** In the Laundry, 1.4 m from its south wall (a panel), facing it. */
-const WALL: [number, number, number] = [39.345, -3.2, 31.805];
+/** In the Coal Store, 1.4 m from its north wall (SW-B-01, a panel between it and the Boiler Room), facing it. */
+const WALL: [number, number, number] = [11, -3.2, 34.5];
+/** That wall's face on the Coal Store's side (z), and its panel. */
+const WALL_FACE_Z = 33.1;
+const WALL_PANEL = "SW-B-01";
 
 async function defender(op = "mute") {
-  const sim = await Sim.create("oregon");
+  const sim = await Sim.create("millrace");
   sim.matchRules.cameras = true;
   const server = new GadgetServer(sim);
   const c = sim.addPlayer("def", op, 0, undefined, undefined, DEFENSE);
@@ -50,8 +53,8 @@ describe("placing a Bulletproof Camera (Phase 7 M5, Phase 8's hands)", () => {
     step({ buttons: Btn.Fire });
     expect(placed().length).toBe(1);
     const cam = placed()[0];
-    expect([cam.onFloor, cam.panel, Math.abs(wrapAngle(cam.yaw))]).toEqual([false, 97, Math.PI]);
-    expect(cam.pos[2]).toBeCloseTo(30.4 + sim.data.gadgets.get("bulletproof_camera")!.sizeM[2] / 2, 1);
+    expect([cam.onFloor, cam.panel, Math.abs(wrapAngle(cam.yaw))]).toEqual([false, sim.level.panels.byId.get(WALL_PANEL)!.panel.spec.index, Math.PI]);
+    expect(cam.pos[2]).toBeCloseTo(WALL_FACE_Z + sim.data.gadgets.get("bulletproof_camera")!.sizeM[2] / 2, 1);
     // None left: back to the weapon, and the key does nothing more.
     expect([body.state.g1, body.state.hand]).toEqual([0, Hand.Weapon]);
     expect(sim.bpCams().length).toBe(1);

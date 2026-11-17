@@ -73,7 +73,12 @@ map's layout):
   boiler stairs (Engine Room down to the Boiler Room); the Gallery stairs up the Loom Hall's west wall; outdoor steps
   down into the millrace's south end.
 - **Hatches:** Carding Store → Mending Room, Payroll → Dispatch Office, Spinning Room → Bolt Store, Firing Floor →
-  Boiler Room, Overlook → Warping Room.
+  Boiler Room, Overlook → Warping Room, Engine Room → Coal Store (H6: the boiler site's second way down from above; its
+  Quick Match pre-setup reinforces both of its hatches and cuts a crouch hole between its two rooms).
+- **Drone holes** (0.4 × 0.2 m slots at floor level): into the building through the mill's north and south walls, the
+  office wing's east front and the boiler house's north wall; inside between the Warping and Spinning Rooms, the Office
+  Hall and Reception, the Boiler Room and Coal Store, the Pit Stores and Wheel Pit, and on 2F the Office Hall and the
+  Drafting Room.
 - **Soft floors:** the Gallery, the Card Room's east part, the Pattern Room, the Archive, the Bale Store's west part.
 
 ## Milestones

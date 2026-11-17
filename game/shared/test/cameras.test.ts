@@ -5,7 +5,7 @@ import { applyDamage, ATTACK, Btn, camerasOnRay, CAMERA_HALF_M, Cause, DEFENSE, 
 import { input } from "./helpers.js";
 
 async function defender(team = DEFENSE) {
-  const sim = await Sim.create("oregon");
+  const sim = await Sim.create("millrace");
   sim.matchRules.cameras = true;
   const c = sim.addPlayer("def", team === DEFENSE ? "mute" : "thermite", 0, undefined, undefined, team);
   const body = sim.pawns.get(c.possessedPawnId)!;
@@ -51,10 +51,13 @@ describe("default cameras (Phase 7 M3)", () => {
     const { c, step, cams } = await defender();
     press(step, Btn.Observe, cams[0].yawDeg);
     const face = cams[0].yawDeg * DEG;
+    // How far the view has turned from the camera's facing, in degrees (the yaw wraps at ±180°: Millrace's first
+    // camera faces 173.5°).
+    const turned = () => ((((c.camYaw - face) / DEG + 540) % 360) + 360) % 360 - 180;
     step({ yawDeg: cams[0].yawDeg + 170 }, 32); // half a second: 30° toward it
-    expect((c.camYaw - face) / DEG).toBeCloseTo(30, 0);
+    expect(turned()).toBeCloseTo(30, 0);
     step({ yawDeg: cams[0].yawDeg + 170 }, 128);
-    expect((c.camYaw - face) / DEG).toBeCloseTo(60, 3);
+    expect(turned()).toBeCloseTo(60, 3);
     step({ pitch: 80 * DEG }, 192);
     expect(c.camPitch / DEG).toBeCloseTo(10, 3);
     step({ pitch: -80 * DEG }, 192);

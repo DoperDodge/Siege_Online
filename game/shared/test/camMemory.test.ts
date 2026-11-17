@@ -2,15 +2,15 @@
 // the feed last watched; Skopós's idle shell is one of her feeds (her shell view, from which she swaps), reached with
 // Observe and the lean as the cameras are, in place of its barrier's camera (which her teammates still watch).
 import { describe, expect, it } from "vitest";
-import { Btn, DEFENSE, DEG, PawnMode, SHELL_VIEW, Sim, ticks, type InputCmd } from "../src/index.js";
+import { Btn, DEFENSE, DEG, PawnMode, SHELL_VIEW, Sim, ticks, wrapAngle, type InputCmd } from "../src/index.js";
 import { input } from "./helpers.js";
 import { scene } from "./interactions/harness.js";
 
 type Look = Partial<InputCmd> & { yawDeg?: number };
 
-/** A defender (`op`) on Oregon with the match's cameras. */
-async function oregon(op = "mute") {
-  const sim = await Sim.create("oregon");
+/** A defender (`op`) on Millrace with the match's cameras. */
+async function millrace(op = "mute") {
+  const sim = await Sim.create("millrace");
   sim.matchRules.cameras = true;
   const c = sim.addPlayer("def", op, 0, undefined, undefined, DEFENSE);
   const step = (cmd: Look = {}, n = 1) => {
@@ -28,14 +28,14 @@ function press(step: (cmd?: Look) => void, buttons: number, look: Look = {}) {
 
 describe("a camera keeps where you left it looking (D-155)", () => {
   it("flipped back to, a camera looks where it was left; the next opens its own way, not turned toward the last one's mouse", async () => {
-    const { c, step, cams } = await oregon();
+    const { c, step, cams } = await millrace();
     press(step, Btn.Observe, { yawDeg: cams[0].yawDeg });
     expect(c.cam).toBe(1);
     // Turned 40° right and 20° down (60°/s: done well within 2 s).
     const look = { yawDeg: cams[0].yawDeg + 40, pitch: -20 * DEG };
     step(look, 128);
     const left = { yaw: c.camYaw, pitch: c.camPitch };
-    expect((left.yaw - cams[0].yawDeg * DEG) / DEG).toBeCloseTo(40, 3);
+    expect(wrapAngle(left.yaw - cams[0].yawDeg * DEG) / DEG).toBeCloseTo(40, 3); // (Millrace's first camera faces 173.5°: past 180° the yaw wraps)
     expect(left.pitch / DEG).toBeCloseTo(-20, 3);
     // On to the next, the mouse still where the first looked: it opens looking its own way, unturned.
     step({ ...look, lean: 1 });
@@ -49,7 +49,7 @@ describe("a camera keeps where you left it looking (D-155)", () => {
   });
 
   it("Observe opens the camera last watched, as it was left; the first time, the first", async () => {
-    const { sim, c, step, cams } = await oregon();
+    const { sim, c, step, cams } = await millrace();
     expect(c.lastCam).toBe(0);
     press(step, Btn.Observe, { yawDeg: cams[0].yawDeg });
     step({ yawDeg: cams[0].yawDeg, lean: 1 });
@@ -69,7 +69,7 @@ describe("a camera keeps where you left it looking (D-155)", () => {
   });
 
   it("the camera last watched broken since: Observe opens the next working one after it", async () => {
-    const { sim, c, step, cams } = await oregon();
+    const { sim, c, step, cams } = await millrace();
     press(step, Btn.Observe, { yawDeg: cams[0].yawDeg });
     step({ yawDeg: cams[0].yawDeg, lean: -1 });
     expect(c.cam).toBe(cams.length);
@@ -81,7 +81,7 @@ describe("a camera keeps where you left it looking (D-155)", () => {
   });
 
   it("each camera's view is remembered, the oldest dropped past the limit", async () => {
-    const { c, step, cams } = await oregon();
+    const { c, step, cams } = await millrace();
     press(step, Btn.Observe, { yawDeg: cams[0].yawDeg });
     for (let i = 1; i < cams.length; i++) {
       step({ yawDeg: cams[i - 1].yawDeg, lean: 1 });
@@ -93,7 +93,7 @@ describe("a camera keeps where you left it looking (D-155)", () => {
 
 describe("Skopós's idle shell is one of her feeds (D-155)", () => {
   it("in a match, after the last camera and before the first: Observe closes it and opens it again, and F swaps from it", async () => {
-    const { sim, c, step, cams } = await oregon("skopos");
+    const { sim, c, step, cams } = await millrace("skopos");
     const first = c.possessedPawnId;
     const other = sim.otherPawn(c.id)!;
     press(step, Btn.Observe, { yawDeg: cams[0].yawDeg });
@@ -134,7 +134,7 @@ describe("Skopós's idle shell is one of her feeds (D-155)", () => {
   });
 
   it("her ability key from a camera goes onto her shell, and again back to her body", async () => {
-    const { sim, c, step, cams } = await oregon("skopos");
+    const { sim, c, step, cams } = await millrace("skopos");
     press(step, Btn.Observe, { yawDeg: cams[0].yawDeg });
     step({ yawDeg: cams[0].yawDeg, lean: 1 });
     expect(c.cam).toBe(2);

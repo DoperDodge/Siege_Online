@@ -45,18 +45,24 @@
   {"id": "1F.BE#1", "center": [22, 1.6, 37.575], "size": [0.3, 3.2, 1.15], "surface": "HARD_WALL"},
   {"id": "1F.BN#0", "center": [9.925, 1.6, 26], "size": [4.15, 3.2, 0.3], "surface": "HARD_WALL"},
   {"id": "1F.BN#1", "center": [14.25, 1.6, 26], "size": [1.5, 3.2, 0.3], "surface": "HARD_WALL"},
-  {"id": "1F.BN#2", "center": [19.325, 1.6, 26], "size": [5.65, 3.2, 0.3], "surface": "HARD_WALL"},
+  {"id": "1F.BN#2.0", "center": [17.75, 1.6, 26], "size": [2.5, 3.2, 0.3], "surface": "HARD_WALL"},
+  {"id": "1F.BN#2.1", "center": [19.2, 1.7, 26], "size": [0.4, 3, 0.3], "surface": "HARD_WALL"},
+  {"id": "1F.BN#2.2", "center": [20.775, 1.6, 26], "size": [2.75, 3.2, 0.3], "surface": "HARD_WALL"},
   {"id": "1F.BS#0", "center": [15, 1.6, 38], "size": [14.3, 3.2, 0.3], "surface": "HARD_WALL"},
   {"id": "1F.BW#0", "center": [8, 1.6, 26.925], "size": [0.3, 3.2, 2.15], "surface": "HARD_WALL"},
   {"id": "1F.BW#1", "center": [8, 1.6, 31.5], "size": [0.3, 3.2, 3], "surface": "HARD_WALL"},
   {"id": "1F.BW#2", "center": [8, 1.6, 36.325], "size": [0.3, 3.2, 3.65], "surface": "HARD_WALL"},
   {"id": "1F.E#0", "center": [60, 1.6, 1.925], "size": [0.3, 3.2, 4.15], "surface": "HARD_WALL"},
-  {"id": "1F.E#1", "center": [60, 1.6, 9.5], "size": [0.3, 3.2, 7], "surface": "HARD_WALL"},
+  {"id": "1F.E#1.0", "center": [60, 1.6, 7.5], "size": [0.3, 3.2, 3], "surface": "HARD_WALL"},
+  {"id": "1F.E#1.1", "center": [60, 1.7, 9.2], "size": [0.3, 3, 0.4], "surface": "HARD_WALL"},
+  {"id": "1F.E#1.2", "center": [60, 1.6, 11.2], "size": [0.3, 3.2, 3.6], "surface": "HARD_WALL"},
   {"id": "1F.E#2", "center": [60, 1.6, 18], "size": [0.3, 3.2, 6], "surface": "HARD_WALL"},
   {"id": "1F.E#3", "center": [60, 1.6, 25.575], "size": [0.3, 3.2, 5.15], "surface": "HARD_WALL"},
   {"id": "1F.N#0", "center": [1.925, 1.6, 0], "size": [4.15, 3.2, 0.3], "surface": "HARD_WALL"},
   {"id": "1F.N#1", "center": [8.5, 1.6, 0], "size": [5, 3.2, 0.3], "surface": "HARD_WALL"},
-  {"id": "1F.N#2", "center": [17.25, 1.6, 0], "size": [8.5, 3.2, 0.3], "surface": "HARD_WALL"},
+  {"id": "1F.N#2.0", "center": [14, 1.6, 0], "size": [2, 3.2, 0.3], "surface": "HARD_WALL"},
+  {"id": "1F.N#2.1", "center": [15.2, 1.7, 0], "size": [0.4, 3, 0.3], "surface": "HARD_WALL"},
+  {"id": "1F.N#2.2", "center": [18.45, 1.6, 0], "size": [6.1, 3.2, 0.3], "surface": "HARD_WALL"},
   {"id": "1F.N#3", "center": [26, 1.6, 0], "size": [6, 3.2, 0.3], "surface": "HARD_WALL"},
   {"id": "1F.N#4", "center": [32.5, 1.6, 0], "size": [3, 3.2, 0.3], "surface": "HARD_WALL"},
   {"id": "1F.N#5", "center": [39.5, 1.6, 0], "size": [7, 3.2, 0.3], "surface": "HARD_WALL"},
@@ -66,7 +72,9 @@
   {"id": "1F.S#1", "center": [8.5, 1.6, 20], "size": [7, 3.2, 0.3], "surface": "HARD_WALL"},
   {"id": "1F.S#2", "center": [17.5, 1.6, 20], "size": [7, 3.2, 0.3], "surface": "HARD_WALL"},
   {"id": "1F.S#3", "center": [26.5, 1.6, 20], "size": [7, 3.2, 0.3], "surface": "HARD_WALL"},
-  {"id": "1F.S#4", "center": [38, 1.6, 20], "size": [12, 3.2, 0.3], "surface": "HARD_WALL"},
+  {"id": "1F.S#4.0", "center": [33.5, 1.6, 20], "size": [3, 3.2, 0.3], "surface": "HARD_WALL"},
+  {"id": "1F.S#4.1", "center": [35.2, 1.7, 20], "size": [0.4, 3, 0.3], "surface": "HARD_WALL"},
+  {"id": "1F.S#4.2", "center": [39.7, 1.6, 20], "size": [8.6, 3.2, 0.3], "surface": "HARD_WALL"},
   {"id": "1F.S#5", "center": [46.825, 1.6, 20], "size": [2.65, 3.2, 0.3], "surface": "HARD_WALL"},
   {"id": "1F.SO#0", "center": [50.175, 1.6, 28], "size": [4.65, 3.2, 0.3], "surface": "HARD_WALL"},
   {"id": "1F.SO#1", "center": [55.75, 1.6, 28], "size": [1.5, 3.2, 0.3], "surface": "HARD_WALL"},
@@ -102,7 +110,9 @@
   {"id": "1F.w018o#2", "center": [58.825, 1.5, 18], "size": [2.65, 3, 0.2], "surface": "HARD_WALL"},
   {"id": "1F.w026#0", "center": [26, 1.5, 0.425], "size": [0.2, 3, 1.15], "surface": "HARD_WALL"},
   {"id": "1F.w026#1", "center": [26, 1.5, 5.5], "size": [0.2, 3, 1], "surface": "HARD_WALL"},
-  {"id": "1F.w026#2", "center": [26, 1.5, 9.75], "size": [0.2, 3, 4.5], "surface": "HARD_WALL"},
+  {"id": "1F.w026#2.0", "center": [26, 1.5, 8.5], "size": [0.2, 3, 2], "surface": "HARD_WALL"},
+  {"id": "1F.w026#2.1", "center": [26, 1.6, 9.7], "size": [0.2, 2.8, 0.4], "surface": "HARD_WALL"},
+  {"id": "1F.w026#2.2", "center": [26, 1.5, 10.95], "size": [0.2, 3, 2.1], "surface": "HARD_WALL"},
   {"id": "1F.w026#3", "center": [26, 1.5, 16.75], "size": [0.2, 3, 1.5], "surface": "HARD_WALL"},
   {"id": "1F.w026#4", "center": [26, 1.5, 19.575], "size": [0.2, 3, 1.15], "surface": "HARD_WALL"},
   {"id": "1F.w038#0", "center": [38, 1.5, 1.175], "size": [0.2, 3, 2.65], "surface": "HARD_WALL"},
@@ -116,7 +126,9 @@
   {"id": "1F.w048#1", "center": [48, 1.5, 9.25], "size": [0.2, 3, 7.5], "surface": "HARD_WALL"},
   {"id": "1F.w048#2", "center": [48, 1.5, 17.175], "size": [0.2, 3, 5.35], "surface": "HARD_WALL"},
   {"id": "1F.w051#0", "center": [51, 1.5, 2.925], "size": [0.2, 3, 6.15], "surface": "HARD_WALL"},
-  {"id": "1F.w051#1", "center": [51, 1.5, 9.25], "size": [0.2, 3, 3.5], "surface": "HARD_WALL"},
+  {"id": "1F.w051#1.0", "center": [51, 1.5, 8.25], "size": [0.2, 3, 1.5], "surface": "HARD_WALL"},
+  {"id": "1F.w051#1.1", "center": [51, 1.6, 9.2], "size": [0.2, 2.8, 0.4], "surface": "HARD_WALL"},
+  {"id": "1F.w051#1.2", "center": [51, 1.5, 10.2], "size": [0.2, 3, 1.6], "surface": "HARD_WALL"},
   {"id": "1F.w051#2", "center": [51, 1.5, 15.5], "size": [0.2, 3, 1], "surface": "HARD_WALL"},
   {"id": "1F.w051#3", "center": [51, 1.5, 18.75], "size": [0.2, 3, 2.5], "surface": "HARD_WALL"},
   {"id": "1F.w051#4", "center": [51, 1.5, 22.25], "size": [0.2, 3, 1.5], "surface": "HARD_WALL"},
@@ -178,7 +190,9 @@
   {"id": "2F.w048#2", "center": [48, 4.7, 18.175], "size": [0.2, 3, 3.35], "surface": "HARD_WALL"},
   {"id": "2F.w051#0", "center": [51, 4.7, 1.425], "size": [0.2, 3, 3.15], "surface": "HARD_WALL"},
   {"id": "2F.w051#1", "center": [51, 4.7, 7.75], "size": [0.2, 3, 1.5], "surface": "HARD_WALL"},
-  {"id": "2F.w051#2", "center": [51, 4.7, 11.75], "size": [0.2, 3, 3.5], "surface": "HARD_WALL"},
+  {"id": "2F.w051#2.0", "center": [51, 4.7, 10.5], "size": [0.2, 3, 1], "surface": "HARD_WALL"},
+  {"id": "2F.w051#2.1", "center": [51, 4.8, 11.2], "size": [0.2, 2.8, 0.4], "surface": "HARD_WALL"},
+  {"id": "2F.w051#2.2", "center": [51, 4.7, 12.45], "size": [0.2, 3, 2.1], "surface": "HARD_WALL"},
   {"id": "2F.w051#3", "center": [51, 4.7, 15.75], "size": [0.2, 3, 1.5], "surface": "HARD_WALL"},
   {"id": "2F.w051#4", "center": [51, 4.7, 20.75], "size": [0.2, 3, 2.5], "surface": "HARD_WALL"},
   {"id": "2F.w051#5", "center": [51, 4.7, 25.825], "size": [0.2, 3, 4.65], "surface": "HARD_WALL"},
@@ -206,7 +220,9 @@
   {"id": "B.W#1.0", "center": [0, -1.7, 15.75], "size": [0.3, 3, 8.5], "surface": "HARD_WALL"},
   {"id": "B.W#1.1", "center": [0, -1.7, 27.075], "size": [0.3, 3, 14.15], "surface": "HARD_WALL"},
   {"id": "B.WO#0", "center": [48, -1.7, 24], "size": [0.3, 3, 8.3], "surface": "HARD_WALL"},
-  {"id": "B.w004#0", "center": [2.425, -1.7, 4], "size": [5.15, 3, 0.2], "surface": "HARD_WALL"},
+  {"id": "B.w004#0.0", "center": [0.925, -1.7, 4], "size": [2.15, 3, 0.2], "surface": "HARD_WALL"},
+  {"id": "B.w004#0.1", "center": [2.2, -1.6, 4], "size": [0.4, 2.8, 0.2], "surface": "HARD_WALL"},
+  {"id": "B.w004#0.2", "center": [3.7, -1.7, 4], "size": [2.6, 3, 0.2], "surface": "HARD_WALL"},
   {"id": "B.w004#1", "center": [7.3, -1.7, 4], "size": [1.6, 3, 0.2], "surface": "HARD_WALL"},
   {"id": "B.w008#0", "center": [8, -1.7, 0.725], "size": [0.2, 3, 1.75], "surface": "HARD_WALL"},
   {"id": "B.w008#1", "center": [8, -1.7, 4.55], "size": [0.2, 3, 2.9], "surface": "HARD_WALL"},
@@ -240,7 +256,9 @@
   {"id": "B.w033#0", "center": [8.425, -1.7, 33], "size": [1.15, 3, 0.2], "surface": "HARD_WALL"},
   {"id": "B.w033#1", "center": [13.5, -1.7, 33], "size": [1, 3, 0.2], "surface": "HARD_WALL"},
   {"id": "B.w033#2", "center": [16.25, -1.7, 33], "size": [1.5, 3, 0.2], "surface": "HARD_WALL"},
-  {"id": "B.w033#3", "center": [20.825, -1.7, 33], "size": [2.65, 3, 0.2], "surface": "HARD_WALL"},
+  {"id": "B.w033#3.0", "center": [20, -1.7, 33], "size": [1, 3, 0.2], "surface": "HARD_WALL"},
+  {"id": "B.w033#3.1", "center": [20.7, -1.6, 33], "size": [0.4, 2.8, 0.2], "surface": "HARD_WALL"},
+  {"id": "B.w033#3.2", "center": [21.525, -1.7, 33], "size": [1.25, 3, 0.2], "surface": "HARD_WALL"},
   {"id": "B.w033n#0", "center": [33, -1.7, 1.425], "size": [0.2, 3, 3.15], "surface": "HARD_WALL"},
   {"id": "B.w033n#1", "center": [33, -1.7, 7.8], "size": [0.2, 3, 6.6], "surface": "HARD_WALL"},
   {"id": "B.w040#0", "center": [40, -1.7, 3.175], "size": [0.2, 3, 6.65], "surface": "HARD_WALL"},
@@ -351,22 +369,25 @@
   {"id": "ST_MAIN:B>1F.landing", "center": [43, -1.7, 5.7], "size": [4, 0.2, 2.6], "surface": "HARD_FLOOR"},
   {"id": "ground#0", "center": [-17.5, -0.1, 20], "size": [25.0001, 0.2, 100], "surface": "HARD_FLOOR"},
   {"id": "ground#1", "center": [-2.5, -0.1, -18], "size": [4.9999, 0.2, 24], "surface": "HARD_FLOOR"},
-  {"id": "ground#10", "center": [29.6, -0.1, -12.5], "size": [1.2, 0.2, 35], "surface": "HARD_FLOOR"},
-  {"id": "ground#11", "center": [29.6, -0.1, 38.1], "size": [1.2, 0.2, 63.8], "surface": "HARD_FLOOR"},
-  {"id": "ground#12", "center": [35.6, -0.1, 20], "size": [10.8, 0.2, 100], "surface": "HARD_FLOOR"},
-  {"id": "ground#13", "center": [42.025, -0.1, -14], "size": [2.05, 0.2, 32], "surface": "HARD_FLOOR"},
-  {"id": "ground#14", "center": [42.025, -0.1, 38.5], "size": [2.05, 0.2, 63], "surface": "HARD_FLOOR"},
-  {"id": "ground#15", "center": [44.025, -0.1, -13.85], "size": [1.95, 0.2, 32.3], "surface": "HARD_FLOOR"},
-  {"id": "ground#16", "center": [44.025, -0.1, 38.5], "size": [1.95, 0.2, 63], "surface": "HARD_FLOOR"},
-  {"id": "ground#17", "center": [67.5, -0.1, 20], "size": [45, 0.2, 100], "surface": "HARD_FLOOR"},
+  {"id": "ground#10", "center": [20.85, -0.1, -1.05], "size": [1.7, 0.2, 57.9], "surface": "HARD_FLOOR"},
+  {"id": "ground#11", "center": [20.85, -0.1, 51.4], "size": [1.7, 0.2, 37.2], "surface": "HARD_FLOOR"},
+  {"id": "ground#12", "center": [25.35, -0.1, 20], "size": [7.3, 0.2, 100], "surface": "HARD_FLOOR"},
+  {"id": "ground#13", "center": [29.6, -0.1, -12.5], "size": [1.2, 0.2, 35], "surface": "HARD_FLOOR"},
+  {"id": "ground#14", "center": [29.6, -0.1, 38.1], "size": [1.2, 0.2, 63.8], "surface": "HARD_FLOOR"},
+  {"id": "ground#15", "center": [35.6, -0.1, 20], "size": [10.8, 0.2, 100], "surface": "HARD_FLOOR"},
+  {"id": "ground#16", "center": [42.025, -0.1, -14], "size": [2.05, 0.2, 32], "surface": "HARD_FLOOR"},
+  {"id": "ground#17", "center": [42.025, -0.1, 38.5], "size": [2.05, 0.2, 63], "surface": "HARD_FLOOR"},
+  {"id": "ground#18", "center": [44.025, -0.1, -13.85], "size": [1.95, 0.2, 32.3], "surface": "HARD_FLOOR"},
+  {"id": "ground#19", "center": [44.025, -0.1, 38.5], "size": [1.95, 0.2, 63], "surface": "HARD_FLOOR"},
   {"id": "ground#2", "center": [-2.5, -0.1, 51.7], "size": [4.9999, 0.2, 36.6], "surface": "HARD_FLOOR"},
+  {"id": "ground#20", "center": [67.5, -0.1, 20], "size": [45, 0.2, 100], "surface": "HARD_FLOOR"},
   {"id": "ground#3", "center": [5.5, -0.1, 20], "size": [11, 0.2, 100], "surface": "HARD_FLOOR"},
   {"id": "ground#4", "center": [11.6, -0.1, -0.5], "size": [1.2, 0.2, 59], "surface": "HARD_FLOOR"},
   {"id": "ground#5", "center": [11.6, -0.1, 50.1], "size": [1.2, 0.2, 39.8], "surface": "HARD_FLOOR"},
-  {"id": "ground#6", "center": [16.1, -0.1, 20], "size": [7.8, 0.2, 100], "surface": "HARD_FLOOR"},
-  {"id": "ground#7", "center": [20.85, -0.1, -1.05], "size": [1.7, 0.2, 57.9], "surface": "HARD_FLOOR"},
-  {"id": "ground#8", "center": [20.85, -0.1, 51.4], "size": [1.7, 0.2, 37.2], "surface": "HARD_FLOOR"},
-  {"id": "ground#9", "center": [25.35, -0.1, 20], "size": [7.3, 0.2, 100], "surface": "HARD_FLOOR"},
+  {"id": "ground#6", "center": [15.1, -0.1, 20], "size": [5.8, 0.2, 100], "surface": "HARD_FLOOR"},
+  {"id": "ground#7", "center": [18.6, -0.1, 2.5], "size": [1.2, 0.2, 65], "surface": "HARD_FLOOR"},
+  {"id": "ground#8", "center": [18.6, -0.1, 53.1], "size": [1.2, 0.2, 33.8], "surface": "HARD_FLOOR"},
+  {"id": "ground#9", "center": [19.6, -0.1, 20], "size": [0.8, 0.2, 100], "surface": "HARD_FLOOR"},
   {"id": "guard:1F#0", "center": [43, -0.9, 7.025], "size": [4, 1.4, 0.05], "surface": "HARD_WALL", "bodiesOnly": true},
   {"id": "guard:1F#0.bar0", "center": [43, -0.625, 7.025], "size": [4, 0.05, 0.05], "surface": "HARD_WALL", "drawOnly": true},
   {"id": "guard:1F#1", "center": [-4.525, -1.3, 28.9], "size": [0.05, 2.2, 0.7], "surface": "HARD_WALL", "bodiesOnly": true},
@@ -549,6 +570,7 @@
   {"id": "H3", "center": [29.6, -0.1, 5.6], "size": [1.2, 0.2, 1.2], "surface": "HATCH", "label": "H3"},
   {"id": "H4", "center": [11.6, -0.1, 29.6], "size": [1.2, 0.2, 1.2], "surface": "HATCH", "label": "H4"},
   {"id": "H5", "center": [21.6, 3.1, 5.6], "size": [1.2, 0.2, 1.2], "surface": "HATCH", "label": "H5"},
+  {"id": "H6", "center": [18.6, -0.1, 35.6], "size": [1.2, 0.2, 1.2], "surface": "HATCH", "label": "H6"},
   {"id": "SF-2F-01#0.r0c0", "center": [1.95, 3.1, 1.525], "size": [3.6, 0.2, 2.75], "surface": "SOFT_FLOOR", "label": "SF-2F-01", "panel": {"region": "SF-2F-01"}},
   {"id": "SF-2F-01#0.r0c1", "center": [5.55, 3.1, 1.525], "size": [3.6, 0.2, 2.75], "surface": "SOFT_FLOOR", "panel": {"region": "SF-2F-01"}},
   {"id": "SF-2F-01#0.r0c2", "center": [9.15, 3.1, 1.525], "size": [3.6, 0.2, 2.75], "surface": "SOFT_FLOOR", "panel": {"region": "SF-2F-01"}},
@@ -946,7 +968,7 @@
   {"id": "2F_ARCHIVE", "callout": "Archive", "storey": "2F", "rects": [[51.1, 20.1, 59.85, 27.85]], "anchor": [55.475, 3.2, 23.975]}
  ],
  "sites": [
-  {"id": "SITE_BOILER", "name": "B Boiler Room / Coal Store", "rooms": ["B_BOILER_ROOM", "B_COAL_STORE"], "plantMarginM": 0.5, "preSetup": {"reinforce": [{"panel": "H4"}], "holes": []}, "bombs": [
+  {"id": "SITE_BOILER", "name": "B Boiler Room / Coal Store", "rooms": ["B_BOILER_ROOM", "B_COAL_STORE"], "plantMarginM": 0.5, "preSetup": {"reinforce": [{"panel": "H4"}, {"panel": "H6"}], "holes": [{"panel": "SW-B-01", "size": "crouch"}]}, "bombs": [
    {"id": "1A", "pos": [17.5, -3.2, 29.5001], "room": "B_BOILER_ROOM"},
    {"id": "1B", "pos": [11, -3.2, 36.5], "room": "B_COAL_STORE"}
   ]},
@@ -981,6 +1003,33 @@
   {"id": "ING5", "kind": "gas_pipe", "pos": [16, 1.2, 0.2], "yawDeg": -180, "room": "1F_LOOM_HALL"}
  ],
  "zones": [
+  {"id": "B.dt1", "kind": "drone_hole", "boxes": [
+   {"center": [20.7, -3.1, 33], "size": [0.4, 0.2, 0.2]}
+  ]},
+  {"id": "B.dt2", "kind": "drone_hole", "boxes": [
+   {"center": [2.2, -3.1, 4], "size": [0.4, 0.2, 0.2]}
+  ]},
+  {"id": "1F.dt1", "kind": "drone_hole", "boxes": [
+   {"center": [15.2, 0.1, 0], "size": [0.4, 0.2, 0.3]}
+  ]},
+  {"id": "1F.dt3", "kind": "drone_hole", "boxes": [
+   {"center": [60, 0.1, 9.2], "size": [0.3, 0.2, 0.4]}
+  ]},
+  {"id": "1F.dt2", "kind": "drone_hole", "boxes": [
+   {"center": [35.2, 0.1, 20], "size": [0.4, 0.2, 0.3]}
+  ]},
+  {"id": "1F.dt5", "kind": "drone_hole", "boxes": [
+   {"center": [26, 0.1, 9.7], "size": [0.2, 0.2, 0.4]}
+  ]},
+  {"id": "1F.dt6", "kind": "drone_hole", "boxes": [
+   {"center": [51, 0.1, 9.2], "size": [0.2, 0.2, 0.4]}
+  ]},
+  {"id": "1F.dt4", "kind": "drone_hole", "boxes": [
+   {"center": [19.2, 0.1, 26], "size": [0.4, 0.2, 0.3]}
+  ]},
+  {"id": "2F.dt1", "kind": "drone_hole", "boxes": [
+   {"center": [51, 3.3, 11.2], "size": [0.2, 0.2, 0.4]}
+  ]},
   {"id": "building:B", "kind": "building", "boxes": [
    {"center": [-2.5, -1.6, 14], "size": [5.3, 3.2, 40.3]},
    {"center": [30.15, -1.6, 10], "size": [60, 3.2, 20.3]},

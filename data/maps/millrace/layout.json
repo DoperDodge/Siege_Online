@@ -1221,6 +1221,19 @@
       "top": "2F_OVERLOOK",
       "bottom": "1F_WARPING",
       "_unverified": []
+    },
+    {
+      "id": "H6",
+      "frame": "world",
+      "rect": [
+        120.0,
+        233.333,
+        128.0,
+        241.333
+      ],
+      "top": "1F_ENGINE_ROOM",
+      "bottom": "B_COAL_STORE",
+      "_unverified": []
     }
   ],
   "floorShifts": [],
@@ -1468,9 +1481,17 @@
         "reinforce": [
           {
             "panel": "H4"
+          },
+          {
+            "panel": "H6"
           }
         ],
-        "holes": [],
+        "holes": [
+          {
+            "panel": "SW-B-01",
+            "size": "crouch"
+          }
+        ],
         "research": "ours (D-183)"
       },
       "_unverified": []

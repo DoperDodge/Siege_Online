@@ -126,7 +126,7 @@ describe("lobby, clock, error and debug messages round-trip", () => {
     const shielded = { ...shot, hit: { pawnId: 7, part: "shield", distance: 9.5 }, target: { pawnId: 7, boxes: [...Array.from({ length: 9 }, () => target.boxes[0]), ...plate] } };
     expect(decodeShotResult(body(encodeShotResult(shielded), Msg.ShotResult))).toEqual(shielded);
     expect(decodeCreateRoom(body(encodeCreateRoom("range_lab"), Msg.CreateRoom))).toEqual({ levelId: "range_lab" });
-    expect(() => decodeCreateRoom(body(encodeCreateRoom("oregon_secret"), Msg.CreateRoom))).toThrow(ProtocolError);
+    expect(() => decodeCreateRoom(body(encodeCreateRoom("millrace_secret"), Msg.CreateRoom))).toThrow(ProtocolError);
     expect(decodeLabTool(body(encodeLabTool({ kind: "resetDummies" }), Msg.LabTool))).toEqual({ kind: "resetDummies" });
     expect(decodeLabTool(body(encodeLabTool({ kind: "respawn" }), Msg.LabTool))).toEqual({ kind: "respawn" });
     const tp = { kind: "teleport" as const, x: -16, y: 0, z: -5.5, yawDeg: 90 };

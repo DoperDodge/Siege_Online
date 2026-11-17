@@ -314,6 +314,15 @@
           ],
           "sections": 2,
           "_unverified": []
+        },
+        {
+          "kind": "DRONE_HOLE",
+          "id": "B.dt1",
+          "at": [
+            136.667,
+            139.333
+          ],
+          "_unverified": []
         }
       ],
       "src": "hand",
@@ -331,6 +340,15 @@
       "weight": "int",
       "kind": "wall",
       "spans": [
+        {
+          "kind": "DRONE_HOLE",
+          "id": "B.dt2",
+          "at": [
+            13.333,
+            16.0
+          ],
+          "_unverified": []
+        },
         {
           "kind": "DOOR",
           "id": "B.o013",
