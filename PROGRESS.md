@@ -68,14 +68,15 @@ The plan: game/shared/src/gadgets/R3_OPERATORS.md (Ulo's calls, D-188): each kee
 names, looks and models and his tweaks to how it works. Rivet, Ohm, Dowser and Hull attacking; Shunt, Bailiff, Latch
 and Tonic defending. One at a time, each complete.
 - **Ohm** (attacker; health and speed 2 / 2; AK-12 or M870, GSh-18 or PMM, a frag, smoke or breach charge): his
-  **Brownout Pistol** in slot 2 (Z). Seven rounds, one a magazine, reloaded in 0.8 s. A round stops at the first wall,
-  floor, body or shield within 40 m and bursts there: every defender's electronic device and body within 1.5 m, through
-  walls and floors, is off for 10 s. Aiming (right mouse) looks through its scope: the view tinted blue and a little
-  closer, and a blue dot on every device a round could knock out, through walls (dots, not outlines: outlines are
-  Dowser's). His look: a dark blue work jacket with copper trim, a grey beanie, a battery pack on his back. A bot
+  **Brownout Pistol** in slot 2 (Z): a big-slide pistol with a coil shroud and a curved red-dot-style sight. Seven
+  rounds, one a magazine, the magazine changed in 1.9 s like the 5.7's (you see the empty one come out of the grip and
+  the next go in). A round stops at the first wall, floor, body or shield within 40 m and bursts there: every defender's
+  electronic device and body within 1.5 m, through walls and floors, is off for 10 s. Aiming (right mouse) brings the
+  sight to your eye: its lens is tinted blue, and in it (only in it) a blue dot sits on every device a round could
+  knock out, through walls (dots, not outlines: outlines are Dowser's). His look: a dark blue work jacket with copper trim, a grey beanie, a battery pack on his back. A bot
   playing Ohm shoots the devices behind the plan's first hard breach wall before the charge goes on.
 - **How to test Ohm**: the Gadget Lab or the greybox lab, pick Ohm (Esc), Z, hold right mouse to look through the
-  scope; put a Damper down as a defender behind a wall first to see its dot and then knock it out. In Play vs bots,
+  sight; put a Damper down as a defender behind a wall first to see its dot and then knock it out. In Play vs bots,
   attacking the Mill with an Ohm bot.
 
 ### Next

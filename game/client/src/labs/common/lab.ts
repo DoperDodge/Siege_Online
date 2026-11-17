@@ -1541,7 +1541,8 @@ export async function startLab(o: LabOptions): Promise<void> {
         noTicks: rs.mode === PawnMode.Dead || ctrl.shellCam || ctrl.swapPhase !== 0 || thirdPerson || freeCam !== null,
         aimed,
         reticle: viewmodel.reticle,
-        zoomed: aimed && inHand!.ads.zoom > 1,
+        // (Ohm's pistol out, R3: its sight is a red dot's, whatever the weapon's.)
+        zoomed: aimed && !viewmodel.gadgetGun && inHand!.ads.zoom > 1,
       });
     }
     frames++;
@@ -1724,8 +1725,9 @@ export async function startLab(o: LabOptions): Promise<void> {
   /** Aiming, drawn from the body you look through: a magnified sight narrows the field of view as ADS comes in. Returns the field of view. */
   function aim(p: Pawn, rs: PawnState): number {
     const w = p.loadout?.weapons[rs.slot];
-    // An EMP on the body (DSEG, Phase 8 M3): its optics are static, no magnification. Ohm's scope up (R3): its own.
-    const fov = scopeUp ? adsFov(settings.fovVertical, OHM_SCOPE_ZOOM, 1) : w ? adsFov(settings.fovVertical, rs.jammed > 0 ? 1 : w.ads.zoom, rs.adsQ / 65535) : settings.fovVertical;
+    // An EMP on the body (DSEG, Phase 8 M3): its optics are static, no magnification. (Ohm's pistol's sight, R3, is a
+    // red dot's: none either.)
+    const fov = scopeUp ? settings.fovVertical : w ? adsFov(settings.fovVertical, rs.jammed > 0 ? 1 : w.ads.zoom, rs.adsQ / 65535) : settings.fovVertical;
     if (Math.abs(camera.fov - fov) > 1e-4) {
       camera.fov = fov;
       camera.updateProjectionMatrix();
@@ -2879,51 +2881,65 @@ export async function startLab(o: LabOptions): Promise<void> {
     tabletPick = tabletEntries[(at + step + tabletEntries.length) % tabletEntries.length].key;
   }
 
-  /** Ohm's scope's magnification (R3). */
-  const OHM_SCOPE_ZOOM = 1.6;
-  /** Ohm's scope is up this frame (R3): his pistol out and ready, ADS held, not on a feed, no EMP on him. */
+  /** Ohm's sight is up this frame (R3): his pistol out and ready, ADS held, not on a feed, no EMP on him. */
   let scopeUp = false;
   const scopeDots: HTMLElement[] = [];
 
   /**
-   * Ohm's Brownout Pistol aimed (R3, Ulo's design): through its scope the view is tinted blue and magnified a little,
-   * and every device of the other side's that a round could turn off (gadgets/electronics.ts empTargets: within its
-   * range, through anything) has a blue dot on it: a dot, never its outline (Dowser's coil outlines). How many rounds
-   * are left shows under the reticle. An EMP on him takes the scope away.
+   * Ohm's Brownout Pistol aimed (R3, Ulo's design): his pistol comes up to the eye and he looks through its curved sight
+   * as through a red dot (no magnification). The lens tints what's behind it blue (its own material, gunKit.ts), and
+   * inside it, and only there, every device of the other side's that a round could turn off (gadgets/electronics.ts
+   * empTargets: within its range, through anything) has a blue dot on it: a dot, never its outline (Dowser's coil
+   * outlines). A blue ring in the lens is its reticle; how many rounds are left shows under the lens. An EMP on him
+   * takes the dots away.
    */
   function updateOhmScope() {
     const body = livingBody();
     const onFeed = ctrl.cam !== 0 || ctrl.drone !== 0 || ctrl.shellCam || ctrl.swapPhase !== 0;
     const g = body && handSlot(body.state.hand) === 2 && !isDetonator(body.state.hand) ? slotGadget(data, body.loadout, 2) : null;
-    scopeUp = !!body && !!g && g.use.kind === "shoot" && !onFeed && body.state.gAct !== GadgetAct.Equip && body.state.jammed === 0 && (heldButtons & Btn.Ads) !== 0;
+    scopeUp = !!body && !!g && g.use.kind === "shoot" && !onFeed && body.state.gAct !== GadgetAct.Equip && (heldButtons & Btn.Ads) !== 0;
     viewmodel.scoped = scopeUp;
-    $(".ohm-scope").classList.toggle("hidden", !scopeUp);
-    app.classList.toggle("ohm-scoped", scopeUp);
-    if (!scopeUp || !body || !g || g.use.kind !== "shoot") {
-      for (const el of scopeDots) el.style.display = "none";
+    const lens = scopeUp ? viewmodel.lensScreen() : null;
+    const el = $(".ohm-scope");
+    el.classList.toggle("hidden", !lens);
+    app.classList.toggle("ohm-scoped", !!lens);
+    if (!lens || !body || !g || g.use.kind !== "shoot") {
+      for (const d of scopeDots) d.style.display = "none";
       return;
     }
     const W = app.clientWidth;
     const H = app.clientHeight;
-    const marks = empTargets(sim, body.team, [camera.position.x, camera.position.y, camera.position.z], g.use.rangeM);
+    const [cx, cy, rx, ry] = [lens.cx * W, lens.cy * H, lens.rx * W, lens.ry * H];
+    // The lens on the page: what's drawn in it is clipped to it.
     const layer = $(".ohm-dots");
+    layer.style.clipPath = `ellipse(${rx.toFixed(1)}px ${ry.toFixed(1)}px at ${cx.toFixed(1)}px ${cy.toFixed(1)}px)`;
+    const ring = $(".ohm-reticle");
+    const rr = Math.max(6, Math.min(rx, ry) * 0.28);
+    ring.style.cssText = `left:${cx.toFixed(1)}px;top:${cy.toFixed(1)}px;width:${(rr * 2).toFixed(1)}px;height:${(rr * 2).toFixed(1)}px;margin:${(-rr).toFixed(1)}px 0 0 ${(-rr).toFixed(1)}px`;
+    const count = $(".ohm-count");
+    count.style.left = `${cx.toFixed(1)}px`;
+    count.style.top = `${(cy + ry + 10).toFixed(1)}px`;
+    const left = body.state.g2;
+    count.textContent = body.state.gAct === GadgetAct.Shoot ? `RELOADING · ${left} left` : `${left} round${left === 1 ? "" : "s"}`;
+    const marks = body.state.jammed > 0 ? [] : empTargets(sim, body.team, [camera.position.x, camera.position.y, camera.position.z], g.use.rangeM);
     let n = 0;
     for (const m of marks) {
       const v = new THREE.Vector3(m[0], m[1], m[2]).project(camera);
-      if (v.z > 1 || Math.abs(v.x) > 1.05 || Math.abs(v.y) > 1.05) continue;
-      let el = scopeDots[n];
-      if (!el) {
-        el = document.createElement("i");
-        layer.appendChild(el);
-        scopeDots.push(el);
+      if (v.z > 1) continue;
+      const [x, y] = [((v.x + 1) / 2) * W, ((1 - v.y) / 2) * H];
+      // Only those the lens shows (with a dot's width to spare at its edge, the clip trims it).
+      if (((x - cx) / (rx + 8)) ** 2 + ((y - cy) / (ry + 8)) ** 2 > 1) continue;
+      let d = scopeDots[n];
+      if (!d) {
+        d = document.createElement("i");
+        layer.appendChild(d);
+        scopeDots.push(d);
       }
       const near = Math.max(0, 1 - camera.position.distanceTo(new THREE.Vector3(m[0], m[1], m[2])) / g.use.rangeM);
-      el.style.cssText = `left:${(((v.x + 1) / 2) * W).toFixed(1)}px;top:${(((1 - v.y) / 2) * H).toFixed(1)}px;--dot:${(8 + 10 * near).toFixed(1)}px;display:block`;
+      d.style.cssText = `left:${x.toFixed(1)}px;top:${y.toFixed(1)}px;--dot:${(5 + 6 * near).toFixed(1)}px;display:block`;
       n++;
     }
     for (let i = n; i < scopeDots.length; i++) scopeDots[i].style.display = "none";
-    const left = body.state.g2;
-    $(".ohm-count").textContent = body.state.gAct === GadgetAct.Shoot ? `RELOADING · ${left} left` : `${left} round${left === 1 ? "" : "s"}`;
   }
 
   /**

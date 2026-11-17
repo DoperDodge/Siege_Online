@@ -131,14 +131,14 @@ html, body { overflow: hidden; overscroll-behavior: none; touch-action: none; us
 .stun-white { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 5; }
 .emp-static { position: fixed; left: 50%; top: 50%; width: 38vmin; height: 38vmin; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(200, 210, 220, 0.35) 0 2px, rgba(0, 0, 0, 0.45) 2px 4px); animation: jam 0.12s steps(2) infinite; }
 @keyframes jam { 50% { background-position: 0 3px; } }
-/* Ohm's Brownout Pistol aimed (R3, Ulo's design): the view tinted blue behind a round scope, and a blue dot on every
-   device a round could turn off (the page places them: updateOhmScope), bigger the nearer; rounds left under it. */
-.ohm-scope { position: fixed; inset: 0; pointer-events: none; z-index: 4; background: radial-gradient(circle at 50% 50%, rgba(30, 110, 255, 0.16) 0, rgba(30, 110, 255, 0.2) 34vmin, rgba(4, 14, 34, 0.92) 35vmin); }
+/* Ohm's Brownout Pistol aimed (R3, Ulo's design): through its curved sight, as through a red dot. The lens's own blue
+   tint is the gun's (gunKit.ts); the page adds, clipped to the lens (updateOhmScope), a blue dot on every device a round
+   could turn off, bigger the nearer, and the sight's reticle, a thin blue ring; the rounds left under the lens. */
+.ohm-scope { position: fixed; inset: 0; pointer-events: none; z-index: 4; }
 .ohm-dots { position: absolute; inset: 0; }
-.ohm-dots i { position: absolute; width: var(--dot); height: var(--dot); margin: calc(var(--dot) / -2) 0 0 calc(var(--dot) / -2); border-radius: 50%; background: radial-gradient(circle, #e8f4ff 0%, #4ea3ff 50%, rgba(40, 120, 255, 0) 72%); box-shadow: 0 0 calc(var(--dot) * 0.8) rgba(60, 150, 255, 0.95); }
-.ohm-reticle { position: absolute; left: 50%; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; border: 2px solid rgba(150, 205, 255, 0.85); border-radius: 50%; }
-.ohm-reticle::after { content: ""; position: absolute; left: 7px; top: 7px; width: 4px; height: 4px; background: #cfe6ff; border-radius: 50%; }
-.ohm-count { position: absolute; left: 50%; top: calc(50% + 24vmin); transform: translateX(-50%); color: #9ccbff; font: 600 13px/1 system-ui, sans-serif; letter-spacing: 0.08em; text-shadow: 0 0 6px rgba(40, 120, 255, 0.8); }
+.ohm-dots i { position: absolute; width: var(--dot); height: var(--dot); margin: calc(var(--dot) / -2) 0 0 calc(var(--dot) / -2); border-radius: 50%; background: radial-gradient(circle, #8fc8ff 0%, #2f86ff 55%, rgba(40, 120, 255, 0) 75%); box-shadow: 0 0 calc(var(--dot) * 0.7) rgba(60, 150, 255, 0.95); }
+.ohm-reticle { position: absolute; border: 1.5px solid rgba(110, 185, 255, 0.95); border-radius: 50%; box-shadow: 0 0 4px rgba(60, 150, 255, 0.8); }
+.ohm-count { position: absolute; transform: translateX(-50%); color: #9ccbff; font: 600 12px/1 system-ui, sans-serif; letter-spacing: 0.08em; text-shadow: 0 0 6px rgba(40, 120, 255, 0.8); white-space: nowrap; }
 .ohm-scoped .crosshair, .ohm-scoped .spread, .ohm-scoped .reticle { display: none; }
 
 /* Murmur's Blood Oxygen Sensor up (our own design, D-183): the view tinted blue; each person it reads (through walls,

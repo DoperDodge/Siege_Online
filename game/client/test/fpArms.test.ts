@@ -442,13 +442,37 @@ describe("the hands on what's held (render/viewmodel.ts)", () => {
     expect(p.hand("left")!.pose).toBe("grip");
   });
 
+  it("Ohm's pistol (R3) is a gun in the hands: both on its grip; aimed, its lens comes onto the middle of the page; a round's magazine change takes the left hand to the magazine", () => {
+    const vm = new Viewmodel(data);
+    const w = weapon("m4");
+    const g = data.gadgets.get("brownout_pistol")!;
+    vm.update(0, 1 / 60, w, state({ hand: 3 }), 30, { data: g, detonator: false });
+    expect(vm.gadgetGun).toBe(true);
+    expect(vm.camera.getObjectByName("held")).toBeUndefined();
+    let p = parts(vm);
+    expect([p.hand("right")!.pose, p.hand("left")!.pose]).toEqual(["grip", "grip"]);
+    expect(vm.lensScreen()).toBeNull(); // not aimed
+    vm.scoped = true;
+    for (let i = 0; i < 30; i++) vm.update(i * 16, 1 / 60, w, state({ hand: 3 }), 30, { data: g, detonator: false });
+    const lens = vm.lensScreen()!;
+    expect(lens.cx).toBeCloseTo(0.5, 2);
+    expect(lens.cy).toBeCloseTo(0.5, 2);
+    expect(lens.rx).toBeGreaterThan(0.02);
+    // Mid-change (a third of the way through): the left hand holds the magazine (its "hold").
+    vm.scoped = false;
+    for (let i = 0; i < 30; i++) vm.update(600 + i * 16, 1 / 60, w, state({ hand: 3, gAct: 6, gTicks: Math.round(1.9 * 64 * 0.2) }), 30, { data: g, detonator: false });
+    p = parts(vm);
+    expect(p.hand("left")!.pose).toBe("hold");
+  });
+
   it("a gadget in the palm rests on it: the palm under the lowest of it there, not under its box's corner", () => {
     const vm = new Viewmodel(data);
     const w = weapon("m4");
     const solid = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
     let checked = 0;
     for (const g of data.gadgets.values()) {
-      if (g.use.kind === "swing" || g.use.kind === "hold") continue;
+      // (A shot item is a gun in the hands, R3: Ohm's pistol, below.)
+      if (g.use.kind === "swing" || g.use.kind === "hold" || g.use.kind === "shoot") continue;
       for (const detonator of [false, true]) {
         if (detonator && g.use.kind !== "place") continue;
         vm.update(0, 1 / 60, w, state({ hand: 1 }), 30, { data: g, detonator });

@@ -130,22 +130,45 @@ export function gadgetShape(id: string, size: V3): Map<ShapeMat, THREE.BufferGeo
       break;
     }
     case "brownout_pistol": {
-      // Ohm's Brownout Pistol (R3; our own design): a squat, heavy pistol with a fat barrel shroud ringed by copper coils
-      // and a blue emitter at the muzzle, a boxy scope on top with a blue lens, and a short grip under its back. Its
-      // front toward −z; its grip at the bottom of its box.
-      const grip = h * 0.42;
-      const bodyH = h - grip - 0.012;
+      // Ohm's Brownout Pistol (R3; our own design), as others see it in his hand: a big-slide pistol (the slide, the
+      // frame under it, a trigger guard, the grip raked back with its magazine's base), a shroud out past the slide
+      // with copper coils and a blue emitter, and a curved sight on the slide. Front toward −z; the grip's foot at the
+      // bottom of its box, the sight's round top at its top.
+      const rake = 0.34;
       const top = h / 2;
-      const yBody = top - 0.026 - bodyH / 2;
-      p.box("dark", [w * 0.92, bodyH, d * 0.62], [0, yBody, d * 0.12]);
-      p.cyl("dark", w * 0.36, d * 0.42, [0, yBody + bodyH * 0.08, -d * 0.27], [HALF_PI, 0, 0], 16);
-      for (let i = 0; i < 4; i++) p.torus("yellow", w * 0.37, 0.0028, [0, yBody + bodyH * 0.08, -d * 0.12 - i * d * 0.07], [0, 0, 0]);
-      p.cyl("blueGlow", w * 0.22, 0.006, [0, yBody + bodyH * 0.08, -d / 2 + 0.003], [HALF_PI, 0, 0], 14);
-      p.box("black", [w * 0.62, 0.026, d * 0.36], [0, top - 0.013, d * 0.05]);
-      p.cyl("blueGlow", 0.008, 0.004, [0, top - 0.013, d * 0.05 - d * 0.18 - 0.002], [HALF_PI, 0, 0], 12);
-      // (Tilted back, its corners reach past its own height: set up a little so they stay in the box.)
-      p.box("rubber", [w * 0.7, grip - 0.012, d * 0.2], [0, -h / 2 + grip / 2 + 0.006, d * 0.28], [-0.22, 0, 0]);
-      p.box("black", [w * 0.5, 0.01, d * 0.18], [0, yBody - bodyH / 2 - 0.005, d * 0.06]);
+      const hoodR = w * 0.3;
+      const hoodY = top - hoodR - 0.004;
+      const slideTop = hoodY - 0.012;
+      const slideH = h * 0.27;
+      const back = d / 2 - 0.004;
+      const slideLen = d * 0.66;
+      const slideZ = back - slideLen / 2;
+      p.box("dark", [w * 0.5, slideH, slideLen], [0, slideTop - slideH / 2, slideZ]);
+      const frameH = h * 0.1;
+      const frameY = slideTop - slideH - frameH / 2;
+      p.box("black", [w * 0.46, frameH, slideLen * 0.78], [0, frameY, slideZ - slideLen * 0.08]);
+      const bore = slideTop - slideH * 0.55;
+      const shroudFront = -d / 2 + 0.004;
+      const shroudBack = back - slideLen + 0.03;
+      p.cyl("dark", w * 0.21, shroudBack - shroudFront, [0, bore, (shroudBack + shroudFront) / 2], [HALF_PI, 0, 0], 16);
+      for (let k = 0; k < 4; k++) p.torus("yellow", w * 0.22, 0.0028, [0, bore, shroudBack - 0.012 - k * 0.016], [0, 0, 0]);
+      p.cyl("blueGlow", w * 0.14, 0.004, [0, bore, shroudFront - 0.002], [HALF_PI, 0, 0], 14);
+      // The grip, raked back from under the frame to the foot of the box (its corners kept in: tilted, a box reaches
+      // past its own height), its magazine's base in its foot; the trigger guard ahead of it.
+      const gripD = d * 0.17;
+      const gripLen = 0.05;
+      const reach = (gripLen * Math.cos(rake) + gripD * Math.sin(rake)) / 2;
+      const gripY = -h / 2 + reach + 0.001;
+      const gripZ = back - d * 0.13;
+      p.box("rubber", [w * 0.5, gripLen, gripD], [0, gripY, gripZ], [-rake, 0, 0]);
+      const plateD = d * 0.12;
+      const plateY = -h / 2 + (0.006 * Math.cos(rake) + plateD * Math.sin(rake)) / 2 + 0.003;
+      p.box("black", [w * 0.54, 0.006, plateD], [0, plateY, gripZ + Math.tan(rake) * (gripY - plateY)], [-rake, 0, 0]);
+      p.torus("black", d * 0.06, 0.003, [0, frameY - frameH / 2 - d * 0.03, back - d * 0.34], [0, HALF_PI, 0]);
+      // The curved sight: a low base on the slide, a hood with a round top round its blue lens.
+      p.box("black", [w * 0.5, 0.008, d * 0.16], [0, slideTop + 0.004, back - d * 0.2]);
+      p.torus("black", hoodR, 0.004, [0, hoodY, back - d * 0.22], [0, 0, 0]);
+      p.cyl("blueGlow", hoodR * 0.9, 0.002, [0, hoodY, back - d * 0.22], [HALF_PI, 0, 0], 18);
       break;
     }
     case "cluster_grenade": {

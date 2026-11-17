@@ -38,6 +38,7 @@
     "gsh_18": { "base": "pistol", "barrel": 0.0, "finish": "black", "variant": "flat" },
     "q_929": { "base": "pistol", "barrel": 0.0, "finish": "grey", "variant": "flat" },
     "5_7_usg": { "base": "pistol", "barrel": 0.0, "finish": "tan", "variant": "57" },
+    "brownout_pistol": { "base": "pistol", "barrel": 0.0, "finish": "black", "variant": "ohm", "scale": 1.1 },
     "pmm": { "base": "pistol", "barrel": 0.0, "finish": "silver", "variant": "pmm", "scale": 0.88 },
     "gonne_6": { "base": "flare", "barrel": 0.1, "finish": "olive" },
     "ballistic_shield": { "base": "pistol", "barrel": 0.0, "finish": "black", "variant": "sig" }

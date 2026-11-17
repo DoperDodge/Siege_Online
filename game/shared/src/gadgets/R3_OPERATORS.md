@@ -24,12 +24,14 @@ bots' use (bots/DESIGN.md §7.4), its model and first-person view (render/), and
 
 ## 2. The abilities
 
-**Ohm: the Brownout Pistol** (Ulo's design; built, §6). A heavy pistol with seven single-round magazines: Fire shoots a
-round, then it's reloaded in 0.8 s. A round flies straight from the eye (judged as a bullet, rewound) and stops at the
-first wall, floor, prop, body or shield within 40 m; it bursts just short of it: every defenders' electronic device and
-body within 1.5 m (a sphere, through walls and floors) is off and jammed for 10 s. Past its range it's spent. Aimed (ADS)
-he looks through its scope: the view tinted blue and magnified a little, and a blue dot on every device of theirs a
-round could turn off (within its range, through anything). A dot, never the device's outline: outlines are Dowser's.
+**Ohm: the Brownout Pistol** (Ulo's design; built, §6). A big-slide pistol with seven single-round magazines: Fire
+shoots a round, then the magazine's changed in 1.9 s (the 5.7 USG's magazine change: the empty one out of the grip, the
+next in). A round flies straight from the eye (judged as a bullet, rewound) and stops at the first wall, floor, prop,
+body or shield within 40 m; it bursts just short of it: every defenders' electronic device and body within 1.5 m (a
+sphere, through walls and floors) is off and jammed for 10 s. Past its range it's spent. Aimed (ADS) he looks through
+its curved sight as through a red dot (no magnification, nothing over the rest of the view): its lens tints what's
+behind it blue, and in the lens a blue dot sits on every device of theirs a round could turn off (within its range,
+through anything), round a thin blue ring of a reticle. A dot, never the device's outline: outlines are Dowser's.
 
 **Tonic: Second Wind** (the medic's updated version, Ulo's pick). Every operator on Tonic's team wears a patch from the
 round's start. His wrist monitor (slot 2, held up like a tablet) lists his teammates and himself with their health; the
@@ -120,4 +122,4 @@ goggles. Tonic: white and teal, a soft cap, a sling bag with a teal plus of our 
 
 | | Operator | Done | Notes |
 |---|---|---|---|
-| R3 M5 | **Ohm** | ✅ | data/operators/ohm.json, data/gadgets/brownout_pistol.json (`use.kind: "shoot"`: `reloadS`, `rangeM`; its `emp`). The hands (gadgets/hands.ts): Fire shoots (a `gshot` event), `GadgetAct.Shoot` while it reloads, put away after the last. The room judges a round as a bullet that goes into no wall (net/room.ts `judgeGadgetShot`, tracePellets with no penetration) and sets its EMP off there (`dseg`); everyone gets a `gshot` event (the streak, the burst). Offline the page stops it at the level (electronics.ts `roundStop`). The scope: electronics.ts `empTargets`, drawn by the lab page (`updateOhmScope`, a 1.6× zoom). Bots: the attack planner's job for an Ohm bot, its rounds at what the scope marks behind the first hard breach wall (bots/use.ts `shotMarks`). Look: `battery` on the back (render/bodyModel.ts); the pistol's model in render/gadgetShapes.ts. Tests: test/ohm.test.ts. (The first build's Brownout Pucks, e46a18e, are gone.) |
+| R3 M5 | **Ohm** | ✅ | data/operators/ohm.json, data/gadgets/brownout_pistol.json (`use.kind: "shoot"`: `reloadS`, `rangeM`; its `emp`). The hands (gadgets/hands.ts): Fire shoots (a `gshot` event), `GadgetAct.Shoot` while the magazine's changed, put away after the last. The room judges a round as a bullet that goes into no wall (net/room.ts `judgeGadgetShot`, tracePellets with no penetration) and sets its EMP off there (`dseg`); everyone gets a `gshot` event (the streak, the burst). Offline the page stops it at the level (electronics.ts `roundStop`). In first person it's a gun (Ulo's fixes): the gun kit's big-slide pistol, variant `ohm` (coil shroud, emitter) with the curved `emp` sight whose lens is see-through blue (render/gunKit.ts; gun_kit.json `brownout_pistol`), posed by the guns' own code (viewmodel.ts `poseGadgetGun`, `placeGun`): aimed over a pistol's 0.24 s, kicked by a round, the magazine changed by the left hand over the reload. What the sight shows: electronics.ts `empTargets`, the page's dots and ring clipped to the lens (lab.ts `updateOhmScope`, viewmodel.ts `lensScreen`). Bots: the attack planner's job for an Ohm bot, its rounds at what the scope marks behind the first hard breach wall (bots/use.ts `shotMarks`). Look: `battery` on the back (render/bodyModel.ts); the pistol's model in render/gadgetShapes.ts. Tests: test/ohm.test.ts. (The first build's Brownout Pucks, e46a18e, are gone.) |

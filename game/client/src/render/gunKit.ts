@@ -32,6 +32,11 @@ export interface GunModel {
   /** What the sight shows at full ADS. */
   readonly reticle: "posts" | "dot" | "cross";
   /**
+   * The lens of a sight you look through to see what the page draws in it (R3, Ohm's curved sight): its middle and half
+   * its width and height (gun frame); null for any other sight.
+   */
+  readonly lens: { center: THREE.Vector3; halfW: number; halfH: number } | null;
+  /**
    * Where it's held (gun frame; a body's hands, render/bodyPose.ts, viewmodel.ts): the middle of the hand on its grip;
    * the middle of the other hand under its handguard or on a grip there (null: both hands on the one grip), and
    * whether that's an upright grip (a vertical one fitted or built on, a Vector's magazine); how far back its butt
@@ -51,7 +56,7 @@ export interface GunModel {
   dispose(): void;
 }
 
-type Mat = "metal" | "furniture" | "wood" | "attach" | "dark" | "glass" | "accent";
+type Mat = "metal" | "furniture" | "wood" | "attach" | "dark" | "glass" | "accent" | "copper" | "emitter" | "lens";
 type P = [number, number];
 const DEG = Math.PI / 180;
 /** Picatinny: the rail's base height and width, its teeth's height and pitch. */
@@ -81,6 +86,8 @@ class Builder {
   intoMag = false;
   /** Where the hand on its grip is (u, v): the last grip built, or a classic stock's wrist. */
   hand: P = [0, 0];
+  /** A sight's lens (R3, Ohm's): where along the gun, its middle's height, half its width and height. */
+  lens: { u: number; v: number; halfW: number; halfH: number } | null = null;
 
   private put(mat: Mat, g: THREE.BufferGeometry): void {
     const into = this.intoMag ? this.magParts : this.parts;
@@ -751,30 +758,41 @@ function double(b: Builder, L: GunLookData): Anchors {
 
 function pistol(b: Builder, L: GunLookData): Anchors {
   const v = L.variant ?? "sig";
-  const len = v === "57" ? 0.2 : v === "pmm" ? 0.16 : 0.185;
-  const sh = v === "57" ? 0.04 : v === "flat" ? 0.034 : 0.032;
-  const rake = v === "1911" ? 18 : v === "flat" || v === "57" ? 20 : 16;
+  // Ohm's Brownout Pistol (R3, "ohm"; our own design) is a big-slide pistol like the 5.7's, with a coil shroud.
+  const big = v === "57" || v === "ohm";
+  const len = big ? 0.2 : v === "pmm" ? 0.16 : 0.185;
+  const sh = big ? 0.04 : v === "flat" ? 0.034 : 0.032;
+  const rake = v === "1911" ? 18 : v === "flat" || big ? 20 : 16;
   const s0 = 0.034;
   const s1 = s0 + sh;
   const back = -0.042;
   const front = back + len;
   // The slide: its front rounded or squared, serrations at the back, the ejection port.
   const nose = v === "usp" || v === "pmm" || v === "sig" ? 0.006 : 0.002;
-  b.side("metal", [[back, s0], [front, s0], [front, s1 - nose], [front - nose, s1], [back + 0.004, s1], [back, s1 - 0.004]], v === "57" ? 0.03 : 0.026);
-  for (let i = 0; i < 7; i++) for (const x of [-1, 1]) b.block("dark", [0.0012, sh * 0.7, 0.0025], back + 0.01 + i * 0.006, s0 + sh * 0.5, x * (v === "57" ? 0.0152 : 0.0132));
+  b.side("metal", [[back, s0], [front, s0], [front, s1 - nose], [front - nose, s1], [back + 0.004, s1], [back, s1 - 0.004]], big ? 0.03 : 0.026);
+  for (let i = 0; i < 7; i++) for (const x of [-1, 1]) b.block("dark", [0.0012, sh * 0.7, 0.0025], back + 0.01 + i * 0.006, s0 + sh * 0.5, x * (big ? 0.0152 : 0.0132));
   b.block("dark", [0.002, sh * 0.5, 0.045], back + len * 0.55, s0 + sh * 0.6, 0.0132);
   // The frame: the dust cover with its rail, the grip raked back, the trigger guard (squared or round).
   b.side("furniture", [[back + 0.004, 0.034], [front - 0.012, 0.034], [front - 0.012, 0.016], [0.075, 0.012], [0.035, 0.026], [back + 0.01, 0.026]], 0.024);
   b.block("furniture", [0.02, 0.006, 0.05], front - 0.04, 0.013);
   triggerGuard(b, 0.028, 0.072, 0.03, "furniture");
-  grip(b, "furniture", 0.0, 0.03, rake, v === "pmm" ? 0.085 : 0.1, 0.038, v === "57" ? 0.032 : 0.029);
+  grip(b, "furniture", 0.0, 0.03, rake, v === "pmm" ? 0.085 : 0.1, 0.038, big ? 0.032 : 0.029);
   if (v === "1911" || v === "pmm") b.side("metal", [[back - 0.008, s0 + 0.004], [back + 0.002, s0 + 0.004], [back + 0.002, s0 + 0.018], [back - 0.01, s0 + 0.02]], 0.008);
   if (v === "1911") b.side("furniture", [[back - 0.018, 0.034], [back + 0.006, 0.034], [back + 0.004, 0.02], [back - 0.014, 0.026]], 0.022);
   // Its sights: a notch at the back, a post at the front.
   for (const x of [-0.006, 0.006]) b.block("dark", [0.004, 0.006, 0.008], back + 0.012, s1 + 0.003, x);
   b.block("dark", [0.003, 0.006, 0.005], front - 0.01, s1 + 0.003);
-  // A barrel just out of the slide.
-  b.tube("metal", 0.0075, front - 0.005, front + Math.max(0.004, L.barrel), s0 + sh * 0.45);
+  // A barrel just out of the slide; Ohm's in a shroud out past it, copper coils round that and a blue emitter in its end.
+  const bore = s0 + sh * 0.45;
+  let tip = front + Math.max(0.004, L.barrel);
+  b.tube("metal", 0.0075, front - 0.005, tip, bore);
+  if (v === "ohm") {
+    tip = front + 0.05;
+    b.tube("dark", 0.0128, front - 0.032, tip, bore, 0, 18);
+    for (let i = 0; i < 4; i++) b.tube("copper", 0.0142, front - 0.024 + i * 0.016, front - 0.015 + i * 0.016, bore, 0, 18);
+    b.tube("emitter", 0.0088, tip, tip + 0.002, bore, 0, 14);
+    tip += 0.002;
+  }
   // The magazine up the grip (its base plate out of the bottom; a long one sticks out, an extended mag).
   b.intoMag = true;
   const t = Math.tan(rake * DEG);
@@ -789,8 +807,8 @@ function pistol(b: Builder, L: GunLookData): Anchors {
     top: { u0: back + 0.02, u1: back + 0.07, v: s1, slide: true },
     optic: back + 0.045,
     irons: { line: s1 + 0.006, rear: back + 0.012, front: front - 0.01, built: "both" },
-    muzzle: [front + Math.max(0.004, L.barrel), s0 + sh * 0.45],
-    barrelR: 0.0075,
+    muzzle: [tip, bore],
+    barrelR: v === "ohm" ? 0.0128 : 0.0075,
     under: null,
     side: { u: front - 0.04, v: 0.004, x: 0 },
   };
@@ -889,9 +907,27 @@ const BASES: Record<GunLookData["base"], (b: Builder, L: GunLookData) => Anchors
  * a holographic sight's window is open along the barrel (the eye looks through it; its reticle is drawn on screen); a
  * scope is closed (at full magnification the scope view replaces the gun).
  */
+/** Points round an arc about (cx, cy) of radius r from angle `from` to `to` (radians), n steps. */
+const arc = (cx: number, cy: number, r: number, from: number, to: number, n: number): P[] =>
+  Array.from({ length: n + 1 }, (_, i) => {
+    const t = from + ((to - from) * i) / n;
+    return [cx + Math.cos(t) * r, cy + Math.sin(t) * r];
+  });
+
 function optic(b: Builder, kind: string, a: Anchors): number | null {
   const u = a.optic;
   const v = a.top.v;
+  if (kind === "emp") {
+    // Ohm's sight (R3, Ulo: a curved red dot; our own design): a low body on the slide and a hood with a round top
+    // round a blue-tinted lens; the device dots show only through the lens (the page clips them to it).
+    b.block("attach", [0.03, 0.01, 0.05], u, v + 0.005);
+    const outer: P[] = [[-0.024, v + 0.01], [0.024, v + 0.01], ...arc(0, v + 0.032, 0.024, 0, Math.PI, 14)];
+    const inner: P[] = [[-0.02, v + 0.014], [0.02, v + 0.014], ...arc(0, v + 0.032, 0.02, 0, Math.PI, 14)];
+    b.section("attach", outer, u + 0.006, u + 0.019, 0.0006, [inner]);
+    b.section("lens", inner, u + 0.0125, u + 0.0135);
+    b.lens = { u: u + 0.013, v: v + 0.033, halfW: 0.02, halfH: 0.019 };
+    return v + 0.033;
+  }
   if (kind === "nonmag") {
     if (a.top.slide) {
       // A mini red dot on the slide: a low body, and a hood round its window.
@@ -1046,6 +1082,10 @@ export function buildGun(look: GunLook, kit: GunKit = loadPresentationData().gun
     dark: { color: "#17191c", metalness: 0.1, roughness: 0.75 },
     glass: { color: "#0d2230", metalness: 0.4, roughness: 0.06, emissive: "#03080c" },
     accent: { color: "#c9c3a8", metalness: 0.8, roughness: 0.3 },
+    copper: { color: "#b06a35", metalness: 0.85, roughness: 0.35 },
+    emitter: { color: "#4ea3ff", emissive: "#2f7dff", metalness: 0, roughness: 0.4 },
+    // A lens you see through (Ohm's sight): the world behind it tinted blue.
+    lens: { color: "#2f7dff", transparent: true, opacity: 0.32, metalness: 0, roughness: 0.05, depthWrite: false },
   };
   const mats = new Map<Mat, THREE.Material>();
   const all: THREE.Material[] = [];
@@ -1111,6 +1151,7 @@ export function buildGun(look: GunLook, kit: GunKit = loadPresentationData().gun
     magHome: mag.position.clone(),
     laser: laser ? laser.multiplyScalar(scale) : null,
     reticle,
+    lens: b.lens ? { center: new THREE.Vector3(0, b.lens.v, -b.lens.u).multiplyScalar(scale), halfW: b.lens.halfW * scale, halfH: b.lens.halfH * scale } : null,
     triangles,
     dispose() {
       group.removeFromParent();
