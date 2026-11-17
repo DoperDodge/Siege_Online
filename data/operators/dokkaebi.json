@@ -2,7 +2,7 @@
   "_doc": "Dokkaebi — loadout and ratings from the official Ubisoft operator page (research/operators/dokkaebi.md). Ability numbers arrive with Phase 8.",
   "_season": "Y11S3",
   "id": "dokkaebi",
-  "name": "Dokkaebi",
+  "name": "Relay",
   "side": "attacker",
   "healthRating": 1,
   "speedRating": 3,
@@ -24,7 +24,7 @@
   },
   "ability": {
     "id": "jegeo_payload",
-    "name": "Jegeo Payload"
+    "name": "Ringer"
   },
   "pawns": 1
 }

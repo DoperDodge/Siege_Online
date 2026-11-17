@@ -16,7 +16,7 @@ await startLab({
       "Action: attackers find the site, carry the defuser in and plant it (hold F in one of the site's rooms; G drops it). Defenders disable a planted defuser (hold F at it) before the fuse runs out. A side with nobody left up loses the round.",
       "Hold Tab for the scoreboard. Dead, you look through a teammate's eyes; click for the next.",
     ],
-    note: "Phase 6: match flow. Timers, defuser rules and what each side sees are our placeholders where Siege's are unknown (research/OPEN_QUESTIONS.md).",
+    note: "Phase 6: match flow. Timers, defuser rules and what each side sees are our own (data/modes, data/objective.json).",
   },
   match: true,
   extend: matchFeatures,

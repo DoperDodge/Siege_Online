@@ -3,7 +3,7 @@
   "_season": "Y11S3",
   "_unverified": ["use.placeS", "use.reachM", "sizeM", "cluster.count", "cluster.everyS", "cluster.fanDeg", "cluster.speedMps", "cluster.upDeg", "cluster.downDeg", "cluster.tubeM"],
   "id": "cluster_charge",
-  "name": "Cluster Charge",
+  "name": "Hailstone Drill",
   "side": "attacker",
   "operator": "fuze",
   "count": 4,

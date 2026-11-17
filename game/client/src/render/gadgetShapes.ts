@@ -8,6 +8,7 @@
 // it's hit and placed; built once per kind and size, merged by material. Our own shapes, of each kind's general form.
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 
 export type ShapeMat = "olive" | "dark" | "metal" | "black" | "tan" | "red" | "yellow" | "white" | "glass" | "rubber" | "blueGlow" | "greenGlow" | "redGlow" | "team";
 
@@ -87,11 +88,11 @@ function fuse(p: Parts, y: number, r: number): void {
 
 /** The shape for a gadget by its id and data size, merged by material; null for one drawn otherwise. */
 /**
- * Pulse's sensor's display in its model's frame (gadget size 0.23 × 0.17 × 0.05): 4:3, a little left of the middle
- * (the sensor block is on the left, the handle on the right), its face toward the holder. Open: when it's up the page
- * draws the screen there (viewmodel.ts sensorScreen).
+ * Murmur's Blood Oxygen Sensor's screen in its model's frame (gadget size 0.07 × 0.17 × 0.036; our own design, D-183):
+ * small, landscape, in the upper part of the handheld's face toward the holder (+z). While it's up the page draws its
+ * readout there (viewmodel.ts sensorScreen).
  */
-export const SENSOR_DISPLAY = { w: 0.15, h: 0.112, cx: -0.005, cy: 0.004, z: 0.0155 } as const;
+export const SENSOR_DISPLAY = { w: 0.05, h: 0.034, cx: 0, cy: 0.03, z: 0.0182 } as const;
 
 export function gadgetShape(id: string, size: V3): Map<ShapeMat, THREE.BufferGeometry> | null {
   const [w, h, d] = size;
@@ -271,28 +272,21 @@ export function gadgetShape(id: string, size: V3): Map<ShapeMat, THREE.BufferGeo
       break;
     }
     case "cardiac_sensor": {
-      // Pulse's heartbeat sensor (our own shapes): a scuffed gunmetal front round a 4:3 display (looked through when it's up:
-      // the display is open, SENSOR_DISPLAY; the front a thin plate, so its edges don't wall the view in), the hinged
-      // sensor block on its left, a handle up its right with a strap and two buttons, a yellow and a red light under
-      // the display. Its display faces the holder (+z).
+      // Murmur's Blood Oxygen Sensor (our own design, D-183): a slim handheld, rounded, dark with a blue light down
+      // each side; a rubber grip below with ribs; a metal cap on top; on its front (−z) a blue emitter ring round a
+      // dark lens near the top; on the face toward the holder (+z) a small screen in a black bezel (SENSOR_DISPLAY, where
+      // the page draws its readout while it's up) and a thumb button under it.
       const S = SENSOR_DISPLAY;
-      const [x0, x1, y0, y1] = [S.cx - S.w / 2, S.cx + S.w / 2, S.cy - S.h / 2, S.cy + S.h / 2];
-      const body = { l: x0 - 0.01, r: x1 + 0.01, b: -h / 2, t: y1 + 0.012 };
-      const pz = 0.006;
-      const fz = S.z - pz / 2;
-      p.box("dark", [body.r - body.l, body.t - y1, pz], [(body.l + body.r) / 2, (y1 + body.t) / 2, fz]);
-      p.box("dark", [body.r - body.l, y0 - body.b, pz], [(body.l + body.r) / 2, (body.b + y0) / 2, fz]);
-      p.box("dark", [x0 - body.l, y1 - y0, pz], [(body.l + x0) / 2, (y0 + y1) / 2, fz]);
-      p.box("dark", [body.r - x1, y1 - y0, pz], [(x1 + body.r) / 2, (y0 + y1) / 2, fz]);
-      // Behind the bottom, where its works are: a box under the display.
-      p.box("dark", [body.r - body.l, y0 - body.b - 0.004, d * 0.62], [(body.l + body.r) / 2, (body.b + y0) / 2 - 0.002, 0]);
-      p.box("metal", [0.02, 0.09, d * 0.8], [body.l - 0.01, 0.005, -0.004]);
-      p.box("dark", [0.035, body.t - body.b - 0.012, d * 0.6], [body.r + 0.0175, (body.t + body.b) / 2 - 0.006, -0.002]);
-      p.box("black", [0.01, (body.t - body.b) * 0.7, d * 0.66], [body.r + 0.03, (body.t + body.b) / 2 - 0.01, -0.002]);
-      p.box("black", [0.012, 0.01, 0.006], [body.r + 0.016, body.t - 0.022, S.z - 0.003]);
-      p.box("black", [0.012, 0.01, 0.006], [body.r + 0.016, body.t - 0.036, S.z - 0.003]);
-      p.box("yellow", [0.008, 0.005, 0.003], [x1 - 0.02, y0 - 0.012, S.z + 0.0005]);
-      p.box("redGlow", [0.008, 0.005, 0.003], [x1 - 0.006, y0 - 0.012, S.z + 0.0005]);
+      const half = d / 2;
+      p.add("rubber", new RoundedBoxGeometry(0.05, 0.062, 0.03, 3, 0.008), [0, -h / 2 + 0.031, 0]);
+      for (const y of [0.016, 0.028, 0.04]) p.box("black", [0.052, 0.003, 0.031], [0, -h / 2 + y, 0]);
+      p.add("dark", new RoundedBoxGeometry(0.066, 0.092, d, 3, 0.01), [0, 0.019, 0]);
+      p.add("metal", new RoundedBoxGeometry(0.058, 0.022, d - 0.004, 2, 0.008), [0, h / 2 - 0.011, 0]);
+      for (const sx of [-1, 1]) p.box("blueGlow", [0.002, 0.06, 0.008], [sx * 0.0335, 0.02, 0]);
+      p.cyl("black", 0.013, 0.004, [0, 0.05, -half + 0.002], [HALF_PI, 0, 0], 20);
+      p.torus("blueGlow", 0.016, 0.0026, [0, 0.05, -half + 0.0026]);
+      p.box("black", [S.w + 0.008, S.h + 0.008, 0.0016], [S.cx, S.cy, half - 0.0008]);
+      p.cyl("metal", 0.006, 0.003, [0, -0.008, half - 0.0015], [HALF_PI, 0, 0], 14);
       break;
     }
     case "jegeo_payload": {

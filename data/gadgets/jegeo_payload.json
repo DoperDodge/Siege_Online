@@ -3,7 +3,7 @@
   "_season": "Y11S3",
   "_unverified": ["jegeo.dismissS", "jegeo.aimDeg", "jegeo.fire.radiusM", "jegeo.fire.damage", "jegeo.fire.everyS", "jegeo.camHacks", "sizeM"],
   "id": "jegeo_payload",
-  "name": "Jegeo Payload",
+  "name": "Ringer",
   "side": "attacker",
   "operator": "dokkaebi",
   "count": 1,

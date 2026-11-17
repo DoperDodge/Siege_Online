@@ -131,22 +131,29 @@ html, body { overflow: hidden; overscroll-behavior: none; touch-action: none; us
 .stun-white { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 5; }
 .emp-static { position: fixed; left: 50%; top: 50%; width: 38vmin; height: 38vmin; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(200, 210, 220, 0.35) 0 2px, rgba(0, 0, 0, 0.45) 2px 4px); animation: jam 0.12s steps(2) infinite; }
 @keyframes jam { 50% { background-position: 0 3px; } }
-/* Pulse's sensor up (Ulo's request after Phase 10): looked through its open display (the page
-   places .pulse-glass over it: Viewmodel.sensorScreen), the world grey through it; a bright red band sweeps across left
-   to right, the view washed dark red behind it; each heartbeat lit where it beats as the band passes (a red dot, bigger
-   the nearer, in a thin white ring), fading until the next pass. No numbers; no crosshair while it's up. */
+/* Murmur's Blood Oxygen Sensor up (our own design, D-183): the view tinted blue; each person it reads (through walls,
+   in its forward fan) a glowing blue dot at their chest, where they were when its wave reached them, with soft rings rippling out from it,
+   bigger the nearer, fading until the next wave; its little screen (the page places .pulse-glass over it:
+   Viewmodel.sensorScreen) a blood-oxygen trace and how many it reads. */
 .pulse { position: fixed; inset: 0; pointer-events: none; z-index: 4; }
-.pulse-glass { position: absolute; border-radius: 9px; overflow: hidden; }
-.pulse-grey { position: absolute; inset: 0; backdrop-filter: grayscale(1) contrast(1.08) brightness(0.92); background: rgba(40, 0, 0, 0.08); }
-.pulse-wash { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: linear-gradient(90deg, rgba(46, 0, 0, 0) 0%, rgba(46, 0, 0, 0.35) 55%, rgba(64, 0, 0, 0.82) 100%); }
-.pulse-band { position: absolute; left: 0; top: 0; bottom: 0; width: calc(100% / 6); background: linear-gradient(90deg, rgba(252, 27, 28, 0) 0%, rgba(252, 27, 28, 0.85) 45%, rgba(255, 120, 110, 0.95) 55%, rgba(252, 27, 28, 0) 100%); mix-blend-mode: screen; }
+.pulse-tint { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 45%, rgba(40, 110, 255, 0.08) 35%, rgba(18, 56, 160, 0.3) 100%); }
 .pulse-hearts { position: absolute; inset: 0; }
 .pulse-hearts i { position: absolute; width: 0; height: 0; }
-.pulse-hearts s { position: absolute; left: calc(var(--ring) / -2); top: calc(var(--ring) / -2); width: var(--ring); height: var(--ring); border-radius: 50%; border: 1.5px solid rgba(255, 255, 255, 0.85); box-shadow: 0 0 10px rgba(255, 40, 40, 0.55), inset 0 0 14px rgba(255, 30, 30, 0.35); }
-.pulse-hearts u { position: absolute; left: calc(var(--dot) / -2); top: calc(var(--dot) / -2); width: var(--dot); height: var(--dot); border-radius: 50%; background: radial-gradient(circle, #ff3a3a 0%, #e60b0c 45%, rgba(230, 11, 12, 0) 72%); box-shadow: 0 0 calc(var(--dot) * 0.8) rgba(255, 20, 20, 0.8); }
-.pulse-state { position: absolute; left: 0; right: 0; top: 46%; text-align: center; font: 700 14px var(--mono); letter-spacing: 0.2em; color: #e5e7eb; text-shadow: 0 0 6px #000; }
-.pulse.frozen .pulse-band, .pulse.frozen .pulse-wash { display: none; }
+.pulse-hearts s { position: absolute; left: calc(var(--ring) / -2); top: calc(var(--ring) / -2); width: var(--ring); height: var(--ring); border-radius: 50%; border: 2px solid rgba(130, 195, 255, 0.95); box-shadow: 0 0 12px rgba(60, 150, 255, 0.7), inset 0 0 8px rgba(60, 150, 255, 0.4); animation: pulse-ripple 1.3s ease-out infinite; }
+.pulse-hearts s:nth-child(2) { animation-delay: 0.43s; }
+.pulse-hearts s:nth-child(3) { animation-delay: 0.86s; }
+.pulse-hearts u { position: absolute; left: calc(var(--dot) / -2); top: calc(var(--dot) / -2); width: var(--dot); height: var(--dot); border-radius: 50%; background: radial-gradient(circle, #ffffff 0%, #79bcff 45%, rgba(60, 140, 255, 0) 75%); box-shadow: 0 0 calc(var(--dot) * 0.9) rgba(70, 150, 255, 0.9); }
+@keyframes pulse-ripple { from { transform: scale(0.2); opacity: 1; } to { transform: scale(1); opacity: 0; } }
+.pulse-glass { position: absolute; border-radius: 2px; overflow: hidden; background: linear-gradient(#0a2140, #051226); box-shadow: inset 0 0 6px rgba(80, 160, 255, 0.35); }
+.pulse-trace { position: absolute; left: 5%; top: 8%; width: 90%; height: 58%; }
+.pulse-trace polyline { fill: none; stroke: #79bcff; stroke-width: 2.2; stroke-linejoin: round; stroke-dasharray: 150; animation: pulse-trace 1.4s linear infinite; }
+@keyframes pulse-trace { from { stroke-dashoffset: 150; } to { stroke-dashoffset: 0; } }
+.pulse-count { position: absolute; left: 0; right: 0; bottom: 6%; text-align: center; font: 700 1em var(--mono); letter-spacing: 0.06em; color: #d6e9ff; }
+.pulse-state { position: absolute; left: 0; right: 0; top: 30%; text-align: center; font: 700 1em var(--mono); color: #d6e9ff; }
+.pulse.frozen .pulse-tint { background: rgba(130, 140, 160, 0.16); }
+.pulse.frozen .pulse-trace, .pulse.frozen .pulse-count { display: none; }
 .pulse.frozen .pulse-hearts { filter: grayscale(1); }
+.pulse.frozen .pulse-hearts s { animation: none; opacity: 0.6; transform: scale(0.7); }
 .sensor-up .crosshair, .sensor-up .spread, .sensor-up .reticle { display: none; }
 /* Dokkaebi's tablet (Ulo's request after Phase 10): the identified defenders and the dead ones' phones, one picked. */
 .tablet { position: fixed; left: 50%; bottom: 12vh; width: 330px; transform: translateX(-50%); pointer-events: none; z-index: 4; padding: 10px 12px; border-radius: 10px; background: rgba(8, 24, 44, 0.84); border: 1px solid rgba(96, 165, 250, 0.55); box-shadow: 0 0 18px rgba(59, 130, 246, 0.35); font: 600 12px var(--mono); color: #dbeafe; }

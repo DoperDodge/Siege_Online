@@ -3,7 +3,7 @@
   "_season": "Y11S3",
   "_unverified": ["use.reachM", "pickUp", "sizeM"],
   "id": "observation_blocker",
-  "name": "Observation Blocker",
+  "name": "Feed Blocker",
   "side": "defender",
   "count": 3,
   "electronic": true,

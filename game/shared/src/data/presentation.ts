@@ -88,7 +88,7 @@ export const operatorLookSchema = z.strictObject({
   skin: color,
   hair: color,
   accent: color,
-  head: z.enum(["helmet", "cap", "beanie", "hood", "bare", "visor"]),
+  head: z.enum(["helmet", "cap", "beanie", "hood", "bare", "visor", "hardhat", "brim"]),
   headColor: color,
   face: z.enum(["none", "goggles", "glasses", "gasmask", "shield"]),
   ears: z.boolean(),

@@ -3,7 +3,7 @@
   "_season": "Y11S3",
   "_unverified": ["sensor.fanDeg", "sensor.pingDeg", "sizeM"],
   "id": "cardiac_sensor",
-  "name": "Cardiac Sensor",
+  "name": "Blood Oxygen Sensor",
   "side": "defender",
   "operator": "pulse",
   "count": 1,
@@ -11,6 +11,6 @@
   "use": {"kind": "hold"},
   "remote": false,
   "pickUp": false,
-  "sizeM": [0.23, 0.17, 0.05],
+  "sizeM": [0.07, 0.17, 0.036],
   "sensor": {"rangeM": 10.5, "fanDeg": 120, "pingDeg": 20}
 }

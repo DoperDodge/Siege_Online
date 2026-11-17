@@ -329,6 +329,41 @@ function head(s: Shaper, L: OperatorLook): void {
       false,
       true,
     );
+  } else if (L.head === "hardhat") {
+    // A work hard hat: a brim all round, deeper at the front, a dome and a ridge along its top.
+    s.paint(L.headColor, 0.45);
+    s.loft(
+      [
+        ringY(0.026, 0.128, 0.152, { z: 0.0, tilt: 0.18 }),
+        ringY(0.033, 0.125, 0.148, { z: 0.0, tilt: 0.18 }),
+        ringY(0.04, 0.099, 0.117, { z: 0.01, tilt: 0.14 }),
+        ringY(0.092, 0.094, 0.111, { z: 0.01, tilt: 0.06 }),
+        ringY(0.124, 0.062, 0.076, { z: 0.01 }),
+        ringY(0.138, 0.014, 0.018, { z: 0.01 }),
+      ],
+      14,
+      false,
+      true,
+    );
+    s.box([0, 0.13, 0.008], [0.022, 0.014, 0.168], 3, 0.005);
+  } else if (L.head === "brim") {
+    // A wide-brimmed hat: a flat brim, a low crown, a band in the accent colour.
+    s.paint(L.headColor, 0.9);
+    s.loft(
+      [
+        ringY(0.05, 0.15, 0.162, { z: 0.01, tilt: 0.05 }),
+        ringY(0.057, 0.148, 0.16, { z: 0.01, tilt: 0.05 }),
+        ringY(0.06, 0.09, 0.106, { z: 0.01, tilt: 0.04 }),
+        ringY(0.124, 0.084, 0.1, { z: 0.01 }),
+        ringY(0.134, 0.05, 0.06, { z: 0.01 }),
+        ringY(0.138, 0.01, 0.012, { z: 0.01 }),
+      ],
+      14,
+      false,
+      true,
+    );
+    s.paint(L.accent, 0.7);
+    s.loft([ringY(0.062, 0.093, 0.109, { z: 0.01, tilt: 0.04 }), ringY(0.082, 0.092, 0.108, { z: 0.01, tilt: 0.03 })], 14, false, false);
   }
 
   // Over the face.

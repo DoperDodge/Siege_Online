@@ -45,7 +45,7 @@ export class DownedHud {
     const needled = alive && s.needled;
     this.root.classList.toggle("needled", needled);
     $(".needle-ui").classList.toggle("hidden", !needled || s.deployKind === DeployKind.Needle);
-    if (needled) $(".needle-ui").textContent = `GU NEEDLE · no sprinting · stand and hold ${interactKey} to pull it`;
+    if (needled) $(".needle-ui").textContent = `BURR BARB · no sprinting · stand and hold ${interactKey} to pull it`;
     if (down) {
       $(".down-title").textContent = s.revivedBy
         ? "BEING REVIVED — hold still"
@@ -83,7 +83,7 @@ export class DownedHud {
                 : deployTicks(destruction, s.deployKind),
       );
       const what = needle
-        ? "PULLING THE NEEDLE"
+        ? "PULLING THE BARB"
         : phone
         ? "TURNING YOUR PHONE OFF"
         : takeBack

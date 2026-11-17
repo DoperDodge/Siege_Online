@@ -2,7 +2,7 @@
   "_doc": "Sentry — loadout and ratings from the official Ubisoft operator page (research/operators/sentry.md). Ability numbers arrive with Phase 8.",
   "_season": "Y11S3",
   "id": "sentry",
-  "name": "Sentry",
+  "name": "Picket",
   "side": "defender",
   "healthRating": 2,
   "speedRating": 2,

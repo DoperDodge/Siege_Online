@@ -3,7 +3,7 @@
   "_season": "Y11S3",
   "_unverified": ["count", "use.hitS", "use.reachM", "use.bothSkinsM", "use.holeM", "use.killCharges", "sizeM"],
   "id": "breaching_hammer",
-  "name": "Breaching Hammer",
+  "name": "Breaching Maul",
   "side": "attacker",
   "operator": "sledge",
   "count": 25,

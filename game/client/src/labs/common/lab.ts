@@ -258,7 +258,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     <div class="lean-ind lean-l">◀</div><div class="lean-ind lean-r">▶</div>
     <div class="flash"></div>
     <div class="stun-white"></div><div class="emp-static hidden"></div>
-    <div class="pulse hidden"><div class="pulse-glass"><div class="pulse-grey"></div><div class="pulse-wash"></div><div class="pulse-band"></div><div class="pulse-hearts"></div><div class="pulse-state"></div></div></div>
+    <div class="pulse hidden"><div class="pulse-tint"></div><div class="pulse-hearts"></div><div class="pulse-glass"><svg class="pulse-trace" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,21 10,21 14,19 18,9 22,6 26,12 30,17 34,15 38,18 46,21 56,21 60,19 64,9 68,6 72,12 76,17 80,15 84,18 92,21 100,21" /></svg><div class="pulse-count"></div><div class="pulse-state"></div></div></div>
     <div class="tablet hidden"><div class="tablet-title"></div><div class="tablet-list"></div><div class="tablet-help"></div></div>
     <div class="prompt hidden"></div>
     <div class="needle-ui hidden"></div>
@@ -895,7 +895,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     const labSections = () => `
       <section><h3>Operator</h3>
         <select class="op-select"><optgroup label="Attackers">${opts("attacker")}</optgroup><optgroup label="Defenders">${opts("defender")}</optgroup></select>
-        ${op.pawns > 1 ? `<p class="note">${op.name} has two shells: press <kbd>${keyLabel(settings.keys.observe)}</kbd> (or <kbd>${keyLabel(settings.keys.ability)}</kbd>) to look through the other shell's camera, one of your cameras (<kbd>${keyLabel(settings.keys.leanLeft)}</kbd> / <kbd>${keyLabel(settings.keys.leanRight)}</kbd> go round them), then <kbd>${keyLabel(settings.keys.interact)}</kbd> to transfer (${swap.transferSeconds} s + ${swap.activationSeconds} s).</p>` : ""}
+        ${op.pawns > 1 ? `<p class="note">${op.name} has two frames: press <kbd>${keyLabel(settings.keys.observe)}</kbd> (or <kbd>${keyLabel(settings.keys.ability)}</kbd>) to look through the other frame's camera, one of your cameras (<kbd>${keyLabel(settings.keys.leanLeft)}</kbd> / <kbd>${keyLabel(settings.keys.leanRight)}</kbd> go round them), then <kbd>${keyLabel(settings.keys.interact)}</kbd> to transfer (${swap.transferSeconds} s + ${swap.activationSeconds} s).</p>` : ""}
         ${net ? `<label>Team <select class="team-select"><option value="0" ${ctrl.team === 0 ? "selected" : ""}>Attackers</option><option value="1" ${ctrl.team === 1 ? "selected" : ""}>Defenders</option></select></label>` : ""}
       </section>
       ${loadoutSection()}
@@ -1046,10 +1046,10 @@ export async function startLab(o: LabOptions): Promise<void> {
         ${row(`<kbd>${keyLabel(k.crouch)}</kbd> / <kbd>${keyLabel(k.prone)}</kbd>`, "Crouch / prone (toggle or hold — see settings)")}
         ${row(`<kbd>${keyLabel(k.leanLeft)}</kbd> / <kbd>${keyLabel(k.leanRight)}</kbd>`, "Lean left / right")}
         ${row(`<kbd>${keyLabel(k.vault)}</kbd>`, "Vault / mantle: face a low obstacle and press it — standing still works; a prompt shows when you can. Holding it while running also works.")}
-        ${row(`<kbd>${keyLabel(k.interact)}</kbd>`, "Use: grab / let go of a ladder; Skopós: transfer to the shell you're viewing")}
+        ${row(`<kbd>${keyLabel(k.interact)}</kbd>`, "Use: grab / let go of a ladder; Twain: transfer to the frame you're viewing")}
         ${row(`<kbd>${keyLabel(k.slowWalk)}</kbd>`, "Slow walk")}
         ${row("Right mouse", "Aim down sights (slower walk)")}
-        ${row(`<kbd>${keyLabel(k.gadget)}</kbd> / <kbd>${keyLabel(k.ability)}</kbd>`, `Gadgets: take your gadget out (${keyLabel(k.ability)}: Striker's and Sentry's second one) and put it away. Left mouse throws it (right mouse lobs it) or, held, places it where the green outline shows; with a charge out, left mouse sets it off (${keyLabel(k.gadget)} again takes out the next one). Hold <kbd>${keyLabel(k.interact)}</kbd> on one of yours to take it back. Skopós: ${keyLabel(k.ability)} (or ${keyLabel(k.observe)}) views your other shell's camera, one of your cameras (press again to go back)`)}
+        ${row(`<kbd>${keyLabel(k.gadget)}</kbd> / <kbd>${keyLabel(k.ability)}</kbd>`, `Gadgets: take your gadget out (${keyLabel(k.ability)}: Pointman's and Picket's second one) and put it away. Left mouse throws it (right mouse lobs it) or, held, places it where the green outline shows; with a charge out, left mouse sets it off (${keyLabel(k.gadget)} again takes out the next one). Hold <kbd>${keyLabel(k.interact)}</kbd> on one of yours to take it back. Skopós: ${keyLabel(k.ability)} (or ${keyLabel(k.observe)}) views your other shell's camera, one of your cameras (press again to go back)`)}
         ${o.match ? "" : row(`<kbd>${keyLabel(k.respawn)}</kbd>`, "Respawn")}
         ${row("Left mouse", net ? "Fire (hold for automatic weapons). Online, each shot shows what the server's lag compensation hit." : "Fire (hold for automatic weapons)")}
         ${row(`<kbd>${keyLabel(k.reload)}</kbd>`, "Reload")}
@@ -1710,7 +1710,7 @@ export async function startLab(o: LabOptions): Promise<void> {
   const MODE_NAMES = ["", "VAULT", "LADDER", "DEAD", "", "RAPPEL", ""];
   function updateHud(p: Pawn) {
     const s = p.state;
-    $(".op-name").textContent = `${op.name} · ${op.side} · ${op.healthRating} health / ${op.speedRating} speed${op.pawns > 1 ? ` · shell ${ctrl.pawnIds.indexOf(p.id) + 1}/2` : ""}`;
+    $(".op-name").textContent = `${op.name} · ${op.side} · ${op.healthRating} health / ${op.speedRating} speed${op.pawns > 1 ? ` · frame ${ctrl.pawnIds.indexOf(p.id) + 1}/2` : ""}`;
     const inHand = slotGadget(data, p.loadout, (handSlot(s.hand) || 1) as 1 | 2);
     const back = s.gTarget ? sim.gadgets.get(s.gTarget) : undefined;
     const backData = back ? data.gadgets.get(kindId(back.kind) ?? "") : undefined;
@@ -1818,7 +1818,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     jegeoBar.classList.toggle("hidden", jegeoRun === null);
     if (jegeoRun) {
       jegeoBar.classList.toggle("ringing", jegeoRun.ringing);
-      $(".jegeo-title").textContent = jegeoRun.ringing ? `Your phone's ringing (Dokkaebi): hold ${keyLabel(settings.keys.interact)} to take it out and turn it off before it blows` : "Uploading the payload";
+      $(".jegeo-title").textContent = jegeoRun.ringing ? `Your phone's ringing (Relay): hold ${keyLabel(settings.keys.interact)} to take it out and turn it off before it blows` : "Uploading the Ringer";
       ($(".jegeo-fill").firstElementChild as HTMLElement).style.width = `${Math.min(100, ((performance.now() - jegeoRun.start) / jegeoRun.ms) * 100).toFixed(0)}%`;
     }
     // A Kludge's hack under way (Phase 8 M8): its bar filling.
@@ -1843,7 +1843,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       const now = net ? net.session.serverTick() : sim.tick;
       const left = (t: number) => `${(Math.max(0, t - now) * DT).toFixed(1)} s`;
       $(".dronecam-title").textContent = [
-        `${bp ? "BULLETPROOF CAM" : shell ? "SKOPÓS SHELL" : "CAM"} ${ctrl.cam}/${sim.camCount()}${room ? ` · ${room}` : ""}${broken ? ` · ${broken} broken` : ""}`,
+        `${bp ? "ARMOURED CAM" : shell ? "TWAIN FRAME" : "CAM"} ${ctrl.cam}/${sim.camCount()}${room ? ` · ${room}` : ""}${broken ? ` · ${broken} broken` : ""}`,
         // (Only a defender fires a defenders' camera's dart: not one Brava hacked, nor one Dokkaebi's lend shows.)
         bp && !dead && bp.team === DEFENSE && ctrl.team === DEFENSE ? `${keyLabel(k.gadget)} EMP dart ${now >= bp.readyAt ? "ready" : left(bp.readyAt)}` : "",
         bp?.signalEnd && !(bp.flags & GFlag.Lost) ? `signal lost in ${left(bp.signalEnd)}` : "",
@@ -1873,7 +1873,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       const hacksLeft = kludge ? (kludgeLeft.get(drone.id) ?? kludge.charges) : 0;
       $(".dronecam-title").textContent = [
         kludge
-          ? `KLUDGE · ${hacksLeft} hack${hacksLeft === 1 ? "" : "s"} · hold left mouse on a device (${kludge.rangeM} m)`
+          ? `CROSSOVER · ${hacksLeft} hack${hacksLeft === 1 ? "" : "s"} · hold left mouse on a device (${kludge.rangeM} m)`
           : `DRONE ${drones.indexOf(drone) + 1}/${drones.length}${held ? ` · ${held} held` : ""}`,
         ds.mode === PawnMode.Dead ? "DESTROYED" : "",
         ds.jammed ? `JAMMED ${secs(ds.jammed)}` : inJam ? "JAMMED (signal disruptor)" : "",
@@ -1891,7 +1891,7 @@ export async function startLab(o: LabOptions): Promise<void> {
         ctrl.swapPhase === 1
           ? "TRANSFERRING…"
           : ctrl.swapPhase === 2
-            ? "ACTIVATING SHELL…"
+            ? "ACTIVATING FRAME…"
             : [
                 // (Its prompt says the interact key swaps.)
                 "SHELL CAMERA",
@@ -2772,16 +2772,15 @@ export async function startLab(o: LabOptions): Promise<void> {
   let jegeoCharges: number | null = null;
 
   /**
-   * The heartbeats Pulse's sensor has picked up (Phase 8 M6), by the body they beat in: where it was when the sweep
-   * last passed over it (the mark stays there as he looks round, until the next pass), when, and how near (0 at the
-   * range's edge … 1 on him); kept, frozen, while an EMP has him. Each its own element.
+   * The people Murmur's Blood Oxygen Sensor has read (Phase 8 M6; its look our own design, D-183), by the body: where they
+   * were when its last wave reached them (the rings stay there until the next wave), when, how near (0 at the range's
+   * edge … 1 on him) and which wave; kept, frozen, while an EMP has him. Each its own element.
    */
-  const heartsSeen = new Map<number, { at: THREE.Vector3; t: number; near: number }>();
+  const heartsSeen = new Map<number, { at: THREE.Vector3; t: number; near: number; wave: number }>();
   const heartEls = new Map<number, HTMLElement>();
-  /** The sweep's place across the screen last frame (0 its left edge … 1 its right). */
-  let sweepWas = 0;
-  /** A sweep across the sensor's screen, left to right (ms). */
-  const SWEEP_MS = 1600;
+  /** A wave goes out from the sensor every WAVE_MS and takes TRAVEL_MS to reach the edge of its range. */
+  const WAVE_MS = 1400;
+  const TRAVEL_MS = 700;
 
   /**
    * Dokkaebi's tablet up: the defenders her team has identified (their operator and player, how long they stay
@@ -2861,7 +2860,7 @@ export async function startLab(o: LabOptions): Promise<void> {
    */
   function updateSensorHud() {
     const body = livingBody();
-    // Not over a feed (a camera, a drone, Skopós's shell): his sensor reads round his body (the review, M12).
+    // Not over a feed (a camera, a drone, Twain's frame view): his sensor reads round his body (the review, M12).
     const onFeed = ctrl.cam !== 0 || ctrl.drone !== 0 || ctrl.shellCam || ctrl.swapPhase !== 0;
     const k = body && !onFeed ? sensorUp(data, body) : null;
     const corners = k ? viewmodel.sensorScreen() : null;
@@ -2873,44 +2872,37 @@ export async function startLab(o: LabOptions): Promise<void> {
       heartEls.clear();
       return;
     }
+    // Its little screen on the page.
     const W = app.clientWidth;
     const H = app.clientHeight;
     const xs = corners.map((c) => c[0] * W);
     const ys = corners.map((c) => c[1] * H);
     const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
-    const [gw, gh] = [x1 - x0, y1 - y0];
     const glass = $(".pulse-glass");
     glass.style.left = `${x0.toFixed(1)}px`;
     glass.style.top = `${y0.toFixed(1)}px`;
-    glass.style.width = `${gw.toFixed(1)}px`;
-    glass.style.height = `${gh.toFixed(1)}px`;
+    glass.style.width = `${(x1 - x0).toFixed(1)}px`;
+    glass.style.height = `${(y1 - y0).toFixed(1)}px`;
+    glass.style.fontSize = `${Math.max(7, (y1 - y0) * 0.2).toFixed(1)}px`;
     const now = performance.now();
     const frozen = body.state.jammed > 0;
-    const onScreen = (p: THREE.Vector3) => {
-      const v = p.clone().project(camera);
-      return { x: ((v.x + 1) / 2) * W - x0, y: ((1 - v.y) / 2) * H - y0, ahead: v.z <= 1 };
-    };
     if (!frozen) {
-      // The band: across a little past each edge in SWEEP_MS. A heartbeat is picked up as it passes over where it is.
-      const sweep = -0.15 + 1.3 * ((now % SWEEP_MS) / SWEEP_MS);
-      const passed = (x: number) => (sweepWas <= sweep ? x > sweepWas && x <= sweep : x > sweepWas || x <= sweep);
+      // The wave: out from the sensor to its range in TRAVEL_MS, every WAVE_MS; a person is read as it reaches them.
+      const wave = now - (now % WAVE_MS);
+      const reach = Math.min(1, (now - wave) / TRAVEL_MS) * k.rangeM;
       for (const p of heartbeats(sim, body)) {
         const h = heartOf(sim, p);
         const at = new THREE.Vector3(h[0], h[1], h[2]);
-        const s = onScreen(at);
-        if (!s.ahead || !passed(s.x / gw)) continue;
         const d = at.distanceTo(camera.position);
-        heartsSeen.set(p.id, { at, t: now, near: Math.max(0, Math.min(1, 1 - d / k.rangeM)) });
+        if (d > reach || heartsSeen.get(p.id)?.wave === wave) continue;
+        heartsSeen.set(p.id, { at, t: now, near: Math.max(0, Math.min(1, 1 - d / k.rangeM)), wave });
       }
-      sweepWas = sweep;
-      $(".pulse-band").style.transform = `translateX(${(sweep * gw - gw / 12).toFixed(1)}px)`;
-      $(".pulse-wash").style.width = `${Math.max(0, sweep * gw).toFixed(1)}px`;
     }
+    // Each one read: blue rings rippling out from a glowing dot where they were, bigger the nearer, fading until the
+    // next wave.
     const layer = $(".pulse-hearts");
-    const ring = Math.min(gh * 0.3, H * 0.18);
     for (const [id, seen] of heartsSeen) {
-      const fade = frozen ? 1 : Math.exp(-(now - seen.t) / 900);
-      const s = onScreen(seen.at);
+      const fade = frozen ? 1 : Math.exp(-(now - seen.t) / 1300);
       if (fade < 0.04) {
         heartsSeen.delete(id);
         heartEls.get(id)?.remove();
@@ -2920,15 +2912,19 @@ export async function startLab(o: LabOptions): Promise<void> {
       let el = heartEls.get(id);
       if (!el) {
         el = document.createElement("i");
-        el.innerHTML = "<s></s><u></u>";
+        el.innerHTML = "<s></s><s></s><s></s><u></u>";
         layer.appendChild(el);
         heartEls.set(id, el);
       }
-      const dot = ring * (0.08 + 0.14 * seen.near);
-      el.style.cssText = `left:${s.x.toFixed(1)}px;top:${s.y.toFixed(1)}px;opacity:${fade.toFixed(3)};--ring:${ring.toFixed(1)}px;--dot:${dot.toFixed(1)}px;display:${s.ahead ? "block" : "none"}`;
+      const v = seen.at.clone().project(camera);
+      const ring = H * (0.07 + 0.09 * seen.near);
+      const x = ((v.x + 1) / 2) * W;
+      const y = ((1 - v.y) / 2) * H;
+      el.style.cssText = `left:${x.toFixed(1)}px;top:${y.toFixed(1)}px;opacity:${fade.toFixed(3)};--ring:${ring.toFixed(1)}px;--dot:${(ring * 0.18).toFixed(1)}px;display:${v.z <= 1 ? "block" : "none"}`;
     }
     $(".pulse").dataset.hearts = String(heartsSeen.size);
     $(".pulse").classList.toggle("frozen", frozen);
+    $(".pulse-count").textContent = `${heartsSeen.size} READ`;
     $(".pulse-state").textContent = frozen ? "NO SIGNAL" : "";
   }
 

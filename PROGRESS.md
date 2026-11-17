@@ -5,7 +5,54 @@ known issues, and what's next.
 
 ---
 
-## Your requests after Phase 10 · 🚧 in review (PR #14; D-182)
+## Project Redmond: making the game its own · 🚧 in progress (branch `claude/project-redmond`; D-183)
+
+The game as it was before this is kept, untouched, on the `siege_online_classic` branch.
+
+### Done so far (R1: who's who)
+- **The twelve operators have new names** (their abilities work as before):
+
+  | Attack | Ability | Defence | Ability |
+  |---|---|---|---|
+  | Cleave | Breaching Maul | Lull | Damper |
+  | Kiln | Burn Frame | Murmur | Blood Oxygen Sensor |
+  | Hail | Hailstone Drill (and the Ballistic Shield) | Vista | Blind Pane |
+  | Patch | Crossover Drone | Twain | Proxy Frames |
+  | Relay | Ringer | Thistle | Burr Mines |
+  | Pointman | any two gadgets | Picket | any two gadgets |
+
+  The general gadgets named after the old game are now the Heavy Breach Charge, the Remote Charge, the Feed Blocker and
+  the Armoured Camera.
+- **New looks for all twelve**: Cleave in a yellow hard hat and a hi-vis vest, Kiln in soot grey with a beanie and
+  goggles, Hail in sand and olive with a cap, Patch in plum with grey hair and goggles, Relay in dark teal, Pointman in
+  plain grey, Lull all in black, Murmur in burgundy and white, Vista in glass grey, Twain's frames dark green with a
+  yellow visor, Thistle in forest green with a wide-brimmed hat, Picket in sand. (A hard hat and a wide-brimmed hat are
+  new things a body can wear.)
+- **Three designs that copied the old game's are replaced by our own**:
+  - the **Ballistic Shield**: a tan plate the same width top to bottom, well-rounded corners, a narrow viewport slit;
+  - **Twain's frame barrier**: a straight armoured front with a band of bulletproof glass at the frame's eyes and a
+    short angled plate at each end, open at the sides (the same footprint as before, so the bots still get round it);
+  - **Murmur's Blood Oxygen Sensor** (it reads the vibrations of lungs and blood): a slim handheld in his right hand
+    with blue lights and a small readout screen; the view tints blue while it's up, and each person it picks up through
+    walls shows as a glowing blue dot with rings rippling out from it, where they are, bigger the closer. Same range,
+    same forward fan, a ping still shares a reading with the team.
+
+### How to test
+1. `npm run build && npm start`, http://localhost:8080 → the Gadget Lab: pick each operator (Esc) and look at them with
+   the free camera, or play a match against bots.
+2. **Murmur**: Z raises the Blood Oxygen Sensor; look toward the attacker dummy (through a wall too).
+3. **Hail**: pick the Ballistic Shield as his primary; **Twain**: her idle frame behind its new barrier.
+
+### Next
+- **R2**: an original map in place of Oregon: a building of the same kind (a basement and two floors, four bomb sites,
+  lots of destructible walls and floors, several ways in) with its own floor plan, art and bot plans.
+- **R3**: eight new operators of our own (a remote breacher, an EMP specialist, an electronics scout, a full-body
+  shield, electrified defences, a shield with a stun prod, a door trapper, a medic).
+- **R4**: the code's internal names and the docs brought in line.
+
+---
+
+## Your requests after Phase 10 · ✅ done (PR #14, squash-merged into `main`; D-182)
 
 ### What's done
 - **Pulse's sensor, looked through**: held up, it comes close to his face and you look **through** its screen: the

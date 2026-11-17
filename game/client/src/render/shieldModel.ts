@@ -1,11 +1,10 @@
-// Fuze's Ballistic Shield as drawn (Phase 8 M11; the game's model, D-157; redrawn from Ulo's reference renders, D-169):
-// a green plate with a narrower top part, its corners rounded, round a viewport of bulletproof glass at eye height in a
-// dark frame that stands out of the plate, stepping out at rounded shoulders to the wider body below, which is flat across
-// its middle and curves back round his sides; a dark rim round its edge, two bolts low down, and its inside dark. It's laid
-// out on the plate (metres across, metres down from its top, metres out of its face) and placed each frame from the same
-// frame as its hitboxes (player/hitboxes.ts shieldFrame), so it tilts with its carrier's lean and swings aside as he aims.
-// One mesh for everyone, your own first-person view included (you see the world through the window, the plate's dark
-// inside round it).
+// The Ballistic Shield as drawn (Phase 8 M11; Project Redmond's own design, D-183): a tan plate the same width top to
+// bottom, its corners well rounded, a narrow viewport slit of bulletproof glass at eye height in a dark frame that stands
+// out of the plate; flat across its middle and curving back round his sides; a dark rim round its edge, two bolts low
+// down, and its inside dark. It's laid out on the plate (metres across, metres down from its top, metres out of its face)
+// and placed each frame from the same frame as its hitboxes (player/hitboxes.ts shieldFrame), so it tilts with its
+// carrier's lean and swings aside as he aims. One mesh for everyone, your own first-person view included (you see the
+// world through the slit, the plate's dark inside round it).
 import * as THREE from "three";
 import { shieldFrame, type GameData, type PawnState, type ShieldPlace, type ShieldPlate } from "@redmond/shared";
 
@@ -203,7 +202,7 @@ export class ShieldModel {
     }
     // Flat shaded: its vertices move every frame, and the faces' own slopes are all the light needs (its curve round the
     // sides reads in the columns' shading).
-    this.face = new THREE.MeshStandardMaterial({ color: 0x55893f, roughness: 0.66, metalness: 0.18, flatShading: true });
+    this.face = new THREE.MeshStandardMaterial({ color: 0x857654, roughness: 0.7, metalness: 0.18, flatShading: true });
     this.inside = new THREE.MeshStandardMaterial({ color: 0x3d4349, roughness: 0.8, metalness: 0.1, flatShading: true });
     this.trim = new THREE.MeshStandardMaterial({ color: 0x3a3f44, roughness: 0.42, metalness: 0.65, flatShading: true, side: THREE.DoubleSide });
     this.glass = new THREE.MeshStandardMaterial({ color: 0xa8d4f0, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide });

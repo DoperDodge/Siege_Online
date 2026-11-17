@@ -66,7 +66,7 @@ export function weaponRow(data: GameData, op: OperatorData, slot: Slot, pick: Lo
   return `<div class="loadout-row"><label>${slot === "primary" ? "Primary" : "Secondary"} ${select("weapon", weapons, wp.weapon)}</label>
       <div class="atts">${atts}</div>
       ${resolved && w && isGun(w) ? `<p class="note stats">${weaponStats(resolved, w)}</p>` : ""}
-      ${w && !isGun(w) ? `<p class="note stats">Held with your secondary pistol: aim to fire it (no hip fire), ×${w.shield.moveSpeedMult} speed. Bullets stop at it; a strong blast, a knife or a stun knocks it aside, Sledge's hammer knocks it down; your melee is a bash.</p>` : ""}</div>`;
+      ${w && !isGun(w) ? `<p class="note stats">Held with your secondary pistol: aim to fire it (no hip fire), ×${w.shield.moveSpeedMult} speed. Bullets stop at it; a strong blast, a knife or a stun knocks it aside, Cleave's maul knocks it down; your melee is a bash.</p>` : ""}</div>`;
 }
 
 /** Both slots' rows for a loadout, with each weapon's numbers, and its gadgets. */

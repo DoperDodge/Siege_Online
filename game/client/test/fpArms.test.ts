@@ -417,24 +417,22 @@ describe("the hands on what's held (render/viewmodel.ts)", () => {
     expect(p.hand("left")!.pose).toBe("edge");
     // One hand each side of it.
     expect(new THREE.Vector3().setFromMatrixPosition(p.hand("left")!.frame).x).toBeLessThan(new THREE.Vector3().setFromMatrixPosition(p.hand("right")!.frame).x - 0.05);
-    // Pulse's sensor all the way up is looked through: no hands in the picture (fingers would show through its open
-    // display), its display where the game has it (about 21–70 % across and 18–85 % down at 16:9).
+    // Murmur's Blood Oxygen Sensor all the way up (our own design, D-183): in his right hand low on the right, its little
+    // screen there for the page's readout (about 64–73 % across and 76–86 % down at 16:9).
     vm.setAspect(16 / 9);
     vm.update(0, 1 / 60, w, state({ hand: 3 }), 30, gadget("cardiac_sensor"));
     p = parts(vm);
-    expect(p.hand("right")).toBeNull();
-    expect(p.hand("left")).toBeNull();
+    expect(p.hand("right")).not.toBeNull();
     const screen = vm.sensorScreen()!;
     expect(screen).not.toBeNull();
     const xs = screen.map((c) => c[0]);
     const ys = screen.map((c) => c[1]);
-    expect(Math.min(...xs)).toBeGreaterThan(0.17);
-    expect(Math.max(...xs)).toBeLessThan(0.74);
-    expect(Math.min(...ys)).toBeGreaterThan(0.14);
-    expect(Math.max(...ys)).toBeLessThan(0.89);
-    expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(0.44);
-    expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThan(0.6);
-    // Coming up it isn't looked through yet, and his hands are on it.
+    expect(Math.min(...xs)).toBeGreaterThan(0.55);
+    expect(Math.max(...xs)).toBeLessThan(0.85);
+    expect(Math.min(...ys)).toBeGreaterThan(0.6);
+    expect(Math.max(...ys)).toBeLessThan(0.98);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(0.05);
+    // Coming up it has no readout yet.
     vm.update(0, 1 / 60, w, state({ hand: 3, gAct: GadgetAct.Equip, gTicks: 1 }), 30, gadget("cardiac_sensor"));
     expect(vm.sensorScreen()).toBeNull();
     expect(parts(vm).hand("right")).not.toBeNull();

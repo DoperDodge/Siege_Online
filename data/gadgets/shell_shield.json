@@ -1,5 +1,5 @@
 {
-  "_doc": "Skopós's idle shell's barrier (research/operators/skopos.md §3.3; Phase 8 M10; the game's model, D-157): the server stands one round each idle shell (her second shell from the round's start, and the one she leaves when she swaps) and takes it away as she wakes that shell or it dies. Built as the game's renders show it (the Pantheon Shells' artist's renders, the Twin Shells key art): in front of the crouched shell, a flat front of armour panels (two columns, two rows, a yellow stripe down each seam) with a wing either side angled back 40° (the slight curve), up to the shell's chest; over that a canopy of tinted bulletproof glass at the shell's head (Fandom: 'a bulletproof glass at head height for observation'; Ubisoft: 'a glass window'): its front leaning back, a pane over each wing, and a roof back over the head. Its sides and back are open: a shell is shot from beside or behind it, or its barrier blown away. A solid like the deployable shield: bullets, bodies and throws stop at every part, the glass too; any blast that reaches it, or Sledge's hammer, breaks it (`GFlag.Broken`: no colliders), leaving the shell open (Ubisoft: 'bulletproof, but not explosion-proof'). The glass doesn't shatter yet (the game's does: a known issue). Its entry stands at the shell's centre (`parts` are placed from it: across, up from its bottom, forward) and is also the idle shell's camera for the defence: the lens (`lensM`) at the crouched shell's eyes just out past the glass, off while an EMP has it (electronic). Never carried (`dropped`). Its sizes are measured off the renders (ours).",
+  "_doc": "Twain's idle frame's barrier (Phase 8 M10; Project Redmond's own design, D-183): the server stands one round each idle frame (her second frame from the round's start, and the one she leaves when she swaps) and takes it away as she wakes that frame or it dies. A straight armoured wall in front of the crouched frame: a front slab 0.84 m wide to 1.02 m, a band of bulletproof glass across it at the frame's eyes (1.02-1.2 m), armour over that to 1.34 m, and a short cheek plate at each end turned 30 degrees back; open at the sides, above and behind. Every part stops bullets, bodies and throws; a blast or the maul breaks the whole barrier. Its camera's lens is just out past the glass at the frame's eyes.",
   "_season": "Y11S3",
   "_unverified": [
     "sizeM",
@@ -7,7 +7,7 @@
     "lensM"
   ],
   "id": "shell_shield",
-  "name": "Shell barrier",
+  "name": "Frame barrier",
   "side": "defender",
   "dropped": true,
   "count": 1,
@@ -22,110 +22,14 @@
   },
   "remote": false,
   "pickUp": false,
-  "sizeM": [
-    1.24,
-    1.36,
-    0.62
-  ],
+  "sizeM": [1.26, 1.34, 0.6],
   "parts": [
-    {
-      "at": [
-        0,
-        0.475,
-        0.45
-      ],
-      "sizeM": [
-        0.7,
-        0.95,
-        0.07
-      ]
-    },
-    {
-      "at": [
-        -0.48,
-        0.475,
-        0.341
-      ],
-      "sizeM": [
-        0.34,
-        0.95,
-        0.07
-      ],
-      "yawDeg": 40
-    },
-    {
-      "at": [
-        0.48,
-        0.475,
-        0.341
-      ],
-      "sizeM": [
-        0.34,
-        0.95,
-        0.07
-      ],
-      "yawDeg": -40
-    },
-    {
-      "at": [
-        0,
-        1.145,
-        0.371
-      ],
-      "sizeM": [
-        0.7,
-        0.42,
-        0.025
-      ],
-      "pitchDeg": 22,
-      "glass": true
-    },
-    {
-      "at": [
-        -0.46,
-        1.14,
-        0.3
-      ],
-      "sizeM": [
-        0.36,
-        0.38,
-        0.025
-      ],
-      "yawDeg": 40,
-      "glass": true
-    },
-    {
-      "at": [
-        0.46,
-        1.14,
-        0.3
-      ],
-      "sizeM": [
-        0.36,
-        0.38,
-        0.025
-      ],
-      "yawDeg": -40,
-      "glass": true
-    },
-    {
-      "at": [
-        0,
-        1.35,
-        0.12
-      ],
-      "sizeM": [
-        0.7,
-        0.025,
-        0.36
-      ],
-      "glass": true
-    }
+    { "at": [0, 0.51, 0.48], "sizeM": [0.84, 1.02, 0.08] },
+    { "at": [0, 1.11, 0.48], "sizeM": [0.84, 0.18, 0.03], "glass": true },
+    { "at": [0, 1.27, 0.48], "sizeM": [0.84, 0.14, 0.08] },
+    { "at": [-0.524, 0.62, 0.43], "sizeM": [0.24, 1.24, 0.08], "yawDeg": 30 },
+    { "at": [0.524, 0.62, 0.43], "sizeM": [0.24, 1.24, 0.08], "yawDeg": -30 }
   ],
-  "lensM": [
-    0,
-    1.15,
-    0.42
-  ],
+  "lensM": [0, 1.11, 0.53],
   "solid": true
 }

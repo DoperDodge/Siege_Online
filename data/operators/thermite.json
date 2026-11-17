@@ -2,7 +2,7 @@
   "_doc": "Thermite — loadout and ratings from the official Ubisoft operator page (research/operators/thermite.md). Ability numbers arrive with Phase 8.",
   "_season": "Y11S3",
   "id": "thermite",
-  "name": "Thermite",
+  "name": "Kiln",
   "side": "attacker",
   "healthRating": 2,
   "speedRating": 2,
@@ -23,7 +23,7 @@
   },
   "ability": {
     "id": "exothermic_charge",
-    "name": "Exothermic Charge"
+    "name": "Burn Frame"
   },
   "pawns": 1
 }

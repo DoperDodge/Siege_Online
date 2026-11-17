@@ -3,7 +3,7 @@
   "_season": "Y11S3",
   "_unverified": ["sizeM", "blast.damage", "blast.destroyM", "blast.cutM", "blast.concussM"],
   "id": "nitro_cell",
-  "name": "Nitro Cell",
+  "name": "Remote Charge",
   "side": "defender",
   "count": 1,
   "electronic": true,

@@ -3,7 +3,7 @@
   "_season": "Y11S3",
   "_unverified": ["use.reachM", "sizeM"],
   "id": "signal_disruptor",
-  "name": "Signal Disruptor",
+  "name": "Damper",
   "side": "defender",
   "operator": "mute",
   "count": 4,

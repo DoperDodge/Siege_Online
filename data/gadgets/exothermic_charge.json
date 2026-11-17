@@ -3,7 +3,7 @@
   "_season": "Y11S3",
   "_unverified": ["use.placeS", "use.reachM", "sizeM", "burnS", "blast.damage.fullM", "blast.damage.zeroM", "blast.near", "blast.destroyM", "blast.cutM", "blast.throughSoft", "blast.concussM"],
   "id": "exothermic_charge",
-  "name": "Exothermic Charge",
+  "name": "Burn Frame",
   "side": "attacker",
   "operator": "thermite",
   "count": 3,

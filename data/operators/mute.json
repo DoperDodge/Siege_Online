@@ -2,7 +2,7 @@
   "_doc": "Mute — loadout and ratings from the official Ubisoft operator page (research/operators/mute.md). Ability numbers arrive with Phase 8.",
   "_season": "Y11S3",
   "id": "mute",
-  "name": "Mute",
+  "name": "Lull",
   "side": "defender",
   "healthRating": 2,
   "speedRating": 2,
@@ -22,7 +22,7 @@
   },
   "ability": {
     "id": "signal_disruptor",
-    "name": "Signal Disruptor"
+    "name": "Damper"
   },
   "pawns": 1
 }

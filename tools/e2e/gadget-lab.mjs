@@ -320,13 +320,13 @@ try {
   await sleep(600);
   result.kludgeBefore = await bra.locator(".gadget-line").textContent();
   await bra.keyboard.press("KeyZ");
-  await until(bra, () => /KLUDGE/.test(document.querySelector(".dronecam-title")?.textContent ?? ""), null, 10000);
+  await until(bra, () => /CROSSOVER/.test(document.querySelector(".dronecam-title")?.textContent ?? ""), null, 10000);
   await input(bra, { forward: 1 });
   await sleep(800);
   await input(bra, null);
   result.kludge = await bra.evaluate(() => ({ title: document.querySelector(".dronecam-title")?.textContent ?? "", line: document.querySelector(".gadget-line")?.textContent ?? "" }));
   await bra.screenshot({ path: shot("gadget-kludge.png") });
-  result.checks.kludgeThrownAndDriven = /KLUDGE DRONE ×2/.test(result.kludgeBefore ?? "") && /KLUDGE · 3 hacks · /.test(result.kludge.title);
+  result.checks.kludgeThrownAndDriven = /CROSSOVER DRONE ×2/.test(result.kludgeBefore ?? "") && /CROSSOVER · 3 hacks · /.test(result.kludge.title);
   await bra.close();
 
   // ---- offline (M9): Dokkaebi 5 m in front of the defender dummy in the open: a ping (T) on it spots it; her tablet (Z)
