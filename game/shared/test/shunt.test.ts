@@ -243,3 +243,23 @@ describe("a bot playing Shunt (R3)", () => {
     expect(packs.every((g) => kindId(g.kind) === "arc_pack")).toBe(true);
   }, 300000);
 });
+
+describe("Shunt's packs and the attackers' other charges (R3_OPERATORS.md §3)", () => {
+  it("burn out every attacker device on a live surface, there before the pack or put on after: a Breach Charge on a barricade; a Heavy Breach Charge, a Hailstone Drill and Rivet's salvo on the reinforced wall", async () => {
+    const s = await lab();
+    const on = (kind: string, id: string, at: Vec3) => s.put(kind, 0, at, s.onPanel(id, at));
+    // Before any pack: a Heavy Breach Charge on the reinforced wall, a Breach Charge on the barricaded door's outside.
+    const heavy = on("hard_breach_charge", "reinforced", [10.4, 1.2, -5.9]);
+    const breach = on("breach_charge", "door_a", [-10, 1.2, 6.05]);
+    s.wait(burn + 8);
+    expect([gone(s, heavy), gone(s, breach)]).toEqual([false, false]);
+    packDown(s);
+    s.put("arc_pack", 1, [-10, 0, 5.77]); // at the door's foot, inside
+    expect(liveSurfaces(s.sim).panels.has(s.panel("door_a").panel.spec.index)).toBe(true);
+    // After: a Hailstone Drill and a Spine on the live wall.
+    const drill = on("cluster_charge", "reinforced", [11.6, 1.2, -5.9]);
+    const spine = on("stud_spine", "reinforced", [12.4, 0.95, -5.9]);
+    s.wait(burn + 8);
+    expect([heavy, breach, drill, spine].map((g) => gone(s, g))).toEqual([true, true, true, true]);
+  });
+});

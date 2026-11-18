@@ -102,17 +102,22 @@ no weapon, the knife the plate's shove. Unbracing takes 0.3 s, and anything that
 unbraces it. A blast ahead of him braced reaches him only a tenth through the plate and never knocks it aside; folded, it
 loses 70% and a strong one knocks the plate aside.
 
-## 3. Interactions (each gets a test)
+## 3. Interactions (each has a test)
 
 - Ohm's rounds turn off Arc Packs, Dampers, the level's cameras, Armoured Cameras and the Bailiff Shield's prod (and
-  shock Bailiff if she's holding it) in reach; Rivet's salvos, Latch's snares and the attackers' own devices aren't
-  touched. His scope dots exactly those an EMP would reach.
+  shock Bailiff if she's holding it; her set-down's shock goes off with it) in reach; Rivet's salvos, Latch's snares
+  and the attackers' own devices aren't touched. His scope dots exactly the devices an EMP would reach, never a body.
+  (test/ohm.test.ts "Ohm's rounds and the other R3 operators"; the shock's timings in test/bailiff.test.ts.)
 - Arc Packs burn out Breach and Heavy Breach Charges, Burn Frames, Hailstone Drills and Rivet's salvos on their surface,
-  placed before or after the pack goes live; not one already set off.
-- Dampers jam Rivet's set-off within reach (a salvo in reach doesn't go; the others do).
-- Dowser's coil shows Arc Packs, Dampers, the level's cameras, Armoured Cameras and Twain's idle frame; not Latch's snares.
-- Latch's snare ignores drones; Hull braced springs it.
-- Tonic's patch on a downed teammate being revived by hand gets him up at the sooner of the two.
+  placed before or after the pack goes live; not one already set off. (test/shunt.test.ts, each kind and tricking;
+  test/rivet.test.ts.)
+- Dampers jam Rivet's set-off within reach (a salvo in reach doesn't go; the others do). (test/rivet.test.ts.)
+- Dowser's coil shows Arc Packs, Dampers, the level's cameras, Armoured Cameras, Bailiff's set-down shield and Twain's
+  idle frame; not Twain herself, nor Latch's snares. (test/dowser.test.ts.)
+- Latch's snare ignores drones; Hull walking through braced springs it (pulling it off takes his hands off the plate, so
+  it folds). (test/latch.test.ts.)
+- Tonic's patch on a downed teammate being revived by hand gets him up at the sooner of the two, with that one's
+  health; the other ends (a spent patch doesn't heal him on top). (test/tonic.test.ts.)
 
 ## 4. Looks (data/presentation/operator_looks.json)
 

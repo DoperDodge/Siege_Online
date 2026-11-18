@@ -22,6 +22,7 @@ import {
   PawnMode,
   Phase,
   Room,
+  shieldUp,
   ticks,
   TICK_HZ,
   wireLength,
@@ -289,4 +290,34 @@ describe("bots and Latch's latches (R3)", () => {
     body.state.snared = true;
     expect(step(() => !body.state.snared, 4)).toBe(true);
   }, 300000);
+});
+
+describe("Latch's latches and Hull (R3_OPERATORS.md §3)", () => {
+  it("Hull walking through braced springs it, as anyone on his feet does (his plate stays braced)", async () => {
+    const plate = data.weapons.get("hull_plate")!;
+    if (plate.class !== "shield" || !plate.shield.brace) throw new Error("hull_plate");
+    const s = await scene(["hull", "latch"], "gadget_lab");
+    s.park();
+    const g = onDoor(s);
+    s.wait(arm);
+    const hull = s.body(0);
+    s.teleport(0, -6, 0, 7.8, 0);
+    s.press(0, Btn.Ability, { yaw: 0 });
+    s.wait(ticks(plate.shield.brace.extendS) + 4);
+    expect([hull.state.braced, hull.state.braceQ]).toEqual([true, 65535]);
+    const hp = hull.state.hp;
+    s.clients[0].cmd = { forward: 1, yaw: 0 };
+    for (let t = 0; t < 256 && !hull.state.snared; t++) s.wait(1);
+    s.clients[0].cmd = { yaw: 0 };
+    expect(hull.state.snared).toBe(true);
+    expect(entry(s, g)!.flags & GFlag.Active).toBe(GFlag.Active);
+    expect(hull.state.hp).toBe(hp - k.hit);
+    expect(hull.state.braced).toBe(true);
+    // Pulling it off (Interact held its time) takes his hands off the plate: it folds, and comes back up after.
+    s.clients[0].cmd = { yaw: 0, buttons: Btn.Interact };
+    s.wait(ticks(k.pullS) + 4);
+    s.clients[0].cmd = { yaw: 0 };
+    s.wait(TICK_HZ);
+    expect([hull.state.snared, hull.state.braced, hull.state.braceQ, shieldUp(hull.state)]).toEqual([false, false, 0, true]);
+  });
 });

@@ -235,3 +235,67 @@ describe("a bot playing Tonic (R3)", () => {
     expect(tonic.state.g2).toBeLessThan(5);
   }, 300000);
 });
+
+describe("Tonic's patch and a revive by hand (R3_OPERATORS.md §3)", () => {
+  const hand = data.combat.revive;
+
+  /** Tonic (0), the downed teammate (1) and one who revives him by hand (2), Tonic's monitor out. */
+  async function trio() {
+    const s = await team(["tonic", "mute", "pulse"]);
+    s.handOut(0, Hand.Ability);
+    down(s, 1);
+    s.wait(16);
+    return s;
+  }
+
+  /** Client 2 starts reviving client 1 by hand: 0.8 m to his +x side, facing him, Interact held. */
+  function byHand(s: Scene) {
+    const b = s.body(1).state;
+    s.clients[2].cmd = { yaw: Math.PI / 2 };
+    s.teleport(2, b.x + 0.8, 0, b.z, 90);
+    s.clients[2].cmd = { yaw: Math.PI / 2, buttons: Btn.Interact };
+    s.wait(3);
+    expect(s.body(2).state.reviveTarget).toBe(s.body(1).id);
+  }
+
+  /** Tonic's patch on client 1 (Auto: the downed teammate): the server's tick it began. */
+  function patched(s: Scene) {
+    patch(s);
+    expect(s.body(1).state.patchTicks).toBeGreaterThan(0);
+    return s.sim.tick - (ticks(k.reviveS) - s.body(1).state.patchTicks);
+  }
+
+  /** The server's tick client 1 is on his feet (looking at most `max` ticks on). */
+  function upAt(s: Scene, max: number) {
+    for (let n = 0; s.body(1).state.mode === PawnMode.Downed && n < max; n++) s.wait(1);
+    expect(s.body(1).state.mode).toBe(PawnMode.Walk);
+    return s.sim.tick;
+  }
+
+  it("the hand's revive nearly done when he's patched: he's up when it's done, with its health, before the patch's time is out", async () => {
+    const s = await trio();
+    byHand(s);
+    s.wait(ticks(hand.seconds) - TICK_HZ); // about a second of it left
+    const from = patched(s);
+    const up = upAt(s, ticks(k.reviveS) + 8);
+    expect(up - from).toBeLessThan(TICK_HZ + 4);
+    expect(s.body(1).state.hp).toBe(hand.revivedHp);
+    // The patch is done with him at his next step: it doesn't heal him on top.
+    s.wait(TICK_HZ);
+    expect([s.body(1).state.hp, s.body(1).state.patchTicks, s.body(1).state.healLeft]).toEqual([hand.revivedHp, 0, 0]);
+    s.clients[2].cmd = {};
+  });
+
+  it("the patch first, the hand's revive begun after: he's up when the patch's time is out, with its health; the hand's revive ends", async () => {
+    const s = await trio();
+    const from = patched(s);
+    s.wait(TICK_HZ / 2);
+    byHand(s);
+    const up = upAt(s, ticks(hand.seconds));
+    expect(Math.abs(up - from - ticks(k.reviveS))).toBeLessThanOrEqual(2);
+    expect(s.body(1).state.hp).toBe(k.reviveHp);
+    s.wait(2);
+    expect([s.body(2).state.reviveTarget, s.body(1).state.revivedBy]).toEqual([0, 0]);
+    s.clients[2].cmd = {};
+  });
+});

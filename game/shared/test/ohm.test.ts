@@ -18,14 +18,17 @@ import {
   Hand,
   handleRoomMessage,
   isFormat,
+  kindId,
   kindOf,
   loadGameData,
   Phase,
   Room,
+  shieldUp,
   sides,
   TICK_HZ,
   ticks,
   type FormatMode,
+  type Gadget,
   type GameEvent,
   type Vec3,
 } from "../src/index.js";
@@ -172,4 +175,54 @@ describe("a bot playing Ohm (R3)", () => {
     expect(ok, `${JSON.stringify(jobs)} ohm g2 ${ohm.state.g2}`).toBe(true);
     expect(ohm.state.g2).toBeLessThan(7);
   }, 300000);
+});
+
+describe("Ohm's rounds and the other R3 operators (R3_OPERATORS.md §3)", () => {
+  it("a round turns off Shunt's pack, Bailiff's set-down (its shock with it) and an armoured camera in reach, and shocks Bailiff with her shield up; not Latch's snare, nor Rivet's salvo; his scope marks exactly what it turns off", async () => {
+    const s = await scene(["ohm", "shunt", "bailiff", "latch", "rivet"], "gadget_lab");
+    s.room.pickLoadout(s.clients[0].id, defaultLoadoutPick(s.sim.data, "ohm"));
+    s.wait(8);
+    s.park();
+    for (const sim of [s.sim, ...s.clients.map((c) => c.session.sim!)]) sim.matchRules.cameras = true;
+    // About the plain soft wall's middle (x −8, its front face z −5.9), most of them behind it.
+    const pack = s.put("arc_pack", 1, [-7.6, 0.05, -6.4]);
+    const post = s.put("bailiff_post", 2, [-8.4, 0.05, -6.4], { flags: GFlag.OnFloor | GFlag.Active });
+    const armoured = s.put("bulletproof_camera", 1, [-7.3, 1.6, -6.2]);
+    const snare = s.put("snare_latch", 3, [-8, 0.3, -6.4]);
+    const salvo = s.put("stud_ring", 4, [-9.2, 1.0, -5.9], s.onPanel("soft_plain", [-9.2, 1.0, -5.9]));
+    s.teleport(2, -8.9, 0, -6.7, 0); // Bailiff, her shield up, behind the wall
+    s.teleport(0, -8, 0, -2.4, 0);
+    expect(shieldUp(s.body(2).state)).toBe(true);
+    const lit = (p: readonly number[]) => (m: readonly number[]) => Math.hypot(m[0] - p[0], m[1] - p[1], m[2] - p[2]) < 1e-6;
+    const marks = empTargets(s.sim, s.body(0).team, [-8, 1.6, -2.4], use!.rangeM);
+    for (const g of [pack, post, armoured]) expect(marks.some(lit(g.pos)), kindId(g.kind)).toBe(true);
+    for (const g of [snare, salvo]) expect(marks.some(lit(g.pos)), kindId(g.kind)).toBe(false);
+    const [shot] = fire(s, s.aimAt(0, [-8, 1.2, -5.9]));
+    expect(shot.burst).toBe(true);
+    s.wait(2);
+    const now = (g: Gadget) => s.sim.gadgets.get(g.id)!;
+    expect([pack, post, armoured, snare, salvo].map((g) => now(g).flags & GFlag.Off)).toEqual([GFlag.Off, GFlag.Off, GFlag.Off, 0, 0]);
+    expect(now(post).flags & GFlag.Active).toBe(0);
+    expect(s.body(2).state.shocked).toBeGreaterThan(0);
+    // Exactly: every entry within the burst's reach is off if and only if the scope marked it.
+    const reach = pistol.emp!.radiusM;
+    const near = s.sim.gadgets.list.filter((g) => Math.hypot(g.pos[0] - shot.end[0], g.pos[1] - shot.end[1], g.pos[2] - shot.end[2]) <= reach);
+    expect(near.length).toBeGreaterThanOrEqual(5);
+    for (const g of near) expect((g.flags & GFlag.Off) !== 0, kindId(g.kind)).toBe(marks.some(lit(g.pos)));
+  });
+
+  it("a round under the level's camera turns it off (his scope marks it, cameras on)", async () => {
+    const s = await scene(["ohm", "shunt"], "gadget_lab");
+    s.room.pickLoadout(s.clients[0].id, defaultLoadoutPick(s.sim.data, "ohm"));
+    s.wait(8);
+    s.park();
+    for (const sim of [s.sim, ...s.clients.map((c) => c.session.sim!)]) sim.matchRules.cameras = true;
+    const cam = s.sim.level.def.cameras[0].pos; // over the door wall's inner face (z 5.9)
+    s.teleport(0, -8, 0, 2, 180);
+    expect(empTargets(s.sim, s.body(0).team, [-8, 1.6, 2], use!.rangeM).some((m) => Math.hypot(m[0] - cam[0], m[1] - cam[1], m[2] - cam[2]) < 1e-6)).toBe(true);
+    expect(s.sim.matchRules.camsOff & 1).toBe(0);
+    const [shot] = fire(s, s.aimAt(0, [cam[0], cam[1] - 0.7, 5.9]));
+    expect(shot.burst).toBe(true);
+    expect(s.sim.matchRules.camsOff & 1).toBe(1);
+  });
 });

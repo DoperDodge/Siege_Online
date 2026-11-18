@@ -133,3 +133,26 @@ describe("a bot playing Dowser (R3)", () => {
     expect(ok).toBe(true);
   }, 300000);
 });
+
+describe("Dowser's coil and the other R3 operators (R3_OPERATORS.md §3)", () => {
+  it("shows Shunt's packs, Bailiff's set-down, armoured cameras and Twain's idle frame; not Twain herself, nor Latch's snares", async () => {
+    const s = await scene(["dowser", "skopos"], "gadget_lab");
+    s.park();
+    // Behind the soft walls (z −6), in his fan from in front of them.
+    const pack = s.put("arc_pack", 1, [-9, 0.05, -8]);
+    const post = s.put("bailiff_post", 1, [-7, 0.05, -8.5]);
+    const armoured = s.put("bulletproof_camera", 1, [-8, 1.6, -6.2]);
+    const snare = s.put("snare_latch", 1, [-6, 0.3, -8]);
+    const twain = s.ctrlOf(1);
+    const idle = twain.pawnIds.find((id) => id !== twain.possessedPawnId)!;
+    expect(idle).toBeDefined();
+    s.sim.teleport(idle, -10, 0, -9, 180);
+    s.teleport(1, -12, 0, -9, 180); // her body she's in, there too
+    coilUp(s, -8, 2, 0);
+    const shown = keys(s);
+    for (const g of [pack, post, armoured]) expect(shown, `entry ${g.id}`).toContain(`g${g.id}`);
+    expect(shown).toContain(`p${idle}`);
+    expect(shown).not.toContain(`g${snare.id}`);
+    expect(shown).not.toContain(`p${twain.possessedPawnId}`);
+  });
+});
