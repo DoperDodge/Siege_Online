@@ -146,6 +146,24 @@ describe("room and client session", () => {
     expect(h.room.stats.mismatchCorrections).toBe(0);
   });
 
+  it("a stall past the hold keeps the sights up and the lean as the player held them: the next shot isn't the hip's", async () => {
+    const h = await harness(["sledge"]);
+    const [a] = h.clients;
+    const pawn = () => h.room.sim.pawns.get(a.session.ctrl!.possessedPawnId)!.state;
+    const aimed = { buttons: Btn.Ads, lean: 1 as const };
+    h.ticks(64, [aimed]);
+    expect(pawn().adsQ).toBe(65535);
+    expect(pawn().lean).toBeCloseTo(1, 3);
+    a.holdUp = true;
+    h.ticks(MAX_HOLD_TICKS + 24, [aimed]); // stepped on without input for 24 ticks
+    expect(h.room.stats.stalls).toBe(1);
+    expect(pawn().adsQ).toBe(65535);
+    expect(pawn().lean).toBeCloseTo(1, 3);
+    a.holdUp = false;
+    h.ticks(2 * MAX_HOLD_TICKS, [aimed]); // the late inputs catch up
+    expect(pawn().adsQ).toBe(65535);
+  });
+
   it("a shot rides on the input that fired it: judged with that input's view, and claimed view times are bounded", async () => {
     const h = await harness(["sledge", "mute"]);
     const [a, b] = h.clients;

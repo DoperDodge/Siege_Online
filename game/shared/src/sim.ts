@@ -1874,9 +1874,13 @@ export class Sim {
       // No input this tick (idle shell, or a dropped packet): stand still, and keep the held-button
       // memory so keys still held when input resumes don't count as fresh presses. The body the player
       // is in keeps its weapon running (a reload goes on through a lag spike); an idle shell's is parked.
+      // It also keeps what shapes its next shot as the player last held it: the sights (ADS) and its lean. A lag
+      // spike past the room's hold doesn't drop the sights (the next shot would take the hip's spread) or
+      // straighten a peek.
       const held = pawn.state.prevButtons;
       this.letGo(pawn, idleShell);
-      this.stepBody(pawn, idleInput(pawn, idleShell ? Stance.Crouch : pawn.state.stance), !idleShell, false);
+      const still = idleInput(pawn, idleShell ? Stance.Crouch : pawn.state.stance);
+      this.stepBody(pawn, idleShell ? still : { ...still, buttons: held & Btn.Ads, lean: heldLean(pawn.state) }, !idleShell, false);
       refreshBroadPhase(this.world);
       pawn.state.prevButtons = held;
     }
@@ -1974,6 +1978,9 @@ function endDeploy(pawn: Pawn) {
 
 /** Teams until match modes assign them (Phase 6): attackers 0, defenders 1. */
 export const sideTeam = (side: "attacker" | "defender") => (side === "attacker" ? 0 : 1);
+
+/** The lean a body is holding (its amount most of the way to one side), as an input's lean. */
+const heldLean = (s: PawnState): -1 | 0 | 1 => (s.lean >= 0.5 ? 1 : s.lean <= -0.5 ? -1 : 0);
 
 export function idleInput(pawn: Pawn, stance: Stance = pawn.state.stance): InputCmd {
   const s = pawn.state;
