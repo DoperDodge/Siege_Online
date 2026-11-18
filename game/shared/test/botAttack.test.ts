@@ -10,7 +10,7 @@ const bt: FormatMode = mode;
 
 /** The person (Blue) defends `site` alone; Orange's five bots attack. */
 async function attack(site: string, seed = 5) {
-  const room = await Room.create("ATK", "oregon", { format: "bot_training", seed });
+  const room = await Room.create("ATK", "millrace", { format: "bot_training", seed });
   const host = room.join("you", { send() {}, buffered: () => 0 })!;
   const send = (b: Uint8Array) => handleRoomMessage(room, host, b[0], new ByteReader(b.subarray(1)));
   send(encodeLobbyAction({ kind: "change", change: { kind: "rules", rules: { match: { ...bt.match, swapEvery: 24, overtime: null, firstAttack: "orange", bots: { ...bt.match.bots!, size: [1, 5], site }, seconds: { ...bt.match.seconds, pick: 5, prep: 40, action: 180 } } } } }));
@@ -27,7 +27,7 @@ async function attack(site: string, seed = 5) {
 
 describe("attacking bots (Phase 9 M5)", () => {
   it("their drones find the site in prep; in action they come in and win the round against a lone defender standing at the site", async () => {
-    const { room, m, until } = await attack("SITE_DINING");
+    const { room, m, until } = await attack("SITE_MILL");
     expect(until(() => m.phase === Phase.Prep, 10)).toBe(true);
     expect(until(() => m.phase === Phase.Action, 45)).toBe(true);
     const found = m.siteRevealed;
@@ -38,11 +38,11 @@ describe("attacking bots (Phase 9 M5)", () => {
   }, 300000);
 
   it("with the defender out of the way, the carrier plants in the site and the fuse runs out", async () => {
-    const { room, m, until } = await attack("SITE_LAUNDRY", 6);
+    const { room, m, until } = await attack("SITE_BOILER", 6);
     expect(until(() => m.phase === Phase.Action, 60)).toBe(true);
-    // The person hides on the far side of the map's outside (the round goes on while they live).
+    // The person hides far out in a corner of the map's outside (the round goes on while they live).
     const you = room.sim.pawns.get(room.bodyOf([...m.players.values()].find((p) => p.bot === null)!.id)!.possessedPawnId)!;
-    room.sim.teleport(you.id, 75, 0, 70, 0);
+    room.sim.teleport(you.id, -25, 0, 68, 0);
     expect(until(() => m.plantedAt !== null || m.phase !== Phase.Action, 170)).toBe(true);
     expect(m.plantedAt).not.toBeNull();
     const carrier = [...m.players.values()].filter((p) => p.bot !== null && m.sideOf(p.id) === ATTACK);

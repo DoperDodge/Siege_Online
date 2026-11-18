@@ -3,6 +3,7 @@
   "id": "movement_lab",
   "name": "Movement Lab",
   "spawns": [{ "id": "start", "pos": [0, 0, 12], "yawDeg": 0 }],
+  "bounds": { "min": [-33, -10, -33], "max": [33, 12, 33], "killY": -10 },
   "solids": [
     { "id": "floor", "center": [0, -0.25, 0], "size": [64, 0.5, 64], "surface": "HARD_FLOOR" },
     { "id": "wall_n", "center": [0, 2, -32], "size": [64, 4, 0.5], "surface": "HARD_WALL" },

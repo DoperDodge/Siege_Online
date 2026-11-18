@@ -48,7 +48,9 @@ describe("map metadata", () => {
       if (lvl.id === "oregon" || lvl.id === "millrace") continue;
       // The Gadget Lab has a default camera and the ingredients to try gadgets on (Phase 8 M3); the other labs none.
       const gadgetLab = lvl.id === "gadget_lab";
-      expect(lvl.bounds, lvl.id).toBeUndefined();
+      // The Movement Lab has bounds: bots climb its ladder (test/botNav.test.ts; Millrace has none).
+      if (lvl.id === "movement_lab") expect(lvl.bounds?.killY, lvl.id).toBeLessThan(0);
+      else expect(lvl.bounds, lvl.id).toBeUndefined();
       expect([lvl.storeys, lvl.rooms, lvl.sites, lvl.zones], lvl.id).toEqual([[], [], [], []]);
       expect([lvl.cameras.length > 0, lvl.ingredients.length > 0], lvl.id).toEqual([gadgetLab, gadgetLab]);
       expect(lvl.solids.every((s) => !s.bodiesOnly), lvl.id).toBe(true);
