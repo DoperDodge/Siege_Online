@@ -143,6 +143,15 @@ and Tonic defending. One at a time, each complete.
   your crosshair for your team.** Mechanical things never show (Latch's snares, barbed wire). No weapon while it's up;
   an EMP on him empties it (NO SIGNAL). His look: field green, a wide-brimmed hat, a slim pack with a whip aerial. A bot
   playing Dowser raises the coil now and then on his way in and pings each device it finds.
+- **Hull** (attacker, the full-body shield; health and speed 3 / 1; the **Hull Plate** with a P229 or 5.7 USG, a smoke,
+  Impact EMP or Heavy Breach Charge): a heavy plate from the floor to just under his eyes, 0.7 m across; he looks over it
+  and fires his pistol from the hip (it's never aimed). **Z braces it**: over 0.4 s its sides and top slide out until
+  it covers him from the floor to over his head, a metre across, with a viewport at eye height. Braced he walks at 0.55
+  (no sprint) with no weapon (his knife is the plate's shove), and a blast in front reaches him only a tenth through it
+  and never knocks it aside; Z again folds it in 0.3 s. His look: dark grey, a heavy plate carrier, a helmet with a
+  face shield. A bot playing Hull braces when the enemy's far off and steps in, then folds it to fight up close.
+- **How to test Hull**: the Gadget Lab, pick Hull; shoot from the hip, then Z to brace and walk at the attacker dummy;
+  switch to a defender and throw a grenade at his plate, braced and folded.
 - **How to test Dowser**: the Gadget Lab, pick Mute and put a Damper down behind a soft wall; pick Dowser, stand in front
   of the wall, Z: its outline shows through the wall; press T to mark it. Turn round to see the lab's camera outlined.
 - **Found by the soak**: a Brava bot's Kludge drone could hover at the foot of a stair for the rest of the round when a
@@ -160,7 +169,7 @@ and Tonic defending. One at a time, each complete.
   left mouse (the pack goes to the wall and the wall lights up); switch to Thermite and put his charge on it. For tricking: put the charge on with the pack picked up, then put it back.
 
 ### Next
-- **R3**: the last one, Hull.
+- **R3**: all eight are in; what's left of R3 is its review across them (the interactions in R3_OPERATORS §3).
 - **R4**: the rest of the tests moved from Oregon to Millrace, Oregon taken off this branch, the code's internal names
   and the docs brought in line.
 

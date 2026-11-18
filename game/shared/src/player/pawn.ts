@@ -195,6 +195,8 @@ export function initialPawnState(x: number, y: number, z: number, yaw: number, m
     snared: false,
     prodOn: false,
     pattern: 0,
+    braced: false,
+    braceQ: 0,
     regenMade: 0,
     regenTicks: 0,
     guard: 0,

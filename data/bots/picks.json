@@ -60,6 +60,9 @@
     ],
     "dowser": [
       "smoke"
+    ],
+    "hull": [
+      "impact_emp"
     ]
   },
   "counters": {
@@ -161,6 +164,11 @@
       "latch",
       "pulse",
       "sentry"
+    ],
+    "hull": [
+      "bailiff",
+      "lesion",
+      "latch"
     ]
   },
   "primaries": {

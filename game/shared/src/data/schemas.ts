@@ -372,6 +372,8 @@ const shieldSchema = z.strictObject({
   shield: z.strictObject({
     pistolAdsS: z.strictObject({ walk: secs, sprint: secs }),
     hipFire: z.boolean(),
+    /** Its pistol is never aimed: from the hip alone (R3, Hull's Plate). */
+    noAds: z.boolean().default(false),
     moveSpeedMult: z.number().positive(),
     suppression: z.strictObject({ hitsToTrigger: z.number().int().positive(), hitsToMax: z.number().int().positive(), falloffS: secs }),
     bashDamage: z.number().nonnegative(),
@@ -405,6 +407,21 @@ const shieldSchema = z.strictObject({
     }),
     absorb: z.number().min(0).max(1),
     guardBreak: z.strictObject({ blastHp: z.number().positive(), seconds: secs }),
+    /**
+     * Braced (R3, Hull's Plate; player/shield.ts): `plate` is it braced, covering him head to foot; `folded`, its size and
+     * height unbraced. His ability key braces it over `extendS` (it unbraces over `retractS`); braced, he walks at
+     * `speedMul` (no sprint) with no weapon, and a blast ahead of him reaches him only `blastThrough` of it (never knocking
+     * it aside).
+     */
+    brace: z
+      .strictObject({
+        folded: z.strictObject({ widthM: z.number().positive(), heightM: z.number().positive(), aboveEyeM: z.number() }),
+        extendS: secs,
+        retractS: secs,
+        speedMul: z.number().positive().max(1),
+        blastThrough: z.number().min(0).max(1),
+      })
+      .optional(),
     /**
      * Its prod (R3, Bailiff's shield; player/prod.ts): held up and not aimed, Fire jolts the first body of the other
      * side within `rangeM` and `halfDeg` of the view (in sight) every `everyS`: `damage`, and slowed to `slowMul` (no

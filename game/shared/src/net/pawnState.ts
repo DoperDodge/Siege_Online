@@ -21,13 +21,13 @@ export const PAWN_U8_FIELDS = [
 export const PAWN_U16_FIELDS = [
   "hp", "maxHp", "lastFallDamage", "actTicks", "reserve0", "reserve1", "cycle", "adsQ", "shotIdx", "sinceShot", "reviveTicks",
   "deployPanel", "deployTicks", "rappelTicks", "jumpCd", "boostTicks", "boostCd", "jammed", "gTicks", "regenTicks", "guard", "suppressT", "knockTicks",
-  "healLeft", "healTicks", "patchTicks", "prodUsed", "prodNext", "prodIdle", "slowed", "shocked",
+  "healLeft", "healTicks", "patchTicks", "prodUsed", "prodNext", "prodIdle", "slowed", "shocked", "braceQ",
 ] as const satisfies readonly (keyof PawnState)[];
 export const PAWN_U32_FIELDS = ["rng", "reviveTarget", "revivedBy", "gTarget"] as const satisfies readonly (keyof PawnState)[];
 
 /** Every non-float field (the hash test changes each one). */
 export const PAWN_INT_FIELDS = [
-  "grounded", "sprinting", "needled", "ringing", "snared", "prodOn", "stance", "stanceFrom", "mode", "prevButtons", "ladder", "rappel", ...PAWN_U8_FIELDS, ...PAWN_U16_FIELDS, ...PAWN_U32_FIELDS,
+  "grounded", "sprinting", "needled", "ringing", "snared", "prodOn", "braced", "stance", "stanceFrom", "mode", "prevButtons", "ladder", "rappel", ...PAWN_U8_FIELDS, ...PAWN_U16_FIELDS, ...PAWN_U32_FIELDS,
 ] as const satisfies readonly (keyof PawnState)[];
 
 /** Bytes of one full state on the wire: the floats, flags, 3 enums, buttons (u16), ladder (i8), rappel (i16), then the u8/u16/u32 fields. */
@@ -36,7 +36,7 @@ export const PAWN_STATE_BYTES =
 
 export function writePawnState(w: ByteWriter, s: PawnState): void {
   for (const k of PAWN_F32_FIELDS) w.f32(s[k]);
-  w.u8((s.grounded ? 1 : 0) | (s.sprinting ? 2 : 0) | (s.needled ? 4 : 0) | (s.ringing ? 8 : 0) | (s.snared ? 16 : 0) | (s.prodOn ? 32 : 0));
+  w.u8((s.grounded ? 1 : 0) | (s.sprinting ? 2 : 0) | (s.needled ? 4 : 0) | (s.ringing ? 8 : 0) | (s.snared ? 16 : 0) | (s.prodOn ? 32 : 0) | (s.braced ? 64 : 0));
   w.u8(s.stance).u8(s.stanceFrom).u8(s.mode);
   w.u16(s.prevButtons);
   w.i8(s.ladder);
@@ -78,6 +78,7 @@ export function readPawnState(r: ByteReader): PawnState {
     ringing: (flags & 8) !== 0,
     snared: (flags & 16) !== 0,
     prodOn: (flags & 32) !== 0,
+    braced: (flags & 64) !== 0,
     stance,
     stanceFrom,
     mode,

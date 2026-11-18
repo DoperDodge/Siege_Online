@@ -7,10 +7,11 @@ import { DeployKind } from "../destruction/deploy.js";
 import type { HitboxData, MovementData } from "../data/schemas.js";
 import { ticks } from "../weapons/ticks.js";
 import { isDowned } from "./downed.js";
-import { poseHitboxes, shieldHitboxes, shieldHold, type Hitbox, type ShieldPlace } from "./hitboxes.js";
+import { poseHitboxes, shieldHitboxes, shieldHold, type Hitbox, type ShieldPlace, type ShieldPlate } from "./hitboxes.js";
 import type { Pawn } from "./pawn.js";
-import { Hand, PawnMode, Stance, type PawnState } from "./types.js";
+import { Btn, Hand, PawnMode, Stance, type PawnState } from "./types.js";
 import type { ResolvedLoadout } from "../weapons/loadout.js";
+import type { ShieldData } from "../data/schemas.js";
 
 /** `PawnState.shieldAt`: where the plate is (sent to others in a remote record's flags, so a rewind puts it there). */
 export const ShieldAt = { None: 0, Front: 1, Back: 2 } as const;
@@ -40,13 +41,43 @@ export function shieldPlace(s: PawnState): ShieldPlace | null {
 /** Whether a body holds its shield up in front now. */
 export const shieldUp = (s: PawnState) => s.shieldAt === ShieldAt.Front;
 
+/** How far a body's plate is braced (Hull's, R3): 0 folded … 1 braced. */
+export const braceOf = (s: PawnState) => s.braceQ / 65535;
+
+/**
+ * A shield's plate as it is on a body now: as its data has it; Hull's (R3, `brace`) between its folded size and its
+ * braced one by how far it's braced (its hitboxes and its model alike).
+ */
+export function platePose(k: ShieldData["shield"], s: PawnState): ShieldPlate {
+  const b = k.brace;
+  if (!b || s.braceQ >= 65535) return k.plate;
+  const t = braceOf(s);
+  const lerp = (a: number, c: number) => a + (c - a) * t;
+  return { ...k.plate, widthM: lerp(b.folded.widthM, k.plate.widthM), topWidthM: lerp(b.folded.widthM, k.plate.topWidthM), heightM: lerp(b.folded.heightM, k.plate.heightM), aboveEyeM: lerp(b.folded.aboveEyeM, k.plate.aboveEyeM) };
+}
+
+/**
+ * A tick of Hull's Plate's brace (R3; the body's own step, predicted): with it up in front his ability key switches it;
+ * whatever takes the plate down (a gadget, a hold, a rope, a knock aside, a fall) unbraces it. It comes out over
+ * `brace.extendS` and folds back over `brace.retractS`.
+ */
+export function stepBrace(pawn: Pawn, pressed: number): void {
+  const b = pawn.loadout?.shield?.brace;
+  if (!b) return;
+  const s = pawn.state;
+  if (pressed & Btn.Ability && shieldUp(s)) s.braced = !s.braced;
+  if (!shieldUp(s)) s.braced = false;
+  s.braceQ = s.braced ? Math.min(65535, s.braceQ + Math.ceil(65536 / ticks(b.extendS))) : Math.max(0, s.braceQ - Math.ceil(65536 / ticks(b.retractS)));
+}
+
 /** A body's hitboxes now: its pose's, and its shield's plate where it is (Phase 8 M11). */
 export function pawnHitboxes(m: MovementData, hb: HitboxData, pawn: Pawn): Hitbox[] {
   const k = pawn.loadout?.shield;
   const place = k ? shieldPlace(pawn.state) : null;
+  const plate = k ? platePose(k, pawn.state) : null;
   // Held up in front, his hands are on its grips behind it (D-169): no arm out past the plate.
-  const body = poseHitboxes(m, hb, pawn.state, k && place === "front" ? shieldHold(m, k.plate, pawn.state) : undefined);
-  return k && place ? [...body, ...shieldHitboxes(m, hb, pawn.state, k.plate, place)] : body;
+  const body = poseHitboxes(m, hb, pawn.state, plate && place === "front" ? shieldHold(m, plate, pawn.state) : undefined);
+  return plate && place ? [...body, ...shieldHitboxes(m, hb, pawn.state, plate, place)] : body;
 }
 
 /** Whether a body's shield has it suppressed (bullets on it lately): no sprinting, the edges of the view blurred. */

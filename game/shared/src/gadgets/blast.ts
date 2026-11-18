@@ -174,7 +174,10 @@ export function blastEffects(sim: Sim, g: Pick<Gadget, "id" | "kind" | "owner" |
     }
     const [fx, fz] = forwardXZ(s.yaw);
     const ahead = (at[0] - s.x) * fx + (at[2] - s.z) * fz > 0;
-    out.bodies.push({ pawn, damage: ahead ? Math.max(1, Math.round(damage * (1 - k.absorb))) : damage, guard: damage >= k.guardBreak.blastHp });
+    // Hull's Plate braced (R3): a blast ahead reaches him only through it, and never knocks it aside.
+    const braced = k.brace !== undefined && s.braceQ >= 65535 && ahead;
+    const kept = braced ? k.brace!.blastThrough : ahead ? 1 - k.absorb : 1;
+    out.bodies.push({ pawn, damage: ahead ? Math.max(1, Math.round(damage * kept)) : damage, guard: !braced && damage >= k.guardBreak.blastHp });
   }
   // Gadgets in its destruction range (and the Claymore's arc), in sight of it (the level and steel shelter them); the
   // level's ingredients there are set off. A smoke cloud isn't blown away. A set-off cluster charge is reached at its

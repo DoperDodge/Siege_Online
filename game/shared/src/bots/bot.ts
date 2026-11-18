@@ -359,6 +359,13 @@ export class Bot {
 
   private act(w: BotWorld, me: Pawn, mates: readonly Pawn[], d: BotDifficulty, now: number): BotInput {
     const s = me.state;
+    // Hull's Plate (R3): braced only in a fight or holding its angle after one; anything else, folded (walking braced
+    // is slow, and a braced plate has no weapon).
+    if (s.braced && this.doing !== Doing.Fight && this.doing !== Doing.Hold) {
+      const input = this.task(w, me, now);
+      input.buttons = (input.buttons & ~(Btn.Fire | Btn.Sprint)) | (s.prevButtons & Btn.Ability ? 0 : Btn.Ability);
+      return input;
+    }
     switch (this.doing) {
       case Doing.Fight:
         if (this.about && this.about.visible) return this.fight(w, me, mates, this.about, d, now);
@@ -709,6 +716,14 @@ export class Bot {
     if (prod && ready && shieldUp(s) && dist <= prod.rangeM - 0.2 && (prodLeft(me) ?? 0) > 0.05 && s.jammed === 0) {
       const click = !s.prodOn && !(s.prevButtons & Btn.Fire) ? Btn.Fire : 0;
       return { forward: dist > 2 ? 0.6 : 0, strafe: 0, yaw: a.view.yaw, pitch: a.view.pitch, buttons: click, stance: Stance.Stand, lean: 0 };
+    }
+    // Hull's Plate (R3): braced, stepping in, while the enemy's farther off than his pistol's good from the hip; folded
+    // to fight up close. (Its key is pressed once a change is wanted; it takes its time to come out or fold.)
+    const brace = me.loadout?.shield?.brace;
+    if (brace && shieldUp(s)) {
+      const want = ready && dist > 8;
+      if (want !== s.braced) return { forward: 0, strafe: 0, yaw: a.view.yaw, pitch: a.view.pitch, buttons: s.prevButtons & Btn.Ability ? 0 : Btn.Ability, stance: Stance.Stand, lean: 0 };
+      if (s.braced) return { forward: 0.8, strafe: 0, yaw: a.view.yaw, pitch: a.view.pitch, buttons: 0, stance: Stance.Stand, lean: 0 };
     }
     let buttons = 0;
     // Down the sights past a few metres (or always, for the better bots).

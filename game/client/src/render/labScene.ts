@@ -16,6 +16,7 @@ import {
   PawnKind,
   PawnMode,
   poseHitboxes,
+  platePose,
   shieldHold,
   shieldPlace,
   type BuiltLevel,
@@ -25,7 +26,7 @@ import {
   type PawnState,
   type Renderable,
   type ResolvedWeapon,
-  type ShieldPlate,
+  type ShieldData,
 } from "@redmond/shared";
 import { BodyModel, operatorLook } from "./bodyModel.js";
 import { Gait, pistolHeld, poseBody, type HeldItem } from "./bodyPose.js";
@@ -539,7 +540,8 @@ export class PawnView {
   private knife: ShapeModel | null = null;
   /** Fuze's Ballistic Shield (Phase 8 M11): its curved plate and window where its state says (your own too). */
   private shield: ShieldModel | null = null;
-  private plate: ShieldPlate | null = null;
+  /** Its shield's numbers (Fuze's, Phase 8 M11; Hull's Plate braces, R3: its plate as it is now is platePose's). */
+  private shieldData: ShieldData["shield"] | null = null;
   private heldKey = "";
   private gunLook = "";
   private gunVisible = false;
@@ -638,8 +640,8 @@ export class PawnView {
   update(data: GameData, state: PawnState, now = performance.now() / 1000, swapTicks = 30) {
     if (this.drone) return this.updateDrone(data, state);
     // Fuze with his shield up in front: his hands on its grips behind it (D-169).
-    const shieldUp = this.plate !== null && shieldPlace(state) === "front";
-    const parts = poseHitboxes(data.movement, data.hitboxes, state, shieldUp ? shieldHold(data.movement, this.plate!, state) : undefined);
+    const shieldUp = this.shieldData !== null && shieldPlace(state) === "front";
+    const parts = poseHitboxes(data.movement, data.hitboxes, state, shieldUp ? shieldHold(data.movement, platePose(this.shieldData!, state), state) : undefined);
     parts.forEach((hb, i) => this.wireParts[i].place(hb, 1.02));
     const model = this.model;
     if (!model) return;
@@ -779,19 +781,19 @@ export class PawnView {
   }
 
   /**
-   * Fuze's Ballistic Shield's plate on this body (its loadout's), or none (Phase 8 M11); `face` its colour (Bailiff's,
-   * R3: a dark slate plate).
+   * Fuze's Ballistic Shield on this body (its loadout's), or none (Phase 8 M11); `face` its plate's colour (Bailiff's,
+   * R3: a dark slate plate). (Hull's, R3: its plate as braced as it is now.)
    */
-  setShield(plate: ShieldPlate | null, face?: number) {
-    if (plate === this.plate) return;
-    this.plate = plate;
+  setShield(k: ShieldData["shield"] | null, face?: number) {
+    if (k === this.shieldData) return;
+    this.shieldData = k;
     if (this.shield) {
       this.body.remove(this.shield.mesh);
       this.shield.dispose();
       this.shield = null;
     }
-    if (plate) {
-      this.shield = new ShieldModel(plate, face);
+    if (k) {
+      this.shield = new ShieldModel(k.plate, face, k);
       this.body.add(this.shield.mesh);
     }
   }

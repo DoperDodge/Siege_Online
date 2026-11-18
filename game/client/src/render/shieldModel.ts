@@ -6,7 +6,7 @@
 // carrier's lean and swings aside as he aims. One mesh for everyone, your own first-person view included (you see the
 // world through the slit, the plate's dark inside round it).
 import * as THREE from "three";
-import { shieldFrame, type GameData, type PawnState, type ShieldPlace, type ShieldPlate } from "@redmond/shared";
+import { platePose, shieldFrame, type GameData, type PawnState, type ShieldData, type ShieldPlace, type ShieldPlate } from "@redmond/shared";
 
 /** A point laid out on the plate: across (metres from its middle), down (metres from its top), out of its face. */
 type PlatePoint = [x: number, down: number, out: number];
@@ -116,10 +116,14 @@ export class ShieldModel {
   private readonly glass: THREE.MeshStandardMaterial;
   private place: ShieldPlace | null = null;
 
-  /** `face`: the plate's colour (the Bailiff Shield's is its own, R3). */
+  /**
+   * `face`: the plate's colour (the Bailiff Shield's is its own, R3). `whole`: its shield's numbers, for a plate that
+   * braces (Hull's, R3): laid out braced, drawn as braced as it is (player/shield.ts platePose).
+   */
   constructor(
     private readonly k: ShieldPlate,
     face = 0x857654,
+    private readonly whole: ShieldData["shield"] | null = null,
   ) {
     const w = k.widthM / 2;
     const H = k.heightM;
@@ -244,7 +248,7 @@ export class ShieldModel {
 
   /** Put it where a body's state has it (`place`), or hide it (none, or prone). */
   update(data: GameData, s: PawnState, place: ShieldPlace | null) {
-    const f = place ? shieldFrame(data.movement, data.hitboxes, s, this.k, place) : null;
+    const f = place ? shieldFrame(data.movement, data.hitboxes, s, this.whole ? platePose(this.whole, s) : this.k, place) : null;
     this.mesh.visible = f !== null;
     if (!f || !place) return;
     if (place !== this.place) {

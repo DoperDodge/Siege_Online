@@ -1,0 +1,37 @@
+{
+  "_doc": "The Hull Plate (Project Redmond R3, gadgets/R3_OPERATORS.md §2): Hull's primary, a heavy plate held with his sidearm, which fires from the hip only (`noAds`: never aimed). Folded (`brace.folded`) it's 0.7 m across and 1.55 m tall, from the floor to just under his eyes: he looks and shoots over it. His ability key braces it: over `brace.extendS` its sides and top slide out until it covers him from the floor to over his head, a metre across (`plate`, with a viewport at eye height); it folds back over `brace.retractS`. Braced he walks at `brace.speedMul` (no sprint) with no weapon (his knife is the plate's shove), and a blast ahead of him reaches him only through it (`brace.blastThrough` of it), never knocking it aside. Folded, a blast ahead loses `absorb` of its damage. Its every number is ours.",
+  "_ours": true,
+  "id": "hull_plate",
+  "name": "Hull Plate",
+  "class": "shield",
+  "shield": {
+    "pistolAdsS": {"walk": 0.5, "sprint": 0.55},
+    "hipFire": true,
+    "noAds": true,
+    "moveSpeedMult": 0.75,
+    "suppression": {"hitsToTrigger": 6, "hitsToMax": 20, "falloffS": 6},
+    "bashDamage": 0,
+    "plate": {
+      "widthM": 1.0,
+      "topWidthM": 1.0,
+      "heightM": 1.86,
+      "shoulderM": 0.0,
+      "cornerM": 0.06,
+      "curveM": 0.12,
+      "frontM": 0.38,
+      "aboveEyeM": 0.23,
+      "crouchRaiseM": 0.0,
+      "ads": {"sideM": 0.0, "dropM": 0.0, "yawDeg": 0},
+      "window": {"widthM": 0.34, "heightM": 0.1}
+    },
+    "absorb": 0.7,
+    "guardBreak": {"blastHp": 40, "seconds": 1.0},
+    "brace": {
+      "folded": {"widthM": 0.7, "heightM": 1.55, "aboveEyeM": -0.08},
+      "extendS": 0.4,
+      "retractS": 0.3,
+      "speedMul": 0.55,
+      "blastThrough": 0.1
+    }
+  }
+}

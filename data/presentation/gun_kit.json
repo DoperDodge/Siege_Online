@@ -43,7 +43,8 @@
     "pmm": { "base": "pistol", "barrel": 0.0, "finish": "silver", "variant": "pmm", "scale": 0.88 },
     "gonne_6": { "base": "flare", "barrel": 0.1, "finish": "olive" },
     "ballistic_shield": { "base": "pistol", "barrel": 0.0, "finish": "black", "variant": "sig" },
-    "bailiff_shield": { "base": "pistol", "barrel": 0.0, "finish": "black", "variant": "sig" }
+    "bailiff_shield": { "base": "pistol", "barrel": 0.0, "finish": "black", "variant": "sig" },
+    "hull_plate": { "base": "pistol", "barrel": 0.0, "finish": "black", "variant": "sig" }
   },
   "byClass": {
     "assault_rifle": { "base": "ar", "barrel": 0.29, "finish": "black", "stock": "collapsible", "fore": "rail", "mag": "stanag" },

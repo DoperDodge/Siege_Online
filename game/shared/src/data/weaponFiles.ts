@@ -6,6 +6,7 @@ import w_ak_12 from "../../../../data/weapons/ak_12.json";
 import w_6p41 from "../../../../data/weapons/6p41.json";
 import w_ballistic_shield from "../../../../data/weapons/ballistic_shield.json";
 import w_bailiff_shield from "../../../../data/weapons/bailiff_shield.json";
+import w_hull_plate from "../../../../data/weapons/hull_plate.json";
 import w_556xi from "../../../../data/weapons/556xi.json";
 import w_m1014 from "../../../../data/weapons/m1014.json";
 import w_m4 from "../../../../data/weapons/m4.json";
@@ -42,4 +43,4 @@ import w_p229 from "../../../../data/weapons/p229.json";
 import w_q_929 from "../../../../data/weapons/q_929.json";
 import w_smg_11 from "../../../../data/weapons/smg_11.json";
 
-export const weaponFiles: Record<string, unknown>[] = [w_para_308, w_camrs, w_ak_12, w_6p41, w_ballistic_shield, w_bailiff_shield, w_556xi, w_m1014, w_m4, w_m249, w_sr_25, w_bosg_12_2, w_mk_14_ebr, w_xk23, w_l85a2, w_m590a1, w_commando_9, w_m870, w_tcsg12, w_pcx_33, w_vector_45_acp, w_ita12l, w_six12_sd, w_t_5_smg, w_ump45, w_mp5k, w_usp40, w_super_shorty, w_pmm, w_gsh_18, w_5_7_usg, w_m45_meusoc, w_ita12s, w_c75_auto, w_gonne_6, w_smg_12, w_p226_mk_25, w_reaper_mk2, w_p229, w_q_929, w_smg_11];
+export const weaponFiles: Record<string, unknown>[] = [w_para_308, w_camrs, w_ak_12, w_6p41, w_ballistic_shield, w_bailiff_shield, w_hull_plate, w_556xi, w_m1014, w_m4, w_m249, w_sr_25, w_bosg_12_2, w_mk_14_ebr, w_xk23, w_l85a2, w_m590a1, w_commando_9, w_m870, w_tcsg12, w_pcx_33, w_vector_45_acp, w_ita12l, w_six12_sd, w_t_5_smg, w_ump45, w_mp5k, w_usp40, w_super_shorty, w_pmm, w_gsh_18, w_5_7_usg, w_m45_meusoc, w_ita12s, w_c75_auto, w_gonne_6, w_smg_12, w_p226_mk_25, w_reaper_mk2, w_p229, w_q_929, w_smg_11];

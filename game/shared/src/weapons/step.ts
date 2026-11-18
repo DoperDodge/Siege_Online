@@ -330,7 +330,9 @@ export function stepWeapon(ctx: WeaponContext, pawn: Pawn, input: InputCmd, pres
     s.modes = (s.modes & ~(15 << (s.slot * 4))) | (next << (s.slot * 4));
     s.burstLeft = 0;
   }
-  if (pressed & Btn.Reload && s.wAct === WeaponAct.Ready && walking && !s.sprinting && s.meleeTicks === 0 && !gadgetOut(s)) startReload(ctx, pawn, w);
+  // (Hull's Plate braced, R3: both hands on it, no weapon.)
+  const braced = s.braceQ > 0;
+  if (pressed & Btn.Reload && s.wAct === WeaponAct.Ready && walking && !s.sprinting && s.meleeTicks === 0 && !gadgetOut(s) && !braced) startReload(ctx, pawn, w);
   // The knife: from any allowed stance, even mid-sprint (it ends the sprint) or mid-reload (it cancels it).
   if (pressed & Btn.Melee && s.meleeTicks === 0 && (s.mode === PawnMode.Walk || onRope(s)) && s.wAct !== WeaponAct.Equip && !handsBusy(s) && melee.allowInStances.includes(STANCE_NAMES[s.stance])) {
     if (s.wAct === WeaponAct.Reload) endReload(s);
@@ -347,7 +349,8 @@ export function stepWeapon(ctx: WeaponContext, pawn: Pawn, input: InputCmd, pres
   if (s.wAct === WeaponAct.Reload) advanceReload(ctx, s, w);
 
   // 5. ADS: rising over the weapon's ADS ticks (slower straight out of a sprint), falling over the exit time.
-  if (wantsAim(ctx, s, input)) {
+  // (Hull's Plate's pistol is never aimed, R3: `noAds`.)
+  if (wantsAim(ctx, s, input) && !lo.shield?.noAds && !braced) {
     if (s.adsQ === 0) {
       if (s.sprinting || s.sinceSprint < exitToFire - 1e-6) s.wflags |= WFlag.AdsFromSprint;
       else s.wflags &= ~WFlag.AdsFromSprint;
@@ -370,7 +373,7 @@ export function stepWeapon(ctx: WeaponContext, pawn: Pawn, input: InputCmd, pres
   const ready = s.wAct === WeaponAct.Ready || (s.wAct === WeaponAct.Reload && loaded > 0 && rules.reload.fireCancels);
   // With Fuze's shield up, the pistol fires only aimed, once the aim is done (no hip fire, Y9S1; Phase 8 M11).
   const shieldHip = lo.shield !== null && !lo.shield.hipFire && s.shieldAt === 1 && s.adsQ < 65535;
-  const gate = walking && sprintGate && ready && s.meleeTicks === 0 && !handsBusy(s) && !gadgetOut(s) && w.fire.kind === "hitscan" && !shieldHip;
+  const gate = walking && sprintGate && ready && s.meleeTicks === 0 && !handsBusy(s) && !gadgetOut(s) && w.fire.kind === "hitscan" && !shieldHip && !braced;
   // A press during the sprint exit fires once it ends, but only on a tick with real input (its view and seq).
   if (press && !sprintGate) s.wflags |= WFlag.FireQueued;
   let queued = false;

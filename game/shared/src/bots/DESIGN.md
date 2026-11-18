@@ -181,6 +181,7 @@ One **commander** per side, server-side, with the same knowledge rules (its team
 | Bailiff (R3) | Her shield up; an enemy within its prod's reach: the prod held on (Fire, not aimed), stepping in, while its charge lasts; farther off, her sidearm aimed |
 | Latch (R3) | His Snare Latches on the site's doors, from the site's side (aimed at the floor in the doorway; a latch goes on its jamb), as many as he carries. Any attacking bot with a latch on its leg pulls it off when nothing's in sight |
 | Ohm (R3) | His Brownout Pistol at the plan's first hard breach wall from its near side, before the push: a round at each device his scope marks behind it, else two at the wall |
+| Hull (R3) | In a fight his plate braced, stepping in, while the enemy's beyond 8 m; folded to fight closer with his pistol from the hip; folded again out of a fight |
 | Dowser (R3) | Out of a fight on his way in, his coil up for 4 s every 10 to 15 s: a ping on each device it shows that he hasn't marked this round, nearest first |
 | Rivet (R3) | The plan's hard breach (as Thermite's): his Stud Driver's Spine (picked with the reload key) laid on the wall from its near side, a slot from the floor to walk through, or a salvo on a hatch from above; set off from cover 3 m back |
 | Generic | Frags and stuns into rooms before entry, smokes for the plant, claymores on flanks; defenders' wire, shields, Nitro Cells (thrown at heard attackers), alarms, Bulletproof Cameras, Observation Blockers per the plan |

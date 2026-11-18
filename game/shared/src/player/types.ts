@@ -280,6 +280,12 @@ export interface PawnState {
   prodOn: boolean;
   /** Rivet's Stud Driver (R3, gadgets/studs.ts): which of its salvos Fire lays (its `driver.lays`), picked with the reload key. */
   pattern: number;
+  /**
+   * Hull's Plate (R3, player/shield.ts stepBrace): braced (his ability key switches it), and how far it's braced
+   * (0 … 65535: its sides and top out over `brace.extendS`, back over `brace.retractS`).
+   */
+  braced: boolean;
+  braceQ: number;
   regenMade: number;
   regenTicks: number;
   // Fuze's Ballistic Shield (Phase 8 M11, player/shield.ts): ticks it's knocked aside (a guard break, or Sledge's

@@ -615,12 +615,12 @@ export async function startLab(o: LabOptions): Promise<void> {
   /**
    * Fuze's free look (Phase 8 M11, Ulo's test): Fire held with his shield up and not aiming turns the view (the mouse)
    * and not the body. The input keeps the body facing where it did, without Fire; letting go turns the view back. (Not
-   * Bailiff's: there Fire is her shield's prod, R3.)
+   * Bailiff's: there Fire is her shield's prod, R3; nor Hull's: his pistol fires from the hip.)
    */
   let freeLookFrom: { yaw: number; pitch: number } | null = null;
   function freeLook(input: InputCmd): InputCmd {
     const p = sim.pawns.get(ctrl.possessedPawnId);
-    const on = !!p?.loadout?.shield && !p.loadout.shield.prod && p.state.shieldAt === 1 && !ctrl.cam && !ctrl.drone && !ctrl.shellCam && !freeCam && (input.buttons & Btn.Fire) !== 0 && !(input.buttons & Btn.Ads);
+    const on = !!p?.loadout?.shield && !p.loadout.shield.prod && !p.loadout.shield.hipFire && p.state.shieldAt === 1 && !ctrl.cam && !ctrl.drone && !ctrl.shellCam && !freeCam && (input.buttons & Btn.Fire) !== 0 && !(input.buttons & Btn.Ads);
     if (on) {
       freeLookFrom ??= { yaw: p!.state.yaw, pitch: p!.state.pitch };
       return { ...input, yaw: freeLookFrom.yaw, pitch: freeLookFrom.pitch, buttons: input.buttons & ~Btn.Fire };
@@ -1542,7 +1542,11 @@ export async function startLab(o: LabOptions): Promise<void> {
       // (Your arms dressed as you: made again only when there are arms to draw, not for each body or drone you look through.)
       if (inHand) viewmodel.setOperator(viewed.operatorId);
       const phone = phoneOut ? data.gadgets.get("dropped_phone") : undefined;
-      viewmodel.update(now, elapsed, inHand, rs, viewed.loadout?.swapTicks ?? 1, !inHand ? null : phone ? { data: phone, detonator: false } : heldGadget(viewed, rs), !!viewed.loadout?.shield && rs.shieldAt === 1);
+      // A shield up: the pistol behind it until aimed over it (Fuze's, Bailiff's); beside it, from the hip (Hull's folded
+      // plate, R3), and none while it's braced.
+      const plateUp = !!viewed.loadout?.shield && rs.shieldAt === 1;
+      const beside = plateUp && !!viewed.loadout?.shield?.noAds && rs.braceQ === 0;
+      viewmodel.update(now, elapsed, inHand, rs, viewed.loadout?.swapTicks ?? 1, !inHand ? null : phone ? { data: phone, detonator: false } : heldGadget(viewed, rs), plateUp && !beside, beside);
       viewmodel.render(renderer);
       const held = viewed.loadout?.weapons[rs.slot];
       const aimed = inHand !== null && viewmodel.aim > 0.9;
@@ -1596,7 +1600,7 @@ export async function startLab(o: LabOptions): Promise<void> {
         held && !held.detonator && held.data.use.kind === "swing" ? held.data.use : null,
       );
       // Bailiff's (R3, the shield with a prod): its own dark slate.
-      v.setShield(pawn.loadout?.shield?.plate ?? null, pawn.loadout?.shield?.prod ? 0x2f3540 : undefined);
+      v.setShield(pawn.loadout?.shield ?? null, pawn.loadout?.shield?.prod ? 0x2f3540 : pawn.loadout?.shield?.brace ? 0x4a5058 : undefined);
       // The body whose eyes we see through, in first person, faces the view itself (the mouse's, as the camera does), so
       // Fuze's shield doesn't trail the view by a tick when he turns (the review, M12); in free look the body keeps its
       // own facing (that's the point of it).
@@ -1954,18 +1958,31 @@ export async function startLab(o: LabOptions): Promise<void> {
     // Bailiff's shield (R3): its prod switched on or off and its charge; set down, its own shock on or off (the key).
     const prodPct = p.loadout?.shield?.prod ? Math.round(100 * (prodLeft(p) ?? 0)) : null;
     const post = p.loadout?.shieldDown && s.g2 === 0 ? sim.gadgets.list.find((g) => g.owner === ctrl.id && data.gadgets.get(kindId(g.kind) ?? "")?.setsDownShield) : undefined;
+    // Hull's Plate (R3): braced or folded, and the key that switches it.
+    const brace = p.loadout?.shield?.brace;
+    const plateText = !brace
+      ? ""
+      : s.braceQ >= 65535
+        ? `PLATE BRACED · walk only, no weapon · ${keyLabel(k.ability)}: fold it`
+        : s.braced
+          ? "PLATE BRACING…"
+          : s.braceQ > 0
+            ? "PLATE FOLDING…"
+            : `PLATE UP · your pistol from the hip · ${keyLabel(k.ability)}: brace it`;
     const shieldText = !p.loadout?.shield
       ? ""
       : s.shieldAt === 1
-        ? prodPct !== null
-          ? s.jammed > 0
-            ? "SHIELD UP · PROD OFF: EMP · aim to fire"
-            : s.prodOn
-              ? `SHIELD UP · PROD ON (${prodPct}%) · click fire to switch it off, aim to fire`
-              : `SHIELD UP · click fire for the prod (${prodPct}%), aim to fire`
-          : freeLookFrom
-            ? "SHIELD UP · FREE LOOK"
-            : "SHIELD UP · aim to fire, hold fire to look round"
+        ? brace
+          ? plateText
+          : prodPct !== null
+            ? s.jammed > 0
+              ? "SHIELD UP · PROD OFF: EMP · aim to fire"
+              : s.prodOn
+                ? `SHIELD UP · PROD ON (${prodPct}%) · click fire to switch it off, aim to fire`
+                : `SHIELD UP · click fire for the prod (${prodPct}%), aim to fire`
+            : freeLookFrom
+              ? "SHIELD UP · FREE LOOK"
+              : "SHIELD UP · aim to fire, hold fire to look round"
         : s.shieldAt === 2
           ? "SHIELD ON YOUR BACK"
           : p.loadout.shieldDown && s.g2 === 0

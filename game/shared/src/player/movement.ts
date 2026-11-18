@@ -18,7 +18,7 @@ import { ticks } from "../weapons/ticks.js";
 import { DeployKind } from "../destruction/deploy.js";
 import { parkHands, putAway, regenSlot, stepHands } from "../gadgets/hands.js";
 import { stepPatch } from "../gadgets/patch.js";
-import { placeShield, shieldUp, stepShield, suppressed } from "./shield.js";
+import { braceOf, placeShield, shieldUp, stepBrace, stepShield, suppressed } from "./shield.js";
 import { stepProd } from "./prod.js";
 
 export interface MoveContext {
@@ -108,6 +108,7 @@ export function stepPawn(ctx: MoveContext, pawn: Pawn, input: InputCmd, weapons 
     stepHands(ctx, pawn, input, pressed, s.meleeTicks === 0 && s.reviveTarget === 0 && s.deployKind === DeployKind.None, live);
     // The Bailiff Shield's prod (R3): a click of Fire with it up and not aimed switches it (the sidearm fires only aimed).
     if (live) stepProd(pawn, input, pressed, ctx.events);
+  if (live) stepBrace(pawn, pressed);
     stepWeapon(ctx, pawn, input, pressed);
   } else {
     parkWeapon(s);
@@ -232,10 +233,11 @@ function stepWalk(ctx: MoveContext, pawn: Pawn, input: InputCmd, pressed: number
     st === Stance.Prone ? m.speed.proneSpeed : st === Stance.Crouch ? walk * m.speed.crouchWalkFactor * mult("crouch") : walk * mult("walk");
   let speed = s.stanceT < 1 ? Math.min(stanceSpeed(s.stanceFrom), stanceSpeed(s.stance)) : stanceSpeed(s.stance);
   const ads = (input.buttons & Btn.Ads) !== 0;
-  if (wantsAim(ctx, s, input) && s.stance !== Stance.Prone) speed = Math.min(speed, m.speed.adsWalkSpeed * mult("adsWalk"));
+  if (wantsAim(ctx, s, input) && !pawn.loadout?.shield?.noAds && s.stance !== Stance.Prone) speed = Math.min(speed, m.speed.adsWalkSpeed * mult("adsWalk"));
   if (input.buttons & Btn.SlowWalk) speed *= m.speed.slowWalkFactor;
-  // Fuze's shield up in front (Phase 8 M11): slower.
-  if (pawn.loadout?.shield && shieldUp(s)) speed *= pawn.loadout.shield.moveSpeedMult;
+  // Fuze's shield up in front (Phase 8 M11): slower; Hull's braced (R3), slower still.
+  const shield = pawn.loadout?.shield;
+  if (shield && shieldUp(s)) speed *= shield.moveSpeedMult + (shield.brace ? (shield.brace.speedMul - shield.moveSpeedMult) * braceOf(s) : 0);
   // Down but not out: a slow crawl, and none at all while a teammate revives you (placeholders).
   if (s.mode === PawnMode.Downed) speed = s.revivedBy !== 0 && ctx.data.combat.revive.targetLocked ? 0 : ctx.data.combat.dbno.crawlSpeed;
 
@@ -245,6 +247,8 @@ function stepWalk(ctx: MoveContext, pawn: Pawn, input: InputCmd, pressed: number
     (input.buttons & Btn.Sprint) !== 0 &&
     input.forward > m.sprint.forwardThreshold &&
     !ads &&
+    // (Hull's Plate braced, R3: walk only.)
+    s.braceQ === 0 &&
     !blocksSprint(s, input) &&
     s.stance === Stance.Stand &&
     s.stanceT >= 1 &&

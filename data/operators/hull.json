@@ -1,0 +1,18 @@
+{
+  "_doc": "Hull (Project Redmond R3, gadgets/R3_OPERATORS.md §1): an attacker behind a full-body shield. Our own operator: name, look and ability (bracing the Hull Plate). Health and speed 3 / 1.",
+  "id": "hull",
+  "name": "Hull",
+  "side": "attacker",
+  "healthRating": 3,
+  "speedRating": 1,
+  "loadout": {
+    "primaries": ["hull_plate"],
+    "secondaries": ["p229", "5_7_usg"],
+    "gadgets": ["smoke", "impact_emp", "hard_breach_charge"]
+  },
+  "ability": {
+    "id": "hull_brace",
+    "name": "Brace"
+  },
+  "pawns": 1
+}

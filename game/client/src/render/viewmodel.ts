@@ -216,9 +216,10 @@ export class Viewmodel {
 
   /**
    * Pose for this frame. `w` is the weapon in hand (null: nothing to hold), `s` the body's state,
-   * `swapTicks` the loadout's swap time; `dt` seconds since the last frame.
+   * `swapTicks` the loadout's swap time; `dt` seconds since the last frame. `behindShield`: a raised shield's pistol,
+   * hidden until it's aimed over it; `besideShield`: a pistol held one-handed beside one, from the hip (Hull's, R3).
    */
-  update(now: number, dt: number, w: ResolvedWeapon | null, s: PawnState, swapTicks: number, gadget: { data: GadgetData; detonator: boolean } | null = null, behindShield = false) {
+  update(now: number, dt: number, w: ResolvedWeapon | null, s: PawnState, swapTicks: number, gadget: { data: GadgetData; detonator: boolean } | null = null, behindShield = false, besideShield = false) {
     const show = w !== null && s.mode !== PawnMode.Dead && !isDowned(s);
     this.knife.visible = false;
     this.shell.visible = false;
@@ -265,7 +266,7 @@ export class Viewmodel {
       }
     }
     // Magnified sights: once fully aimed, the scope overlay replaces the gun (see the lab's .scope).
-    this.placeGun(now, dt, gun, s, { equip, reload, tilt, hideAimed: w.ads.zoom > 1, oneHanded: behindShield });
+    this.placeGun(now, dt, gun, s, { equip, reload, tilt, hideAimed: w.ads.zoom > 1, oneHanded: behindShield || besideShield });
   }
 
   /**
