@@ -138,7 +138,7 @@ goggles. Tonic: white and teal, a soft cap, a sling bag with a teal plus of our 
 | R3 M8 | Bailiff's shield; Hull's plate | ✅ the prod's stun and slow, setting it down, the EMP shock; braced cover, blasts stopped; bots carry them |
 | R3 M7 | Rivet's Stud Driver | ✅ three shapes, holes a body gets through, through steel, Dampers and packs; bots breach with it |
 | R3 M6 | Dowser's Divining Coil | ✅ the fan, the outlines, the ping; bots ping devices for their team |
-| R3 M9 | Models, first person, HUD for all eight; the interactions (§3); soak; browser tests; review; docs | every check green |
+| R3 M9 | Models, first person, HUD for all eight; the interactions (§3); soak; browser tests; review; docs | every check green: ✅ models, first person and HUD; ✅ each interaction tested (§3); ✅ soaks clean; ✅ the browser check (tools/e2e/r3-lab.mjs: each of the eight through the page's own keys and HUD); the review next |
 
 ## 6. As built
 

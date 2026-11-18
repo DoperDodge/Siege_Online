@@ -168,8 +168,17 @@ and Tonic defending. One at a time, each complete.
 - **How to test Shunt**: the Gadget Lab, pick Shunt, Z, look at the floor just in front of the Reinforced wall and hold
   left mouse (the pack goes to the wall and the wall lights up); switch to Thermite and put his charge on it. For tricking: put the charge on with the pack picked up, then put it back.
 
+- **The eight against each other** (R3_OPERATORS §3): each interaction has a test in its operator's file (Ohm's round on
+  Shunt's pack, Bailiff and her set-down, Latch's snare and Rivet's salvo; the packs against every attacker charge;
+  Dowser's coil on the R3 devices and Twain's idle frame; Hull braced through Latch's snare; Tonic's patch and a revive
+  by hand). They found nothing wrong. A browser check runs each of the eight through the Gadget Lab's own keys and HUD
+  (tools/e2e/r3-lab.mjs, in CI).
+- **Found by CI** (D-197): when a player's inputs ran late past the room's hold (a lag spike, or a slow computer), the
+  room's copy of their body let go of the sights and straightened its lean, so the next shot took the hip's spread. It
+  now keeps both as the player held them.
+
 ### Next
-- **R3**: all eight are in; what's left of R3 is its review across them (the interactions in R3_OPERATORS §3).
+- **R3**: all eight are in and tested against each other; what's left is a code review across them.
 - **R4**: the rest of the tests moved from Oregon to Millrace, Oregon taken off this branch, the code's internal names
   and the docs brought in line.
 
