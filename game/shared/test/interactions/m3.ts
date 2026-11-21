@@ -441,12 +441,12 @@ row("generic.proximity_alarm_converted", "player.defender", async () => {
 
 row("environment.outdoors", "generic.proximity_alarm", async () => {
   // In a match's prep it can't go outdoors (ours: one that comes to rest out there is destroyed); after prep it can.
-  const sim = await Sim.create("oregon");
+  const sim = await Sim.create("millrace");
   const server = new GadgetServer(sim);
   let prep = true;
   server.inPrep = () => prep;
   const c = sim.addPlayer("def", "mute", 0, undefined, undefined, DEFENSE);
-  const street = sim.level.def.spawns.find((sp) => sp.group === "B_STREET")!.pos;
+  const street = sim.level.def.spawns.find((sp) => sp.group === "B_RAIL_SIDING")!.pos;
   const thrown = (seq: number) => {
     server.onEvent({ kind: "throw", pawnId: c.possessedPawnId, seq, slot: 1, gadget: "proximity_alarm", pos: [street[0], street[1] + 1, street[2]], vel: [0, -3, 0], yaw: 0 });
     for (let i = 0; i < 64; i++) {

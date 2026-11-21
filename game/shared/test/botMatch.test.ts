@@ -32,7 +32,7 @@ const quick = (over: Record<string, unknown> = {}) => ({
 });
 
 async function botRoom(format = "bot_training", seed = 9) {
-  const room = await Room.create("BOTS", "oregon", { format, seed });
+  const room = await Room.create("BOTS", "millrace", { format, seed });
   const clock = { t: 0 };
   type Client = { name: string; session: ClientSession; id: number; toServer: Uint8Array[]; events: GameEvent[]; errors: { code: number; message: string }[]; cmd: Partial<Omit<InputCmd, "seq">> };
   const clients: Client[] = [];
@@ -180,16 +180,16 @@ describe("bots in match rooms (Phase 9 M1)", () => {
     const t = await botRoom();
     const you = await t.add("you");
     t.tick();
-    t.lobby(you, { kind: "change", change: { kind: "rules", rules: quick({ firstAttack: "orange", bots: { ...bt.match.bots!, site: "SITE_MEETING" } }) } });
+    t.lobby(you, { kind: "change", change: { kind: "rules", rules: quick({ firstAttack: "orange", bots: { ...bt.match.bots!, site: "SITE_DISPATCH" } }) } });
     t.tick();
     t.lobby(you, { kind: "start" });
     t.tick();
     expect(t.match.sideOf(you.id)).toBe(DEFENSE);
-    you.toServer.push(encodeMatchAction({ kind: "siteVote", site: "SITE_DORMS" }));
+    you.toServer.push(encodeMatchAction({ kind: "siteVote", site: "SITE_OFFICES" }));
     t.tick();
     expect(you.errors.at(-1)).toMatchObject({ code: ErrorCode.Refused });
     t.until(() => t.match.phase === Phase.Prep, 12, "prep");
-    expect(t.match.site).toBe("SITE_MEETING");
+    expect(t.match.site).toBe("SITE_DISPATCH");
   });
 
   it("backfill: Unranked's host turns bots on and the empty slots fill; Ranked can't have bots", async () => {
@@ -197,7 +197,7 @@ describe("bots in match rooms (Phase 9 M1)", () => {
     const you = await t.add("you");
     t.tick();
     expect(t.bots().length).toBe(0);
-    t.lobby(you, { kind: "change", change: { kind: "bots", bots: { fill: true, size: [2, 2], difficulty: ["hard", "hard"], picks: "fixed", site: "SITE_DORMS" } } });
+    t.lobby(you, { kind: "change", change: { kind: "bots", bots: { fill: true, size: [2, 2], difficulty: ["hard", "hard"], picks: "fixed", site: "SITE_OFFICES" } } });
     t.tick();
     // A toggle format's bots fill every slot, pick at random and leave the site to the vote.
     expect(t.bots().length).toBe(9);
