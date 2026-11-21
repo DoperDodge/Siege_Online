@@ -189,9 +189,32 @@ and Tonic defending. One at a time, each complete.
   drone that touches a pack can drive off again; the prod and the pack's shock respect the attacker safeguard and the
   team damage rules.
 
+### Done (R4: cleanup)
+- **Oregon is gone from the game and its tools**: the menu's Oregon cards, its data and research, the tools that
+  traced it from floor plans, its furniture and outside models. The map page is Millrace's alone (main menu →
+  Millrace). Everything that ran on Oregon now runs on Millrace or in a lab: the map generator's checks, the browser
+  tests of the map page and of its frame budget and art, the bench (`npm run bench:map`), netsim and the bot soak.
+- **A Rappel Lab** (main menu → Rappel Lab): a yard of practice buildings with every kind of wall a rope hangs on: a
+  three-storey tower with a stepped gable, a house whose upper storey stands back behind a narrow ledge, walls a few
+  centimetres apart, a balcony behind a railing, a roof hanging over its wall, windows to swing
+  into or climb out of, a barricaded door. The rappel rules' tests play there now.
+- **The code says the game's names**: operator and gadget ids, their files and the code built round them are Cleave,
+  Kiln, Hail, Patch, Relay, Pointman, Lull, Murmur, Vista, Twain, Thistle and Picket, the Breaching Maul, the Burn
+  Frame, the Hailstone Drill and so on. An old link (`?op=sledge`) or a saved loadout under an old name just falls back
+  to the default, and Bot Training's stats per operator start afresh.
+- **The docs say what the game is now**: the README, an amendment at the top of the plan, notes in the design docs.
+- **The Destruction and Gadget Labs' back row** keeps its walls (1.7 m with one section, 4.1 m with three or two,
+  3.3 m and 3.7 m with two), named by their width.
+- **Found on the way**: the Gadget Lab's browser test pressed Fire while a gadget was still coming out on a slow machine
+  (CI caught it); it now waits until the gadget is ready.
+
+### How to test (R4)
+1. Main menu: no Oregon cards; **Millrace** opens the map page (Go to, the free camera, the plan view), and **Rappel
+   Lab** opens the yard: Go to → each building, then hold Space at a wall's foot or a roof edge.
+2. Play vs bots on Millrace as before: everything should look and play the same, with the new names everywhere.
+
 ### Next
-- **R4**: the rest of the tests moved from Oregon to Millrace, Oregon taken off this branch, the code's internal names
-  and the docs brought in line.
+- The R4 review, then this pull request is ready for your look (R1–R4).
 
 ---
 
