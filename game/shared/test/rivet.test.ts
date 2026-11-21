@@ -309,3 +309,22 @@ describe("a bot playing Rivet (R3)", () => {
     expect(whole - cells()).toBeGreaterThan(400);
   }, 300000);
 });
+
+describe("Rivet's driver can't be hurried (the review, R3)", () => {
+  it("to its detonator and back doesn't lay the next salvo before its cycle is up", async () => {
+    const s = await lab();
+    s.teleport(0, SOFT_X, 0, FACE + 3, 0);
+    expect(lay(s, [SOFT_X - 0.8, 1.2, FACE])).toBeDefined();
+    const aim = s.aimAt(0, [SOFT_X + 0.8, 1.2, FACE]);
+    const t0 = s.sim.tick;
+    s.press(0, Btn.Ability, aim); // its detonator
+    s.press(0, Btn.Ability, aim); // the driver again
+    s.wait(ticks(data.gadgetRules.equipS) + 2);
+    expect(s.body(0).state.hand).toBe(Hand.Ability);
+    expect(s.sim.tick - t0).toBeLessThan(cycle - 4);
+    const before = salvos(s).length;
+    s.press(0, Btn.Fire, aim);
+    s.wait(2);
+    expect(salvos(s).length).toBe(before);
+  });
+});

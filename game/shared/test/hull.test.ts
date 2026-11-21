@@ -4,8 +4,9 @@
 // metre across; braced he walks at 0.55 (no sprint) with no weapon, and a blast ahead of him reaches him only a tenth
 // through it, never knocking it aside. It folds back over 0.3 s, or when anything takes the plate down.
 import { describe, expect, it } from "vitest";
-import { blastEffects, Btn, GFlag, Hand, kindOf, loadGameData, pawnHitboxes, platePose, Sim, type Pawn, type PlayerController } from "../src/index.js";
+import { blastEffects, Btn, eyePose, GFlag, Hand, kindOf, loadGameData, pawnHitboxes, PawnMode, platePose, Sim, type Pawn, type PlayerController } from "../src/index.js";
 import { hspeed, input, run, teleport } from "./helpers.js";
+import { scene } from "./interactions/harness.js";
 import { botLoadout, ByteReader, encodeLobbyAction, handleRoomMessage, isFormat, Phase, Room, sees, TICK_HZ, type FormatMode } from "../src/index.js";
 
 const data = loadGameData();
@@ -172,4 +173,40 @@ describe("a bot playing Hull (R3)", () => {
     }, 90);
     expect(ok).toBe(true);
   }, 300000);
+});
+
+describe("Hull's brace as others see it (the review, R3)", () => {
+  it("a rewound shot meets the braced plate: shot at his eye from 6 m, braced, he takes nothing", async () => {
+    const s = await scene(["hull", "mute"], "destruction_lab");
+    s.park();
+    s.teleport(0, 0, 0, 12, 0);
+    s.teleport(1, 0, 0, 6, 180);
+    s.clients[0].cmd = { yaw: 0 };
+    s.wait(10);
+    s.press(0, Btn.Ability, { yaw: 0 });
+    s.wait(60);
+    const hull = s.body(0);
+    expect([hull.state.braced, hull.state.braceQ]).toEqual([true, 65535]);
+    const top = (hs: ReturnType<typeof pawnHitboxes>) => Math.max(...hs.filter((h) => h.part === "shield").flatMap((h) => [h.a[1] + h.radius, h.b[1] + h.radius])) - hull.state.y;
+    const now = top(pawnHitboxes(s.sim.data.movement, s.sim.data.hitboxes, hull));
+    expect(top(s.room.history.at(s.sim.tick - 4).get(hull.id)!)).toBeCloseTo(now, 2);
+    const eye = eyePose(s.sim.data.movement, s.sim.data.hitboxes, hull.state).pos;
+    const hp = hull.state.hp;
+    s.shootAt(1, [eye[0], eye[1] + 0.02, eye[2]]);
+    expect(s.body(0).state.hp).toBe(hp);
+  });
+});
+
+describe("Hull knocked down braced (the review, R3)", () => {
+  it("gets up with it folded: the knockdown took the plate down, and it doesn't come back braced", async () => {
+    const { sim, ctrl, pawn } = await hull();
+    press(sim, ctrl, Btn.Ability);
+    run(sim, ctrl, {}, brace.extendS + 0.2);
+    expect([pawn.state.braced, pawn.state.braceQ]).toEqual([true, 65535]);
+    expect(sim.knockDown(pawn, [0, 1, -2])).toBe(true);
+    for (let n = 0; pawn.state.mode === PawnMode.Knocked && n < TICK_HZ * 10; n++) sim.step(new Map([[ctrl.id, input({})]]));
+    expect(pawn.state.mode).toBe(PawnMode.Walk);
+    run(sim, ctrl, {}, 0.1);
+    expect([pawn.state.braced, pawn.state.braceQ]).toEqual([false, 0]);
+  });
 });

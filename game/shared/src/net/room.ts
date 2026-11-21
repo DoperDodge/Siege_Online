@@ -52,7 +52,7 @@ import { hackTargetFor, hackTargetPos, kludgeOf, type HackTarget, type KludgeDat
 import { pawnJammed, pointJammed } from "../gadgets/jammers.js";
 import { heartOf } from "../gadgets/sensor.js";
 import { patchWorking, startPatch, stopPatch, type PatchData } from "../gadgets/patch.js";
-import { arcData, liveSurfaces, type ArcData } from "../gadgets/arcs.js";
+import { arcData, liveSurfaces, packOn, type ArcData } from "../gadgets/arcs.js";
 import { prodTarget } from "../player/prod.js";
 import { GadgetServer, type IngredientStage } from "../gadgets/serve.js";
 import { blastEffects, isCloud, pawnDistance } from "../gadgets/blast.js";
@@ -369,6 +369,11 @@ export class Room implements DirectorHost {
       const owner = pawn.ownerId !== null ? this.memberOf(pawn.ownerId) : null;
       if (owner) this.force(owner);
     };
+    // So does an Arc Pack jamming a drone (R3): its pilot's next correction carries it.
+    this.gadgetServer.onDroneJam = (drone) => {
+      const owner = drone.ownerId !== null ? this.memberOf(drone.ownerId) : null;
+      if (owner) this.force(owner);
+    };
     // Latch's snare (R3) shut on a body or come off it: its owner's next correction carries it. Shut, the snap is loud:
     // the latch's side is shown where he is for its `spotS`.
     this.gadgetServer.onSnare = (pawn, g) => {
@@ -464,6 +469,11 @@ export class Room implements DirectorHost {
   /** The damage rules: the match's format (with the host's changes), or the lab preset. */
   get rules(): ModeData {
     return this.director?.mode ?? this.labRules;
+  }
+
+  /** Whether a body takes no damage now: Quick Match's Attacker Safeguard (the director's; none without one). */
+  private safeguarded(pawn: Pawn): boolean {
+    return this.director?.safeguarded(pawn) ?? false;
   }
 
   /** Team damage now: the match's rule for the phase, or a lab's action-phase rule. */
@@ -1048,12 +1058,39 @@ export class Room implements DirectorHost {
     const target = hit ? this.sim.pawns.get(hit.pawnId) : undefined;
     if (!hit || !target) return;
     const attacker: Attacker = { ctrlId: m.ctrl.id, team: by.team, weaponId: "bailiff_shield", origin: eye };
-    this.hurt(target, { amount: k.damage, kill: false }, { cause: Cause.Gadget, attacker, headshot: false });
-    target.state.slowed = ticks(k.slowS);
-    const owner = target.ownerId !== null ? this.memberOf(target.ownerId) : null;
-    if (owner) this.force(owner);
+    // Under the damage rules a bullet's is under (the review): slowed only if it took the jolt.
+    if (this.memberHurts(m, target, k.damage, { cause: Cause.Gadget, attacker, headshot: false })) {
+      target.state.slowed = ticks(k.slowS);
+      const owner = target.ownerId !== null ? this.memberOf(target.ownerId) : null;
+      if (owner) this.force(owner);
+    }
     const ev: GameEvent = { kind: "emp", pos: [hit.point[0], hit.point[1], hit.point[2]] };
     for (const o of this.members.values()) o.events.push(ev);
+  }
+
+  /**
+   * Damage a member's blow that isn't a bullet's does a body (a prod's jolt, R3), under the rules a bullet's is (the
+   * review): none to a body under the Attacker Safeguard, nor to a teammate with friendly fire off; a teammate's scaled,
+   * or reflected on the member once its team damage has gone over the line (reverse friendly fire), and counted toward
+   * it. Whether the body took it.
+   */
+  private memberHurts(m: Member, victim: Pawn, amount: number, by: { cause: Cause; attacker: Attacker; headshot: boolean }): boolean {
+    const friendly = victim.team === by.attacker.team;
+    if ((friendly && !this.friendlyFireOn()) || this.safeguarded(victim)) return false;
+    const dealt = friendly ? Math.round(amount * this.rules.friendlyFire.scale) : amount;
+    if (dealt <= 0) return false;
+    if (friendly && m.reflect) {
+      const own = m.ctrl && this.sim.pawns.get(m.ctrl.possessedPawnId);
+      if (own) this.hurt(own, { amount: dealt, kill: false }, { ...by, cause: Cause.Reflect, attacker: null });
+      return false;
+    }
+    const r = this.hurt(victim, { amount: dealt, kill: false }, by);
+    if (r.outcome === "ignored") return false;
+    if (friendly) {
+      m.teamDamage += r.removed;
+      if (this.rules.reverseFriendlyFire.enabled && m.teamDamage >= this.rules.reverseFriendlyFire.thresholdHp) m.reflect = true;
+    }
+    return true;
   }
 
   private judgeGadgetShot(m: Member, applied: QueuedInput, e: Extract<SimEvent, { kind: "gshot" }>) {
@@ -1141,7 +1178,9 @@ export class Room implements DirectorHost {
     if (k && (live.panels.size || live.gadgets.size)) {
       const onGadget = gadgetOnRay(this.sim.gadgets, this.sim.data, hit.origin, dir, plain + 0.02, (g) => live.gadgets.has(g.id));
       const panel = this.sim.level.panels.firstSolid(hit.origin, dir, reach);
-      const pack = (onGadget ? live.gadgets.get(onGadget.g.id) : undefined) ?? (panel ? live.panels.get(panel.entry.panel.spec.index) : undefined);
+      // On a wall, only where its section is live (the review: not the rest of the wall).
+      const at = (t: number): Vec3 => [hit.origin[0] + dir[0] * t, hit.origin[1] + dir[1] * t, hit.origin[2] + dir[2] * t];
+      const pack = (onGadget ? live.gadgets.get(onGadget.g.id) : undefined) ?? (panel ? packOn(this.sim, live, panel.entry.panel.spec.index, at(panel.crossing.face)) : undefined);
       if (pack && pack.team !== attacker.team) {
         this.shock(attacker, pack, k, dir);
         return;
@@ -1163,17 +1202,19 @@ export class Room implements DirectorHost {
 
   /**
    * A knife on a live surface (R3, Shunt's packs): its wielder takes the shock, credited to the pack's owner, and is
-   * pushed back off it (his client corrected).
+   * pushed back off it (his client corrected); under the Attacker Safeguard, neither (the review), as a gadget's damage.
    */
   private shock(body: Pawn, pack: Gadget, k: ArcData, dir: Vec3) {
-    const attacker: Attacker = { ctrlId: pack.owner, team: pack.team, weaponId: "arc_pack", origin: [pack.pos[0], pack.pos[1], pack.pos[2]] };
-    this.hurt(body, { amount: k.shock, kill: false }, { cause: Cause.Gadget, attacker, headshot: false });
     const s = body.state;
     const len = Math.hypot(dir[0], dir[2]) || 1;
-    s.vx = Math.fround((-dir[0] / len) * k.pushMps);
-    s.vz = Math.fround((-dir[2] / len) * k.pushMps);
-    const owner = body.ownerId !== null ? this.memberOf(body.ownerId) : null;
-    if (owner) this.force(owner);
+    if (!this.safeguarded(body)) {
+      const attacker: Attacker = { ctrlId: pack.owner, team: pack.team, weaponId: "arc_pack", origin: [pack.pos[0], pack.pos[1], pack.pos[2]] };
+      this.hurt(body, { amount: k.shock, kill: false }, { cause: Cause.Gadget, attacker, headshot: false });
+      s.vx = Math.fround((-dir[0] / len) * k.pushMps);
+      s.vz = Math.fround((-dir[2] / len) * k.pushMps);
+      const owner = body.ownerId !== null ? this.memberOf(body.ownerId) : null;
+      if (owner) this.force(owner);
+    }
     const ev: GameEvent = { kind: "emp", pos: [s.x + (dir[0] / len) * 0.6, s.y + 1.2, s.z + (dir[2] / len) * 0.6] };
     for (const m of this.members.values()) m.events.push(ev);
   }
@@ -1327,7 +1368,7 @@ export class Room implements DirectorHost {
         if (!victim || victim.state.mode === PawnMode.Dead || victim.life !== shot.lives.get(body.pawnId)) continue;
         const friendly = victim.team === shot.team;
         if (friendly && !this.friendlyFireOn()) continue; // team damage off: no damage, no marker
-        if (this.director?.safeguarded(victim)) continue; // Quick Match's Attacker Safeguard: the same
+        if (this.safeguarded(victim)) continue; // Quick Match's Attacker Safeguard: the same
         const by = { cause: shot.cause, attacker: shot, headshot: body.headshot };
         if (friendly && shot.m.reflect) {
           // Reverse friendly fire: the shooter takes it instead.
@@ -2277,7 +2318,7 @@ export class Room implements DirectorHost {
       const own = g.owner !== 0 && pawn.ownerId === g.owner;
       const friendly = !own && pawn.team === attacker.team && pawn.kind !== PawnKind.Drone;
       if (friendly && !this.friendlyFireOn()) continue;
-      if (this.director?.safeguarded(pawn)) continue;
+      if (this.safeguarded(pawn)) continue;
       const amount = friendly ? Math.round(damage * this.rules.friendlyFire.scale) : damage;
       if (amount <= 0) continue;
       if (friendly && owner?.reflect) {
@@ -2378,11 +2419,14 @@ export class Room implements DirectorHost {
     return false;
   }
 
-  /** Damage from a gadget over time (barbed wire, a gas pipe's jet or fire), credited to its owner (an ingredient's to nobody). */
-  private gadgetHurt(g: Gadget, pawn: Pawn, amount: number) {
-    if (this.director?.safeguarded(pawn)) return;
+  /**
+   * Damage from a gadget over time (barbed wire, a gas pipe's jet or fire, a set-down shield's shock), credited to its
+   * owner (an ingredient's to nobody); none under the Attacker Safeguard. Whether the body took it.
+   */
+  private gadgetHurt(g: Gadget, pawn: Pawn, amount: number): boolean {
+    if (this.safeguarded(pawn)) return false;
     const attacker: Attacker = { ctrlId: g.owner, team: g.owner ? g.team : NEUTRAL, weaponId: kindId(g.kind) ?? "", origin: [g.pos[0], g.pos[1], g.pos[2]] };
-    this.hurt(pawn, { amount, kill: false }, { cause: Cause.Gadget, attacker, headshot: false });
+    return this.hurt(pawn, { amount, kill: false }, { cause: Cause.Gadget, attacker, headshot: false }).outcome !== "ignored";
   }
 
   /** An alarm (or a metal detector) started or stopped sounding: everyone hears it; the body that set it off sees it marked. */

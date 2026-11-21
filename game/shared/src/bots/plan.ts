@@ -468,14 +468,18 @@ export class DefensePlanner {
       }
     }
     // Shunt (R3): his Arc Packs on the floor at the foot of the plan's reinforced walls (well inside a pack's reach of
-    // the face), on the side the plan reinforces them from (the defenders'), once each is reinforced; as many as he
-    // carries. He stands back on the nav grid and looks down at the spot.
+    // the face, by one section of each), on the side the plan reinforces them from (the defenders'), once each is
+    // reinforced; as many as he carries. He stands back on the nav grid and looks down at the spot.
     const arc = slots[1]?.arc ? { g: slots[1], k: slots[1].arc } : null;
     if (arc && !planned.has(arc.g.id)) {
       const walls = (this.strat?.defense.reinforce ?? []).filter((r) => r.from && room(r.from) && byId.get(r.panel)?.panel.kind === "wall");
       for (const r of walls.slice(0, arc.g.count)) {
         const e = byId.get(r.panel)!;
-        const foot = sides(level, e, e.frame.t / 2 + Math.min(0.18, arc.k.reachM * 0.5)).find((x) => x.room === r.from)?.pos;
+        // By the middle of its middle section, not on a line between two: a pack makes only the section it's by live.
+        const p = e.panel;
+        const [u0, u1] = p.sectionRange(p.sectionOf(Math.floor(p.w / 2)));
+        const uMid = ((u0 + u1) / 2) * p.cellU - e.frame.w / 2;
+        const foot = sides(level, e, e.frame.t / 2 + Math.min(0.18, arc.k.reachM * 0.5), uMid).find((x) => x.room === r.from)?.pos;
         const spot = foot ? floorSpot(sim, this.nav, r.from!, foot, foot, 1.0) : null;
         add(2, "place", spot && { stand: spot.stand, look: [foot![0], foot![1] + 0.02, foot![2]] }, {}, e.panel.spec.index);
       }

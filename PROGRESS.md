@@ -166,7 +166,7 @@ and Tonic defending. One at a time, each complete.
 - **How to test Latch**: the Gadget Lab, pick Latch, Z, look at the empty door frame and hold left mouse; switch to an
   attacker and walk through it.
 - **How to test Shunt**: the Gadget Lab, pick Shunt, Z, look at the floor just in front of the Reinforced wall and hold
-  left mouse (the pack goes to the wall and the wall lights up); switch to Thermite and put his charge on it. For tricking: put the charge on with the pack picked up, then put it back.
+  left mouse (the pack goes to the wall and the section of it the pack is by lights up); switch to Thermite and put his charge on it. For tricking: put the charge on with the pack picked up, then put it back.
 
 - **The eight against each other** (R3_OPERATORS §3): each interaction has a test in its operator's file (Ohm's round on
   Shunt's pack, Bailiff and her set-down, Latch's snare and Rivet's salvo; the packs against every attacker charge;
@@ -176,9 +176,14 @@ and Tonic defending. One at a time, each complete.
 - **Found by CI** (D-197): when a player's inputs ran late past the room's hold (a lag spike, or a slow computer), the
   room's copy of their body let go of the sights and straightened its lean, so the next shot took the hip's spread. It
   now keeps both as the player held them.
+- **The review** (D-198): a code review across the eight found ten faults, each now fixed with a test. The ones you'd
+  notice: an Arc Pack lights up only the section of a reinforced wall it stands by (it lit the whole wall); a Hailstone
+  Drill on a live deployable shield is burnt out; a knockdown folds Hull's plate and switches Bailiff's prod off;
+  others see Hull's plate braced; clicking the prod or switching Ohm's pistol away and back can't beat their timers; a
+  drone that touches a pack can drive off again; the prod and the pack's shock respect the attacker safeguard and the
+  team damage rules.
 
 ### Next
-- **R3**: all eight are in and tested against each other; what's left is a code review across them.
 - **R4**: the rest of the tests moved from Oregon to Millrace, Oregon taken off this branch, the code's internal names
   and the docs brought in line.
 

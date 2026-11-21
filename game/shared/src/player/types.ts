@@ -257,6 +257,11 @@ export interface PawnState {
   hand: number;
   gAct: number;
   gTicks: number;
+  /**
+   * Ticks before the item in slot 2 can be used again (R3: Ohm's pistol reloading, Rivet's driver cycling). It runs
+   * down whatever's in hand, so putting it away, a knife or a vault doesn't hurry it (the review).
+   */
+  gCool: number;
   g1: number;
   g2: number;
   w1: number;

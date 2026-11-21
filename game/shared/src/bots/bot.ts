@@ -242,8 +242,13 @@ export class Bot {
     if (s.mode === PawnMode.Downed && s.g2 > 0 && !patchWorking(s) && slotGadget(w.sim.data, pawn.loadout, 2)?.patch) return { ...this.still(s), buttons: now % 8 < 4 ? Btn.Ability : 0 };
     // Down: nothing a downed body can usefully press (crawling to cover comes with the plans).
     if (s.mode === PawnMode.Downed || s.mode === PawnMode.Knocked) return this.still(s);
-    // A snare on its leg (R3, Latch's): out of a fight it stands still and pulls it off (Interact held).
-    if (s.snared && !this.about?.visible) return { ...this.still(s), buttons: Btn.Interact };
+    // A snare on its leg (R3, Latch's): out of a fight it stands still and pulls it off (Interact held). The pull starts
+    // on a press: until it's pulling, Interact is let go a tick and pressed again (a press made mid-knife or mid-vault
+    // is lost, and one held from then on never starts it: the review).
+    if (s.snared && !this.about?.visible) {
+      const pulling = s.deployKind === DeployKind.Snare;
+      return { ...this.still(s), buttons: pulling || !(s.prevButtons & Btn.Interact) ? Btn.Interact : 0 };
+    }
     // Skopós between shells: the keys of the swap and nothing else.
     const swapping = this.swapStep(ctrl, s, now);
     if (swapping) return swapping;

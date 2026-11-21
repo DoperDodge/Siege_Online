@@ -5,7 +5,7 @@
 // Its detonator can't set off one on a live surface; one already set off isn't stopped. An EMP turns a pack off for its seconds. An attacker's knife on a live surface
 // shocks him and does nothing to it; his drone by a pack is jammed. A bot playing Shunt puts his packs by the walls the
 // site's plan reinforces.
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   arcPanels,
   ATTACK,
@@ -19,6 +19,7 @@ import {
   kindId,
   kindOf,
   L_STEEL,
+  liveSpans,
   liveSurfaces,
   loadGameData,
   PawnMode,
@@ -28,6 +29,7 @@ import {
   ticks,
   type FormatMode,
   type Gadget,
+  type Pawn,
   type Vec3,
 } from "../src/index.js";
 import { LAB, scene, type Scene } from "./interactions/harness.js";
@@ -43,12 +45,15 @@ async function lab() {
   return s;
 }
 
-/** At the reinforced wall's foot (its face toward +z at z −5.9), where Shunt puts his pack. */
-const FOOT: Vec3 = [11.0, 0, -5.72];
+/**
+ * At the reinforced wall's foot (its face toward +z at z −5.9), where Shunt puts his pack: by its right section (x 11.5
+ * to 13), the one the charges go on (a pack makes only its own section live).
+ */
+const FOOT: Vec3 = [12.2, 0, -5.72];
 
 /** Shunt (client 1) puts a pack down at the reinforced wall's foot from in front of it, as a player does, and steps away. */
 function packDown(s: Scene): Gadget {
-  s.teleport(1, 11.0, 0, -4.7);
+  s.teleport(1, 12.2, 0, -4.7);
   const g = s.plant(1, FOOT)!;
   expect(g).toBeDefined();
   s.teleport(1, ...LAB.away[1]);
@@ -95,7 +100,7 @@ describe("Shunt and his Arc Packs (R3)", () => {
     expect(s.clients[0].events.slice(before).some((e) => e.kind === "emp" && Math.abs(e.pos[0] - g.pos[0]) < 0.01)).toBe(true);
     expect(s.solidAt("reinforced", L_STEEL, [11.8, 1.4, -6])).toBe(true);
     // A pack a little further off doesn't reach it.
-    const far = s.put("arc_pack", 1, [11.0, 0.075, -5.9 + k.reachM + 0.2]);
+    const far = s.put("arc_pack", 1, [12.2, 0.075, -5.9 + k.reachM + 0.2]);
     expect(arcPanels(s.sim, far, k.reachM)).toEqual([]);
   });
 
@@ -117,7 +122,7 @@ describe("Shunt and his Arc Packs (R3)", () => {
   it("tricking: picked up (Interact held), the wall's dead and a charge goes on; put back, the charge is burnt out", async () => {
     const s = await lab();
     const pack = packDown(s);
-    s.teleport(1, 11.0, 0, -4.7);
+    s.teleport(1, 12.2, 0, -4.7);
     const look = s.aimAt(1, pack.pos);
     // His next pack out of its slot first (a press while it comes out does nothing).
     s.clients[1].cmd = { ...look };
@@ -143,7 +148,7 @@ describe("Shunt and his Arc Packs (R3)", () => {
     s.detonate(0);
     s.wait(2);
     expect(s.sim.gadgets.get(g.id)!.flags & GFlag.Active).toBe(GFlag.Active);
-    s.put("arc_pack", 1, [11.0, 0.075, -5.72]);
+    s.put("arc_pack", 1, [12.2, 0.075, -5.72]);
     expect(liveSurfaces(s.sim).panels.size).toBe(1);
     s.wait(burn + 4);
     expect(gone(s, g)).toBe(false);
@@ -153,8 +158,8 @@ describe("Shunt and his Arc Packs (R3)", () => {
 
   it("an EMP turns a pack off for its seconds: a charge put on meanwhile stays until it's on again", async () => {
     const s = await lab();
-    const pack = s.put("arc_pack", 1, [11.0, 0.075, -5.72]);
-    emp(s, [11.0, 0.4, -5.6], 6);
+    const pack = s.put("arc_pack", 1, [12.2, 0.075, -5.72]);
+    emp(s, [12.2, 0.4, -5.6], 6);
     s.wait(1);
     const off = s.sim.gadgets.get(pack.id)!;
     expect(off.flags & GFlag.Off).toBe(GFlag.Off);
@@ -249,7 +254,7 @@ describe("Shunt's packs and the attackers' other charges (R3_OPERATORS.md §3)",
     const s = await lab();
     const on = (kind: string, id: string, at: Vec3) => s.put(kind, 0, at, s.onPanel(id, at));
     // Before any pack: a Heavy Breach Charge on the reinforced wall, a Breach Charge on the barricaded door's outside.
-    const heavy = on("hard_breach_charge", "reinforced", [10.4, 1.2, -5.9]);
+    const heavy = on("hard_breach_charge", "reinforced", [12.6, 1.2, -5.9]);
     const breach = on("breach_charge", "door_a", [-10, 1.2, 6.05]);
     s.wait(burn + 8);
     expect([gone(s, heavy), gone(s, breach)]).toEqual([false, false]);
@@ -257,9 +262,117 @@ describe("Shunt's packs and the attackers' other charges (R3_OPERATORS.md §3)",
     s.put("arc_pack", 1, [-10, 0, 5.77]); // at the door's foot, inside
     expect(liveSurfaces(s.sim).panels.has(s.panel("door_a").panel.spec.index)).toBe(true);
     // After: a Hailstone Drill and a Spine on the live wall.
-    const drill = on("cluster_charge", "reinforced", [11.6, 1.2, -5.9]);
-    const spine = on("stud_spine", "reinforced", [12.4, 0.95, -5.9]);
+    const drill = on("cluster_charge", "reinforced", [11.9, 1.2, -5.9]);
+    const spine = on("stud_spine", "reinforced", [12.3, 0.95, -5.9]);
     s.wait(burn + 8);
     expect([heavy, breach, drill, spine].map((g) => gone(s, g))).toEqual([true, true, true, true]);
+  });
+});
+
+describe("a drone stopped by a live pack (the review, R3)", () => {
+  it("is jammed its 2 s, then can be driven off; no correction while it's there is counted as its pilot's misprediction", async () => {
+    const s = await lab();
+    s.put("arc_pack", 1, [0, 0.075, 14]);
+    s.room.spawnPilot(s.clients[0].id, null, 0, ATTACK);
+    s.room.rosterChanged();
+    s.wait(8);
+    const drone = s.sim.dronesOf(s.ctrlOf(0)).find((p) => p.state.mode === PawnMode.Walk)!;
+    s.clients[0].cmd = { yaw: -Math.PI / 2 };
+    s.sim.placeDrone(drone.id, 0.3, 0.02, 14, -90); // facing away from the pack (+x)
+    s.wait(8);
+    expect(drone.state.jammed).toBeGreaterThan(0);
+    const mismatch = s.room.stats.mismatchCorrections;
+    s.wait(ticks(k.droneJamS));
+    const x0 = drone.state.x;
+    s.clients[0].cmd = { forward: 1, yaw: -Math.PI / 2 };
+    s.wait(TICK_HZ * 2);
+    s.clients[0].cmd = { yaw: -Math.PI / 2 };
+    expect(drone.state.x - x0).toBeGreaterThan(0.5);
+    expect(s.room.stats.mismatchCorrections).toBe(mismatch);
+  });
+});
+
+describe("a pack by a wall reinforced in part (the review, R3)", () => {
+  /** The section of the Gadget Lab's 3 m reinforceable wall (reinforce_2: x −0.5 to 2.5, its face toward +z at z −5.9) at x. */
+  const sectionAtX = (s: Scene, x: number) => {
+    const e = s.panel("reinforce_2");
+    const f = e.frame;
+    return e.panel.sectionOf(Math.floor(((x - f.center[0]) * f.u[0] + (-5.9 - f.center[2]) * f.u[2] + f.w / 2) / e.panel.cellU));
+  };
+
+  it("electrifies the section it stands by, not the wall: a charge on the soft section stays and a knife there cuts it; by the soft one, it electrifies nothing", async () => {
+    const s = await lab();
+    const e = s.panel("reinforce_2");
+    const on = (kind: string, at: Vec3) => s.put(kind, 0, at, s.onPanel("reinforce_2", at));
+    // Steel up on its left half (x −0.5 to 1) only, and a pack at that half's foot.
+    expect(sectionAtX(s, 0.2)).not.toBe(sectionAtX(s, 1.8));
+    e.panel.apply({ kind: "reinforce", section: sectionAtX(s, 0.2), side: 1 });
+    s.teleport(1, 0.2, 0, -4.7);
+    const pack = s.plant(1, [0.2, 0, -5.72])!;
+    s.teleport(1, ...LAB.away[1]);
+    expect(arcPanels(s.sim, pack, k.reachM)).toEqual([e.panel.spec.index]);
+    // What the clients draw live: that half only (its middle 0.75 m left of the wall's, 1.5 m wide; the face's u is +x).
+    const spans = liveSpans(e, liveSurfaces(s.sim).panels.get(e.panel.spec.index)!);
+    expect(spans.map(([mid, w]) => [+mid.toFixed(3), +w.toFixed(3)])).toEqual([[-0.75, 1.5]]);
+    // An attacker's knife on the steel half shocks him; on the soft half, it doesn't, and cuts it.
+    const hp = s.body(0).state.hp;
+    s.teleport(0, 0.6, 0, -5.1);
+    s.knife(0, [0.6, 1.2, -5.9]);
+    expect(s.body(0).state.hp).toBe(hp - k.shock);
+    s.teleport(0, 2.2, 0, -5.1);
+    const hash = s.sim.level.panels.hash();
+    s.knife(0, [2.2, 1.2, -5.9]);
+    expect(s.body(0).state.hp).toBe(hp - k.shock);
+    expect(s.sim.level.panels.hash()).not.toBe(hash);
+    s.teleport(0, ...LAB.away[0]);
+    // A Heavy Breach Charge on the steel half is burnt out; a Breach Charge on the soft half isn't.
+    const steel = on("hard_breach_charge", [0.2, 1.2, -5.9]);
+    const soft = on("breach_charge", [1.8, 1.2, -5.9]);
+    s.wait(burn + 8);
+    expect([gone(s, steel), gone(s, soft)]).toEqual([true, false]);
+    // A pack at the soft half's foot electrifies nothing: a charge on the steel half stays.
+    s.sim.gadgets.remove(pack.id);
+    s.teleport(1, 1.8, 0, -4.7);
+    const by = s.plant(1, [1.8, 0, -5.72])!;
+    s.teleport(1, ...LAB.away[1]);
+    expect([arcPanels(s.sim, by, k.reachM), liveSurfaces(s.sim).panels.size]).toEqual([[], 0]);
+    const later = on("hard_breach_charge", [0.2, 1.2, -5.9]);
+    s.wait(burn + 8);
+    expect(gone(s, later)).toBe(false);
+  });
+});
+
+describe("a charge on a live deployable shield (the review, R3)", () => {
+  it("can't be set off and is burnt out, as on a live wall", async () => {
+    const s = await scene(["fuze", "shunt"], "destruction_lab");
+    s.park();
+    const shield = s.put("deployable_shield", 1, [0, 0.5, 13], { yaw: Math.PI });
+    s.put("arc_pack", 1, [0.7, 0.075, 12.8]);
+    expect(liveSurfaces(s.sim).gadgets.has(shield.id)).toBe(true);
+    // Fuze's Hailstone Drill on its face, from in front of it.
+    s.teleport(0, 0, 0, 14.2);
+    const g = s.plant(0, [0, 0.6, 13.06])!;
+    expect([kindId(g.kind), g.panel]).toEqual(["cluster_charge", -1]);
+    s.detonate(0);
+    expect([gone(s, g), s.sim.gadgets.get(g.id)!.flags & GFlag.Active]).toEqual([false, 0]);
+    s.wait(burn);
+    expect(gone(s, g)).toBe(true);
+  });
+});
+
+describe("a knife on a live surface under the Attacker Safeguard (the review, R3)", () => {
+  it("does nothing to the attacker (no damage, not thrown back), and nothing to the surface", async () => {
+    const s = await lab();
+    // Quick Match's safeguard (the director's; a lab has none) said to cover Thermite.
+    vi.spyOn(s.room as unknown as { safeguarded(p: Pawn): boolean }, "safeguarded").mockImplementation((p) => p === s.body(0));
+    s.put("arc_pack", 1, [-10, 0.075, 5.75]);
+    s.teleport(0, -10, 0, 6.85);
+    const hp = s.body(0).state.hp;
+    const z = s.body(0).state.z;
+    const hash = s.sim.level.panels.hash();
+    s.knife(0, [-10, 1.2, 6.05]);
+    expect(s.body(0).state.hp).toBe(hp);
+    expect(s.body(0).state.z).toBeLessThan(z + 0.1);
+    expect(s.sim.level.panels.hash()).toBe(hash);
   });
 });

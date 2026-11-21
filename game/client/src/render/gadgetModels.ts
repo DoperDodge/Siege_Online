@@ -26,6 +26,7 @@ import {
   KIND_SHELL_SHIELD,
   kindId,
   kindOf,
+  liveSpans,
   liveSurfaces,
   raycastLevel,
   salvoCut,
@@ -37,6 +38,7 @@ import {
   tubeTip,
   type Gadget,
   type GadgetData,
+  type PanelFrame,
   type SimEvent,
   type Sim,
   type Vec3,
@@ -481,16 +483,21 @@ export class GadgetModels {
 
   /**
    * Shunt's live surfaces (R3, gadgets/arcs.ts), as the table and panels are now: a flickering sheet just off each face
-   * of every electrified panel; crackle across them and over each electrified shield or wire, drawn anew every 70 ms.
+   * of every electrified stretch (a wall's live sections, a whole barricade); crackle across them and over each
+   * electrified shield or wire, drawn anew every 70 ms.
    */
   private showArcs() {
     const live = liveSurfaces(this.sim);
     const t = performance.now();
     const panels = this.sim.level.panels.list;
+    // Each live stretch: its panel's frame, its middle along the face from the face's middle, and its width.
+    const spans: { f: PanelFrame; mid: number; w: number }[] = [];
+    for (const [idx, by] of live.panels) {
+      const e = panels[idx];
+      if (e) for (const [mid, w] of liveSpans(e, by)) spans.push({ f: e.frame, mid, w });
+    }
     let n = 0;
-    for (const idx of live.panels.keys()) {
-      const f = panels[idx]?.frame;
-      if (!f) continue;
+    for (const { f, mid, w } of spans) {
       for (const side of [-1, 1]) {
         let m = this.arcSheets[n];
         if (!m) {
@@ -501,9 +508,9 @@ export class GadgetModels {
         }
         m.visible = true;
         const off = side * (f.t / 2 + 0.012);
-        m.position.set(f.center[0] + f.n[0] * off, f.center[1] + f.n[1] * off, f.center[2] + f.n[2] * off);
+        m.position.set(f.center[0] + f.u[0] * mid + f.n[0] * off, f.center[1] + f.u[1] * mid + f.n[1] * off, f.center[2] + f.u[2] * mid + f.n[2] * off);
         m.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3(...f.u), new THREE.Vector3(...f.v), new THREE.Vector3(...f.n)));
-        m.scale.set(f.w, f.h, 1);
+        m.scale.set(w, f.h, 1);
         n++;
       }
     }
@@ -512,7 +519,7 @@ export class GadgetModels {
     this.arcSheetMat.opacity = 0.06 + 0.07 * Math.abs(Math.sin(t * 0.021) * Math.sin(t * 0.0067 + 1.3));
     // Bailiff's set-down shields with their shock on (R3) crackle across their face too.
     const posts = this.sim.gadgets.list.filter((g) => g.flags & GFlag.Active && !(g.flags & GFlag.Off) && this.dataOf(g.kind)?.setsDownShield);
-    const key = `${[...live.panels.keys()].join(",")}|${[...live.gadgets.keys()].join(",")}|${posts.map((g) => g.id).join(",")}`;
+    const key = `${[...live.panels].map(([i, by]) => `${i}:${Object.keys(by).join(".")}`).join(",")}|${[...live.gadgets.keys()].join(",")}|${posts.map((g) => g.id).join(",")}`;
     if (key === this.arcKey && t - this.arcAt < 70) return;
     this.arcKey = key;
     this.arcAt = t;
@@ -529,18 +536,16 @@ export class GadgetModels {
         prev = p;
       }
     };
-    for (const idx of live.panels.keys()) {
-      const f = panels[idx]?.frame;
-      if (!f) continue;
+    for (const { f, mid, w } of spans) {
       const at = (x: number, y: number, side: number): Vec3 => {
         const o = side * (f.t / 2 + 0.016);
         return [f.center[0] + f.u[0] * x + f.v[0] * y + f.n[0] * o, f.center[1] + f.u[1] * x + f.v[1] * y + f.n[1] * o, f.center[2] + f.u[2] * x + f.v[2] * y + f.n[2] * o];
       };
       for (const side of [-1, 1])
         for (let i = 0; i < 3; i++) {
-          const x0 = (Math.random() - 0.5) * f.w;
+          const x0 = mid + (Math.random() - 0.5) * w;
           const y0 = (Math.random() - 0.5) * f.h;
-          const x1 = Math.max(-f.w / 2, Math.min(f.w / 2, x0 + (Math.random() - 0.5) * 1.2));
+          const x1 = Math.max(mid - w / 2, Math.min(mid + w / 2, x0 + (Math.random() - 0.5) * 1.2));
           const y1 = Math.max(-f.h / 2, Math.min(f.h / 2, y0 + (Math.random() - 0.5) * 1.2));
           bolt(at(x0, y0, side), at(x1, y1, side), 6, 0.06, f.u, f.v);
         }

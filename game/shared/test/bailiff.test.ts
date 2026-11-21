@@ -4,7 +4,7 @@
 // on 8 s of charge that refills once it's been off a second. Aimed, her sidearm fires as Fuze's does. Her ability item
 // sets the shield down as solid cover (no shield on her while it's down); she picks it up again. An EMP reaching her
 // with it up shocks her (no moving, no hands, 1.5 s) and turns the prod off; set down, it doesn't shock her.
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   ATTACK,
   Btn,
@@ -20,13 +20,17 @@ import {
   Hand,
   kindOf,
   loadGameData,
+  PawnMode,
   prodData,
   ShieldAt,
+  Sim,
   ticks,
   TICK_HZ,
   viewDir,
+  type Pawn,
   type Vec3,
 } from "../src/index.js";
+import { input, run, teleport } from "./helpers.js";
 import { LAB, scene, type Scene } from "./interactions/harness.js";
 
 const data = loadGameData();
@@ -303,3 +307,99 @@ describe("a bot playing Bailiff (R3)", () => {
 
 void GFlag;
 void viewDir;
+
+describe("the prod's cadence can't be beaten (the review, R3)", () => {
+  it("clicking it off and on as fast as can be jolts no faster than holding it on", async () => {
+    const s = await lab();
+    const look = faceOff(s, 2.5);
+    const hp0 = s.body(0).state.hp;
+    for (let i = 0; i < TICK_HZ; i++) {
+      s.clients[1].cmd = { ...look, buttons: i % 2 === 0 ? Btn.Fire : 0 };
+      s.wait(1);
+    }
+    s.clients[1].cmd = { ...look };
+    s.wait(6);
+    expect((hp0 - s.body(0).state.hp) / k.damage).toBeLessThanOrEqual(Math.ceil(TICK_HZ / every) + 1);
+  });
+
+  it("nor does switching the set-down shield's shock off and on", async () => {
+    const s = await lab();
+    s.teleport(1, 0, 0, 12, 0);
+    expect(s.plant(1, [0, 0, 10.8])?.kind).toBe(kindOf("bailiff_post"));
+    s.teleport(0, 0, 0, 8.6, 180);
+    s.wait(4);
+    const hp0 = s.body(0).state.hp;
+    for (let i = 0; i < TICK_HZ / 2; i++) s.press(1, Btn.Ability); // a press each two ticks: on, off, on...
+    s.wait(6);
+    expect((hp0 - s.body(0).state.hp) / k.damage).toBeLessThanOrEqual(Math.ceil(TICK_HZ / every) + 1);
+  });
+});
+
+describe("Bailiff knocked down with the prod on (the review, R3)", () => {
+  it("gets up with it off: the knockdown took her shield down, and it doesn't jolt after", async () => {
+    const sim = await Sim.create("movement_lab");
+    const ctrl = sim.addPlayer("bailiff", "bailiff", 0);
+    teleport(sim, ctrl, 0, 0, 0);
+    const pawn = sim.pawns.get(ctrl.possessedPawnId)!;
+    run(sim, ctrl, {}, 0.2);
+    sim.step(new Map([[ctrl.id, input({ buttons: Btn.Fire })]]));
+    sim.step(new Map([[ctrl.id, input({})]]));
+    expect(pawn.state.prodOn).toBe(true);
+    expect(sim.knockDown(pawn, [0, 1, -2])).toBe(true);
+    for (let n = 0; pawn.state.mode === PawnMode.Knocked && n < TICK_HZ * 10; n++) sim.step(new Map([[ctrl.id, input({})]]));
+    expect(pawn.state.mode).toBe(PawnMode.Walk);
+    let jolts = 0;
+    for (let i = 0; i < 40; i++) {
+      sim.step(new Map([[ctrl.id, input({})]]));
+      jolts += sim.events.filter((e) => e.kind === "prod").length;
+    }
+    expect([pawn.state.prodOn, jolts]).toEqual([false, 0]);
+  });
+});
+
+describe("the prod and the set-down shock under the damage rules (the review, R3)", () => {
+  it("do nothing to an attacker under the Attacker Safeguard: no damage, no slow", async () => {
+    const s = await lab();
+    // Quick Match's safeguard (the director's; a lab has none) said to cover Sledge.
+    vi.spyOn(s.room as unknown as { safeguarded(p: Pawn): boolean }, "safeguarded").mockImplementation((p) => p === s.body(0));
+    const look = faceOff(s);
+    const hp = s.body(0).state.hp;
+    prod(s, look, every * 2);
+    expect([s.body(0).state.hp, s.body(0).state.slowed]).toEqual([hp, 0]);
+    // Her set-down shield's shock: the same.
+    s.teleport(1, 0, 0, 12, 0);
+    expect(s.plant(1, [0, 0, 10.8])?.kind).toBe(kindOf("bailiff_post"));
+    s.teleport(0, 0, 0, 8.6, 180);
+    s.wait(4);
+    s.press(1, Btn.Ability);
+    s.wait(every * 2);
+    expect([s.body(0).state.hp, s.body(0).state.slowed]).toEqual([hp, 0]);
+  });
+
+  it("a teammate in front (friendly fire on) takes it as team damage: scaled, and once hers is over the line, reflected on her", async () => {
+    const s = await scene(["sledge", "bailiff", "mute"], "gadget_lab");
+    s.park();
+    const rules = s.room.rules;
+    const was = { scale: rules.friendlyFire.scale, reverse: { ...rules.reverseFriendlyFire } };
+    try {
+      rules.friendlyFire.scale = 0.5;
+      rules.reverseFriendlyFire.enabled = true;
+      rules.reverseFriendlyFire.thresholdHp = k.damage; // two jolts' scaled damage
+      s.teleport(1, 0, 0, 12, 0);
+      s.teleport(2, 0, 0, 9.5, 180);
+      const look = s.aimAt(1, [0, 1.2, 9.5]);
+      s.clients[1].cmd = { ...look };
+      s.wait(24);
+      const [hers, his] = [s.body(1).state.hp, s.body(2).state.hp];
+      prod(s, look, every * 4);
+      const half = Math.round(k.damage * 0.5);
+      // Two jolts on him at half; the rest on her, at half too.
+      expect(his - s.body(2).state.hp).toBe(2 * half);
+      expect(hers - s.body(1).state.hp).toBeGreaterThan(0);
+      expect((hers - s.body(1).state.hp) % half).toBe(0);
+    } finally {
+      rules.friendlyFire.scale = was.scale;
+      Object.assign(rules.reverseFriendlyFire, was.reverse);
+    }
+  });
+});

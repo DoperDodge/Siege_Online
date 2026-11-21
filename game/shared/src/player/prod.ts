@@ -34,7 +34,8 @@ export function prodReady(pawn: Pawn, input: InputCmd): boolean {
  * A tick of a body's prod (its own step; `pressed`: the buttons pressed this tick). A click of Fire with the shield up
  * and not aiming switches it on or off (Ulo's). On, it uses its charge, with a jolt at once and every `everyS` after (a
  * `prod` event); it goes off by itself when it can't jolt (aimed, the shield not up, an EMP, a shock) or its charge is
- * spent. Off, once it's been off `refillDelayS` its charge comes back a second a second.
+ * spent. Off, once it's been off `refillDelayS` its charge comes back a second a second; the wait for its next jolt runs
+ * on, so switching it off and on again doesn't jolt sooner.
  */
 export function stepProd(pawn: Pawn, input: InputCmd, pressed: number, events: { push(e: { kind: "prod"; pawnId: number; seq: number; yaw: number; pitch: number }): void }): void {
   const k = pawn.loadout?.shield?.prod;
@@ -53,7 +54,9 @@ export function stepProd(pawn: Pawn, input: InputCmd, pressed: number, events: {
     if (s.prodUsed >= ticks(k.chargeS)) s.prodOn = false;
     return;
   }
-  s.prodNext = 0;
+  // Off, the wait for the next jolt runs on (it isn't reset): switched back on, it jolts at once only if a jolt's time
+  // has gone by since the last (the review: clicking it off and on jolted every other tick).
+  if (s.prodNext > 0) s.prodNext--;
   s.prodIdle = Math.min(0xffff, s.prodIdle + 1);
   if (s.prodIdle >= ticks(k.refillDelayS) && s.prodUsed > 0) s.prodUsed--;
 }

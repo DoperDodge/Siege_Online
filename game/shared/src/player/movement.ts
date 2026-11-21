@@ -108,7 +108,8 @@ export function stepPawn(ctx: MoveContext, pawn: Pawn, input: InputCmd, weapons 
     stepHands(ctx, pawn, input, pressed, s.meleeTicks === 0 && s.reviveTarget === 0 && s.deployKind === DeployKind.None, live);
     // The Bailiff Shield's prod (R3): a click of Fire with it up and not aimed switches it (the sidearm fires only aimed).
     if (live) stepProd(pawn, input, pressed, ctx.events);
-  if (live) stepBrace(pawn, pressed);
+    // Hull's Plate's brace (R3): his ability key with it up switches it.
+    if (live) stepBrace(pawn, pressed);
     stepWeapon(ctx, pawn, input, pressed);
   } else {
     parkWeapon(s);
@@ -116,6 +117,14 @@ export function stepPawn(ctx: MoveContext, pawn: Pawn, input: InputCmd, weapons 
     if (down) {
       s.adsQ = 0; // no weapons while down, nor gadgets
       putAway(s, false);
+      // Nor the shield: Bailiff's prod goes off and Hull's plate folds (the review, R3: both came back on with the
+      // shield when they got up). Their steps run on with nothing pressed: the prod's charge refills, the plate folds.
+      s.prodOn = false;
+      s.braced = false;
+      if (live) {
+        stepProd(pawn, input, 0, ctx.events);
+        stepBrace(pawn, 0);
+      }
     }
   }
   // Where Fuze's shield's plate is, now the hands and holds are settled for the tick (Phase 8 M11).

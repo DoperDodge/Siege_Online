@@ -226,3 +226,33 @@ describe("Ohm's rounds and the other R3 operators (R3_OPERATORS.md §3)", () => 
     expect(s.sim.matchRules.camsOff & 1).toBe(1);
   });
 });
+
+describe("Ohm's reload can't be skipped (the review, R3)", () => {
+  it("putting the pistol away and out again doesn't load the next round any sooner", async () => {
+    const s = await atWall();
+    const look = { yaw: 0, pitch: 0 };
+    expect(fire(s, look)).toHaveLength(1);
+    const t0 = s.sim.tick;
+    let early = 0;
+    while (s.sim.tick - t0 < RELOAD - 40) {
+      s.press(0, Btn.Ability, look); // away
+      s.press(0, Btn.Ability, look); // out again
+      s.wait(ticks(data.gadgetRules.equipS) + 2);
+      early += fire(s, look).length;
+    }
+    expect(early).toBe(0);
+    s.wait(RELOAD);
+    expect(fire(s, look)).toHaveLength(1);
+  });
+
+  it("nor does a knife", async () => {
+    const s = await atWall();
+    const look = { yaw: 0, pitch: 0 };
+    expect(fire(s, look)).toHaveLength(1);
+    s.press(0, Btn.Melee, look);
+    for (let n = 0; n < 200 && s.body(0).state.meleeTicks > 0; n++) s.wait(1);
+    expect(fire(s, look)).toHaveLength(0);
+    s.wait(RELOAD);
+    expect(fire(s, look)).toHaveLength(1);
+  });
+});

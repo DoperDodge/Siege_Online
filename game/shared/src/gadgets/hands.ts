@@ -206,6 +206,8 @@ export function stepHands(ctx: HandsContext, pawn: Pawn, input: InputCmd, presse
   const s = pawn.state;
   const lo = pawn.loadout;
   if (!lo) return;
+  // The wait before the next round or salvo (R3) runs down whatever's in hand.
+  if (s.gCool > 0) s.gCool--;
   const before = s.hand;
   // The key of the weapon already out, with a gadget or a detonator in hand: the client sends its slot's key and Swap
   // together (gadgets/DESIGN.md §2). It's put away and that weapon comes back up (equipping, the weapon's step lets
@@ -280,7 +282,7 @@ export function stepHands(ctx: HandsContext, pawn: Pawn, input: InputCmd, presse
       s.gTicks = 0;
     }
     const most = g.maxOut ?? Infinity;
-    if (!(pressed & Btn.Fire) || left(s, slot) === 0 || waiting(s, slot) >= most) return;
+    if (!(pressed & Btn.Fire) || left(s, slot) === 0 || waiting(s, slot) >= most || s.gCool > 0) return;
     const spot = placeSpotFor(ctx, pawn);
     const laid = laidBy(ctx.data, g, s.pattern);
     if (!spot || !laid) return;
@@ -288,6 +290,7 @@ export function stepHands(ctx: HandsContext, pawn: Pawn, input: InputCmd, presse
     if (slot === 1) [s.g1, s.w1] = [s.g1 - 1, s.w1 + 1];
     else [s.g2, s.w2] = [s.g2 - 1, s.w2 + 1];
     s.gTicks = 0;
+    s.gCool = Math.max(1, ticks(u.cycleS));
     if (left(s, slot) > 0 && waiting(s, slot) < most) s.gAct = GadgetAct.Shoot;
     else {
       s.hand = detonatorHand(slot);
@@ -307,11 +310,12 @@ export function stepHands(ctx: HandsContext, pawn: Pawn, input: InputCmd, presse
       if (left(s, slot) === 0) putAway(s);
       return;
     }
-    if (!(pressed & Btn.Fire) || left(s, slot) === 0) return;
+    if (!(pressed & Btn.Fire) || left(s, slot) === 0 || s.gCool > 0) return;
     if (slot === 1) s.g1--;
     else s.g2--;
     s.gAct = GadgetAct.Shoot;
     s.gTicks = 0;
+    s.gCool = Math.max(1, ticks(u.reloadS));
     ctx.events.push({ kind: "gshot", pawnId: pawn.id, seq: input.seq, slot, gadget: g.id, yaw: s.yaw, pitch: s.pitch, origin: eyePose(ctx.data.movement, ctx.data.hitboxes, s).pos });
     return;
   }

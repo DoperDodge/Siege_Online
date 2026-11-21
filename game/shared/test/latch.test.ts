@@ -290,6 +290,14 @@ describe("bots and Latch's latches (R3)", () => {
     body.state.snared = true;
     expect(step(() => !body.state.snared, 4)).toBe(true);
   }, 300000);
+
+  it("one snared mid-knife pulls it off too, its first press of Interact lost to the knife (the review)", async () => {
+    const { room, bots, step } = await match(["sledge", "thermite", "striker", "fuze", "brava"], "orange", "SITE_BOILER");
+    const body = room.sim.pawns.get(room.bodyOf(bots[0].id)!.possessedPawnId)!;
+    body.state.snared = true;
+    body.state.meleeTicks = 1;
+    expect(step(() => !body.state.snared, 5)).toBe(true);
+  }, 300000);
 });
 
 describe("Latch's latches and Hull (R3_OPERATORS.md §3)", () => {
@@ -319,5 +327,35 @@ describe("Latch's latches and Hull (R3_OPERATORS.md §3)", () => {
     s.clients[0].cmd = { yaw: 0 };
     s.wait(TICK_HZ);
     expect([hull.state.snared, hull.state.braced, hull.state.braceQ, shieldUp(hull.state)]).toEqual([false, false, 0, true]);
+  });
+});
+
+describe("two latches on one door (the review, R3)", () => {
+  it("only one shuts on a body at once, the other staying armed; pulled off, the one sprung is gone from the table", async () => {
+    const s = await lab();
+    s.teleport(1, -6, 0, 4.8);
+    const a = s.plant(1, [-6.25, 0, 5.95]);
+    s.teleport(1, -6, 0, 4.8);
+    const b = s.plant(1, [-5.8, 0, 5.95]);
+    expect([a, b].every((g) => g !== undefined)).toBe(true);
+    s.teleport(1, ...LAB.away[1]);
+    s.wait(arm + 2);
+    const hp = s.body(0).state.hp;
+    through(s);
+    s.wait(2);
+    expect(s.body(0).state.snared).toBe(true);
+    expect(s.body(0).state.hp).toBe(hp - k.hit);
+    const latches = () => s.sim.gadgets.list.filter((g) => g.kind === kindOf("snare_latch"));
+    const sprung = latches().filter((g) => g.flags & GFlag.Active);
+    expect(sprung).toHaveLength(1);
+    const other = latches().find((g) => g.id !== sprung[0].id)!;
+    s.clients[0].cmd = { yaw: 0, buttons: Btn.Interact };
+    s.wait(ticks(k.pullS) + 4);
+    s.clients[0].cmd = { yaw: 0 };
+    s.wait(4);
+    // The one sprung is spent (none left behind in the table); the other is still there (and, as he's still across its
+    // wire, it may have shut on him now).
+    expect(s.sim.gadgets.get(sprung[0].id)).toBeUndefined();
+    expect(latches().map((g) => g.id)).toEqual([other.id]);
   });
 });
