@@ -37,11 +37,11 @@ if (!isFormat(mode)) throw new Error("bot_training");
 const bt: FormatMode = mode;
 
 /**
- * A Bot Training room on Oregon: the person alone on one side (attacking when the bots defend), Orange's five bots
+ * A Bot Training room on Millrace: the person alone on one side (attacking when the bots defend), Orange's five bots
  * playing `ops` in slot order, at `site`.
  */
 async function match(site: string, botsDefend: boolean, ops: string[], seed = 5) {
-  const room = await Room.create("GAD", "oregon", { format: "bot_training", seed });
+  const room = await Room.create("GAD", "millrace", { format: "bot_training", seed });
   const host = room.join("you", { send() {}, buffered: () => 0 })!;
   const send = (b: Uint8Array) => handleRoomMessage(room, host, b[0], new ByteReader(b.subarray(1)));
   const rules = { ...bt.match, swapEvery: 24, overtime: null, firstAttack: botsDefend ? "blue" : "orange", bots: { ...bt.match.bots!, size: [1, 5], site }, seconds: { ...bt.match.seconds, pick: 8, prep: 45, action: 180 } };
@@ -62,7 +62,13 @@ async function match(site: string, botsDefend: boolean, ops: string[], seed = 5)
   expect(until(() => m.phase === Phase.Planning, 5)).toBe(true);
   const bots = [...m.players.values()].filter((p) => p.bot !== null);
   expect(bots.length).toBe(5);
+  // A teammate's operator can't be picked twice: each bot first goes to one nobody here asked for, then takes its own
+  // (picked straight away, one could be refused while another bot still held it).
+  const side = data.operators.get(ops[0])!.side;
+  const spare = [...data.operators.values()].filter((o) => o.side === side && !ops.includes(o.id)).map((o) => o.id);
+  bots.forEach((p, k) => room.pickLoadout(p.id, botLoadout(data, spare[k])));
   bots.forEach((p, k) => room.pickLoadout(p.id, botLoadout(data, ops[k])));
+  expect(bots.map((p) => m.players.get(p.id)!.operator)).toEqual(ops);
   const botOf = (op: string) => bots[ops.indexOf(op)].id;
   const body = (id: number): Pawn => room.sim.pawns.get(room.bodyOf(id)!.possessedPawnId)!;
   const count = (kind: string) => room.sim.gadgets.list.filter((g) => kindId(g.kind) === kind).length;
@@ -78,10 +84,18 @@ async function match(site: string, botsDefend: boolean, ops: string[], seed = 5)
   return { room, m, until, botOf, body, count, person, seen, info };
 }
 
+/** Where the person hides, out of the way: inside, the room farthest from the site's (out of the attackers' spawns' sight). */
+function hideFrom(room: Room, site: string): [number, number, number] {
+  const level = room.sim.level.def;
+  const at = level.rooms.find((r) => r.id === level.sites.find((s) => s.id === site)!.rooms[0])!.anchor;
+  const far = [...level.rooms].sort((a, b) => Math.hypot(b.anchor[0] - at[0], b.anchor[2] - at[2]) - Math.hypot(a.anchor[0] - at[0], a.anchor[2] - at[2]))[0];
+  return [far.anchor[0], far.anchor[1], far.anchor[2]];
+}
+
 describe("bots' gadgets (Phase 9 M7)", () => {
-  it("defenders at the Laundry set up in prep: Mute's jammers, Mira's mirror, Lesion's mines, Sentry's wire and shield, Skopós's other shell", async () => {
+  it("defenders at the Mill set up in prep: Mute's jammers, Mira's mirror, Lesion's mines, Sentry's wire and shield, Skopós's other shell", async () => {
     const ops = ["mute", "mira", "lesion", "sentry", "skopos"];
-    const { room, m, until, botOf, body, count, info } = await match("SITE_LAUNDRY", true, ops);
+    const { room, m, until, botOf, body, count, info } = await match("SITE_MILL", true, ops);
     expect(until(() => m.phase === Phase.Prep, 15)).toBe(true);
     const skopos = room.bodyOf(botOf("skopos"))!;
     const home = skopos.possessedPawnId;
@@ -99,25 +113,26 @@ describe("bots' gadgets (Phase 9 M7)", () => {
     expect(Math.hypot(idle.state.x - otherFrom[0], idle.state.z - otherFrom[1]), why).toBeGreaterThan(2);
     expect(skopos.possessedPawnId, why).toBe(home);
     // The plan's first wall still got its steel.
-    const p = room.sim.level.panels.byId.get("SW-B-01")!.panel;
+    const p = room.sim.level.panels.byId.get(data.bots.strats.get("millrace")!.sites.SITE_MILL.defense.reinforce[0].panel)!.panel;
     expect(p.reinforcedBefore(0) || p.reinforcedBefore(1), why).toBe(true);
     void body;
   }, 240000);
 
-  it("attackers at the Laundry breach on their way in: Thermite, Striker (EMP first), Fuze's Cluster Charge, Dokkaebi's breach charge, Brava's Kludge; Dokkaebi calls a spotted defender", async () => {
+  it("attackers at the Mill breach on their way in: Thermite, Striker (EMP first), Fuze's Cluster Charge, Dokkaebi's breach charge, Brava's Kludge; Dokkaebi calls a spotted defender", async () => {
     const ops = ["thermite", "striker", "fuze", "brava", "dokkaebi"];
-    const { room, m, until, botOf, body, person, seen, info } = await match("SITE_LAUNDRY", false, ops, 6);
+    const { room, m, until, botOf, body, person, seen, info } = await match("SITE_MILL", false, ops, 6);
     expect(until(() => m.phase === Phase.Action, 60)).toBe(true);
     // The person (defending alone) hides far off, out of the way.
     const you = body(person.id);
-    room.sim.teleport(you.id, 75, 0, 70, 0);
+    room.sim.teleport(you.id, ...hideFrom(room, "SITE_MILL"), 0);
     const panels = room.sim.level.panels.byId;
+    const [hard1, hard2] = data.bots.strats.get("millrace")!.sites.SITE_MILL.attack.hardBreach.map((h) => h.panel);
     const brava = room.bodyOf(botOf("brava"))!;
     let kludge = false;
     expect(
       until(() => {
         kludge ||= room.sim.dronesOf(brava).some((p) => p.kludge && p.state.mode !== PawnMode.Held);
-        return panels.get("SW-B-01")!.panel.modified && panels.get("SW-B-02")!.panel.modified && seen.has("cluster_charge") && seen.has("breach_charge") && kludge;
+        return panels.get(hard1)!.panel.modified && panels.get(hard2)!.panel.modified && seen.has("cluster_charge") && seen.has("breach_charge") && kludge;
       }, 90),
       info(),
     ).toBe(true);
@@ -129,18 +144,18 @@ describe("bots' gadgets (Phase 9 M7)", () => {
     expect(until(() => jegeo.get(dokkaebi.id)?.upload !== null && jegeo.get(dokkaebi.id) !== undefined, 8), info()).toBe(true);
   }, 300000);
 
-  it("Sledge opens the Laundry's hatch from the Lobby with his hammer", async () => {
+  it("Sledge opens Dispatch's hatch from Payroll above with his hammer", async () => {
     const ops = ["sledge", "thermite", "striker", "brava", "dokkaebi"];
-    const { room, m, until, body, person, info } = await match("SITE_LAUNDRY", false, ops, 7);
+    const { room, m, until, body, person, info } = await match("SITE_DISPATCH", false, ops, 7);
     expect(until(() => m.phase === Phase.Action, 60)).toBe(true);
-    room.sim.teleport(body(person.id).id, 75, 0, 70, 0);
-    const h3 = room.sim.level.panels.byId.get("H3")!.panel;
-    expect(until(() => h3.broken, 80), info()).toBe(true);
+    room.sim.teleport(body(person.id).id, ...hideFrom(room, "SITE_DISPATCH"), 0);
+    const h2 = room.sim.level.panels.byId.get("H2")!.panel;
+    expect(until(() => h2.broken, 80), info()).toBe(true);
   }, 300000);
 
-  it("in action, Pulse scans from above the Laundry and pings an attacker he finds; Skopós, hurt, swaps into her other shell", async () => {
+  it("in action, Pulse scans from above the Boiler and pings an attacker he finds; Skopós, hurt, swaps into her other shell", async () => {
     const ops = ["pulse", "skopos", "mute", "mira", "lesion"];
-    const { room, m, until, botOf, body, person, info } = await match("SITE_LAUNDRY", true, ops, 8);
+    const { room, m, until, botOf, body, person, info } = await match("SITE_BOILER", true, ops, 8);
     expect(until(() => m.phase === Phase.Action, 60)).toBe(true);
     const pulse = body(botOf("pulse"));
     // His sensor comes up on his rounds.
@@ -180,7 +195,7 @@ describe("bots' gadgets (Phase 9 M7)", () => {
 
   it("defenders react in action: a Nitro Cell thrown where an attacker was heard, set off as he comes by it; Lesion's mines at his room's ways in", async () => {
     const ops = ["mute", "lesion", "mira", "sentry", "skopos"];
-    const { room, m, until, botOf, body, count, person, info } = await match("SITE_LAUNDRY", true, ops, 9);
+    const { room, m, until, botOf, body, count, person, info } = await match("SITE_BOILER", true, ops, 9);
     expect(until(() => m.phase === Phase.Action, 60)).toBe(true);
     const mines = count("gu_mine");
     const mute = body(botOf("mute"));
@@ -225,9 +240,9 @@ describe("bots' gadgets (Phase 9 M7)", () => {
 
   it("attackers' grenades: Sledge's frag into the site before going in, Thermite's smoke on a teammate planting, a claymore behind Brava once in", async () => {
     const ops = ["sledge", "brava", "thermite", "striker", "dokkaebi"];
-    const { room, m, until, botOf, body, person, seen, info } = await match("SITE_DINING", false, ops, 10);
+    const { room, m, until, botOf, body, person, seen, info } = await match("SITE_DISPATCH", false, ops, 10);
     expect(until(() => m.phase === Phase.Action, 60)).toBe(true);
-    room.sim.teleport(body(person.id).id, 75, 0, 70, 0);
+    room.sim.teleport(body(person.id).id, ...hideFrom(room, "SITE_DISPATCH"), 0);
     // The defuser's carrier goes for the plant and throws no grenade first (D-164): the frag's to come from a Sledge
     // without it (who carries it was drawn as action started, so depends on how the round went until then).
     const o = room.sim.objective!;
@@ -249,7 +264,7 @@ describe("bots' gadgets (Phase 9 M7)", () => {
     // Brava, once her Kludge is done, comes into the site's room: a claymore behind her.
     const brava = botOf("brava");
     expect(until(() => room.attackPlan?.taskOf(brava)?.kind !== "kludge", 30), info()).toBe(true);
-    const site = room.sim.level.def.sites.find((x) => x.id === "SITE_DINING")!;
+    const site = room.sim.level.def.sites.find((x) => x.id === "SITE_DISPATCH")!;
     const inside = roomSpots(nav, room.sim.level.def, site.rooms[0], 1.5)[2];
     room.sim.teleport(body(brava).id, inside[0], inside[1], inside[2], 0);
     expect(until(() => seen.has("claymore"), 12), info()).toBe(true);
@@ -263,7 +278,7 @@ describe("Fuze's Ballistic Shield in a bot's hands (Phase 9 M7)", () => {
     expect(botLoadout(data, "fuze", 0.99).primary.weapon).not.toBe("ballistic_shield");
     let wins = 0;
     for (let seed = 1; seed <= 3; seed++) {
-      const room = await Room.create("SHIELD", "oregon", { lab: true, seed });
+      const room = await Room.create("SHIELD", "millrace", { lab: true, seed });
       const fuze = room.addBot(0, "normal")!;
       room.pickLoadout(fuze, shield);
       const enemy = room.addBot(1, "recruit")!;
@@ -271,9 +286,9 @@ describe("Fuze's Ballistic Shield in a bot's hands (Phase 9 M7)", () => {
         room.sim.teleport(room.bodyOf(id)!.possessedPawnId, p[0], p[1], p[2], yawDeg);
         room.botOf(id)!.order = p;
       };
-      // The Junkyard, facing each other.
-      at(fuze, [-21.125, 0, 45.875], 0);
-      at(enemy, [-21.125, 0, 35.875], 180);
+      // The riverbank, facing each other.
+      at(fuze, [-20, 0, 30], 0);
+      at(enemy, [-20, 0, 20], 180);
       const pawn = (id: number) => room.sim.pawns.get(room.bodyOf(id)!.possessedPawnId)!;
       expect(pawn(fuze).loadout?.pick.primary.weapon).toBe("ballistic_shield");
       for (let i = 0; i < 15 * TICK_HZ && pawn(enemy).state.mode === PawnMode.Walk && pawn(fuze).state.mode === PawnMode.Walk; i++) room.step();

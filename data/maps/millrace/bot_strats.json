@@ -322,11 +322,18 @@
         ],
         "softBreach": [
           {
-            "panel": "H1",
-            "from": "2F_CARDING_STORE",
+            "panel": "SW-1F-04",
+            "from": "1F_MILL_CORRIDOR",
             "ops": [
               "sledge",
               "fuze"
+            ]
+          },
+          {
+            "panel": "H1",
+            "from": "2F_CARDING_STORE",
+            "ops": [
+              "sledge"
             ]
           }
         ],
