@@ -1,5 +1,9 @@
 # Phase 9 design: Bot Training
 
+> **Project Redmond:** the map is Millrace now (`data/maps/millrace`), and the operators carry our names (R1) and
+> ids (R4). Oregon and its research (`research/oregon/`) were removed in R4: where this design names them, or the
+> operators' old names, it records how the phase was built.
+
 Status: adopted 2026-11-07. Scope: PLAN.md §15 and §17 Phase 9, "Navmesh + destruction rebake, perception, team
 planner, bot_strats.json for all 4 Oregon sites, all 12 operators playable by bots, difficulty levels, drills,
 training feedback"; done when "Ulo can play a full solo match vs 5 Normal bots on attack and defense, and it feels
@@ -123,7 +127,7 @@ difficulty in data, where a tree needs an interrupt for every case.
 - **Motor** (every tick): the aim controller (§7), the path follower, stance, lean and buttons with human timings
   (holds for deploys, presses for single shots).
 
-## 6. Team planner and `data/maps/oregon/bot_strats.json`
+## 6. Team planner and `data/maps/<map>/bot_strats.json`
 
 One **commander** per side, server-side, with the same knowledge rules (its team's).
 

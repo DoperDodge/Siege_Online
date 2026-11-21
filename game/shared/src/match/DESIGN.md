@@ -1,5 +1,9 @@
 # Phase 6 design: match flow and lobby
 
+> **Project Redmond:** the map is Millrace now (`data/maps/millrace`), and the operators carry our names (R1) and
+> ids (R4). Oregon and its research (`research/oregon/`) were removed in R4: where this design names them, or the
+> operators' old names, it records how the phase was built.
+
 Status: adopted 2026-10-29. Scope: PLAN.md §17 Phase 6, "All formats, any team size 1–5 uneven, operator select,
 prep/action, plant/defuse, rounds, side swap, bans, scoreboard"; done when "Full 1v1 and 2v3 matches playable start
 to finish".

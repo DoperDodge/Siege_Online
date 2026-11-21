@@ -1,5 +1,9 @@
 # Intel (Phase 7) — design
 
+> **Project Redmond:** the map is Millrace now (`data/maps/millrace`), and the operators carry our names (R1) and
+> ids (R4). Oregon and its research (`research/oregon/`) were removed in R4: where this design names them, or the
+> operators' old names, it records how the phase was built.
+
 PLAN §10 and §17: drones, default cameras, the Bulletproof Camera, the feed list, pinging and the comm wheel,
 spectating when dead. **Done when** prep-phase droning and watching the cameras work online. The facts come from
 `research/intel.md` (I:line below), `research/round_flow.md` and `research/oregon/map_features.md`; every number the

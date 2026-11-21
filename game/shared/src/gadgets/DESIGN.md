@@ -1,5 +1,9 @@
 # Operators and gadgets (Phase 8) — design
 
+> **Project Redmond:** the map is Millrace now (`data/maps/millrace`), and the operators carry our names (R1) and
+> ids (R4). Oregon and its research (`research/oregon/`) were removed in R4: where this design names them, or the
+> operators' old names, it records how the phase was built.
+
 PLAN §11 and §17: every generic secondary gadget in both pools, then the twelve operators' abilities, Fuze's
 Ballistic Shield and the Siege X ingredients. **Done when** every row of `research/interactions.csv` (343) has a
 passing test. The facts come from `research/gadgets.md` (G§ below), `research/operators/*.md`,

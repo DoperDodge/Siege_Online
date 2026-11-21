@@ -42,6 +42,7 @@ normal and ORM maps are resized WebP copies of the CC0 source's maps.
 | `game/client/public/art/textures/sky.*` (polyhaven HDRI `kloofendal_38d_partly_cloudy_puresky`: the sky backdrop and its light, by `tools/art/sky.mjs`) | https://polyhaven.com/a/kloofendal_38d_partly_cloudy_puresky | Greg Zaal, Jarod Guest | CC0 1.0 | — (CC0: no credit needed) | 2026-11-08, Phase 10 |
 
 ## Research references (NOT shipped, NOT assets)
-Reference images and callout maps used to study Oregon are listed in
-`research/oregon/refs/SOURCES.md`. They are personal reference only, are not committed to this
-(public) repo, and must never be used as in-game textures.
+Reference images and callout maps were used to study the original game's map (Oregon) before Project Redmond
+replaced it with Millrace, our own. They were personal reference only, never committed to this (public) repo, and
+never used as in-game textures; that research and its source list were removed with Oregon (R4). The same rule holds
+for any reference gathered from now on.

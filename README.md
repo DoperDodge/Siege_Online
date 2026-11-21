@@ -1,8 +1,10 @@
 # Project REDMOND
 
-A private, non-commercial fan project: a multiplayer tactical-breach shooter modeled on
-Rainbow Six Siege, played on a full recreation of **Oregon**. It runs **in the web browser**
-(TypeScript + Three.js), with the game server hosted on **Railway**.
+A private, non-commercial multiplayer tactical-breach shooter of our own: two teams of five, one attacking a building
+and one holding it, with destructible walls and floors, drones and cameras, and twenty operators with gadgets of their
+own. It began as a fan study of Rainbow Six Siege's mechanics; Project Redmond made it its own: original operators,
+our own map (**Millrace**, a closed textile mill by a river), our own designs. It runs **in the web browser** (TypeScript +
+Three.js), with the game server hosted on **Railway**.
 
 - **The plan:** [`PLAN.md`](PLAN.md) — the source of truth for scope and phases.
 - **Where we are and how to test it:** [`PROGRESS.md`](PROGRESS.md)
@@ -10,20 +12,18 @@ Rainbow Six Siege, played on a full recreation of **Oregon**. It runs **in the w
 - **Research (Phase 0):** start with [`research/SUMMARY.md`](research/SUMMARY.md), then
   [`research/OPEN_QUESTIONS.md`](research/OPEN_QUESTIONS.md).
 
-> **Legal/IP guardrails (PLAN.md §1.1):** no ripped, extracted, or decompiled Siege assets and no
-> Ubisoft artwork in the build. All shipped art/audio is original, procedural, or properly licensed
-> (logged in [`ASSET_SOURCES.md`](ASSET_SOURCES.md)). No public distribution unless Ulo decides so
-> later — in which case operators, names, and the map must be replaced with originals.
+> **Legal/IP guardrails (PLAN.md §1.1):** no ripped, extracted, or decompiled assets of any other game and no third-party
+> artwork in the build. All shipped art/audio is original, procedural, or properly licensed (logged in
+> [`ASSET_SOURCES.md`](ASSET_SOURCES.md)). The operators, their names and gadgets, and the map are our own (Project
+> Redmond, DECISIONS D-183 on). No public distribution unless Ulo decides so later.
 
 ## Current status
 
-**Phase 10 — the art pass: done (PR #13), waiting for your look at 1080p High.** Oregon is textured and lit (a real
-sky, the sun, light bounced round the rooms and baked in your browser), with door and window frames, furniture,
-each room's dressing and the outside; every weapon, gadget and operator is modelled, and you see your own arms in
-first person. Settings → Graphics picks High, Medium, Low or the greybox; F8 shows the frame rate and what's drawn.
-Phases 1–9 (movement, online play, gunplay, destruction, the Oregon greybox, matches, intel, operators and gadgets,
-Bot Training) are merged; the labs are still there for each. `PROGRESS.md` says what to test in each phase; Phase 11
-(audio) is next.
+**Project Redmond — making the game its own: R1–R3 done, R4 (cleanup) in review.** The twelve original operators have
+new names, looks and gadget designs (R1); the old map is gone and every match, drill and Bot Training round plays on
+Millrace, our own (R2); eight new operators of our own join them (R3: Ohm, Tonic, Shunt, Latch, Bailiff, Rivet,
+Dowser, Hull). The labs are still there for each part of the game, with a Rappel Lab added. `PROGRESS.md` says what to
+test; Phase 11 (audio) comes after.
 
 ## Repository layout
 
@@ -32,7 +32,7 @@ PLAN.md  PROGRESS.md  DECISIONS.md  ASSET_SOURCES.md  README.md
 research/        Phase 0 output (reference only, never shipped)
 data/            operators, weapons, gadgets, surfaces, modes, maps     (from Phase 1)
 game/            shared/ (sim used by browser AND server), server/, client/   (from Phase 1)
-tools/           blender/, mapgen/, netsim/, spike/web_stack/
+tools/           blender/, mapgen/, netsim/, soak/, bench/, e2e/, spike/web_stack/
 builds/          gitignored build output
 ```
 
