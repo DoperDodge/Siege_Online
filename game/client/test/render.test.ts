@@ -476,7 +476,7 @@ describe("level scene", () => {
     }
     expect(names).toContain("Reinforceable · 3 sections");
     expect(names).toContain("Reinforceable · 2 sections");
-    expect(names).toContain("Oregon: Dining | Kitchen · 1 section");
+    expect(names).toContain("1.7 m wall · 1 section");
     // Every other label is as the level gives it.
     for (const s of sim.level.def.solids) if (s.label && !walls.includes(s)) expect(names).toContain(s.label);
   });

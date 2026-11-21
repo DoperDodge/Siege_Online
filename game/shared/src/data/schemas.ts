@@ -1373,7 +1373,7 @@ export const SURFACES = [
 ] as const;
 export type Surface = (typeof SURFACES)[number];
 
-/** The kinds of rotation hole a pre-setup cuts (research/oregon/common_setups.md's sizes; data/destruction.json). */
+/** The kinds of rotation hole a pre-setup cuts (their sizes: data/destruction.json `rotationHoles`). */
 export const ROTATION_HOLES = ["vault", "crouch"] as const;
 export type RotationHole = (typeof ROTATION_HOLES)[number];
 

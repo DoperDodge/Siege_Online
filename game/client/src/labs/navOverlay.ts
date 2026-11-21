@@ -1,4 +1,4 @@
-// The bots' navigation grid drawn over the level (Phase 9 M2, bots/DESIGN.md §3): F6 on the Oregon page. The page builds
+// The bots' navigation grid drawn over the level (Phase 9 M2, bots/DESIGN.md §3): F6 on the map page (Millrace). The page builds
 // the same grid the room's bots use from its own copy of the world (about a second, once), kept up as walls and gadgets
 // change, and draws it round the camera: a dot per place a body can stand (green: standing; yellow: crouched only;
 // blue: on a ramp), and a line per link (orange: a vault; purple: a ladder; red: a drop; brown: a barricade to break).

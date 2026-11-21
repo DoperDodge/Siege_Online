@@ -273,8 +273,8 @@ export class Bot {
   /**
    * A teammate beside it trying to move and not getting on, for a second and a half all told (brushing past is
    * nothing), while it stands still (holding a spot, waiting, looking about; not in a fight): it steps away from him for
-   * a moment, to give him room. Two bodies can't pass where one fits (the Oregon soak's dorms: a defender stood where
-   * another, cutting round a bunk's corner, needed to slide, and that one tried for good).
+   * a moment, to give him room. Two bodies can't pass where one fits (a soak's narrow room: a defender stood where
+   * another, cutting round a bed's corner, needed to slide, and that one tried for good).
    */
   private makeWay(me: Pawn, mates: readonly Pawn[], input: BotInput, now: number): BotInput {
     const s = me.state;

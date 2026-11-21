@@ -1290,7 +1290,7 @@ export async function startLab(o: LabOptions): Promise<void> {
   }
 
   let frames = 0;
-  /** A performance capture's frames while one runs (tools/e2e/oregon-perf.mjs): each one's work, draws and panel redraw. */
+  /** A performance capture's frames while one runs (tools/e2e/millrace-perf.mjs): each one's work, draws and panel redraw. */
   let perfLog: { workMs: number; calls: number; triangles: number; panelMs: number; drawMs: number }[] | null = null;
   /** This frame's time drawing the world: three's own work and its calls into WebGL (part of workMs; the perf capture). */
   let drawMs = 0;
@@ -2055,12 +2055,12 @@ export async function startLab(o: LabOptions): Promise<void> {
       get walking() {
         return walkPath && { k: walkPath.k, ticks: walkPath.ticks, done: walkPath.done };
       },
-      /** Shadow-map redraws so far (tools/e2e/oregon.mjs checks a lost and restored context asks for one). */
+      /** Shadow-map redraws so far (tools/e2e/millrace.mjs checks a lost and restored context asks for one). */
       get shadowDraws() {
         return shadowDraws;
       },
       /**
-       * A performance capture (tools/e2e/oregon-perf.mjs): `start` records every frame drawn from now on (the
+       * A performance capture (tools/e2e/millrace-perf.mjs): `start` records every frame drawn from now on (the
        * page's work in ms as the stats overlay counts it, draw calls, triangles, the panels' redraw in ms);
        * `stop` ends it and returns them.
        */
@@ -2208,7 +2208,7 @@ export async function startLab(o: LabOptions): Promise<void> {
        * What the page shows: hitboxes, third person and, on a map, the storey views (the storey you're on by
        * id, hide-above, the plan view and its zoom, the palette, the storeys and panels drawn, the static
        * materials' colours) and the HUD line; with the level's storeys, rooms and plan units (`levelPlan`: metres
-       * per u and each storey's frame) (tools/e2e/oregon.mjs).
+       * per u and each storey's frame) (tools/e2e/millrace.mjs).
        */
       get view(): Record<string, unknown> {
         const def = sim.level.def;

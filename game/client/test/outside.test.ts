@@ -102,14 +102,15 @@ describe("the outside's models (render/outside.ts)", () => {
     expect(checked).toBeGreaterThan(400);
   });
 
-  it("a tyre row of no depth still ends (and draws tyres of a sensible size)", () => {
-    for (const depth of [0, 0.001]) {
-      const kit = new Kit().place([0, 0, 0]);
-      const r = { id: "EXT_TYRES#9", kind: "solid", visible: true, center: [0, 0, 0], quat: [0, 0, 0, 1], size: [3, 1, depth] } as unknown as Parameters<NonNullable<ReturnType<typeof modelFor>>>[3];
-      modelFor("EXT_TYRES#9")!(kit, [3, 1, depth], () => 1, r);
-      expect(kit.triangles).toBeGreaterThan(0);
-      expect(kit.triangles).toBeLessThan(20000);
-    }
+  it("an item of no depth still ends (and draws a sensible amount)", () => {
+    for (const id of ["EXT_BALES_1", "EXT_BOOTH_GATE", "EXT_CONTAINER_1", "EXT_DOCK", "EXT_SHED", "EXT_TRUCK", "EXT_WALL_RIVER"])
+      for (const depth of [0, 0.001]) {
+        const kit = new Kit().place([0, 0, 0]);
+        const r = { id, kind: "solid", visible: true, center: [0, 0, 0], quat: [0, 0, 0, 1], size: [3, 1, depth] } as unknown as Parameters<NonNullable<ReturnType<typeof modelFor>>>[3];
+        modelFor(id)!(kit, [3, 1, depth], () => 1, r);
+        expect(kit.triangles, `${id} ${depth}`).toBeGreaterThan(0);
+        expect(kit.triangles, `${id} ${depth}`).toBeLessThan(20000);
+      }
   });
 
   it("the woods stand past the bounds, never in the play area", async () => {

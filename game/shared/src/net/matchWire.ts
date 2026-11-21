@@ -38,7 +38,7 @@ const readOpt = (r: ByteReader) => r.str(MAX_ID) || null;
 
 // ---------------------------------------------------------------- creating and listing rooms
 
-/** Create a match room (on Oregon) running this format (a data/modes id), in its lobby, with the sender as host. */
+/** Create a match room (on Millrace) running this format (a data/modes id), in its lobby, with the sender as host. */
 export const encodeCreateMatch = (format: string) => new ByteWriter().u8(Msg.CreateMatch).str(format.slice(0, MAX_ID)).finish();
 /** The server checks the id is a format. */
 export const decodeCreateMatch = (r: ByteReader) => ({ format: r.str(MAX_ID) });

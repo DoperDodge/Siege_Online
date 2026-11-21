@@ -1,5 +1,5 @@
 {
-  "_doc": "Bots' plans for Millrace's four sites (Project Redmond's own map, R2, D-183; game/shared/src/bots/DESIGN.md §6): our own, by the same rules as Oregon's: `reinforce` spent top-down (each wall from the room named, its steel facing the site; a hatch from above), `holes` from the room named, `anchors` the rooms anchors hold, `roam` the roamers' areas; attack per spawn group the rooms the way in goes through, the walls and hatches to breach, where to plant, hold after the plant and the flanks to watch. `gadgets` places each operator's devices.",
+  "_doc": "Bots' plans for Millrace's four sites (Project Redmond's own map, R2, D-183; game/shared/src/bots/DESIGN.md §6): our own: `reinforce` spent top-down (each wall from the room named, its steel facing the site; a hatch from above), `holes` from the room named, `anchors` the rooms anchors hold, `roam` the roamers' areas; attack per spawn group the rooms the way in goes through, the walls and hatches to breach, where to plant, hold after the plant and the flanks to watch. `gadgets` places each operator's devices.",
   "_season": "ours",
   "_unverified": [],
   "sites": {

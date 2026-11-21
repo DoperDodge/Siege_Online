@@ -282,7 +282,7 @@ export class PathFollower {
     const way = Math.atan2(-dx, -dz);
     // Stuck: the body trying to walk but not getting half a metre on (whatever the waypoints: a new route from the
     // same place is still stuck), for how long. (The simulation's ticks: counting only the ticks it walked, a pause in
-    // walking never showed as one, and a stall carried over to every goal after it: the Oregon soak's frozen Patch.)
+    // walking never showed as one, and a stall carried over to every goal after it: a soak's frozen Patch.)
     const now = this.tickedAt;
     // (Across the floor: bobbing up and down, a jump or a vault tap that goes nowhere, isn't getting on.)
     if (!this.anchor || Math.hypot(pos[0] - this.anchor[0], pos[2] - this.anchor[2]) > UNSTUCK_M || now - this.lastWalk > 2) {

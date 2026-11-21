@@ -1,7 +1,6 @@
 // Presentation data (Phase 3 M9): how things look, never how they behave. Client-only in use, kept apart
 // from GameData so it is not part of the simulation data hash (a look change never makes a tab refresh).
 import { z } from "zod";
-import oregonArtJson from "../../../../data/maps/oregon/art.json";
 import millraceArtJson from "../../../../data/maps/millrace/art.json";
 import gunKitJson from "../../../../data/presentation/gun_kit.json";
 import materialsJson from "../../../../data/presentation/materials.json";
@@ -283,10 +282,7 @@ export function loadArtData(): ArtData {
   const data: ArtData = {
     textures: texturesSchema.parse(texturesJson),
     materials: materialsSchema.parse(materialsJson).materials,
-    maps: new Map([
-      ["oregon", mapArtSchema.parse(oregonArtJson)],
-      ["millrace", mapArtSchema.parse(millraceArtJson)],
-    ]),
+    maps: new Map([["millrace", mapArtSchema.parse(millraceArtJson)]]),
   };
   const problems = artProblems(data);
   if (problems.length) throw new Error(`art data: ${problems.join("; ")}`);

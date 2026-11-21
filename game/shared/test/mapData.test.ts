@@ -45,7 +45,7 @@ describe("map metadata", () => {
     const data = loadGameData();
     for (const lvl of data.levels.values()) {
       // The compiled maps (tools/mapgen) have them all; Millrace is Project Redmond's own (R2, D-183).
-      if (lvl.id === "oregon" || lvl.id === "millrace") continue;
+      if (lvl.id === "millrace") continue;
       // The Gadget Lab has a default camera and the ingredients to try gadgets on (Phase 8 M3); the other labs none.
       const gadgetLab = lvl.id === "gadget_lab";
       // The Movement Lab has bounds: bots climb its ladder (test/botNav.test.ts; Millrace has none).
