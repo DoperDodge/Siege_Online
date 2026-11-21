@@ -1038,7 +1038,7 @@ describe("pings, scans and callouts (Phase 7 M4)", () => {
     for (let i = 0; i < 4; i++) t.tick();
     expect([count(c, "spotted"), count(c, "ping")]).toEqual([1, 1]);
     // On the wall between (z 33, the Coal Store's face of it).
-    const ping = c.events.findLast((e) => e.kind === "ping") as Extract<GameEvent, { kind: "ping" }>;
+    const ping = c.events.filter((e): e is Extract<GameEvent, { kind: "ping" }> => e.kind === "ping").at(-1)!;
     expect(Math.abs(ping.pos[2] - 33.1)).toBeLessThan(0.05);
   }, 60_000);
 
