@@ -4,7 +4,7 @@
 // room's walls. An answer from Ulo flips one field; this says what each choice does.
 import { frames as framesOf } from "./frames.js";
 import { distanceInside } from "./grid.js";
-import type { Floor } from "./research.js";
+import type { Floor } from "./schema.js";
 import { CELL_M, compileRooms } from "./rooms.js";
 import type { Layout, WallsPart } from "./schema.js";
 import { compileWalls } from "./walls.js";

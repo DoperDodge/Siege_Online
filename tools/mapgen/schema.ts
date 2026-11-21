@@ -12,13 +12,15 @@ const URect = z.tuple([num, num, num, num]);
 /** [from, to] along a wall line, u. */
 const Span = z.tuple([num, num]).refine(([a, b]) => b > a, "a span runs from low to high");
 export const FLOOR_IDS = ["B", "1F", "2F", "3F"] as const;
+/** A storey of a map, by its plan: the basement, then up. */
+export type Floor = (typeof FLOOR_IDS)[number];
 const Floor = z.enum(FLOOR_IDS);
 const Level = z.union([Floor, z.literal("EXT")]);
 /** Native image frames (each floor image is its own perspective render) and world (= the 1F frame). */
 export const FRAME_IDS = ["B", "1F", "2F", "3F", "world"] as const;
 const Frame = z.enum(FRAME_IDS);
 const Dir = z.enum(["N", "E", "S", "W"]);
-/** Where a record came from: the raster extraction, the SVG vectors, research tables, the blueprint, by hand, or Ulo. */
+/** Where a record came from: traced from a raster or from vectors, a table, a plan, drawn by hand, or Ulo's answer. */
 const Src = z.enum(["raster", "vector", "research", "blueprint", "hand", "ulo"]);
 /** This record's placeholder fields (UNVERIFIED), by name. */
 const Uv = z.array(z.string()).default([]);
@@ -26,15 +28,15 @@ const Uv = z.array(z.string()).default([]);
 const common = {
   id: z.string(),
   at: Span,
-  /** The research row it answers to ("layout_notes §6.2: 1F_DINING | 1F_KITCHEN"). */
+  /** The source or note it answers to ("ours (D-183)"). */
   research: z.string().optional(),
-  /** Extraction ids it was seeded from (data/maps/<id>/extracted.json): the drift test follows them. */
+  /** Ids of what it was traced from, for the record. */
   from: z.array(z.string()).optional(),
   src: Src.optional(),
   note: z.string().optional(),
   /**
-   * Built as hard wall all the same: an opening one source draws and the official blueprint doesn't (DESIGN
-   * amendment 7, P36). The span stays so the research still finds it; set false to build it.
+   * Built as hard wall all the same: an opening kept on the plan but walled up (DESIGN amendment 7, P36). The
+   * span stays so its id still resolves; set false to build it.
    */
   hard: z.boolean().optional(),
   _unverified: Uv,
@@ -42,7 +44,7 @@ const common = {
 const barricade = z.enum(["standing", "empty", "none"]);
 
 export const spanSchema = z.discriminatedUnion("kind", [
-  /** A destructible, reinforceable wall section run (surfaces.md §2): one panel with `sections` reinforcements. */
+  /** A destructible, reinforceable wall section run: one panel with `sections` reinforcements. */
   z.strictObject({ kind: z.literal("SOFT"), ...common, sections: z.number().int().min(1).max(3), construction: z.string().optional() }),
   /** A doorway: a barricade frame (standing outside, empty inside, unless `barricade` says otherwise). */
   z.strictObject({ kind: z.literal("DOOR"), ...common, headM: num.optional(), barricade: barricade.optional() }),
@@ -63,7 +65,7 @@ export const spanSchema = z.discriminatedUnion("kind", [
 export type SpanDef = z.infer<typeof spanSchema>;
 
 export const wallSchema = z.strictObject({
-  /** Stable, from the extraction ("1F.w003"). */
+  /** Stable ("1F.w003"). */
   id: z.string(),
   /** H runs east–west (along x), V north–south (along y). */
   axis: z.enum(["H", "V"]),
@@ -97,7 +99,7 @@ export const wallsPartSchema = z.strictObject({
   floor: Floor,
   frame: Frame,
   walls: z.array(wallSchema),
-  /** Extracted items (extracted.json ids) deliberately left out, each with why: the drift test checks the rest are used. */
+  /** Traced items deliberately left out, each with why. */
   dropped: z.array(z.strictObject({ from: z.string(), note: z.string() })).default([]),
 });
 export type WallsPart = z.infer<typeof wallsPartSchema>;
@@ -185,7 +187,7 @@ export const layoutSchema = z.strictObject({
   _doc: z.string(),
   /** Dot-paths of the root's placeholder values; records list theirs in their own `_unverified`. */
   _unverified: z.array(z.string()),
-  /** Where answers came from: key -> "research/oregon/surfaces.md §2" or "Ulo 2026-10-09". */
+  /** Where answers came from: key -> a source ("DESIGN.md §3", "ours (D-183)") or "Ulo 2026-10-09". */
   _sources: z.record(z.string(), z.string()),
   id: z.string(),
   name: z.string(),
@@ -243,7 +245,7 @@ export const layoutSchema = z.strictObject({
     .default([]),
   splits: z.array(z.strictObject({ floor: Floor, frame: Frame, axis: z.enum(["H", "V"]), at: num, span: Span, note: z.string() })).default([]),
   /**
-   * Soft floors (surfaces.md §4.2): the rectangles' floor inside the storey's walls, less hatches and wells, as
+   * Soft floors: the rectangles' floor inside the storey's walls, less hatches and wells, as
    * SOFT_FLOOR tiles of one region. `hard` builds it as slab all the same (one flag from the alternative).
    */
   softFloors: z
@@ -253,7 +255,7 @@ export const layoutSchema = z.strictObject({
         floor: Floor,
         frame: Frame,
         rects: z.array(URect),
-        /** The other source's extent (amendment 7: r6calls where Ubisoft's blueprint draws more); `use: "alt"` builds it. */
+        /** Another extent to choose (amendment 7); `use: "alt"` builds it. */
         alt: z.array(URect).optional(),
         use: z.enum(["main", "alt"]).default("main"),
         hard: z.boolean().default(false),
@@ -266,8 +268,8 @@ export const layoutSchema = z.strictObject({
     )
     .default([]),
   /**
-   * Hatches (surfaces.md §5): the largest rectangle of `rect` inside the `top` room is a HATCH panel in that
-   * room's floor, reinforced from the top. `rect` is in the frame named (r6calls' hatch squares are world).
+   * Hatches: the largest rectangle of `rect` inside the `top` room is a HATCH panel in that room's floor,
+   * reinforced from the top. `rect` is in the frame named.
    */
   hatches: z
     .array(
@@ -322,8 +324,8 @@ export const layoutSchema = z.strictObject({
     }),
   ),
   /**
-   * Bomb sites (markers.ts): two rooms each, the bombs at r6calls' markers (frame and u as extracted), each in
-   * the room named. `number` is the site's number on r6calls and Liquipedia.
+   * Bomb sites (markers.ts): two rooms each, the bombs at their markers (frame and u), each in the room named.
+   * `number` is the site's number in the lobby and the HUD.
    */
   sites: z
     .array(
@@ -351,7 +353,7 @@ export const layoutSchema = z.strictObject({
     )
     .default([]),
   /**
-   * Default cameras (markers.ts): r6calls' marker; mounted on the nearest wall of its room (`room`: which room the
+   * Default cameras (markers.ts): a marker; mounted on the nearest wall of its room (`room`: which room the
    * marker is in, where it sits on a wall line), facing the room's middle, unless `yawDeg` says otherwise.
    */
   cameras: z
@@ -370,7 +372,7 @@ export const layoutSchema = z.strictObject({
       }),
     )
     .default([]),
-  /** Fire extinguishers and gas pipes (markers.ts): r6calls' marker, on the nearest wall, facing out of it. */
+  /** Fire extinguishers and gas pipes (markers.ts): a marker, on the nearest wall, facing out of it. */
   ingredients: z
     .array(
       z.strictObject({
@@ -387,7 +389,7 @@ export const layoutSchema = z.strictObject({
     )
     .default([]),
   /**
-   * Spawn peeks and run-outs (zones.ts, map_features §10): a box in front of each door or window named, inside it
+   * Spawn peeks and run-outs (zones.ts): a box in front of each door or window named, inside it
    * (spawn_peek) or outside it (out_of_bounds), looking out of it toward the attackers' spawn group `faces`.
    */
   zones: z

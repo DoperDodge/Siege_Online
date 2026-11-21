@@ -1,15 +1,14 @@
 // Zones (DESIGN §5.11, P34): areas later phases give meaning to, as boxes in world metres.
 // - building, one per storey: its footprint (the space inside its walls and the walls round it, whatever their
-//   thickness; the roofs are outside, map_features §10) from its floor up to the next storey's floor, so a body
+//   thickness; the roofs are outside) from its floor up to the next storey's floor, so a body
 //   anywhere inside is in one storey's zone.
-// - spawn_peek and out_of_bounds: map_features §10's candidates (UNVERIFIED) at the doors and windows layout.json
-//   names: a box `zone.depthM` deep in front of the opening, inside it (where a defender stands to peek at the
+// - spawn_peek and out_of_bounds: at the doors and windows layout.json names: a box `zone.depthM` deep in front of the opening, inside it (where a defender stands to peek at the
 //   attackers' spawn) or outside it (a run-out), as high as the opening's top, looking out of it.
-// - rappel: the outer faces of the exterior walls above ground (map_features §8: every roof edge anchors a rappel
-//   down the wall under it), a thin box just outside each stretch of face, looking out of it; none on the walls
+// - rappel: the outer faces of the exterior walls above ground (every roof edge anchors a rappel down the wall
+//   under it), a thin box just outside each stretch of face, looking out of it; none on the walls
 //   of layout.rappel.refuse.
 import { greedyRects, type PlanGrid } from "./grid.js";
-import type { Floor } from "./research.js";
+import type { Floor } from "./schema.js";
 import { CELL_M, storeyOfBox, type RoomsResult } from "./rooms.js";
 import type { Layout, WallsPart } from "./schema.js";
 import type { Opening, Solid, Zone } from "./walls.js";

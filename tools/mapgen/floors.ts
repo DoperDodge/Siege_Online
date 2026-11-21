@@ -1,7 +1,7 @@
 // Floors (DESIGN §5.6): each storey's floor as slabs and panels. The ground (the floor of the first storey
 // above ground) covers the play area; any other storey's floor covers its footprint, cut back where boxes of
 // the storey below run up into it (exterior walls reach the next floor). Out of it come the hatches (a HATCH
-// panel: the largest rectangle of the research square inside the room on top), the wells (no floor), and the
+// panel: the largest rectangle of the hatch's square inside the room on top), the wells (no floor), and the
 // soft floors (SOFT_FLOOR tiles of at most tileMaxM, in whole joist spacings, the tiles of one area sharing a
 // region so a bullet counts them as one surface), and the stairwells (stairs.ts: no floor where a run needs the
 // headroom). What's left is hard slab, in as few rectangles as the greedy cover gives. A room in
@@ -12,7 +12,7 @@
 // shaft down to the room below, whose ceiling stays where it was.
 import type { Frames } from "./frames.js";
 import { distanceInside, greedyRects, maxIn, subtractRects, type Rect } from "./grid.js";
-import type { Floor } from "./research.js";
+import type { Floor } from "./schema.js";
 import { CELL_M, clearCells, fillBox, storeyOfBox, type RoomsResult } from "./rooms.js";
 import type { Layout } from "./schema.js";
 import type { Solid } from "./walls.js";
@@ -31,7 +31,7 @@ export interface HatchReport {
   storey: Floor;
   /** The panel, metres [x0, z0, x1, z1]. */
   rect: Rect;
-  /** How much of the research square was given up on each side to keep inside the top room, u [W, N, E, S]. */
+  /** How much of the hatch's authored square was given up on each side to keep inside the top room, u [W, N, E, S]. */
   clipU: [number, number, number, number];
 }
 

@@ -8,7 +8,7 @@
 // the roof, and the walls under it are raised to it in steps instead.
 import { frames } from "./frames.js";
 import { greedyRects, type Rect } from "./grid.js";
-import type { Floor } from "./research.js";
+import type { Floor } from "./schema.js";
 import { CELL_M, fillBox, storeyOfBox, type RoomsResult } from "./rooms.js";
 import type { Layout } from "./schema.js";
 import type { Solid } from "./walls.js";

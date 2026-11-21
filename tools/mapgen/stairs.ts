@@ -9,7 +9,7 @@
 import type { Frames } from "./frames.js";
 import { CELL_M } from "./rooms.js";
 import type { Rect } from "./grid.js";
-import type { Floor } from "./research.js";
+import type { Floor } from "./schema.js";
 import type { Layout } from "./schema.js";
 import type { Solid } from "./walls.js";
 

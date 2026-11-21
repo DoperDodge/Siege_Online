@@ -5,7 +5,7 @@
 // sites) and an anchor, the spot nearest its middle where a body fits, for goTo and its label.
 import type { Frames } from "./frames.js";
 import { distanceInside, greedyRects, maxIn, PlanGrid, type Rect } from "./grid.js";
-import type { Floor } from "./research.js";
+import type { Floor } from "./schema.js";
 import type { Layout } from "./schema.js";
 import type { Solid } from "./walls.js";
 

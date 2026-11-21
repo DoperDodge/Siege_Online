@@ -1,12 +1,12 @@
-// Sites, cameras and ingredients (DESIGN §5.11, P30–P32): r6calls' markers (extracted.json's points, in the
-// frame they were drawn in) placed in the compiled level. A bomb stands on its room's floor at the marker. A
+// Sites, cameras and ingredients (DESIGN §5.11, P30–P32): layout.json's markers (in the frame they were drawn in)
+// placed in the compiled level. A bomb stands on its room's floor at the marker. A
 // camera goes on the wall face nearest its marker that faces into the marker's room, under the ceiling, looking
 // down at the room's middle; outside (level EXT), on the building face nearest it, looking out from it, or on a
 // post where none is near, looking at the building. An extinguisher or a gas pipe goes on the nearest wall face
 // of its room (outside: of the building), facing out of it. A marker inside on no room's floor, or outside but
 // inside the building, is reported.
 import type { Frames } from "./frames.js";
-import type { Floor } from "./research.js";
+import type { Floor } from "./schema.js";
 import type { CompiledRoom, RoomsResult } from "./rooms.js";
 import { storeyOfBox } from "./rooms.js";
 import type { Layout } from "./schema.js";

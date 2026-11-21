@@ -5,7 +5,7 @@
 import type { Frames } from "./frames.js";
 import { PlanGrid } from "./grid.js";
 import type { Layout, SpanDef, WallDef } from "./schema.js";
-import type { Floor } from "./research.js";
+import type { Floor } from "./schema.js";
 
 /** A compiled box (metres, axis-aligned): what level.json's solids hold. */
 export interface Solid {
@@ -103,7 +103,7 @@ export interface WallsResult {
   grids: Map<Floor, PlanGrid>;
 }
 
-/** Raster band half-widths (u): 7 px interior, 12–13 px exterior (tools/mapgen/extract, wallgeo.py). */
+/** How far a line drawn at a named weight reaches either side of its centre (u): its band, where a line ending in it meets it, and what the plan treats as wall. */
 const DRAWN_HALF_U = { int: 1.24, ext: 2.3 } as const;
 /** A span edge this close to a line end (u) moves with the end. */
 const END_STICK_U = 0.6;

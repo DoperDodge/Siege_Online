@@ -1,5 +1,5 @@
-// The outside (DESIGN §5.9): exterior.json's items, placed by hand from the r6calls background in world u (or
-// a floor's frame), as boxes, fences, rails, ramps and steps. A box, fence or rail's rectangle is its footprint
+// The outside (DESIGN §5.9): exterior.json's items, placed by hand in world u (or a floor's frame), as boxes,
+// fences, rails, ramps and steps. A box, fence or rail's rectangle is its footprint
 // before it turns `yawDeg` about its middle (positive turns left, as a body's yaw: east toward north). A ramp
 // or a flight of steps faces a whole quarter: its rectangle is where it stands, rising toward `yawDeg` (0 north,
 // 90 west) by `hM`. Heights are metres: `baseY` is where it stands (default the floor of its level, the ground

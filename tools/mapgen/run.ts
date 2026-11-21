@@ -1,30 +1,21 @@
-// npm run mapgen [-- --check] [--map <id>]  compile data/maps/<id>/layout.json (Oregon by default) to level.json and its
-//                                    plans (--check: fail if stale)
-// npm run mapgen:import [-- --force] seed walls_<floor>.json from extracted.json (once; --force overwrites)
-// npm run mapgen:refs                download the official blueprints and the r6calls map (gitignored)
-// npm run mapgen:compare             our plans over the blueprints and rasters, for checking by eye
+// npm run mapgen [-- --check] [--map <id>]  compile data/maps/<id>/layout.json (Millrace by default) to level.json
+//                                    and its plans (--check: fail if level.json is stale)
 // npm run mapgen -- --where x,y,floor  a position in a floor's own u (or world u, or metres with ",m") in every
 //                                    frame, and the room there (DESIGN amendment 17)
 // Run from the repo root (npm does). Bundled by esbuild like netsim; no extra runner.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { walkChecklist, withChecklist } from "./checklist.js";
 import { compile, loadInputs } from "./compile.js";
 import { frames, type FrameId } from "./frames.js";
 import { readableJson } from "./format.js";
-import { importFloor, type Extracted } from "./import.js";
-import { planSvg, writePlans } from "./plans.js";
-import { downloadRefs } from "./refs.js";
+import { writePlans } from "./plans.js";
 import { mapReport, reportMarkdown, summaryLines } from "./report.js";
-import { connections, FLOORS, softWalls } from "./research.js";
 
 const ROOT = process.cwd();
 const args = process.argv.slice(2);
-/** The map compiled (`--map <id>`; Oregon by default): its authoring files are data/maps/<id>/. */
-const MAP_ID = args.includes("--map") ? args[args.indexOf("--map") + 1] : "oregon";
+/** The map compiled (`--map <id>`; Millrace by default): its authoring files are data/maps/<id>/. */
+const MAP_ID = args.includes("--map") ? args[args.indexOf("--map") + 1] : "millrace";
 const MAP = join(ROOT, "data", "maps", MAP_ID);
-/** Oregon's research folder (the walk's checklist, the plans compared with the blueprints); a map of our own has none. */
-const RESEARCH = join(ROOT, "research", MAP_ID);
 const command = args[0] && !args[0].startsWith("--") ? args[0] : "compile";
 const flag = (name: string) => args.includes(`--${name}`);
 
@@ -33,42 +24,16 @@ function write(path: string, text: string) {
   writeFileSync(path, text);
 }
 
-function runImport() {
-  const ex = JSON.parse(readFileSync(join(MAP, "extracted.json"), "utf8")) as Extracted;
-  const research = { connections: connections(ROOT), softWalls: softWalls(ROOT) };
-  const mPerU = (JSON.parse(readFileSync(join(MAP, "layout.json"), "utf8")) as { units: { mPerU: number } }).units.mPerU;
-  for (const floor of FLOORS) {
-    const file = join(MAP, `walls_${floor}.json`);
-    if (existsSync(file) && !flag("force")) {
-      console.log(`walls_${floor}.json exists (curated by hand since); --force overwrites it`);
-      continue;
-    }
-    const { part, unmatched } = importFloor(floor, ex, research, mPerU);
-    write(file, readableJson(part as unknown as Record<string, unknown>));
-    const spans = part.walls.reduce((a, w) => a + w.spans.length, 0);
-    console.log(`walls_${floor}.json: ${part.walls.length} lines, ${spans} spans`);
-    for (const r of unmatched.rows) console.log(`  research row with no span: ${r.roomA} | ${r.roomB} ${r.typeText}`);
-    for (const s of unmatched.spans) console.log(`  span with no research row: ${s}`);
-  }
-}
-
 function runCompile() {
   const inputs = loadInputs(ROOT, MAP_ID);
   const compiled = compile(inputs);
   const { level, report } = compiled;
   const text = readableJson(level);
   const file = join(MAP, "level.json");
-  // Oregon's walls were seeded from an extraction (their drift from it is reported); a map drawn by hand has none.
-  const extractedFile = join(MAP, "extracted.json");
-  const extracted = existsSync(extractedFile) ? (JSON.parse(readFileSync(extractedFile, "utf8")) as Extracted) : null;
-  const more = mapReport(ROOT, inputs, compiled, extracted);
+  const more = mapReport(ROOT, inputs, compiled);
   const inUse = Object.fromEntries(Object.entries(inputs.layout.frames).map(([f, v]) => [f, v.use]));
   write(join(ROOT, "builds", "mapgen", "report.json"), JSON.stringify({ ...report, ...more }, null, 1) + "\n");
   write(join(ROOT, "builds", "mapgen", "report.md"), reportMarkdown(compiled, more, inUse, inputs.layout.name));
-  // The walk's checklist, in research/<map>/walkthrough.md between its markers (Oregon's; a map with none skips it).
-  const walkFile = join(RESEARCH, "walkthrough.md");
-  const walkOld = existsSync(walkFile) ? readFileSync(walkFile, "utf8") : null;
-  const walkNew = walkOld === null ? null : withChecklist(walkOld, walkChecklist(inputs, compiled).lines);
   const c = report.counts;
   console.log(
     `${MAP_ID}: ${c.solids} solids (${report.panels} panels, ${report.cellsPerLayer} cells per layer), ` +
@@ -86,24 +51,14 @@ function runCompile() {
   if (report.errors.length) process.exit(1);
   if (flag("check")) {
     const old = existsSync(file) ? readFileSync(file, "utf8") : "";
-    // The committed plans (Oregon's, research/oregon/compare) must match; a map without that folder has none.
-    const compareDir = join(RESEARCH, "compare");
-    const plans = existsSync(compareDir)
-      ? inputs.layout.emit.filter((floor) => {
-          const svg = join(compareDir, `${floor}.svg`);
-          return !existsSync(svg) || readFileSync(svg, "utf8") !== planSvg(ROOT, level, floor, MAP_ID);
-        })
-      : [];
-    const stale = [...(old !== text ? [`data/maps/${MAP_ID}/level.json`] : []), ...(plans.length ? [`the plans of ${plans.join(", ")}`] : []), ...(walkOld !== walkNew ? [`the checklist in research/${MAP_ID}/walkthrough.md`] : [])];
-    if (stale.length) {
-      console.error(`stale: ${stale.join(", ")}: run npm run mapgen and commit them`);
+    if (old !== text) {
+      console.error(`stale: data/maps/${MAP_ID}/level.json: run npm run mapgen -- --map ${MAP_ID} and commit it`);
       process.exit(1);
     }
-    console.log("level.json, the plans and the walk's checklist are up to date");
+    console.log(`data/maps/${MAP_ID}/level.json is up to date`);
     return;
   }
   write(file, text);
-  if (walkNew !== null && walkNew !== walkOld) write(walkFile, walkNew);
   console.log(`wrote data/maps/${MAP_ID}/level.json (${(text.length / 1024).toFixed(0)} KB)`);
   writePlans(ROOT, level, MAP_ID);
 }
@@ -135,11 +90,8 @@ function runWhere(spec: string) {
 async function main() {
   const where = args.indexOf("--where");
   if (where >= 0) return runWhere(args[where + 1] ?? "");
-  if (command === "import") runImport();
-  else if (command === "compile") runCompile();
-  else if (command === "refs") await downloadRefs(ROOT);
-  else if (command === "compare") writePlans(ROOT, compile(loadInputs(ROOT, MAP_ID)).level, MAP_ID);
-  else throw new Error(`unknown command "${command}" (compile, import, refs, compare)`);
+  if (command === "compile") runCompile();
+  else throw new Error(`unknown command "${command}" (compile; --where x,y,floor)`);
 }
 
 main().catch((e) => {
