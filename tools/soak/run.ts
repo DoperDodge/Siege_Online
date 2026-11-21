@@ -1,5 +1,5 @@
 // The long bot soak by hand (Phase 9 M10; PLAN §19): every site of a map, a few rounds each, one report.
-//   npm run soak [-- --rounds 3 --seed 5 --site SITE_DINING --map oregon|millrace --dump]
+//   npm run soak [-- --rounds 3 --seed 5 --site SITE_MILL --map millrace|oregon --dump]
 // prints each site's line and each stuck bot (with --dump, what's round it: panels, gadgets, bodies), writes
 // builds/soak/soak.json; exits 1 on a problem.
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -28,7 +28,7 @@ const dump = (room: Room, id: number) => {
   console.log(`    near: ${[...panels, ...gadgets, ...bodies].join("; ") || "nothing"}`);
 };
 const reports: SoakReport[] = [];
-const map = arg("map", "oregon");
+const map = arg("map", "millrace");
 const sites = map === "millrace" ? ["SITE_BOILER", "SITE_MILL", "SITE_DISPATCH", "SITE_OFFICES"] : ["SITE_LAUNDRY", "SITE_DINING", "SITE_MEETING", "SITE_DORMS"];
 for (const site of only ? [only] : sites) {
   const r = await soak(site, rounds, seed, process.argv.includes("--dump") ? dump : undefined, map);

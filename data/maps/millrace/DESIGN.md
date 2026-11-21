@@ -87,6 +87,6 @@ map's layout):
 |---|---|
 | R2.1 | The generator compiles any map in `data/maps/<id>` (Oregon's literals and its blueprint tooling out of the path) |
 | R2.2 | Millrace's walls, rooms, floors, stairs, hatches, roofs, outside and metadata; the structural checks; a walkable greybox |
-| R2.3 | Its art: each room's style, the outside's items, cover props and dressing |
+| R2.3 | Its art: each room's style, the outside's items, cover props and dressing. ✅ Each room's style and the outside's look (art.json); the cover props as the mill's machines and fittings (render/furniture.ts: the looms, the spinning frame, the carding engine, the dye vats, the brick-set boiler, the water wheel, the sluice gate, the race's debris, the footbridge, the bales, the bolt rack, the clerk's desk, the plan chest, the mending table; the metal ones closed bodies, as bullets stop at them); the yard's bales, loading dock and brick walls (render/outside.ts); a dressing kit per room style (notice boards, clocks, posters, shelves, pegboards, rugs in the offices, crates and buckets on working floors) |
 | R2.4 | The bots' plans for its four sites; the bot tests on it |
 | R2.5 | Matches, Bot Training, the labs and the tests on Millrace; Oregon's data off this branch |

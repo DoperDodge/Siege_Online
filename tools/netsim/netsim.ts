@@ -26,6 +26,7 @@ import {
   Phase,
   poseHitboxes,
   rayCapsule,
+  raycastLevel,
   Room,
   ropeAt,
   siteArea,
@@ -71,7 +72,7 @@ export interface NetsimOptions {
   walls?: boolean;
   /** One client holds Fire the whole run, and its uplink stalls `ms` once, at `atS` seconds. */
   sprayStall?: { client: number; atS: number; ms: number };
-  /** The level the room plays (a key of VENUES): the Movement Lab, or Oregon (Phase 5 M6). */
+  /** The level the room plays (a key of VENUES): the Movement Lab, the Gadget Lab, Millrace or Oregon (Phase 5 M6). */
   level?: string;
   /**
    * Rappel (Phase 5 M8, on a level with rappel faces): each bot has an outside wall of its own, hooks on at its
@@ -302,15 +303,24 @@ export function ropeSpots(room: Room, n: number, apart = 6): RopeSpot[] {
   const out = 0.6; // from the wall's face: inside findRappel's reach
   const hang = m.stance.collisionRadius + m.rappel.wallGap; // where the body hangs on the rope
   const all: (RopeSpot & { len: number })[] = [];
+  /** Ground under (x, z) at the rope's foot: not the edge of a drop (Millrace's west face stands over the dry race). */
+  const ground = (x: number, z: number) => {
+    const hit = raycastLevel(room.sim, [x, 0.5, z], [0, -1, 0], 0.7);
+    return hit !== null && Math.abs(hit.t - 0.5) < 0.1;
+  };
   faces.forEach((f, i) => {
-    const u = (f.u0 + f.u1) / 2;
     if (f.u1 - f.u0 < 2) return;
-    const at = (o: number) => [f.n[0] * (f.d + o) + f.t[0] * u, f.n[1] * (f.d + o) + f.t[1] * u];
-    const [x, z] = at(out);
-    const [hx, hz] = at(hang);
-    const rope = ropeAt(faces, i, x, z, 0.1);
-    if (!rope || rope[0] > 0.05 || rope[1] < 3 || !room.sim.standsFree(x, 0, z) || !room.sim.standsFree(hx, 0, hz)) return;
-    all.push({ x, z, yawDeg: (Math.atan2(f.n[0], f.n[1]) * 180) / Math.PI, len: rope[1] - rope[0] });
+    // A short face at its middle; along a long one, a spot every 7 m (2 m in from its ends).
+    const span = f.u1 - f.u0;
+    const us = span < 6 ? [(f.u0 + f.u1) / 2] : Array.from({ length: Math.floor((span - 4) / 7) + 1 }, (_, k) => f.u0 + 2 + k * 7);
+    for (const u of us) {
+      const at = (o: number) => [f.n[0] * (f.d + o) + f.t[0] * u, f.n[1] * (f.d + o) + f.t[1] * u];
+      const [x, z] = at(out);
+      const [hx, hz] = at(hang);
+      const rope = ropeAt(faces, i, x, z, 0.1);
+      if (!rope || rope[0] > 0.05 || rope[1] < 3 || !room.sim.standsFree(x, 0, z) || !room.sim.standsFree(hx, 0, hz) || !ground(x, z) || !ground(hx, hz)) continue;
+      all.push({ x, z, yawDeg: (Math.atan2(f.n[0], f.n[1]) * 180) / Math.PI, len: rope[1] - rope[0] });
+    }
   });
   const picked: RopeSpot[] = [];
   for (const s of all.sort((a, b) => b.len - a.len || a.x - b.x || a.z - b.z)) {
@@ -446,6 +456,14 @@ export const VENUES: Record<string, Venue> = {
     // Attackers (even) at z 15 facing the defenders (odd) at z 25, 6 m apart along each line.
     combat: (i) => ({ x: -12 + Math.floor(i / 2) * 6, z: i % 2 ? 25 : 15, yawDeg: i % 2 ? 0 : 180 }),
     walls: (i) => ({ x: -12 + Math.floor(i / 2) * 6, z: i % 2 ? 25 : 15, yawDeg: i % 2 ? 0 : 180 }),
+  },
+  millrace: {
+    // The road east of the office wing, on the ground (1F's level).
+    middle: { x: 76, z: 16 },
+    spread: (i) => ({ x: 64 + (i % 10) * 2.5, z: 14 + Math.floor(i / 10) * 4 }),
+    combat: (i) => ({ x: 66 + Math.floor(i / 2) * 3, z: i % 2 ? 12 : 20, yawDeg: i % 2 ? 180 : 0 }),
+    // Inside, 2.5 m either side of SW-1F-03, Spinning's 4 m soft wall to Mending (z 11, x 33…37).
+    walls: (i) => ({ x: [34.0, 34.7, 35.4, 36.1, 36.8][Math.floor(i / 2) % 5], z: i % 2 ? 13.5 : 8.5, yawDeg: i % 2 ? 0 : 180 }),
   },
   oregon: {
     // The street south of the building, on the ground (1F's level).
@@ -1056,7 +1074,7 @@ export interface MatchNetsimReport {
 }
 
 /**
- * Ten clients through a whole Custom match on Oregon over the simulated network (PLAN §19): the lobby, ban votes,
+ * Ten clients through a whole Custom match on Millrace over the simulated network (PLAN §19): the lobby, ban votes,
  * picks, site votes and spawns, defenders in prep behind red walls (and Quick Match's pre-setups), every round's
  * action with the bots moving and firing, plants and disables held across the latency, the side swaps and the end.
  * The harness makes each round end the scripted way (killing defenders, or putting the carrier and the last defender
@@ -1068,7 +1086,7 @@ export async function runMatchNetsim(partial: Partial<MatchNetsimOptions> = {}):
   if (o.script.length % 2 || o.script.length < 2) throw new Error("netsim: a match has an even number of rounds");
   const rng = new Rng(o.seed);
   const clock = new Clock();
-  const room = await Room.create("SIM00", "oregon", { format: "custom", seed: o.seed });
+  const room = await Room.create("SIM00", "millrace", { format: "custom", seed: o.seed });
   const match = room.director!.match;
   const data = room.sim.data;
   const level = room.sim.level.def;

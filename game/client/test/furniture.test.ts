@@ -1,5 +1,5 @@
-// Oregon's cover props as furniture (Phase 10 M6, render/DESIGN.md §9.1), without a GPU: what's drawn is what collides.
-// Each of the 29 props gets a model that keeps to its box (within 3 cm round its footprint; only small things stand on
+// Millrace's cover props as furniture (Phase 10 M6, render/DESIGN.md §9.1), without a GPU: what's drawn is what collides.
+// Each of the 19 props gets a model that keeps to its box (within 3 cm round its footprint; only small things stand on
 // its top) and fills it; rays at a drone's or a foot's height from every side meet the model before they're through
 // the box (nothing reads as room to drive or see under it), rays from above meet it, and a metal prop (bullets stop at
 // it) shows no gap at any height.
@@ -25,8 +25,8 @@ const sets = (): TextureSets => ({
 });
 
 let level: BuiltLevel | null = null;
-async function oregon() {
-  level ??= (await Sim.create("oregon")).level;
+async function millrace() {
+  level ??= (await Sim.create("millrace")).level;
   return { level, art: new LevelArt(level, sets(), loadArtData()) };
 }
 
@@ -76,9 +76,9 @@ function along(from: number, to: number, step: number, inset: number): number[] 
 
 describe("the cover props as furniture (render/furniture.ts)", () => {
   it("every prop has a model, built per storey, and the boxes it stands for are listed", async () => {
-    const { level, art } = await oregon();
+    const { level, art } = await millrace();
     const props = level.renderables.filter((r) => r.kind === "solid" && r.id.startsWith("PROP_"));
-    expect(props.length).toBe(29);
+    expect(props.length).toBe(19);
     const { kits, ids } = buildFurniture(level, art, (r) => (r.center[1] < -0.5 ? 0 : r.center[1] < 3 ? 1 : 2));
     expect([...ids].sort()).toEqual(props.map((r) => r.id).sort());
     expect([...kits.keys()].sort()).toEqual([0, 1, 2]);
@@ -88,15 +88,15 @@ describe("the cover props as furniture (render/furniture.ts)", () => {
   });
 
   it("pieces know how far each side is from a wall (they face away from the nearer)", async () => {
-    const { level } = await oregon();
+    const { level } = await millrace();
     const at = (id: string) => wallsAround(level, level.renderables.find((r) => r.id === id)!);
-    // The kitchen's long counter stands along the north wall (−z); the island stands free.
-    expect(at("PROP_KITCHEN_COUNTER_N").nz).toBeLessThanOrEqual(0.3);
-    expect(Math.min(...Object.values(at("PROP_KITCHEN_ISLAND")))).toBeGreaterThan(0.3);
+    // The sluice gate stands against the race's west wall (−x); a loom on the Loom Hall's floor stands free.
+    expect(at("PROP_SLUICE_GATE").nx).toBeLessThanOrEqual(0.3);
+    expect(Math.min(...Object.values(at("PROP_LOOM_1")))).toBeGreaterThan(0.3);
   });
 
   it("each model keeps to its box, fills it, and is closed where a drone or a foot could look under it", async () => {
-    const { level, art } = await oregon();
+    const { level, art } = await millrace();
     const problems: string[] = [];
     const check = (ok: boolean, what: string) => {
       if (!ok && !problems.some((p) => p.split(":")[0] === what.split(":")[0] && p.split(":")[1].slice(0, 12) === what.split(":")[1].slice(0, 12))) problems.push(what);

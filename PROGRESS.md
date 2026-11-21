@@ -62,6 +62,12 @@ The game as it was before this is kept, untouched, on the `siege_online_classic`
 
 - **More for Millrace**: drone holes (nine slots at floor level: into the building and between rooms on every storey)
   and a second hatch into the boiler site (from the Engine Room down into the Coal Store).
+- **Millrace's own look, finished** (R2.3): its cover props are now the mill's machines and fittings, not plain boxes:
+  five looms, a spinning frame, a carding engine, square dye vats, a boiler in its brickwork, the water wheel in its
+  pit, a sluice gate and a heap of debris in the dry race, the plank footbridge, bales, racks of cloth bolts, a clerk's
+  desk, a plan chest under a drawing board, a mending table. Outside: the yard's bales, the loading dock, the brick
+  walls. Every room is dressed for a mill: notice boards, clocks, posters, shelves, pegboards of tools, rugs in the
+  offices, crates and buckets on the working floors. The metal machines are drawn closed, as bullets stop at them.
 
 ### In progress (R3: eight new operators)
 The plan: game/shared/src/gadgets/R3_OPERATORS.md (Ulo's calls, D-188): each keeps the role he asked for, with our

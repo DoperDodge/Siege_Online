@@ -1,12 +1,12 @@
 // CLI: npm run netsim -- [--clients 10] [--seconds 30] [--one-way 50] [--jitter 10] [--seed 1]
 //      npm run netsim -- --spread | --combat   (no contact | two teams fighting: downs, revives, knives)
 //      npm run netsim -- --combat --walls       (the fight across the sample walls: holes synced to everyone)
-//      npm run netsim -- --level oregon ...     (any of the above on Oregon: the street, or across the Kitchen's soft wall)
-//      npm run netsim -- --level oregon --rappel (each bot up, along and down an outside wall of its own on a rope)
+//      npm run netsim -- --level millrace ...   (any of the above on Millrace: the road, or across Spinning's soft wall)
+//      npm run netsim -- --level millrace --rappel (each bot up, along and down an outside wall of its own on a rope)
 //      npm run netsim -- --gadgets               (the Gadget Lab: two lines of every operator using their gadgets)
 //      npm run netsim -- --hitreg [--seconds 30] [--one-way 50] [--jitter 10] [--cap 16] [--seed 1]
 //      npm run netsim -- --match [--clients 10] [--seed 1] [--script elimination,time,detonate,disable,...]
-//                                (a whole Custom match on Oregon, each round ending the scripted way; 10 rounds by default)
+//                                (a whole Custom match on Millrace, each round ending the scripted way; 10 rounds by default)
 import { runHitreg, runMatchNetsim, runNetsim, type MatchNetsimOptions, type NetsimOptions, type RoundScript } from "./netsim.js";
 
 const args = process.argv.slice(2);

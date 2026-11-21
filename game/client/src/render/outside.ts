@@ -1,9 +1,11 @@
-// The outside's items as models (Phase 10 M5, render/DESIGN.md §8): each of Oregon's outside items (exterior.json, D-099)
-// drawn as what it is — fences, sheds, silos, tanks, trailers, the container, the bus, vans, cars, the truck, wrecks, the
-// excavator, the generator, reels, lumber, tyres, garden beds, the greenhouse — built in code (kit.ts) to fill its box,
-// which still collides (and is hidden while the art shows). What's drawn keeps to the box at a body's height: a round
-// silo or tank stands on a square plinth filling its box's corners up there; roofs may overhang a little above it.
+// The outside's items as models (Phase 10 M5, render/DESIGN.md §8): each map's outside items (exterior.json) drawn as
+// what it is — fences, sheds, silos, tanks, trailers, containers, the bus, vans, cars, the truck, wrecks, the excavator,
+// the generator, reels, lumber, tyres, garden beds, the greenhouse; Millrace's bales, loading dock and brick walls
+// (R2.3) — built in code (kit.ts) to fill its box, which still collides (and is hidden while the art shows). What's
+// drawn keeps to the box at a body's height: a round silo or tank stands on a square plinth filling its box's corners
+// up there; roofs may overhang a little above it.
 import type { BuiltLevel, Renderable } from "@redmond/shared";
+import { baleStack, seeded } from "./furniture.js";
 import { Kit } from "./kit.js";
 import type { LevelArt } from "./levelArt.js";
 
@@ -16,6 +18,10 @@ function yawOf(q: readonly number[]): number {
 
 /** The model for a renderable by its id, or null. */
 export function modelFor(id: string): Model | null {
+  // Millrace's (R2.3): the yard's bales, the loading dock, the brick walls round the yard and along the river.
+  if (/^EXT_BALES/.test(id)) return (k, s, m, r) => baleStack(k, s, m, seeded(r.id));
+  if (/^EXT_DOCK/.test(id)) return dock;
+  if (/^EXT_WALL_(RIVER|YARD)/.test(id)) return brickWall;
   if (/^EXT_FENCE/.test(id)) return fence;
   if (/^EXT_(WALL_S|BLOCKS)/.test(id)) return blockWall;
   if (/^EXT_SHED_E/.test(id)) return (k, s, m, r) => shed(k, s, m, "metal_orange", r);
@@ -95,6 +101,34 @@ const fence: Model = (k, s, m, r) =>
 const blockWall: Model = (k, s, m) => {
   k.box([0, -0.03, 0], [s[0], s[1] - 0.06, s[2]], m("concrete_painted"));
   k.box([0, s[1] / 2 - 0.03, 0], [s[0] + 0.03, 0.06, s[2] + 0.04], m("concrete_wall"));
+};
+
+/**
+ * A loading dock: a concrete platform its whole box, a steel angle along its top edges, rubber bumpers down the face
+ * the lorries back onto (the long side away from the building: −z here), a steel ladder up that face, and yellow
+ * bollards along the top's back edge.
+ */
+const dock: Model = (k, s, m, r) => {
+  lengthwise(k, s, r, (len, h, dep) => {
+    const y0 = -h / 2;
+    k.box([0, 0, 0], [len, h, dep], m("concrete_wall"));
+    for (const sz of [-1, 1]) k.box([0, h / 2 - 0.03, sz * (dep / 2 - 0.02)], [len, 0.06, 0.05], m("steel"));
+    for (let x = -len / 2 + 1.5; x <= len / 2 - 1.5 + 1e-6; x += 3) k.box([x, y0 + h * 0.55, -dep / 2 - 0.03], [0.3, 0.45, 0.06], m("rubber"));
+    const lx = len / 2 - 0.8;
+    for (const dx of [-0.2, 0.2]) k.box([lx + dx, 0, -dep / 2 - 0.025], [0.04, h, 0.05], m("steel"));
+    for (let y = y0 + 0.25; y < h / 2 - 0.1; y += 0.28) k.box([lx, y, -dep / 2 - 0.03], [0.4, 0.03, 0.04], m("steel"));
+    for (let x = -len / 2 + 2; x <= len / 2 - 2 + 1e-6; x += 6) k.cylinder([x, h / 2 + 0.3, dep / 2 - 0.3], 0.12, 0.6, "y", m("metal_yellow"), 12);
+  });
+};
+
+/** A brick wall: piers every 3 m or so standing a little proud, a stone coping along its top. */
+const brickWall: Model = (k, s, m, r) => {
+  lengthwise(k, s, r, (len, h, dep) => {
+    k.box([0, -0.05, 0], [len, h - 0.1, dep - 0.1], m("brick"));
+    k.box([0, h / 2 - 0.05, 0], [len, 0.1, dep], m("concrete_wall"));
+    const n = Math.max(1, Math.round(len / 3));
+    for (let i = 0; i <= n; i++) k.box([-len / 2 + 0.25 + ((len - 0.5) * i) / n, -0.05, 0], [0.5, h - 0.1, dep], m("brick"));
+  });
 };
 
 function shed(k: Kit, s: readonly [number, number, number], m: (x: string) => number, wall: string, r: Renderable): void {
