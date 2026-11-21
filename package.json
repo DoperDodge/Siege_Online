@@ -23,7 +23,7 @@
     "mapgen:import": "npm run mapgen -- import",
     "mapgen:refs": "npm run mapgen -- refs",
     "mapgen:compare": "npm run mapgen -- compare",
-    "bench:oregon": "esbuild tools/bench/oregon.ts --bundle --platform=node --format=esm --outfile=builds/bench/oregon.mjs --log-level=warning && node builds/bench/oregon.mjs",
+    "bench:map": "esbuild tools/bench/map.ts --bundle --platform=node --format=esm --outfile=builds/bench/map.mjs --log-level=warning && node builds/bench/map.mjs",
     "bench:bots": "esbuild tools/bench/bots.ts --bundle --platform=node --format=esm --outfile=builds/bench/bots.mjs --log-level=warning && node builds/bench/bots.mjs",
     "soak": "esbuild tools/soak/run.ts --bundle --platform=node --format=esm --outfile=builds/soak/run.mjs --log-level=warning && node builds/soak/run.mjs",
     "test:e2e:art": "node tools/e2e/oregon-art.mjs",

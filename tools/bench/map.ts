@@ -1,11 +1,11 @@
-// Oregon on this machine (Phase 5 M6; tools/mapgen/DESIGN.md §8 and §9.3): what loading the level costs, an op
-// on the biggest panels (the server and every client apply each one), what a late joiner is sent, and the
+// A compiled map on this machine (Phase 5 M6; tools/mapgen/DESIGN.md §8 and §9.3): what loading the level costs, an
+// op on the biggest panels (the server and every client apply each one), what a late joiner is sent, and the
 // client's redraw of a panel after a hole (PLAN §8.2: at most 1 ms a frame on the main thread), on the soft
 // floors' tiles as built (layout.json defaults.softFloor.tileMaxM) and cut at 3 m instead (amendment 8).
 // Numbers depend on the machine: PROGRESS records a run, and the tests keep loose bounds only. The server's
-// tick is netsim's (`npm run netsim -- --level oregon`); frame times and draw calls come from the browser
+// tick is netsim's (`npm run netsim -- --level millrace`); frame times and draw calls come from the browser
 // (tools/e2e/oregon-perf.mjs, the stats overlay).
-//   npm run bench:oregon            prints a table, writes builds/bench/oregon.json
+//   npm run bench:map [-- --map millrace]    prints a table, writes builds/bench/<map>.json
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { performance } from "node:perf_hooks";
@@ -16,6 +16,8 @@ import { PanelView } from "../../game/client/src/render/panelView.js";
 import { compile, loadInputs } from "../mapgen/compile.js";
 
 const ROOT = process.cwd();
+const at = process.argv.indexOf("--map");
+const MAP = at > 0 && process.argv[at + 1] ? process.argv[at + 1] : "millrace";
 // The lab scene draws its labels and the floor texture on canvases, which Node lacks: these draw nothing.
 const pen = new Proxy({}, { get: (_t, key) => (key === "measureText" ? (text: string) => ({ width: 12 * text.length }) : () => {}) });
 (globalThis as { document?: unknown }).document = { createElement: () => ({ width: 0, height: 0, getContext: () => pen }) };
@@ -49,7 +51,7 @@ let data!: GameData;
 const load = time(() => (data = loadGameData()));
 const creates: number[] = [];
 let sim!: Sim;
-for (let i = 0; i < 6; i++) creates.push(await timeAsync(async () => (sim = await Sim.create("oregon", data))));
+for (let i = 0; i < 6; i++) creates.push(await timeAsync(async () => (sim = await Sim.create(MAP, data))));
 const scenes: number[] = [];
 let lab!: ReturnType<typeof createLabScene>;
 for (let i = 0; i < 3; i++) scenes.push(time(() => (lab = createLabScene(sim.level))));
@@ -57,7 +59,7 @@ const views: number[] = [];
 for (let i = 0; i < 3; i++) views.push(time(() => new PanelView(new THREE.Scene(), sim.level.panels).update()));
 out.load = { loadGameDataMs: +load.toFixed(1), simCreate: stats(creates.slice(1)), labScene: stats(scenes), panelView: stats(views) };
 row("loadGameData, every data file read and checked (zod)", load);
-row("Sim.create oregon (after one warm-up)", stats(creates.slice(1)));
+row(`Sim.create ${MAP} (after one warm-up)`, stats(creates.slice(1)));
 row("lab scene (static boxes, labels)", stats(scenes));
 row("PanelView, every panel drawn", stats(views));
 void lab;
@@ -109,7 +111,7 @@ for (let i = 0; i < 5; i++) {
   hashes.push(time(() => panels.hash()));
 }
 const state = encodePanelState(panels);
-const joiner = await Sim.create("oregon", data);
+const joiner = await Sim.create(MAP, data);
 const joins = time(() => {
   const r = new ByteReader(state);
   r.u8();
@@ -124,12 +126,12 @@ row("late join: applying it", joins);
 async function redraw(tileMaxM: number | null) {
   let s = sim;
   if (tileMaxM !== null) {
-    const inputs = loadInputs(ROOT);
+    const inputs = loadInputs(ROOT, MAP);
     inputs.layout.defaults.softFloor.tileMaxM = tileMaxM;
     for (const f of inputs.layout.softFloors) delete (f as { tileMaxM?: number }).tileMaxM;
-    const def = levelSchema.parse({ ...compile(inputs).level, id: `oregon_tiles_${tileMaxM}` });
+    const def = levelSchema.parse({ ...compile(inputs).level, id: `${MAP}_tiles_${tileMaxM}` });
     s = await Sim.create(def.id, { ...data, levels: new Map(data.levels).set(def.id, def) });
-  } else s = await Sim.create("oregon", data);
+  } else s = await Sim.create(MAP, data);
   const view = new PanelView(new THREE.Scene(), s.level.panels);
   view.update();
   const kinds: Record<string, unknown> = {};
@@ -147,11 +149,11 @@ async function redraw(tileMaxM: number | null) {
   }
   return { panels: s.level.panels.list.length, kinds };
 }
-const builtTile = loadInputs(ROOT).layout.defaults.softFloor.tileMaxM;
+const builtTile = loadInputs(ROOT, MAP).layout.defaults.softFloor.tileMaxM;
 out.redraw = { asBuilt: { tileMaxM: builtTile, ...(await redraw(null)) }, tiles3m: await redraw(3) };
 
 const width = Math.max(...rows.map(([w]) => w.length));
 for (const [what, v] of rows) console.log(`${what.padEnd(width)}  ${v}`);
 mkdirSync(join(ROOT, "builds", "bench"), { recursive: true });
-writeFileSync(join(ROOT, "builds", "bench", "oregon.json"), JSON.stringify(out, null, 1) + "\n");
-console.log("wrote builds/bench/oregon.json");
+writeFileSync(join(ROOT, "builds", "bench", `${MAP}.json`), JSON.stringify(out, null, 1) + "\n");
+console.log(`wrote builds/bench/${MAP}.json`);
