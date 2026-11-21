@@ -1,11 +1,11 @@
-// Oregon performance capture (Phase 5 M6, tools/mapgen/DESIGN.md amendment 8 and §9.3), from the page's own
+// Millrace performance capture (Phase 5 M6, tools/mapgen/DESIGN.md amendment 8 and §9.3), from the page's own
 // numbers for every frame (window.__lab.perf): its work on the main thread as the stats overlay counts it, the
 // draw calls and triangles, and the destructible panels' redraw. Two runs on the offline page:
 // - a fly-through: the free camera at every room of every storey looking four ways, then over the building from
 //   each side;
 // - a destruction storm: a Breach Charge on each soft wall from one side, and an Impact Grenade up into each
 //   soft floor area from the room below; every panel it reaches redraws.
-// It prints p50 / p95 / max and writes builds/e2e/oregon-perf.json. The browser here draws in software
+// It prints p50 / p95 / max and writes builds/e2e/millrace-perf.json. The browser here draws in software
 // (swiftshader), so its frame rate means nothing; the page's work and its draws do. The bounds are loose (a
 // regression ten times over, not a budget): the frame rate is read on Ulo's PC (PLAN §18, the F8 overlay).
 // Requires `npm run build` first.
@@ -19,7 +19,7 @@ const PORT = 21100 + Math.floor(Math.random() * 300);
 const BASE = `http://127.0.0.1:${PORT}`;
 const OUT = fileURLToPath(new URL("../../builds/e2e/", import.meta.url));
 const SERVER = fileURLToPath(new URL("../../game/server/dist/main.js", import.meta.url));
-const LEVEL = JSON.parse(readFileSync(fileURLToPath(new URL("../../data/maps/oregon/level.json", import.meta.url)), "utf8"));
+const LEVEL = JSON.parse(readFileSync(fileURLToPath(new URL("../../data/maps/millrace/level.json", import.meta.url)), "utf8"));
 mkdirSync(OUT, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 /** Loose bounds for CI (ms and draws): the page's work a frame, a panel redraw, and the draws a frame. */
@@ -55,7 +55,7 @@ try {
   const page = await ctx.newPage();
   page.on("pageerror", (e) => errors.push(String(e)));
   page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
-  await page.goto(`${BASE}/labs/oregon.html?map=oregon&autotest=1&lowgfx&op=sledge`);
+  await page.goto(`${BASE}/labs/millrace.html?autotest=1&lowgfx&op=sledge`);
   await page.waitForFunction(() => window.__lab?.net?.ready, null, { timeout: 60000 });
   result.webgl = await page.evaluate(() => window.__lab.report.webgl);
   /** Wait until the page has drawn `n` more frames. */
@@ -81,7 +81,7 @@ try {
   const fly = await page.evaluate(() => window.__lab.perf.stop());
   await page.evaluate(() => window.__lab.fly(null));
   result.flyThrough = { poses: poses.length, frames: fly.length, workMs: spread(fly.map((f) => f.workMs)), calls: spread(fly.map((f) => f.calls)), triangles: spread(fly.map((f) => f.triangles)) };
-  await page.screenshot({ path: join(OUT, "oregon-perf-fly.png") });
+  await page.screenshot({ path: join(OUT, "millrace-perf-fly.png") });
 
   // ---- The storm: a breach charge on every soft wall, an impact grenade up into every soft floor area.
   const panelOf = (id) => page.evaluate((id) => window.__lab.panel(id), id);
@@ -138,7 +138,7 @@ try {
     redrawFrames: redraws.length,
     panelMs: spread(redraws.map((f) => f.panelMs)),
   };
-  await page.screenshot({ path: join(OUT, "oregon-perf-storm.png") });
+  await page.screenshot({ path: join(OUT, "millrace-perf-storm.png") });
   result.seconds = Math.round((Date.now() - started) / 1000);
 
   result.checks.flewThroughEveryRoom = fly.length >= poses.length * 2;
@@ -159,9 +159,9 @@ try {
 }
 result.errors = errors;
 result.bounds = BOUND;
-writeFileSync(join(OUT, "oregon-perf.json"), JSON.stringify(result, null, 1) + "\n");
+writeFileSync(join(OUT, "millrace-perf.json"), JSON.stringify(result, null, 1) + "\n");
 const line = (name, s) => (s ? `${name}: p50 ${s.p50} / p95 ${s.p95} / max ${s.max}` : `${name}: -`);
-console.log(`oregon-perf (${result.webgl ?? "no WebGL"}), ${result.seconds ?? "?"} s`);
+console.log(`millrace-perf (${result.webgl ?? "no WebGL"}), ${result.seconds ?? "?"} s`);
 if (result.flyThrough) console.log(`  fly-through, ${result.flyThrough.poses} poses, ${result.flyThrough.frames} frames: ${line("work ms", result.flyThrough.workMs)}; ${line("draws", result.flyThrough.calls)}; ${line("triangles", result.flyThrough.triangles)}`);
 if (result.storm) console.log(`  storm, ${result.storm.hit} of ${result.storm.targets} panels, ${result.storm.frames} frames: ${line("work ms", result.storm.workMs)}; ${line("panel redraw ms", result.storm.panelMs)} over ${result.storm.redrawFrames} frames`);
 console.log(JSON.stringify({ ok, checks: result.checks, missed: result.storm?.missed, error: result.error, errors }, null, 1));

@@ -1,4 +1,4 @@
-// The art pass on a real GPU's terms (Phase 10, game/client/src/render/DESIGN.md §13): the Oregon lab at High,
+// The art pass on a real GPU's terms (Phase 10, game/client/src/render/DESIGN.md §13): Millrace's page at High,
 // Medium and Low in a browser, checked not for "did it draw here" but for "does it keep to what every WebGL2 device
 // guarantees". The browser here draws in software, which is more generous than real hardware: it lets a fragment
 // shader use 32 textures where Chrome and Edge on Windows (Direct3D) and most phones allow exactly the 16 WebGL2
@@ -100,6 +100,9 @@ function readGl() {
   return { programs, textures: window.__gl.textures, here: gl ? { samplers: gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS), renderer: gl.getParameter(gl.RENDERER) } : null };
 }
 
+/** The views (the free camera's pose: x, y, z, yaw and pitch in degrees): the Loom Hall across its looms, and the yard. */
+const LOOM_HALL = [1.5, 1.6, 2, -142, -3.4];
+const YARD = [62, 1.6, 47, 40.9, 0.5];
 /** How long a wait may take on a slow runner (ms): the art's textures and shaders, a probe pass, a frame, a screenshot. */
 const WAIT = { art: 300000, pass: 420000, frames: 240000, screenshot: 240000 };
 
@@ -115,7 +118,7 @@ async function load(gfx, refuse = "") {
   page.on("pageerror", (e) => errors.push(String(e)));
   page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
   await page.addInitScript(watchGl, refuse);
-  await page.goto(`${BASE}/labs/oregon.html?map=oregon&autotest=1&gfx=${gfx}&op=sledge`);
+  await page.goto(`${BASE}/labs/millrace.html?autotest=1&gfx=${gfx}&op=sledge`);
   await page.waitForFunction(() => window.__lab?.net?.ready, null, { timeout: 60000 });
   await page.waitForFunction(() => window.__lab.view.art?.ready, null, { timeout: WAIT.art, polling: 250 });
   console.log(`  ${name}: the art is in at ${at()}`);
@@ -129,17 +132,16 @@ async function load(gfx, refuse = "") {
     await page.waitForFunction(() => window.__lab.view.art.probes.passes >= 2, null, { timeout: WAIT.pass, polling: 500 });
     console.log(`  ${name}: their second at ${at()}`);
   }
-  // In the kitchen, looking across it: a few frames drawn with everything on (each frame's draws and triangles kept
-  // from here on, for the budgets).
-  const kitchen = await page.evaluate(() => window.__lab.view.rooms.find((r) => r.id === "1F_KITCHEN").anchor);
-  await page.evaluate((a) => window.__lab.fly([a[0], a[1] + 1.6, a[2], 40, -8]), kitchen);
+  // In the Loom Hall, the busiest room (its five looms, its pillars), looking across the rows of looms from its north-west
+  // corner: a few frames drawn with everything on (each frame's draws and triangles kept from here on, for the budgets).
+  await page.evaluate((p) => window.__lab.fly(p), LOOM_HALL);
   await page.evaluate(() => window.__lab.perf.start());
   const f0 = await page.evaluate(() => window.__lab.frames);
   await page.waitForFunction((t) => window.__lab.frames >= t, f0 + 6, { timeout: WAIT.frames, polling: 100 });
-  console.log(`  ${name}: six frames in the kitchen at ${at()}`);
-  const png = await page.screenshot({ path: join(OUT, `art-${gfx}${refuse ? "-fallback" : ""}.png`), timeout: WAIT.screenshot });
+  console.log(`  ${name}: six frames in the Loom Hall at ${at()}`);
+  const png = await page.screenshot({ path: join(OUT, `millrace-art-${gfx}${refuse ? "-fallback" : ""}.png`), timeout: WAIT.screenshot });
   console.log(`  ${name}: its screenshot at ${at()}`);
-  // How bright the picture is where no HUD is drawn (its lower left: the island's top and the floor), 0..255.
+  // How bright the picture is where no HUD is drawn (its lower left: the floor and the nearer looms), 0..255.
   const brightness = await page.evaluate(async (b64) => {
     const img = await createImageBitmap(new Blob([Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0))], { type: "image/png" }));
     const c = new OffscreenCanvas(img.width, img.height);
@@ -151,8 +153,9 @@ async function load(gfx, refuse = "") {
     for (let i = 0; i < d.length; i += 4) sum += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
     return sum / (d.length / 4);
   }, png.toString("base64"));
-  // Then the yard, looking over the compound at the building: the view with the most to draw.
-  await page.evaluate(() => window.__lab.fly([30, 1.6, 50, 0, -4]));
+  // Then the yard, from its west end, looking across it at the office wing, the mill and the boiler house (any view out
+  // here has nearly the whole map in front of it: as many draws as the most of them, within 1 %).
+  await page.evaluate((p) => window.__lab.fly(p), YARD);
   const fy = await page.evaluate(() => window.__lab.frames);
   await page.waitForFunction((t) => window.__lab.frames >= t, fy + 2, { timeout: WAIT.frames, polling: 100 });
   const perf = await page.evaluate(() => window.__lab.perf.stop());
@@ -224,7 +227,7 @@ try {
     result.checks[`${gfx}NoConsoleErrors`] = r.errors.length === 0;
     // A lit room, not a black or blown-out picture.
     result.checks[`${gfx}RoomIsLit`] = r.brightness > 45 && r.brightness < 235;
-    // Within the budgets, in the kitchen and the yard (the draws counted in a frame at all: not none).
+    // Within the budgets, in the Loom Hall and the yard (the draws counted in a frame at all: not none).
     result.checks[`${gfx}WithinBudgets`] = summary.calls > 20 && summary.calls <= BUDGET.calls && summary.triangles <= BUDGET.triangles && summary.textureMB > 0 && summary.textureMB <= BUDGET.textureMB;
   }
   // The probes in use at High (or the check above would pass for the wrong reason).
@@ -251,9 +254,9 @@ try {
 }
 result.guaranteed = GUARANTEED;
 result.budget = BUDGET;
-writeFileSync(join(OUT, "oregon-art.json"), JSON.stringify(result, null, 1) + "\n");
+writeFileSync(join(OUT, "millrace-art.json"), JSON.stringify(result, null, 1) + "\n");
 for (const [gfx, s] of Object.entries(result.presets))
-  console.log(`oregon-art ${gfx}: ${s.programs} programs (${s.notLinked} not linked), at most ${s.maxSamplers} of ${GUARANTEED.samplers} samplers [${s.worstSamplers}], ${s.maxUniformVectors} uniform vectors, 3D textures to ${s.max3D}, ${s.maxLayers} layers; at most ${s.calls} draws and ${Math.round(s.triangles / 1000)}k triangles a frame, ${s.textureMB} MB of textures`);
+  console.log(`millrace-art ${gfx}: ${s.programs} programs (${s.notLinked} not linked), at most ${s.maxSamplers} of ${GUARANTEED.samplers} samplers [${s.worstSamplers}], ${s.maxUniformVectors} uniform vectors, 3D textures to ${s.max3D}, ${s.maxLayers} layers; at most ${s.calls} draws and ${Math.round(s.triangles / 1000)}k triangles a frame, ${s.textureMB} MB of textures`);
 if (result.here) console.log(`  (this browser: ${result.here.renderer}, ${result.here.samplers} samplers a shader)`);
 if (result.fallback) console.log(`  fallback: ${result.fallback.problem}`);
 console.log(JSON.stringify({ ok, checks: result.checks, error: result.error }, null, 1));
