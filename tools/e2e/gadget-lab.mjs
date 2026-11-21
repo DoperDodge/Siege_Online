@@ -357,7 +357,7 @@ try {
   result.ringerEvents = await dok.evaluate(() => window.__lab.net.events.filter((e) => e.kind === "ringer" || e.kind === "spotted" || e.kind === "blast").map((e) => (e.kind === "ringer" ? `ringer${e.stage}` : e.kind)));
   await input(dok, null);
   result.checks.ringerCallsASpottedDummy =
-    !result.ringerBar.hidden && /Uploading/.test(result.ringerBar.title) && ["spotted", "jegeo0", "jegeo1", "blast"].every((k) => result.ringerEvents.includes(k));
+    !result.ringerBar.hidden && /Uploading/.test(result.ringerBar.title) && ["spotted", "ringer0", "ringer1", "blast"].every((k) => result.ringerEvents.includes(k));
   await dok.close();
 
   // ---- offline (M10): Thistle throws a Burr mine (Z) at the attacker dummy's feet: it lands, and the dummy sets it off
