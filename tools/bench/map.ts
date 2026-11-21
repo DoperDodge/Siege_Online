@@ -4,7 +4,7 @@
 // floors' tiles as built (layout.json defaults.softFloor.tileMaxM) and cut at 3 m instead (amendment 8).
 // Numbers depend on the machine: PROGRESS records a run, and the tests keep loose bounds only. The server's
 // tick is netsim's (`npm run netsim -- --level millrace`); frame times and draw calls come from the browser
-// (tools/e2e/oregon-perf.mjs, the stats overlay).
+// (tools/e2e/millrace-perf.mjs, the stats overlay).
 //   npm run bench:map [-- --map millrace]    prints a table, writes builds/bench/<map>.json
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
