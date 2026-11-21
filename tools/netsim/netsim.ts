@@ -72,7 +72,7 @@ export interface NetsimOptions {
   walls?: boolean;
   /** One client holds Fire the whole run, and its uplink stalls `ms` once, at `atS` seconds. */
   sprayStall?: { client: number; atS: number; ms: number };
-  /** The level the room plays (a key of VENUES): the Movement Lab, the Gadget Lab, Millrace or Oregon (Phase 5 M6). */
+  /** The level the room plays (a key of VENUES): the Movement Lab, the Gadget Lab or Millrace (Phase 5 M6). */
   level?: string;
   /**
    * Rappel (Phase 5 M8, on a level with rappel faces): each bot has an outside wall of its own, hooks on at its
@@ -464,14 +464,6 @@ export const VENUES: Record<string, Venue> = {
     combat: (i) => ({ x: 66 + Math.floor(i / 2) * 3, z: i % 2 ? 12 : 20, yawDeg: i % 2 ? 180 : 0 }),
     // Inside, 2.5 m either side of SW-1F-03, Spinning's 4 m soft wall to Mending (z 11, x 33…37).
     walls: (i) => ({ x: [34.0, 34.7, 35.4, 36.1, 36.8][Math.floor(i / 2) % 5], z: i % 2 ? 13.5 : 8.5, yawDeg: i % 2 ? 0 : 180 }),
-  },
-  oregon: {
-    // The street south of the building, on the ground (1F's level).
-    middle: { x: 30, z: 54 },
-    spread: (i) => ({ x: 10 + (i % 10) * 6, z: 56 - Math.floor(i / 10) * 8 }),
-    combat: (i) => ({ x: 16 + Math.floor(i / 2) * 3, z: i % 2 ? 50 : 58, yawDeg: i % 2 ? 180 : 0 }),
-    // Inside, 2.5 m either side of SW-1F-06, the Kitchen's 4 m soft wall to the Security room (z 31.15, x 20.55…24.6).
-    walls: (i) => ({ x: [20.95, 21.75, 22.55, 23.35, 24.15][Math.floor(i / 2) % 5], z: i % 2 ? 33.65 : 28.65, yawDeg: i % 2 ? 0 : 180 }),
   },
 };
 

@@ -1,10 +1,10 @@
 // The long bot soak by hand (Phase 9 M10; PLAN §19): every site of a map, a few rounds each, one report.
-//   npm run soak [-- --rounds 3 --seed 5 --site SITE_MILL --map millrace|oregon --dump]
+//   npm run soak [-- --rounds 3 --seed 5 --site SITE_MILL --map millrace --dump]
 // prints each site's line and each stuck bot (with --dump, what's round it: panels, gadgets, bodies), writes
 // builds/soak/soak.json; exits 1 on a problem.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Room } from "@redmond/shared";
+import { loadGameData, type Room } from "@redmond/shared";
 import { soak, type SoakReport } from "./soak.js";
 
 const arg = (name: string, def: string) => {
@@ -29,7 +29,8 @@ const dump = (room: Room, id: number) => {
 };
 const reports: SoakReport[] = [];
 const map = arg("map", "millrace");
-const sites = map === "millrace" ? ["SITE_BOILER", "SITE_MILL", "SITE_DISPATCH", "SITE_OFFICES"] : ["SITE_LAUNDRY", "SITE_DINING", "SITE_MEETING", "SITE_DORMS"];
+const sites = (loadGameData().levels.get(map)?.sites ?? []).map((s) => s.id);
+if (!sites.length) throw new Error(`soak: map "${map}" has no bomb sites`);
 for (const site of only ? [only] : sites) {
   const r = await soak(site, rounds, seed, process.argv.includes("--dump") ? dump : undefined, map);
   reports.push(r);
