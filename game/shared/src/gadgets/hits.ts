@@ -4,6 +4,7 @@
 import { DEG, forwardXZ, rightXZ, type Vec3 } from "../core/math.js";
 import type { GameData } from "../data/load.js";
 import { tubeBox } from "./cluster.js";
+import { studBoxes } from "./studs.js";
 import { isIngredient, kindId } from "./kinds.js";
 import { GFlag, type Gadget, type GadgetTable } from "./table.js";
 
@@ -58,12 +59,14 @@ export interface GadgetBox {
 }
 
 /**
- * The boxes of an entry built of `parts` (Skopós's idle shell's barrier, the game's model: D-157), or null for a plain
- * one: each centred `at` (across, up from the entry's bottom, forward from its position), turned with the entry and by
- * its own `yawDeg`, leaning back `pitchDeg`.
+ * The boxes of an entry built of `parts` (Skopós's idle shell's barrier, the game's model: D-157), or a salvo's studs
+ * (Rivet's, R3: gadgets/studs.ts), or null for a plain one: each part centred `at` (across, up from the entry's bottom,
+ * forward from its position), turned with the entry and by its own `yawDeg`, leaning back `pitchDeg`.
  */
-export function partBoxes(data: GameData, g: Pick<Gadget, "kind" | "pos" | "yaw">): GadgetBox[] | null {
+export function partBoxes(data: GameData, g: Pick<Gadget, "kind" | "pos" | "yaw" | "flags">): GadgetBox[] | null {
   const d = data.gadgets.get(kindId(g.kind) ?? "");
+  // A salvo of Rivet's studs (R3) is its studs: a bullet has to meet one.
+  if (d?.salvo) return studBoxes(data, g);
   if (!d?.parts) return null;
   const [fx, fz] = forwardXZ(g.yaw);
   const [rx, rz] = rightXZ(g.yaw);

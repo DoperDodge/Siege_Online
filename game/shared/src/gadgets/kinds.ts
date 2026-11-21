@@ -33,6 +33,17 @@ export const GADGET_KINDS = [
   "dropped_phone",
   "gu_mine",
   "shell_shield",
+  // Project Redmond R3's operators' own items (gadgets/R3_OPERATORS.md).
+  "brownout_pistol",
+  "second_wind",
+  "arc_pack",
+  "snare_latch",
+  "bailiff_post",
+  "stud_driver",
+  "stud_ring",
+  "stud_spine",
+  "stud_cross",
+  "divining_coil",
 ] as const;
 
 const index = new Map<string, number>(GADGET_KINDS.map((k, i) => [k, i]));

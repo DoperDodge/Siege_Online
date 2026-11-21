@@ -2,7 +2,7 @@
   "_doc": "Striker — loadout and ratings from the official Ubisoft operator page (research/operators/striker.md). Ability numbers arrive with Phase 8.",
   "_season": "Y11S3",
   "id": "striker",
-  "name": "Striker",
+  "name": "Pointman",
   "side": "attacker",
   "healthRating": 2,
   "speedRating": 2,

@@ -1,5 +1,5 @@
 // The kill plane in a room (Phase 5, DECISIONS D-076): a body it brings back is in a new life, so nothing aimed at
-// or owed by its old life carries over, and nothing owed to the old life is lost. Oregon has a kill plane under
+// or owed by its old life carries over, and nothing owed to the old life is lost. Millrace has a kill plane under
 // the map; a body teleported over the void east of it falls through.
 import { describe, expect, it } from "vitest";
 import { Cause, DT, loadGameData, PawnMode, type GameEvent, type ShotOnBody } from "../src/index.js";
@@ -14,13 +14,13 @@ interface RoomInside {
 }
 
 async function overTheVoid() {
-  const { room, clients, tick } = await roomWith("oregon", ["sledge", "mute"]);
+  const { room, clients, tick } = await roomWith("millrace", ["sledge", "mute"]);
   for (let i = 0; i < 20; i++) tick();
   const [a, b] = clients;
   const inside = room as unknown as RoomInside;
   const pawnOf = (c: typeof a) => room.sim.pawns.get(c.session.ctrl!.possessedPawnId)!;
   const B = pawnOf(b);
-  room.sim.teleport(B.id, 85, 0, 31.5, 0); // past the map's east edge
+  room.sim.teleport(B.id, 95, 0, 31.5, 0); // past the map's east edge (its ground ends at x 90)
   for (let i = 0; i < 10; i++) tick();
   const shot = (shooter: typeof a, bodies: ShotOnBody[], lives: Map<number, number>) => ({
     m: inside.members.get(shooter.id),

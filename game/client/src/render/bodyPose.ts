@@ -467,6 +467,11 @@ function work(i: PoseIn, pose: RigPose, f: Frame): void {
   } else if (kind === DeployKind.Needle) {
     pose.handR = f.at(j.shoulderL, 0.02, -0.2 + 0.02 * beat, 0.14);
     pose.handL = f.at(j.shoulderL, -0.02, -0.32, 0.22);
+  } else if (kind === DeployKind.Snare) {
+    // Latch's snare being pulled off (R3): bent to the shin, both hands on the jaws, working them open.
+    pose.handL = f.at(j.chest, -0.06, -0.78, 0.38);
+    pose.handR = f.at(j.chest, 0.08, -0.74 + 0.03 * beat, 0.4);
+    pose.look = f.F.clone().addScaledVector(f.U, -1.3).normalize();
   } else if (kind === DeployKind.Phone) {
     // A ringing phone out to be turned off: in the right hand before the chest, the left hand's thumb at it, eyes down on it.
     pose.handR = f.at(j.chest, 0.07, 0.06, 0.32);

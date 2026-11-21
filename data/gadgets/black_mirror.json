@@ -3,7 +3,7 @@
   "_season": "Y11S3",
   "_unverified": ["use.placeS", "use.reachM", "sizeM", "mirror.standY", "mirror.crouchY", "mirror.frameM", "mirror.lossMax", "mirror.ejectS"],
   "id": "black_mirror",
-  "name": "Black Mirror",
+  "name": "Blind Pane",
   "side": "defender",
   "operator": "mira",
   "count": 2,

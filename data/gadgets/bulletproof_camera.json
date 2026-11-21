@@ -3,7 +3,7 @@
   "_season": "Y11S3",
   "_unverified": ["use.placeS", "use.reachM", "sizeM"],
   "id": "bulletproof_camera",
-  "name": "Bulletproof Camera",
+  "name": "Armoured Camera",
   "side": "defender",
   "count": 1,
   "electronic": true,

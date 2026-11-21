@@ -1,0 +1,17 @@
+{
+  "_doc": "The Spine: one of Rivet's Stud Driver's salvos (Project Redmond R3, data/gadgets/stud_driver.json): never carried, laid by the driver (its `count` unused; its `use` is where it may go). A vertical line of six studs; set off by his detonator, it cuts a slot 0.8 m wide and 2 m tall (data/destruction.json `explosives.stud_spine`) through every layer, steel too (a hatch whole). On a wall it runs up from the floor (`salvo.ledgeM` 0): a slot a body walks through. A small blast round it. A bullet into one of its studs destroys it (gadgets/studs.ts); its `sizeM` is its studs' extent. Our own design and numbers.",
+  "_ours": true,
+  "id": "stud_spine",
+  "name": "Spine",
+  "side": "attacker",
+  "operator": "rivet",
+  "count": 3,
+  "electronic": false,
+  "use": {"kind": "place", "on": ["soft", "steel"], "placeS": 0.1, "reachM": 25},
+  "remote": true,
+  "pickUp": false,
+  "sizeM": [0.1, 1.9, 0.05],
+  "blast": {"damage": {"max": 20, "fullM": 0.2, "zeroM": 1.0}, "destroyM": 0.4, "cut": "stud_spine", "throughSoft": 0.7, "concussM": 1.5},
+  "fragile": true,
+  "salvo": {"ledgeM": 0}
+}

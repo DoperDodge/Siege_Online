@@ -25,8 +25,8 @@ const sets = (): TextureSets => ({
 });
 
 let level: BuiltLevel | null = null;
-async function oregon() {
-  level ??= (await Sim.create("oregon")).level;
+async function millrace() {
+  level ??= (await Sim.create("millrace")).level;
   return { level, art: new LevelArt(level, sets(), loadArtData()) };
 }
 
@@ -37,7 +37,7 @@ const inside = (r: Renderable, x: number, y: number, z: number, pad = 0) => {
 
 describe("the dressing (render/dressing.ts)", () => {
   it("every piece is where the rules let it be", async () => {
-    const { level, art } = await oregon();
+    const { level, art } = await millrace();
     const dressing = buildDressing(level, art, art.map!, true)!;
     const placed = dressing.placed;
     const hardWalls = level.renderables.filter((r) => r.visible && r.kind === "solid" && r.surface === "HARD_WALL" && !/^PROP_|^EXT_/.test(r.id));
@@ -121,7 +121,7 @@ describe("the dressing (render/dressing.ts)", () => {
   }, 60_000);
 
   it("most of what each room's kit asks for is placed, the same every time", async () => {
-    const { level, art } = await oregon();
+    const { level, art } = await millrace();
     const a = buildDressing(level, art, art.map!, true)!;
     const b = buildDressing(level, art, art.map!, true)!;
     expect(b.placed).toEqual(a.placed);

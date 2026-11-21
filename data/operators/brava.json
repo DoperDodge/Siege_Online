@@ -2,7 +2,7 @@
   "_doc": "Brava — loadout and ratings from the official Ubisoft operator page (research/operators/brava.md). Ability numbers arrive with Phase 8.",
   "_season": "Y11S3",
   "id": "brava",
-  "name": "Brava",
+  "name": "Patch",
   "side": "attacker",
   "healthRating": 1,
   "speedRating": 3,
@@ -22,7 +22,7 @@
   },
   "ability": {
     "id": "kludge_drone",
-    "name": "Kludge Drone"
+    "name": "Crossover Drone"
   },
   "pawns": 1
 }

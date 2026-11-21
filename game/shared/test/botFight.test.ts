@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { PawnMode, raycastLevel, Room, Source, TICK_HZ, type BotLevel, type Vec3 } from "../src/index.js";
 
 async function lab(seed = 3) {
-  return Room.create("FIGHT", "oregon", { lab: true, seed });
+  return Room.create("FIGHT", "millrace", { lab: true, seed });
 }
 
 /** A bot standing at `at`, facing `yawDeg`, its order to stay there. */
@@ -35,16 +35,16 @@ function clear(room: Room, a: Vec3, b: Vec3): boolean {
 describe("bots' senses and fights (Phase 9 M3)", () => {
   it("an enemy standing still behind a wall is never known; one sprinting there is heard (where, roughly), not seen", async () => {
     const room = await lab();
-    // Dining and the Kitchen, the soft wall between them.
-    const a = botAt(room, [19.0, 0, 27.0], 1, "elite", 90);
-    const b = botAt(room, [21.8, 0, 27.0], 0, "elite", -90);
-    expect(clear(room, [19.0, 0, 27.0], [21.8, 0, 27.0])).toBe(false);
+    // The Warping room and Spinning, the wall between them (SW-1F-01, x 26).
+    const a = botAt(room, [24.6, 0, 3.5], 1, "elite", -90);
+    const b = botAt(room, [27.4, 0, 3.5], 0, "elite", 90);
+    expect(clear(room, [24.6, 0, 3.5], [27.4, 0, 3.5])).toBe(false);
     steps(room, 4);
     expect(a.bot.senses.contacts.has(b.pawn().id)).toBe(false);
-    // Now the attacker sprints up and down the Kitchen.
+    // Now the attacker sprints up and down Spinning.
     b.bot.order = null;
-    const far: Vec3 = [27.5, 0, 27.0];
-    const near: Vec3 = [21.8, 0, 27.0];
+    const far: Vec3 = [33.0, 0, 3.5];
+    const near: Vec3 = [27.4, 0, 3.5];
     let heard = false;
     for (let lap = 0; lap < 3 && !heard; lap++) {
       b.bot.legs.sprint = true;
@@ -60,11 +60,11 @@ describe("bots' senses and fights (Phase 9 M3)", () => {
 
   it("an enemy in the open is noticed, aimed at and shot; a downed one is finished", async () => {
     const room = await lab();
-    // Yaw 0 faces −z: A (north) faces B; B faces away, south.
-    const a = botAt(room, [-21.125, 0, 45.875], 1, "normal", 0);
-    const bPos: Vec3 = [-21.125, 0, 35.875];
+    // On the riverbank. Yaw 0 faces −z: A (to the south) faces B; B faces away, north.
+    const a = botAt(room, [-20, 0, 30], 1, "normal", 0);
+    const bPos: Vec3 = [-20, 0, 20];
     const b = botAt(room, bPos, 0, "recruit", 0);
-    expect(clear(room, [-21.125, 0, 45.875], bPos)).toBe(true);
+    expect(clear(room, [-20, 0, 30], bPos)).toBe(true);
     const hp = b.pawn().state.hp;
     const hit = steps(room, 4, () => b.pawn().state.hp < hp || b.pawn().state.mode !== PawnMode.Walk);
     expect(hit).toBe(true);
@@ -76,9 +76,9 @@ describe("bots' senses and fights (Phase 9 M3)", () => {
   it("what one bot sees, its teammate is told of after the comms delay", async () => {
     const room = await lab();
     // A Recruit sees it (and takes its time over it); its Elite teammate looks the other way (north); the enemy faces away.
-    const a = botAt(room, [-21.125, 0, 45.875], 1, "recruit", 0);
-    const mate = botAt(room, [-31.125, 0, 45.875], 1, "elite", 180);
-    const enemy = botAt(room, [-21.125, 0, 35.875], 0, "recruit", 0);
+    const a = botAt(room, [-20, 0, 30], 1, "recruit", 0);
+    const mate = botAt(room, [-26, 0, 32], 1, "elite", 180);
+    const enemy = botAt(room, [-20, 0, 20], 0, "recruit", 0);
     let seenAt = -1;
     const told = steps(room, 4, () => {
       if (seenAt < 0 && a.bot.senses.contacts.get(enemy.pawn().id)?.source === Source.Seen) seenAt = room.sim.tick;
@@ -90,14 +90,14 @@ describe("bots' senses and fights (Phase 9 M3)", () => {
     expect(room.sim.tick - seenAt).toBeGreaterThanOrEqual(Math.floor(0.3 * TICK_HZ));
   }, 60000);
 
-  it("duels at 12 m in the open (the Junkyard): an Elite bot beats a Recruit most of the time", async () => {
+  it("duels at 12 m in the open (the riverbank): an Elite bot beats a Recruit most of the time", async () => {
     let elite = 0;
     const rounds = 5;
     for (let seed = 1; seed <= rounds; seed++) {
       const room = await lab(seed);
       // Facing each other.
-      const e = botAt(room, [-21.125, 0, 45.875], 1, "elite", 0);
-      const r = botAt(room, [-21.125, 0, 33.875], 0, "recruit", 180);
+      const e = botAt(room, [-20, 0, 42], 1, "elite", 0);
+      const r = botAt(room, [-20, 0, 30], 0, "recruit", 180);
       steps(room, 12, () => e.pawn().state.mode !== PawnMode.Walk || r.pawn().state.mode !== PawnMode.Walk);
       if (r.pawn().state.mode !== PawnMode.Walk && e.pawn().state.mode === PawnMode.Walk) elite++;
     }

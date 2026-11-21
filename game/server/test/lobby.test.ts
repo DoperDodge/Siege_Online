@@ -133,7 +133,7 @@ describe("lobby", () => {
     expect(rooms.count).toBe(1);
   });
 
-  it("creates a match room on Oregon in its lobby, lists it (no names) unless it's private, and refuses unknown formats", async () => {
+  it("creates a match room on Millrace in its lobby, lists it (no names) unless it's private, and refuses unknown formats", async () => {
     const clock = { t: 0 };
     const rooms = new RoomManager(() => clock.t);
     const a = fakeClient(rooms, clock);
@@ -141,7 +141,7 @@ describe("lobby", () => {
     a.conn.onMessage(encodeCreateMatch("quick_match"));
     await until(() => a.of(Msg.Welcome).length === 1);
     const welcome = decodeWelcome(a.of(Msg.Welcome)[0]);
-    expect([welcome.levelId, welcome.controllerId]).toEqual(["oregon", 0]);
+    expect([welcome.levelId, welcome.controllerId]).toEqual(["millrace", 0]);
     rooms.step();
     const view = decodeMatchState(a.of(Msg.MatchState).at(-1)!);
     expect(view).toMatchObject({ format: "quick_match", phase: Phase.Lobby, you: view.host });

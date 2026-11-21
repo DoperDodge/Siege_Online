@@ -39,16 +39,43 @@
     ],
     "lesion": [
       "observation_blocker"
+    ],
+    "ohm": [
+      "breach_charge"
+    ],
+    "tonic": [
+      "bulletproof_camera"
+    ],
+    "shunt": [
+      "barbed_wire"
+    ],
+    "latch": [
+      "proximity_alarm"
+    ],
+    "bailiff": [
+      "barbed_wire"
+    ],
+    "rivet": [
+      "claymore"
+    ],
+    "dowser": [
+      "smoke"
+    ],
+    "hull": [
+      "impact_emp"
     ]
   },
   "counters": {
     "mute": [
       "brava",
+      "ohm",
+      "dowser",
       "striker",
       "fuze"
     ],
     "mira": [
       "fuze",
+      "rivet",
       "sledge",
       "dokkaebi"
     ],
@@ -73,19 +100,19 @@
       "thermite"
     ],
     "thermite": [
+      "shunt",
       "mute",
-      "mira",
-      "lesion"
+      "mira"
     ],
     "striker": [
+      "shunt",
       "mute",
-      "sentry",
-      "skopos"
+      "sentry"
     ],
     "fuze": [
+      "shunt",
       "mute",
-      "lesion",
-      "sentry"
+      "lesion"
     ],
     "brava": [
       "mira",
@@ -93,14 +120,55 @@
       "skopos"
     ],
     "sledge": [
+      "latch",
       "pulse",
-      "sentry",
-      "mute"
+      "sentry"
     ],
     "dokkaebi": [
       "mute",
       "mira",
       "lesion"
+    ],
+    "ohm": [
+      "sentry",
+      "lesion",
+      "pulse"
+    ],
+    "tonic": [
+      "ohm",
+      "dokkaebi",
+      "striker"
+    ],
+    "shunt": [
+      "ohm",
+      "dowser",
+      "striker",
+      "sledge"
+    ],
+    "latch": [
+      "brava",
+      "sledge",
+      "striker"
+    ],
+    "bailiff": [
+      "ohm",
+      "striker",
+      "fuze"
+    ],
+    "rivet": [
+      "shunt",
+      "mute",
+      "bailiff"
+    ],
+    "dowser": [
+      "latch",
+      "pulse",
+      "sentry"
+    ],
+    "hull": [
+      "bailiff",
+      "lesion",
+      "latch"
     ]
   },
   "primaries": {

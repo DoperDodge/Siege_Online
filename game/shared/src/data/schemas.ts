@@ -8,6 +8,8 @@ const meta = {
   _season: z.string().optional(),
   /** Dot-paths of placeholder values that still need verification (PLAN §0.2). */
   _unverified: z.array(z.string()).default([]),
+  /** Of our own design (Project Redmond R3): no research behind it, so no row in research/weapons.csv. */
+  _ours: z.boolean().optional(),
 };
 
 const byRating = z.object({ "1": z.number().positive(), "2": z.number().positive(), "3": z.number().positive() });
@@ -370,6 +372,8 @@ const shieldSchema = z.strictObject({
   shield: z.strictObject({
     pistolAdsS: z.strictObject({ walk: secs, sprint: secs }),
     hipFire: z.boolean(),
+    /** Its pistol is never aimed: from the hip alone (R3, Hull's Plate). */
+    noAds: z.boolean().default(false),
     moveSpeedMult: z.number().positive(),
     suppression: z.strictObject({ hitsToTrigger: z.number().int().positive(), hitsToMax: z.number().int().positive(), falloffS: secs }),
     bashDamage: z.number().nonnegative(),
@@ -395,9 +399,51 @@ const shieldSchema = z.strictObject({
       crouchRaiseM: z.number().min(0),
       ads: z.strictObject({ sideM: z.number().min(0), dropM: z.number().min(0), yawDeg: z.number() }),
       window: z.strictObject({ widthM: z.number().positive(), heightM: z.number().positive() }),
+      /**
+       * Its top bent back over the head (R3, the Bailiff Shield): over its top `bandM` the plate curves back toward its
+       * carrier, its top edge `backM` nearer him.
+       */
+      topWrap: z.strictObject({ bandM: z.number().positive(), backM: z.number().min(0) }).optional(),
     }),
     absorb: z.number().min(0).max(1),
     guardBreak: z.strictObject({ blastHp: z.number().positive(), seconds: secs }),
+    /**
+     * Braced (R3, Hull's Plate; player/shield.ts): `plate` is it braced, covering him head to foot; `folded`, its size and
+     * height unbraced. His ability key braces it over `extendS` (it unbraces over `retractS`); braced, he walks at
+     * `speedMul` (no sprint) with no weapon, and a blast ahead of him reaches him only `blastThrough` of it (never knocking
+     * it aside).
+     */
+    brace: z
+      .strictObject({
+        folded: z.strictObject({ widthM: z.number().positive(), heightM: z.number().positive(), aboveEyeM: z.number() }),
+        extendS: secs,
+        retractS: secs,
+        speedMul: z.number().positive().max(1),
+        blastThrough: z.number().min(0).max(1),
+      })
+      .optional(),
+    /**
+     * Its prod (R3, Bailiff's shield; player/prod.ts): held up and not aimed, Fire jolts the first body of the other
+     * side within `rangeM` and `halfDeg` of the view (in sight) every `everyS`: `damage`, and slowed to `slowMul` (no
+     * sprint, no vault) for `slowS`. It runs on `chargeS` of charge, which refills a second a second once it's been off
+     * `refillDelayS`. An EMP turns it off; one reaching its holder with it up shocks her for `shockS` (no moving, no
+     * hands).
+     */
+    prod: z
+      .strictObject({
+        rangeM: z.number().positive(),
+        halfDeg: z.number().positive().max(90),
+        /** Its cone set down (its shock switched on with the ability key: it can't aim, so it's wider). */
+        postHalfDeg: z.number().positive().max(90),
+        damage: z.number().min(0),
+        everyS: secs,
+        slowMul: z.number().positive().max(1),
+        slowS: secs,
+        chargeS: secs,
+        refillDelayS: z.number().min(0),
+        shockS: secs,
+      })
+      .optional(),
   }),
 });
 
@@ -886,10 +932,11 @@ export type IntelData = z.infer<typeof intelSchema>;
 /**
  * Where a placed gadget may go (gadgets/place.ts): something flat enough to stand on, a wall, a breakable surface
  * that isn't reinforced where it goes (a soft wall, a floor, a hatch, a barricade), a reinforced section, a
- * deployable shield's front (Fuze's Cluster Charge, Phase 8 M5), or a reinforceable wall, from its steel's side if
- * it's reinforced (Mira's Black Mirror, M7).
+ * deployable shield's front (Fuze's Cluster Charge, Phase 8 M5), a reinforceable wall, from its steel's side if
+ * it's reinforced (Mira's Black Mirror, M7), or a door's or window's frame (Latch's Snare Latch, R3: gadgets/place.ts
+ * frameSpot).
  */
-export const PLACE_ON = ["floor", "wall", "soft", "steel", "shield", "reinforceable"] as const;
+export const PLACE_ON = ["floor", "wall", "soft", "steel", "shield", "reinforceable", "frame"] as const;
 export type PlaceOn = (typeof PLACE_ON)[number];
 
 const sizeM = z.tuple([z.number().positive(), z.number().positive(), z.number().positive()]);
@@ -993,6 +1040,19 @@ export const gadgetSchema = z
        * drones; Z throws one out and drives it, as the drone key does a drone. Never in the hands.
        */
       z.strictObject({ kind: z.literal("drone") }),
+      /**
+       * Shot from the hands (Ohm's Brownout Pistol, R3): Fire shoots one round from the eye along the view, out to
+       * `rangeM` (the room judges where it stops, rewound, as a bullet that goes into no wall and stops in the first
+       * body), then it's reloaded for `reloadS` before the next (each round its own magazine: `count` rounds a round).
+       * What a round does where it stops is the file's (`emp`).
+       */
+      z.strictObject({ kind: z.literal("shoot"), reloadS: z.number().positive(), rangeM: z.number().positive() }),
+      /**
+       * Launched from the hands (Rivet's Stud Driver, R3: gadgets/studs.ts): Fire lays a salvo (its `driver.lays`, the
+       * one the reload key picked) on the surface the view meets out to `reachM`, if it may go `on` that; the next can
+       * go `cycleS` later.
+       */
+      z.strictObject({ kind: z.literal("launch"), on: z.array(z.enum(PLACE_ON)).min(1), reachM: z.number().positive(), cycleS: z.number().positive() }),
     ]),
     /** Waits for its owner's detonator once it's out. */
     remote: z.boolean(),
@@ -1105,6 +1165,12 @@ export const gadgetSchema = z
      */
     sensor: z.strictObject({ rangeM: z.number().positive(), fanDeg: z.number().gt(0).max(360), pingDeg: z.number().gt(0).max(90) }).optional(),
     /**
+     * Dowser's Divining Coil (R3, gadgets/coil.ts): held up, it shows him alone the other side's electronic devices
+     * within `rangeM` of his eye through anything, within `fanDeg` of his facing across the floor, as outlines; a ping
+     * while it's up marks the one nearest his crosshair within `pingDeg` for his team.
+     */
+    coil: z.strictObject({ rangeM: z.number().positive(), fanDeg: z.number().gt(0).max(360), pingDeg: z.number().gt(0).max(90) }).optional(),
+    /**
      * Mira's Black Mirror (Phase 8 M7, gadgets/mirror.ts): placed on a reinforceable wall at standing (`standY`) or
      * crouched (`crouchY`) height above the floor, it cuts its glass's window (`sizeM`'s width and height) through
      * every layer and fills it: bulletproof and blast-proof both ways, seen through from its placer's side only; a
@@ -1163,6 +1229,45 @@ export const gadgetSchema = z
       .strictObject({ radiusM: z.number().positive(), hit: z.number().min(0), damage: z.number().min(0), everyS: z.number().positive(), pullS: z.number().positive() })
       .optional(),
     /**
+     * Shunt's Arc Packs (R3, gadgets/arcs.ts): a pack standing electrifies the reinforced wall section or barricade (and
+     * its side's shields and wire) within `reachM`; an enemy device on a live surface is burnt out `burnS` after it's
+     * found there; an enemy's knife on one takes `shock` and is pushed back at `pushMps`; an enemy drone by a pack is
+     * jammed `droneJamS`. Put on the floor within `snapM` of such a surface's face, a pack goes against its foot.
+     */
+    arc: z
+      .strictObject({ reachM: z.number().positive(), snapM: z.number().min(0), burnS: z.number().positive(), shock: z.number().min(0), pushMps: z.number().min(0), droneJamS: z.number().min(0) })
+      .optional(),
+    /**
+     * Bailiff's shield set down (R3, player/shield.ts): this item, put down, is her shield standing as cover; while it's
+     * out (none left in its slot) her shield isn't on her arm.
+     */
+    setsDownShield: z.boolean().optional(),
+    /**
+     * Rivet's Stud Driver (R3, gadgets/studs.ts): the salvos it lays (gadget files of their own, each a `salvo`), the
+     * one it lays picked with the reload key while it's out; its detonator sets off every one of them out together.
+     */
+    driver: z.strictObject({ lays: z.array(z.string()).min(1).max(4) }).optional(),
+    /**
+     * A salvo of Rivet's studs (R3, gadgets/studs.ts): laid by a `driver`, never carried. On a wall it goes with its
+     * hole's bottom `ledgeM` over the floor below (0: from the floor), so a body gets through it; a bullet that meets
+     * one of its studs destroys it.
+     */
+    salvo: z.strictObject({ ledgeM: z.number().min(0) }).optional(),
+    /**
+     * Latch's Snare Latch (R3, gadgets/snare.ts, gadgets/serve.ts snap): sprung by an enemy body crossing its wire (its
+     * `tripwire`), it shuts on his leg: `hit` at once, `damage` every `everyS`, his speed × `speedMul` (no sprint),
+     * until he pulls it off (Interact held `pullS`) or goes down; the other side is shown where he is for `spotS`.
+     */
+    snare: z
+      .strictObject({ hit: z.number().min(0), damage: z.number().min(0), everyS: z.number().positive(), speedMul: z.number().positive().max(1), pullS: z.number().positive(), spotS: z.number().min(0) })
+      .optional(),
+    /**
+     * Tonic's Second Wind (R3, gadgets/patch.ts, net/room.ts patches): a patch set off on a body on its feet heals
+     * `heal` over `healS` (up to its most); on a downed one it stops the bleeding and gets him up `reviveS` later with
+     * `reviveHp`.
+     */
+    patch: z.strictObject({ heal: z.number().int().min(1).max(200), healS: z.number().positive(), reviveS: z.number().positive(), reviveHp: z.number().int().min(1) }).optional(),
+    /**
      * A slot 2 item that comes back over time (Phase 8 M10: Lesion's mines): `start` at a life's start, one more every
      * `everyS`, until `count` have been given (gadgets/hands.ts regenSlot).
      */
@@ -1189,12 +1294,16 @@ export const gadgetSchema = z
       if (g[k] !== undefined && !g.remote) ctx.addIssue({ code: "custom", path: [k], message: "only a remote device has this" });
     if (g.cluster && (g.blast || g.burnS !== undefined)) ctx.addIssue({ code: "custom", path: ["cluster"], message: "a cluster charge's grenades blast, not the charge" });
     if (u.kind === "place" && u.on.includes("shield") && !g.cluster) ctx.addIssue({ code: "custom", path: ["use", "on"], message: "only a cluster charge drills through a shield" });
-    if ((u.kind === "hold") !== (g.sensor !== undefined || g.jegeo !== undefined)) ctx.addIssue({ code: "custom", path: ["use"], message: "a held item is a sensor or a tablet, and they're held" });
+    if ((u.kind === "hold") !== (g.sensor !== undefined || g.jegeo !== undefined || g.patch !== undefined || g.coil !== undefined)) ctx.addIssue({ code: "custom", path: ["use"], message: "a held item is a sensor, a tablet, a patch monitor or a coil, and they're held" });
     if (g.jammer && (u.kind !== "place" || g.jammer.warnM < g.jammer.radiusM)) ctx.addIssue({ code: "custom", path: ["jammer"], message: "a jammer is placed, and warns beyond its reach" });
     if (g.mirror && (u.kind !== "place" || !u.on.includes("reinforceable") || !g.solid)) ctx.addIssue({ code: "custom", path: ["mirror"], message: "a mirror is solid and placed on a reinforceable wall" });
     if (g.gu && (u.kind !== "throw" || u.flight !== "settle" || g.remote || g.electronic)) ctx.addIssue({ code: "custom", path: ["gu"], message: "a Gu mine is thrown, settles, and is mechanical" });
     if (g.regen && g.regen.start > g.count) ctx.addIssue({ code: "custom", path: ["regen", "start"], message: "more at the start than it ever gives" });
     if ((u.kind === "drone") !== (g.kludge !== undefined)) ctx.addIssue({ code: "custom", path: ["kludge"], message: "a drone item is a Kludge, and a Kludge is a drone item" });
+    if (g.arc && (u.kind !== "place" || !u.on.includes("floor") || !g.electronic)) ctx.addIssue({ code: "custom", path: ["arc"], message: "an arc pack is electronic and put down on a floor" });
+    if (u.kind === "shoot" && !g.emp) ctx.addIssue({ code: "custom", path: ["use"], message: "a shot item's round does something where it stops (emp)" });
+    if ((u.kind === "launch") !== (g.driver !== undefined) || (g.driver && !g.remote)) ctx.addIssue({ code: "custom", path: ["driver"], message: "a launched item is a driver, which lays salvos that wait for its detonator" });
+    if (g.salvo && (!g.remote || !g.blast?.cut || u.kind !== "place")) ctx.addIssue({ code: "custom", path: ["salvo"], message: "a salvo is a remote device placed where its driver lays it, and its blast cuts a shape" });
   });
 export type GadgetData = z.infer<typeof gadgetSchema>;
 
@@ -1521,6 +1630,11 @@ const explosiveCommon = {
 export const explosiveSchema = z.union([
   z.strictObject({ ...explosiveCommon, shape: z.literal("rect"), wM: metres, hM: metres }),
   z.strictObject({ ...explosiveCommon, shape: z.literal("disc"), diameterM: metres }),
+  /**
+   * An X (Rivet's Cross, R3): two arms `armM` wide along its diagonals, their middles' ends `spanM` apart across and up
+   * (rounded ends), over a round middle `hubM` across (the hole a body vaults through where they cross).
+   */
+  z.strictObject({ ...explosiveCommon, shape: z.literal("cross"), spanM: metres, armM: metres, hubM: metres }),
 ]);
 export type ExplosiveData = z.infer<typeof explosiveSchema>;
 export const destructionSchema = z.strictObject({

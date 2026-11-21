@@ -61,8 +61,8 @@ describe("netsim: 10 clients, 100 ms round trip, jitter, stalls, drift", () => {
     expect(r.serverTickMs.mean).toBeLessThan(5);
   }, 90000);
 
-  it("on Oregon (Phase 5 M6): a fight across the Kitchen's soft wall; no desyncs, and every client ends with the server's panels", async () => {
-    const r = await runNetsim({ level: "oregon", seconds: 10, combat: true, walls: true, seed: 6 });
+  it("on Millrace (Phase 5 M6): a fight across the Spinning room's soft wall; no desyncs, and every client ends with the server's panels", async () => {
+    const r = await runNetsim({ level: "millrace", seconds: 10, combat: true, walls: true, seed: 6 });
     expect(r.desyncs).toEqual([]);
     expect(r.room.droppedInputs).toBe(0);
     expect(r.panels.ops).toBeGreaterThan(50);
@@ -75,9 +75,9 @@ describe("netsim: 10 clients, 100 ms round trip, jitter, stalls, drift", () => {
     expect(r.serverTickMs.mean).toBeLessThan(5);
   }, 90000);
 
-  it("on Oregon, rappelling (Phase 5 M8): each bot up, along and down a wall of its own, turning over, firing and knifing, through stalls past the room's hold budget; no mispredictions", async () => {
+  it("on Millrace, rappelling (Phase 5 M8): each bot up, along and down a wall of its own, turning over, firing and knifing, through stalls past the room's hold budget; no mispredictions", async () => {
     // Stalls of 400 ms: past MAX_HOLD_TICKS, so the room steps bodies on ropes (and mid-hold) without input.
-    const r = await runNetsim({ level: "oregon", seconds: 15, rappel: true, crowd: false, seed: 7, stallMs: 400, stallsPerSecond: 0.1 });
+    const r = await runNetsim({ level: "millrace", seconds: 15, rappel: true, crowd: false, seed: 7, stallMs: 400, stallsPerSecond: 0.1 });
     expect(r.room.stalls).toBeGreaterThan(0);
     expect(r.desyncs).toEqual([]);
     expect(r.room.droppedInputs).toBe(0);
@@ -155,7 +155,7 @@ describe("netsim hitreg: a still shooter at 100 ms round trip aims at heads as i
 });
 
 describe("a whole match (Phase 6 M6)", () => {
-  it("four clients through a 4-round Custom match on Oregon, each round ending another way: as scripted, no desyncs at rest, every client's walls and match the server's", async () => {
+  it("four clients through a 4-round Custom match on Millrace, each round ending another way: as scripted, no desyncs at rest, every client's walls and match the server's", async () => {
     const r = await runMatchNetsim({ clients: 4, script: ["elimination", "detonate", "disable", "time"], seed: 2 });
     expect(r.rounds.map((x) => [x.round, x.reason, x.asScripted])).toEqual([
       [1, "elimination", true],

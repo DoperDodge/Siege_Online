@@ -3,10 +3,15 @@
 // data's size) and fills it; what's held is no bigger than a hand holds; the drone keeps to its size where it's shot.
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { loadGameData } from "@redmond/shared";
+import { loadGameData, salvoCut, studPoints, type GadgetData } from "@redmond/shared";
 import { droneShape, gadgetShape, heldShape, knifeShape, shapeModel, type ShapeMat } from "../src/render/gadgetShapes.js";
 
 const data = loadGameData();
+/** A salvo's studs (Rivet's, R3: the page passes them from its data). */
+const studsOf = (g: GadgetData) => {
+  const ex = salvoCut(data, g);
+  return ex ? studPoints(ex) : [];
+};
 /** Drawn their own way: the Black Mirror's frame and glass, the Bulletproof Camera, Skopós's shell (its parts), a dropped phone, Brava's drone (a pawn). */
 const OTHERWISE = new Set(["black_mirror", "bulletproof_camera", "shell_shield", "kludge_drone"]);
 
@@ -30,7 +35,7 @@ describe("the gadgets' shapes (render/gadgetShapes.ts)", () => {
     const problems: string[] = [];
     let shaped = 0;
     for (const g of data.gadgets.values()) {
-      const parts = gadgetShape(g.id, g.sizeM);
+      const parts = gadgetShape(g.id, g.sizeM, studsOf(g));
       if (!parts) {
         if (!OTHERWISE.has(g.id)) problems.push(`${g.id}: no shape`);
         continue;

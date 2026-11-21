@@ -1,0 +1,14 @@
+{
+  "_doc": "Tonic's Second Wind (Project Redmond R3, gadgets/R3_OPERATORS.md §2; the medic's updated version, Ulo's pick; our numbers, the official page gives none): his ability, the wrist monitor in his slot 2 (Z), held up like a tablet. Every operator on his team wears a patch. With the monitor up, the wheel picks a teammate (or himself, or Auto: a downed teammate first, else the most hurt) and Fire sets the picked one's patch off, from anywhere (net/room.ts patches): on a body on its feet it heals `patch.heal` over `patch.healS` (up to its most); on a downed one it stops the bleeding and gets him up `patch.reviveS` later with `patch.reviveHp`. One teammate's patch at a time; his own apart from that, and when he's down the ability key sets his own off. `count` patches a round in all. Electronic: an EMP on Tonic stops the monitor; one on a patched body stops its patch.",
+  "id": "second_wind",
+  "name": "Second Wind",
+  "side": "defender",
+  "operator": "tonic",
+  "count": 5,
+  "electronic": true,
+  "use": {"kind": "hold"},
+  "remote": false,
+  "pickUp": false,
+  "sizeM": [0.11, 0.075, 0.022],
+  "patch": {"heal": 45, "healS": 6, "reviveS": 2.5, "reviveHp": 25}
+}

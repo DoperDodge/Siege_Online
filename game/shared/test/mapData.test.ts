@@ -44,11 +44,16 @@ describe("map metadata", () => {
   it("the labs parse unchanged: every new field is optional", () => {
     const data = loadGameData();
     for (const lvl of data.levels.values()) {
-      if (lvl.id === "oregon") continue;
+      // The compiled maps (tools/mapgen) have them all; Millrace is Project Redmond's own (R2, D-183).
+      if (lvl.id === "oregon" || lvl.id === "millrace") continue;
       // The Gadget Lab has a default camera and the ingredients to try gadgets on (Phase 8 M3); the other labs none.
       const gadgetLab = lvl.id === "gadget_lab";
-      expect(lvl.bounds, lvl.id).toBeUndefined();
-      expect([lvl.storeys, lvl.rooms, lvl.sites, lvl.zones], lvl.id).toEqual([[], [], [], []]);
+      // The Movement Lab has bounds: bots climb its ladder (test/botNav.test.ts; Millrace has none).
+      if (lvl.id === "movement_lab") expect(lvl.bounds?.killY, lvl.id).toBeLessThan(0);
+      else expect(lvl.bounds, lvl.id).toBeUndefined();
+      expect([lvl.storeys, lvl.rooms, lvl.sites], lvl.id).toEqual([[], [], []]);
+      // The Rappel Lab's faces are its zones (R4.1: rappel zones only); the other labs have none.
+      expect(lvl.zones.every((z) => z.kind === "rappel") && (lvl.zones.length > 0) === (lvl.id === "rappel_lab"), lvl.id).toBe(true);
       expect([lvl.cameras.length > 0, lvl.ingredients.length > 0], lvl.id).toEqual([gadgetLab, gadgetLab]);
       expect(lvl.solids.every((s) => !s.bodiesOnly), lvl.id).toBe(true);
     }

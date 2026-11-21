@@ -14,10 +14,15 @@ import { raycastLevel } from "./level/raycast.js";
 import { detonatable, GadgetTable, GFlag, type Gadget } from "./gadgets/table.js";
 import { isIngredient, KIND_BP_CAMERA, KIND_SHELL_SHIELD, kindId, kindOf } from "./gadgets/kinds.js";
 import { pawnJammed, pointJammed } from "./gadgets/jammers.js";
+import { onLiveSurface } from "./gadgets/arcs.js";
+import { snareData, snareSlow } from "./gadgets/snare.js";
+import { prodSlow } from "./player/prod.js";
 import { heartbeats, heartOf, sensorUp } from "./gadgets/sensor.js";
 import { mirrorOf, sightPast } from "./gadgets/mirror.js";
 import { barrierOf, crossesBarrier, smokeOnSegment, wireSlow } from "./gadgets/areas.js";
 import { gadgetOnRay, partBoxes } from "./gadgets/hits.js";
+import { salvosOut } from "./gadgets/studs.js";
+import { coilMarks, coilUp, type CoilMark } from "./gadgets/coil.js";
 import { emptySlots, moveStock, placeSpotFor, slotGadget, stockSlots } from "./gadgets/hands.js";
 import { guData } from "./gadgets/gu.js";
 import { CAMERA_HALF_M } from "./intel/cameras.js";
@@ -122,11 +127,14 @@ export class Sim {
       level,
       events: [],
       canRappel: (pawn) => pawn.team === sideTeam("attacker") || this.deployRules.rappel,
-      slowOf: (pawn) => wireSlow(data, this.gadgets, pawn, pawn.kind === PawnKind.Drone),
+      // Barbed wire (Phase 8 M3), and Latch's snare on a leg (R3).
+      // ... and a prod's jolt (R3).
+      slowOf: (pawn) => wireSlow(data, this.gadgets, pawn, pawn.kind === PawnKind.Drone) * snareSlow(data, pawn) * prodSlow(data, pawn),
       // Skopós's shells through her own barriers (D-157): a shell waking stands up under its canopy.
       passes: (pawn, c) => pawn.ownerId !== null && this.barrierOwner.get(c.handle) === pawn.ownerId,
       // Phase 8 M6: not while the body, or the device, is inside an enemy jammer.
-      canDetonate: (pawn, gadget) => !pawnJammed(this, pawn) && detonatable(this.gadgets.list, pawn.ownerId ?? 0, kindOf(gadget), (g) => !pointJammed(this, g.team, g.pos)) !== undefined,
+      canDetonate: (pawn, gadget) => this.detonations(pawn, gadget) > 0,
+      salvosReady: (pawn, gadget) => this.detonations(pawn, gadget),
       droneJammed: (pawn) => pawnJammed(this, pawn),
       swingMeets: (pawn, reachM) => this.swingMeets(pawn, reachM),
       solidOnRay: (origin, dir, maxT) => this.solidOnRay(origin, dir, maxT),
@@ -568,7 +576,8 @@ export class Sim {
     const hit = gadgetOnRay(this.gadgets, this.data, eye, dir, plain + 0.05, (g) => {
       const id = this.data.gadgets.get(kindId(g.kind) ?? "");
       // Not one a Kludge hacked over to the other side (Phase 8 M8).
-      return g.owner === pawn.ownerId && g.team === pawn.team && !(g.flags & GFlag.Flying) && id !== undefined && id.pickUp && slots.includes(id.id) && !(id.solid && g.flags & GFlag.Hit);
+      // Nor a snare sprung on someone's leg (R3).
+      return g.owner === pawn.ownerId && g.team === pawn.team && !(g.flags & GFlag.Flying) && id !== undefined && id.pickUp && slots.includes(id.id) && !(id.solid && g.flags & GFlag.Hit) && !(id.snare && g.flags & GFlag.Active);
     });
     return hit?.g ?? null;
   }
@@ -587,6 +596,30 @@ export class Sim {
     if (id === slotGadget(this.data, pawn.loadout, 1)?.id) s.g1++;
     else s.g2++;
     this.ctx.events.push({ kind: "pickUpGadget", pawnId: pawn.id, gadgetId: g.id });
+    endDeploy(pawn);
+    return true; // still this tick
+  }
+
+  /** Whether a body can pull a snare off its leg now: snared, on its feet, not mid-swing (R3). */
+  private canPullSnare(pawn: Pawn): boolean {
+    const s = pawn.state;
+    return s.snared && s.mode === PawnMode.Walk && s.meleeTicks === 0;
+  }
+
+  /**
+   * A snare being pulled off (R3, Latch's): Interact held, in any stance, for its `pullS`; then the body's free (the
+   * server sees it and the latch is spent). Let go sooner, it stays shut.
+   */
+  private holdSnare(pawn: Pawn, held: boolean): boolean {
+    const s = pawn.state;
+    const k = snareData(this.data);
+    if (!k || !held || !this.canPullSnare(pawn)) {
+      endDeploy(pawn);
+      return false;
+    }
+    s.deployTicks = Math.min(0xffff, s.deployTicks + 1);
+    if (s.deployTicks < ticks(k.pullS)) return true;
+    s.snared = false;
     endDeploy(pawn);
     return true; // still this tick
   }
@@ -667,6 +700,7 @@ export class Sim {
     const s = pawn.state;
     const held = (input.buttons & Btn.Interact) !== 0;
     if (s.deployKind === DeployKind.Needle) return this.holdNeedle(pawn, held);
+    if (s.deployKind === DeployKind.Snare) return this.holdSnare(pawn, held);
     if (s.deployKind === DeployKind.Phone) return this.holdPhone(pawn, held);
     if (s.deployKind === DeployKind.PickUp) return this.holdPickUp(pawn, held);
     if (s.deployKind === DeployKind.Plant || s.deployKind === DeployKind.Disable) return this.holdDefuser(pawn, held);
@@ -688,6 +722,15 @@ export class Sim {
     if (s.needled) {
       if (!this.canPullNeedle(pawn)) return false;
       s.deployKind = DeployKind.Needle;
+      s.deployPanel = 0;
+      s.deployTicks = 1;
+      s.deploySection = 0;
+      return true;
+    }
+    // Latch's snare on his leg (R3): pulling it off comes next, in any stance, held still.
+    if (s.snared) {
+      if (!this.canPullSnare(pawn)) return false;
+      s.deployKind = DeployKind.Snare;
       s.deployPanel = 0;
       s.deployTicks = 1;
       s.deploySection = 0;
@@ -1202,6 +1245,20 @@ export class Sim {
         return;
       }
     }
+    // Dowser's coil up (R3): the device it shows nearest the crosshair, within its `pingDeg`, is what's pinged.
+    const coil = body && c.pawnIds.includes(body.id) ? coilUp(this.data, body) : null;
+    if (body && coil) {
+      let best: { m: CoilMark; cos: number } | null = null;
+      for (const m of coilMarks(this, body)) {
+        const w = [m.pos[0] - v.pos[0], m.pos[1] - v.pos[1], m.pos[2] - v.pos[2]];
+        const cos = (w[0] * dir[0] + w[1] * dir[1] + w[2] * dir[2]) / Math.max(1e-6, Math.hypot(w[0], w[1], w[2]));
+        if (cos >= Math.cos(coil.pingDeg * DEG) && (!best || cos > best.cos)) best = { m, cos };
+      }
+      if (best) {
+        this.ctx.events.push({ kind: "ping", ctrlId: c.id, pos: [best.m.pos[0], best.m.pos[1], best.m.pos[2]], gadget: best.m.kind });
+        return;
+      }
+    }
     const at = (t: number): [number, number, number] => [v.pos[0] + dir[0] * t, v.pos[1] + dir[1] * t, v.pos[2] + dir[2] * t];
     // Through a Black Mirror from its placer's side (Phase 8 M7).
     let t = sightPast(this, v.pos, dir, 200)?.t ?? null;
@@ -1288,6 +1345,19 @@ export class Sim {
    * `reachM` (Phase 8 M4: it spends a charge, predicted). Bodies and drones aren't asked here: where they are now isn't
    * where the swinger saw them, so the room judges and charges those, rewound (net/room.ts judgeSwing).
    */
+  /**
+   * How many devices of `gadget` a body's detonator sets off now: its oldest working one, or every working salvo of a
+   * driver's (Rivet's, R3); none while the body, or the device, is in an enemy jammer's reach (Phase 8 M6), or on a
+   * surface Shunt's pack makes live (R3).
+   */
+  detonations(pawn: Pawn, gadget: string): number {
+    if (pawnJammed(this, pawn)) return 0;
+    const ok = (g: Gadget) => !pointJammed(this, g.team, g.pos) && !onLiveSurface(this, g);
+    const d = this.data.gadgets.get(gadget);
+    if (d?.driver) return salvosOut(this.gadgets.list, pawn.ownerId ?? 0, d, ok).length;
+    return detonatable(this.gadgets.list, pawn.ownerId ?? 0, kindOf(gadget), ok) ? 1 : 0;
+  }
+
   private swingMeets(pawn: Pawn, reachM: number): boolean {
     const s = pawn.state;
     const eye = eyePose(this.data.movement, this.data.hitboxes, s).pos;
@@ -1781,7 +1851,7 @@ export class Sim {
                 ? d.plantLocksBody
                 : k === DeployKind.Disable
                   ? d.disableLocksBody
-                  : k === DeployKind.PickUp || (k !== DeployKind.None && k !== DeployKind.Needle && this.data.destruction.reinforcement.locksReinforcer));
+                  : k === DeployKind.PickUp || k === DeployKind.Snare || (k !== DeployKind.None && k !== DeployKind.Needle && this.data.destruction.reinforcement.locksReinforcer));
             // A standing body crouches for the defuser's holds where the data says so (prone stays prone); it stands
             // back up when the hold ends, as its stance key says.
             const kneel = !reviving && input.stance === Stance.Stand && (k === DeployKind.Plant ? d.plantCrouches : k === DeployKind.Disable && d.disableCrouches);
@@ -1804,9 +1874,13 @@ export class Sim {
       // No input this tick (idle shell, or a dropped packet): stand still, and keep the held-button
       // memory so keys still held when input resumes don't count as fresh presses. The body the player
       // is in keeps its weapon running (a reload goes on through a lag spike); an idle shell's is parked.
+      // It also keeps what shapes its next shot as the player last held it: the sights (ADS) and its lean. A lag
+      // spike past the room's hold doesn't drop the sights (the next shot would take the hip's spread) or
+      // straighten a peek.
       const held = pawn.state.prevButtons;
       this.letGo(pawn, idleShell);
-      this.stepBody(pawn, idleInput(pawn, idleShell ? Stance.Crouch : pawn.state.stance), !idleShell, false);
+      const still = idleInput(pawn, idleShell ? Stance.Crouch : pawn.state.stance);
+      this.stepBody(pawn, idleShell ? still : { ...still, buttons: held & Btn.Ads, lean: heldLean(pawn.state) }, !idleShell, false);
       refreshBroadPhase(this.world);
       pawn.state.prevButtons = held;
     }
@@ -1904,6 +1978,9 @@ function endDeploy(pawn: Pawn) {
 
 /** Teams until match modes assign them (Phase 6): attackers 0, defenders 1. */
 export const sideTeam = (side: "attacker" | "defender") => (side === "attacker" ? 0 : 1);
+
+/** The lean a body is holding (its amount most of the way to one side), as an input's lean. */
+const heldLean = (s: PawnState): -1 | 0 | 1 => (s.lean >= 0.5 ? 1 : s.lean <= -0.5 ? -1 : 0);
 
 export function idleInput(pawn: Pawn, stance: Stance = pawn.state.stance): InputCmd {
   const s = pawn.state;

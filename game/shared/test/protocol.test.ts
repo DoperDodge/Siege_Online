@@ -9,6 +9,7 @@ import {
   decodeHelloRest,
   decodeHelloVersion,
   decodeInput,
+  decodeJegeoPick,
   decodeJoinRoom,
   decodeLabTool,
   decodePickLoadout,
@@ -23,6 +24,7 @@ import {
   encodeEvents,
   encodeHello,
   encodeInput,
+  encodeJegeoPick,
   encodeJoinRoom,
   encodeLabTool,
   encodePickLoadout,
@@ -126,7 +128,7 @@ describe("lobby, clock, error and debug messages round-trip", () => {
     const shielded = { ...shot, hit: { pawnId: 7, part: "shield", distance: 9.5 }, target: { pawnId: 7, boxes: [...Array.from({ length: 9 }, () => target.boxes[0]), ...plate] } };
     expect(decodeShotResult(body(encodeShotResult(shielded), Msg.ShotResult))).toEqual(shielded);
     expect(decodeCreateRoom(body(encodeCreateRoom("range_lab"), Msg.CreateRoom))).toEqual({ levelId: "range_lab" });
-    expect(() => decodeCreateRoom(body(encodeCreateRoom("oregon_secret"), Msg.CreateRoom))).toThrow(ProtocolError);
+    expect(() => decodeCreateRoom(body(encodeCreateRoom("millrace_secret"), Msg.CreateRoom))).toThrow(ProtocolError);
     expect(decodeLabTool(body(encodeLabTool({ kind: "resetDummies" }), Msg.LabTool))).toEqual({ kind: "resetDummies" });
     expect(decodeLabTool(body(encodeLabTool({ kind: "respawn" }), Msg.LabTool))).toEqual({ kind: "respawn" });
     const tp = { kind: "teleport" as const, x: -16, y: 0, z: -5.5, yawDeg: 90 };
@@ -166,6 +168,12 @@ describe("lobby, clock, error and debug messages round-trip", () => {
       { kind: "jegeo", stage: 4, pawnId: 7, ticks: 1280, charges: 2 },
       { kind: "alarm", gadget: 41, pos: [2, 0.05, 15], on: false, pawnId: 0 },
       { kind: "kill", victimPawn: 8, victimCtrl: 5, killerCtrl: 4, assistCtrl: 0, weapon: "barbed_wire", cause: 8, headshot: false, friendly: false },
+      // R3: Ohm's pistol rounds, one that burst and one that was spent.
+      { kind: "gshot", pawnId: 6, gadget: 30, end: [1, 0.5, -5.84375], burst: true },
+      { kind: "gshot", pawnId: 6, gadget: 30, end: [-20.5, 40, 3.25], burst: false },
+      // R3: Tonic's monitor's list of his team.
+      { kind: "vitals", busy: true, bodies: [{ pawnId: 3, ctrl: 2, hp: 85, maxHp: 125, down: false, patched: true }, { pawnId: 9, ctrl: 5, hp: 12, maxHp: 110, down: true, patched: false }] },
+      { kind: "vitals", busy: false, bodies: [] },
     ];
     // (Float32 positions; a stun's blindness in 255ths.)
     for (const e of events) if (e.kind === "ping" || e.kind === "blast" || e.kind === "alarm") e.pos = [Math.fround(e.pos[0]), Math.fround(e.pos[1]), Math.fround(e.pos[2])];
@@ -175,6 +183,12 @@ describe("lobby, clock, error and debug messages round-trip", () => {
     expect(bad([5, 0, 0, 0, 1, 99])).toThrow(ProtocolError); // unknown kind
     expect(bad([5, 0, 0, 0, 0xff, 0x7f])).toThrow(ProtocolError); // n far too big
     expect(() => decodeEvents(new ByteReader(Uint8Array.from([...ok.subarray(1), 0])))).toThrow(ProtocolError); // trailing byte
+  });
+
+  it("a held tablet's pick: Dokkaebi's (a defender, a phone) and Tonic's (R3: a body's patch), or none, round-trip", () => {
+    const picks = [{ kind: "none" }, { kind: "defender", pawnId: 12 }, { kind: "phone", gadgetId: 300 }, { kind: "patch", pawnId: 7 }] as const;
+    for (const p of picks) expect(decodeJegeoPick(body(encodeJegeoPick(p), Msg.JegeoPick))).toEqual(p);
+    expect(() => decodeJegeoPick(new ByteReader(Uint8Array.from([4, 1])))).toThrow(ProtocolError);
   });
 
   it("every decoder only ever throws ProtocolError on garbage", () => {

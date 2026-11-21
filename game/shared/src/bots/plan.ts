@@ -51,13 +51,14 @@ export type Task =
 /**
  * A gadget used as a player does (gadgets/DESIGN.md §2) from slot `slot`, from `stand` (null: where it is) with the
  * view on `look`: placed (Fire held), thrown (Fire) or lobbed (ADS), swung (Fire held: a blow at each of `spots`, or
- * at `look`, until panel `panel` is open), held up `seconds`, or a device out set off ("detonate"). A remote device or
- * a fused charge is then left from `cover` (set off from there, or waited out `seconds`). `tag` names it.
+ * at `look`, until panel `panel` is open), shot (R3, Ohm's pistol: a round at each of `spots`, the devices its scope
+ * marks near `look` first), held up `seconds`, or a device out set off ("detonate"). A remote device or a fused charge
+ * is then left from `cover` (set off from there, or waited out `seconds`). `tag` names it.
  */
 export interface GadgetTask {
   kind: "gadget";
   slot: 1 | 2;
-  how: "place" | "throw" | "lob" | "swing" | "hold" | "detonate";
+  how: "place" | "throw" | "lob" | "swing" | "hold" | "detonate" | "shoot" | "launch";
   stand: Vec3 | null;
   look: Vec3;
   spots?: Vec3[];
@@ -65,6 +66,8 @@ export interface GadgetTask {
   cover?: Vec3;
   seconds?: number;
   crouch?: boolean;
+  /** A driver's salvo to lay (R3, Rivet's: its `driver.lays` index, picked with the reload key first). */
+  pattern?: number;
   tag: string;
 }
 
@@ -149,13 +152,22 @@ export function coverFrom(nav: NavWorld, at: UseSpot, d = 3): Vec3 {
 }
 
 /**
- * A hard breach of wall `e` from room `from` by this body (M7): Thermite's Exothermic Charge, set off from cover; else
- * a Hard Breach Charge (Striker's EMP at the wall first), waited out from cover. None: it has neither.
+ * A hard breach of wall `e` from room `from` by this body (M7): Rivet's Stud Driver (R3), a Spine laid on the wall (a
+ * slot from the floor to walk through) or a salvo on a hatch from above, set off from cover; Thermite's Exothermic
+ * Charge, set off from cover; else a Hard Breach Charge (Striker's EMP at the wall first), waited out from cover.
+ * None: it has none of them.
  */
 export function hardBreachTasks(sim: Sim, nav: NavWorld, b: Pawn, e: PanelEntry, from: string | null): Task[] {
+  const index = e.panel.spec.index;
+  const driver = slotWith(sim, b, "stud_driver");
+  if (driver) {
+    const spot = e.panel.kind === "hatch" ? hatchSpot(sim, nav, e) : e.panel.kind === "wall" ? wallSpot(sim, nav, e, from, 1.2, 1.0) : null;
+    if (!spot) return [];
+    const lays = slotGadget(sim.data, b.loadout, driver)?.driver?.lays ?? [];
+    return [gadgetTask(driver, "launch", spot, `stud${index}`, { cover: coverFrom(nav, spot, 3), pattern: Math.max(0, lays.indexOf("stud_spine")) })];
+  }
   const at = wallSpot(sim, nav, e, from, 0.8, 0.9);
   if (!at || e.panel.kind !== "wall") return [];
-  const index = e.panel.spec.index;
   const cover = coverFrom(nav, at);
   const thermite = slotWith(sim, b, "exothermic_charge");
   if (thermite) return [gadgetTask(thermite, "place", at, `therm${index}`, { cover })];
@@ -455,6 +467,32 @@ export class DefensePlanner {
         add(slot, "place", floorSpot(sim, this.nav, spot.room, near, near ?? firstWay(sim, spot.room)));
       }
     }
+    // Shunt (R3): his Arc Packs on the floor at the foot of the plan's reinforced walls (well inside a pack's reach of
+    // the face, by one section of each), on the side the plan reinforces them from (the defenders'), once each is
+    // reinforced; as many as he carries. He stands back on the nav grid and looks down at the spot.
+    const arc = slots[1]?.arc ? { g: slots[1], k: slots[1].arc } : null;
+    if (arc && !planned.has(arc.g.id)) {
+      const walls = (this.strat?.defense.reinforce ?? []).filter((r) => r.from && room(r.from) && byId.get(r.panel)?.panel.kind === "wall");
+      for (const r of walls.slice(0, arc.g.count)) {
+        const e = byId.get(r.panel)!;
+        // By the middle of its middle section, not on a line between two: a pack makes only the section it's by live.
+        const p = e.panel;
+        const [u0, u1] = p.sectionRange(p.sectionOf(Math.floor(p.w / 2)));
+        const uMid = ((u0 + u1) / 2) * p.cellU - e.frame.w / 2;
+        const foot = sides(level, e, e.frame.t / 2 + Math.min(0.18, arc.k.reachM * 0.5), uMid).find((x) => x.room === r.from)?.pos;
+        const spot = foot ? floorSpot(sim, this.nav, r.from!, foot, foot, 1.0) : null;
+        add(2, "place", spot && { stand: spot.stand, look: [foot![0], foot![1] + 0.02, foot![2]] }, {}, e.panel.spec.index);
+      }
+    }
+    // Latch (R3): his Snare Latches on the site's doors, from the site's side (aimed at the floor in the doorway, a latch
+    // goes on its jamb); as many as he carries.
+    const snare = slots[1]?.snare ? slots[1] : null;
+    if (snare && !planned.has(snare.id)) {
+      for (const door of this.siteDoors().slice(0, snare.count)) {
+        const spot = floorSpot(sim, this.nav, door.room, door.at, door.at, 1.0);
+        add(2, "place", spot && { stand: spot.stand, look: [door.at[0], door.at[1] + 0.02, door.at[2]] });
+      }
+    }
     if (op === "skopos") {
       const rooms = (this.strat?.defense.gadgets.skopos ?? []).map((x) => x.room).filter((r): r is string => !!r && room(r));
       const last = rooms[rooms.length - 1];
@@ -608,6 +646,9 @@ export class DefensePlanner {
   }
 }
 
+/** How much nearer (m) another site's bomb must be before a bot changes its guess at the site (AttackPlanner.site). */
+const GUESS_KEEP_M = 5;
+
 /**
  * An attacking team's planner for one round (Phase 9 M5). Prep: each bot's drone toward a bomb of a site it could be
  * (spread over the four, all to the found one once it's found). Action: each bot in through its spawn group's way in
@@ -633,20 +674,30 @@ export class AttackPlanner {
     private readonly ctrlOf: (memberId: number) => number,
   ) {}
 
-  /** The site, as the attackers know it: found, or a guess (the nearest to the bot's spawn) until then. */
-  private site(from: Vec3 | null): string | null {
+  /**
+   * The site, as bot `id` knows it: found, or a guess until then, the one whose bomb is nearest it; it keeps its guess
+   * until another's is GUESS_KEEP_M nearer. (Without that, a bot walking along the line halfway between two sites'
+   * bombs swapped its guess back and forth, and its jobs with it, every few ticks: it walked one way and the other.)
+   */
+  private site(id: number, from: Vec3 | null): string | null {
     const level = this.sim.level.def;
     if (this.match.siteRevealed && this.match.site) return this.match.site;
-    if (!from) return level.sites[0]?.id ?? null;
+    const had = this.guesses.get(id) ?? null;
+    if (!from) return had ?? level.sites[0]?.id ?? null;
+    const near = (st: (typeof level.sites)[number]) => Math.min(...st.bombs.map((b) => Math.hypot(b.pos[0] - from[0], b.pos[1] - from[1], b.pos[2] - from[2])));
     let best: string | null = null;
     let bestD = Infinity;
-    for (const st of level.sites)
-      for (const b of st.bombs) {
-        const d = Math.hypot(b.pos[0] - from[0], b.pos[1] - from[1], b.pos[2] - from[2]);
-        if (d < bestD) [best, bestD] = [st.id, d];
-      }
+    for (const st of level.sites) {
+      const d = near(st);
+      if (d < bestD) [best, bestD] = [st.id, d];
+    }
+    const kept = had ? level.sites.find((st) => st.id === had) : undefined;
+    if (kept && near(kept) <= bestD + GUESS_KEEP_M) return had;
+    if (best) this.guesses.set(id, best);
     return best;
   }
+  /** Each bot's guess at the site (site()). */
+  private readonly guesses = new Map<number, string>();
 
   private body(id: number): { pos: Vec3; pawnId: number } | null {
     const ctrlId = this.ctrlOf(id);
@@ -677,7 +728,7 @@ export class AttackPlanner {
       const nearest = this.bots.map((b) => ({ b, at: this.body(b) })).filter((x) => x.at).sort((a, b) => dist(a.at!.pos, d) - dist(b.at!.pos, d))[0];
       if (nearest?.b === id) return { kind: "pickup", at: [d[0], d[1], d[2]] };
     }
-    const site = this.site(me?.pos ?? null);
+    const site = this.site(id, me?.pos ?? null);
     if (!site) return null;
     const stInfo = level.sites.find((x) => x.id === site)!;
     // The carrier plants as soon as it's in one of the site's rooms (a spot clear of the room's edges).
@@ -723,7 +774,7 @@ export class AttackPlanner {
    * The team's jobs for `site` (M7, bots/DESIGN.md §7.4): each of the plan's hard breaches to the first bot of its
    * operators who has the charge (Thermite's Exothermic; Striker's EMP then a Hard Breach Charge; Fuze's Hard Breach
    * Charge), each soft breach to one too (Sledge's hammer, Fuze's Cluster Charge, else anyone's breach charge), one
-   * breach a bot; Brava's Kludge first, toward the first hard breach's far side.
+   * breach a bot; Brava's Kludge first, toward the first hard breach's far side; Ohm's pistol at that wall (R3).
    */
   private makeJobs(site: string) {
     this.jobsFor = site;
@@ -762,6 +813,19 @@ export class AttackPlanner {
         for (const t of tasks) add(b.id, t);
         break;
       }
+    }
+    // Ohm (R3): his Brownout Pistol at the first hard breach's wall from its near side, 3 m off: a round at each device
+    // his scope marks behind it (a Damper there would stop the charge), else two at the wall low and high, whose bursts
+    // reach through it.
+    const first = strat.attack.hardBreach.find((h) => byId.get(h.panel)?.panel.kind === "wall");
+    const firstWall = first && byId.get(first.panel);
+    for (const b of bots) {
+      const pistol = slotOf(b.body, "brownout_pistol");
+      if (b.op !== "ohm" || busy.has(b.id) || !pistol || !first || !firstWall) continue;
+      const at = wallSpot(sim, this.nav, firstWall, first.from, 3.0, 0.5);
+      if (!at) continue;
+      busy.add(b.id);
+      add(b.id, gadgetTask(pistol, "shoot", at, `emp${firstWall.panel.spec.index}`, { spots: [at.look, [at.look[0], at.look[1] + 0.8, at.look[2]]] }));
     }
     for (const h of strat.attack.softBreach) {
       const e = byId.get(h.panel);

@@ -2,7 +2,7 @@
   "_doc": "Mira — loadout and ratings from the official Ubisoft operator page (research/operators/mira.md). Ability numbers arrive with Phase 8.",
   "_season": "Y11S3",
   "id": "mira",
-  "name": "Mira",
+  "name": "Vista",
   "side": "defender",
   "healthRating": 3,
   "speedRating": 1,
@@ -22,7 +22,7 @@
   },
   "ability": {
     "id": "black_mirror",
-    "name": "Black Mirror"
+    "name": "Blind Pane"
   },
   "pawns": 1
 }

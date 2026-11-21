@@ -1,6 +1,6 @@
 // The Destruction Lab's explosive tools (Phase 4 M7; research/destruction.md §4, data/destruction.json
-// `explosives`): each cuts its shape (a rectangle for charges, a disc for grenades and the Nitro Cell) out of
-// the first panel along the view, centred where the view meets it. Only the shapes: placing, throwing,
+// `explosives`): each cuts its shape (a rectangle for charges, a disc for grenades and the Nitro Cell, an X for Rivet's
+// Cross) out of the first panel along the view, centred where the view meets it. Only the shapes: placing, throwing,
 // fuses and damage to players come with the gadgets (Phase 8).
 import type { Vec3 } from "../core/math.js";
 import type { DestructionData, ExplosiveData } from "../data/schemas.js";
@@ -29,16 +29,24 @@ export function explosiveOps(panels: PanelSet, d: DestructionData, ex: Explosive
     return [{ panel, op: { kind: "damage", amount: reinforced ? ex.reinforcedHatchDamage : ex.hatchDamage, hard: reinforced } }];
   }
   if (!ex.hard && p.reinforced & (1 << p.sectionOf(c.u))) return [];
-  let shape: CutShape;
-  if (ex.shape === "disc") shape = { kind: "disc", u4: c.u4, v4: c.v4, r4: Math.round((2 * ex.diameterM) / d.cellM) };
-  else {
+  const shapes: CutShape[] = [];
+  if (ex.shape === "disc") shapes.push({ kind: "disc", u4: c.u4, v4: c.v4, r4: Math.round((2 * ex.diameterM) / d.cellM) });
+  else if (ex.shape === "cross") {
+    // Rivet's Cross (R3), centred on the point: its round middle, and its two arms corner to corner (quarter cells).
+    const hu = Math.round(((ex.spanM / 2) * 4) / p.cellU);
+    const hv = Math.round(((ex.spanM / 2) * 4) / p.cellV);
+    const r4 = Math.round((2 * ex.armM) / d.cellM);
+    shapes.push({ kind: "disc", u4: c.u4, v4: c.v4, r4: Math.round((2 * ex.hubM) / d.cellM) });
+    shapes.push({ kind: "line", u4a: c.u4 - hu, v4a: c.v4 - hv, u4b: c.u4 + hu, v4b: c.v4 + hv, r4 });
+    shapes.push({ kind: "line", u4a: c.u4 - hu, v4a: c.v4 + hv, u4b: c.u4 + hu, v4b: c.v4 - hv, r4 });
+  } else {
     // Centred on the point, in whole cells.
     const uM = c.u4 / 4;
     const vM = c.v4 / 4;
     const hw = ex.wM / 2 / p.cellU;
     const hh = ex.hM / 2 / p.cellV;
-    shape = { kind: "rect", u0: Math.round(uM - hw), v0: Math.round(vM - hh), u1: Math.round(uM + hw), v1: Math.round(vM + hh) };
+    shapes.push({ kind: "rect", u0: Math.round(uM - hw), v0: Math.round(vM - hh), u1: Math.round(uM + hw), v1: Math.round(vM + hh) });
   }
   const layers = [L_FRONT, L_BACK, ...(ex.studs ? [L_CORE] : []), ...(ex.hard ? [L_STEEL] : [])];
-  return layers.filter((l) => p.layers[l]).map((layer) => ({ panel, op: { kind: "cut", layer, shape, hard: ex.hard } }));
+  return layers.filter((l) => p.layers[l]).flatMap((layer) => shapes.map((shape) => ({ panel, op: { kind: "cut", layer, shape, hard: ex.hard } }) as IndexedOp));
 }

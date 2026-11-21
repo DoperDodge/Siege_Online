@@ -3,7 +3,7 @@
   "_season": "Y11S3",
   "_unverified": ["use.reachM", "sizeM", "blast.throughSoft", "fragile"],
   "id": "hard_breach_charge",
-  "name": "Hard Breach Charge",
+  "name": "Heavy Breach Charge",
   "side": "attacker",
   "count": 2,
   "electronic": false,

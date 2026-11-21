@@ -12,10 +12,10 @@ const callout = (name: string) => data.intel.callouts.indexOf(name);
 
 /** The person on Blue with four bot teammates playing `mates`, against five bots; Blue attacks first unless `defend`. */
 async function team(mates: string[], defend = false, seed = 4) {
-  const room = await Room.create("ORD", "oregon", { format: "bot_training", seed });
+  const room = await Room.create("ORD", "millrace", { format: "bot_training", seed });
   const host = room.join("you", { send() {}, buffered: () => 0 })!;
   const send = (b: Uint8Array) => handleRoomMessage(room, host, b[0], new ByteReader(b.subarray(1)));
-  const rules = { ...bt.match, swapEvery: 24, overtime: null, firstAttack: defend ? "orange" : "blue", bots: { ...bt.match.bots!, size: [5, 5], site: "SITE_DINING" }, seconds: { ...bt.match.seconds, pick: 8, prep: 40, action: 180 } };
+  const rules = { ...bt.match, swapEvery: 24, overtime: null, firstAttack: defend ? "orange" : "blue", bots: { ...bt.match.bots!, size: [5, 5], site: "SITE_MILL" }, seconds: { ...bt.match.seconds, pick: 8, prep: 40, action: 180 } };
   send(encodeLobbyAction({ kind: "change", change: { kind: "rules", rules: { match: rules } } } as Parameters<typeof encodeLobbyAction>[0]));
   room.step();
   send(encodeLobbyAction({ kind: "start" }));
@@ -52,9 +52,9 @@ describe("orders to bot teammates (Phase 9 M6)", () => {
   it("Go here: the nearest bot goes to the pinged spot and holds there; Follow me: one keeps near you as you move; Regroup: all come to you", async () => {
     const { room, m, until, mine, body, you, ping, order, near, info } = await team(["sledge", "brava", "striker", "dokkaebi"]);
     expect(until(() => m.phase === Phase.Action, 60)).toBe(true);
-    // In the Junkyard (open ground west of the house).
-    room.sim.teleport(you().id, -21, 0, 46, 0);
-    const spot: Vec3 = [-21.1, 0, 38];
+    // On the riverbank (open ground west of the mill).
+    room.sim.teleport(you().id, -20, 0, 32, 0);
+    const spot: Vec3 = [-20.1, 0, 24];
     ping(spot);
     order("Go here");
     const goer = mine.find((p) => room.botOf(p.id)!.ordered(room.sim.tick) !== null)!;
@@ -63,11 +63,11 @@ describe("orders to bot teammates (Phase 9 M6)", () => {
     // It stays there (holding) a while.
     until(() => false, 4);
     expect(near(body(goer.id), spot, 1.5), info()).toBe(true);
-    // Follow me: you walk off (teleported along the Junkyard); the follower keeps up.
+    // Follow me: you walk off (teleported along the riverbank); the follower keeps up.
     order("Follow me");
     const follower = mine.find((p) => room.botOf(p.id)!.ordered(room.sim.tick)?.kind === "follow")!;
     expect(follower, info()).toBeDefined();
-    for (const p of [[-25, 0, 50], [-17, 0, 52]] as Vec3[]) {
+    for (const p of [[-24, 0, 36], [-16, 0, 38]] as Vec3[]) {
       room.sim.teleport(you().id, p[0], p[1], p[2], 0);
       expect(until(() => near(body(follower.id), p, 3.2), 20), info()).toBe(true);
     }
@@ -81,12 +81,12 @@ describe("orders to bot teammates (Phase 9 M6)", () => {
   it("Breach this: a teammate with something to open it with opens the pinged wall", async () => {
     const { room, m, until, you, ping, order, info } = await team(["sledge", "brava", "striker", "dokkaebi"], false, 5);
     expect(until(() => m.phase === Phase.Action, 60)).toBe(true);
-    // A soft wall of the Showers (the plan's soft breach for Sledge), pinged from the Showers' side.
-    const e = room.sim.level.panels.byId.get("SW-1F-03")!;
-    const s = sides(room.sim.level.def, e, 0.05).find((x) => x.room === "1F_SHOWERS")!;
+    // A wall no plan reinforces (between the Loom Hall and Warping), pinged from the Loom Hall's side.
+    const e = room.sim.level.panels.byId.get("SW-1F-09")!;
+    const s = sides(room.sim.level.def, e, 0.05).find((x) => x.room === "1F_LOOM_HALL")!;
     const at: Vec3 = [s.pos[0], s.pos[1] + 1.2, s.pos[2]];
-    expect(panelAt(room.sim, at)?.panel.spec.id).toBe("SW-1F-03");
-    const stand = sides(room.sim.level.def, e, 2).find((x) => x.room === "1F_SHOWERS")!.pos;
+    expect(panelAt(room.sim, at)?.panel.spec.id).toBe("SW-1F-09");
+    const stand = sides(room.sim.level.def, e, 2).find((x) => x.room === "1F_LOOM_HALL")!.pos;
     room.sim.teleport(you().id, stand[0], stand[1], stand[2], 0);
     ping(at);
     order("Breach this");
@@ -106,7 +106,7 @@ describe("orders to bot teammates (Phase 9 M6)", () => {
     const d = await team(["mute", "mira", "lesion", "sentry"], true, 7);
     expect(d.until(() => d.m.phase === Phase.Action, 60)).toBe(true);
     const plan = d.room.defensePlan!;
-    const anchors = data.bots.strats.get("oregon")!.sites.SITE_DINING.defense.anchors;
+    const anchors = data.bots.strats.get("millrace")!.sites.SITE_MILL.defense.anchors;
     const roamer = d.mine.find((p) => plan.taskOf(p.id)?.kind === "roam" && !(plan.taskOf(p.id) as { rooms: string[] }).rooms.every((r) => anchors.includes(r)));
     expect(roamer).toBeDefined();
     d.order("Rotate");

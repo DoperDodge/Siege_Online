@@ -115,7 +115,7 @@ describe("what the HUD says", () => {
     expect(feedLine({ kind: "reviveEnd", reviverPawn: 20, targetPawn: 10, completed: true }, names, me)).toEqual({ text: "Bot revived Ulo", mine: true });
     expect(feedLine({ kind: "reviveEnd", reviverPawn: 20, targetPawn: 10, completed: false }, names, me)).toBeNull();
     expect(feedLine({ kind: "reviveStart", reviverPawn: 20, targetPawn: 10 }, names, me)).toBeNull();
-    expect(feedLine({ kind: "shellDestroyed", pawnId: 21, ownerCtrl: 2, killerCtrl: 1, weapon: "l85a2", headshot: false }, names, me)!.text).toBe("Ulo [L85A2] destroyed Bot's idle shell");
+    expect(feedLine({ kind: "shellDestroyed", pawnId: 21, ownerCtrl: 2, killerCtrl: 1, weapon: "l85a2", headshot: false }, names, me)!.text).toBe("Ulo [L85A2] destroyed Bot's idle frame");
   });
 
   it("death screen: who killed you and with what; bleeding out; a fall says so itself", () => {

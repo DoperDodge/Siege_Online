@@ -63,6 +63,9 @@ like the map generator's walk graph (tools/mapgen/walkgraph.ts, its head start),
   standing body fits (else bots crouch through it).
 - **Edges**: a node joins its 8 neighbours' nodes within a step (0.35 m), diagonals only where both sides join (no
   corner cutting). Computed when asked, from the heights, so rebuilding a chunk never leaves stale edges in another.
+  A ramp's nodes and flat ones join only where they're level (0.12 m). A staircase's nodes (on its steps or its
+  invisible slope: the level tags both) join each other by a step whichever is which, and join the floor by a step only
+  along the flight's run, at its ends: never from the floor beside it onto its side (D-184).
 - **Links**, each with the input that takes it: **vault** (over a sill, a rail, a hole's lip; onto a ledge) found by
   running the movement code's own vault planner from candidate nodes facing vaultable boxes; **ladder** (up and down);
   **drop** (off a ledge, through a hatch or floor hole: one way, ≤ 3.4 m, the fall's damage in its cost); **rappel**
@@ -71,7 +74,8 @@ like the map generator's walk graph (tools/mapgen/walkgraph.ts, its head start),
   reinforced wall or hatch (a hard breach): only plans that allow it use them (§6).
 - **Search**: the grid is cut into **chunks** of 16 × 16 columns (4 m); each chunk's nodes split into **regions**
   (connected within the chunk). A* runs over regions (a few thousand), then over nodes inside the regions on that
-  route (and their neighbours), then the path is pulled straight where a straight walk stays on nodes. Searches are
+  route (and their neighbours), then the path is pulled straight where a straight walk stays on nodes (and crosses
+  no staircase's edge the grid doesn't join). Searches are
   budgeted per tick (a bot waits a tick or two for a long one).
 - **Following** (`bots/nav/follow.ts`): yaw and forward/strafe toward the next point (the body can look one way and
   walk another), crouch on crouch-only nodes, each link's input at its start (face the sill and Vault; Interact at a
@@ -164,7 +168,7 @@ One **commander** per side, server-side, with the same knowledge rules (its team
 | Thermite | Exothermic Charge on the plan's reinforced wall (or hatch) once no jammer is on it; detonates from cover |
 | Striker | Hard Breach Charge + Impact EMP by default (common_setups §0.1); EMPs jammers by the breach |
 | Fuze | Cluster Charges through walls and hatches into anchor rooms before the push; backup Hard Breach Charge |
-| Brava | Kludge drone onto jammers by the hard breach, then cameras |
+| Brava | Kludge drone onto jammers by the hard breach, then cameras; once a device is in its sights, Fire held the whole hack (the sights may come and go), a device begun twice left |
 | Dokkaebi | Jegeo Payload on a detected anchor before the push; hacks cameras through phones |
 | Mute | Signal Disruptors by the reinforced walls and hatches (after reinforcing), one on a drone path |
 | Mira | Black Mirrors on the plan's walls, from the site side; anchors watching through them |
@@ -172,10 +176,22 @@ One **commander** per side, server-side, with the same knowledge rules (its team
 | Sentry | Barbed Wire + Deployable Shield by default, on the plan's spots |
 | Pulse | Roams above or below the site, scans through the floor and pings what it finds |
 | Lesion | Gu mines on stair bottoms, hatch drops and doors (the plan's spots) |
+| Tonic (R3) | His monitor up and Fire (its Auto pick) when a teammate's down, or (out of a fight) one's badly hurt, or he is; down, the ability key gets him up |
+| Shunt (R3) | His Arc Packs on the floor at the foot of the plan's reinforced walls (from the side it reinforces them from), each once its wall is reinforced: standing back on the nav grid, looking down at the spot |
+| Bailiff (R3) | Her shield up; an enemy within its prod's reach: the prod held on (Fire, not aimed), stepping in, while its charge lasts; farther off, her sidearm aimed |
+| Latch (R3) | His Snare Latches on the site's doors, from the site's side (aimed at the floor in the doorway; a latch goes on its jamb), as many as he carries. Any attacking bot with a latch on its leg pulls it off when nothing's in sight |
+| Ohm (R3) | His Brownout Pistol at the plan's first hard breach wall from its near side, before the push: a round at each device his scope marks behind it, else two at the wall |
+| Hull (R3) | In a fight his plate braced, stepping in, while the enemy's beyond 8 m; folded to fight closer with his pistol from the hip; folded again out of a fight |
+| Dowser (R3) | Out of a fight on his way in, his coil up for 4 s every 10 to 15 s: a ping on each device it shows that he hasn't marked this round, nearest first |
+| Rivet (R3) | The plan's hard breach (as Thermite's): his Stud Driver's Spine (picked with the reload key) laid on the wall from its near side, a slot from the floor to walk through, or a salvo on a hatch from above; set off from cover 3 m back |
 | Generic | Frags and stuns into rooms before entry, smokes for the plant, claymores on flanks; defenders' wire, shields, Nitro Cells (thrown at heard attackers), alarms, Bulletproof Cameras, Observation Blockers per the plan |
 
 "Counter my pick" (Bot Training): the bots' side picks the roster's answer to the human's operator (Mute against
 Thermite, Brava against Mute, …: a table in data/bots/picks.json, ours).
+
+Getting by each other (R3, D-189): a bot standing still beside a teammate who's been trying to move and not getting on
+(a second and a half all told) steps away from him for a moment; the follower's stuck clock runs on the simulation's
+ticks and starts afresh for each goal and after giving up.
 
 As built (M7, D-164): one motor, bots/use.ts, uses any gadget by the keys (place, throw or lob on a ballistic arc,
 swing, hold, detonate from cover); the planners hand out the plan's device spots (defense, prep) and breaches (attack,

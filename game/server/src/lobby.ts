@@ -25,8 +25,8 @@ import {
   type RoomListEntry,
 } from "@redmond/shared";
 
-/** The map match rooms play (Phase 6; one map so far). */
-export const MATCH_LEVEL = "oregon";
+/** The map match rooms play (Project Redmond R2: Millrace, our own; one map so far). */
+export const MATCH_LEVEL = "millrace";
 
 export const MAX_ROOMS = 50;
 /** An empty room is kept this long (someone may be reconnecting), then removed. */

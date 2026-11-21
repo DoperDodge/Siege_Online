@@ -1,13 +1,12 @@
-// Fuze's Ballistic Shield as drawn (Phase 8 M11; the game's model, D-157; redrawn from Ulo's reference renders, D-169):
-// a green plate with a narrower top part, its corners rounded, round a viewport of bulletproof glass at eye height in a
-// dark frame that stands out of the plate, stepping out at rounded shoulders to the wider body below, which is flat across
-// its middle and curves back round his sides; a dark rim round its edge, two bolts low down, and its inside dark. It's laid
-// out on the plate (metres across, metres down from its top, metres out of its face) and placed each frame from the same
-// frame as its hitboxes (player/hitboxes.ts shieldFrame), so it tilts with its carrier's lean and swings aside as he aims.
-// One mesh for everyone, your own first-person view included (you see the world through the window, the plate's dark
-// inside round it).
+// The Ballistic Shield as drawn (Phase 8 M11; Project Redmond's own design, D-183): a tan plate the same width top to
+// bottom, its corners well rounded, a narrow viewport slit of bulletproof glass at eye height in a dark frame that stands
+// out of the plate; flat across its middle and curving back round his sides; a dark rim round its edge, two bolts low
+// down, and its inside dark. It's laid out on the plate (metres across, metres down from its top, metres out of its face)
+// and placed each frame from the same frame as its hitboxes (player/hitboxes.ts shieldFrame), so it tilts with its
+// carrier's lean and swings aside as he aims. One mesh for everyone, your own first-person view included (you see the
+// world through the slit, the plate's dark inside round it).
 import * as THREE from "three";
-import { shieldFrame, type GameData, type PawnState, type ShieldPlace, type ShieldPlate } from "@redmond/shared";
+import { platePose, shieldFrame, type GameData, type PawnState, type ShieldData, type ShieldPlace, type ShieldPlate } from "@redmond/shared";
 
 /** A point laid out on the plate: across (metres from its middle), down (metres from its top), out of its face. */
 type PlatePoint = [x: number, down: number, out: number];
@@ -19,6 +18,8 @@ const FRAME_OUT_M = 0.03;
 const BOLT_M = 0.032;
 /** Segments in each rounded corner, and the most a column of the face spans across (its curve shows in columns). */
 const ARC_SEGS = 5;
+/** Rows across a plate's top bend (`topWrap`). */
+const WRAP_ROWS = 6;
 const COLUMN_M = 0.035;
 
 /** An outline (anticlockwise, x right and y up) moved in by `r` all round (its corners where the moved edges meet). */
@@ -83,14 +84,21 @@ class PlateShape {
       }
     };
     const q = Math.PI / 2;
+    // A plate one width to its top (the Bailiff Shield's, R3) has no shoulders: its sides go straight up to its top
+    // corners. (Drawn with them, its outline doubled back on itself there and its rim's inset shot out in spikes.)
+    const step = S > 1e-6 && tw < w - 1e-6;
     out.push(new THREE.Vector2(0, -H));
     arc(w - R, -H + R, -q, 0); // bottom right
-    arc(w - R, -S - R, 0, q); // right shoulder
-    out.push(new THREE.Vector2(tw, -S)); // into the top part
+    if (step) {
+      arc(w - R, -S - R, 0, q); // right shoulder
+      out.push(new THREE.Vector2(tw, -S)); // into the top part
+    }
     arc(tw - R, -R, 0, q); // top right
     arc(-tw + R, -R, q, 2 * q); // top left
-    out.push(new THREE.Vector2(-tw, -S));
-    arc(-w + R, -S - R, q, 2 * q); // left shoulder
+    if (step) {
+      out.push(new THREE.Vector2(-tw, -S));
+      arc(-w + R, -S - R, q, 2 * q); // left shoulder
+    }
     arc(-w + R, -H + R, 2 * q, 3 * q); // bottom left
     // (Points that fall together where an arc ends on a straight edge: one of each.)
     return out.filter((p, i) => i === 0 || p.distanceTo(out[i - 1]) > 1e-6);
@@ -108,11 +116,21 @@ export class ShieldModel {
   private readonly glass: THREE.MeshStandardMaterial;
   private place: ShieldPlace | null = null;
 
-  constructor(private readonly k: ShieldPlate) {
+  /**
+   * `face`: the plate's colour (the Bailiff Shield's is its own, R3). `whole`: its shield's numbers, for a plate that
+   * braces (Hull's, R3): laid out braced, drawn as braced as it is (player/shield.ts platePose).
+   */
+  constructor(
+    private readonly k: ShieldPlate,
+    face = 0x857654,
+    private readonly whole: ShieldData["shield"] | null = null,
+  ) {
     const w = k.widthM / 2;
-    const tw = Math.min(w, k.topWidthM / 2);
     const H = k.heightM;
-    const S = Math.min(k.shoulderM, H * 0.6);
+    let tw = Math.min(w, k.topWidthM / 2);
+    let S = Math.min(k.shoulderM, H * 0.6);
+    // No shoulders, or a top part as wide as its body: one width to the top (PlateShape.outline).
+    if (S <= 1e-6 || tw >= w - 1e-6) [tw, S] = [w, 0];
     const R = Math.min(k.cornerM, tw * 0.4, (H - S) * 0.4);
     const shape = new PlateShape(w, tw, S, H, R);
     // The window across the top part at eye height (its top `aboveEyeM` over the eyes).
@@ -129,12 +147,26 @@ export class ShieldModel {
     // A patch of the face from (x0, y0..y1 at x0) to (x1, y..y at x1), on vertices of its own for each side so each keeps
     // its own shading: anticlockwise across the plate (x right, y up) faces its carrier (the plate's local z is backward):
     // that's its inside; its face winds the other way.
-    const patch = (x0: number, b0: number, t0: number, x1: number, b1: number, t1: number) => {
+    // A plate whose top bends back over the head (`topWrap`, R3) is cut in rows across that band, so the bend shows.
+    const rows: number[] = [];
+    if (k.topWrap) for (let i = 1; i < WRAP_ROWS; i++) rows.push(-(k.topWrap.bandM * i) / WRAP_ROWS);
+    const quadPatch = (x0: number, b0: number, t0: number, x1: number, b1: number, t1: number) => {
       if (t0 - b0 < 1e-5 && t1 - b1 < 1e-5) return;
       const o = [add(x0, b0, 0), add(x1, b1, 0), add(x1, t1, 0), add(x0, t0, 0)];
       const i = [add(x0, b0, 0), add(x1, b1, 0), add(x1, t1, 0), add(x0, t0, 0)];
       faceIn.push(i[0], i[1], i[2], i[0], i[2], i[3]);
       faceOut.push(o[0], o[2], o[1], o[0], o[3], o[2]);
+    };
+    const patch = (x0: number, b0: number, t0: number, x1: number, b1: number, t1: number) => {
+      const cuts = rows.filter((y) => y > Math.min(b0, b1) + 1e-4 && y < Math.max(t0, t1) - 1e-4);
+      if (!cuts.length) return quadPatch(x0, b0, t0, x1, b1, t1);
+      let [p0, p1] = [b0, b1];
+      for (const y of cuts.sort((a, b) => a - b)) {
+        const [q0, q1] = [Math.min(Math.max(y, b0), t0), Math.min(Math.max(y, b1), t1)];
+        quadPatch(x0, p0, q0, x1, p1, q1);
+        [p0, p1] = [q0, q1];
+      }
+      quadPatch(x0, p0, t0, x1, p1, t1);
     };
 
     // The face in columns (its curve round his sides shows column by column), cut where its shape changes: the rounded
@@ -203,7 +235,7 @@ export class ShieldModel {
     }
     // Flat shaded: its vertices move every frame, and the faces' own slopes are all the light needs (its curve round the
     // sides reads in the columns' shading).
-    this.face = new THREE.MeshStandardMaterial({ color: 0x55893f, roughness: 0.66, metalness: 0.18, flatShading: true });
+    this.face = new THREE.MeshStandardMaterial({ color: face, roughness: 0.7, metalness: 0.18, flatShading: true });
     this.inside = new THREE.MeshStandardMaterial({ color: 0x3d4349, roughness: 0.8, metalness: 0.1, flatShading: true });
     this.trim = new THREE.MeshStandardMaterial({ color: 0x3a3f44, roughness: 0.42, metalness: 0.65, flatShading: true, side: THREE.DoubleSide });
     this.glass = new THREE.MeshStandardMaterial({ color: 0xa8d4f0, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide });
@@ -216,7 +248,7 @@ export class ShieldModel {
 
   /** Put it where a body's state has it (`place`), or hide it (none, or prone). */
   update(data: GameData, s: PawnState, place: ShieldPlace | null) {
-    const f = place ? shieldFrame(data.movement, data.hitboxes, s, this.k, place) : null;
+    const f = place ? shieldFrame(data.movement, data.hitboxes, s, this.whole ? platePose(this.whole, s) : this.k, place) : null;
     this.mesh.visible = f !== null;
     if (!f || !place) return;
     if (place !== this.place) {

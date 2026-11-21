@@ -59,7 +59,7 @@ const quick = (over: Record<string, unknown> = {}) => ({
 });
 
 async function matchRoom(format = "custom", seed = 5) {
-  const room = await Room.create("MATCH", "oregon", { format, seed });
+  const room = await Room.create("MATCH", "millrace", { format, seed });
   const clock = { t: 0 };
   /** `cmd`: this client's input for the next ticks (as roomHarness.ts has it). */
   type Client = { name: string; session: ClientSession; id: number; toServer: Uint8Array[]; events: GameEvent[]; errors: { code: number; message: string }[]; cmd: Partial<Omit<InputCmd, "seq">> };
@@ -162,44 +162,44 @@ describe("match rooms", () => {
     t.lobby(atk, { kind: "ready", ready: false }); // the lobby is over: refused, harmlessly
     atk.toServer.push(encodePickLoadout(defaultLoadoutPick(data, "thermite")));
     def.toServer.push(encodePickLoadout(defaultLoadoutPick(data, "mute")));
-    t.act(def, { kind: "siteVote", site: "SITE_LAUNDRY" });
-    t.act(atk, { kind: "spawn", group: "C_CONSTRUCTION" });
-    t.act(atk, { kind: "siteVote", site: "SITE_DORMS" }); // attackers don't vote
+    t.act(def, { kind: "siteVote", site: "SITE_BOILER" });
+    t.act(atk, { kind: "spawn", group: "C_YARD_GATE" });
+    t.act(atk, { kind: "siteVote", site: "SITE_OFFICES" }); // attackers don't vote
     t.tick();
     expect(atk.errors.at(-1)?.message).toMatch(/Not voting on the site/);
     // The attacker doesn't know the site; the defender does once it's chosen.
     t.until(() => t.match.phase === Phase.Prep, 10, "prep");
     t.tick();
     expect(atk.session.match!.site).toBeNull();
-    expect(def.session.match!.site).toBe("SITE_LAUNDRY");
+    expect(def.session.match!.site).toBe("SITE_BOILER");
     expect(def.session.match!.redWalls).toBe(true);
     expect(t.room.sim.matchRules.redWalls).toBe(true);
     expect(def.session.sim!.matchRules.redWalls).toBe(true);
     const defBody = t.bodyOf(def)!;
     expect(defBody.operatorId).toBe("mute");
     expect(defBody.team).toBe(DEFENSE);
-    const laundry = t.room.sim.level.def.spawns.filter((s) => s.group === "SITE_LAUNDRY")[0];
-    expect(Math.hypot(defBody.state.x - laundry.pos[0], defBody.state.z - laundry.pos[2])).toBeLessThan(1.5);
+    const boiler = t.room.sim.level.def.spawns.filter((s) => s.group === "SITE_BOILER")[0];
+    expect(Math.hypot(defBody.state.x - boiler.pos[0], defBody.state.z - boiler.pos[2])).toBeLessThan(1.5);
     // The attacker has no body in prep: they drive their first drone, out at their spawn (Phase 7).
     const prepDrone = t.bodyOf(atk)!;
     expect(prepDrone.kind).toBe(PawnKind.Drone);
-    const chosen = t.room.sim.level.def.spawns.filter((s) => s.group === "C_CONSTRUCTION")[0];
+    const chosen = t.room.sim.level.def.spawns.filter((s) => s.group === "C_YARD_GATE")[0];
     expect(Math.hypot(prepDrone.state.x - chosen.pos[0], prepDrone.state.z - chosen.pos[2])).toBeLessThan(0.5);
     expect(t.room.sim.deployRules.pools).toEqual([0, 6]);
 
-    // Action: the attacker at C Construction; the red walls come down.
+    // Action: the attacker at C Yard Gate; the red walls come down.
     t.until(() => t.match.phase === Phase.Action, 10, "action");
     t.tick();
     const atkBody = t.bodyOf(atk)!;
-    const construction = t.room.sim.level.def.spawns.find((s) => s.group === "C_CONSTRUCTION")!;
+    const gate = t.room.sim.level.def.spawns.find((s) => s.group === "C_YARD_GATE")!;
     expect(atkBody.operatorId).toBe("thermite");
-    expect(Math.hypot(atkBody.state.x - construction.pos[0], atkBody.state.z - construction.pos[2])).toBeLessThan(1.5);
+    expect(Math.hypot(atkBody.state.x - gate.pos[0], atkBody.state.z - gate.pos[2])).toBeLessThan(1.5);
     expect(t.room.sim.matchRules.redWalls).toBe(false);
     expect(def.session.match!.players.find((p) => p.id === atk.id)!.operator).toBe("thermite");
     // The defender goes down and, the last one up, dies: the attackers win by elimination.
     t.room.killBody(t.bodyOf(def)!.id, Cause.Lab);
     t.tick();
-    expect(t.match.history[0]).toMatchObject({ round: 1, winner: t.match.players.get(atk.id)!.team, reason: WinReason.Elimination, site: "SITE_LAUNDRY" });
+    expect(t.match.history[0]).toMatchObject({ round: 1, winner: t.match.players.get(atk.id)!.team, reason: WinReason.Elimination, site: "SITE_BOILER" });
     expect(t.match.phase).toBe(Phase.RoundEnd);
 
     // Round 2: the sides swap (nobody picks: the timer does). Time runs out: the defenders win.
@@ -271,7 +271,7 @@ describe("match rooms", () => {
     for (const side of [attackers, defenders]) expect(new Set(side.map((c) => t.bodyOf(c)!.operatorId)).size).toBe(side.length);
     // A defender outside the building: detected after the grace second, by the attackers only.
     const runner = t.bodyOf(defenders[0])!;
-    const out = t.room.sim.level.def.spawns.find((s) => s.group === "B_STREET")!;
+    const out = t.room.sim.level.def.spawns.find((s) => s.group === "B_RAIL_SIDING")!;
     t.room.sim.teleport(runner.id, out.pos[0] + 2, out.pos[1], out.pos[2]);
     for (let i = 0; i < 1.2 / DT + 10; i++) t.tick();
     expect(attackers[0].session.match!.detected).toEqual([runner.id]);
@@ -299,25 +299,25 @@ describe("the defuser (match/DESIGN.md §8)", () => {
     const def = cs.find((c) => t.match.sideOf(c.id) === DEFENSE)!;
     return [atk, def] as const;
   };
-  /** In the Laundry, 0.5 m and more from its walls and clear of its table: the site's first defender spawn. */
-  const LAUNDRY: [number, number, number] = [39.345, -3.2, 32.805];
+  /** In the Boiler Room, 0.5 m and more from its walls and clear of its boiler and stairs: room around it every way. */
+  const BOILER: [number, number, number] = [15, -3.2, 30];
 
   it("its carrier plants it in the site (7 s held, predicted), the fuse runs out: attackers; next round a defender disables it in time: defenders", async () => {
     const t = await matchRoom("custom", 3);
     const cs = await t.start(["a", "b"], quick({ siteReveal: "roundStart" }));
     let [atk, def] = sides(t, cs);
-    t.act(def, { kind: "siteVote", site: "SITE_LAUNDRY" });
+    t.act(def, { kind: "siteVote", site: "SITE_BOILER" });
     t.until(() => t.match.phase === Phase.Action, 15, "action");
     t.tick();
     const carrier = t.bodyOf(atk)!;
-    expect(t.room.sim.objective).toMatchObject({ carrier: carrier.id, site: "SITE_LAUNDRY", canPlant: true, planted: null });
+    expect(t.room.sim.objective).toMatchObject({ carrier: carrier.id, site: "SITE_BOILER", canPlant: true, planted: null });
     const [atkClient, defClient] = [atk, def];
     expect(atkClient.session.match!.defuser!.carrier).toBe(carrier.id);
     expect(defClient.session.match!.defuser!.carrier).toBe(0); // defenders don't see the carrier
     // Outside the site there's no plant; inside, the prompt and a 7 s hold, the body held still.
     const atkCtrl = t.room.bodyOf(atk.id)!;
     expect(t.room.sim.prompt(atkCtrl.id)).not.toBe("plant");
-    t.place(atkClient, ...LAUNDRY, 0);
+    t.place(atkClient, ...BOILER, 0);
     expect(t.room.sim.prompt(atkCtrl.id)).toBe("plant");
     const missedBefore = atkClient.session.mispredictions.length;
     const stood = { ...t.bodyOf(atk)!.state };
@@ -341,11 +341,11 @@ describe("the defuser (match/DESIGN.md §8)", () => {
     // Round 2, sides swapped: plant again, then the defender disables it facing it from 1 m.
     t.until(() => t.match.phase === Phase.Planning && t.match.round === 2, 5, "round 2");
     [atk, def] = sides(t, cs);
-    t.act(def, { kind: "siteVote", site: "SITE_LAUNDRY" });
+    t.act(def, { kind: "siteVote", site: "SITE_BOILER" });
     t.until(() => t.match.phase === Phase.Action, 15, "round 2's action");
     t.tick();
     const [a2, d2] = [atk, def];
-    t.place(a2, ...LAUNDRY, 0);
+    t.place(a2, ...BOILER, 0);
     a2.cmd = { yaw: 0, buttons: Btn.Interact };
     t.until(() => t.match.phase === Phase.PostPlant, 8, "round 2's plant");
     a2.cmd = {};
@@ -369,15 +369,15 @@ describe("the defuser (match/DESIGN.md §8)", () => {
     const [first, second] = t.match.sides[ATTACK].map((id) => cs.find((c) => c.id === id)!);
     const body = t.bodyOf(first)!;
     expect(t.room.sim.objective!.carrier).toBe(body.id);
-    t.place(first, ...LAUNDRY, 0);
+    t.place(first, ...BOILER, 0);
     t.room.killBody(body.id, Cause.Lab);
     t.tick();
     const dropped = t.room.sim.objective!.dropped!;
     expect(t.room.sim.objective!.carrier).toBe(0);
-    expect(Math.hypot(dropped[0] - LAUNDRY[0], dropped[2] - LAUNDRY[2])).toBeLessThan(0.1);
+    expect(Math.hypot(dropped[0] - BOILER[0], dropped[2] - BOILER[2])).toBeLessThan(0.1);
     expect(second.session.match!.defuser!.dropped).not.toBeNull();
     // 0.8 m away, looking the other way: a press picks it up.
-    t.place(second, LAUNDRY[0] + 0.8, LAUNDRY[1], LAUNDRY[2], 90);
+    t.place(second, BOILER[0] + 0.8, BOILER[1], BOILER[2], 90);
     expect(t.room.sim.prompt(t.room.bodyOf(second.id)!.id)).toBe("pickUp");
     second.cmd = { yaw: 90 * DEG, buttons: Btn.Interact };
     t.tick();
@@ -393,9 +393,9 @@ describe("the defuser (match/DESIGN.md §8)", () => {
     const cs = await t.start(["a", "b"], quick({ siteReveal: "roundStart" }));
     for (const round of [1, 2]) {
       const [a, def] = sides(t, cs);
-      t.act(def, { kind: "siteVote", site: "SITE_LAUNDRY" });
+      t.act(def, { kind: "siteVote", site: "SITE_BOILER" });
       t.until(() => t.match.phase === Phase.Action && t.match.round === round, 20, `round ${round}'s action`);
-      t.place(a, ...LAUNDRY, 0);
+      t.place(a, ...BOILER, 0);
       // Start the 7 s plant 3 s before the 30 s run out.
       t.until(() => t.room.sim.tick >= t.match.phaseEnd - 3 * 64, 31, "3 s left");
       a.cmd = { yaw: 0, buttons: Btn.Interact };
@@ -424,62 +424,62 @@ describe("the defuser (match/DESIGN.md §8)", () => {
     t.tick();
     const [first, second] = t.match.sides[ATTACK].map((id) => cs.find((c) => c.id === id)!);
     expect(t.room.sim.objective!.carrier).toBe(t.bodyOf(first)!.id);
-    /** A member's body 1.2 m over the Laundry's floor at `x` (in the air, under its ceiling). */
+    /** A member's body 1.2 m over the Boiler Room's floor at `x` (in the air, under its ceiling). */
     const lift = (c: (typeof cs)[number], x: number) => {
       const body = t.bodyOf(c)!;
-      t.room.sim.teleport(body.id, x, LAUNDRY[1] + 1.2, LAUNDRY[2], 0);
+      t.room.sim.teleport(body.id, x, BOILER[1] + 1.2, BOILER[2], 0);
       t.room.correct(c.id);
       return body;
     };
     const onFloorAt = (x: number) => {
       const d = t.room.sim.objective!.dropped!;
-      expect(Math.hypot(d[0] - x, d[2] - LAUNDRY[2])).toBeLessThan(0.1);
-      expect(d[1]).toBeCloseTo(LAUNDRY[1], 1);
+      expect(Math.hypot(d[0] - x, d[2] - BOILER[2])).toBeLessThan(0.1);
+      expect(d[1]).toBeCloseTo(BOILER[1], 1);
     };
-    t.place(first, ...LAUNDRY, 0);
-    const body = lift(first, LAUNDRY[0]);
+    t.place(first, ...BOILER, 0);
+    const body = lift(first, BOILER[0]);
     first.cmd = { buttons: Btn.Drop };
     t.until(() => t.room.sim.objective!.carrier === 0, 0.25, "the drop");
     first.cmd = {};
-    expect(body.state.y).toBeGreaterThan(LAUNDRY[1] + 0.8); // let go of in the air
-    onFloorAt(LAUNDRY[0]);
+    expect(body.state.y).toBeGreaterThan(BOILER[1] + 0.8); // let go of in the air
+    onFloorAt(BOILER[0]);
     // From the floor, 0.8 m away: a press picks it up.
-    t.place(second, LAUNDRY[0] + 0.8, LAUNDRY[1], LAUNDRY[2], 90);
+    t.place(second, BOILER[0] + 0.8, BOILER[1], BOILER[2], 90);
     expect(t.room.sim.prompt(t.room.bodyOf(second.id)!.id)).toBe("pickUp");
     second.cmd = { yaw: 90 * DEG, buttons: Btn.Interact };
     t.until(() => t.room.sim.objective!.carrier === t.bodyOf(second)!.id, 0.25, "the pickup");
     second.cmd = {};
-    t.room.killBody(lift(second, LAUNDRY[0] + 0.8).id, Cause.Lab);
+    t.room.killBody(lift(second, BOILER[0] + 0.8).id, Cause.Lab);
     t.tick();
     expect(t.room.sim.objective!.carrier).toBe(0);
-    onFloorAt(LAUNDRY[0] + 0.8);
+    onFloorAt(BOILER[0] + 0.8);
   }, 60_000);
 
-  it("an attacker who walks into the site finds it (under \"sight\" too) at once: in the Laundry, facing away from both its bombs", async () => {
+  it("an attacker who walks into the site finds it (under \"sight\" too) at once: in the Boiler Room, facing away from both its bombs", async () => {
     const t = await matchRoom("custom", 3);
     const cs = await t.start(["a", "b"], quick());
     expect(t.match.mode.match.siteReveal).toBe("sight");
     const [atk, def] = sides(t, cs);
-    t.act(def, { kind: "siteVote", site: "SITE_LAUNDRY" });
+    t.act(def, { kind: "siteVote", site: "SITE_BOILER" });
     // In prep, the defender out of the way: they start where the attacker goes.
     t.until(() => t.match.phase === Phase.Prep, 15, "prep");
     t.tick();
-    t.place(def, LAUNDRY[0] + 1, LAUNDRY[1], LAUNDRY[2], 90);
+    t.place(def, BOILER[0] + 1, BOILER[1], BOILER[2], 90);
     t.until(() => t.match.phase === Phase.Action, 15, "action");
     t.tick();
     expect([t.match.siteRevealed, atk.session.match!.site]).toEqual([false, null]);
     // Just after the action phase went out to the clients, the attacker in, facing away from its bomb: the news
     // reaches them in the same tick, not up to STATE_EVERY ticks later.
-    const bomb = t.room.sim.level.def.sites.find((s) => s.id === "SITE_LAUNDRY")!.bombs.find((b) => b.room === "B_LAUNDRY")!.pos;
-    const away = Math.atan2(-(LAUNDRY[0] - bomb[0]), -(LAUNDRY[2] - bomb[2])) / DEG; // the Supply's is behind walls
+    const bomb = t.room.sim.level.def.sites.find((s) => s.id === "SITE_BOILER")!.bombs.find((b) => b.room === "B_BOILER_ROOM")!.pos;
+    const away = Math.atan2(-(BOILER[0] - bomb[0]), -(BOILER[2] - bomb[2])) / DEG; // the Coal Store's is behind a wall
     const body = t.bodyOf(atk)!;
-    t.room.sim.teleport(body.id, ...LAUNDRY, away);
+    t.room.sim.teleport(body.id, ...BOILER, away);
     t.room.correct(atk.id);
     atk.cmd = { yaw: away * DEG };
     t.tick();
     t.tick();
     expect(t.match.siteRevealed).toBe(true);
-    expect(atk.session.match!.site).toBe("SITE_LAUNDRY");
+    expect(atk.session.match!.site).toBe("SITE_BOILER");
     // Its carrier, settled there, plants: the hold predicted.
     for (let i = 0; i < 18; i++) t.tick();
     const missed = atk.session.mispredictions.length;
@@ -495,13 +495,13 @@ describe("the defuser's edge cases", () => {
     const cs = await t.start(["a", "b"], quick({ siteReveal: "roundStart" }));
     const atk = cs.find((c) => t.match.sideOf(c.id) === ATTACK)!;
     const def = cs.find((c) => t.match.sideOf(c.id) === DEFENSE)!;
-    t.act(def, { kind: "siteVote", site: "SITE_DORMS" });
+    t.act(def, { kind: "siteVote", site: "SITE_OFFICES" });
     t.until(() => t.match.phase === Phase.Action, 15, "action");
     t.tick();
-    // H4, in the Kids' Dorms' floor (one of the site's rooms).
-    const h4 = t.room.sim.level.panels.byId.get("H4")!;
-    const top = h4.max[1];
-    const [hx, hz] = [(h4.min[0] + h4.max[0]) / 2, (h4.min[2] + h4.max[2]) / 2];
+    // H2, in Payroll's floor (one of the site's rooms).
+    const h2 = t.room.sim.level.panels.byId.get("H2")!;
+    const top = h2.max[1];
+    const [hx, hz] = [(h2.min[0] + h2.max[0]) / 2, (h2.min[2] + h2.max[2]) / 2];
     t.place(atk, hx, top, hz, 0);
     atk.cmd = { yaw: 0, buttons: Btn.Interact };
     t.until(() => t.match.phase === Phase.PostPlant, 8, "the plant on the hatch");
@@ -513,10 +513,10 @@ describe("the defuser's edge cases", () => {
     t.tick();
     expect(t.match.phase).toBe(Phase.PostPlant);
     // The hatch breaks under it: deactivated.
-    t.room.queuePanelOp(h4.panel.spec.index, { kind: "damage", amount: 1e6, hard: false });
+    t.room.queuePanelOp(h2.panel.spec.index, { kind: "damage", amount: 1e6, hard: false });
     t.tick();
     t.tick();
-    expect(h4.panel.broken).toBe(true);
+    expect(h2.panel.broken).toBe(true);
     expect(t.match.history[0]).toMatchObject({ reason: WinReason.Deactivated, winner: t.match.players.get(def.id)!.team });
   }, 60_000);
 });
@@ -562,7 +562,7 @@ describe("each format's details (Phase 6 M5)", () => {
     expect(v.players.filter((p) => p.side === ATTACK).map((p) => p.safe)).toEqual([true, true]);
     // (Their drones aren't safeguarded, wherever they are: Phase 7.)
     for (const c of [a1, a2]) for (const d of t.room.sim.dronesOf(t.room.bodyOf(c.id)!)) expect(t.room.director!.safeguarded(d)).toBe(false);
-    const lobby = t.room.sim.level.def.rooms.find((r) => r.id === "1F_LOBBY")!.anchor;
+    const lobby = t.room.sim.level.def.rooms.find((r) => r.id === "1F_RECEPTION")!.anchor;
     t.place(a2, lobby[0], lobby[1], lobby[2], 0);
     expect(t.room.director!.safeguarded(t.bodyOf(a2)!)).toBe(false);
     expect(a1.session.match!.players.find((p) => p.id === a2.id)!.safe).toBe(false);
@@ -736,7 +736,7 @@ describe("each format's details (Phase 6 M5)", () => {
     const t = await matchRoom("practice", 8);
     const host = await t.add("host");
     t.tick();
-    for (let r = 1; r <= 70; r++) t.match.history.push({ round: r, attackers: 0, winner: 1, reason: WinReason.Time, site: "SITE_DINING" });
+    for (let r = 1; r <= 70; r++) t.match.history.push({ round: r, attackers: 0, winner: 1, reason: WinReason.Time, site: "SITE_MILL" });
     expect(t.room.director!.view(host.id).history.map((h) => h.round)).toEqual(Array.from({ length: 64 }, (_, i) => i + 7));
   });
 });
@@ -804,14 +804,14 @@ describe("drones in a match (Phase 7 M1)", () => {
     const t = await matchRoom("custom", 3);
     const cs = await t.start(["a", "b"], quick({ siteReveal: "roundStart" }));
     const [atk, def] = sidesOf(t, cs);
-    t.act(def, { kind: "siteVote", site: "SITE_LAUNDRY" });
+    t.act(def, { kind: "siteVote", site: "SITE_BOILER" });
     t.until(() => t.match.phase === Phase.Prep, 15, "prep");
     t.tick();
-    // The defender in the Laundry facing −x; the drone 3 m ahead of them.
-    const LAUNDRY: [number, number, number] = [39.345, -3.2, 32.805];
-    t.place(def, ...LAUNDRY, 90);
+    // The defender in the Boiler Room facing −x; the drone 3 m ahead of them.
+    const BOILER: [number, number, number] = [15, -3.2, 30];
+    t.place(def, ...BOILER, 90);
     const [d1] = t.room.sim.dronesOf(t.room.bodyOf(atk.id)!);
-    t.room.sim.placeDrone(d1.id, LAUNDRY[0] - 3, LAUNDRY[1] + 0.02, LAUNDRY[2], 90);
+    t.room.sim.placeDrone(d1.id, BOILER[0] - 3, BOILER[1] + 0.02, BOILER[2], 90);
     t.room.correct(atk.id);
     for (let i = 0; i < 16; i++) t.tick();
     const shooter = t.bodyOf(def)!;
@@ -943,12 +943,15 @@ describe("default cameras in a match (Phase 7 M3)", () => {
 });
 
 describe("pings, scans and callouts (Phase 7 M4)", () => {
-  const LAUNDRY: [number, number, number] = [39.345, -3.2, 32.805];
-  /** Three players: a and c on Blue, attacking first; b on Orange, defending the Laundry. */
+  /** In the Boiler Room, clear of its boiler and stairs. */
+  const BOILER: [number, number, number] = [15, -3.2, 30];
+  /** In the Coal Store: a wall between it and BOILER. */
+  const COAL: [number, number] = [17, 35.5];
+  /** Three players: a and c on Blue, attacking first; b on Orange, defending the Boiler Room. */
   const three = async () => {
     const t = await matchRoom("custom", 3);
     const [a, b, c] = await t.start(["a", "b", "c"], quick({ siteReveal: "roundStart", firstAttack: "blue" }));
-    t.act(b, { kind: "siteVote", site: "SITE_LAUNDRY" });
+    t.act(b, { kind: "siteVote", site: "SITE_BOILER" });
     t.until(() => t.match.phase === Phase.Prep, 15, "prep");
     t.tick();
     return { t, a, b, c };
@@ -987,10 +990,10 @@ describe("pings, scans and callouts (Phase 7 M4)", () => {
 
   it("Fire held 1 s on a drone spots an enemy in its view's cone, in sight (the team and the one spotted are told); behind a wall, not", async () => {
     const { t, a, b, c } = await three();
-    t.place(b, ...LAUNDRY, 90);
+    t.place(b, ...BOILER, 90);
     const [drone] = t.room.sim.dronesOf(t.room.bodyOf(a.id)!);
     const aimFrom = (x: number, z: number) => {
-      t.room.sim.placeDrone(drone.id, x, LAUNDRY[1] + 0.02, z, 0);
+      t.room.sim.placeDrone(drone.id, x, BOILER[1] + 0.02, z, 0);
       t.room.correct(a.id);
       const eye = t.room.sim.eyeOf(drone).pos;
       const head = eyePose(data.movement, data.hitboxes, t.bodyOf(b)!.state).pos;
@@ -999,13 +1002,13 @@ describe("pings, scans and callouts (Phase 7 M4)", () => {
       for (let i = 0; i < 16; i++) t.tick();
     };
     const spotted = (x: { events: GameEvent[] }) => x.events.filter((e) => e.kind === "spotted").length;
-    // 2 m from the defender, in the Laundry (clear of its machines and table): spotted.
-    aimFrom(LAUNDRY[0], LAUNDRY[2] + 2);
+    // 2 m from the defender, in the Boiler Room: spotted.
+    aimFrom(BOILER[0], BOILER[2] + 2);
     press(t, a, Btn.Fire, 72);
     for (let i = 0; i < 4; i++) t.tick();
     expect([spotted(a), spotted(c), spotted(b)]).toEqual([1, 1, 1]);
-    // From the Supply room, a wall between: not.
-    aimFrom(40.375, 24.625);
+    // From the Coal Store, a wall between: not.
+    aimFrom(...COAL);
     press(t, a, Btn.Fire, 72);
     for (let i = 0; i < 4; i++) t.tick();
     expect(spotted(c)).toBe(1);
@@ -1013,10 +1016,10 @@ describe("pings, scans and callouts (Phase 7 M4)", () => {
 
   it("a ping on an enemy in view spots him, a red ping (Phase 8 M9); with a wall between, it lands on the wall", async () => {
     const { t, a, b, c } = await three();
-    t.place(b, ...LAUNDRY, 90);
+    t.place(b, ...BOILER, 90);
     const [drone] = t.room.sim.dronesOf(t.room.bodyOf(a.id)!);
     const aimFrom = (x: number, z: number) => {
-      t.room.sim.placeDrone(drone.id, x, LAUNDRY[1] + 0.02, z, 0);
+      t.room.sim.placeDrone(drone.id, x, BOILER[1] + 0.02, z, 0);
       t.room.correct(a.id);
       const eye = t.room.sim.eyeOf(drone).pos;
       const chest = heartOf(t.room.sim, t.bodyOf(b)!);
@@ -1025,15 +1028,18 @@ describe("pings, scans and callouts (Phase 7 M4)", () => {
       for (let i = 0; i < 16; i++) t.tick();
     };
     const count = (x: { events: GameEvent[] }, kind: GameEvent["kind"]) => x.events.filter((e) => e.kind === kind).length;
-    aimFrom(LAUNDRY[0], LAUNDRY[2] + 2);
+    aimFrom(BOILER[0], BOILER[2] + 2);
     press(t, a, Btn.Ping);
     for (let i = 0; i < 4; i++) t.tick();
     expect([count(a, "spotted"), count(c, "spotted"), count(b, "spotted"), count(c, "ping")]).toEqual([1, 1, 1, 0]);
     for (let i = 0; i < 64; i++) t.tick();
-    aimFrom(40.375, 24.625);
+    aimFrom(...COAL);
     press(t, a, Btn.Ping);
     for (let i = 0; i < 4; i++) t.tick();
     expect([count(c, "spotted"), count(c, "ping")]).toEqual([1, 1]);
+    // On the wall between (z 33, the Coal Store's face of it).
+    const ping = c.events.filter((e): e is Extract<GameEvent, { kind: "ping" }> => e.kind === "ping").at(-1)!;
+    expect(Math.abs(ping.pos[2] - 33.1)).toBeLessThan(0.05);
   }, 60_000);
 
   it("a ping key hammered every other tick sends a few a second at most", async () => {
@@ -1080,14 +1086,16 @@ describe("pings, scans and callouts (Phase 7 M4)", () => {
 
 
 describe("the Bulletproof Camera in a match (Phase 7 M5)", () => {
-  /** In the Laundry, 1.4 m from its south wall (panel 97), facing it. */
-  const WALL: [number, number, number] = [39.345, -3.2, 31.805];
-  /** a attacks (Blue); b defends the Laundry as Mute (a Bulletproof Camera in the loadout). A long prep. */
+  /** In the Coal Store, 1.4 m from its wall with the Boiler Room (SW-B-02, a soft wall), facing it (−z). */
+  const WALL: [number, number, number] = [18.25, -3.2, 34.5];
+  /** The panel index of that wall. */
+  const wallPanel = (t: { room: Room }) => t.room.sim.level.panels.byId.get("SW-B-02")!.panel.spec.index;
+  /** a attacks (Blue); b defends the Boiler Room as Mute (a Bulletproof Camera in the loadout). A long prep. */
   const setup = async (prep = 60) => {
     const t = await matchRoom("custom", 2);
     const seconds = { ...custom.match.seconds, pick: 5, prep, action: 30, roundEnd: 2 };
     const [a, b] = await t.start(["a", "b"], quick({ siteReveal: "roundStart", firstAttack: "blue", seconds }));
-    t.act(b, { kind: "siteVote", site: "SITE_LAUNDRY" });
+    t.act(b, { kind: "siteVote", site: "SITE_BOILER" });
     b.toServer.push(encodePickLoadout(defaultLoadoutPick(data, "mute")));
     t.until(() => t.match.phase === Phase.Prep, 15, "prep");
     t.tick();
@@ -1135,7 +1143,7 @@ describe("the Bulletproof Camera in a match (Phase 7 M5)", () => {
     wait(t, 8);
     const missed = b.session.mispredictions.length;
     const cam = placeCamera(t, b)();
-    expect([cam.flags & GFlag.OnFloor, cam.panel, cam.signalEnd, cam.flags & GFlag.Broken, cam.owner, cam.team]).toEqual([0, 97, 0, 0, t.room.bodyOf(b.id)!.id, DEFENSE]);
+    expect([cam.flags & GFlag.OnFloor, cam.panel, cam.signalEnd, cam.flags & GFlag.Broken, cam.owner, cam.team]).toEqual([0, wallPanel(t), 0, 0, t.room.bodyOf(b.id)!.id, DEFENSE]);
     expect([a.session.sim!.bpCams(), b.session.sim!.bpCams()]).toEqual([[cam], [cam]]);
     expect(t.bodyOf(b)!.state.g1).toBe(0);
     const ctrl = t.room.bodyOf(b.id)!;
@@ -1160,7 +1168,7 @@ describe("the Bulletproof Camera in a match (Phase 7 M5)", () => {
     shoot(t, b, aimAt(t, b, cam().pos));
     expect(cam().flags & GFlag.Broken).toBe(0);
     // 1.2 m along the wall from it, close to the wall: the shot comes at its side.
-    t.place(b, WALL[0] - 1.2, WALL[1], 30.75, -90);
+    t.place(b, WALL[0] - 1.2, WALL[1], 33.45, -90);
     wait(t, 8);
     shoot(t, b, aimAt(t, b, cam().pos));
     expect(cam().flags & GFlag.Broken).toBe(GFlag.Broken);
@@ -1175,14 +1183,14 @@ describe("the Bulletproof Camera in a match (Phase 7 M5)", () => {
     const cam = placeCamera(t, b);
     b.cmd = { yaw: 0, buttons: Btn.Interact };
     t.until(() => (cam().flags & GFlag.Broken) !== 0, 8, "reinforced");
-    expect(t.room.sim.level.panels.list[97].panel.kind).toBe("wall");
+    expect(t.room.sim.level.panels.list[wallPanel(t)].panel.kind).toBe("wall");
   }, 60_000);
 
   it("placed outdoors it loses its signal 10 s later: a defender watching it goes on to the next camera", async () => {
     const { t, b } = await setup(5);
     t.until(() => t.match.phase === Phase.Action, 10, "action"); // red walls keep defenders in during prep
     t.tick();
-    const street = t.room.sim.level.def.spawns.find((s) => s.group === "B_STREET")!.pos;
+    const street = t.room.sim.level.def.spawns.find((s) => s.group === "B_RAIL_SIDING")!.pos;
     t.place(b, street[0], street[1], street[2], 0);
     wait(t, 8);
     const cam = placeCamera(t, b, 0, -60 * DEG);
@@ -1208,7 +1216,7 @@ describe("the Bulletproof Camera in a match (Phase 7 M5)", () => {
     wait(t, 8);
     const camNow = placeCamera(t, b);
     const cam = camNow();
-    // a's drone on the Laundry floor, 2 m out in front of the camera.
+    // a's drone on the Coal Store floor, 2 m out in front of the camera.
     const [drone] = t.room.sim.dronesOf(t.room.bodyOf(a.id)!);
     t.room.sim.placeDrone(drone.id, WALL[0], WALL[1] + 0.02, cam.pos[2] + 2, 0);
     t.room.correct(a.id);

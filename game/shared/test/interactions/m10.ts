@@ -1,5 +1,5 @@
 // Interaction rows of Phase 8 M10 (gadgets/DESIGN.md §7, §12): Lesion's Gu mines, and Skopós's idle shell's barrier,
-// camera and knife, on the Gadget Lab (the defuser's row on Oregon, which has sites). Lesion or Skopós is client 1; Lesion
+// camera and knife, on the Gadget Lab (the defuser's row on Millrace, which has sites). Lesion or Skopós is client 1; Lesion
 // throws his mines with Z as a player does, or a test puts one straight into the table on the floor; the attacker
 // (client 0, Sledge unless it says) walks into it, shoots, knifes or blows it up.
 import { expect } from "vitest";
@@ -139,15 +139,15 @@ row("lesion.gu_mine", "player.defender", async () => {
 });
 
 row("lesion.gu_mine", "objective.defuser", async () => {
-  // On Oregon, Sledge carrying the defuser in the Laundry can plant; needled, he can't plant (his Interact pulls the
-  // needle instead) nor drop it; the needle out, he can plant again.
-  const s = await scene(["sledge", "lesion"], "oregon");
-  const LAUNDRY = [39.345, -3.2, 32.805] as const;
-  s.teleport(1, 30, -3.2, 20);
-  s.teleport(0, LAUNDRY[0], LAUNDRY[1], LAUNDRY[2]);
-  s.sim.objective = { carrier: s.body(0).id, dropped: null, planted: null, site: "SITE_LAUNDRY", canPlant: true, plantTicks: ticks(7), disableTicks: ticks(7) };
+  // On Millrace, Sledge carrying the defuser in the Boiler Room can plant; needled, he can't plant (his Interact pulls
+  // the needle instead) nor drop it; the needle out, he can plant again.
+  const s = await scene(["sledge", "lesion"], "millrace");
+  const BOILER = [15, -3.2, 30] as const;
+  s.teleport(1, 15, -3.2, 36); // in the Coal Store, out of the way
+  s.teleport(0, BOILER[0], BOILER[1], BOILER[2]);
+  s.sim.objective = { carrier: s.body(0).id, dropped: null, planted: null, site: "SITE_BOILER", canPlant: true, plantTicks: ticks(7), disableTicks: ticks(7) };
   expect(s.sim.defuserActionFor(s.body(0))).toBe("plant");
-  const g = s.put("gu_mine", 1, [LAUNDRY[0] + 0.4, LAUNDRY[1] + 0.03, LAUNDRY[2]]);
+  const g = s.put("gu_mine", 1, [BOILER[0] + 0.4, BOILER[1] + 0.03, BOILER[2]]);
   s.wait(2);
   expect([there(s, g), s.body(0).state.needled, s.sim.defuserActionFor(s.body(0))]).toEqual([false, true, null]);
   s.press(0, Btn.Drop);

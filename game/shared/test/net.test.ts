@@ -5,12 +5,16 @@ import {
   ByteReader,
   ByteWriter,
   controllerState,
+  DeployKind,
+  GadgetAct,
+  Hand,
   hashPawnState,
   initialPawnState,
   MAX_CAM_VIEWS,
   PAWN_F32_FIELDS,
   PAWN_INT_FIELDS,
   PAWN_STATE_BYTES,
+  PawnMode,
   ProtocolError,
   readControllerState,
   readPawnState,
@@ -81,6 +85,18 @@ describe("PawnState codec", () => {
       expect(hashPawnState(wire(s))).toBe(hashPawnState(s));
     }
     expect(new Set(states.map((s) => s.mode)).size).toBeGreaterThan(2); // really covered several modes
+  });
+
+  it("every enum's highest value round-trips (Ohm reloading his pistol, the last deploy kind, knocked down); one past it is refused", () => {
+    const top = (e: object) => Math.max(...Object.values(e).filter((v): v is number => typeof v === "number"));
+    const s: PawnState = { ...initialPawnState(1, 2, 3, 0.5, 100), gAct: GadgetAct.Shoot, hand: top(Hand), deployKind: top(DeployKind), mode: PawnMode.Knocked };
+    expect([s.gAct, top(GadgetAct)]).toEqual([GadgetAct.Shoot, GadgetAct.Shoot]);
+    expect(wire(s)).toEqual(s);
+    for (const bad of [{ gAct: top(GadgetAct) + 1 }, { hand: top(Hand) + 1 }, { deployKind: top(DeployKind) + 1 }]) {
+      const w = new ByteWriter();
+      writePawnState(w, { ...s, ...bad });
+      expect(() => readPawnState(new ByteReader(w.finish())), JSON.stringify(bad)).toThrow(ProtocolError);
+    }
   });
 
   it("the hash changes when any field changes by one float32 step", () => {

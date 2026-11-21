@@ -25,14 +25,14 @@
     },
     "bashDamage": 0,
     "plate": {
-      "widthM": 0.62,
-      "topWidthM": 0.41,
-      "heightM": 1.1,
+      "widthM": 0.58,
+      "topWidthM": 0.58,
+      "heightM": 1.05,
       "shoulderM": 0.37,
-      "cornerM": 0.05,
-      "curveM": 0.06,
+      "cornerM": 0.08,
+      "curveM": 0.04,
       "frontM": 0.3,
-      "aboveEyeM": 0.21,
+      "aboveEyeM": 0.18,
       "crouchRaiseM": 0.05,
       "ads": {
         "sideM": 0.3,
@@ -40,8 +40,8 @@
         "yawDeg": 22
       },
       "window": {
-        "widthM": 0.33,
-        "heightM": 0.18
+        "widthM": 0.3,
+        "heightM": 0.1
       }
     },
     "absorb": 0.66,

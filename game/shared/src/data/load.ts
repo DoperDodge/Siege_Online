@@ -6,7 +6,9 @@ import movementLabJson from "../../../../data/maps/movement_lab/layout.json";
 import rangeLabJson from "../../../../data/maps/range_lab/layout.json";
 import destructionLabJson from "../../../../data/maps/destruction_lab/layout.json";
 import gadgetLabJson from "../../../../data/maps/gadget_lab/layout.json";
+import rappelLabJson from "../../../../data/maps/rappel_lab/layout.json";
 import oregonJson from "../../../../data/maps/oregon/level.json";
+import millraceJson from "../../../../data/maps/millrace/level.json";
 import brava from "../../../../data/operators/brava.json";
 import fuze from "../../../../data/operators/fuze.json";
 import thermite from "../../../../data/operators/thermite.json";
@@ -19,6 +21,14 @@ import mira from "../../../../data/operators/mira.json";
 import lesion from "../../../../data/operators/lesion.json";
 import pulse from "../../../../data/operators/pulse.json";
 import mute from "../../../../data/operators/mute.json";
+import ohm from "../../../../data/operators/ohm.json";
+import tonic from "../../../../data/operators/tonic.json";
+import shunt from "../../../../data/operators/shunt.json";
+import latch from "../../../../data/operators/latch.json";
+import bailiff from "../../../../data/operators/bailiff.json";
+import rivet from "../../../../data/operators/rivet.json";
+import dowser from "../../../../data/operators/dowser.json";
+import hull from "../../../../data/operators/hull.json";
 import gunplayJson from "../../../../data/gunplay.json";
 import combatJson from "../../../../data/combat.json";
 import labModeJson from "../../../../data/modes/lab.json";
@@ -39,6 +49,7 @@ import botDifficultyJson from "../../../../data/bots/difficulty.json";
 import botNamesJson from "../../../../data/bots/names.json";
 import botPicksJson from "../../../../data/bots/picks.json";
 import oregonStratsJson from "../../../../data/maps/oregon/bot_strats.json";
+import millraceStratsJson from "../../../../data/maps/millrace/bot_strats.json";
 import objectiveJson from "../../../../data/objective.json";
 import intelJson from "../../../../data/intel.json";
 import destructionJson from "../../../../data/destruction.json";
@@ -117,8 +128,8 @@ export interface GameData {
 export const rawData = {
   movement: movementJson as Record<string, unknown>,
   hitboxes: hitboxJson as Record<string, unknown>,
-  operators: [brava, fuze, thermite, striker, dokkaebi, sledge, sentry, skopos, mira, lesion, pulse, mute] as Record<string, unknown>[],
-  levels: [movementLabJson, rangeLabJson, destructionLabJson, gadgetLabJson, oregonJson] as Record<string, unknown>[],
+  operators: [brava, fuze, thermite, striker, dokkaebi, sledge, sentry, skopos, mira, lesion, pulse, mute, ohm, tonic, shunt, latch, bailiff, rivet, dowser, hull] as Record<string, unknown>[],
+  levels: [movementLabJson, rangeLabJson, destructionLabJson, gadgetLabJson, rappelLabJson, oregonJson, millraceJson] as Record<string, unknown>[],
   weapons: weaponFiles,
   gunplay: gunplayJson as Record<string, unknown>,
   combat: combatJson as Record<string, unknown>,
@@ -131,11 +142,11 @@ export const rawData = {
   botDifficulty: botDifficultyJson as Record<string, unknown>,
   botNames: botNamesJson as Record<string, unknown>,
   botPicks: botPicksJson as Record<string, unknown>,
-  botStrats: { oregon: oregonStratsJson } as Record<string, Record<string, unknown>>,
+  botStrats: { oregon: oregonStratsJson, millrace: millraceStratsJson } as Record<string, Record<string, unknown>>,
 };
 
 /** Maps that tools/mapgen compiles (DECISIONS D-070): their LevelDef is level.json, generated from the authoring layout.json. */
-const COMPILED_MAPS = new Set(["oregon"]);
+const COMPILED_MAPS = new Set(["oregon", "millrace"]);
 /** The file a level comes from, for error messages. */
 export const levelFile = (id: string) => `data/maps/${id}/${COMPILED_MAPS.has(id) ? "level" : "layout"}.json`;
 
@@ -220,6 +231,11 @@ export function crossFileProblems(data: Pick<GameData, "operators" | "weapons" |
         const c = data.gadgets.get(g.mirror.canister);
         if (!c || !c.fragile || c.side !== g.side || c.operator !== g.operator) out.push(`data/gadgets/${g.id}.json: mirror.canister names "${g.mirror.canister}", which isn't a fragile gadget of its own on its side and its operator's`);
       }
+      // Rivet's Stud Driver (R3): what it lays are salvos of their own, on its side and its operator's.
+      for (const id of g.driver?.lays ?? []) {
+        const k = data.gadgets.get(id);
+        if (!k?.salvo || k.side !== g.side || k.operator !== g.operator) out.push(`data/gadgets/${g.id}.json: driver.lays names "${id}", which isn't a salvo of its own on its side and its operator's`);
+      }
       if (!g.cluster) continue;
       const k = data.gadgets.get(g.cluster.grenade);
       if (!k || k.use.kind !== "throw" || k.use.fuseS === undefined || !k.blast || k.side !== g.side || k.operator !== g.operator)
@@ -243,7 +259,7 @@ export function crossFileProblems(data: Pick<GameData, "operators" | "weapons" |
       if (!g.operator) continue;
       const op = data.operators.get(g.operator);
       const ability = op && data.gadgets.get(op.ability.id);
-      const part = ability !== undefined && (ability.cluster?.grenade === g.id || ability.mirror?.canister === g.id);
+      const part = ability !== undefined && (ability.cluster?.grenade === g.id || ability.mirror?.canister === g.id || (ability.driver?.lays.includes(g.id) ?? false));
       if (!op) out.push(`data/gadgets/${g.id}.json: operator "${g.operator}" doesn't exist`);
       else if ((op.ability.id !== g.id && !part) || op.side !== g.side) out.push(`data/gadgets/${g.id}.json: it isn't ${op.id}'s ability (${op.ability.id}) or part of it, on their side`);
     }

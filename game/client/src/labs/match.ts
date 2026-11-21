@@ -1,11 +1,11 @@
-// A match on Oregon (Phase 6, match/DESIGN.md §11): the game client (labs/common/lab.ts) with `match` on, in a room
+// A match on Millrace (Phase 6, match/DESIGN.md §11; the map since Project Redmond R2): the game client (labs/common/lab.ts) with `match` on, in a room
 // the Play page (play.html) created or joined; the lobby, planning, HUD, scoreboard and summaries are matchFeatures.ts.
 import { startLab } from "./common/lab.js";
 import { matchFeatures } from "./matchFeatures.js";
 
 await startLab({
-  levelId: "oregon",
-  title: "Match · Oregon",
+  levelId: "millrace",
+  title: "Match · Millrace",
   page: "/play.html",
   goTo: [],
   help: {
@@ -16,7 +16,7 @@ await startLab({
       "Action: attackers find the site, carry the defuser in and plant it (hold F in one of the site's rooms; G drops it). Defenders disable a planted defuser (hold F at it) before the fuse runs out. A side with nobody left up loses the round.",
       "Hold Tab for the scoreboard. Dead, you look through a teammate's eyes; click for the next.",
     ],
-    note: "Phase 6: match flow. Timers, defuser rules and what each side sees are our placeholders where Siege's are unknown (research/OPEN_QUESTIONS.md).",
+    note: "Phase 6: match flow. Timers, defuser rules and what each side sees are our own (data/modes, data/objective.json).",
   },
   match: true,
   extend: matchFeatures,

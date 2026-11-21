@@ -11,7 +11,10 @@ import { startLab } from "./common/lab.js";
 import { destructionFeatures } from "./destructionFeatures.js";
 import { navOverlay } from "./navOverlay.js";
 
-const level = loadGameData().levels.get("oregon")!;
+// Project Redmond's own map (R2, D-183) by default; `?map=oregon` shows the old one while it's still here.
+const MAP = new URLSearchParams(location.search).get("map") === "oregon" ? "oregon" : "millrace";
+if (MAP === "millrace") document.title = "Millrace";
+const level = loadGameData().levels.get(MAP)!;
 /** Metres from the plan's u (the level's plan.mPerU). */
 const U = level.plan?.mPerU ?? 0.15;
 const at = (name: string, x: number, y: number, yawDeg = 0): [string, number, number, number, number] => [name, x * U, 0, y * U, yawDeg];
@@ -21,15 +24,35 @@ const rooms = level.rooms.length > 0;
 // Attacker insertion points straight from the compiled level, so the menu follows the data: each group's first
 // spot (its insertion point; the other four stand within 3 m of it).
 const spawns = level.spawns.filter((s, i, all) => s.side === "attack" && all.findIndex((o) => o.group === s.group) === i);
+/** A spawn group's name as people say it ("A_RIVERBANK": "A Riverbank"). */
+const spawnName = (group: string) => group.replace(/_/g, " ").replace(/(?<=\w)(\w*)/g, (w) => w.toLowerCase());
+const spawnNames = spawns.map((s) => spawnName(s.group!)).join(", ");
+
+/** What to try on Millrace (the generic tools' lines are the same on both maps). */
+const millraceHelp = [
+  `Go to (pause menu) lists the four bomb sites first, then every room by storey, under its callout, and the three attacker spawns (${spawnNames}).`,
+  "The bomb sites: Go to → Bomb sites puts you at a site's first defender spawn, facing between its two bombs (red cases, named Bomb 1A, 1B…): the Boiler Room and Coal Store in the boiler house's basement, the Spinning and Mending Rooms on the mill's 1F, the Dispatch Office and Bale Store in the office wing, the Drafting Room and Payroll above them.",
+  "Take the stairs between storeys: the Main Stairs (basement to 2F, in the middle of the mill), the Office Stairs (Reception up to the Drafting Room), the Boiler Stairs (Boiler Room up into the Engine Room), the Gallery Stairs (the Loom Hall up to the Gallery) and the Millrace Steps (from the riverbank down into the dry millrace, at basement depth).",
+  "Outside: Go to an attacker spawn and walk in: from the riverbank on the west, along the millrace or over its footbridge; from the rail siding on the north, past the loading platform; from the yard gate on the east, across the yard to the office wing and the boiler house. The tunnel joins the boiler house's basement to the mill's cellars.",
+  "The roofs: the mill's long gable roof, the office wing's flat roof and the boiler house's are all walkable; rappel up to them (or to a window) from the ground.",
+];
+/** What to try on Oregon. */
+const oregonHelp = [
+  rooms
+    ? "Go to (pause menu) lists the four bomb sites first, then every room by storey, under its callout, with the Main Entrance and the three attacker spawns (A Junkyard, B Street, C Construction)."
+    : "The pause menu's Go to has the main rooms and the three attacker spawns (A Junkyard, B Street, C Construction).",
+  "The bomb sites: Go to → Bomb sites puts you at a site's first defender spawn, facing between its two bombs (red cases, named Bomb 1A, 1B…).",
+  "Take the stairs between storeys: the Tower, White and Armory Stairs run from the basement to 2F, and the Small Stairs from the Small Tower's corner up to 2F. The ladder in the 2F Tower goes up to the Cat Walk.",
+];
 
 await startLab({
-  levelId: "oregon",
-  title: "Oregon (greybox)",
+  levelId: MAP,
+  title: MAP === "millrace" ? "Millrace" : "Oregon (greybox)",
   page: "/labs/oregon.html",
   offline: "local",
   goTo: [
-    at("Main Entrance (outside)", 253, 295),
-    ...(rooms
+    ...(MAP === "oregon" ? [at("Main Entrance (outside)", 253, 295)] : []),
+    ...(rooms || MAP !== "oregon"
       ? []
       : [
           at("1F Lobby", 265, 262),
@@ -44,31 +67,24 @@ await startLab({
           at("1F Showers", 92, 231),
           at("1F Security", 168, 220),
         ]),
-    ...spawns.map((s): [string, number, number, number, number] => [`Attacker spawn ${s.group!.replace("_", " ")}`, s.pos[0], s.pos[1], s.pos[2], s.yawDeg]),
+    ...spawns.map((s): [string, number, number, number, number] => [`Attacker spawn ${spawnName(s.group!)}`, s.pos[0], s.pos[1], s.pos[2], s.yawDeg]),
   ],
   help: {
     tryThis: [
-      rooms
-        ? "Go to (pause menu) lists the four bomb sites first, then every room by storey, under its callout, with the Main Entrance and the three attacker spawns (A Junkyard, B Street, C Construction) on 1F."
-        : "The pause menu's Go to has the main rooms and the three attacker spawns (A Junkyard, B Street, C Construction).",
-      "The bomb sites: Go to → Bomb sites puts you at a site's first defender spawn, facing between its two bombs (red cases, named Bomb 1A, 1B…). Check them against the game, with the cameras (dark boxes, each with a pale cone the way it looks), the extinguishers (red) and the gas pipes (yellow). Every spawn has a disc and an arrow: attackers orange, defenders blue.",
-      "Press O for the zones: the rappel faces (orange, just outside every outside wall), the spawn-peek spots (green, inside the doors and windows that look at an attackers' spawn) and the run-outs (red, outside the doors defenders run out of).",
-      "The furniture: bullets go through the wooden and soft pieces (tables, counters, beds) at ×0.7 each, and the metal ones (the washers, the chest freezers, the bunk beds) stop them. Shoot through the Kitchen island. Pieces up to 1.1 m high can be vaulted.",
-      "Walk each storey against the blueprint: every wall, door and window should be where it has them. Exterior doors and windows start barricaded; inside doors are empty frames you can barricade (hold F).",
-      "Blue walls are the soft walls, labelled with their research ids (surfaces.md §2) and how many reinforcements they take (the dark seams split the sections); shoot, knife, reinforce or blow them open as in the Destruction Lab. Yellow floors are soft: shoot up through them from below. Green squares are hatches: break one and drop through.",
-      "Take the stairs between storeys: the Tower, White and Armory Stairs run from the basement to 2F, and the Small Stairs from the Small Tower's corner up to 2F. The ladder in the 2F Tower goes up to the Cat Walk: face it, press F, and W climbs. To come down from the top, stand at the gap in the rail facing the drop and press F; S climbs down, W back up.",
-      "Outside: Go to an attacker spawn (A Junkyard, B Street, C Construction) and walk to the building. East of it, the Bunker stairs go down a sunken passage to the basement's east door, and the Tower's outside stairs, beside its east door, go up onto the Meeting roof. Fences and low walls are vaulted (Space).",
-      "The roofs: vault out of the 2F Office's north window (the 2F Small Tower's east door leads into the Office) or the Dorms' big window onto the Dining roof, or step out of the Master's door onto the Balcony. Every slope and flat roof can be walked on.",
-      "Rappel (attackers in a match; anyone here): hold Space (the vault button on touch) at the foot of an outside wall facing it, at a roof edge facing out over it (you go over upside down), or inside at an open window with nothing to vault onto outside (you climb out onto the rope). Where you could also vault, a quick tap still vaults. On the rope W climbs, S descends (Shift: fast), A and D move along the wall (Shift faster), C turns you upside down and back; you look at most 90° either side of the wall, and can aim, shoot and knife. Space at a window swings you out and in through it; at glass or a barricade it's a rappel breach: a fresh barricade bounces you off with a kick that wears it, and a worn one gives way. Climbing to the top takes you over it onto a roof (over a railing too), and F lets go. Try the Big Tower's north wall from the ground, or from its 2F window (break the window first), the Dorms' big window from the Dining roof under it, and the Kids' Dorms' north window from the edge of its roof (the free camera puts you on a roof).",
-      "Press N for the free camera: fly through anything (WASD along the view, Space up, C down, Shift faster) while your body stays where it was; F puts your body on the floor under the camera (where a body fits), N takes you back to it.",
+      ...(MAP === "millrace" ? millraceHelp : oregonHelp),
+      "Press O for the zones: the rappel faces (orange, just outside every outside wall), the spawn-peek spots (green, inside the doors and windows that look at an attackers' spawn) and the run-outs.",
+      "The furniture: bullets go through the wooden and soft pieces (tables, counters, crates) at ×0.7 each, and the metal ones (machines, cabinets) stop them.",
+      "Exterior doors and windows start barricaded; inside doors are empty frames you can barricade (hold F). Blue walls are the soft walls, labelled with their ids and how many reinforcements they take (the dark seams split the sections); shoot, knife, reinforce or blow them open as in the Destruction Lab.",
+      "Rappel (attackers in a match; anyone here): hold Space (the vault button on touch) at the foot of an outside wall facing it, at a roof edge facing out over it (you go over upside down), or inside at an open window.",
+      "Press N for the free camera: fly through anything (WASD along the view, Space up, C down, Shift faster) while your body stays where it was; F puts your body on the floor under the camera (where a body fits), N takes you back.",
       "Drone holes are slots at floor level. Windows have glass outside the barricade and a sill you can vault once it's open.",
-      "The line at the bottom left says where you are: the room, the storey, and your position in the plan's units (u), first in the world frame (1F's drawing), then in your storey's own drawing (the frame its wall file uses). Quote it when you report something out of place.",
-      "Press M for the plan view: your storey from above, north up, centred on you, with the room callouts; the wheel zooms. Hold it against the blueprint. You keep walking in it (W goes the way the arrow points); M again goes back.",
+      "The line at the bottom left says where you are: the room, the storey, and your position.",
+      "Press M for the plan view: your storey from above, north up, centred on you, with the room callouts; the wheel zooms. You keep walking in it (W goes the way the arrow points); M again goes back.",
       "Press H to hide the storeys above yours (it follows you up and down), and P to switch between the surface colours and one light grey.",
-      "Press F6 for the bots' navigation grid round you (Phase 9): a dot wherever a body can stand (green; yellow where only crouched; blue on the stairs' ramps), and lines for the ways bots get between places other than walking: vaults (orange), the ladder (purple), drops (red) and barricades they break first (brown). Break a wall or a barricade and watch it follow.",
-      "Press F8 (or open the page with ?stats) for the frame-rate overlay: the target is 120 FPS on average and 90 at the 1% lows, at 1080p on High. The browser draws no faster than the display refreshes, so read the FPS on a display faster than 120 Hz (144 Hz or more). On a slower one, read the work instead: the page's own work each frame on the main thread (8.3 ms on average and 11.1 ms for the slowest 1% leave room for 120 and 90 FPS); it can't see the graphics card, so it says nothing about a frame the GPU holds up.",
+      "Press F6 for the bots' navigation grid round you: a dot wherever a body can stand (green; yellow where only crouched; blue on the stairs' slopes), and lines for the ways bots get between places other than walking.",
+      "Press F8 (or open the page with ?stats) for the frame-rate overlay.",
     ],
-    note: "Phase 5 milestone 8: rappel on every outside wall, on top of the four bomb sites with five defenders each, r6calls' cameras and ingredients, the major furniture and the zones, the roofs, the outside, the attacker spawns and every storey, room, stair and the ladder. Every shape, size and marker is a placeholder until you've walked it: 1 u of the plan = 0.15 m, floors at −3.2, 0, 3.2 and 6.2 m, roofs at 3.2, 6.2 and 9.2 m, doors 2.1 m (research/OPEN_QUESTIONS.md).",
+    note: MAP === "millrace" ? "Project Redmond R2: Millrace, our own map. Tell us what's wrong: rooms, sightlines, ways in, anything that blocks." : "Oregon, kept until Millrace replaces it everywhere (R2).",
   },
   extend: (lab) => {
     destructionFeatures(lab);

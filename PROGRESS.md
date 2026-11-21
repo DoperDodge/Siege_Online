@@ -5,7 +5,197 @@ known issues, and what's next.
 
 ---
 
-## Your requests after Phase 10 · 🚧 in review (PR #14; D-182)
+## Project Redmond: making the game its own · 🚧 in progress (branch `claude/project-redmond`; D-183)
+
+The game as it was before this is kept, untouched, on the `siege_online_classic` branch.
+
+### Done so far (R1: who's who)
+- **The twelve operators have new names** (their abilities work as before):
+
+  | Attack | Ability | Defence | Ability |
+  |---|---|---|---|
+  | Cleave | Breaching Maul | Lull | Damper |
+  | Kiln | Burn Frame | Murmur | Blood Oxygen Sensor |
+  | Hail | Hailstone Drill (and the Ballistic Shield) | Vista | Blind Pane |
+  | Patch | Crossover Drone | Twain | Proxy Frames |
+  | Relay | Ringer | Thistle | Burr Mines |
+  | Pointman | any two gadgets | Picket | any two gadgets |
+
+  The general gadgets named after the old game are now the Heavy Breach Charge, the Remote Charge, the Feed Blocker and
+  the Armoured Camera.
+- **New looks for all twelve**: Cleave in a yellow hard hat and a hi-vis vest, Kiln in soot grey with a beanie and
+  goggles, Hail in sand and olive with a cap, Patch in plum with grey hair and goggles, Relay in dark teal, Pointman in
+  plain grey, Lull all in black, Murmur in burgundy and white, Vista in glass grey, Twain's frames dark green with a
+  yellow visor, Thistle in forest green with a wide-brimmed hat, Picket in sand. (A hard hat and a wide-brimmed hat are
+  new things a body can wear.)
+- **Three designs that copied the old game's are replaced by our own**:
+  - the **Ballistic Shield**: a tan plate the same width top to bottom, well-rounded corners, a narrow viewport slit;
+  - **Twain's frame barrier**: a straight armoured front with a band of bulletproof glass at the frame's eyes and a
+    short angled plate at each end, open at the sides (the same footprint as before, so the bots still get round it);
+  - **Murmur's Blood Oxygen Sensor** (it reads the vibrations of lungs and blood): a slim handheld in his right hand
+    with blue lights and a small readout screen; the view tints blue while it's up, and each person it picks up through
+    walls shows as a glowing blue dot with rings rippling out from it, where they are, bigger the closer. Same range,
+    same forward fan, a ping still shares a reading with the team.
+
+### How to test
+1. `npm run build && npm start`, http://localhost:8080 → the Gadget Lab: pick each operator (Esc) and look at them with
+   the free camera, or play a match against bots.
+2. **Murmur**: Z raises the Blood Oxygen Sensor; look toward the attacker dummy (through a wall too).
+3. **Hail**: pick the Ballistic Shield as his primary; **Twain**: her idle frame behind its new barrier.
+
+### In progress (R2: Millrace, our own map)
+- **The map** (data/maps/millrace, its DESIGN.md): a closed textile mill by a river: the mill block over a basement,
+  the office wing, the boiler house joined to the cellars by a tunnel, the yard, and the dry millrace along the west.
+  Four sites (Boiler Room / Coal Store, Spinning / Mending, Dispatch / Bale Store, Drafting / Payroll), three attacker
+  spawns. Version 2 (after Ulo's walk): smaller rooms and corridors instead of the big open halls, nothing in front of
+  the doors and windows, spawns tucked out of sight lines.
+- **Bots on Millrace**: every staircase now works both ways for them. On Millrace none could be climbed; Oregon's
+  worked only because their flights had an open side. Two flights started against a wall and now have room at the
+  bottom, and the map generator refuses a staircase without room to step on and off (D-184). The bot soak plays a
+  round on each of the four sites with no bot stuck. Fixes it took on the way: attackers no longer change their guess
+  at the site back and forth, drones route only where a drone can drive, and a bot back from its drone sets off
+  straight away.
+- **Matches and Bot Training are on Millrace now**: Play → Play vs bots (offline), a drill, or a match on the server.
+  The greybox lab opens Millrace too (Oregon's still there as the menu's Oregon cards until it's taken off).
+- **How to test now**: Play → **Play vs bots**, pick a site in the lobby and play a round; or the main menu's
+  **Millrace** card (the greybox lab: Go to, the free camera, the plan view), or **Millrace online** with a friend.
+
+- **More for Millrace**: drone holes (nine slots at floor level: into the building and between rooms on every storey)
+  and a second hatch into the boiler site (from the Engine Room down into the Coal Store).
+- **Millrace's own look, finished** (R2.3): its cover props are now the mill's machines and fittings, not plain boxes:
+  five looms, a spinning frame, a carding engine, square dye vats, a boiler in its brickwork, the water wheel in its
+  pit, a sluice gate and a heap of debris in the dry race, the plank footbridge, bales, racks of cloth bolts, a clerk's
+  desk, a plan chest under a drawing board, a mending table. Outside: the yard's bales, the loading dock, the brick
+  walls. Every room is dressed for a mill: notice boards, clocks, posters, shelves, pegboards of tools, rugs in the
+  offices, crates and buckets on the working floors. The metal machines are drawn closed, as bullets stop at them.
+
+### In progress (R3: eight new operators)
+The plan: game/shared/src/gadgets/R3_OPERATORS.md (Ulo's calls, D-188): each keeps the role he asked for, with our
+names, looks and models and his tweaks to how it works. Rivet, Ohm, Dowser and Hull attacking; Shunt, Bailiff, Latch
+and Tonic defending. One at a time, each complete.
+- **Ohm** (attacker; health and speed 2 / 2; AK-12 or M870, GSh-18 or PMM, a frag, smoke or breach charge): his
+  **Brownout Pistol** in slot 2 (Z): a big-slide pistol with a coil shroud and a curved red-dot-style sight. Seven
+  rounds, one a magazine, the magazine changed in 1.9 s like the 5.7's (you see the empty one come out of the grip and
+  the next go in). A round stops at the first wall, floor, body or shield within 40 m and bursts there: every defender's
+  electronic device and body within 1.5 m, through walls and floors, is off for 10 s. Aiming (right mouse) brings the
+  sight to your eye: its lens is tinted blue, and in it (only in it) a blue dot sits on every device a round could
+  knock out, through walls (dots, not outlines: outlines are Dowser's). His look: a dark blue work jacket with copper trim, a grey beanie, a battery pack on his back. A bot
+  playing Ohm shoots the devices behind the plan's first hard breach wall before the charge goes on.
+- **How to test Ohm**: the Gadget Lab or the greybox lab, pick Ohm (Esc), Z, hold right mouse to look through the
+  sight; put a Damper down as a defender behind a wall first to see its dot and then knock it out. In Play vs bots,
+  attack the Mill with an Ohm bot on your team.
+- **Tonic** (defender, the medic; health and speed 3 / 1; UMP45 or M590A1, P229 or USP40, an armoured camera or barbed
+  wire): **Second Wind**, the medic's updated version you pointed at. Every teammate wears a patch. Z raises his wrist
+  monitor: it lists Auto, you and your teammates with their health (or DOWN); the mouse wheel picks, Fire sets that
+  one's patch off from anywhere. On someone standing it heals 45 over 6 s; on someone down it stops the bleeding and
+  gets them up 2.5 s later with 25. One teammate's patch at a time, but his own any time, and when he's down Z gets
+  him back up. Five patches a round. An EMP on him stops the monitor; on a patched teammate it stops the patch. A
+  patched player's health bar turns teal with SECOND WIND on it. His look: white and teal, a cap, a sling bag with a
+  teal plus. A bot playing Tonic gets a downed teammate up (and heals the badly hurt) wherever they are.
+- **How to test Tonic**: the Gadget Lab, pick Tonic, Z: the lab's defender dummies are his teammates on the list. In
+  Play vs bots, defending with a Tonic bot: go down near your teammates and watch him bring you back.
+- **Bots don't freeze or block each other in a doorway any more** (found while adding Tonic): a bot that had once
+  stalled could give up on every goal after it and stand still for the rest of the round, and two teammates could wedge
+  each other where only one fits. Every map's soak runs clean again.
+- **Shunt** (defender, against hard breaches; health and speed 2 / 2; MP5K or M1014, P226 or Q-929, barbed wire or a
+  Nitro Cell): four **Arc Packs** in slot 2 (Z), put down on the floor (0.8 s); aimed at the floor up to a metre short
+  of a reinforced wall or a barricade, a pack goes against its foot. A pack there makes it live: it flickers blue and crackles on both sides, for everyone to see (barbed wire and
+  shields of his side's by it too). An attacker's charge on a live surface can't be set off and is burnt out half a
+  second after it's on it, whether it went on while the surface was live or was there already when the pack went live.
+  So **tricking works**: pick the pack up (hold F on it), let the attacker see the wall go quiet and put his charge on,
+  and put the pack back before he sets it off. Once a charge is set off (burning, drilling) it's too late. An attacker
+  knifing a live surface takes 10 and is thrown back, and does nothing to it; a drone by a pack is jammed. An EMP (Ohm's
+  pistol) turns a pack off for its seconds; one bullet destroys it. His look: steel blue shirt, a hi-vis vest, a cap and
+  safety glasses, amber gloves, a cable reel on his back. A bot playing Shunt puts his packs at the foot of the walls
+  his team reinforces, once they're reinforced.
+- **Latch** (defender, the trapper; health and speed 2 / 2; Vector or SIX12 SD, C75 or SMG-12, a Nitro Cell or a
+  proximity alarm): four **Snare Latches** in slot 2 (Z). Look at a door's or window's opening and hold left mouse
+  (1.2 s): the latch goes on the nearer side of the frame at shin height (a window's: on its sill) and 1.5 s later a thin
+  grey wire runs across the opening. The first attacker through it is caught by the leg: 35 at once and 5 a second, slowed
+  to 0.7 and no sprinting, until he holds F for 1.5 s to pull it off (or goes down). The snap is loud: the defenders see
+  where he is for 3 s. Drones pass under it and defenders walk through it; it's mechanical, so an EMP doesn't stop it
+  and Ohm's sight doesn't show it; one bullet breaks it; Latch can take his own back (F) before it's sprung. His look:
+  rust brown, a dark hood and goggles, a satchel with spare latches. A bot playing Latch traps the site's doors in prep,
+  and attacking bots pull a latch off their leg when nothing's in sight.
+- **Bailiff** (defender, shield and prod; health and speed 3 / 1; the **Bailiff Shield** with an SMG-11 or P229,
+  barbed wire or an impact grenade): a dark slate shield from the floor to over her head, wrapping round her sides and
+  over the top, so nothing of her shows past it (feet included), held with her sidearm (aim to fire it). With the
+  shield up and not aiming, **click Fire to switch its prod on** (click again to switch it off): it jolts the nearest
+  attacker within 4 m in front of you every third of a second: 4 damage, and he's slowed to 0.6 with no sprinting or
+  vaulting for 1.2 s. The prod has 8 s of charge (on the shield line) that comes back once it's been off a second.
+  **Z** takes out its set-down: hold Fire and the shield goes down on the floor as solid cover with its viewport, and
+  you have your sidearm alone; hold F on it to pick it back up. **Set down, Z switches the shield's own shock on and
+  off**: it jolts any attacker who comes in front of it the same way (on its own charge; an EMP switches it off). **The twist**: an EMP that reaches her while she holds the shield up shocks her: 1.5 s she
+  can't move, shoot or use anything, and the prod stays off for the EMP's time (set down, it doesn't). Her look: black
+  with white piping, a helmet with a face shield. A bot playing Bailiff prods attackers who come close.
+- **Rivet** (attacker, the remote hard breacher; health and speed 2 / 2; UMP45 or Commando 9, P229 or USP40, a stun,
+  claymore or breach charge): the **Stud Driver** in slot 2 (Z), a stubby launcher with a drum. **Your design: his hard
+  breaches come in a circle, a vertical line and an X, and each is a hole you can get through.** Fire lays a salvo of
+  explosive studs where you aim, on a wall, floor or hatch (soft or reinforced) up to 25 m away; **R picks the shape**
+  while it's out (the HUD says which, and green dots show where the studs will go): the **Ring** (a round hole 1.4 m
+  across), the **Spine** (a slot 0.8 m wide and 2 m tall) or the **Cross** (an X with a round middle). On a wall the
+  salvo lines itself up whatever height you aim at: the Ring's and the Cross's bottom edge goes 0.45 m over the floor, a
+  ledge you vault through (Space), and the Spine runs up from the floor, a slot you walk through. Three salvos a round,
+  all three can wait at once; Z gives the detonator and **one press sets them all off together**, each cutting its
+  shape through every layer, steel included (a hatch goes whole). A Damper in reach of one salvo keeps that one from
+  going (the others do); a live Arc Pack burns one out; a bullet into one of its studs destroys it. His look: slate
+  overalls, an orange hood, a dark visor, a drum of spare studs on his back. A bot playing Rivet lays a Spine on the
+  plan's hard breach wall and sets it off from cover.
+- **Dowser** (attacker, the electronics scout; health and speed 1 / 3; L85A2 or T-5 SMG, C75 Auto or P226, a smoke,
+  claymore or breach charge): the **Divining Coil** in slot 2 (Z), a brass search coil on a short handle held out ahead.
+  While it's up, every electronic device of the defenders' within 18 m in a 100° fan ahead of him (Arc Packs, Dampers,
+  armoured cameras, alarms, Nitro Cells, the level's cameras, Twain's idle frame) shows as an amber outline, through
+  walls and floors, for him alone; the gadget line says how many it reads. **Ping (T) while it's up marks the one nearest
+  your crosshair for your team.** Mechanical things never show (Latch's snares, barbed wire). No weapon while it's up;
+  an EMP on him empties it (NO SIGNAL). His look: field green, a wide-brimmed hat, a slim pack with a whip aerial. A bot
+  playing Dowser raises the coil now and then on his way in and pings each device it finds.
+- **Hull** (attacker, the full-body shield; health and speed 3 / 1; the **Hull Plate** with a P229 or 5.7 USG, a smoke,
+  Impact EMP or Heavy Breach Charge): a heavy plate from the floor to just under his eyes, 0.7 m across; he looks over it
+  and fires his pistol from the hip (it's never aimed). **Z braces it**: over 0.4 s its sides and top slide out until
+  it covers him from the floor to over his head, a metre across, with a viewport at eye height. Braced he walks at 0.55
+  (no sprint) with no weapon (his knife is the plate's shove), and a blast in front reaches him only a tenth through it
+  and never knocks it aside; Z again folds it in 0.3 s. His look: dark grey, a heavy plate carrier, a helmet with a
+  face shield. A bot playing Hull braces when the enemy's far off and steps in, then folds it to fight up close.
+- **How to test Hull**: the Gadget Lab, pick Hull; shoot from the hip, then Z to brace and walk at the attacker dummy;
+  switch to a defender and throw a grenade at his plate, braced and folded.
+- **How to test Dowser**: the Gadget Lab, pick Mute and put a Damper down behind a soft wall; pick Dowser, stand in front
+  of the wall, Z: its outline shows through the wall; press T to mark it. Turn round to see the lab's camera outlined.
+- **Found by the soak**: a Brava bot's Kludge drone could hover at the foot of a stair for the rest of the round when a
+  device it wanted to hack flickered in and out of its sights at the edge of its reach: it let go of Fire each time
+  (so the hack never finished) and counted each glimpse as getting on. It now holds Fire through the whole hack once one
+  starts, and leaves a device it has tried twice.
+- **How to test Rivet**: the Gadget Lab, pick Rivet, Z, aim at the soft walls and press left mouse (R between presses
+  for the other shapes), then Z and left mouse to set them all off; walk up to the Ring or the Cross and press Space to
+  vault through, or walk through the Spine. Try one on the Reinforced wall too.
+- **How to test Bailiff**: the Gadget Lab, pick Bailiff; walk up to the attacker dummy and click left mouse; Z and hold
+  left mouse to set the shield down, then Z to switch its shock on. Then switch to Ohm and shoot an EMP round at her with the shield up.
+- **How to test Latch**: the Gadget Lab, pick Latch, Z, look at the empty door frame and hold left mouse; switch to an
+  attacker and walk through it.
+- **How to test Shunt**: the Gadget Lab, pick Shunt, Z, look at the floor just in front of the Reinforced wall and hold
+  left mouse (the pack goes to the wall and the section of it the pack is by lights up); switch to Thermite and put his charge on it. For tricking: put the charge on with the pack picked up, then put it back.
+
+- **The eight against each other** (R3_OPERATORS §3): each interaction has a test in its operator's file (Ohm's round on
+  Shunt's pack, Bailiff and her set-down, Latch's snare and Rivet's salvo; the packs against every attacker charge;
+  Dowser's coil on the R3 devices and Twain's idle frame; Hull braced through Latch's snare; Tonic's patch and a revive
+  by hand). They found nothing wrong. A browser check runs each of the eight through the Gadget Lab's own keys and HUD
+  (tools/e2e/r3-lab.mjs, in CI).
+- **Found by CI** (D-197): when a player's inputs ran late past the room's hold (a lag spike, or a slow computer), the
+  room's copy of their body let go of the sights and straightened its lean, so the next shot took the hip's spread. It
+  now keeps both as the player held them.
+- **The review** (D-198): a code review across the eight found ten faults, each now fixed with a test. The ones you'd
+  notice: an Arc Pack lights up only the section of a reinforced wall it stands by (it lit the whole wall); a Hailstone
+  Drill on a live deployable shield is burnt out; a knockdown folds Hull's plate and switches Bailiff's prod off;
+  others see Hull's plate braced; clicking the prod or switching Ohm's pistol away and back can't beat their timers; a
+  drone that touches a pack can drive off again; the prod and the pack's shock respect the attacker safeguard and the
+  team damage rules.
+
+### Next
+- **R4**: the rest of the tests moved from Oregon to Millrace, Oregon taken off this branch, the code's internal names
+  and the docs brought in line.
+
+---
+
+## Your requests after Phase 10 · ✅ done (PR #14, squash-merged into `main`; D-182)
 
 ### What's done
 - **Pulse's sensor, looked through**: held up, it comes close to his face and you look **through** its screen: the

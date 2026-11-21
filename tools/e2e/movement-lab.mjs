@@ -121,10 +121,10 @@ try {
   result.checks.freeCameraLeavesTheShellsView =
     onCam.viewed.yaw !== onCam.possessed.yaw && flying.viewed.yaw === onCam.viewed.yaw && backOnCam.viewed.yaw === onCam.viewed.yaw;
   await page.keyboard.press("KeyF");
-  await page.waitForFunction(() => document.querySelector(".op-name").textContent.includes("shell 2/2"), null, { timeout: 20000 });
+  await page.waitForFunction(() => document.querySelector(".op-name").textContent.includes("frame 2/2"), null, { timeout: 20000 });
   const camClosed = await page.evaluate(() => document.querySelector(".shellcam").classList.contains("hidden"));
   result.checks.skoposSwapViaCamera =
-    start.includes("shell 1/2") && afterF.includes("shell 1/2") && camPrompt.includes("F to transfer") && camClosed;
+    start.includes("frame 1/2") && afterF.includes("frame 1/2") && camPrompt.includes("F to transfer") && camClosed;
 
   // Real keyboard input (not the autotest script): C toggles crouch; sprint stands you up and clears the
   // toggle, so you are still standing after letting go (the simulation alone would crouch you again).

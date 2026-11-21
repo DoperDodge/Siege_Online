@@ -8,8 +8,9 @@
 // it's hit and placed; built once per kind and size, merged by material. Our own shapes, of each kind's general form.
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 
-export type ShapeMat = "olive" | "dark" | "metal" | "black" | "tan" | "red" | "yellow" | "white" | "glass" | "rubber" | "blueGlow" | "greenGlow" | "redGlow" | "team";
+export type ShapeMat = "olive" | "dark" | "metal" | "black" | "tan" | "red" | "yellow" | "white" | "glass" | "rubber" | "blueGlow" | "greenGlow" | "redGlow" | "team" | "orange";
 
 /** Each shape material's look (the gadget models make one of each, shared). */
 export const SHAPE_MATERIALS: Record<ShapeMat, { color: number; roughness: number; metalness: number; emissive?: number }> = {
@@ -27,6 +28,8 @@ export const SHAPE_MATERIALS: Record<ShapeMat, { color: number; roughness: numbe
   greenGlow: { color: 0x37ff6a, roughness: 0.4, metalness: 0, emissive: 0x24c94f },
   redGlow: { color: 0xff3030, roughness: 0.4, metalness: 0, emissive: 0xff2020 },
   team: { color: 0xffffff, roughness: 0.55, metalness: 0.1 },
+  // Rivet's studs' heads and his driver's muzzle band (R3): a hot orange, lit a little so a salvo shows on a wall.
+  orange: { color: 0xea580c, roughness: 0.45, metalness: 0.2, emissive: 0x7c2d12 },
 };
 
 type V3 = readonly [number, number, number];
@@ -87,16 +90,69 @@ function fuse(p: Parts, y: number, r: number): void {
 
 /** The shape for a gadget by its id and data size, merged by material; null for one drawn otherwise. */
 /**
- * Pulse's sensor's display in its model's frame (gadget size 0.23 × 0.17 × 0.05): 4:3, a little left of the middle
- * (the sensor block is on the left, the handle on the right), its face toward the holder. Open: when it's up the page
- * draws the screen there (viewmodel.ts sensorScreen).
+ * Murmur's Blood Oxygen Sensor's screen in its model's frame (gadget size 0.07 × 0.17 × 0.036; our own design, D-183):
+ * small, landscape, in the upper part of the handheld's face toward the holder (+z). While it's up the page draws its
+ * readout there (viewmodel.ts sensorScreen).
  */
-export const SENSOR_DISPLAY = { w: 0.15, h: 0.112, cx: -0.005, cy: 0.004, z: 0.0155 } as const;
+export const SENSOR_DISPLAY = { w: 0.05, h: 0.034, cx: 0, cy: 0.03, z: 0.0182 } as const;
 
-export function gadgetShape(id: string, size: V3): Map<ShapeMat, THREE.BufferGeometry> | null {
+/**
+ * `studs`: a salvo's studs (Rivet's, R3: gadgets/studs.ts studPoints), across and up its face from its middle; the
+ * page's data gives them, a shape alone can't.
+ */
+export function gadgetShape(id: string, size: V3, studs: readonly (readonly [number, number])[] = []): Map<ShapeMat, THREE.BufferGeometry> | null {
   const [w, h, d] = size;
   const p = new Parts();
   switch (id) {
+    case "stud_ring":
+    case "stud_spine":
+    case "stud_cross": {
+      // A salvo of Rivet's studs (R3; our own design): each a squat steel stud driven into the surface (the back of its
+      // box, +z), its domed head out (−z) with a hot orange band. (No studs given: no shape of its own.)
+      if (!studs.length) return null;
+      const back = d / 2;
+      for (const [x, y] of studs) {
+        p.cyl("metal", 0.016, d * 0.5, [x, y, back - d * 0.25], [HALF_PI, 0, 0], 10);
+        p.cyl("orange", 0.026, 0.008, [x, y, back - d * 0.5 - 0.004], [HALF_PI, 0, 0], 12);
+        p.lathe("dark", [[0.022, 0], [0.016, 0.006], [0.001, 0.01]], [x, y, back - d * 0.5 - 0.008], 10, [-HALF_PI, 0, 0]);
+      }
+      break;
+    }
+    case "divining_coil": {
+      // Dowser's Divining Coil (R3; our own design): a flat search coil, a ring wound in the accent's brass, at the top of
+      // a short handle, a small housing where they meet with an amber lamp, a rubber grip low on the handle. The coil's
+      // face toward −z (it's held out ahead of him).
+      const r = w / 2 - 0.009;
+      const cy = h / 2 - r - 0.009;
+      p.torus("yellow", r, 0.008, [0, cy, 0], [0, 0, 0]);
+      p.torus("dark", r * 0.62, 0.005, [0, cy, 0], [0, 0, 0]);
+      p.box("dark", [0.012, r * 1.3, 0.006], [0, cy, 0]);
+      p.box("dark", [0.05, 0.04, d * 0.8], [0, cy - r - 0.012, 0]);
+      p.cyl("orange", 0.006, 0.004, [0, cy - r - 0.012, -d * 0.4 - 0.002], [HALF_PI, 0, 0], 8);
+      p.cyl("metal", 0.011, cy - r - 0.03 + h / 2, [0, (cy - r - 0.032 - h / 2) / 2, 0], [0, 0, 0], 10);
+      p.cyl("rubber", 0.015, 0.1, [0, -h / 2 + 0.05, 0], [0, 0, 0], 12);
+      break;
+    }
+    case "stud_driver": {
+      // Rivet's Stud Driver (R3; our own design), as others see it in his hand: a fat barrel along its top with an
+      // orange band round its muzzle, a three-round drum across under it, a pistol grip raked back, a guard. Front −z.
+      const barrelR = w * 0.38;
+      const by = h / 2 - barrelR * 1.08;
+      p.cyl("dark", barrelR, d * 0.9, [0, by, -d * 0.04], [HALF_PI, 0, 0], 14);
+      p.cyl("orange", barrelR * 1.08, 0.02, [0, by, -d / 2 + 0.026], [HALF_PI, 0, 0], 14);
+      p.cyl("black", barrelR * 0.62, 0.004, [0, by, -d * 0.49 - 0.002], [HALF_PI, 0, 0], 12);
+      const drumR = w * 0.42;
+      const dy = by - barrelR - drumR * 0.55;
+      p.cyl("metal", drumR, w * 0.9, [0, dy, -d * 0.12], [0, 0, HALF_PI], 14);
+      for (let i = 0; i < 3; i++) {
+        const a = (i * 2 * Math.PI) / 3;
+        for (const x of [-1, 1]) p.cyl("orange", drumR * 0.22, 0.004, [x * w * 0.45, dy + Math.sin(a) * drumR * 0.5, -d * 0.12 + Math.cos(a) * drumR * 0.5], [0, 0, HALF_PI], 8);
+      }
+      const gripH = h / 2 + by - barrelR;
+      p.box("black", [w * 0.6, gripH, d * 0.17], [0, -h / 2 + gripH / 2, d * 0.3]);
+      p.box("dark", [w * 0.3, 0.012, d * 0.3], [0, -h / 2 + gripH * 0.55, d * 0.1]);
+      break;
+    }
     case "frag": {
       const r = Math.min(w, d) / 2 - 0.002;
       const by = -h / 2;
@@ -126,6 +182,111 @@ export function gadgetShape(id: string, size: V3): Map<ShapeMat, THREE.BufferGeo
       p.cyl("dark", r, h * 0.62, [0, -h * 0.19, 0], [0, 0, 0], 18);
       for (const y of [-0.3, -0.1]) p.cyl("blueGlow", r * 1.02, 0.006, [0, y * h, 0], [0, 0, 0], 18);
       p.lathe("dark", [[r, h * 0.12], [r * 0.9, h * 0.28], [r * 0.5, h * 0.42], [0.001, h * 0.48]]);
+      break;
+    }
+    case "brownout_pistol": {
+      // Ohm's Brownout Pistol (R3; our own design), as others see it in his hand: a big-slide pistol (the slide, the
+      // frame under it, a trigger guard, the grip raked back with its magazine's base), a shroud out past the slide
+      // with copper coils and a blue emitter, and a curved sight on the slide. Front toward −z; the grip's foot at the
+      // bottom of its box, the sight's round top at its top.
+      const rake = 0.34;
+      const top = h / 2;
+      const hoodR = w * 0.3;
+      const hoodY = top - hoodR - 0.004;
+      const slideTop = hoodY - 0.012;
+      const slideH = h * 0.27;
+      const back = d / 2 - 0.004;
+      const slideLen = d * 0.66;
+      const slideZ = back - slideLen / 2;
+      p.box("dark", [w * 0.5, slideH, slideLen], [0, slideTop - slideH / 2, slideZ]);
+      const frameH = h * 0.1;
+      const frameY = slideTop - slideH - frameH / 2;
+      p.box("black", [w * 0.46, frameH, slideLen * 0.78], [0, frameY, slideZ - slideLen * 0.08]);
+      const bore = slideTop - slideH * 0.55;
+      const shroudFront = -d / 2 + 0.004;
+      const shroudBack = back - slideLen + 0.03;
+      p.cyl("dark", w * 0.21, shroudBack - shroudFront, [0, bore, (shroudBack + shroudFront) / 2], [HALF_PI, 0, 0], 16);
+      for (let k = 0; k < 4; k++) p.torus("yellow", w * 0.22, 0.0028, [0, bore, shroudBack - 0.012 - k * 0.016], [0, 0, 0]);
+      p.cyl("blueGlow", w * 0.14, 0.004, [0, bore, shroudFront - 0.002], [HALF_PI, 0, 0], 14);
+      // The grip, raked back from under the frame to the foot of the box (its corners kept in: tilted, a box reaches
+      // past its own height), its magazine's base in its foot; the trigger guard ahead of it.
+      const gripD = d * 0.17;
+      const gripLen = 0.05;
+      const reach = (gripLen * Math.cos(rake) + gripD * Math.sin(rake)) / 2;
+      const gripY = -h / 2 + reach + 0.001;
+      const gripZ = back - d * 0.13;
+      p.box("rubber", [w * 0.5, gripLen, gripD], [0, gripY, gripZ], [-rake, 0, 0]);
+      const plateD = d * 0.12;
+      const plateY = -h / 2 + (0.006 * Math.cos(rake) + plateD * Math.sin(rake)) / 2 + 0.003;
+      p.box("black", [w * 0.54, 0.006, plateD], [0, plateY, gripZ + Math.tan(rake) * (gripY - plateY)], [-rake, 0, 0]);
+      p.torus("black", d * 0.06, 0.003, [0, frameY - frameH / 2 - d * 0.03, back - d * 0.34], [0, HALF_PI, 0]);
+      // The curved sight: a low base on the slide, a hood with a round top round its blue lens.
+      p.box("black", [w * 0.5, 0.008, d * 0.16], [0, slideTop + 0.004, back - d * 0.2]);
+      p.torus("black", hoodR, 0.004, [0, hoodY, back - d * 0.22], [0, 0, 0]);
+      p.cyl("blueGlow", hoodR * 0.9, 0.002, [0, hoodY, back - d * 0.22], [HALF_PI, 0, 0], 18);
+      break;
+    }
+    case "second_wind": {
+      // Tonic's monitor (R3; our own design): a slim handheld in a rubber bumper, its screen facing him (+z) with a
+      // teal plus in its corner, a strap loop down its back.
+      p.box("rubber", [w, h, d * 0.7], [0, 0, -d * 0.15]);
+      p.box("dark", [w * 0.9, h * 0.84, d * 0.3], [0, 0, d * 0.35]);
+      p.box("greenGlow", [w * 0.12, h * 0.05, 0.002], [w * 0.36, h * 0.33, d / 2]);
+      p.box("greenGlow", [w * 0.04, h * 0.16, 0.002], [w * 0.36, h * 0.33, d / 2]);
+      p.box("black", [w * 0.5, h * 0.2, d * 0.3], [0, 0, -d / 2 + d * 0.15]);
+      break;
+    }
+    case "arc_pack": {
+      // Shunt's Arc Pack (R3; our own design): a squat rugged cell in a rubber skirt with a yellow band round it, a coil
+      // of copper cable on its lid under a carry handle, a blue lamp at the back of the lid, and two copper prongs out
+      // its front (−z: toward the wall it's put by), blue at their tips.
+      const caseH = h * 0.66;
+      const lid = -h / 2 + caseH;
+      const z0 = d * 0.06;
+      p.box("dark", [w * 0.9, caseH, d * 0.8], [0, -h / 2 + caseH / 2, z0]);
+      p.box("rubber", [w, h * 0.12, d * 0.86], [0, -h / 2 + h * 0.06, z0]);
+      p.box("yellow", [w * 0.91, h * 0.09, d * 0.81], [0, -h / 2 + caseH * 0.62, z0]);
+      p.torus("yellow", Math.min(w, d * 0.8) * 0.3, 0.007, [0, lid + 0.008, z0], [HALF_PI, 0, 0]);
+      const post = h - caseH - 0.012;
+      for (const x of [-1, 1]) p.box("black", [0.012, post, 0.012], [x * w * 0.3, lid + post / 2, z0]);
+      p.box("black", [w * 0.6 + 0.012, 0.012, 0.016], [0, h / 2 - 0.006, z0]);
+      p.cyl("blueGlow", 0.011, 0.01, [w * 0.33, lid + 0.005, d * 0.34], [0, 0, 0], 10);
+      for (const x of [-1, 1]) {
+        p.cyl("yellow", 0.008, d * 0.12, [x * w * 0.24, -h / 2 + caseH * 0.4, -d / 2 + d * 0.06 + 0.003], [HALF_PI, 0, 0], 8);
+        p.cyl("blueGlow", 0.0085, 0.006, [x * w * 0.24, -h / 2 + caseH * 0.4, -d / 2 + 0.004], [HALF_PI, 0, 0], 8);
+      }
+      break;
+    }
+    case "snare_latch": {
+      // Latch's Snare Latch (R3; our own design): an L bracket (a mounting plate against the jamb, +z, and a foot along
+      // its underside), a squat spring housing on it, two serrated steel jaws held open above and below its mouth, and a
+      // small wire spool at its front (−z), where its wire leaves across the opening. No lights: it's mechanical.
+      p.box("dark", [w * 0.9, h * 0.9, d * 0.14], [0, h * 0.04, d / 2 - d * 0.07]);
+      p.box("dark", [w * 0.7, 0.008, d], [0, -h / 2 + 0.004, 0]);
+      p.box("olive", [w * 0.62, h * 0.42, d * 0.5], [0, 0, d * 0.13]);
+      p.cyl("metal", h * 0.12, w * 0.7, [0, 0, d * 0.13], [0, 0, HALF_PI], 12);
+      for (const s of [-1, 1]) {
+        p.box("metal", [w * 0.84, 0.006, d * 0.46], [0, s * h * 0.3, -d * 0.12], [s * 0.42, 0, 0]);
+        for (let i = 0; i < 4; i++) p.box("metal", [0.008, 0.012, 0.006], [(i - 1.5) * w * 0.2, s * h * 0.36, -d * 0.31]);
+      }
+      p.cyl("black", 0.014, d * 0.12, [0, 0, -d / 2 + d * 0.07], [HALF_PI, 0, 0], 10);
+      p.cyl("metal", 0.006, d * 0.13, [0, 0, -d / 2 + d * 0.065], [HALF_PI, 0, 0], 8);
+      break;
+    }
+    case "bailiff_post": {
+      // Bailiff's shield set down (R3; our own design): the plate standing on its foot as cover, dark slate, its edges
+      // trimmed, a narrow viewport of glass high in it, a white band across it at waist height, and a fold-out foot
+      // behind it (+z) holding it up. (Its face set back a few millimetres: what's on it stays in its box.)
+      const t = d * 0.5;
+      const front = -d / 2;
+      p.box("dark", [w, h * 0.97, t - 0.006], [0, h * 0.015, front + 0.006 + (t - 0.006) / 2]);
+      for (const x of [-1, 1]) p.box("black", [0.02, h * 0.97, t - 0.003], [x * (w / 2 - 0.01), h * 0.015, front + 0.003 + (t - 0.003) / 2]);
+      p.box("black", [w, 0.02, t - 0.003], [0, h / 2 - 0.01, front + 0.003 + (t - 0.003) / 2]);
+      p.box("glass", [w * 0.5, h * 0.06, 0.003], [0, h * 0.36, front + 0.0035]);
+      for (const y of [1, -1]) p.box("black", [w * 0.56, 0.012, 0.004], [0, h * 0.36 + y * (h * 0.03 + 0.006), front + 0.003]);
+      p.box("white", [w * 0.98, 0.03, 0.003], [0, -h * 0.08, front + 0.0035]);
+      p.box("black", [w * 0.7, 0.02, d - t], [0, -h / 2 + 0.01, front + t + (d - t) / 2]);
+      for (const x of [-1, 1]) p.box("metal", [0.02, h * 0.3, 0.012], [x * w * 0.3, -h / 2 + h * 0.15, d / 2 - 0.008]);
       break;
     }
     case "cluster_grenade": {
@@ -271,28 +432,21 @@ export function gadgetShape(id: string, size: V3): Map<ShapeMat, THREE.BufferGeo
       break;
     }
     case "cardiac_sensor": {
-      // Pulse's heartbeat sensor (our own shapes): a scuffed gunmetal front round a 4:3 display (looked through when it's up:
-      // the display is open, SENSOR_DISPLAY; the front a thin plate, so its edges don't wall the view in), the hinged
-      // sensor block on its left, a handle up its right with a strap and two buttons, a yellow and a red light under
-      // the display. Its display faces the holder (+z).
+      // Murmur's Blood Oxygen Sensor (our own design, D-183): a slim handheld, rounded, dark with a blue light down
+      // each side; a rubber grip below with ribs; a metal cap on top; on its front (−z) a blue emitter ring round a
+      // dark lens near the top; on the face toward the holder (+z) a small screen in a black bezel (SENSOR_DISPLAY, where
+      // the page draws its readout while it's up) and a thumb button under it.
       const S = SENSOR_DISPLAY;
-      const [x0, x1, y0, y1] = [S.cx - S.w / 2, S.cx + S.w / 2, S.cy - S.h / 2, S.cy + S.h / 2];
-      const body = { l: x0 - 0.01, r: x1 + 0.01, b: -h / 2, t: y1 + 0.012 };
-      const pz = 0.006;
-      const fz = S.z - pz / 2;
-      p.box("dark", [body.r - body.l, body.t - y1, pz], [(body.l + body.r) / 2, (y1 + body.t) / 2, fz]);
-      p.box("dark", [body.r - body.l, y0 - body.b, pz], [(body.l + body.r) / 2, (body.b + y0) / 2, fz]);
-      p.box("dark", [x0 - body.l, y1 - y0, pz], [(body.l + x0) / 2, (y0 + y1) / 2, fz]);
-      p.box("dark", [body.r - x1, y1 - y0, pz], [(x1 + body.r) / 2, (y0 + y1) / 2, fz]);
-      // Behind the bottom, where its works are: a box under the display.
-      p.box("dark", [body.r - body.l, y0 - body.b - 0.004, d * 0.62], [(body.l + body.r) / 2, (body.b + y0) / 2 - 0.002, 0]);
-      p.box("metal", [0.02, 0.09, d * 0.8], [body.l - 0.01, 0.005, -0.004]);
-      p.box("dark", [0.035, body.t - body.b - 0.012, d * 0.6], [body.r + 0.0175, (body.t + body.b) / 2 - 0.006, -0.002]);
-      p.box("black", [0.01, (body.t - body.b) * 0.7, d * 0.66], [body.r + 0.03, (body.t + body.b) / 2 - 0.01, -0.002]);
-      p.box("black", [0.012, 0.01, 0.006], [body.r + 0.016, body.t - 0.022, S.z - 0.003]);
-      p.box("black", [0.012, 0.01, 0.006], [body.r + 0.016, body.t - 0.036, S.z - 0.003]);
-      p.box("yellow", [0.008, 0.005, 0.003], [x1 - 0.02, y0 - 0.012, S.z + 0.0005]);
-      p.box("redGlow", [0.008, 0.005, 0.003], [x1 - 0.006, y0 - 0.012, S.z + 0.0005]);
+      const half = d / 2;
+      p.add("rubber", new RoundedBoxGeometry(0.05, 0.062, 0.03, 3, 0.008), [0, -h / 2 + 0.031, 0]);
+      for (const y of [0.016, 0.028, 0.04]) p.box("black", [0.052, 0.003, 0.031], [0, -h / 2 + y, 0]);
+      p.add("dark", new RoundedBoxGeometry(0.066, 0.092, d, 3, 0.01), [0, 0.019, 0]);
+      p.add("metal", new RoundedBoxGeometry(0.058, 0.022, d - 0.004, 2, 0.008), [0, h / 2 - 0.011, 0]);
+      for (const sx of [-1, 1]) p.box("blueGlow", [0.002, 0.06, 0.008], [sx * 0.0335, 0.02, 0]);
+      p.cyl("black", 0.013, 0.004, [0, 0.05, -half + 0.002], [HALF_PI, 0, 0], 20);
+      p.torus("blueGlow", 0.016, 0.0026, [0, 0.05, -half + 0.0026]);
+      p.box("black", [S.w + 0.008, S.h + 0.008, 0.0016], [S.cx, S.cy, half - 0.0008]);
+      p.cyl("metal", 0.006, 0.003, [0, -0.008, half - 0.0015], [HALF_PI, 0, 0], 14);
       break;
     }
     case "jegeo_payload": {
@@ -499,12 +653,13 @@ const UP = new THREE.Vector3(0, 1, 0);
 export function restsAt(parts: Map<ShapeMat, THREE.BufferGeometry>, z: number, fallback: number): { y: number; z: number } {
   const meshes = [...parts.values()].map((g) => new THREE.Mesh(g, UNDERSIDE));
   const ray = new THREE.Raycaster();
-  // (Up through its faces over the palm, and its own points there: a thin leg the rays go either side of.)
+  // (Up through its faces over the palm every 5 mm, and its own points there: a thin leg the rays go either side of.
+  // Every 15 mm, a set-down Bailiff Shield's foot, under a centimetre deep in the hand, fell between them.)
   const lowest = (at: number) => {
     let low = Infinity;
-    for (let i = -2; i <= 2; i++) {
-      for (let k = -2; k <= 2; k++) {
-        ray.set(new THREE.Vector3(i * 0.015, -10, at + k * 0.015), UP);
+    for (let i = -6; i <= 6; i++) {
+      for (let k = -6; k <= 6; k++) {
+        ray.set(new THREE.Vector3(i * 0.005, -10, at + k * 0.005), UP);
         const hit = ray.intersectObjects(meshes, false)[0];
         if (hit) low = Math.min(low, hit.point.y);
       }

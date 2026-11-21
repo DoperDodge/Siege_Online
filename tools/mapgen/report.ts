@@ -120,8 +120,10 @@ export function wallDrift(inputs: Inputs, extracted: Extracted): Pick<MapReport,
   return { drift, curated };
 }
 
-export function mapReport(root: string, inputs: Inputs, compiled: Compiled, extracted: Extracted): MapReport {
-  return { budgets: budgets(compiled), unverified: unverifiedList(root, inputs), ...wallDrift(inputs, extracted) };
+export function mapReport(root: string, inputs: Inputs, compiled: Compiled, extracted: Extracted | null): MapReport {
+  // A map drawn by hand (no extraction) has no drift to report.
+  const drift = extracted ? wallDrift(inputs, extracted) : { drift: [], curated: [] };
+  return { budgets: budgets(compiled), unverified: unverifiedList(root, inputs, inputs.layout.id), ...drift };
 }
 
 const n = (x: number) => x.toLocaleString("en-GB");
@@ -141,9 +143,9 @@ export function summaryLines(r: MapReport): string[] {
 }
 
 /** builds/mapgen/report.md: the whole report, for reading. */
-export function reportMarkdown(compiled: Compiled, r: MapReport, frameInUse: Record<string, string>): string {
+export function reportMarkdown(compiled: Compiled, r: MapReport, frameInUse: Record<string, string>, name = "Oregon"): string {
   const c = compiled.report;
-  const out: string[] = ["# Oregon: the generator's report", "", "Written by `npm run mapgen` from `data/maps/oregon` (layout.json and its parts). Not committed: run it again for a fresh one.", ""];
+  const out: string[] = [`# ${name}: the generator's report`, "", "Written by `npm run mapgen` from `data/maps/<id>` (layout.json and its parts). Not committed: run it again for a fresh one.", ""];
   out.push("## Counts", "", "| What | Count |", "|---|---|", ...Object.entries(c.counts).map(([k, v]) => `| ${k} | ${n(v)} |`), "");
   out.push("## Budgets", "", "| Budget | Now | Limit |", "|---|---|---|", ...r.budgets.map((b) => `| ${b.name} | ${n(b.value)} | ${n(b.limit)} |`), "");
   out.push("## Frames with an alternative", "", "Where each hatch lands under each option (DESIGN P2).", "");

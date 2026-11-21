@@ -569,7 +569,8 @@ explicit metres of a pillar), with its spans sorted:
 
 - **Ground (1F level)**: one slab layer over the playable rectangle, top at Y 0, 0.2 m thick, minus the holes
   where something goes down: the B stair shafts that arrive in 1F, hatches H1–H3, the Bunker passage trench.
-  It is also the B ceiling.
+  It is also the B ceiling. A soft floor on the ground storey is tiled as on any other and cut out of the ground
+  (Millrace's SF-1F-01, the Bale Store over the Strongroom: until R4 the ground slab skipped it, silently).
 - **B floor**: the B footprint at Y -3.2, plus the trench floor.
 - **2F slab** (Y 3.0..3.2): the 2F footprint minus stair holes (runs arriving on 2F), hatches H4–H6, soft floors
   SF-2F-01..09, and cut back to exterior-wall inner faces. Flat 1F roofs at the same level are roofs (5.8).
@@ -578,7 +579,9 @@ explicit metres of a pillar), with its spans sorted:
   greedy rectangles (the panel drawing uses the same algorithm, D-069(3)). Expect 20–60 rectangles per storey.
 - **Stairwell holes**: each stair run cuts its `hole` (default: the shaft minus the strip where the top flight
   arrives) from the slab above; the check is headroom, not shape: every step needs at least `headroomM`
-  (2.0 m) of clearance under any slab, else the run errors.
+  (2.0 m) of clearance under any slab, else the run errors. A run also needs a way on and off: a strip a body wide
+  (0.6 m) from its first riser 0.9 m out, and from its top 0.9 m on, clear of everything from the floor to head
+  height (D-184: two of Millrace's first flights started against a wall).
 - **Soft floors**: each region (world u) minus wall footprints and hatches, split into rectangles, then each
   rectangle into an even grid of tiles no larger than `tileMaxM` (4 m), sized in whole joist spacings (0.4 m)
   where possible so the joist pattern doesn't jump at seams. Each tile is a SOFT_FLOOR panel, slab-thick

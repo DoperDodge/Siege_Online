@@ -221,6 +221,23 @@ export interface PawnState {
   reviveTicks: number;
   reviveTarget: number;
   revivedBy: number;
+  /**
+   * Tonic's Second Wind on this body (R3, gadgets/patch.ts): health still to come from a patch healing it, and ticks
+   * into that heal; ticks left until a patch gets it up from down.
+   */
+  healLeft: number;
+  healTicks: number;
+  patchTicks: number;
+  /**
+   * The Bailiff Shield's prod (R3, player/prod.ts): ticks of its charge used, ticks to its next jolt while it's held on,
+   * and ticks since it was last on (its refill waits for them). A body jolted by one is slowed for `slowed` ticks;
+   * Bailiff shocked by an EMP on her raised shield can't move or use her hands for `shocked` ticks.
+   */
+  prodUsed: number;
+  prodNext: number;
+  prodIdle: number;
+  slowed: number;
+  shocked: number;
   // reinforcing and barricades (Phase 4 M6; destruction/deploy.ts): what the body is putting up or taking
   // down (DeployKind, 0 = nothing), on which panel and section, and for how many ticks it has held Interact
   deployKind: number;
@@ -240,6 +257,11 @@ export interface PawnState {
   hand: number;
   gAct: number;
   gTicks: number;
+  /**
+   * Ticks before the item in slot 2 can be used again (R3: Ohm's pistol reloading, Rivet's driver cycling). It runs
+   * down whatever's in hand, so putting it away, a knife or a vault doesn't hurry it (the review).
+   */
+  gCool: number;
   g1: number;
   g2: number;
   w1: number;
@@ -254,6 +276,21 @@ export interface PawnState {
    * Interact press is the dismissal's, so nothing else starts on it (the review, M12).
    */
   ringing: boolean;
+  /**
+   * Latch's Snare Latch shut on this body's leg (R3; the server's, its owner corrected): slowed, no sprint, bitten by the
+   * server until it's pulled off (an Interact hold, sim.ts holdSnare) or the body is down.
+   */
+  snared: boolean;
+  /** The Bailiff Shield's prod switched on (R3, player/prod.ts: a click of Fire with it up switches it). */
+  prodOn: boolean;
+  /** Rivet's Stud Driver (R3, gadgets/studs.ts): which of its salvos Fire lays (its `driver.lays`), picked with the reload key. */
+  pattern: number;
+  /**
+   * Hull's Plate (R3, player/shield.ts stepBrace): braced (his ability key switches it), and how far it's braced
+   * (0 … 65535: its sides and top out over `brace.extendS`, back over `brace.retractS`).
+   */
+  braced: boolean;
+  braceQ: number;
   regenMade: number;
   regenTicks: number;
   // Fuze's Ballistic Shield (Phase 8 M11, player/shield.ts): ticks it's knocked aside (a guard break, or Sledge's
@@ -296,6 +333,8 @@ export enum GadgetAct {
   Place = 4,
   /** Swinging (Sledge's hammer, Phase 8 M4): its blow lands partway through. */
   Swing = 5,
+  /** Just shot (Ohm's Brownout Pistol, R3): the next can't go until it's reloaded. */
+  Shoot = 6,
 }
 
 export const NEUTRAL_INPUT: Readonly<Omit<InputCmd, "seq" | "yaw" | "pitch">> = {

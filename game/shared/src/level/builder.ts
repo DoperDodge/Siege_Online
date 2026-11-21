@@ -27,6 +27,8 @@ export interface SolidInfo {
   vaultable: boolean;
   /** A prop's class (data/destruction.json props): bullets decide at it instead of stopping (combat/hitreg.ts). */
   prop?: string;
+  /** A staircase's step or its slope (bots' nav: a step's top and the slope beside it join, whichever is higher). */
+  stair?: true;
 }
 
 export interface LadderRuntime {
@@ -106,7 +108,7 @@ export function buildLevel(R: Rapier, world: World, def: LevelDef, destruction?:
     const lz = (t / 2) * Math.sin(angle) + (length / 2) * Math.cos(angle);
     const [ox, oz] = rotateXZ(0, -lz, yaw);
     const center: Vec3 = [start[0] + ox, start[1] - ly, start[2] + oz];
-    addBox({ id, surface, vaultable: false }, "ramp", center, [width, t, length], quatYawPitch(yaw, angle), { collides: true, visible, label, stairRamp });
+    addBox({ id, surface, vaultable: false, ...(stairRamp ? { stair: true as const } : {}) }, "ramp", center, [width, t, length], quatYawPitch(yaw, angle), { collides: true, visible, label, stairRamp });
   };
 
   for (const r of def.ramps) {
@@ -124,7 +126,7 @@ export function buildLevel(R: Rapier, world: World, def: LevelDef, destruction?:
       const h = st.solid ? top : Math.min(top, 2 * st.rise);
       const d = st.run * (i + 0.5);
       const center: Vec3 = [st.start[0] + fx * d, st.start[1] + top - h / 2, st.start[2] + fz * d];
-      addBox({ id: `${st.id}_step${i}`, surface: st.surface, vaultable: false }, "stair_step", center, [st.width, h, st.run], quat, {
+      addBox({ id: `${st.id}_step${i}`, surface: st.surface, vaultable: false, stair: true }, "stair_step", center, [st.width, h, st.run], quat, {
         collides: true,
         visible: true,
       });

@@ -2,7 +2,7 @@
   "_doc": "Sledge — loadout and ratings from the official Ubisoft operator page (research/operators/sledge.md). Ability numbers arrive with Phase 8.",
   "_season": "Y11S3",
   "id": "sledge",
-  "name": "Sledge",
+  "name": "Cleave",
   "side": "attacker",
   "healthRating": 2,
   "speedRating": 2,
@@ -23,7 +23,7 @@
   },
   "ability": {
     "id": "breaching_hammer",
-    "name": "Tactical Breaching Hammer"
+    "name": "Breaching Maul"
   },
   "pawns": 1
 }

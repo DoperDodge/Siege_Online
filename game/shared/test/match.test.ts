@@ -1,5 +1,5 @@
 // The match state machine (match/match.ts): the lobby, a round's phases and timers, votes, picks, the defuser's
-// carrier, outcomes, the score, overtime and the end, against the formats in data/modes and Oregon's sites.
+// carrier, outcomes, the score, overtime and the end, against the formats in data/modes and Millrace's sites.
 import { describe, expect, it } from "vitest";
 import {
   ATTACK,
@@ -14,11 +14,12 @@ import {
   WinReason,
   type FormatMode,
   type MatchEvent,
+  type MatchMap,
   type Team,
 } from "../src/index.js";
 
 const data = loadGameData();
-const map = matchMapOf(data.levels.get("oregon")!, data.operators.values());
+const map = matchMapOf(data.levels.get("millrace")!, data.operators.values());
 const format = (id: string): FormatMode => {
   const m = data.modes.get(id)!;
   if (!isFormat(m)) throw new Error(id);
@@ -26,8 +27,8 @@ const format = (id: string): FormatMode => {
 };
 
 /** A match with players already in it: `blue` and `orange` names, everyone ready; the first is the host. */
-function lobby(id: string, blue: number, orange: number, seed = 7) {
-  const match = new Match(format(id), map, seed);
+function lobby(id: string, blue: number, orange: number, seed = 7, on: MatchMap = map) {
+  const match = new Match(format(id), on, seed);
   let next = 1;
   for (let i = 0; i < Math.max(blue, orange); i++) {
     if (i < blue) match.addPlayer(next++, `b${i}`);
@@ -217,7 +218,11 @@ describe("bans, sites and picks", () => {
   });
 
   it("at two bans per side, a 5-player side keeps 5 operators: the second ban on it doesn't count", () => {
-    const m = lobby("ranked", 5, 5);
+    // (On a roster of six defenders, as the game had before R3 grew it: two bans would leave four.)
+    const six: MatchMap = { ...map, roster: [map.roster[ATTACK], map.roster[DEFENSE].slice(0, 6)] };
+    expect(six.roster[DEFENSE]).toContain("mute");
+    expect(six.roster[DEFENSE]).toContain("pulse");
+    const m = lobby("ranked", 5, 5, 7, six);
     m.change(m.hostId, { kind: "bans", maxPerSide: 2 });
     for (const p of m.players.values()) m.setReady(p.id, true);
     const at = { tick: 0 };
@@ -237,11 +242,11 @@ describe("bans, sites and picks", () => {
     const { match, at } = started("ranked", 2, 2);
     finishPhase(match, at); // bans
     const [d1, d2] = match.sides[DEFENSE];
-    expect(match.voteSite(match.sides[ATTACK][0], "SITE_DORMS")).toMatch(/Not voting/);
-    expect(match.voteSite(d1, "SITE_LAUNDRY")).toBeNull();
-    expect(match.voteSite(d2, "SITE_LAUNDRY")).toBeNull();
+    expect(match.voteSite(match.sides[ATTACK][0], "SITE_OFFICES")).toMatch(/Not voting/);
+    expect(match.voteSite(d1, "SITE_BOILER")).toBeNull();
+    expect(match.voteSite(d2, "SITE_BOILER")).toBeNull();
     finishPhase(match, at);
-    expect([match.site, match.siteRevealed]).toEqual(["SITE_LAUNDRY", false]);
+    expect([match.site, match.siteRevealed]).toEqual(["SITE_BOILER", false]);
     match.siteFound();
     expect(match.siteRevealed).toBe(true);
     const q = started("quick_match", 1, 1);
@@ -261,13 +266,13 @@ describe("bans, sites and picks", () => {
     expect(match.players.get(atk)!.operator).toBe(map.roster[ATTACK][0]);
     expect(match.players.get(def)!.operator).toBe("mira");
     expect(match.pickOperator(atk, "sledge")).toBeNull();
-    expect(match.chooseSpawn(atk, "B_STREET")).toBeNull();
+    expect(match.chooseSpawn(atk, "B_RAIL_SIDING")).toBeNull();
     expect(match.pickOperator(def, "mute")).toMatch(/Not picking/);
     winRound(match, at, match.attackers);
     // Round 2: same sides, nobody picks; each keeps last round's operator.
     finishPhase(match, at);
     expect(match.players.get(atk)!.operator).toBe("sledge");
-    expect(match.players.get(atk)!.spawn).toBe("B_STREET");
+    expect(match.players.get(atk)!.spawn).toBe("B_RAIL_SIDING");
     expect(match.players.get(def)!.operator).toBe("mira");
   });
 

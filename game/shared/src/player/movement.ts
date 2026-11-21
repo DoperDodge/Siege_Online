@@ -17,7 +17,9 @@ import { bleedTick, isDowned } from "./downed.js";
 import { ticks } from "../weapons/ticks.js";
 import { DeployKind } from "../destruction/deploy.js";
 import { parkHands, putAway, regenSlot, stepHands } from "../gadgets/hands.js";
-import { placeShield, shieldUp, stepShield, suppressed } from "./shield.js";
+import { stepPatch } from "../gadgets/patch.js";
+import { braceOf, placeShield, shieldUp, stepBrace, stepShield, suppressed } from "./shield.js";
+import { stepProd } from "./prod.js";
 
 export interface MoveContext {
   R: Rapier;
@@ -35,6 +37,8 @@ export interface MoveContext {
   slowOf?(pawn: Pawn): number;
   /** Whether a body's detonator has a device of `gadget` out to set off (Phase 8 M3: not one an EMP disabled). */
   canDetonate?(pawn: Pawn, gadget: string): boolean;
+  /** How many of a driver's salvos its detonator sets off now (R3, Rivet's: every one that can go). */
+  salvosReady?(pawn: Pawn, gadget: string): number;
   /** Whether a swing's blow from this body's eye along its view meets something within `reachM` (Phase 8 M4: it costs a charge). */
   swingMeets?(pawn: Pawn, reachM: number): boolean;
   /** How far along a ray the first solid gadget is (Phase 8 M5: a deployable shield Fuze's charge goes on), or null. */
@@ -61,12 +65,20 @@ const PRONE_TOLERANCE = 0.005;
  */
 export function stepPawn(ctx: MoveContext, pawn: Pawn, input: InputCmd, weapons = true, live = true): void {
   const s = pawn.state;
+  // Bailiff shocked (R3: an EMP reached her raised shield): no moving and no hands until it wears off.
+  if (s.shocked > 0 && s.mode !== PawnMode.Dead) {
+    s.shocked--;
+    input = { ...input, forward: 0, strafe: 0, buttons: 0 };
+  }
   const pressed = input.buttons & ~s.prevButtons;
   s.prevButtons = input.buttons;
   s.lastFallDamage = 0;
-  // An EMP on the body (DSEG, Phase 8 M3) wears off.
+  // An EMP on the body (DSEG, Phase 8 M3) wears off, and so does a prod's jolt (R3).
   if (s.jammed > 0) s.jammed--;
+  if (s.slowed > 0) s.slowed--;
   if (s.mode === PawnMode.Dead) return;
+  // Tonic's Second Wind on this body (R3): its heal, or getting it up from down (a revive of its own, for the room).
+  if (stepPatch(ctx.data, s)) ctx.events.push({ kind: "reviveEnd", reviverPawn: pawn.id, targetPawn: pawn.id, completed: true });
   // Lesion's next mine comes (Phase 8 M10); Fuze's shield's guard break and suppression wear off (M11).
   regenSlot(ctx.data, pawn);
   stepShield(pawn);
@@ -94,6 +106,10 @@ export function stepPawn(ctx: MoveContext, pawn: Pawn, input: InputCmd, weapons 
   if (weapons && !down) {
     // The gadget in hand first (Phase 8): a key that takes one out puts the weapon away this same tick.
     stepHands(ctx, pawn, input, pressed, s.meleeTicks === 0 && s.reviveTarget === 0 && s.deployKind === DeployKind.None, live);
+    // The Bailiff Shield's prod (R3): a click of Fire with it up and not aimed switches it (the sidearm fires only aimed).
+    if (live) stepProd(pawn, input, pressed, ctx.events);
+    // Hull's Plate's brace (R3): his ability key with it up switches it.
+    if (live) stepBrace(pawn, pressed);
     stepWeapon(ctx, pawn, input, pressed);
   } else {
     parkWeapon(s);
@@ -101,6 +117,14 @@ export function stepPawn(ctx: MoveContext, pawn: Pawn, input: InputCmd, weapons 
     if (down) {
       s.adsQ = 0; // no weapons while down, nor gadgets
       putAway(s, false);
+      // Nor the shield: Bailiff's prod goes off and Hull's plate folds (the review, R3: both came back on with the
+      // shield when they got up). Their steps run on with nothing pressed: the prod's charge refills, the plate folds.
+      s.prodOn = false;
+      s.braced = false;
+      if (live) {
+        stepProd(pawn, input, 0, ctx.events);
+        stepBrace(pawn, 0);
+      }
     }
   }
   // Where Fuze's shield's plate is, now the hands and holds are settled for the tick (Phase 8 M11).
@@ -203,7 +227,8 @@ function stepWalk(ctx: MoveContext, pawn: Pawn, input: InputCmd, pressed: number
   // Contextual actions first: ladders (interact or vault key; from the top, interact only) and vaulting (held
   // vault key is buffered).
   if ((pressed & Btn.Interact || input.buttons & Btn.Vault) && tryAttachLadder(ctx, pawn, (pressed & Btn.Interact) !== 0)) return;
-  if (input.buttons & Btn.Vault && s.grounded && s.stance !== Stance.Prone && s.stanceT >= 1 && tryVault(ctx, pawn)) return;
+  // (Not while a prod's jolt slows it: R3.)
+  if (input.buttons & Btn.Vault && s.grounded && s.stance !== Stance.Prone && s.stanceT >= 1 && s.slowed === 0 && tryVault(ctx, pawn)) return;
 
   // Speed for this tick. The weapon in hand scales it (LMGs slower, the horizontal grip faster; which
   // speeds it scales is data, gunplay.rules.moveMultScope).
@@ -217,10 +242,11 @@ function stepWalk(ctx: MoveContext, pawn: Pawn, input: InputCmd, pressed: number
     st === Stance.Prone ? m.speed.proneSpeed : st === Stance.Crouch ? walk * m.speed.crouchWalkFactor * mult("crouch") : walk * mult("walk");
   let speed = s.stanceT < 1 ? Math.min(stanceSpeed(s.stanceFrom), stanceSpeed(s.stance)) : stanceSpeed(s.stance);
   const ads = (input.buttons & Btn.Ads) !== 0;
-  if (wantsAim(ctx, s, input) && s.stance !== Stance.Prone) speed = Math.min(speed, m.speed.adsWalkSpeed * mult("adsWalk"));
+  if (wantsAim(ctx, s, input) && !pawn.loadout?.shield?.noAds && s.stance !== Stance.Prone) speed = Math.min(speed, m.speed.adsWalkSpeed * mult("adsWalk"));
   if (input.buttons & Btn.SlowWalk) speed *= m.speed.slowWalkFactor;
-  // Fuze's shield up in front (Phase 8 M11): slower.
-  if (pawn.loadout?.shield && shieldUp(s)) speed *= pawn.loadout.shield.moveSpeedMult;
+  // Fuze's shield up in front (Phase 8 M11): slower; Hull's braced (R3), slower still.
+  const shield = pawn.loadout?.shield;
+  if (shield && shieldUp(s)) speed *= shield.moveSpeedMult + (shield.brace ? (shield.brace.speedMul - shield.moveSpeedMult) * braceOf(s) : 0);
   // Down but not out: a slow crawl, and none at all while a teammate revives you (placeholders).
   if (s.mode === PawnMode.Downed) speed = s.revivedBy !== 0 && ctx.data.combat.revive.targetLocked ? 0 : ctx.data.combat.dbno.crawlSpeed;
 
@@ -230,6 +256,8 @@ function stepWalk(ctx: MoveContext, pawn: Pawn, input: InputCmd, pressed: number
     (input.buttons & Btn.Sprint) !== 0 &&
     input.forward > m.sprint.forwardThreshold &&
     !ads &&
+    // (Hull's Plate braced, R3: walk only.)
+    s.braceQ === 0 &&
     !blocksSprint(s, input) &&
     s.stance === Stance.Stand &&
     s.stanceT >= 1 &&
@@ -574,7 +602,8 @@ function stepDowned(ctx: MoveContext, pawn: Pawn, input: InputCmd) {
   stepWalk(ctx, pawn, { ...input, buttons: 0, lean: 0, stance }, 0);
   if (s.mode !== PawnMode.Downed) return; // a fall finished it
   if (s.invulnTicks > 0) s.invulnTicks--;
-  if (s.revivedBy === 0 && bleedTick(ctx.data.combat, s, Math.hypot(s.vx, s.vz) > ctx.data.combat.dbno.movingSpeed)) {
+  // (Not while a teammate revives it, nor while a patch gets it up: R3.)
+  if (s.revivedBy === 0 && s.patchTicks === 0 && bleedTick(ctx.data.combat, s, Math.hypot(s.vx, s.vz) > ctx.data.combat.dbno.movingSpeed)) {
     ctx.events.push({ kind: "death", pawnId: pawn.id, cause: "bleed", life: pawn.life });
   }
 }

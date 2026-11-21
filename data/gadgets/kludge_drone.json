@@ -3,7 +3,7 @@
   "_season": "Y11S3",
   "_unverified": ["sizeM", "kludge.charges", "kludge.rangeM", "kludge.hackS", "kludge.destroyS", "kludge.overheatS", "kludge.coneDeg"],
   "id": "kludge_drone",
-  "name": "Kludge Drone",
+  "name": "Crossover Drone",
   "side": "attacker",
   "operator": "brava",
   "count": 2,

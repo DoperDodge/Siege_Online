@@ -2,7 +2,7 @@
   "_doc": "Fuze — loadout and ratings from the official Ubisoft operator page (research/operators/fuze.md). Ability numbers arrive with Phase 8.",
   "_season": "Y11S3",
   "id": "fuze",
-  "name": "Fuze",
+  "name": "Hail",
   "side": "attacker",
   "healthRating": 3,
   "speedRating": 1,
@@ -24,7 +24,7 @@
   },
   "ability": {
     "id": "cluster_charge",
-    "name": "Cluster Charge"
+    "name": "Hailstone Drill"
   },
   "pawns": 1
 }

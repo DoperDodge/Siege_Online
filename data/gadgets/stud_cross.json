@@ -1,0 +1,17 @@
+{
+  "_doc": "The Cross: one of Rivet's Stud Driver's salvos (Project Redmond R3, data/gadgets/stud_driver.json): never carried, laid by the driver (its `count` unused; its `use` is where it may go). Nine studs in an X; set off by his detonator, it cuts an X (data/destruction.json `explosives.stud_cross`: two arms 0.6 m wide corner to corner of a 1.5 m square, over a round middle 1.2 m across) through every layer, steel too (a hatch whole). On a wall its middle's bottom is `salvo.ledgeM` over the floor: a ledge a body vaults through. A small blast round it. A bullet into one of its studs destroys it (gadgets/studs.ts); its `sizeM` is its studs' extent. Our own design and numbers.",
+  "_ours": true,
+  "id": "stud_cross",
+  "name": "Cross",
+  "side": "attacker",
+  "operator": "rivet",
+  "count": 3,
+  "electronic": false,
+  "use": {"kind": "place", "on": ["soft", "steel"], "placeS": 0.1, "reachM": 25},
+  "remote": true,
+  "pickUp": false,
+  "sizeM": [1.6, 1.6, 0.05],
+  "blast": {"damage": {"max": 20, "fullM": 0.2, "zeroM": 1.0}, "destroyM": 0.4, "cut": "stud_cross", "throughSoft": 0.7, "concussM": 1.5},
+  "fragile": true,
+  "salvo": {"ledgeM": 0.45}
+}

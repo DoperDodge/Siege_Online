@@ -245,6 +245,8 @@ export interface ShieldPlate {
   crouchRaiseM: number;
   ads: { sideM: number; dropM: number; yawDeg: number };
   window: { widthM: number; heightM: number };
+  /** Its top bent back over the head (the Bailiff Shield's, R3), or none. */
+  topWrap?: { bandM: number; backM: number };
 }
 
 /** How far Fuze's raised shield has gone aside for aiming (0 up … 1 aside): the body's aiming progress (`adsQ`). */
@@ -272,6 +274,14 @@ export interface ShieldFrame {
 export function plateBend(k: ShieldPlate, u: number): number {
   const t = Math.max(0, Math.abs(u) - PLATE_FLAT) / (1 - PLATE_FLAT);
   return k.curveM * t * t;
+}
+
+/** How far the plate bends back toward its carrier `d` metres below its top (`topWrap`, R3): none below its band. */
+export function topBend(k: ShieldPlate, d: number): number {
+  const w = k.topWrap;
+  if (!w || d >= w.bandM) return 0;
+  const t = 1 - Math.max(0, d) / w.bandM;
+  return w.backM * t * t;
 }
 
 /** The middle of the plate that's flat (as a fraction of its half width); it curves back from there to its edges. */
@@ -324,7 +334,8 @@ export function shieldFrame(m: MovementData, hb: HitboxData, s: PawnState, k: Sh
   const [cy, sy] = [Math.cos(yaw), Math.sin(yaw)];
   const at = (u: number, y: number, out = 0): Vec3 => {
     const x = u * half;
-    const bend = plateBend(k, u);
+    // Curved back round his sides, and (the Bailiff Shield's, R3) over his head at its top.
+    const bend = plateBend(k, u) + topBend(k, y1 - y);
     if (!front) return toWorld(s, [x, y, 0.22 - bend + out], height, torso);
     // From the plate's middle (frontM ahead, −z): turned about it, then across to the left.
     const dz = bend - out;

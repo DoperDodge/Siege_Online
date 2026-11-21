@@ -26,8 +26,11 @@ describe("loadout picks (DECISIONS D-042)", () => {
       const p = defaultLoadoutPick(data, op.id);
       expect(problem(p), op.id).toBeNull();
       const { loadout } = resolveLoadout(data, p);
-      expect(loadout.weapons.map((w) => w.id)).toEqual([p.primary.weapon, p.secondary.weapon]);
+      // A shield's loadout holds its sidearm in both slots (Fuze's when he takes it; Bailiff's always, R3).
+      const shield = !isGun(data.weapons.get(p.primary.weapon)!);
+      expect(loadout.weapons.map((w) => w.id), op.id).toEqual(shield ? [p.secondary.weapon, p.secondary.weapon] : [p.primary.weapon, p.secondary.weapon]);
     }
+    expect(defaultLoadoutPick(data, "bailiff").primary.weapon).toBe("bailiff_shield");
     // The GONNE-6 is skipped (D-054); the shield can be picked since Phase 8 M11, but isn't Fuze's default.
     expect(defaultLoadoutPick(data, "fuze").primary.weapon).toBe("ak_12");
     expect([isPickable(data, "ballistic_shield"), isPickable(data, "gonne_6")]).toEqual([true, false]);

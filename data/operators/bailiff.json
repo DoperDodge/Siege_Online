@@ -1,0 +1,18 @@
+{
+  "_doc": "Bailiff (Project Redmond R3, gadgets/R3_OPERATORS.md §1): a defender with a full-height shield and its prod (Ulo's: the stun and the slow, set down, and the EMP shock while she holds it). Our own operator: name, look, shield and prod. Health and speed 3 / 1.",
+  "id": "bailiff",
+  "name": "Bailiff",
+  "side": "defender",
+  "healthRating": 3,
+  "speedRating": 1,
+  "loadout": {
+    "primaries": ["bailiff_shield"],
+    "secondaries": ["smg_11", "p229"],
+    "gadgets": ["barbed_wire", "impact_grenade"]
+  },
+  "ability": {
+    "id": "bailiff_post",
+    "name": "Set Down"
+  },
+  "pawns": 1
+}

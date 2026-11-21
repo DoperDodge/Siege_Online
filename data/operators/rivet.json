@@ -1,0 +1,18 @@
+{
+  "_doc": "Rivet (Project Redmond R3, gadgets/R3_OPERATORS.md §1): an attacker who opens walls and hatches from range, reinforced ones too, in three shapes (Ulo's design: a circle, a vertical line and an X, each a hole a body gets through). Our own operator: name, look and ability (the Stud Driver). Health and speed 2 / 2.",
+  "id": "rivet",
+  "name": "Rivet",
+  "side": "attacker",
+  "healthRating": 2,
+  "speedRating": 2,
+  "loadout": {
+    "primaries": ["ump45", "commando_9"],
+    "secondaries": ["p229", "usp40"],
+    "gadgets": ["stun", "claymore", "breach_charge"]
+  },
+  "ability": {
+    "id": "stud_driver",
+    "name": "Stud Driver"
+  },
+  "pawns": 1
+}

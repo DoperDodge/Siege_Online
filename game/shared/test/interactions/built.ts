@@ -85,14 +85,14 @@ row("action.reinforce", "generic.bulletproof_camera", async () => {
 });
 
 row("environment.outdoors", "generic.bulletproof_camera", async () => {
-  // On Oregon, placed in the street (outdoors) it loses its signal 10 s later; in the Laundry (indoors) never.
-  const sim = await Sim.create("oregon");
+  // On Millrace, placed by the rail siding (outdoors) it loses its signal 10 s later; in the Boiler Room (indoors) never.
+  const sim = await Sim.create("millrace");
   const server = new GadgetServer(sim);
   const c = sim.addPlayer("def", "mute", 0, undefined, undefined, DEFENSE);
-  const street = sim.level.def.spawns.find((sp) => sp.group === "B_STREET")!.pos;
+  const siding = sim.level.def.spawns.find((sp) => sp.group === "B_RAIL_SIDING")!.pos;
   const place = (pos: Vec3) => server.onEvent({ kind: "place", pawnId: c.possessedPawnId, seq: 1, slot: 1, gadget: "bulletproof_camera", pos, yaw: 0, onFloor: true, flat: false, panel: -1 });
-  place([street[0], street[1] + 0.06, street[2]]);
-  place([39.345, -3.14, 31.805]);
+  place([siding[0], siding[1] + 0.06, siding[2]]);
+  place([15, -3.14, 30]);
   const [out, inside] = sim.gadgets.list;
   expect([out.signalEnd - sim.tick, inside.signalEnd]).toEqual([ticks(sim.data.intel.bulletproofCamera.outdoorSignalS), 0]);
   for (let i = 0; i < ticks(10) + 1; i++) {

@@ -1,7 +1,7 @@
 // The art pass's data and materials (Phase 10 M1–M2, render/DESIGN.md §2, §3, §5), without a GPU: the art files are
 // whole (every material's set packed, every style's materials listed, the shipped textures within budget), every
-// Oregon room has a style, faces wear the style of the room they face (inside walls and floors, outside zones round
-// the Big Tower and below ground), boxes with a style of their own keep it, and the graphics presets.
+// Millrace room has a style, faces wear the style of the room they face (inside walls and floors, outside zones round
+// the office wing and below ground), boxes with a style of their own keep it, and the graphics presets.
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
@@ -32,12 +32,12 @@ function fakeSets(): TextureSets {
   };
 }
 
-let oregon: BuiltLevel | null = null;
-let oregonSim: Sim | null = null;
-async function oregonArt() {
-  oregonSim ??= await Sim.create("oregon");
-  oregon ??= oregonSim.level;
-  return { level: oregon, art: new LevelArt(oregon, fakeSets(), loadArtData()), sim: oregonSim };
+let millrace: BuiltLevel | null = null;
+let millraceSim: Sim | null = null;
+async function millraceArt() {
+  millraceSim ??= await Sim.create("millrace");
+  millrace ??= millraceSim.level;
+  return { level: millrace, art: new LevelArt(millrace, fakeSets(), loadArtData()), sim: millraceSim };
 }
 
 describe("the art data (render/DESIGN.md §2)", () => {
@@ -60,21 +60,21 @@ describe("the art data (render/DESIGN.md §2)", () => {
 
   it("finds what's wrong: a material on a missing set, a style naming a missing material, a bad pattern", () => {
     const data = loadArtData();
-    const oregonArt = data.maps.get("oregon")!;
+    const mapArt = data.maps.get("millrace")!;
     const broken = {
       ...data,
       materials: { ...data.materials, odd: { set: "nope", tint: "#ffffff" } },
-      maps: new Map([["oregon", { ...oregonArt, styles: { ...oregonArt.styles, hall: { ...oregonArt.styles.hall, floor: "missing" } }, items: [{ match: "(", style: "hall" }] }]]),
+      maps: new Map([["millrace", { ...mapArt, styles: { ...mapArt.styles, mill: { ...mapArt.styles.mill, floor: "missing" } }, items: [{ match: "(", style: "mill" }] }]]),
     };
     const problems = artProblems(broken).join("\n");
     expect(problems).toContain("material odd: no texture set nope");
-    expect(problems).toContain("style hall.floor: no material missing");
+    expect(problems).toContain("style mill.floor: no material missing");
     expect(problems).toContain("bad pattern (");
   });
 
-  it("gives every Oregon room a style, and names no room Oregon doesn't have", async () => {
-    const { level } = await oregonArt();
-    const rooms = Object.keys(loadArtData().maps.get("oregon")!.rooms);
+  it("gives every Millrace room a style, and names no room Millrace doesn't have", async () => {
+    const { level } = await millraceArt();
+    const rooms = Object.keys(loadArtData().maps.get("millrace")!.rooms);
     const ids = level.def.rooms.map((r) => r.id);
     expect(ids.filter((id) => !rooms.includes(id))).toEqual([]);
     expect(rooms.filter((id) => !ids.includes(id))).toEqual([]);
@@ -83,8 +83,8 @@ describe("the art data (render/DESIGN.md §2)", () => {
 
 describe("faces wear the style of the room they face (render/DESIGN.md §5.2)", () => {
   it("each room's floor and ceiling, at its anchor", async () => {
-    const { level, art } = await oregonArt();
-    const styles = loadArtData().maps.get("oregon")!.rooms;
+    const { level, art } = await millraceArt();
+    const styles = loadArtData().maps.get("millrace")!.rooms;
     for (const r of level.def.rooms) {
       const storey = level.def.storeys.find((s) => s.id === r.storey)!;
       // A spot inside one of its rects (the anchor can sit on its edge): the first rect's middle.
@@ -95,37 +95,38 @@ describe("faces wear the style of the room they face (render/DESIGN.md §5.2)", 
     }
   });
 
-  it("a wall's two faces wear the two rooms' styles; outside faces their zone's: the Big Tower red, the house's siding, below ground concrete", async () => {
-    const { level, art } = await oregonArt();
+  it("a wall's two faces wear the two rooms' styles; outside faces their zone's: the office wing's, the mill's brick, below ground concrete", async () => {
+    const { level, art } = await millraceArt();
     const room = (id: string) => level.def.rooms.find((r) => r.id === id)!;
-    // The Kitchen's west edge from inside: facing east (+x), into the Kitchen.
-    const k = room("1F_KITCHEN").rects[0];
-    expect(art.styleAt([k[0], 1.5, (k[1] + k[3]) / 2], [1, 0, 0])).toBe("kitchen");
-    // Just north of the Big Tower's 1F rect, facing north (−z): outside, the tower's zone.
-    const t = room("1F_TOWER").rects[0];
-    expect(art.styleAt([(t[0] + t[2]) / 2, 1.5, t[1] - 0.1], [0, 0, -1])).toBe("tower_out");
+    // Dispatch's west edge from inside: facing east (+x), into Dispatch (an office).
+    const d = room("1F_DISPATCH").rects[0];
+    expect(art.styleAt([d[0], 1.5, (d[1] + d[3]) / 2], [1, 0, 0])).toBe("office");
+    // Just north of Reception's rect, facing north (−z): outside, the office wing's zone.
+    const r = room("1F_RECEPTION").rects[0];
+    expect(art.styleAt([(r[0] + r[2]) / 2, 1.5, r[1] - 0.1], [0, 0, -1])).toBe("office_out");
     // Far out in the yard: the outside style; and under the ground there, below_out.
-    expect(art.styleAt([-20, 0, 60], [0, 1, 0])).toBe("house_out");
+    expect(art.styleAt([-20, 0, 60], [0, 1, 0])).toBe("mill_out");
     expect(art.styleAt([-20, -1.5, 60], [1, 0, 0])).toBe("below_out");
   });
 
-  it("boxes with a style of their own keep it: roofs, stairs, rails, the ladder, cover props by class, outside items; walls go by their room", async () => {
-    const { level, art } = await oregonArt();
+  it("boxes with a style of their own keep it: roofs, stairs, cover props by class (or their own), outside items; walls go by their room", async () => {
+    const { level, art } = await millraceArt();
     const styleOf = (id: string) => {
       const r = level.renderables.find((x) => x.id === id);
       expect(r, id).toBeDefined();
       return art.styleAt(r!.center, [0, 1, 0], art.styleOf(r!));
     };
-    expect(styleOf("RF_TOWER.W")).toBe("roof_tower");
-    expect(styleOf("RF_DORMS.N")).toBe("roof");
-    expect(styleOf("RF_DINING#0")).toBe("roof_flat");
-    expect(styleOf(level.renderables.find((r) => r.kind === "stair_step" && !r.id.startsWith("S1:B>1F"))!.id)).toBe("stairs");
-    expect(styleOf(level.renderables.find((r) => r.kind === "ladder_rung")!.id)).toBe("ladder");
-    expect(styleOf("PROP_DINING_BENCH")).toBe("prop_soft");
-    expect(styleOf("PROP_DINING_CABINET")).toBe("prop_wood");
-    expect(styleOf("EXT_BUS")).toBe("bus");
-    expect(styleOf("EXT_SILO_N")).toBe("silo");
-    const wall = level.renderables.find((r) => r.id === "1F.w000#0")!;
+    expect(styleOf("RF_MILL.W#0")).toBe("roof");
+    expect(styleOf("RF_OFFICE#0")).toBe("roof_flat");
+    expect(styleOf(level.renderables.find((r) => r.kind === "stair_step" && r.id.startsWith("ST_MAIN:"))!.id)).toBe("stairs");
+    expect(styleOf(level.renderables.find((r) => r.kind === "stair_step" && r.id.startsWith("ST_RACE:"))!.id)).toBe("stairs_concrete");
+    expect(styleOf("PROP_BALES_STORE")).toBe("prop_soft");
+    expect(styleOf("PROP_DESK_DISPATCH")).toBe("prop_wood");
+    expect(styleOf("PROP_VAT_1")).toBe("prop_metal");
+    expect(styleOf("PROP_LOOM_1")).toBe("machine");
+    expect(styleOf("EXT_TRUCK")).toBe("vehicle");
+    expect(styleOf("EXT_CONTAINER_1")).toBe("container");
+    const wall = level.renderables.find((r) => r.id === "1F.w010#0")!;
     expect(art.styleOf(wall)).toBe(0);
   });
 
@@ -155,9 +156,9 @@ describe("the level's shader keeps to what every GPU allows (Ulo's report: Mediu
   const OURS_AT_MOST = 10;
 
   it("with the probes on, the level's and the panels' shaders declare few enough textures", async () => {
-    oregon ??= (await Sim.create("oregon")).level;
-    const art = new LevelArt(oregon, fakeSets(), loadArtData());
-    const probes = new ProbeField(oregon, () => ({}) as never, new Float32Array(0), 0);
+    millrace ??= (await Sim.create("millrace")).level;
+    const art = new LevelArt(millrace, fakeSets(), loadArtData());
+    const probes = new ProbeField(millrace, () => ({}) as never, new Float32Array(0), 0);
     art.attachProbes(probes.uniforms);
     for (const m of [art.staticMaterial(), art.panelMaterial("skin:SOFT_WALL")!, art.panelMaterial("core:wood")!]) {
       const { fragment, uniforms } = patched(m);
@@ -180,7 +181,7 @@ describe("the level's shader keeps to what every GPU allows (Ulo's report: Mediu
   });
 
   it("the one lookup table has each room's style, each material and each style where the shader reads them", async () => {
-    const { level, art } = await oregonArt();
+    const { level, art } = await millraceArt();
     const t = art.uniforms.tArtTables.value as THREE.DataTexture;
     const { width, height } = t.image;
     const data = t.image.data as Float32Array;
@@ -188,7 +189,7 @@ describe("the level's shader keeps to what every GPU allows (Ulo's report: Mediu
     expect(height).toBeLessThanOrEqual(2048);
     const texel = (x: number, y: number) => Array.from(data.subarray((y * width + x) * 4, (y * width + x) * 4 + 4));
     const art2 = loadArtData();
-    const map = art2.maps.get("oregon")!;
+    const map = art2.maps.get("millrace")!;
     const mats = Object.keys(art2.materials);
     const styles = [...Object.keys(map.styles), ...mats.map((m) => `_${m}`)];
     // A material's row: its texture set's layer, its tint; its tile size.
@@ -269,7 +270,7 @@ describe("graphics presets (render/DESIGN.md §3)", () => {
 
 describe("architecture (render/DESIGN.md §7)", () => {
   it("frames every door and window once (a window's glass and barricade together), keeps the doorway clear but for thin linings, and puts a fixture over every lamp", async () => {
-    const { level, art } = await oregonArt();
+    const { level, art } = await millraceArt();
     const lab = { storeys: level.def.storeys.map(() => new THREE.Group()) } as unknown as LabScene;
     const lamps = roomLamps(level, (id) => art.lampOf(id));
     const arch = new Architecture(lab, level, art, lamps);
@@ -301,7 +302,7 @@ describe("architecture (render/DESIGN.md §7)", () => {
   });
 
   it("hangs each fixture on the ceiling over its lamp; what hangs on a panel goes with it and comes back with it; no hatch border on a floor that breaks", async () => {
-    const { level, art, sim } = await oregonArt();
+    const { level, art, sim } = await millraceArt();
     const lab = { storeys: level.def.storeys.map(() => new THREE.Group()) } as unknown as LabScene;
     const lamps = roomLamps(level, (id) => art.lampOf(id));
     const arch = new Architecture(lab, level, art, lamps);

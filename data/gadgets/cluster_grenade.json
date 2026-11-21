@@ -3,7 +3,7 @@
   "_season": "Y11S3",
   "_unverified": ["count", "use.fuseS", "sizeM", "blast.damage.max", "blast.destroyM", "blast.cut", "blast.cutM", "blast.throughSoft", "blast.concussM"],
   "id": "cluster_grenade",
-  "name": "Cluster Charge",
+  "name": "Hailstone Drill",
   "side": "attacker",
   "operator": "fuze",
   "count": 5,

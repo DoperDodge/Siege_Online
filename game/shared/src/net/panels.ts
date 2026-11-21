@@ -30,10 +30,13 @@ const U16 = (v: number) => (Number.isNaN(v) ? 0 : Math.max(0, Math.min(0xffff, M
  */
 export function wireOp(op: PanelOp): PanelOp {
   if (op.kind !== "cut") return op;
+  const c = op.shape;
   const s: CutShape =
-    op.shape.kind === "disc"
-      ? { kind: "disc", u4: I16(op.shape.u4), v4: I16(op.shape.v4), r4: U16(op.shape.r4) }
-      : { kind: "rect", u0: I16(op.shape.u0), v0: I16(op.shape.v0), u1: I16(op.shape.u1), v1: I16(op.shape.v1) };
+    c.kind === "disc"
+      ? { kind: "disc", u4: I16(c.u4), v4: I16(c.v4), r4: U16(c.r4) }
+      : c.kind === "line"
+        ? { kind: "line", u4a: I16(c.u4a), v4a: I16(c.v4a), u4b: I16(c.u4b), v4b: I16(c.v4b), r4: U16(c.r4) }
+        : { kind: "rect", u0: I16(c.u0), v0: I16(c.v0), u1: I16(c.u1), v1: I16(c.v1) };
   return { kind: "cut", layer: op.layer, shape: s, hard: op.hard };
 }
 
@@ -41,8 +44,9 @@ function writeOp(w: ByteWriter, { panel, op }: IndexedOp) {
   w.varu(panel).u8(OP[op.kind]);
   switch (op.kind) {
     case "cut":
-      w.u8(op.layer | (op.hard ? 0x10 : 0) | (op.shape.kind === "rect" ? 0x20 : 0));
+      w.u8(op.layer | (op.hard ? 0x10 : 0) | (op.shape.kind === "rect" ? 0x20 : 0) | (op.shape.kind === "line" ? 0x40 : 0));
       if (op.shape.kind === "disc") w.i16(op.shape.u4).i16(op.shape.v4).u16(op.shape.r4);
+      else if (op.shape.kind === "line") w.i16(op.shape.u4a).i16(op.shape.v4a).i16(op.shape.u4b).i16(op.shape.v4b).u16(op.shape.r4);
       else w.i16(op.shape.u0).i16(op.shape.v0).i16(op.shape.u1).i16(op.shape.v1);
       break;
     case "damage":
@@ -64,8 +68,13 @@ function readOp(r: ByteReader, panelCount: number): IndexedOp {
   if (kind === OP.cut) {
     const flags = r.u8();
     const layer = flags & 0x0f;
-    if (layer >= LAYER_COUNT || flags & 0xc0) throw new ProtocolError("panel op: bad cut");
-    const shape: CutShape = flags & 0x20 ? { kind: "rect", u0: r.i16(), v0: r.i16(), u1: r.i16(), v1: r.i16() } : { kind: "disc", u4: r.i16(), v4: r.i16(), r4: r.u16() };
+    if (layer >= LAYER_COUNT || flags & 0x80 || (flags & 0x60) === 0x60) throw new ProtocolError("panel op: bad cut");
+    const shape: CutShape =
+      flags & 0x20
+        ? { kind: "rect", u0: r.i16(), v0: r.i16(), u1: r.i16(), v1: r.i16() }
+        : flags & 0x40
+          ? { kind: "line", u4a: r.i16(), v4a: r.i16(), u4b: r.i16(), v4b: r.i16(), r4: r.u16() }
+          : { kind: "disc", u4: r.i16(), v4: r.i16(), r4: r.u16() };
     return { panel, op: { kind: "cut", layer, shape, hard: (flags & 0x10) !== 0 } };
   }
   if (kind === OP.damage) {

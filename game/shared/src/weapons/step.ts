@@ -77,6 +77,15 @@ export type SimEvent =
    */
   /** (`spent`: the simulation spent a charge on it, for the level, a panel or a gadget in reach; bodies are the room's.) */
   | { kind: "swing"; pawnId: number; seq: number; slot: 1 | 2; gadget: string; yaw: number; pitch: number; origin: Vec3; spent: boolean }
+  /**
+   * A round shot from a gadget in the hands (R3, Ohm's Brownout Pistol) from the body's eye along its view: the room
+   * judges where it stops, rewound as a bullet.
+   */
+  | { kind: "gshot"; pawnId: number; seq: number; slot: 1 | 2; gadget: string; yaw: number; pitch: number; origin: Vec3 }
+  /** The Bailiff Shield's prod jolting along the view (R3, player/prod.ts): the room judges who it meets. */
+  | { kind: "prod"; pawnId: number; seq: number; yaw: number; pitch: number }
+  /** Bailiff's ability key with her shield set down (R3): its shock switched on or off (gadgets/serve.ts). */
+  | { kind: "postToggle"; pawnId: number; seq: number }
   /** `gadget`: the kind of the enemy gadget pinged (Phase 8 M3), or −1. */
   | { kind: "ping"; ctrlId: number; pos: Vec3; gadget: number; heart?: boolean }
   /**
@@ -321,7 +330,9 @@ export function stepWeapon(ctx: WeaponContext, pawn: Pawn, input: InputCmd, pres
     s.modes = (s.modes & ~(15 << (s.slot * 4))) | (next << (s.slot * 4));
     s.burstLeft = 0;
   }
-  if (pressed & Btn.Reload && s.wAct === WeaponAct.Ready && walking && !s.sprinting && s.meleeTicks === 0 && !gadgetOut(s)) startReload(ctx, pawn, w);
+  // (Hull's Plate braced, R3: both hands on it, no weapon.)
+  const braced = s.braceQ > 0;
+  if (pressed & Btn.Reload && s.wAct === WeaponAct.Ready && walking && !s.sprinting && s.meleeTicks === 0 && !gadgetOut(s) && !braced) startReload(ctx, pawn, w);
   // The knife: from any allowed stance, even mid-sprint (it ends the sprint) or mid-reload (it cancels it).
   if (pressed & Btn.Melee && s.meleeTicks === 0 && (s.mode === PawnMode.Walk || onRope(s)) && s.wAct !== WeaponAct.Equip && !handsBusy(s) && melee.allowInStances.includes(STANCE_NAMES[s.stance])) {
     if (s.wAct === WeaponAct.Reload) endReload(s);
@@ -338,7 +349,8 @@ export function stepWeapon(ctx: WeaponContext, pawn: Pawn, input: InputCmd, pres
   if (s.wAct === WeaponAct.Reload) advanceReload(ctx, s, w);
 
   // 5. ADS: rising over the weapon's ADS ticks (slower straight out of a sprint), falling over the exit time.
-  if (wantsAim(ctx, s, input)) {
+  // (Hull's Plate's pistol is never aimed, R3: `noAds`.)
+  if (wantsAim(ctx, s, input) && !lo.shield?.noAds && !braced) {
     if (s.adsQ === 0) {
       if (s.sprinting || s.sinceSprint < exitToFire - 1e-6) s.wflags |= WFlag.AdsFromSprint;
       else s.wflags &= ~WFlag.AdsFromSprint;
@@ -361,7 +373,7 @@ export function stepWeapon(ctx: WeaponContext, pawn: Pawn, input: InputCmd, pres
   const ready = s.wAct === WeaponAct.Ready || (s.wAct === WeaponAct.Reload && loaded > 0 && rules.reload.fireCancels);
   // With Fuze's shield up, the pistol fires only aimed, once the aim is done (no hip fire, Y9S1; Phase 8 M11).
   const shieldHip = lo.shield !== null && !lo.shield.hipFire && s.shieldAt === 1 && s.adsQ < 65535;
-  const gate = walking && sprintGate && ready && s.meleeTicks === 0 && !handsBusy(s) && !gadgetOut(s) && w.fire.kind === "hitscan" && !shieldHip;
+  const gate = walking && sprintGate && ready && s.meleeTicks === 0 && !handsBusy(s) && !gadgetOut(s) && w.fire.kind === "hitscan" && !shieldHip && !braced;
   // A press during the sprint exit fires once it ends, but only on a tick with real input (its view and seq).
   if (press && !sprintGate) s.wflags |= WFlag.FireQueued;
   let queued = false;

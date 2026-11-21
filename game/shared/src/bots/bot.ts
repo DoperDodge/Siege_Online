@@ -18,6 +18,11 @@ import { slotGadget } from "../gadgets/hands.js";
 import { kindId, kindOf } from "../gadgets/kinds.js";
 import { hackTargetFor, kludgeOf, type KludgeData } from "../gadgets/hack.js";
 import { heartbeats, heartOf } from "../gadgets/sensor.js";
+import { coilMarks } from "../gadgets/coil.js";
+import { ticks } from "../weapons/ticks.js";
+import { patchWorking } from "../gadgets/patch.js";
+import { prodLeft } from "../player/prod.js";
+import { shieldUp } from "../player/shield.js";
 import { GFlag } from "../gadgets/table.js";
 import type { GameData } from "../data/load.js";
 import type { Sim } from "../sim.js";
@@ -61,6 +66,8 @@ export interface BotWorld {
 
 /** How often (ticks) a bot looks at the planning screens. */
 const CHOOSE_EVERY = 8;
+/** A teammate stuck beside a standing bot this long (s, pauses leaking it away at half the rate) makes it step aside (makeWay). */
+const MAKE_WAY_S = 1.5;
 /** On a team with people, bots pick once those have, or this long before the timer ends (s): people choose first. */
 const PICK_LATE_S = 5;
 
@@ -117,6 +124,9 @@ export class Bot {
   private taskStep = 0;
   private lastSwing = -1e9;
   private lastPing = -1e9;
+  /** What its coil's pings marked this round (Dowser's, R3: each device once). */
+  private dowsed = new Set<string>();
+  private dowsedRound = -1;
   /** A count a task started with (Brava's Kludge drones out). */
   private taskCount = 0;
   /** Brava's Kludge: what's in its sights (its key) and when Fire may be held on it, when it last saw a device. */
@@ -129,6 +139,9 @@ export class Bot {
   /** How near its Kludge has got to where it's going, and when it last got a metre nearer. */
   private kludgeBest = Infinity;
   private kludgeAt = 0;
+  /** A hack it holds Fire for (its target's key, the tick it began), and how many times it has begun one on each target. */
+  private hackRun: { key: string; from: number } | null = null;
+  private readonly hackTries = new Map<string, number>();
   /** A task whose place it couldn't get to (it does it from where it is), by its key. */
   private unreachable = "";
   /** Its planner's gadget job under way (by the task's key). */
@@ -225,18 +238,81 @@ export class Bot {
     this.heard.length = 0;
     // Who it has just noticed (in sight), for the round report.
     if (w.noticed) for (const c of this.senses.contacts.values()) if (c.detected && c.spottedAt === now && c.kind === PawnKind.Body) w.noticed(c.pawnId);
+    // Tonic down (R3): his own patch gets him up, off the ability key (pressed now and then: the room takes a press).
+    if (s.mode === PawnMode.Downed && s.g2 > 0 && !patchWorking(s) && slotGadget(w.sim.data, pawn.loadout, 2)?.patch) return { ...this.still(s), buttons: now % 8 < 4 ? Btn.Ability : 0 };
     // Down: nothing a downed body can usefully press (crawling to cover comes with the plans).
     if (s.mode === PawnMode.Downed || s.mode === PawnMode.Knocked) return this.still(s);
+    // A snare on its leg (R3, Latch's): out of a fight it stands still and pulls it off (Interact held). The pull starts
+    // on a press: until it's pulling, Interact is let go a tick and pressed again (a press made mid-knife or mid-vault
+    // is lost, and one held from then on never starts it: the review).
+    if (s.snared && !this.about?.visible) {
+      const pulling = s.deployKind === DeployKind.Snare;
+      return { ...this.still(s), buttons: pulling || !(s.prevButtons & Btn.Interact) ? Btn.Interact : 0 };
+    }
     // Skopós between shells: the keys of the swap and nothing else.
     const swapping = this.swapStep(ctrl, s, now);
     if (swapping) return swapping;
     if ((now + this.memberId) % 4 === 0) this.decide(w, pawn, ctrl, mates, d, now);
-    const input = this.hands(s, this.act(w, pawn, mates, d, now), now);
+    const input = this.makeWay(pawn, mates, this.hands(s, this.act(w, pawn, mates, d, now), now), now);
+    // Its prod on with nothing in sight (R3, Bailiff): a click switches it off.
+    if (s.prodOn && !this.about?.visible) input.buttons = s.prevButtons & Btn.Fire ? input.buttons & ~Btn.Fire : input.buttons | Btn.Fire;
     this.asked = { yaw: input.yaw, pitch: input.pitch };
     return input;
   }
 
+  /** Stepping out of a teammate's way until this tick, which way (world x, z). */
+  private wayUntil = -1;
+  private wayDir: [number, number] = [0, 0];
+  /**
+   * Each teammate stuck beside it: where he was when it started counting, and for how long he's tried to move there
+   * without getting on (ticks: one more while he tries, half a tick less while he pauses, so a body that keeps trying
+   * still adds up).
+   */
+  private readonly stuckBeside = new Map<number, { x: number; z: number; t: number }>();
+
+  /**
+   * A teammate beside it trying to move and not getting on, for a second and a half all told (brushing past is
+   * nothing), while it stands still (holding a spot, waiting, looking about; not in a fight): it steps away from him for
+   * a moment, to give him room. Two bodies can't pass where one fits (the Oregon soak's dorms: a defender stood where
+   * another, cutting round a bunk's corner, needed to slide, and that one tried for good).
+   */
+  private makeWay(me: Pawn, mates: readonly Pawn[], input: BotInput, now: number): BotInput {
+    const s = me.state;
+    for (const p of mates) {
+      const near = Math.hypot(s.x - p.state.x, s.z - p.state.z) < 0.9 && Math.abs(p.state.y - s.y) < 0.5;
+      const trying = Math.hypot(p.state.vx, p.state.vz) > 0.5;
+      const e = this.stuckBeside.get(p.id);
+      if (near && trying) {
+        // Getting on (a quarter metre from where the count began): the count starts again.
+        if (!e || Math.hypot(p.state.x - e.x, p.state.z - e.z) > 0.25) this.stuckBeside.set(p.id, { x: p.state.x, z: p.state.z, t: 1 });
+        else e.t++;
+      } else if (e) {
+        e.t -= 0.5;
+        if (e.t <= 0 || !near) this.stuckBeside.delete(p.id);
+      }
+    }
+    for (const id of [...this.stuckBeside.keys()]) if (!mates.some((p) => p.id === id)) this.stuckBeside.delete(id);
+    if (this.doing === Doing.Fight || s.mode !== PawnMode.Walk) return input;
+    const stepping = now < this.wayUntil;
+    if (!stepping && (input.forward !== 0 || input.strafe !== 0)) return input;
+    if (!stepping) {
+      const stuck = mates.find((p) => (this.stuckBeside.get(p.id)?.t ?? 0) >= MAKE_WAY_S * TICK_HZ);
+      if (!stuck) return input;
+      this.stuckBeside.delete(stuck.id);
+      // Straight away from him (his room is where this body is).
+      const dx = s.x - stuck.state.x;
+      const dz = s.z - stuck.state.z;
+      const d = Math.hypot(dx, dz) || 1;
+      this.wayDir = [dx / d, dz / d];
+      this.wayUntil = now + Math.round(0.7 * TICK_HZ);
+    }
+    // The step as the keys give it: its way against the facing.
+    const rel = wrapAngle(Math.atan2(-this.wayDir[0], -this.wayDir[1]) - input.yaw);
+    return { ...input, forward: Math.cos(rel), strafe: -Math.sin(rel) };
+  }
+
   // ------------------------------------------------------------------ deciding
+
 
   /** Score what it could do and take the best (keeping the current one unless beaten by KEEP). */
   private decide(w: BotWorld, me: Pawn, ctrl: PlayerController, mates: readonly Pawn[], d: BotDifficulty, now: number) {
@@ -288,6 +364,13 @@ export class Bot {
 
   private act(w: BotWorld, me: Pawn, mates: readonly Pawn[], d: BotDifficulty, now: number): BotInput {
     const s = me.state;
+    // Hull's Plate (R3): braced only in a fight or holding its angle after one; anything else, folded (walking braced
+    // is slow, and a braced plate has no weapon).
+    if (s.braced && this.doing !== Doing.Fight && this.doing !== Doing.Hold) {
+      const input = this.task(w, me, now);
+      input.buttons = (input.buttons & ~(Btn.Fire | Btn.Sprint)) | (s.prevButtons & Btn.Ability ? 0 : Btn.Ability);
+      return input;
+    }
     switch (this.doing) {
       case Doing.Fight:
         if (this.about && this.about.visible) return this.fight(w, me, mates, this.about, d, now);
@@ -331,6 +414,15 @@ export class Bot {
    */
   private extras(w: BotWorld, me: Pawn, r: GadgetUse, input: BotInput | null, d: BotDifficulty, now: number): BotInput | null {
     const s = me.state;
+    // Tonic's monitor (R3): up and ready, Fire once (the room's Auto picks who), then put away.
+    if (r.task.tag === "patch" && input && r.ready(me)) {
+      if (r.firedAt >= 0) {
+        if (now - r.firedAt > 0.5 * TICK_HZ) r.finish(true);
+        return input;
+      }
+      r.firedAt = now;
+      return { ...input, buttons: input.buttons | Btn.Fire };
+    }
     if (r.task.tag === "jegeo" && input && r.ready(me)) {
       if (r.firedAt >= 0) {
         if (now - r.firedAt > 1.5 * TICK_HZ) r.finish(true);
@@ -359,6 +451,25 @@ export class Bot {
         return { ...input, yaw: v.yaw, pitch: v.pitch, buttons: input.buttons | (ping ? Btn.Ping : 0) };
       }
       // Nothing yet: a slow turn round (the sensor sees a fan ahead of it).
+      return { ...input, yaw: wrapAngle(s.yaw + 1.6 / TICK_HZ), pitch: 0 };
+    }
+    if (r.task.tag === "dowse" && input && r.ready(me)) {
+      // Dowser's coil up (R3): a ping on each device it shows that it hasn't marked this round, nearest first.
+      const round = w.match?.round ?? 0;
+      if (round !== this.dowsedRound) [this.dowsed, this.dowsedRound] = [new Set(), round];
+      const next = coilMarks(w.sim, me).find((m) => !this.dowsed.has(m.key));
+      if (next) {
+        const eye = eyePose(w.sim.data.movement, w.sim.data.hitboxes, s).pos;
+        const want = lookAt(eye, next.pos);
+        const v = this.turnTo({ yaw: s.yaw, pitch: s.pitch }, want, d);
+        const ping = viewGap(v, want) < 0.04 && now - this.lastPing > 0.8 * TICK_HZ;
+        if (ping) {
+          this.lastPing = now;
+          this.dowsed.add(next.key);
+        }
+        return { ...input, yaw: v.yaw, pitch: v.pitch, buttons: input.buttons | (ping ? Btn.Ping : 0) };
+      }
+      // Nothing (new) yet: a slow turn round (the coil sees a fan ahead of it).
       return { ...input, yaw: wrapAngle(s.yaw + 1.6 / TICK_HZ), pitch: 0 };
     }
     return input;
@@ -433,6 +544,20 @@ export class Bot {
     const inSite = !!site && here !== null && site.rooms.includes(here);
     if (!inSite) this.cameFrom = [s.x, s.y, s.z];
     if (me.team === DEFENSE) {
+      // Tonic (R3): his monitor up and a patch set off (its Auto pick) when a teammate's down, or (out of a fight) one's
+      // badly hurt, or he is; never while a teammate's patch is working, which only his own can join.
+      const monitor = slotOf("second_wind");
+      if (monitor && left(monitor) > 0 && since("patch") > 2) {
+        const mates = [...sim.pawns.values()].filter((p) => p.team === me.team && p.id !== me.id && p.kind === PawnKind.Body && p.state.mode !== PawnMode.Dead);
+        const busy = mates.some((p) => patchWorking(p.state));
+        const down = !busy && mates.some((p) => p.state.mode === PawnMode.Downed);
+        const hurt = !busy && mates.some((p) => p.state.mode === PawnMode.Walk && p.state.hp < p.state.maxHp * 0.6);
+        const self = !patchWorking(s) && s.hp < s.maxHp * 0.5;
+        if (down || (!target && (hurt || self))) {
+          const ahead: Vec3 = [s.x - Math.sin(s.yaw) * 4, s.y + 1.2, s.z - Math.cos(s.yaw) * 4];
+          return { task: { kind: "gadget", slot: monitor, how: "hold", stand: null, look: ahead, seconds: 1.5, tag: "patch" }, score: down ? 0.92 : 0.7 };
+        }
+      }
       // A Nitro Cell thrown where an enemy was just heard, close (round a corner: as near it as it can see).
       if (nitro && left(nitro) > 0 && out(nitro) === 0 && recent && recent.kind === PawnKind.Body && recent.source !== Source.Seen) {
         const dist = Math.hypot(recent.pos[0] - s.x, recent.pos[2] - s.z);
@@ -462,6 +587,12 @@ export class Bot {
     if (tablet && !target && since("jegeo") > 10) {
       const spotted = this.senses.spottedNow(sim, now);
       if (spotted) return { task: { kind: "gadget", slot: tablet, how: "hold", stand: null, look: spotted, seconds: 3, tag: "jegeo" }, score: 0.8 * keen };
+    }
+    // Dowser (R3): the coil up for a few seconds every so often on his way in (not in a fight), pinging what it shows.
+    const coil = slotOf("divining_coil");
+    if (coil && !target && !recent && since("dowse") > 10 + (this.memberId % 5)) {
+      const ahead: Vec3 = [s.x - Math.sin(s.yaw) * 6, s.y + 1.4, s.z - Math.cos(s.yaw) * 6];
+      return { task: { kind: "gadget", slot: coil, how: "hold", stand: null, look: ahead, seconds: 4, tag: "dowse" }, score: 0.5 };
     }
     // A grenade into the site's room just before its way goes in (a door, a hole, a hatch it broke), once a round.
     const grenade = slotOf("frag", "stun");
@@ -584,6 +715,21 @@ export class Bot {
     const dist = Math.hypot(a.point[0] - eye[0], a.point[1] - eye[1], a.point[2] - eye[2]);
     const ready = now - c.spottedAt >= ((d.reactionMs / 1000) * 0.4 * TICK_HZ);
     const onIt = a.off < a.size * 1.4 + 0.004;
+    // The Bailiff Shield's prod (R3): up close with it up and charge left, a click of Fire (not aimed) switches it on,
+    // and it steps in while it jolts; farther off, aiming its sidearm switches it off.
+    const prod = me.loadout?.shield?.prod;
+    if (prod && ready && shieldUp(s) && dist <= prod.rangeM - 0.2 && (prodLeft(me) ?? 0) > 0.05 && s.jammed === 0) {
+      const click = !s.prodOn && !(s.prevButtons & Btn.Fire) ? Btn.Fire : 0;
+      return { forward: dist > 2 ? 0.6 : 0, strafe: 0, yaw: a.view.yaw, pitch: a.view.pitch, buttons: click, stance: Stance.Stand, lean: 0 };
+    }
+    // Hull's Plate (R3): braced, stepping in, while the enemy's farther off than his pistol's good from the hip; folded
+    // to fight up close. (Its key is pressed once a change is wanted; it takes its time to come out or fold.)
+    const brace = me.loadout?.shield?.brace;
+    if (brace && shieldUp(s)) {
+      const want = ready && dist > 8;
+      if (want !== s.braced) return { forward: 0, strafe: 0, yaw: a.view.yaw, pitch: a.view.pitch, buttons: s.prevButtons & Btn.Ability ? 0 : Btn.Ability, stance: Stance.Stand, lean: 0 };
+      if (s.braced) return { forward: 0.8, strafe: 0, yaw: a.view.yaw, pitch: a.view.pitch, buttons: 0, stance: Stance.Stand, lean: 0 };
+    }
     let buttons = 0;
     // Down the sights past a few metres (or always, for the better bots).
     if (dist > 6 || d.peekStyle !== "wide") buttons |= Btn.Ads;
@@ -984,6 +1130,8 @@ export class Bot {
       this.hackSeen = now;
       this.kludgeBest = Infinity;
       this.kludgeAt = now;
+      this.hackRun = null;
+      this.hackTries.clear();
       this.legs.stop();
     }
     // The other side's devices it sees within reach, nearest first (looked for a few times a second: each is a sight
@@ -1003,10 +1151,24 @@ export class Bot {
       this.hackKey = key;
       this.hackFrom = now + 2;
     }
-    // Getting nowhere (stuck on a step, no way in) is as done as having got there.
-    // Getting on: a metre nearer where it's going, or a hack running (a device merely in view it can't get to isn't).
+    // A hack: once its target's in the sights, Fire held for the hack's time (the room runs it while Fire's held and the
+    // Kludge is in reach: the sights may come and go meanwhile, at the edge of its reach or through a gap), then let go
+    // for a fresh press. A target begun twice is left (a hack that doesn't take, or one it can't keep in reach of).
+    if (this.hackRun && now - this.hackRun.from >= ticks(k.hackS) + 8) {
+      this.hackRun = null;
+      this.hackFrom = now + 2;
+    }
     const toGo = Math.hypot(to[0] - s.x, to[2] - s.z);
-    if (toGo < this.kludgeBest - 1 || (sights !== null && now >= this.hackFrom)) [this.kludgeBest, this.kludgeAt] = [Math.min(toGo, this.kludgeBest), now];
+    const tries = this.hackTries.get(key) ?? 0;
+    // Getting nowhere (stuck on a step, no way in) is as done as having got there. Getting on: a metre nearer where
+    // it's going, or a hack begun (a device merely in view isn't, nor one flickering in and out of its sights: Ulo's
+    // soak found a Kludge at a stair's foot doing that for ever).
+    if (!this.hackRun && sights !== null && now >= this.hackFrom && tries < 2) {
+      this.hackRun = { key, from: now };
+      this.hackTries.set(key, tries + 1);
+      [this.kludgeBest, this.kludgeAt] = [Math.min(toGo, this.kludgeBest), now];
+    }
+    if (toGo < this.kludgeBest - 1) [this.kludgeBest, this.kludgeAt] = [toGo, now];
     const done = now - this.taskSince > 25 * TICK_HZ || now - this.kludgeAt > 6 * TICK_HZ || this.legs.state === FollowState.Failed || (this.legs.state !== FollowState.Walking && now - this.hackSeen > 5 * TICK_HZ && !devices.length);
     if (done) {
       const job = this.ordered(now) ?? w.taskOf();
@@ -1028,7 +1190,7 @@ export class Bot {
         const st = this.legs.tick(w.nav, sim, drone, v.yaw);
         [forward, strafe] = [st.forward, st.strafe];
       }
-      return { forward, strafe, yaw: v.yaw, pitch: v.pitch, buttons: sights && now >= this.hackFrom ? Btn.Fire : 0, stance: Stance.Stand, lean: 0 };
+      return { forward, strafe, yaw: v.yaw, pitch: v.pitch, buttons: this.hackRun ? Btn.Fire : 0, stance: Stance.Stand, lean: 0 };
     }
     if (!w.nav) return { forward: 0, strafe: 0, yaw: s.yaw, pitch: 0, buttons: 0, stance: Stance.Stand, lean: 0 };
     this.legs.goTo(to, 1.5);
