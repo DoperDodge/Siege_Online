@@ -2112,6 +2112,8 @@ export async function startLab(o: LabOptions): Promise<void> {
           gadgets: possessed()?.state.g1 ?? 0,
           gadgets2: possessed()?.state.g2 ?? 0,
           hand: possessed()?.state.hand ?? 0,
+          /** What the hands are doing (GadgetAct): Equip (1) while a gadget comes out of its slot, when Fire does nothing. */
+          gAct: possessed()?.state.gAct ?? 0,
           table: sim.gadgets.list.map((g) => ({ id: g.id, kind: kindId(g.kind), flags: g.flags, pos: [...g.pos], owner: g.owner })),
           frames,
           lastShot,

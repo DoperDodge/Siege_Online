@@ -70,14 +70,19 @@ try {
   /** Until the page's table has no gadget but the level's ingredients. */
   const noGadgets = (page) => page.waitForFunction((ing) => window.__lab.net.table.every((g) => ing.includes(g.kind)), INGREDIENTS, { timeout: 60000, polling: 100 });
   const until = (page, fn, arg, ms = 60000) => page.waitForFunction(fn, arg, { timeout: ms, polling: 100 });
+  /**
+   * Until gadget slot `hand` is in the hands and out (GadgetAct.Ready, 0). Its equip time is game time, which a slow
+   * page's second of wall time holds less of, and a press of Fire while it comes out does nothing: CI run 44890237618
+   * pressed after a second, the page still equipping, and Lesion's mine never left his hand.
+   */
+  const ready = (page, hand) => until(page, (h) => window.__lab.net.hand === h && window.__lab.net.gAct === 0, hand);
 
   // ---- offline: Sledge's frag
   const off = await open(`${BASE}/labs/gadget_lab.html?autotest=1&lowgfx&op=sledge&gadgets=frag`, { width: 960, height: 540 });
   await off.evaluate(() => window.__lab.teleport(0, 0, 8, 0));
   await sleep(600);
   await off.keyboard.press("Digit3");
-  await until(off, () => window.__lab.net.hand === 1);
-  await sleep(1000); // its equip time
+  await ready(off, 1);
   result.hud = await off.locator(".gadget-line").textContent();
   await input(off, { buttons: Btn.Fire, pitch: -0.15 });
   await until(off, () => window.__lab.net.table.some((g) => g.kind === "frag"));
@@ -120,8 +125,7 @@ try {
   await off.evaluate(() => window.__lab.teleport(-8, 0, -4.5, 0));
   await sleep(600);
   await off.keyboard.press("Digit3");
-  await until(off, () => window.__lab.net.hand === 1);
-  await sleep(1000);
+  await ready(off, 1);
   await input(off, { buttons: Btn.Fire, pitch: 0 });
   await until(off, () => /PLACING THE BREACH CHARGE/.test(document.querySelector(".revive-title")?.textContent ?? ""));
   result.placingBar = await off.locator(".revive-title").textContent();
@@ -149,8 +153,7 @@ try {
   await sleep(600);
   const steelBefore = (await off.evaluate(() => window.__lab.panel("reinforced"))).holes[3];
   await off.keyboard.press("KeyZ");
-  await until(off, () => window.__lab.net.hand === 3);
-  await sleep(1000);
+  await ready(off, 3);
   await input(off, { buttons: Btn.Fire, pitch: 0 });
   await until(off, () => window.__lab.net.table.some((g) => g.kind === "cluster_charge"));
   await input(off, { pitch: 0 });
@@ -211,8 +214,7 @@ try {
   await sleep(600);
   const exoBefore = (await off.evaluate(() => window.__lab.panel("reinforced"))).holes[3];
   await off.keyboard.press("KeyZ");
-  await until(off, () => window.__lab.net.hand === 3);
-  await sleep(1000);
+  await ready(off, 3);
   await input(off, { buttons: Btn.Fire, pitch: -0.3 });
   await until(off, () => window.__lab.net.table.some((g) => g.kind === "exothermic_charge"));
   await input(off, { pitch: -0.3 });
@@ -241,8 +243,7 @@ try {
   await nit.evaluate(() => window.__lab.teleport(-3, 0, 15, 0));
   await sleep(600);
   await nit.keyboard.press("Digit3");
-  await until(nit, () => window.__lab.net.hand === 1);
-  await sleep(1000);
+  await ready(nit, 1);
   await input(nit, { buttons: Btn.Fire, pitch: -0.7 });
   await until(nit, () => window.__lab.net.table.some((g) => g.kind === "nitro_cell" && !(g.flags & 1)));
   await input(nit, { pitch: -0.7 });
@@ -266,8 +267,7 @@ try {
 
   // ---- offline (M6): Mute's Signal Disruptor (Z) at his feet: held 3 s, it stands on the floor (its reach shown)
   await nit.keyboard.press("KeyZ");
-  await until(nit, () => window.__lab.net.hand === 3);
-  await sleep(1000);
+  await ready(nit, 3);
   await input(nit, { buttons: Btn.Fire, pitch: -1.2 });
   await until(nit, () => window.__lab.net.table.some((g) => g.kind === "signal_disruptor"));
   await input(nit, { pitch: -0.4 });
@@ -296,8 +296,7 @@ try {
   await mir.evaluate(() => window.__lab.teleport(1.6, 0, -5.0, 0));
   await sleep(600);
   await mir.keyboard.press("KeyZ");
-  await until(mir, () => window.__lab.net.hand === 3);
-  await sleep(1000);
+  await ready(mir, 3);
   await input(mir, { buttons: Btn.Fire, pitch: 0 });
   await until(mir, () => window.__lab.net.table.some((g) => g.kind === "black_mirror"));
   await input(mir, { pitch: 0 });
@@ -340,8 +339,7 @@ try {
   await until(dok, () => window.__lab.net.events.some((e) => e.kind === "spotted"), null, 10000);
   await input(dok, { yaw: 0, pitch: -0.12 });
   await dok.keyboard.press("KeyZ");
-  await until(dok, () => window.__lab.net.hand === 3);
-  await sleep(1000);
+  await ready(dok, 3);
   // (Pressed again if a slow page lets a press go by: CI run 41260952777 missed the only one.)
   const calling = () => dok.evaluate(() => window.__lab.net.events.some((e) => e.kind === "jegeo" && e.stage === 0));
   for (let k = 0; k < 4 && !(await calling()); k++) {
@@ -367,8 +365,7 @@ try {
   await les.evaluate(() => window.__lab.teleport(-3, 0, 13.6, 0));
   await sleep(600);
   await les.keyboard.press("KeyZ");
-  await until(les, () => window.__lab.net.hand === 3);
-  await sleep(1000);
+  await ready(les, 3);
   await input(les, { buttons: Btn.Fire, yaw: 0, pitch: -1.0 });
   // (Waits long enough for a slow page's game time: THROTTLE=8 took over 10 s. The mine is read in the same look that
   // finds it: a slow page can have it go off before a second look.)
@@ -414,8 +411,7 @@ try {
   await stun.evaluate(() => window.__lab.teleport(0, 0, 18, 0));
   await sleep(600);
   await stun.keyboard.press("Digit3");
-  await until(stun, () => window.__lab.net.hand === 1);
-  await sleep(1000);
+  await ready(stun, 1);
   await input(stun, { buttons: Btn.Fire, pitch: -0.9 });
   await until(stun, () => window.__lab.net.events.some((e) => e.kind === "stunned"));
   await input(stun, { pitch: -0.9 });
@@ -430,8 +426,7 @@ try {
   await smoke.evaluate(() => window.__lab.teleport(0, 0, 18, 0));
   await sleep(600);
   await smoke.keyboard.press("Digit3");
-  await until(smoke, () => window.__lab.net.hand === 1);
-  await sleep(1000);
+  await ready(smoke, 1);
   await input(smoke, { buttons: Btn.Fire, pitch: -0.3 });
   await until(smoke, (a) => window.__lab.net.table.some((g) => g.kind === "smoke" && g.flags & a), ACTIVE);
   await input(smoke, null);
@@ -454,8 +449,7 @@ try {
   const serverStats = async () => (await (await fetch(`${BASE}/stats`)).json()).totals;
   const statsBefore = await serverStats();
   await a.keyboard.press("Digit3");
-  await until(a, () => window.__lab.net.hand === 1);
-  await sleep(1000);
+  await ready(a, 1);
   await input(a, { buttons: Btn.Fire, pitch: -0.15 });
   await until(a, () => window.__lab.net.table.some((g) => g.kind === "frag"));
   await input(a, { pitch: -0.15 });
