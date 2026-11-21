@@ -8,7 +8,7 @@ import type { ResolvedDamage } from "../weapons/loadout.js";
 export type Zone = "head" | "neck" | "torso" | "pelvis" | "arm" | "leg";
 
 /** A drone's box counts as a torso (any hit destroys a drone anyway: combat/apply.ts). */
-/** A part's damage zone (a drone's one box and Fuze's shield's plate count as the torso where a zone is needed). */
+/** A part's damage zone (a drone's one box and Hail's shield's plate count as the torso where a zone is needed). */
 export const zoneOf = (part: BodyPart): Zone => (part === "drone" || part === "shield" ? "torso" : part.startsWith("arm") ? "arm" : part.startsWith("leg") ? "leg" : (part as Zone));
 
 const CORE: readonly Zone[] = ["head", "neck", "torso", "pelvis"];
@@ -58,7 +58,7 @@ export interface BulletOptions {
   mult?: number;
   /** Friendly-fire scale when the target is a teammate. */
   scale?: number;
-  /** The target is Skopós's idle shell: headshots do a multiple instead of killing (skopos.md §3.3). */
+  /** The target is Twain's idle shell: headshots do a multiple instead of killing (twain.md §3.3). */
   idleShell?: boolean;
 }
 

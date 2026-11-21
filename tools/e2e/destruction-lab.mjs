@@ -56,7 +56,7 @@ try {
   };
 
   // ---- offline: the page's own room
-  const off = await open(`${BASE}/labs/destruction_lab.html?autotest=1&lowgfx&op=mute`, { width: 960, height: 540 });
+  const off = await open(`${BASE}/labs/destruction_lab.html?autotest=1&lowgfx&op=lull`, { width: 960, height: 540 });
   await off.evaluate(() => window.__lab.teleport(2.2, 0, -5.0, 0)); // 0.9 m from the 2-section wall, its right half
   await sleep(800);
   result.prompt = await off.locator(".prompt").textContent();
@@ -92,9 +92,9 @@ try {
   await off.close();
 
   // ---- online: what one player does, the other sees
-  const a = await open(`${BASE}/labs/destruction_lab.html?online&autotest=1&lowgfx&op=mute&lag=${LAG}`);
+  const a = await open(`${BASE}/labs/destruction_lab.html?online&autotest=1&lowgfx&op=lull&lag=${LAG}`);
   const room = (await a.evaluate(() => window.__lab.net)).room;
-  const b = await open(`${BASE}/labs/destruction_lab.html?room=${room}&autotest=1&lowgfx&op=sledge&lag=${LAG}`);
+  const b = await open(`${BASE}/labs/destruction_lab.html?room=${room}&autotest=1&lowgfx&op=cleave&lag=${LAG}`);
   await a.waitForFunction(() => window.__lab.net.players.length === 2, null, { timeout: 10000 });
   // A reinforces the 3-section wall's left section from the −z side.
   await a.evaluate(() => window.__lab.teleport(4.4, 0, -7.0, 180));

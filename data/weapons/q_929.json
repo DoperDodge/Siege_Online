@@ -1,5 +1,5 @@
 {
-  "_doc": "Q-929 (Lesion). research/weapons.csv row q_929; class rules research/weapons_notes.md §4.",
+  "_doc": "Q-929 (Thistle). research/weapons.csv row q_929; class rules research/weapons_notes.md §4.",
   "_season": "Y11S3.1",
   "_unverified": ["damage.falloff", "destruction"],
   "id": "q_929",

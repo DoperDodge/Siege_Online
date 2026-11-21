@@ -123,10 +123,10 @@ export class CameraModels {
 }
 
 /**
- * The round's Bulletproof Cameras (Phase 7 M5, intel/DESIGN.md §4): a dark box with a plate round its lens, on its
+ * The round's Armoured Cameras (Phase 7 M5, intel/DESIGN.md §4): a dark box with a plate round its lens, on its
  * wall or the floor, facing its way; a broken one turns grey and hangs askew. Greybox until the art pass.
  */
-export class BpCameraModels {
+export class ArmouredCameraModels {
   /** Each camera's group, its box and plate (they turn grey when it breaks), and its light. */
   private readonly items: { group: THREE.Group; shell: THREE.Mesh[]; light: THREE.Mesh }[] = [];
   private readonly body: THREE.BoxGeometry;

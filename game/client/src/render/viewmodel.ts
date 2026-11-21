@@ -140,7 +140,7 @@ export class Viewmodel {
   private lastShootTicks = 0;
   /** Where the palm under it is, its own frame: how low it comes there, and how far back (gadgetShapes.ts restsAt). */
   private heldRest = { y: 0, z: 0 };
-  /** A held-up item's screen (Pulse's sensor, Dokkaebi's tablet): lit, facing the eye. */
+  /** A held-up item's screen (Murmur's sensor, Relay's tablet): lit, facing the eye. */
   private screen: THREE.Mesh | null = null;
   private heldKey = "";
   private readonly flash: THREE.Sprite;
@@ -245,7 +245,7 @@ export class Viewmodel {
     const gun = this.useGun(`w:${gunKey({ id: w.id, class: w.class, pick: w.pick })}`, () => buildGun({ id: w.id, class: w.class, pick: w.pick }, this.kit), pistolHeld(w.class));
     // Aiming: the sight line comes onto the view axis, adsDistance in front of the eye.
     this.aim = smooth(s.adsQ / 65535);
-    // Fuze's pistol is behind his raised shield until it's slid down far enough to aim over (Phase 8 M11).
+    // Hail's pistol is behind his raised shield until it's slid down far enough to aim over (Phase 8 M11).
     if (behindShield && this.aim < 0.6) this.rig.visible = false;
     // Swapping: the new weapon comes up from below; reloading: a dip and a roll, the magazine out and back.
     let reload: Reload | null = null;
@@ -419,7 +419,7 @@ export class Viewmodel {
   private poseArms(gun: GunModel, hands: GunHands, at: THREE.Matrix4, reload: Reload | null, oneHanded: boolean, dt: number) {
     const onGun = (m: THREE.Matrix4) => new THREE.Matrix4().multiplyMatrices(at, m);
     this.arms.setHand("right", onGun(hands.right), "grip");
-    // Fuze's other hand is on his shield.
+    // Hail's other hand is on his shield.
     if (oneHanded) {
       this.leftKnown = false;
       return;
@@ -511,7 +511,7 @@ export class Viewmodel {
         this.screen = null;
       }
       if (gadget) {
-        // A swung item (Sledge's hammer, Phase 8 M4) is drawn long; anything else no bigger than a hand holds.
+        // A swung item (Cleave's hammer, Phase 8 M4) is drawn long; anything else no bigger than a hand holds.
         const cap = gadget.data.use.kind === "swing" ? 0.6 : 0.3;
         const shape = heldShape(gadget.detonator ? "detonator" : gadget.data.id, gadget.data.sizeM, cap);
         const [w, h, d] = shape.size;
@@ -552,7 +552,7 @@ export class Viewmodel {
       strike = p < hit ? smooth(p / hit) : 1 - smooth((p - hit) / Math.max(1e-6, 1 - hit));
     }
     if (gadget?.data.id === "dropped_phone") {
-      // A phone out of the pocket to turn a call off (Dokkaebi's): up in front in the right hand, its screen to the eye.
+      // A phone out of the pocket to turn a call off (Relay's): up in front in the right hand, its screen to the eye.
       this.held.position.set(0.05, -0.13, -0.3);
       this.held.rotation.set(1.2, -0.12, 0.08);
       this.holdHeld("palm");

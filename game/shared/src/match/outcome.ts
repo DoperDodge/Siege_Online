@@ -20,7 +20,7 @@ export type WinReason = (typeof WinReason)[keyof typeof WinReason];
 
 /** What the room sees at the end of a tick in action or post-plant. */
 export interface RoundFacts {
-  /** Players on each side with their body alive and not down (Skopós: her active shell). */
+  /** Players on each side with their body alive and not down (Twain: her active shell). */
   attackersUp: number;
   defendersUp: number;
   /**

@@ -1,5 +1,5 @@
 // Interaction rows of Phase 8 M3 (gadgets/DESIGN.md §6, §9, §12): the stun's flash, smoke, the Impact EMP's DSEG,
-// barbed wire, the deployable shield, the proximity alarm, the observation blocker, and the level's ingredients. Each
+// barbed wire, the deployable shield, the proximity alarm, the feed blocker, and the level's ingredients. Each
 // sets its scene up on the Gadget Lab level (its default camera over the door wall, its fire extinguisher, gas pipe and
 // metal detector) and goes through the room's own path: a gadget set off as its fuse or impact sets it off, a body's
 // keys, a shot, a knife, a scan from a camera or a drone.
@@ -26,8 +26,8 @@ import { input } from "../helpers.js";
 import { scene, type Scene } from "./harness.js";
 import { row } from "./registry.js";
 
-/** A scene on the Gadget Lab (Sledge client 0 and Mute client 1 unless `ops` says), everyone out of the way. */
-async function lab(ops: string[] = ["sledge", "mute"]) {
+/** A scene on the Gadget Lab (Cleave client 0 and Lull client 1 unless `ops` says), everyone out of the way. */
+async function lab(ops: string[] = ["cleave", "lull"]) {
   const s = await scene(ops, "gadget_lab");
   s.park();
   return s;
@@ -78,7 +78,7 @@ function walkSpeed(s: Scene, i: number, yawDeg: number, n: number, sprint = fals
 row("generic.stun", "player.defender", async () => {
   // Facing it 5 m away: fully blinded for its 5 s (UNVERIFIED for defenders: Fandom's numbers); facing away 6 m off,
   // only ringing ears (within 8 m).
-  const s = await lab(["sledge", "mute", "pulse"]);
+  const s = await lab(["cleave", "lull", "murmur"]);
   s.teleport(1, 0, 0, 16);
   s.teleport(2, 4, 0, 16);
   s.clients[2].cmd = { yaw: Math.PI }; // facing +z, away from it
@@ -89,23 +89,23 @@ row("generic.stun", "player.defender", async () => {
 });
 
 row("generic.stun", "player.attacker", async () => {
-  // Attackers the same, its thrower too: Sledge facing his own stun 5 m away.
+  // Attackers the same, its thrower too: Cleave facing his own stun 5 m away.
   const s = await lab();
   s.teleport(0, 0, 0, 16);
   goOff(s, "stun", 0, [0, 1.0, 11]);
   expect(sent(s, 0, "stunned")).toEqual([{ kind: "stunned", seconds: 5, blind: 1, ring: true, concuss: false }]);
 });
 
-row("generic.stun", "skopos.shell_active", async () => {
-  // Skopós in her shell: blinded like anyone (UNVERIFIED).
-  const s = await lab(["sledge", "skopos"]);
+row("generic.stun", "twain.shell_active", async () => {
+  // Twain in her shell: blinded like anyone (UNVERIFIED).
+  const s = await lab(["cleave", "twain"]);
   s.teleport(1, 0, 0, 16);
   goOff(s, "stun", 0, [0, 1.0, 11]);
   expect(sent(s, 1, "stunned").map((e) => e.blind)).toEqual([1]);
 });
 
 row("generic.stun", "generic.deployable_shield", async () => {
-  // Its slits let the flash through: Mute behind a shield, the stun low on its far side (the shield is between them, as
+  // Its slits let the flash through: Lull behind a shield, the stun low on its far side (the shield is between them, as
   // the level's sight sees it), is blinded all the same.
   const s = await lab();
   s.teleport(1, 0, 0, 16);
@@ -121,7 +121,7 @@ row("generic.stun", "generic.deployable_shield", async () => {
 });
 
 row("generic.stun", "camera.default", async () => {
-  // A camera isn't blinded, nor who watches one: Mute faces the stun with his body but is on the camera over the door
+  // A camera isn't blinded, nor who watches one: Lull faces the stun with his body but is on the camera over the door
   // wall, which faces it too; nothing, and the camera works.
   const s = await lab();
   s.teleport(1, -6, 0, 1);
@@ -132,12 +132,12 @@ row("generic.stun", "camera.default", async () => {
   expect([sent(s, 1, "stunned"), s.ctrlOf(1).cam, s.sim.camWorks(0)]).toEqual([[], 1, true]);
 });
 
-row("generic.stun", "generic.bulletproof_camera", async () => {
-  // Nor a Bulletproof Camera: Mute watches his own on the floor, the stun right in front of it and of his body; its
+row("generic.stun", "generic.armoured_camera", async () => {
+  // Nor a Armoured Camera: Lull watches his own on the floor, the stun right in front of it and of his body; its
   // glass and feed are fine.
   const s = await lab();
   s.teleport(1, 0, 0, 16);
-  const cam = s.put("bulletproof_camera", 1, [0, 0.06, 13]);
+  const cam = s.put("armoured_camera", 1, [0, 0.06, 13]);
   s.sim.matchRules.camsBroken = 1; // the level's camera out of the way: his first is this one
   onCameras(s, 1);
   goOff(s, "stun", 0, [0, 0.5, 12]);
@@ -145,7 +145,7 @@ row("generic.stun", "generic.bulletproof_camera", async () => {
 });
 
 row("generic.stun", "drone.standard", async () => {
-  // Nor a drone, nor its driver: Sledge on his drone 1 m from the stun; the drone drives on.
+  // Nor a drone, nor its driver: Cleave on his drone 1 m from the stun; the drone drives on.
   const s = await lab();
   const drone = pilot(s, 0, 0, 12);
   goOff(s, "stun", 1, [0, 0.3, 11]);
@@ -155,7 +155,7 @@ row("generic.stun", "drone.standard", async () => {
 // ---------------------------------------------------------------- smoke
 
 row("generic.smoke", "camera.default", async () => {
-  // A camera can't see through it: Mute scans Sledge from the camera over the door wall and spots him; with a cloud
+  // A camera can't see through it: Lull scans Cleave from the camera over the door wall and spots him; with a cloud
   // between them (2.5 m round), he doesn't.
   const s = await lab();
   s.teleport(0, -8, 0, -2);
@@ -166,7 +166,7 @@ row("generic.smoke", "camera.default", async () => {
 });
 
 row("generic.smoke", "drone.standard", async () => {
-  // Nor a drone: Sledge's drone scans Mute and spots him; with a cloud between them, it doesn't.
+  // Nor a drone: Cleave's drone scans Lull and spots him; with a cloud between them, it doesn't.
   const s = await lab();
   pilot(s, 0, 6, 26);
   s.teleport(1, 6, 0, 16);
@@ -175,10 +175,10 @@ row("generic.smoke", "drone.standard", async () => {
   expect(s.scan(0, s.body(1))).toBe(false);
 });
 
-row("generic.smoke", "generic.bulletproof_camera", async () => {
-  // A Bulletproof Camera sees through it (thermal): Mute scans Sledge through a cloud from his own, and spots him.
+row("generic.smoke", "generic.armoured_camera", async () => {
+  // A Armoured Camera sees through it (thermal): Lull scans Cleave through a cloud from his own, and spots him.
   const s = await lab();
-  s.put("bulletproof_camera", 1, [0, 1.5, 23.9]);
+  s.put("armoured_camera", 1, [0, 1.5, 23.9]);
   s.sim.matchRules.camsBroken = 1;
   onCameras(s, 1);
   s.teleport(0, 0, 0, 14);
@@ -187,8 +187,8 @@ row("generic.smoke", "generic.bulletproof_camera", async () => {
 });
 
 row("generic.smoke", "player.defender", async () => {
-  // A defender's view stops at it too (it hides players inside, UNVERIFIED): Mute's ping at Sledge through a cloud
-  // lands on the cloud's near side, not on Sledge or the wall beyond.
+  // A defender's view stops at it too (it hides players inside, UNVERIFIED): Lull's ping at Cleave through a cloud
+  // lands on the cloud's near side, not on Cleave or the wall beyond.
   const s = await lab();
   s.teleport(1, 0, 0, 20);
   s.teleport(0, 0, 0, 12.5);
@@ -201,13 +201,13 @@ row("generic.smoke", "player.defender", async () => {
 
 // ---------------------------------------------------------------- the Impact EMP (DSEG)
 
-/** An Impact EMP (Sledge's) gone off at `at`. */
+/** An Impact EMP (Cleave's) gone off at `at`. */
 const empAt = (s: Scene, at: Vec3) => goOff(s, "impact_emp", 0, at);
 
-row("generic.impact_emp", "generic.bulletproof_camera", async () => {
-  // Within its 2 m a Bulletproof Camera's feed goes for its 9 s, then comes back.
+row("generic.impact_emp", "generic.armoured_camera", async () => {
+  // Within its 2 m a Armoured Camera's feed goes for its 9 s, then comes back.
   const s = await lab();
-  const cam = s.put("bulletproof_camera", 1, [0, 0.06, 14]);
+  const cam = s.put("armoured_camera", 1, [0, 0.06, 14]);
   const i = s.sim.level.def.cameras.length; // its place in the defenders' list, after the level's
   empAt(s, [0, 0.1, 12.5]);
   expect([s.sim.gadgets.get(cam.id)!.flags & GFlag.Off, s.sim.camWorks(i)]).toEqual([GFlag.Off, false]);
@@ -227,35 +227,35 @@ row("generic.impact_emp", "generic.proximity_alarm", async () => {
   expect(sent(s, 0, "alarm").some((e) => e.gadget === alarm.id && e.on)).toBe(true);
 });
 
-row("generic.impact_emp", "generic.nitro_cell", async () => {
-  // A Nitro Cell EMP'd can't be set off: Mute presses his detonator and nothing goes off, until it wears off.
+row("generic.impact_emp", "generic.remote_charge", async () => {
+  // A Remote Charge EMP'd can't be set off: Lull presses his detonator and nothing goes off, until it wears off.
   const s = await lab();
-  s.room.pickLoadout(s.clients[1].id, { ...defaultLoadoutPick(s.sim.data, "mute"), gadgets: ["nitro_cell"] });
+  s.room.pickLoadout(s.clients[1].id, { ...defaultLoadoutPick(s.sim.data, "lull"), gadgets: ["remote_charge"] });
   s.wait(8);
   s.teleport(1, 0, 0, 16);
   s.press(1, Btn.Gadget);
   s.wait(ticks(s.sim.data.gadgetRules.equipS) + 2);
   s.press(1, Btn.Fire, { pitch: -0.7 });
   s.wait(64);
-  const nitro = s.sim.gadgets.list.find((g) => g.kind === kindOf("nitro_cell"))!;
-  expect(nitro.flags & GFlag.Flying).toBe(0);
+  const remoteCharge = s.sim.gadgets.list.find((g) => g.kind === kindOf("remote_charge"))!;
+  expect(remoteCharge.flags & GFlag.Flying).toBe(0);
   s.teleport(1, 0, 0, 24); // out of the EMP's 2 m (an EMP on him would stop him too) and of its blast
-  empAt(s, [nitro.pos[0], nitro.pos[1] + 0.1, nitro.pos[2]]);
+  empAt(s, [remoteCharge.pos[0], remoteCharge.pos[1] + 0.1, remoteCharge.pos[2]]);
   s.press(1, Btn.Fire);
   s.wait(4);
-  expect([s.sim.gadgets.get(nitro.id)?.id, sent(s, 1, "blast").length]).toEqual([nitro.id, 1]); // the EMP's only
+  expect([s.sim.gadgets.get(remoteCharge.id)?.id, sent(s, 1, "blast").length]).toEqual([remoteCharge.id, 1]); // the EMP's only
   s.wait(ticks(9));
   s.press(1, Btn.Fire);
   s.wait(4);
-  expect([s.sim.gadgets.get(nitro.id), sent(s, 1, "blast").length]).toEqual([undefined, 2]);
+  expect([s.sim.gadgets.get(remoteCharge.id), sent(s, 1, "blast").length]).toEqual([undefined, 2]);
 });
 
-row("generic.impact_emp", "generic.observation_blocker", async () => {
-  // An observation blocker EMP'd is down (UNVERIFIED): Sledge's drone spots Mute through it; once it's back, it can't.
+row("generic.impact_emp", "generic.feed_blocker", async () => {
+  // An feed blocker EMP'd is down (UNVERIFIED): Cleave's drone spots Lull through it; once it's back, it can't.
   const s = await lab();
   pilot(s, 0, 6, 26);
   s.teleport(1, 6, 0, 16);
-  const ob = s.put("observation_blocker", 1, [6, 0.125, 20]);
+  const ob = s.put("feed_blocker", 1, [6, 0.125, 20]);
   empAt(s, [6, 0.3, 20.5]);
   expect(s.sim.gadgets.get(ob.id)!.flags & GFlag.Off).toBe(GFlag.Off);
   expect(s.scan(0, s.body(1))).toBe(true);
@@ -264,7 +264,7 @@ row("generic.impact_emp", "generic.observation_blocker", async () => {
 });
 
 row("generic.impact_emp", "camera.default", async () => {
-  // The level's camera within 2 m: its feed is off for 9 s (Mute on it is put off it), then back.
+  // The level's camera within 2 m: its feed is off for 9 s (Lull on it is put off it), then back.
   const s = await lab();
   onCameras(s, 1);
   empAt(s, [-8, 1.2, 5.0]);
@@ -291,7 +291,7 @@ row("generic.impact_emp", "generic.deployable_shield", async () => {
 });
 
 row("generic.impact_emp", "player.defender", async () => {
-  // A defender in it (DSEG): no observation tools for 9 s (Mute's cameras don't open), then back.
+  // A defender in it (DSEG): no observation tools for 9 s (Lull's cameras don't open), then back.
   const s = await lab();
   s.sim.matchRules.cameras = true;
   s.teleport(1, 0, 0, 14);
@@ -308,7 +308,7 @@ row("generic.impact_emp", "drone.standard", async () => {
   // Its own side's drones: nothing (UNVERIFIED; it's the attackers' EMP).
   const s = await lab();
   const drone = pilot(s, 0, 0, 14);
-  goOff(s, "impact_emp", 1, [0, 0.3, 14.2]); // (put as Mute's only to have a body to own it: its team is what counts)
+  goOff(s, "impact_emp", 1, [0, 0.3, 14.2]); // (put as Lull's only to have a body to own it: its team is what counts)
   expect(drone.state.jammed).toBeGreaterThan(0); // a defenders' EMP does reach it
   const s2 = await lab();
   const own = pilot(s2, 0, 0, 14);
@@ -316,9 +316,9 @@ row("generic.impact_emp", "drone.standard", async () => {
   expect(own.state.jammed).toBe(0);
 });
 
-row("generic.impact_emp", "skopos.shell_idle", async () => {
+row("generic.impact_emp", "twain.shell_idle", async () => {
   // Her idle shell in it: she can't swap into it (its shell camera doesn't open) until it wears off.
-  const s = await lab(["sledge", "skopos"]);
+  const s = await lab(["cleave", "twain"]);
   const c = s.ctrlOf(1);
   const idle = s.sim.pawns.get(c.pawnIds.find((id) => id !== c.possessedPawnId)!)!;
   empAt(s, [idle.state.x, idle.state.y + 1, idle.state.z]);
@@ -330,9 +330,9 @@ row("generic.impact_emp", "skopos.shell_idle", async () => {
   expect(c.shellCam).toBe(true);
 });
 
-row("generic.impact_emp", "skopos.shell_active", async () => {
+row("generic.impact_emp", "twain.shell_active", async () => {
   // The shell she's in: no observation tools (her shell camera, so no swap) until it wears off.
-  const s = await lab(["sledge", "skopos"]);
+  const s = await lab(["cleave", "twain"]);
   s.teleport(1, 0, 0, 14);
   empAt(s, [0, 0.5, 14.5]);
   expect(s.body(1).state.jammed).toBeGreaterThan(0);
@@ -355,42 +355,42 @@ row("generic.impact_emp", "ingredient.metal_detector", async () => {
   expect(sent(s, 0, "alarm").some((e) => e.gadget === det.id && e.on)).toBe(true);
 });
 
-// ---------------------------------------------------------------- the observation blocker
+// ---------------------------------------------------------------- the feed blocker
 
-row("generic.observation_blocker", "drone.standard", async () => {
-  // Its barrier hides what's behind it from the attackers' drones: Sledge's drone spots Mute; with Mute's blocker
+row("generic.feed_blocker", "drone.standard", async () => {
+  // Its barrier hides what's behind it from the attackers' drones: Cleave's drone spots Lull; with Lull's blocker
   // between them, it doesn't.
   const s = await lab();
   pilot(s, 0, 6, 26);
   s.teleport(1, 6, 0, 16);
   expect(s.scan(0, s.body(1))).toBe(true);
-  s.put("observation_blocker", 1, [6, 0.125, 20]);
+  s.put("feed_blocker", 1, [6, 0.125, 20]);
   expect(s.scan(0, s.body(1))).toBe(false);
 });
 
-row("generic.observation_blocker", "camera.default", async () => {
-  // Not from its own side's cameras: Mute's own blocker between the camera and Sledge, and Mute spots him from it.
+row("generic.feed_blocker", "camera.default", async () => {
+  // Not from its own side's cameras: Lull's own blocker between the camera and Cleave, and Lull spots him from it.
   const s = await lab();
   s.teleport(0, -8, 0, -2);
-  s.put("observation_blocker", 1, [-8, 0.125, 2]);
+  s.put("feed_blocker", 1, [-8, 0.125, 2]);
   onCameras(s, 1);
   expect(s.scan(1, s.body(0))).toBe(true);
 });
 
-row("generic.observation_blocker_converted", "camera.default", async () => {
-  // Hacked to the attackers' side (Brava, M8), it hides from the defenders' cameras instead (UNVERIFIED).
+row("generic.feed_blocker_converted", "camera.default", async () => {
+  // Hacked to the attackers' side (Patch, M8), it hides from the defenders' cameras instead (UNVERIFIED).
   const s = await lab();
   s.teleport(0, -8, 0, -2);
-  s.put("observation_blocker", 1, [-8, 0.125, 2], { team: ATTACK });
+  s.put("feed_blocker", 1, [-8, 0.125, 2], { team: ATTACK });
   onCameras(s, 1);
   expect(s.scan(1, s.body(0))).toBe(false);
 });
 
-row("generic.observation_blocker", "player.attacker", async () => {
-  // Players don't see it and aren't stopped by it: Sledge pings through it from his body (it lands beyond it); from his
+row("generic.feed_blocker", "player.attacker", async () => {
+  // Players don't see it and aren't stopped by it: Cleave pings through it from his body (it lands beyond it); from his
   // drone, the same ping stops on it.
-  const s = await lab(["sledge", "mute", "thermite"]);
-  s.put("observation_blocker", 1, [6, 0.125, 20]);
+  const s = await lab(["cleave", "lull", "kiln"]);
+  s.put("feed_blocker", 1, [6, 0.125, 20]);
   s.teleport(0, 6, 0, 26);
   const beyond: Vec3 = [6, 0, 14];
   s.press(0, Btn.Ping, s.aimAt(0, beyond));
@@ -432,7 +432,7 @@ row("generic.proximity_alarm", "drone.standard", async () => {
 });
 
 row("generic.proximity_alarm_converted", "player.defender", async () => {
-  // Hacked to the attackers' side (Brava, M8), defenders set it off (UNVERIFIED).
+  // Hacked to the attackers' side (Patch, M8), defenders set it off (UNVERIFIED).
   const s = await lab();
   const alarm = s.put("proximity_alarm", 1, [2, 0.05, 15], { team: ATTACK });
   s.teleport(1, 2, 0, 16.5);
@@ -445,7 +445,7 @@ row("environment.outdoors", "generic.proximity_alarm", async () => {
   const server = new GadgetServer(sim);
   let prep = true;
   server.inPrep = () => prep;
-  const c = sim.addPlayer("def", "mute", 0, undefined, undefined, DEFENSE);
+  const c = sim.addPlayer("def", "lull", 0, undefined, undefined, DEFENSE);
   const street = sim.level.def.spawns.find((sp) => sp.group === "B_RAIL_SIDING")!.pos;
   const thrown = (seq: number) => {
     server.onEvent({ kind: "throw", pawnId: c.possessedPawnId, seq, slot: 1, gadget: "proximity_alarm", pos: [street[0], street[1] + 1, street[2]], vel: [0, -3, 0], yaw: 0 });
@@ -463,7 +463,7 @@ row("environment.outdoors", "generic.proximity_alarm", async () => {
 
 // ---------------------------------------------------------------- barbed wire
 
-/** Mute's wire across the open floor at z 20 (2.5 m along x). */
+/** Lull's wire across the open floor at z 20 (2.5 m along x). */
 const wire = (s: Scene) => s.put("barbed_wire", 1, [0, 0.225, 20]);
 
 row("generic.barbed_wire", "player.attacker", async () => {
@@ -485,7 +485,7 @@ row("generic.barbed_wire", "player.attacker", async () => {
 });
 
 row("generic.barbed_wire", "player.defender", async () => {
-  // Defenders aren't slowed: Mute sprints through his own wire as fast as anywhere.
+  // Defenders aren't slowed: Lull sprints through his own wire as fast as anywhere.
   const s = await lab();
   wire(s);
   s.teleport(1, -1.6, 0, 24);
@@ -519,8 +519,8 @@ row("player.melee", "generic.barbed_wire", async () => {
 // ---------------------------------------------------------------- the deployable shield
 
 row("generic.deployable_shield", "player.attacker", async () => {
-  // It stops an attacker's bullets (its slits too) and his body: Sledge's shot at Mute's legs hurts him; behind the
-  // shield, the same shot doesn't, and Sledge can't walk through it.
+  // It stops an attacker's bullets (its slits too) and his body: Cleave's shot at Lull's legs hurts him; behind the
+  // shield, the same shot doesn't, and Cleave can't walk through it.
   const s = await lab();
   s.teleport(1, 0, 0, 13);
   s.teleport(0, 0, 0, 17);
@@ -549,7 +549,7 @@ row("weapon.bullet", "generic.deployable_shield", async () => {
 });
 
 row("generic.deployable_shield", "generic.frag", async () => {
-  // It stops a blast's damage: a frag on its far side and Mute right behind it, unhurt; the blast destroys it.
+  // It stops a blast's damage: a frag on its far side and Lull right behind it, unhurt; the blast destroys it.
   const s = await lab();
   const shield = s.put("deployable_shield", 1, [0, 0.5, 14]);
   s.teleport(1, 0, 0, 13.4);
@@ -560,7 +560,7 @@ row("generic.deployable_shield", "generic.frag", async () => {
 });
 
 row("generic.deployable_shield", "drone.standard", async () => {
-  // It stops a drone (UNVERIFIED): Sledge's drone driving at it stops in front of it.
+  // It stops a drone (UNVERIFIED): Cleave's drone driving at it stops in front of it.
   const s = await lab();
   s.put("deployable_shield", 1, [0, 0.5, 15]);
   const drone = pilot(s, 0, 0, 18);
@@ -570,10 +570,10 @@ row("generic.deployable_shield", "drone.standard", async () => {
 });
 
 row("player.melee", "generic.deployable_shield", async () => {
-  // A knife hit makes its glass opaque, and then Mute can't pick it up.
+  // A knife hit makes its glass opaque, and then Lull can't pick it up.
   const s = await lab();
   const shield = s.put("deployable_shield", 1, [0, 0.5, 14]);
-  s.room.pickLoadout(s.clients[1].id, { ...defaultLoadoutPick(s.sim.data, "mute"), gadgets: ["deployable_shield"] });
+  s.room.pickLoadout(s.clients[1].id, { ...defaultLoadoutPick(s.sim.data, "lull"), gadgets: ["deployable_shield"] });
   s.wait(8);
   s.teleport(0, 0, 0, 14.7);
   s.knife(0, [0, 0.8, 14.06]);
@@ -643,7 +643,7 @@ row("generic.frag", "ingredient.gas_pipe", async () => {
 });
 
 row("ingredient.fire_extinguisher", "player.defender", async () => {
-  // Its burst concusses those close by: Mute 1.5 m from it when it's shot.
+  // Its burst concusses those close by: Lull 1.5 m from it when it's shot.
   const s = await lab();
   const ext = ingredient(s, "fire_extinguisher");
   s.teleport(1, ext.pos[0] + 1.5, 0, ext.pos[2] + 0.6);
@@ -653,7 +653,7 @@ row("ingredient.fire_extinguisher", "player.defender", async () => {
 });
 
 row("ingredient.gas_pipe", "player.attacker", async () => {
-  // Its jet burns who's in it: Sledge in front of the pipe when it's set off.
+  // Its jet burns who's in it: Cleave in front of the pipe when it's set off.
   const s = await lab();
   const pipe = ingredient(s, "gas_pipe");
   s.teleport(0, pipe.pos[0], 0, pipe.pos[2] + 1.5);

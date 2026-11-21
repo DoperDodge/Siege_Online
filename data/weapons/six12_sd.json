@@ -1,5 +1,5 @@
 {
-  "_doc": "SIX12 SD (Lesion). research/weapons.csv row six12_sd; class rules research/weapons_notes.md §4. Double-action revolver: whole-cylinder reload, integral suppressor, no barrel slot (weapons_notes.md §4.4, §4.7). Ammo-refill 1.25 / 2.02 s community-measured.",
+  "_doc": "SIX12 SD (Thistle). research/weapons.csv row six12_sd; class rules research/weapons_notes.md §4. Double-action revolver: whole-cylinder reload, integral suppressor, no barrel slot (weapons_notes.md §4.4, §4.7). Ammo-refill 1.25 / 2.02 s community-measured.",
   "_season": "Y11S3.1",
   "_unverified": ["damage.base", "damage.falloff", "destruction", "reload.refillEmptyS", "reload.refillTacticalS"],
   "id": "six12_sd",

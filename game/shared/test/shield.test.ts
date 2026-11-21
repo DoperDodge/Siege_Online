@@ -1,4 +1,4 @@
-// Fuze's Ballistic Shield (Phase 8 M11, player/shield.ts, gadgets/DESIGN.md §8): its loadout, where its plate is,
+// Hail's Ballistic Shield (Phase 8 M11, player/shield.ts, gadgets/DESIGN.md §8): its loadout, where its plate is,
 // the plate's hitboxes, aimed-only fire, its speed, and what knocks it aside that no CSV row covers (a stun).
 import { describe, expect, it } from "vitest";
 import {
@@ -33,12 +33,12 @@ import { scene } from "./interactions/harness.js";
 
 const data = loadGameData();
 const SHIELD = { weapon: "ballistic_shield", sight: null, barrel: null, grip: null, underbarrel: null };
-const shieldPick = (): LoadoutPick => ({ ...defaultLoadoutPick(data, "fuze"), primary: SHIELD });
+const shieldPick = (): LoadoutPick => ({ ...defaultLoadoutPick(data, "hail"), primary: SHIELD });
 
-/** Fuze on the Movement Lab, with the shield (or his default AK-12), settled and facing −z. */
-async function fuze(withShield = true) {
+/** Hail on the Movement Lab, with the shield (or his default AK-12), settled and facing −z. */
+async function hail(withShield = true) {
   const sim = await Sim.create("movement_lab");
-  const ctrl = sim.addPlayer("fuze", "fuze", 0, undefined, withShield ? shieldPick() : undefined);
+  const ctrl = sim.addPlayer("hail", "hail", 0, undefined, withShield ? shieldPick() : undefined);
   const pawn = sim.pawns.get(ctrl.possessedPawnId)!;
   teleport(sim, ctrl, 0, 0, 0);
   return { sim, ctrl, pawn };
@@ -51,16 +51,16 @@ describe("the Ballistic Shield's loadout", () => {
     expect(problem).toBeNull();
     const k = loadout.shield!;
     expect(k).not.toBeNull();
-    const pistol = defaultLoadoutPick(data, "fuze").secondary.weapon;
+    const pistol = defaultLoadoutPick(data, "hail").secondary.weapon;
     expect(loadout.weapons.map((w) => w.id)).toEqual([pistol, pistol]);
     expect([loadout.weapons[0].ads.ticks, loadout.weapons[0].ads.fromSprintTicks]).toEqual([ticks(k.pistolAdsS.walk), ticks(k.pistolAdsS.sprint)]);
-    expect(resolveLoadout(data, defaultLoadoutPick(data, "fuze")).loadout.shield).toBeNull();
+    expect(resolveLoadout(data, defaultLoadoutPick(data, "hail")).loadout.shield).toBeNull();
   });
 });
 
 describe("where the plate is", () => {
   it("up in front with the pistol, on the back for a gadget, prone or a hold, and gone while knocked aside, down or dead", async () => {
-    const { sim, ctrl, pawn } = await fuze();
+    const { sim, ctrl, pawn } = await hail();
     const s = pawn.state;
     expect([s.hand, s.shieldAt]).toEqual([Hand.Weapon, ShieldAt.Front]);
     // His gadget in hand (3): on his back.
@@ -93,7 +93,7 @@ describe("where the plate is", () => {
   });
 
   it("goes to others in the remote record, so a rewind puts it where it was", async () => {
-    const { pawn } = await fuze();
+    const { pawn } = await hail();
     for (const at of [ShieldAt.None, ShieldAt.Front, ShieldAt.Back]) {
       pawn.state.shieldAt = at;
       expect(remoteState(quantizeRemote(pawn.state)).shieldAt).toBe(at);
@@ -103,7 +103,7 @@ describe("where the plate is", () => {
 
 describe("the plate's hitboxes", () => {
   it("stand across him in front (frontM at the middle, curving back round his sides), a rigid heightM down from aboveEyeM over the eyes, the same width all the way up; swing aside to his left as he aims (never into the floor); tilt whole with a lean; on the back behind the torso; none prone", async () => {
-    const { sim, pawn } = await fuze();
+    const { sim, pawn } = await hail();
     const k = pawn.loadout!.shield!;
     const m = sim.data.movement;
     const hb = sim.data.hitboxes;
@@ -163,7 +163,7 @@ describe("the plate's hitboxes", () => {
   });
 
   it("held up, his hands are on its grips behind it, crossed (no arm out past the plate, so nothing of his is hit through it); aiming, his right hand comes out with the pistol", async () => {
-    const { sim, pawn } = await fuze();
+    const { sim, pawn } = await hail();
     const k = pawn.loadout!.shield!;
     const m = sim.data.movement;
     const hb = sim.data.hitboxes;
@@ -190,7 +190,7 @@ describe("the plate's hitboxes", () => {
   });
 
   it("how far it has slid down goes to others in the remote record (8 steps), with the shield up only", async () => {
-    const { pawn } = await fuze();
+    const { pawn } = await hail();
     const sent = (adsQ: number, shieldAt: number) => remoteState(quantizeRemote({ ...pawn.state, adsQ, shieldAt })).adsQ;
     expect([sent(0, ShieldAt.Front), sent(65535, ShieldAt.Front), sent(65535, ShieldAt.Back), sent(65535, ShieldAt.None)]).toEqual([0, 65535, 0, 0]);
     expect(sent(30000, ShieldAt.Front)).toBe(Math.round((3 / 7) * 65535));
@@ -209,7 +209,7 @@ describe("holding the shield", () => {
   };
 
   it("fires the pistol only aimed, once the aim is done (no hip fire); Swap does nothing", async () => {
-    const w = await fuze();
+    const w = await hail();
     const s = w.pawn.state;
     expect(shots(w, Btn.Fire, 0.5)).toBe(0);
     run(w.sim, w.ctrl, {}, 0.5);
@@ -225,9 +225,9 @@ describe("holding the shield", () => {
     expect(s.slot).toBe(0);
   });
 
-  it("walks at moveSpeedMult of Fuze's speed with his AK-12", async () => {
+  it("walks at moveSpeedMult of Hail's speed with his AK-12", async () => {
     const speedOf = async (withShield: boolean) => {
-      const w = await fuze(withShield);
+      const w = await hail(withShield);
       run(w.sim, w.ctrl, { forward: 1 }, 1.5);
       return Math.hypot(w.pawn.state.vx, w.pawn.state.vz);
     };
@@ -239,7 +239,7 @@ describe("holding the shield", () => {
 
 describe("a stun", () => {
   it("knocks a raised shield aside (a concussion's guard break is always whole), whoever's it is", async () => {
-    const s = await scene(["fuze", "mute"], "gadget_lab");
+    const s = await scene(["hail", "lull"], "gadget_lab");
     s.room.pickLoadout(s.clients[0].id, shieldPick());
     s.wait(8);
     s.park();
@@ -257,7 +257,7 @@ describe("a stun", () => {
 
 describe("a teammate's bullets on the shield", () => {
   it("suppress its carrier only with friendly fire on (as a teammate's blow does nothing with it off: the review, M12)", async () => {
-    const s = await scene(["fuze", "sledge"], "gadget_lab");
+    const s = await scene(["hail", "cleave"], "gadget_lab");
     s.room.pickLoadout(s.clients[0].id, shieldPick());
     s.wait(8);
     s.park();

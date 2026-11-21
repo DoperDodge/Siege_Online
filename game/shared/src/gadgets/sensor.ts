@@ -1,7 +1,7 @@
-// Pulse's Cardiac Sensor (Phase 8 M6; research/operators/pulse.md; data/gadgets/cardiac_sensor.json `sensor`): held
+// Murmur's Blood Oxygen Sensor (Phase 8 M6; research/operators/pulse.md; data/gadgets/blood_oxygen_sensor.json `sensor`): held
 // up (out of his slot 2, ready), it shows him the other side's heartbeats: living bodies, downed ones too (ours), within
 // `rangeM` of his eye through anything, within `fanDeg` of his facing across the floor. Not drones, not his own side
-// (Skopós's shells are defenders). An EMP on him (DSEG) freezes it: nothing new while it lasts (his client keeps what
+// (Twain's shells are defenders). An EMP on him (DSEG) freezes it: nothing new while it lasts (his client keeps what
 // it showed). Only he sees them; a ping while it's up shares the one nearest his crosshair (Sim.ping).
 import { DEG, forwardXZ, type Vec3 } from "../core/math.js";
 import type { GameData } from "../data/load.js";

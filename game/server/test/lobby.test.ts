@@ -293,7 +293,7 @@ describe("lobby", () => {
     await until(() => a.of(Msg.Welcome).length === 1);
     const rosters = () => a.of(Msg.Roster).length;
     const before = rosters();
-    const pick = encodePickLoadout(defaultLoadoutPick(loadGameData(), "brava"));
+    const pick = encodePickLoadout(defaultLoadoutPick(loadGameData(), "patch"));
     for (let i = 0; i < HEAVY_BURST + 5; i++) a.conn.onMessage(pick);
     expect(rosters() - before).toBe(HEAVY_BURST); // each accepted pick is a new body (and a roster)
     expect(a.closed).toEqual([]);

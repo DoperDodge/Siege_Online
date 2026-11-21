@@ -1,5 +1,5 @@
 {
-  "_doc": "Intel (Phase 7; game/shared/src/intel/DESIGN.md, DECISIONS D-134), from research/intel.md §9. Drones: two per attacker, any damage but a fall destroys one, a jump every 3 s, strafing at full speed (verified); the speed, acceleration, air control, jump height, boost numbers, size, the height of a step it climbs, its view (field and tilt), where its camera sits, the throw and the pickup reach are placeholders. Default cameras: their turn limits, speed and field of view are placeholders. Scans: a 1 s hold (verified), the cone and the range placeholders. Pings: their time, cooldown and count, and how quick a double tap is, are placeholders. Callouts: the comm wheel's (research/intel.md §2: Breach, Area Clear, Help, Danger and Thanks partly verified; Defuser, Rotate and Push ours). The Bulletproof Camera (its count, placing and size are in data/gadgets/bulletproof_camera.json since Phase 8): a 0.75 m EMP dart and 10 s of signal outdoors (verified); how wide its bulletproof front is (`frontDeg` either side of its facing), its view, how far the dart flies, its recharge and how long it disables a drone are placeholders. Metres, seconds, degrees. Orders (Phase 9 M6, bots/DESIGN.md §8): the last five callouts are orders to bot teammates, and `botOrders` says what each callout asks of them (Go here and Hold here: your last ping's spot; Breach this: the wall or hatch you last pinged; Follow me; Regroup on you; Help: the nearest comes to you; Push: the attackers' bots go in now; Rotate: the defenders' roamers come back to the site); ours.",
+  "_doc": "Intel (Phase 7; game/shared/src/intel/DESIGN.md, DECISIONS D-134), from research/intel.md §9. Drones: two per attacker, any damage but a fall destroys one, a jump every 3 s, strafing at full speed (verified); the speed, acceleration, air control, jump height, boost numbers, size, the height of a step it climbs, its view (field and tilt), where its camera sits, the throw and the pickup reach are placeholders. Default cameras: their turn limits, speed and field of view are placeholders. Scans: a 1 s hold (verified), the cone and the range placeholders. Pings: their time, cooldown and count, and how quick a double tap is, are placeholders. Callouts: the comm wheel's (research/intel.md §2: Breach, Area Clear, Help, Danger and Thanks partly verified; Defuser, Rotate and Push ours). The Armoured Camera (its count, placing and size are in data/gadgets/armoured_camera.json since Phase 8): a 0.75 m EMP dart and 10 s of signal outdoors (verified); how wide its bulletproof front is (`frontDeg` either side of its facing), its view, how far the dart flies, its recharge and how long it disables a drone are placeholders. Metres, seconds, degrees. Orders (Phase 9 M6, bots/DESIGN.md §8): the last five callouts are orders to bot teammates, and `botOrders` says what each callout asks of them (Go here and Hold here: your last ping's spot; Breach this: the wall or hatch you last pinged; Follow me; Regroup on you; Help: the nearest comes to you; Push: the attackers' bots go in now; Rotate: the defenders' roamers come back to the site); ours.",
   "_season": "Y11S3",
   "_unverified": [
     "drone.speedMps",
@@ -20,11 +20,11 @@
     "scan.rangeM",
     "ping",
     "callouts",
-    "bulletproofCamera.frontDeg",
-    "bulletproofCamera.view",
-    "bulletproofCamera.dartRangeM",
-    "bulletproofCamera.dartRechargeS",
-    "bulletproofCamera.disableS"
+    "armouredCamera.frontDeg",
+    "armouredCamera.view",
+    "armouredCamera.dartRangeM",
+    "armouredCamera.dartRechargeS",
+    "armouredCamera.disableS"
   ],
   "drone": {
     "perAttacker": 2,
@@ -89,7 +89,7 @@
     "Follow me",
     "Regroup"
   ],
-  "bulletproofCamera": {
+  "armouredCamera": {
     "frontDeg": 50,
     "view": {
       "yawHalfRangeDeg": 80,

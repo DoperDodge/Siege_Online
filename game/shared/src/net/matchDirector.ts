@@ -84,7 +84,7 @@ export class MatchDirector {
   /** Ticks each defender's body has been outside the building this round, and who is detected (pawn ids). */
   private readonly outside = new Map<number, number>();
   private detected: number[] = [];
-  /** The cameras someone is watching (a bit each, in the defenders' list: the level's, then Bulletproof Cameras). */
+  /** The cameras someone is watching (a bit each, in the defenders' list: the level's, then Armoured Cameras). */
   private watched = 0;
   private dirty = true;
   private urgent = false;
@@ -408,7 +408,7 @@ export class MatchDirector {
     this.changed(true);
   }
 
-  /** Dokkaebi has the attackers watching the defenders' cameras, or no longer (Phase 8 M9): everyone hears at once. */
+  /** Relay has the attackers watching the defenders' cameras, or no longer (Phase 8 M9): everyone hears at once. */
   camerasLent(on: boolean) {
     const rules = this.host.sim.matchRules;
     if (rules.camsLent === on) return;
@@ -416,7 +416,7 @@ export class MatchDirector {
     this.changed(true);
   }
 
-  /** A Kludge drone hacked default cameras (Phase 8 M8): everyone hears at once (the feeds are the attackers' now). */
+  /** A Crossover drone hacked default cameras (Phase 8 M8): everyone hears at once (the feeds are the attackers' now). */
   camerasHacked(bits: number) {
     const rules = this.host.sim.matchRules;
     if ((rules.camsHacked | bits) === rules.camsHacked) return;
@@ -520,7 +520,7 @@ export class MatchDirector {
     return false;
   }
 
-  /** Players of a side with their active body alive and not down (Skopós: her active shell; DESIGN §7). */
+  /** Players of a side with their active body alive and not down (Twain: her active shell; DESIGN §7). */
   private up(side: Side): number {
     let n = 0;
     for (const id of this.match.sides[side]) {

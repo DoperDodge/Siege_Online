@@ -1,6 +1,6 @@
 // Dowser's Divining Coil (Project Redmond R3, gadgets/R3_OPERATORS.md §2; data/gadgets/divining_coil.json `coil`): held
 // up (out of his slot 2, ready), it shows him the other side's electronic devices: their entries in the gadget table
-// marked `electronic` (Shunt's packs, Dampers, armoured cameras, alarms, Nitro Cells, Twain's barrier...), the level's
+// marked `electronic` (Shunt's packs, Dampers, armoured cameras, alarms, Remote Charges, Twain's barrier...), the level's
 // cameras (the defenders'), their drones, and Twain's idle frame; within `rangeM` of his eye through anything, within
 // `fanDeg` of his facing across the floor. Mechanical things never show (Latch's snares, barbed wire, Rivet's studs).
 // Only he sees them, as outlines (the page's); a ping while it's up marks the one nearest his crosshair for his team
@@ -67,7 +67,7 @@ export function coilMarks(sim: Sim, pawn: Pawn): CoilMark[] {
     if (!d || dist < 0) continue;
     out.push({ key: `g${g.id}`, pos: [g.pos[0], g.pos[1], g.pos[2]], size: d.sizeM, yaw: g.yaw, flat: (g.flags & GFlag.Flat) !== 0, kind: g.kind, dist });
   }
-  // The level's cameras are the defenders' (unbroken; one an attacker's Kludge hacked is his side's now).
+  // The level's cameras are the defenders' (unbroken; one an attacker's Crossover hacked is his side's now).
   if (pawn.team !== DEFENSE) {
     const r = sim.matchRules;
     const side = CAMERA_HALF_M * 2;

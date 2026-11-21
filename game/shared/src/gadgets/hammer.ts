@@ -1,4 +1,4 @@
-// Sledge's breaching hammer on the level (Phase 8 M4; research/operators/sledge.md §3; data/gadgets/breaching_hammer.json
+// Cleave's breaching maul on the level (Phase 8 M4; research/operators/sledge.md §3; data/gadgets/breaching_maul.json
 // `use`): what one blow does to the first material along the view within its reach. A soft wall or floor gets a
 // rectangle `holeM` (width × height) round where the blow lands, through both faces and the wooden studs when the eye
 // is within `bothSkinsM` of it across the floor (a wall stood close to, a floor hammered from above; metal studs and

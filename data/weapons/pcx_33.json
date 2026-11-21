@@ -1,5 +1,5 @@
 {
-  "_doc": "PCX-33 (Skopós). research/weapons.csv row pcx_33; class rules research/weapons_notes.md §4. Skopós: each shell keeps its own ammo (weapons_notes.md §4.6). Extended barrel 40 / min 32 and ammo-refill 1.03 / 2.56 s community-measured.",
+  "_doc": "PCX-33 (Twain). research/weapons.csv row pcx_33; class rules research/weapons_notes.md §4. Twain: each shell keeps its own ammo (weapons_notes.md §4.6). Extended barrel 40 / min 32 and ammo-refill 1.03 / 2.56 s community-measured.",
   "_season": "Y11S3.1",
   "_unverified": [
     "ammo.maxAmmo",

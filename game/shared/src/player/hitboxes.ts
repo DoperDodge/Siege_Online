@@ -7,7 +7,7 @@ import { currentEyeHeight, currentHeight, proneWeight } from "./stance.js";
 import { PawnMode, type PawnState } from "./types.js";
 
 /**
- * "drone": the one box of an attacker's drone (Phase 7, player/drone.ts). "shield": Fuze's Ballistic Shield's plate
+ * "drone": the one box of an attacker's drone (Phase 7, player/drone.ts). "shield": Hail's Ballistic Shield's plate
  * (Phase 8 M11, player/shield.ts): it takes no damage; what meets it first stops there.
  */
 export type BodyPart = "head" | "neck" | "torso" | "pelvis" | "arm_l" | "arm_r" | "leg_l" | "leg_r" | "drone" | "shield";
@@ -27,7 +27,7 @@ const partRadius = (hb: HitboxData, part: BodyPart) =>
   hb.parts[part.startsWith("arm") ? "arm" : part.startsWith("leg") ? "leg" : (part as "head" | "neck" | "torso" | "pelvis")].radius;
 
 /**
- * Fuze's hands on his raised shield (D-169, Ulo: arms crossed on grips behind it, the plate near flush against him):
+ * Hail's hands on his raised shield (D-169, Ulo: arms crossed on grips behind it, the plate near flush against him):
  * crossed behind the plate, just clear of its back; as he aims (`aside`, 0…1) his right hand comes out with the pistol
  * and his left stays on the plate as it swings aside to his left (`sideM`).
  */
@@ -207,7 +207,7 @@ function toWorld(s: PawnState, p: Vec3, height: number, lift: number): Vec3 {
   return [s.x + x, s.y + ly, s.z + z];
 }
 
-/** A body's pose as capsules; `hold`: Fuze's hands on his raised shield's grips (see ShieldHold). */
+/** A body's pose as capsules; `hold`: Hail's hands on his raised shield's grips (see ShieldHold). */
 export function poseHitboxes(m: MovementData, hb: HitboxData, s: PawnState, hold?: ShieldHold): Hitbox[] {
   const leanOffset = s.lean * m.lean.offset;
   const height = currentHeight(m, s);
@@ -229,7 +229,7 @@ export function poseHitboxes(m: MovementData, hb: HitboxData, s: PawnState, hold
   });
 }
 
-/** Where Fuze's Ballistic Shield's plate is on a body (Phase 8 M11, player/shield.ts shieldPlace). */
+/** Where Hail's Ballistic Shield's plate is on a body (Phase 8 M11, player/shield.ts shieldPlace). */
 export type ShieldPlace = "front" | "back";
 
 /** The plate's numbers (data/weapons/ballistic_shield.json `shield.plate`). */
@@ -249,7 +249,7 @@ export interface ShieldPlate {
   topWrap?: { bandM: number; backM: number };
 }
 
-/** How far Fuze's raised shield has gone aside for aiming (0 up … 1 aside): the body's aiming progress (`adsQ`). */
+/** How far Hail's raised shield has gone aside for aiming (0 up … 1 aside): the body's aiming progress (`adsQ`). */
 export const shieldLowered = (s: PawnState) => Math.min(1, Math.max(0, s.adsQ / 65535));
 
 /** Where the plate is on a body now: its bottom and top heights over the feet, and a point on it (see shieldFrame). */
@@ -290,13 +290,13 @@ const PLATE_FLAT = 0.45;
 /** Aiming's swing aside, eased (slow at its ends, quick in its middle). */
 const easeAside = (a: number) => a * a * (3 - 2 * a);
 
-/** Fuze's hands on his shield held up in front now (ShieldHold). */
+/** Hail's hands on his shield held up in front now (ShieldHold). */
 export function shieldHold(m: MovementData, k: ShieldPlate, s: PawnState): ShieldHold {
   return { frontM: k.frontM, sideM: k.ads.sideM, aside: easeAside(shieldLowered(s)), hunch: crouchWeight(m, currentHeight(m, s)) };
 }
 
 /**
- * Fuze's Ballistic Shield's plate on a body (Phase 8 M11; the game's model, D-157; Ulo's reference renders, D-169). In
+ * Hail's Ballistic Shield's plate on a body (Phase 8 M11; the game's model, D-157; Ulo's reference renders, D-169). In
  * front: a rigid plate `heightM` tall, held close, its middle `frontM` ahead, flat across its middle and curving back round
  * his sides (its edges `curveM` nearer him); its top `aboveEyeM` over the eyes, so its window is at eye height. Aiming
  * swings it aside to his left (`ads`: across by `sideM`, turned back round his side by `yawDeg` about its middle, `dropM`
@@ -348,11 +348,11 @@ export function shieldFrame(m: MovementData, hb: HitboxData, s: PawnState, k: Sh
   return { y0, y1, tall, half, shoulder, at };
 }
 
-/** How far over the floor Fuze's plate's bottom stays (it never goes through it). */
+/** How far over the floor Hail's plate's bottom stays (it never goes through it). */
 const FLOOR_GAP_M = 0.02;
 
 /**
- * Fuze's Ballistic Shield as hitboxes (Phase 8 M11): seven vertical capsules side by side along its plate (see
+ * Hail's Ballistic Shield as hitboxes (Phase 8 M11): seven vertical capsules side by side along its plate (see
  * shieldFrame), each part "shield": the outer two, past its narrower top part, only up to its shoulders; none while prone.
  */
 export function shieldHitboxes(m: MovementData, hb: HitboxData, s: PawnState, k: ShieldPlate, place: ShieldPlace): Hitbox[] {

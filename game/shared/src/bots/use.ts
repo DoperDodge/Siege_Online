@@ -65,7 +65,7 @@ export class GadgetUse {
   private usedAt = -1;
   private heldFrom = -1;
   private nudge = 0;
-  /** Fire pressed (a hold use's: Dokkaebi's tablet), when. */
+  /** Fire pressed (a hold use's: Relay's tablet), when. */
   firedAt = -1;
   /** The follower's failures to get there. */
   private walkFails = 0;

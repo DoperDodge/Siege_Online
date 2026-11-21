@@ -20,7 +20,7 @@ import {
   defaultLoadoutPick,
   encodePickLoadout,
   encodeCallout,
-  encodeJegeoPick,
+  encodeRingerPick,
   droneEye,
   eyePose,
   GRIPS,
@@ -52,7 +52,7 @@ import {
   zoneBoxes,
   type IndexedOp,
   type InputCmd,
-  type JegeoPick,
+  type RingerPick,
   type Pawn,
   type PanelChange,
   type PawnState,
@@ -77,11 +77,11 @@ import {
   isDetonator,
   heartbeats,
   heartOf,
-  guData,
+  burrData,
   snareData,
   prodLeft,
   suppressed,
-  kludgeOf,
+  crossoverOf,
   pawnJammed,
   sensorUp,
   patchWorking,
@@ -106,7 +106,7 @@ import { OnlineConnection } from "../../net/online.js";
 import { ArtView } from "../../render/artView.js";
 import { createLabScene, createRenderer, PawnView, PREPASS_LAYER, storeyOf, updateLabels, warmShaders } from "../../render/labScene.js";
 import { initialQuality, presetFor, PRESETS, QUALITIES, QUALITY_NAMES, type QualityPreset, type QualitySetting } from "../../render/quality.js";
-import { BpCameraModels, CameraModels } from "../../render/cameraModels.js";
+import { ArmouredCameraModels, CameraModels } from "../../render/cameraModels.js";
 import { GadgetModels } from "../../render/gadgetModels.js";
 import { PanelView } from "../../render/panelView.js";
 import { StoreyView, type Palette } from "../../render/storeyView.js";
@@ -232,7 +232,7 @@ export interface LabApi extends LabHandle {
 const KNOCK_LOOK_UP = 1.2;
 
 /** A match page's stand-in controller while you have no body: it controls no pawns, so nothing of yours is ever found. */
-const NO_BODY: PlayerController = { id: 0, name: "", operatorId: "sledge", pawnIds: [], possessedPawnId: 0, drone: 0, prevLean: 0, cam: 0, camYaw: 0, camPitch: 0, camEntry: 0, lastCam: 0, camViews: [], shellCam: false, swapPhase: 0, swapT: 0, swapCooldown: 0, prevButtons: 0, team: 0 };
+const NO_BODY: PlayerController = { id: 0, name: "", operatorId: "cleave", pawnIds: [], possessedPawnId: 0, drone: 0, prevLean: 0, cam: 0, camYaw: 0, camPitch: 0, camEntry: 0, lastCam: 0, camViews: [], shellCam: false, swapPhase: 0, swapT: 0, swapCooldown: 0, prevButtons: 0, team: 0 };
 
 export async function startLab(o: LabOptions): Promise<void> {
   // ------------------------------------------------------------------ setup
@@ -241,7 +241,7 @@ export async function startLab(o: LabOptions): Promise<void> {
   const autotest = params.has("autotest");
   const online = o.match === true || params.has("online") || params.has("room");
   const data = loadGameData();
-  let operatorId = data.operators.has(params.get("op") ?? "") ? params.get("op")! : "sledge";
+  let operatorId = data.operators.has(params.get("op") ?? "") ? params.get("op")! : "cleave";
   let op = data.operators.get(operatorId)!;
 
   const app = document.getElementById("app")!;
@@ -269,12 +269,12 @@ export async function startLab(o: LabOptions): Promise<void> {
     <div class="lean-ind lean-l">◀</div><div class="lean-ind lean-r">▶</div>
     <div class="flash"></div>
     <div class="stun-white"></div><div class="emp-static hidden"></div>
-    <div class="pulse hidden"><div class="pulse-tint"></div><div class="pulse-hearts"></div><div class="pulse-glass"><svg class="pulse-trace" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,21 10,21 14,19 18,9 22,6 26,12 30,17 34,15 38,18 46,21 56,21 60,19 64,9 68,6 72,12 76,17 80,15 84,18 92,21 100,21" /></svg><div class="pulse-count"></div><div class="pulse-state"></div></div></div>
+    <div class="murmur hidden"><div class="murmur-tint"></div><div class="murmur-hearts"></div><div class="murmur-glass"><svg class="murmur-trace" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,21 10,21 14,19 18,9 22,6 26,12 30,17 34,15 38,18 46,21 56,21 60,19 64,9 68,6 72,12 76,17 80,15 84,18 92,21 100,21" /></svg><div class="murmur-count"></div><div class="murmur-state"></div></div></div>
     <div class="ohm-scope hidden"><div class="ohm-dots"></div><div class="ohm-reticle"></div><div class="ohm-count"></div></div>
     <div class="tablet hidden"><div class="tablet-title"></div><div class="tablet-list"></div><div class="tablet-help"></div></div>
     <div class="prompt hidden"></div>
     <div class="needle-ui hidden"></div>
-    <div class="jegeo-bar hidden"><div class="jegeo-title"></div><div class="jegeo-fill"><div></div></div></div>
+    <div class="ringer-bar hidden"><div class="ringer-title"></div><div class="ringer-fill"><div></div></div></div>
     <div class="shellcam hidden"><div class="shellcam-title"></div><div class="feeds"></div><div class="swap-bar"><div></div></div></div>
     <div class="dronecam hidden"><div class="dronecam-title"></div><div class="feeds"></div><div class="hack-bar hidden"><div></div></div></div>
     <div class="down-ui hidden"><div class="down-title"></div><div class="down-bar"><div></div></div></div>
@@ -359,7 +359,7 @@ export async function startLab(o: LabOptions): Promise<void> {
   const net = online ? await (o.match ? matchRoom() : lobby()) : local ? await localRoom() : null;
   const sim = net ? net.session.sim! : await Sim.create(o.levelId, data);
   let ctrl: PlayerController = net ? await firstBody(net) : sim.addPlayer("you", operatorId, 0, undefined, pickFromUrl(operatorId));
-  /** Your body (Skopós: the shell you control). Only a match page can be without one (NO_BODY), and it checks first. */
+  /** Your body (Twain: the shell you control). Only a match page can be without one (NO_BODY), and it checks first. */
   const possessed = () => sim.pawns.get(ctrl.possessedPawnId)!;
   const heldWeapon = (): ResolvedWeapon | null => {
     const p = sim.pawns.get(ctrl.possessedPawnId);
@@ -494,12 +494,12 @@ export async function startLab(o: LabOptions): Promise<void> {
   const drawnView = new Map<number, [number, number]>();
 
   const pawnViews = new Map<number, PawnView>();
-  /** The level's default cameras (Phase 7), drawn whole or broken, and the round's Bulletproof Cameras. */
+  /** The level's default cameras (Phase 7), drawn whole or broken, and the round's Armoured Cameras. */
   // (Drawn on a map's lab page too: they're part of its look.)
   const cameraModels = sim.level.def.cameras.length
     ? new CameraModels(scene, sim.level.def.cameras, (from, dir, max) => raycastLevel(sim, from, dir, max)?.t ?? null, (y) => labScene.storeys[storeyOf(sim.level.def.storeys, y - 0.5)] ?? scene)
     : null;
-  const bpCameraModels = new BpCameraModels(scene, data.gadgets.get("bulletproof_camera")!.sizeM);
+  const armouredCameraModels = new ArmouredCameraModels(scene, data.gadgets.get("armoured_camera")!.sizeM);
   /** The gadget table (Phase 8): every gadget placed, thrown or dropped; offline, our own server side keeps it. */
   const gadgetModels = new GadgetModels(scene, sim);
   const offlineGadgets = net ? null : new GadgetServer(sim);
@@ -515,12 +515,12 @@ export async function startLab(o: LabOptions): Promise<void> {
   controls.setView(sim.pawns.get(ctrl.possessedPawnId)?.state.yaw ?? 0, 0);
   controls.attach(renderer.domElement);
   controls.isBlocked = () => !$(".pause").classList.contains("hidden") || !$(".help").classList.contains("hidden");
-  // On a feed: a camera, a drone, or Skopós's shell view (one of her feeds, D-155: Q / E go round them there too).
+  // On a feed: a camera, a drone, or Twain's shell view (one of her feeds, D-155: Q / E go round them there too).
   controls.onDrone = () => ctrl.cam !== 0 || ctrl.shellCam || sim.pawns.get(sim.viewedPawnId(ctrl.id))?.kind === PawnKind.Drone;
   // The comm wheel (Phase 7) needs a room to send its callouts to.
   controls.wheelSize = () => (net ? data.intel.callouts.length : 0);
   controls.onCallout = (id) => net?.send(encodeCallout(id));
-  // Dokkaebi's tablet up: the wheel moves her pick instead of switching weapons.
+  // Relay's tablet up: the wheel moves her pick instead of switching weapons.
   {
     const taken = controls.wheelTaken;
     controls.wheelTaken = () => tabletUp || taken();
@@ -583,7 +583,7 @@ export async function startLab(o: LabOptions): Promise<void> {
         snapshotAll();
       } else {
         freeCam = null;
-        // Back to the view you left: Skopós' other shell (where she was looking through it), if you were on it.
+        // Back to the view you left: Twain' other shell (where she was looking through it), if you were on it.
         const v = sim.pawns.get(sim.viewedPawnId(ctrl.id)) ?? p;
         const shellView = ctrl.shellCam && ctrl.swapPhase === 0;
         controls.setView(shellView ? ctrl.camYaw : v.state.yaw, shellView ? ctrl.camPitch : v.state.pitch);
@@ -609,11 +609,11 @@ export async function startLab(o: LabOptions): Promise<void> {
   }
 
   /**
-   * In the free camera your body gets no input: it stands as it was, and the view it gives (Skopós' other
+   * In the free camera your body gets no input: it stands as it was, and the view it gives (Twain' other
    * shell's, on its camera) looks where it looked.
    */
   /**
-   * Fuze's free look (Phase 8 M11, Ulo's test): Fire held with his shield up and not aiming turns the view (the mouse)
+   * Hail's free look (Phase 8 M11, Ulo's test): Fire held with his shield up and not aiming turns the view (the mouse)
    * and not the body. The input keeps the body facing where it did, without Fire; letting go turns the view back. (Not
    * Bailiff's: there Fire is her shield's prod, R3; nor Hull's: his pistol fires from the hip.)
    */
@@ -1062,7 +1062,7 @@ export async function startLab(o: LabOptions): Promise<void> {
         ${row(`<kbd>${keyLabel(k.interact)}</kbd>`, "Use: grab / let go of a ladder; Twain: transfer to the frame you're viewing")}
         ${row(`<kbd>${keyLabel(k.slowWalk)}</kbd>`, "Slow walk")}
         ${row("Right mouse", "Aim down sights (slower walk)")}
-        ${row(`<kbd>${keyLabel(k.gadget)}</kbd> / <kbd>${keyLabel(k.ability)}</kbd>`, `Gadgets: take your gadget out (${keyLabel(k.ability)}: Pointman's and Picket's second one) and put it away. Left mouse throws it (right mouse lobs it) or, held, places it where the green outline shows; with a charge out, left mouse sets it off (${keyLabel(k.gadget)} again takes out the next one). Hold <kbd>${keyLabel(k.interact)}</kbd> on one of yours to take it back. Skopós: ${keyLabel(k.ability)} (or ${keyLabel(k.observe)}) views your other shell's camera, one of your cameras (press again to go back)`)}
+        ${row(`<kbd>${keyLabel(k.gadget)}</kbd> / <kbd>${keyLabel(k.ability)}</kbd>`, `Gadgets: take your gadget out (${keyLabel(k.ability)}: Pointman's and Picket's second one) and put it away. Left mouse throws it (right mouse lobs it) or, held, places it where the green outline shows; with a charge out, left mouse sets it off (${keyLabel(k.gadget)} again takes out the next one). Hold <kbd>${keyLabel(k.interact)}</kbd> on one of yours to take it back. Twain: ${keyLabel(k.ability)} (or ${keyLabel(k.observe)}) views your other shell's camera, one of your cameras (press again to go back)`)}
         ${o.match ? "" : row(`<kbd>${keyLabel(k.respawn)}</kbd>`, "Respawn")}
         ${row("Left mouse", net ? "Fire (hold for automatic weapons). Online, each shot shows what the server's lag compensation hit." : "Fire (hold for automatic weapons)")}
         ${row(`<kbd>${keyLabel(k.reload)}</kbd>`, "Reload")}
@@ -1191,10 +1191,10 @@ export async function startLab(o: LabOptions): Promise<void> {
       if (sent) claims.set(sent.seq & 0xffff, { viewTick: net.session.lastViewTick, weapon: heldWeapon() });
       if (claims.size > 512) claims.delete(claims.keys().next().value!);
       clickViewTick = null;
-      // (Not on Brava's Kludge: its Fire hacks, it never scans: the review, M12.)
-      const kludge = ctrl.drone !== 0 && sim.pawns.get(ctrl.drone)?.kludge === true;
-      // (Nor on Skopós's shell view: the room scans from cameras and drones.)
-      scanTicks = input.buttons & Btn.Fire && controls.onDrone() && !ctrl.shellCam && !kludge ? scanTicks + 1 : 0;
+      // (Not on Patch's Crossover: its Fire hacks, it never scans: the review, M12.)
+      const crossover = ctrl.drone !== 0 && sim.pawns.get(ctrl.drone)?.crossover === true;
+      // (Nor on Twain's shell view: the room scans from cameras and drones.)
+      scanTicks = input.buttons & Btn.Fire && controls.onDrone() && !ctrl.shellCam && !crossover ? scanTicks + 1 : 0;
     } else {
       const input = freeLook(still(script ? autoInput(++seq) : controls.sample(++seq)));
       heldButtons = input.buttons;
@@ -1209,7 +1209,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       offlineGadgets?.step();
     }
     const p = possessed();
-    // The view follows the body you're looking through (Skopós' other shell while on its camera).
+    // The view follows the body you're looking through (Twain' other shell while on its camera).
     const nowViewed = sim.viewedPawnId(ctrl.id);
     const v = sim.pawns.get(nowViewed);
     if (!p || !v) return; // online, between bodies (the server's new one hasn't arrived yet)
@@ -1227,8 +1227,8 @@ export async function startLab(o: LabOptions): Promise<void> {
       // Knocked down (D-156): the mouse does nothing until you're up, and you're up looking where you went down.
       if (!freeCam) controls.setView(v.state.yaw, v.state.pitch);
     } else if (!freeCam && !freeLookFrom && !(v.kind === PawnKind.Drone && !ctrl.pawnIds.includes(v.id))) {
-      // (On a teammate's drone the view is yours alone: the drone's own facing is its driver's. In Fuze's free look the
-      // view leaves the body's facing on purpose. On Skopós's shell view it's her own view, as on a camera: the shell
+      // (On a teammate's drone the view is yours alone: the drone's own facing is its driver's. In Hail's free look the
+      // view leaves the body's facing on purpose. On Twain's shell view it's her own view, as on a camera: the shell
       // doesn't turn with it, D-169, so its facing would pull the view back every tick.)
       const shellView = ctrl.shellCam && ctrl.swapPhase === 0;
       controls.syncView(shellView ? ctrl.camYaw : v.state.yaw, shellView ? ctrl.camPitch : v.state.pitch, tickKick);
@@ -1256,7 +1256,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       controls.limits = { pitchMin: v.state.pitch, pitchMax: v.state.pitch, maxYawStep: null, yawRange: { center: v.state.yaw, half: 0 } };
     // On a rope the view turns only so far from the wall, and moving onto it, the move turns it.
     controls.limits.yawRange = ropeYawRange(sim.level, data, v.state);
-    // A camera (Phase 7): so far either side of its facing (a Bulletproof Camera on the floor: all the way round), its
+    // A camera (Phase 7): so far either side of its facing (a Armoured Camera on the floor: all the way round), its
     // own tilt.
     if (ctrl.cam) {
       const l = sim.camLimits(ctrl.cam - 1);
@@ -1424,22 +1424,22 @@ export async function startLab(o: LabOptions): Promise<void> {
     /** Looking from outside your body: third person, or a map's plan view. */
     const outside = thirdPerson || storeyView?.plan === true || freeCam !== null;
     // On a default camera everyone is drawn, your body too (it stands where you left it).
-    // (A Bulletproof Camera of a round just over is still yours until the next tick hands you on: not this frame.)
+    // (A Armoured Camera of a round just over is still yours until the next tick hands you on: not this frame.)
     const onCamera = !spec && ctrl.cam !== 0 && ctrl.cam <= sim.camCount();
     drawBodies(alpha, renderTick, spec ? (spec.kind === "pawn" ? spec.pawnId : -1) : onCamera ? -1 : viewed!.id, spec ? spec.kind !== "pawn" : outside || onCamera, replay !== null);
     // A watched camera's light: blue to defenders, red to attackers.
     const watched = net?.session.match?.camsWatched ?? 0;
     const levelCams = sim.level.def.cameras.length;
     cameraModels?.update(sim.matchRules.camsBroken, watched, ctrl.team === sideTeam("defender"));
-    bpCameraModels.update(sim.bpCams(), watched >>> levelCams, ctrl.team === sideTeam("defender"));
+    armouredCameraModels.update(sim.armouredCams(), watched >>> levelCams, ctrl.team === sideTeam("defender"));
     const serverNow = net ? net.session.serverTick() : sim.tick + alpha;
-    // What we look through (Phase 8 M3): smoke isn't drawn in a Bulletproof Camera's thermal view; the other side's
-    // observation blocker shows on our drones and cameras.
-    gadgetModels.view = { thermal: onCamera && sim.bpCamAt(ctrl.cam - 1) !== null, team: ctrl.team, tool: onCamera || sim.pawns.get(sim.viewedPawnId(ctrl.id))?.kind === PawnKind.Drone };
+    // What we look through (Phase 8 M3): smoke isn't drawn in a Armoured Camera's thermal view; the other side's
+    // feed blocker shows on our drones and cameras.
+    gadgetModels.view = { thermal: onCamera && sim.armouredCamAt(ctrl.cam - 1) !== null, team: ctrl.team, tool: onCamera || sim.pawns.get(sim.viewedPawnId(ctrl.id))?.kind === PawnKind.Drone };
     gadgetModels.update(net ? renderTick : sim.tick + alpha, serverNow, ctrl.id);
     poseOutline();
-    // A Bulletproof Camera's thermal view: the world tinted, bodies glowing white.
-    const thermal = onCamera && sim.bpCamAt(ctrl.cam - 1) !== null;
+    // A Armoured Camera's thermal view: the world tinted, bodies glowing white.
+    const thermal = onCamera && sim.armouredCamAt(ctrl.cam - 1) !== null;
     app.classList.toggle("thermal", thermal);
     for (const v of pawnViews.values()) v.heat(thermal);
     updateShots(now);
@@ -1535,14 +1535,14 @@ export async function startLab(o: LabOptions): Promise<void> {
       // (Knocked down, D-156: nothing in hand until you're up. On a ladder or with the hands at work — a revive, a
       // reinforcement, a barricade, the defuser — the gun can't fire and isn't in the hands: none drawn, as the body
       // others see has it slung.)
-      // A ringing phone being turned off (Dokkaebi's call) is in the hands instead of the gun.
+      // A ringing phone being turned off (Relay's call) is in the hands instead of the gun.
       const phoneOut = rs.deployKind === DeployKind.Phone;
       const busy = rs.mode === PawnMode.Ladder || rs.reviveTarget !== 0 || (rs.deployKind !== 0 && !phoneOut);
       const inHand = viewed.id === me.id && !outside && !onCamera && !ctrl.shellCam && ctrl.swapPhase === 0 && rs.mode !== PawnMode.Knocked && !busy ? (viewed.loadout?.weapons[rs.slot] ?? null) : null;
       // (Your arms dressed as you: made again only when there are arms to draw, not for each body or drone you look through.)
       if (inHand) viewmodel.setOperator(viewed.operatorId);
       const phone = phoneOut ? data.gadgets.get("dropped_phone") : undefined;
-      // A shield up: the pistol behind it until aimed over it (Fuze's, Bailiff's); beside it, from the hip (Hull's folded
+      // A shield up: the pistol behind it until aimed over it (Hail's, Bailiff's); beside it, from the hip (Hull's folded
       // plate, R3), and none while it's braced.
       const plateUp = !!viewed.loadout?.shield && rs.shieldAt === 1;
       const beside = plateUp && !!viewed.loadout?.shield?.noAds && rs.braceQ === 0;
@@ -1602,7 +1602,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       // Bailiff's (R3, the shield with a prod): its own dark slate.
       v.setShield(pawn.loadout?.shield ?? null, pawn.loadout?.shield?.prod ? 0x2f3540 : pawn.loadout?.shield?.brace ? 0x4a5058 : undefined);
       // The body whose eyes we see through, in first person, faces the view itself (the mouse's, as the camera does), so
-      // Fuze's shield doesn't trail the view by a tick when he turns (the review, M12); in free look the body keeps its
+      // Hail's shield doesn't trail the view by a tick when he turns (the review, M12); in free look the body keeps its
       // own facing (that's the point of it).
       const fpYaw = pawn.id === eyesId && !outside && !freeLookFrom && !pawn.proxy && rs.mode !== PawnMode.Dead && rs.mode !== PawnMode.Knocked;
       v.update(sim.data, rs.mode === PawnMode.Dead ? corpse(rs) : fpYaw ? { ...rs, yaw: controls.yaw } : rs, performance.now() / 1000, pawn.loadout?.swapTicks ?? 30);
@@ -1767,9 +1767,9 @@ export async function startLab(o: LabOptions): Promise<void> {
       placeTicks: inHand?.use.kind === "place" ? ticks(inHand.use.placeS) : 1,
       takeBack: backData?.name ?? "gadget",
       takeBackTicks: ticks(data.gadgetRules.pickUpS),
-      needleTicks: ticks(guData(data)?.pullS ?? 1),
+      needleTicks: ticks(burrData(data)?.pullS ?? 1),
       snareTicks: ticks(snareData(data)?.pullS ?? 1),
-      phoneTicks: ticks(data.gadgets.get("jegeo_payload")?.jegeo?.dismissS ?? 1),
+      phoneTicks: ticks(data.gadgets.get("ringer")?.ringer?.dismissS ?? 1),
     });
     app.querySelectorAll<HTMLElement>(".stances span").forEach((el) => el.classList.toggle("on", Number(el.dataset.s) === s.stance));
     $(".stance-bar div").style.width = `${s.stanceT * 100}%`;
@@ -1805,7 +1805,7 @@ export async function startLab(o: LabOptions): Promise<void> {
             : `${deathText ?? "You died from the fall"} — press ${keyLabel(settings.keys.respawn)} to respawn`
           : "Click to play · F1 for controls";
     if (touchLayer) touchLayer.querySelector(".touch-btn")!.classList.toggle("on", controls.sprintIsLatched);
-    // Skopós's shell is one of her cameras (Ulo, D-155): Observe reaches it, so her touch layer has no Ability button.
+    // Twain's shell is one of her cameras (Ulo, D-155): Observe reaches it, so her touch layer has no Ability button.
     touchLayer?.querySelector('[data-action="ability"]')?.classList.toggle("hidden", op.pawns > 1);
 
     const k = settings.keys;
@@ -1857,20 +1857,20 @@ export async function startLab(o: LabOptions): Promise<void> {
     const drone = sim.pawns.get(sim.viewedPawnId(ctrl.id));
     const onDrone = drone?.kind === PawnKind.Drone;
     $(".dronecam").classList.toggle("hidden", !onDrone && ctrl.cam === 0);
-    // Jammed by an EMP, or inside an enemy Signal Disruptor (Phase 8 M6; static as a warning near one).
+    // Jammed by an EMP, or inside an enemy Damper (Phase 8 M6; static as a warning near one).
     const inJam = onDrone && pawnJammed(sim, drone);
     $(".dronecam").classList.toggle("jammed", onDrone && (drone.state.jammed > 0 || inJam));
     $(".dronecam").classList.toggle("warned", onDrone && !inJam && pawnJammed(sim, drone, true));
-    // Dokkaebi's upload under way, or a call ringing on our phone (Phase 8 M9): its bar filling.
-    const jegeoBar = $(".jegeo-bar");
-    if (jegeoRun && performance.now() - jegeoRun.start > jegeoRun.ms + 500) jegeoRun = null;
-    jegeoBar.classList.toggle("hidden", jegeoRun === null);
-    if (jegeoRun) {
-      jegeoBar.classList.toggle("ringing", jegeoRun.ringing);
-      $(".jegeo-title").textContent = jegeoRun.ringing ? `Your phone's ringing (Relay): hold ${keyLabel(settings.keys.interact)} to take it out and turn it off before it blows` : "Uploading the Ringer";
-      ($(".jegeo-fill").firstElementChild as HTMLElement).style.width = `${Math.min(100, ((performance.now() - jegeoRun.start) / jegeoRun.ms) * 100).toFixed(0)}%`;
+    // Relay's upload under way, or a call ringing on our phone (Phase 8 M9): its bar filling.
+    const ringerBar = $(".ringer-bar");
+    if (ringerRun && performance.now() - ringerRun.start > ringerRun.ms + 500) ringerRun = null;
+    ringerBar.classList.toggle("hidden", ringerRun === null);
+    if (ringerRun) {
+      ringerBar.classList.toggle("ringing", ringerRun.ringing);
+      $(".ringer-title").textContent = ringerRun.ringing ? `Your phone's ringing (Relay): hold ${keyLabel(settings.keys.interact)} to take it out and turn it off before it blows` : "Uploading the Ringer";
+      ($(".ringer-fill").firstElementChild as HTMLElement).style.width = `${Math.min(100, ((performance.now() - ringerRun.start) / ringerRun.ms) * 100).toFixed(0)}%`;
     }
-    // A Kludge's hack under way (Phase 8 M8): its bar filling.
+    // A Crossover's hack under way (Phase 8 M8): its bar filling.
     const hackBar = $(".hack-bar");
     hackBar.classList.toggle("hidden", !(onDrone && hackRun));
     if (hackRun) (hackBar.firstElementChild as HTMLElement).style.width = `${Math.min(100, ((performance.now() - hackRun.start) / hackRun.ms) * 100).toFixed(0)}%`;
@@ -1880,20 +1880,20 @@ export async function startLab(o: LabOptions): Promise<void> {
       if (row.dataset.html !== html) row.innerHTML = row.dataset.html = html;
     }
     if (ctrl.cam) {
-      // Which camera (a Bulletproof Camera: its dart, and outdoors how long its signal lasts), how many are broken.
+      // Which camera (a Armoured Camera: its dart, and outdoors how long its signal lasts), how many are broken.
       const cams = sim.level.def.cameras;
-      const bp = sim.bpCamAt(ctrl.cam - 1);
-      // Skopós's idle shell's camera (Phase 8 M10): its barrier's entry.
+      const bp = sim.armouredCamAt(ctrl.cam - 1);
+      // Twain's idle shell's camera (Phase 8 M10): its barrier's entry.
       const shell = sim.shellCamAt(ctrl.cam - 1);
       const cam = bp || shell ? null : cams[ctrl.cam - 1];
-      const broken = cams.filter((_, i) => sim.matchRules.camsBroken & (1 << i)).length + sim.bpCams().filter((c) => c.flags & GFlag.Broken).length;
+      const broken = cams.filter((_, i) => sim.matchRules.camsBroken & (1 << i)).length + sim.armouredCams().filter((c) => c.flags & GFlag.Broken).length;
       const room = cam?.room ? (sim.level.def.rooms.find((r) => r.id === cam.room)?.callout ?? "") : "";
       // The dart's and the signal's times are the server's ticks (the simulation here counts its own).
       const now = net ? net.session.serverTick() : sim.tick;
       const left = (t: number) => `${(Math.max(0, t - now) * DT).toFixed(1)} s`;
       $(".dronecam-title").textContent = [
         `${bp ? "ARMOURED CAM" : shell ? "TWAIN FRAME" : "CAM"} ${ctrl.cam}/${sim.camCount()}${room ? ` · ${room}` : ""}${broken ? ` · ${broken} broken` : ""}`,
-        // (Only a defender fires a defenders' camera's dart: not one Brava hacked, nor one Dokkaebi's lend shows.)
+        // (Only a defender fires a defenders' camera's dart: not one Patch hacked, nor one Relay's lend shows.)
         bp && !dead && bp.team === DEFENSE && ctrl.team === DEFENSE ? `${keyLabel(k.gadget)} EMP dart ${now >= bp.readyAt ? "ready" : left(bp.readyAt)}` : "",
         bp?.signalEnd && !(bp.flags & GFlag.Lost) ? `signal lost in ${left(bp.signalEnd)}` : "",
         `${keyLabel(k.leanLeft)} / ${keyLabel(k.leanRight)} switch · ${keyLabel(k.observe)} back`,
@@ -1918,14 +1918,14 @@ export async function startLab(o: LabOptions): Promise<void> {
       const prep = drone.id === ctrl.possessedPawnId;
       const others = prep ? sim.feedDrones(ctrl).filter((p) => !ctrl.pawnIds.includes(p.id)).length : sim.feedDrones(ctrl).length - 1;
       const keys = [others > 0 ? `${keyLabel(k.leanLeft)} / ${keyLabel(k.leanRight)} switch` : "", prep ? "" : `${keyLabel(k.observe)} back`].filter(Boolean).join(" · ");
-      const kludge = drone.kludge ? kludgeOf(data, drone) : null;
-      const hacksLeft = kludge ? (kludgeLeft.get(drone.id) ?? kludge.charges) : 0;
+      const crossover = drone.crossover ? crossoverOf(data, drone) : null;
+      const hacksLeft = crossover ? (crossoverLeft.get(drone.id) ?? crossover.charges) : 0;
       $(".dronecam-title").textContent = [
-        kludge
-          ? `CROSSOVER · ${hacksLeft} hack${hacksLeft === 1 ? "" : "s"} · hold left mouse on a device (${kludge.rangeM} m)`
+        crossover
+          ? `CROSSOVER · ${hacksLeft} hack${hacksLeft === 1 ? "" : "s"} · hold left mouse on a device (${crossover.rangeM} m)`
           : `DRONE ${drones.indexOf(drone) + 1}/${drones.length}${held ? ` · ${held} held` : ""}`,
         ds.mode === PawnMode.Dead ? "DESTROYED" : "",
-        ds.jammed ? `JAMMED ${secs(ds.jammed)}` : inJam ? "JAMMED (signal disruptor)" : "",
+        ds.jammed ? `JAMMED ${secs(ds.jammed)}` : inJam ? "JAMMED (damper)" : "",
         `${keyLabel(k.vault)} jump ${ds.jumpCd ? secs(ds.jumpCd) : "ready"}`,
         `${keyLabel(k.sprint)} boost ${ds.boostTicks ? "ON" : ds.boostCd ? secs(ds.boostCd) : "ready"}`,
         keys,
@@ -1989,7 +1989,7 @@ export async function startLab(o: LabOptions): Promise<void> {
             ? `SHIELD SET DOWN · ${keyLabel(k.ability)}: its shock ${post && post.flags & GFlag.Off ? "OFF (EMP)" : post && post.flags & GFlag.Active ? "ON" : "OFF"} · F on it to take it back`
             : "SHIELD KNOCKED ASIDE";
     ammoHud.update(p.loadout?.weapons[s.slot], s, dead || onCam, keyLabel(k.fireMode), shieldText);
-    // Fuze's shield suppressed (Phase 8 M11): the edges of the view blur, and no sprinting (alive only: the review, M12).
+    // Hail's shield suppressed (Phase 8 M11): the edges of the view blur, and no sprinting (alive only: the review, M12).
     app.classList.toggle("suppressed", !dead && suppressed(p.loadout ?? null, s));
     // The gadgets in the two slots (Phase 8): how many are left, on which key; a detonator's devices waiting.
     const slotText = (slot: 1 | 2, key: string) => {
@@ -1997,10 +1997,10 @@ export async function startLab(o: LabOptions): Promise<void> {
       if (!g) return "";
       const left = slot === 1 ? s.g1 : s.g2;
       const out = slot === 1 ? s.w1 : s.w2;
-      // A held item (Pulse's sensor, Phase 8 M6) is never used up: no count. Brava's Kludges (M8): how many she holds.
-      const kludges = g.use.kind === "drone" ? sim.dronesOf(ctrl).filter((d) => d.kludge && d.state.mode === PawnMode.Held).length : 0;
+      // A held item (Murmur's sensor, Phase 8 M6) is never used up: no count. Patch's Crossovers (M8): how many she holds.
+      const crossovers = g.use.kind === "drone" ? sim.dronesOf(ctrl).filter((d) => d.crossover && d.state.mode === PawnMode.Held).length : 0;
       // (Tonic's monitor, R3, counts its patches.)
-      const count = g.use.kind === "hold" && !g.patch ? "" : ` ×${g.use.kind === "drone" ? kludges : left}`;
+      const count = g.use.kind === "hold" && !g.patch ? "" : ` ×${g.use.kind === "drone" ? crossovers : left}`;
       // Rivet's driver (R3): the salvo it lays now, and the key that picks the next.
       const laid = g.use.kind === "launch" ? laidBy(data, g, s.pattern) : null;
       // Dowser's coil up (R3): how many devices it reads, and the key that marks one for his team.
@@ -2097,9 +2097,9 @@ export async function startLab(o: LabOptions): Promise<void> {
           drone: ctrl.drone,
           /** The default camera watched (Phase 7): its number in the level's list, 0: none. */
           cam: ctrl.cam,
-          /** How many cameras the defenders' list holds now (the level's, Bulletproof Cameras, idle shells: Phase 8 M10). */
+          /** How many cameras the defenders' list holds now (the level's, Armoured Cameras, idle shells: Phase 8 M10). */
           cams: sim.camCount(),
-          /** Skopós on her own idle shell's view, one of her feeds (D-155), and the feed Observe opens again. */
+          /** Twain on her own idle shell's view, one of her feeds (D-155), and the feed Observe opens again. */
           shellCam: ctrl.shellCam,
           lastCam: ctrl.lastCam,
           /** Where a camera or her shell view looks (D-169: it turns, the shell doesn't), and her other shell's facing. */
@@ -2192,7 +2192,7 @@ export async function startLab(o: LabOptions): Promise<void> {
       get fov() {
         return camera.fov;
       },
-      /** The body you look through (Skopós' other shell, on its camera) and the one you control. */
+      /** The body you look through (Twain' other shell, on its camera) and the one you control. */
       get bodies() {
         const st = (id: number) => {
           const p = sim.pawns.get(id);
@@ -2620,14 +2620,14 @@ export async function startLab(o: LabOptions): Promise<void> {
    */
   function feedRow(): string {
     if (ctrl.cam || ctrl.shellCam || ctrl.swapPhase) {
-      // Skopós's own idle shell is one of her feeds (Ulo, D-155): last, in place of its barrier's camera, as the lean
+      // Twain's own idle shell is one of her feeds (Ulo, D-155): last, in place of its barrier's camera, as the lean
       // goes round them.
       const n = sim.camCount();
       // (No cameras in a lab, or with the phone blown up: her shell alone.)
       const cams = sim.camsOn(ctrl) ? Array.from({ length: n }, (_, i) => i).filter((i) => sim.shellCamAt(i)?.owner !== ctrl.id) : [];
       const row = cams.map((i) => {
         const cls = [i === ctrl.cam - 1 ? "on" : "", sim.camWorks(i) ? "" : "broken"].filter(Boolean).join(" ");
-        return `<span class="${cls}">${sim.bpCamAt(i) ? "BP" : sim.shellCamAt(i) ? "SH" : i + 1}</span>`;
+        return `<span class="${cls}">${sim.armouredCamAt(i) ? "BP" : sim.shellCamAt(i) ? "SH" : i + 1}</span>`;
       });
       if (sim.bodyIds(ctrl).length > 1) {
         const on = ctrl.shellCam || ctrl.swapPhase !== 0;
@@ -2658,9 +2658,9 @@ export async function startLab(o: LabOptions): Promise<void> {
       }
     for (const pawn of sim.pawns.values())
       if (!pawnViews.has(pawn.id)) {
-        // Brava's Kludge drones (Phase 8 M8) are bigger, and greener.
-        const size = pawn.kludge ? (data.gadgets.get("kludge_drone")?.sizeM ?? data.intel.drone.sizeM) : data.intel.drone.sizeM;
-        const color = pawn.kludge ? 0x65a30d : pawn.proxy ? 0xf97316 : 0x3b82f6;
+        // Patch's Crossover drones (Phase 8 M8) are bigger, and greener.
+        const size = pawn.crossover ? (data.gadgets.get("crossover_drone")?.sizeM ?? data.intel.drone.sizeM) : data.intel.drone.sizeM;
+        const color = pawn.crossover ? 0x65a30d : pawn.proxy ? 0xf97316 : 0x3b82f6;
         const view = new PawnView(scene, color, pawn.proxy ? nameOfPawn(pawn.id) || undefined : undefined, undefined, pawn.kind, size, pawn.operatorId);
         view.remote = !!pawn.proxy;
         pawnViews.set(pawn.id, view);
@@ -2826,18 +2826,18 @@ export async function startLab(o: LabOptions): Promise<void> {
           if (o.match && by && killer !== undefined) killcam = { killer, name: by.name, deathTick: tick, start: performance.now() };
         }
         // Intel (Phase 7): pings, scans and callouts from your team (and word that you were spotted).
-        // Brava's Kludge drone (Phase 8 M8): its hack's progress and the hacks it has left; Skopós told her shell's overheating.
+        // Patch's Crossover drone (Phase 8 M8): its hack's progress and the hacks it has left; Twain told her shell's overheating.
         if (e.kind === "hack") {
-          kludgeLeft.set(e.kludge, e.left);
+          crossoverLeft.set(e.crossover, e.left);
           hackRun = e.stage === 0 ? { start: now, ms: e.ticks * DT * 1000 } : null;
-          if (e.stage === 1) flash(`Hacked · ${e.left} hack${e.left === 1 ? "" : "s"} left on this Kludge`, "info");
-        } else if (e.kind === "overheat") flash(`A Kludge is overheating your idle shell: swap into it within ${(e.ticks * DT).toFixed(0)} s or lose it`, "bad");
+          if (e.stage === 1) flash(`Hacked · ${e.left} hack${e.left === 1 ? "" : "s"} left on this Crossover`, "info");
+        } else if (e.kind === "overheat") flash(`A Crossover is overheating your idle shell: swap into it within ${(e.ticks * DT).toFixed(0)} s or lose it`, "bad");
         // Tonic's monitor (R3): his team as the room last listed it.
         else if (e.kind === "vitals") vitals = e;
-        // Dokkaebi's Jegeo Payload (Phase 8 M9): her upload and phone hacks; its target's ringing phone.
-        else if (e.kind === "jegeo") {
+        // Relay's Ringer (Phase 8 M9): her upload and phone hacks; its target's ringing phone.
+        else if (e.kind === "ringer") {
           const secs = (e.ticks * DT).toFixed(0);
-          jegeoRun = e.stage === 0 || e.stage === 3 ? { start: now, ms: e.ticks * DT * 1000, ringing: e.stage === 3 } : e.stage === 4 ? jegeoRun : null;
+          ringerRun = e.stage === 0 || e.stage === 3 ? { start: now, ms: e.ticks * DT * 1000, ringing: e.stage === 3 } : e.stage === 4 ? ringerRun : null;
           const who = nameOfPawn(e.pawnId) || "the defender";
           if (e.stage === 0) flash(`Uploading to ${who}: keep the tablet up (${secs} s) · ${e.charges} left`, "info");
           else if (e.stage === 1) flash(ctrl.pawnIds.includes(e.pawnId) ? "Your phone exploded: no cameras for the rest of the round" : `Payload delivered to ${who}`, ctrl.pawnIds.includes(e.pawnId) ? "bad" : "info");
@@ -2845,16 +2845,16 @@ export async function startLab(o: LabOptions): Promise<void> {
           else if (e.stage === 3) flash(`Your phone's ringing: hold ${keyLabel(settings.keys.interact)} to take it out and turn it off within ${secs} s`, "bad");
           else flash(`Phone hacked: your team watches the defenders' cameras for ${secs} s`, "info");
           // Her tablet's list: a target she called rests his cooldown from now; a phone hacked is gone from it.
-          const cool = data.gadgets.get("jegeo_payload")?.jegeo?.cooldownS ?? 0;
-          if (e.stage !== 3) jegeoCharges = e.charges;
-          if (e.stage === 1 || e.stage === 2) jegeoCooldownUntil.set(e.pawnId, now + cool * 1000);
+          const cool = data.gadgets.get("ringer")?.ringer?.cooldownS ?? 0;
+          if (e.stage !== 3) ringerCharges = e.charges;
+          if (e.stage === 1 || e.stage === 2) ringerCooldownUntil.set(e.pawnId, now + cool * 1000);
           if (e.stage === 4) {
             phonesHacked.add(e.pawnId);
             hacksMade++;
           }
         }
         if (e.kind === "ping") {
-          // An enemy gadget pinged (Phase 8 M3) is named with it, a heartbeat on Pulse's sensor (M6) too.
+          // An enemy gadget pinged (Phase 8 M3) is named with it, a heartbeat on Murmur's sensor (M6) too.
           const what = e.heart ? " · heartbeat" : e.gadget >= 0 ? ` · ${data.gadgets.get(kindId(e.gadget) ?? "")?.name ?? kindId(e.gadget)}` : "";
           intelHud.ping(e, `${e.ctrl === me ? "you" : nameOfCtrl(e.ctrl)}${what}`, now);
         } else if (e.kind === "stunned") {
@@ -2874,27 +2874,27 @@ export async function startLab(o: LabOptions): Promise<void> {
     }
   }
 
-  /** Brava's Kludge drones (Phase 8 M8): each one's hacks left, as the server last said; the hack under way's bar. */
-  const kludgeLeft = new Map<number, number>();
+  /** Patch's Crossover drones (Phase 8 M8): each one's hacks left, as the server last said; the hack under way's bar. */
+  const crossoverLeft = new Map<number, number>();
   let hackRun: { start: number; ms: number } | null = null;
-  /** Dokkaebi's upload under way (Phase 8 M9), or the call ringing on our phone: its bar. */
-  let jegeoRun: { start: number; ms: number; ringing: boolean } | null = null;
+  /** Relay's upload under way (Phase 8 M9), or the call ringing on our phone: its bar. */
+  let ringerRun: { start: number; ms: number; ringing: boolean } | null = null;
   /**
-   * Dokkaebi's tablet (Ulo's request after Phase 10): the defenders her team has identified (spotted, until when: ms),
+   * Relay's tablet (Ulo's request after Phase 10): the defenders her team has identified (spotted, until when: ms),
    * the ones she's called resting their cooldown, the dead defenders' phones hacked, and her pick among them (the wheel
    * moves it; the room is told each change, and Fire sends to it).
    */
   const identifiedUntil = new Map<number, number>();
-  const jegeoCooldownUntil = new Map<number, number>();
+  const ringerCooldownUntil = new Map<number, number>();
   const phonesHacked = new Set<number>();
   let hacksMade = 0;
   let tabletUp = false;
   let tabletPick = "";
   let tabletSent = "";
   let tabletKey = "";
-  let tabletEntries: { key: string; label: string; note: string; ok: boolean; pick: JegeoPick }[] = [];
+  let tabletEntries: { key: string; label: string; note: string; ok: boolean; pick: RingerPick }[] = [];
   /** Her charges, as her last payload event said. */
-  let jegeoCharges: number | null = null;
+  let ringerCharges: number | null = null;
   /** Tonic's team as his monitor shows it (R3): the room's last word. */
   let vitals: Extract<GameEvent, { kind: "vitals" }> | null = null;
 
@@ -2910,14 +2910,14 @@ export async function startLab(o: LabOptions): Promise<void> {
   const TRAVEL_MS = 700;
 
   /**
-   * Dokkaebi's tablet up: the defenders her team has identified (their operator and player, how long they stay
+   * Relay's tablet up: the defenders her team has identified (their operator and player, how long they stay
    * identified, or their cooldown after a call) and the dead defenders' phones she can still hack, one picked (the wheel
-   * moves it). The pick is the room's to check when she presses Fire (net/room.ts jegeo).
+   * moves it). The pick is the room's to check when she presses Fire (net/room.ts ringer).
    */
   function updateTablet() {
     const body = livingBody();
     const onFeed = ctrl.cam !== 0 || ctrl.drone !== 0 || ctrl.shellCam || ctrl.swapPhase !== 0;
-    const t = body ? slotGadget(data, body.loadout, 2)?.jegeo : undefined;
+    const t = body ? slotGadget(data, body.loadout, 2)?.ringer : undefined;
     const patch = body ? slotGadget(data, body.loadout, 2)?.patch : undefined;
     tabletUp = !!body && (!!t || !!patch) && !onFeed && body.state.hand === Hand.Ability && body.state.gAct !== GadgetAct.Equip;
     $(".tablet").classList.toggle("hidden", !tabletUp);
@@ -2938,7 +2938,7 @@ export async function startLab(o: LabOptions): Promise<void> {
         continue;
       }
       const r = roster.find((e) => e.pawnIds.includes(id));
-      const cool = (jegeoCooldownUntil.get(id) ?? 0) - now;
+      const cool = (ringerCooldownUntil.get(id) ?? 0) - now;
       entries.push({
         key: `d:${id}`,
         label: r ? `${opName(r.operatorId)} (${r.name})` : "Defender",
@@ -2963,13 +2963,13 @@ export async function startLab(o: LabOptions): Promise<void> {
     if (!entries.some((e) => e.key === tabletPick)) tabletPick = entries[0]?.key ?? "";
     if (tabletPick !== tabletSent) {
       tabletSent = tabletPick;
-      net?.send(encodeJegeoPick(entries.find((e) => e.key === tabletPick)?.pick ?? { kind: "none" }));
+      net?.send(encodeRingerPick(entries.find((e) => e.key === tabletPick)?.pick ?? { kind: "none" }));
     }
-    const charges = jegeoCharges ?? t.startCharges;
+    const charges = ringerCharges ?? t.startCharges;
     const key = `${tabletPick}|${charges}|${entries.map((e) => `${e.key}:${e.note}`).join(",")}`;
     if (key === tabletKey) return;
     tabletKey = key;
-    $(".tablet-title").textContent = `JEGEO PAYLOAD · ${charges} charge${charges === 1 ? "" : "s"}`;
+    $(".tablet-title").textContent = `RINGER · ${charges} charge${charges === 1 ? "" : "s"}`;
     $(".tablet-list").innerHTML = entries.length
       ? entries.map((e) => `<div class="${e.key === tabletPick ? "on" : ""}${e.ok ? "" : " off"}"><b>${escapeHtml(e.label)}</b><span>${escapeHtml(e.note)}</span></div>`).join("")
       : `<div class="empty">No defender identified: drone, ping or scan one</div>`;
@@ -2999,7 +2999,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     if (!entries.some((e) => e.key === tabletPick)) tabletPick = "auto";
     if (tabletPick !== tabletSent) {
       tabletSent = tabletPick;
-      net?.send(encodeJegeoPick(entries.find((e) => e.key === tabletPick)?.pick ?? { kind: "none" }));
+      net?.send(encodeRingerPick(entries.find((e) => e.key === tabletPick)?.pick ?? { kind: "none" }));
     }
     const left = body.state.g2;
     const key = `m|${tabletPick}|${left}|${v?.busy ?? false}|${entries.map((e) => `${e.key}:${e.note}:${e.ok}`).join(",")}`;
@@ -3010,7 +3010,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     $(".tablet-help").textContent = left > 0 ? `wheel: pick · fire: set the patch off${v?.busy ? " · a teammate's patch is working" : ""}` : "no patches left";
   }
 
-  /** Dokkaebi's tablet: the wheel moves her pick down (or up) its list. */
+  /** Relay's tablet: the wheel moves her pick down (or up) its list. */
   function moveTabletPick(step: number) {
     if (!tabletEntries.length) return;
     const at = Math.max(0, tabletEntries.findIndex((e) => e.key === tabletPick));
@@ -3081,11 +3081,11 @@ export async function startLab(o: LabOptions): Promise<void> {
   }
 
   /**
-   * Pulse's sensor up (Phase 8 M6; as in the game, Ulo's request after Phase 10): held up before his face, he looks
+   * Murmur's sensor up (Phase 8 M6; as in the game, Ulo's request after Phase 10): held up before his face, he looks
    * through its display: the world grey through it, a bright red band sweeping across it left to right with the view
    * washed dark red behind it, and each heartbeat it picks up (within its range and fan, through anything) lit where
    * that body is as the band passes over it: a red dot in a thin white ring, the dot bigger the nearer, fading until the
-   * next pass, the mark staying where he was as Pulse looks round. No numbers, no crosshair. Only he sees it; an EMP on
+   * next pass, the mark staying where he was as Murmur looks round. No numbers, no crosshair. Only he sees it; an EMP on
    * him freezes it.
    */
   function updateSensorHud() {
@@ -3094,7 +3094,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     const onFeed = ctrl.cam !== 0 || ctrl.drone !== 0 || ctrl.shellCam || ctrl.swapPhase !== 0;
     const k = body && !onFeed ? sensorUp(data, body) : null;
     const corners = k ? viewmodel.sensorScreen() : null;
-    $(".pulse").classList.toggle("hidden", !corners);
+    $(".murmur").classList.toggle("hidden", !corners);
     app.classList.toggle("sensor-up", !!corners);
     if (!k || !body || !corners) {
       heartsSeen.clear();
@@ -3108,7 +3108,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     const xs = corners.map((c) => c[0] * W);
     const ys = corners.map((c) => c[1] * H);
     const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
-    const glass = $(".pulse-glass");
+    const glass = $(".murmur-glass");
     glass.style.left = `${x0.toFixed(1)}px`;
     glass.style.top = `${y0.toFixed(1)}px`;
     glass.style.width = `${(x1 - x0).toFixed(1)}px`;
@@ -3130,7 +3130,7 @@ export async function startLab(o: LabOptions): Promise<void> {
     }
     // Each one read: blue rings rippling out from a glowing dot where they were, bigger the nearer, fading until the
     // next wave.
-    const layer = $(".pulse-hearts");
+    const layer = $(".murmur-hearts");
     for (const [id, seen] of heartsSeen) {
       const fade = frozen ? 1 : Math.exp(-(now - seen.t) / 1300);
       if (fade < 0.04) {
@@ -3152,10 +3152,10 @@ export async function startLab(o: LabOptions): Promise<void> {
       const y = ((1 - v.y) / 2) * H;
       el.style.cssText = `left:${x.toFixed(1)}px;top:${y.toFixed(1)}px;opacity:${fade.toFixed(3)};--ring:${ring.toFixed(1)}px;--dot:${(ring * 0.18).toFixed(1)}px;display:${v.z <= 1 ? "block" : "none"}`;
     }
-    $(".pulse").dataset.hearts = String(heartsSeen.size);
-    $(".pulse").classList.toggle("frozen", frozen);
-    $(".pulse-count").textContent = `${heartsSeen.size} READ`;
-    $(".pulse-state").textContent = frozen ? "NO SIGNAL" : "";
+    $(".murmur").dataset.hearts = String(heartsSeen.size);
+    $(".murmur").classList.toggle("frozen", frozen);
+    $(".murmur-count").textContent = `${heartsSeen.size} READ`;
+    $(".murmur-state").textContent = frozen ? "NO SIGNAL" : "";
   }
 
   /**

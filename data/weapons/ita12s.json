@@ -1,5 +1,5 @@
 {
-  "_doc": "ITA12S (Thermite, Striker, Mira). research/weapons.csv row ita12s; class rules research/weapons_notes.md §4. Tube-fed secondary shotgun (per-shell reload). Pellet damage and ammo are weapons_notes.md Q1/Q3.",
+  "_doc": "ITA12S (Kiln, Pointman, Vista). research/weapons.csv row ita12s; class rules research/weapons_notes.md §4. Tube-fed secondary shotgun (per-shell reload). Pellet damage and ammo are weapons_notes.md Q1/Q3.",
   "_season": "Y11S3.1",
   "_unverified": ["ammo.maxAmmo", "damage.base", "damage.falloff", "destruction"],
   "id": "ita12s",

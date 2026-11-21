@@ -167,7 +167,7 @@ try {
   // ---- offline: walk in through the Spinning Room's north door
   const lvl = JSON.parse(readFileSync(fileURLToPath(LEVEL_FILE), "utf8"));
   const labSpawn = lvl.spawns.find((sp) => sp.id === "lab");
-  const off = await open(`${BASE}/labs/millrace.html?autotest=1&lowgfx&op=sledge`, { width: 960, height: 540 });
+  const off = await open(`${BASE}/labs/millrace.html?autotest=1&lowgfx&op=cleave`, { width: 960, height: 540 });
   const start = await own(off);
   result.start = { x: start.x, z: start.z };
   result.checks.startsAtTheLabSpawnOutsideTheMill = Math.abs(start.x - labSpawn.pos[0]) < 0.3 && Math.abs(start.z - labSpawn.pos[2]) < 0.3 && start.z < DOOR_Z - 1;
@@ -586,7 +586,7 @@ try {
   await off.close();
 
   // ---- shadows on: a lost and restored WebGL context draws the shadow map again
-  const gfx = await open(`${BASE}/labs/millrace.html?autotest=1&op=sledge`);
+  const gfx = await open(`${BASE}/labs/millrace.html?autotest=1&op=cleave`);
   await sleep(500);
   const drawsBefore = await gfx.evaluate(() => window.__lab.shadowDraws);
   // Chrome allows a restore only once the lost event has been handled (three prevents its default), so the
@@ -618,9 +618,9 @@ try {
   await gfx.close();
 
   // ---- online: what one player breaks, the other sees
-  const a = await open(`${BASE}/labs/millrace.html?online&autotest=1&lowgfx&op=sledge&lag=${LAG}`);
+  const a = await open(`${BASE}/labs/millrace.html?online&autotest=1&lowgfx&op=cleave&lag=${LAG}`);
   const room = (await a.evaluate(() => window.__lab.net)).room;
-  const b = await open(`${BASE}/labs/millrace.html?room=${room}&autotest=1&lowgfx&op=mute&lag=${LAG}`);
+  const b = await open(`${BASE}/labs/millrace.html?room=${room}&autotest=1&lowgfx&op=lull&lag=${LAG}`);
   await a.waitForFunction(() => window.__lab.net.players.length === 2, null, { timeout: 10000 });
   await a.evaluate(([x, z]) => window.__lab.teleport(x, 0, z, 180), [DOOR_X, DOOR_Z - 0.75]);
   await b.evaluate(([x, z]) => window.__lab.teleport(x, 0, z, 150), [DOOR_X + 1.5, DOOR_Z - 3.5]);

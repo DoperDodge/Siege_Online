@@ -78,7 +78,7 @@ export function loadoutRows(data: GameData, pick: LoadoutPick): string {
 }
 
 /**
- * The gadget row (Phase 8): one of the operator's gadgets, or a kit's two (Striker, Sentry: two different ones), as
+ * The gadget row (Phase 8): one of the operator's gadgets, or a kit's two (Pointman, Picket: two different ones), as
  * selects with `data-gadget` (their place in the pick); nothing for an operator without gadgets.
  */
 export function gadgetRow(data: GameData, op: OperatorData, pick: LoadoutPick): string {

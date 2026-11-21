@@ -56,7 +56,7 @@ export const PANEL_GROUPS = groups(G_PANEL, G_STATIC | G_PLAYER);
 export const PROP_GROUPS = groups(G_PROP, G_STATIC | G_PLAYER);
 /** Solid gadgets: like level geometry for every query that sees them. */
 export const GADGET_GROUPS = groups(G_GADGET, G_STATIC | G_PLAYER);
-/** Player movement bodies: blocked by the level and by each other (Skopós' two shells included). */
+/** Player movement bodies: blocked by the level and by each other (Twain' two shells included). */
 export const PLAYER_GROUPS = groups(G_PLAYER, G_STATIC | G_PLAYER | G_PANEL | G_PROP | G_GADGET);
 /** Dead bodies: invisible to every query. Takes effect at once (setEnabled(false) waits for a refresh). */
 export const NONSOLID_PLAYER_GROUPS = groups(G_PLAYER, 0);

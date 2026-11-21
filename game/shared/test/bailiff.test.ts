@@ -1,7 +1,7 @@
 // Bailiff and the Bailiff Shield (Project Redmond R3, gadgets/R3_OPERATORS.md §2; Ulo's: the stun and the slow, she can
 // set it down, and an EMP on it while she holds it shocks her). Held up and not aimed, Fire holds the prod on: a jolt
 // into the nearest attacker in reach and cone every third of a second (4, slowed to 0.6, no sprint, no vault, 1.2 s),
-// on 8 s of charge that refills once it's been off a second. Aimed, her sidearm fires as Fuze's does. Her ability item
+// on 8 s of charge that refills once it's been off a second. Aimed, her sidearm fires as Hail's does. Her ability item
 // sets the shield down as solid cover (no shield on her while it's down); she picks it up again. An EMP reaching her
 // with it up shocks her (no moving, no hands, 1.5 s) and turns the prod off; set down, it doesn't shock her.
 import { describe, expect, it, vi } from "vitest";
@@ -37,14 +37,14 @@ const data = loadGameData();
 const k = prodData(data)!;
 const every = ticks(k.everyS);
 
-/** Sledge (client 0, attacking) and Bailiff (client 1, defending) on the Gadget Lab, out of the way. */
+/** Cleave (client 0, attacking) and Bailiff (client 1, defending) on the Gadget Lab, out of the way. */
 async function lab() {
-  const s = await scene(["sledge", "bailiff"], "gadget_lab");
+  const s = await scene(["cleave", "bailiff"], "gadget_lab");
   s.park();
   return s;
 }
 
-/** Bailiff at (0, 12) and Sledge `dist` m in front of her (−z), `side` m across; her view on his chest. */
+/** Bailiff at (0, 12) and Cleave `dist` m in front of her (−z), `side` m across; her view on his chest. */
 function faceOff(s: Scene, dist = 2.5, side = 0) {
   s.teleport(1, 0, 0, 12, 0);
   s.teleport(0, side, 0, 12 - dist, 180);
@@ -289,7 +289,7 @@ describe("a bot playing Bailiff (R3)", () => {
       return done();
     };
     expect(step(() => m.phase === Phase.Planning, 5)).toBe(true);
-    const ops = ["bailiff", "mute", "pulse", "lesion", "mira"];
+    const ops = ["bailiff", "lull", "murmur", "thistle", "vista"];
     const bots = [...m.players.values()].filter((p) => p.bot !== null);
     bots.forEach((p, i) => room.pickLoadout(p.id, botLoadout(data, ops[i])));
     expect(step(() => m.phase === Phase.Action, 60)).toBe(true);
@@ -360,7 +360,7 @@ describe("Bailiff knocked down with the prod on (the review, R3)", () => {
 describe("the prod and the set-down shock under the damage rules (the review, R3)", () => {
   it("do nothing to an attacker under the Attacker Safeguard: no damage, no slow", async () => {
     const s = await lab();
-    // Quick Match's safeguard (the director's; a lab has none) said to cover Sledge.
+    // Quick Match's safeguard (the director's; a lab has none) said to cover Cleave.
     vi.spyOn(s.room as unknown as { safeguarded(p: Pawn): boolean }, "safeguarded").mockImplementation((p) => p === s.body(0));
     const look = faceOff(s);
     const hp = s.body(0).state.hp;
@@ -377,7 +377,7 @@ describe("the prod and the set-down shock under the damage rules (the review, R3
   });
 
   it("a teammate in front (friendly fire on) takes it as team damage: scaled, and once hers is over the line, reflected on her", async () => {
-    const s = await scene(["sledge", "bailiff", "mute"], "gadget_lab");
+    const s = await scene(["cleave", "bailiff", "lull"], "gadget_lab");
     s.park();
     const rules = s.room.rules;
     const was = { scale: rules.friendlyFire.scale, reverse: { ...rules.reverseFriendlyFire } };

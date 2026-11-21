@@ -1,5 +1,5 @@
 // Gadget Lab (Phase 8, gadgets/DESIGN.md §11): the Destruction Lab's walls to take every operator's gadgets to. Pick an
-// operator and their gadgets in the pause menu (Striker and Sentry take any two of their side's). Offline the page runs
+// operator and their gadgets in the pause menu (Pointman and Picket take any two of their side's). Offline the page runs
 // a room of its own in a Web Worker (gadgets are the server's side, exactly as online); `?online` / `?room=CODE` play
 // it on the server, where everyone sees the same gadgets.
 import { startLab } from "./common/lab.js";

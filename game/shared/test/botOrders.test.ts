@@ -31,7 +31,7 @@ async function team(mates: string[], defend = false, seed = 4) {
   const mine = [...m.players.values()].filter((p) => p.bot !== null && m.sideOf(p.id) === side());
   expect(mine.length).toBe(4);
   mine.forEach((p, k) => room.pickLoadout(p.id, botLoadout(data, mates[k])));
-  room.pickLoadout(person.id, botLoadout(data, defend ? "mute" : "thermite"));
+  room.pickLoadout(person.id, botLoadout(data, defend ? "lull" : "kiln"));
   const body = (id: number): Pawn => room.sim.pawns.get(room.bodyOf(id)!.possessedPawnId)!;
   const you = () => body(person.id);
   /** The person pings `at` (where their view's ray landed). */
@@ -50,7 +50,7 @@ describe("orders to bot teammates (Phase 9 M6)", () => {
   });
 
   it("Go here: the nearest bot goes to the pinged spot and holds there; Follow me: one keeps near you as you move; Regroup: all come to you", async () => {
-    const { room, m, until, mine, body, you, ping, order, near, info } = await team(["sledge", "brava", "striker", "dokkaebi"]);
+    const { room, m, until, mine, body, you, ping, order, near, info } = await team(["cleave", "patch", "pointman", "relay"]);
     expect(until(() => m.phase === Phase.Action, 60)).toBe(true);
     // On the riverbank (open ground west of the mill).
     room.sim.teleport(you().id, -20, 0, 32, 0);
@@ -79,7 +79,7 @@ describe("orders to bot teammates (Phase 9 M6)", () => {
   }, 300000);
 
   it("Breach this: a teammate with something to open it with opens the pinged wall", async () => {
-    const { room, m, until, you, ping, order, info } = await team(["sledge", "brava", "striker", "dokkaebi"], false, 5);
+    const { room, m, until, you, ping, order, info } = await team(["cleave", "patch", "pointman", "relay"], false, 5);
     expect(until(() => m.phase === Phase.Action, 60)).toBe(true);
     // A wall no plan reinforces (between the Loom Hall and Warping), pinged from the Loom Hall's side.
     const e = room.sim.level.panels.byId.get("SW-1F-09")!;
@@ -94,7 +94,7 @@ describe("orders to bot teammates (Phase 9 M6)", () => {
   }, 300000);
 
   it("Push: the attacking bots drop their jobs before the way in; Rotate: the defending bots' roamers come back to the site", async () => {
-    const a = await team(["sledge", "brava", "striker", "thermite"], false, 6);
+    const a = await team(["cleave", "patch", "pointman", "kiln"], false, 6);
     expect(a.until(() => a.m.phase === Phase.Action, 60)).toBe(true);
     a.until(() => false, 1);
     expect(a.room.attackPlan!.jobList().some((j) => !j.done)).toBe(true);
@@ -103,7 +103,7 @@ describe("orders to bot teammates (Phase 9 M6)", () => {
     expect(a.mine.every((p) => a.room.attackPlan!.taskOf(p.id)?.kind !== "gadget")).toBe(true);
     void ATTACK;
 
-    const d = await team(["mute", "mira", "lesion", "sentry"], true, 7);
+    const d = await team(["lull", "vista", "thistle", "picket"], true, 7);
     expect(d.until(() => d.m.phase === Phase.Action, 60)).toBe(true);
     const plan = d.room.defensePlan!;
     const anchors = data.bots.strats.get("millrace")!.sites.SITE_MILL.defense.anchors;

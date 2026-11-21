@@ -52,7 +52,7 @@ const cmd = (c: Partial<InputCmd> & { yawDeg?: number }): InputCmd => {
 /** A Sim of the compiled level with one body in it. */
 const walker = async () => {
   const sim = await Sim.create(MAP_ID);
-  const ctrl = sim.addPlayer("walker", "sledge");
+  const ctrl = sim.addPlayer("walker", "cleave");
   return { sim, ctrl, pawn: sim.pawns.get(ctrl.possessedPawnId)! };
 };
 const steps = (sim: Sim, n: number) => {
@@ -174,8 +174,8 @@ describe("millrace level.json", () => {
       expect(Math.abs(((s.yawDeg - want + 540) % 360) - 180), s.id).toBeLessThan(10);
     }
     // Two bodies join and walk; the level is a working room level.
-    const a = sim.addPlayer("a", "sledge");
-    const b = sim.addPlayer("b", "mute");
+    const a = sim.addPlayer("a", "cleave");
+    const b = sim.addPlayer("b", "lull");
     for (let t = 0; t < 64; t++) sim.step(new Map());
     for (const c of [a, b]) expect(sim.pawns.get(c.possessedPawnId)!.state.grounded).toBe(true);
   });
@@ -1052,7 +1052,7 @@ describe("millrace determinism (DESIGN §9.2 check 12)", () => {
   it("two Sims given the same panel-op log and the same inputs end with the same panels, and a body walks through the same hole", async () => {
     const make = async () => {
       const sim = await Sim.create(MAP_ID);
-      const ctrl = sim.addPlayer("tester", "sledge");
+      const ctrl = sim.addPlayer("tester", "cleave");
       // In the Mending Room south of its 4 m soft wall to the Spinning Room (SW-1F-03, z 11), facing it (netsim's wall fight).
       sim.teleport(ctrl.possessedPawnId, 35, 0, 12.6, 0);
       return { sim, ctrl };

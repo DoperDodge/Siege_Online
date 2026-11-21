@@ -108,7 +108,7 @@ describe("HitboxHistory", () => {
   });
   it("raycastAll lists every body and part a ray crosses, nearest first; its first entry is the raycast hit", async () => {
     const { sim, ctrl, pawn } = await labWith();
-    const other = sim.addPlayer("b", "mute");
+    const other = sim.addPlayer("b", "lull");
     sim.teleport(other.possessedPawnId, 0.6, 0, 8, 0);
     const hist = new HitboxHistory(sim, 32);
     for (let i = 0; i < 40; i++) {

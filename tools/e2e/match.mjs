@@ -8,7 +8,7 @@
 // attacker drives their first drone from the spawn (the defender's page has it), and the defender goes round the
 // cameras; in action the attacker is at B Rail Siding carrying the defuser, pings (their page marks it, the defender's has
 // nothing) and throws their second drone (6); the defenders win on time, the banner says so, the sides swap for round 2
-// (where the new defender places a Bulletproof Camera and watches it), and after it the summary has both rounds; the
+// (where the new defender places a Armoured Camera and watches it), and after it the summary has both rounds; the
 // host takes everyone back to the lobby. 2v3: five players (three on Blue, two on Orange; some never pick and get an
 // operator anyway, one per team each); in action an attacker goes from their drone to a teammate's (the feed list), and
 // a defender shoots a teammate down the sights (friendly fire on, reverse friendly fire off), who then looks through a
@@ -103,16 +103,16 @@ try {
     .waitForFunction((code) => [...document.querySelectorAll(".rooms td.code")].some((td) => td.textContent === code), room, { timeout: 15000 })
     .then(() => true, () => false);
   await lister.screenshot({ path: shot("match-play-list.png") });
-  // Loadouts on the Play page: another sight on Thermite's primary is kept (this browser's storage) across a reload.
+  // Loadouts on the Play page: another sight on Kiln's primary is kept (this browser's storage) across a reload.
   const sightSel = '.loadout [data-slot="primary"][data-part="sight"]';
-  await lister.selectOption(".lo-op", "thermite");
+  await lister.selectOption(".lo-op", "kiln");
   const sights = await lister.$$eval(`${sightSel} option`, (os) => os.map((o) => o.value));
   const wantSight = sights.find((v) => v !== "iron") ?? null;
   if (wantSight) await lister.selectOption(sightSel, wantSight);
   await lister.reload();
   await lister.waitForSelector(sightSel);
   result.oneVsOne.playLoadout = { sights, wantSight, kept: [await lister.$eval(".lo-op", (sel) => sel.value), await lister.$eval(sightSel, (sel) => sel.value)] };
-  result.checks.loadoutKeptOnThePlayPage = wantSight !== null && result.oneVsOne.playLoadout.kept[0] === "thermite" && result.oneVsOne.playLoadout.kept[1] === wantSight;
+  result.checks.loadoutKeptOnThePlayPage = wantSight !== null && result.oneVsOne.playLoadout.kept[0] === "kiln" && result.oneVsOne.playLoadout.kept[1] === wantSight;
   await lister.screenshot({ path: shot("match-play-loadouts.png"), fullPage: true });
   await lister.context().close();
   const b = await viaPlay("Bo", { room });
@@ -237,7 +237,7 @@ try {
     .waitForFunction((id) => window.__lab.net.remotes.some((r) => r.id === id && r.state !== null), droneId, { timeout: 5000 })
     .then(() => true, () => false);
   // The defender watches the cameras (Phase 7): 5 opens the first, Q goes round to the last feed (the level's last
-  // camera, or for Skopós her own idle shell's view, D-155), 5 closes them and 5 opens that last feed again (D-155).
+  // camera, or for Twain her own idle shell's view, D-155), 5 closes them and 5 opens that last feed again (D-155).
   // Each key is held until the page shows what it did (its game ticks run in its frames, slow on a busy runner), then
   // let go for two of its ticks so the next press is a new one.
   const OBSERVE = 1 << 14;
@@ -255,17 +255,17 @@ try {
   await def1.screenshot({ path: shot("match-prep-defender-camera.png") });
   const lastFeed = () => {
     const n = window.__lab.net;
-    return n.cams > 0 && (n.loadout?.operator === "skopos" ? n.shellCam && n.cam === 0 : n.cam === n.cams);
+    return n.cams > 0 && (n.loadout?.operator === "twain" ? n.shellCam && n.cam === 0 : n.cam === n.cams);
   };
   const wentRound = await holdUntil(def1, { lean: -1 }, lastFeed);
   await def1.screenshot({ path: shot("match-prep-defender-last-feed.png") });
   const closed = await holdUntil(def1, { buttons: OBSERVE }, () => window.__lab.net.cam === 0 && !window.__lab.net.shellCam);
   const reopened = await holdUntil(def1, { buttons: OBSERVE }, lastFeed);
   const operator = await def1.evaluate(() => window.__lab.net.loadout?.operator ?? null);
-  // Skopós's real keys on her shell view (D-155): the page locks her stance keys there, yet E goes round to the first
+  // Twain's real keys on her shell view (D-155): the page locks her stance keys there, yet E goes round to the first
   // camera and Q back to her shell.
   let keysGoRound = null;
-  if (operator === "skopos" && reopened) {
+  if (operator === "twain" && reopened) {
     const seen = (fn) => def1.waitForFunction(fn, null, { timeout: 10000, polling: 50 }).then(() => true, () => false);
     await def1.keyboard.press("KeyE");
     const toFirst = await seen(() => window.__lab.net.cam === 1 && !window.__lab.net.shellCam);
@@ -323,7 +323,7 @@ try {
   result.checks.defendersWinOnTime = r1 !== undefined && r1.reason === 1 && r1.winner !== r1.attackers && /WINS ROUND 1/.test(banner) && /Time ran out/.test(banner);
   await a.screenshot({ path: shot("match-round-end.png") });
 
-  // Round 2: the sides swap. The new defender takes a Bulletproof Camera (Mute, or Sentry if Mute is banned: theirs is
+  // Round 2: the sides swap. The new defender takes a Armoured Camera (Lull, or Picket if Lull is banned: theirs is
   // in the default kit), places it on the floor in front of them in action, and watches it after the level's cameras
   // (Phase 7 M5).
   await a.waitForFunction(() => window.__match.view.round === 2 && window.__match.view.phase === 2, null, { timeout: 30000 });
@@ -331,24 +331,24 @@ try {
   result.checks.sidesSwap = v.attackers !== r1.attackers;
   const def2 = att1;
   const bpOp = await def2
-    .waitForFunction(() => ["mute", "sentry"].find((op) => document.querySelector(`.match-screen [data-act=op][data-op="${op}"]:not([disabled])`)) ?? false, null, { timeout: 10000 })
+    .waitForFunction(() => ["lull", "picket"].find((op) => document.querySelector(`.match-screen [data-act=op][data-op="${op}"]:not([disabled])`)) ?? false, null, { timeout: 10000 })
     .then((h) => h.jsonValue(), () => null);
   if (bpOp) await def2.click(`.match-screen [data-act=op][data-op="${bpOp}"]`);
   await phase(a, P.Action, 60000);
   await def2.waitForFunction(() => window.__lab.net.own !== null && !window.__match.spectating && window.__lab.net.gadgets > 0, null, { timeout: 20000 }).catch(() => {});
-  // Phase 8's hands: its slot's key takes it out (Mute: the gadget key; Sentry: the ability key, its kit's second), then Fire
+  // Phase 8's hands: its slot's key takes it out (Lull: the gadget key; Picket: the ability key, its kit's second), then Fire
   // held places it.
-  const slotKey = bpOp === "sentry" ? 1 << 5 : 1 << 12;
+  const slotKey = bpOp === "picket" ? 1 << 5 : 1 << 12;
   const tookOut = await holdUntil(def2, { buttons: slotKey, pitch: -1.05 }, () => window.__lab.net.hand !== 0);
   await sleep(800); // its equip time
-  const placedBp = tookOut && (await holdUntil(def2, { buttons: 1 << 6, pitch: -1.05 }, () => window.__lab.net.table.filter((g) => g.kind === "bulletproof_camera").length === 1));
+  const placedBp = tookOut && (await holdUntil(def2, { buttons: 1 << 6, pitch: -1.05 }, () => window.__lab.net.table.filter((g) => g.kind === "armoured_camera").length === 1));
   const watchedBp =
     placedBp &&
     (await holdUntil(def2, { buttons: OBSERVE }, () => window.__lab.net.cam === 1)) &&
     (await holdUntil(def2, { lean: -1 }, (n) => window.__lab.net.cam === n, lvl.cameras.length + 1));
-  await def2.screenshot({ path: shot("match-bulletproof-camera.png") });
+  await def2.screenshot({ path: shot("match-armoured-camera.png") });
   result.oneVsOne.round2 = { operator: bpOp, placed: placedBp, watched: watchedBp };
-  result.checks.bulletproofCameraPlacedAndWatched = bpOp !== null && placedBp && watchedBp;
+  result.checks.armouredCameraPlacedAndWatched = bpOp !== null && placedBp && watchedBp;
   await phase(a, P.MatchEnd, 120000);
   await a.waitForFunction(() => window.__match.screen === "summary", null, { timeout: 10000 });
   v = await view(a);
@@ -364,7 +364,7 @@ try {
 
   // ---------------------------------------------------------------- 2v3
 
-  const names = ["Cy", "Di", "Ed", "Fa", "Gu"];
+  const names = ["Cy", "Di", "Ed", "Fa", "Burr"];
   const host = await viaPlay(names[0], { format: "custom" });
   const room2 = await host.evaluate(() => window.__lab.net.room);
   const pages = [host];

@@ -1,5 +1,5 @@
 {
-  "_doc": "TCSG12 (Sentry). research/weapons.csv row tcsg12; class rules research/weapons_notes.md §4. Damage 75 since Y9S4.2. Slug headshot rule is weapons_notes.md Q13; slug penetration full (CSV) vs simple (core_mechanics.md §9.3).",
+  "_doc": "TCSG12 (Picket). research/weapons.csv row tcsg12; class rules research/weapons_notes.md §4. Damage 75 since Y9S4.2. Slug headshot rule is weapons_notes.md Q13; slug penetration full (CSV) vs simple (core_mechanics.md §9.3).",
   "_season": "Y11S3.1",
   "_unverified": ["ammo.maxAmmo", "damage.head", "damage.penetration", "destruction"],
   "id": "tcsg12",

@@ -55,7 +55,7 @@ try {
   const page = await ctx.newPage();
   page.on("pageerror", (e) => errors.push(String(e)));
   page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
-  await page.goto(`${BASE}/labs/millrace.html?autotest=1&lowgfx&op=sledge`);
+  await page.goto(`${BASE}/labs/millrace.html?autotest=1&lowgfx&op=cleave`);
   await page.waitForFunction(() => window.__lab?.net?.ready, null, { timeout: 60000 });
   result.webgl = await page.evaluate(() => window.__lab.report.webgl);
   /** Wait until the page has drawn `n` more frames. */

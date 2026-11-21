@@ -1,9 +1,9 @@
 // Shaped models for the gadgets and the drone (Phase 10 M7, render/DESIGN.md §10): each gadget as what it is —
-// grenades (a frag's ribbed body, a flashbang's perforated can, a smoke can), the impact grenades, Fuze's bomblets,
-// Lesion's mine, the C4 brick with its phone, the proximity alarm, the claymore on its legs, the breach charge's
-// frame, the hard breach charge, Thermite's charge with its canisters, Fuze's launcher box,
-// the deployable shield, a coil of barbed wire, the observation blocker, Mute's jammer, Pulse's sensor, Dokkaebi's
-// tablet, Mira's canister, Sledge's hammer — and the drone (hull, tyres, camera, antenna; Brava's bigger, with its
+// grenades (a frag's ribbed body, a flashbang's perforated can, a smoke can), the impact grenades, Hail's bomblets,
+// Thistle's mine, the C4 brick with its phone, the proximity alarm, the claymore on its legs, the breach charge's
+// frame, the heavy breach charge, Kiln's charge with its canisters, Hail's launcher box,
+// the deployable shield, a coil of barbed wire, the feed blocker, Lull's jammer, Murmur's sensor, Relay's
+// tablet, Vista's canister, Cleave's hammer — and the drone (hull, tyres, camera, antenna; Patch's bigger, with its
 // spike). Each fits the box its data gives (sizeM: width, height, depth; the front toward −z), so what's drawn is where
 // it's hit and placed; built once per kind and size, merged by material. Our own shapes, of each kind's general form.
 import * as THREE from "three";
@@ -289,13 +289,13 @@ export function gadgetShape(id: string, size: V3, studs: readonly (readonly [num
       for (const x of [-1, 1]) p.box("metal", [0.02, h * 0.3, 0.012], [x * w * 0.3, -h / 2 + h * 0.15, d / 2 - 0.008]);
       break;
     }
-    case "cluster_grenade": {
+    case "hailstone": {
       const r = Math.min(w, h, d) / 2 - 0.002;
       p.lathe("dark", [[0.001, -r], [r * 0.7, -r * 0.7], [r, 0], [r * 0.7, r * 0.7], [0.001, r]]);
       p.cyl("yellow", r * 1.01, 0.006, [0, 0, 0], [0, 0, 0], 16);
       break;
     }
-    case "gu_mine": {
+    case "burr_mine": {
       const r = Math.min(w, d) / 2 - 0.005;
       p.lathe("olive", [[r, -h / 2], [r * 0.95, -h / 2 + h * 0.3], [r * 0.6, -h / 2 + h * 0.62], [0.001, -h / 2 + h * 0.7]], [0, 0, 0], 18);
       for (let i = 0; i < 6; i++) {
@@ -306,7 +306,7 @@ export function gadgetShape(id: string, size: V3, studs: readonly (readonly [num
       p.cyl("greenGlow", 0.005, 0.004, [0, -h / 2 + h * 0.71, 0], [0, 0, 0], 10);
       break;
     }
-    case "nitro_cell": {
+    case "remote_charge": {
       p.box("tan", [w * 0.9, h * 0.62, d * 0.9], [0, -h * 0.17, 0]);
       for (const x of [-0.25, 0.25]) p.box("black", [0.004, h * 0.64, d * 0.92], [x * w, -h * 0.17, 0]);
       p.box("black", [w * 0.55, h * 0.14, d * 0.85], [0, h * 0.24, 0]);
@@ -346,14 +346,14 @@ export function gadgetShape(id: string, size: V3, studs: readonly (readonly [num
       p.box("black", [0.12, 0.09, d], [0, -h / 2 + s + 0.05, 0]);
       break;
     }
-    case "hard_breach_charge": {
+    case "heavy_breach_charge": {
       p.box("dark", [w, h, d * 0.3], [0, 0, d * 0.35]);
       for (const sx of [-1, 1]) for (const sy of [-1, 1]) p.cyl("olive", w * 0.16, d * 0.6, [sx * w * 0.24, sy * h * 0.24, -d * 0.1], [HALF_PI, 0, 0], 16);
       p.box("black", [w * 0.22, h * 0.22, d * 0.7], [0, 0, -d * 0.05]);
       p.box("metal", [w * 0.4, 0.02, 0.02], [0, h / 2 - 0.03, -d * 0.3]);
       break;
     }
-    case "exothermic_charge": {
+    case "burn_frame": {
       // A frame, a row of canisters across it, the control box in the middle.
       const s = 0.05;
       const t = d * 0.5;
@@ -367,8 +367,8 @@ export function gadgetShape(id: string, size: V3, studs: readonly (readonly [num
       p.box("redGlow", [0.04, 0.02, 0.004], [0, 0.03, -d * 0.5]);
       break;
     }
-    case "cluster_charge": {
-      // Fuze's launcher on its wall: the mounting plate against it (+z; its tubes fire through), the box, and on the
+    case "hailstone_drill": {
+      // Hail's launcher on its wall: the mounting plate against it (+z; its tubes fire through), the box, and on the
       // room's side a carry handle and the arming panel with its light.
       p.box("dark", [w, h, d * 0.15], [0, 0, d * 0.425]);
       p.box("olive", [w * 0.86, h * 0.86, d * 0.75], [0, 0, d * 0.0]);
@@ -414,7 +414,7 @@ export function gadgetShape(id: string, size: V3, studs: readonly (readonly [num
       for (const x of [-w / 2 + 0.05, 0, w / 2 - 0.05]) p.box("dark", [0.02, h, 0.02], [x, 0, 0]);
       break;
     }
-    case "observation_blocker": {
+    case "feed_blocker": {
       for (let i = 0; i < 3; i++) {
         const a = (i / 3) * Math.PI * 2;
         p.box("metal", [0.006, h * 0.45, 0.006], [Math.cos(a) * w * 0.3, -h / 2 + h * 0.2, Math.sin(a) * d * 0.3], [Math.sin(a) * 0.4, 0, -Math.cos(a) * 0.4]);
@@ -424,14 +424,14 @@ export function gadgetShape(id: string, size: V3, studs: readonly (readonly [num
       p.cyl("blueGlow", w * 0.33, 0.006, [0, h * 0.25, 0], [0, 0, 0], 16);
       break;
     }
-    case "signal_disruptor": {
+    case "damper": {
       p.box("dark", [w * 0.96, h * 0.5, d * 0.96], [0, -h * 0.25, 0]);
       p.lathe("black", [[w * 0.25, 0], [w * 0.2, h * 0.15], [0.001, h * 0.2]], [0, 0, 0], 16);
       for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) p.cyl("black", 0.005, h * 0.5, [x * w * 0.36, h * 0.25, z * d * 0.36], [0, 0, 0], 6);
       p.box("greenGlow", [0.04, 0.008, 0.004], [0, -h * 0.2, -d * 0.481]);
       break;
     }
-    case "cardiac_sensor": {
+    case "blood_oxygen_sensor": {
       // Murmur's Blood Oxygen Sensor (our own design, D-183): a slim handheld, rounded, dark with a blue light down
       // each side; a rubber grip below with ribs; a metal cap on top; on its front (−z) a blue emitter ring round a
       // dark lens near the top; on the face toward the holder (+z) a small screen in a black bezel (SENSOR_DISPLAY, where
@@ -449,18 +449,18 @@ export function gadgetShape(id: string, size: V3, studs: readonly (readonly [num
       p.cyl("metal", 0.006, 0.003, [0, -0.008, half - 0.0015], [HALF_PI, 0, 0], 14);
       break;
     }
-    case "jegeo_payload": {
+    case "ringer": {
       // Held up to the face: its screen on the side toward the holder (+z).
       p.box("dark", [w, h, d * 0.8], [0, 0, -d * 0.1]);
       p.box("black", [w * 0.86, h * 0.72, d * 0.25], [0, h * 0.06, d * 0.35]);
       break;
     }
-    case "mirror_canister": {
+    case "pane_canister": {
       p.cyl("dark", w / 2 - 0.004, h * 0.8, [0, -h * 0.1, 0], [0, 0, 0], 16);
       p.cyl("metal", w / 2 - 0.002, h * 0.2, [0, h * 0.4, 0], [0, 0, 0], 16);
       break;
     }
-    case "breaching_hammer": {
+    case "breaching_maul": {
       // A long handle, its grip wrapped, the head across its top.
       p.cyl("tan", 0.016, h * 0.85, [0, -h * 0.07, 0], [0, 0, 0], 10);
       p.cyl("rubber", 0.019, h * 0.22, [0, -h / 2 + h * 0.12, 0], [0, 0, 0], 10);
@@ -482,11 +482,11 @@ export function gadgetShape(id: string, size: V3, studs: readonly (readonly [num
 }
 
 /**
- * The drone (Phase 7; Brava's Kludge, bigger, with a spike), within its size: a rounded hull between two knobbly
+ * The drone (Phase 7; Patch's Crossover, bigger, with a spike), within its size: a rounded hull between two knobbly
  * tyres, the camera at its front with a light, an antenna back over it, a skid; a team stripe. Returns the hull's parts
  * and each wheel's (the wheels turn as it drives).
  */
-export function droneShape(size: V3, kludge = false): { hull: Map<ShapeMat, THREE.BufferGeometry>; wheel: Map<ShapeMat, THREE.BufferGeometry> } {
+export function droneShape(size: V3, crossover = false): { hull: Map<ShapeMat, THREE.BufferGeometry>; wheel: Map<ShapeMat, THREE.BufferGeometry> } {
   const [w, h, l] = size;
   const hull = new Parts();
   const tyreW = w * 0.18;
@@ -521,8 +521,8 @@ export function droneShape(size: V3, kludge = false): { hull: Map<ShapeMat, THRE
   hull.box("metal", [inner * 0.4, 0.008, 0.04], [0, bottom - 0.004, hl * 0.8], [0.3, 0, 0]);
   // The axle through.
   hull.cyl("metal", 0.008, w - 0.01, [0, 0, 0], [0, 0, HALF_PI], 10);
-  if (kludge) {
-    // Brava's: a spike on a mount over the hull, an orange band.
+  if (crossover) {
+    // Patch's: a spike on a mount over the hull, an orange band.
     hull.cyl("metal", 0.012, h * 0.5, [0, top + h * 0.2, -hl * 0.4], [-0.9, 0, 0], 8, 0.002);
     hull.box("yellow", [inner * 1.01, 0.01, 0.02], [0, top * 0.4, -hl * 0.6]);
   }
@@ -580,7 +580,7 @@ function packed(id: string): Map<ShapeMat, THREE.BufferGeometry> | null {
       p.box("black", [0.09, 0.03, 0.06], [0, 0.085, 0]);
       break;
     }
-    case "exothermic_charge": {
+    case "burn_frame": {
       // Folded in three: a dark block, its canisters showing along one side, the control box.
       p.box("dark", [0.3, 0.22, 0.08], [0, 0, 0.02]);
       for (let i = 0; i < 4; i++) p.cyl("metal", 0.03, 0.2, [-0.105 + i * 0.07, 0, -0.035], [0, 0, 0], 12);

@@ -203,7 +203,7 @@ function head(s: Shaper, L: OperatorLook): void {
   s.on(BONE.head);
   const robot = L.head === "visor";
   if (robot) {
-    // Skopós: a smooth shell with a band of glass across the eyes.
+    // Twain: a smooth shell with a band of glass across the eyes.
     s.paint(L.headColor, 0.35);
     s.loft(
       [

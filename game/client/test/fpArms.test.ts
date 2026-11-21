@@ -51,7 +51,7 @@ function parts(vm: Viewmodel) {
 
 describe("the hands and arms (render/fpArms.ts)", () => {
   it("each pose is a hand's size, a left hand the mirror of a right, the whole within the first-person budget", () => {
-    const arms = new FpArms(operatorLook("thermite"));
+    const arms = new FpArms(operatorLook("kiln"));
     // PLAN §12.2: a first-person weapon ≤ 25k triangles; the arms that hold it are a part of that. Built: every pose of
     // a hand once (a left hand shares its right's triangles' count); drawn at once: two hands and two arms.
     expect(arms.triangles).toBeGreaterThan(2000);
@@ -102,13 +102,13 @@ describe("the hands and arms (render/fpArms.ts)", () => {
       return seen;
     };
     const hex = (s: string) => new THREE.Color(s).getHexString();
-    const arms = new FpArms(looks.lesion);
-    expect(looks.lesion.sleeves).toBe("short");
-    expect(colorsOf(arms.group.getObjectByName("forearm-left") as THREE.Mesh)).toContain(hex(looks.lesion.skin));
-    expect(colorsOf(arms.group.getObjectByName("hand-right-grip") as THREE.Mesh)).toContain(hex(looks.lesion.gloves));
-    arms.setLook(looks.mute);
-    expect(colorsOf(arms.group.getObjectByName("forearm-left") as THREE.Mesh)).toContain(hex(looks.mute.uniform));
-    expect(colorsOf(arms.group.getObjectByName("forearm-left") as THREE.Mesh)).not.toContain(hex(looks.mute.skin));
+    const arms = new FpArms(looks.thistle);
+    expect(looks.thistle.sleeves).toBe("short");
+    expect(colorsOf(arms.group.getObjectByName("forearm-left") as THREE.Mesh)).toContain(hex(looks.thistle.skin));
+    expect(colorsOf(arms.group.getObjectByName("hand-right-grip") as THREE.Mesh)).toContain(hex(looks.thistle.gloves));
+    arms.setLook(looks.lull);
+    expect(colorsOf(arms.group.getObjectByName("forearm-left") as THREE.Mesh)).toContain(hex(looks.lull.uniform));
+    expect(colorsOf(arms.group.getObjectByName("forearm-left") as THREE.Mesh)).not.toContain(hex(looks.lull.skin));
     arms.dispose();
   });
 
@@ -411,7 +411,7 @@ describe("the hands on what's held (render/viewmodel.ts)", () => {
     const ready = new THREE.Vector3().setFromMatrixPosition(p.hand("right")!.frame);
     vm.update(0, 1 / 60, w, state({ hand: 1, gAct: GadgetAct.Throw, gTicks: 200 }), 30, gadget("frag"));
     expect(new THREE.Vector3().setFromMatrixPosition(parts(vm).hand("right")!.frame).z).toBeGreaterThan(ready.z + 0.05);
-    vm.update(0, 1 / 60, w, state({ hand: 3 }), 30, gadget("jegeo_payload"));
+    vm.update(0, 1 / 60, w, state({ hand: 3 }), 30, gadget("ringer"));
     p = parts(vm);
     expect(p.hand("right")!.pose).toBe("edge");
     expect(p.hand("left")!.pose).toBe("edge");
@@ -420,7 +420,7 @@ describe("the hands on what's held (render/viewmodel.ts)", () => {
     // Murmur's Blood Oxygen Sensor all the way up (our own design, D-183): in his right hand low on the right, its little
     // screen there for the page's readout (about 64–73 % across and 76–86 % down at 16:9).
     vm.setAspect(16 / 9);
-    vm.update(0, 1 / 60, w, state({ hand: 3 }), 30, gadget("cardiac_sensor"));
+    vm.update(0, 1 / 60, w, state({ hand: 3 }), 30, gadget("blood_oxygen_sensor"));
     p = parts(vm);
     expect(p.hand("right")).not.toBeNull();
     const screen = vm.sensorScreen()!;
@@ -433,10 +433,10 @@ describe("the hands on what's held (render/viewmodel.ts)", () => {
     expect(Math.max(...ys)).toBeLessThan(0.98);
     expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(0.05);
     // Coming up it has no readout yet.
-    vm.update(0, 1 / 60, w, state({ hand: 3, gAct: GadgetAct.Equip, gTicks: 1 }), 30, gadget("cardiac_sensor"));
+    vm.update(0, 1 / 60, w, state({ hand: 3, gAct: GadgetAct.Equip, gTicks: 1 }), 30, gadget("blood_oxygen_sensor"));
     expect(vm.sensorScreen()).toBeNull();
     expect(parts(vm).hand("right")).not.toBeNull();
-    vm.update(0, 1 / 60, w, state({ hand: 3 }), 30, gadget("breaching_hammer"));
+    vm.update(0, 1 / 60, w, state({ hand: 3 }), 30, gadget("breaching_maul"));
     p = parts(vm);
     expect(p.hand("right")!.pose).toBe("grip");
     expect(p.hand("left")!.pose).toBe("grip");
@@ -508,7 +508,7 @@ describe("the hands on what's held (render/viewmodel.ts)", () => {
     expect(checked).toBeGreaterThan(15);
   });
 
-  it("no arms with nothing to hold: dead, down, or behind Fuze's raised shield (where only the pistol's hand shows, aimed)", () => {
+  it("no arms with nothing to hold: dead, down, or behind Hail's raised shield (where only the pistol's hand shows, aimed)", () => {
     const vm = new Viewmodel(data);
     const w = weapon("m4");
     const none = (s: PawnState, behindShield = false, ww: ResolvedWeapon | null = w) => {

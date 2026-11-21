@@ -1,5 +1,5 @@
 // A body's hands (Phase 8, gadgets/DESIGN.md §2): the weapon, slot 1's gadget (the secondary gadget) or slot 2's (the
-// ability's item; Striker's and Sentry's second gadget). The gadget key and the ability key take a slot's device out
+// ability's item; Pointman's and Picket's second gadget). The gadget key and the ability key take a slot's device out
 // (its detonator first while devices of it wait) and put it away; Fire throws or places it (held) or presses the
 // detonator; ADS lobs a throwable. All of it is pawn state, predicted like the weapon; what it makes in the world
 // (a throw, a placed gadget, a detonation) is an event the server turns into gadget table ops (net/room.ts).
@@ -51,7 +51,7 @@ export function stockSlots(data: GameData, s: PawnState, lo: ResolvedLoadout | n
 }
 
 /**
- * Skopós's gadgets are one pool for both shells (research/operators/skopos.md; the review, Phase 8 M12): only the shell
+ * Twain's gadgets are one pool for both shells (research/operators/skopos.md; the review, Phase 8 M12): only the shell
  * she's in holds them. `from`'s counts (left, waiting, the slot 2 refill) go to `to`, and `from` is left with none.
  */
 export function moveStock(from: PawnState, to: PawnState): void {
@@ -59,13 +59,13 @@ export function moveStock(from: PawnState, to: PawnState): void {
   [from.g1, from.g2, from.w1, from.w2, from.regenMade, from.regenTicks] = [0, 0, 0, 0, 0, 0];
 }
 
-/** No gadgets on a body (Skopós's idle shell: the pool is the other's). */
+/** No gadgets on a body (Twain's idle shell: the pool is the other's). */
 export function emptySlots(s: PawnState): void {
   [s.g1, s.g2, s.w1, s.w2, s.regenMade, s.regenTicks] = [0, 0, 0, 0, 0, 0];
 }
 
 /**
- * A slot 2 item that comes back over time (Phase 8 M10, Lesion's mines: data `regen`): one more every `regen.everyS`
+ * A slot 2 item that comes back over time (Phase 8 M10, Thistle's mines: data `regen`): one more every `regen.everyS`
  * until its `count` have been given this life (a mine picked up again is back in hand, not given anew).
  */
 export function regenSlot(data: GameData, pawn: Pawn): void {
@@ -101,7 +101,7 @@ export function putAway(s: PawnState, equip = true): void {
   s.actTicks = 0;
 }
 
-/** A body nobody drives this tick (Skopós's other shell, a body left on the cameras): a windup or a placing stops. */
+/** A body nobody drives this tick (Twain's other shell, a body left on the cameras): a windup or a placing stops. */
 export function parkHands(s: PawnState): void {
   if (s.gAct === GadgetAct.Throw || s.gAct === GadgetAct.Lob || s.gAct === GadgetAct.Place) {
     s.gAct = GadgetAct.Ready;
@@ -144,8 +144,8 @@ export function deviceLost(data: GameData, pawn: Pawn, gadget: string): boolean 
 }
 
 /**
- * The key of a slot pressed: its detonator or device out, swapped, or put away. With `maxOut` of it waiting (Thermite's
- * and Fuze's charges, one at a time: Ulo, Phase 8), only its detonator comes out until one is set off or lost.
+ * The key of a slot pressed: its detonator or device out, swapped, or put away. With `maxOut` of it waiting (Kiln's
+ * and Hail's charges, one at a time: Ulo, Phase 8), only its detonator comes out until one is set off or lost.
  */
 function toggle(s: PawnState, slot: 1 | 2, g: GadgetData) {
   if (handSlot(s.hand) === slot) {
@@ -191,7 +191,7 @@ export function placeSpotFor(q: PlaceQuery & { data: GameData }, pawn: Pawn): Pl
     return salvoSpot(q, laid, ex, g.use.on, g.use.reachM, eyePose(q.data.movement, q.data.hitboxes, s).pos, viewDir(s.yaw, s.pitch), s.yaw);
   }
   if (!g || !isPlaced(g)) return null;
-  // Mira's mirror goes at her head height standing or crouched, never prone (Phase 8 M7).
+  // Vista's mirror goes at her head height standing or crouched, never prone (Phase 8 M7).
   if (g.mirror && s.stance === Stance.Prone) return null;
   return placeSpot(q, g, eyePose(q.data.movement, q.data.hitboxes, s).pos, viewDir(s.yaw, s.pitch), s.yaw, s.stance === Stance.Crouch);
 }
@@ -218,7 +218,7 @@ export function stepHands(ctx: HandsContext, pawn: Pawn, input: InputCmd, presse
   }
   const one = slotGadget(ctx.data, lo, 1);
   if (pressed & Btn.Gadget && one) toggle(s, 1, one);
-  // Brava's Kludge drones (Phase 8 M8, a `drone` item) are thrown by the drone code, never taken in hand.
+  // Patch's Crossover drones (Phase 8 M8, a `drone` item) are thrown by the drone code, never taken in hand.
   const two = slotGadget(ctx.data, lo, 2);
   // Bailiff's shield set down (R3, Ulo's): the ability key switches its shock on and off.
   if (pressed & Btn.Ability && two?.setsDownShield && s.g2 === 0) ctx.events.push({ kind: "postToggle", pawnId: pawn.id, seq: input.seq });
@@ -235,7 +235,7 @@ export function stepHands(ctx: HandsContext, pawn: Pawn, input: InputCmd, presse
     putAway(s);
     return;
   }
-  // A swung item (Sledge's hammer) works on a rope too (research/operators/sledge.md §3.1).
+  // A swung item (Cleave's hammer) works on a rope too (research/operators/sledge.md §3.1).
   const walking = s.mode === PawnMode.Walk || (g.use.kind === "swing" && s.mode === PawnMode.Rappel);
   if (s.gAct === GadgetAct.Equip) {
     s.gTicks = Math.min(0xffff, s.gTicks + 1);
@@ -344,7 +344,7 @@ export function stepHands(ctx: HandsContext, pawn: Pawn, input: InputCmd, presse
     }
     return;
   }
-  // Held up (Pulse's sensor, Phase 8 M6): it works while it's out (gadgets/sensor.ts); Fire does nothing with it.
+  // Held up (Murmur's sensor, Phase 8 M6): it works while it's out (gadgets/sensor.ts); Fire does nothing with it.
   if (g.use.kind === "hold") return;
   if (g.use.kind === "throw") {
     if (s.gAct === GadgetAct.Ready) {

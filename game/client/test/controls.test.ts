@@ -12,7 +12,7 @@ describe("Controls.resetStance", () => {
       const c = make({ crouchMode: "hold", proneMode: "hold" });
       c.press(action);
       expect(c.sample(1).stance).toBe(stance);
-      c.resetStance(stance); // e.g. back from Skopós' shell camera, or a swap hand-over, while held
+      c.resetStance(stance); // e.g. back from Twain' shell camera, or a swap hand-over, while held
       c.release(action);
       expect(c.sample(2).stance).toBe(Stance.Stand);
     }
@@ -127,7 +127,7 @@ describe("weapon buttons (DECISIONS D-055)", () => {
     expect([5, 6, 7].map((n) => c.sample(n).buttons & Btn.Gadget)).toEqual([Btn.Gadget, 0, 0]);
   });
 
-  it("with one weapon only (Fuze's shield): 2 or the wheel sends nothing, and with a gadget out any weapon key brings the pistol back (the review, M12)", () => {
+  it("with one weapon only (Hail's shield): 2 or the wheel sends nothing, and with a gadget out any weapon key brings the pistol back (the review, M12)", () => {
     const c = make({});
     let state: { slot: number; equipping: boolean; gadget?: number; fixed: boolean } = { slot: 0, equipping: false, fixed: true };
     c.weaponState = () => state;
@@ -287,7 +287,7 @@ describe("on a drone or a camera (Phase 7)", () => {
     expect([cmd.stance, cmd.lean, cmd.buttons & Btn.Swap]).toEqual([Stance.Stand, 0, 0]);
   });
 
-  it("on Skopós's shell view (a feed whose stance keys are locked, D-155) a lean still switches the feed; crouch and aim don't reach the body", () => {
+  it("on Twain's shell view (a feed whose stance keys are locked, D-155) a lean still switches the feed; crouch and aim don't reach the body", () => {
     const c = make({});
     let shell = true;
     c.onDrone = () => shell;

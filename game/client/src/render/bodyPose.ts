@@ -55,7 +55,7 @@ export interface PoseIn {
   reload: ResolvedWeapon["reload"] | null;
   /** A gadget in its hands instead. */
   held: HeldItem | null;
-  /** Fuze's shield raised in front: his hands are on its grips (the hitboxes have them there). */
+  /** Hail's shield raised in front: his hands are on its grips (the hitboxes have them there). */
   shieldUp: boolean;
   gait: Gait;
   /** Seconds (any clock that runs on). */
@@ -313,7 +313,7 @@ export function poseBody(i: PoseIn): PoseOut {
     qGun.copy(qBody).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(-1.15, 0.5, 0.2, "YXZ")));
     origin = at(j.chest, 0.06, -0.2, 0.17).sub(gun.hold.grip.clone().applyQuaternion(qGun));
   } else if (i.shieldUp) {
-    // Behind Fuze's raised shield: in his right hand where the hitboxes have it (on the plate's grip, and out past its
+    // Behind Hail's raised shield: in his right hand where the hitboxes have it (on the plate's grip, and out past its
     // side as he aims: D-169).
     origin = rig.rest.handR.clone().sub(gun.hold.grip.clone().applyQuaternion(qGun));
   } else if (pistol) {

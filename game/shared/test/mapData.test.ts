@@ -107,7 +107,7 @@ describe("map metadata", () => {
     expect(fence.visible).toBe(false);
     const shot = raycastLevel(sim, [0, 1.2, 0], [0, 0, -1], 30);
     expect(shot).toBeNull(); // nothing but the open yard north of the spawn
-    const ctrl = sim.addPlayer("walker", "sledge");
+    const ctrl = sim.addPlayer("walker", "cleave");
     run(sim, ctrl, { forward: 1, yawDeg: 0 }, 3);
     const p = sim.pawns.get(ctrl.possessedPawnId)!.state;
     expect(p.z).toBeGreaterThan(-5 + 0.1 + 0.25); // stopped at the fence's south face
@@ -116,7 +116,7 @@ describe("map metadata", () => {
 
   it("a body that falls below the kill plane comes back to spawn 0 standing, unhurt", async () => {
     const sim = await Sim.create("map_test", withLevel(testMap()));
-    const ctrl = sim.addPlayer("faller", "sledge");
+    const ctrl = sim.addPlayer("faller", "cleave");
     const pawn = sim.pawns.get(ctrl.possessedPawnId)!;
     sim.teleport(pawn.id, 9.6, 0, 3, -90);
     let lowest = 0;
@@ -139,7 +139,7 @@ describe("map metadata", () => {
     /** Down a body falling off the east edge; `bleedSteps`: how many steps of bleeding it has left. */
     const fall = async (bleedSteps: number | null) => {
       const sim = await Sim.create("map_test", withLevel(testMap()));
-      const ctrl = sim.addPlayer("faller", "sledge");
+      const ctrl = sim.addPlayer("faller", "cleave");
       const pawn = sim.pawns.get(ctrl.possessedPawnId)!;
       sim.teleport(pawn.id, 11, 0, 3, -90); // just past the edge
       sim.step(new Map());

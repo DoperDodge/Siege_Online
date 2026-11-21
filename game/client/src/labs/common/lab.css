@@ -29,9 +29,9 @@ html, body { overflow: hidden; overscroll-behavior: none; touch-action: none; us
 .hurt-dir.on.show { opacity: 1; }
 /* Down but not out: darkened, blurred vision (core_mechanics.md §10.2), the bleed bar and the revive gauge. */
 .downed #view { filter: grayscale(0.7) brightness(0.55) blur(1.5px); }
-/* Fuze's shield suppressed (Phase 8 M11): the edges of the view blurred and darkened. */
+/* Hail's shield suppressed (Phase 8 M11): the edges of the view blurred and darkened. */
 .suppressed::before { content: ""; position: fixed; inset: 0; pointer-events: none; backdrop-filter: blur(3px); -webkit-mask-image: radial-gradient(ellipse at center, transparent 45%, black 85%); mask-image: radial-gradient(ellipse at center, transparent 45%, black 85%); box-shadow: inset 0 0 120px 30px rgba(0, 0, 0, 0.55); }
-/* A Gu needle in you (Phase 8 M10): a sickly green at the edges of the view, and how to pull it. */
+/* A Burr needle in you (Phase 8 M10): a sickly green at the edges of the view, and how to pull it. */
 .needled #view { filter: saturate(0.75) hue-rotate(-12deg); }
 .needled::after { content: ""; position: fixed; inset: 0; pointer-events: none; box-shadow: inset 0 0 140px 40px rgba(101, 163, 13, 0.45); }
 .needle-ui { position: absolute; top: 62%; left: 50%; transform: translateX(-50%); font-size: 13px; color: #bef264; text-shadow: 0 1px 2px #000; pointer-events: none; white-space: nowrap; }
@@ -97,17 +97,17 @@ html, body { overflow: hidden; overscroll-behavior: none; touch-action: none; us
 .dronecam .feeds span.view { font-style: italic; opacity: 0.7; }
 .swap-bar { position: absolute; top: 88px; left: 50%; width: 240px; height: 4px; transform: translateX(-50%); background: rgba(0, 0, 0, 0.5); border-radius: 2px; overflow: hidden; }
 .swap-bar div { height: 100%; background: var(--accent); }
-/* Skopós's shell view among her feeds (D-155): its row under the swap bar. */
+/* Twain's shell view among her feeds (D-155): its row under the swap bar. */
 .shellcam .feeds { top: 100px; }
-/* A Kludge drone's hack (Phase 8 M8). */
+/* A Crossover drone's hack (Phase 8 M8). */
 .hack-bar { position: absolute; top: 64px; left: 50%; width: 240px; height: 5px; transform: translateX(-50%); background: rgba(0, 0, 0, 0.5); border-radius: 2px; overflow: hidden; }
 .hack-bar div { height: 100%; width: 0; background: #84cc16; }
-/* Dokkaebi's upload (Phase 8 M9), green; the call ringing on the target's phone, red. */
-.jegeo-bar { position: absolute; top: 58%; left: 50%; width: 260px; transform: translateX(-50%); text-align: center; font-size: 12px; text-shadow: 0 1px 2px #000; pointer-events: none; }
-.jegeo-fill { margin-top: 4px; height: 5px; background: rgba(0, 0, 0, 0.5); border-radius: 2px; overflow: hidden; }
-.jegeo-fill div { height: 100%; width: 0; background: #22c55e; }
-.jegeo-bar.ringing .jegeo-title { color: #f87171; }
-.jegeo-bar.ringing .jegeo-fill div { background: #ef4444; }
+/* Relay's upload (Phase 8 M9), green; the call ringing on the target's phone, red. */
+.ringer-bar { position: absolute; top: 58%; left: 50%; width: 260px; transform: translateX(-50%); text-align: center; font-size: 12px; text-shadow: 0 1px 2px #000; pointer-events: none; }
+.ringer-fill { margin-top: 4px; height: 5px; background: rgba(0, 0, 0, 0.5); border-radius: 2px; overflow: hidden; }
+.ringer-fill div { height: 100%; width: 0; background: #22c55e; }
+.ringer-bar.ringing .ringer-title { color: #f87171; }
+.ringer-bar.ringing .ringer-fill div { background: #ef4444; }
 /* Intel (Phase 7): your team's pings (yellow; danger orange), enemies spotted by a scan (red), the comm wheel, the scan's gauge. */
 .intel-marks { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
 .intel-mark { position: absolute; left: 0; top: 0; --c: #facc15; }
@@ -125,10 +125,10 @@ html, body { overflow: hidden; overscroll-behavior: none; touch-action: none; us
 .scan-gauge div { height: 100%; width: 0; background: #fca5a5; }
 .scan-gauge.full div { background: #ef4444; }
 .killfeed div.callout { color: #fde047; }
-/* A Bulletproof Camera's thermal view (bodies glow white: PawnView.heat), a jammed drone's static, gadgets left. */
+/* A Armoured Camera's thermal view (bodies glow white: PawnView.heat), a jammed drone's static, gadgets left. */
 .thermal #view canvas { filter: grayscale(1) sepia(1) hue-rotate(55deg) saturate(1.4) brightness(1.3) contrast(1.15); }
 .dronecam.jammed { background: repeating-linear-gradient(0deg, rgba(200, 210, 220, 0.14) 0 2px, rgba(0, 0, 0, 0.2) 2px 4px); animation: jam 0.12s steps(2) infinite; }
-/* Near a Signal Disruptor (Phase 8 M6): a lighter static as a warning. */
+/* Near a Damper (Phase 8 M6): a lighter static as a warning. */
 .dronecam.warned:not(.jammed) { background: repeating-linear-gradient(0deg, rgba(200, 210, 220, 0.06) 0 2px, rgba(0, 0, 0, 0.08) 2px 4px); animation: jam 0.25s steps(2) infinite; }
 /* A stun's flash (Phase 8 M3), white fading over its time; an EMP on you: static over your sights while aiming. */
 .stun-white { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 5; }
@@ -146,29 +146,29 @@ html, body { overflow: hidden; overscroll-behavior: none; touch-action: none; us
 
 /* Murmur's Blood Oxygen Sensor up (our own design, D-183): the view tinted blue; each person it reads (through walls,
    in its forward fan) a glowing blue dot at their chest, where they were when its wave reached them, with soft rings rippling out from it,
-   bigger the nearer, fading until the next wave; its little screen (the page places .pulse-glass over it:
+   bigger the nearer, fading until the next wave; its little screen (the page places .murmur-glass over it:
    Viewmodel.sensorScreen) a blood-oxygen trace and how many it reads. */
-.pulse { position: fixed; inset: 0; pointer-events: none; z-index: 4; }
-.pulse-tint { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 45%, rgba(40, 110, 255, 0.08) 35%, rgba(18, 56, 160, 0.3) 100%); }
-.pulse-hearts { position: absolute; inset: 0; }
-.pulse-hearts i { position: absolute; width: 0; height: 0; }
-.pulse-hearts s { position: absolute; left: calc(var(--ring) / -2); top: calc(var(--ring) / -2); width: var(--ring); height: var(--ring); border-radius: 50%; border: 2px solid rgba(130, 195, 255, 0.95); box-shadow: 0 0 12px rgba(60, 150, 255, 0.7), inset 0 0 8px rgba(60, 150, 255, 0.4); animation: pulse-ripple 1.3s ease-out infinite; }
-.pulse-hearts s:nth-child(2) { animation-delay: 0.43s; }
-.pulse-hearts s:nth-child(3) { animation-delay: 0.86s; }
-.pulse-hearts u { position: absolute; left: calc(var(--dot) / -2); top: calc(var(--dot) / -2); width: var(--dot); height: var(--dot); border-radius: 50%; background: radial-gradient(circle, #ffffff 0%, #79bcff 45%, rgba(60, 140, 255, 0) 75%); box-shadow: 0 0 calc(var(--dot) * 0.9) rgba(70, 150, 255, 0.9); }
-@keyframes pulse-ripple { from { transform: scale(0.2); opacity: 1; } to { transform: scale(1); opacity: 0; } }
-.pulse-glass { position: absolute; border-radius: 2px; overflow: hidden; background: linear-gradient(#0a2140, #051226); box-shadow: inset 0 0 6px rgba(80, 160, 255, 0.35); }
-.pulse-trace { position: absolute; left: 5%; top: 8%; width: 90%; height: 58%; }
-.pulse-trace polyline { fill: none; stroke: #79bcff; stroke-width: 2.2; stroke-linejoin: round; stroke-dasharray: 150; animation: pulse-trace 1.4s linear infinite; }
-@keyframes pulse-trace { from { stroke-dashoffset: 150; } to { stroke-dashoffset: 0; } }
-.pulse-count { position: absolute; left: 0; right: 0; bottom: 6%; text-align: center; font: 700 1em var(--mono); letter-spacing: 0.06em; color: #d6e9ff; }
-.pulse-state { position: absolute; left: 0; right: 0; top: 30%; text-align: center; font: 700 1em var(--mono); color: #d6e9ff; }
-.pulse.frozen .pulse-tint { background: rgba(130, 140, 160, 0.16); }
-.pulse.frozen .pulse-trace, .pulse.frozen .pulse-count { display: none; }
-.pulse.frozen .pulse-hearts { filter: grayscale(1); }
-.pulse.frozen .pulse-hearts s { animation: none; opacity: 0.6; transform: scale(0.7); }
+.murmur { position: fixed; inset: 0; pointer-events: none; z-index: 4; }
+.murmur-tint { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 45%, rgba(40, 110, 255, 0.08) 35%, rgba(18, 56, 160, 0.3) 100%); }
+.murmur-hearts { position: absolute; inset: 0; }
+.murmur-hearts i { position: absolute; width: 0; height: 0; }
+.murmur-hearts s { position: absolute; left: calc(var(--ring) / -2); top: calc(var(--ring) / -2); width: var(--ring); height: var(--ring); border-radius: 50%; border: 2px solid rgba(130, 195, 255, 0.95); box-shadow: 0 0 12px rgba(60, 150, 255, 0.7), inset 0 0 8px rgba(60, 150, 255, 0.4); animation: murmur-ripple 1.3s ease-out infinite; }
+.murmur-hearts s:nth-child(2) { animation-delay: 0.43s; }
+.murmur-hearts s:nth-child(3) { animation-delay: 0.86s; }
+.murmur-hearts u { position: absolute; left: calc(var(--dot) / -2); top: calc(var(--dot) / -2); width: var(--dot); height: var(--dot); border-radius: 50%; background: radial-gradient(circle, #ffffff 0%, #79bcff 45%, rgba(60, 140, 255, 0) 75%); box-shadow: 0 0 calc(var(--dot) * 0.9) rgba(70, 150, 255, 0.9); }
+@keyframes murmur-ripple { from { transform: scale(0.2); opacity: 1; } to { transform: scale(1); opacity: 0; } }
+.murmur-glass { position: absolute; border-radius: 2px; overflow: hidden; background: linear-gradient(#0a2140, #051226); box-shadow: inset 0 0 6px rgba(80, 160, 255, 0.35); }
+.murmur-trace { position: absolute; left: 5%; top: 8%; width: 90%; height: 58%; }
+.murmur-trace polyline { fill: none; stroke: #79bcff; stroke-width: 2.2; stroke-linejoin: round; stroke-dasharray: 150; animation: murmur-trace 1.4s linear infinite; }
+@keyframes murmur-trace { from { stroke-dashoffset: 150; } to { stroke-dashoffset: 0; } }
+.murmur-count { position: absolute; left: 0; right: 0; bottom: 6%; text-align: center; font: 700 1em var(--mono); letter-spacing: 0.06em; color: #d6e9ff; }
+.murmur-state { position: absolute; left: 0; right: 0; top: 30%; text-align: center; font: 700 1em var(--mono); color: #d6e9ff; }
+.murmur.frozen .murmur-tint { background: rgba(130, 140, 160, 0.16); }
+.murmur.frozen .murmur-trace, .murmur.frozen .murmur-count { display: none; }
+.murmur.frozen .murmur-hearts { filter: grayscale(1); }
+.murmur.frozen .murmur-hearts s { animation: none; opacity: 0.6; transform: scale(0.7); }
 .sensor-up .crosshair, .sensor-up .spread, .sensor-up .reticle { display: none; }
-/* Dokkaebi's tablet (Ulo's request after Phase 10): the identified defenders and the dead ones' phones, one picked. */
+/* Relay's tablet (Ulo's request after Phase 10): the identified defenders and the dead ones' phones, one picked. */
 .tablet { position: fixed; left: 50%; bottom: 12vh; width: 330px; transform: translateX(-50%); pointer-events: none; z-index: 4; padding: 10px 12px; border-radius: 10px; background: rgba(8, 24, 44, 0.84); border: 1px solid rgba(96, 165, 250, 0.55); box-shadow: 0 0 18px rgba(59, 130, 246, 0.35); font: 600 12px var(--mono); color: #dbeafe; }
 .tablet-title { font-size: 11px; letter-spacing: 0.08em; color: #93c5fd; margin-bottom: 6px; }
 .tablet-list div { display: flex; justify-content: space-between; gap: 10px; padding: 5px 8px; border-radius: 6px; margin: 2px 0; }

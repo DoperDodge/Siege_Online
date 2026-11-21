@@ -156,7 +156,7 @@ try {
   await page.evaluate(() => document.querySelector(".gear").click()); // the settings button: opens or closes the pause menu
   await page.evaluate(() =>
     window.__lab.pickLoadout({
-      operator: "sledge",
+      operator: "cleave",
       primary: { weapon: "l85a2", sight: "magnified", barrel: null, grip: null, underbarrel: null },
       secondary: { weapon: "p226_mk_25", sight: null, barrel: null, grip: null, underbarrel: null },
       gadgets: ["frag"],

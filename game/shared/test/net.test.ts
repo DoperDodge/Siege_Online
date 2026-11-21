@@ -38,11 +38,11 @@ describe("byte codec", () => {
   it("round-trips every type, including long varints and non-ASCII strings", () => {
     const w = new ByteWriter(4); // forces growth
     w.u8(255).i8(-128).u16(65535).i16(-32768).u32(4294967295).i32(-2147483648).f32(1.5).f64(Math.PI);
-    w.varu(0).varu(127).varu(128).varu(2 ** 40).str("Ulo ✓ 🎮 Skopós");
+    w.varu(0).varu(127).varu(128).varu(2 ** 40).str("Ulo ✓ 🎮 Twain");
     const r = new ByteReader(w.finish());
     expect([r.u8(), r.i8(), r.u16(), r.i16(), r.u32(), r.i32(), r.f32(), r.f64()]).toEqual([255, -128, 65535, -32768, 4294967295, -2147483648, 1.5, Math.PI]);
     expect([r.varu(), r.varu(), r.varu(), r.varu()]).toEqual([0, 127, 128, 2 ** 40]);
-    expect(r.str()).toBe("Ulo ✓ 🎮 Skopós");
+    expect(r.str()).toBe("Ulo ✓ 🎮 Twain");
     expect(r.remaining).toBe(0);
   });
 
@@ -139,12 +139,12 @@ describe("PawnState codec", () => {
 describe("Sim hooks for netcode", () => {
   it("a client can mirror the server's ids, and ids can't collide", async () => {
     const sim = await Sim.create("movement_lab");
-    const c = sim.addPlayer("remote", "skopos", 0, { controller: 40, pawns: [41, 42] });
+    const c = sim.addPlayer("remote", "twain", 0, { controller: 40, pawns: [41, 42] });
     expect(c.id).toBe(40);
     expect(c.pawnIds).toEqual([41, 42]);
-    expect(sim.addPlayer("next", "sledge").id).toBeGreaterThan(42);
-    expect(() => sim.addPlayer("dup", "sledge", 0, { controller: 50, pawns: [41] })).toThrow(/in use/);
-    expect(() => sim.addPlayer("bad", "sledge", 0, { controller: 60, pawns: [61, 62] })).toThrow(/pawn/);
+    expect(sim.addPlayer("next", "cleave").id).toBeGreaterThan(42);
+    expect(() => sim.addPlayer("dup", "cleave", 0, { controller: 50, pawns: [41] })).toThrow(/in use/);
+    expect(() => sim.addPlayer("bad", "cleave", 0, { controller: 60, pawns: [61, 62] })).toThrow(/pawn/);
   });
 
   it("restoring a state mid-run and replaying the same inputs reproduces the run bit-for-bit", async () => {
@@ -171,7 +171,7 @@ describe("Sim hooks for netcode", () => {
       a.sim.step(new Map([[a.ctrl.id, cmds[t]]]));
     }
     const b = await Sim.create("movement_lab");
-    const bc = b.addPlayer("replay", "sledge", 0, { controller: a.ctrl.id, pawns: a.ctrl.pawnIds });
+    const bc = b.addPlayer("replay", "cleave", 0, { controller: a.ctrl.id, pawns: a.ctrl.pawnIds });
     b.setPawnState(bc.possessedPawnId, saved!.state);
     for (let t = saved!.tick; t < cmds.length; t++) b.step(new Map([[bc.id, cmds[t]]]));
     const pb = b.pawns.get(bc.possessedPawnId)!;
@@ -184,11 +184,11 @@ describe("Sim hooks for netcode", () => {
     const { sim } = await labWith();
     const colliders = sim.world.colliders.len();
     const proxyState = { ...initialPawnState(3, 0.02, 8, 0, 110), stance: Stance.Crouch, stanceFrom: Stance.Crouch };
-    const proxy = sim.addProxy(900, "mute", proxyState);
+    const proxy = sim.addProxy(900, "lull", proxyState);
     for (let i = 0; i < 64; i++) sim.step(new Map());
     expect(proxy.state).toEqual(proxyState); // gravity never touched it
     expect(proxy.collider.translation().y).toBeGreaterThan(0.5); // posed as a crouched body
-    const joined = sim.addPlayer("guest", "skopos");
+    const joined = sim.addPlayer("guest", "twain");
     expect(sim.world.colliders.len()).toBe(colliders + 3);
     sim.removePlayer(joined.id);
     sim.removePawn(900);

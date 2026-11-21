@@ -3,9 +3,9 @@
 // away), throws are stepped to where they rest, stick or go off, fuses and outdoor signals run out on the server's
 // ticks, and steel going up breaks what's on its wall. M3: smoke stays as a cloud for its time, EMPs disable (DSEG)
 // until a tick, alarms and the metal detector sound while someone's in reach, barbed wire bites who moves in it, and
-// the level's ingredients go through their stages. M5: a detonator sets Thermite's charge burning (it goes off after
-// its burn) and Fuze's drilling (its grenades come out on the far side one after another, then it falls); Fuze's are
-// one at a time. M7: a Black Mirror burns its window out of its wall as it's placed and gets its canister; the
+// the level's ingredients go through their stages. M5: a detonator sets Kiln's charge burning (it goes off after
+// its burn) and Hail's drilling (its grenades come out on the far side one after another, then it falls); Hail's are
+// one at a time. M7: a Blind Pane burns its window out of its wall as it's placed and gets its canister; the
 // canister destroyed, the glass is ejected 4 s later; it falls with its wall. Every change is a table op the room sends
 // with the next snapshot.
 import { isIdleShell } from "../combat/apply.js";
@@ -13,7 +13,7 @@ import { DEG, forwardXZ, type Vec3 } from "../core/math.js";
 import type { GadgetData } from "../data/schemas.js";
 import { explosiveOps } from "../destruction/explosives.js";
 import type { IndexedOp } from "../destruction/panels.js";
-import { indoors } from "../intel/bpCamera.js";
+import { indoors } from "../intel/armouredCamera.js";
 import { raycastLevel } from "../level/raycast.js";
 import { droneHitboxes } from "../player/drone.js";
 import { poseHitboxes, type Hitbox } from "../player/hitboxes.js";
@@ -32,7 +32,7 @@ import { empReach } from "./electronics.js";
 import { gadgetOnRay } from "./hits.js";
 import { pointJammed } from "./jammers.js";
 import { canisterSpot, mirrorHeld, mirrorOf, windowOps } from "./mirror.js";
-import { isIngredient, KIND_BP_CAMERA, KIND_SHELL_SHIELD, kindId, kindOf } from "./kinds.js";
+import { isIngredient, KIND_ARMOURED_CAMERA, KIND_FRAME_BARRIER, kindId, kindOf } from "./kinds.js";
 import { arcData, liveSurfaces, onLiveSurface, packLive, packUnder } from "./arcs.js";
 import { wireLength, type SnareData } from "./snare.js";
 import { prodData, prodTarget } from "../player/prod.js";
@@ -88,7 +88,7 @@ function segSeg(a: Vec3, b: Vec3, c: Vec3, d: Vec3): { dist: number; at: Vec3 } 
 export type GoOff = (g: Gadget, at: Vec3, end: FlightEnd | null) => void;
 
 /**
- * What a set-off cluster charge drills through before its grenades come out (Phase 8 M5): steel where it sits (a
+ * What a set-off hailstone drill drills through before its grenades come out (Phase 8 M5): steel where it sits (a
  * reinforced section or a reinforced hatch), a solid gadget behind it (a deployable shield, `shield`), or neither (a
  * soft surface: at once).
  */
@@ -124,15 +124,15 @@ export class GadgetServer {
   hurt: (g: Gadget, pawn: Pawn, amount: number) => boolean = () => true;
   /** The room: an alarm or a metal detector started sounding (`by`, the body in reach) or went quiet (null). */
   onAlarm: (g: Gadget, by: Pawn | null) => void = () => {};
-  /** The room: a Gu mine needled this body (Phase 8 M10; its `needled` changed: its owner needs a correction). */
+  /** The room: a Burr mine needled this body (Phase 8 M10; its `needled` changed: its owner needs a correction). */
   onNeedle: (pawn: Pawn, g: Gadget) => void = () => {};
-  /** Gu needles in bodies (Phase 8 M10; by pawn id): the tick of the next bite, and the mine (for its owner and numbers). */
+  /** Burr needles in bodies (Phase 8 M10; by pawn id): the tick of the next bite, and the mine (for its owner and numbers). */
   private readonly needles = new Map<number, { next: number; g: Gadget }>();
   /** The room: an ingredient set off reached a stage (its effects: smoke and concussion, a jet, a blast). */
   onIngredient: (g: Gadget, stage: IngredientStage) => void = () => {};
   /** Whether a match is in its prep phase (an alarm can't go outdoors then). */
   inPrep: () => boolean = () => false;
-  /** The room: panel ops made here (a cluster charge's hole, Phase 8 M5), applied with this tick's. */
+  /** The room: panel ops made here (a hailstone drill's hole, Phase 8 M5), applied with this tick's. */
   cut: (ops: IndexedOp[]) => void = () => {};
   /**
    * The room: a Snare Latch (`g`) shut on this body (R3), or came off it (pulled, down, broken: `g` null): its
@@ -153,11 +153,11 @@ export class GadgetServer {
   private readonly packJams = new Map<number, number>();
   /** Devices on live surfaces (Shunt's packs, R3), by entry id: the tick each was first found there. */
   private readonly burning = new Map<number, number>();
-  /** How many grenades each set-off cluster charge has let out (by entry id; the server's alone). */
+  /** How many grenades each set-off hailstone drill has let out (by entry id; the server's alone). */
   private readonly released = new Map<number, number>();
-  /** Each Black Mirror's canister's entry id: its mirror's (the server's alone; M7). */
+  /** Each Blind Pane's canister's entry id: its mirror's (the server's alone; M7). */
   private readonly canisters = new Map<number, number>();
-  /** Entries a Kludge's hack has fizzling out (M8): the tick each is destroyed. */
+  /** Entries a Crossover's hack has fizzling out (M8): the tick each is destroyed. */
   private readonly fizzles = new Map<number, number>();
 
   constructor(
@@ -187,18 +187,18 @@ export class GadgetServer {
         return;
       }
       const fuse = g.use.kind === "place" && g.use.fuseS !== undefined ? sim.tick + ticks(g.use.fuseS) : 0;
-      // A Bulletproof Camera placed outdoors loses its signal after a while (research/intel.md §4).
-      const out = kind === KIND_BP_CAMERA && !indoors(sim.level.def, ...e.pos);
+      // A Armoured Camera placed outdoors loses its signal after a while (research/intel.md §4).
+      const out = kind === KIND_ARMOURED_CAMERA && !indoors(sim.level.def, ...e.pos);
       const flags = (e.onFloor ? GFlag.OnFloor : 0) | (e.flat ? GFlag.Flat : 0);
       // A tripwire arms its time after it's placed (the Claymore: `readyAt`).
       const armed = g.tripwire ? sim.tick + ticksOrZero(g.tripwire.armS) : 0;
-      const put = sim.gadgets.add({ ...base, pos: e.pos, vel: [0, 0, 0], flags, panel: e.panel, fuseEnd: fuse, signalEnd: out ? sim.tick + ticks(sim.data.intel.bulletproofCamera.outdoorSignalS) : 0, readyAt: armed });
+      const put = sim.gadgets.add({ ...base, pos: e.pos, vel: [0, 0, 0], flags, panel: e.panel, fuseEnd: fuse, signalEnd: out ? sim.tick + ticks(sim.data.intel.armouredCamera.outdoorSignalS) : 0, readyAt: armed });
       if (g.mirror) this.mirrorIn(put, g, g.mirror.canister);
       return;
     }
     if (e.kind === "detonate") {
       const pawn = sim.pawns.get(e.pawnId);
-      // Its owner's oldest working one of that kind out (the controller's: Skopós's shells share theirs), not one inside
+      // Its owner's oldest working one of that kind out (the controller's: Twain's shells share theirs), not one inside
       // an enemy jammer (Phase 8 M6), nor one on a surface Shunt's pack makes live (R3).
       const ok = (x: Gadget) => !pointJammed(sim, x.team, x.pos) && !onLiveSurface(sim, x);
       const driver = sim.data.gadgets.get(e.gadget);
@@ -237,8 +237,8 @@ export class GadgetServer {
   }
 
   /**
-   * Its owner's detonator set a remote device off: Thermite's charge starts burning (it goes off `burnS` later,
-   * gadgets/DESIGN.md §7), Fuze's starts drilling; the rest go off now.
+   * Its owner's detonator set a remote device off: Kiln's charge starts burning (it goes off `burnS` later,
+   * gadgets/DESIGN.md §7), Hail's starts drilling; the rest go off now.
    */
   detonated(g: Gadget): void {
     const d = this.dataOf(g);
@@ -257,7 +257,7 @@ export class GadgetServer {
   }
 
   /**
-   * A set-off cluster charge's tick (Phase 8 M5): drilling until `fuseEnd`; then its tube is through (its hole cut, a
+   * A set-off hailstone drill's tick (Phase 8 M5): drilling until `fuseEnd`; then its tube is through (its hole cut, a
    * shield's glass shattered) and one grenade comes out every `everyS` from the tube's end, across the fan; after the
    * last it falls (gone).
    */
@@ -275,7 +275,7 @@ export class GadgetServer {
   }
 
   /**
-   * A Black Mirror just placed (M7): its window burnt out of every layer of its wall (applied with this tick's ops), and
+   * A Blind Pane just placed (M7): its window burnt out of every layer of its wall (applied with this tick's ops), and
    * its canister put on its placer's side under the glass.
    */
   private mirrorIn(g: Gadget, d: GadgetData, canister: string) {
@@ -288,7 +288,7 @@ export class GadgetServer {
   }
 
   /**
-   * A device a Kludge's hack can't control (a Nitro Cell, M8): disabled at once (its detonator skips it) and destroyed
+   * A device a Crossover's hack can't control (a Remote Charge, M8): disabled at once (its detonator skips it) and destroyed
    * `after` ticks later, without its blast.
    */
   fizzle(g: Gadget, after: number): void {
@@ -297,7 +297,7 @@ export class GadgetServer {
     this.fizzles.set(g.id, end);
   }
 
-  /** A Black Mirror goes (its wall gave way round it): its canister with it. */
+  /** A Blind Pane goes (its wall gave way round it): its canister with it. */
   private mirrorOut(g: Gadget) {
     for (const [c, m] of this.canisters)
       if (m === g.id) {
@@ -308,8 +308,8 @@ export class GadgetServer {
   }
 
   /**
-   * Panel ops changed a panel (the room's, after it applied them; M7): a Black Mirror in it whose wall no longer holds
-   * it falls (data/gadgets/black_mirror.json `mirror.lossMax`).
+   * Panel ops changed a panel (the room's, after it applied them; M7): a Blind Pane in it whose wall no longer holds
+   * it falls (data/gadgets/blind_pane.json `mirror.lossMax`).
    */
   panelChanged(panel: number): void {
     for (const g of [...this.sim.gadgets.list]) {
@@ -319,7 +319,7 @@ export class GadgetServer {
     }
   }
 
-  /** A cluster charge's tube gets through: its hole in the panel it's on (data/destruction.json), or a shield's glass shattered. */
+  /** A hailstone drill's tube gets through: its hole in the panel it's on (data/destruction.json), or a shield's glass shattered. */
   private breakThrough(g: Gadget, c: ClusterData) {
     const ex = this.sim.data.destruction.explosives[c.cut];
     if (g.panel >= 0 && ex) {
@@ -334,7 +334,7 @@ export class GadgetServer {
     if (shield) this.sim.gadgets.update(shield.id, { flags: shield.flags | GFlag.Hit });
   }
 
-  /** Grenade `i` of a set-off cluster charge out of its tube's end, thrown across the fan with its own fuse. */
+  /** Grenade `i` of a set-off hailstone drill out of its tube's end, thrown across the fan with its own fuse. */
   private release(g: Gadget, c: ClusterData, i: number) {
     const k = this.sim.data.gadgets.get(c.grenade);
     const tip = tubeTip(this.sim.data, g);
@@ -399,7 +399,7 @@ export class GadgetServer {
         this.cluster(now, d.cluster);
         continue;
       }
-      // A Black Mirror whose canister went: its glass is ejected at the end of its time (an open hole, its frame left).
+      // A Blind Pane whose canister went: its glass is ejected at the end of its time (an open hole, its frame left).
       if (d.mirror) {
         if (now.flags & GFlag.Active && tick >= now.fuseEnd) sim.gadgets.update(now.id, { flags: (now.flags & ~GFlag.Active) | GFlag.Broken, fuseEnd: 0 });
         continue;
@@ -412,9 +412,9 @@ export class GadgetServer {
         const by = d.tripwire && !(now.flags & GFlag.Active) && !isFlying(now) && tick >= now.readyAt ? this.crossing(now, d.tripwire, true, wireLength(sim, now, d), (p) => !p.state.snared) : null;
         if (by) this.snap(now, by, d.snare);
       } else if (d.tripwire && !off && !isFlying(now) && tick >= now.readyAt && this.tripped(now, d.tripwire)) this.trigger(now, null);
-      else if (d.gu && !isFlying(now)) {
-        // A Gu mine at rest (Phase 8 M10): an enemy body within reach (a downed one too) sets it off.
-        const r = d.gu.radiusM;
+      else if (d.burr && !isFlying(now)) {
+        // A Burr mine at rest (Phase 8 M10): an enemy body within reach (a downed one too) sets it off.
+        const r = d.burr.radiusM;
         if (this.bodyNear(now, (p) => pawnDistance(sim, p, now!.pos) <= r, true)) this.sting(now);
       } else if (d.alarm && !isFlying(now)) {
         const r = d.alarm.radiusM;
@@ -443,7 +443,7 @@ export class GadgetServer {
    * Whether an enemy body crosses one of a tripwire's lasers (the Claymore, research/gadgets.md §3.3): straight out
    * from it at its height, along its facing turned by each angle, up to `lengthM` or what stops sight first (they pass
    * holes and gaps). A body crosses one where its own capsule (what it walks with, feet to head) does: a thin hitbox
-   * would let a standing body straddle a laser between its feet. Not its own team, the dead, or Skopós's idle shell
+   * would let a standing body straddle a laser between its feet. Not its own team, the dead, or Twain's idle shell
    * (it fires when she wakes that shell).
    */
   private tripped(g: Gadget, t: Tripwire): boolean {
@@ -698,7 +698,7 @@ export class GadgetServer {
   }
 
   /**
-   * An EMP of `team`'s (an Impact EMP grenade, a Bulletproof Camera's dart; gadgets/electronics.ts): the other side's
+   * An EMP of `team`'s (an Impact EMP grenade, a Armoured Camera's dart; gadgets/electronics.ts): the other side's
    * electronics within `radiusM` disabled for `seconds` (it refreshes), its bodies and drones jammed as long. What it
    * jammed (their owners need a correction) and the default cameras it reached, for the room.
    */
@@ -710,7 +710,7 @@ export class GadgetServer {
     return { pawns: r.pawns, cams: r.cams };
   }
 
-  /** A living body (Skopós's idle shell left out) that `near` accepts: of the other side than `g`'s (`enemies`), or anyone's. */
+  /** A living body (Twain's idle shell left out) that `near` accepts: of the other side than `g`'s (`enemies`), or anyone's. */
   private bodyNear(g: Gadget, near: (p: Pawn) => boolean, enemies: boolean): Pawn | null {
     for (const p of this.sim.pawns.values()) {
       if (p.kind !== PawnKind.Body || (enemies && p.team === g.team) || p.state.mode === PawnMode.Dead || p.state.mode === PawnMode.Held) continue;
@@ -728,12 +728,12 @@ export class GadgetServer {
   }
 
   /**
-   * A Gu mine set off (Phase 8 M10; lesion.md): an enemy body within its reach, a knife or a hammer on it. It's gone, and
-   * every enemy body within its reach that isn't down (nor Skopós's idle shell) is needled: its hit, then a bite every
+   * A Burr mine set off (Phase 8 M10; thistle.md): an enemy body within its reach, a knife or a hammer on it. It's gone, and
+   * every enemy body within its reach that isn't down (nor Twain's idle shell) is needled: its hit, then a bite every
    * `everyS`; one already needled takes the hit and a bite at once, and its timer starts again (Y8S3).
    */
   sting(g: Gadget): void {
-    const k = this.dataOf(g)?.gu;
+    const k = this.dataOf(g)?.burr;
     if (!k) return;
     this.sim.gadgets.remove(g.id);
     for (const p of [...this.sim.pawns.values()]) {
@@ -748,12 +748,12 @@ export class GadgetServer {
     }
   }
 
-  /** The needled bitten (Phase 8 M10): a Gu's `damage` every `everyS` until the needle's pulled or the body is down or dead. */
+  /** The needled bitten (Phase 8 M10): a Burr's `damage` every `everyS` until the needle's pulled or the body is down or dead. */
   private bites() {
     const tick = this.sim.tick;
     for (const [id, n] of this.needles) {
       const p = this.sim.pawns.get(id);
-      const k = this.dataOf(n.g)?.gu;
+      const k = this.dataOf(n.g)?.burr;
       if (!p || !k || !p.state.needled || p.state.mode === PawnMode.Dead || isDowned(p.state)) {
         this.needles.delete(id);
         continue;
@@ -852,7 +852,7 @@ export class GadgetServer {
   /**
    * Steel went up on a panel (its `section`, or −1 for none named): what's on it breaks (a camera's glass) or is
    * destroyed, and what stands on the floor at a wall's foot along that section is crushed by its bar (Phase 8 M6;
-   * research CSV `action.reinforce`: a jammer, a Gu mine; ours: within FOOT_OUT_M of either face, its box's centre
+   * research CSV `action.reinforce`: a jammer, a Burr mine; ours: within FOOT_OUT_M of either face, its box's centre
    * under FOOT_UP_M off the wall's bottom).
    */
   reinforced(panel: number, section = -1): void {
@@ -872,26 +872,26 @@ export class GadgetServer {
       if (g.panel === panel) {
         // On that section of the wall only (the CSV's "on that wall section"; the review, M12); a hatch is one piece.
         if (foot && !across(g).inSection) continue;
-        if (g.kind === KIND_BP_CAMERA) this.sim.gadgets.update(g.id, { flags: g.flags | GFlag.Broken });
+        if (g.kind === KIND_ARMOURED_CAMERA) this.sim.gadgets.update(g.id, { flags: g.flags | GFlag.Broken });
         else this.destroy(g);
         continue;
       }
-      // (Skopós's idle shell's barrier isn't crushed: the shell doesn't stop a teammate reinforcing beside it, M10.)
-      if (!foot || isIngredient(g.kind) || isFlying(g) || g.panel >= 0 || g.kind === KIND_SHELL_SHIELD) continue;
+      // (Twain's idle shell's barrier isn't crushed: the shell doesn't stop a teammate reinforcing beside it, M10.)
+      if (!foot || isIngredient(g.kind) || isFlying(g) || g.panel >= 0 || g.kind === KIND_FRAME_BARRIER) continue;
       // Nor a grenade resting there, its fuse running, or its cloud (as a blast spares a cloud): devices are crushed
-      // (a jammer, an alarm, a camera, a Gu mine, a Nitro Cell), not a frag or a smoke (the review, M12).
+      // (a jammer, an alarm, a camera, a Burr mine, a Remote Charge), not a frag or a smoke (the review, M12).
       const d = this.dataOf(g);
-      if (d?.use.kind === "throw" && !d.remote && !d.gu) continue;
+      if (d?.use.kind === "throw" && !d.remote && !d.burr) continue;
       const at = across(g);
       if (!at.inSection || at.up > FOOT_UP_M || at.out > FOOT_OUT_M) continue;
-      if (g.kind === KIND_BP_CAMERA) this.sim.gadgets.update(g.id, { flags: g.flags | GFlag.Broken });
+      if (g.kind === KIND_ARMOURED_CAMERA) this.sim.gadgets.update(g.id, { flags: g.flags | GFlag.Broken });
       else this.destroy(g);
     }
   }
 
   /**
    * An entry destroyed (not set off): gone, and the owner of a remote device still waiting for its detonator told (one
-   * already set off, burning or drilling, isn't waiting). A cluster charge destroyed once set off has let one grenade
+   * already set off, burning or drilling, isn't waiting). A hailstone drill destroyed once set off has let one grenade
    * out first, however quick (Y6S3 DN).
    */
   destroy(g: Gadget): void {
@@ -904,7 +904,7 @@ export class GadgetServer {
     }
     this.sim.gadgets.remove(g.id);
     if (d?.remote && !(g.flags & GFlag.Active)) this.onLost(g, d);
-    // A Black Mirror's canister (M7): its glass is ejected `ejectS` later (unless it's going already).
+    // A Blind Pane's canister (M7): its glass is ejected `ejectS` later (unless it's going already).
     const mirror = this.canisters.get(g.id);
     if (mirror === undefined) return;
     this.canisters.delete(g.id);
@@ -914,19 +914,19 @@ export class GadgetServer {
   }
 
   /**
-   * An entry in a blast's destruction range (or a fire): a Bulletproof Camera's glass breaks (it keeps its place in the
+   * An entry in a blast's destruction range (or a fire): a Armoured Camera's glass breaks (it keeps its place in the
    * list), an ingredient is set off, the rest are destroyed.
    */
   blastHit(g: Gadget): void {
-    // A Black Mirror's glass is blast-proof (M7): only its wall giving way takes it.
+    // A Blind Pane's glass is blast-proof (M7): only its wall giving way takes it.
     if (mirrorOf(this.sim.data, g)) return;
     if (isIngredient(g.kind)) this.ignite(g);
-    // A Bulletproof Camera's glass breaks; so does an idle shell's barrier (M10), its entry left as the shell's camera.
-    else if (g.kind === KIND_BP_CAMERA || g.kind === KIND_SHELL_SHIELD) this.sim.gadgets.update(g.id, { flags: g.flags | GFlag.Broken });
+    // A Armoured Camera's glass breaks; so does an idle shell's barrier (M10), its entry left as the shell's camera.
+    else if (g.kind === KIND_ARMOURED_CAMERA || g.kind === KIND_FRAME_BARRIER) this.sim.gadgets.update(g.id, { flags: g.flags | GFlag.Broken });
     else this.destroy(g);
   }
 
-  /** Break these Bulletproof Cameras' glass (shot from the side or the back, knifed). */
+  /** Break these Armoured Cameras' glass (shot from the side or the back, knifed). */
   breakCams(cams: readonly Gadget[]): void {
     for (const c of cams) this.sim.gadgets.update(c.id, { flags: c.flags | GFlag.Broken });
   }

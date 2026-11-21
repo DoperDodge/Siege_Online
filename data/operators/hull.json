@@ -8,7 +8,7 @@
   "loadout": {
     "primaries": ["hull_plate"],
     "secondaries": ["p229", "5_7_usg"],
-    "gadgets": ["smoke", "impact_emp", "hard_breach_charge"]
+    "gadgets": ["smoke", "impact_emp", "heavy_breach_charge"]
   },
   "ability": {
     "id": "hull_brace",

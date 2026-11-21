@@ -75,7 +75,7 @@ describe("bullets through props (DESIGN amendment 3)", () => {
     // Sight (marks, lasers, the knife's line) stops at the first shelf's face.
     expect(+raycastLevel(sim, [0, EYE_Y, 0], NORTH, 20)!.t.toFixed(6)).toBe(2.8);
     // A body walking north into the shelf stops in front of it.
-    const ctrl = sim.addPlayer("walker", "sledge");
+    const ctrl = sim.addPlayer("walker", "cleave");
     const pawn = sim.pawns.get(ctrl.possessedPawnId)!;
     sim.teleport(pawn.id, 0, 0, 0, 0, Stance.Stand);
     for (let seq = 1; seq <= 128; seq++) sim.step(new Map([[ctrl.id, { seq, forward: 1, strafe: 0, yaw: 0, pitch: 0, buttons: 0, stance: Stance.Stand, lean: 0 }]]));

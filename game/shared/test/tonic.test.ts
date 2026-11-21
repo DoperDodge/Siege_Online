@@ -31,7 +31,7 @@ const data = loadGameData();
 const k = data.gadgets.get("second_wind")!.patch!;
 
 /** Tonic (client 0) and his teammates (the other defenders), standing apart in the open. */
-async function team(ops: string[] = ["tonic", "mute"]) {
+async function team(ops: string[] = ["tonic", "lull"]) {
   const s = await scene(ops);
   s.room.pickLoadout(s.clients[0].id, defaultLoadoutPick(s.sim.data, "tonic"));
   s.wait(8);
@@ -97,26 +97,26 @@ describe("Tonic and his Second Wind (R3)", () => {
   });
 
   it("one teammate's patch at a time; his own apart from it", async () => {
-    const s = await team(["tonic", "mute", "pulse"]);
+    const s = await team(["tonic", "lull", "murmur"]);
     s.body(1).state.hp = 20;
     s.body(2).state.hp = 40;
     s.body(0).state.hp = 50;
     s.wait(2);
-    patch(s); // Auto: Mute, the most hurt
+    patch(s); // Auto: Lull, the most hurt
     expect([s.body(1).state.healLeft > 0, s.body(2).state.healLeft]).toEqual([true, 0]);
-    // Pulse picked while Mute's patch works: nothing.
-    s.room.onJegeoPick(s.clients[0].id, { kind: "patch", pawnId: s.body(2).id });
+    // Murmur picked while Lull's patch works: nothing.
+    s.room.onRingerPick(s.clients[0].id, { kind: "patch", pawnId: s.body(2).id });
     s.wait(2);
     patch(s);
     expect([s.body(2).state.healLeft, s.body(0).state.g2]).toEqual([0, 4]);
     // His own: yes.
-    s.room.onJegeoPick(s.clients[0].id, { kind: "patch", pawnId: s.body(0).id });
+    s.room.onRingerPick(s.clients[0].id, { kind: "patch", pawnId: s.body(0).id });
     s.wait(2);
     patch(s);
     expect([s.body(0).state.healLeft > 0, s.body(0).state.g2]).toEqual([true, 3]);
-    // Mute's done: Pulse's can go now (Auto would take him too).
+    // Lull's done: Murmur's can go now (Auto would take him too).
     s.wait(ticks(k.healS) + 2);
-    s.room.onJegeoPick(s.clients[0].id, { kind: "none" });
+    s.room.onRingerPick(s.clients[0].id, { kind: "none" });
     s.wait(2);
     patch(s);
     expect(s.body(2).state.healLeft).toBeGreaterThan(0);
@@ -133,7 +133,7 @@ describe("Tonic and his Second Wind (R3)", () => {
   });
 
   it("five a round: with none left Fire does nothing", async () => {
-    const s = await team(["tonic", "mute", "pulse", "lesion", "mira"]);
+    const s = await team(["tonic", "lull", "murmur", "thistle", "vista"]);
     for (let i = 0; i < 5; i++) {
       for (let j = 1; j < 5; j++) s.body(j).state.healLeft = 0;
       s.body(1 + (i % 4)).state.hp = 30;
@@ -180,12 +180,12 @@ describe("Tonic and his Second Wind (R3)", () => {
     expect(last.bodies.map((b) => b.pawnId)).toEqual([s.body(0).id, s.body(1).id]);
     expect(last.bodies[1].down).toBe(true);
     expect(last.bodies[0].maxHp).toBe(s.body(0).state.maxHp);
-    // Mute (client 1) isn't told: he has no monitor.
+    // Lull (client 1) isn't told: he has no monitor.
     expect(s.clients[1].events.some((e) => e.kind === "vitals")).toBe(false);
   });
 
   it("Auto picks the downed teammate nearest to bleeding out, else the most hurt by share, else himself if hurt", async () => {
-    const s = await team(["tonic", "mute", "pulse"]);
+    const s = await team(["tonic", "lull", "murmur"]);
     const [t, a, b] = [s.body(0), s.body(1), s.body(2)];
     expect(autoPatch(t, [t, a, b], false)).toBeNull();
     a.state.hp = 60;
@@ -218,7 +218,7 @@ describe("a bot playing Tonic (R3)", () => {
       return done();
     };
     expect(step(() => m.phase === Phase.Planning, 5)).toBe(true);
-    const ops = ["tonic", "mute", "pulse", "lesion", "mira"];
+    const ops = ["tonic", "lull", "murmur", "thistle", "vista"];
     const bots = [...m.players.values()].filter((p) => p.bot !== null);
     bots.forEach((p, k) => room.pickLoadout(p.id, botLoadout(data, ops[k])));
     expect(step(() => m.phase === Phase.Action, 60)).toBe(true);
@@ -241,7 +241,7 @@ describe("Tonic's patch and a revive by hand (R3_OPERATORS.md §3)", () => {
 
   /** Tonic (0), the downed teammate (1) and one who revives him by hand (2), Tonic's monitor out. */
   async function trio() {
-    const s = await team(["tonic", "mute", "pulse"]);
+    const s = await team(["tonic", "lull", "murmur"]);
     s.handOut(0, Hand.Ability);
     down(s, 1);
     s.wait(16);

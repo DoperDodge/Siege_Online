@@ -678,7 +678,7 @@
         -7.5
       ],
       "yawDeg": 180,
-      "operator": "mute",
+      "operator": "lull",
       "team": 1,
       "script": "static"
     },
@@ -691,7 +691,7 @@
         -7.5
       ],
       "yawDeg": 180,
-      "operator": "pulse",
+      "operator": "murmur",
       "team": 1,
       "script": "static"
     },
@@ -704,7 +704,7 @@
         4.5
       ],
       "yawDeg": 0,
-      "operator": "mira",
+      "operator": "vista",
       "team": 1,
       "script": "static"
     },
@@ -717,7 +717,7 @@
         2
       ],
       "yawDeg": 180,
-      "operator": "lesion",
+      "operator": "thistle",
       "team": 1,
       "script": "static"
     },
@@ -730,7 +730,7 @@
         12
       ],
       "yawDeg": 0,
-      "operator": "sledge",
+      "operator": "cleave",
       "team": 0,
       "script": "static"
     }

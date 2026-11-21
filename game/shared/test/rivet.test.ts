@@ -41,8 +41,8 @@ const FACE = -5.9;
 /** The reinforced wall's middle across (the same face). */
 const STEEL_X = 11.5;
 
-/** Rivet (client 0, attacking) and Mute (client 1, defending) on the Gadget Lab, out of the way. */
-async function lab(ops = ["rivet", "mute"]) {
+/** Rivet (client 0, attacking) and Lull (client 1, defending) on the Gadget Lab, out of the way. */
+async function lab(ops = ["rivet", "lull"]) {
   const s = await scene(ops, "gadget_lab");
   s.park();
   return s;
@@ -129,7 +129,7 @@ describe("Rivet and his Stud Driver (R3)", () => {
   });
 
   it("his detonator sets off every salvo together, each cutting its own shape: a circle, a slot up from the floor, an X", async () => {
-    const s = await lab(["rivet", "mute"]);
+    const s = await lab(["rivet", "lull"]);
     s.teleport(0, -8, 0, 4, 0);
     const ring = lay(s, [-12, 1.4, FACE], RING)!;
     const spine = lay(s, [-8, 1.4, FACE], SPINE)!;
@@ -163,7 +163,7 @@ describe("Rivet and his Stud Driver (R3)", () => {
 
   it("every hole is one a body gets through: it vaults through the Ring and the Cross, and walks through the Spine", async () => {
     for (const pattern of [RING, CROSS]) {
-      const s = await lab(["rivet", "sledge"]);
+      const s = await lab(["rivet", "cleave"]);
       s.teleport(0, SOFT_X, 0, 2, 0);
       lay(s, [SOFT_X, 1.4, FACE], pattern);
       // (Before it's set off, the wall's whole: no way through.)
@@ -176,7 +176,7 @@ describe("Rivet and his Stud Driver (R3)", () => {
       s.teleport(1, 0, 0, 10);
       expect(vaultsThrough(s, 1, SOFT_X + 0.15), `pattern ${pattern}, off its middle`).toBe(true);
     }
-    const s = await lab(["rivet", "sledge"]);
+    const s = await lab(["rivet", "cleave"]);
     s.teleport(0, SOFT_X, 0, 2, 0);
     lay(s, [SOFT_X, 1.4, FACE], SPINE);
     s.detonate(0);
@@ -220,7 +220,7 @@ describe("Rivet and his Stud Driver (R3)", () => {
     const jammed = lay(s, [-8, 1.4, FACE], RING)!;
     lay(s, [-4, 1.4, FACE], RING);
     expect(s.body(0).state.g2).toBe(0);
-    s.put("signal_disruptor", 1, [-8, data.gadgets.get("signal_disruptor")!.sizeM[1] / 2, FACE + 1.0]);
+    s.put("damper", 1, [-8, data.gadgets.get("damper")!.sizeM[1] / 2, FACE + 1.0]);
     s.teleport(0, -8, 0, 8, 0);
     s.press(0, Btn.Fire);
     s.wait(4);
@@ -245,7 +245,7 @@ describe("Rivet and his Stud Driver (R3)", () => {
   });
 
   it("a bullet into one of its studs destroys a salvo; one through the Ring's empty middle doesn't", async () => {
-    const s = await lab(["rivet", "mute"]);
+    const s = await lab(["rivet", "lull"]);
     s.teleport(0, SOFT_X, 0, 4, 0);
     const g = lay(s, [SOFT_X, 1.4, FACE], RING)!;
     s.teleport(0, 25, 0, 25);
@@ -287,7 +287,7 @@ describe("a bot playing Rivet (R3)", () => {
       return done();
     };
     expect(step(() => m.phase === Phase.Planning, 5)).toBe(true);
-    const ops = ["rivet", "sledge", "striker", "brava", "ohm"];
+    const ops = ["rivet", "cleave", "pointman", "patch", "ohm"];
     const bots = [...m.players.values()].filter((p) => p.bot !== null);
     bots.forEach((p, k) => room.pickLoadout(p.id, botLoadout(data, ops[k])));
     expect(step(() => m.phase === Phase.Action, 60)).toBe(true);

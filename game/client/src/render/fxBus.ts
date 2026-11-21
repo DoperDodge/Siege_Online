@@ -79,7 +79,7 @@ export class FxBus {
   /** A stun's flash, an extinguisher's burst (Phase 8 M3). */
   private readonly whites: Pool<THREE.Mesh>;
   /**
-   * Dokkaebi's payload's fire on the floor where the phone went off, for its seconds (Phase 8 M9): drawn from the
+   * Relay's payload's fire on the floor where the phone went off, for its seconds (Phase 8 M9): drawn from the
    * blast event and the data (the review, M12: it burned unseen, the room's alone).
    */
   private readonly groundFires: Pool<THREE.Mesh>;
@@ -192,14 +192,14 @@ export class FxBus {
       puff.position.copy(at);
       puff.scale.setScalar(r * 1.4);
       this.light(at, now);
-    } else if (d?.jegeo) {
-      // Dokkaebi's payload: the phone goes off in his hands (a small fireball), and a fire burns on the floor there.
+    } else if (d?.ringer) {
+      // Relay's payload: the phone goes off in his hands (a small fireball), and a fire burns on the floor there.
       const fire = this.fireballs.take(now, FIREBALL_MS);
       fire.position.copy(at);
       fire.scale.setScalar(0.45);
       this.puffs.take(now, PUFF_MS).position.copy(at);
       this.light(at, now);
-      const k = d.jegeo.fire;
+      const k = d.ringer.fire;
       const floor = raycastLevel(this.sim, pos, [0, -1, 0], 3);
       const ground = this.groundFires.take(now, k.seconds * 1000);
       ground.position.set(pos[0], pos[1] - (floor?.t ?? 1.1) + 0.15, pos[2]);
@@ -266,7 +266,7 @@ export class FxBus {
       else if (e.kind === "emp") {
         const ball = this.emps.take(performance.now(), EMP_MS);
         ball.position.set(e.pos[0], e.pos[1], e.pos[2]);
-        ball.scale.setScalar(this.sim.data.intel.bulletproofCamera.dartRadiusM);
+        ball.scale.setScalar(this.sim.data.intel.armouredCamera.dartRadiusM);
       } else if (e.kind === "blast") this.blast(e.gadget, e.pos, performance.now());
       else if (e.kind === "gshot") this.rounds.push(e);
     }

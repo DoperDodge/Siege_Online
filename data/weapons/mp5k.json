@@ -1,5 +1,5 @@
 {
-  "_doc": "MP5K (Mute). research/weapons.csv row mp5k; class rules research/weapons_notes.md §4. No grip slot (the Y9S1 notes' own example). Extended barrel 33 / min 26 and ammo-refill 1.02 / 2.30 s community-measured.",
+  "_doc": "MP5K (Lull). research/weapons.csv row mp5k; class rules research/weapons_notes.md §4. No grip slot (the Y9S1 notes' own example). Extended barrel 33 / min 26 and ammo-refill 1.02 / 2.30 s community-measured.",
   "_season": "Y11S3.1",
   "_unverified": [
     "damage.extendedBarrel",

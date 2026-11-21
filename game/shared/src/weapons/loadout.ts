@@ -121,13 +121,13 @@ export interface ResolvedLoadout {
   gadgets: string[];
   /**
    * The gadgets in the hands' two slots (Phase 8, gadgets/DESIGN.md §2): slot 1 the secondary gadget, slot 2 a kit's
-   * second gadget (Striker, Sentry) or the operator's own item (their ability: Sledge's hammer, M4); null where
+   * second gadget (Pointman, Picket) or the operator's own item (their ability: Cleave's hammer, M4); null where
    * there's none.
    */
   slots: [string | null, string | null];
   swapTicks: number;
   /**
-   * Fuze's Ballistic Shield (Phase 8 M11, player/shield.ts): its numbers when it's the primary pick, else null. Its
+   * Hail's Ballistic Shield (Phase 8 M11, player/shield.ts): its numbers when it's the primary pick, else null. Its
    * loadout holds the secondary pistol in the shield's hand (both slots, which never swap), aimed in the shield's time.
    */
   shield: ShieldData["shield"] | null;

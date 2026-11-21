@@ -32,7 +32,7 @@ describe("panel ops on the wire", () => {
 
 describe("everyone ends with the server's panels", () => {
   it("one player's shots hole a wall: the other player and one who joins later have the same panels", async () => {
-    const { room, clients, add, tick } = await roomWith("range_lab", ["sledge", "mute"]);
+    const { room, clients, add, tick } = await roomWith("range_lab", ["cleave", "lull"]);
     for (let i = 0; i < 20; i++) tick();
     const [a, b] = clients;
     a.toServer.push(encodeLabTool({ kind: "teleport", x: -8.3, y: 0, z: 16, yawDeg: 0 }));
@@ -53,7 +53,7 @@ describe("everyone ends with the server's panels", () => {
       expect(c.session.stats.panelMismatches).toBe(0);
       expect(c.session.stats.panelOps).toBe(room.stats.panelOps);
     }
-    const late = await add("thermite");
+    const late = await add("kiln");
     for (let i = 0; i < 4; i++) tick();
     expect(late.session.stats.panelStates).toBe(1);
     expect(late.session.sim!.level.panels.hash()).toBe(server.hash());
@@ -62,7 +62,7 @@ describe("everyone ends with the server's panels", () => {
   });
 
   it("a client whose panels fell out of step asks once and gets the server's state back", async () => {
-    const { room, clients, tick } = await roomWith("movement_lab", ["sledge"]);
+    const { room, clients, tick } = await roomWith("movement_lab", ["cleave"]);
     for (let i = 0; i < 10; i++) tick();
     const [a] = clients;
     // Something only this client did (a bug, a bad memory): its panels now differ.
@@ -79,7 +79,7 @@ describe("everyone ends with the server's panels", () => {
 
 describe("ops go out with snapshots", () => {
   it("one who joins between two isn't sent an op twice; one not sent snapshots gets its ops with the next it is sent", async () => {
-    const { room, clients, add, tick } = await roomWith("destruction_lab", ["sledge"]);
+    const { room, clients, add, tick } = await roomWith("destruction_lab", ["cleave"]);
     for (let i = 0; i < 10; i++) tick();
     const [a] = clients;
     const server = room.sim.level.panels;
@@ -95,7 +95,7 @@ describe("ops go out with snapshots", () => {
     tick();
     expect(room.sim.tick % 2).toBe(1);
     expect(a.session.sim!.level.panels.hash()).not.toBe(server.hash());
-    const late = await add("mute"); // its state has the wear already
+    const late = await add("lull"); // its state has the wear already
     tick();
     for (const c of [a, late]) agree(c);
     expect(late.session.sim!.level.panels.byId.get("door_a")!.panel.hp).toBe(door.hp);
@@ -114,7 +114,7 @@ describe("ops go out with snapshots", () => {
 
 describe("walking through a breach the server opened", () => {
   it("the client moves through it with its prediction holding, and stands where the server has it", async () => {
-    const { room, clients, tick } = await roomWith("movement_lab", ["sledge"]);
+    const { room, clients, tick } = await roomWith("movement_lab", ["cleave"]);
     for (let i = 0; i < 10; i++) tick();
     const [a] = clients;
     a.toServer.push(encodeLabTool({ kind: "teleport", x: -4.5, y: 0, z: 15.6, yawDeg: 180 }));

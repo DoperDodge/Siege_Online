@@ -68,7 +68,7 @@ const mispredictions = (room: Room, memberId: number) => {
 
 describe("room combat: credit, revives and stalls", () => {
   it("downed by nobody (a lab tool), then knifed: the kill is the knifer's, with no assist", async () => {
-    const h = await harness(["sledge", "sledge"]);
+    const h = await harness(["cleave", "cleave"]);
     const [a, b] = h.clients;
     h.lab(a, { kind: "teleport", x: 0, y: 0, z: 12, yawDeg: 0 });
     h.lab(b, { kind: "teleport", x: 0, y: 0, z: 10.9, yawDeg: 90 });
@@ -82,7 +82,7 @@ describe("room combat: credit, revives and stalls", () => {
   });
 
   it("a revive cut from the reviver's side (it goes down) corrects the downed player at once: no misprediction", async () => {
-    const h = await harness(["sledge", "sledge"]);
+    const h = await harness(["cleave", "cleave"]);
     const [a, b] = h.clients;
     const facingB = { yaw: Math.PI / 2 }; // A, at +X of B, looks along −X
     h.lab(b, { kind: "teleport", x: 0, y: 0, z: 12, yawDeg: 0 });
@@ -101,7 +101,7 @@ describe("room combat: credit, revives and stalls", () => {
   });
 
   it("a downed player whose client skips one tick in five can't slow the bleed-out by more than the hold budget", async () => {
-    const h = await harness(["sledge", "sledge"]);
+    const h = await harness(["cleave", "cleave"]);
     const [, b] = h.clients;
     h.lab(b, { kind: "teleport", x: 0, y: 0, z: 12, yawDeg: 0 });
     h.ticks(10);

@@ -1,5 +1,5 @@
 {
-  "_doc": "556xi (Thermite). research/weapons.csv row 556xi; class rules research/weapons_notes.md §4. Ammo-refill 1.30 / 2.74 s community-measured.",
+  "_doc": "556xi (Kiln). research/weapons.csv row 556xi; class rules research/weapons_notes.md §4. Ammo-refill 1.30 / 2.74 s community-measured.",
   "_season": "Y11S3.1",
   "_unverified": ["destruction", "reload.refillEmptyS", "reload.refillTacticalS"],
   "id": "556xi",

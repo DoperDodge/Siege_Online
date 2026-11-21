@@ -41,12 +41,12 @@ export interface MoveContext {
   salvosReady?(pawn: Pawn, gadget: string): number;
   /** Whether a swing's blow from this body's eye along its view meets something within `reachM` (Phase 8 M4: it costs a charge). */
   swingMeets?(pawn: Pawn, reachM: number): boolean;
-  /** How far along a ray the first solid gadget is (Phase 8 M5: a deployable shield Fuze's charge goes on), or null. */
+  /** How far along a ray the first solid gadget is (Phase 8 M5: a deployable shield Hail's charge goes on), or null. */
   solidOnRay?(origin: Vec3, dir: Vec3, maxT: number): number | null;
-  /** Whether a drone is inside an enemy jammer (Phase 8 M6, Mute's): it loses its driver. */
+  /** Whether a drone is inside an enemy jammer (Phase 8 M6, Lull's): it loses its driver. */
   droneJammed?(pawn: Pawn): boolean;
   /**
-   * Whether a body moves through this collider (D-157: Skopós's shells through her own barriers, whose canopy is just
+   * Whether a body moves through this collider (D-157: Twain's shells through her own barriers, whose canopy is just
    * over a crouched shell's head: one waking stands up under it).
    */
   passes?(pawn: Pawn, c: Collider): boolean;
@@ -59,7 +59,7 @@ const PRONE_TOLERANCE = 0.005;
 
 /**
  * One tick of a body: look, move, then the weapon in hand. `weapons` is false for a body nobody is driving
- * (Skopós's shell she isn't in): its weapon is parked instead of stepped. `live` is false when the input isn't
+ * (Twain's shell she isn't in): its weapon is parked instead of stepped. `live` is false when the input isn't
  * its player's this tick (a stall, or a body driven idle): a rappel hold or swing waits, neither going on nor
  * ending, as a panel hold does (Sim.step), so the player's next input carries on where the client predicted.
  */
@@ -79,7 +79,7 @@ export function stepPawn(ctx: MoveContext, pawn: Pawn, input: InputCmd, weapons 
   if (s.mode === PawnMode.Dead) return;
   // Tonic's Second Wind on this body (R3): its heal, or getting it up from down (a revive of its own, for the room).
   if (stepPatch(ctx.data, s)) ctx.events.push({ kind: "reviveEnd", reviverPawn: pawn.id, targetPawn: pawn.id, completed: true });
-  // Lesion's next mine comes (Phase 8 M10); Fuze's shield's guard break and suppression wear off (M11).
+  // Thistle's next mine comes (Phase 8 M10); Hail's shield's guard break and suppression wear off (M11).
   regenSlot(ctx.data, pawn);
   stepShield(pawn);
 
@@ -127,7 +127,7 @@ export function stepPawn(ctx: MoveContext, pawn: Pawn, input: InputCmd, weapons 
       }
     }
   }
-  // Where Fuze's shield's plate is, now the hands and holds are settled for the tick (Phase 8 M11).
+  // Where Hail's shield's plate is, now the hands and holds are settled for the tick (Phase 8 M11).
   placeShield(pawn);
   roundState(s);
   // The collider is placed from the state, exactly as a client places it from a correction (which carries
@@ -244,7 +244,7 @@ function stepWalk(ctx: MoveContext, pawn: Pawn, input: InputCmd, pressed: number
   const ads = (input.buttons & Btn.Ads) !== 0;
   if (wantsAim(ctx, s, input) && !pawn.loadout?.shield?.noAds && s.stance !== Stance.Prone) speed = Math.min(speed, m.speed.adsWalkSpeed * mult("adsWalk"));
   if (input.buttons & Btn.SlowWalk) speed *= m.speed.slowWalkFactor;
-  // Fuze's shield up in front (Phase 8 M11): slower; Hull's braced (R3), slower still.
+  // Hail's shield up in front (Phase 8 M11): slower; Hull's braced (R3), slower still.
   const shield = pawn.loadout?.shield;
   if (shield && shieldUp(s)) speed *= shield.moveSpeedMult + (shield.brace ? (shield.brace.speedMul - shield.moveSpeedMult) * braceOf(s) : 0);
   // Down but not out: a slow crawl, and none at all while a teammate revives you (placeholders).
@@ -263,7 +263,7 @@ function stepWalk(ctx: MoveContext, pawn: Pawn, input: InputCmd, pressed: number
     s.stanceT >= 1 &&
     s.grounded &&
     slow >= 1 &&
-    // A Gu needle in him (Phase 8 M10), or his shield suppressed (M11): no sprinting.
+    // A Burr needle in him (Phase 8 M10), or his shield suppressed (M11): no sprinting.
     !s.needled &&
     !suppressed(pawn.loadout, s);
   if (sprinting) speed = m.speed.sprintByRating[rating] * mult("sprint");
@@ -428,7 +428,7 @@ function moveCollider(ctx: MoveContext, pawn: Pawn, dx: number, dy: number, dz: 
   // Rapier's snap-to-ground can drop a body into the floor when it starts inside the controller's contact
   // offset of both a wall and the floor (sprinting diagonally into a wall: 0.29 m in one tick, found by the
   // netsim). A step that ends inside level geometry it started clear of is redone without the snap.
-  // Skopós's shells move through her own barriers (D-157: ctx.passes).
+  // Twain's shells move through her own barriers (D-157: ctx.passes).
   const passes = ctx.passes;
   const own = passes ? (c: Collider) => !passes(pawn, c) : undefined;
   const startClear = !insideStatic(ctx, pawn, t, own);

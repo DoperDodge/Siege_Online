@@ -7,8 +7,8 @@ import { ATTACK, blastEffects, DEFENSE, blastFalloff, GFlag, kindId, kindOf, Sim
 
 async function setup() {
   const sim = await Sim.create("gadget_lab");
-  const a = sim.addPlayer("a", "sledge", 0, undefined, undefined, ATTACK);
-  const d = sim.addPlayer("d", "mute", 1, undefined, undefined, DEFENSE);
+  const a = sim.addPlayer("a", "cleave", 0, undefined, undefined, ATTACK);
+  const d = sim.addPlayer("d", "lull", 1, undefined, undefined, DEFENSE);
   const atk = sim.pawns.get(a.possessedPawnId)!;
   const def = sim.pawns.get(d.possessedPawnId)!;
   const g = (kind: string, over: Partial<Gadget> = {}): Gadget => ({
@@ -100,10 +100,10 @@ describe("blast damage (Phase 8 M2)", () => {
     expect(dmg(clay)).toBe(0);
   });
 
-  it("destroys gadgets in its destruction range (a Bulletproof Camera there too), not past it nor behind steel", async () => {
+  it("destroys gadgets in its destruction range (a Armoured Camera there too), not past it nor behind steel", async () => {
     const { sim, g, fx } = await setup();
     const near = sim.gadgets.add({ ...g("claymore", { pos: [0, 0.07, 10] }) });
-    const cam = sim.gadgets.add({ ...g("bulletproof_camera", { pos: [2, 0.06, 12], team: DEFENSE }) });
+    const cam = sim.gadgets.add({ ...g("armoured_camera", { pos: [2, 0.06, 12], team: DEFENSE }) });
     sim.gadgets.add({ ...g("claymore", { pos: [0, 0.07, 16] }) }); // 4 m away: past its 3.6 m
     const behindSteel = sim.gadgets.add({ ...g("proximity_alarm", { pos: [11.5, 0.5, -6.5], team: DEFENSE }) });
     const blast = fx(g("frag", { pos: [0, 0.04, 12] }));
@@ -131,11 +131,11 @@ describe("blast damage (Phase 8 M2)", () => {
     expect(cloud.id).toBeGreaterThan(0);
   });
 
-  it("a charge's own panel neither stops nor dims its blast: a Hard Breach Charge on steel reaches a defender right behind", async () => {
+  it("a charge's own panel neither stops nor dims its blast: a Heavy Breach Charge on steel reaches a defender right behind", async () => {
     const { sim, def, g, dmg } = await setup();
     const steel = sim.level.panels.byId.get("reinforced")!.panel.spec.index;
     sim.teleport(def.id, 11.5, 0, -6.45, 0);
-    expect(dmg(g("hard_breach_charge", { pos: [11.5, 1.0, -5.85], yaw: Math.PI, flags: 0, panel: steel }))).toBe(5);
+    expect(dmg(g("heavy_breach_charge", { pos: [11.5, 1.0, -5.85], yaw: Math.PI, flags: 0, panel: steel }))).toBe(5);
     // A blast that isn't on it (a frag in front of the same wall) is still stopped by its steel.
     expect(dmg(g("frag", { pos: [11.5, 1.0, -5.75] }))).toBe(0);
   });

@@ -81,7 +81,7 @@ describe("what the HUD says", () => {
   });
 
   it("ammo: fire mode with its key only when there's a choice; low at a fifth of the magazine", () => {
-    const { loadout } = resolveLoadout(data, defaultLoadoutPick(data, "sledge"));
+    const { loadout } = resolveLoadout(data, defaultLoadoutPick(data, "cleave"));
     const [rifle, pistol] = loadout.weapons;
     const s = { ...initialPawnState(0, 0, 0, 0, 100, loadout), wAct: WeaponAct.Ready };
     expect([rifle.id, rifle.fire.modes, pistol.fire.modes]).toEqual(["l85a2", ["auto", "semi"], ["semi"]]);

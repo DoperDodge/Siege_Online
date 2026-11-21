@@ -50,7 +50,7 @@ const TOWER = { x: -1, z: -10, yawDeg: 180 } as const;
 /** The middle of the Tower's 2F north window (x 0.5–1.8, its sill 4.1 m up). */
 const TOWER_WINDOW = 1.15;
 
-async function lab(op = "sledge") {
+async function lab(op = "cleave") {
   const sim = await Sim.create("rappel_lab");
   const ctrl = sim.addPlayer("roper", op);
   const pawn = sim.pawns.get(ctrl.possessedPawnId)!;
@@ -200,8 +200,8 @@ describe("hooking on", () => {
   it("at a barricaded door in a wall (a lab room gives both sides both tools, on their own keys): Space holds for the rope, F for the barricade; an attacker is shown the rope first, a defender the barricade", async () => {
     // The Tower's south wall (rappel:tower:S, z -5), its barricaded door in view.
     for (const [op, prompt] of [
-      ["sledge", "rappel"],
-      ["mute", "unbarricade"],
+      ["cleave", "rappel"],
+      ["lull", "unbarricade"],
     ] as const) {
       const { sim, ctrl, pawn } = await lab(op);
       sim.deployRules = { anyone: true, rappel: true, pools: [10, 10] };
@@ -233,7 +233,7 @@ describe("hooking on", () => {
     expect(findRappel((sim as any).ctx, pawn)).toBeNull();
     stand(sim, ctrl, TOWER.x, 0, TOWER.z - 1.5, TOWER.yawDeg); // a metre too far
     expect(findRappel((sim as any).ctx, pawn)).toBeNull();
-    const d = await lab("mute");
+    const d = await lab("lull");
     stand(d.sim, d.ctrl, TOWER.x, 0, TOWER.z - 0.6, TOWER.yawDeg);
     expect(findRappel((d.sim as any).ctx, d.pawn)).toBeNull();
     d.sim.deployRules.rappel = true; // a lab room's rules
@@ -311,8 +311,8 @@ describe("hooking on", () => {
     expect([pawn.state.mode, pawn.state.grounded, +pawn.state.y.toFixed(1)]).toEqual([PawnMode.Walk, true, 0]);
   });
 
-  it("Skopós (a lab room lets her rappel): her shell's camera opens on the rope, but she can't swap shells there, and the body hangs still meanwhile", async () => {
-    const { sim, ctrl, pawn } = await lab("skopos");
+  it("Twain (a lab room lets her rappel): her shell's camera opens on the rope, but she can't swap shells there, and the body hangs still meanwhile", async () => {
+    const { sim, ctrl, pawn } = await lab("twain");
     sim.deployRules.rappel = true;
     stand(sim, ctrl, TOWER.x, 0, TOWER.z - 0.6, TOWER.yawDeg);
     hookOn(sim, ctrl, TOWER.yawDeg);
@@ -752,7 +752,7 @@ describe("rappel online", () => {
     let tick = 0;
     let spikeEnd = 0;
     const session = new ClientSession({ send: (b) => up.push({ at: Math.max(tick, spikeEnd) + LAG, b }), now: () => clock.t });
-    const id = room.join("roper", { send: (b) => down.push({ at: tick + LAG, b }), buffered: () => 0 }, "sledge")!;
+    const id = room.join("roper", { send: (b) => down.push({ at: tick + LAG, b }), buffered: () => 0 }, "cleave")!;
     const deliver = () => {
       while (up.length && up[0].at <= tick) {
         const b = up.shift()!.b;

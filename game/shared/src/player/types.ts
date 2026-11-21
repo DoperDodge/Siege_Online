@@ -17,13 +17,13 @@ export enum PawnMode {
   /** A drone in its owner's hand (Phase 7, intel/DESIGN.md §2): no collider, not stepped, not sent to others. */
   Held = 6,
   /**
-   * Knocked down (D-156: a shield's bash, Sledge's hammer on a raised shield): shoved back onto its back, lying, then
+   * Knocked down (D-156: a shield's bash, Cleave's hammer on a raised shield): shoved back onto its back, lying, then
    * getting up, its player's input ignored until it's up (PawnState.knockTicks, knockLie; player/movement.ts).
    */
   Knocked = 7,
 }
 
-/** What a pawn is (Phase 7): an operator's body (Skopós's shells too), or an attacker's drone. */
+/** What a pawn is (Phase 7): an operator's body (Twain's shells too), or an attacker's drone. */
 export enum PawnKind {
   Body = 0,
   Drone = 1,
@@ -47,7 +47,7 @@ export const Btn = {
   Interact: 1 << 2,
   Ads: 1 << 3,
   SlowWalk: 1 << 4,
-  /** Unique-ability key: the ability's item in and out, like the gadget key (Skopós: open / close the idle shell's camera). */
+  /** Unique-ability key: the ability's item in and out, like the gadget key (Twain: open / close the idle shell's camera). */
   Ability: 1 << 5,
   /** Fire, held (DECISIONS D-055): automatic weapons fire while it is down, others on the press. */
   Fire: 1 << 6,
@@ -61,7 +61,7 @@ export const Btn = {
   Ping: 1 << 11,
   /**
    * The gadget key (Phase 8, gadgets/DESIGN.md §2): takes the secondary gadget out (or its detonator) and puts it
-   * away; on a Bulletproof Camera, fires its EMP dart (as Fire does).
+   * away; on a Armoured Camera, fires its EMP dart (as Fire does).
    */
   Gadget: 1 << 12,
   /** Drop the defuser (Phase 6, D-120). */
@@ -249,7 +249,7 @@ export interface PawnState {
   jumpCd: number;
   boostTicks: number;
   boostCd: number;
-  /** A drone's ticks left jammed by a Bulletproof Camera's EMP dart (it doesn't move or turn meanwhile). */
+  /** A drone's ticks left jammed by a Armoured Camera's EMP dart (it doesn't move or turn meanwhile). */
   jammed: number;
   // gadgets (Phase 8, gadgets/DESIGN.md §2): what the hands hold (Hand), what the gadget in them is doing (GadgetAct)
   // and for how many ticks, the devices left in slot 1 (the secondary gadget) and slot 2 (the ability's, or a kit's
@@ -267,12 +267,12 @@ export interface PawnState {
   w1: number;
   w2: number;
   gTarget: number;
-  // Lesion's Gu (Phase 8 M10): a needle in this body (no sprinting; the server's bites until it's pulled or the body is
+  // Thistle's Burr (Phase 8 M10): a needle in this body (no sprinting; the server's bites until it's pulled or the body is
   // down), and a slot 2 item that comes back over time (his mines, gadgets/hands.ts regenSlot): how many it has given
   // this life, and the ticks into the next
   needled: boolean;
   /**
-   * Dokkaebi's call ringing on this body's player's phone (Phase 8 M9; the server's, its owner corrected): a fresh
+   * Relay's call ringing on this body's player's phone (Phase 8 M9; the server's, its owner corrected): a fresh
    * Interact press is the dismissal's, so nothing else starts on it (the review, M12).
    */
   ringing: boolean;
@@ -293,7 +293,7 @@ export interface PawnState {
   braceQ: number;
   regenMade: number;
   regenTicks: number;
-  // Fuze's Ballistic Shield (Phase 8 M11, player/shield.ts): ticks it's knocked aside (a guard break, or Sledge's
+  // Hail's Ballistic Shield (Phase 8 M11, player/shield.ts): ticks it's knocked aside (a guard break, or Cleave's
   // knockdown) and nowhere; the bullets it has stopped lately (its suppression), and the ticks since the last
   guard: number;
   suppress: number;
@@ -312,7 +312,7 @@ export enum Hand {
   /** Slot 1, the secondary gadget: a device, or the detonator of those waiting. */
   Gadget = 1,
   Detonator = 2,
-  /** Slot 2, the ability's item (Striker's and Sentry's second gadget): a device, or its detonator. */
+  /** Slot 2, the ability's item (Pointman's and Picket's second gadget): a device, or its detonator. */
   Ability = 3,
   AbilityDetonator = 4,
 }
@@ -331,7 +331,7 @@ export enum GadgetAct {
   Lob = 3,
   /** Fire held with the view on a spot for it: placing. */
   Place = 4,
-  /** Swinging (Sledge's hammer, Phase 8 M4): its blow lands partway through. */
+  /** Swinging (Cleave's hammer, Phase 8 M4): its blow lands partway through. */
   Swing = 5,
   /** Just shot (Ohm's Brownout Pistol, R3): the next can't go until it's reloaded. */
   Shoot = 6,
@@ -347,7 +347,7 @@ export const NEUTRAL_INPUT: Readonly<Omit<InputCmd, "seq" | "yaw" | "pitch">> = 
 
 /**
  * On a rope and free to act (Phase 5 M8): not moving onto it, swinging, or turning over. Aiming, firing, the knife,
- * Skopós' shell camera and the window prompts wait for it.
+ * Twain' shell camera and the window prompts wait for it.
  */
 export const ropeIdle = (s: PawnState) => s.mode === PawnMode.Rappel && s.moveDur === 0 && s.rappelTicks === 0 && (s.ropeTurn === 0 || s.ropeTurn === 1);
 

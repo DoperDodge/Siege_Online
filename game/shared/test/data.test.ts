@@ -90,18 +90,18 @@ describe("data files", () => {
 
   it("operator ratings match the official pages (research/core_mechanics.md §1.3)", () => {
     const expected: Record<string, [number, number]> = {
-      brava: [1, 3],
-      fuze: [3, 1],
-      thermite: [2, 2],
-      striker: [2, 2],
-      dokkaebi: [1, 3],
-      sledge: [2, 2],
-      sentry: [2, 2],
-      skopos: [1, 3],
-      mira: [3, 1],
-      lesion: [2, 2],
-      pulse: [1, 3],
-      mute: [2, 2],
+      patch: [1, 3],
+      hail: [3, 1],
+      kiln: [2, 2],
+      pointman: [2, 2],
+      relay: [1, 3],
+      cleave: [2, 2],
+      picket: [2, 2],
+      twain: [1, 3],
+      vista: [3, 1],
+      thistle: [2, 2],
+      murmur: [1, 3],
+      lull: [2, 2],
     };
     for (const [id, [health, speed]] of Object.entries(expected)) {
       const op = data.operators.get(id)!;
@@ -110,13 +110,13 @@ describe("data files", () => {
   });
 
 
-  it("gadget-kit operators pick two distinct gadgets from a 7-gadget pool; Skopós has two pawns", () => {
-    for (const id of ["striker", "sentry"]) {
+  it("gadget-kit operators pick two distinct gadgets from a 7-gadget pool; Twain has two pawns", () => {
+    for (const id of ["pointman", "picket"]) {
       const kit = data.operators.get(id)!.loadout.gadgetKit!;
       expect(kit).toMatchObject({ picks: 2, distinct: true });
       expect(kit.pool).toHaveLength(7);
     }
-    expect(data.operators.get("skopos")!.pawns).toBe(2);
+    expect(data.operators.get("twain")!.pawns).toBe(2);
   });
 });
 
@@ -211,10 +211,10 @@ describe("weapon data agrees with research/weapons.csv (DECISIONS D-039)", () =>
 
   it("encodes the per-operator attachment access and the special cases", () => {
     const w = (id: string) => data.weapons.get(id) as GunData;
-    expect(w("mk_14_ebr").attachments.sights).toContainEqual({ id: "telescopic", operators: ["dokkaebi"] });
+    expect(w("mk_14_ebr").attachments.sights).toContainEqual({ id: "telescopic", operators: ["relay"] });
     expect(w("mk_14_ebr").recoil.firstShotMult).toBe(3.5);
     expect(w("reaper_mk2").recoil.stageStarts).toEqual([0, 3, 10, 25]);
-    expect(w("5_7_usg").attachments.barrels).toContainEqual({ id: "muzzle_brake", operators: ["thermite", "pulse"] });
+    expect(w("5_7_usg").attachments.barrels).toContainEqual({ id: "muzzle_brake", operators: ["kiln", "murmur"] });
     expect(w("six12_sd").integralSuppressor && w("smg_12").integralSuppressor).toBe(true);
     expect(w("mp5k").attachments.grips).toEqual([]);
     expect(w("m590a1").damage!.falloff).toEqual([[5, 48], [6, 36], [10, 36], [13, 21]]);
@@ -224,8 +224,8 @@ describe("weapon data agrees with research/weapons.csv (DECISIONS D-039)", () =>
     expect(data.weapons.get("ballistic_shield")!.class).toBe("shield");
     // Defender automatic weapons lost magnified sights in Y10S3 (weapons_notes.md §4.2).
     for (const id of ["commando_9", "pcx_33", "vector_45_acp", "t_5_smg", "ump45", "mp5k"]) expect(w(id).attachments.sights.map(offerId), id).not.toContain("magnified");
-    expect(data.operators.get("skopos")!.combat).toEqual({ canDbno: false, meleeHole: "large" });
-    expect(data.operators.get("sledge")!.combat).toEqual({ canDbno: true, meleeHole: "standard" });
+    expect(data.operators.get("twain")!.combat).toEqual({ canDbno: false, meleeHole: "large" });
+    expect(data.operators.get("cleave")!.combat).toEqual({ canDbno: true, meleeHole: "standard" });
   });
 });
 
@@ -282,18 +282,18 @@ describe("weapon schema and cross-file checks reject bad data", () => {
   it("finds loadouts and restrictions that don't line up", () => {
     const ops = new Map<string, OperatorData>([...data.operators].map(([k, v]) => [k, clone(v)]));
     const weapons = new Map(data.weapons);
-    ops.get("brava")!.loadout.primaries.push("nope");
-    ops.get("fuze")!.loadout.secondaries.push("ballistic_shield");
+    ops.get("patch")!.loadout.primaries.push("nope");
+    ops.get("hail")!.loadout.secondaries.push("ballistic_shield");
     const mk14 = clone(weapons.get("mk_14_ebr")) as GunData;
-    mk14.attachments.barrels = [{ id: "muzzle_brake", operators: ["sledge"] }];
+    mk14.attachments.barrels = [{ id: "muzzle_brake", operators: ["cleave"] }];
     weapons.set("mk_14_ebr", mk14);
     const reaper = clone(weapons.get("reaper_mk2")) as GunData;
     reaper.recoil.stageStarts = [0, 3];
     weapons.set("reaper_mk2", reaper);
     const problems = crossFileProblems({ operators: ops, weapons, gunplay: data.gunplay });
-    expect(problems.join("\n")).toMatch(/brava\.json: loadout\.primaries names "nope"/);
-    expect(problems.join("\n")).toMatch(/fuze\.json: the shield "ballistic_shield" can only be a primary/);
-    expect(problems.join("\n")).toMatch(/mk_14_ebr\.json: attachments\.barrels "muzzle_brake" names "sledge"/);
+    expect(problems.join("\n")).toMatch(/patch\.json: loadout\.primaries names "nope"/);
+    expect(problems.join("\n")).toMatch(/hail\.json: the shield "ballistic_shield" can only be a primary/);
+    expect(problems.join("\n")).toMatch(/mk_14_ebr\.json: attachments\.barrels "muzzle_brake" names "cleave"/);
     expect(problems.join("\n")).toMatch(/reaper_mk2\.json: recoil\.stageStarts has 2 entries/);
   });
 });

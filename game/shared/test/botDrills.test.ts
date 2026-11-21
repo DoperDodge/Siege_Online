@@ -164,12 +164,12 @@ describe("Bot Training drills (Phase 9 M8)", () => {
     expect(room.sim.objective).not.toBeNull();
   }, 120000);
 
-  it("counter my pick: the defending bots answer your Thermite with Shunt, Mute and Mira (data/bots/picks.json)", async () => {
+  it("counter my pick: the defending bots answer your Kiln with Shunt, Lull and Vista (data/bots/picks.json)", async () => {
     const { room, m, until, person } = await drill("bot_training", 9, { picks: "counter" });
     expect(until(() => m.phase === Phase.Planning, 10)).toBe(true);
-    room.pickOperator(person.id, "thermite");
+    room.pickOperator(person.id, "kiln");
     expect(until(() => m.sides[DEFENSE].every((id) => m.players.get(id)!.operator !== null), 40)).toBe(true);
     const ops = m.sides[DEFENSE].map((id) => m.players.get(id)!.operator);
-    for (const op of ["shunt", "mute", "mira"]) expect(ops).toContain(op);
+    for (const op of ["shunt", "lull", "vista"]) expect(ops).toContain(op);
   }, 120000);
 });

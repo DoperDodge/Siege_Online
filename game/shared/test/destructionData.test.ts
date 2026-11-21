@@ -33,7 +33,7 @@ describe("destruction data", () => {
     expect([d.reinforcement.hatchFromTopOnly, d.reinforcement.canReinforceDamaged, d.reinforcement.canReReinforce]).toEqual([true, true, false]);
     expect(Math.ceil(d.barricade.hp / d.melee.barricadeDamage)).toBe(3); // three hits always break a barricade
     expect(d.melee.studs).toBe(false);
-    expect(d.explosives.exothermic_charge.reinforcedHatchDamage).toBe(1_000_000);
+    expect(d.explosives.burn_frame.reinforcedHatchDamage).toBe(1_000_000);
     expect(data.modes.get("lab")!.reinforcements).toBe(10);
     const marked = unverified(rawData.destruction);
     for (const path of ["reinforcement.deploySeconds", "reinforcement.reinforcedHatchHp", "barricade.hp", "melee.barricadeDamage", "melee.studs"]) expect(marked).not.toContain(path);

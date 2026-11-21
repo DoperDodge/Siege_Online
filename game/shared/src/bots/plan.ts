@@ -41,10 +41,10 @@ export type Task =
   | { kind: "pickup"; at: Vec3 }
   /** Use a gadget (bots/use.ts). */
   | GadgetTask
-  /** Skopós: walk her idle shell to `to` (into it, there, and back to the shell she was in). */
+  /** Twain: walk her idle shell to `to` (into it, there, and back to the shell she was in). */
   | { kind: "shell"; to: Vec3 }
-  /** Brava: a Kludge drone thrown and driven toward `to`, hacking the other side's devices it finds on the way. */
-  | { kind: "kludge"; to: Vec3 }
+  /** Patch: a Crossover drone thrown and driven toward `to`, hacking the other side's devices it finds on the way. */
+  | { kind: "crossover"; to: Vec3 }
   /** Keep near this teammate's body (an order, M6). */
   | { kind: "follow"; pawnId: number };
 
@@ -78,7 +78,7 @@ interface Job {
   done: boolean;
   /** Tries that failed (it's dropped after two). */
   fails: number;
-  /** Only this bot's (its own gadget's), and not before this panel's reinforcement is done (Mira's mirror). */
+  /** Only this bot's (its own gadget's), and not before this panel's reinforcement is done (Vista's mirror). */
   only?: number;
   after?: number;
 }
@@ -120,7 +120,7 @@ function jobAt(t: Task): Vec3 {
     case "gadget":
       return t.stand ?? t.look;
     case "shell":
-    case "kludge":
+    case "crossover":
       return t.to;
     case "follow":
     case "roam":
@@ -153,8 +153,8 @@ export function coverFrom(nav: NavWorld, at: UseSpot, d = 3): Vec3 {
 
 /**
  * A hard breach of wall `e` from room `from` by this body (M7): Rivet's Stud Driver (R3), a Spine laid on the wall (a
- * slot from the floor to walk through) or a salvo on a hatch from above, set off from cover; Thermite's Exothermic
- * Charge, set off from cover; else a Hard Breach Charge (Striker's EMP at the wall first), waited out from cover.
+ * slot from the floor to walk through) or a salvo on a hatch from above, set off from cover; Kiln's BurnFrame
+ * Charge, set off from cover; else a Heavy Breach Charge (Pointman's EMP at the wall first), waited out from cover.
  * None: it has none of them.
  */
 export function hardBreachTasks(sim: Sim, nav: NavWorld, b: Pawn, e: PanelEntry, from: string | null): Task[] {
@@ -169,12 +169,12 @@ export function hardBreachTasks(sim: Sim, nav: NavWorld, b: Pawn, e: PanelEntry,
   const at = wallSpot(sim, nav, e, from, 0.8, 0.9);
   if (!at || e.panel.kind !== "wall") return [];
   const cover = coverFrom(nav, at);
-  const thermite = slotWith(sim, b, "exothermic_charge");
-  if (thermite) return [gadgetTask(thermite, "place", at, `therm${index}`, { cover })];
-  const hbc = slotWith(sim, b, "hard_breach_charge");
+  const kiln = slotWith(sim, b, "burn_frame");
+  if (kiln) return [gadgetTask(kiln, "place", at, `therm${index}`, { cover })];
+  const hbc = slotWith(sim, b, "heavy_breach_charge");
   if (!hbc) return [];
   const out: Task[] = [];
-  // Striker's EMP at the wall first: a jammer behind it would stop the charge.
+  // Pointman's EMP at the wall first: a jammer behind it would stop the charge.
   const emp = slotWith(sim, b, "impact_emp");
   const far = wallSpot(sim, nav, e, from, 3.2, 1.3);
   if (emp && far) out.push(gadgetTask(emp, "throw", far, `emp${index}`));
@@ -183,20 +183,20 @@ export function hardBreachTasks(sim: Sim, nav: NavWorld, b: Pawn, e: PanelEntry,
 }
 
 /**
- * A soft breach of `e` (a hatch from above, or a wall from room `from`) by this body (M7): Sledge's hammer (a blow, low
- * and high on a wall), a Cluster Charge or a breach charge on it, set off from cover. None: it has none of them.
+ * A soft breach of `e` (a hatch from above, or a wall from room `from`) by this body (M7): Cleave's hammer (a blow, low
+ * and high on a wall), a Hailstone Drill or a breach charge on it, set off from cover. None: it has none of them.
  */
 export function softBreachTasks(sim: Sim, nav: NavWorld, b: Pawn, e: PanelEntry, from: string | null): Task[] {
   const hatch = e.panel.kind === "hatch";
   const at = hatch ? hatchSpot(sim, nav, e) : wallSpot(sim, nav, e, from, 0.7, 0.55);
   if (!at) return [];
   const index = e.panel.spec.index;
-  const hammer = slotWith(sim, b, "breaching_hammer");
+  const hammer = slotWith(sim, b, "breaching_maul");
   if (hammer) {
     const spots = hatch ? [at.look] : [at.look, [at.look[0], at.look[1] + 0.95, at.look[2]] as Vec3];
     return [gadgetTask(hammer, "swing", at, `ham${index}`, { spots, panel: index, crouch: hatch })];
   }
-  const charge = slotWith(sim, b, "cluster_charge") || slotWith(sim, b, "breach_charge");
+  const charge = slotWith(sim, b, "hailstone_drill") || slotWith(sim, b, "breach_charge");
   if (!charge) return [];
   const put = hatch ? at : wallSpot(sim, nav, e, from, 0.8, 1.0);
   if (!put) return [];
@@ -423,9 +423,9 @@ export class DefensePlanner {
 
   /**
    * A bot's own gadget jobs (M7, bots/DESIGN.md §7.4), once it has a body in prep: its operator's devices where the
-   * site plan puts them (Mute's jammers, Mira's mirrors once their wall has steel, Lesion's mines, Sentry's wire and
-   * shield, Skopós's idle shell into the plan's other room), a defender's impact grenades for the plan's rotation holes,
-   * and its generic gadget at the site's ways in (wire, a shield, a camera, an observation blocker, an alarm).
+   * site plan puts them (Lull's jammers, Vista's mirrors once their wall has steel, Thistle's mines, Picket's wire and
+   * shield, Twain's idle shell into the plan's other room), a defender's impact grenades for the plan's rotation holes,
+   * and its generic gadget at the site's ways in (wire, a shield, a camera, an feed blocker, an alarm).
    */
   private ownJobs(id: number) {
     const sim = this.sim;
@@ -445,7 +445,7 @@ export class DefensePlanner {
     };
     const planned = new Set<string>();
     for (const spot of this.strat?.defense.gadgets[op] ?? []) {
-      if (op === "skopos") {
+      if (op === "twain") {
         // Her idle shell into the plan's last room (she anchors in the first).
         continue;
       }
@@ -493,8 +493,8 @@ export class DefensePlanner {
         add(2, "place", spot && { stand: spot.stand, look: [door.at[0], door.at[1] + 0.02, door.at[2]] });
       }
     }
-    if (op === "skopos") {
-      const rooms = (this.strat?.defense.gadgets.skopos ?? []).map((x) => x.room).filter((r): r is string => !!r && room(r));
+    if (op === "twain") {
+      const rooms = (this.strat?.defense.gadgets.twain ?? []).map((x) => x.room).filter((r): r is string => !!r && room(r));
       const last = rooms[rooms.length - 1];
       const spots = last ? roomSpots(this.nav, level, last, 1) : [];
       const to = spots[Math.floor(spots.length / 2)];
@@ -514,7 +514,7 @@ export class DefensePlanner {
     }
     // Its generic gadget (slot 1), if the plan didn't place it: at the site's ways in, from inside.
     const g1 = slots[0];
-    if (g1 && !planned.has(g1.id) && g1.id !== "impact_grenade" && g1.id !== "nitro_cell") {
+    if (g1 && !planned.has(g1.id) && g1.id !== "impact_grenade" && g1.id !== "remote_charge") {
       const doors = this.siteDoors();
       for (let k = 0; k < Math.min(body.state.g1, doors.length); k++) {
         const d = doors[(k + this.bots.indexOf(id)) % doors.length];
@@ -626,10 +626,10 @@ export class DefensePlanner {
   private makeRoles() {
     const anchorsRooms = this.strat?.defense.anchors ?? this.siteRooms();
     const roam = this.strat?.defense.roam ?? [];
-    // Pulse roams the plan's rooms above or below the site, scanning (M7); the rest share out as anchors and roamers.
-    const pulseRooms = (this.strat?.defense.gadgets.pulse ?? []).map((x) => x.room).filter((r): r is string => !!r);
-    const bots = this.bots.filter((id) => !(pulseRooms.length && this.match.players.get(id)?.operator === "pulse"));
-    for (const id of this.bots) if (!bots.includes(id)) this.roles.set(id, { kind: "roam", rooms: pulseRooms });
+    // Murmur roams the plan's rooms above or below the site, scanning (M7); the rest share out as anchors and roamers.
+    const murmurRooms = (this.strat?.defense.gadgets.murmur ?? []).map((x) => x.room).filter((r): r is string => !!r);
+    const bots = this.bots.filter((id) => !(murmurRooms.length && this.match.players.get(id)?.operator === "murmur"));
+    for (const id of this.bots) if (!bots.includes(id)) this.roles.set(id, { kind: "roam", rooms: murmurRooms });
     const n = bots.length;
     // Of five, two roam; of fewer, fewer (one roamer from four; none from three or fewer).
     const roamers = roam.length ? Math.max(0, Math.min(ROAMERS_OF_FIVE, n - 3)) : 0;
@@ -658,7 +658,7 @@ const GUESS_KEEP_M = 5;
 export class AttackPlanner {
   /** Each bot's way in this round (spots), worked out when it first asks in action. */
   private readonly ways = new Map<number, Task>();
-  /** Each bot's jobs before its way in (M7: breaches, Brava's Kludge), made for the site it then went for. */
+  /** Each bot's jobs before its way in (M7: breaches, Patch's Crossover), made for the site it then went for. */
   private readonly jobs = new Map<number, Job[]>();
   private jobsFor: string | null = null;
   /** Told to push: no more jobs before the way in. */
@@ -739,7 +739,7 @@ export class AttackPlanner {
         if (spot) return { kind: "plant", spot };
       }
     }
-    // Its jobs first (a breach on the way in, Brava's Kludge ahead of the team), then its way in.
+    // Its jobs first (a breach on the way in, Patch's Crossover ahead of the team), then its way in.
     if (this.jobsFor !== site && !this.pushed) this.makeJobs(site);
     const job = this.jobs.get(id)?.find((j) => !j.done && j.fails < 2);
     if (job) return job.task;
@@ -772,9 +772,9 @@ export class AttackPlanner {
 
   /**
    * The team's jobs for `site` (M7, bots/DESIGN.md §7.4): each of the plan's hard breaches to the first bot of its
-   * operators who has the charge (Thermite's Exothermic; Striker's EMP then a Hard Breach Charge; Fuze's Hard Breach
-   * Charge), each soft breach to one too (Sledge's hammer, Fuze's Cluster Charge, else anyone's breach charge), one
-   * breach a bot; Brava's Kludge first, toward the first hard breach's far side; Ohm's pistol at that wall (R3).
+   * operators who has the charge (Kiln's BurnFrame; Pointman's EMP then a Heavy Breach Charge; Hail's Hard Breach
+   * Charge), each soft breach to one too (Cleave's hammer, Hail's Hailstone Drill, else anyone's breach charge), one
+   * breach a bot; Patch's Crossover first, toward the first hard breach's far side; Ohm's pistol at that wall (R3).
    */
   private makeJobs(site: string) {
     this.jobsFor = site;
@@ -794,13 +794,13 @@ export class AttackPlanner {
       list.push({ task, by: id, done: false, fails: 0 });
     };
     const slotOf = (b: Pawn, gid: string) => slotWith(sim, b, gid);
-    // Brava: her Kludge toward the far side of the first hard breach (where the jammers are), else the site.
+    // Patch: her Crossover toward the far side of the first hard breach (where the jammers are), else the site.
     for (const b of bots) {
-      if (b.op !== "brava" || slotGadget(sim.data, b.body.loadout, 2)?.use.kind !== "drone") continue;
+      if (b.op !== "patch" || slotGadget(sim.data, b.body.loadout, 2)?.use.kind !== "drone") continue;
       const hb = strat.attack.hardBreach.map((h) => byId.get(h.panel)).find((e) => e);
       const far = hb ? sides(level, hb, 1.5).find((x) => x.room !== null && st.rooms.includes(x.room)) : undefined;
       const to = far?.pos ?? roomSpots(this.nav, level, st.rooms[0], 1.5)[0];
-      if (to) add(b.id, { kind: "kludge", to });
+      if (to) add(b.id, { kind: "crossover", to });
     }
     for (const h of strat.attack.hardBreach) {
       const e = byId.get(h.panel);

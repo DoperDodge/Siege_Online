@@ -23,7 +23,7 @@ import { roomWith } from "./roomHarness.js";
 
 const DEG = Math.PI / 180;
 
-async function lab(operator = "mute") {
+async function lab(operator = "lull") {
   const sim = await Sim.create("destruction_lab");
   sim.deployRules = { anyone: false, rappel: false, pools: [10, 10] };
   const ctrl = sim.addPlayer("p", operator);
@@ -123,7 +123,7 @@ describe("reinforcing a wall (in the simulation)", () => {
     at(sim, pawn, 0.4, 0, -5.0, 0);
     sim.deployRules = { anyone: false, rappel: false, pools: [10, 0] };
     expect(sim.prompt(ctrl.id)).toBeNull();
-    const att = await lab("sledge");
+    const att = await lab("cleave");
     at(att.sim, att.pawn, 0.4, 0, -5.0, 0);
     expect(att.sim.prompt(att.ctrl.id)).toBeNull();
     att.sim.deployRules = { anyone: true, rappel: true, pools: [10, 10] };
@@ -133,7 +133,7 @@ describe("reinforcing a wall (in the simulation)", () => {
 
 describe("in a lab room", () => {
   it("steel goes up on the reinforcer's side from the team's pool; everyone sees it; bullets from the far side stop at it", async () => {
-    const { room, clients, tick } = await roomWith("destruction_lab", ["mute"]);
+    const { room, clients, tick } = await roomWith("destruction_lab", ["lull"]);
     for (let i = 0; i < 10; i++) tick();
     const [a] = clients;
     room.onLabTool(a.id, { kind: "teleport", x: 2.2, y: 0, z: -5.0, yawDeg: 0 });
@@ -157,7 +157,7 @@ describe("in a lab room", () => {
   });
 
   it("a hatch is reinforced from above, never from below, and then shrugs off bullets", async () => {
-    const { room, clients, tick } = await roomWith("destruction_lab", ["mute", "mute"]);
+    const { room, clients, tick } = await roomWith("destruction_lab", ["lull", "lull"]);
     for (let i = 0; i < 10; i++) tick();
     const [top, below] = clients;
     room.onLabTool(below.id, { kind: "teleport", x: 10, y: 0, z: 8, yawDeg: 0 });
@@ -179,7 +179,7 @@ describe("in a lab room", () => {
   });
 
   it("a barricade goes up in an empty door in 2 s and blocks it; three knife hits break it; it comes off in 1 s", async () => {
-    const { room, clients, tick } = await roomWith("destruction_lab", ["mute"]);
+    const { room, clients, tick } = await roomWith("destruction_lab", ["lull"]);
     for (let i = 0; i < 10; i++) tick();
     const [a] = clients;
     const body = () => room.sim.pawns.get(a.session.ctrl!.possessedPawnId)!.state;

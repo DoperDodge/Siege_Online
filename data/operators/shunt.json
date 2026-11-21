@@ -8,7 +8,7 @@
   "loadout": {
     "primaries": ["mp5k", "m1014"],
     "secondaries": ["p226_mk_25", "q_929"],
-    "gadgets": ["barbed_wire", "nitro_cell"]
+    "gadgets": ["barbed_wire", "remote_charge"]
   },
   "ability": {
     "id": "arc_pack",

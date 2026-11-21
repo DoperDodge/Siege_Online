@@ -8,7 +8,7 @@
   "loadout": {
     "primaries": ["vector_45_acp", "six12_sd"],
     "secondaries": ["c75_auto", "smg_12"],
-    "gadgets": ["nitro_cell", "proximity_alarm"]
+    "gadgets": ["remote_charge", "proximity_alarm"]
   },
   "ability": {
     "id": "snare_latch",

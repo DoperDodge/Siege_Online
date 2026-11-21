@@ -1,8 +1,8 @@
 // Health and being down (Phase 3 M7, M9): the health bar (the 20 HP down pool while down), the down screen
 // (crawl, bleed, wait for a teammate) and, while you revive someone, the revive's progress (D-048, D-049);
 // the same gauge shows a reinforcement or barricade going up (Phase 4 M6), a rope being hooked on (Phase 5 M8), the
-// defuser being planted or disabled (Phase 6, match/DESIGN.md §8), a Bulletproof Camera being placed (Phase 7), and a
-// Gu needle being pulled (Phase 8 M10; a needle in you tints the view and says how to pull it).
+// defuser being planted or disabled (Phase 6, match/DESIGN.md §8), a Armoured Camera being placed (Phase 7), and a
+// Burr needle being pulled (Phase 8 M10; a needle in you tints the view and says how to pull it).
 import { DeployKind, deployTicks, GadgetAct, isDowned, PawnMode, ticks, TICK_HZ, type CombatData, type DestructionData, type MovementData, type PawnState } from "@redmond/shared";
 
 /** Seconds left on a revive `reviveTicks` in. */
@@ -39,7 +39,7 @@ export class DownedHud {
     $(".hp").classList.toggle("down", down);
     this.root.classList.toggle("downed", down);
     $(".down-ui").classList.toggle("hidden", !down);
-    // A Gu needle in you (Phase 8 M10): the view sickly green at its edges, and how to pull it. (Nothing of a body's own
+    // A Burr needle in you (Phase 8 M10): the view sickly green at its edges, and how to pull it. (Nothing of a body's own
     // holds or needle once it's dead: a lethal fall left them on the death screen, the review found, M12.)
     const alive = s.mode !== PawnMode.Dead;
     // Latch's snare on your leg (R3), or a jolt of Bailiff's prod (R3, for a moment): the same line, its own words.

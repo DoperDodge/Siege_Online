@@ -92,7 +92,7 @@ export function applyDamage(sim: Sim, pawn: Pawn, d: Damage, rules?: Pick<ModeDa
   if (s.mode !== PawnMode.Vault) s.mode = PawnMode.Downed;
   s.lean = 0;
   s.sprinting = false;
-  s.needled = false; // a Gu's poison stops when he's down (lesion.md)
+  s.needled = false; // a Burr's poison stops when he's down (thistle.md)
   s.meleeTicks = 0;
   parkWeapon(s);
   s.adsQ = 0;
@@ -139,7 +139,7 @@ function teammateUp(sim: Sim, pawn: Pawn): boolean {
   return false;
 }
 
-/** Skopós's shell that isn't being driven (her other body): it takes headshots differently and its loss isn't an elimination. */
+/** Twain's shell that isn't being driven (her other body): it takes headshots differently and its loss isn't an elimination. */
 export function isIdleShell(sim: Sim, pawn: Pawn): boolean {
   if (pawn.ownerId === null || pawn.kind !== PawnKind.Body) return false;
   const c = sim.controllers.get(pawn.ownerId);

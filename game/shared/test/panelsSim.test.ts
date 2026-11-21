@@ -62,7 +62,7 @@ describe("panels in the level", () => {
 
   it("a body walks into an intact wall and stops; through a breach-sized hole it walks on", async () => {
     const sim = await Sim.create("movement_lab");
-    const ctrl = sim.addPlayer("tester", "sledge");
+    const ctrl = sim.addPlayer("tester", "cleave");
     settle(sim, ctrl);
     teleport(sim, ctrl, -4.5, 0, 15.5, 180);
     run(sim, ctrl, { forward: 1, yawDeg: 180 }, 2);
@@ -84,7 +84,7 @@ describe("panels in the level", () => {
   it("the same ops on two sims at the same tick keep a body walking through the hole bit-identical", async () => {
     const make = async () => {
       const sim = await Sim.create("movement_lab");
-      const ctrl = sim.addPlayer("tester", "brava");
+      const ctrl = sim.addPlayer("tester", "patch");
       sim.teleport(ctrl.possessedPawnId, -4.2, 0, 15.6, 180);
       return { sim, ctrl };
     };
@@ -116,7 +116,7 @@ describe("floors and hatches", () => {
       ],
     });
     const sim = await Sim.create("deck", { ...data, levels: new Map(data.levels).set("deck", deckLevel) });
-    const ctrl = sim.addPlayer("tester", "sledge");
+    const ctrl = sim.addPlayer("tester", "cleave");
     settle(sim, ctrl);
     return { sim, ctrl, pawn: sim.pawns.get(ctrl.possessedPawnId)! };
   }

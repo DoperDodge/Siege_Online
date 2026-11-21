@@ -310,7 +310,7 @@ export class Perception {
         return;
       }
       case "ping": {
-        // A teammate's heartbeat ping (Pulse's sensor): an enemy there now (the one there, as its client would draw it).
+        // A teammate's heartbeat ping (Murmur's sensor): an enemy there now (the one there, as its client would draw it).
         if (!e.heart || e.ctrl === ctrlId) return;
         let best: Pawn | null = null;
         let bestD = 2;
@@ -342,7 +342,7 @@ export class Perception {
     }
   }
 
-  /** An enemy sensed where it is (Pulse's sensor shows its heartbeat): known there now, not seen. */
+  /** An enemy sensed where it is (Murmur's sensor shows its heartbeat): known there now, not seen. */
   sensed(p: Pawn, now: number): void {
     const c = this.contacts.get(p.id) ?? blank(p, now);
     if (c.visible) return;

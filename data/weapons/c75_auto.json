@@ -1,5 +1,5 @@
 {
-  "_doc": "C75 Auto (Dokkaebi, Sentry). research/weapons.csv row c75_auto; class rules research/weapons_notes.md §4. Iron sights only. Machine-pistol falloff community-measured.",
+  "_doc": "C75 Auto (Relay, Picket). research/weapons.csv row c75_auto; class rules research/weapons_notes.md §4. Iron sights only. Machine-pistol falloff community-measured.",
   "_season": "Y11S3.1",
   "_unverified": ["damage.falloff", "destruction"],
   "id": "c75_auto",

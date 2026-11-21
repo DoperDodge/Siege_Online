@@ -160,8 +160,8 @@ describe("match rooms", () => {
 
     const [atk, def] = t.match.attackers === t.match.players.get(host.id)!.team ? [host, guest] : [guest, host];
     t.lobby(atk, { kind: "ready", ready: false }); // the lobby is over: refused, harmlessly
-    atk.toServer.push(encodePickLoadout(defaultLoadoutPick(data, "thermite")));
-    def.toServer.push(encodePickLoadout(defaultLoadoutPick(data, "mute")));
+    atk.toServer.push(encodePickLoadout(defaultLoadoutPick(data, "kiln")));
+    def.toServer.push(encodePickLoadout(defaultLoadoutPick(data, "lull")));
     t.act(def, { kind: "siteVote", site: "SITE_BOILER" });
     t.act(atk, { kind: "spawn", group: "C_YARD_GATE" });
     t.act(atk, { kind: "siteVote", site: "SITE_OFFICES" }); // attackers don't vote
@@ -176,7 +176,7 @@ describe("match rooms", () => {
     expect(t.room.sim.matchRules.redWalls).toBe(true);
     expect(def.session.sim!.matchRules.redWalls).toBe(true);
     const defBody = t.bodyOf(def)!;
-    expect(defBody.operatorId).toBe("mute");
+    expect(defBody.operatorId).toBe("lull");
     expect(defBody.team).toBe(DEFENSE);
     const boiler = t.room.sim.level.def.spawns.filter((s) => s.group === "SITE_BOILER")[0];
     expect(Math.hypot(defBody.state.x - boiler.pos[0], defBody.state.z - boiler.pos[2])).toBeLessThan(1.5);
@@ -192,10 +192,10 @@ describe("match rooms", () => {
     t.tick();
     const atkBody = t.bodyOf(atk)!;
     const gate = t.room.sim.level.def.spawns.find((s) => s.group === "C_YARD_GATE")!;
-    expect(atkBody.operatorId).toBe("thermite");
+    expect(atkBody.operatorId).toBe("kiln");
     expect(Math.hypot(atkBody.state.x - gate.pos[0], atkBody.state.z - gate.pos[2])).toBeLessThan(1.5);
     expect(t.room.sim.matchRules.redWalls).toBe(false);
-    expect(def.session.match!.players.find((p) => p.id === atk.id)!.operator).toBe("thermite");
+    expect(def.session.match!.players.find((p) => p.id === atk.id)!.operator).toBe("kiln");
     // The defender goes down and, the last one up, dies: the attackers win by elimination.
     t.room.killBody(t.bodyOf(def)!.id, Cause.Lab);
     t.tick();
@@ -659,24 +659,24 @@ describe("each format's details (Phase 6 M5)", () => {
     t.tick();
     const atk = t.match.sideOf(host.id) === ATTACK ? host : guest;
     const def = atk === host ? guest : host;
-    atk.toServer.push(encodePickLoadout(defaultLoadoutPick(data, "thermite")));
-    def.toServer.push(encodePickLoadout(defaultLoadoutPick(data, "pulse")));
+    atk.toServer.push(encodePickLoadout(defaultLoadoutPick(data, "kiln")));
+    def.toServer.push(encodePickLoadout(defaultLoadoutPick(data, "murmur")));
     toAction(t);
     t.room.killBody(t.bodyOf(def)!.id, Cause.Lab);
     t.tick();
     skip(t);
-    // Round 2 (same sides): the winner can't take Thermite again; the loser keeps Pulse.
+    // Round 2 (same sides): the winner can't take Kiln again; the loser keeps Murmur.
     expect([t.match.round, t.match.phase, t.match.sideOf(atk.id)]).toEqual([2, Phase.Planning, ATTACK]);
     const me = (c: typeof atk) => c.session.match!.players.find((p) => p.id === c.id)!;
-    expect([me(atk).locked, me(def).locked]).toEqual(["thermite", null]);
+    expect([me(atk).locked, me(def).locked]).toEqual(["kiln", null]);
     // The lock is the winner's own business (and their team's): the other side isn't sent it.
     expect(def.session.match!.players.find((p) => p.id === atk.id)!.locked).toBeNull();
-    atk.toServer.push(encodePickLoadout(defaultLoadoutPick(data, "thermite")));
+    atk.toServer.push(encodePickLoadout(defaultLoadoutPick(data, "kiln")));
     t.tick();
     expect(atk.errors.at(-1)?.message).toBe("That operator isn't available");
-    def.toServer.push(encodePickLoadout(defaultLoadoutPick(data, "pulse")));
+    def.toServer.push(encodePickLoadout(defaultLoadoutPick(data, "murmur")));
     for (let i = 0; i < 10; i++) t.tick(); // a pick goes out with the next state, within 8 ticks
-    expect(me(def).operator).toBe("pulse");
+    expect(me(def).operator).toBe("murmur");
   }, 60_000);
 
   it("Practice: one side may be empty, rounds go on swapping sides, and only the host ends it (no winner)", async () => {
@@ -782,10 +782,10 @@ describe("drones in a match (Phase 7 M1)", () => {
     const ctrl = t.room.bodyOf(atk.id)!;
     expect(t.room.sim.pawns.get(ctrl.possessedPawnId)!.kind).toBe(PawnKind.Body);
     expect(ctrl.pawnIds.slice(1, 3)).toEqual([d1.id, d2.id]);
-    // Brava's body comes with her two Kludge drones as well (Phase 8 M8); anyone else's with nothing more.
+    // Patch's body comes with her two Crossover drones as well (Phase 8 M8); anyone else's with nothing more.
     const more = ctrl.pawnIds.slice(3).map((id) => t.room.sim.pawns.get(id)!);
-    expect(more.length).toBe(ctrl.operatorId === "brava" ? 2 : 0);
-    expect(more.every((p) => p.kind === PawnKind.Drone && p.kludge)).toBe(true);
+    expect(more.length).toBe(ctrl.operatorId === "patch" ? 2 : 0);
+    expect(more.every((p) => p.kind === PawnKind.Drone && p.crossover)).toBe(true);
     expect(dist(d1, parked)).toBeLessThan(0.01);
     expect(atk.session.ctrl!.pawnIds).toEqual(ctrl.pawnIds);
     for (let i = 0; i < 16; i++) t.tick();
@@ -1085,18 +1085,18 @@ describe("pings, scans and callouts (Phase 7 M4)", () => {
 });
 
 
-describe("the Bulletproof Camera in a match (Phase 7 M5)", () => {
+describe("the Armoured Camera in a match (Phase 7 M5)", () => {
   /** In the Coal Store, 1.4 m from its wall with the Boiler Room (SW-B-02, a soft wall), facing it (−z). */
   const WALL: [number, number, number] = [18.25, -3.2, 34.5];
   /** The panel index of that wall. */
   const wallPanel = (t: { room: Room }) => t.room.sim.level.panels.byId.get("SW-B-02")!.panel.spec.index;
-  /** a attacks (Blue); b defends the Boiler Room as Mute (a Bulletproof Camera in the loadout). A long prep. */
+  /** a attacks (Blue); b defends the Boiler Room as Lull (a Armoured Camera in the loadout). A long prep. */
   const setup = async (prep = 60) => {
     const t = await matchRoom("custom", 2);
     const seconds = { ...custom.match.seconds, pick: 5, prep, action: 30, roundEnd: 2 };
     const [a, b] = await t.start(["a", "b"], quick({ siteReveal: "roundStart", firstAttack: "blue", seconds }));
     t.act(b, { kind: "siteVote", site: "SITE_BOILER" });
-    b.toServer.push(encodePickLoadout(defaultLoadoutPick(data, "mute")));
+    b.toServer.push(encodePickLoadout(defaultLoadoutPick(data, "lull")));
     t.until(() => t.match.phase === Phase.Prep, 15, "prep");
     t.tick();
     return { t, a, b };
@@ -1116,10 +1116,10 @@ describe("the Bulletproof Camera in a match (Phase 7 M5)", () => {
     b.cmd = { yaw, pitch };
     wait(t, ticks(data.gadgetRules.equipS) + 2);
     b.cmd = { yaw, pitch, buttons: Btn.Fire };
-    t.until(() => t.room.sim.bpCams().length > 0, 2, "placed");
+    t.until(() => t.room.sim.armouredCams().length > 0, 2, "placed");
     b.cmd = { yaw, pitch };
     wait(t, 16);
-    return () => t.room.sim.bpCams()[0];
+    return () => t.room.sim.armouredCams()[0];
   };
   /** The yaw and pitch from b's eye to `at`. */
   const aimAt = (t: T, b: C, at: readonly number[]) => {
@@ -1144,7 +1144,7 @@ describe("the Bulletproof Camera in a match (Phase 7 M5)", () => {
     const missed = b.session.mispredictions.length;
     const cam = placeCamera(t, b)();
     expect([cam.flags & GFlag.OnFloor, cam.panel, cam.signalEnd, cam.flags & GFlag.Broken, cam.owner, cam.team]).toEqual([0, wallPanel(t), 0, 0, t.room.bodyOf(b.id)!.id, DEFENSE]);
-    expect([a.session.sim!.bpCams(), b.session.sim!.bpCams()]).toEqual([[cam], [cam]]);
+    expect([a.session.sim!.armouredCams(), b.session.sim!.armouredCams()]).toEqual([[cam], [cam]]);
     expect(t.bodyOf(b)!.state.g1).toBe(0);
     const ctrl = t.room.bodyOf(b.id)!;
     b.cmd = { yaw: 0, buttons: Btn.Observe };
@@ -1153,7 +1153,7 @@ describe("the Bulletproof Camera in a match (Phase 7 M5)", () => {
     t.until(() => ctrl.cam === 1, 0.5, "the first camera");
     const n = t.room.sim.level.def.cameras.length;
     b.cmd = { yaw: cam.yaw, lean: -1 };
-    t.until(() => ctrl.cam === n + 1, 0.5, "the Bulletproof Camera");
+    t.until(() => ctrl.cam === n + 1, 0.5, "the Armoured Camera");
     b.cmd = { yaw: cam.yaw };
     wait(t, 32);
     expect(b.session.ctrl!.cam).toBe(n + 1);
@@ -1173,7 +1173,7 @@ describe("the Bulletproof Camera in a match (Phase 7 M5)", () => {
     shoot(t, b, aimAt(t, b, cam().pos));
     expect(cam().flags & GFlag.Broken).toBe(GFlag.Broken);
     wait(t, 8);
-    expect([a.session.sim!.bpCams()[0].flags & GFlag.Broken, b.session.sim!.bpCams()[0].flags & GFlag.Broken]).toEqual([GFlag.Broken, GFlag.Broken]);
+    expect([a.session.sim!.armouredCams()[0].flags & GFlag.Broken, b.session.sim!.armouredCams()[0].flags & GFlag.Broken]).toEqual([GFlag.Broken, GFlag.Broken]);
   }, 60_000);
 
   it("steel going up on its wall breaks it", async () => {
@@ -1201,13 +1201,13 @@ describe("the Bulletproof Camera in a match (Phase 7 M5)", () => {
     b.cmd = {};
     t.until(() => ctrl.cam === 1, 0.5, "the first camera");
     b.cmd = { lean: -1 };
-    t.until(() => ctrl.cam === t.room.sim.level.def.cameras.length + 1, 0.5, "the Bulletproof Camera");
+    t.until(() => ctrl.cam === t.room.sim.level.def.cameras.length + 1, 0.5, "the Armoured Camera");
     b.cmd = {};
     t.until(() => ctrl.cam === 1, 10.5, "its signal gone");
     expect(t.room.sim.tick).toBeGreaterThanOrEqual(cam().signalEnd);
     // The room tells everyone; the defender's own client hands over as well.
     for (let i = 0; i < 16; i++) t.tick();
-    expect([cam().flags & GFlag.Lost, b.session.sim!.bpCams()[0].flags & GFlag.Lost, b.session.ctrl!.cam]).toEqual([GFlag.Lost, GFlag.Lost, 1]);
+    expect([cam().flags & GFlag.Lost, b.session.sim!.armouredCams()[0].flags & GFlag.Lost, b.session.ctrl!.cam]).toEqual([GFlag.Lost, GFlag.Lost, 1]);
   }, 60_000);
 
   it("its EMP dart jams the drone it bursts on (6 s, no driving); it's ready again 10 s later; the dead can't fire it", async () => {
@@ -1226,7 +1226,7 @@ describe("the Bulletproof Camera in a match (Phase 7 M5)", () => {
     b.cmd = { yaw: cam.yaw, buttons: Btn.Observe };
     t.tick();
     b.cmd = { yaw: cam.yaw, lean: -1 };
-    t.until(() => ctrl.cam === t.room.sim.level.def.cameras.length + 1, 1, "the Bulletproof Camera");
+    t.until(() => ctrl.cam === t.room.sim.level.def.cameras.length + 1, 1, "the Armoured Camera");
     const lens = t.room.sim.camLens(ctrl.cam - 1, ctrl.camYaw);
     const d = [drone.state.x - lens[0], drone.state.y + 0.06 - lens[1], drone.state.z - lens[2]];
     const aim = { yaw: Math.atan2(-d[0], -d[2]), pitch: Math.atan2(d[1], Math.hypot(d[0], d[2])) };
@@ -1264,7 +1264,7 @@ describe("the Bulletproof Camera in a match (Phase 7 M5)", () => {
       b.cmd = { ...aim, buttons: Btn.Observe };
       t.tick();
       b.cmd = { ...aim, lean: -1 };
-      t.until(() => ctrl.cam === t.room.sim.level.def.cameras.length + 1, 1, "the Bulletproof Camera, dead");
+      t.until(() => ctrl.cam === t.room.sim.level.def.cameras.length + 1, 1, "the Armoured Camera, dead");
     }
     fire();
     expect(emps(b)).toBe(2);
@@ -1275,12 +1275,12 @@ describe("the review of Phase 7", () => {
   it("in prep an attacker's pilot is this round's operator: the roster says so", async () => {
     const t = await matchRoom("custom", 3);
     const [a, b] = await t.start(["a", "b"], quick({ siteReveal: "roundStart", firstAttack: "blue" }));
-    a.toServer.push(encodePickLoadout(defaultLoadoutPick(data, "fuze")));
+    a.toServer.push(encodePickLoadout(defaultLoadoutPick(data, "hail")));
     t.until(() => t.match.phase === Phase.Prep, 15, "prep");
     for (let i = 0; i < 8; i++) t.tick();
     const ctrl = t.room.bodyOf(a.id)!;
-    expect(ctrl.operatorId).toBe("fuze");
-    expect(b.session.roster.find((e) => e.controllerId === ctrl.id)!.operatorId).toBe("fuze");
+    expect(ctrl.operatorId).toBe("hail");
+    expect(b.session.roster.find((e) => e.controllerId === ctrl.id)!.operatorId).toBe("hail");
   }, 60_000);
 
   it("an attacker picks up a drone whose boost is recharging: predicted (no corrections)", async () => {
@@ -1359,15 +1359,15 @@ describe("the feed list (Phase 7 M6)", () => {
   }, 60_000);
 });
 
-describe("Skopós's idle shell in a match", () => {
+describe("Twain's idle shell in a match", () => {
   it("shooting her idle shell dead isn't her elimination: the round goes on", async () => {
     const t = await matchRoom("custom", 2);
     const [a, b] = await t.start(["a", "b"], quick({ siteReveal: "roundStart", firstAttack: "blue" }));
-    b.toServer.push(encodePickLoadout(defaultLoadoutPick(data, "skopos")));
+    b.toServer.push(encodePickLoadout(defaultLoadoutPick(data, "twain")));
     t.until(() => t.match.phase === Phase.Action, 15, "action");
     for (let i = 0; i < 16; i++) t.tick();
     const ctrl = t.room.bodyOf(b.id)!;
-    expect(ctrl.operatorId).toBe("skopos");
+    expect(ctrl.operatorId).toBe("twain");
     const idle = t.room.sim.bodyIds(ctrl).find((id) => id !== ctrl.possessedPawnId)!;
     const shell = t.room.sim.pawns.get(idle)!;
     // Its barrier covers its front, a glass canopy over its head (the game's, D-157): the attacker goes round behind it
@@ -1398,7 +1398,7 @@ describe("Skopós's idle shell in a match", () => {
     for (const lose of ["leaving", "arriving"] as const) {
       const t = await matchRoom("custom", 2);
       const [, b] = await t.start(["a", "b"], quick({ siteReveal: "roundStart", firstAttack: "blue" }));
-      b.toServer.push(encodePickLoadout(defaultLoadoutPick(data, "skopos")));
+      b.toServer.push(encodePickLoadout(defaultLoadoutPick(data, "twain")));
       t.until(() => t.match.phase === Phase.Action, 15, "action");
       for (let i = 0; i < 16; i++) t.tick();
       const ctrl = t.room.bodyOf(b.id)!;

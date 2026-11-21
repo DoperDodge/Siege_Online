@@ -40,9 +40,9 @@ const use = pistol.use.kind === "shoot" ? pistol.use : null;
 const RELOAD = ticks(use!.reloadS);
 const EMP_S = pistol.emp!.seconds;
 
-/** Ohm (client 0) 3.5 m in front of the reinforceable wall at z −6 (front face −5.9), facing it; Mute out of the way. */
+/** Ohm (client 0) 3.5 m in front of the reinforceable wall at z −6 (front face −5.9), facing it; Lull out of the way. */
 async function atWall() {
-  const s = await scene(["ohm", "mute"]);
+  const s = await scene(["ohm", "lull"]);
   s.room.pickLoadout(s.clients[0].id, defaultLoadoutPick(s.sim.data, "ohm"));
   s.wait(8);
   s.teleport(0, 1, 0, -2.4, 0);
@@ -87,8 +87,8 @@ describe("Ohm's Brownout Pistol (R3)", () => {
 
   it("a round stops at the wall and bursts there: a Damper 1 m behind it is off for its seconds, one 2.5 m behind isn't", async () => {
     const s = await atWall();
-    const near = s.put("signal_disruptor", 1, [1, 0.06, -6.9]);
-    const far = s.put("signal_disruptor", 1, [1, 0.06, -8.5]);
+    const near = s.put("damper", 1, [1, 0.06, -6.9]);
+    const far = s.put("damper", 1, [1, 0.06, -8.5]);
     const own = s.put("claymore", 0, [2.2, 0.05, -5.2]);
     const [shot] = fire(s, s.aimAt(0, [1, 0.5, -5.9]));
     expect(shot.burst).toBe(true);
@@ -115,10 +115,10 @@ describe("Ohm's Brownout Pistol (R3)", () => {
 describe("Ohm's scope (R3): what it marks", () => {
   it("the other side's electronic devices in range, through walls; not their mechanical ones, nor his own side's", async () => {
     const s = await atWall();
-    const damper = s.put("signal_disruptor", 1, [1, 0.06, -7.5]);
+    const damper = s.put("damper", 1, [1, 0.06, -7.5]);
     s.put("barbed_wire", 1, [3, 0.225, -7.5]);
     s.put("claymore", 0, [2, 0.05, -4]);
-    const cam = s.put("bulletproof_camera", 1, [-2, 1.5, -6.2]);
+    const cam = s.put("armoured_camera", 1, [-2, 1.5, -6.2]);
     const far = s.put("proximity_alarm", 1, [1, 0.05, 25]); // 27 m behind him, within its 40 m
     const out = s.put("proximity_alarm", 1, [30, 0.05, 30]); // past its range
     const eye: Vec3 = [1, 1.6, -2.4];
@@ -155,7 +155,7 @@ describe("a bot playing Ohm (R3)", () => {
       return done();
     };
     expect(step(() => m.phase === Phase.Planning, 5)).toBe(true);
-    const ops = ["ohm", "thermite", "striker", "sledge", "fuze"];
+    const ops = ["ohm", "kiln", "pointman", "cleave", "hail"];
     const bots = [...m.players.values()].filter((p) => p.bot !== null);
     bots.forEach((p, k) => room.pickLoadout(p.id, botLoadout(data, ops[k])));
     expect(step(() => m.phase === Phase.Action, 60)).toBe(true);
@@ -167,7 +167,7 @@ describe("a bot playing Ohm (R3)", () => {
     const wall = room.sim.level.panels.byId.get("SW-1F-01")!;
     const site = room.sim.level.def.sites.find((x) => x.id === "SITE_MILL")!;
     const behind = sides(room.sim.level.def, wall, 0.8).find((x) => x.room !== null && site.rooms.includes(x.room))!;
-    const damper = room.sim.gadgets.add({ kind: kindOf("signal_disruptor"), owner: you.id, team: yourBody.team, pos: [behind.pos[0], behind.pos[1] + 0.06, behind.pos[2]], yaw: 0, vel: [0, 0, 0], flags: GFlag.OnFloor, panel: -1, launchTick: 0, fuseEnd: 0, signalEnd: 0, readyAt: 0, offEnd: 0, seq: 0 });
+    const damper = room.sim.gadgets.add({ kind: kindOf("damper"), owner: you.id, team: yourBody.team, pos: [behind.pos[0], behind.pos[1] + 0.06, behind.pos[2]], yaw: 0, vel: [0, 0, 0], flags: GFlag.OnFloor, panel: -1, launchTick: 0, fuseEnd: 0, signalEnd: 0, readyAt: 0, offEnd: 0, seq: 0 });
     const ohm = room.sim.pawns.get(room.bodyOf(bots[0].id)!.possessedPawnId)!;
     let off = false;
     const ok = step(() => (off ||= ((room.sim.gadgets.get(damper.id)?.flags ?? 0) & GFlag.Off) !== 0), 90);
@@ -187,7 +187,7 @@ describe("Ohm's rounds and the other R3 operators (R3_OPERATORS.md §3)", () => 
     // About the plain soft wall's middle (x −8, its front face z −5.9), most of them behind it.
     const pack = s.put("arc_pack", 1, [-7.6, 0.05, -6.4]);
     const post = s.put("bailiff_post", 2, [-8.4, 0.05, -6.4], { flags: GFlag.OnFloor | GFlag.Active });
-    const armoured = s.put("bulletproof_camera", 1, [-7.3, 1.6, -6.2]);
+    const armoured = s.put("armoured_camera", 1, [-7.3, 1.6, -6.2]);
     const snare = s.put("snare_latch", 3, [-8, 0.3, -6.4]);
     const salvo = s.put("stud_ring", 4, [-9.2, 1.0, -5.9], s.onPanel("soft_plain", [-9.2, 1.0, -5.9]));
     s.teleport(2, -8.9, 0, -6.7, 0); // Bailiff, her shield up, behind the wall

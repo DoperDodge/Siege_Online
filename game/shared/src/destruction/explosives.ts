@@ -1,5 +1,5 @@
 // The Destruction Lab's explosive tools (Phase 4 M7; research/destruction.md §4, data/destruction.json
-// `explosives`): each cuts its shape (a rectangle for charges, a disc for grenades and the Nitro Cell, an X for Rivet's
+// `explosives`): each cuts its shape (a rectangle for charges, a disc for grenades and the Remote Charge, an X for Rivet's
 // Cross) out of the first panel along the view, centred where the view meets it. Only the shapes: placing, throwing,
 // fuses and damage to players come with the gadgets (Phase 8).
 import type { Vec3 } from "../core/math.js";

@@ -1,0 +1,27 @@
+{
+  "_doc": "Thistle — loadout and ratings from the official Ubisoft operator page (research/operators/lesion.md). Ability numbers arrive with Phase 8.",
+  "_season": "Y11S3",
+  "id": "thistle",
+  "name": "Thistle",
+  "side": "defender",
+  "healthRating": 2,
+  "speedRating": 2,
+  "loadout": {
+    "primaries": [
+      "six12_sd",
+      "t_5_smg"
+    ],
+    "secondaries": [
+      "q_929"
+    ],
+    "gadgets": [
+      "feed_blocker",
+      "armoured_camera"
+    ]
+  },
+  "ability": {
+    "id": "burr_mine",
+    "name": "Burr Mines"
+  },
+  "pawns": 1
+}

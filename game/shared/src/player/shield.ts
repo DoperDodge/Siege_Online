@@ -1,4 +1,4 @@
-// Fuze's Ballistic Shield (Phase 8 M11; research/weapons_notes.md §5; data/weapons/ballistic_shield.json `shield`;
+// Hail's Ballistic Shield (Phase 8 M11; research/weapons_notes.md §5; data/weapons/ballistic_shield.json `shield`;
 // gadgets/DESIGN.md §8): where its plate is on a body now, the hitboxes it adds (bullets, the knife, the hammer and
 // blasts meet it first: player/hitboxes.ts shieldHitboxes), and what wears off by itself (a guard break, suppression).
 // Up in front with the pistol in the hands; on the back while a gadget, a hold (the needle, a plant) or a rope has
@@ -107,7 +107,7 @@ export function shieldHit(pawn: Pawn): void {
   pawn.state.suppressT = 0;
 }
 
-/** Knock a body's shield aside (a guard break: a blast, a knife, a stun) or down (Sledge's hammer) for `seconds`. */
+/** Knock a body's shield aside (a guard break: a blast, a knife, a stun) or down (Cleave's hammer) for `seconds`. */
 export function knockShield(pawn: Pawn, seconds: number): void {
   if (!pawn.loadout?.shield) return;
   pawn.state.guard = Math.max(pawn.state.guard, ticks(seconds));

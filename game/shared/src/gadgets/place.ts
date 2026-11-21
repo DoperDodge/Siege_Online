@@ -1,7 +1,7 @@
-// Where a placed gadget goes (Phase 8, gadgets/DESIGN.md §2; the Bulletproof Camera's rule from Phase 7 made general):
+// Where a placed gadget goes (Phase 8, gadgets/DESIGN.md §2; the Armoured Camera's rule from Phase 7 made general):
 // on the first surface along the view within the gadget's reach, if its data allows that surface. On a floor it
 // stands facing the placer's way; on a wall it faces out of it. A charge placed on a breakable floor or hatch lies
-// flat on it. Fuze's Cluster Charge also goes on a deployable shield's face (M5). Mira's Black Mirror (M7) goes into a
+// flat on it. Hail's Hailstone Drill also goes on a deployable shield's face (M5). Vista's Blind Pane (M7) goes into a
 // reinforceable wall at her head height, standing or crouched, from its steel's side if it's reinforced.
 import type { Vec3 } from "../core/math.js";
 import type { ExplosiveData, GadgetData, PlaceOn } from "../data/schemas.js";
@@ -112,7 +112,7 @@ export function placeSpot(q: PlaceQuery, g: PlaceData, eye: Vec3, dir: Vec3, yaw
 }
 
 /**
- * Where a `toFloor` charge stands on its wall (Thermite's, Phase 8 M5): its box's centre height just above the floor
+ * Where a `toFloor` charge stands on its wall (Kiln's, Phase 8 M5): its box's centre height just above the floor
  * under `pos` (out of the wall along `n`), if the same panel is there to go on that low; else null (it stays where
  * the view met it).
  */

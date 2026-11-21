@@ -95,7 +95,7 @@ export function hashPawnState(s: PawnState): number {
   return fnv1a(w.finish());
 }
 
-/** The predicted part of a controller (Skopós' camera and swap state, the drone driven): exact, like PawnState. */
+/** The predicted part of a controller (Twain' camera and swap state, the drone driven): exact, like PawnState. */
 export type ControllerState = Pick<
   PlayerController,
   "possessedPawnId" | "shellCam" | "swapPhase" | "swapT" | "swapCooldown" | "prevButtons" | "drone" | "prevLean" | "cam" | "camYaw" | "camPitch" | "camEntry" | "lastCam" | "camViews"
@@ -132,7 +132,7 @@ export function readControllerState(r: ByteReader): ControllerState {
   const camViews: CamView[] = [];
   for (let i = 0; i < n; i++) {
     const key = r.varu();
-    // (A camera's key: 2 and up; Skopós's shell view has none.)
+    // (A camera's key: 2 and up; Twain's shell view has none.)
     if (key < 2) throw new ProtocolError("bad camera view");
     camViews.push({ key, yaw: r.finite(), pitch: r.finite() });
   }

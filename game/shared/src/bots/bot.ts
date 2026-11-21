@@ -16,7 +16,7 @@ import type { Pawn, PlayerController } from "../player/pawn.js";
 import { Btn, Hand, handSlot, PawnKind, PawnMode, Stance, WeaponAct, type InputCmd } from "../player/types.js";
 import { slotGadget } from "../gadgets/hands.js";
 import { kindId, kindOf } from "../gadgets/kinds.js";
-import { hackTargetFor, kludgeOf, type KludgeData } from "../gadgets/hack.js";
+import { hackTargetFor, crossoverOf, type CrossoverData } from "../gadgets/hack.js";
 import { heartbeats, heartOf } from "../gadgets/sensor.js";
 import { coilMarks } from "../gadgets/coil.js";
 import { ticks } from "../weapons/ticks.js";
@@ -75,7 +75,7 @@ const PICK_LATE_S = 5;
 export const Doing = { Task: 0, Fight: 1, Hold: 2, Investigate: 3, Reload: 4, Revive: 5, Gadget: 6 } as const;
 export type Doing = (typeof Doing)[keyof typeof Doing];
 
-/** A Kludge looks for devices to hack every this many ticks. */
+/** A Crossover looks for devices to hack every this many ticks. */
 const HACK_SCAN_TICKS = 6;
 /** A behaviour's score must beat the current one's by this to take over (no dithering). */
 const KEEP = 0.12;
@@ -127,18 +127,18 @@ export class Bot {
   /** What its coil's pings marked this round (Dowser's, R3: each device once). */
   private dowsed = new Set<string>();
   private dowsedRound = -1;
-  /** A count a task started with (Brava's Kludge drones out). */
+  /** A count a task started with (Patch's Crossover drones out). */
   private taskCount = 0;
-  /** Brava's Kludge: what's in its sights (its key) and when Fire may be held on it, when it last saw a device. */
+  /** Patch's Crossover: what's in its sights (its key) and when Fire may be held on it, when it last saw a device. */
   private hackKey = "";
   private hackFrom = 0;
   private hackSeen = 0;
-  /** The devices its Kludge last saw (where, how far), and when it looks again. */
+  /** The devices its Crossover last saw (where, how far), and when it looks again. */
   private hackDevices: { p: Vec3; dist: number }[] = [];
   private hackScanAt = 0;
-  /** How near its Kludge has got to where it's going, and when it last got a metre nearer. */
-  private kludgeBest = Infinity;
-  private kludgeAt = 0;
+  /** How near its Crossover has got to where it's going, and when it last got a metre nearer. */
+  private crossoverBest = Infinity;
+  private crossoverAt = 0;
   /** A hack it holds Fire for (its target's key, the tick it began), and how many times it has begun one on each target. */
   private hackRun: { key: string; from: number } | null = null;
   private readonly hackTries = new Map<string, number>();
@@ -154,10 +154,10 @@ export class Bot {
   private reactAt = 0;
   /** When each kind of its own uses was last made (tag → tick). */
   private readonly usedAt = new Map<string, number>();
-  /** Skopós: a swap under way (0: none; 1 her shell's view opening; 2 confirming; 3 transferring), since when. */
+  /** Twain: a swap under way (0: none; 1 her shell's view opening; 2 confirming; 3 transferring), since when. */
   private swap = 0;
   private swapSince = 0;
-  /** Skopós walking her idle shell (prep): the shell she set out from. */
+  /** Twain walking her idle shell (prep): the shell she set out from. */
   private shellHome = 0;
   /** Where it was before it came into the site's rooms (an attacker's claymore faces that way). */
   private cameFrom: Vec3 | null = null;
@@ -249,7 +249,7 @@ export class Bot {
       const pulling = s.deployKind === DeployKind.Snare;
       return { ...this.still(s), buttons: pulling || !(s.prevButtons & Btn.Interact) ? Btn.Interact : 0 };
     }
-    // Skopós between shells: the keys of the swap and nothing else.
+    // Twain between shells: the keys of the swap and nothing else.
     const swapping = this.swapStep(ctrl, s, now);
     if (swapping) return swapping;
     if ((now + this.memberId) % 4 === 0) this.decide(w, pawn, ctrl, mates, d, now);
@@ -326,7 +326,7 @@ export class Bot {
     const low = w0 ? loaded < Math.max(1, w0.ammo.magazine * 0.3) : false;
     const downMate = mates.find((p) => p.state.mode === PawnMode.Downed && Math.hypot(p.state.x - s.x, p.state.z - s.z) < 15);
     // Its planner's job (setting up in prep, a retake) comes before chasing sounds; a role (hold, roam) after them.
-    const jobScore = job && (job.kind === "reinforce" || job.kind === "barricade" || job.kind === "hole" || job.kind === "retake" || job.kind === "gadget" || job.kind === "shell" || job.kind === "kludge") ? 0.75 : 0.3;
+    const jobScore = job && (job.kind === "reinforce" || job.kind === "barricade" || job.kind === "hole" || job.kind === "retake" || job.kind === "gadget" || job.kind === "shell" || job.kind === "crossover") ? 0.75 : 0.3;
     const scores: [Doing, number, Contact | null][] = [[Doing.Task, jobScore, null]];
     if (target) scores.push([Doing.Fight, 1, target]);
     if (loaded === 0) scores.push([Doing.Reload, 0.95, null]);
@@ -350,7 +350,7 @@ export class Bot {
       if (r) [this.react, this.reactScore, this.reactMade] = [new GadgetUse(r.task, now), r.score, now];
     }
     if (this.react) scores.push([Doing.Gadget, this.reactScore, null]);
-    this.skoposSwap(w, me, ctrl, now, target);
+    this.twainSwap(w, me, ctrl, now, target);
     let best = scores[0];
     for (const sc of scores) if (sc[1] > best[1]) best = sc;
     const current = scores.find((sc) => sc[0] === this.doing);
@@ -408,8 +408,8 @@ export class Bot {
   }
 
   /**
-   * What a gadget use of its own adds to the motor's keys: Dokkaebi's tablet sends the payload once it's on the
-   * spotted defender; Pulse's sensor, up, shows heartbeats (each one known to it and its team) and the nearest is
+   * What a gadget use of its own adds to the motor's keys: Relay's tablet sends the payload once it's on the
+   * spotted defender; Murmur's sensor, up, shows heartbeats (each one known to it and its team) and the nearest is
    * pinged for everyone.
    */
   private extras(w: BotWorld, me: Pawn, r: GadgetUse, input: BotInput | null, d: BotDifficulty, now: number): BotInput | null {
@@ -423,7 +423,7 @@ export class Bot {
       r.firedAt = now;
       return { ...input, buttons: input.buttons | Btn.Fire };
     }
-    if (r.task.tag === "jegeo" && input && r.ready(me)) {
+    if (r.task.tag === "ringer" && input && r.ready(me)) {
       if (r.firedAt >= 0) {
         if (now - r.firedAt > 1.5 * TICK_HZ) r.finish(true);
         return input;
@@ -510,10 +510,10 @@ export class Bot {
   }
 
   /**
-   * One of its own gadget uses worth making now (score), from what it knows: a Nitro Cell out set off when an enemy's
+   * One of its own gadget uses worth making now (score), from what it knows: a Remote Charge out set off when an enemy's
    * by it; a defender's cell thrown where an enemy was heard close; an attacker's grenade into the site's room before it
-   * goes in, a claymore behind it once in, a smoke on a teammate planting; Dokkaebi's payload on a spotted defender;
-   * Pulse's sensor up now and then on his rounds. Null: none.
+   * goes in, a claymore behind it once in, a smoke on a teammate planting; Relay's payload on a spotted defender;
+   * Murmur's sensor up now and then on his rounds. Null: none.
    */
   private reaction(w: BotWorld, me: Pawn, ctrl: PlayerController, d: BotDifficulty, now: number, target: Contact | null, job: Task | null): { task: GadgetTask; score: number } | null {
     const sim = w.sim;
@@ -526,14 +526,14 @@ export class Bot {
     const out = (slot: 1 | 2) => (slot === 1 ? s.w1 : s.w2);
     const since = (tag: string) => (now - (this.usedAt.get(tag) ?? -1e9)) / TICK_HZ;
     const keen = 0.5 + 0.5 * d.utilityUse;
-    // A Nitro Cell out: set off when an enemy's (known to be) by it.
-    const nitro = slotOf("nitro_cell");
-    if (nitro && out(nitro) > 0) {
-      const kind = kindOf("nitro_cell");
+    // A Remote Charge out: set off when an enemy's (known to be) by it.
+    const remoteCharge = slotOf("remote_charge");
+    if (remoteCharge && out(remoteCharge) > 0) {
+      const kind = kindOf("remote_charge");
       const cell = sim.gadgets.list.find((g) => g.owner === ctrl.id && g.kind === kind && !(g.flags & GFlag.Flying));
       if (cell) {
         const by = [...this.senses.contacts.values()].some((c) => c.kind === PawnKind.Body && now - c.at < TICK_HZ && Math.hypot(c.pos[0] - cell.pos[0], c.pos[1] + 0.9 - cell.pos[1], c.pos[2] - cell.pos[2]) < 3.5);
-        if (by) return { task: { kind: "gadget", slot: nitro, how: "detonate", stand: null, look: cell.pos, tag: "boom" }, score: 1.05 };
+        if (by) return { task: { kind: "gadget", slot: remoteCharge, how: "detonate", stand: null, look: cell.pos, tag: "boom" }, score: 1.05 };
       }
     }
     if (m.phase !== Phase.Action && m.phase !== Phase.PostPlant) return null;
@@ -558,35 +558,35 @@ export class Bot {
           return { task: { kind: "gadget", slot: monitor, how: "hold", stand: null, look: ahead, seconds: 1.5, tag: "patch" }, score: down ? 0.92 : 0.7 };
         }
       }
-      // A Nitro Cell thrown where an enemy was just heard, close (round a corner: as near it as it can see).
-      if (nitro && left(nitro) > 0 && out(nitro) === 0 && recent && recent.kind === PawnKind.Body && recent.source !== Source.Seen) {
+      // A Remote Charge thrown where an enemy was just heard, close (round a corner: as near it as it can see).
+      if (remoteCharge && left(remoteCharge) > 0 && out(remoteCharge) === 0 && recent && recent.kind === PawnKind.Body && recent.source !== Source.Seen) {
         const dist = Math.hypot(recent.pos[0] - s.x, recent.pos[2] - s.z);
         const at = dist > 3.5 && dist < 11 ? this.throwPoint(w, me, recent.pos, 9) : null;
-        if (at && Math.hypot(at[0] - recent.pos[0], at[2] - recent.pos[2]) < 3) return { task: { kind: "gadget", slot: nitro, how: "lob", stand: null, look: at, tag: "nitro" }, score: 0.78 * keen };
+        if (at && Math.hypot(at[0] - recent.pos[0], at[2] - recent.pos[2]) < 3) return { task: { kind: "gadget", slot: remoteCharge, how: "lob", stand: null, look: at, tag: "remoteCharge" }, score: 0.78 * keen };
       }
-      // Lesion: a Gu mine (they come back over time) at a way into the room it's in, now and then.
-      const gu = slotOf("gu_mine");
-      if (gu && left(gu) > 0 && !target && !recent && here && since("gu") > 15) {
+      // Thistle: a Burr mine (they come back over time) at a way into the room it's in, now and then.
+      const burr = slotOf("burr_mine");
+      if (burr && left(burr) > 0 && !target && !recent && here && since("burr") > 15) {
         const eye = eyePose(sim.data.movement, sim.data.hitboxes, s).pos;
         const ways = waysIn(sim, here)
           .map((p): Vec3 => [p[0], p[1] - LOOK_H, p[2]])
           .filter((p) => Math.abs(p[1] - s.y) < 1 && Math.hypot(p[0] - s.x, p[2] - s.z) > 2.5 && Math.hypot(p[0] - s.x, p[2] - s.z) < 10 && sees(sim, eye, [p[0], p[1] + 0.3, p[2]]));
         const way = ways[(this.memberId + Math.floor(now / (20 * TICK_HZ))) % Math.max(1, ways.length)];
-        if (way) return { task: { kind: "gadget", slot: gu, how: "throw", stand: null, look: [way[0], way[1] + 0.05, way[2]], tag: "gu" }, score: 0.45 };
+        if (way) return { task: { kind: "gadget", slot: burr, how: "throw", stand: null, look: [way[0], way[1] + 0.05, way[2]], tag: "burr" }, score: 0.45 };
       }
-      // Pulse: the sensor up for a few seconds every so often, on his rounds (not in a fight).
-      const sensor = slotOf("cardiac_sensor");
+      // Murmur: the sensor up for a few seconds every so often, on his rounds (not in a fight).
+      const sensor = slotOf("blood_oxygen_sensor");
       if (sensor && !target && !recent && since("scan") > 12 + (this.memberId % 5)) {
         const ahead: Vec3 = [s.x - Math.sin(s.yaw) * 6, s.y + 1.4, s.z - Math.cos(s.yaw) * 6];
         return { task: { kind: "gadget", slot: sensor, how: "hold", stand: null, look: ahead, seconds: 4, tag: "scan" }, score: 0.5 };
       }
       return null;
     }
-    // Attackers. Dokkaebi: the payload sent to a spotted defender (her charges permitting: the room says).
-    const tablet = slotOf("jegeo_payload");
-    if (tablet && !target && since("jegeo") > 10) {
+    // Attackers. Relay: the payload sent to a spotted defender (her charges permitting: the room says).
+    const tablet = slotOf("ringer");
+    if (tablet && !target && since("ringer") > 10) {
       const spotted = this.senses.spottedNow(sim, now);
-      if (spotted) return { task: { kind: "gadget", slot: tablet, how: "hold", stand: null, look: spotted, seconds: 3, tag: "jegeo" }, score: 0.8 * keen };
+      if (spotted) return { task: { kind: "gadget", slot: tablet, how: "hold", stand: null, look: spotted, seconds: 3, tag: "ringer" }, score: 0.8 * keen };
     }
     // Dowser (R3): the coil up for a few seconds every so often on his way in (not in a fight), pinging what it shows.
     const coil = slotOf("divining_coil");
@@ -659,10 +659,10 @@ export class Bot {
   }
 
   /**
-   * Skopós (in action, not mid-fight): into her other shell when this one is hurt, or when the enemy is heard by the
+   * Twain (in action, not mid-fight): into her other shell when this one is hurt, or when the enemy is heard by the
    * other and far from this one (D-164: the shell nearer the attack).
    */
-  private skoposSwap(w: BotWorld, me: Pawn, ctrl: PlayerController, now: number, target: Contact | null) {
+  private twainSwap(w: BotWorld, me: Pawn, ctrl: PlayerController, now: number, target: Contact | null) {
     const m = w.match;
     if (this.swap !== 0 || !m || m.phase !== Phase.Action || target || ctrl.swapPhase !== 0 || ctrl.swapCooldown > 0) return;
     const other = w.sim.otherPawn(ctrl.id);
@@ -997,7 +997,7 @@ export class Bot {
         return input ?? look(t.look);
       }
       case "shell": {
-        // Skopós in prep: into her other shell, it walked to `to`, and back into the one she left.
+        // Twain in prep: into her other shell, it walked to `to`, and back into the one she left.
         const c = me.ownerId !== null ? sim.controllers.get(me.ownerId) : undefined;
         if (!c) return null;
         if (this.taskStep === 0) {
@@ -1047,8 +1047,8 @@ export class Bot {
         const v = this.turnTo({ yaw: s.yaw, pitch: s.pitch }, { yaw: ps.yaw, pitch: 0 }, d);
         return { forward: 0, strafe: 0, yaw: v.yaw, pitch: v.pitch, buttons: 0, stance: Stance.Stand, lean: 0 };
       }
-      case "kludge": {
-        // Brava: a Kludge drone out toward `to` (her ability key), then driven (drive()).
+      case "crossover": {
+        // Patch: a Crossover drone out toward `to` (her ability key), then driven (drive()).
         if (this.taskStep === 0) {
           this.taskStep = 1;
           this.taskCount = this.dronesOut(w, me);
@@ -1063,10 +1063,10 @@ export class Bot {
     }
   }
 
-  /** Its Kludge drones out (thrown), counted. */
+  /** Its Crossover drones out (thrown), counted. */
   private dronesOut(w: BotWorld, me: Pawn): number {
     const c = me.ownerId !== null ? w.sim.controllers.get(me.ownerId) : undefined;
-    return c ? w.sim.dronesOf(c).filter((p) => p.kludge && p.state.mode !== PawnMode.Held).length : 0;
+    return c ? w.sim.dronesOf(c).filter((p) => p.crossover && p.state.mode !== PawnMode.Held).length : 0;
   }
 
   /**
@@ -1082,10 +1082,10 @@ export class Bot {
     this.heard.length = 0;
     const eye = eyeOf(w.sim, drone);
     const job = this.ordered(now) ?? w.taskOf();
-    // A drone out in the action that's no longer its job (a Kludge's done): back to the body (Observe).
-    if (ctrl.drone && job?.kind !== "kludge" && job?.kind !== "drone") return { forward: 0, strafe: 0, yaw: s.yaw, pitch: s.pitch, buttons: now % 6 === 0 ? Btn.Observe : 0, stance: Stance.Stand, lean: 0 };
-    const k = kludgeOf(w.sim.data, drone);
-    if (k && job?.kind === "kludge") return this.kludge(w, drone, k, job.to, d, now, eye);
+    // A drone out in the action that's no longer its job (a Crossover's done): back to the body (Observe).
+    if (ctrl.drone && job?.kind !== "crossover" && job?.kind !== "drone") return { forward: 0, strafe: 0, yaw: s.yaw, pitch: s.pitch, buttons: now % 6 === 0 ? Btn.Observe : 0, stance: Stance.Stand, lean: 0 };
+    const k = crossoverOf(w.sim.data, drone);
+    if (k && job?.kind === "crossover") return this.crossover(w, drone, k, job.to, d, now, eye);
     const seen = this.senses.target(drone);
     if (seen && seen.kind === PawnKind.Body) {
       const at = seen.chest ?? seen.head ?? [seen.pos[0], seen.pos[1] + 1.1, seen.pos[2]];
@@ -1117,19 +1117,19 @@ export class Bot {
   }
 
   /**
-   * Brava's Kludge (M7): toward `to`, and on the way any of the other side's devices it sees within reach — up to it,
+   * Patch's Crossover (M7): toward `to`, and on the way any of the other side's devices it sees within reach — up to it,
    * the crosshair on it, Fire held while it's in the sights (let go between hacks: the room wants a fresh press);
    * done after a while, or once there with nothing left to hack (then Observe takes it back to its body).
    */
-  private kludge(w: BotWorld, drone: Pawn, k: KludgeData, to: Vec3, d: BotDifficulty, now: number, eye: Vec3): BotInput {
+  private crossover(w: BotWorld, drone: Pawn, k: CrossoverData, to: Vec3, d: BotDifficulty, now: number, eye: Vec3): BotInput {
     const s = drone.state;
     const sim = w.sim;
     if (this.taskStep < 2) {
       this.taskStep = 2;
       this.taskSince = now;
       this.hackSeen = now;
-      this.kludgeBest = Infinity;
-      this.kludgeAt = now;
+      this.crossoverBest = Infinity;
+      this.crossoverAt = now;
       this.hackRun = null;
       this.hackTries.clear();
       this.legs.stop();
@@ -1152,7 +1152,7 @@ export class Bot {
       this.hackFrom = now + 2;
     }
     // A hack: once its target's in the sights, Fire held for the hack's time (the room runs it while Fire's held and the
-    // Kludge is in reach: the sights may come and go meanwhile, at the edge of its reach or through a gap), then let go
+    // Crossover is in reach: the sights may come and go meanwhile, at the edge of its reach or through a gap), then let go
     // for a fresh press. A target begun twice is left (a hack that doesn't take, or one it can't keep in reach of).
     if (this.hackRun && now - this.hackRun.from >= ticks(k.hackS) + 8) {
       this.hackRun = null;
@@ -1162,17 +1162,17 @@ export class Bot {
     const tries = this.hackTries.get(key) ?? 0;
     // Getting nowhere (stuck on a step, no way in) is as done as having got there. Getting on: a metre nearer where
     // it's going, or a hack begun (a device merely in view isn't, nor one flickering in and out of its sights: Ulo's
-    // soak found a Kludge at a stair's foot doing that for ever).
+    // soak found a Crossover at a stair's foot doing that for ever).
     if (!this.hackRun && sights !== null && now >= this.hackFrom && tries < 2) {
       this.hackRun = { key, from: now };
       this.hackTries.set(key, tries + 1);
-      [this.kludgeBest, this.kludgeAt] = [Math.min(toGo, this.kludgeBest), now];
+      [this.crossoverBest, this.crossoverAt] = [Math.min(toGo, this.crossoverBest), now];
     }
-    if (toGo < this.kludgeBest - 1) [this.kludgeBest, this.kludgeAt] = [toGo, now];
-    const done = now - this.taskSince > 25 * TICK_HZ || now - this.kludgeAt > 6 * TICK_HZ || this.legs.state === FollowState.Failed || (this.legs.state !== FollowState.Walking && now - this.hackSeen > 5 * TICK_HZ && !devices.length);
+    if (toGo < this.crossoverBest - 1) [this.crossoverBest, this.crossoverAt] = [toGo, now];
+    const done = now - this.taskSince > 25 * TICK_HZ || now - this.crossoverAt > 6 * TICK_HZ || this.legs.state === FollowState.Failed || (this.legs.state !== FollowState.Walking && now - this.hackSeen > 5 * TICK_HZ && !devices.length);
     if (done) {
       const job = this.ordered(now) ?? w.taskOf();
-      if (job?.kind === "kludge") this.report(w, job, true);
+      if (job?.kind === "crossover") this.report(w, job, true);
       return { forward: 0, strafe: 0, yaw: s.yaw, pitch: s.pitch, buttons: Btn.Observe, stance: Stance.Stand, lean: 0 };
     }
     this.legs.allow = droneLink;
@@ -1316,7 +1316,7 @@ function taskKey(t: Task): string {
       return `x${t.tag}`;
     case "shell":
       return `s${t.to.join()}`;
-    case "kludge":
+    case "crossover":
       return `q${t.to.join()}`;
     case "follow":
       return `f${t.pawnId}`;
@@ -1325,7 +1325,7 @@ function taskKey(t: Task): string {
 
 /**
  * A bot's loadout for an operator: the defaults, with the gadgets data/bots/picks.json gives it, and its other primary
- * (Fuze's Ballistic Shield) when `roll` (0–1) falls under that one's chance; each only if the loadout allows it.
+ * (Hail's Ballistic Shield) when `roll` (0–1) falls under that one's chance; each only if the loadout allows it.
  */
 export function botLoadout(data: GameData, op: string, roll = 1): LoadoutPick {
   const base = defaultLoadoutPick(data, op);
@@ -1340,7 +1340,7 @@ export function botLoadout(data: GameData, op: string, roll = 1): LoadoutPick {
   return pick;
 }
 
-/** Where the devices of the other side's a Kludge can hack are (`team`: the Kludge's): gadgets and default cameras. */
+/** Where the devices of the other side's a Crossover can hack are (`team`: the Crossover's): gadgets and default cameras. */
 function hackables(sim: Sim, team: number): Vec3[] {
   const out: Vec3[] = [];
   for (const g of sim.gadgets.list) {

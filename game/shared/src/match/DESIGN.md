@@ -142,7 +142,7 @@ ban.
 - The last body of a side still up that goes down dies at once (core_mechanics §10.1, `lastAliveDies`), except an
   attacker after the defuser is planted.
 - A side is **eliminated** when none of its players' active bodies is up (alive and not down); with the rule above
-  that happens the moment its last body goes down or dies. Skopós is eliminated when her active shell dies; her idle
+  that happens the moment its last body goes down or dies. Twain is eliminated when her active shell dies; her idle
   shell doesn't count (research/operators/skopos.md).
 
 ## 8. The defuser (D-120)

@@ -72,7 +72,7 @@ export type SimEvent =
   | { kind: "disable"; pawnId: number }
   /** The ping key (Phase 7): what a controller aimed at, from its body, its drone or its camera. */
   /**
-   * A swing's blow landing (Phase 8 M4, Sledge's hammer) from the body's eye along its view: only one that met
+   * A swing's blow landing (Phase 8 M4, Cleave's hammer) from the body's eye along its view: only one that met
    * something within reach (it spent a charge); the room judges what.
    */
   /** (`spent`: the simulation spent a charge on it, for the level, a panel or a gadget in reach; bodies are the room's.) */
@@ -276,7 +276,7 @@ function advanceReload(ctx: WeaponContext, s: PawnState, w: ResolvedWeapon) {
 }
 
 /**
- * Stops whatever the weapon was doing on a body nobody is driving (Skopós's shell left behind on a swap):
+ * Stops whatever the weapon was doing on a body nobody is driving (Twain's shell left behind on a swap):
  * a reload is cancelled (an immersive one leaves what was in the weapon), a burst or queued shot dropped.
  */
 export function parkWeapon(s: PawnState): void {
@@ -314,7 +314,7 @@ export function stepWeapon(ctx: WeaponContext, pawn: Pawn, input: InputCmd, pres
   // 2. Interrupts: sprinting, a vault or a ladder cancel a reload.
   if (s.wAct === WeaponAct.Reload && ((rules.reload.sprintInterrupts && s.sprinting) || !walking)) endReload(s);
 
-  // 3. Presses. (Fuze's shield loadout has its one pistol: nothing to swap to, Phase 8 M11.)
+  // 3. Presses. (Hail's shield loadout has its one pistol: nothing to swap to, Phase 8 M11.)
   if (pressed & Btn.Swap && s.wAct !== WeaponAct.Equip && !lo.shield) {
     if (s.wAct === WeaponAct.Reload) endReload(s);
     s.slot ^= 1;
@@ -371,7 +371,7 @@ export function stepWeapon(ctx: WeaponContext, pawn: Pawn, input: InputCmd, pres
   const sprintGate = !s.sprinting && s.sinceSprint >= exitToFire - 1e-6;
   const loaded = loadedOf(s);
   const ready = s.wAct === WeaponAct.Ready || (s.wAct === WeaponAct.Reload && loaded > 0 && rules.reload.fireCancels);
-  // With Fuze's shield up, the pistol fires only aimed, once the aim is done (no hip fire, Y9S1; Phase 8 M11).
+  // With Hail's shield up, the pistol fires only aimed, once the aim is done (no hip fire, Y9S1; Phase 8 M11).
   const shieldHip = lo.shield !== null && !lo.shield.hipFire && s.shieldAt === 1 && s.adsQ < 65535;
   const gate = walking && sprintGate && ready && s.meleeTicks === 0 && !handsBusy(s) && !gadgetOut(s) && w.fire.kind === "hitscan" && !shieldHip && !braced;
   // A press during the sprint exit fires once it ends, but only on a tick with real input (its view and seq).

@@ -22,7 +22,7 @@ import { GFlag, type Gadget } from "./table.js";
 
 export interface BlastEffects {
   /** Each body or drone it reaches, and the damage (whole points, at least 1). */
-  /** `guard`: a body's Fuze shield up, knocked aside by it (Phase 8 M11: a blast of `guardBreak.blastHp` or more). */
+  /** `guard`: a body's Hail shield up, knocked aside by it (Phase 8 M11: a blast of `guardBreak.blastHp` or more). */
   bodies: { pawn: Pawn; damage: number; guard?: boolean }[];
   /** Entries it destroys (not the one that went off). */
   gadgets: Gadget[];
@@ -40,7 +40,7 @@ export function blastFalloff(f: BlastFalloff, d: number): number {
 /**
  * What a blast's line from `from` to `to` meets: the level, solid gadgets (a deployable shield) or steel stop it; each
  * soft panel it passes (by its solid material) lets `throughSoft` through. `skip`: the panel the charge itself is on,
- * which neither stops nor dims its own blast (it's blowing a hole in it: a Hard Breach Charge's steel too); `exclude`:
+ * which neither stops nor dims its own blast (it's blowing a hole in it: a Heavy Breach Charge's steel too); `exclude`:
  * the collider of the solid gadget the line goes to (its own box doesn't shelter it).
  */
 export function blastLine(sim: Sim, from: Vec3, to: Vec3, skip: number, exclude?: Collider): { blocked: boolean; soft: number } {
@@ -49,7 +49,7 @@ export function blastLine(sim: Sim, from: Vec3, to: Vec3, skip: number, exclude?
   if (len < 1e-6) return { blocked: false, soft: 0 };
   const dir: Vec3 = [d[0] / len, d[1] / len, d[2] / len];
   const ray = new sim.R.Ray({ x: from[0], y: from[1], z: from[2] }, { x: dir[0], y: dir[1], z: dir[2] });
-  // (Skopós's idle shell's barrier doesn't stop it, M10: the blast breaks it and goes on to the shell.)
+  // (Twain's idle shell's barrier doesn't stop it, M10: the blast breaks it and goes on to the shell.)
   if (sim.world.castRay(ray, len, true, undefined, QUERY_BULLET, exclude, undefined, sim.blastMeets)) return { blocked: true, soft: 0 };
   const passed = new Set<number>();
   for (const { entry, crossing } of sim.level.panels.crossings(from, dir, len)) {
@@ -165,7 +165,7 @@ export function blastEffects(sim: Sim, g: Pick<Gadget, "id" | "kind" | "owner" |
     }
     if (best <= 0) continue;
     const damage = Math.max(1, Math.round(best));
-    // Fuze's shield up (Phase 8 M11): a blast in front of it loses `absorb` of its damage (Y9S1.3); one of `blastHp`
+    // Hail's shield up (Phase 8 M11): a blast in front of it loses `absorb` of its damage (Y9S1.3); one of `blastHp`
     // or more knocks it aside (a guard break), whichever side it's on.
     const k = pawn.loadout?.shield;
     if (!k || !shieldUp(s)) {
@@ -180,7 +180,7 @@ export function blastEffects(sim: Sim, g: Pick<Gadget, "id" | "kind" | "owner" |
     out.bodies.push({ pawn, damage: ahead ? Math.max(1, Math.round(damage * kept)) : damage, guard: !braced && damage >= k.guardBreak.blastHp });
   }
   // Gadgets in its destruction range (and the Claymore's arc), in sight of it (the level and steel shelter them); the
-  // level's ingredients there are set off. A smoke cloud isn't blown away. A set-off cluster charge is reached at its
+  // level's ingredients there are set off. A smoke cloud isn't blown away. A set-off hailstone drill is reached at its
   // tube's end too (on the far side of its surface), but not by its own grenades (Phase 8 M5).
   const kind = kindId(g.kind);
   for (const e of sim.gadgets.list) {
@@ -192,7 +192,7 @@ export function blastEffects(sim: Sim, g: Pick<Gadget, "id" | "kind" | "owner" |
       Math.hypot(p[0] - at[0], p[1] - at[1], p[2] - at[2]) <= b.destroyM && inArc(b, g, at, p) && !blastLine(sim, at, p, e.panel === g.panel ? g.panel : -1, sim.solidOf(e.id)).blocked;
     if (reached(e.pos) || (tip && reached(tip))) out.gadgets.push(e);
   }
-  // Panels: a charge cuts its shape into the panel it's on, and (Thermite's, `cutM`) into the panels next to it; a
+  // Panels: a charge cuts its shape into the panel it's on, and (Kiln's, `cutM`) into the panels next to it; a
   // grenade cuts every panel within `cutM` (smaller with distance), breaks barricades and wears hatches; barricades
   // within its destruction range break too.
   const ex = b.cut ? sim.data.destruction.explosives[b.cut] : undefined;

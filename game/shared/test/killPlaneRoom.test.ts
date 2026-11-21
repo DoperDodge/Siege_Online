@@ -14,7 +14,7 @@ interface RoomInside {
 }
 
 async function overTheVoid() {
-  const { room, clients, tick } = await roomWith("millrace", ["sledge", "mute"]);
+  const { room, clients, tick } = await roomWith("millrace", ["cleave", "lull"]);
   for (let i = 0; i < 20; i++) tick();
   const [a, b] = clients;
   const inside = room as unknown as RoomInside;

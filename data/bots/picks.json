@@ -1,50 +1,50 @@
 {
-  "_doc": "Bots' operator choices (bots/DESIGN.md §7.4). `gadgets`: the secondary gadget(s) each operator's bot carries (for the role it plays; the operator's own list otherwise): Pointman's and Picket's kits a breacher's and an anchor's (Heavy Breach Charge + Impact EMP; Barbed Wire + Deployable Shield). `counters`: for Bot Training's \"counter my pick\", the operators that answer each one (ours, from the research's roles: Brava and Striker's EMP against Mute, Mute against Thermite and Fuze's charges, and so on), best first. `primaries`: a primary an operator's bot sometimes takes in place of its default, and how often (Fuze's Ballistic Shield a quarter of the time; ours).",
+  "_doc": "Bots' operator choices (bots/DESIGN.md §7.4). `gadgets`: the secondary gadget(s) each operator's bot carries (for the role it plays; the operator's own list otherwise): Pointman's and Picket's kits a breacher's and an anchor's (Heavy Breach Charge + Impact EMP; Barbed Wire + Deployable Shield). `counters`: for Bot Training's \"counter my pick\", the operators that answer each one (ours, from the research's roles: Patch and Pointman's EMP against Lull, Lull against Kiln and Hail's charges, and so on), best first. `primaries`: a primary an operator's bot sometimes takes in place of its default, and how often (Hail's Ballistic Shield a quarter of the time; ours).",
   "_season": "Y11S3",
   "gadgets": {
-    "sledge": [
+    "cleave": [
       "frag"
     ],
-    "thermite": [
+    "kiln": [
       "smoke"
     ],
-    "striker": [
-      "hard_breach_charge",
+    "pointman": [
+      "heavy_breach_charge",
       "impact_emp"
     ],
-    "fuze": [
-      "hard_breach_charge"
+    "hail": [
+      "heavy_breach_charge"
     ],
-    "brava": [
+    "patch": [
       "claymore"
     ],
-    "dokkaebi": [
+    "relay": [
       "breach_charge"
     ],
-    "mute": [
-      "nitro_cell"
+    "lull": [
+      "remote_charge"
     ],
-    "mira": [
-      "nitro_cell"
+    "vista": [
+      "remote_charge"
     ],
-    "skopos": [
+    "twain": [
       "impact_grenade"
     ],
-    "sentry": [
+    "picket": [
       "barbed_wire",
       "deployable_shield"
     ],
-    "pulse": [
-      "nitro_cell"
+    "murmur": [
+      "remote_charge"
     ],
-    "lesion": [
-      "observation_blocker"
+    "thistle": [
+      "feed_blocker"
     ],
     "ohm": [
       "breach_charge"
     ],
     "tonic": [
-      "bulletproof_camera"
+      "armoured_camera"
     ],
     "shunt": [
       "barbed_wire"
@@ -66,113 +66,113 @@
     ]
   },
   "counters": {
-    "mute": [
-      "brava",
+    "lull": [
+      "patch",
       "ohm",
       "dowser",
-      "striker",
-      "fuze"
+      "pointman",
+      "hail"
     ],
-    "mira": [
-      "fuze",
+    "vista": [
+      "hail",
       "rivet",
-      "sledge",
-      "dokkaebi"
+      "cleave",
+      "relay"
     ],
-    "skopos": [
-      "brava",
-      "fuze",
-      "dokkaebi"
+    "twain": [
+      "patch",
+      "hail",
+      "relay"
     ],
-    "sentry": [
-      "fuze",
-      "sledge",
-      "brava"
+    "picket": [
+      "hail",
+      "cleave",
+      "patch"
     ],
-    "pulse": [
-      "dokkaebi",
-      "sledge",
-      "brava"
+    "murmur": [
+      "relay",
+      "cleave",
+      "patch"
     ],
-    "lesion": [
-      "sledge",
-      "fuze",
-      "thermite"
+    "thistle": [
+      "cleave",
+      "hail",
+      "kiln"
     ],
-    "thermite": [
+    "kiln": [
       "shunt",
-      "mute",
-      "mira"
+      "lull",
+      "vista"
     ],
-    "striker": [
+    "pointman": [
       "shunt",
-      "mute",
-      "sentry"
+      "lull",
+      "picket"
     ],
-    "fuze": [
+    "hail": [
       "shunt",
-      "mute",
-      "lesion"
+      "lull",
+      "thistle"
     ],
-    "brava": [
-      "mira",
-      "lesion",
-      "skopos"
+    "patch": [
+      "vista",
+      "thistle",
+      "twain"
     ],
-    "sledge": [
+    "cleave": [
       "latch",
-      "pulse",
-      "sentry"
+      "murmur",
+      "picket"
     ],
-    "dokkaebi": [
-      "mute",
-      "mira",
-      "lesion"
+    "relay": [
+      "lull",
+      "vista",
+      "thistle"
     ],
     "ohm": [
-      "sentry",
-      "lesion",
-      "pulse"
+      "picket",
+      "thistle",
+      "murmur"
     ],
     "tonic": [
       "ohm",
-      "dokkaebi",
-      "striker"
+      "relay",
+      "pointman"
     ],
     "shunt": [
       "ohm",
       "dowser",
-      "striker",
-      "sledge"
+      "pointman",
+      "cleave"
     ],
     "latch": [
-      "brava",
-      "sledge",
-      "striker"
+      "patch",
+      "cleave",
+      "pointman"
     ],
     "bailiff": [
       "ohm",
-      "striker",
-      "fuze"
+      "pointman",
+      "hail"
     ],
     "rivet": [
       "shunt",
-      "mute",
+      "lull",
       "bailiff"
     ],
     "dowser": [
       "latch",
-      "pulse",
-      "sentry"
+      "murmur",
+      "picket"
     ],
     "hull": [
       "bailiff",
-      "lesion",
+      "thistle",
       "latch"
     ]
   },
   "primaries": {
-    "fuze": {
+    "hail": {
       "id": "ballistic_shield",
       "chance": 0.25
     }

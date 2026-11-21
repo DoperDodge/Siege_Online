@@ -12,7 +12,7 @@ import { droneCollider, droneEye, stepDrone } from "./player/drone.js";
 import { insideAny, zoneBoxes, ZONE_TEST_HEIGHT, type ZoneBox } from "./level/zones.js";
 import { raycastLevel } from "./level/raycast.js";
 import { detonatable, GadgetTable, GFlag, type Gadget } from "./gadgets/table.js";
-import { isIngredient, KIND_BP_CAMERA, KIND_SHELL_SHIELD, kindId, kindOf } from "./gadgets/kinds.js";
+import { isIngredient, KIND_ARMOURED_CAMERA, KIND_FRAME_BARRIER, kindId, kindOf } from "./gadgets/kinds.js";
 import { pawnJammed, pointJammed } from "./gadgets/jammers.js";
 import { onLiveSurface } from "./gadgets/arcs.js";
 import { snareData, snareSlow } from "./gadgets/snare.js";
@@ -24,7 +24,7 @@ import { gadgetOnRay, partBoxes } from "./gadgets/hits.js";
 import { salvosOut } from "./gadgets/studs.js";
 import { coilMarks, coilUp, type CoilMark } from "./gadgets/coil.js";
 import { emptySlots, moveStock, placeSpotFor, slotGadget, stockSlots } from "./gadgets/hands.js";
-import { guData } from "./gadgets/gu.js";
+import { burrData } from "./gadgets/burr.js";
 import { CAMERA_HALF_M } from "./intel/cameras.js";
 import { canDisable, canPickUp, inSite, siteArea, type DefuserState, type SiteArea } from "./match/objective.js";
 import { eyePose, poseHitboxes } from "./player/hitboxes.js";
@@ -47,16 +47,16 @@ export interface MatchSimRules {
   /** Below the kill plane a body dies (the room kills it) instead of going back to spawn 0 (labs). */
   killPlaneKills: boolean;
   /**
-   * Defenders watch the level's default cameras, then the round's Bulletproof Cameras (Phase 7, a match; the gadget
+   * Defenders watch the level's default cameras, then the round's Armoured Cameras (Phase 7, a match; the gadget
    * table's, Phase 8); `camsBroken`: a bit for each broken default camera.
    */
   cameras: boolean;
   camsBroken: number;
   /** A bit for each default camera an EMP has off for now (Phase 8 M3, DSEG: its feed is static; the room says when). */
   camsOff: number;
-  /** A bit for each default camera a Kludge drone has hacked (Phase 8 M8): the attackers' now, not the defenders'. */
+  /** A bit for each default camera a Crossover drone has hacked (Phase 8 M8): the attackers' now, not the defenders'. */
   camsHacked: number;
-  /** Dokkaebi hacked a dead defender's phone (Phase 8 M9): the attackers watch the defenders' cameras too, for now. */
+  /** Relay hacked a dead defender's phone (Phase 8 M9): the attackers watch the defenders' cameras too, for now. */
   camsLent: boolean;
 }
 
@@ -67,7 +67,7 @@ const LENS_AHEAD_M = 0.03;
 const DROP_FROM_ABOVE = 0.1;
 const DROP_MAX_FALL = 60;
 
-/** Contextual hint for the HUD: "Space to mantle", "F to climb", "F to transfer" (Skopós camera), "Hold F to reinforce". */
+/** Contextual hint for the HUD: "Space to mantle", "F to climb", "F to transfer" (Twain camera), "Hold F to reinforce". */
 export type Prompt = MovementPrompt | "transfer" | "revive" | "reinforce" | "barricade" | "unbarricade" | "plant" | "disable" | "pickUp" | "pickUpDrone" | "pickUpGadget";
 
 export class Sim {
@@ -130,7 +130,7 @@ export class Sim {
       // Barbed wire (Phase 8 M3), and Latch's snare on a leg (R3).
       // ... and a prod's jolt (R3).
       slowOf: (pawn) => wireSlow(data, this.gadgets, pawn, pawn.kind === PawnKind.Drone) * snareSlow(data, pawn) * prodSlow(data, pawn),
-      // Skopós's shells through her own barriers (D-157): a shell waking stands up under its canopy.
+      // Twain's shells through her own barriers (D-157): a shell waking stands up under its canopy.
       passes: (pawn, c) => pawn.ownerId !== null && this.barrierOwner.get(c.handle) === pawn.ownerId,
       // Phase 8 M6: not while the body, or the device, is inside an enemy jammer.
       canDetonate: (pawn, gadget) => this.detonations(pawn, gadget) > 0,
@@ -242,7 +242,7 @@ export class Sim {
   }
 
   /**
-   * Create a controller and its pawn(s) at a level spawn. Skopós gets two shells side by side. `ids` lets a
+   * Create a controller and its pawn(s) at a level spawn. Twain gets two shells side by side. `ids` lets a
    * client mirror the server's controller and pawn ids for the player it predicts. `pick` is the loadout
    * (an invalid one becomes the operator's default, DECISIONS D-042); every shell carries the same one,
    * each with its own ammo.
@@ -462,7 +462,7 @@ export class Sim {
    * inputs come back (it takes a fresh press to start, so a hold ended by a stall could never restart while held).
    */
   /**
-   * Knock a body down (D-156: a shield's bash, Sledge's hammer on a raised shield; the server's, its player corrected):
+   * Knock a body down (D-156: a shield's bash, Cleave's hammer on a raised shield; the server's, its player corrected):
    * it turns to face what hit it (from `from`), lets go of whatever it was doing (a revive, a hold), stands for the fall
    * and goes over onto its back, its player's input ignored until it's up again (player/movement.ts stepKnocked). Only
    * a body on its feet: one on a rope or a ladder, vaulting, down or dead isn't. False when it wasn't.
@@ -509,7 +509,7 @@ export class Sim {
     const limit = this.data.destruction.reinforcement.reach + 1.5;
     const plain = this.world.castRay(ray, limit, true, undefined, QUERY_SIGHT)?.timeOfImpact ?? limit;
     const a = deployAction(this.data.destruction, this.level.panels, eye, dir, [s.x, s.y, s.z], pawn.team, this.deployRules, plain);
-    // A wall holding a Black Mirror can't be reinforced afterwards (Phase 8 M7; research CSV action.reinforce).
+    // A wall holding a Blind Pane can't be reinforced afterwards (Phase 8 M7; research CSV action.reinforce).
     if (a?.kind === DeployKind.Reinforce && this.gadgets.list.some((g) => g.panel === a.panel && mirrorOf(this.data, g))) return null;
     return a;
   }
@@ -531,7 +531,7 @@ export class Sim {
     if (!o || s.mode !== PawnMode.Walk || !s.grounded) return null;
     const attacker = pawn.team === sideTeam("attacker");
     if (attacker && o.dropped && o.carrier === 0 && canPickUp(this.data.objective, o.dropped, s.x, s.y, s.z)) return "pickUp";
-    // A Gu needle in the carrier (Phase 8 M10): no planting until it's pulled (lesion.md).
+    // A Burr needle in the carrier (Phase 8 M10): no planting until it's pulled (thistle.md).
     if (attacker && o.carrier === pawn.id && o.canPlant && o.site && !s.needled) {
       const area = this.areaOf(o.site);
       if (area && inSite(area, s.x, s.y, s.z)) return "plant";
@@ -575,7 +575,7 @@ export class Sim {
     const plain = raycastLevel(this, eye, dir, reach)?.t ?? reach;
     const hit = gadgetOnRay(this.gadgets, this.data, eye, dir, plain + 0.05, (g) => {
       const id = this.data.gadgets.get(kindId(g.kind) ?? "");
-      // Not one a Kludge hacked over to the other side (Phase 8 M8).
+      // Not one a Crossover hacked over to the other side (Phase 8 M8).
       // Nor a snare sprung on someone's leg (R3).
       return g.owner === pawn.ownerId && g.team === pawn.team && !(g.flags & GFlag.Flying) && id !== undefined && id.pickUp && slots.includes(id.id) && !(id.solid && g.flags & GFlag.Hit) && !(id.snare && g.flags & GFlag.Active);
     });
@@ -624,19 +624,19 @@ export class Sim {
     return true; // still this tick
   }
 
-  /** Whether a body can pull its Gu needle now: needled, on its feet, standing (Phase 8 M10). */
+  /** Whether a body can pull its Burr needle now: needled, on its feet, standing (Phase 8 M10). */
   private canPullNeedle(pawn: Pawn): boolean {
     const s = pawn.state;
     return s.needled && s.mode === PawnMode.Walk && s.stance === Stance.Stand && s.meleeTicks === 0;
   }
 
   /**
-   * Pulling a Gu needle (Phase 8 M10; lesion.md): Interact held, standing, for the mine's `pullS` (the weapon lowered
+   * Pulling a Burr needle (Phase 8 M10; thistle.md): Interact held, standing, for the mine's `pullS` (the weapon lowered
    * meanwhile, the body free to walk); then it's out: no more bites (the server's), sprinting again.
    */
   private holdNeedle(pawn: Pawn, held: boolean): boolean {
     const s = pawn.state;
-    const k = guData(this.data);
+    const k = burrData(this.data);
     if (!k || !held || !this.canPullNeedle(pawn)) {
       endDeploy(pawn);
       return false;
@@ -649,13 +649,13 @@ export class Sim {
   }
 
   /**
-   * A ringing phone being turned off (Dokkaebi's Jegeo Payload): out in the hand, the gun away, switched off once
+   * A ringing phone being turned off (Relay's Ringer): out in the hand, the gun away, switched off once
    * Interact has been held the payload's `dismissS`; let go sooner, it goes back in the pocket still ringing. The room
-   * sees the ringing stop and cuts her upload (net/room.ts jegeo).
+   * sees the ringing stop and cuts her upload (net/room.ts ringer).
    */
   private holdPhone(pawn: Pawn, held: boolean): boolean {
     const s = pawn.state;
-    const k = this.data.gadgets.get("jegeo_payload")?.jegeo;
+    const k = this.data.gadgets.get("ringer")?.ringer;
     if (!k || !held || !s.ringing) {
       endDeploy(pawn);
       return false;
@@ -670,7 +670,7 @@ export class Sim {
   /** The carrier's Drop key: the defuser falls to the floor under the body (off a rope or a ladder too). */
   private dropDefuser(pawn: Pawn, input: InputCmd) {
     const o = this.objective;
-    // Nor dropping it with a Gu needle in him (Phase 8 M10).
+    // Nor dropping it with a Burr needle in him (Phase 8 M10).
     if (!o || o.carrier !== pawn.id || pawn.state.needled || !(input.buttons & ~pawn.state.prevButtons & Btn.Drop)) return;
     const s = pawn.state;
     o.carrier = 0;
@@ -718,7 +718,7 @@ export class Sim {
     }
     const pressed = input.buttons & ~s.prevButtons & Btn.Interact;
     if (!pressed || s.meleeTicks > 0) return false;
-    // A Gu needle in him (Phase 8 M10): pulling it comes first, standing (lesion.md).
+    // A Burr needle in him (Phase 8 M10): pulling it comes first, standing (thistle.md).
     if (s.needled) {
       if (!this.canPullNeedle(pawn)) return false;
       s.deployKind = DeployKind.Needle;
@@ -736,7 +736,7 @@ export class Sim {
       s.deploySection = 0;
       return true;
     }
-    // Dokkaebi's call ringing: the press takes the phone out to turn it off, before anything else on F.
+    // Relay's call ringing: the press takes the phone out to turn it off, before anything else on F.
     if (s.ringing) {
       s.deployKind = DeployKind.Phone;
       s.deployPanel = 0;
@@ -791,7 +791,7 @@ export class Sim {
     this.controllers.delete(controllerId);
   }
 
-  /** A controller's other, still-alive pawn (Skopós' idle shell), or null. */
+  /** A controller's other, still-alive pawn (Twain' idle shell), or null. */
   otherPawn(controllerId: number): Pawn | null {
     const c = this.controllers.get(controllerId);
     if (!c) return null;
@@ -803,7 +803,7 @@ export class Sim {
   }
 
   /**
-   * Skopós's shell died while she was transferring out of it (from the transfer's start it crouches and stands still:
+   * Twain's shell died while she was transferring out of it (from the transfer's start it crouches and stands still:
    * it is going idle, and an attacker sees her inactive shell, research/operators/skopos.md §3.2): she arrives in the
    * other at once, if it stands, and isn't eliminated. True when that happened (the room tells her client).
    */
@@ -820,7 +820,7 @@ export class Sim {
     return true;
   }
 
-  /** A controller's bodies (Skopós: her two shells), not its drones. */
+  /** A controller's bodies (Twain: her two shells), not its drones. */
   bodyIds(c: PlayerController): number[] {
     return c.pawnIds.filter((id) => this.pawns.get(id)?.kind !== PawnKind.Drone);
   }
@@ -868,14 +868,14 @@ export class Sim {
 
   /**
    * A held drone for a controller (Phase 7); one with no body possesses its first. `id`: a client mirroring the
-   * server's. `kludge`: one of Brava's Kludge drones (Phase 8 M8).
+   * server's. `crossover`: one of Patch's Crossover drones (Phase 8 M8).
    */
-  addDrone(controllerId: number, id?: number, kludge = false): Pawn {
+  addDrone(controllerId: number, id?: number, crossover = false): Pawn {
     const c = this.controllers.get(controllerId);
     if (!c) throw new Error(`no controller ${controllerId}`);
     const at = this.pawns.get(c.possessedPawnId)?.state ?? { x: 0, y: 0, z: 0 };
     const pawn = this.spawnPawn(c.operatorId, at.x, at.y, at.z, 0, c.id, id, null, c.team, PawnKind.Drone);
-    if (kludge) pawn.kludge = true;
+    if (crossover) pawn.crossover = true;
     c.pawnIds.push(pawn.id);
     if (!c.possessedPawnId) c.possessedPawnId = pawn.id;
     return pawn;
@@ -899,11 +899,11 @@ export class Sim {
 
   /**
    * A body throws a held drone (data/intel.json `drone.throw`): it appears ahead of the body, or in its place when a
-   * wall is that close, moving forward and up. `kludge`: one of Brava's Kludge drones (Phase 8 M8), else a drone. Null
+   * wall is that close, moving forward and up. `crossover`: one of Patch's Crossover drones (Phase 8 M8), else a drone. Null
    * when none is held.
    */
-  private throwDrone(c: PlayerController, body: Pawn, buttons: number, kludge = false): Pawn | null {
-    const held = this.dronesOf(c).find((p) => p.state.mode === PawnMode.Held && (p.kludge ?? false) === kludge);
+  private throwDrone(c: PlayerController, body: Pawn, buttons: number, crossover = false): Pawn | null {
+    const held = this.dronesOf(c).find((p) => p.state.mode === PawnMode.Held && (p.crossover ?? false) === crossover);
     if (!held) return null;
     const t = this.data.intel.drone.throw;
     const b = body.state;
@@ -967,7 +967,7 @@ export class Sim {
       c.drone = next.id === body.id ? 0 : next.id;
       return;
     }
-    // On a feed: a drone, or a camera the attackers may watch (one a Kludge hacked, or Dokkaebi's lend, Phase 8). A
+    // On a feed: a drone, or a camera the attackers may watch (one a Crossover hacked, or Relay's lend, Phase 8). A
     // new lean goes round drones then cameras, wrapping. (Ulo's test: on a hacked camera this function took the lean
     // before the cameras' code saw it, so a second camera was never reached and there was no way back to a drone.)
     // Observe from a drone goes back to the body, from a camera too (updateCams).
@@ -976,17 +976,17 @@ export class Sim {
       else if (newLean) this.nextFeed(c, out, newLean);
       return;
     }
-    // The ability key throws a Kludge drone for Brava (Phase 8 M8: her slot 2 item is a `drone` one).
-    const kludge = pressed & Btn.Ability && slotGadget(this.data, body.loadout, 2)?.use.kind === "drone";
-    if (pressed & Btn.Throw || kludge) {
-      const thrown = body.state.mode === PawnMode.Walk ? this.throwDrone(c, body, input.buttons, !!kludge) : null;
+    // The ability key throws a Crossover drone for Patch (Phase 8 M8: her slot 2 item is a `drone` one).
+    const crossover = pressed & Btn.Ability && slotGadget(this.data, body.loadout, 2)?.use.kind === "drone";
+    if (pressed & Btn.Throw || crossover) {
+      const thrown = body.state.mode === PawnMode.Walk ? this.throwDrone(c, body, input.buttons, !!crossover) : null;
       if (thrown) c.drone = thrown.id;
     } else if (pressed & Btn.Observe && out.length) c.drone = out[0].id;
   }
 
   /**
    * The feed after (or before, `dir` −1) the one a controller is on, round its list: the drones out (`drones`, the feed
-   * list's), then the cameras its team may watch in order (Phase 8: those a Kludge hacked, the defenders' on Dokkaebi's
+   * list's), then the cameras its team may watch in order (Phase 8: those a Crossover hacked, the defenders' on Relay's
    * lend). Going to the camera it's already on does nothing (its view stays where it is).
    */
   private nextFeed(c: PlayerController, drones: readonly Pawn[], dir: number) {
@@ -1028,8 +1028,8 @@ export class Sim {
   }
 
   /**
-   * Default cameras (Phase 7, intel/DESIGN.md §3), for defenders in a match, and Skopós's shell view (Ulo, D-155): one
-   * list of feeds, the cameras the team may watch and, for Skopós, her own idle shell in place of its barrier's camera.
+   * Default cameras (Phase 7, intel/DESIGN.md §3), for defenders in a match, and Twain's shell view (Ulo, D-155): one
+   * list of feeds, the cameras the team may watch and, for Twain, her own idle shell in place of its barrier's camera.
    * Observe opens the feed last watched (the first working one the first time) and closes it; a new lean goes to the
    * previous / next feed; a camera's view turns toward the mouse within its limits at its turn rate (data/intel.json
    * `camera`), and each camera keeps where its viewer left it looking. A camera broken while watched hands over to the
@@ -1037,14 +1037,14 @@ export class Sim {
    * `watchedBefore`: the camera watched when the tick began (Sim.watched).
    */
   private updateCams(c: PlayerController, input: InputCmd | undefined, heldBefore: number, watchedBefore: number) {
-    // A phone Dokkaebi blew up (Phase 8 M9): no cameras for the rest of the round.
+    // A phone Relay blew up (Phase 8 M9): no cameras for the rest of the round.
     if (!this.camsOn(c)) c.cam = 0;
     const body = this.pawns.get(c.possessedPawnId);
     // Down, or knocked down (D-156: nothing of its player's input counts until it's up).
     const downed = body !== undefined && (isDowned(body.state) || body.state.mode === PawnMode.Knocked);
     // An EMP on the body (DSEG, Phase 8 M3): no observation tools.
     const jammed = body !== undefined && body.kind === PawnKind.Body && body.state.jammed > 0;
-    // A camera watched that's an entry (a Bulletproof Camera, an idle shell's) keeps the view as the list's numbers
+    // A camera watched that's an entry (a Armoured Camera, an idle shell's) keeps the view as the list's numbers
     // shift round it (one placed or gone before it: the review, M12).
     if (c.cam && c.camEntry && this.camEntryAt(c.cam - 1) !== c.camEntry) {
       let at = -1;
@@ -1064,7 +1064,7 @@ export class Sim {
     const lean = Math.sign(input.lean);
     const newLean = lean !== 0 && lean !== c.prevLean ? lean : 0;
     c.prevLean = lean;
-    // Skopós mid-swap: the swap runs its course (updateShells).
+    // Twain mid-swap: the swap runs its course (updateShells).
     if (c.swapPhase !== 0) return;
     const pressed = input.buttons & ~heldBefore;
     if (c.cam || c.shellCam) {
@@ -1104,7 +1104,7 @@ export class Sim {
 
   /**
    * A camera's key in a controller's memory (D-155): 2(i + 1) for the level's camera i, 2·id + 1 for a gadget entry's
-   * (a Bulletproof Camera, an idle shell's barrier), so it stays its own as the list's numbers shift.
+   * (a Armoured Camera, an idle shell's barrier), so it stays its own as the list's numbers shift.
    */
   camKey(i: number): number {
     const e = this.camEntryAt(i);
@@ -1118,7 +1118,7 @@ export class Sim {
 
   /**
    * Whether feed `slot` is one a controller may go to (D-155): slot i < camCount() is camera i, working and one its team
-   * may watch, but not Skopós's own idle shell's barrier (her shell view takes its place); slot camCount() is her shell
+   * may watch, but not Twain's own idle shell's barrier (her shell view takes its place); slot camCount() is her shell
    * view.
    */
   camFeedOk(c: PlayerController, slot: number): boolean {
@@ -1149,7 +1149,7 @@ export class Sim {
     return at >= 0 && this.camFeedOk(c, at) ? at : this.nextCamFeed(c, at, 1);
   }
 
-  /** Onto feed `slot` (camFeedOk's): a camera, or Skopós's shell view. */
+  /** Onto feed `slot` (camFeedOk's): a camera, or Twain's shell view. */
   private openFeed(c: PlayerController, slot: number) {
     if (slot >= this.camCount()) this.openShellView(c);
     else {
@@ -1159,11 +1159,11 @@ export class Sim {
   }
 
   /**
-   * Whether Skopós's idle shell can be looked through (and swapped into) now (research/operators/skopos.md §3.2): two
+   * Whether Twain's idle shell can be looked through (and swapped into) now (research/operators/skopos.md §3.2): two
    * shells, the other standing; hers on her feet, or hanging on a rope (Ulo: cameras work on the rope; a lab room lets
    * her rappel); no EMP on either (DSEG, Phase 8 M3: her shell camera is an observation tool, the idle shell a device),
-   * nor a jammer of the other side (Phase 8 M8: one Brava converted; Mute's own don't mind her); her phone not blown up
-   * by Dokkaebi (Phase 8 M9: no swapping for the rest of the round).
+   * nor a jammer of the other side (Phase 8 M8: one Patch converted; Lull's own don't mind her); her phone not blown up
+   * by Relay (Phase 8 M9: no swapping for the rest of the round).
    */
   private shellReachable(c: PlayerController): boolean {
     if (this.bodyIds(c).length < 2 || c.phoneLost) return false;
@@ -1174,13 +1174,13 @@ export class Sim {
     return ready && active.state.jammed <= 0 && other.state.jammed <= 0 && !pawnJammed(this, active) && !pawnJammed(this, other);
   }
 
-  /** Whether Skopós may go onto her shell view now (D-155): it's reachable, and no swap is under way or just done. */
+  /** Whether Twain may go onto her shell view now (D-155): it's reachable, and no swap is under way or just done. */
   private shellViewOk(c: PlayerController): boolean {
     return c.swapPhase === 0 && c.swapCooldown <= 0 && this.shellReachable(c);
   }
 
   /**
-   * Skopós onto her idle shell's view, off any camera (her ability key, or the feeds' list: D-155). The view starts
+   * Twain onto her idle shell's view, off any camera (her ability key, or the feeds' list: D-155). The view starts
    * where the shell faces and looks round from there without turning it (Ulo: its body and barrier stay as they stand).
    */
   private openShellView(c: PlayerController) {
@@ -1216,20 +1216,20 @@ export class Sim {
     const eye = this.eyeOf(p);
     if (p.kind === PawnKind.Drone && !c.pawnIds.includes(p.id)) return { ...eye, yaw: c.camYaw, pitch: c.camPitch }; // a teammate's drone
     if (input) return { ...eye, yaw: input.yaw, pitch: input.pitch };
-    // Skopós's shell view looks where she turned it, not where the shell faces.
+    // Twain's shell view looks where she turned it, not where the shell faces.
     return c.shellCam && c.swapPhase === 0 ? { ...eye, yaw: c.camYaw, pitch: c.camPitch } : eye;
   }
 
   /**
    * The ping key (Phase 7, intel/DESIGN.md §6): the point the view is on, a "ping" event for the room to share. Smoke
-   * stops the view (the ping lands on the cloud; a Bulletproof Camera sees through it), and an enemy gadget on the way
+   * stops the view (the ping lands on the cloud; a Armoured Camera sees through it), and an enemy gadget on the way
    * is what's pinged (its kind goes with the ping; Phase 8 M3).
    */
   private ping(c: PlayerController, input: InputCmd) {
     const v = this.viewOf(c, input);
     if (!v) return;
     const dir = viewDir(v.yaw, v.pitch);
-    // Pulse's sensor up (Phase 8 M6): the heartbeat nearest the crosshair, within its `pingDeg`, is what's pinged.
+    // Murmur's sensor up (Phase 8 M6): the heartbeat nearest the crosshair, within its `pingDeg`, is what's pinged.
     const body = c.cam ? undefined : this.pawns.get(this.viewedPawnId(c.id));
     const sensor = body && c.pawnIds.includes(body.id) ? sensorUp(this.data, body) : null;
     if (body && sensor) {
@@ -1260,12 +1260,12 @@ export class Sim {
       }
     }
     const at = (t: number): [number, number, number] => [v.pos[0] + dir[0] * t, v.pos[1] + dir[1] * t, v.pos[2] + dir[2] * t];
-    // Through a Black Mirror from its placer's side (Phase 8 M7).
+    // Through a Blind Pane from its placer's side (Phase 8 M7).
     let t = sightPast(this, v.pos, dir, 200)?.t ?? null;
-    const thermal = c.cam !== 0 && this.bpCamAt(c.cam - 1) !== null;
+    const thermal = c.cam !== 0 && this.armouredCamAt(c.cam - 1) !== null;
     const smoke = thermal ? null : smokeOnSegment(this.data, this.gadgets, v.pos, at(t ?? 200));
     if (smoke !== null && (t === null || smoke < t)) t = smoke;
-    // From a drone or a camera, the other side's observation blocker stops it too.
+    // From a drone or a camera, the other side's feed blocker stops it too.
     if (c.cam !== 0 || this.pawns.get(this.viewedPawnId(c.id))?.kind === PawnKind.Drone)
       for (const e of this.gadgets.list) {
         const d = this.data.gadgets.get(kindId(e.kind) ?? "");
@@ -1292,7 +1292,7 @@ export class Sim {
     const want = new Map<number, { g: Gadget; size: readonly [number, number, number]; key: string }>();
     for (const g of this.gadgets.list) {
       const d = this.data.gadgets.get(kindId(g.kind) ?? "");
-      // Not one in the air, nor a Black Mirror whose glass is ejected (Phase 8 M7).
+      // Not one in the air, nor a Blind Pane whose glass is ejected (Phase 8 M7).
       if (d?.solid && !(g.flags & (GFlag.Flying | GFlag.Broken))) want.set(g.id, { g, size: d.sizeM, key: `${g.pos.join(",")},${g.yaw}` });
     }
     let changed = false;
@@ -1308,7 +1308,7 @@ export class Sim {
       }
     for (const [id, w] of want) {
       if (this.solids.has(id)) continue;
-      // One box, or the parts of one built of them (Skopós's idle shell's barrier, D-157), each turned and leaning back.
+      // One box, or the parts of one built of them (Twain's idle shell's barrier, D-157), each turned and leaning back.
       const boxes = partBoxes(this.data, w.g) ?? [{ pos: w.g.pos, yaw: w.g.yaw, pitch: 0, half: [w.size[0] / 2, w.size[1] / 2, w.size[2] / 2] as Vec3, glass: false }];
       const cs = boxes.map((b) => {
         const [qx, qy, qz, qw] = quatYawPitchRoll(b.yaw, b.pitch, 0);
@@ -1317,7 +1317,7 @@ export class Sim {
           .setRotation({ x: qx, y: qy, z: qz, w: qw })
           .setCollisionGroups(GADGET_GROUPS);
         const c = this.world.createCollider(desc);
-        if (w.g.kind === KIND_SHELL_SHIELD) {
+        if (w.g.kind === KIND_FRAME_BARRIER) {
           this.blastless.add(c.handle);
           this.barrierOwner.set(c.handle, w.g.owner);
         }
@@ -1332,9 +1332,9 @@ export class Sim {
     }
   }
 
-  /** The colliders a blast goes through (Phase 8 M10: Skopós's idle shells' barriers, bulletproof but not blast-proof). */
+  /** The colliders a blast goes through (Phase 8 M10: Twain's idle shells' barriers, bulletproof but not blast-proof). */
   private readonly blastless = new Set<number>();
-  /** Skopós's barriers' colliders and whose they are (D-157): her own shells move through them. */
+  /** Twain's barriers' colliders and whose they are (D-157): her own shells move through them. */
   private readonly barrierOwner = new Map<number, number>();
 
   /** Whether a blast's line meets this collider: everything solid but an idle shell's barrier (gadgets/blast.ts). */
@@ -1367,7 +1367,7 @@ export class Sim {
 
   /**
    * How far along a ray the first solid gadget's box is (a deployable shield, within `maxT`), or null (Phase 8 M5:
-   * Fuze's Cluster Charge goes on one).
+   * Hail's Hailstone Drill goes on one).
    */
   solidOnRay(origin: Vec3, dir: Vec3, maxT: number): number | null {
     return gadgetOnRay(this.gadgets, this.data, origin, dir, maxT, (g) => !(g.flags & GFlag.Flying) && this.data.gadgets.get(kindId(g.kind) ?? "")?.solid === true)?.t ?? null;
@@ -1379,67 +1379,67 @@ export class Sim {
     return this.solids.get(id)?.cs[0];
   }
 
-  /** The round's Bulletproof Cameras (the gadget table's, in the order they were placed). */
-  bpCams(): readonly Gadget[] {
-    if (this.bpCache.version !== this.gadgets.version) this.bpCache = { version: this.gadgets.version, list: this.gadgets.list.filter((g) => g.kind === KIND_BP_CAMERA) };
+  /** The round's Armoured Cameras (the gadget table's, in the order they were placed). */
+  armouredCams(): readonly Gadget[] {
+    if (this.bpCache.version !== this.gadgets.version) this.bpCache = { version: this.gadgets.version, list: this.gadgets.list.filter((g) => g.kind === KIND_ARMOURED_CAMERA) };
     return this.bpCache.list;
   }
 
   /**
-   * Skopós's idle shells' barriers (Phase 8 M10; the table's, in the order they went up): each is its shell's camera,
+   * Twain's idle shells' barriers (Phase 8 M10; the table's, in the order they went up): each is its shell's camera,
    * the defence's. Every client has the table, while who's in which shell is each player's own (no client could list
    * another's idle shell).
    */
   shellCams(): readonly Gadget[] {
-    if (this.shellCache.version !== this.gadgets.version) this.shellCache = { version: this.gadgets.version, list: this.gadgets.list.filter((g) => g.kind === KIND_SHELL_SHIELD) };
+    if (this.shellCache.version !== this.gadgets.version) this.shellCache = { version: this.gadgets.version, list: this.gadgets.list.filter((g) => g.kind === KIND_FRAME_BARRIER) };
     return this.shellCache.list;
   }
 
-  /** How many cameras defenders have: the level's, then the round's Bulletproof Cameras, then the idle shells' (M10). */
+  /** How many cameras defenders have: the level's, then the round's Armoured Cameras, then the idle shells' (M10). */
   camCount(): number {
-    return this.level.def.cameras.length + this.bpCams().length + this.shellCams().length;
+    return this.level.def.cameras.length + this.armouredCams().length + this.shellCams().length;
   }
 
-  /** A Bulletproof Camera by its place in the defenders' list (from 0); null for any other. */
-  bpCamAt(i: number): Gadget | null {
+  /** A Armoured Camera by its place in the defenders' list (from 0); null for any other. */
+  armouredCamAt(i: number): Gadget | null {
     const n = this.level.def.cameras.length;
-    return i < n ? null : (this.bpCams()[i - n] ?? null);
+    return i < n ? null : (this.armouredCams()[i - n] ?? null);
   }
 
   /** An idle shell's camera (its barrier's entry, Phase 8 M10) by its place in the defenders' list; null for any other. */
   shellCamAt(i: number): Gadget | null {
-    const n = this.level.def.cameras.length + this.bpCams().length;
+    const n = this.level.def.cameras.length + this.armouredCams().length;
     return i < n ? null : (this.shellCams()[i - n] ?? null);
   }
 
   /**
-   * Whether camera i has a feed: not broken, and a Bulletproof Camera placed outdoors not yet without its signal (the
+   * Whether camera i has a feed: not broken, and a Armoured Camera placed outdoors not yet without its signal (the
    * room says when: a client's ticks aren't the server's).
    */
   camWorks(i: number): boolean {
-    if (i >= this.camCount()) return false; // a Bulletproof Camera from a round that's over
+    if (i >= this.camCount()) return false; // a Armoured Camera from a round that's over
     // An idle shell's (M10): off while an EMP has it, or inside a jammer of the other side.
     const shell = this.shellCamAt(i);
     if (shell) return !(shell.flags & GFlag.Off) && !pointJammed(this, shell.team, this.camLens(i, shell.yaw));
-    const bp = this.bpCamAt(i);
+    const bp = this.armouredCamAt(i);
     if (bp && bp.flags & (GFlag.Broken | GFlag.Lost | GFlag.Off)) return false;
     if (!bp && (i >= 32 || ((this.matchRules.camsBroken | this.matchRules.camsOff) & (1 << i)) !== 0)) return false;
-    // Inside a jammer of the other side than its own (Phase 8 M8: one Brava's Kludge converted, or Mute's on a hacked one).
+    // Inside a jammer of the other side than its own (Phase 8 M8: one Patch's Crossover converted, or Lull's on a hacked one).
     return !pointJammed(this, this.camTeam(i), bp ? bp.pos : this.level.def.cameras[i].pos);
   }
 
   /**
-   * Whose camera i is (Phase 8 M8): the defenders', unless a Kludge drone hacked it (a default camera's bit in
-   * `matchRules.camsHacked`, a Bulletproof Camera's team).
+   * Whose camera i is (Phase 8 M8): the defenders', unless a Crossover drone hacked it (a default camera's bit in
+   * `matchRules.camsHacked`, a Armoured Camera's team).
    */
   camTeam(i: number): number {
-    const bp = this.bpCamAt(i) ?? this.shellCamAt(i);
+    const bp = this.armouredCamAt(i) ?? this.shellCamAt(i);
     if (bp) return bp.team;
     return i < 32 && this.matchRules.camsHacked & (1 << i) ? sideTeam("attacker") : sideTeam("defender");
   }
 
   /**
-   * Whether camera i is one `team` can watch now: working, and theirs, or the defenders' while Dokkaebi has the
+   * Whether camera i is one `team` can watch now: working, and theirs, or the defenders' while Relay has the
    * attackers watching them (Phase 8 M9, `camsLent`).
    */
   private camFor(team: number, i: number): boolean {
@@ -1449,13 +1449,13 @@ export class Sim {
   }
 
   /**
-   * How camera i's view turns: `face` its facing; within `half` of it (π: all the way round, a Bulletproof Camera on
+   * How camera i's view turns: `face` its facing; within `half` of it (π: all the way round, a Armoured Camera on
    * the floor), tilting from `pitchMin` to `pitchMax`, at most `turn` a tick; `fovDeg` how wide it sees.
    */
   camLimits(i: number): { face: number; half: number; pitchMin: number; pitchMax: number; turn: number; fovDeg: number } {
-    const bp = this.bpCamAt(i);
+    const bp = this.armouredCamAt(i);
     const shell = this.shellCamAt(i);
-    const k = bp ? this.data.intel.bulletproofCamera.view : this.data.intel.camera;
+    const k = bp ? this.data.intel.armouredCamera.view : this.data.intel.camera;
     return {
       face: bp ? bp.yaw : shell ? shell.yaw : (this.level.def.cameras[i]?.yawDeg ?? 0) * DEG,
       half: bp && bp.flags & GFlag.OnFloor ? Math.PI : k.yawHalfRangeDeg * DEG,
@@ -1473,22 +1473,22 @@ export class Sim {
   camLens(i: number, yaw: number): [number, number, number] {
     const shell = this.shellCamAt(i);
     if (shell) {
-      const d = this.data.gadgets.get("shell_shield")!;
+      const d = this.data.gadgets.get("frame_barrier")!;
       const [lx, ly, lz] = d.lensM ?? [0, this.data.movement.stance.crouch.eye, d.sizeM[2] / 2 + LENS_AHEAD_M];
       const [fx, fz] = forwardXZ(shell.yaw);
       const [rx, rz] = rightXZ(shell.yaw);
       return [shell.pos[0] + rx * lx + fx * lz, shell.pos[1] - d.sizeM[1] / 2 + ly, shell.pos[2] + rz * lx + fz * lz];
     }
-    const bp = this.bpCamAt(i);
+    const bp = this.armouredCamAt(i);
     const at = bp ? bp.pos : (this.level.def.cameras[i]?.pos ?? [0, 0, 0]);
-    const ahead = (bp ? this.data.gadgets.get("bulletproof_camera")!.sizeM[2] / 2 : CAMERA_HALF_M) + LENS_AHEAD_M;
+    const ahead = (bp ? this.data.gadgets.get("armoured_camera")!.sizeM[2] / 2 : CAMERA_HALF_M) + LENS_AHEAD_M;
     const [fx, fz] = forwardXZ(yaw);
     return [at[0] + fx * ahead, at[1], at[2] + fz * ahead];
   }
 
-  /** The gadget table entry camera i is (a Bulletproof Camera, an idle shell's barrier), or 0 (one of the level's). */
+  /** The gadget table entry camera i is (a Armoured Camera, an idle shell's barrier), or 0 (one of the level's). */
   private camEntryAt(i: number): number {
-    return this.bpCamAt(i)?.id ?? this.shellCamAt(i)?.id ?? 0;
+    return this.armouredCamAt(i)?.id ?? this.shellCamAt(i)?.id ?? 0;
   }
 
   /** Onto camera i, looking where this viewer left it (Ulo, D-155), or the first time its own way. */
@@ -1507,7 +1507,7 @@ export class Sim {
       return;
     }
     c.camYaw = Math.fround(wrapAngle(l.face));
-    c.camPitch = Math.fround(clamp(this.bpCamAt(i) || this.shellCamAt(i) ? 0 : this.level.def.cameras[i].pitchDeg * DEG, l.pitchMin, l.pitchMax));
+    c.camPitch = Math.fround(clamp(this.armouredCamAt(i) || this.shellCamAt(i) ? 0 : this.level.def.cameras[i].pitchDeg * DEG, l.pitchMin, l.pitchMax));
   }
 
   /** One of this body's own drones out within reach (data/intel.json `drone.pickupReachM`), to pick up with F. */
@@ -1668,7 +1668,7 @@ export class Sim {
     pawn.collider.setTranslation({ x: spawn.pos[0], y: spawn.pos[1] + hh + r + 0.02, z: spawn.pos[2] });
     pawn.state = { ...initialPawnState(spawn.pos[0], spawn.pos[1] + 0.02, spawn.pos[2], Math.fround(spawn.yawDeg * DEG), pawn.state.maxHp, pawn.loadout), rng: pawn.state.rng };
     stockSlots(this.data, pawn.state, pawn.loadout);
-    // Skopós's shell she isn't in holds none of her gadgets (one pool, in the shell she's in).
+    // Twain's shell she isn't in holds none of her gadgets (one pool, in the shell she's in).
     const owner = pawn.ownerId !== null ? this.controllers.get(pawn.ownerId) : undefined;
     if (owner && owner.possessedPawnId !== pawn.id && this.bodyIds(owner).length > 1) emptySlots(pawn.state);
     pawn.life++;
@@ -1747,7 +1747,7 @@ export class Sim {
 
   /**
    * Advance one tick. Possessed pawns get their controller's input. Idle pawns stand still (gravity only);
-   * idle Skopós shells stay crouched. While Skopós looks through her other shell's camera, her mouse
+   * idle Twain shells stay crouched. While Twain looks through her other shell's camera, her mouse
    * turns that shell's view and the body she left stands still.
    */
   step(inputs: ReadonlyMap<number, InputCmd>, only?: ReadonlySet<number>, advanceTick = only === undefined): void {
@@ -1841,7 +1841,7 @@ export class Sim {
           const reviving = this.updateRevive(pawn, input);
           if (reviving || this.updateDeploy(pawn, input)) {
             // Reviving holds you in place, and so do reinforcing and barricading (reinforcement.locksReinforcer;
-            // both placeholders), the defuser's holds (data/objective.json) and placing a Bulletproof Camera (ours),
+            // both placeholders), the defuser's holds (data/objective.json) and placing a Armoured Camera (ours),
             // through the tick a hold completes; the held key never reaches a ladder.
             const k = pawn.state.deployKind !== DeployKind.None ? pawn.state.deployKind : holding;
             const d = this.data.objective.defuser;
@@ -1858,7 +1858,7 @@ export class Sim {
             cmd = { ...input, forward: still ? 0 : input.forward, strafe: still ? 0 : input.strafe, buttons: input.buttons & ~Btn.Interact, stance: kneel ? Stance.Crouch : input.stance };
           }
         }
-        // Placing a gadget holds the body still (ours, like the Bulletproof Camera in Phase 7), from the tick it starts.
+        // Placing a gadget holds the body still (ours, like the Armoured Camera in Phase 7), from the tick it starts.
         const placing = pawn.state.gAct === GadgetAct.Place || (input.buttons & Btn.Fire && pawn.state.gAct === GadgetAct.Ready && placeSpotFor(this.ctx, pawn));
         if (placing && !idleDriven.has(pawn.id)) cmd = { ...cmd, forward: 0, strafe: 0 };
         // A body driven without its player's buttons (left behind on the camera, or being looked
@@ -1909,7 +1909,7 @@ export class Sim {
   }
 
   /**
-   * Skopós shell swap (research/operators/skopos.md §3.2): the ability key opens the idle shell's camera;
+   * Twain shell swap (research/operators/skopos.md §3.2): the ability key opens the idle shell's camera;
    * interact, while on that camera, starts the swap: transfer (the active shell idles), then activation
    * (the target shell wakes up), then a short cooldown. Timings come from the operator's ability params
    * and run every tick, even when this tick's input is missing (it only carries the key presses).

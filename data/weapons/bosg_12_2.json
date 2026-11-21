@@ -1,5 +1,5 @@
 {
-  "_doc": "BOSG.12.2 (Dokkaebi). research/weapons.csv row bosg_12_2; class rules research/weapons_notes.md §4. Break-action, reloads both barrels. Slug headshot rule is weapons_notes.md Q13; slug penetration full (CSV) vs simple (core_mechanics.md §9.3). Ammo-refill 0.45 / 1.79 s community-measured.",
+  "_doc": "BOSG.12.2 (Relay). research/weapons.csv row bosg_12_2; class rules research/weapons_notes.md §4. Break-action, reloads both barrels. Slug headshot rule is weapons_notes.md Q13; slug penetration full (CSV) vs simple (core_mechanics.md §9.3). Ammo-refill 0.45 / 1.79 s community-measured.",
   "_season": "Y11S3.1",
   "_unverified": [
     "damage.head",

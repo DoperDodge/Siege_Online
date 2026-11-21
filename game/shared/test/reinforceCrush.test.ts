@@ -7,14 +7,14 @@ import { scene } from "./interactions/harness.js";
 
 describe("reinforcing one section of a wall", () => {
   it("leaves the other section's camera, a frag at the foot (it still goes off) and a smoke cloud alone", async () => {
-    const s = await scene(["sledge", "mute"]);
+    const s = await scene(["cleave", "lull"]);
     s.park();
     const entry = s.sim.level.panels.byId.get("reinforce_2")!;
     const panel = entry.panel;
-    const d = s.sim.data.gadgets.get("bulletproof_camera")!;
-    // The wall runs x −2.5…2.5 at z −6 (its face toward +z at −5.9): Mute reinforces the right section (x > 0).
-    const left = s.put("bulletproof_camera", 1, [-1.8, 1.5, -5.9 + d.sizeM[2] / 2], { yaw: Math.PI, flags: 0, panel: panel.spec.index });
-    const right = s.put("bulletproof_camera", 1, [1.8, 1.5, -5.9 + d.sizeM[2] / 2], { yaw: Math.PI, flags: 0, panel: panel.spec.index });
+    const d = s.sim.data.gadgets.get("armoured_camera")!;
+    // The wall runs x −2.5…2.5 at z −6 (its face toward +z at −5.9): Lull reinforces the right section (x > 0).
+    const left = s.put("armoured_camera", 1, [-1.8, 1.5, -5.9 + d.sizeM[2] / 2], { yaw: Math.PI, flags: 0, panel: panel.spec.index });
+    const right = s.put("armoured_camera", 1, [1.8, 1.5, -5.9 + d.sizeM[2] / 2], { yaw: Math.PI, flags: 0, panel: panel.spec.index });
     const frag = s.put("frag", 0, [1.2, 0.06, -5.75], { fuseEnd: s.sim.tick + 20 * 64 });
     const smoke = s.put("smoke", 0, [0.8, 0.06, -5.7], { flags: GFlag.OnFloor | GFlag.Active, fuseEnd: s.sim.tick + 20 * 64 });
     s.teleport(1, 1.6, 0, -5.0, 0);

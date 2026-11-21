@@ -7,7 +7,7 @@ import { input } from "./helpers.js";
 async function defender(team = DEFENSE) {
   const sim = await Sim.create("millrace");
   sim.matchRules.cameras = true;
-  const c = sim.addPlayer("def", team === DEFENSE ? "mute" : "thermite", 0, undefined, undefined, team);
+  const c = sim.addPlayer("def", team === DEFENSE ? "lull" : "kiln", 0, undefined, undefined, team);
   const body = sim.pawns.get(c.possessedPawnId)!;
   const step = (cmd: Partial<InputCmd> & { yawDeg?: number } = {}, n = 1) => {
     for (let i = 0; i < n; i++) sim.step(new Map([[c.id, input(cmd)]]));

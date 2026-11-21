@@ -8,7 +8,7 @@ import { roomWith } from "./roomHarness.js";
 /** In front of the Destruction Lab's plain soft wall, 1.4 m from it, facing it. */
 const SOFT = { x: -8, y: 0, z: -4.5, yawDeg: 0 };
 
-async function setup(ops = ["sledge", "fuze"]) {
+async function setup(ops = ["cleave", "hail"]) {
   const h = await roomWith("destruction_lab", ops);
   const wait = (n: number) => {
     for (let i = 0; i < n; i++) h.tick();
@@ -63,7 +63,7 @@ describe("gadgets online (Phase 8 M1)", () => {
     wait(4);
     expect(room.sim.gadgets.list.map((g) => g.kind)).toEqual([kindOf("breach_charge")]);
     expect(agree()).toBe(true);
-    const late = await add("mute");
+    const late = await add("lull");
     wait(2);
     expect(late.session.sim!.gadgets.list).toEqual(room.sim.gadgets.list);
     // The detonator is out after placing: Fire sets it off.

@@ -1,5 +1,5 @@
 {
-  "_doc": "Smoke Grenade (attacker pool; research/gadgets.md §3.6). Thrown; it releases its smoke 3 s after the throw, or 2 s after it first meets a surface (Fandom). Its size is a placeholder. Its cloud (M3): a sphere 5 m across for 10 s (Fandom, last reworked Y2S3); it blocks sight and pings land on it; bullets go through; a Bulletproof Camera sees through it.",
+  "_doc": "Smoke Grenade (attacker pool; research/gadgets.md §3.6). Thrown; it releases its smoke 3 s after the throw, or 2 s after it first meets a surface (Fandom). Its size is a placeholder. Its cloud (M3): a sphere 5 m across for 10 s (Fandom, last reworked Y2S3); it blocks sight and pings land on it; bullets go through; a Armoured Camera sees through it.",
   "_season": "Y11S3",
   "_unverified": ["use.fuseS", "use.afterHitS", "sizeM", "cloud"],
   "id": "smoke",

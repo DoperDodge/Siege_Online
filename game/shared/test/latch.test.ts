@@ -37,9 +37,9 @@ const latch = data.gadgets.get("snare_latch")!;
 const k = latch.snare!;
 const arm = ticks(latch.tripwire!.armS);
 
-/** Sledge (client 0, attacking) and Latch (client 1, defending) on the Gadget Lab, out of the way. */
+/** Cleave (client 0, attacking) and Latch (client 1, defending) on the Gadget Lab, out of the way. */
 async function lab() {
-  const s = await scene(["sledge", "latch"], "gadget_lab");
+  const s = await scene(["cleave", "latch"], "gadget_lab");
   s.park();
   return s;
 }
@@ -276,7 +276,7 @@ describe("bots and Latch's latches (R3)", () => {
   }
 
   it("a bot playing Latch puts his latches on the site's doors in prep, each on a frame", async () => {
-    const { room, bots } = await match(["latch", "mute", "pulse", "lesion", "mira"], "blue", "SITE_MILL");
+    const { room, bots } = await match(["latch", "lull", "murmur", "thistle", "vista"], "blue", "SITE_MILL");
     const ctrl = room.bodyOf(bots[0].id)!;
     const mine = room.sim.gadgets.list.filter((g) => g.kind === kindOf("snare_latch") && g.owner === ctrl.id);
     expect(mine.length, `doing ${room.botOf(bots[0].id)!.doing}`).toBeGreaterThanOrEqual(2);
@@ -284,7 +284,7 @@ describe("bots and Latch's latches (R3)", () => {
   }, 300000);
 
   it("a snared bot attacker pulls it off when nothing's in sight", async () => {
-    const { room, bots, step } = await match(["sledge", "thermite", "striker", "fuze", "brava"], "orange", "SITE_BOILER");
+    const { room, bots, step } = await match(["cleave", "kiln", "pointman", "hail", "patch"], "orange", "SITE_BOILER");
     const body = room.sim.pawns.get(room.bodyOf(bots[0].id)!.possessedPawnId)!;
     expect(body.team).toBe(ATTACK);
     body.state.snared = true;
@@ -292,7 +292,7 @@ describe("bots and Latch's latches (R3)", () => {
   }, 300000);
 
   it("one snared mid-knife pulls it off too, its first press of Interact lost to the knife (the review)", async () => {
-    const { room, bots, step } = await match(["sledge", "thermite", "striker", "fuze", "brava"], "orange", "SITE_BOILER");
+    const { room, bots, step } = await match(["cleave", "kiln", "pointman", "hail", "patch"], "orange", "SITE_BOILER");
     const body = room.sim.pawns.get(room.bodyOf(bots[0].id)!.possessedPawnId)!;
     body.state.snared = true;
     body.state.meleeTicks = 1;

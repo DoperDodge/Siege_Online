@@ -1,4 +1,4 @@
-// Electronics (Phase 8 M3, gadgets/DESIGN.md §6): an EMP's DSEG. An Impact EMP grenade or a Bulletproof Camera's dart
+// Electronics (Phase 8 M3, gadgets/DESIGN.md §6): an EMP's DSEG. An Impact EMP grenade or a Armoured Camera's dart
 // disables the other side's electronics within its radius, through walls (ours): gadgets whose data says
 // `electronic` (and the metal detector) until a tick (GFlag.Off: no feed, trigger, laser, alarm or barrier), bodies
 // and drones for a while (PawnState.jammed: a body can't use its sights' optics, cameras or drones, or set its

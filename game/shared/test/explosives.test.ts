@@ -35,7 +35,7 @@ describe("explosives on panels", () => {
     const { boom, apply, panel } = await lab();
     expect(boom("breach_charge", [11.5, 1.2, -5], NORTH)).toEqual([]);
     expect(boom("impact_grenade", [11.5, 1.2, -5], NORTH)).toEqual([]);
-    const ops = boom("exothermic_charge", [11.5, 1.2, -5], NORTH);
+    const ops = boom("burn_frame", [11.5, 1.2, -5], NORTH);
     expect(ops.map((o) => (o.op.kind === "cut" ? [o.op.layer, o.op.hard] : null))).toEqual([
       [L_FRONT, true],
       [L_BACK, true],
@@ -55,7 +55,7 @@ describe("explosives on panels", () => {
     sim.level.panels.apply(panel("hatch").spec.index, { kind: "reinforce", section: 0, side: 1 });
     apply(boom("frag_grenade", [10, 5, 8], DOWN));
     expect(panel("hatch").broken).toBe(false);
-    apply(boom("hard_breach_charge", [10, 4.6, 8], DOWN));
+    apply(boom("heavy_breach_charge", [10, 4.6, 8], DOWN));
     expect(panel("hatch").broken).toBe(true);
   });
 
@@ -63,9 +63,9 @@ describe("explosives on panels", () => {
     const { boom, apply, panel } = await lab();
     apply(boom("frag_grenade", [-10, 1.2, 9], NORTH));
     expect(panel("door_a").broken).toBe(true);
-    apply(boom("nitro_cell", [-3, 1.5, 4], [0, 0, 1]));
+    apply(boom("remote_charge", [-3, 1.5, 4], [0, 0, 1]));
     expect(panel("window_glass").broken).toBe(true);
-    const changes = apply(boom("nitro_cell", [14.5, 5, 8], DOWN));
+    const changes = apply(boom("remote_charge", [14.5, 5, 8], DOWN));
     expect(changes.some((c) => c.movementChanged)).toBe(false);
     expect(holes(panel("soft_floor").layers[L_FRONT])).toBeGreaterThan(0);
   });
@@ -79,7 +79,7 @@ describe("explosives on panels", () => {
 
 describe("in a room", () => {
   it("an explosive id the data doesn't have (one every object has, like constructor) does nothing", async () => {
-    const { room, clients, tick } = await roomWith("destruction_lab", ["sledge", "mute"]);
+    const { room, clients, tick } = await roomWith("destruction_lab", ["cleave", "lull"]);
     for (let i = 0; i < 10; i++) tick();
     const [a, b] = clients;
     const hatch = room.sim.level.panels.byId.get("hatch")!.panel;
@@ -97,7 +97,7 @@ describe("in a room", () => {
   });
 
   it("a throw stops at plain level geometry: through a hard wall, nothing", async () => {
-    const { room, clients, tick } = await roomWith("destruction_lab", ["sledge"]);
+    const { room, clients, tick } = await roomWith("destruction_lab", ["cleave"]);
     for (let i = 0; i < 10; i++) tick();
     const [a] = clients;
     const wall = room.sim.level.panels.byId.get("soft_studs")!.panel;
@@ -114,7 +114,7 @@ describe("in a room", () => {
   });
 
   it("the lab tool's cut reaches everyone; Reset walls puts every panel back and refills the pools", async () => {
-    const { room, clients, tick } = await roomWith("destruction_lab", ["sledge", "mute"]);
+    const { room, clients, tick } = await roomWith("destruction_lab", ["cleave", "lull"]);
     for (let i = 0; i < 10; i++) tick();
     const [a, b] = clients;
     const fresh = room.sim.level.panels.hash();

@@ -52,7 +52,7 @@ describe("Quick Match pre-setups (match/DESIGN.md §9)", () => {
 
   it("a body vaults through a vault hole (Spinning Room → Mill Corridor) and walks crouched through a crouch hole (Boiler Room → Coal Store); without them the wall stops it", async () => {
     const sim = await Sim.create("millrace");
-    const ctrl = sim.addPlayer("tester", "sledge");
+    const ctrl = sim.addPlayer("tester", "cleave");
     const p = sim.pawns.get(ctrl.possessedPawnId)!;
     // SW-1F-04 runs along z at x 38; the Spinning Room is west of it. Facing east (yaw −90°), Space vaults through.
     const vaultWall = sim.level.panels.byId.get("SW-1F-04")!.frame.center;

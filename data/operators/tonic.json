@@ -8,7 +8,7 @@
   "loadout": {
     "primaries": ["ump45", "m590a1"],
     "secondaries": ["p229", "usp40"],
-    "gadgets": ["bulletproof_camera", "barbed_wire"]
+    "gadgets": ["armoured_camera", "barbed_wire"]
   },
   "ability": {
     "id": "second_wind",

@@ -1,12 +1,12 @@
 // The gadget table drawn (Phase 8 M1, gadgets/DESIGN.md §11): each entry as a greybox of its data's size and its
 // kind's colour, standing, on its wall or lying flat; a thrown one along its flight (stepped here by the same code the
 // server steps it with). Your own throws and placings are drawn at once from your prediction, until the server's entry
-// takes over. Bulletproof Cameras are drawn by BpCameraModels (render/cameraModels.ts). Greybox until the art pass.
-// M3 adds what an entry's flags show: smoke clouds (not in a Bulletproof Camera's thermal view), a gas pipe's jet and
-// fire, an alarm sounding, an EMP's sparks, and an observation blocker's barrier to the other side's drones and cameras;
-// the level's ingredients are entries too. M5: Thermite's charge burning shows sparks on both sides of its surface,
-// Fuze's set off shows its tube through it (its grenades are thrown entries). M6: Mute's jammer lights up while it
-// works, and its reach shows for a moment once it's placed. M7: Mira's Black Mirror is its frame and its glass, clear from
+// takes over. Armoured Cameras are drawn by ArmouredCameraModels (render/cameraModels.ts). Greybox until the art pass.
+// M3 adds what an entry's flags show: smoke clouds (not in a Armoured Camera's thermal view), a gas pipe's jet and
+// fire, an alarm sounding, an EMP's sparks, and an feed blocker's barrier to the other side's drones and cameras;
+// the level's ingredients are entries too. M5: Kiln's charge burning shows sparks on both sides of its surface,
+// Hail's set off shows its tube through it (its grenades are thrown entries). M6: Lull's jammer lights up while it
+// works, and its reach shows for a moment once it's placed. M7: Vista's Blind Pane is its frame and its glass, clear from
 // her side and black from the other (two one-sided sheets), grey once shattered, gone once ejected. R3: Shunt's live
 // surfaces (gadgets/arcs.ts) flicker blue and crackle, on both sides, for everyone to see.
 import * as THREE from "three";
@@ -22,8 +22,8 @@ import {
   isFlying,
   isIngredient,
   jetOf,
-  KIND_BP_CAMERA,
-  KIND_SHELL_SHIELD,
+  KIND_ARMOURED_CAMERA,
+  KIND_FRAME_BARRIER,
   kindId,
   kindOf,
   liveSpans,
@@ -49,7 +49,7 @@ type ThrowUse = Extract<GadgetData["use"], { kind: "throw" }>;
 /** Each kind's colour (greybox). */
 const COLOURS: Record<string, number> = {
   breach_charge: 0x52525b,
-  hard_breach_charge: 0x71717a,
+  heavy_breach_charge: 0x71717a,
   claymore: 0x4d5d3a,
   frag: 0x3f4a1f,
   stun: 0x9ca3af,
@@ -57,22 +57,22 @@ const COLOURS: Record<string, number> = {
   impact_emp: 0x2563eb,
   barbed_wire: 0x94a3b8,
   deployable_shield: 0x374151,
-  observation_blocker: 0x334155,
+  feed_blocker: 0x334155,
   impact_grenade: 0x7f1d1d,
-  nitro_cell: 0x111827,
+  remote_charge: 0x111827,
   proximity_alarm: 0x1f2937,
   fire_extinguisher: 0xb91c1c,
   gas_pipe: 0xb45309,
   metal_detector: 0x9ca3af,
-  exothermic_charge: 0x7c2d12,
-  cluster_charge: 0x3f3f46,
-  cluster_grenade: 0x3f4a1f,
-  signal_disruptor: 0x1e293b,
-  black_mirror: 0x134e4a,
-  mirror_canister: 0xdc2626,
+  burn_frame: 0x7c2d12,
+  hailstone_drill: 0x3f3f46,
+  hailstone: 0x3f4a1f,
+  damper: 0x1e293b,
+  blind_pane: 0x134e4a,
+  pane_canister: 0xdc2626,
   dropped_phone: 0x0f172a,
-  gu_mine: 0x65a30d,
-  shell_shield: 0x475569,
+  burr_mine: 0x65a30d,
+  frame_barrier: 0x475569,
   brownout_pistol: 0x1e3a5f,
   second_wind: 0x0f766e,
   arc_pack: 0x27303a,
@@ -85,7 +85,7 @@ const COLOURS: Record<string, number> = {
 };
 
 /**
- * What the page looks through (Phase 8 M3): a Bulletproof Camera's thermal view sees through smoke; an observation
+ * What the page looks through (Phase 8 M3): a Armoured Camera's thermal view sees through smoke; an observation
  * blocker's barrier shows (and blocks) to the other side's observation tools, a drone or a camera.
  */
 export interface GadgetView {
@@ -297,7 +297,7 @@ export class GadgetModels {
     let geo = this.geometry.get(id);
     if (!geo) {
       // Grenades and fire extinguishers are round; a gas pipe lies along its width; everything else is its box.
-      const round = (d?.use.kind === "throw" && !d.remote && id !== "proximity_alarm") || id === "fire_extinguisher" || id === "mirror_canister";
+      const round = (d?.use.kind === "throw" && !d.remote && id !== "proximity_alarm") || id === "fire_extinguisher" || id === "pane_canister";
       if (round) geo = new THREE.CylinderGeometry(w / 2, w / 2, h, 12);
       // A gas pipe stands upright (Ulo's test): a unit-tall cylinder, set to its floor-to-ceiling run per entry (pipeRun).
       else if (id === "gas_pipe") geo = new THREE.CylinderGeometry(w / 2, w / 2, 1, 10);
@@ -321,7 +321,7 @@ export class GadgetModels {
       return group;
     }
     if (d?.mirror) {
-      // A Black Mirror (M7): its frame round the window, through the wall (its glass is drawn by its state).
+      // A Blind Pane (M7): its frame round the window, through the wall (its glass is drawn by its state).
       const f = d.mirror.frameM;
       const deep = 0.24;
       const frame = new THREE.Group();
@@ -384,7 +384,7 @@ export class GadgetModels {
     for (const e of events) {
       if (e.kind !== "throw" && e.kind !== "place") continue;
       const kind = kindOf(e.gadget);
-      if (kind < 0 || kind === KIND_BP_CAMERA) continue;
+      if (kind < 0 || kind === KIND_ARMOURED_CAMERA) continue;
       const obj = this.model(kind);
       this.scene.add(obj);
       const flags = e.kind === "throw" ? GFlag.Flying : (e.onFloor ? GFlag.OnFloor : 0) | (e.flat ? GFlag.Flat : 0);
@@ -400,7 +400,7 @@ export class GadgetModels {
     const table = this.sim.gadgets;
     const seen = new Set<number>();
     for (const g of table.list) {
-      if (g.kind === KIND_BP_CAMERA) continue;
+      if (g.kind === KIND_ARMOURED_CAMERA) continue;
       seen.add(g.id);
       let it = this.items.get(g.id);
       if (!it) {
@@ -440,8 +440,8 @@ export class GadgetModels {
       const body = it.obj.getObjectByName("body") as THREE.Mesh | undefined;
       if (kindId(g.kind) === "gas_pipe") this.pipeRun(it.obj, g);
       else body?.scale.setScalar(isIngredient(g.kind) && g.flags & GFlag.Broken ? 0.7 : 1);
-      // Skopós's idle shell's barrier broken by a blast (M10): gone (its entry stays as the shell's camera).
-      it.obj.visible = !(g.kind === KIND_SHELL_SHIELD && g.flags & GFlag.Broken);
+      // Twain's idle shell's barrier broken by a blast (M10): gone (its entry stays as the shell's camera).
+      it.obj.visible = !(g.kind === KIND_FRAME_BARRIER && g.flags & GFlag.Broken);
       this.setLasers(it, g);
     }
     for (const [id, it] of this.items)
@@ -626,7 +626,7 @@ export class GadgetModels {
       glow.position.set(...g.pos);
       group.add(glow);
     }
-    // A Black Mirror's glass (M7): one-way while whole (clear toward its facing, black the other way), grey when shattered.
+    // A Blind Pane's glass (M7): one-way while whole (clear toward its facing, black the other way), grey when shattered.
     const mirror = this.dataOf(g.kind)?.mirror;
     if (mirror && !(g.flags & GFlag.Broken)) {
       const [w, h] = this.dataOf(g.kind)!.sizeM;
@@ -638,7 +638,7 @@ export class GadgetModels {
         group.add(sheet);
       }
     }
-    // A defenders' device a Kludge hacked over to the attackers (M8): it glows in their colour.
+    // A defenders' device a Crossover hacked over to the attackers (M8): it glows in their colour.
     if (this.dataOf(g.kind)?.side === "defender" && g.team !== 1 && !(g.flags & GFlag.Flying)) {
       const glow = new THREE.Mesh(new THREE.SphereGeometry(Math.max(0.12, Math.max(...this.dataOf(g.kind)!.sizeM) * 0.6), 12, 8), this.fxMat.hacked);
       glow.position.set(g.pos[0], g.pos[1], g.pos[2]);
@@ -655,8 +655,8 @@ export class GadgetModels {
       spark.position.set(g.pos[0], g.pos[1] + 0.1, g.pos[2]);
       group.add(spark);
     }
-    // Thermite's charge burning (M5): sparks over its face on its side and on the surface's far side.
-    if (id === "exothermic_charge" && g.flags & GFlag.Active) {
+    // Kiln's charge burning (M5): sparks over its face on its side and on the surface's far side.
+    if (id === "burn_frame" && g.flags & GFlag.Active) {
       const size = this.dataOf(g.kind)!.sizeM;
       const back = behindOf(g);
       const through = (g.panel >= 0 ? this.sim.level.panels.list[g.panel]?.frame.t : undefined) ?? 0.2;
@@ -667,7 +667,7 @@ export class GadgetModels {
         group.add(glow);
       }
     }
-    // Fuze's charge set off (M5): its tube through the surface, out on the far side.
+    // Hail's charge set off (M5): its tube through the surface, out on the far side.
     const tube = tubeBox(data, g);
     const tip = tubeTip(data, g);
     if (tube && tip) {

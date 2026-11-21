@@ -37,7 +37,7 @@ export function rangeFeatures(lab: LabApi): void {
     const lines = [`<b>Last shot</b>${weapon ? ` · ${escapeHtml(weapon.name)}` : ""}`];
     if (shot.hit) {
       const part = shot.hit.part as BodyPart;
-      // (Fuze's shield's plate, Phase 8 M11: it takes nothing.)
+      // (Hail's shield's plate, Phase 8 M11: it takes nothing.)
       // The zone the server confirmed, once it has (your own shot's guess can be a hair off where an arm crosses the
       // body: the panel compares the damage dealt with the data for where it really landed).
       const zone = hits[0]?.zone ?? (part === "shield" ? "torso" : zoneOf(part));

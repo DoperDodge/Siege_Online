@@ -151,7 +151,7 @@ describe("a bot playing Hull (R3)", () => {
       return done();
     };
     expect(step(() => m.phase === Phase.Planning, 5)).toBe(true);
-    const ops = ["hull", "thermite", "striker", "sledge", "fuze"];
+    const ops = ["hull", "kiln", "pointman", "cleave", "hail"];
     const bots = [...m.players.values()].filter((p) => p.bot !== null);
     bots.forEach((p, i) => room.pickLoadout(p.id, botLoadout(data, ops[i])));
     expect(step(() => m.phase === Phase.Action, 60)).toBe(true);
@@ -177,7 +177,7 @@ describe("a bot playing Hull (R3)", () => {
 
 describe("Hull's brace as others see it (the review, R3)", () => {
   it("a rewound shot meets the braced plate: shot at his eye from 6 m, braced, he takes nothing", async () => {
-    const s = await scene(["hull", "mute"], "destruction_lab");
+    const s = await scene(["hull", "lull"], "destruction_lab");
     s.park();
     s.teleport(0, 0, 0, 12, 0);
     s.teleport(1, 0, 0, 6, 180);

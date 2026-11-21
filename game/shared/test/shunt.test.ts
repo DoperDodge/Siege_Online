@@ -38,9 +38,9 @@ const data = loadGameData();
 const k = data.gadgets.get("arc_pack")!.arc!;
 const burn = ticks(k.burnS);
 
-/** Thermite (client 0, attacking) and Shunt (client 1, defending) on the Gadget Lab, out of the way. */
+/** Kiln (client 0, attacking) and Shunt (client 1, defending) on the Gadget Lab, out of the way. */
 async function lab() {
-  const s = await scene(["thermite", "shunt"], "gadget_lab");
+  const s = await scene(["kiln", "shunt"], "gadget_lab");
   s.park();
   return s;
 }
@@ -60,7 +60,7 @@ function packDown(s: Scene): Gadget {
   return g;
 }
 
-/** Thermite (client 0) puts his charge on the reinforced wall at x, as a player does, and steps back. */
+/** Kiln (client 0) puts his charge on the reinforced wall at x, as a player does, and steps back. */
 function charge(s: Scene, x = 11.8): Gadget {
   s.teleport(0, x, 0, -5.0);
   const g = s.plant(0, [x, 1.4, -5.9])!;
@@ -135,7 +135,7 @@ describe("Shunt and his Arc Packs (R3)", () => {
     const g = charge(s);
     s.wait(burn * 3);
     expect(gone(s, g)).toBe(false);
-    // Back down before Thermite sets it off.
+    // Back down before Kiln sets it off.
     packDown(s);
     s.wait(burn + 2);
     expect(gone(s, g)).toBe(true);
@@ -152,7 +152,7 @@ describe("Shunt and his Arc Packs (R3)", () => {
     expect(liveSurfaces(s.sim).panels.size).toBe(1);
     s.wait(burn + 4);
     expect(gone(s, g)).toBe(false);
-    s.wait(ticks(s.sim.data.gadgets.get("exothermic_charge")!.burnS!) + 8);
+    s.wait(ticks(s.sim.data.gadgets.get("burn_frame")!.burnS!) + 8);
     expect(s.solidAt("reinforced", L_STEEL, [11.8, 1.0, -6])).toBe(false);
   });
 
@@ -234,7 +234,7 @@ describe("a bot playing Shunt (R3)", () => {
       return done();
     };
     expect(step(() => m.phase === Phase.Planning, 5)).toBe(true);
-    const ops = ["shunt", "mute", "pulse", "lesion", "mira"];
+    const ops = ["shunt", "lull", "murmur", "thistle", "vista"];
     const bots = [...m.players.values()].filter((p) => p.bot !== null);
     bots.forEach((p, i) => room.pickLoadout(p.id, botLoadout(data, ops[i])));
     expect(step(() => m.phase === Phase.Action, 60)).toBe(true);
@@ -254,7 +254,7 @@ describe("Shunt's packs and the attackers' other charges (R3_OPERATORS.md §3)",
     const s = await lab();
     const on = (kind: string, id: string, at: Vec3) => s.put(kind, 0, at, s.onPanel(id, at));
     // Before any pack: a Heavy Breach Charge on the reinforced wall, a Breach Charge on the barricaded door's outside.
-    const heavy = on("hard_breach_charge", "reinforced", [12.6, 1.2, -5.9]);
+    const heavy = on("heavy_breach_charge", "reinforced", [12.6, 1.2, -5.9]);
     const breach = on("breach_charge", "door_a", [-10, 1.2, 6.05]);
     s.wait(burn + 8);
     expect([gone(s, heavy), gone(s, breach)]).toEqual([false, false]);
@@ -262,7 +262,7 @@ describe("Shunt's packs and the attackers' other charges (R3_OPERATORS.md §3)",
     s.put("arc_pack", 1, [-10, 0, 5.77]); // at the door's foot, inside
     expect(liveSurfaces(s.sim).panels.has(s.panel("door_a").panel.spec.index)).toBe(true);
     // After: a Hailstone Drill and a Spine on the live wall.
-    const drill = on("cluster_charge", "reinforced", [11.9, 1.2, -5.9]);
+    const drill = on("hailstone_drill", "reinforced", [11.9, 1.2, -5.9]);
     const spine = on("stud_spine", "reinforced", [12.3, 0.95, -5.9]);
     s.wait(burn + 8);
     expect([heavy, breach, drill, spine].map((g) => gone(s, g))).toEqual([true, true, true, true]);
@@ -326,7 +326,7 @@ describe("a pack by a wall reinforced in part (the review, R3)", () => {
     expect(s.sim.level.panels.hash()).not.toBe(hash);
     s.teleport(0, ...LAB.away[0]);
     // A Heavy Breach Charge on the steel half is burnt out; a Breach Charge on the soft half isn't.
-    const steel = on("hard_breach_charge", [0.2, 1.2, -5.9]);
+    const steel = on("heavy_breach_charge", [0.2, 1.2, -5.9]);
     const soft = on("breach_charge", [1.8, 1.2, -5.9]);
     s.wait(burn + 8);
     expect([gone(s, steel), gone(s, soft)]).toEqual([true, false]);
@@ -336,7 +336,7 @@ describe("a pack by a wall reinforced in part (the review, R3)", () => {
     const by = s.plant(1, [1.8, 0, -5.72])!;
     s.teleport(1, ...LAB.away[1]);
     expect([arcPanels(s.sim, by, k.reachM), liveSurfaces(s.sim).panels.size]).toEqual([[], 0]);
-    const later = on("hard_breach_charge", [0.2, 1.2, -5.9]);
+    const later = on("heavy_breach_charge", [0.2, 1.2, -5.9]);
     s.wait(burn + 8);
     expect(gone(s, later)).toBe(false);
   });
@@ -344,15 +344,15 @@ describe("a pack by a wall reinforced in part (the review, R3)", () => {
 
 describe("a charge on a live deployable shield (the review, R3)", () => {
   it("can't be set off and is burnt out, as on a live wall", async () => {
-    const s = await scene(["fuze", "shunt"], "destruction_lab");
+    const s = await scene(["hail", "shunt"], "destruction_lab");
     s.park();
     const shield = s.put("deployable_shield", 1, [0, 0.5, 13], { yaw: Math.PI });
     s.put("arc_pack", 1, [0.7, 0.075, 12.8]);
     expect(liveSurfaces(s.sim).gadgets.has(shield.id)).toBe(true);
-    // Fuze's Hailstone Drill on its face, from in front of it.
+    // Hail's Hailstone Drill on its face, from in front of it.
     s.teleport(0, 0, 0, 14.2);
     const g = s.plant(0, [0, 0.6, 13.06])!;
-    expect([kindId(g.kind), g.panel]).toEqual(["cluster_charge", -1]);
+    expect([kindId(g.kind), g.panel]).toEqual(["hailstone_drill", -1]);
     s.detonate(0);
     expect([gone(s, g), s.sim.gadgets.get(g.id)!.flags & GFlag.Active]).toEqual([false, 0]);
     s.wait(burn);
@@ -363,7 +363,7 @@ describe("a charge on a live deployable shield (the review, R3)", () => {
 describe("a knife on a live surface under the Attacker Safeguard (the review, R3)", () => {
   it("does nothing to the attacker (no damage, not thrown back), and nothing to the surface", async () => {
     const s = await lab();
-    // Quick Match's safeguard (the director's; a lab has none) said to cover Thermite.
+    // Quick Match's safeguard (the director's; a lab has none) said to cover Kiln.
     vi.spyOn(s.room as unknown as { safeguarded(p: Pawn): boolean }, "safeguarded").mockImplementation((p) => p === s.body(0));
     s.put("arc_pack", 1, [-10, 0.075, 5.75]);
     s.teleport(0, -10, 0, 6.85);

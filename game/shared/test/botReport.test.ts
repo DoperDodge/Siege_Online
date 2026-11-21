@@ -9,7 +9,7 @@ describe("round reports (Phase 9 M9)", () => {
       format: "drill_duel",
       drill: "duel",
       side: "attack",
-      operator: "sledge",
+      operator: "cleave",
       won: true,
       seconds: 7.5,
       death: null,

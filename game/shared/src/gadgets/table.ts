@@ -15,9 +15,9 @@ export const GFlag = {
   Flying: 1 << 0,
   /** Placed on (or come to rest on) a floor; else on a wall, or stuck where it hit. */
   OnFloor: 1 << 1,
-  /** Its glass is broken (a Bulletproof Camera shot from the side or knifed): no feed for the rest of the round. */
+  /** Its glass is broken (a Armoured Camera shot from the side or knifed): no feed for the rest of the round. */
   Broken: 1 << 2,
-  /** Placed outdoors, its signal is gone (a Bulletproof Camera, the room says when). */
+  /** Placed outdoors, its signal is gone (a Armoured Camera, the room says when). */
   Lost: 1 << 3,
   /** Lying flat on a floor or a hatch (a charge on one): its box's depth is up (gadgets/hits.ts). */
   Flat: 1 << 4,
@@ -25,7 +25,7 @@ export const GFlag = {
   Off: 1 << 5,
   /**
    * Going: a smoke cloud, an alarm sounding, an ingredient set off (its cloud, a gas pipe's jet or its fire), a charge
-   * set off and burning (Thermite's) or drilling and letting its grenades out (Fuze's).
+   * set off and burning (Kiln's) or drilling and letting its grenades out (Hail's).
    */
   Active: 1 << 6,
   /** Hit once by a knife (barbed wire: the next hit destroys it; a deployable shield: its glass is opaque); a gas pipe that's spent. */

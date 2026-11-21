@@ -8,18 +8,18 @@ import destructionLabJson from "../../../../data/maps/destruction_lab/layout.jso
 import gadgetLabJson from "../../../../data/maps/gadget_lab/layout.json";
 import rappelLabJson from "../../../../data/maps/rappel_lab/layout.json";
 import millraceJson from "../../../../data/maps/millrace/level.json";
-import brava from "../../../../data/operators/brava.json";
-import fuze from "../../../../data/operators/fuze.json";
-import thermite from "../../../../data/operators/thermite.json";
-import striker from "../../../../data/operators/striker.json";
-import dokkaebi from "../../../../data/operators/dokkaebi.json";
-import sledge from "../../../../data/operators/sledge.json";
-import sentry from "../../../../data/operators/sentry.json";
-import skopos from "../../../../data/operators/skopos.json";
-import mira from "../../../../data/operators/mira.json";
-import lesion from "../../../../data/operators/lesion.json";
-import pulse from "../../../../data/operators/pulse.json";
-import mute from "../../../../data/operators/mute.json";
+import patch from "../../../../data/operators/patch.json";
+import hail from "../../../../data/operators/hail.json";
+import kiln from "../../../../data/operators/kiln.json";
+import pointman from "../../../../data/operators/pointman.json";
+import relay from "../../../../data/operators/relay.json";
+import cleave from "../../../../data/operators/cleave.json";
+import picket from "../../../../data/operators/picket.json";
+import twain from "../../../../data/operators/twain.json";
+import vista from "../../../../data/operators/vista.json";
+import thistle from "../../../../data/operators/thistle.json";
+import murmur from "../../../../data/operators/murmur.json";
+import lull from "../../../../data/operators/lull.json";
 import ohm from "../../../../data/operators/ohm.json";
 import tonic from "../../../../data/operators/tonic.json";
 import shunt from "../../../../data/operators/shunt.json";
@@ -126,7 +126,7 @@ export interface GameData {
 export const rawData = {
   movement: movementJson as Record<string, unknown>,
   hitboxes: hitboxJson as Record<string, unknown>,
-  operators: [brava, fuze, thermite, striker, dokkaebi, sledge, sentry, skopos, mira, lesion, pulse, mute, ohm, tonic, shunt, latch, bailiff, rivet, dowser, hull] as Record<string, unknown>[],
+  operators: [patch, hail, kiln, pointman, relay, cleave, picket, twain, vista, thistle, murmur, lull, ohm, tonic, shunt, latch, bailiff, rivet, dowser, hull] as Record<string, unknown>[],
   levels: [movementLabJson, rangeLabJson, destructionLabJson, gadgetLabJson, rappelLabJson, millraceJson] as Record<string, unknown>[],
   weapons: weaponFiles,
   gunplay: gunplayJson as Record<string, unknown>,
@@ -220,7 +220,7 @@ export function crossFileProblems(data: Pick<GameData, "operators" | "weapons" |
   const out: string[] = [];
   if (data.destruction) out.push(...destructionProblems(data.destruction, data.weapons, data.levels));
   if (data.gadgets) {
-    // A blast's cut (and a cluster charge's hole) is one of the explosives' shapes (data/destruction.json); a cluster
+    // A blast's cut (and a hailstone drill's hole) is one of the explosives' shapes (data/destruction.json); a cluster
     // charge's grenade is a thrown gadget with a fuse and a blast (Phase 8 M5).
     for (const g of data.gadgets.values()) {
       for (const [where, cut] of [["blast.cut", g.blast?.cut], ["cluster.cut", g.cluster?.cut]] as const)
@@ -252,7 +252,7 @@ export function crossFileProblems(data: Pick<GameData, "operators" | "weapons" |
         }
       }
     }
-    // An operator's own item (Phase 8 M4) is their ability, or what it lets out (Fuze's grenades, M5), on their side.
+    // An operator's own item (Phase 8 M4) is their ability, or what it lets out (Hail's grenades, M5), on their side.
     for (const g of data.gadgets.values()) {
       if (!g.operator) continue;
       const op = data.operators.get(g.operator);

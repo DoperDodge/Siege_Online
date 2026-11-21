@@ -886,8 +886,8 @@ export function matchFeatures(lab: LabApi): void {
   );
   lab.addHelp(`<kbd>${keyLabel(keys.throwDrone)}</kbd>`, "Throw a drone you have in hand, and drive it (attackers)");
   lab.addHelp(
-    `<kbd>${keyLabel(keys.gadget)}</kbd> (Bulletproof Camera)`,
-    `Defenders who took it: take it out, then hold left mouse at a wall or the floor in front of you (${(lab.data.gadgets.get("bulletproof_camera")!.use as { placeS: number }).placeS} s); it joins the cameras (after the level's). Watching it, ${keyLabel(keys.gadget)} fires its EMP dart: drones in its burst are jammed for ${lab.data.intel.bulletproofCamera.disableS} s (ready again ${lab.data.intel.bulletproofCamera.dartRechargeS} s later). Its front is bulletproof; its sides and back aren't`,
+    `<kbd>${keyLabel(keys.gadget)}</kbd> (Armoured Camera)`,
+    `Defenders who took it: take it out, then hold left mouse at a wall or the floor in front of you (${(lab.data.gadgets.get("armoured_camera")!.use as { placeS: number }).placeS} s); it joins the cameras (after the level's). Watching it, ${keyLabel(keys.gadget)} fires its EMP dart: drones in its burst are jammed for ${lab.data.intel.armouredCamera.disableS} s (ready again ${lab.data.intel.armouredCamera.dartRechargeS} s later). Its front is bulletproof; its sides and back aren't`,
   );
   lab.addHelp(
     "Hold left mouse (on a drone or a camera)",

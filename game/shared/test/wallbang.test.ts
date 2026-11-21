@@ -255,7 +255,7 @@ describe("in a room", () => {
     const toServer: Uint8Array[] = [];
     const events: GameEvent[] = [];
     const session = new ClientSession({ send: (b) => toServer.push(b), now: () => clock.t, onEvents: (_t, evs) => events.push(...evs) });
-    const id = room.join("shooter", { send: (b) => session.handle(b), buffered: () => 0 }, "sledge")!;
+    const id = room.join("shooter", { send: (b) => session.handle(b), buffered: () => 0 }, "cleave")!;
     await session.loaded();
     const tick = (cmd: Partial<Omit<InputCmd, "seq">> = {}) => {
       clock.t += DT * 1000;
@@ -296,7 +296,7 @@ describe("in a room", () => {
 
   it("a hole the shooter's client has is open for its shots, whichever tick it was made on (ops ride with snapshots)", async () => {
     for (const parity of [0, 1]) {
-      const { room, clients, tick } = await roomWith("range_lab", ["sledge"]);
+      const { room, clients, tick } = await roomWith("range_lab", ["cleave"]);
       const [a] = clients;
       for (let i = 0; i < 20; i++) tick();
       const target = room.sim.pawns.get(room.roster().find((e) => e.kind === 1 && e.name === "Behind the wall")!.pawnIds[0])!;

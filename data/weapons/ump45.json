@@ -1,5 +1,5 @@
 {
-  "_doc": "UMP45 (Pulse). research/weapons.csv row ump45; class rules research/weapons_notes.md §4. Damage 42 since Y10S4.2. Extended barrel 47 / min 37 and ammo-refill 1.26 / 2.38 s community-measured.",
+  "_doc": "UMP45 (Murmur). research/weapons.csv row ump45; class rules research/weapons_notes.md §4. Damage 42 since Y10S4.2. Extended barrel 47 / min 37 and ammo-refill 1.26 / 2.38 s community-measured.",
   "_season": "Y11S3.1",
   "_unverified": [
     "damage.extendedBarrel",

@@ -1,5 +1,5 @@
 {
-  "_doc": "M870 (Sentry). research/weapons.csv row m870; class rules research/weapons_notes.md §4. Tube-fed (per-shell reload). Pellet damage 42 vs Fandom 60 is weapons_notes.md Q1.",
+  "_doc": "M870 (Picket). research/weapons.csv row m870; class rules research/weapons_notes.md §4. Tube-fed (per-shell reload). Pellet damage 42 vs Fandom 60 is weapons_notes.md Q1.",
   "_season": "Y11S3.1",
   "_unverified": ["damage.base", "damage.falloff", "destruction"],
   "id": "m870",

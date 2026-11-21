@@ -51,7 +51,7 @@ async function lineUp(operators: string[], zs: number[]) {
 
 describe("pellets against bodies (as the shooter saw them)", () => {
   it("penetration: none stops at the first body, full goes through all of them at 70 % each", async () => {
-    const { sim, pawns, history, tick } = await lineUp(["sledge", "mute", "pulse"], [4, 6, 8]);
+    const { sim, pawns, history, tick } = await lineUp(["cleave", "lull", "murmur"], [4, 6, 8]);
     const torso = pawns[0].state.y + 1.2;
     const origin: Vec3 = [0, torso, 0];
     const along: Vec3[] = [[0, 0, 1]];
@@ -70,7 +70,7 @@ describe("pellets against bodies (as the shooter saw them)", () => {
   });
 
   it("a body that left, or came back as a new life with the same id, is not shot where it used to be", async () => {
-    const { sim, pawns, history, tick } = await lineUp(["sledge", "mute"], [4, 6]);
+    const { sim, pawns, history, tick } = await lineUp(["cleave", "lull"], [4, 6]);
     const origin: Vec3 = [0, pawns[0].state.y + 1.2, 0];
     const hitIds = () => tracePellets(sim, history, origin, [[0, 0, 1]], tick, "none", new Set())[0].hits.map((h) => h.id);
     expect(hitIds()).toEqual([pawns[0].id]);
@@ -81,8 +81,8 @@ describe("pellets against bodies (as the shooter saw them)", () => {
   });
 
   it("a shotgun blast adds its pellets up per body; buckshot headshots are ×1.5 per pellet, not a kill", async () => {
-    const { sim, pawns, history, tick } = await lineUp(["sledge"], [5]);
-    const m590 = resolveLoadout(data, { ...defaultLoadoutPick(data, "sledge"), primary: { weapon: "m590a1", sight: null, barrel: null, grip: null, underbarrel: null } }).loadout.weapons[0];
+    const { sim, pawns, history, tick } = await lineUp(["cleave"], [5]);
+    const m590 = resolveLoadout(data, { ...defaultLoadoutPick(data, "cleave"), primary: { weapon: "m590a1", sight: null, barrel: null, grip: null, underbarrel: null } }).loadout.weapons[0];
     const s = pawns[0].state;
     const torso: Vec3 = [0, s.y + 1.2, 0];
     const eight: Vec3[] = Array.from({ length: 8 }, () => [0, 0, 1]);
@@ -104,7 +104,7 @@ describe("pellets against bodies (as the shooter saw them)", () => {
 describe("damage application", () => {
   it("is ignored by the dead, hurts the living, kills at 0 and stops the body blocking", async () => {
     const { applyDamage } = await import("../src/index.js");
-    const { sim, pawns } = await lineUp(["sledge"], [5]);
+    const { sim, pawns } = await lineUp(["cleave"], [5]);
     const p = pawns[0];
     expect(applyDamage(sim, p, { amount: 30, kill: false })).toEqual({ outcome: "hurt", removed: 30 });
     expect(p.state.hp).toBe(80);

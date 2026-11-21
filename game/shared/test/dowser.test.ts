@@ -11,9 +11,9 @@ import { loadGameData } from "../src/index.js";
 const data = loadGameData();
 const k = data.gadgets.get("divining_coil")!.coil!;
 
-/** Dowser (client 0, attacking) and Mute (client 1, defending) on the Gadget Lab, out of the way. */
+/** Dowser (client 0, attacking) and Lull (client 1, defending) on the Gadget Lab, out of the way. */
 async function lab() {
-  const s = await scene(["dowser", "mute"], "gadget_lab");
+  const s = await scene(["dowser", "lull"], "gadget_lab");
   s.park();
   return s;
 }
@@ -39,12 +39,12 @@ describe("Dowser and his Divining Coil (R3)", () => {
   it("up, it shows the defenders' electronic devices through walls within its range and fan, nothing mechanical, none of his side's", async () => {
     const s = await lab();
     // Behind the soft walls (z −6), from in front of them (z 2), facing them (−z).
-    const damper = s.put("signal_disruptor", 1, [-8, 0.1, -8]);
+    const damper = s.put("damper", 1, [-8, 0.1, -8]);
     const alarm = s.put("proximity_alarm", 1, [-4, 0.05, -9]);
     const wire = s.put("barbed_wire", 1, [-6, 0.2, -8]);
     const snare = s.put("snare_latch", 1, [-12, 0.3, -8]);
-    const far = s.put("signal_disruptor", 1, [-8, 0.1, -17.5]);
-    const behind = s.put("signal_disruptor", 1, [-8, 0.1, 10]);
+    const far = s.put("damper", 1, [-8, 0.1, -17.5]);
+    const behind = s.put("damper", 1, [-8, 0.1, 10]);
     const mine = s.put("claymore", 0, [-7, 0.1, -3]);
     // Not up: nothing.
     s.teleport(0, -8, 0, 2, 0);
@@ -66,7 +66,7 @@ describe("Dowser and his Divining Coil (R3)", () => {
 
   it("an EMP on him empties it while it lasts", async () => {
     const s = await lab();
-    const damper = s.put("signal_disruptor", 1, [-8, 0.1, -8]);
+    const damper = s.put("damper", 1, [-8, 0.1, -8]);
     coilUp(s, -8, 2, 0);
     expect(keys(s)).toContain(`g${damper.id}`);
     s.body(0).state.jammed = 3 * TICK_HZ;
@@ -76,12 +76,12 @@ describe("Dowser and his Divining Coil (R3)", () => {
   it("a ping with it up marks the device nearest his crosshair for his team, its kind with it", async () => {
     const s = await lab();
     const pings = () => s.clients[0].events.filter((e): e is Extract<GameEvent, { kind: "ping" }> => e.kind === "ping");
-    const damper = s.put("signal_disruptor", 1, [-8, 0.1, -8]);
+    const damper = s.put("damper", 1, [-8, 0.1, -8]);
     const alarm = s.put("proximity_alarm", 1, [-4, 0.05, -9]);
     coilUp(s, -8, 2, 0);
     // Aimed at the wall a little off the Damper (within the coil's 20°): the Damper's marked, where it is.
     s.press(0, Btn.Ping, s.aimAt(0, [-7.6, 1.0, -6]));
-    expect(pings().map((e) => [e.gadget, e.pos])).toEqual([[kindOf("signal_disruptor"), damper.pos]]);
+    expect(pings().map((e) => [e.gadget, e.pos])).toEqual([[kindOf("damper"), damper.pos]]);
     // Toward the alarm: the alarm.
     s.wait(40);
     s.press(0, Btn.Ping, s.aimAt(0, alarm.pos));
@@ -110,7 +110,7 @@ describe("a bot playing Dowser (R3)", () => {
       return done();
     };
     expect(step(() => m.phase === Phase.Planning, 5)).toBe(true);
-    const ops = ["dowser", "thermite", "striker", "sledge", "fuze"];
+    const ops = ["dowser", "kiln", "pointman", "cleave", "hail"];
     const bots = [...m.players.values()].filter((p) => p.bot !== null);
     bots.forEach((p, i) => room.pickLoadout(p.id, botLoadout(data, ops[i])));
     expect(step(() => m.phase === Phase.Action, 60)).toBe(true);
@@ -120,7 +120,7 @@ describe("a bot playing Dowser (R3)", () => {
     room.sim.teleport(yourBody.id, 11, -3.2, 35.5, 0);
     for (const e of room.sim.level.panels.list.filter((x) => x.panel.kind === "wall").slice(0, 40)) {
       const f = e.frame;
-      room.sim.gadgets.add({ kind: kindOf("signal_disruptor"), owner: you.id, team: yourBody.team, pos: [f.center[0] + f.n[0] * 0.6, f.center[1] - f.h / 2 + 0.06, f.center[2] + f.n[2] * 0.6], yaw: 0, vel: [0, 0, 0], flags: 2, panel: -1, launchTick: 0, fuseEnd: 0, signalEnd: 0, readyAt: 0, offEnd: 0, seq: 0 });
+      room.sim.gadgets.add({ kind: kindOf("damper"), owner: you.id, team: yourBody.team, pos: [f.center[0] + f.n[0] * 0.6, f.center[1] - f.h / 2 + 0.06, f.center[2] + f.n[2] * 0.6], yaw: 0, vel: [0, 0, 0], flags: 2, panel: -1, launchTick: 0, fuseEnd: 0, signalEnd: 0, readyAt: 0, offEnd: 0, seq: 0 });
     }
     // What a teammate of his hears: his pings.
     const mate = room.botOf(bots[1].id)!;
@@ -129,19 +129,19 @@ describe("a bot playing Dowser (R3)", () => {
       heard.push(...ev);
       hear(ev);
     };
-    const ok = step(() => heard.some((e) => e.kind === "ping" && e.gadget === kindOf("signal_disruptor")), 150);
+    const ok = step(() => heard.some((e) => e.kind === "ping" && e.gadget === kindOf("damper")), 150);
     expect(ok).toBe(true);
   }, 300000);
 });
 
 describe("Dowser's coil and the other R3 operators (R3_OPERATORS.md §3)", () => {
   it("shows Shunt's packs, Bailiff's set-down, armoured cameras and Twain's idle frame; not Twain herself, nor Latch's snares", async () => {
-    const s = await scene(["dowser", "skopos"], "gadget_lab");
+    const s = await scene(["dowser", "twain"], "gadget_lab");
     s.park();
     // Behind the soft walls (z −6), in his fan from in front of them.
     const pack = s.put("arc_pack", 1, [-9, 0.05, -8]);
     const post = s.put("bailiff_post", 1, [-7, 0.05, -8.5]);
-    const armoured = s.put("bulletproof_camera", 1, [-8, 1.6, -6.2]);
+    const armoured = s.put("armoured_camera", 1, [-8, 1.6, -6.2]);
     const snare = s.put("snare_latch", 1, [-6, 0.3, -8]);
     const twain = s.ctrlOf(1);
     const idle = twain.pawnIds.find((id) => id !== twain.possessedPawnId)!;

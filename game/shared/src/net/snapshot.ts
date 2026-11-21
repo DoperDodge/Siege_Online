@@ -18,7 +18,7 @@
 //   bit2 yaw               : varu zigzag(wrapped Δ) of a u16 angle (full turn = 65536)
 //   bit3 pitch             : varu zigzag(Δ), pitch · 16384/π
 //   bit4 flags             : u16 stance | stanceFrom<<2 | mode<<4 (3 bits) | sprinting<<7 | grounded<<8 |
-//                            shieldAt<<9 (2 bits: Fuze's shield's plate, Phase 8 M11) | lowered<<11 (3 bits: how far
+//                            shieldAt<<9 (2 bits: Hail's shield's plate, Phase 8 M11) | lowered<<11 (3 bits: how far
 //                            his raised shield has slid down for aiming, 0–7, or how far Hull's plate is braced: he
 //                            never aims, and braced nobody does; 0 with no shield up) | knifing<<14
 //                            (Phase 10 M10: others draw the stab) (1 free)
@@ -36,8 +36,8 @@ import { ByteReader, ByteWriter, fnv1a, ProtocolError } from "./bytes.js";
 import { readControllerState, readPawnState, writeControllerState, writePawnState, type ControllerState } from "./pawnState.js";
 
 /**
- * The most pawns a correction carries: a body and its drones (Phase 7; Brava's two Kludge drones too, Phase 8 M8), or
- * Skopós's two shells.
+ * The most pawns a correction carries: a body and its drones (Phase 7; Patch's two Crossover drones too, Phase 8 M8), or
+ * Twain's two shells.
  */
 export const MAX_OWN_PAWNS = 6;
 
@@ -103,7 +103,7 @@ export function quantizeRemote(s: PawnState): RemoteQ {
     tiltB: i8(s.tiltB, 128),
     tiltSide: i8(s.tiltSide, 128),
     tuck: round(s.tuck * 255),
-    // Fuze's shield's plate (Phase 8 M11) in bits 9-10, and how far it's slid down for aiming in 11-13 (or how far
+    // Hail's shield's plate (Phase 8 M11) in bits 9-10, and how far it's slid down for aiming in 11-13 (or how far
     // Hull's plate is braced, R3: the two never go together): others draw it, and a rewind puts it where they saw it.
     flags:
       s.stance |

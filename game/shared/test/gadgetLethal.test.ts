@@ -1,5 +1,5 @@
 // The lethal gadgets on the server (Phase 8 M2, gadgets/DESIGN.md §5, §7): the Claymore's tripwire (armed 1 s after it's
-// placed, three lasers, enemies only, not Skopós's idle shell), impact grenades going off on the first body they meet,
+// placed, three lasers, enemies only, not Twain's idle shell), impact grenades going off on the first body they meet,
 // and in a room a frag's blast: damage credited to its thrower, everyone told, what it destroys.
 import { describe, expect, it } from "vitest";
 import { ATTACK, Btn, DEFENSE, GadgetServer, GFlag, isIngredient, kindOf, PawnMode, Sim, ticks, type Gadget, type GameEvent, type Vec3 } from "../src/index.js";
@@ -22,8 +22,8 @@ async function lab() {
 describe("the Claymore's tripwire (Phase 8 M2)", () => {
   it("armed 1 s after it's placed; a defender crossing a laser sets it off; an attacker doesn't", async () => {
     const { sim, server, went, step } = await lab();
-    const a = sim.addPlayer("a", "brava", 0, undefined, undefined, ATTACK);
-    const d = sim.addPlayer("d", "mute", 1, undefined, undefined, DEFENSE);
+    const a = sim.addPlayer("a", "patch", 0, undefined, undefined, ATTACK);
+    const d = sim.addPlayer("d", "lull", 1, undefined, undefined, DEFENSE);
     const atk = sim.pawns.get(a.possessedPawnId)!;
     const def = sim.pawns.get(d.possessedPawnId)!;
     sim.teleport(atk.id, 10, 0, 16, 0);
@@ -53,10 +53,10 @@ describe("the Claymore's tripwire (Phase 8 M2)", () => {
     expect(went.length).toBe(2);
   });
 
-  it("Skopós's idle shell standing on a laser doesn't set it off; it does once she's in that shell", async () => {
+  it("Twain's idle shell standing on a laser doesn't set it off; it does once she's in that shell", async () => {
     const { sim, server, went, step } = await lab();
-    const a = sim.addPlayer("a", "brava", 0, undefined, undefined, ATTACK);
-    const s = sim.addPlayer("s", "skopos", 1, undefined, undefined, DEFENSE);
+    const a = sim.addPlayer("a", "patch", 0, undefined, undefined, ATTACK);
+    const s = sim.addPlayer("s", "twain", 1, undefined, undefined, DEFENSE);
     const [active, idle] = s.pawnIds.map((id) => sim.pawns.get(id)!);
     sim.teleport(sim.pawns.get(a.possessedPawnId)!.id, 10, 0, 16, 0);
     sim.teleport(active.id, -10, 0, 16, 0);
@@ -74,8 +74,8 @@ describe("the Claymore's tripwire (Phase 8 M2)", () => {
 describe("impact grenades (Phase 8 M2)", () => {
   it("go off on the first body they meet, not their thrower's; else where they hit", async () => {
     const { sim, server, went, step } = await lab();
-    const s = sim.addPlayer("s", "skopos", 1, undefined, undefined, DEFENSE);
-    const a = sim.addPlayer("a", "sledge", 0, undefined, undefined, ATTACK);
+    const s = sim.addPlayer("s", "twain", 1, undefined, undefined, DEFENSE);
+    const a = sim.addPlayer("a", "cleave", 0, undefined, undefined, ATTACK);
     const thrower = sim.pawns.get(s.possessedPawnId)!;
     const target = sim.pawns.get(a.possessedPawnId)!;
     sim.teleport(thrower.id, 0, 0, 16, 0);
@@ -99,13 +99,13 @@ describe("impact grenades (Phase 8 M2)", () => {
 
 describe("a frag in a room (Phase 8 M2)", () => {
   it("lobbed at a dummy, it goes off at its fuse: the dummy is hurt by its thrower's frag, everyone sees the blast", async () => {
-    const h = await roomWith("gadget_lab", ["sledge", "mute"]);
+    const h = await roomWith("gadget_lab", ["cleave", "lull"]);
     const [a, b] = h.clients;
     const wait = (n: number) => {
       for (let i = 0; i < n; i++) h.tick();
     };
     wait(8);
-    // The "Defender in the open" dummy stands at (3, 0, 2); Sledge 2.5 m north of it, facing it.
+    // The "Defender in the open" dummy stands at (3, 0, 2); Cleave 2.5 m north of it, facing it.
     h.room.onLabTool(a.id, { kind: "teleport", x: 3, y: 0, z: 4.5, yawDeg: 0 });
     h.room.onLabTool(b.id, { kind: "teleport", x: -12, y: 0, z: 16, yawDeg: 0 });
     wait(8);

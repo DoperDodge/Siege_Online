@@ -1,5 +1,5 @@
 {
-  "_doc": "Super Shorty (Brava, Sentry). research/weapons.csv row super_shorty; class rules research/weapons_notes.md §4. Tube-fed secondary shotgun (per-shell reload); mainly for utility holes.",
+  "_doc": "Super Shorty (Patch, Picket). research/weapons.csv row super_shorty; class rules research/weapons_notes.md §4. Tube-fed secondary shotgun (per-shell reload); mainly for utility holes.",
   "_season": "Y11S3.1",
   "_unverified": ["damage.falloff", "destruction"],
   "id": "super_shorty",

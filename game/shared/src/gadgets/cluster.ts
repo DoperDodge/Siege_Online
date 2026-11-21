@@ -1,4 +1,4 @@
-// Fuze's Cluster Charge (Phase 8 M5; research/operators/fuze.md §3; data/gadgets/cluster_charge.json `cluster`):
+// Hail's Hailstone Drill (Phase 8 M5; research/operators/fuze.md §3; data/gadgets/hailstone_drill.json `cluster`):
 // where its tube reaches behind it once set off (out of a wall's far face, down through a floor: bullets and blasts
 // meet it there from the far side, gadgets/hits.ts and blast.ts), and the fan its grenades leave the tube in, from
 // its placer's left to right (the official tip). The server drills and lets them out (gadgets/serve.ts); a client
@@ -28,7 +28,7 @@ export function behindOf(g: Pick<Gadget, "yaw" | "flags">): Vec3 {
   return [-fx, 0, -fz];
 }
 
-/** Where a set-off cluster charge's tube ends: `tubeM` behind its back, on the surface's far side. */
+/** Where a set-off hailstone drill's tube ends: `tubeM` behind its back, on the surface's far side. */
 export function tubeTip(data: GameData, g: Gadget): Vec3 | null {
   const a = activeCluster(data, g);
   if (!a) return null;

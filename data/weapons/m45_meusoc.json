@@ -1,5 +1,5 @@
 {
-  "_doc": "M45 MEUSOC (Thermite, Pulse). research/weapons.csv row m45_meusoc; class rules research/weapons_notes.md §4.",
+  "_doc": "M45 MEUSOC (Kiln, Murmur). research/weapons.csv row m45_meusoc; class rules research/weapons_notes.md §4.",
   "_season": "Y11S3.1",
   "_unverified": ["damage.falloff", "destruction"],
   "id": "m45_meusoc",

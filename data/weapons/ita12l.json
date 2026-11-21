@@ -1,5 +1,5 @@
 {
-  "_doc": "ITA12L (Mira). research/weapons.csv row ita12l; class rules research/weapons_notes.md §4. Tube-fed (per-shell reload). Pellet damage 40 is a placeholder (weapons_notes.md Q1).",
+  "_doc": "ITA12L (Vista). research/weapons.csv row ita12l; class rules research/weapons_notes.md §4. Tube-fed (per-shell reload). Pellet damage 40 is a placeholder (weapons_notes.md Q1).",
   "_season": "Y11S3.1",
   "_unverified": ["damage.base", "damage.falloff", "destruction"],
   "id": "ita12l",

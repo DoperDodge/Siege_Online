@@ -10,7 +10,7 @@ import { input } from "./helpers.js";
 async function attacker(level = "range_lab", group?: string) {
   const sim = await Sim.create(level);
   const spawn = group ? sim.level.def.spawns.findIndex((s) => s.group === group) : 0;
-  const c = sim.addPlayer("atk", "thermite", spawn, undefined, undefined, ATTACK);
+  const c = sim.addPlayer("atk", "kiln", spawn, undefined, undefined, ATTACK);
   sim.addDrone(c.id);
   sim.addDrone(c.id);
   const body = sim.pawns.get(c.possessedPawnId)!;
@@ -240,11 +240,11 @@ describe("a teammate's drone (Phase 7 M6, intel/DESIGN.md §5)", () => {
   /** Two attackers in the range lab: a with two drones, b with none; and a defender, d. */
   async function team() {
     const sim = await Sim.create("range_lab");
-    const a = sim.addPlayer("a", "thermite", 0, undefined, undefined, ATTACK);
+    const a = sim.addPlayer("a", "kiln", 0, undefined, undefined, ATTACK);
     sim.addDrone(a.id);
     sim.addDrone(a.id);
-    const b = sim.addPlayer("b", "sledge", 0, undefined, undefined, ATTACK);
-    const d = sim.addPlayer("d", "mute", 0, undefined, undefined, DEFENSE);
+    const b = sim.addPlayer("b", "cleave", 0, undefined, undefined, ATTACK);
+    const d = sim.addPlayer("d", "lull", 0, undefined, undefined, DEFENSE);
     const step = (ca: Partial<InputCmd> & { yawDeg?: number } = {}, cb: Partial<InputCmd> & { yawDeg?: number } = {}, n = 1, cd: Partial<InputCmd> = {}) => {
       for (let i = 0; i < n; i++) sim.step(new Map([[a.id, input(ca)], [b.id, input(cb)], [d.id, input(cd)]]));
     };
@@ -306,7 +306,7 @@ describe("a teammate's drone (Phase 7 M6, intel/DESIGN.md §5)", () => {
 
   it("in prep, where you are your first drone, a new lean goes to a teammate's and back", async () => {
     const { sim, a, step, drone } = await team();
-    const p = sim.addPilot("p", "fuze", ATTACK);
+    const p = sim.addPilot("p", "hail", ATTACK);
     const own = sim.addDrone(p.id);
     sim.placeDrone(own.id, -3, 0.02, -3, 0);
     const run = (cmd: Partial<InputCmd> & { yawDeg?: number }, n = 1) => {

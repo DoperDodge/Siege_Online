@@ -116,9 +116,9 @@ describe("bans (D-119)", () => {
   });
 
   it("a vote is the most-voted choice, a tie broken by the roll, and nothing with no votes", () => {
-    expect(tally(["mute", "pulse", "mute", null], 0.9)).toBe("mute");
-    expect(tally(["pulse", "mute"], 0)).toBe("mute");
-    expect(tally(["pulse", "mute"], 0.99)).toBe("pulse");
+    expect(tally(["lull", "murmur", "lull", null], 0.9)).toBe("lull");
+    expect(tally(["murmur", "lull"], 0)).toBe("lull");
+    expect(tally(["murmur", "lull"], 0.99)).toBe("murmur");
     expect(tally([null, null], 0.5)).toBeNull();
     expect(tally([], 0.5)).toBeNull();
   });
@@ -132,8 +132,8 @@ describe("bans (D-119)", () => {
 
 describe("operators, pools, rating, MVP", () => {
   it("the operators left to pick keep the roster's order, without bans, teammates' picks and attrition", () => {
-    const roster = ["brava", "fuze", "thermite", "striker", "dokkaebi", "sledge"];
-    expect(allowedOperators(roster, new Set(["fuze"]), new Set(["sledge"]), "brava")).toEqual(["thermite", "striker", "dokkaebi"]);
+    const roster = ["patch", "hail", "kiln", "pointman", "relay", "cleave"];
+    expect(allowedOperators(roster, new Set(["hail"]), new Set(["cleave"]), "patch")).toEqual(["kiln", "pointman", "relay"]);
   });
 
   it("reinforcements: D-015's scaling (6, 6, 6, 8, 10), Siege's 10, or endless", () => {
