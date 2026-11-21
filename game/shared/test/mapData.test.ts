@@ -51,7 +51,9 @@ describe("map metadata", () => {
       // The Movement Lab has bounds: bots climb its ladder (test/botNav.test.ts; Millrace has none).
       if (lvl.id === "movement_lab") expect(lvl.bounds?.killY, lvl.id).toBeLessThan(0);
       else expect(lvl.bounds, lvl.id).toBeUndefined();
-      expect([lvl.storeys, lvl.rooms, lvl.sites, lvl.zones], lvl.id).toEqual([[], [], [], []]);
+      expect([lvl.storeys, lvl.rooms, lvl.sites], lvl.id).toEqual([[], [], []]);
+      // The Rappel Lab's faces are its zones (R4.1: rappel zones only); the other labs have none.
+      expect(lvl.zones.every((z) => z.kind === "rappel") && (lvl.zones.length > 0) === (lvl.id === "rappel_lab"), lvl.id).toBe(true);
       expect([lvl.cameras.length > 0, lvl.ingredients.length > 0], lvl.id).toEqual([gadgetLab, gadgetLab]);
       expect(lvl.solids.every((s) => !s.bodiesOnly), lvl.id).toBe(true);
     }

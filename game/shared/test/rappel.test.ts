@@ -1,6 +1,7 @@
 // Rappel (Phase 5 M8, research/core_mechanics.md §6; Ulo's corrections, D-116): hooking on by holding the vault
 // key at a face's foot, a roof edge or a window, the moves onto the rope, moving on it and its ends, turning over,
-// swinging into a window (a rappel breach), the view and the knife on it, who may, and the state on the wire.
+// swinging into a window (a rappel breach), the view and the knife on it, who may, and the state on the wire. Played
+// in the Rappel Lab (data/maps/rappel_lab, R4.1): a yard with every kind of face a rope hangs on.
 import { describe, expect, it } from "vitest";
 import {
   applyDamage,
@@ -44,11 +45,13 @@ import {
 } from "../src/index.js";
 import { run, settle } from "./helpers.js";
 
-/** The Big Tower's north face (z 7.3, looking north): one rope from the ground to the Cat Walk's top (9.2 m). */
-const TOWER = { x: 40.15, z: 7.3, yawDeg: 180 } as const;
+/** The Tower's north face (z -10, looking north): one rope from the ground to its top (9.2 m). */
+const TOWER = { x: -1, z: -10, yawDeg: 180 } as const;
+/** The middle of the Tower's 2F north window (x 0.5–1.8, its sill 4.1 m up). */
+const TOWER_WINDOW = 1.15;
 
-async function oregon(op = "sledge") {
-  const sim = await Sim.create("oregon");
+async function lab(op = "sledge") {
+  const sim = await Sim.create("rappel_lab");
   const ctrl = sim.addPlayer("roper", op);
   const pawn = sim.pawns.get(ctrl.possessedPawnId)!;
   return { sim, ctrl, pawn };
@@ -89,7 +92,7 @@ function hookOn(sim: Sim, ctrl: PlayerController, yawDeg: number, start: RopeSta
   for (let t = ticks(start === "top" ? R.edgeAttachSeconds : start === "window" ? R.windowAttachSeconds : R.attachSeconds); t >= 0; t--) run(sim, ctrl, { yaw: s.yaw, stance }, 1 / 64);
 }
 
-/** How far a body on the Big Tower's north rope is out from the rope's line (a swing takes it out). */
+/** How far a body on the Tower's north rope is out from the rope's line (a swing takes it out). */
 const outOnTower = (sim: Sim, z: number) => TOWER.z - sim.data.movement.stance.collisionRadius - sim.data.movement.rappel.wallGap - z;
 
 /** Facing the way `rad` faces (to float noise). */
@@ -97,26 +100,26 @@ const facing = (yaw: number, rad: number) => Math.abs(wrapAngle(yaw - rad)) < 1e
 
 describe("rappel faces (D-105's zones)", () => {
   it("a tower's storeys hang one rope; a face over a roof starts at the roof", async () => {
-    const { sim } = await oregon();
+    const { sim } = await lab();
     const faces = sim.level.rappel;
-    expect(faces).toHaveLength(55);
-    const north = faces.findIndex((f) => f.id === "rappel:1F:N01");
+    expect(faces).toHaveLength(38);
+    const north = faces.findIndex((f) => f.id === "rappel:tower:N");
     expect(ropeAt(faces, north, TOWER.x, TOWER.z, 1)).toEqual([0, expect.closeTo(9.2, 5)]);
     expect(ropeRun(faces, north, TOWER.x, 1)?.d).toBeCloseTo(-TOWER.z, 5); // n = (0, -1): d = -z
-    // The Kids' Dorms' north wall stands on the Meeting roof (3.2 m).
-    const kids = faces.findIndex((f) => f.id === "rappel:2F:N03");
-    expect(ropeAt(faces, kids, 28, 23.65, 4)?.map((v) => +v.toFixed(2))).toEqual([3.2, 6.2]);
-    expect(ropeAt(faces, kids, 28, 23.65, 1)).toBeNull();
+    // The Ledge House's 2F north wall stands on its 1F (3.2 m), 0.3 m back from the 1F wall.
+    const ledge = faces.findIndex((f) => f.id === "rappel:ledge:N2");
+    expect(ropeAt(faces, ledge, -12, -9.7, 4)?.map((v) => +v.toFixed(2))).toEqual([3.2, 6.2]);
+    expect(ropeAt(faces, ledge, -12, -9.7, 1)).toBeNull();
   });
 
-  it("walls a few centimetres apart one over the other hang one rope off the outermost, so a body climbs past the step (the Garage's east wall)", async () => {
-    const { sim, ctrl, pawn } = await oregon();
+  it("walls a few centimetres apart one over the other hang one rope off the outermost, so a body climbs past the step (the Step House's east wall)", async () => {
+    const { sim, ctrl, pawn } = await lab();
     const m = sim.data.movement;
     const faces = sim.level.rappel;
-    const [low, high] = ["rappel:1F:E03", "rappel:2F:E05"].map((id) => faces.findIndex((f) => f.id === id));
-    expect(faces[high].d - faces[low].d).toBeCloseTo(0.1, 5); // the 2F wall stands 10 cm further out
-    expect(ropeRun(faces, low, 40.8, 1)).toEqual({ y0: 0, y1: expect.closeTo(6.2, 5), d: faces[high].d });
-    stand(sim, ctrl, 44.12, 0, 40.8, 90); // at the 1F wall's foot, facing it (west)
+    const [low, high] = ["rappel:step:E1", "rappel:step:E2"].map((id) => faces.findIndex((f) => f.id === id));
+    expect(faces[high].d - faces[low].d).toBeCloseTo(0.08, 5); // the 2F wall stands 8 cm further out
+    expect(ropeRun(faces, low, -7, 1)).toEqual({ y0: 0, y1: expect.closeTo(6.2, 5), d: faces[high].d });
+    stand(sim, ctrl, 16.32, 0, -7, 90); // at the 1F wall's foot (closer to the 2F wall's plane than a body is wide), facing it (west)
     expect(findRappel((sim as any).ctx, pawn)?.face).toBe(low);
     hookOn(sim, ctrl, 90);
     expect(pawn.state.x - faces[high].d).toBeCloseTo(m.stance.collisionRadius + m.rappel.wallGap, 3);
@@ -143,7 +146,7 @@ describe("the rope drawn", () => {
 
 describe("hooking on", () => {
   it("at a face's foot, facing it: holding the vault key for holdSeconds hooks on and moves onto the rope over attachSeconds; letting go early doesn't", async () => {
-    const { sim, ctrl, pawn } = await oregon();
+    const { sim, ctrl, pawn } = await lab();
     const m = sim.data.movement;
     const R = m.rappel;
     stand(sim, ctrl, TOWER.x, 0, TOWER.z - 0.6, TOWER.yawDeg);
@@ -169,40 +172,40 @@ describe("hooking on", () => {
     expect(facing(pawn.state.yaw, Math.PI)).toBe(true);
   });
 
-  it("where a vault can be had too (the Dorms' big window from inside, opened): a tap of the vault key vaults out, a hold climbs out onto the rope", async () => {
+  it("where a vault can be had too (the Ledge House's window over the Annex roof, from inside, opened): a tap of the vault key vaults out, a hold climbs out onto the rope", async () => {
     for (const hold of [false, true]) {
-      const { sim, ctrl, pawn } = await oregon();
+      const { sim, ctrl, pawn } = await lab();
       for (const [id, op] of [
         ["bar", { kind: "barricade", up: false }],
         ["glass", { kind: "damage", amount: 1, hard: false }],
       ] as const)
-        sim.level.panels.apply(sim.level.panels.byId.get(`2F.o021.${id}`)!.panel.spec.index, op);
-      stand(sim, ctrl, 21.1, 3.2, 31.9, 90); // in the Dorms Main Hall, facing the window (west)
+        sim.level.panels.apply(sim.level.panels.byId.get(`ledge_n1_${id}`)!.panel.spec.index, op);
+      stand(sim, ctrl, -19, 3.2, -9.1, 0); // in the Ledge House's 2F, facing the window (north)
       expect([sim.prompt(ctrl.id), findRappel((sim as any).ctx, pawn)?.start]).toEqual(["rappelVault", "window"]);
       if (hold) {
-        hookOn(sim, ctrl, 90, "window");
+        hookOn(sim, ctrl, 0, "window");
         expect([pawn.state.mode, pawn.state.moveDur, pawn.state.rappelFlags & RappelFlag.Inverted]).toEqual([PawnMode.Rappel, 0, 0]);
       } else {
-        run(sim, ctrl, { yawDeg: 90, buttons: Btn.Vault }, 3 / 64);
+        run(sim, ctrl, { yawDeg: 0, buttons: Btn.Vault }, 3 / 64);
         expect(pawn.state.mode).toBe(PawnMode.Walk); // still held: it might be a hold yet
-        run(sim, ctrl, { yawDeg: 90 }, 1 / 64);
+        run(sim, ctrl, { yawDeg: 0 }, 1 / 64);
         expect(pawn.state.mode).toBe(PawnMode.Vault);
-        run(sim, ctrl, { yawDeg: 90 }, 1.5);
+        run(sim, ctrl, { yawDeg: 0 }, 1.5);
         expect([pawn.state.mode, pawn.state.grounded]).toEqual([PawnMode.Walk, true]);
       }
-      expect(pawn.state.x).toBeLessThan(20.3); // outside: on the Dining roof, or on the rope over it
+      expect(pawn.state.z).toBeLessThan(-9.7); // outside: on the Annex roof, or on the rope over it
     }
   });
 
   it("at a barricaded door in a wall (a lab room gives both sides both tools, on their own keys): Space holds for the rope, F for the barricade; an attacker is shown the rope first, a defender the barricade", async () => {
-    // The 1F south wall at x 3.8 (rappel:1F:S02), the 1F.o005 barricade in view.
+    // The Tower's south wall (rappel:tower:S, z -5), its barricaded door in view.
     for (const [op, prompt] of [
       ["sledge", "rappel"],
       ["mute", "unbarricade"],
     ] as const) {
-      const { sim, ctrl, pawn } = await oregon(op);
+      const { sim, ctrl, pawn } = await lab(op);
       sim.deployRules = { anyone: true, rappel: true, pools: [10, 10] };
-      stand(sim, ctrl, 3.775, 0, 39.1, 0);
+      stand(sim, ctrl, 0, 0, -4.4, 0);
       expect(sim.prompt(ctrl.id), op).toBe(prompt);
       run(sim, ctrl, { yawDeg: 0, buttons: Btn.Interact }, 2 / 64);
       expect([pawn.state.rappelTicks, pawn.state.deployKind !== 0], op).toEqual([0, true]);
@@ -213,7 +216,7 @@ describe("hooking on", () => {
   });
 
   it("a tick without the player's input (a stall) leaves the hold as it is: it goes on when input comes back, the key still held", async () => {
-    const { sim, ctrl, pawn } = await oregon();
+    const { sim, ctrl, pawn } = await lab();
     stand(sim, ctrl, TOWER.x, 0, TOWER.z - 0.6, TOWER.yawDeg);
     const hold = ticks(sim.data.movement.rappel.holdSeconds);
     run(sim, ctrl, { yawDeg: TOWER.yawDeg, buttons: Btn.Vault }, 10 / 64);
@@ -225,12 +228,12 @@ describe("hooking on", () => {
   });
 
   it("not facing the wall, too far from it, or a defender outside a lab room: no rope offered", async () => {
-    const { sim, ctrl, pawn } = await oregon();
+    const { sim, ctrl, pawn } = await lab();
     stand(sim, ctrl, TOWER.x, 0, TOWER.z - 0.6, 0); // back to the wall
     expect(findRappel((sim as any).ctx, pawn)).toBeNull();
     stand(sim, ctrl, TOWER.x, 0, TOWER.z - 1.5, TOWER.yawDeg); // a metre too far
     expect(findRappel((sim as any).ctx, pawn)).toBeNull();
-    const d = await oregon("mute");
+    const d = await lab("mute");
     stand(d.sim, d.ctrl, TOWER.x, 0, TOWER.z - 0.6, TOWER.yawDeg);
     expect(findRappel((d.sim as any).ctx, d.pawn)).toBeNull();
     d.sim.deployRules.rappel = true; // a lab room's rules
@@ -238,11 +241,11 @@ describe("hooking on", () => {
   });
 
   it("at a roof edge facing out over it: over the edge onto the rope under it over edgeAttachSeconds, turning upside down on the way; the stance key turns it back over turnSeconds, holding it still", async () => {
-    const { sim, ctrl, pawn } = await oregon();
+    const { sim, ctrl, pawn } = await lab();
     const m = sim.data.movement;
     const R = m.rappel;
-    // On the Kids roof (6.2 m), at its north edge over the Kids' Dorms' wall.
-    stand(sim, ctrl, 28, 6.2, 24.0, 0);
+    // On the Ledge House's roof (6.2 m), at its north edge over the 2F wall.
+    stand(sim, ctrl, -14, 6.2, -9.35, 0);
     expect(findRappel((sim as any).ctx, pawn)?.start).toBe("top");
     run(sim, ctrl, { yawDeg: 0, buttons: Btn.Vault }, R.holdSeconds);
     const s = pawn.state;
@@ -278,13 +281,13 @@ describe("hooking on", () => {
     expect([s.ropeTurn, s.rappelFlags & RappelFlag.Inverted]).toEqual([1, RappelFlag.Inverted]);
   });
 
-  it("out of a window with nothing to stand on outside (the Big Tower's 2F window, opened): over the sill and down onto the rope outside, turning to the wall", async () => {
-    const { sim, ctrl, pawn } = await oregon();
+  it("out of a window with nothing to stand on outside (the Tower's 2F window, opened): over the sill and down onto the rope outside, turning to the wall", async () => {
+    const { sim, ctrl, pawn } = await lab();
     const m = sim.data.movement;
     const R = m.rappel;
     const ctx = (sim as any).ctx;
-    const panel = (id: string) => sim.level.panels.byId.get(`2F.o006.${id}`)!.panel;
-    stand(sim, ctrl, 42.3, 3.2, 7.9, 0); // in the 2F Tower, facing the window (north)
+    const panel = (id: string) => sim.level.panels.byId.get(`tower_n_${id}`)!.panel;
+    stand(sim, ctrl, TOWER_WINDOW, 3.2, TOWER.z + 0.6, 0); // in the Tower's 2F, facing the window (north)
     expect(findRappel(ctx, pawn)).toBeNull(); // its glass and barricade in the way
     sim.level.panels.apply(panel("bar").spec.index, { kind: "barricade", up: false });
     expect(findRappel(ctx, pawn)).toBeNull(); // the glass still
@@ -299,7 +302,7 @@ describe("hooking on", () => {
     expect(apex).toBeGreaterThan(4.1); // over the sill, tucked as a vault is
     expect([tuck > 0.95, pawn.state.tuck]).toEqual([true, 0]);
     expect([pawn.state.mode, pawn.state.moveDur, pawn.state.rappelFlags & RappelFlag.Inverted]).toEqual([PawnMode.Rappel, 0, 0]);
-    expect([pawn.state.x, pawn.state.y]).toEqual([expect.closeTo(42.3, 2), expect.closeTo(4.1 - R.windowHangBelowSill, 2)]);
+    expect([pawn.state.x, pawn.state.y]).toEqual([expect.closeTo(TOWER_WINDOW, 2), expect.closeTo(4.1 - R.windowHangBelowSill, 2)]);
     expect(pawn.state.z).toBeCloseTo(TOWER.z - m.stance.collisionRadius - m.rappel.wallGap, 3);
     expect(facing(pawn.state.yaw, Math.PI)).toBe(true);
     // Down to the ground.
@@ -309,7 +312,7 @@ describe("hooking on", () => {
   });
 
   it("Skopós (a lab room lets her rappel): her shell's camera opens on the rope, but she can't swap shells there, and the body hangs still meanwhile", async () => {
-    const { sim, ctrl, pawn } = await oregon("skopos");
+    const { sim, ctrl, pawn } = await lab("skopos");
     sim.deployRules.rappel = true;
     stand(sim, ctrl, TOWER.x, 0, TOWER.z - 0.6, TOWER.yawDeg);
     hookOn(sim, ctrl, TOWER.yawDeg);
@@ -329,7 +332,7 @@ describe("hooking on", () => {
 
 describe("on the rope", () => {
   async function onTower() {
-    const o = await oregon();
+    const o = await lab();
     stand(o.sim, o.ctrl, TOWER.x, 0, TOWER.z - 0.6, TOWER.yawDeg);
     hookOn(o.sim, o.ctrl, TOWER.yawDeg);
     expect([o.pawn.state.mode, o.pawn.state.moveDur]).toEqual([PawnMode.Rappel, 0]);
@@ -375,7 +378,7 @@ describe("on the rope", () => {
     // East along the wall (A, facing it) to its end, 0.3 m in from the tower's corner.
     run(sim, ctrl, { yawDeg: TOWER.yawDeg, strafe: -1 }, 5);
     expect(pawn.state.mode).toBe(PawnMode.Rappel);
-    expect(pawn.state.x).toBeLessThanOrEqual(44.4 + 1e-3);
+    expect(pawn.state.x).toBeLessThanOrEqual(2.7 + 1e-3);
     // Down: off the rope onto the ground.
     run(sim, ctrl, { yawDeg: TOWER.yawDeg, forward: 1 }, 1);
     run(sim, ctrl, { yawDeg: TOWER.yawDeg, forward: -1 }, 2);
@@ -407,15 +410,15 @@ describe("on the rope", () => {
     expect([pawn.state.meleeTicks, pawn.state.ropeTurn > 0 && pawn.state.ropeTurn < 1]).toEqual([0, true]);
   });
 
-  /** Along to the Big Tower's 2F north window (2F.o006, x 41.65–42.95, sill 4.1 m), the feet 0.7 m under the sill. */
+  /** Along to the Tower's 2F north window (x 0.5–1.8, sill 4.1 m), the feet 0.7 m under the sill. */
   async function atTowerWindow() {
     const o = await onTower();
     const { sim, ctrl, pawn } = o;
-    const target = 42.3;
+    const target = TOWER_WINDOW;
     for (let t = 0; t < 400 && Math.abs(pawn.state.x - target) > 0.05; t++) run(sim, ctrl, { yawDeg: TOWER.yawDeg, strafe: pawn.state.x < target ? -0.5 : 0.5 }, 1 / 64);
     for (let t = 0; t < 400 && pawn.state.y < 3.4; t++) run(sim, ctrl, { yawDeg: TOWER.yawDeg, forward: 0.5 }, 1 / 64);
     expect(pawn.state.mode).toBe(PawnMode.Rappel);
-    const panel = (id: string) => sim.level.panels.byId.get(`2F.o006.${id}`)!.panel;
+    const panel = (id: string) => sim.level.panels.byId.get(`tower_n_${id}`)!.panel;
     return { ...o, panel };
   }
 
@@ -437,7 +440,7 @@ describe("on the rope", () => {
     expect(pawn.state.mode).toBe(PawnMode.Vault); // back at the wall: in
     run(sim, ctrl, { yawDeg: TOWER.yawDeg }, 1.5);
     expect([pawn.state.mode, pawn.state.grounded, +pawn.state.y.toFixed(1)]).toEqual([PawnMode.Walk, true, 3.2]);
-    expect(pawn.state.z).toBeGreaterThan(TOWER.z + 0.3); // inside the 2F Tower
+    expect(pawn.state.z).toBeGreaterThan(TOWER.z + 0.3); // inside the Tower's 2F
   });
 
   it("rappel breach: Space at the glass and barricade swings into them; a fresh barricade bounces the body off (out bounceOutM and back) with a kick, a worn one gives way", async () => {
@@ -481,7 +484,7 @@ describe("on the rope", () => {
     expect([pawn.state.mode, pawn.state.rappelTicks, pawn.state.rappelFlags & RappelFlag.Inverted, pawn.state.ropeTurn]).toEqual([PawnMode.Rappel, 0, 0, 0]);
     expect(outOnTower(sim, pawn.state.z)).toBeCloseTo(0, 4);
     expect([glass.broken, bar.broken, bar.hp]).toEqual([true, false, B.hp - B.rappelKickDamage]);
-    // Worn to rappelThroughHp: the next swing goes through, breaking the barricade, into the 2F Tower.
+    // Worn to rappelThroughHp: the next swing goes through, breaking the barricade, into the Tower's 2F.
     expect(planBreach(ctx, pawn)).toMatchObject({ panels: [bar.spec.index], through: true });
     step({ yawDeg: TOWER.yawDeg, stance: Stance.Crouch, buttons: Btn.Vault });
     for (let t = 1; t < swing; t++) step({ yawDeg: TOWER.yawDeg, stance: Stance.Crouch });
@@ -503,12 +506,12 @@ describe("on the rope", () => {
     expect([log.length, facing(pawn.state.yaw, Math.PI)]).toEqual([1, true]);
   });
 
-  it("into a Dorms window from the roof (M8's done-when): over the Kids' Dorms' roof edge upside down, right side up, down to the window, two swings in", async () => {
-    const { sim, ctrl, pawn } = await oregon();
+  it("into a window from the roof (M8's done-when): over the Ledge House's roof edge upside down, right side up, down to the window over the ledge, two swings in", async () => {
+    const { sim, ctrl, pawn } = await lab();
     const R = sim.data.movement.rappel;
-    const bar = sim.level.panels.byId.get("2F.o004.bar")!.panel;
-    const glass = sim.level.panels.byId.get("2F.o004.glass")!.panel;
-    stand(sim, ctrl, 27.875, 6.3, 24.04, 0);
+    const bar = sim.level.panels.byId.get("ledge_n2_bar")!.panel;
+    const glass = sim.level.panels.byId.get("ledge_n2_glass")!.panel;
+    stand(sim, ctrl, -12, 6.3, -9.31, 0);
     expect(movementPrompt((sim as any).ctx, pawn)).toBe("rappel");
     hookOn(sim, ctrl, 0, "top");
     expect([pawn.state.mode, pawn.state.ropeTurn]).toEqual([PawnMode.Rappel, 1]);
@@ -532,30 +535,30 @@ describe("on the rope", () => {
     expect([glass.broken, bar.broken]).toEqual([true, true]);
     run(sim, ctrl, held, 1.5);
     expect([pawn.state.mode, pawn.state.grounded, +pawn.state.y.toFixed(1)]).toEqual([PawnMode.Walk, true, 3.2]);
-    expect(pawn.state.z).toBeGreaterThan(23.95); // in the Kids' Dorms (z 23.95–30.45)
+    expect(pawn.state.z).toBeGreaterThan(-9.4); // in the Ledge House's 2F (z -9.4 to -4.3)
   });
 
-  it("into the Dorms' big window from the Dining roof: hooked on at the wall's foot, two swings into the Dorms Main Hall", async () => {
-    const { sim, ctrl, pawn } = await oregon();
+  it("into the window over the Annex from its roof: hooked on at the wall's foot, two swings into the Ledge House's 2F", async () => {
+    const { sim, ctrl, pawn } = await lab();
     const R = sim.data.movement.rappel;
-    const bar = sim.level.panels.byId.get("2F.o021.bar")!.panel;
-    stand(sim, ctrl, 19.75, 3.6, 31.9, -90); // on the Dining roof, facing the Dorms Main Hall's west wall
+    const bar = sim.level.panels.byId.get("ledge_n1_bar")!.panel;
+    stand(sim, ctrl, -19, 3.2, -10.3, 180); // on the Annex roof, facing the Ledge House's 2F north wall
     expect([pawn.state.grounded, sim.prompt(ctrl.id)]).toEqual([true, "rappel"]);
-    hookOn(sim, ctrl, -90);
+    hookOn(sim, ctrl, 180);
     expect([pawn.state.mode, movementPrompt((sim as any).ctx, pawn)]).toEqual([PawnMode.Rappel, "rappelBreach"]);
     const whole = ticks(R.swingSeconds) + ticks(R.bounceSeconds);
     const log: { panels: number[]; through: boolean }[] = [];
     for (let k = 0; k < 2; k++) {
-      run(sim, ctrl, { yawDeg: -90, buttons: Btn.Vault }, 1 / 64);
+      run(sim, ctrl, { yawDeg: 180, buttons: Btn.Vault }, 1 / 64);
       for (let t = 1; t < whole; t++) {
-        run(sim, ctrl, { yawDeg: -90 }, 1 / 64);
+        run(sim, ctrl, { yawDeg: 180 }, 1 / 64);
         applyBreaches(sim, log);
       }
     }
     expect([log.map((e) => e.through), bar.broken]).toEqual([[false, true], true]);
-    run(sim, ctrl, { yawDeg: -90 }, 1.5);
+    run(sim, ctrl, { yawDeg: 180 }, 1.5);
     expect([pawn.state.mode, pawn.state.grounded, +pawn.state.y.toFixed(1)]).toEqual([PawnMode.Walk, true, 3.2]);
-    expect(pawn.state.x).toBeGreaterThan(20.5); // in the Dorms Main Hall (x 20.5–30)
+    expect(pawn.state.z).toBeGreaterThan(-9.4); // in the Ledge House's 2F
   });
 
   it("a stall holds a turn, a swing and the stance key as they are; each goes on when input comes back", async () => {
@@ -606,9 +609,9 @@ describe("on the rope", () => {
   });
 
   it("climbing up a face under a roof goes over the top onto it", async () => {
-    const { sim, ctrl, pawn } = await oregon();
-    // The Kids' Dorms' north wall from the Meeting roof (its ridge, about 4 m up) up to the Kids roof (6.2 m).
-    stand(sim, ctrl, 33, 4.3, 23.0, 180);
+    const { sim, ctrl, pawn } = await lab();
+    // The Ledge House's 2F north wall from the Annex roof (3.2 m) up to its roof (6.2 m).
+    stand(sim, ctrl, -20.5, 3.2, -10.3, 180);
     run(sim, ctrl, { yawDeg: 180 }, 0.5);
     expect(pawn.state.grounded).toBe(true);
     hookOn(sim, ctrl, 180);
@@ -616,14 +619,14 @@ describe("on the rope", () => {
     for (let t = 0; t < 64 * 3 && pawn.state.mode === PawnMode.Rappel; t++) run(sim, ctrl, { yawDeg: 180, forward: 1 }, 1 / 64);
     run(sim, ctrl, { yawDeg: 180 }, 1);
     expect([pawn.state.mode, pawn.state.grounded, +pawn.state.y.toFixed(1)]).toEqual([PawnMode.Walk, true, 6.2]);
-    expect(pawn.state.z).toBeGreaterThan(23.65);
+    expect(pawn.state.z).toBeGreaterThan(-9.7);
   });
 
-  it("under a roof that hangs over the wall (Ulo: the Dorms' eave over its south wall), climbing goes over the eave onto the roof", async () => {
-    const { sim, ctrl, pawn } = await oregon();
+  it("under a roof that hangs over the wall (Ulo: an eave, the Eave House's over its south wall), climbing goes over the eave onto the roof", async () => {
+    const { sim, ctrl, pawn } = await lab();
     const R = sim.data.movement.rappel;
-    // The 1F wall under the Dorms' south wall (rappel:1F:S01, z 38; one rope with 2F:S04 above, to 6.2 m), from the ground.
-    stand(sim, ctrl, 30.8, 0, 38.6, 0);
+    // The Eave House's south wall (rappel:eave:S, z 10; one rope up both storeys, to 6.2 m), from the ground.
+    stand(sim, ctrl, 13, 0, 10.6, 0);
     hookOn(sim, ctrl, 0);
     expect(ropeAt(sim.level.rappel, pawn.state.rappel, pawn.state.x, pawn.state.z, 1)?.[1]).toBeCloseTo(6.2, 5);
     for (let t = 0; t < 64 * 6 && pawn.state.mode === PawnMode.Rappel; t++) run(sim, ctrl, { yawDeg: 0, forward: 1 }, 1 / 64);
@@ -633,31 +636,32 @@ describe("on the rope", () => {
     run(sim, ctrl, { yawDeg: 0 }, 1);
     expect([pawn.state.mode, pawn.state.grounded]).toEqual([PawnMode.Walk, true]);
     expect(pawn.state.y).toBeGreaterThan(6.2); // on the roof's slope
-    expect(pawn.state.z).toBeLessThan(38);
+    expect(pawn.state.z).toBeLessThan(10);
   });
 
-  it("no climbing over the top through what stands higher than a vault behind the edge: a gable end (the Big Tower's), a storey's wall set back from the edge or its barricaded window (the Kids' Dorms' over the Kitchen)", async () => {
+  it("no climbing over the top through what stands higher than a vault behind the edge: a gable end (the Tower's), a storey's wall set back from the edge or its barricaded window (the Ledge House's)", async () => {
     const { sim, ctrl, pawn } = await onTower();
     const top = (yawDeg: number) => {
       for (let t = 0; t < 64 * 8; t++) run(sim, ctrl, { yawDeg, forward: 1 }, 1 / 64);
       return [pawn.state.mode, +pawn.state.y.toFixed(2)];
     };
-    expect(top(TOWER.yawDeg)).toEqual([PawnMode.Rappel, 8]); // under the gable end, which rises to 11.2 m
-    // The Kitchen's north wall (rappel:1F:N04, z 23.35, to 3.2 m): the Kids' Dorms' wall stands 0.3 m back from its
-    // top, its north window (2F.o004, barricaded) at x 27.2–28.55.
-    for (const x of [25, 27.77]) {
-      stand(sim, ctrl, x, 0, 22.75, 180);
+    expect(top(TOWER.yawDeg)).toEqual([PawnMode.Rappel, 8]); // under the stepped gable, which rises to 11.6 m
+    // The Ledge House's 1F north wall (rappel:ledge:N1, z -10, to 3.2 m): its 2F wall stands 0.3 m back from its top,
+    // the 2F window over the ledge (barricaded) at x -12.65 to -11.35.
+    for (const x of [-14, -12]) {
+      stand(sim, ctrl, x, 0, -10.6, 180);
       hookOn(sim, ctrl, 180);
       expect(top(180), `x ${x}`).toEqual([PawnMode.Rappel, 2]);
-      expect(pawn.state.z, `x ${x}`).toBeLessThan(23.35);
+      expect(pawn.state.z, `x ${x}`).toBeLessThan(-10);
     }
   });
 
-  it("the Balcony: climbing its wall goes over the railing onto it (Ulo); from it, facing out over the railing, a hold goes over it onto the rope, upside down", async () => {
-    const { sim, ctrl, pawn } = await oregon();
+  it("a balcony: climbing its wall goes over the railing onto it (Ulo); from it, facing out over the railing, a hold goes over it onto the rope, upside down", async () => {
+    const { sim, ctrl, pawn } = await lab();
     const H = sim.data.movement.stance.stand.height;
-    // At the foot of the 1F wall under the Balcony (rappel:1F:S05, z 42.6; the railing on it is z 42.3–42.6, 3.2–4.2 m).
-    stand(sim, ctrl, 36.8, 0, 43.2, 0);
+    // At the foot of the Ledge House's 1F south wall, under its balcony (rappel:ledge:S1, z -2; the railing on it is
+    // z -2.3 to -2, 3.2–4.2 m).
+    stand(sim, ctrl, -15, 0, -1.4, 0);
     expect(sim.prompt(ctrl.id)).toBe("rappel");
     hookOn(sim, ctrl, 0);
     for (let t = 0; t < 64 * 4 && pawn.state.mode === PawnMode.Rappel; t++) run(sim, ctrl, { yawDeg: 0, forward: 1 }, 1 / 64);
@@ -668,18 +672,18 @@ describe("on the rope", () => {
     }
     expect([pawn.state.mode, pawn.state.grounded, +pawn.state.y.toFixed(1)]).toEqual([PawnMode.Walk, true, 3.2]);
     expect(apex).toBeGreaterThan(4.2); // over the railing's top
-    expect(pawn.state.z).toBeLessThan(42.3); // behind it, on the Balcony
-    stand(sim, ctrl, 36.8, 3.2, 41.9, 180);
+    expect(pawn.state.z).toBeLessThan(-2.3); // behind it, on the balcony
+    stand(sim, ctrl, -15, 3.2, -2.7, 180);
     expect(findRappel((sim as any).ctx, pawn)?.start).toBe("top");
     hookOn(sim, ctrl, 180, "top");
     expect([pawn.state.mode, pawn.state.ropeTurn]).toEqual([PawnMode.Rappel, 1]);
-    expect(pawn.state.z).toBeGreaterThan(42.6);
+    expect(pawn.state.z).toBeGreaterThan(-2);
     expect(pawn.state.y + H).toBeLessThanOrEqual(3.2);
   });
 
-  it("at the rope's foot over a ledge narrower than the body (the Kids' Dorms' north wall, on the Kitchen's): S takes it off the rope onto the ledge", async () => {
-    const { sim, ctrl, pawn } = await oregon();
-    stand(sim, ctrl, 27.875, 6.3, 24.04, 0);
+  it("at the rope's foot over a ledge narrower than the body (the Ledge House's 2F north wall, on the 1F's): S takes it off the rope onto the ledge", async () => {
+    const { sim, ctrl, pawn } = await lab();
+    stand(sim, ctrl, -14, 6.3, -9.31, 0);
     hookOn(sim, ctrl, 0, "top");
     const held = { yawDeg: 180, stance: Stance.Crouch };
     run(sim, ctrl, held, sim.data.movement.rappel.turnSeconds + 1 / 64);
@@ -688,28 +692,28 @@ describe("on the rope", () => {
     expect([pawn.state.mode, pawn.state.grounded, +pawn.state.y.toFixed(1)]).toEqual([PawnMode.Walk, true, 3.2]);
   });
 
-  it("Space doesn't swing up onto a roof over the wall (the Garage's south wall): that's W's, over the top", async () => {
-    const { sim, ctrl, pawn } = await oregon();
+  it("Space doesn't swing up onto a roof over the wall (the Annex's soft north wall, which a vault goes over): that's W's, over the top", async () => {
+    const { sim, ctrl, pawn } = await lab();
     const ctx = (sim as any).ctx;
-    stand(sim, ctrl, 47.7, 0, 40.5, 0); // at the wall's foot (rappel:1F:S03, z 39.9), facing it (north)
-    hookOn(sim, ctrl, 0);
+    stand(sim, ctrl, -19, 0, -14.6, 180); // at the wall's foot (rappel:annex:N, z -14), facing it (south)
+    hookOn(sim, ctrl, 180);
     expect(pawn.state.mode).toBe(PawnMode.Rappel);
-    for (let t = 0; t < 128 && pawn.state.y < 1.86; t++) run(sim, ctrl, { yawDeg: 0, forward: 1 }, 1 / 64);
+    for (let t = 0; t < 128 && pawn.state.y < 1.86; t++) run(sim, ctrl, { yawDeg: 180, forward: 1 }, 1 / 64);
     expect(planVault(ctx, pawn)?.toY).toBeCloseTo(3.2, 1); // a vault from here lands on the roof...
     expect(movementPrompt(ctx, pawn)).toBeNull(); // ...but isn't offered
-    run(sim, ctrl, { yawDeg: 0, buttons: Btn.Vault }, 2 / 64);
+    run(sim, ctrl, { yawDeg: 180, buttons: Btn.Vault }, 2 / 64);
     expect([pawn.state.mode, pawn.state.rappelTicks]).toEqual([PawnMode.Rappel, 0]);
-    for (let t = 0; t < 64 && pawn.state.mode === PawnMode.Rappel; t++) run(sim, ctrl, { yawDeg: 0, forward: 1 }, 1 / 64);
-    run(sim, ctrl, { yawDeg: 0 }, 1);
+    for (let t = 0; t < 64 && pawn.state.mode === PawnMode.Rappel; t++) run(sim, ctrl, { yawDeg: 180, forward: 1 }, 1 / 64);
+    run(sim, ctrl, { yawDeg: 180 }, 1);
     expect([pawn.state.mode, pawn.state.grounded, +pawn.state.y.toFixed(1)]).toEqual([PawnMode.Walk, true, 3.2]);
-    expect(pawn.state.z).toBeLessThan(39.9); // on the Garage roof
+    expect(pawn.state.z).toBeGreaterThan(-14); // on the Annex roof
   });
 
   it("lethal damage on the rope kills outright; the same on foot downs (DBNO)", async () => {
     const { sim, pawn } = await onTower();
     applyDamage(sim, pawn, { amount: pawn.state.hp + 1, kill: false, cause: Cause.Bullet });
     expect(pawn.state.mode).toBe(PawnMode.Dead);
-    const o = await oregon();
+    const o = await lab();
     stand(o.sim, o.ctrl, TOWER.x, 0, TOWER.z - 0.6, TOWER.yawDeg);
     applyDamage(o.sim, o.pawn, { amount: o.pawn.state.hp + 1, kill: false, cause: Cause.Bullet });
     expect(o.pawn.state.mode).toBe(PawnMode.Downed);
@@ -718,7 +722,7 @@ describe("on the rope", () => {
 
 describe("rappel state on the wire", () => {
   it("round-trips exactly (mid-turn too), and the hash sees each rappel field", async () => {
-    const { sim, ctrl, pawn } = await oregon();
+    const { sim, ctrl, pawn } = await lab();
     stand(sim, ctrl, TOWER.x, 0, TOWER.z - 0.6, TOWER.yawDeg);
     hookOn(sim, ctrl, TOWER.yawDeg);
     run(sim, ctrl, { yawDeg: TOWER.yawDeg, stance: Stance.Crouch }, 5 / 64);
@@ -737,11 +741,11 @@ describe("rappel online", () => {
   const STALL = 24;
 
   /**
-   * A lab room on Oregon and one client LAG ticks away each way, standing at the Big Tower's foot facing it.
+   * A lab room on the Rappel Lab and one client LAG ticks away each way, standing at the Tower's foot facing it.
    * `stall(n)`: the client's next n ticks of input reach the room only after them (a lag spike).
    */
   async function online(code: string) {
-    const room = await Room.create(code, "oregon", { lab: true });
+    const room = await Room.create(code, "rappel_lab", { lab: true });
     const clock = { t: 0 };
     const up: { at: number; b: Uint8Array }[] = [];
     const down: { at: number; b: Uint8Array }[] = [];
@@ -825,11 +829,11 @@ describe("rappel online", () => {
     const stalls = room.stats.stalls;
     const { holdSeconds, attachSeconds, swingSeconds, bounceSeconds, climbSpeed, strafeSpeed } = room.sim.data.movement.rappel;
     const whole = ticks(swingSeconds) + ticks(bounceSeconds);
-    // Hook on, climb to 3.55 m (the window's sill is at 4.1), then along to its middle (x 42.3).
+    // Hook on, climb to 3.55 m (the window's sill is at 4.1), then along to its middle.
     const plan: Leg[] = [
       [{ buttons: Btn.Vault }, ticks(holdSeconds) + ticks(attachSeconds) + 4],
       [{ forward: 1 }, Math.round((3.53 * 64) / climbSpeed)],
-      [{ strafe: -1 }, Math.round((2.15 * 64) / strafeSpeed)],
+      [{ strafe: -1 }, Math.round(((TOWER_WINDOW - TOWER.x) * 64) / strafeSpeed)],
       [{}, 8],
       [{ buttons: Btn.Vault }, 1],
       [{}, 10],
@@ -841,10 +845,10 @@ describe("rappel online", () => {
       if (spike) stall(STALL);
       for (let i = 0; i < n; i++) step(cmd);
     }
-    const bar = (sim: Sim) => sim.level.panels.byId.get("2F.o006.bar")!.panel;
-    const glass = (sim: Sim) => sim.level.panels.byId.get("2F.o006.glass")!.panel;
+    const bar = (sim: Sim) => sim.level.panels.byId.get("tower_n_bar")!.panel;
+    const glass = (sim: Sim) => sim.level.panels.byId.get("tower_n_glass")!.panel;
     expect([server().mode, server().grounded, +server().y.toFixed(1)]).toEqual([PawnMode.Walk, true, 3.2]);
-    expect(server().z).toBeGreaterThan(TOWER.z + 0.3); // in the 2F Tower
+    expect(server().z).toBeGreaterThan(TOWER.z + 0.3); // in the Tower's 2F
     expect([bar(room.sim).broken, glass(room.sim).broken, bar(session.sim!).broken, glass(session.sim!).broken]).toEqual([true, true, true, true]);
     expect(session.sim!.level.panels.hash()).toBe(room.sim.level.panels.hash());
     expect(room.stats.stalls - stalls).toBe(1);

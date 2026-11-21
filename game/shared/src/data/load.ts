@@ -6,6 +6,7 @@ import movementLabJson from "../../../../data/maps/movement_lab/layout.json";
 import rangeLabJson from "../../../../data/maps/range_lab/layout.json";
 import destructionLabJson from "../../../../data/maps/destruction_lab/layout.json";
 import gadgetLabJson from "../../../../data/maps/gadget_lab/layout.json";
+import rappelLabJson from "../../../../data/maps/rappel_lab/layout.json";
 import oregonJson from "../../../../data/maps/oregon/level.json";
 import millraceJson from "../../../../data/maps/millrace/level.json";
 import brava from "../../../../data/operators/brava.json";
@@ -128,7 +129,7 @@ export const rawData = {
   movement: movementJson as Record<string, unknown>,
   hitboxes: hitboxJson as Record<string, unknown>,
   operators: [brava, fuze, thermite, striker, dokkaebi, sledge, sentry, skopos, mira, lesion, pulse, mute, ohm, tonic, shunt, latch, bailiff, rivet, dowser, hull] as Record<string, unknown>[],
-  levels: [movementLabJson, rangeLabJson, destructionLabJson, gadgetLabJson, oregonJson, millraceJson] as Record<string, unknown>[],
+  levels: [movementLabJson, rangeLabJson, destructionLabJson, gadgetLabJson, rappelLabJson, oregonJson, millraceJson] as Record<string, unknown>[],
   weapons: weaponFiles,
   gunplay: gunplayJson as Record<string, unknown>,
   combat: combatJson as Record<string, unknown>,
