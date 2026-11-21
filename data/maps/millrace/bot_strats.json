@@ -234,6 +234,7 @@
           "sentry": [
             {
               "gadget": "barbed_wire",
+              "near": "1F.o034.bar",
               "room": "1F_MILL_CORRIDOR"
             },
             {
@@ -324,7 +325,8 @@
             "panel": "H1",
             "from": "2F_CARDING_STORE",
             "ops": [
-              "sledge"
+              "sledge",
+              "fuze"
             ]
           }
         ],
@@ -508,7 +510,8 @@
             "panel": "H2",
             "from": "2F_PAYROLL",
             "ops": [
-              "sledge"
+              "sledge",
+              "fuze"
             ]
           }
         ],

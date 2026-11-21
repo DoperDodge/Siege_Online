@@ -25,6 +25,14 @@ async function attack(site: string, seed = 5) {
   return { room, m, until, host, send };
 }
 
+/** Where the person hides, out of the way: inside, the room farthest from the site's (out of the attackers' spawns' sight). */
+function hideFrom(room: Room, site: string): [number, number, number] {
+  const level = room.sim.level.def;
+  const at = level.rooms.find((r) => r.id === level.sites.find((s) => s.id === site)!.rooms[0])!.anchor;
+  const far = [...level.rooms].sort((a, b) => Math.hypot(b.anchor[0] - at[0], b.anchor[2] - at[2]) - Math.hypot(a.anchor[0] - at[0], a.anchor[2] - at[2]))[0];
+  return [far.anchor[0], far.anchor[1], far.anchor[2]];
+}
+
 describe("attacking bots (Phase 9 M5)", () => {
   it("their drones find the site in prep; in action they come in and win the round against a lone defender standing at the site", async () => {
     const { room, m, until } = await attack("SITE_MILL");
@@ -40,9 +48,9 @@ describe("attacking bots (Phase 9 M5)", () => {
   it("with the defender out of the way, the carrier plants in the site and the fuse runs out", async () => {
     const { room, m, until } = await attack("SITE_BOILER", 6);
     expect(until(() => m.phase === Phase.Action, 60)).toBe(true);
-    // The person hides far out in a corner of the map's outside (the round goes on while they live).
+    // The person hides indoors, in the room farthest from the site (the round goes on while they live).
     const you = room.sim.pawns.get(room.bodyOf([...m.players.values()].find((p) => p.bot === null)!.id)!.possessedPawnId)!;
-    room.sim.teleport(you.id, -25, 0, 68, 0);
+    room.sim.teleport(you.id, ...hideFrom(room, "SITE_BOILER"), 0);
     expect(until(() => m.plantedAt !== null || m.phase !== Phase.Action, 170)).toBe(true);
     expect(m.plantedAt).not.toBeNull();
     const carrier = [...m.players.values()].filter((p) => p.bot !== null && m.sideOf(p.id) === ATTACK);
