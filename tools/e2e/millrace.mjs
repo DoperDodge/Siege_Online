@@ -152,7 +152,8 @@ try {
       const [x, z] = spots[k % spots.length];
       await page.evaluate(([x, y, z]) => window.__lab.teleport(x, y, z, 0), [x, top, z]);
       await sleep(400);
-      for (let j = 0; j < 2 && blows < tries; j++, blows++) {
+      for (let j = 0; j < 2 && blows < tries; j++) {
+        blows++; // counted before a miss breaks out: misses use up the tries too
         const before = (await panel(page, h.id)).hp;
         const started = await swing(page, { pitch: -1.45, stance: CROUCH });
         const p = await panel(page, h.id);
@@ -268,6 +269,7 @@ try {
   // ---- floors: a shot up through a 2F soft floor from 1F, and a drop through a hatch
   const tiles = lvl.solids.filter((sd) => sd.panel?.region === "SF-2F-02"); // the Card Room's, over the Spinning Room
   const h2 = lvl.solids.find((sd) => sd.id === "H2"); // Payroll's, over the Dispatch Office
+  if (!tiles.length || !h2) throw new Error("millrace.mjs: the level has no SF-2F-02 tiles or no H2 (renamed? update the test)");
   {
     // Under the Card Room's floor, from the Spinning Room: a spot between joists (every 0.4 m from a tile's −x edge),
     // inside the Spinning Room with room to stand.
@@ -329,6 +331,8 @@ try {
   // The Boiler Stairs, one flight from the Boiler Room up into the Engine Room: before its first riser, along it, past
   // its top (tools/mapgen's walk test).
   const flight = lvl.stairs?.find((f) => f.id === "ST_FIRING:B>1F#0");
+  // Each place below is looked up by id: a check whose place is missing fails rather than going unrun.
+  result.checks.upTheBoilerStairsFromBTo1F = result.checks.backDownTheBoilerStairsToB = false;
   if (flight) {
     const [fx, fz] = ahead(flight.yawDeg);
     const len = flight.run * flight.steps;
@@ -353,6 +357,7 @@ try {
   // ---- rappel: the mill's north wall is one rope from the ground to the eaves (its 1F and 2F faces); at x 26, between
   // the Warping Room's and the Spinning Room's windows.
   const north = lvl.zones?.find((z) => z.id === "rappel:1F:N01");
+  result.checks.rappelUpTheMillAndDown = false;
   if (north) {
     const hp0 = (await own(off)).hp;
     const wallZ = north.boxes[0].center[2] + north.boxes[0].size[2] / 2;
@@ -395,6 +400,7 @@ try {
   // (2F.o009), and swing in: the fresh barricade bounces you off, kicked, and the glass breaks; the second swing goes
   // through it into the Drafting Room.
   const win = lvl.solids.find((sd) => sd.id === "2F.o009.bar");
+  result.checks.rappelBreachIntoTheDraftingRoom = false;
   if (win) {
     const out = rad(-90); // east, out over the edge
     const held = { yaw: rad(90), stance: CROUCH }; // facing the wall (west), right side up

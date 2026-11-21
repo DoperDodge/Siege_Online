@@ -6,7 +6,7 @@
 // tick is netsim's (`npm run netsim -- --level millrace`); frame times and draw calls come from the browser
 // (tools/e2e/millrace-perf.mjs, the stats overlay).
 //   npm run bench:map [-- --map millrace]    prints a table, writes builds/bench/<map>.json
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { performance } from "node:perf_hooks";
 import * as THREE from "three";
@@ -18,6 +18,11 @@ import { compile, loadInputs } from "../mapgen/compile.js";
 const ROOT = process.cwd();
 const at = process.argv.indexOf("--map");
 const MAP = at > 0 && process.argv[at + 1] ? process.argv[at + 1] : "millrace";
+// A compiled map only (its layout is the generator's, its soft-floor tiles recut below): a lab has neither.
+if (!existsSync(join(ROOT, "data", "maps", MAP, "level.json"))) {
+  console.error(`bench:map: "${MAP}" isn't a compiled map (no data/maps/${MAP}/level.json)`);
+  process.exit(1);
+}
 // The lab scene draws its labels and the floor texture on canvases, which Node lacks: these draw nothing.
 const pen = new Proxy({}, { get: (_t, key) => (key === "measureText" ? (text: string) => ({ width: 12 * text.length }) : () => {}) });
 (globalThis as { document?: unknown }).document = { createElement: () => ({ width: 0, height: 0, getContext: () => pen }) };

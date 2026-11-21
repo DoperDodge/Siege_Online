@@ -22,9 +22,11 @@ obj/
 Thumbs.db
 .DS_Store
 
-# Third-party reference images downloaded during research are personal reference only
-# and must never be committed (this repo is public; tools/mapgen/hygiene.test.ts checks).
-research/*/refs/web/
+# Third-party reference material is personal reference only and must never be committed (this repo is public;
+# tools/mapgen/hygiene.test.ts checks). Older clones may still hold Oregon's references and screenshots on disk
+# (research/oregon/refs/) and the old blueprint extraction's rasters (tools/mapgen/extract/): both stay ignored.
+research/*/refs/
+tools/mapgen/extract/
 __pycache__/
 
 # Blender backups

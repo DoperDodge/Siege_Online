@@ -82,6 +82,18 @@ describe("millrace level.json", () => {
     expect(Buffer.byteLength(readableJson(level))).toBeLessThanOrEqual(BUDGET.levelBytes);
   });
 
+  it("exterior doors and windows start barricaded, inside doors are empty frames, windows have glass", () => {
+    const openings = Object.entries(report.openings);
+    for (const [id, side] of openings) {
+      const bar = solids.find((s) => s.id === `${id}.bar`);
+      expect(bar?.surface, id).toBe("BARRICADE");
+      expect(bar?.panel?.empty === true, id).toBe(side === "interior");
+      if (bar?.panel?.construction === "barricade_window") expect(solids.find((s) => s.id === `${id}.glass`)?.surface, id).toBe("WINDOW");
+    }
+    // Both kinds are there: the ways in barricaded, the ways round inside open frames.
+    expect(new Set(openings.map(([, side]) => side))).toEqual(new Set(["interior", "exterior"]));
+  });
+
   it("the report lists the budgets, each within its limit, and no UNVERIFIED value (Millrace is ours: nothing to confirm against a source)", () => {
     const r = mapReport(ROOT, inputs, compiled);
     expect(r.budgets.map((b) => b.name)).toEqual(["solids", "panels", "panel cells per layer", "cells per layer of the largest panel", "level.json bytes"]);

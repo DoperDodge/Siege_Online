@@ -29,8 +29,10 @@ const dump = (room: Room, id: number) => {
 };
 const reports: SoakReport[] = [];
 const map = arg("map", "millrace");
-const sites = (loadGameData().levels.get(map)?.sites ?? []).map((s) => s.id);
-if (!sites.length) throw new Error(`soak: map "${map}" has no bomb sites`);
+const level = loadGameData().levels.get(map);
+if (!level) throw new Error(`soak: no map "${map}"`);
+const sites = level.sites.map((s) => s.id);
+if (!only && !sites.length) throw new Error(`soak: map "${map}" has no bomb sites (name one with --site)`);
 for (const site of only ? [only] : sites) {
   const r = await soak(site, rounds, seed, process.argv.includes("--dump") ? dump : undefined, map);
   reports.push(r);
