@@ -2625,6 +2625,9 @@ export class Room implements DirectorHost {
         const drop = m.queue.length - MAX_QUEUE;
         m.queue.splice(0, drop);
         this.stats.droppedInputs += drop;
+        // The client predicted those inputs: the correction that follows is the room's doing, as after a step without
+        // input, not a misprediction.
+        m.forced = true;
       }
       const next = this.take(m);
       if (!next) {

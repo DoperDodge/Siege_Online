@@ -19,6 +19,7 @@ import {
   loadGameData,
   ErrorCode,
   MAX_HOLD_TICKS,
+  MAX_QUEUE,
   Msg,
   Room,
   Stance,
@@ -144,6 +145,23 @@ describe("room and client session", () => {
     expect(h.room.stats.stalls).toBe(1);
     expect(a.session.stats.corrections).toBe(corrections + 1);
     expect(h.room.stats.mismatchCorrections).toBe(0);
+  });
+
+  it("inputs dropped from an overflowing queue: the correction after them is the room's doing, not a misprediction", async () => {
+    const h = await harness(["sledge"]);
+    const [a] = h.clients;
+    const before = { dropped: h.room.stats.droppedInputs, mismatch: h.room.stats.mismatchCorrections, corrections: h.room.stats.corrections };
+    // A client running ahead of the room (two inputs reach it every tick, none missing): its queue grows past the most
+    // the room keeps, and the oldest are dropped (inputs the client has already predicted).
+    for (let i = 0; i < MAX_QUEUE + 12; i++) {
+      a.session.tick({ forward: 1, strafe: 0, yaw: 0, pitch: 0, buttons: 0, stance: 0, lean: 0 });
+      h.toServer(a);
+      h.tick([{ forward: 1 }]);
+    }
+    h.ticks(2 * MAX_HOLD_TICKS, [{ forward: 1 }]);
+    expect(h.room.stats.droppedInputs).toBeGreaterThan(before.dropped);
+    expect(h.room.stats.corrections).toBeGreaterThan(before.corrections);
+    expect(h.room.stats.mismatchCorrections).toBe(before.mismatch);
   });
 
   it("a stall past the hold keeps the sights up and the lean as the player held them: the next shot isn't the hip's", async () => {
