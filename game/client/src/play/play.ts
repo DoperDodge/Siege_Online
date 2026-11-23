@@ -56,11 +56,11 @@ const FORMAT_NOTES: Record<string, string> = {
 const root = document.getElementById("play")!;
 root.innerHTML = `
   <h1>PLAY</h1>
-  <p class="tag">Matches on Oregon: two teams of 1–5, uneven allowed. <a href="/">Home</a></p>
+  <p class="tag">Matches on Millrace: two teams of 1–5, uneven allowed. <a href="/">Home</a></p>
   <section><h2>Your name</h2><div class="row"><input class="name" maxlength="24" placeholder="Player" autocomplete="nickname"></div></section>
   <section><h2>Bot Training</h2>
     <div class="row"><button class="primary vs-bots">Play vs bots (offline)</button></div>
-    <p class="note">You and bots on Oregon, no server needed: bots fill every empty place on both teams. In the lobby, choose your side (attack, defense or both), the team sizes, each team's difficulty (Recruit, Normal, Hard, Elite), the site, and how the bots pick operators (at random, in order, or the answer to yours). To bring friends, create a Bot Training match below instead.</p>
+    <p class="note">You and bots on Millrace, no server needed: bots fill every empty place on both teams. In the lobby, choose your side (attack, defense or both), the team sizes, each team's difficulty (Recruit, Normal, Hard, Elite), the site, and how the bots pick operators (at random, in order, or the answer to yours). To bring friends, create a Bot Training match below instead.</p>
     <h3>Drills</h3>
     <div class="row drills">${drills.map((m) => `<button class="drill" data-format="${m.id}" title="${escapeHtml(DRILL_NOTES[m.id] ?? "")}">${escapeHtml(m.match.name.replace(/^Drill: /, ""))}</button>`).join("")}</div>
     <p class="note">Offline, one setup each: ${drills.map((m) => `<b>${escapeHtml(m.match.name.replace(/^Drill: /, ""))}</b>: ${escapeHtml(DRILL_NOTES[m.id] ?? "")}`).join(" ")}</p>

@@ -14,7 +14,7 @@ export interface MeleeHit {
   zone: Zone;
   /** Across the floor from the attacker's body to the part hit. */
   reach: number;
-  /** It met the body's Fuze shield's plate first (Phase 8 M11): a guard break, no damage. */
+  /** It met the body's Hail shield's plate first (Phase 8 M11): a guard break, no damage. */
   shield: boolean;
 }
 

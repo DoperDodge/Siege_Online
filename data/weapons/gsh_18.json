@@ -1,5 +1,5 @@
 {
-  "_doc": "GSh-18 (Fuze). research/weapons.csv row gsh_18; class rules research/weapons_notes.md §4. Laser since Y7S3.",
+  "_doc": "GSh-18 (Hail). research/weapons.csv row gsh_18; class rules research/weapons_notes.md §4. Laser since Y7S3.",
   "_season": "Y11S3.1",
   "_unverified": ["damage.falloff", "destruction"],
   "id": "gsh_18",

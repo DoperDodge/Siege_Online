@@ -22,7 +22,7 @@ const BUTTONS: TouchButton[] = [
   { label: "Lean R", action: "leanRight", kind: "mode" },
   { label: "Use", action: "interact", kind: "hold" }, // held: a revive takes 4 s
   { label: "ADS", action: "ads", kind: "mode" },
-  { label: "Ability", action: "ability", kind: "tap" }, // the operator's item (Z); none for Skopós, her shell is a camera
+  { label: "Ability", action: "ability", kind: "tap" }, // the operator's item (Z); none for Twain, her shell is a camera
   { label: "Fire", action: "fire", kind: "hold" },
   { label: "Reload", action: "reload", kind: "tap" },
   { label: "Swap", action: "swap", kind: "tap" },

@@ -35,7 +35,7 @@ export interface Keybinds {
   throwDrone: string;
   /** Ping where you look (Phase 7, intel/DESIGN.md §6); held, the comm wheel. */
   ping: string;
-  /** Gadgets (Phase 7, intel/DESIGN.md §4): held, place a Bulletproof Camera; on one, fire its EMP dart. */
+  /** Gadgets (Phase 7, intel/DESIGN.md §4): held, place a Armoured Camera; on one, fire its EMP dart. */
   gadget: string;
 }
 

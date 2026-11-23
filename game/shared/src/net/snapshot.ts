@@ -18,8 +18,9 @@
 //   bit2 yaw               : varu zigzag(wrapped Δ) of a u16 angle (full turn = 65536)
 //   bit3 pitch             : varu zigzag(Δ), pitch · 16384/π
 //   bit4 flags             : u16 stance | stanceFrom<<2 | mode<<4 (3 bits) | sprinting<<7 | grounded<<8 |
-//                            shieldAt<<9 (2 bits: Fuze's shield's plate, Phase 8 M11) | lowered<<11 (3 bits: how far
-//                            his raised shield has slid down for aiming, 0–7; 0 with no shield up) | knifing<<14
+//                            shieldAt<<9 (2 bits: Hail's shield's plate, Phase 8 M11) | lowered<<11 (3 bits: how far
+//                            his raised shield has slid down for aiming, 0–7, or how far Hull's plate is braced: he
+//                            never aims, and braced nobody does; 0 with no shield up) | knifing<<14
 //                            (Phase 10 M10: others draw the stab) (1 free)
 //   bit6 lean (i8 ·127)   bit7 stanceT (u8 ·255)   bit8 tilts (3 × i8 ·128)   bit9 tuck (u8 ·255)
 //   bit10 aux              : u8, bit0 = aiming, bit1 = secondary weapon in hand, bit2 = a drone jammed, bit3 = reloading
@@ -35,8 +36,8 @@ import { ByteReader, ByteWriter, fnv1a, ProtocolError } from "./bytes.js";
 import { readControllerState, readPawnState, writeControllerState, writePawnState, type ControllerState } from "./pawnState.js";
 
 /**
- * The most pawns a correction carries: a body and its drones (Phase 7; Brava's two Kludge drones too, Phase 8 M8), or
- * Skopós's two shells.
+ * The most pawns a correction carries: a body and its drones (Phase 7; Patch's two Crossover drones too, Phase 8 M8), or
+ * Twain's two shells.
  */
 export const MAX_OWN_PAWNS = 6;
 
@@ -102,8 +103,8 @@ export function quantizeRemote(s: PawnState): RemoteQ {
     tiltB: i8(s.tiltB, 128),
     tiltSide: i8(s.tiltSide, 128),
     tuck: round(s.tuck * 255),
-    // Fuze's shield's plate (Phase 8 M11) in bits 9-10, and how far it's slid down for aiming in 11-13: others draw it,
-    // and a rewind puts it where they saw it.
+    // Hail's shield's plate (Phase 8 M11) in bits 9-10, and how far it's slid down for aiming in 11-13 (or how far
+    // Hull's plate is braced, R3: the two never go together): others draw it, and a rewind puts it where they saw it.
     flags:
       s.stance |
       (s.stanceFrom << 2) |
@@ -111,7 +112,7 @@ export function quantizeRemote(s: PawnState): RemoteQ {
       (s.sprinting ? 128 : 0) |
       (s.grounded ? 256 : 0) |
       ((s.shieldAt & 3) << 9) |
-      (s.shieldAt === 1 ? round((s.adsQ / 65535) * 7) << 11 : 0) |
+      (s.shieldAt === 1 ? round((Math.max(s.adsQ, s.braceQ) / 65535) * 7) << 11 : 0) |
       (s.meleeTicks > 0 ? FLAG_KNIFING : 0),
     aux:
       (s.prevButtons & Btn.Ads ? 1 : 0) |
@@ -140,8 +141,9 @@ export function remoteState(q: RemoteQ, maxHp = 100): PawnState {
   s.sprinting = (q.flags & 128) !== 0;
   s.grounded = (q.flags & 256) !== 0;
   s.shieldAt = (q.flags >> 9) & 3;
-  // (Its aiming progress as far as the shield shows it: the plate slides down with it.)
-  s.adsQ = round((((q.flags >> 11) & 7) / 7) * 65535);
+  // (Its aiming progress as far as the shield shows it: the plate slides down with it. Or, for Hull's plate, how far
+  // it's braced: a plate with no brace takes no notice of `braceQ`, and his has no slide for aiming.)
+  s.adsQ = s.braceQ = round((((q.flags >> 11) & 7) / 7) * 65535);
   // The one byte serves a body on a rope and a knocked-down one (D-156): they're never both.
   s.ropeTurn = s.mode === PawnMode.Rappel ? q.turn / 255 : 0;
   s.knockLie = s.mode === PawnMode.Knocked ? q.turn / 255 : 0;
@@ -179,6 +181,7 @@ export function interpolateRemote(a: PawnState, b: PawnState, u: number): PawnSt
     ropeTurn: lerp(a.ropeTurn, b.ropeTurn, u),
     knockLie: a.mode === b.mode ? lerp(a.knockLie, b.knockLie, u) : b.knockLie,
     adsQ: lerp(a.adsQ, b.adsQ, u),
+    braceQ: lerp(a.braceQ, b.braceQ, u),
   };
 }
 

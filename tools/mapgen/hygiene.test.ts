@@ -1,14 +1,12 @@
-// The repo is public: no third-party image may ever be committed (PLAN §1.1, DECISIONS D-079). Oregon's
-// extraction reads r6calls and Ubisoft images, so this test fails on any tracked image file; on archives,
-// documents, models and videos, which can carry images (by name and by their bytes); on PNG, JPEG or WEBP bytes
-// anywhere in a file and other image formats by their header; on image data URIs; and on base64 image data,
-// JSON-escaped or URL-safe, wherever it starts in a long base64 run. It reads what git has staged (the index),
-// not the working tree, so a file staged and then deleted on disk is still checked; a large file kept in Git LFS
-// is checked by its stored content. The only images allowed are our own plan SVGs in research/oregon/compare/
-// (drawn by tools/mapgen from our geometry, never embedding or linking a picture), and Ulo's screenshots in
-// research/oregon/refs/ulo/ once Ulo has made the repo private and removed its .gitignore lines; and the game's CC0
-// texture sets (D-170, amending D-079): WebP files in game/client/public/art/textures/ named in its staged manifest by a
-// set from Poly Haven or ambientCG under CC0, each listed in ASSET_SOURCES.md.
+// The repo is public: no third-party image may ever be committed (PLAN §1.1, DECISIONS D-079). So this test fails on
+// any tracked image file; on archives, documents, models and videos, which can carry images (by name and by their
+// bytes); on PNG, JPEG or WEBP bytes anywhere in a file and other image formats by their header; on image data URIs;
+// and on base64 image data, JSON-escaped or URL-safe, wherever it starts in a long base64 run. It reads what git has
+// staged (the index), not the working tree, so a file staged and then deleted on disk is still checked; a large file
+// kept in Git LFS is checked by its stored content. The only images allowed are the game's CC0 texture sets (D-170,
+// amending D-079): WebP files in game/client/public/art/textures/ named in its staged manifest by a set from Poly Haven
+// or ambientCG under CC0, each listed in ASSET_SOURCES.md. (The generator's plans are written to builds/, never
+// tracked.)
 // Run it before committing with: npx vitest run tools/mapgen/hygiene.test.ts
 // (.githooks/pre-commit does that; enable with `git config core.hooksPath .githooks`).
 import { execFileSync } from "node:child_process";
@@ -20,10 +18,6 @@ const ROOT = join(import.meta.dirname, "..", "..");
 const IMAGE_EXT = /\.(png|jpe?g|jfif|gif|webp|bmp|tiff?|ico|svgz?|avif|heic|heif|psd|exr|hdr|tga|dds|ktx2?|jxl)$/i;
 /** Archives, documents, models and videos: each can carry pictures; none is tracked until Ulo decides (D-079). */
 const CARRIER_EXT = /\.(zip|z\d\d|7z|rar|tar|tgz|tbz2?|txz|gz|bz2|xz|zst|lz4|cab|iso|dmg|pdf|docx?|pptx?|xlsx?|odt|epub|glb|gltf|fbx|blend|usdz?|3ds|dae|ai|eps|mp4|m4v|mov|webm|mkv|avi)$/i;
-/** Our own drawings: plain SVG written by tools/mapgen/plans.ts with this attribute. */
-const PLAN_SVG = /^research\/oregon\/compare\/[\w.-]+\.svg$/;
-const PLAN_MARK = 'data-generator="tools/mapgen"';
-const ULO_DIR = "research/oregon/refs/ulo/";
 const ART_DIR = "game/client/public/art/textures/";
 const CC0_SOURCES = new Set(["polyhaven", "ambientcg"]);
 const LFS_POINTER = "version https://git-lfs.github.com/spec/v1";
@@ -109,15 +103,9 @@ function isWebp(b: Buffer): boolean {
 }
 
 /** What is wrong with one tracked file, or null (`art`: the CC0 texture files allowed, cc0ArtFiles). */
-export function imageProblem(path: string, b: Buffer, uloOpen: boolean, art: ReadonlySet<string> = new Set()): string | null {
-  if (uloOpen && path.startsWith(ULO_DIR)) return null;
+export function imageProblem(path: string, b: Buffer, art: ReadonlySet<string> = new Set()): string | null {
   if (art.has(path)) return isWebp(b) ? null : "is listed as a CC0 texture but isn't a WebP";
-  if (IMAGE_EXT.test(path)) {
-    if (!PLAN_SVG.test(path)) return "is an image file";
-    const text = b.toString("utf8");
-    if (!text.includes(PLAN_MARK)) return `is an SVG without ${PLAN_MARK}`;
-    if (/<image\b|href\s*=|<foreignObject\b|@import|url\(\s*(?!['"]?#)/i.test(text)) return "is a plan SVG that embeds or links a picture";
-  }
+  if (IMAGE_EXT.test(path)) return "is an image file";
   if (CARRIER_EXT.test(path)) return "is an archive, document, model or video, which can carry images";
   for (const [magic, what] of CONTAINERS) if (b.subarray(0, magic.length).equals(magic)) return `is ${what}, which can carry images`;
   if (/^BZh[1-9]1AY&SY/.test(b.toString("latin1", 0, 10))) return "is a bzip2 archive, which can carry images";
@@ -185,17 +173,10 @@ function stagedFiles(): { path: string; bytes: Buffer | null; why?: string }[] {
   return files;
 }
 
-/** Ulo's screenshot folder counts as allowed only once the staged .gitignore stops ignoring it (the repo went private). */
-function uloFolderOpen(gitignore: string): boolean {
-  return !gitignore.split(/\r?\n/).some((l) => l.trim() === "research/oregon/refs/ulo/*");
-}
-
 describe("repo hygiene", () => {
   it("tracks no third-party image, image bytes, image data URI or image-carrying archive", () => {
     const files = stagedFiles();
     expect(files.length).toBeGreaterThan(100);
-    const gitignore = files.find((f) => f.path === ".gitignore")?.bytes;
-    const uloOpen = gitignore ? uloFolderOpen(gitignore.toString("utf8")) : false;
     const art = cc0ArtFiles(files.find((f) => f.path === `${ART_DIR}manifest.json`)?.bytes, files.find((f) => f.path === "ASSET_SOURCES.md")?.bytes);
     const problems: string[] = [...art.problems];
     for (const f of files) {
@@ -203,7 +184,7 @@ describe("repo hygiene", () => {
         problems.push(`${f.path} ${f.why}`);
         continue;
       }
-      const p = imageProblem(f.path, f.bytes, uloOpen, art.allowed);
+      const p = imageProblem(f.path, f.bytes, art.allowed);
       if (p) problems.push(`${f.path} ${p}`);
     }
     expect(problems).toEqual([]);
@@ -248,22 +229,18 @@ describe("repo hygiene", () => {
       ["anim.json", Buffer.from(`{"b":"${"R0lG" + "ODlhAQABAIAAAP"}"}`), /base64/],
       ["scene.gltf", Buffer.from("{}"), /model/],
       ...[1, 2, 4].map((pad): [string, Buffer, RegExp] => [`buffer${pad}.json`, Buffer.from(`{"uri": "x;base64,${inBuffer(jpeg(0xe0), pad)}"}`), /base64 image data \(JPEG/]),
-      ["research/oregon/compare/1F.svg", Buffer.from(`<svg ${PLAN_MARK}><rect/></svg>`), null],
-      ["research/oregon/compare/1F.svg", Buffer.from(`<svg ${PLAN_MARK}><rect fill="url(#hatch)"/></svg>`), null],
-      ["research/oregon/compare/1F.svg", Buffer.from(`<svg ${PLAN_MARK}><image href="x.jpg"/></svg>`), /embeds/],
-      ["research/oregon/compare/1F.svg", Buffer.from(`<svg ${PLAN_MARK}><rect style="fill: url(https://example.com/b.jpg)"/></svg>`), /embeds/],
-      ["research/oregon/compare/1F.svg", Buffer.from("<svg><rect/></svg>"), /without/],
-      ["research/oregon/refs/ulo/kitchen.png", png, /image file/],
+      // An SVG is an image file, even one the generator drew (its plans go to builds/, never tracked).
+      ["docs/plan.svg", Buffer.from('<svg data-generator="tools/mapgen"><rect/></svg>'), /image file/],
+      ["research/refs/kitchen.png", png, /image file/],
       ["game/shared/src/sim.ts", Buffer.from("export const x = 1; // BM text and %PDF in prose are fine, and a path like /9" + "j/ too"), null],
       ["package-lock.json", Buffer.from(`{"integrity": "sha512-${"A".repeat(86)}=="}`), null], // a checksum is short of a picture
-      ["data/maps/oregon/level.json", Buffer.from('{"id": "oregon", "solids": []}'), null],
+      ["data/maps/millrace/level.json", Buffer.from('{"id": "millrace", "solids": []}'), null],
     ];
     for (const [path, b, want] of cases) {
-      const got = imageProblem(path, b, false);
+      const got = imageProblem(path, b);
       if (want) expect(got, path).toMatch(want);
       else expect(got, path).toBeNull();
     }
-    expect(imageProblem("research/oregon/refs/ulo/kitchen.png", png, true)).toBeNull();
   });
 
   it("allows the CC0 texture sets the manifest names, as WebP in their folder only, and only when ASSET_SOURCES.md lists them (D-170)", () => {
@@ -274,16 +251,14 @@ describe("repo hygiene", () => {
     const art = cc0ArtFiles(manifest, log);
     expect([...art.allowed].sort()).toEqual(["color", "normal", "orm"].map((m) => `game/client/public/art/textures/plaster.${m}.webp`));
     expect(art.problems).toEqual(["texture set odd isn't CC0 from Poly Haven or ambientCG", "texture set stray (https://polyhaven.com/a/stray) isn't listed in ASSET_SOURCES.md"]);
-    expect(imageProblem("game/client/public/art/textures/plaster.color.webp", webp, false, art.allowed)).toBeNull();
-    expect(imageProblem("game/client/public/art/textures/plaster.color.webp", Buffer.concat([PNG_MAGIC, Buffer.alloc(16)]), false, art.allowed)).toMatch(/isn't a WebP/);
-    expect(imageProblem("game/client/public/art/textures/stray.color.webp", webp, false, art.allowed)).toMatch(/image file/);
-    expect(imageProblem("research/oregon/plaster.color.webp", webp, false, art.allowed)).toMatch(/image file/);
+    expect(imageProblem("game/client/public/art/textures/plaster.color.webp", webp, art.allowed)).toBeNull();
+    expect(imageProblem("game/client/public/art/textures/plaster.color.webp", Buffer.concat([PNG_MAGIC, Buffer.alloc(16)]), art.allowed)).toMatch(/isn't a WebP/);
+    expect(imageProblem("game/client/public/art/textures/stray.color.webp", webp, art.allowed)).toMatch(/image file/);
+    expect(imageProblem("research/plaster.color.webp", webp, art.allowed)).toMatch(/image file/);
     expect(cc0ArtFiles(Buffer.from("not json"), log).problems).toEqual(["game/client/public/art/textures/manifest.json isn't JSON"]);
   });
 
-  it("reads Ulo's folder rule from the staged .gitignore, and Git LFS pointers by their stored content", () => {
-    expect(uloFolderOpen("node_modules/\nresearch/oregon/refs/ulo/*\n!research/oregon/refs/ulo/README.md\n")).toBe(false);
-    expect(uloFolderOpen("node_modules/\n")).toBe(true);
+  it("reads Git LFS pointers by their stored content", () => {
     const pointer = Buffer.from(`${LFS_POINTER}\noid sha256:${"ab".repeat(32)}\nsize 1256\n`);
     expect(contentOf(pointer, "/nonexistent")).toBeNull();
     expect(contentOf(Buffer.from("plain text"), "/nonexistent")?.toString()).toBe("plain text");

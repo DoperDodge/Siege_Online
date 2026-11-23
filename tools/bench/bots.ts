@@ -3,7 +3,7 @@
 // where the time went: the bots' brains (each one's think), the navigation catching up with changed walls (rebuilds),
 // the team planners (made as prep starts), and the rest of the step (the simulation, the gadgets, the match).
 // Numbers depend on the machine: PROGRESS records a run.
-//   npm run bench:bots [-- --rounds 2 --seed 3 --site SITE_LAUNDRY]    prints a table, writes builds/bench/bots.json
+//   npm run bench:bots [-- --rounds 2 --seed 3 --site SITE_BOILER --map millrace]    prints a table, writes builds/bench/bots.json
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { performance } from "node:perf_hooks";
@@ -16,6 +16,7 @@ const arg = (name: string, def: string) => {
 const ROUNDS = Number(arg("rounds", "2"));
 const SEED = Number(arg("seed", "3"));
 const SITE = arg("site", "");
+const MAP = arg("map", "millrace");
 
 const stats = (xs: number[]) => {
   if (!xs.length) return { p50: 0, p95: 0, p99: 0, max: 0, n: 0 };
@@ -47,7 +48,7 @@ const data = loadGameData();
 const bt = data.modes.get("bot_training")!;
 if (!isFormat(bt)) throw new Error("bot_training");
 const mode: FormatMode = bt;
-const room = await Room.create("BENCH", "oregon", { format: "bot_training", seed: SEED });
+const room = await Room.create("BENCH", MAP, { format: "bot_training", seed: SEED });
 const person = room.join("bench", { send() {}, buffered: () => 0 })!;
 const send = (b: Uint8Array) => handleRoomMessage(room, person, b[0], new ByteReader(b.subarray(1)));
 const rules = { ...mode.match, rounds: Math.max(2, ROUNDS + (ROUNDS % 2)), overtime: null, bots: { ...mode.match.bots!, size: [5, 5], site: SITE || null } };

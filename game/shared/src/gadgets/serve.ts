@@ -3,9 +3,9 @@
 // away), throws are stepped to where they rest, stick or go off, fuses and outdoor signals run out on the server's
 // ticks, and steel going up breaks what's on its wall. M3: smoke stays as a cloud for its time, EMPs disable (DSEG)
 // until a tick, alarms and the metal detector sound while someone's in reach, barbed wire bites who moves in it, and
-// the level's ingredients go through their stages. M5: a detonator sets Thermite's charge burning (it goes off after
-// its burn) and Fuze's drilling (its grenades come out on the far side one after another, then it falls); Fuze's are
-// one at a time. M7: a Black Mirror burns its window out of its wall as it's placed and gets its canister; the
+// the level's ingredients go through their stages. M5: a detonator sets Kiln's charge burning (it goes off after
+// its burn) and Hail's drilling (its grenades come out on the far side one after another, then it falls); Hail's are
+// one at a time. M7: a Blind Pane burns its window out of its wall as it's placed and gets its canister; the
 // canister destroyed, the glass is ejected 4 s later; it falls with its wall. Every change is a table op the room sends
 // with the next snapshot.
 import { isIdleShell } from "../combat/apply.js";
@@ -13,7 +13,7 @@ import { DEG, forwardXZ, type Vec3 } from "../core/math.js";
 import type { GadgetData } from "../data/schemas.js";
 import { explosiveOps } from "../destruction/explosives.js";
 import type { IndexedOp } from "../destruction/panels.js";
-import { indoors } from "../intel/bpCamera.js";
+import { indoors } from "../intel/armouredCamera.js";
 import { raycastLevel } from "../level/raycast.js";
 import { droneHitboxes } from "../player/drone.js";
 import { poseHitboxes, type Hitbox } from "../player/hitboxes.js";
@@ -32,7 +32,12 @@ import { empReach } from "./electronics.js";
 import { gadgetOnRay } from "./hits.js";
 import { pointJammed } from "./jammers.js";
 import { canisterSpot, mirrorHeld, mirrorOf, windowOps } from "./mirror.js";
-import { isIngredient, KIND_BP_CAMERA, KIND_SHELL_SHIELD, kindId, kindOf } from "./kinds.js";
+import { isIngredient, KIND_ARMOURED_CAMERA, KIND_FRAME_BARRIER, kindId, kindOf } from "./kinds.js";
+import { arcData, liveSurfaces, onLiveSurface, packLive, packUnder } from "./arcs.js";
+import { wireLength, type SnareData } from "./snare.js";
+import { prodData, prodTarget } from "../player/prod.js";
+import { pawnHitboxes } from "../player/shield.js";
+import { salvosOut } from "./studs.js";
 import { detonatable, GFlag, type Gadget } from "./table.js";
 
 const KIND_WIRE = kindOf("barbed_wire");
@@ -83,7 +88,7 @@ function segSeg(a: Vec3, b: Vec3, c: Vec3, d: Vec3): { dist: number; at: Vec3 } 
 export type GoOff = (g: Gadget, at: Vec3, end: FlightEnd | null) => void;
 
 /**
- * What a set-off cluster charge drills through before its grenades come out (Phase 8 M5): steel where it sits (a
+ * What a set-off hailstone drill drills through before its grenades come out (Phase 8 M5): steel where it sits (a
  * reinforced section or a reinforced hatch), a solid gadget behind it (a deployable shield, `shield`), or neither (a
  * soft surface: at once).
  */
@@ -112,25 +117,47 @@ export class GadgetServer {
    * owner has one fewer waiting (the room takes it off their body and corrects them).
    */
   onLost: (g: Gadget, data: GadgetData) => void = () => {};
-  /** The room: a body or drone hurt by a gadget over time (barbed wire, a gas pipe's jet or fire), by `amount` now. */
-  hurt: (g: Gadget, pawn: Pawn, amount: number) => void = () => {};
+  /**
+   * The room: a body or drone hurt by a gadget over time (barbed wire, a gas pipe's jet or fire, a set-down shield's
+   * shock), by `amount` now; whether it took it (none under the Attacker Safeguard).
+   */
+  hurt: (g: Gadget, pawn: Pawn, amount: number) => boolean = () => true;
   /** The room: an alarm or a metal detector started sounding (`by`, the body in reach) or went quiet (null). */
   onAlarm: (g: Gadget, by: Pawn | null) => void = () => {};
-  /** The room: a Gu mine needled this body (Phase 8 M10; its `needled` changed: its owner needs a correction). */
+  /** The room: a Burr mine needled this body (Phase 8 M10; its `needled` changed: its owner needs a correction). */
   onNeedle: (pawn: Pawn, g: Gadget) => void = () => {};
-  /** Gu needles in bodies (Phase 8 M10; by pawn id): the tick of the next bite, and the mine (for its owner and numbers). */
+  /** Burr needles in bodies (Phase 8 M10; by pawn id): the tick of the next bite, and the mine (for its owner and numbers). */
   private readonly needles = new Map<number, { next: number; g: Gadget }>();
   /** The room: an ingredient set off reached a stage (its effects: smoke and concussion, a jet, a blast). */
   onIngredient: (g: Gadget, stage: IngredientStage) => void = () => {};
   /** Whether a match is in its prep phase (an alarm can't go outdoors then). */
   inPrep: () => boolean = () => false;
-  /** The room: panel ops made here (a cluster charge's hole, Phase 8 M5), applied with this tick's. */
+  /** The room: panel ops made here (a hailstone drill's hole, Phase 8 M5), applied with this tick's. */
   cut: (ops: IndexedOp[]) => void = () => {};
-  /** How many grenades each set-off cluster charge has let out (by entry id; the server's alone). */
+  /**
+   * The room: a Snare Latch (`g`) shut on this body (R3), or came off it (pulled, down, broken: `g` null): its
+   * `snared` changed, so its owner needs a correction; caught, the other side is shown where he is.
+   */
+  onSnare: (pawn: Pawn, g: Gadget | null) => void = () => {};
+  /** Snares shut on bodies (R3; by pawn id): the latch's entry, and the tick of its next bite. */
+  private readonly snares = new Map<number, { id: number; next: number }>();
+  /** The room: a set-down Bailiff Shield's shock (R3) jolted this body (slowed here): its owner corrected, the spark shown. */
+  onJolt: (pawn: Pawn, g: Gadget, at: Vec3) => void = () => {};
+  /** Set-down Bailiff Shields' shocks (R3; by entry id): ticks of charge used, ticks to the next jolt, ticks off. */
+  private readonly posts = new Map<number, { used: number; next: number; idle: number }>();
+  /** The room: a device burnt out on a live surface by Shunt's pack (R3), as it leaves the table. */
+  onBurnt: (g: Gadget, pack: Gadget) => void = () => {};
+  /** An Arc Pack jammed a drone (R3): its pilot's prediction can't know (the room corrects him). */
+  onDroneJam: (drone: Pawn) => void = () => {};
+  /** Drones an Arc Pack jammed, and the tick until which none can jam them again (they drive off meanwhile). */
+  private readonly packJams = new Map<number, number>();
+  /** Devices on live surfaces (Shunt's packs, R3), by entry id: the tick each was first found there. */
+  private readonly burning = new Map<number, number>();
+  /** How many grenades each set-off hailstone drill has let out (by entry id; the server's alone). */
   private readonly released = new Map<number, number>();
-  /** Each Black Mirror's canister's entry id: its mirror's (the server's alone; M7). */
+  /** Each Blind Pane's canister's entry id: its mirror's (the server's alone; M7). */
   private readonly canisters = new Map<number, number>();
-  /** Entries a Kludge's hack has fizzling out (M8): the tick each is destroyed. */
+  /** Entries a Crossover's hack has fizzling out (M8): the tick each is destroyed. */
   private readonly fizzles = new Map<number, number>();
 
   constructor(
@@ -160,21 +187,46 @@ export class GadgetServer {
         return;
       }
       const fuse = g.use.kind === "place" && g.use.fuseS !== undefined ? sim.tick + ticks(g.use.fuseS) : 0;
-      // A Bulletproof Camera placed outdoors loses its signal after a while (research/intel.md §4).
-      const out = kind === KIND_BP_CAMERA && !indoors(sim.level.def, ...e.pos);
+      // A Armoured Camera placed outdoors loses its signal after a while (research/intel.md §4).
+      const out = kind === KIND_ARMOURED_CAMERA && !indoors(sim.level.def, ...e.pos);
       const flags = (e.onFloor ? GFlag.OnFloor : 0) | (e.flat ? GFlag.Flat : 0);
       // A tripwire arms its time after it's placed (the Claymore: `readyAt`).
       const armed = g.tripwire ? sim.tick + ticksOrZero(g.tripwire.armS) : 0;
-      const put = sim.gadgets.add({ ...base, pos: e.pos, vel: [0, 0, 0], flags, panel: e.panel, fuseEnd: fuse, signalEnd: out ? sim.tick + ticks(sim.data.intel.bulletproofCamera.outdoorSignalS) : 0, readyAt: armed });
+      const put = sim.gadgets.add({ ...base, pos: e.pos, vel: [0, 0, 0], flags, panel: e.panel, fuseEnd: fuse, signalEnd: out ? sim.tick + ticks(sim.data.intel.armouredCamera.outdoorSignalS) : 0, readyAt: armed });
       if (g.mirror) this.mirrorIn(put, g, g.mirror.canister);
       return;
     }
     if (e.kind === "detonate") {
       const pawn = sim.pawns.get(e.pawnId);
-      // Its owner's oldest working one of that kind out (the controller's: Skopós's shells share theirs), not one inside
-      // an enemy jammer (Phase 8 M6).
-      const g = pawn && detonatable(sim.gadgets.list, pawn.ownerId ?? 0, kindOf(e.gadget), (x) => !pointJammed(sim, x.team, x.pos));
+      // Its owner's oldest working one of that kind out (the controller's: Twain's shells share theirs), not one inside
+      // an enemy jammer (Phase 8 M6), nor one on a surface Shunt's pack makes live (R3).
+      const ok = (x: Gadget) => !pointJammed(sim, x.team, x.pos) && !onLiveSurface(sim, x);
+      const driver = sim.data.gadgets.get(e.gadget);
+      if (pawn && driver?.driver) {
+        // Rivet's driver (R3): every salvo of his that can go, together. Each is set off before any goes, so one's blast
+        // reaching another doesn't count it lost (his detonator counted it).
+        const go = salvosOut(sim.gadgets.list, pawn.ownerId ?? 0, driver, ok);
+        for (const x of go) sim.gadgets.update(x.id, { flags: x.flags | GFlag.Active });
+        for (const x of go) {
+          const now = sim.gadgets.get(x.id);
+          if (now) this.trigger(now, null);
+        }
+        return;
+      }
+      const g = pawn && detonatable(sim.gadgets.list, pawn.ownerId ?? 0, kindOf(e.gadget), ok);
       if (g) this.detonated(g);
+      return;
+    }
+    if (e.kind === "postToggle") {
+      // Bailiff's shield set down (R3): its shock on (with charge left, not off under an EMP) or off.
+      const pawn = sim.pawns.get(e.pawnId);
+      const g = pawn ? sim.gadgets.list.find((x) => x.owner === pawn.ownerId && this.dataOf(x)?.setsDownShield) : undefined;
+      const k = prodData(sim.data);
+      if (!g || !k) return;
+      const st = this.post(g.id);
+      const on = !(g.flags & GFlag.Active) && !(g.flags & GFlag.Off) && st.used < ticks(k.chargeS);
+      // (Its wait for the next jolt is left as it is: switching it off and on again doesn't jolt sooner.)
+      sim.gadgets.update(g.id, { flags: on ? g.flags | GFlag.Active : g.flags & ~GFlag.Active });
       return;
     }
     if (e.kind === "pickUpGadget") {
@@ -185,8 +237,8 @@ export class GadgetServer {
   }
 
   /**
-   * Its owner's detonator set a remote device off: Thermite's charge starts burning (it goes off `burnS` later,
-   * gadgets/DESIGN.md §7), Fuze's starts drilling; the rest go off now.
+   * Its owner's detonator set a remote device off: Kiln's charge starts burning (it goes off `burnS` later,
+   * gadgets/DESIGN.md §7), Hail's starts drilling; the rest go off now.
    */
   detonated(g: Gadget): void {
     const d = this.dataOf(g);
@@ -205,7 +257,7 @@ export class GadgetServer {
   }
 
   /**
-   * A set-off cluster charge's tick (Phase 8 M5): drilling until `fuseEnd`; then its tube is through (its hole cut, a
+   * A set-off hailstone drill's tick (Phase 8 M5): drilling until `fuseEnd`; then its tube is through (its hole cut, a
    * shield's glass shattered) and one grenade comes out every `everyS` from the tube's end, across the fan; after the
    * last it falls (gone).
    */
@@ -223,7 +275,7 @@ export class GadgetServer {
   }
 
   /**
-   * A Black Mirror just placed (M7): its window burnt out of every layer of its wall (applied with this tick's ops), and
+   * A Blind Pane just placed (M7): its window burnt out of every layer of its wall (applied with this tick's ops), and
    * its canister put on its placer's side under the glass.
    */
   private mirrorIn(g: Gadget, d: GadgetData, canister: string) {
@@ -236,7 +288,7 @@ export class GadgetServer {
   }
 
   /**
-   * A device a Kludge's hack can't control (a Nitro Cell, M8): disabled at once (its detonator skips it) and destroyed
+   * A device a Crossover's hack can't control (a Remote Charge, M8): disabled at once (its detonator skips it) and destroyed
    * `after` ticks later, without its blast.
    */
   fizzle(g: Gadget, after: number): void {
@@ -245,7 +297,7 @@ export class GadgetServer {
     this.fizzles.set(g.id, end);
   }
 
-  /** A Black Mirror goes (its wall gave way round it): its canister with it. */
+  /** A Blind Pane goes (its wall gave way round it): its canister with it. */
   private mirrorOut(g: Gadget) {
     for (const [c, m] of this.canisters)
       if (m === g.id) {
@@ -256,8 +308,8 @@ export class GadgetServer {
   }
 
   /**
-   * Panel ops changed a panel (the room's, after it applied them; M7): a Black Mirror in it whose wall no longer holds
-   * it falls (data/gadgets/black_mirror.json `mirror.lossMax`).
+   * Panel ops changed a panel (the room's, after it applied them; M7): a Blind Pane in it whose wall no longer holds
+   * it falls (data/gadgets/blind_pane.json `mirror.lossMax`).
    */
   panelChanged(panel: number): void {
     for (const g of [...this.sim.gadgets.list]) {
@@ -267,7 +319,7 @@ export class GadgetServer {
     }
   }
 
-  /** A cluster charge's tube gets through: its hole in the panel it's on (data/destruction.json), or a shield's glass shattered. */
+  /** A hailstone drill's tube gets through: its hole in the panel it's on (data/destruction.json), or a shield's glass shattered. */
   private breakThrough(g: Gadget, c: ClusterData) {
     const ex = this.sim.data.destruction.explosives[c.cut];
     if (g.panel >= 0 && ex) {
@@ -282,7 +334,7 @@ export class GadgetServer {
     if (shield) this.sim.gadgets.update(shield.id, { flags: shield.flags | GFlag.Hit });
   }
 
-  /** Grenade `i` of a set-off cluster charge out of its tube's end, thrown across the fan with its own fuse. */
+  /** Grenade `i` of a set-off hailstone drill out of its tube's end, thrown across the fan with its own fuse. */
   private release(g: Gadget, c: ClusterData, i: number) {
     const k = this.sim.data.gadgets.get(c.grenade);
     const tip = tubeTip(this.sim.data, g);
@@ -347,17 +399,22 @@ export class GadgetServer {
         this.cluster(now, d.cluster);
         continue;
       }
-      // A Black Mirror whose canister went: its glass is ejected at the end of its time (an open hole, its frame left).
+      // A Blind Pane whose canister went: its glass is ejected at the end of its time (an open hole, its frame left).
       if (d.mirror) {
         if (now.flags & GFlag.Active && tick >= now.fuseEnd) sim.gadgets.update(now.id, { flags: (now.flags & ~GFlag.Active) | GFlag.Broken, fuseEnd: 0 });
         continue;
       }
       const off = (now.flags & GFlag.Off) !== 0;
       if (now.fuseEnd !== 0 && tick >= now.fuseEnd) this.trigger(now, null);
-      else if (d.tripwire && !off && !isFlying(now) && tick >= now.readyAt && this.tripped(now, d.tripwire)) this.trigger(now, null);
-      else if (d.gu && !isFlying(now)) {
-        // A Gu mine at rest (Phase 8 M10): an enemy body within reach (a downed one too) sets it off.
-        const r = d.gu.radiusM;
+      else if (d.snare) {
+        // A Snare Latch (R3): armed and not yet sprung, the first enemy body on its feet across its wire springs it.
+        // (A body already caught by another latch springs no second one: the review, R3.)
+        const by = d.tripwire && !(now.flags & GFlag.Active) && !isFlying(now) && tick >= now.readyAt ? this.crossing(now, d.tripwire, true, wireLength(sim, now, d), (p) => !p.state.snared) : null;
+        if (by) this.snap(now, by, d.snare);
+      } else if (d.tripwire && !off && !isFlying(now) && tick >= now.readyAt && this.tripped(now, d.tripwire)) this.trigger(now, null);
+      else if (d.burr && !isFlying(now)) {
+        // A Burr mine at rest (Phase 8 M10): an enemy body within reach (a downed one too) sets it off.
+        const r = d.burr.radiusM;
         if (this.bodyNear(now, (p) => pawnDistance(sim, p, now!.pos) <= r, true)) this.sting(now);
       } else if (d.alarm && !isFlying(now)) {
         const r = d.alarm.radiusM;
@@ -366,6 +423,9 @@ export class GadgetServer {
     }
     this.wires();
     this.bites();
+    this.snared();
+    this.postShocks();
+    this.arcs();
     this.flights.prune((id) => {
       const g = sim.gadgets.get(id);
       return g !== undefined && isFlying(g);
@@ -383,27 +443,80 @@ export class GadgetServer {
    * Whether an enemy body crosses one of a tripwire's lasers (the Claymore, research/gadgets.md §3.3): straight out
    * from it at its height, along its facing turned by each angle, up to `lengthM` or what stops sight first (they pass
    * holes and gaps). A body crosses one where its own capsule (what it walks with, feet to head) does: a thin hitbox
-   * would let a standing body straddle a laser between its feet. Not its own team, the dead, or Skopós's idle shell
+   * would let a standing body straddle a laser between its feet. Not its own team, the dead, or Twain's idle shell
    * (it fires when she wakes that shell).
    */
   private tripped(g: Gadget, t: Tripwire): boolean {
+    return this.crossing(g, t) !== null;
+  }
+
+  /**
+   * The first enemy body across one of a tripwire's lasers (see tripped), or null; `standing`: not one that's down;
+   * `length`: how far each runs, if not to what stops sight (a snare's wire, R3: across its opening).
+   */
+  private crossing(g: Gadget, t: Tripwire, standing = false, length?: number, also: (p: Pawn) => boolean = () => true): Pawn | null {
     const sim = this.sim;
     const m = sim.data.movement;
     const r = m.stance.collisionRadius;
-    const bodies = [...sim.pawns.values()].filter((p) => p.kind === PawnKind.Body && p.team !== g.team && p.state.mode !== PawnMode.Dead && p.state.mode !== PawnMode.Held && !isIdleShell(sim, p));
-    if (bodies.length === 0) return false;
+    const bodies = [...sim.pawns.values()].filter(
+      (p) => p.kind === PawnKind.Body && p.team !== g.team && p.state.mode !== PawnMode.Dead && p.state.mode !== PawnMode.Held && !isIdleShell(sim, p) && !(standing && isDowned(p.state)) && also(p),
+    );
+    if (bodies.length === 0) return null;
     for (const deg of t.anglesDeg) {
       const [fx, fz] = forwardXZ(g.yaw + deg * DEG);
       const dir: Vec3 = [fx, 0, fz];
-      const len = raycastLevel(sim, g.pos, dir, t.lengthM)?.t ?? t.lengthM;
+      const len = length ?? raycastLevel(sim, g.pos, dir, t.lengthM)?.t ?? t.lengthM;
       const end: Vec3 = [g.pos[0] + fx * len, g.pos[1], g.pos[2] + fz * len];
       for (const p of bodies) {
         const s = p.state;
         const top = Math.max(r, currentHeight(m, s) - r);
-        if (segSeg(g.pos, end, [s.x, s.y + r, s.z], [s.x, s.y + top, s.z]).dist <= r) return true;
+        if (segSeg(g.pos, end, [s.x, s.y + r, s.z], [s.x, s.y + top, s.z]).dist <= r) return p;
       }
     }
-    return false;
+    return null;
+  }
+
+  /**
+   * A Snare Latch sprung (R3): it shuts on the leg of the body that crossed its wire: `hit` at once, then `damage` every
+   * `everyS` until it's pulled off or he's down (snared). Its entry goes with him, at his foot, until it's spent.
+   */
+  private snap(g: Gadget, p: Pawn, k: SnareData) {
+    // A latch he was in until this tick (pulled off, not yet tidied away) is spent now: its entry isn't lost under
+    // this one's (the review, R3).
+    const was = this.snares.get(p.id);
+    if (was && was.id !== g.id) this.sim.gadgets.remove(was.id);
+    p.state.snared = true;
+    this.snares.set(p.id, { id: g.id, next: this.sim.tick + ticks(k.everyS) });
+    this.sim.gadgets.update(g.id, { flags: g.flags | GFlag.Active, pos: ankle(p) });
+    this.onSnare(p, g);
+    this.hurt(g, p, k.hit);
+  }
+
+  /**
+   * The snared (R3): bitten every `everyS`, the latch kept at the foot. Once it's off (pulled off: the body's own step;
+   * the body down or dead; the latch broken) it's spent: gone from the table, and the body free.
+   */
+  private snared() {
+    const tick = this.sim.tick;
+    for (const [id, n] of this.snares) {
+      const p = this.sim.pawns.get(id);
+      const g = this.sim.gadgets.get(n.id);
+      const k = g ? this.dataOf(g)?.snare : undefined;
+      if (!p || !g || !k || !p.state.snared || p.state.mode === PawnMode.Dead || isDowned(p.state)) {
+        this.snares.delete(id);
+        if (g) this.sim.gadgets.remove(g.id);
+        if (p?.state.snared) {
+          p.state.snared = false;
+          this.onSnare(p, null);
+        }
+        continue;
+      }
+      const at = ankle(p);
+      if (Math.hypot(at[0] - g.pos[0], at[1] - g.pos[1], at[2] - g.pos[2]) > 0.02) this.sim.gadgets.update(g.id, { pos: at });
+      if (tick < n.next) continue;
+      n.next = tick + ticks(k.everyS);
+      this.hurt(g, p, k.damage);
+    }
   }
 
   /**
@@ -469,6 +582,115 @@ export class GadgetServer {
     this.sim.gadgets.update(g.id, { pos: end.pos, yaw, flags: (g.flags & ~GFlag.Flying) | (onFloor || end.how !== "stick" ? GFlag.OnFloor : 0), panel: end.panel, vel: [0, 0, 0], readyAt });
   }
 
+  /**
+   * Shunt's Arc Packs (R3, gadgets/arcs.ts): every device of the other side's on a live surface (a panel's section a
+   * pack electrifies, or a deployable shield it does) is burnt out `burnS` after it's first found there, whether it was put on while the surface was live or
+   * was there already when a pack went live (a pack picked up and put back again catches it); one already set off
+   * (burning, drilling) isn't stopped. An enemy drone by a live pack is jammed for `droneJamS`.
+   */
+  private arcs() {
+    const sim = this.sim;
+    const k = arcData(sim.data);
+    if (!k) return;
+    const live = liveSurfaces(sim);
+    const tick = sim.tick;
+    const seen = new Set<number>();
+    if (live.panels.size || live.gadgets.size)
+      for (const g of [...sim.gadgets.list]) {
+        if (g.flags & (GFlag.Flying | GFlag.Active) || isIngredient(g.kind)) continue;
+        const pack = packUnder(sim, live, g);
+        const d = this.dataOf(g);
+        if (!pack || g.team === pack.team || !d || d.arc) continue;
+        seen.add(g.id);
+        const since = this.burning.get(g.id);
+        if (since === undefined) this.burning.set(g.id, tick);
+        else if (tick - since >= ticks(k.burnS)) {
+          this.burning.delete(g.id);
+          this.onBurnt(g, pack);
+          this.destroy(g);
+        }
+      }
+    for (const id of this.burning.keys()) if (!seen.has(id)) this.burning.delete(id);
+    if (k.droneJamS <= 0) return;
+    const jam = ticks(k.droneJamS);
+    for (const [id, until] of this.packJams) if (until <= tick || !sim.pawns.has(id)) this.packJams.delete(id);
+    for (const pack of sim.gadgets.list) {
+      if (!packLive(sim, pack)) continue;
+      for (const p of sim.pawns.values()) {
+        if (p.kind !== PawnKind.Drone || p.team === pack.team || p.state.mode === PawnMode.Dead) continue;
+        if (Math.hypot(p.state.x - pack.pos[0], p.state.y - pack.pos[1], p.state.z - pack.pos[2]) > 0.6) continue;
+        // Jammed once a touch: its `droneJamS`, then as long again to drive off before a pack can jam it again (the
+        // review: jammed afresh every tick, it could never leave). Its pilot can't predict it: the room corrects him.
+        if (this.packJams.has(p.id)) continue;
+        p.state.jammed = Math.max(p.state.jammed, jam);
+        this.packJams.set(p.id, tick + 2 * jam);
+        this.onDroneJam(p);
+      }
+    }
+  }
+
+  /** A set-down shield's shock's state (R3), made as it's first wanted. */
+  private post(id: number): { used: number; next: number; idle: number } {
+    let st = this.posts.get(id);
+    if (!st) this.posts.set(id, (st = { used: 0, next: 0, idle: 0 }));
+    return st;
+  }
+
+  /**
+   * Set-down Bailiff Shields' shocks (R3, Ulo's): one switched on uses its own charge and jolts, at once and every
+   * `everyS`, the nearest body of the other side in front of it (from its top's middle, straight out of its face) within
+   * `rangeM` and `postHalfDeg`, in sight: the prod's damage, slowed for `slowS`. An EMP (Off) or its charge running out
+   * switches it off; off, its charge refills once it's been off `refillDelayS`.
+   */
+  private postShocks() {
+    const sim = this.sim;
+    const k = prodData(sim.data);
+    if (!k) return;
+    for (const g of sim.gadgets.list) {
+      const d = this.dataOf(g);
+      if (!d?.setsDownShield) continue;
+      const st = this.post(g.id);
+      const on = (g.flags & GFlag.Active) !== 0;
+      if (on && (g.flags & GFlag.Off || st.used >= ticks(k.chargeS))) {
+        sim.gadgets.update(g.id, { flags: g.flags & ~GFlag.Active });
+        continue;
+      }
+      if (!on) {
+        // (The wait for its next jolt runs on: switched off and on again, it doesn't jolt sooner. The review.)
+        if (st.next > 0) st.next--;
+        st.idle = Math.min(0xffff, st.idle + 1);
+        if (st.idle >= ticks(k.refillDelayS) && st.used > 0) st.used--;
+        continue;
+      }
+      st.idle = 0;
+      st.used++;
+      if (st.next > 0) {
+        st.next--;
+        continue;
+      }
+      st.next = Math.max(1, ticks(k.everyS)) - 1;
+      const [fx, fz] = forwardXZ(g.yaw);
+      const out = d.sizeM[2] / 2 + 0.05;
+      const eye: Vec3 = [g.pos[0] + fx * out, g.pos[1] + d.sizeM[1] / 2 - 0.35, g.pos[2] + fz * out];
+      const bodies = new Map<number, Hitbox[]>();
+      for (const p of sim.pawns.values())
+        if (p.kind === PawnKind.Body && p.team !== g.team && p.state.mode !== PawnMode.Dead && p.state.mode !== PawnMode.Held && !isIdleShell(sim, p)) bodies.set(p.id, pawnHitboxes(sim.data.movement, sim.data.hitboxes, p));
+      const blocked = (a: Vec3, b: Vec3) => {
+        const v: Vec3 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+        const len = Math.hypot(v[0], v[1], v[2]);
+        const hit = len > 1e-4 ? raycastLevel(sim, a, [v[0] / len, v[1] / len, v[2] / len], len) : null;
+        return hit !== null && hit.t < len - 0.05;
+      };
+      const hit = prodTarget(eye, g.yaw, 0, bodies, new Set(), { ...k, halfDeg: k.postHalfDeg }, blocked);
+      const target = hit ? sim.pawns.get(hit.pawnId) : undefined;
+      if (!hit || !target) continue;
+      // Slowed only if it took the jolt (the review: not under the Attacker Safeguard).
+      if (this.hurt(g, target, k.damage)) target.state.slowed = ticks(k.slowS);
+      this.onJolt(target, g, hit.point);
+    }
+    for (const id of this.posts.keys()) if (!sim.gadgets.get(id)) this.posts.delete(id);
+  }
+
   /** An entry whose DSEG has worn off is on again. */
   private wakeUp(g: Gadget): Gadget {
     if (!(g.flags & GFlag.Off) || this.sim.tick < g.offEnd) return g;
@@ -476,7 +698,7 @@ export class GadgetServer {
   }
 
   /**
-   * An EMP of `team`'s (an Impact EMP grenade, a Bulletproof Camera's dart; gadgets/electronics.ts): the other side's
+   * An EMP of `team`'s (an Impact EMP grenade, a Armoured Camera's dart; gadgets/electronics.ts): the other side's
    * electronics within `radiusM` disabled for `seconds` (it refreshes), its bodies and drones jammed as long. What it
    * jammed (their owners need a correction) and the default cameras it reached, for the room.
    */
@@ -488,7 +710,7 @@ export class GadgetServer {
     return { pawns: r.pawns, cams: r.cams };
   }
 
-  /** A living body (Skopós's idle shell left out) that `near` accepts: of the other side than `g`'s (`enemies`), or anyone's. */
+  /** A living body (Twain's idle shell left out) that `near` accepts: of the other side than `g`'s (`enemies`), or anyone's. */
   private bodyNear(g: Gadget, near: (p: Pawn) => boolean, enemies: boolean): Pawn | null {
     for (const p of this.sim.pawns.values()) {
       if (p.kind !== PawnKind.Body || (enemies && p.team === g.team) || p.state.mode === PawnMode.Dead || p.state.mode === PawnMode.Held) continue;
@@ -506,12 +728,12 @@ export class GadgetServer {
   }
 
   /**
-   * A Gu mine set off (Phase 8 M10; lesion.md): an enemy body within its reach, a knife or a hammer on it. It's gone, and
-   * every enemy body within its reach that isn't down (nor Skopós's idle shell) is needled: its hit, then a bite every
+   * A Burr mine set off (Phase 8 M10; thistle.md): an enemy body within its reach, a knife or a hammer on it. It's gone, and
+   * every enemy body within its reach that isn't down (nor Twain's idle shell) is needled: its hit, then a bite every
    * `everyS`; one already needled takes the hit and a bite at once, and its timer starts again (Y8S3).
    */
   sting(g: Gadget): void {
-    const k = this.dataOf(g)?.gu;
+    const k = this.dataOf(g)?.burr;
     if (!k) return;
     this.sim.gadgets.remove(g.id);
     for (const p of [...this.sim.pawns.values()]) {
@@ -526,12 +748,12 @@ export class GadgetServer {
     }
   }
 
-  /** The needled bitten (Phase 8 M10): a Gu's `damage` every `everyS` until the needle's pulled or the body is down or dead. */
+  /** The needled bitten (Phase 8 M10): a Burr's `damage` every `everyS` until the needle's pulled or the body is down or dead. */
   private bites() {
     const tick = this.sim.tick;
     for (const [id, n] of this.needles) {
       const p = this.sim.pawns.get(id);
-      const k = this.dataOf(n.g)?.gu;
+      const k = this.dataOf(n.g)?.burr;
       if (!p || !k || !p.state.needled || p.state.mode === PawnMode.Dead || isDowned(p.state)) {
         this.needles.delete(id);
         continue;
@@ -630,7 +852,7 @@ export class GadgetServer {
   /**
    * Steel went up on a panel (its `section`, or −1 for none named): what's on it breaks (a camera's glass) or is
    * destroyed, and what stands on the floor at a wall's foot along that section is crushed by its bar (Phase 8 M6;
-   * research CSV `action.reinforce`: a jammer, a Gu mine; ours: within FOOT_OUT_M of either face, its box's centre
+   * research CSV `action.reinforce`: a jammer, a Burr mine; ours: within FOOT_OUT_M of either face, its box's centre
    * under FOOT_UP_M off the wall's bottom).
    */
   reinforced(panel: number, section = -1): void {
@@ -650,26 +872,26 @@ export class GadgetServer {
       if (g.panel === panel) {
         // On that section of the wall only (the CSV's "on that wall section"; the review, M12); a hatch is one piece.
         if (foot && !across(g).inSection) continue;
-        if (g.kind === KIND_BP_CAMERA) this.sim.gadgets.update(g.id, { flags: g.flags | GFlag.Broken });
+        if (g.kind === KIND_ARMOURED_CAMERA) this.sim.gadgets.update(g.id, { flags: g.flags | GFlag.Broken });
         else this.destroy(g);
         continue;
       }
-      // (Skopós's idle shell's barrier isn't crushed: the shell doesn't stop a teammate reinforcing beside it, M10.)
-      if (!foot || isIngredient(g.kind) || isFlying(g) || g.panel >= 0 || g.kind === KIND_SHELL_SHIELD) continue;
+      // (Twain's idle shell's barrier isn't crushed: the shell doesn't stop a teammate reinforcing beside it, M10.)
+      if (!foot || isIngredient(g.kind) || isFlying(g) || g.panel >= 0 || g.kind === KIND_FRAME_BARRIER) continue;
       // Nor a grenade resting there, its fuse running, or its cloud (as a blast spares a cloud): devices are crushed
-      // (a jammer, an alarm, a camera, a Gu mine, a Nitro Cell), not a frag or a smoke (the review, M12).
+      // (a jammer, an alarm, a camera, a Burr mine, a Remote Charge), not a frag or a smoke (the review, M12).
       const d = this.dataOf(g);
-      if (d?.use.kind === "throw" && !d.remote && !d.gu) continue;
+      if (d?.use.kind === "throw" && !d.remote && !d.burr) continue;
       const at = across(g);
       if (!at.inSection || at.up > FOOT_UP_M || at.out > FOOT_OUT_M) continue;
-      if (g.kind === KIND_BP_CAMERA) this.sim.gadgets.update(g.id, { flags: g.flags | GFlag.Broken });
+      if (g.kind === KIND_ARMOURED_CAMERA) this.sim.gadgets.update(g.id, { flags: g.flags | GFlag.Broken });
       else this.destroy(g);
     }
   }
 
   /**
    * An entry destroyed (not set off): gone, and the owner of a remote device still waiting for its detonator told (one
-   * already set off, burning or drilling, isn't waiting). A cluster charge destroyed once set off has let one grenade
+   * already set off, burning or drilling, isn't waiting). A hailstone drill destroyed once set off has let one grenade
    * out first, however quick (Y6S3 DN).
    */
   destroy(g: Gadget): void {
@@ -682,7 +904,7 @@ export class GadgetServer {
     }
     this.sim.gadgets.remove(g.id);
     if (d?.remote && !(g.flags & GFlag.Active)) this.onLost(g, d);
-    // A Black Mirror's canister (M7): its glass is ejected `ejectS` later (unless it's going already).
+    // A Blind Pane's canister (M7): its glass is ejected `ejectS` later (unless it's going already).
     const mirror = this.canisters.get(g.id);
     if (mirror === undefined) return;
     this.canisters.delete(g.id);
@@ -692,19 +914,19 @@ export class GadgetServer {
   }
 
   /**
-   * An entry in a blast's destruction range (or a fire): a Bulletproof Camera's glass breaks (it keeps its place in the
+   * An entry in a blast's destruction range (or a fire): a Armoured Camera's glass breaks (it keeps its place in the
    * list), an ingredient is set off, the rest are destroyed.
    */
   blastHit(g: Gadget): void {
-    // A Black Mirror's glass is blast-proof (M7): only its wall giving way takes it.
+    // A Blind Pane's glass is blast-proof (M7): only its wall giving way takes it.
     if (mirrorOf(this.sim.data, g)) return;
     if (isIngredient(g.kind)) this.ignite(g);
-    // A Bulletproof Camera's glass breaks; so does an idle shell's barrier (M10), its entry left as the shell's camera.
-    else if (g.kind === KIND_BP_CAMERA || g.kind === KIND_SHELL_SHIELD) this.sim.gadgets.update(g.id, { flags: g.flags | GFlag.Broken });
+    // A Armoured Camera's glass breaks; so does an idle shell's barrier (M10), its entry left as the shell's camera.
+    else if (g.kind === KIND_ARMOURED_CAMERA || g.kind === KIND_FRAME_BARRIER) this.sim.gadgets.update(g.id, { flags: g.flags | GFlag.Broken });
     else this.destroy(g);
   }
 
-  /** Break these Bulletproof Cameras' glass (shot from the side or the back, knifed). */
+  /** Break these Armoured Cameras' glass (shot from the side or the back, knifed). */
   breakCams(cams: readonly Gadget[]): void {
     for (const c of cams) this.sim.gadgets.update(c.id, { flags: c.flags | GFlag.Broken });
   }
@@ -719,4 +941,10 @@ export class GadgetServer {
     this.sim.gadgets.clear();
     for (const g of lost) this.onLost(g, this.dataOf(g)!);
   }
+}
+
+/** Where a snared body's latch is: at its foot. */
+function ankle(p: Pawn): Vec3 {
+  const s = p.state;
+  return [s.x, s.y + 0.1, s.z];
 }

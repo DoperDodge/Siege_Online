@@ -1,5 +1,5 @@
 {
-  "_doc": "SMG-12 (Dokkaebi). research/weapons.csv row smg_12; class rules research/weapons_notes.md §4. Y11S3 official: damage 16, magazine 22, max ammo 111. Integral suppressor, no barrel slot.",
+  "_doc": "SMG-12 (Relay). research/weapons.csv row smg_12; class rules research/weapons_notes.md §4. Y11S3 official: damage 16, magazine 22, max ammo 111. Integral suppressor, no barrel slot.",
   "_season": "Y11S3.1",
   "_unverified": ["damage.falloff", "destruction"],
   "id": "smg_12",

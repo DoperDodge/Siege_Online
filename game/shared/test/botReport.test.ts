@@ -9,7 +9,7 @@ describe("round reports (Phase 9 M9)", () => {
       format: "drill_duel",
       drill: "duel",
       side: "attack",
-      operator: "sledge",
+      operator: "cleave",
       won: true,
       seconds: 7.5,
       death: null,
@@ -29,7 +29,7 @@ describe("round reports (Phase 9 M9)", () => {
 
   it("a duel lost to the bot: who killed you and with what, who saw you first, the damage you took, no time to kill", async () => {
     const reports: RoundReport[] = [];
-    const room = await Room.create("REP", "oregon", { format: "drill_duel", seed: 3 });
+    const room = await Room.create("REP", "millrace", { format: "drill_duel", seed: 3 });
     const host = room.join("you", {
       send(b: Uint8Array) {
         if (b[0] === Msg.RoundReport) reports.push(decodeRoundReport(new ByteReader(b.subarray(1))));

@@ -16,7 +16,7 @@ const MAX_RULES_JSON = 8192;
 const MAX_PLAYERS = 16;
 /** The last rounds a match state carries (Practice's go on without end). */
 export const MAX_HISTORY = 64;
-/** At most this many Bulletproof Cameras a round (a bit each where shots break them). */
+/** At most this many Armoured Cameras a round (a bit each where shots break them). */
 const MAX_ROOMS = 100;
 const NO_RATING = 0xffff;
 
@@ -38,7 +38,7 @@ const readOpt = (r: ByteReader) => r.str(MAX_ID) || null;
 
 // ---------------------------------------------------------------- creating and listing rooms
 
-/** Create a match room (on Oregon) running this format (a data/modes id), in its lobby, with the sender as host. */
+/** Create a match room (on Millrace) running this format (a data/modes id), in its lobby, with the sender as host. */
 export const encodeCreateMatch = (format: string) => new ByteWriter().u8(Msg.CreateMatch).str(format.slice(0, MAX_ID)).finish();
 /** The server checks the id is a format. */
 export const decodeCreateMatch = (r: ByteReader) => ({ format: r.str(MAX_ID) });
@@ -279,11 +279,11 @@ export interface MatchView {
   camsBroken: number;
   /** The default cameras an EMP has off for now (Phase 8 M3, DSEG): a bit each. */
   camsOff: number;
-  /** The default cameras a Kludge drone hacked this round (Phase 8 M8): the attackers' feeds now, a bit each. */
+  /** The default cameras a Crossover drone hacked this round (Phase 8 M8): the attackers' feeds now, a bit each. */
   camsHacked: number;
-  /** Dokkaebi has the attackers watching the defenders' cameras for now (Phase 8 M9). */
+  /** Relay has the attackers watching the defenders' cameras for now (Phase 8 M9). */
   camsLent: boolean;
-  /** The cameras someone is watching (Phase 7): a bit each, the level's then the Bulletproof Cameras. */
+  /** The cameras someone is watching (Phase 7): a bit each, the level's then the Armoured Cameras. */
   camsWatched: number;
   history: RoundRecord[];
   /** At the match end: the winner (null: a draw), whether by forfeit, and the MVP (0: none). */

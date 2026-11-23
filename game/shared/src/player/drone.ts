@@ -44,7 +44,7 @@ export function stepDrone(ctx: MoveContext, pawn: Pawn, driver: InputCmd | null)
   const d = ctx.data.intel.drone;
   const s = pawn.state;
   if (s.mode !== PawnMode.Walk) return;
-  // Jammed by an EMP (a Bulletproof Camera's dart: until it wears off) or inside an enemy jammer (Mute's, Phase 8 M6:
+  // Jammed by an EMP (a Armoured Camera's dart: until it wears off) or inside an enemy jammer (Lull's, Phase 8 M6:
   // while it's there): deaf to its driver, it settles where it is.
   const jammed = s.jammed > 0 || (ctx.droneJammed?.(pawn) ?? false);
   if (s.jammed > 0) s.jammed--;

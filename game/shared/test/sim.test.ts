@@ -1,4 +1,4 @@
-// Skopós shell swapping, ladders and spawning (second adversarial review).
+// Twain shell swapping, ladders and spawning (second adversarial review).
 import { describe, expect, it } from "vitest";
 import { Btn, DEG, levelSchema, loadGameData, operatorSchema, PawnMode, Sim, Stance } from "../src/index.js";
 import { labWith, run, teleport } from "./helpers.js";
@@ -31,9 +31,9 @@ describe("standsFree (the lab's free camera puts a body down only where it fits)
   });
 });
 
-describe("Skopós shell camera and swap", () => {
+describe("Twain shell camera and swap", () => {
   it("a key held since before the camera opened isn't a fresh press when you come back", async () => {
-    const { sim, ctrl, pawn } = await labWith("skopos");
+    const { sim, ctrl, pawn } = await labWith("twain");
     teleport(sim, ctrl, -16, 0, -5.8, 180); // at the ladder, facing away from it
     run(sim, ctrl, { buttons: Btn.Interact, yawDeg: 180 }, 1 / 64); // F held from here on
     run(sim, ctrl, { buttons: Btn.Interact | Btn.Ability, yawDeg: 180 }, 1 / 64); // Z: camera opens
@@ -47,7 +47,7 @@ describe("Skopós shell camera and swap", () => {
   });
 
   it("opening or closing the camera doesn't turn either body to the other one's view", async () => {
-    const { sim, ctrl } = await labWith("skopos");
+    const { sim, ctrl } = await labWith("twain");
     const [a, b] = ctrl.pawnIds.map((id) => sim.pawns.get(id)!);
     sim.teleport(b.id, b.state.x, 0, b.state.z, 90, Stance.Crouch);
     run(sim, ctrl, { yawDeg: 0 }, 0.1);
@@ -63,7 +63,7 @@ describe("Skopós shell camera and swap", () => {
   });
 
   it("the swap keeps running through dropped inputs, and the new shell wakes up standing", async () => {
-    const { sim, ctrl } = await labWith("skopos");
+    const { sim, ctrl } = await labWith("twain");
     const b = sim.pawns.get(ctrl.pawnIds[1])!;
     run(sim, ctrl, { buttons: Btn.Ability }, 1 / 64);
     run(sim, ctrl, { buttons: Btn.Interact }, 1 / 64);
@@ -83,21 +83,21 @@ describe("Skopós shell camera and swap", () => {
     return Sim.create("tight", { ...data, levels: new Map(data.levels).set("tight", tight) });
   }
 
-  it("Skopós's second shell stands the other way when a wall is to the right of the spawn", async () => {
+  it("Twain's second shell stands the other way when a wall is to the right of the spawn", async () => {
     // Right next to wall_e (x 31.75..32.25): 1.5 m to the right is inside it.
     const sim = await labWithSpawns([{ id: "by_wall", pos: [30.6, 0, 0], yawDeg: 0 }]);
-    const [a, b] = sim.addPlayer("p", "skopos").pawnIds.map((id) => sim.pawns.get(id)!.state);
+    const [a, b] = sim.addPlayer("p", "twain").pawnIds.map((id) => sim.pawns.get(id)!.state);
     expect([a.x, a.z, b.x, b.z].map((v) => +v.toFixed(5) + 0)).toEqual([30.6, 0, 30.6 - 1.5, 0]);
   });
 
-  it("Skopós's second shell never stands on the far side of a thin wall", async () => {
+  it("Twain's second shell never stands on the far side of a thin wall", async () => {
     // Facing west, so the right is +z: 1.5 m that way is clear floor, but behind winwall_left (z -0.1..0.1).
     const sim = await labWithSpawns([{ id: "by_thin_wall", pos: [3.2, 0, -0.8], yawDeg: -90 }]);
-    const [a, b] = sim.addPlayer("p", "skopos").pawnIds.map((id) => sim.pawns.get(id)!.state);
+    const [a, b] = sim.addPlayer("p", "twain").pawnIds.map((id) => sim.pawns.get(id)!.state);
     expect([a.x, a.z, b.x, b.z].map((v) => +v.toFixed(5) + 0)).toEqual([3.2, -0.8, 3.2, -0.8 - 1.5]);
   });
 
-  it("a Skopós join with no room for the second shell on any side leaves nothing behind", async () => {
+  it("a Twain join with no room for the second shell on any side leaves nothing behind", async () => {
     // A closet 1.2 m square: one body fits, and no second one 1.5 m away is inside it.
     const sim = await labWithSpawns(
       [{ id: "closet", pos: [24, 0, 20], yawDeg: 0 }],
@@ -109,19 +109,19 @@ describe("Skopós shell camera and swap", () => {
       ],
     );
     const colliders = sim.world.colliders.len();
-    expect(() => sim.addPlayer("p", "skopos")).toThrow(/second shell/);
+    expect(() => sim.addPlayer("p", "twain")).toThrow(/second shell/);
     expect(sim.pawns.size).toBe(0);
     expect(sim.world.colliders.len()).toBe(colliders);
     // One body still joins there.
-    expect(sim.addPlayer("q", "sledge").pawnIds).toHaveLength(1);
+    expect(sim.addPlayer("q", "cleave").pawnIds).toHaveLength(1);
   });
 
-  it("every spawn on every map has room for Skopós's second shell", async () => {
+  it("every spawn on every map has room for Twain's second shell", async () => {
     const data = loadGameData();
     for (const id of data.levels.keys()) {
       const sim = await Sim.create(id, data);
       for (const [i, spawn] of sim.level.def.spawns.entries()) {
-        const ctrl = sim.addPlayer("p", "skopos", i); // throws, naming the spawn, when there's no room
+        const ctrl = sim.addPlayer("p", "twain", i); // throws, naming the spawn, when there's no room
         const [a, b] = ctrl.pawnIds.map((pid) => sim.pawns.get(pid)!.state);
         const where = `${id} spawn ${spawn.id}`;
         expect(Math.hypot(a.x - spawn.pos[0], a.z - spawn.pos[2]), where).toBeCloseTo(0, 5);
@@ -132,15 +132,15 @@ describe("Skopós shell camera and swap", () => {
   });
 
   it("rejects shell offsets and swap timings that can't work", async () => {
-    const skopos = loadGameData().operators.get("skopos")!;
-    const withParams = (p: Record<string, number>) => ({ ...skopos, ability: { ...skopos.ability, params: { ...skopos.ability.params, ...p } } });
+    const twain = loadGameData().operators.get("twain")!;
+    const withParams = (p: Record<string, number>) => ({ ...twain, ability: { ...twain.ability, params: { ...twain.ability.params, ...p } } });
     expect(operatorSchema.safeParse(withParams({ transferSeconds: 0 })).success).toBe(false);
     expect(operatorSchema.safeParse(withParams({ activationSeconds: -1 })).success).toBe(false);
     expect(operatorSchema.safeParse(withParams({ swapCooldownSeconds: 0 })).success).toBe(true);
     const data = loadGameData();
     const cramped = operatorSchema.parse(withParams({ idleShellOffset: 0.4 }));
-    const sim = await Sim.create("movement_lab", { ...data, operators: new Map(data.operators).set("skopos", cramped) });
-    expect(() => sim.addPlayer("p", "skopos")).toThrow(/two body radii/);
+    const sim = await Sim.create("movement_lab", { ...data, operators: new Map(data.operators).set("twain", cramped) });
+    expect(() => sim.addPlayer("p", "twain")).toThrow(/two body radii/);
     expect(sim.pawns.size).toBe(0);
   });
 });

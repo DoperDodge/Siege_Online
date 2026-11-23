@@ -1,5 +1,5 @@
 {
-  "_doc": "Vector .45 ACP (Mira). research/weapons.csv row vector_45_acp; class rules research/weapons_notes.md §4. Extended barrel 25 / min 20 and ammo-refill 0.99 / 2.31 s community-measured.",
+  "_doc": "Vector .45 ACP (Vista). research/weapons.csv row vector_45_acp; class rules research/weapons_notes.md §4. Extended barrel 25 / min 20 and ammo-refill 0.99 / 2.31 s community-measured.",
   "_season": "Y11S3.1",
   "_unverified": [
     "damage.extendedBarrel",

@@ -87,6 +87,10 @@ const CROUCH_COST = 1.6;
 export class NavSearch {
   /** The region graph: each region's outgoing edges (region id → cost). */
   private readonly adj = new Map<number, Map<number, number>>();
+  /** Of those, the ones a body walks (neighbouring nodes across a chunk's edge)… */
+  private readonly walkAdj = new Map<number, Set<number>>();
+  /** …and the links that make the others (by index into grid.links), for a search that may take only some links. */
+  private readonly linkAdj = new Map<number, Map<number, number[]>>();
   /** The node graph's searches give up after this many nodes (a route the regions said exists but isn't). */
   maxNodes = 120_000;
   /** Nodes the last search looked at (tests and the bench). */
@@ -97,8 +101,11 @@ export class NavSearch {
     /** A search on a copy of this one's grid: its region graph copied instead of worked out again. */
     from?: NavSearch,
   ) {
-    if (from) for (const [r, m] of from.adj) this.adj.set(r, new Map(m));
-    else for (let k = 0; k < grid.chunks.length; k++) this.chunkEdges(k);
+    if (from) {
+      for (const [r, m] of from.adj) this.adj.set(r, new Map(m));
+      for (const [r, m] of from.walkAdj) this.walkAdj.set(r, new Set(m));
+      for (const [r, m] of from.linkAdj) this.linkAdj.set(r, new Map([...m].map(([s, ls]) => [s, [...ls]])));
+    } else for (let k = 0; k < grid.chunks.length; k++) this.chunkEdges(k);
   }
 
   /** After grid.rebuild: the region edges out of these chunks (and the ladders') again. */
@@ -118,7 +125,11 @@ export class NavSearch {
   private chunkEdges(k: number): void {
     const g = this.grid;
     const c = g.chunks[k];
-    for (let r = 0; r < REGION_SPAN; r++) this.adj.delete(k * REGION_SPAN + r);
+    for (let r = 0; r < REGION_SPAN; r++) {
+      this.adj.delete(k * REGION_SPAN + r);
+      this.walkAdj.delete(k * REGION_SPAN + r);
+      this.linkAdj.delete(k * REGION_SPAN + r);
+    }
     const add = (a: number, b: number, extra: number) => {
       if (a === b) return;
       let m = this.adj.get(a);
@@ -149,16 +160,30 @@ export class NavSearch {
         if (pairs.has(key)) continue;
         pairs.add(key);
         add(a, b, 0);
+        let w = this.walkAdj.get(a);
+        if (!w) this.walkAdj.set(a, (w = new Set()));
+        w.add(b);
       }
     }
     for (const at of c.links) {
       const l = g.links[at];
-      if (l) add(g.regionOf(l.from), g.regionOf(l.to), l.cost);
+      if (!l) continue;
+      const [a, b] = [g.regionOf(l.from), g.regionOf(l.to)];
+      add(a, b, l.cost);
+      if (a === b) continue;
+      let m = this.linkAdj.get(a);
+      if (!m) this.linkAdj.set(a, (m = new Map()));
+      const list = m.get(b);
+      if (list) list.push(at);
+      else m.set(b, [at]);
     }
   }
 
-  /** The region route from one region to another (A* on the region graph; only through regions `ok` allows), or null. */
-  regionRoute(from: number, to: number, ok?: (r: number) => boolean): number[] | null {
+  /**
+   * The region route from one region to another (A* on the region graph; only through regions `ok` allows, and from
+   * one to the next only by walking or a link `allow` allows), or null.
+   */
+  regionRoute(from: number, to: number, ok?: (r: number) => boolean, allow?: (l: NavLink) => boolean): number[] | null {
     if (from === to) return [from];
     const goal = this.regionPos(to);
     const h = (r: number) => {
@@ -183,6 +208,7 @@ export class NavSearch {
       const gr = gs.get(r)!;
       for (const [s, cost] of this.adj.get(r) ?? []) {
         if (ok && !ok(s)) continue;
+        if (allow && !this.walkAdj.get(r)?.has(s) && !(this.linkAdj.get(r)?.get(s) ?? []).some((i) => this.grid.links[i] && allow(this.grid.links[i]!))) continue;
         const ng = gr + cost;
         if (ng < (gs.get(s) ?? Infinity)) {
           gs.set(s, ng);
@@ -196,15 +222,16 @@ export class NavSearch {
 
   /**
    * A route from `from` to `to` (feet positions): the regions it crosses, its start and goal nodes; null: none.
-   * `confined`: inside the building all the way (a defender under the red walls; the goal must be inside).
+   * `confined`: inside the building all the way (a defender under the red walls; the goal must be inside). `allow`: by
+   * no link but those (a drone's: drops and under door barricades; not through a window it can't vault).
    */
-  route(from: Vec3, to: Vec3, confined = false): NavRoute | null {
+  route(from: Vec3, to: Vec3, confined = false, allow?: (l: NavLink) => boolean): NavRoute | null {
     const g = this.grid;
     const a = g.nodeNear(from[0], from[1], from[2], 1, 0.9);
     const b = g.nodeNear(to[0], to[1], to[2], 1.5, 1.2);
     if (a < 0 || b < 0) return null;
     if (confined && !g.insideAt(b)) return null;
-    const regions = this.regionRoute(g.regionOf(a), g.regionOf(b), confined ? (r) => g.regionInside(r) : undefined);
+    const regions = this.regionRoute(g.regionOf(a), g.regionOf(b), confined ? (r) => g.regionInside(r) : undefined, allow);
     return regions ? { regions, start: a, goal: b, version: g.version, ...(confined ? { confined } : {}) } : null;
   }
 
@@ -229,7 +256,7 @@ export class NavSearch {
 
   /** A whole path from `from` to `to` (the route refined to its end), or null. */
   path(from: Vec3, to: Vec3, allow?: (l: NavLink) => boolean): NavPath | null {
-    const route = this.route(from, to);
+    const route = this.route(from, to, false, allow);
     if (!route) return null;
     const steps: PathStep[] = [];
     let at = route.start;
@@ -405,6 +432,8 @@ export class NavSearch {
     const len = Math.hypot(pb[0] - pa[0], pb[2] - pa[2]);
     const n = Math.max(1, Math.ceil(len / (NAV_CELL * 0.5)));
     let y = pa[1];
+    let at = a;
+    const nb: [number, number][] = [];
     for (let s = 1; s <= n; s++) {
       const t = s / n;
       const x = pa[0] + (pb[0] - pa[0]) * t;
@@ -413,6 +442,15 @@ export class NavSearch {
       const j = Math.floor((z - g.z0) / NAV_CELL);
       const m = g.nodeAt(i, j, y);
       if (m < 0) return false;
+      // On or off a staircase only where the grid joins the two (its ends): not onto its side from the floor beside it.
+      if (m !== at) {
+        if ((g.nodeFlags(m) ^ g.nodeFlags(at)) & NavFlag.Stair) {
+          nb.length = 0;
+          g.neighbours(at, nb);
+          if (!nb.some(([k]) => k === m)) return false;
+        }
+        at = m;
+      }
       y = g.nodeY(m);
       // A diagonal crossing between columns: both sides must hold too (no corner cut).
       const fx = (x - g.x0) / NAV_CELL - i;

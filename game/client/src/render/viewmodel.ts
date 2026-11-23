@@ -102,8 +102,10 @@ const VIEWMODEL_KEY = 1.8;
 const VIEWMODEL_ENV = 0.6;
 /** Where under an item lying in the palm the palm is (its own frame: a little behind its middle). */
 const HELD_PALM_Z = 0.01;
-/** How many guns stay built (the primary, the secondary, one more after a loadout change). */
-const GUNS_KEPT = 3;
+/** How many guns stay built (the primary, the secondary, one more after a loadout change, Ohm's pistol). */
+const GUNS_KEPT = 4;
+/** How long a gadget that's a gun takes to come up to the eye (s): a pistol's (the 5.7's `adsS`). */
+const GADGET_ADS_S = 0.24;
 
 export class Viewmodel {
   readonly scene = new THREE.Scene();
@@ -126,11 +128,19 @@ export class Viewmodel {
   private heldModel: ShapeModel | null = null;
   /** Its size as drawn (across, up, deep). */
   private heldSize: [number, number, number] = [0, 0, 0];
-  /** Pulse's sensor all the way up: looked through (sensorScreen). */
+  /** Murmur's Blood Oxygen Sensor all the way up: the page draws its readout (sensorScreen). */
   private sensorUp = false;
+  /** Ohm's pistol aimed (R3): ADS held with it out (the page's, set each frame); it comes up to the eye. */
+  scoped = false;
+  /** A gadget that's a gun is in hand this frame (Ohm's pistol): the page draws what its sight shows (lensScreen). */
+  gadgetGun = false;
+  /** That gun's aiming, uneased (0…1), and its shot as last seen (a new one kicks it). */
+  private aimRaw = 0;
+  private shooting = false;
+  private lastShootTicks = 0;
   /** Where the palm under it is, its own frame: how low it comes there, and how far back (gadgetShapes.ts restsAt). */
   private heldRest = { y: 0, z: 0 };
-  /** A held-up item's screen (Pulse's sensor, Dokkaebi's tablet): lit, facing the eye. */
+  /** A held-up item's screen (Murmur's sensor, Relay's tablet): lit, facing the eye. */
   private screen: THREE.Mesh | null = null;
   private heldKey = "";
   private readonly flash: THREE.Sprite;
@@ -206,69 +216,43 @@ export class Viewmodel {
 
   /**
    * Pose for this frame. `w` is the weapon in hand (null: nothing to hold), `s` the body's state,
-   * `swapTicks` the loadout's swap time; `dt` seconds since the last frame.
+   * `swapTicks` the loadout's swap time; `dt` seconds since the last frame. `behindShield`: a raised shield's pistol,
+   * hidden until it's aimed over it; `besideShield`: a pistol held one-handed beside one, from the hip (Hull's, R3).
    */
-  update(now: number, dt: number, w: ResolvedWeapon | null, s: PawnState, swapTicks: number, gadget: { data: GadgetData; detonator: boolean } | null = null, behindShield = false) {
-    const vm = this.kit.viewmodel;
+  update(now: number, dt: number, w: ResolvedWeapon | null, s: PawnState, swapTicks: number, gadget: { data: GadgetData; detonator: boolean } | null = null, behindShield = false, besideShield = false) {
     const show = w !== null && s.mode !== PawnMode.Dead && !isDowned(s);
     this.knife.visible = false;
     this.shell.visible = false;
     this.arms.setHand("left", null);
     this.arms.setHand("right", null);
-    this.poseHeld(show ? gadget : null, s);
-    this.rig.visible = show && !gadget;
+    // A gadget that's a gun (R3: Ohm's Brownout Pistol, a "shoot" item; Rivet's Stud Driver, a "launch" one) is posed as
+    // a gun is; any other as a gadget.
+    const isGun = gadget?.data.use.kind === "shoot" || gadget?.data.use.kind === "launch";
+    const gadgetGun = show && gadget !== null && !gadget.detonator && isGun ? gadget.data : null;
+    this.gadgetGun = gadgetGun !== null;
+    this.poseHeld(show && !gadgetGun ? gadget : null, s);
+    this.rig.visible = show && (!gadget || gadgetGun !== null);
+    if (gadgetGun) {
+      this.poseGadgetGun(now, dt, gadgetGun, s);
+      this.arms.update();
+      return;
+    }
     if (!show || !w || gadget) {
       this.aim = 0;
       this.arms.update();
       return;
     }
-    const look = { id: w.id, class: w.class, pick: w.pick };
-    const key = gunKey(look);
-    if (key !== this.key) {
-      // The last few guns in hand stay built (a swap back and forth builds nothing): the newest last.
-      if (this.gun) this.gun.group.visible = false;
-      let built = this.guns.get(key);
-      if (built) this.guns.delete(key);
-      else {
-        built = buildGun(look, this.kit);
-        this.rig.add(built.group);
-      }
-      this.guns.set(key, built);
-      for (const [k, g] of this.guns) {
-        if (this.guns.size <= GUNS_KEPT) break;
-        g.dispose();
-        this.guns.delete(k);
-      }
-      this.gun = built;
-      this.key = key;
-      this.reticle = built.reticle;
-      this.hands = gunHands(built, pistolHeld(w.class));
-      this.leftKnown = false;
-    }
-    const gun = this.gun!;
+    const gun = this.useGun(`w:${gunKey({ id: w.id, class: w.class, pick: w.pick })}`, () => buildGun({ id: w.id, class: w.class, pick: w.pick }, this.kit), pistolHeld(w.class));
     // Aiming: the sight line comes onto the view axis, adsDistance in front of the eye.
     this.aim = smooth(s.adsQ / 65535);
-    // Fuze's pistol is behind his raised shield until it's slid down far enough to aim over (Phase 8 M11).
+    // Hail's pistol is behind his raised shield until it's slid down far enough to aim over (Phase 8 M11).
     if (behindShield && this.aim < 0.6) this.rig.visible = false;
-    const hip = new THREE.Vector3(...vm.hip);
-    const ads = new THREE.Vector3(0, 0, -vm.adsDistance).sub(gun.sight);
-    const pos = hip.lerp(ads, this.aim);
-    const rot = new THREE.Euler(0, 0, 0, "YXZ");
-    // Sprinting: lowered and turned in.
-    this.sprintW = THREE.MathUtils.damp(this.sprintW, s.sprinting ? 1 : 0, 10, dt);
-    pos.add(new THREE.Vector3(...vm.sprint.offset).multiplyScalar(this.sprintW));
-    rot.y += vm.sprint.yawDeg * DEG * this.sprintW;
-    rot.x += vm.sprint.pitchDeg * DEG * this.sprintW;
     // Swapping: the new weapon comes up from below; reloading: a dip and a roll, the magazine out and back.
-    gun.mag.position.copy(gun.magHome);
-    /** A reload under way: how far through it is, and (a magazine's) when the magazine comes out and when the next is in. */
     let reload: Reload | null = null;
     let tilt = 0;
-    if (s.wAct === WeaponAct.Equip) {
-      const p = Math.min(1, s.actTicks / Math.max(1, swapTicks));
-      pos.y -= (1 - smooth(p)) * vm.downFor.equip;
-      rot.x -= (1 - smooth(p)) * 0.6;
-    } else if (s.wAct === WeaponAct.Reload && w.reload.kind !== "none") {
+    let equip: number | null = null;
+    if (s.wAct === WeaponAct.Equip) equip = Math.min(1, s.actTicks / Math.max(1, swapTicks));
+    else if (s.wAct === WeaponAct.Reload && w.reload.kind !== "none") {
       const r = w.reload;
       if (r.kind === "magazine") {
         const tac = s.reloadKind === ReloadKind.Tactical;
@@ -281,9 +265,95 @@ export class Viewmodel {
         tilt = 1;
       }
     }
+    // Magnified sights: once fully aimed, the scope overlay replaces the gun (see the lab's .scope).
+    this.placeGun(now, dt, gun, s, { equip, reload, tilt, hideAimed: w.ads.zoom > 1, oneHanded: behindShield || besideShield });
+  }
+
+  /**
+   * Ohm's Brownout Pistol (R3, Ulo's design) as a gun: the gun kit's big-slide pistol with its coil shroud and its
+   * curved sight (gunKit.ts); Rivet's Stud Driver too, the kit's hand cannon with its drum. Aimed (the page's `scoped`: ADS held with it out) it comes up to the eye over a pistol's
+   * aiming time; a round kicks it; then the magazine's changed over the reload time (the 5.7's, Ulo): the left hand
+   * takes the empty one off the bottom of the grip, down out of the picture, and back with the next, as a pistol's
+   * reload goes. Taken out, it comes up from below.
+   */
+  private poseGadgetGun(now: number, dt: number, data: GadgetData, s: PawnState) {
+    const u = data.use;
+    if (u.kind !== "shoot" && u.kind !== "launch") return;
+    // (Rivet's driver, R3: its own irons; a salvo's kick, then the next loaded over its cycle as a magazine's changed.)
+    const look = { id: data.id, class: "handgun", pick: { sight: u.kind === "shoot" ? "emp" : null, barrel: null, grip: null, underbarrel: null } };
+    const gun = this.useGun(`g:${gunKey(look)}`, () => buildGun(look, this.kit), true);
+    this.reticle = "posts";
+    // Aiming, eased over a pistol's ADS time (it's the page's, not the simulation's).
+    this.aimRaw = THREE.MathUtils.clamp(this.aimRaw + (this.scoped ? dt : -dt) / GADGET_ADS_S, 0, 1);
+    this.aim = smooth(this.aimRaw);
+    let equip: number | null = null;
+    let reload: Reload | null = null;
+    let tilt = 0;
+    if (s.gAct === GadgetAct.Equip) equip = Math.min(1, s.gTicks / Math.max(1, ticks(this.data.gadgetRules.equipS)));
+    else if (s.gAct === GadgetAct.Shoot) {
+      // The round's kick as it goes; then the magazine changed over the rest (out a quarter of the way, in by half).
+      if (s.gTicks < this.lastShootTicks || !this.shooting) this.kick = 1;
+      const total = Math.max(1, ticks(u.kind === "shoot" ? u.reloadS : u.cycleS));
+      const t = Math.min(1, s.gTicks / total);
+      reload = { t, out: 0.25, in: 0.5, empty: false, shells: null };
+      tilt = through(t, 0.04, 0.16) * (1 - through(t, 0.86, 1));
+    }
+    this.shooting = s.gAct === GadgetAct.Shoot;
+    this.lastShootTicks = this.shooting ? s.gTicks : 0;
+    this.placeGun(now, dt, gun, s, { equip, reload, tilt, hideAimed: false, oneHanded: false });
+  }
+
+  /** The gun built for `key` (kept among the last few built), made the one in hand. */
+  private useGun(key: string, build: () => GunModel, pistol: boolean): GunModel {
+    if (key !== this.key) {
+      // The last few guns in hand stay built (a swap back and forth builds nothing): the newest last.
+      if (this.gun) this.gun.group.visible = false;
+      let built = this.guns.get(key);
+      if (built) this.guns.delete(key);
+      else {
+        built = build();
+        this.rig.add(built.group);
+      }
+      this.guns.set(key, built);
+      for (const [k, g] of this.guns) {
+        if (this.guns.size <= GUNS_KEPT) break;
+        g.dispose();
+        this.guns.delete(k);
+      }
+      this.gun = built;
+      this.key = key;
+      this.reticle = built.reticle;
+      this.hands = gunHands(built, pistol);
+      this.leftKnown = false;
+    }
+    return this.gun!;
+  }
+
+  /**
+   * The gun in hand placed for this frame: at the hip or on the eye's line (`aim`), coming up from below as it's taken
+   * out (`equip`, 0…1), tipped over for a reload (`tilt`) and its hands working it (`reload`), sprinting, the knife,
+   * kick, sway and breath; hidden once fully aimed through a magnified sight (`hideAimed`).
+   */
+  private placeGun(now: number, dt: number, gun: GunModel, s: PawnState, o: { equip: number | null; reload: Reload | null; tilt: number; hideAimed: boolean; oneHanded: boolean }) {
+    const vm = this.kit.viewmodel;
+    const hip = new THREE.Vector3(...vm.hip);
+    const ads = new THREE.Vector3(0, 0, -vm.adsDistance).sub(gun.sight);
+    const pos = hip.lerp(ads, this.aim);
+    const rot = new THREE.Euler(0, 0, 0, "YXZ");
+    // Sprinting: lowered and turned in.
+    this.sprintW = THREE.MathUtils.damp(this.sprintW, s.sprinting ? 1 : 0, 10, dt);
+    pos.add(new THREE.Vector3(...vm.sprint.offset).multiplyScalar(this.sprintW));
+    rot.y += vm.sprint.yawDeg * DEG * this.sprintW;
+    rot.x += vm.sprint.pitchDeg * DEG * this.sprintW;
+    gun.mag.position.copy(gun.magHome);
+    if (o.equip !== null) {
+      pos.y -= (1 - smooth(o.equip)) * vm.downFor.equip;
+      rot.x -= (1 - smooth(o.equip)) * 0.6;
+    }
+    const reload = o.reload;
     // Up, in and tipped over for the hand that works it (gun_kit.json `viewmodel.reload`), eased on and off (a reload
     // cut short, the last shell in); aimed through it, the gun stays on the eye's line (its reticle is drawn there).
-    this.reloadW = THREE.MathUtils.damp(this.reloadW, tilt * (1 - this.aim), 12, dt);
+    this.reloadW = THREE.MathUtils.damp(this.reloadW, o.tilt * (1 - this.aim), 12, dt);
     this.shellW = THREE.MathUtils.damp(this.shellW, reload?.shells ? 1 : 0, 12, dt);
     {
       const k = this.reloadW;
@@ -318,11 +388,10 @@ export class Viewmodel {
     rot.z += Math.sin(now * 0.0011) * 0.004 * breath;
     gun.group.position.copy(pos);
     gun.group.rotation.copy(rot);
-    // Magnified sights: once fully aimed, the scope overlay replaces the gun (see the lab's .scope).
-    gun.group.visible = !(w.ads.zoom > 1 && this.aim > 0.92);
+    gun.group.visible = !(o.hideAimed && this.aim > 0.92);
     this.flash.visible = now < this.flashUntil && gun.group.visible;
     if (this.flash.visible) this.flash.position.copy(gun.muzzle).applyEuler(rot).add(pos);
-    if (this.rig.visible && gun.group.visible && this.hands) this.poseArms(gun, this.hands, new THREE.Matrix4().compose(pos, new THREE.Quaternion().setFromEuler(rot), new THREE.Vector3(1, 1, 1)), reload, behindShield, dt);
+    if (this.rig.visible && gun.group.visible && this.hands) this.poseArms(gun, this.hands, new THREE.Matrix4().compose(pos, new THREE.Quaternion().setFromEuler(rot), new THREE.Vector3(1, 1, 1)), reload, o.oneHanded, dt);
     else this.leftKnown = false;
     if (stab) {
       // The knife in the right fist (whether or not the gun is drawn): its handle across the palm, the blade out past
@@ -350,7 +419,7 @@ export class Viewmodel {
   private poseArms(gun: GunModel, hands: GunHands, at: THREE.Matrix4, reload: Reload | null, oneHanded: boolean, dt: number) {
     const onGun = (m: THREE.Matrix4) => new THREE.Matrix4().multiplyMatrices(at, m);
     this.arms.setHand("right", onGun(hands.right), "grip");
-    // Fuze's other hand is on his shield.
+    // Hail's other hand is on his shield.
     if (oneHanded) {
       this.leftKnown = false;
       return;
@@ -442,7 +511,7 @@ export class Viewmodel {
         this.screen = null;
       }
       if (gadget) {
-        // A swung item (Sledge's hammer, Phase 8 M4) is drawn long; anything else no bigger than a hand holds.
+        // A swung item (Cleave's hammer, Phase 8 M4) is drawn long; anything else no bigger than a hand holds.
         const cap = gadget.data.use.kind === "swing" ? 0.6 : 0.3;
         const shape = heldShape(gadget.detonator ? "detonator" : gadget.data.id, gadget.data.sizeM, cap);
         const [w, h, d] = shape.size;
@@ -452,10 +521,10 @@ export class Viewmodel {
         this.held = this.heldModel.group;
         this.held.name = "held";
         this.camera.add(this.held);
-        if (!gadget.detonator && gadget.data.use.kind === "hold") {
-          // Its screen, on the face toward the eye once it's up (green: Pulse's heartbeats; blue: Dokkaebi's tablet).
-          // (Pulse's sensor's display is open, looked through: its plane only says where it is, for the page to draw
-          // the screen there.)
+        // (Dowser's coil, R3, has no screen: what it reads is outlined where it is, the page's.)
+        if (!gadget.detonator && gadget.data.use.kind === "hold" && !gadget.data.coil) {
+          // Its screen, on the face toward the eye once it's up (blue: Relay's tablet). (Murmur's Blood Oxygen Sensor's
+          // screen: its plane only says where it is, for the page to draw the readout there.)
           const S = SENSOR_DISPLAY;
           this.screen = gadget.data.sensor
             ? new THREE.Mesh(new THREE.PlaneGeometry(S.w, S.h), new THREE.MeshBasicMaterial())
@@ -483,27 +552,32 @@ export class Viewmodel {
       strike = p < hit ? smooth(p / hit) : 1 - smooth((p - hit) / Math.max(1e-6, 1 - hit));
     }
     if (gadget?.data.id === "dropped_phone") {
-      // A phone out of the pocket to turn a call off (Dokkaebi's): up in front in the right hand, its screen to the eye.
+      // A phone out of the pocket to turn a call off (Relay's): up in front in the right hand, its screen to the eye.
       this.held.position.set(0.05, -0.13, -0.3);
       this.held.rotation.set(1.2, -0.12, 0.08);
       this.holdHeld("palm");
       return;
     }
     if (u?.kind === "hold" && !gadget?.detonator) {
-      // Held up to the face like a scope (Pulse's sensor, Ulo's test; Dokkaebi's tablet the same): it comes up from the
-      // hip over its equip time to just under the eyes, its screen toward them. Pulse's comes up closer, its screen
-      // filling the middle of the view, and once it's up he looks through it: the device isn't drawn, the page draws
-      // its see-through screen where it is (sensorScreen) with the heartbeats on it.
+      // Held up like a scope (Relay's tablet): it comes up from the hip over its equip time to just under the eyes, its
+      // screen toward them. Murmur's Blood Oxygen Sensor is held in his right hand, low on the right of the view, its
+      // emitter forward and its little screen tilted up to his eyes; once it's up the page draws its readout there
+      // (sensorScreen) and the people it reads where they are.
       const k = smooth(up);
+      if (gadget?.data.coil) {
+        // Dowser's Divining Coil (R3): in the right hand, held out ahead and low on the right, its coil leaning forward
+        // over what it reads (its outlines are the page's).
+        this.held.position.set(lerp(0.2, 0.13, k), lerp(-0.42, -0.2, k), lerp(-0.45, -0.42, k));
+        this.held.rotation.set(lerp(-0.9, -0.55, k), lerp(-0.4, -0.12, k), 0);
+        this.holdHeld("palm");
+        return;
+      }
       if (gadget?.data.sensor) {
-        // Pulse's HB-5 as the game holds it: up before his face, its display over the middle of the view a little left
-        // of centre (about 21–70 % across, 18–85 % down at 16:9), the frame down to the bottom of the view; looked
-        // through once it's up. (In his hands by its lower corners as it comes up; once up his hands are out of the
-        // picture, as the game's are but the thumb on its handle: fingers behind an open display would show through it.)
-        this.held.position.set(lerp(0.2, -0.0084, k), lerp(-0.42, -0.0065, k), lerp(-0.45, -0.18, k));
-        this.held.rotation.set(lerp(-0.9, 0, k), lerp(-0.4, 0, k), 0);
+        // Our own (D-183): in the right hand, low on the right, its top leaning away so the screen faces the eyes.
+        this.held.position.set(lerp(0.2, 0.12, k), lerp(-0.42, -0.145, k), lerp(-0.45, -0.36, k));
+        this.held.rotation.set(lerp(-0.9, -0.3, k), lerp(-0.4, -0.18, k), 0);
         this.sensorUp = up >= 1;
-        if (!this.sensorUp) this.holdHeld("up");
+        this.holdHeld("palm");
         return;
       }
       this.held.position.set(lerp(0.2, 0, k), lerp(-0.42, -0.06, k), lerp(-0.45, -0.24, k));
@@ -541,9 +615,9 @@ export class Viewmodel {
   }
 
   /**
-   * Pulse's sensor all the way up: where its screen is on the view (0..1 across from the left, 0..1 down from the top),
-   * its four corners in order round it (top left, top right, bottom right, bottom left), for the page to draw the
-   * see-through screen there; null otherwise.
+   * Murmur's Blood Oxygen Sensor all the way up: where its screen is on the view (0..1 across from the left, 0..1 down
+   * from the top), its four corners in order (top left, top right, bottom right, bottom left), for the page to draw the
+   * readout there; null otherwise.
    */
   sensorScreen(): [number, number][] | null {
     if (!this.sensorUp || !this.held || !this.screen) return null;
@@ -560,6 +634,25 @@ export class Viewmodel {
       const p = new THREE.Vector3(x, y, 0).applyMatrix4(this.screen!.matrixWorld).project(this.camera);
       return [(p.x + 1) / 2, (1 - p.y) / 2];
     });
+  }
+
+  /**
+   * Where the lens of the gun in hand is on the page (R3, Ohm's curved sight), once it's up to the eye: its middle
+   * and half its width and height, as fractions of the page (0…1 from the top left); null otherwise.
+   */
+  lensScreen(): { cx: number; cy: number; rx: number; ry: number } | null {
+    const gun = this.gun;
+    if (!this.gadgetGun || !gun?.lens || !gun.group.visible || this.aim < 0.5) return null;
+    gun.group.updateMatrixWorld(true);
+    this.camera.updateMatrixWorld(true);
+    const at = (x: number, y: number) => {
+      const p = new THREE.Vector3(gun.lens!.center.x + x, gun.lens!.center.y + y, gun.lens!.center.z).applyMatrix4(gun.group.matrixWorld).project(this.camera);
+      return [(p.x + 1) / 2, (1 - p.y) / 2] as const;
+    };
+    const c = at(0, 0);
+    const r = at(gun.lens.halfW, 0);
+    const t = at(0, gun.lens.halfH);
+    return { cx: c[0], cy: c[1], rx: Math.abs(r[0] - c[0]), ry: Math.abs(t[1] - c[1]) };
   }
 
   /** Light the gun as the world around it is lit: `k` of daylight (a map's basement is darker). */

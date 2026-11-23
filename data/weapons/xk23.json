@@ -1,5 +1,5 @@
 {
-  "_doc": "XK23 (Dokkaebi). research/weapons.csv row xk23; class rules research/weapons_notes.md §4. Y11S2 official: 49 dmg, 675 rpm, 35 × 5 = 175, extended barrel 54. Extended-barrel minimum 43 and ammo-refill 0.91 / 2.74 s community-measured.",
+  "_doc": "XK23 (Relay). research/weapons.csv row xk23; class rules research/weapons_notes.md §4. Y11S2 official: 49 dmg, 675 rpm, 35 × 5 = 175, extended barrel 54. Extended-barrel minimum 43 and ammo-refill 0.91 / 2.74 s community-measured.",
   "_season": "Y11S3.1",
   "_unverified": [
     "damage.extendedBarrel",

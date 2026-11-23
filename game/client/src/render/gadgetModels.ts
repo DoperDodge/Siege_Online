@@ -1,13 +1,14 @@
 // The gadget table drawn (Phase 8 M1, gadgets/DESIGN.md §11): each entry as a greybox of its data's size and its
 // kind's colour, standing, on its wall or lying flat; a thrown one along its flight (stepped here by the same code the
 // server steps it with). Your own throws and placings are drawn at once from your prediction, until the server's entry
-// takes over. Bulletproof Cameras are drawn by BpCameraModels (render/cameraModels.ts). Greybox until the art pass.
-// M3 adds what an entry's flags show: smoke clouds (not in a Bulletproof Camera's thermal view), a gas pipe's jet and
-// fire, an alarm sounding, an EMP's sparks, and an observation blocker's barrier to the other side's drones and cameras;
-// the level's ingredients are entries too. M5: Thermite's charge burning shows sparks on both sides of its surface,
-// Fuze's set off shows its tube through it (its grenades are thrown entries). M6: Mute's jammer lights up while it
-// works, and its reach shows for a moment once it's placed. M7: Mira's Black Mirror is its frame and its glass, clear from
-// her side and black from the other (two one-sided sheets), grey once shattered, gone once ejected.
+// takes over. Armoured Cameras are drawn by ArmouredCameraModels (render/cameraModels.ts). Greybox until the art pass.
+// M3 adds what an entry's flags show: smoke clouds (not in a Armoured Camera's thermal view), a gas pipe's jet and
+// fire, an alarm sounding, an EMP's sparks, and an feed blocker's barrier to the other side's drones and cameras;
+// the level's ingredients are entries too. M5: Kiln's charge burning shows sparks on both sides of its surface,
+// Hail's set off shows its tube through it (its grenades are thrown entries). M6: Lull's jammer lights up while it
+// works, and its reach shows for a moment once it's placed. M7: Vista's Blind Pane is its frame and its glass, clear from
+// her side and black from the other (two one-sided sheets), grey once shattered, gone once ejected. R3: Shunt's live
+// surfaces (gadgets/arcs.ts) flicker blue and crackle, on both sides, for everyone to see.
 import * as THREE from "three";
 import { gadgetShape, SHAPE_MATERIALS, type ShapeMat } from "./gadgetShapes.js";
 import {
@@ -21,17 +22,23 @@ import {
   isFlying,
   isIngredient,
   jetOf,
-  KIND_BP_CAMERA,
-  KIND_SHELL_SHIELD,
+  KIND_ARMOURED_CAMERA,
+  KIND_FRAME_BARRIER,
   kindId,
   kindOf,
+  liveSpans,
+  liveSurfaces,
   raycastLevel,
+  salvoCut,
+  studPoints,
+  wireLength,
   sizeOf,
   TUBE_HALF_M,
   tubeBox,
   tubeTip,
   type Gadget,
   type GadgetData,
+  type PanelFrame,
   type SimEvent,
   type Sim,
   type Vec3,
@@ -42,7 +49,7 @@ type ThrowUse = Extract<GadgetData["use"], { kind: "throw" }>;
 /** Each kind's colour (greybox). */
 const COLOURS: Record<string, number> = {
   breach_charge: 0x52525b,
-  hard_breach_charge: 0x71717a,
+  heavy_breach_charge: 0x71717a,
   claymore: 0x4d5d3a,
   frag: 0x3f4a1f,
   stun: 0x9ca3af,
@@ -50,26 +57,35 @@ const COLOURS: Record<string, number> = {
   impact_emp: 0x2563eb,
   barbed_wire: 0x94a3b8,
   deployable_shield: 0x374151,
-  observation_blocker: 0x334155,
+  feed_blocker: 0x334155,
   impact_grenade: 0x7f1d1d,
-  nitro_cell: 0x111827,
+  remote_charge: 0x111827,
   proximity_alarm: 0x1f2937,
   fire_extinguisher: 0xb91c1c,
   gas_pipe: 0xb45309,
   metal_detector: 0x9ca3af,
-  exothermic_charge: 0x7c2d12,
-  cluster_charge: 0x3f3f46,
-  cluster_grenade: 0x3f4a1f,
-  signal_disruptor: 0x1e293b,
-  black_mirror: 0x134e4a,
-  mirror_canister: 0xdc2626,
+  burn_frame: 0x7c2d12,
+  hailstone_drill: 0x3f3f46,
+  hailstone: 0x3f4a1f,
+  damper: 0x1e293b,
+  blind_pane: 0x134e4a,
+  pane_canister: 0xdc2626,
   dropped_phone: 0x0f172a,
-  gu_mine: 0x65a30d,
-  shell_shield: 0x475569,
+  burr_mine: 0x65a30d,
+  frame_barrier: 0x475569,
+  brownout_pistol: 0x1e3a5f,
+  second_wind: 0x0f766e,
+  arc_pack: 0x27303a,
+  snare_latch: 0x4a3b2f,
+  bailiff_post: 0x2f3540,
+  stud_driver: 0x3f3f46,
+  stud_ring: 0xea580c,
+  stud_spine: 0xea580c,
+  stud_cross: 0xea580c,
 };
 
 /**
- * What the page looks through (Phase 8 M3): a Bulletproof Camera's thermal view sees through smoke; an observation
+ * What the page looks through (Phase 8 M3): a Armoured Camera's thermal view sees through smoke; an observation
  * blocker's barrier shows (and blocks) to the other side's observation tools, a drone or a camera.
  */
 export interface GadgetView {
@@ -109,16 +125,30 @@ export class GadgetModels {
     glassShattered: new THREE.MeshBasicMaterial({ color: 0xcbd5e1, side: THREE.DoubleSide }),
     reach: new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.12, wireframe: true, depthWrite: false }),
     tube: new THREE.MeshStandardMaterial({ color: 0x52525b, roughness: 0.5, metalness: 0.6 }),
-    // Skopós's idle shell's barrier (D-157): dark armour panels in grey frames, yellow seams, a tinted glass canopy.
-    armour: new THREE.MeshStandardMaterial({ color: 0x24282d, roughness: 0.7, metalness: 0.35 }),
-    armourFrame: new THREE.MeshStandardMaterial({ color: 0xa3a9b0, roughness: 0.5, metalness: 0.35 }),
-    stripe: new THREE.MeshStandardMaterial({ color: 0xd4a514, roughness: 0.5, metalness: 0.2 }),
-    canopy: new THREE.MeshStandardMaterial({ color: 0x6b5634, roughness: 0.05, metalness: 0.2, transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide }),
-    canopyLight: new THREE.MeshBasicMaterial({ color: 0xffd34d }),
+    // Twain's idle frame's barrier (our own design, D-183): olive armour slabs with a lighter rim and corner bolts, a
+    // band of the accent low across the front, a green-tinted glass slit.
+    armour: new THREE.MeshStandardMaterial({ color: 0x3a4637, roughness: 0.75, metalness: 0.3 }),
+    armourFrame: new THREE.MeshStandardMaterial({ color: 0x5f6b5a, roughness: 0.55, metalness: 0.35 }),
+    stripe: new THREE.MeshStandardMaterial({ color: 0xc8c040, roughness: 0.5, metalness: 0.2 }),
+    canopy: new THREE.MeshStandardMaterial({ color: 0x3f6b4a, roughness: 0.05, metalness: 0.2, transparent: true, opacity: 0.3, depthWrite: false, side: THREE.DoubleSide }),
   };
   /** A Claymore's lasers (Phase 8 M2): red, once it's armed. */
   private readonly laserMat = new THREE.LineBasicMaterial({ color: 0xff2020, transparent: true, opacity: 0.7 });
+  /** A Snare Latch's wire (R3): thin grey steel across its opening, once it's armed; gone once it's sprung. */
+  private readonly wireMat = new THREE.LineBasicMaterial({ color: 0xa8a29e, transparent: true, opacity: 0.5 });
   private readonly ghosts: Ghost[] = [];
+  /**
+   * Shunt's live surfaces (R3): a sheet over each face of an electrified panel, flickering, and crackle (jagged blue
+   * lines, new ones every few frames) across them and round an electrified shield or wire.
+   */
+  private readonly arcSheetMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.1, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending });
+  private readonly arcLineMat = new THREE.LineBasicMaterial({ color: 0xbae6fd, transparent: true, opacity: 0.9, depthWrite: false });
+  private readonly arcSheetGeo = new THREE.PlaneGeometry(1, 1);
+  private readonly arcSheets: THREE.Mesh[] = [];
+  private readonly arcLines = new THREE.LineSegments(new THREE.BufferGeometry(), this.arcLineMat);
+  /** When the crackle was last drawn anew (performance.now), and what was live then. */
+  private arcAt = 0;
+  private arcKey = "";
   /** Our own throws, by entry id: the server tick their flight is drawn from (the ghost's, so it doesn't jump back). */
   private readonly ownStart = new Map<number, number>();
   private readonly flights: Flights;
@@ -130,6 +160,9 @@ export class GadgetModels {
     private readonly sim: Sim,
   ) {
     this.flights = new Flights({ q: sim, rules: sim.data.gadgetRules, gravity: sim.data.movement.gravity });
+    this.arcLines.frustumCulled = false;
+    this.arcLines.visible = false;
+    scene.add(this.arcLines);
   }
 
   private dataOf(kind: number): GadgetData | undefined {
@@ -232,7 +265,10 @@ export class GadgetModels {
     let parts = this.shapes.get(id);
     if (parts === undefined) {
       const size = sizeOf(this.sim.data, kind);
-      parts = size ? gadgetShape(id, size) : null;
+      // A salvo of Rivet's (R3): its studs where they are (gadgets/studs.ts).
+      const d = this.sim.data.gadgets.get(id);
+      const ex = d && salvoCut(this.sim.data, d);
+      parts = size ? gadgetShape(id, size, ex ? studPoints(ex) : []) : null;
       this.shapes.set(id, parts);
       // Shared: disposeOwn leaves them.
       for (const [m, g] of parts ?? []) this.geometry.set(`shape:${id}:${m}`, g);
@@ -261,7 +297,7 @@ export class GadgetModels {
     let geo = this.geometry.get(id);
     if (!geo) {
       // Grenades and fire extinguishers are round; a gas pipe lies along its width; everything else is its box.
-      const round = (d?.use.kind === "throw" && !d.remote && id !== "proximity_alarm") || id === "fire_extinguisher" || id === "mirror_canister";
+      const round = (d?.use.kind === "throw" && !d.remote && id !== "proximity_alarm") || id === "fire_extinguisher" || id === "pane_canister";
       if (round) geo = new THREE.CylinderGeometry(w / 2, w / 2, h, 12);
       // A gas pipe stands upright (Ulo's test): a unit-tall cylinder, set to its floor-to-ceiling run per entry (pipeRun).
       else if (id === "gas_pipe") geo = new THREE.CylinderGeometry(w / 2, w / 2, 1, 10);
@@ -285,7 +321,7 @@ export class GadgetModels {
       return group;
     }
     if (d?.mirror) {
-      // A Black Mirror (M7): its frame round the window, through the wall (its glass is drawn by its state).
+      // A Blind Pane (M7): its frame round the window, through the wall (its glass is drawn by its state).
       const f = d.mirror.frameM;
       const deep = 0.24;
       const frame = new THREE.Group();
@@ -348,7 +384,7 @@ export class GadgetModels {
     for (const e of events) {
       if (e.kind !== "throw" && e.kind !== "place") continue;
       const kind = kindOf(e.gadget);
-      if (kind < 0 || kind === KIND_BP_CAMERA) continue;
+      if (kind < 0 || kind === KIND_ARMOURED_CAMERA) continue;
       const obj = this.model(kind);
       this.scene.add(obj);
       const flags = e.kind === "throw" ? GFlag.Flying : (e.onFloor ? GFlag.OnFloor : 0) | (e.flat ? GFlag.Flat : 0);
@@ -364,7 +400,7 @@ export class GadgetModels {
     const table = this.sim.gadgets;
     const seen = new Set<number>();
     for (const g of table.list) {
-      if (g.kind === KIND_BP_CAMERA) continue;
+      if (g.kind === KIND_ARMOURED_CAMERA) continue;
       seen.add(g.id);
       let it = this.items.get(g.id);
       if (!it) {
@@ -389,8 +425,9 @@ export class GadgetModels {
       }
       this.ownStart.delete(g.id);
       this.showReach(it, g);
-      // A tripwire's lasers show from the moment it's armed (its `readyAt`, a server tick), and not while it's off.
-      for (const l of it.lasers) l.visible = now >= g.readyAt && !(g.flags & GFlag.Off);
+      // A tripwire's lasers show from the moment it's armed (its `readyAt`, a server tick), and not while it's off (nor a
+      // snare's wire once it's sprung).
+      for (const l of it.lasers) l.visible = now >= g.readyAt && !(g.flags & (GFlag.Off | GFlag.Active));
       const key = `${g.pos.join(",")},${g.yaw},${g.flags}`;
       const extraKey = `${key},${this.view.thermal},${this.view.team},${this.view.tool}`;
       if (extraKey !== it.extraKey) {
@@ -403,8 +440,8 @@ export class GadgetModels {
       const body = it.obj.getObjectByName("body") as THREE.Mesh | undefined;
       if (kindId(g.kind) === "gas_pipe") this.pipeRun(it.obj, g);
       else body?.scale.setScalar(isIngredient(g.kind) && g.flags & GFlag.Broken ? 0.7 : 1);
-      // Skopós's idle shell's barrier broken by a blast (M10): gone (its entry stays as the shell's camera).
-      it.obj.visible = !(g.kind === KIND_SHELL_SHIELD && g.flags & GFlag.Broken);
+      // Twain's idle shell's barrier broken by a blast (M10): gone (its entry stays as the shell's camera).
+      it.obj.visible = !(g.kind === KIND_FRAME_BARRIER && g.flags & GFlag.Broken);
       this.setLasers(it, g);
     }
     for (const [id, it] of this.items)
@@ -441,6 +478,109 @@ export class GadgetModels {
       const g = { id: -1 - x.seq, kind: x.kind, owner: me, team: 0, pos: x.pos, yaw: x.yaw, vel: x.vel, flags: x.flags, panel: -1, launchTick: 0, fuseEnd: 0, signalEnd: 0, readyAt: 0, offEnd: 0, seq: x.seq };
       this.pose(x.obj, x.flags & GFlag.Flying && use?.kind === "throw" ? this.flightAt(g, use, now - x.at) : x.pos, x.yaw, x.flags);
     }
+    this.showArcs();
+  }
+
+  /**
+   * Shunt's live surfaces (R3, gadgets/arcs.ts), as the table and panels are now: a flickering sheet just off each face
+   * of every electrified stretch (a wall's live sections, a whole barricade); crackle across them and over each
+   * electrified shield or wire, drawn anew every 70 ms.
+   */
+  private showArcs() {
+    const live = liveSurfaces(this.sim);
+    const t = performance.now();
+    const panels = this.sim.level.panels.list;
+    // Each live stretch: its panel's frame, its middle along the face from the face's middle, and its width.
+    const spans: { f: PanelFrame; mid: number; w: number }[] = [];
+    for (const [idx, by] of live.panels) {
+      const e = panels[idx];
+      if (e) for (const [mid, w] of liveSpans(e, by)) spans.push({ f: e.frame, mid, w });
+    }
+    let n = 0;
+    for (const { f, mid, w } of spans) {
+      for (const side of [-1, 1]) {
+        let m = this.arcSheets[n];
+        if (!m) {
+          m = new THREE.Mesh(this.arcSheetGeo, this.arcSheetMat);
+          m.renderOrder = 2;
+          this.scene.add(m);
+          this.arcSheets.push(m);
+        }
+        m.visible = true;
+        const off = side * (f.t / 2 + 0.012);
+        m.position.set(f.center[0] + f.u[0] * mid + f.n[0] * off, f.center[1] + f.u[1] * mid + f.n[1] * off, f.center[2] + f.u[2] * mid + f.n[2] * off);
+        m.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3(...f.u), new THREE.Vector3(...f.v), new THREE.Vector3(...f.n)));
+        m.scale.set(w, f.h, 1);
+        n++;
+      }
+    }
+    for (let i = n; i < this.arcSheets.length; i++) this.arcSheets[i].visible = false;
+    // A flicker: two beats at once, never quite dark.
+    this.arcSheetMat.opacity = 0.06 + 0.07 * Math.abs(Math.sin(t * 0.021) * Math.sin(t * 0.0067 + 1.3));
+    // Bailiff's set-down shields with their shock on (R3) crackle across their face too.
+    const posts = this.sim.gadgets.list.filter((g) => g.flags & GFlag.Active && !(g.flags & GFlag.Off) && this.dataOf(g.kind)?.setsDownShield);
+    const key = `${[...live.panels].map(([i, by]) => `${i}:${Object.keys(by).join(".")}`).join(",")}|${[...live.gadgets.keys()].join(",")}|${posts.map((g) => g.id).join(",")}`;
+    if (key === this.arcKey && t - this.arcAt < 70) return;
+    this.arcKey = key;
+    this.arcAt = t;
+    const pts: number[] = [];
+    // A jagged line from a to b, in `k` steps, each step's middle thrown off by up to `j` along `off1` and `off2`.
+    const bolt = (a: Vec3, b: Vec3, k: number, j: number, off1: Vec3, off2: Vec3) => {
+      let prev = a;
+      for (let s = 1; s <= k; s++) {
+        const u = s / k;
+        const r1 = s === k ? 0 : (Math.random() * 2 - 1) * j;
+        const r2 = s === k ? 0 : (Math.random() * 2 - 1) * j;
+        const p: Vec3 = [a[0] + (b[0] - a[0]) * u + off1[0] * r1 + off2[0] * r2, a[1] + (b[1] - a[1]) * u + off1[1] * r1 + off2[1] * r2, a[2] + (b[2] - a[2]) * u + off1[2] * r1 + off2[2] * r2];
+        pts.push(prev[0], prev[1], prev[2], p[0], p[1], p[2]);
+        prev = p;
+      }
+    };
+    for (const { f, mid, w } of spans) {
+      const at = (x: number, y: number, side: number): Vec3 => {
+        const o = side * (f.t / 2 + 0.016);
+        return [f.center[0] + f.u[0] * x + f.v[0] * y + f.n[0] * o, f.center[1] + f.u[1] * x + f.v[1] * y + f.n[1] * o, f.center[2] + f.u[2] * x + f.v[2] * y + f.n[2] * o];
+      };
+      for (const side of [-1, 1])
+        for (let i = 0; i < 3; i++) {
+          const x0 = mid + (Math.random() - 0.5) * w;
+          const y0 = (Math.random() - 0.5) * f.h;
+          const x1 = Math.max(mid - w / 2, Math.min(mid + w / 2, x0 + (Math.random() - 0.5) * 1.2));
+          const y1 = Math.max(-f.h / 2, Math.min(f.h / 2, y0 + (Math.random() - 0.5) * 1.2));
+          bolt(at(x0, y0, side), at(x1, y1, side), 6, 0.06, f.u, f.v);
+        }
+    }
+    for (const id of live.gadgets.keys()) {
+      const g = this.sim.gadgets.get(id);
+      const d = g && this.dataOf(g.kind);
+      if (!g || !d) continue;
+      const [w, h] = d.sizeM;
+      const [fx, fz] = forwardXZ(g.yaw);
+      const across: Vec3 = [fz, 0, -fx];
+      for (let i = 0; i < 2; i++) {
+        const x0 = (Math.random() - 0.5) * w;
+        const x1 = (Math.random() - 0.5) * w;
+        // An entry's position is its box's middle.
+        const a: Vec3 = [g.pos[0] + across[0] * x0, g.pos[1] + (Math.random() - 0.5) * h, g.pos[2] + across[2] * x0];
+        const b: Vec3 = [g.pos[0] + across[0] * x1, g.pos[1] + (Math.random() - 0.5) * h, g.pos[2] + across[2] * x1];
+        bolt(a, b, 5, 0.05, [0, 1, 0], [fx, 0, fz]);
+      }
+    }
+    for (const g of posts) {
+      const d = this.dataOf(g.kind)!;
+      const [w, h, dep] = d.sizeM;
+      const [fx, fz] = forwardXZ(g.yaw);
+      const across: Vec3 = [fz, 0, -fx];
+      const front = dep / 2 + 0.01;
+      for (let i = 0; i < 4; i++) {
+        const at = (x: number, y: number): Vec3 => [g.pos[0] + across[0] * x + fx * front, g.pos[1] + y, g.pos[2] + across[2] * x + fz * front];
+        bolt(at((Math.random() - 0.5) * w, (Math.random() - 0.5) * h), at((Math.random() - 0.5) * w, (Math.random() - 0.5) * h), 6, 0.05, [0, 1, 0], across);
+      }
+    }
+    const geo = this.arcLines.geometry;
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3));
+    geo.computeBoundingSphere();
+    this.arcLines.visible = pts.length > 0;
   }
 
   /**
@@ -486,7 +626,7 @@ export class GadgetModels {
       glow.position.set(...g.pos);
       group.add(glow);
     }
-    // A Black Mirror's glass (M7): one-way while whole (clear toward its facing, black the other way), grey when shattered.
+    // A Blind Pane's glass (M7): one-way while whole (clear toward its facing, black the other way), grey when shattered.
     const mirror = this.dataOf(g.kind)?.mirror;
     if (mirror && !(g.flags & GFlag.Broken)) {
       const [w, h] = this.dataOf(g.kind)!.sizeM;
@@ -498,7 +638,7 @@ export class GadgetModels {
         group.add(sheet);
       }
     }
-    // A defenders' device a Kludge hacked over to the attackers (M8): it glows in their colour.
+    // A defenders' device a Crossover hacked over to the attackers (M8): it glows in their colour.
     if (this.dataOf(g.kind)?.side === "defender" && g.team !== 1 && !(g.flags & GFlag.Flying)) {
       const glow = new THREE.Mesh(new THREE.SphereGeometry(Math.max(0.12, Math.max(...this.dataOf(g.kind)!.sizeM) * 0.6), 12, 8), this.fxMat.hacked);
       glow.position.set(g.pos[0], g.pos[1], g.pos[2]);
@@ -515,8 +655,8 @@ export class GadgetModels {
       spark.position.set(g.pos[0], g.pos[1] + 0.1, g.pos[2]);
       group.add(spark);
     }
-    // Thermite's charge burning (M5): sparks over its face on its side and on the surface's far side.
-    if (id === "exothermic_charge" && g.flags & GFlag.Active) {
+    // Kiln's charge burning (M5): sparks over its face on its side and on the surface's far side.
+    if (id === "burn_frame" && g.flags & GFlag.Active) {
       const size = this.dataOf(g.kind)!.sizeM;
       const back = behindOf(g);
       const through = (g.panel >= 0 ? this.sim.level.panels.list[g.panel]?.frame.t : undefined) ?? 0.2;
@@ -527,7 +667,7 @@ export class GadgetModels {
         group.add(glow);
       }
     }
-    // Fuze's charge set off (M5): its tube through the surface, out on the far side.
+    // Hail's charge set off (M5): its tube through the surface, out on the far side.
     const tube = tubeBox(data, g);
     const tip = tubeTip(data, g);
     if (tube && tip) {
@@ -571,10 +711,10 @@ export class GadgetModels {
    * segments, a cloud, a jet), not the kinds' and the effects' shared ones (the review, M12: they piled up).
    */
   /**
-   * An entry built of parts (Skopós's idle shell's barrier, the game's model: D-157), each where gadgets/hits.ts partBoxes
-   * has it, in the entry's own frame (forward is −z; `height` its whole height, its position at half that): armour
-   * panels in grey frames (two rows, the wide ones two columns) with a yellow stripe down each seam; glass panes tinted,
-   * thin-framed, the front one with a light at each corner. Its group is named "body" (a broken one hides it).
+   * An entry built of parts (Twain's idle frame's barrier, our own design: D-183), each where gadgets/hits.ts partBoxes
+   * has it, in the entry's own frame (forward is −z; `height` its whole height, its position at half that): armour slabs
+   * with a lighter rim round their faces and a bolt in each corner, the first (the front) with a band of the accent low
+   * across it; glass tinted green in a thin dark frame. Its group is named "body" (a broken one hides it).
    */
   private partsModel(parts: NonNullable<ReturnType<GadgetModels["dataOf"]>>["parts"] & object, height: number): THREE.Group {
     const body = new THREE.Group();
@@ -586,6 +726,7 @@ export class GadgetModels {
       mesh.position.set(x, y, z);
       into.add(mesh);
     };
+    const front = parts.findIndex((q) => !q.glass);
     parts.forEach((p, i) => {
       const part = new THREE.Group();
       part.position.set(p.at[0], p.at[1] - height / 2, -p.at[2]);
@@ -597,22 +738,14 @@ export class GadgetModels {
         // A thin dark frame round the pane.
         const f = 0.018;
         for (const [bw, bh, x, y] of [[w, f, 0, h / 2], [w, f, 0, -h / 2], [f, h, w / 2, 0], [f, h, -w / 2, 0]] as const) box(part, bw, bh, f, x, y, 0, m.tube);
-        // The front pane's lights at its corners.
-        if (i === parts.findIndex((q) => q.glass)) for (const sx of [-1, 1]) for (const sy of [-1, 1]) box(part, 0.03, 0.03, 0.012, sx * (w / 2 - 0.03), sy * (h / 2 - 0.03), face, m.canopyLight);
       } else {
         box(part, w, h, d, 0, 0, 0, m.armour);
-        // Its panels' grey frames: round its edge, across its middle (two rows) and, a wide one, down its middle; a
-        // yellow stripe down each vertical seam.
-        const f = 0.045;
-        const cols = w > 0.5 ? 2 : 1;
-        for (const y of [-h / 2 + f / 2, 0, h / 2 - f / 2]) box(part, w, f, 0.012, 0, y, face, m.armourFrame);
-        for (let c = 0; c <= cols; c++) {
-          const x = -w / 2 + (w * c) / cols;
-          const edge = c === 0 ? f / 2 : c === cols ? -f / 2 : 0;
-          box(part, f, h, 0.012, x + edge, 0, face, m.armourFrame);
-          if (c > 0 && c < cols) box(part, 0.012, h * 0.92, 0.016, x, 0, face - 0.004, m.stripe);
-        }
-        if (cols === 1) box(part, 0.012, h * 0.92, 0.016, (p.yawDeg >= 0 ? 1 : -1) * (w / 2 - f - 0.01), 0, face - 0.004, m.stripe);
+        // A lighter rim round its face and a bolt in each corner.
+        const f = 0.03;
+        for (const [bw, bh, x, y] of [[w, f, 0, h / 2 - f / 2], [w, f, 0, -h / 2 + f / 2], [f, h, w / 2 - f / 2, 0], [f, h, -w / 2 + f / 2, 0]] as const) box(part, bw, bh, 0.012, x, y, face, m.armourFrame);
+        for (const sx of [-1, 1]) for (const sy of [-1, 1]) box(part, 0.026, 0.026, 0.018, sx * (w / 2 - 0.05), sy * (h / 2 - 0.05), face - 0.004, m.tube);
+        // The front slab: a band of the accent low across it.
+        if (i === front) box(part, w - 2 * f, 0.05, 0.014, 0, -h / 2 + 0.16, face - 0.002, m.stripe);
       }
       body.add(part);
     });
@@ -637,13 +770,16 @@ export class GadgetModels {
       l.geometry.dispose();
     }
     it.lasers = [];
-    const t = this.dataOf(g.kind)?.tripwire;
-    if (!t) return;
+    const d = this.dataOf(g.kind);
+    const t = d?.tripwire;
+    // A snare sprung on a leg has no wire left.
+    if (!d || !t || (d.snare && g.flags & GFlag.Active)) return;
     for (const deg of t.anglesDeg) {
       const [fx, fz] = forwardXZ(g.yaw + deg * DEG);
-      const len = raycastLevel(this.sim, g.pos, [fx, 0, fz], t.lengthM)?.t ?? t.lengthM;
+      // A snare's wire runs across its opening to the far jamb (gadgets/snare.ts), the same as the server's.
+      const len = d.snare ? wireLength(this.sim, g, d) : (raycastLevel(this.sim, g.pos, [fx, 0, fz], t.lengthM)?.t ?? t.lengthM);
       const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(...g.pos), new THREE.Vector3(g.pos[0] + fx * len, g.pos[1], g.pos[2] + fz * len)]);
-      const line = new THREE.Line(geo, this.laserMat);
+      const line = new THREE.Line(geo, d.snare ? this.wireMat : this.laserMat);
       line.visible = false;
       this.scene.add(line);
       it.lasers.push(line);
@@ -680,6 +816,14 @@ export class GadgetModels {
       }
     }
     this.laserMat.dispose();
+    this.wireMat.dispose();
+    for (const m of this.arcSheets) this.scene.remove(m);
+    this.arcSheets.length = 0;
+    this.scene.remove(this.arcLines);
+    this.arcLines.geometry.dispose();
+    this.arcSheetGeo.dispose();
+    this.arcSheetMat.dispose();
+    this.arcLineMat.dispose();
     for (const x of this.ghosts) {
       this.scene.remove(x.obj);
       this.disposeOwn(x.obj);

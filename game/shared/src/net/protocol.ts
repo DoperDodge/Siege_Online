@@ -34,8 +34,8 @@ export const Msg = {
   MatchAction: 0x0e,
   /** A callout off the comm wheel (Phase 7): its number in data/intel.json `callouts`. */
   Callout: 0x0f,
-  /** Dokkaebi's pick on her tablet: an identified defender to send the Jegeo Payload to, or a dead defender's phone to hack. */
-  JegeoPick: 0x20,
+  /** Relay's pick on her tablet: an identified defender to send the Ringer to, or a dead defender's phone to hack. */
+  RingerPick: 0x20,
   // server → client
   Snapshot: MSG_SNAPSHOT,
   Welcome: 0x11,
@@ -140,7 +140,7 @@ export function decodeHelloRest(r: ByteReader): { name: string; dataHash: number
 }
 
 /** Levels a client may ask a new room to load (the lab pages'). */
-export const ROOM_LEVELS = ["movement_lab", "range_lab", "destruction_lab", "oregon", "gadget_lab"] as const;
+export const ROOM_LEVELS = ["movement_lab", "range_lab", "destruction_lab", "gadget_lab", "rappel_lab", "millrace"] as const;
 export const encodeCreateRoom = (levelId: string = "movement_lab") => new ByteWriter().u8(Msg.CreateRoom).str(levelId).finish();
 /** Throws ProtocolError for a level that isn't in ROOM_LEVELS. */
 export function decodeCreateRoom(r: ByteReader): { levelId: string } {
@@ -202,12 +202,12 @@ export interface RosterEntry {
   controllerId: number;
   name: string;
   operatorId: string;
-  /** The bodies (Skopós: her two shells), none for an attacker in prep. */
+  /** The bodies (Twain: her two shells), none for an attacker in prep. */
   pawnIds: number[];
-  /** An attacker's drones in a match (Phase 7, intel/DESIGN.md §2), held or out; Brava's Kludge drones too (Phase 8 M8). */
+  /** An attacker's drones in a match (Phase 7, intel/DESIGN.md §2), held or out; Patch's Crossover drones too (Phase 8 M8). */
   drones: number[];
-  /** Which of `drones` are Brava's Kludge drones (Phase 8 M8). */
-  kludges: number[];
+  /** Which of `drones` are Patch's Crossover drones (Phase 8 M8). */
+  crossovers: number[];
   /** 0 attackers, 1 defenders (from the operator's side unless a lab tool moved them). */
   team: number;
   /** 0 a player; 1 a range-lab dummy (Phase 3 M10). */
@@ -224,8 +224,8 @@ export function encodeRoster(entries: RosterEntry[], you: number): Uint8Array {
     for (const id of e.pawnIds) w.varu(id);
     w.u8(e.drones.length);
     for (const id of e.drones) w.varu(id);
-    // Which of them are Kludges: a bit per drone, in order (Phase 8 M8).
-    w.u8(e.drones.reduce((bits, id, i) => (e.kludges.includes(id) ? bits | (1 << i) : bits), 0));
+    // Which of them are Crossovers: a bit per drone, in order (Phase 8 M8).
+    w.u8(e.drones.reduce((bits, id, i) => (e.crossovers.includes(id) ? bits | (1 << i) : bits), 0));
     w.u8(e.team).u8(e.kind);
     writeLoadoutPick(w, e.loadout);
   }
@@ -248,11 +248,11 @@ export function decodeRoster(r: ByteReader): { you: number; entries: RosterEntry
     const drones = Array.from({ length: nd }, () => r.varu());
     const bits = r.u8();
     if (bits >> nd) throw new ProtocolError("bad drones");
-    const kludges = drones.filter((_, i) => bits & (1 << i));
+    const crossovers = drones.filter((_, i) => bits & (1 << i));
     const team = r.u8();
     const kind = r.u8();
     if (team > 1 || kind > 1) throw new ProtocolError("bad roster entry");
-    out.push({ controllerId, name, operatorId, pawnIds, drones, kludges, team, kind, loadout: readLoadoutPick(r) });
+    out.push({ controllerId, name, operatorId, pawnIds, drones, crossovers, team, kind, loadout: readLoadoutPick(r) });
   }
   return { you, entries: out };
 }
@@ -283,9 +283,9 @@ export interface ShotBox {
   radius: number;
 }
 
-/** Every body part a shot result's boxes can name ("shield": Fuze's plate, Phase 8 M11), by index. Append only. */
+/** Every body part a shot result's boxes can name ("shield": Hail's plate, Phase 8 M11), by index. Append only. */
 const BOX_PARTS: readonly BodyPart[] = ["head", "neck", "torso", "pelvis", "arm_l", "arm_r", "leg_l", "leg_r", "drone", "shield"];
-/** A shot result's boxes at most: a body's (nine) and Fuze's shield's plate (six) with room to spare. */
+/** A shot result's boxes at most: a body's (nine) and Hail's shield's plate (six) with room to spare. */
 const MAX_SHOT_BOXES = 24;
 const MAX_SHOT_PELLETS = 16;
 
@@ -425,22 +425,29 @@ export function decodeLabTool(r: ByteReader): LabTool {
 }
 
 /**
- * Dokkaebi's pick on her tablet: an identified defender (his body's pawn id) to send the Jegeo Payload to, a dead
+ * Relay's pick on her tablet: an identified defender (his body's pawn id) to send the Ringer to, a dead
  * defender's phone (its gadget id) to hack his cameras with, or nothing. The room checks it when she presses Fire.
  */
-export type JegeoPick = { kind: "none" } | { kind: "defender"; pawnId: number } | { kind: "phone"; gadgetId: number };
-export function encodeJegeoPick(p: JegeoPick): Uint8Array {
-  const w = new ByteWriter().u8(Msg.JegeoPick);
+/**
+ * A held tablet's pick (a player's message, checked when they press Fire): Relay's (Phase 8 M9: an identified
+ * defender, or a dead one's phone), or Tonic's monitor's (R3: the body whose patch Fire sets off). None: by her aim (a
+ * bot's), or (Tonic's) Auto.
+ */
+export type RingerPick = { kind: "none" } | { kind: "defender"; pawnId: number } | { kind: "phone"; gadgetId: number } | { kind: "patch"; pawnId: number };
+export function encodeRingerPick(p: RingerPick): Uint8Array {
+  const w = new ByteWriter().u8(Msg.RingerPick);
   if (p.kind === "none") return w.u8(0).finish();
+  if (p.kind === "patch") return w.u8(3).varu(p.pawnId).finish();
   return p.kind === "defender" ? w.u8(1).varu(p.pawnId).finish() : w.u8(2).varu(p.gadgetId).finish();
 }
-export function decodeJegeoPick(r: ByteReader): JegeoPick {
+export function decodeRingerPick(r: ByteReader): RingerPick {
   const k = r.u8();
   if (k === 0) return { kind: "none" };
   const id = r.varu();
   if (k === 1) return { kind: "defender", pawnId: id };
   if (k === 2) return { kind: "phone", gadgetId: id };
-  throw new ProtocolError("bad jegeo pick");
+  if (k === 3) return { kind: "patch", pawnId: id };
+  throw new ProtocolError("bad ringer pick");
 }
 
 /** A callout off the comm wheel (Phase 7, intel/DESIGN.md §6): its number in data/intel.json `callouts`. */

@@ -1,5 +1,9 @@
 # Phase 9 design: Bot Training
 
+> **Project Redmond:** the map is Millrace now (`data/maps/millrace`), and the operators carry our names (R1) and
+> ids (R4). Oregon and its research (`research/oregon/`) were removed in R4: where this design names them, or the
+> operators' old names, it records how the phase was built.
+
 Status: adopted 2026-11-07. Scope: PLAN.md §15 and §17 Phase 9, "Navmesh + destruction rebake, perception, team
 planner, bot_strats.json for all 4 Oregon sites, all 12 operators playable by bots, difficulty levels, drills,
 training feedback"; done when "Ulo can play a full solo match vs 5 Normal bots on attack and defense, and it feels
@@ -63,6 +67,9 @@ like the map generator's walk graph (tools/mapgen/walkgraph.ts, its head start),
   standing body fits (else bots crouch through it).
 - **Edges**: a node joins its 8 neighbours' nodes within a step (0.35 m), diagonals only where both sides join (no
   corner cutting). Computed when asked, from the heights, so rebuilding a chunk never leaves stale edges in another.
+  A ramp's nodes and flat ones join only where they're level (0.12 m). A staircase's nodes (on its steps or its
+  invisible slope: the level tags both) join each other by a step whichever is which, and join the floor by a step only
+  along the flight's run, at its ends: never from the floor beside it onto its side (D-184).
 - **Links**, each with the input that takes it: **vault** (over a sill, a rail, a hole's lip; onto a ledge) found by
   running the movement code's own vault planner from candidate nodes facing vaultable boxes; **ladder** (up and down);
   **drop** (off a ledge, through a hatch or floor hole: one way, ≤ 3.4 m, the fall's damage in its cost); **rappel**
@@ -71,7 +78,8 @@ like the map generator's walk graph (tools/mapgen/walkgraph.ts, its head start),
   reinforced wall or hatch (a hard breach): only plans that allow it use them (§6).
 - **Search**: the grid is cut into **chunks** of 16 × 16 columns (4 m); each chunk's nodes split into **regions**
   (connected within the chunk). A* runs over regions (a few thousand), then over nodes inside the regions on that
-  route (and their neighbours), then the path is pulled straight where a straight walk stays on nodes. Searches are
+  route (and their neighbours), then the path is pulled straight where a straight walk stays on nodes (and crosses
+  no staircase's edge the grid doesn't join). Searches are
   budgeted per tick (a bot waits a tick or two for a long one).
 - **Following** (`bots/nav/follow.ts`): yaw and forward/strafe toward the next point (the body can look one way and
   walk another), crouch on crouch-only nodes, each link's input at its start (face the sill and Vault; Interact at a
@@ -96,7 +104,7 @@ it has no channel to):
   blasts, breaches and other destruction (panel ops), and footsteps worked out from enemies' speed (sprinting carries
   ~20 m, walking ~10 m, crouch-walking ~4 m, slow walk 0; another storey halves it). A sound gives a position with an
   error that shrinks with distance; difficulty `soundUse` scales how much bots trust it.
-- **Team intel**: the team's pings and spotted marks (the events its client would get), Pulse's heartbeats, what a
+- **Team intel**: the team's pings and spotted marks (the events its client would get), Murmur's heartbeats, what a
   teammate on a camera or a drone sees (bots on cams and drones perceive through them as through their eyes), damage
   taken with its direction, and what teammates saw, shared on the team's board after a short delay (voice comms;
   difficulty `coordination` scales the delay and how much is shared).
@@ -119,7 +127,7 @@ difficulty in data, where a tree needs an interrupt for every case.
 - **Motor** (every tick): the aim controller (§7), the path follower, stance, lean and buttons with human timings
   (holds for deploys, presses for single shots).
 
-## 6. Team planner and `data/maps/oregon/bot_strats.json`
+## 6. Team planner and `data/maps/<map>/bot_strats.json`
 
 One **commander** per side, server-side, with the same knowledge rules (its team's).
 
@@ -132,9 +140,9 @@ One **commander** per side, server-side, with the same knowledge rules (its team
   prep start: nodes with cover whose sight lines reach the room's entries (doors, breachable walls, hatches) at a good
   distance, so they need no hand placing and follow the walls as they are.
 - **Prep (attack)**: each bot drives a drone toward the site along the nav grid (drone rules), pings what it sees.
-- **Action (attack)**: routes from the spawn per the plan, **hard breaches** (the plan's wall for Thermite, Hard
-  Breach Charges for Striker or Fuze; anti-gadget first: Brava hacks and Impact EMPs on jammers), **soft breaches**
-  (Sledge, breach charges, shotguns), vertical play (floors and hatches from above), clearing rooms with support
+- **Action (attack)**: routes from the spawn per the plan, **hard breaches** (the plan's wall for Kiln, Hard
+  Breach Charges for Pointman or Hail; anti-gadget first: Patch hacks and Impact EMPs on jammers), **soft breaches**
+  (Cleave, breach charges, shotguns), vertical play (floors and hatches from above), clearing rooms with support
   covering, the **plant** (the carrier with cover, at the plan's spots or any valid one), post-plant holds.
 - **Action (defense)**: anchors hold, roamers delay and fall back, rotations through the plan's holes when the attack
   commits, retake and disable after a plant.
@@ -160,28 +168,40 @@ One **commander** per side, server-side, with the same knowledge rules (its team
 ### 7.4 Operators (§15.3: every operator, their real loadouts)
 | Operator | What the bot does |
 |---|---|
-| Sledge | Opens unreinforced hatches and floors from above and soft walls on the route; hammer for barricades |
-| Thermite | Exothermic Charge on the plan's reinforced wall (or hatch) once no jammer is on it; detonates from cover |
-| Striker | Hard Breach Charge + Impact EMP by default (common_setups §0.1); EMPs jammers by the breach |
-| Fuze | Cluster Charges through walls and hatches into anchor rooms before the push; backup Hard Breach Charge |
-| Brava | Kludge drone onto jammers by the hard breach, then cameras |
-| Dokkaebi | Jegeo Payload on a detected anchor before the push; hacks cameras through phones |
-| Mute | Signal Disruptors by the reinforced walls and hatches (after reinforcing), one on a drone path |
-| Mira | Black Mirrors on the plan's walls, from the site side; anchors watching through them |
-| Skopós | One shell in each site room; swaps to the one nearer the attack |
-| Sentry | Barbed Wire + Deployable Shield by default, on the plan's spots |
-| Pulse | Roams above or below the site, scans through the floor and pings what it finds |
-| Lesion | Gu mines on stair bottoms, hatch drops and doors (the plan's spots) |
-| Generic | Frags and stuns into rooms before entry, smokes for the plant, claymores on flanks; defenders' wire, shields, Nitro Cells (thrown at heard attackers), alarms, Bulletproof Cameras, Observation Blockers per the plan |
+| Cleave | Opens unreinforced hatches and floors from above and soft walls on the route; hammer for barricades |
+| Kiln | Burn Frame on the plan's reinforced wall (or hatch) once no jammer is on it; detonates from cover |
+| Pointman | Heavy Breach Charge + Impact EMP by default (common_setups §0.1); EMPs jammers by the breach |
+| Hail | Hailstone Drills through walls and hatches into anchor rooms before the push; backup Heavy Breach Charge |
+| Patch | Crossover drone onto jammers by the hard breach, then cameras; once a device is in its sights, Fire held the whole hack (the sights may come and go), a device begun twice left |
+| Relay | Ringer on a detected anchor before the push; hacks cameras through phones |
+| Lull | Dampers by the reinforced walls and hatches (after reinforcing), one on a drone path |
+| Vista | Blind Panes on the plan's walls, from the site side; anchors watching through them |
+| Twain | One shell in each site room; swaps to the one nearer the attack |
+| Picket | Barbed Wire + Deployable Shield by default, on the plan's spots |
+| Murmur | Roams above or below the site, scans through the floor and pings what it finds |
+| Thistle | Burr mines on stair bottoms, hatch drops and doors (the plan's spots) |
+| Tonic (R3) | His monitor up and Fire (its Auto pick) when a teammate's down, or (out of a fight) one's badly hurt, or he is; down, the ability key gets him up |
+| Shunt (R3) | His Arc Packs on the floor at the foot of the plan's reinforced walls (from the side it reinforces them from), each once its wall is reinforced: standing back on the nav grid, looking down at the spot |
+| Bailiff (R3) | Her shield up; an enemy within its prod's reach: the prod held on (Fire, not aimed), stepping in, while its charge lasts; farther off, her sidearm aimed |
+| Latch (R3) | His Snare Latches on the site's doors, from the site's side (aimed at the floor in the doorway; a latch goes on its jamb), as many as he carries. Any attacking bot with a latch on its leg pulls it off when nothing's in sight |
+| Ohm (R3) | His Brownout Pistol at the plan's first hard breach wall from its near side, before the push: a round at each device his scope marks behind it, else two at the wall |
+| Hull (R3) | In a fight his plate braced, stepping in, while the enemy's beyond 8 m; folded to fight closer with his pistol from the hip; folded again out of a fight |
+| Dowser (R3) | Out of a fight on his way in, his coil up for 4 s every 10 to 15 s: a ping on each device it shows that he hasn't marked this round, nearest first |
+| Rivet (R3) | The plan's hard breach (as Kiln's): his Stud Driver's Spine (picked with the reload key) laid on the wall from its near side, a slot from the floor to walk through, or a salvo on a hatch from above; set off from cover 3 m back |
+| Generic | Frags and stuns into rooms before entry, smokes for the plant, claymores on flanks; defenders' wire, shields, Remote Charges (thrown at heard attackers), alarms, Armoured Cameras, Feed Blockers per the plan |
 
-"Counter my pick" (Bot Training): the bots' side picks the roster's answer to the human's operator (Mute against
-Thermite, Brava against Mute, …: a table in data/bots/picks.json, ours).
+"Counter my pick" (Bot Training): the bots' side picks the roster's answer to the human's operator (Lull against
+Kiln, Patch against Lull, …: a table in data/bots/picks.json, ours).
+
+Getting by each other (R3, D-189): a bot standing still beside a teammate who's been trying to move and not getting on
+(a second and a half all told) steps away from him for a moment; the follower's stuck clock runs on the simulation's
+ticks and starts afresh for each goal and after giving up.
 
 As built (M7, D-164): one motor, bots/use.ts, uses any gadget by the keys (place, throw or lob on a ballistic arc,
 swing, hold, detonate from cover); the planners hand out the plan's device spots (defense, prep) and breaches (attack,
-before the way in), and the brain adds reactions (Doing.Gadget): Nitro Cells, Lesion's mines in action, Pulse's
-scans, Dokkaebi's payload, pre-entry frags, plant smokes, claymores, Skopós's swaps. Simplified: Skopós moves her idle
-shell once in prep and swaps by need; Brava's Kludge hacks what it sees on its way to the breach, then she's back.
+before the way in), and the brain adds reactions (Doing.Gadget): Remote Charges, Thistle's mines in action, Murmur's
+scans, Relay's payload, pre-entry frags, plant smokes, claymores, Twain's swaps. Simplified: Twain moves her idle
+shell once in prep and swaps by need; Patch's Crossover hacks what it sees on its way to the breach, then she's back.
 
 ## 8. Orders from human teammates
 
@@ -283,7 +303,7 @@ stats are on the Play page.
 | M4 | Defense: prep (reinforce, holes, barricades, generic gadgets), hold spots, anchors and roamers, rotations, cameras, retake and disable | defending bots that set up and hold |
 | M5 | Attack: drones in prep, spawns, routes, clearing, soft and hard breaches, vertical, rappel, the plant and post-plant | full bot-vs-bot rounds |
 | M6 | Team planner and bot_strats.json for all four sites; orders from human teammates on the comm wheel | each site plays its plan |
-| M7 | All twelve operators' abilities, Fuze's shield, the generic throwables | every operator |
+| M7 | All twelve operators' abilities, Hail's shield, the generic throwables | every operator |
 | M8 | Bot Training setup (your side, sizes, difficulty, site, rounds, picks), the drills | every drill |
 | M9 | Training feedback: round report, killcam, stats per drill and operator | feedback after each round |
 | M10 | Gates: soak, tick budget, browser test, review, docs, report | a solo match vs 5 Normal bots on attack and defense |

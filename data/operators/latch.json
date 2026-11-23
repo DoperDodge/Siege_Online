@@ -1,0 +1,18 @@
+{
+  "_doc": "Latch (Project Redmond R3, gadgets/R3_OPERATORS.md §1): a defender who traps doors and windows. Our own operator: name, look and device (Snare Latches: a trapper that does damage, Ulo's). Health and speed 2 / 2.",
+  "id": "latch",
+  "name": "Latch",
+  "side": "defender",
+  "healthRating": 2,
+  "speedRating": 2,
+  "loadout": {
+    "primaries": ["vector_45_acp", "six12_sd"],
+    "secondaries": ["c75_auto", "smg_12"],
+    "gadgets": ["remote_charge", "proximity_alarm"]
+  },
+  "ability": {
+    "id": "snare_latch",
+    "name": "Snare Latches"
+  },
+  "pawns": 1
+}

@@ -554,7 +554,7 @@
       "surface": "HARD_WALL"
     },
     {
-      "id": "oregon_1f_05",
+      "id": "reinforce_170_1",
       "center": [
         -13.15,
         1.5,
@@ -569,10 +569,10 @@
       "panel": {
         "sections": 1
       },
-      "label": "Oregon: Dining | Kitchen"
+      "label": "1.7 m wall"
     },
     {
-      "id": "oregon_2f_01",
+      "id": "reinforce_410_3",
       "center": [
         -7.95,
         1.5,
@@ -587,10 +587,10 @@
       "panel": {
         "sections": 3
       },
-      "label": "Oregon: Kids' Dorms | Dorms hall"
+      "label": "4.1 m wall"
     },
     {
-      "id": "oregon_b_01",
+      "id": "reinforce_410_2",
       "center": [
         -2.45,
         1.5,
@@ -605,10 +605,10 @@
       "panel": {
         "sections": 2
       },
-      "label": "Oregon: Laundry | Freezer"
+      "label": "4.1 m wall"
     },
     {
-      "id": "oregon_1f_14",
+      "id": "reinforce_330_2",
       "center": [
         2.65,
         1.5,
@@ -623,10 +623,10 @@
       "panel": {
         "sections": 2
       },
-      "label": "Oregon: Classroom | Lobby"
+      "label": "3.3 m wall"
     },
     {
-      "id": "oregon_1f_17",
+      "id": "reinforce_370_2",
       "center": [
         7.65,
         1.5,
@@ -641,7 +641,7 @@
       "panel": {
         "sections": 2
       },
-      "label": "Oregon: Garage (outside wall)"
+      "label": "3.7 m wall"
     }
   ],
   "stairs": [
@@ -678,7 +678,7 @@
         -7.5
       ],
       "yawDeg": 180,
-      "operator": "mute",
+      "operator": "lull",
       "team": 1,
       "script": "static"
     },
@@ -691,7 +691,7 @@
         -7.5
       ],
       "yawDeg": 180,
-      "operator": "pulse",
+      "operator": "murmur",
       "team": 1,
       "script": "static"
     },
@@ -704,7 +704,7 @@
         4.5
       ],
       "yawDeg": 0,
-      "operator": "mira",
+      "operator": "vista",
       "team": 1,
       "script": "static"
     },
@@ -717,7 +717,7 @@
         2
       ],
       "yawDeg": 180,
-      "operator": "lesion",
+      "operator": "thistle",
       "team": 1,
       "script": "static"
     },
@@ -730,7 +730,7 @@
         12
       ],
       "yawDeg": 0,
-      "operator": "sledge",
+      "operator": "cleave",
       "team": 0,
       "script": "static"
     }

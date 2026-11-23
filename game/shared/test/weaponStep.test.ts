@@ -73,8 +73,8 @@ describe("ammo at spawn", () => {
 
 describe("fire rate (integer cadence, at most one shot a tick)", () => {
   for (const [op, slot, weapon, rpm] of [
-    ["brava", 0, "para_308", 650],
-    ["mute", 1, "smg_11", 1270],
+    ["patch", 0, "para_308", 650],
+    ["lull", 1, "smg_11", 1270],
   ] as const) {
     it(`${weapon} at ${rpm} rpm: ⌈N·rpm/3840⌉ shots over N held ticks, ${Math.floor(3840 / rpm)} or ${Math.ceil(3840 / rpm)} ticks apart`, async () => {
       const w = slot === 0 ? await armed(op, wp(weapon)) : await armed(op, undefined, wp(weapon));
@@ -92,7 +92,7 @@ describe("fire rate (integer cadence, at most one shot a tick)", () => {
   }
 
   it("a pump shotgun (87 rpm) clicked every other tick fires once per ~44 ticks; semi needs a fresh press", async () => {
-    const w = await armed("sledge", wp("m590a1"));
+    const w = await armed("cleave", wp("m590a1"));
     // Holding the trigger: one shot.
     expect(shotTicks(w, 60).length).toBe(1);
     w.ticks(60);
@@ -104,7 +104,7 @@ describe("fire rate (integer cadence, at most one shot a tick)", () => {
   });
 
   it("fire modes: B cycles them; a burst fires 3 while held and stops when released", async () => {
-    const w = await armed("fuze", wp("ak_12")); // auto, burst3, semi
+    const w = await armed("hail", wp("ak_12")); // auto, burst3, semi
     expect(w.weapons()[0].fire.modes).toEqual(["auto", "burst3", "semi"]);
     w.tick({ buttons: Btn.FireMode });
     expect(w.s().modes & 15).toBe(1);
@@ -121,7 +121,7 @@ describe("fire rate (integer cadence, at most one shot a tick)", () => {
 
 describe("reloads (immersive reload, core_mechanics.md §14)", () => {
   it("tactical gives magazine + 1, empty gives the magazine; refill and end at the data's ticks", async () => {
-    const w = await armed("brava", wp("para_308"));
+    const w = await armed("patch", wp("para_308"));
     shotTicks(w, 6); // a few shots: 31 → 30 - …
     const before = loadedOf(w.s());
     expect(before).toBeLessThan(31);
@@ -147,8 +147,8 @@ describe("reloads (immersive reload, core_mechanics.md §14)", () => {
 
   it("interrupted after the magazine is out: the chambered round stays (closed bolt) or nothing (open-bolt LMG)", async () => {
     for (const [op, weapon, keep] of [
-      ["brava", "para_308", 1],
-      ["fuze", "6p41", 0],
+      ["patch", "para_308", 1],
+      ["hail", "6p41", 0],
     ] as const) {
       const w = await armed(op, wp(weapon));
       shotTicks(w, 3);
@@ -169,7 +169,7 @@ describe("reloads (immersive reload, core_mechanics.md §14)", () => {
   });
 
   it("firing the chambered round during a reload cancels it", async () => {
-    const w = await armed("brava", wp("para_308"));
+    const w = await armed("patch", wp("para_308"));
     shotTicks(w, 3);
     w.ticks(10);
     w.tick({ buttons: Btn.Reload });
@@ -187,7 +187,7 @@ describe("reloads (immersive reload, core_mechanics.md §14)", () => {
   });
 
   it("a tube shotgun loads one shell at a time (from empty, after the overhead), and firing stops it", async () => {
-    const w = await armed("sledge", wp("m590a1"));
+    const w = await armed("cleave", wp("m590a1"));
     const r = w.weapons()[0].reload;
     if (r.kind !== "per_shell") throw new Error("per-shell weapon expected");
     // Two shots, then reload: one shell per perShellTicks.
@@ -220,7 +220,7 @@ describe("reloads (immersive reload, core_mechanics.md §14)", () => {
   });
 
   it("rounds are never created or lost: loaded + reserve + shots fired = total, whatever you press", async () => {
-    const w = await armed("pulse"); // UMP45 + 5.7 USG
+    const w = await armed("murmur"); // UMP45 + 5.7 USG
     const total = [0, 1].map((k) => loadedOf(w.s(), k) + reserveOf(w.s(), k));
     const fired = [0, 0];
     let seed = 5;
@@ -241,7 +241,7 @@ describe("reloads (immersive reload, core_mechanics.md §14)", () => {
 
 describe("swap and the sprint-to-fire gate", () => {
   it("a swap blocks fire while the other weapon comes up (38 ticks), and each weapon keeps its ammo", async () => {
-    const w = await armed("brava"); // PARA-308 + USP40
+    const w = await armed("patch"); // PARA-308 + USP40
     shotTicks(w, 10);
     const primary = loadedOf(w.s(), 0);
     w.ticks(10);
@@ -264,7 +264,7 @@ describe("swap and the sprint-to-fire gate", () => {
 
   it("the first shot after a sprint comes on the 16th tick (0.25 s), and going prone doesn't shorten it", async () => {
     for (const stance of [Stance.Stand, Stance.Prone]) {
-      const w = await armed("sledge");
+      const w = await armed("cleave");
       w.ticks(64, { forward: 1, buttons: Btn.Sprint });
       expect(w.s().sprinting).toBe(true);
       // Fire held stops the sprint at once; the shot waits out the sprint exit.
@@ -274,7 +274,7 @@ describe("swap and the sprint-to-fire gate", () => {
   });
 
   it("a click during the sprint exit fires when it ends, but never on a tick without input", async () => {
-    const w = await armed("sledge", wp("m590a1")); // semi: a single click
+    const w = await armed("cleave", wp("m590a1")); // semi: a single click
     w.ticks(64, { forward: 1, buttons: Btn.Sprint });
     expect(w.tick({ buttons: Btn.Fire })).toBe(0);
     expect(w.s().wflags & WFlag.FireQueued).toBeTruthy();
@@ -293,7 +293,7 @@ describe("swap and the sprint-to-fire gate", () => {
   });
 
   it("no shots mid-vault, and vaulting cancels a reload", async () => {
-    const w = await armed("sledge");
+    const w = await armed("cleave");
     shotTicks(w, 4);
     w.ticks(10);
     w.sim.teleport(w.ctrl.possessedPawnId, -6, 0, 3.4, 0); // facing the 0.9 m obstacle at z = 2
@@ -315,9 +315,9 @@ describe("swap and the sprint-to-fire gate", () => {
   });
 });
 
-describe("Skopós (each shell its own ammo, weapons/step.ts parkWeapon)", () => {
+describe("Twain (each shell its own ammo, weapons/step.ts parkWeapon)", () => {
   it("shells keep separate ammo, and leaving a shell mid-reload cancels its reload", async () => {
-    const w = await armed("skopos");
+    const w = await armed("twain");
     const ctrl = w.ctrl as PlayerController;
     const [a, b] = ctrl.pawnIds;
     shotTicks(w, 20);
@@ -348,8 +348,8 @@ describe("Skopós (each shell its own ammo, weapons/step.ts parkWeapon)", () => 
 
 describe("determinism", () => {
   it("two sims on the same fire / reload / swap script stay bit-identical, whatever their tick counters say", async () => {
-    const one = await armed("dokkaebi");
-    const two = await armed("dokkaebi");
+    const one = await armed("relay");
+    const two = await armed("relay");
     two.sim.tick += 1000; // weapon code must never read the tick counter
     let seed = 9;
     const rnd = () => (seed = (seed * 1103515245 + 12345) >>> 0) / 2 ** 32;

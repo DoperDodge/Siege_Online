@@ -31,8 +31,8 @@ function useWorldStep(world: World): { steps: number } {
 async function script(stock: boolean): Promise<{ hashes: number[]; travelled: number; steps: number }> {
   const sim = await Sim.create("movement_lab");
   const count = stock ? useWorldStep(sim.world) : { steps: 0 };
-  const a = sim.addPlayer("a", "sledge");
-  let b = sim.addPlayer("b", "thermite");
+  const a = sim.addPlayer("a", "cleave");
+  let b = sim.addPlayer("b", "kiln");
   const hashes: number[] = [];
   const start = sim.pawns.get(a.possessedPawnId)!.state;
   const [x0, z0] = [start.x, start.z];
@@ -40,7 +40,7 @@ async function script(stock: boolean): Promise<{ hashes: number[]; travelled: nu
   for (let t = 0; t < 640; t++) {
     if (t === 120) for (const op of cut) sim.level.panels.apply(sim.level.panels.byId.get("sample_soft")!.panel.spec.index, op);
     if (t === 300) sim.removePlayer(b.id);
-    if (t === 340) b = sim.addPlayer("b2", "thermite");
+    if (t === 340) b = sim.addPlayer("b2", "kiln");
     const yaw = t < 200 ? 15 : t < 400 ? 180 : -60;
     const cmd = (p: Partial<InputCmd> & { yawDeg?: number }) => input(p);
     sim.step(

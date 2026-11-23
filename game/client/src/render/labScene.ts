@@ -16,6 +16,7 @@ import {
   PawnKind,
   PawnMode,
   poseHitboxes,
+  platePose,
   shieldHold,
   shieldPlace,
   type BuiltLevel,
@@ -25,7 +26,7 @@ import {
   type PawnState,
   type Renderable,
   type ResolvedWeapon,
-  type ShieldPlate,
+  type ShieldData,
 } from "@redmond/shared";
 import { BodyModel, operatorLook } from "./bodyModel.js";
 import { Gait, pistolHeld, poseBody, type HeldItem } from "./bodyPose.js";
@@ -283,7 +284,7 @@ export const STOREY_SLACK_M = 0.25;
 
 /**
  * A floor (a slab, soft-floor tile or hatch: flat, of a floor surface) goes with the storey whose floor its top
- * is, by the height this gives: a room's floor can hang lower than its storey's slab (Oregon's
+ * is, by the height this gives: a room's floor can hang lower than its storey's slab (a map's
  * layout.floorShifts), and its bottom would put it with the storey below. A raised floor's slab is thick (solid
  * down to the storey's slab), so its bottom puts it with its storey.
  */
@@ -524,7 +525,7 @@ export class PawnView {
   private readonly wireParts: CapsuleParts[] = [];
   private readonly tag: THREE.Sprite | null;
   private readonly materials: THREE.Material[];
-  /** The body's own colours, which glow white in a Bulletproof Camera's thermal view (heat). */
+  /** The body's own colours, which glow white in a Armoured Camera's thermal view (heat). */
   private readonly skin: THREE.MeshStandardMaterial[];
   private hot = false;
   private gun: GunModel | null = null;
@@ -537,9 +538,10 @@ export class PawnView {
   private heldItem: HeldItem | null = null;
   /** The knife, drawn while it stabs. */
   private knife: ShapeModel | null = null;
-  /** Fuze's Ballistic Shield (Phase 8 M11): its curved plate and window where its state says (your own too). */
+  /** Hail's Ballistic Shield (Phase 8 M11): its curved plate and window where its state says (your own too). */
   private shield: ShieldModel | null = null;
-  private plate: ShieldPlate | null = null;
+  /** Its shield's numbers (Hail's, Phase 8 M11; Hull's Plate braces, R3: its plate as it is now is platePose's). */
+  private shieldData: ShieldData["shield"] | null = null;
   private heldKey = "";
   private gunLook = "";
   private gunVisible = false;
@@ -624,7 +626,7 @@ export class PawnView {
     scene.add(this.body, this.wire);
   }
 
-  /** Seen through a Bulletproof Camera's thermal view (Phase 7): the body (or drone) glows white. */
+  /** Seen through a Armoured Camera's thermal view (Phase 7): the body (or drone) glows white. */
   heat(on: boolean) {
     if (on === this.hot) return;
     this.hot = on;
@@ -637,9 +639,9 @@ export class PawnView {
    */
   update(data: GameData, state: PawnState, now = performance.now() / 1000, swapTicks = 30) {
     if (this.drone) return this.updateDrone(data, state);
-    // Fuze with his shield up in front: his hands on its grips behind it (D-169).
-    const shieldUp = this.plate !== null && shieldPlace(state) === "front";
-    const parts = poseHitboxes(data.movement, data.hitboxes, state, shieldUp ? shieldHold(data.movement, this.plate!, state) : undefined);
+    // Hail with his shield up in front: his hands on its grips behind it (D-169).
+    const shieldUp = this.shieldData !== null && shieldPlace(state) === "front";
+    const parts = poseHitboxes(data.movement, data.hitboxes, state, shieldUp ? shieldHold(data.movement, platePose(this.shieldData!, state), state) : undefined);
     parts.forEach((hb, i) => this.wireParts[i].place(hb, 1.02));
     const model = this.model;
     if (!model) return;
@@ -710,10 +712,10 @@ export class PawnView {
       }
     }
     this.posed = true;
-    // What's on its back: there unless it's the item in its hands (Sledge's hammer, Thermite's charge, ...). (Before the
+    // What's on its back: there unless it's the item in its hands (Cleave's hammer, Kiln's charge, ...). (Before the
     // bones are copied: the item placed with them on the frame it comes back.)
     const back = model.look.back;
-    model.showBack(back === "pack" || back === "radio" || handSlot(state.hand) !== 2);
+    model.showBack(back === "pack" || back === "radio" || back === "battery" || back === "medbag" || back === "reel" || back === "traps" || back === "studs" || back === "aerial" || handSlot(state.hand) !== 2);
     model.sync();
     if (this.tag) this.tag.position.set(rig.joints.head.x, rig.joints.head.y + 0.42, rig.joints.head.z);
     this.gunVisible = this.gun !== null && gunAt !== null;
@@ -737,7 +739,7 @@ export class PawnView {
         this.knife.group.quaternion.copy(knifeAt.quaternion);
       }
     }
-    // Fuze's shield (Phase 8 M11): in your own first person too, where you look through its window.
+    // Hail's shield (Phase 8 M11): in your own first person too, where you look through its window.
     this.shield?.update(data, state, shieldPlace(state));
   }
 
@@ -760,7 +762,7 @@ export class PawnView {
     e.y = state.y;
     e.z = state.z;
     e.at = now;
-    // (Fuze's shield sends its own aiming: how far down it has slid.)
+    // (Hail's shield sends its own aiming: how far down it has slid.)
     const aimTo = state.shieldAt === 1 ? state.adsQ / 65535 : state.prevButtons & Btn.Ads ? 1 : 0;
     e.aim += (aimTo - e.aim) * (1 - Math.exp(-dt * 9));
     if (state.wAct === WeaponAct.Reload) e.reloadFrom = e.reloadFrom < 0 ? now : e.reloadFrom;
@@ -778,17 +780,20 @@ export class PawnView {
     return s;
   }
 
-  /** Fuze's Ballistic Shield's plate on this body (its loadout's), or none (Phase 8 M11). */
-  setShield(plate: ShieldPlate | null) {
-    if (plate === this.plate) return;
-    this.plate = plate;
+  /**
+   * Hail's Ballistic Shield on this body (its loadout's), or none (Phase 8 M11); `face` its plate's colour (Bailiff's,
+   * R3: a dark slate plate). (Hull's, R3: its plate as braced as it is now.)
+   */
+  setShield(k: ShieldData["shield"] | null, face?: number) {
+    if (k === this.shieldData) return;
+    this.shieldData = k;
     if (this.shield) {
       this.body.remove(this.shield.mesh);
       this.shield.dispose();
       this.shield = null;
     }
-    if (plate) {
-      this.shield = new ShieldModel(plate);
+    if (k) {
+      this.shield = new ShieldModel(k.plate, face, k);
       this.body.add(this.shield.mesh);
     }
   }
@@ -798,7 +803,7 @@ export class PawnView {
 
   /**
    * The gadget in its hands (its id, or "detonator", and its data's size; `up`: held up to the face; `swing`: swung
-   * in both hands, Sledge's hammer, with its swing's timing), or none: the gun shows again. Its shaped model
+   * in both hands, Cleave's hammer, with its swing's timing), or none: the gun shows again. Its shaped model
    * (gadgetShapes.ts), no bigger than a hand holds (a swung one its own length).
    */
   setHeld(held: { id: string; size: readonly number[] } | null, up = false, swing: HeldItem["swing"] = null) {

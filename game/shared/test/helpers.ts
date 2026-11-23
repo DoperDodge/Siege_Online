@@ -1,6 +1,6 @@
 import { DEG, eyePose, poseHitboxes, QUERY_STATIC, quatFromTo, Sim, Stance, TICK_HZ, type InputCmd, type Pawn, type PlayerController, type Vec3 } from "../src/index.js";
 
-export async function labWith(operatorId = "sledge"): Promise<{ sim: Sim; ctrl: PlayerController; pawn: Pawn }> {
+export async function labWith(operatorId = "cleave"): Promise<{ sim: Sim; ctrl: PlayerController; pawn: Pawn }> {
   const sim = await Sim.create("movement_lab");
   const ctrl = sim.addPlayer("tester", operatorId);
   const pawn = sim.pawns.get(ctrl.possessedPawnId)!;

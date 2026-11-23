@@ -212,8 +212,8 @@ const WALL_ITEMS: Record<DressingWall, { w: [number, number]; h: [number, number
   pegboard: { w: [1.1, 1.3], h: [0.8, 0.8], y: 1.45, deep: 0.06 },
 };
 
-/** Rugs that lie under a piece of furniture (r6calls' renders show them), by room. */
-const RUG_UNDER: Record<string, string> = { "1F_DINING": "PROP_DINING_TABLE_N", "2F_GAME_ROOM": "PROP_GAME_SOFA" };
+/** Rugs that lie under a piece of furniture, by room: the Dispatch Office's under the clerk's desk. */
+const RUG_UNDER: Record<string, string> = { "1F_DISPATCH": "PROP_DESK_DISPATCH" };
 
 export interface Dressing {
   /** One geometry per storey (by `storeyOf` of a room's storey index). */
@@ -284,7 +284,7 @@ export function buildDressing(level: BuiltLevel, art: LevelArt, map: MapArt, all
       }
     }
 
-    // Rugs: under the furniture the renders show on one, else in the middle of the room's biggest rectangle.
+    // Rugs: under the furniture RUG_UNDER names, else in the middle of the room's biggest rectangle.
     for (let n = 0; n < (kit.rug ?? 0); n++) {
       const floorY = level.def.storeys[storeyIx].floorY;
       const under = n === 0 ? RUG_UNDER[room.id] : undefined;

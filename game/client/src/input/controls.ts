@@ -51,7 +51,7 @@ export class Controls {
   /** When this returns true (a menu is open), game keys are ignored. */
   isBlocked: () => boolean = () => false;
   /**
-   * When this returns true (Skopós is on her other shell's camera or mid-swap), stance, lean and aim keys
+   * When this returns true (Twain is on her other shell's camera or mid-swap), stance, lean and aim keys
    * are ignored: the simulation doesn't use them there, and they would silently apply to the body you
    * return to.
    */
@@ -61,13 +61,13 @@ export class Controls {
    * wheel turn into a single swap press only when the slot would change (C16 in the Phase 3 plan). `gadget`: the
    * gadget slot in the hands (Phase 8: 1 or 2; 0 the weapon), which 1 / 2 put away.
    */
-  /** `fixed`: the loadout has one weapon only (Fuze's shield and pistol): every weapon key means the one out. */
+  /** `fixed`: the loadout has one weapon only (Hail's shield and pistol): every weapon key means the one out. */
   weaponState: () => { slot: number; equipping: boolean; zoom?: number; gadget?: number; fixed?: boolean } | null = () => null;
   /** When this returns true (a map's plan view zooms with it), the mouse wheel doesn't switch weapons. */
   wheelTaken: () => boolean = () => false;
   /**
    * When this returns true (the lab's free camera is flying), a key only counts as held (the camera flies
-   * with isHeld) and does nothing for the body: no toggle, pulse or weapon request is left to reach it
+   * with isHeld) and does nothing for the body: no toggle, murmur or weapon request is left to reach it
    * afterwards. The use key calls onFlyUse instead.
    */
   flying: () => boolean = () => false;
@@ -79,33 +79,33 @@ export class Controls {
   private leanIntent: -1 | 0 | 1 = 0;
   private adsToggled = false;
   private sprintLatched = false;
-  private interactPulse = false;
-  private abilityPulse = false;
-  private vaultPulse = false;
+  private interactMurmur = false;
+  private abilityMurmur = false;
+  private vaultMurmur = false;
   /** A click shorter than a tick still fires: Fire is sent for at least one tick (D-055). */
-  private firePulse = false;
-  private reloadPulse = false;
-  private fireModePulse = false;
-  private meleePulse = false;
-  private dropPulse = false;
-  private observePulse = false;
-  /** The gadget key (Phase 8): a press takes the gadget out or puts it away (on a Bulletproof Camera, fires its dart). */
-  private gadgetPulse = false;
-  private throwPulse = false;
+  private fireMurmur = false;
+  private reloadMurmur = false;
+  private fireModeMurmur = false;
+  private meleeMurmur = false;
+  private dropMurmur = false;
+  private observeMurmur = false;
+  /** The gadget key (Phase 8): a press takes the gadget out or puts it away (on a Armoured Camera, fires its dart). */
+  private gadgetMurmur = false;
+  private throwMurmur = false;
   /**
-   * On a drone or a camera (Phase 7), or Skopós's shell view (one of her feeds, D-155), the lean keys are held, whatever
+   * On a drone or a camera (Phase 7), or Twain's shell view (one of her feeds, D-155), the lean keys are held, whatever
    * the lean setting: a new press goes to the previous / next feed.
    */
   onDrone: () => boolean = () => false;
   /** A lean pressed on a feed, sent for the next tick even if let go before it (−1 / 1; 0: none). */
-  private leanPulse: -1 | 0 | 1 = 0;
+  private leanMurmur: -1 | 0 | 1 = 0;
   /**
    * The ping key (Phase 7, intel/DESIGN.md §6): a tap pings where you look (sent for one tick when it's let go); held
    * for WHEEL_TICKS it opens the comm wheel instead, where the mouse points at a callout and letting go sends it.
    */
   private pingDown = false;
   private pingTicks = 0;
-  private pingPulse = false;
+  private pingMurmur = false;
   /** The comm wheel while it's open: the mouse's travel since it opened (counts), which picks the callout. */
   private wheel: { x: number; y: number } | null = null;
   /** How many callouts the comm wheel holds (0: none here, and a held ping key pings when let go). */
@@ -288,7 +288,7 @@ export class Controls {
       else this.held.add(action);
       return;
     }
-    // (A lean on a feed switches the feed, even on Skopós's shell view, where the stance keys are locked: D-155.)
+    // (A lean on a feed switches the feed, even on Twain's shell view, where the stance keys are locked: D-155.)
     const feedLean = (action === "leanLeft" || action === "leanRight") && this.onDrone();
     if (STANCE_ACTIONS.has(action) && this.stanceLocked() && !feedLean) return;
     const s = this.settings;
@@ -296,7 +296,7 @@ export class Controls {
     if (this.onDrone() && FEED_IGNORES.has(action)) {
       // On a drone or a camera (Phase 7) the body's toggles and weapons stay as they were (it stands idle), and a lean
       // goes to the previous / next feed: for one tick at least, so a tap between ticks (or a touch button's) counts.
-      if (action === "leanLeft" || action === "leanRight") this.leanPulse = this.lastLeanHold = action === "leanLeft" ? -1 : 1;
+      if (action === "leanLeft" || action === "leanRight") this.leanMurmur = this.lastLeanHold = action === "leanLeft" ? -1 : 1;
       return;
     }
     switch (action) {
@@ -324,41 +324,41 @@ export class Controls {
         break;
       case "vault":
         // Also sent for one tick after a tap shorter than a frame ("Space to mantle" while standing still).
-        this.vaultPulse = true;
+        this.vaultMurmur = true;
         break;
       case "interact":
-        this.interactPulse = true;
+        this.interactMurmur = true;
         break;
       case "ability":
         // Sent for exactly one tick so a quick tap (keyboard or touch) is never missed.
-        this.abilityPulse = true;
+        this.abilityMurmur = true;
         break;
       case "respawn":
         this.onUi(action);
         break;
       case "fire":
-        this.firePulse = true;
+        this.fireMurmur = true;
         break;
       case "reload":
-        this.reloadPulse = true;
+        this.reloadMurmur = true;
         break;
       case "fireMode":
-        this.fireModePulse = true;
+        this.fireModeMurmur = true;
         break;
       case "melee":
-        this.meleePulse = true;
+        this.meleeMurmur = true;
         break;
       case "drop":
-        this.dropPulse = true;
+        this.dropMurmur = true;
         break;
       case "observe":
-        this.observePulse = true;
+        this.observeMurmur = true;
         break;
       case "gadget":
-        this.gadgetPulse = true;
+        this.gadgetMurmur = true;
         break;
       case "throwDrone":
-        this.throwPulse = true;
+        this.throwMurmur = true;
         break;
       case "ping":
         this.pingDown = true;
@@ -387,7 +387,7 @@ export class Controls {
         const pick = this.wheelPick;
         this.wheel = null;
         if (pick !== null && pick !== undefined) this.onCallout(pick);
-      } else this.pingPulse = true;
+      } else this.pingMurmur = true;
     }
   }
 
@@ -427,26 +427,26 @@ export class Controls {
 
     let buttons = 0;
     if (this.held.has("sprint") || this.sprintLatched) buttons |= Btn.Sprint;
-    if (this.held.has("vault") || this.vaultPulse) buttons |= Btn.Vault;
+    if (this.held.has("vault") || this.vaultMurmur) buttons |= Btn.Vault;
     // Interact is held (reviving takes 4 s, DECISIONS D-049); a tap shorter than a tick still goes out once.
-    if (this.held.has("interact") || this.interactPulse) buttons |= Btn.Interact;
+    if (this.held.has("interact") || this.interactMurmur) buttons |= Btn.Interact;
     if (this.adsActive) buttons |= Btn.Ads;
     if (this.held.has("slowWalk")) buttons |= Btn.SlowWalk;
-    if (this.abilityPulse) buttons |= Btn.Ability;
-    if (this.held.has("fire") || this.firePulse) buttons |= Btn.Fire;
-    if (this.reloadPulse) buttons |= Btn.Reload;
-    if (this.fireModePulse) buttons |= Btn.FireMode;
-    if (this.meleePulse) buttons |= Btn.Melee;
-    if (this.dropPulse) buttons |= Btn.Drop;
-    if (this.observePulse) buttons |= Btn.Observe;
-    if (this.gadgetPulse) buttons |= Btn.Gadget;
-    if (this.throwPulse) buttons |= Btn.Throw;
+    if (this.abilityMurmur) buttons |= Btn.Ability;
+    if (this.held.has("fire") || this.fireMurmur) buttons |= Btn.Fire;
+    if (this.reloadMurmur) buttons |= Btn.Reload;
+    if (this.fireModeMurmur) buttons |= Btn.FireMode;
+    if (this.meleeMurmur) buttons |= Btn.Melee;
+    if (this.dropMurmur) buttons |= Btn.Drop;
+    if (this.observeMurmur) buttons |= Btn.Observe;
+    if (this.gadgetMurmur) buttons |= Btn.Gadget;
+    if (this.throwMurmur) buttons |= Btn.Throw;
     if (this.pingDown && !this.wheel && ++this.pingTicks >= WHEEL_TICKS && this.wheelSize() > 0) this.wheel = { x: 0, y: 0 };
-    if (this.pingPulse) buttons |= Btn.Ping;
+    if (this.pingMurmur) buttons |= Btn.Ping;
     // Weapon slot: one swap press, sent only while the slot differs and no swap is already under way
     // (a press then would be ignored); released for a tick in between so the next press is a new one.
     const ws = this.weaponState();
-    // One weapon only (Fuze's shield): any weapon key is the weapon already out (a swap would never happen, and a
+    // One weapon only (Hail's shield): any weapon key is the weapon already out (a swap would never happen, and a
     // request kept for it would go on sending Swap, which puts a gadget away the moment it comes out).
     if (ws?.fixed && this.wantSlot !== null) this.wantSlot = ws.slot === 1 ? 1 : 0;
     if (ws?.gadget && this.wantSlot !== null) {
@@ -462,18 +462,18 @@ export class Controls {
       buttons |= Btn.Swap;
       this.sentSwap = true;
     } else this.sentSwap = false;
-    this.vaultPulse = false;
-    this.interactPulse = false;
-    this.abilityPulse = false;
-    this.firePulse = false;
-    this.reloadPulse = false;
-    this.fireModePulse = false;
-    this.meleePulse = false;
-    this.dropPulse = false;
-    this.observePulse = false;
-    this.gadgetPulse = false;
-    this.throwPulse = false;
-    this.pingPulse = false;
+    this.vaultMurmur = false;
+    this.interactMurmur = false;
+    this.abilityMurmur = false;
+    this.fireMurmur = false;
+    this.reloadMurmur = false;
+    this.fireModeMurmur = false;
+    this.meleeMurmur = false;
+    this.dropMurmur = false;
+    this.observeMurmur = false;
+    this.gadgetMurmur = false;
+    this.throwMurmur = false;
+    this.pingMurmur = false;
 
     const s = this.settings;
     let stance = this.stanceIntent;
@@ -486,8 +486,8 @@ export class Controls {
       const r = this.held.has("leanRight");
       lean = l && r ? this.lastLeanHold : l ? -1 : r ? 1 : 0;
     }
-    if (this.onDrone() && lean === 0) lean = this.leanPulse;
-    this.leanPulse = 0;
+    if (this.onDrone() && lean === 0) lean = this.leanMurmur;
+    this.leanMurmur = 0;
     // Prone: turn toward the view by at most one step from where the body is (re-anchored in syncView).
     const step = this.limits.maxYawStep;
     const yaw = step === null ? this.yaw : wrapAngle(this.sampledYaw + clamp(wrapAngle(this.yaw - this.sampledYaw), -step, step));
@@ -497,7 +497,7 @@ export class Controls {
     return cmd;
   }
 
-  /** Jump the view to a different body (Skopós camera / swap) without carrying over a stale clamp. */
+  /** Jump the view to a different body (Twain camera / swap) without carrying over a stale clamp. */
   setView(yaw: number, pitch: number) {
     this.yaw = this.sampledYaw = yaw;
     this.pitch = this.sampledPitch = pitch;

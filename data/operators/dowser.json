@@ -1,0 +1,18 @@
+{
+  "_doc": "Dowser (Project Redmond R3, gadgets/R3_OPERATORS.md §1): an attacker who finds the defenders' electronics through walls and marks them for his team. Our own operator: name, look and ability (the Divining Coil). Health and speed 1 / 3.",
+  "id": "dowser",
+  "name": "Dowser",
+  "side": "attacker",
+  "healthRating": 1,
+  "speedRating": 3,
+  "loadout": {
+    "primaries": ["l85a2", "t_5_smg"],
+    "secondaries": ["c75_auto", "p226_mk_25"],
+    "gadgets": ["smoke", "claymore", "breach_charge"]
+  },
+  "ability": {
+    "id": "divining_coil",
+    "name": "Divining Coil"
+  },
+  "pawns": 1
+}

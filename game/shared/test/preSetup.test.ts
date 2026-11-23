@@ -1,4 +1,4 @@
-// Quick Match's pre-setups (match/preSetup.ts, match/DESIGN.md §9) on Oregon: each site's walls reinforced from the
+// Quick Match's pre-setups (match/preSetup.ts, match/DESIGN.md §9) on Millrace: each site's walls reinforced from the
 // side of the room the data names (a hatch from its top), and its rotation holes cut so that bodies get through them.
 import { describe, expect, it } from "vitest";
 import { Btn, preSetupOps, Sim, Stance, type PanelEntry } from "../src/index.js";
@@ -15,8 +15,8 @@ const offFace = (e: PanelEntry, side: number, d: number): [number, number] => {
 };
 
 describe("Quick Match pre-setups (match/DESIGN.md §9)", () => {
-  it("every Oregon site has one: its walls get steel on every section facing their room, a hatch from its top, and each hole is clear for a body", async () => {
-    const sim = await Sim.create("oregon");
+  it("every Millrace site has one: its walls get steel on every section facing their room, a hatch from its top, and each hole is clear for a body", async () => {
+    const sim = await Sim.create("millrace");
     const d = sim.data.destruction;
     for (const site of sim.level.def.sites) {
       for (const e of sim.level.panels.list) if (e.panel.modified) sim.level.panels.reset(e.panel.spec.index);
@@ -50,27 +50,27 @@ describe("Quick Match pre-setups (match/DESIGN.md §9)", () => {
     }
   });
 
-  it("a body vaults through a vault hole (Dining → Kitchen) and walks crouched through a crouch hole (Supply → Laundry); without them the wall stops it", async () => {
-    const sim = await Sim.create("oregon");
-    const ctrl = sim.addPlayer("tester", "sledge");
+  it("a body vaults through a vault hole (Spinning Room → Mill Corridor) and walks crouched through a crouch hole (Boiler Room → Coal Store); without them the wall stops it", async () => {
+    const sim = await Sim.create("millrace");
+    const ctrl = sim.addPlayer("tester", "cleave");
     const p = sim.pawns.get(ctrl.possessedPawnId)!;
-    // SW-1F-05 runs along z at x 20.35; the Dining is west of it. Facing east (yaw −90°), Space vaults through.
-    const vaultWall = sim.level.panels.byId.get("SW-1F-05")!.frame.center;
+    // SW-1F-04 runs along z at x 38; the Spinning Room is west of it. Facing east (yaw −90°), Space vaults through.
+    const vaultWall = sim.level.panels.byId.get("SW-1F-04")!.frame.center;
     const vault = () => {
       teleport(sim, ctrl, vaultWall[0] - 0.65, 0, vaultWall[2], -90);
       sim.step(new Map([[ctrl.id, input({ yawDeg: -90, buttons: Btn.Vault })]]));
       run(sim, ctrl, { yawDeg: -90 }, 1.5);
-      return inRoom(sim, "1F_KITCHEN", p.state.x, p.state.z) && p.state.x > vaultWall[0] + 0.3;
+      return inRoom(sim, "1F_MILL_CORRIDOR", p.state.x, p.state.z) && p.state.x > vaultWall[0] + 0.3;
     };
-    // SW-B-06 runs along x at z 30.3; the Supply Room's strip is north of it. Crouched, facing south (180°), walk through.
-    const crouchWall = sim.level.panels.byId.get("SW-B-06")!.frame.center;
+    // SW-B-01 runs along x at z 33; the Boiler Room is north of it. Crouched, facing south (180°), walk through.
+    const crouchWall = sim.level.panels.byId.get("SW-B-01")!.frame.center;
     const crouch = () => {
       teleport(sim, ctrl, crouchWall[0], -3.2, crouchWall[2] - 0.6, 180, Stance.Crouch);
       run(sim, ctrl, { yawDeg: 180, forward: 1, stance: Stance.Crouch }, 1.5);
-      return inRoom(sim, "B_LAUNDRY", p.state.x, p.state.z) && p.state.z > crouchWall[2] + 0.4;
+      return inRoom(sim, "B_COAL_STORE", p.state.x, p.state.z) && p.state.z > crouchWall[2] + 0.4;
     };
     expect([vault(), crouch()]).toEqual([false, false]);
-    for (const id of ["SITE_DINING", "SITE_LAUNDRY"]) for (const o of preSetupOps(sim.level.def, sim.level.panels, sim.data.destruction, id)) sim.level.panels.apply(o.panel, o.op);
+    for (const id of ["SITE_MILL", "SITE_BOILER"]) for (const o of preSetupOps(sim.level.def, sim.level.panels, sim.data.destruction, id)) sim.level.panels.apply(o.panel, o.op);
     expect([vault(), crouch()]).toEqual([true, true]);
   });
 });

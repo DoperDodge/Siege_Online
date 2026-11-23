@@ -48,7 +48,7 @@ describe("damage against distance (weapons_notes.md §4.3)", () => {
     expect(bulletDamage(combat, m590, 3, "arm")).toMatchObject({ amount: 36 });
   });
 
-  it("Skopós's idle shell takes a multiple on a headshot instead of dying (skopos.md §3.3)", () => {
+  it("Twain's idle shell takes a multiple on a headshot instead of dying (twain.md §3.3)", () => {
     // "A 5.7 USG headshot doesn't destroy it": 42 × 2 = 84 < 100 HP.
     expect(bulletDamage(combat, dmg("5_7_usg"), 5, "head", { idleShell: true })).toEqual({ kill: false, amount: 84, headshot: true });
   });

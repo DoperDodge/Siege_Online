@@ -1,5 +1,5 @@
 {
-  "_doc": "L85A2 (Sledge). research/weapons.csv row l85a2; class rules research/weapons_notes.md §4. Ammo-refill 1.43 / 2.65 s community-measured.",
+  "_doc": "L85A2 (Cleave). research/weapons.csv row l85a2; class rules research/weapons_notes.md §4. Ammo-refill 1.43 / 2.65 s community-measured.",
   "_season": "Y11S3.1",
   "_unverified": ["destruction", "reload.refillEmptyS", "reload.refillTacticalS"],
   "id": "l85a2",

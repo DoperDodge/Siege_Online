@@ -44,11 +44,16 @@ describe("map metadata", () => {
   it("the labs parse unchanged: every new field is optional", () => {
     const data = loadGameData();
     for (const lvl of data.levels.values()) {
-      if (lvl.id === "oregon") continue;
+      // The compiled maps (tools/mapgen) have them all; Millrace is Project Redmond's own (R2, D-183).
+      if (lvl.id === "millrace") continue;
       // The Gadget Lab has a default camera and the ingredients to try gadgets on (Phase 8 M3); the other labs none.
       const gadgetLab = lvl.id === "gadget_lab";
-      expect(lvl.bounds, lvl.id).toBeUndefined();
-      expect([lvl.storeys, lvl.rooms, lvl.sites, lvl.zones], lvl.id).toEqual([[], [], [], []]);
+      // The Movement Lab has bounds: bots climb its ladder (test/botNav.test.ts; Millrace has none).
+      if (lvl.id === "movement_lab") expect(lvl.bounds?.killY, lvl.id).toBeLessThan(0);
+      else expect(lvl.bounds, lvl.id).toBeUndefined();
+      expect([lvl.storeys, lvl.rooms, lvl.sites], lvl.id).toEqual([[], [], []]);
+      // The Rappel Lab's faces are its zones (R4.1: rappel zones only); the other labs have none.
+      expect(lvl.zones.every((z) => z.kind === "rappel") && (lvl.zones.length > 0) === (lvl.id === "rappel_lab"), lvl.id).toBe(true);
       expect([lvl.cameras.length > 0, lvl.ingredients.length > 0], lvl.id).toEqual([gadgetLab, gadgetLab]);
       expect(lvl.solids.every((s) => !s.bodiesOnly), lvl.id).toBe(true);
     }
@@ -102,7 +107,7 @@ describe("map metadata", () => {
     expect(fence.visible).toBe(false);
     const shot = raycastLevel(sim, [0, 1.2, 0], [0, 0, -1], 30);
     expect(shot).toBeNull(); // nothing but the open yard north of the spawn
-    const ctrl = sim.addPlayer("walker", "sledge");
+    const ctrl = sim.addPlayer("walker", "cleave");
     run(sim, ctrl, { forward: 1, yawDeg: 0 }, 3);
     const p = sim.pawns.get(ctrl.possessedPawnId)!.state;
     expect(p.z).toBeGreaterThan(-5 + 0.1 + 0.25); // stopped at the fence's south face
@@ -111,7 +116,7 @@ describe("map metadata", () => {
 
   it("a body that falls below the kill plane comes back to spawn 0 standing, unhurt", async () => {
     const sim = await Sim.create("map_test", withLevel(testMap()));
-    const ctrl = sim.addPlayer("faller", "sledge");
+    const ctrl = sim.addPlayer("faller", "cleave");
     const pawn = sim.pawns.get(ctrl.possessedPawnId)!;
     sim.teleport(pawn.id, 9.6, 0, 3, -90);
     let lowest = 0;
@@ -134,7 +139,7 @@ describe("map metadata", () => {
     /** Down a body falling off the east edge; `bleedSteps`: how many steps of bleeding it has left. */
     const fall = async (bleedSteps: number | null) => {
       const sim = await Sim.create("map_test", withLevel(testMap()));
-      const ctrl = sim.addPlayer("faller", "sledge");
+      const ctrl = sim.addPlayer("faller", "cleave");
       const pawn = sim.pawns.get(ctrl.possessedPawnId)!;
       sim.teleport(pawn.id, 11, 0, 3, -90); // just past the edge
       sim.step(new Map());

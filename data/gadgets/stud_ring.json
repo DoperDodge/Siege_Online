@@ -1,0 +1,17 @@
+{
+  "_doc": "The Ring: one of Rivet's Stud Driver's salvos (Project Redmond R3, data/gadgets/stud_driver.json): never carried, laid by the driver (its `count` unused; its `use` is where it may go). Eight studs round a circle; set off by his detonator, it cuts a round hole 1.4 m across (data/destruction.json `explosives.stud_ring`) through every layer, steel too (a hatch whole). On a wall its hole's bottom is `salvo.ledgeM` over the floor: a ledge a body vaults through. A small blast round it. A bullet into one of its studs destroys it (gadgets/studs.ts); its `sizeM` is its studs' extent. Our own design and numbers.",
+  "_ours": true,
+  "id": "stud_ring",
+  "name": "Ring",
+  "side": "attacker",
+  "operator": "rivet",
+  "count": 3,
+  "electronic": false,
+  "use": {"kind": "place", "on": ["soft", "steel"], "placeS": 0.1, "reachM": 25},
+  "remote": true,
+  "pickUp": false,
+  "sizeM": [1.3, 1.3, 0.05],
+  "blast": {"damage": {"max": 20, "fullM": 0.2, "zeroM": 1.0}, "destroyM": 0.4, "cut": "stud_ring", "throughSoft": 0.7, "concussM": 1.5},
+  "fragile": true,
+  "salvo": {"ledgeM": 0.45}
+}

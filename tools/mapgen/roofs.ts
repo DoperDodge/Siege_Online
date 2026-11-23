@@ -6,8 +6,9 @@
 // ceiling slab at the eave unless `ceiling` is false; and steps closing each end of the roof that nothing else
 // closes (a storey above, or a roof beside it at least as high). With no ceiling the room below looks up into
 // the roof, and the walls under it are raised to it in steps instead.
+import { frames } from "./frames.js";
 import { greedyRects, type Rect } from "./grid.js";
-import type { Floor } from "./research.js";
+import type { Floor } from "./schema.js";
 import { CELL_M, fillBox, storeyOfBox, type RoomsResult } from "./rooms.js";
 import type { Layout } from "./schema.js";
 import type { Solid } from "./walls.js";
@@ -401,6 +402,20 @@ export function checkRoofs(layout: Layout, roofs: Roof[], solids: Box[], rooms: 
   const holds = (b: Box, x: number, z: number) => x >= lo(b, 0) && x <= hi(b, 0) && z >= lo(b, 2) && z <= hi(b, 2);
   const pitched = roofs.filter((r) => r.pitch);
   const inRect = (r: Roof, x: number, z: number) => r.rects.some((q) => x >= q[0] && x <= q[2] && z >= q[1] && z <= q[3]);
+  // The ground's own wells are open to the sky on purpose (a sunken space outside: Millrace's millrace, D-183).
+  const fr = frames(layout);
+  const k = layout.units.mPerU;
+  const ground = layout.storeys.find((s) => !s.underground)?.id;
+  const sky = layout.wells
+    .filter((w) => w.floor === ground)
+    .flatMap((w) =>
+      w.rects.map((r) => {
+        const [ax, az] = fr.toWorld(w.frame, r[0], r[1]);
+        const [bx, bz] = fr.toWorld(w.frame, r[2], r[3]);
+        return [Math.min(ax, bx) * k, Math.min(az, bz) * k, Math.max(ax, bx) * k, Math.max(az, bz) * k];
+      }),
+    );
+  const underSky = (x: number, z: number) => sky.some((q) => x >= q[0] && x <= q[2] && z >= q[1] && z <= q[3]);
 
   // ---- Cover: spots every half metre over each room's rectangles.
   const covering = new Set(["HARD_FLOOR", "SOFT_FLOOR", "HATCH"]);
@@ -415,7 +430,7 @@ export function checkRoofs(layout: Layout, roofs: Roof[], solids: Box[], rooms: 
         for (let j = 0; j < nz; j++) {
           const [x, z] = [x0 + ((i + 0.5) * (x1 - x0)) / nx, z0 + ((j + 0.5) * (z1 - z0)) / nz];
           total++;
-          const over = near(x, z).some((b) => covering.has(b.surface) && lo(b, 1) > floorY + 0.5 && holds(b, x, z)) || pitched.some((r) => inRect(r, x, z) && underside(r, x, z) > floorY + 0.5);
+          const over = underSky(x, z) || near(x, z).some((b) => covering.has(b.surface) && lo(b, 1) > floorY + 0.5 && holds(b, x, z)) || pitched.some((r) => inRect(r, x, z) && underside(r, x, z) > floorY + 0.5);
           if (!over) open.push([x, z]);
         }
       }

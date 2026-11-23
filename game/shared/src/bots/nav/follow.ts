@@ -91,6 +91,8 @@ export class PathFollower {
   /** Where the body was when it last got UNSTUCK_M on while walking, when, and the last tick it walked. */
   private anchor: Vec3 | null = null;
   private anchorAt = 0;
+  /** The body or drone it walked last tick (another one now: its way is searched again from there). */
+  private pawnId = -1;
   private lastWalk = -10;
   /** Where it last gave up going (and when, its own ticks): asked there again soon after, it doesn't start over. */
   private failedGoal: Vec3 | null = null;
@@ -145,13 +147,16 @@ export class PathFollower {
     this.retries = 0;
     this.taking = null;
     this.reroute = false;
+    // A new goal's walk starts its stuck clock afresh (one stall must not count against every goal after it).
+    this.anchor = null;
   }
 
-  /** Given up on the goal (stuck, or no way there). */
+  /** Given up on the goal (stuck, or no way there). The next walk starts its stuck clock afresh. */
   private fail(): void {
     this.state = FollowState.Failed;
     this.failedGoal = this.goal;
     this.failedAt = this.ticks;
+    this.anchor = null;
   }
 
   stop(): void {
@@ -177,6 +182,18 @@ export class PathFollower {
     this.tickedAt = sim.tick;
     this.nav = nav;
     const still: Stride = { forward: 0, strafe: 0, yaw: look ?? s.yaw, pitch: null, buttons: 0, stance: Stance.Stand };
+    // Another body or drone than last time (back in its body from a drone, into Twain's other frame): the stretch it
+    // was on and a link it was taking were the other one's (a body left "taking" its drone's door 30 m off stood still
+    // till the link timed out). Same goal, searched again from here.
+    if (pawn.id !== this.pawnId) {
+      this.pawnId = pawn.id;
+      this.route = null;
+      this.steps = [];
+      this.idx = 0;
+      this.taking = null;
+      this.anchor = null;
+      this.retries = 0;
+    }
     if (!this.goal || this.state === FollowState.Idle || this.state === FollowState.Failed) return still;
     // A scripted move under way (a vault, a ladder's dismount): nothing to do but wait.
     if (s.mode === PawnMode.Vault) return still;
@@ -230,7 +247,8 @@ export class PathFollower {
     if (!this.route) {
       // A new route waits its turn when many bots want one this tick.
       if (!nav.takeRoute()) return false;
-      this.route = nav.search.route(pos, this.goal!, this.confined);
+      // A drone's route only by the links it can take (a body's breaks what's in its way: refine below).
+      this.route = nav.search.route(pos, this.goal!, this.confined, this.drone ? this.allow : undefined);
       this.steps = [];
       if (!this.route) {
         this.fail();
@@ -239,8 +257,9 @@ export class PathFollower {
     }
     if (this.idx >= this.steps.length || this.steps.length === 0) {
       const at = grid.nodeNear(pos[0], pos[1], pos[2], 1, 0.9);
-      // The links it's allowed first; none of them leads there (a defender's own barricades shut it out): any.
-      const part = at >= 0 ? (nav.search.refine(at, this.route, 4, this.allow) ?? (this.allow ? nav.search.refine(at, this.route, 4) : null)) : null;
+      // The links it's allowed first; none of them leads there (a defender's own barricades shut it out): any (a body's;
+      // a drone can't take another kind).
+      const part = at >= 0 ? (nav.search.refine(at, this.route, 4, this.allow) ?? (this.allow && !this.drone ? nav.search.refine(at, this.route, 4) : null)) : null;
       if (!part) {
         // Off the route (pushed, fell): a new one from here, at most a few times in a row.
         this.route = null;
@@ -262,8 +281,9 @@ export class PathFollower {
     const len = Math.hypot(dx, dz);
     const way = Math.atan2(-dx, -dz);
     // Stuck: the body trying to walk but not getting half a metre on (whatever the waypoints: a new route from the
-    // same place is still stuck), for how long.
-    const now = this.tickCount++;
+    // same place is still stuck), for how long. (The simulation's ticks: counting only the ticks it walked, a pause in
+    // walking never showed as one, and a stall carried over to every goal after it: a soak's frozen Patch.)
+    const now = this.tickedAt;
     // (Across the floor: bobbing up and down, a jump or a vault tap that goes nowhere, isn't getting on.)
     if (!this.anchor || Math.hypot(pos[0] - this.anchor[0], pos[2] - this.anchor[2]) > UNSTUCK_M || now - this.lastWalk > 2) {
       this.anchor = [pos[0], pos[1], pos[2]];
@@ -300,7 +320,6 @@ export class PathFollower {
     if (this.sprint && !low && !side && look === null && Math.abs(rel) < 0.3 && len > 2) buttons |= Btn.Sprint;
     return { forward, strafe, yaw, pitch: null, buttons, stance: low || side ? Stance.Crouch : Stance.Stand };
   }
-  private tickCount = 0;
   /** Its ticks (every tick asked, walking or not). */
   private ticks = 0;
 

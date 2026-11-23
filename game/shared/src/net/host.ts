@@ -1,7 +1,7 @@
 // The messages a client sends once it is in a room, routed to the room: one table for the game server's
 // lobby (game/server/src/lobby.ts) and the Range Lab's in-page room (Phase 3 M10, DECISIONS D-052).
 import type { ByteReader } from "./bytes.js";
-import { decodeCallout, decodeInput, decodeJegeoPick, decodeLabTool, decodePickLoadout, decodePing, Msg } from "./protocol.js";
+import { decodeCallout, decodeInput, decodeRingerPick, decodeLabTool, decodePickLoadout, decodePing, Msg } from "./protocol.js";
 import { decodeLobbyAction, decodeMatchAction } from "./matchWire.js";
 import type { Room } from "./room.js";
 
@@ -44,8 +44,8 @@ export function handleRoomMessage(room: Room, memberId: number, type: number, r:
     case Msg.Callout:
       room.onCallout(memberId, decodeCallout(r));
       return true;
-    case Msg.JegeoPick:
-      room.onJegeoPick(memberId, decodeJegeoPick(r));
+    case Msg.RingerPick:
+      room.onRingerPick(memberId, decodeRingerPick(r));
       return true;
   }
   return false;

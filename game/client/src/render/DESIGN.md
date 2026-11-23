@@ -1,5 +1,9 @@
 # Phase 10 design: the art pass
 
+> **Project Redmond:** the map is Millrace now (`data/maps/millrace`), and the operators carry our names (R1) and
+> ids (R4). Oregon and its research (`research/oregon/`) were removed in R4: where this design names them, or the
+> operators' old names, it records how the phase was built.
+
 Status: adopted 2026-11-08. Scope: PLAN.md §12 and §17 Phase 10, "Architecture kit, props, lighting, weapons,
 gadgets, operator models, 1P/3P anims"; done when "Oregon looks finished at 1080p High, ≥ 120 FPS on target PC".
 
@@ -50,7 +54,7 @@ wall), the 79 outside items and 29 cover props by id (exterior.json), cameras an
   The format is WebP (D-170: no KTX2 encoder could be built here); KTX2, PLAN §3's choice for GPU memory, can replace
   it later without touching the materials.
 - **Data:** `data/presentation/materials.json` (the material library: texture set, tint, roughness and scale per
-  material) and `data/maps/oregon/art.json` (the map's dressing: room styles, which material each part of the
+  material) and `data/maps/<map>/art.json` (the map's dressing: room styles, which material each part of the
   outside wears, model kinds for the outside items and props, lamps, decorative items). Both are presentation data
   outside the data hash, validated by schemas, checked by tests (§13).
 - **Where things load:** the page loads textures after the level is drawn (the greybox look shows until they
@@ -75,7 +79,7 @@ Settings → Graphics: **Low / Medium / High** (default High on desktop, Low on 
 Draw calls ≤ 1,500 a frame (shadow passes included); triangles ≤ 3 M; textures ≤ 600 MB of GPU memory; the page's
 work ≤ 4 ms a frame (p95) on Ulo's CPU, ≤ 8 ms here; a panel's redraw ≤ 1 ms (PLAN §8.2). Characters ≤ 40k
 triangles at LOD0 with 3 LODs, first-person weapons ≤ 25k (PLAN §12.2). The stats overlay (F8) shows draws,
-triangles, geometry and texture memory; oregon-perf.mjs checks them.
+triangles, geometry and texture memory; millrace-perf.mjs checks them (oregon-perf.mjs until R4).
 
 ## 5. Surface materials (M2)
 
@@ -137,7 +141,7 @@ minimum, and exactly what Chrome and Edge on Windows and most phones give); the 
 allows 32. So each grid is **one** texture (a probe's four texels stacked along y) and the level's lookups are one
 table: the level's shader uses 11 at High (6 of its own, 2 grids, the environment, three's lookup table, the shadow
 map). Every texture read gives its own level of detail (`textureGrad`, `textureLod`, `texelFetch`): implicit
-derivatives are undefined inside the branches and loops the reads are in. `tools/e2e/oregon-art.mjs` holds every
+derivatives are undefined inside the branches and loops the reads are in. `tools/e2e/millrace-art.mjs` (oregon-art.mjs until R4) holds every
 program to WebGL2's minimums, and if a GPU still can't build a preset's shaders the page loads Low and says why.
 
 ### 6.4 Destruction and the light

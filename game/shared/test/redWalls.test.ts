@@ -33,8 +33,8 @@ describe("zones", () => {
 describe("red walls", () => {
   it("stop a defender walking out of the building; an attacker walks on; down, they stop nobody", async () => {
     const sim = await make();
-    const def = sim.addPlayer("def", "mute");
-    const atk = sim.addPlayer("atk", "sledge");
+    const def = sim.addPlayer("def", "lull");
+    const atk = sim.addPlayer("atk", "cleave");
     sim.matchRules.redWalls = true;
     teleport(sim, def, 0, 0, 12);
     teleport(sim, atk, 1.5, 0, 12);
@@ -51,7 +51,7 @@ describe("red walls", () => {
 
   it("keep a vault that would land outside from starting; one that lands inside goes", async () => {
     const sim = await make();
-    const def = sim.addPlayer("def", "mute");
+    const def = sim.addPlayer("def", "lull");
     sim.matchRules.redWalls = true;
     teleport(sim, def, -6, 0, 3.2);
     run(sim, def, { buttons: Btn.Vault }, 1.5);
@@ -65,7 +65,7 @@ describe("red walls", () => {
 
   it("stop a body in the air outright: a fall held back doesn't gather speed, and it drops from rest once they're down", async () => {
     const sim = await make();
-    const def = sim.addPlayer("def", "mute");
+    const def = sim.addPlayer("def", "lull");
     sim.matchRules.redWalls = true;
     // Just outside building a and 1.5 m up: every move it makes (the fall too) is undone, so it hangs there.
     sim.teleport(def.possessedPawnId, 0, 1.5, 8.5, 0);

@@ -1,5 +1,20 @@
 # PLAN.md — Project REDMOND
-### A multiplayer tactical-breach shooter modeled on Rainbow Six Siege, played on a full recreation of Oregon
+### A multiplayer tactical-breach shooter of our own, played on Millrace
+
+> **Amended by Project Redmond (from 2026-11-17; DECISIONS D-183 and after).** The game began as a study of Rainbow Six
+> Siege played on a recreation of its map Oregon; Ulo then made it his own. Read this plan with these changes:
+> - **The map is Millrace** (`data/maps/millrace`, its DESIGN.md), our own: a closed textile mill by a river, four
+>   bomb sites, three attacker spawns. Wherever this plan says Oregon, read Millrace. Oregon's data and its research
+>   were removed (R4).
+> - **The twelve operators carry our names, looks and gadget designs** (R1): Cleave, Kiln, Hail, Patch, Relay and
+>   Pointman attack; Lull, Murmur, Vista, Twain, Thistle and Picket defend. **Eight more are our own** (R3): Ohm,
+>   Rivet, Dowser and Hull attack; Tonic, Shunt, Latch and Bailiff defend. Their numbers live in `data/operators/`.
+> - The mechanics stay those this plan describes (the research below is the record of where they came from); the
+>   names, the designs and the map are ours. New work needs no Siege facts verified: its numbers are ours, tuned by
+>   playtesting, as the R3 operators' are.
+> - Labs: the Rappel Lab joins the others (a yard of every kind of face a rope hangs on, D-201).
+>
+> The original plan follows, kept as written where it still holds.
 
 > **Audience:** Claude Opus 5.5 running in Claude Code.
 > **Owner:** Ulo (DoperDodge). Intermediate programmer, Windows 11, plays Siege.
@@ -25,15 +40,15 @@
 
 - **Runs in a web browser** — players open a URL, nothing to install; the server is hosted on **Railway** (changed 2026-09-29, DECISIONS D-019/D-020).
 - 6v6-capable (up to **5v5 players** per match, like Siege — the "6 attackers / 6 defenders" is the operator roster per side).
-- One map: **Oregon**, recreated as completely and accurately as possible (current live layout).
-- Core objective: **Bomb** (Oregon's 4 bomb-site pairs). Secure Area / Hostage are stretch goals.
+- One map: **Millrace**, our own (Project Redmond R2). Until then: **Oregon**, recreated as completely and accurately as possible (current live layout).
+- Core objective: **Bomb** (the map's 4 bomb-site pairs). Secure Area / Hostage are stretch goals.
 - Lobby formats: **1v1**, **Quick Match**, **Unranked**, **Ranked**, **Bot Training**, plus **Custom** and **Practice** (additions). (Quick Match added by Ulo 2026-09-29.) Every format must work with **any team size from 1 to 5**, including uneven teams (e.g., 2v3).
 - Full Siege movement: walk, sprint, crouch, **prone**, **lean/tilt** (in all stances where Siege allows it), vaulting, rappelling, ladders.
 - Full Siege intel layer: **drones** (attackers), **cameras** (defenders, including Oregon's default cams), pinging, spectating.
 - Full Siege destruction: **soft walls, hard walls, reinforced walls, floors/ceilings, hatches, barricades**, bullet penetration, melee punching, explosives, hard breaching.
-- 12 operators, each with their real primaries, secondaries, secondary-gadget options, and unique ability:
-  - **Attackers:** Brava, Fuze, Thermite, Striker, Dokkaebi, Sledge
-  - **Defenders:** Sentry, Skopós, Mira, Legion, Pulse, Mute
+- 12 operators, each with their real primaries, secondaries, secondary-gadget options, and unique ability; since Project Redmond under our own names and designs (R1), and eight more of our own (R3):
+  - **Attackers:** Patch, Hail, Kiln, Pointman, Relay, Cleave; and Ohm, Rivet, Dowser, Hull
+  - **Defenders:** Picket, Twain, Vista, Thistle, Murmur, Lull; and Tonic, Shunt, Latch, Bailiff
 - **Bot Training mode**: play solo or with friends against (and alongside) AI bots that use real operators, gadgets, and Siege tactics (see §15).
 - Good-looking 3D models (see §12 for the honest asset strategy).
 
@@ -63,6 +78,9 @@ Spin up parallel research subagents. Each produces a markdown file in `research/
 | `research/SUMMARY.md` | One-page digest + the season the data was verified against. |
 
 ### 2.2 Oregon research (most important, hardest part)
+
+> Project Redmond: the map is Millrace, our own, designed rather than researched (`data/maps/millrace/DESIGN.md`);
+> Oregon's research and data were removed (R4). This section is kept as the record of how Phases 0–10 were built.
 
 Output: `research/oregon/`
 
@@ -267,7 +285,10 @@ Every property above (and anything research adds) lives in `data/surfaces.json` 
 
 ---
 
-## 9. Oregon map build
+## 9. Map build
+
+> Built this way for Oregon (Phases 5 and 10); Millrace, our own, goes through the same generator and checks
+> (`tools/mapgen`, `data/maps/millrace/`).
 
 ### 9.1 Pipeline (layout-as-data)
 1. Write `data/maps/oregon/layout.json` from `research/oregon/`: floors, rooms, wall segments (start/end, height, thickness, **surface class**), openings (doors, windows, with barricade flag), floor/ceiling sections (soft/hard), hatches, stairs, ladders, rappel zones, spawn points, bomb site objects, default cameras, destructible ingredients, out-of-bounds volumes, callout names per room.

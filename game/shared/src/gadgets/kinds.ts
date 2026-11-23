@@ -4,35 +4,46 @@
 // round's start; the operators' devices join as their milestones build them.
 export const GADGET_KINDS = [
   "breach_charge",
-  "hard_breach_charge",
+  "heavy_breach_charge",
   "claymore",
   "frag",
   "stun",
   "smoke",
   "impact_emp",
   "barbed_wire",
-  "bulletproof_camera",
+  "armoured_camera",
   "deployable_shield",
-  "observation_blocker",
+  "feed_blocker",
   "impact_grenade",
-  "nitro_cell",
+  "remote_charge",
   "proximity_alarm",
   "fire_extinguisher",
   "gas_pipe",
   "metal_detector",
-  "breaching_hammer",
-  "exothermic_charge",
-  "cluster_charge",
-  "cluster_grenade",
-  "signal_disruptor",
-  "cardiac_sensor",
-  "black_mirror",
-  "mirror_canister",
-  "kludge_drone",
-  "jegeo_payload",
+  "breaching_maul",
+  "burn_frame",
+  "hailstone_drill",
+  "hailstone",
+  "damper",
+  "blood_oxygen_sensor",
+  "blind_pane",
+  "pane_canister",
+  "crossover_drone",
+  "ringer",
   "dropped_phone",
-  "gu_mine",
-  "shell_shield",
+  "burr_mine",
+  "frame_barrier",
+  // Project Redmond R3's operators' own items (gadgets/R3_OPERATORS.md).
+  "brownout_pistol",
+  "second_wind",
+  "arc_pack",
+  "snare_latch",
+  "bailiff_post",
+  "stud_driver",
+  "stud_ring",
+  "stud_spine",
+  "stud_cross",
+  "divining_coil",
 ] as const;
 
 const index = new Map<string, number>(GADGET_KINDS.map((k, i) => [k, i]));
@@ -47,9 +58,9 @@ export function kindId(kind: number): string | undefined {
   return GADGET_KINDS[kind];
 }
 
-export const KIND_BP_CAMERA = kindOf("bulletproof_camera");
-/** Skopós's idle shell's barrier (Phase 8 M10): also that shell's camera. */
-export const KIND_SHELL_SHIELD = kindOf("shell_shield");
+export const KIND_ARMOURED_CAMERA = kindOf("armoured_camera");
+/** Twain's idle shell's barrier (Phase 8 M10): also that shell's camera. */
+export const KIND_FRAME_BARRIER = kindOf("frame_barrier");
 
 /** The level's ingredients' kinds (M3): what they are is data/gadgets.json `ingredients`, not a gadget file. */
 export const INGREDIENT_KINDS = new Set(["fire_extinguisher", "gas_pipe", "metal_detector"].map(kindOf));

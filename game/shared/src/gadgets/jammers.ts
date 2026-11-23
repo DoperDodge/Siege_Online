@@ -1,4 +1,4 @@
-// Mute's Signal Disruptors (Phase 8 M6; research/operators/mute.md; gadgets/DESIGN.md §6): a jammer standing in the
+// Lull's Dampers (Phase 8 M6; research/operators/mute.md; gadgets/DESIGN.md §6): a jammer standing in the
 // gadget table (not in the air, not disabled by an EMP) jams the other side's wireless signals within its
 // `jammer.radiusM`, a sphere (through floors): a remote device of theirs can't be set off while it, or its owner's
 // body, is inside one (Y10S4: "signals coming in or out of the radius"), and a drone of theirs inside one loses its

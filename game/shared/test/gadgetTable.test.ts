@@ -42,13 +42,13 @@ describe("the gadget table (Phase 8 M1)", () => {
   it("keeps entries float32-exact in id order; ops replayed on another table give the same entries and hash", () => {
     const server = new GadgetTable();
     const a = server.add(entry());
-    const b = server.add(entry({ kind: kindOf("nitro_cell"), flags: GFlag.Flying, vel: [1.3, 2.7, -9.1], team: 1, panel: 12 }));
+    const b = server.add(entry({ kind: kindOf("remote_charge"), flags: GFlag.Flying, vel: [1.3, 2.7, -9.1], team: 1, panel: 12 }));
     expect([a.id, b.id]).toEqual([1, 2]);
     expect(a.pos[0]).toBe(Math.fround(1.1));
     expect(a.seq).toBe(70001 & 0xffff);
     server.update(a.id, { flags: a.flags | GFlag.Broken });
     server.remove(b.id);
-    const c = server.add(entry({ kind: kindOf("bulletproof_camera"), signalEnd: 2000 }));
+    const c = server.add(entry({ kind: kindOf("armoured_camera"), signalEnd: 2000 }));
     const client = new GadgetTable();
     const ops = server.takeOps();
     expect(ops.map((o) => o.kind)).toEqual(["put", "put", "put", "remove", "put"]);

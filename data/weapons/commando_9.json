@@ -1,5 +1,5 @@
 {
-  "_doc": "Commando 9 (Sentry). research/weapons.csv row commando_9; class rules research/weapons_notes.md §4. No magnified sight on defender automatics since Y10S3. Extended barrel 40 / min 32 community-measured.",
+  "_doc": "Commando 9 (Picket). research/weapons.csv row commando_9; class rules research/weapons_notes.md §4. No magnified sight on defender automatics since Y10S3. Extended barrel 40 / min 32 community-measured.",
   "_season": "Y11S3.1",
   "_unverified": ["damage.extendedBarrel", "destruction", "fire.modes"],
   "id": "commando_9",

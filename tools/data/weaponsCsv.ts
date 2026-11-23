@@ -54,7 +54,7 @@ export function leadingNumber(cell: string): number | null {
 /** The first word of the cell ("UNVERIFIED:simple (AR class…)" → "simple"), lower-cased. */
 export const leadingWord = (cell: string) => (/^[A-Za-z0-9_./-]+/.exec(stripUnverified(cell))?.[0] ?? "").toLowerCase();
 
-/** A `;`-separated list cell, each entry reduced to its first token ("muzzle_brake (Dokkaebi-only)" → "muzzle_brake"). */
+/** A `;`-separated list cell, each entry reduced to its first token ("muzzle_brake (Relay-only)" → "muzzle_brake"). */
 export const listTokens = (cell: string) =>
   stripUnverified(cell)
     .split(";")

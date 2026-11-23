@@ -1,5 +1,9 @@
 # SUMMARY.md — Phase 0 research digest
 
+> **Project Redmond (2026-11):** the game is its own now: our map Millrace replaced Oregon, and the operators carry
+> our names (DECISIONS D-183 on). `research/oregon/` was removed with Oregon (R4), so links into it below no longer
+> resolve; the rest of this research stays as the record of where the mechanics came from.
+
 **Verified against: Y11S3 "Operation Split Fire" (released 2026-09-01), including the Y11S3.1 patch (2026-09-22). Researched 2026-09-29.**
 Sources, in priority order (PLAN §0.3): official Ubisoft operator/map pages, patch notes, and Designer's Notes → Fandom (via its API) → siege.gg / r6calls / patch-note sites. Liquipedia rate-limited this environment, so it's under-cited. Every number in `research/` has a source URL or an `UNVERIFIED` tag. Open items: [`OPEN_QUESTIONS.md`](OPEN_QUESTIONS.md) (259; the top 10 come first).
 

@@ -17,13 +17,13 @@ export enum PawnMode {
   /** A drone in its owner's hand (Phase 7, intel/DESIGN.md §2): no collider, not stepped, not sent to others. */
   Held = 6,
   /**
-   * Knocked down (D-156: a shield's bash, Sledge's hammer on a raised shield): shoved back onto its back, lying, then
+   * Knocked down (D-156: a shield's bash, Cleave's hammer on a raised shield): shoved back onto its back, lying, then
    * getting up, its player's input ignored until it's up (PawnState.knockTicks, knockLie; player/movement.ts).
    */
   Knocked = 7,
 }
 
-/** What a pawn is (Phase 7): an operator's body (Skopós's shells too), or an attacker's drone. */
+/** What a pawn is (Phase 7): an operator's body (Twain's shells too), or an attacker's drone. */
 export enum PawnKind {
   Body = 0,
   Drone = 1,
@@ -47,7 +47,7 @@ export const Btn = {
   Interact: 1 << 2,
   Ads: 1 << 3,
   SlowWalk: 1 << 4,
-  /** Unique-ability key: the ability's item in and out, like the gadget key (Skopós: open / close the idle shell's camera). */
+  /** Unique-ability key: the ability's item in and out, like the gadget key (Twain: open / close the idle shell's camera). */
   Ability: 1 << 5,
   /** Fire, held (DECISIONS D-055): automatic weapons fire while it is down, others on the press. */
   Fire: 1 << 6,
@@ -61,7 +61,7 @@ export const Btn = {
   Ping: 1 << 11,
   /**
    * The gadget key (Phase 8, gadgets/DESIGN.md §2): takes the secondary gadget out (or its detonator) and puts it
-   * away; on a Bulletproof Camera, fires its EMP dart (as Fire does).
+   * away; on a Armoured Camera, fires its EMP dart (as Fire does).
    */
   Gadget: 1 << 12,
   /** Drop the defuser (Phase 6, D-120). */
@@ -221,6 +221,23 @@ export interface PawnState {
   reviveTicks: number;
   reviveTarget: number;
   revivedBy: number;
+  /**
+   * Tonic's Second Wind on this body (R3, gadgets/patch.ts): health still to come from a patch healing it, and ticks
+   * into that heal; ticks left until a patch gets it up from down.
+   */
+  healLeft: number;
+  healTicks: number;
+  patchTicks: number;
+  /**
+   * The Bailiff Shield's prod (R3, player/prod.ts): ticks of its charge used, ticks to its next jolt while it's held on,
+   * and ticks since it was last on (its refill waits for them). A body jolted by one is slowed for `slowed` ticks;
+   * Bailiff shocked by an EMP on her raised shield can't move or use her hands for `shocked` ticks.
+   */
+  prodUsed: number;
+  prodNext: number;
+  prodIdle: number;
+  slowed: number;
+  shocked: number;
   // reinforcing and barricades (Phase 4 M6; destruction/deploy.ts): what the body is putting up or taking
   // down (DeployKind, 0 = nothing), on which panel and section, and for how many ticks it has held Interact
   deployKind: number;
@@ -232,7 +249,7 @@ export interface PawnState {
   jumpCd: number;
   boostTicks: number;
   boostCd: number;
-  /** A drone's ticks left jammed by a Bulletproof Camera's EMP dart (it doesn't move or turn meanwhile). */
+  /** A drone's ticks left jammed by a Armoured Camera's EMP dart (it doesn't move or turn meanwhile). */
   jammed: number;
   // gadgets (Phase 8, gadgets/DESIGN.md §2): what the hands hold (Hand), what the gadget in them is doing (GadgetAct)
   // and for how many ticks, the devices left in slot 1 (the secondary gadget) and slot 2 (the ability's, or a kit's
@@ -240,23 +257,43 @@ export interface PawnState {
   hand: number;
   gAct: number;
   gTicks: number;
+  /**
+   * Ticks before the item in slot 2 can be used again (R3: Ohm's pistol reloading, Rivet's driver cycling). It runs
+   * down whatever's in hand, so putting it away, a knife or a vault doesn't hurry it (the review).
+   */
+  gCool: number;
   g1: number;
   g2: number;
   w1: number;
   w2: number;
   gTarget: number;
-  // Lesion's Gu (Phase 8 M10): a needle in this body (no sprinting; the server's bites until it's pulled or the body is
+  // Thistle's Burr (Phase 8 M10): a needle in this body (no sprinting; the server's bites until it's pulled or the body is
   // down), and a slot 2 item that comes back over time (his mines, gadgets/hands.ts regenSlot): how many it has given
   // this life, and the ticks into the next
   needled: boolean;
   /**
-   * Dokkaebi's call ringing on this body's player's phone (Phase 8 M9; the server's, its owner corrected): a fresh
+   * Relay's call ringing on this body's player's phone (Phase 8 M9; the server's, its owner corrected): a fresh
    * Interact press is the dismissal's, so nothing else starts on it (the review, M12).
    */
   ringing: boolean;
+  /**
+   * Latch's Snare Latch shut on this body's leg (R3; the server's, its owner corrected): slowed, no sprint, bitten by the
+   * server until it's pulled off (an Interact hold, sim.ts holdSnare) or the body is down.
+   */
+  snared: boolean;
+  /** The Bailiff Shield's prod switched on (R3, player/prod.ts: a click of Fire with it up switches it). */
+  prodOn: boolean;
+  /** Rivet's Stud Driver (R3, gadgets/studs.ts): which of its salvos Fire lays (its `driver.lays`), picked with the reload key. */
+  pattern: number;
+  /**
+   * Hull's Plate (R3, player/shield.ts stepBrace): braced (his ability key switches it), and how far it's braced
+   * (0 … 65535: its sides and top out over `brace.extendS`, back over `brace.retractS`).
+   */
+  braced: boolean;
+  braceQ: number;
   regenMade: number;
   regenTicks: number;
-  // Fuze's Ballistic Shield (Phase 8 M11, player/shield.ts): ticks it's knocked aside (a guard break, or Sledge's
+  // Hail's Ballistic Shield (Phase 8 M11, player/shield.ts): ticks it's knocked aside (a guard break, or Cleave's
   // knockdown) and nowhere; the bullets it has stopped lately (its suppression), and the ticks since the last
   guard: number;
   suppress: number;
@@ -275,7 +312,7 @@ export enum Hand {
   /** Slot 1, the secondary gadget: a device, or the detonator of those waiting. */
   Gadget = 1,
   Detonator = 2,
-  /** Slot 2, the ability's item (Striker's and Sentry's second gadget): a device, or its detonator. */
+  /** Slot 2, the ability's item (Pointman's and Picket's second gadget): a device, or its detonator. */
   Ability = 3,
   AbilityDetonator = 4,
 }
@@ -294,8 +331,10 @@ export enum GadgetAct {
   Lob = 3,
   /** Fire held with the view on a spot for it: placing. */
   Place = 4,
-  /** Swinging (Sledge's hammer, Phase 8 M4): its blow lands partway through. */
+  /** Swinging (Cleave's hammer, Phase 8 M4): its blow lands partway through. */
   Swing = 5,
+  /** Just shot (Ohm's Brownout Pistol, R3): the next can't go until it's reloaded. */
+  Shoot = 6,
 }
 
 export const NEUTRAL_INPUT: Readonly<Omit<InputCmd, "seq" | "yaw" | "pitch">> = {
@@ -308,7 +347,7 @@ export const NEUTRAL_INPUT: Readonly<Omit<InputCmd, "seq" | "yaw" | "pitch">> = 
 
 /**
  * On a rope and free to act (Phase 5 M8): not moving onto it, swinging, or turning over. Aiming, firing, the knife,
- * Skopós' shell camera and the window prompts wait for it.
+ * Twain' shell camera and the window prompts wait for it.
  */
 export const ropeIdle = (s: PawnState) => s.mode === PawnMode.Rappel && s.moveDur === 0 && s.rappelTicks === 0 && (s.ropeTurn === 0 || s.ropeTurn === 1);
 

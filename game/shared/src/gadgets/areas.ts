@@ -70,7 +70,7 @@ export function smokeOnSegment(data: GameData, table: GadgetTable, from: Vec3, t
 }
 
 /**
- * An observation blocker's barrier (its data's `barrier`): a rectangle standing on the floor under it, facing its
+ * An feed blocker's barrier (its data's `barrier`): a rectangle standing on the floor under it, facing its
  * placer's way, `heightM` tall and as wide as `widthM` allows before a wall on either side (its arms stop there).
  */
 export function barrierOf(q: LevelQuery, b: NonNullable<GadgetData["barrier"]>, g: Gadget, size: readonly number[]): { centre: Vec3; n: Vec3; t: Vec3; half: number; floor: number; top: number } {
@@ -87,7 +87,7 @@ export function barrierOf(q: LevelQuery, b: NonNullable<GadgetData["barrier"]>, 
 
 /**
  * Where a segment first crosses a barrier rectangle (metres along it), or null. A segment ending on the barrier (the
- * blocker itself stands in it) isn't hidden by it (Phase 8 M8: a Kludge can see the device to hack it).
+ * blocker itself stands in it) isn't hidden by it (Phase 8 M8: a Crossover can see the device to hack it).
  */
 export function crossesBarrier(bar: ReturnType<typeof barrierOf>, from: Vec3, to: Vec3): number | null {
   const d = [to[0] - from[0], to[1] - from[1], to[2] - from[2]];

@@ -68,7 +68,7 @@ try {
   page.on("pageerror", (e) => errors.push(String(e)));
   page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
 
-  await page.goto(`${BASE}/labs/movement_lab.html?autotest=1&op=sledge`);
+  await page.goto(`${BASE}/labs/movement_lab.html?autotest=1&op=cleave`);
   await page.waitForFunction(() => window.__lab?.report?.ready, null, { timeout: 30000 });
   await page.screenshot({ path: shot("lab-start.png") });
   // The scripted run takes ~15 s of simulated time; software rendering may run it slower.
@@ -87,8 +87,8 @@ try {
   result.checks.helpOpensWithF1 = await page.evaluate(() => !document.querySelector(".help").classList.contains("hidden"));
   await page.screenshot({ path: shot("lab-help.png") });
 
-  // Skopós: F alone does nothing; Z opens the other shell's camera; F there transfers (1.3 s + 1.3 s).
-  await page.goto(`${BASE}/labs/movement_lab.html?op=skopos`);
+  // Twain: F alone does nothing; Z opens the other shell's camera; F there transfers (1.3 s + 1.3 s).
+  await page.goto(`${BASE}/labs/movement_lab.html?op=twain`);
   await page.waitForFunction(() => window.__lab?.report?.ready, null, { timeout: 30000 });
   await sleep(500);
   const hud = () => page.locator(".op-name").textContent();
@@ -108,7 +108,7 @@ try {
   await page.keyboard.press("KeyZ");
   await page.waitForFunction(() => !document.querySelector(".shellcam").classList.contains("hidden"), null, { timeout: 5000 });
   const camPrompt = await page.locator(".prompt").textContent();
-  await page.screenshot({ path: shot("skopos-shell-camera.png") });
+  await page.screenshot({ path: shot("twain-shell-camera.png") });
   // The free camera from the shell's camera (D-098): the shell keeps looking where it looked, flying and after.
   const onCam = await bodies();
   await page.keyboard.press("KeyN");
@@ -121,14 +121,14 @@ try {
   result.checks.freeCameraLeavesTheShellsView =
     onCam.viewed.yaw !== onCam.possessed.yaw && flying.viewed.yaw === onCam.viewed.yaw && backOnCam.viewed.yaw === onCam.viewed.yaw;
   await page.keyboard.press("KeyF");
-  await page.waitForFunction(() => document.querySelector(".op-name").textContent.includes("shell 2/2"), null, { timeout: 20000 });
+  await page.waitForFunction(() => document.querySelector(".op-name").textContent.includes("frame 2/2"), null, { timeout: 20000 });
   const camClosed = await page.evaluate(() => document.querySelector(".shellcam").classList.contains("hidden"));
-  result.checks.skoposSwapViaCamera =
-    start.includes("shell 1/2") && afterF.includes("shell 1/2") && camPrompt.includes("F to transfer") && camClosed;
+  result.checks.twainSwapViaCamera =
+    start.includes("frame 1/2") && afterF.includes("frame 1/2") && camPrompt.includes("F to transfer") && camClosed;
 
   // Real keyboard input (not the autotest script): C toggles crouch; sprint stands you up and clears the
   // toggle, so you are still standing after letting go (the simulation alone would crouch you again).
-  await page.goto(`${BASE}/labs/movement_lab.html?op=sledge`);
+  await page.goto(`${BASE}/labs/movement_lab.html?op=cleave`);
   await page.waitForFunction(() => window.__lab?.report?.ready, null, { timeout: 30000 });
   await sleep(300);
   const onStance = () => page.evaluate(() => document.querySelector(".stances span.on")?.textContent);

@@ -80,7 +80,7 @@ const OPERATORS = [...data.operators.keys()];
 describe("the operators' looks and bodies (operator_looks.json, render/bodyModel.ts)", () => {
   it("every operator has a look of its own, and a body within the budget, bound a vertex to a bone", () => {
     const looks = loadPresentationData().operatorLooks.looks;
-    expect(OPERATORS.length).toBe(12);
+    expect(OPERATORS.length).toBe(20); // the twelve, Ohm, Tonic, Shunt, Latch, Bailiff, Rivet, Dowser and Hull (R3)
     const seen = new Set<string>();
     for (const id of [...OPERATORS, "default"]) {
       expect(looks[id], `${id} has a look`).toBeDefined();
@@ -236,12 +236,12 @@ describe("what's drawn is where it's hit", () => {
         worst[`trunk ${id}`] = Math.max(worst[`trunk ${id}`] ?? -1, trunk);
         expect(head, `${id} ${name}: the head past its hitbox`).toBeLessThan(0.06);
         expect(trunk, `${id} ${name}: the trunk past its hitboxes`).toBeLessThan(0.1);
-        // What's carried on the back is kit, not body: a pack keeps as close; only Sledge's hammer (its head over his
-        // shoulder) and a radio's aerial stand off it.
+        // What's carried on the back is kit, not body: a pack keeps as close; only Cleave's hammer (its head over his
+        // shoulder) and an aerial (a radio's, Dowser's pack's: R3) stand off it.
         if (g.back) {
           const back = posed(g.back, rig.matrices, BONE.chest);
           verts.push(...back);
-          expect(Math.max(...back.map(({ p }) => past(p))), `${id} ${name}: what's on its back`).toBeLessThan(operatorLook(id).back === "hammer" || operatorLook(id).back === "radio" ? 0.2 : 0.1);
+          expect(Math.max(...back.map(({ p }) => past(p))), `${id} ${name}: what's on its back`).toBeLessThan(["hammer", "radio", "aerial"].includes(operatorLook(id).back) ? 0.2 : 0.1);
         }
         // Upright on the floor: nothing over the capsule the body moves in, nothing under the floor.
         if (name === "stand" || name === "crouch" || name === "leanLeft" || name === "halfCrouched") {
@@ -335,7 +335,7 @@ describe("holding a gun (render/bodyPose.ts)", () => {
   });
 
   it("a reload takes the left hand to the magazine and the pouch, the magazine out while the simulation has it out", () => {
-    const { loadout } = resolveLoadout(data, defaultLoadoutPick(data, "thermite"));
+    const { loadout } = resolveLoadout(data, defaultLoadoutPick(data, "kiln"));
     const w = loadout.weapons[0];
     expect(w.reload.kind).toBe("magazine");
     if (w.reload.kind !== "magazine") return;
@@ -490,8 +490,8 @@ describe("a dead body falls (render/bodyRagdoll.ts)", () => {
 describe("the pawn view draws the body (render/labScene.ts)", () => {
   it("one skinned mesh on the rig; hidden in first person; the gun in its hands; dead, it falls", () => {
     const scene = new THREE.Scene();
-    const view = new PawnView(scene, 0x3b82f6, undefined, undefined, undefined, undefined, "sledge");
-    const { loadout } = resolveLoadout(data, defaultLoadoutPick(data, "sledge"));
+    const view = new PawnView(scene, 0x3b82f6, undefined, undefined, undefined, undefined, "cleave");
+    const { loadout } = resolveLoadout(data, defaultLoadoutPick(data, "cleave"));
     const w = loadout.weapons[0];
     view.setWeapon({ id: w.id, class: w.class, pick: w.pick }, w);
     const s = state({ ...initialPawnState(0, 0, 0, 0, 100, loadout), grounded: true });
@@ -522,7 +522,7 @@ describe("the pawn view draws the body (render/labScene.ts)", () => {
     expect(muzzle.y).toBeLessThan(1.65);
     expect(Math.abs(muzzle.x)).toBeLessThan(0.2);
     // The hammer in his hands: not on his back.
-    view.setHeld({ id: "breaching_hammer", size: data.gadgets.get("breaching_hammer")!.sizeM }, false, { swingS: 0.8, hitS: 0.4 });
+    view.setHeld({ id: "breaching_maul", size: data.gadgets.get("breaching_maul")!.sizeM }, false, { swingS: 0.8, hitS: 0.4 });
     view.update(data, { ...s, hand: Hand.Ability }, 0.1);
     expect(drawn()).not.toContain("body-back");
     view.setHeld(null);
@@ -548,8 +548,8 @@ describe("the pawn view draws the body (render/labScene.ts)", () => {
     expect(scene.children.length).toBe(0);
   });
 
-  it("Fuze's pistol is in his right hand where the hitboxes have it behind his raised shield, and out past it as he aims", () => {
-    const { loadout } = resolveLoadout(data, { ...defaultLoadoutPick(data, "fuze"), primary: { weapon: "ballistic_shield", sight: null, barrel: null, grip: null, underbarrel: null } });
+  it("Hail's pistol is in his right hand where the hitboxes have it behind his raised shield, and out past it as he aims", () => {
+    const { loadout } = resolveLoadout(data, { ...defaultLoadoutPick(data, "hail"), primary: { weapon: "ballistic_shield", sight: null, barrel: null, grip: null, underbarrel: null } });
     const plate = loadout.shield!.plate;
     const w = loadout.weapons[1];
     const gun = buildGun({ id: w.id, class: w.class, pick: w.pick });
@@ -573,9 +573,9 @@ describe("the pawn view draws the body (render/labScene.ts)", () => {
 
   it("another player's body (its snapshots carry no speed or progress) strides as it moves, aims, and reloads from when it began", () => {
     const scene = new THREE.Scene();
-    const view = new PawnView(scene, 0xf97316, undefined, undefined, undefined, undefined, "thermite");
+    const view = new PawnView(scene, 0xf97316, undefined, undefined, undefined, undefined, "kiln");
     view.remote = true;
-    const { loadout } = resolveLoadout(data, defaultLoadoutPick(data, "thermite"));
+    const { loadout } = resolveLoadout(data, defaultLoadoutPick(data, "kiln"));
     const w = loadout.weapons[0];
     view.setWeapon({ id: w.id, class: w.class, pick: w.pick }, w);
     const mesh = () => {

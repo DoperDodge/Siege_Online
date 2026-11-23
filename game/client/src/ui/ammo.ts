@@ -1,5 +1,5 @@
 // The weapon readout (Phase 3 M3, M9), bottom right: weapon, rounds loaded / in reserve (red when the
-// magazine is nearly empty), fire mode, and whether it's reloading or being switched to; with Fuze's Ballistic Shield
+// magazine is nearly empty), fire mode, and whether it's reloading or being switched to; with Hail's Ballistic Shield
 // (Phase 8 M11), where the shield is.
 import { fireModeOf, loadedOf, reserveOf, WeaponAct, type PawnState, type ResolvedWeapon } from "@redmond/shared";
 

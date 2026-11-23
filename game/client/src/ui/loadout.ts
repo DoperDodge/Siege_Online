@@ -66,7 +66,8 @@ export function weaponRow(data: GameData, op: OperatorData, slot: Slot, pick: Lo
   return `<div class="loadout-row"><label>${slot === "primary" ? "Primary" : "Secondary"} ${select("weapon", weapons, wp.weapon)}</label>
       <div class="atts">${atts}</div>
       ${resolved && w && isGun(w) ? `<p class="note stats">${weaponStats(resolved, w)}</p>` : ""}
-      ${w && !isGun(w) ? `<p class="note stats">Held with your secondary pistol: aim to fire it (no hip fire), ×${w.shield.moveSpeedMult} speed. Bullets stop at it; a strong blast, a knife or a stun knocks it aside, Sledge's hammer knocks it down; your melee is a bash.</p>` : ""}</div>`;
+      ${w && !isGun(w) && !w.shield.prod ? `<p class="note stats">Held with your secondary pistol: aim to fire it (no hip fire), ×${w.shield.moveSpeedMult} speed. Bullets stop at it; a strong blast, a knife or a stun knocks it aside, Cleave's maul knocks it down; your melee is a bash.</p>` : ""}
+      ${w && !isGun(w) && w.shield.prod ? `<p class="note stats">Full height, held with your secondary: aim to fire it, ×${w.shield.moveSpeedMult} speed. Click fire to switch its prod on and off: a jolt every ${w.shield.prod.everyS} s into the nearest attacker within ${w.shield.prod.rangeM} m (${w.shield.prod.damage} each, slowed to ×${w.shield.prod.slowMul} for ${w.shield.prod.slowS} s), ${w.shield.prod.chargeS} s of charge. Your ability sets it down as cover; set down, your ability key switches its own shock on and off. An EMP on it while you hold it up shocks you.</p>` : ""}</div>`;
 }
 
 /** Both slots' rows for a loadout, with each weapon's numbers, and its gadgets. */
@@ -77,7 +78,7 @@ export function loadoutRows(data: GameData, pick: LoadoutPick): string {
 }
 
 /**
- * The gadget row (Phase 8): one of the operator's gadgets, or a kit's two (Striker, Sentry: two different ones), as
+ * The gadget row (Phase 8): one of the operator's gadgets, or a kit's two (Pointman, Picket: two different ones), as
  * selects with `data-gadget` (their place in the pick); nothing for an operator without gadgets.
  */
 export function gadgetRow(data: GameData, op: OperatorData, pick: LoadoutPick): string {

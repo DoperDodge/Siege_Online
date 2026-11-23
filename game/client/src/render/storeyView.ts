@@ -53,7 +53,7 @@ export function storeyLight(storey: { floorY: number }): StoreyLight {
 
 /** The light follows you to another storey quickly: 63 % of the way in this long (an exponential blend). */
 const LIGHT_BLEND_S = 0.25;
-/** The plan view's half height at first (metres: Oregon's building fits), and the closest the wheel zooms. */
+/** The plan view's half height at first (metres: a whole building fits), and the closest the wheel zooms. */
 const PLAN_HALF_M = 20;
 const PLAN_MIN_HALF_M = 3;
 /**

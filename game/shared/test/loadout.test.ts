@@ -26,69 +26,72 @@ describe("loadout picks (DECISIONS D-042)", () => {
       const p = defaultLoadoutPick(data, op.id);
       expect(problem(p), op.id).toBeNull();
       const { loadout } = resolveLoadout(data, p);
-      expect(loadout.weapons.map((w) => w.id)).toEqual([p.primary.weapon, p.secondary.weapon]);
+      // A shield's loadout holds its sidearm in both slots (Hail's when he takes it; Bailiff's always, R3).
+      const shield = !isGun(data.weapons.get(p.primary.weapon)!);
+      expect(loadout.weapons.map((w) => w.id), op.id).toEqual(shield ? [p.secondary.weapon, p.secondary.weapon] : [p.primary.weapon, p.secondary.weapon]);
     }
-    // The GONNE-6 is skipped (D-054); the shield can be picked since Phase 8 M11, but isn't Fuze's default.
-    expect(defaultLoadoutPick(data, "fuze").primary.weapon).toBe("ak_12");
+    expect(defaultLoadoutPick(data, "bailiff").primary.weapon).toBe("bailiff_shield");
+    // The GONNE-6 is skipped (D-054); the shield can be picked since Phase 8 M11, but isn't Hail's default.
+    expect(defaultLoadoutPick(data, "hail").primary.weapon).toBe("ak_12");
     expect([isPickable(data, "ballistic_shield"), isPickable(data, "gonne_6")]).toEqual([true, false]);
-    expect(problem(pick("dokkaebi", wp("mk_14_ebr"), wp("gonne_6")))).toMatch(/can't be picked yet/);
+    expect(problem(pick("relay", wp("mk_14_ebr"), wp("gonne_6")))).toMatch(/can't be picked yet/);
   });
 
   it("fills an empty sight with iron and an empty grip slot with the horizontal grip", () => {
-    const { loadout } = resolveLoadout(data, pick("brava", wp("para_308")));
+    const { loadout } = resolveLoadout(data, pick("patch", wp("para_308")));
     expect(loadout.pick.primary).toMatchObject({ sight: "iron", grip: "horizontal" });
     expect(loadout.weapons[0].moveSpeedMult).toBe(1); // full speed: the horizontal grip
     // No grip slot: stays empty.
-    expect(resolveLoadout(data, pick("mute", wp("mp5k"))).loadout.pick.primary.grip).toBeNull();
+    expect(resolveLoadout(data, pick("lull", wp("mp5k"))).loadout.pick.primary.grip).toBeNull();
   });
 
   it("enforces what each weapon and operator can fit (weapons_notes.md §4, §6)", () => {
-    expect(problem(pick("brava", wp("camrs", { grip: "vertical" })))).toBeNull();
-    expect(problem(pick("dokkaebi", wp("mk_14_ebr", { sight: "telescopic", barrel: "muzzle_brake" })))).toBeNull();
-    // The 5.7 USG's muzzle brake: Thermite and Pulse, not Striker (Q6).
-    expect(problem(pick("thermite", wp("556xi"), wp("5_7_usg", { barrel: "muzzle_brake" })))).toBeNull();
-    expect(problem(pick("striker", wp("m4"), wp("5_7_usg", { barrel: "muzzle_brake" })))).toMatch(/no muzzle_brake/);
-    expect(problem(pick("mute", wp("mp5k", { grip: "vertical" })))).toMatch(/grip/);
-    expect(problem(pick("lesion", wp("six12_sd", { barrel: "suppressor" })))).toMatch(/no suppressor/);
-    expect(problem(pick("dokkaebi", wp("mk_14_ebr"), wp("smg_12", { barrel: "suppressor" })))).toMatch(/no suppressor/);
+    expect(problem(pick("patch", wp("camrs", { grip: "vertical" })))).toBeNull();
+    expect(problem(pick("relay", wp("mk_14_ebr", { sight: "telescopic", barrel: "muzzle_brake" })))).toBeNull();
+    // The 5.7 USG's muzzle brake: Kiln and Murmur, not Pointman (Q6).
+    expect(problem(pick("kiln", wp("556xi"), wp("5_7_usg", { barrel: "muzzle_brake" })))).toBeNull();
+    expect(problem(pick("pointman", wp("m4"), wp("5_7_usg", { barrel: "muzzle_brake" })))).toMatch(/no muzzle_brake/);
+    expect(problem(pick("lull", wp("mp5k", { grip: "vertical" })))).toMatch(/grip/);
+    expect(problem(pick("thistle", wp("six12_sd", { barrel: "suppressor" })))).toMatch(/no suppressor/);
+    expect(problem(pick("relay", wp("mk_14_ebr"), wp("smg_12", { barrel: "suppressor" })))).toMatch(/no suppressor/);
     // Defender automatics have no magnified sight since Y10S3 (weapons_notes.md §4.2).
-    expect(problem(pick("sentry", wp("commando_9", { sight: "magnified" })))).toMatch(/no magnified/);
-    expect(problem(pick("mira", wp("vector_45_acp", { sight: "magnified" })))).toMatch(/no magnified/);
-    expect(problem(pick("sledge", wp("l85a2", { sight: "magnified", barrel: "compensator", grip: "angled", underbarrel: "laser" })))).toBeNull();
+    expect(problem(pick("picket", wp("commando_9", { sight: "magnified" })))).toMatch(/no magnified/);
+    expect(problem(pick("vista", wp("vector_45_acp", { sight: "magnified" })))).toMatch(/no magnified/);
+    expect(problem(pick("cleave", wp("l85a2", { sight: "magnified", barrel: "compensator", grip: "angled", underbarrel: "laser" })))).toBeNull();
     // Weapons belong to their operators, and primaries stay primaries.
-    expect(problem(pick("sledge", wp("para_308")))).toMatch(/can't carry para_308/);
-    expect(problem(pick("brava", wp("usp40")))).toMatch(/as a primary/);
+    expect(problem(pick("cleave", wp("para_308")))).toMatch(/can't carry para_308/);
+    expect(problem(pick("patch", wp("usp40")))).toMatch(/as a primary/);
   });
 
   it("checks gadgets: one from the list, or a kit's distinct picks", () => {
-    expect(defaultLoadoutPick(data, "striker").gadgets).toHaveLength(2);
-    expect(problem(pick("brava", wp("para_308"), undefined, ["claymore"]))).toBeNull();
-    expect(problem(pick("brava", wp("para_308"), undefined, ["claymore", "smoke"]))).toMatch(/picks one/);
-    const kit = data.operators.get("striker")!.loadout.gadgetKit!.pool;
-    expect(problem(pick("striker", wp("m4"), undefined, [kit[0], kit[0]]))).toMatch(/must differ/);
-    expect(problem(pick("striker", wp("m4"), undefined, [kit[0], kit[3]]))).toBeNull();
+    expect(defaultLoadoutPick(data, "pointman").gadgets).toHaveLength(2);
+    expect(problem(pick("patch", wp("para_308"), undefined, ["claymore"]))).toBeNull();
+    expect(problem(pick("patch", wp("para_308"), undefined, ["claymore", "smoke"]))).toMatch(/picks one/);
+    const kit = data.operators.get("pointman")!.loadout.gadgetKit!.pool;
+    expect(problem(pick("pointman", wp("m4"), undefined, [kit[0], kit[0]]))).toMatch(/must differ/);
+    expect(problem(pick("pointman", wp("m4"), undefined, [kit[0], kit[3]]))).toBeNull();
   });
 
   it("replaces an invalid pick with the default and says why", () => {
-    const bad = pick("sledge", wp("para_308"));
+    const bad = pick("cleave", wp("para_308"));
     const { loadout, problem: why } = resolveLoadout(data, bad);
     expect(why).toMatch(/para_308/);
-    expect(loadout.pick).toEqual(defaultLoadoutPick(data, "sledge"));
+    expect(loadout.pick).toEqual(defaultLoadoutPick(data, "cleave"));
   });
 });
 
 describe("resolved weapon numbers", () => {
-  const brava = (o: Partial<WeaponPick> = {}) => resolveLoadout(data, pick("brava", wp("para_308", o))).loadout.weapons[0];
+  const patch = (o: Partial<WeaponPick> = {}) => resolveLoadout(data, pick("patch", wp("para_308", o))).loadout.weapons[0];
 
   it("converts times to ticks with the attachment bonuses", () => {
     // ADS 0.52 s ÷ (1 + 0.10 iron + 0.10 laser) = 0.433 s = 27.7 → 28 ticks.
-    expect(brava({ underbarrel: "laser" }).ads.ticks).toBe(28);
-    expect(brava({ sight: "magnified" }).ads.ticks).toBe(33); // 0.52 s, no bonus
-    expect(brava({ sight: "magnified" }).ads.fromSprintTicks).toBe(37); // × 1.1
+    expect(patch({ underbarrel: "laser" }).ads.ticks).toBe(28);
+    expect(patch({ sight: "magnified" }).ads.ticks).toBe(33); // 0.52 s, no bonus
+    expect(patch({ sight: "magnified" }).ads.fromSprintTicks).toBe(37); // × 1.1
     // Angled grip: reload × 0.8. Tactical 2.6 s → 2.08 s = 133 ticks.
-    expect(brava({ grip: "angled" }).reload).toMatchObject({ kind: "magazine", tacticalTicks: 133, emptyTicks: 169 });
-    expect(brava().reload).toMatchObject({ tacticalTicks: 166, emptyTicks: 211, refillTacticalTicks: 97, refillEmptyTicks: 160 });
-    expect(resolveLoadout(data, pick("brava", wp("para_308"))).loadout.swapTicks).toBe(38);
+    expect(patch({ grip: "angled" }).reload).toMatchObject({ kind: "magazine", tacticalTicks: 133, emptyTicks: 169 });
+    expect(patch().reload).toMatchObject({ tacticalTicks: 166, emptyTicks: 211, refillTacticalTicks: 97, refillEmptyTicks: 160 });
+    expect(resolveLoadout(data, pick("patch", wp("para_308"))).loadout.swapTicks).toBe(38);
     // Tube shotgun: 0.6 s a shell, and the empty overhead 5.5 − 7 × 0.6 = 1.3 s.
     expect(resolveWeapon(data, wp("m590a1")).reload).toEqual({ kind: "per_shell", perShellTicks: 38, emptyExtraTicks: 83 });
   });
@@ -107,37 +110,37 @@ describe("resolved weapon numbers", () => {
   });
 
   it("applies the extended barrel's damage", () => {
-    expect(brava({ barrel: "extended_barrel" }).damage).toMatchObject({ base: 52, falloff: [[25, 52], [35, 42]] });
-    expect(brava().damage!.base).toBe(47);
-    const xk = resolveLoadout(data, pick("dokkaebi", wp("xk23", { barrel: "extended_barrel" }))).loadout.weapons[0];
+    expect(patch({ barrel: "extended_barrel" }).damage).toMatchObject({ base: 52, falloff: [[25, 52], [35, 42]] });
+    expect(patch().damage!.base).toBe(47);
+    const xk = resolveLoadout(data, pick("relay", wp("xk23", { barrel: "extended_barrel" }))).loadout.weapons[0];
     expect(xk.damage).toMatchObject({ base: 54, falloff: [[25, 54], [35, 43]] });
   });
 
   it("applies movement multipliers: LMG −10 %, horizontal grip +5 % up to full speed (core_mechanics.md §2.2)", () => {
     const speed = (op: string, slot: 0 | 1, p: WeaponPick) =>
       resolveLoadout(data, slot === 0 ? pick(op, p) : pick(op, defaultLoadoutPick(data, op).primary, p)).loadout.weapons[slot].moveSpeedMult;
-    expect(speed("fuze", 0, wp("6p41", { grip: "horizontal" }))).toBeCloseTo(0.9, 6);
-    expect(speed("fuze", 0, wp("6p41", { grip: "vertical" }))).toBeCloseTo(0.9 / 1.05, 6);
-    expect(speed("brava", 0, wp("para_308", { grip: "vertical" }))).toBeCloseTo(1 / 1.05, 6);
-    expect(speed("brava", 1, wp("usp40"))).toBe(1); // a handgun is full speed
-    expect(speed("mute", 0, wp("mp5k"))).toBeCloseTo(1 / 1.05, 6); // no grip slot, so no grip bonus
+    expect(speed("hail", 0, wp("6p41", { grip: "horizontal" }))).toBeCloseTo(0.9, 6);
+    expect(speed("hail", 0, wp("6p41", { grip: "vertical" }))).toBeCloseTo(0.9 / 1.05, 6);
+    expect(speed("patch", 0, wp("para_308", { grip: "vertical" }))).toBeCloseTo(1 / 1.05, 6);
+    expect(speed("patch", 1, wp("usp40"))).toBe(1); // a handgun is full speed
+    expect(speed("lull", 0, wp("mp5k"))).toBeCloseTo(1 / 1.05, 6); // no grip slot, so no grip bonus
   });
 
   it("applies recoil attachments and the official recoil facts", () => {
-    expect(brava({ barrel: "compensator" }).recoil.sideMult).toBeCloseTo(0.65, 6);
-    expect(brava({ grip: "vertical", barrel: "flash_hider" }).recoil.upMult).toBeCloseTo(0.85 * 0.8, 6);
-    expect(brava({ barrel: "flash_hider" }).recoil.firstShotUpMult).toBeCloseTo(0.87, 6);
-    const mk14 = (barrel: WeaponPick["barrel"]) => resolveLoadout(data, pick("dokkaebi", wp("mk_14_ebr", { barrel }))).loadout.weapons[0].recoil;
+    expect(patch({ barrel: "compensator" }).recoil.sideMult).toBeCloseTo(0.65, 6);
+    expect(patch({ grip: "vertical", barrel: "flash_hider" }).recoil.upMult).toBeCloseTo(0.85 * 0.8, 6);
+    expect(patch({ barrel: "flash_hider" }).recoil.firstShotUpMult).toBeCloseTo(0.87, 6);
+    const mk14 = (barrel: WeaponPick["barrel"]) => resolveLoadout(data, pick("relay", wp("mk_14_ebr", { barrel }))).loadout.weapons[0].recoil;
     expect(mk14(null).firstShotMult).toBeCloseTo(3.5, 6);
     expect(mk14("muzzle_brake").firstShotMult).toBeCloseTo(3.5 * 0.55, 5);
     expect(mk14("muzzle_brake").recenter.delayTicks).toBeLessThan(mk14(null).recenter.delayTicks);
-    const reaper = resolveLoadout(data, pick("sledge", wp("l85a2"), wp("reaper_mk2"))).loadout.weapons[1];
+    const reaper = resolveLoadout(data, pick("cleave", wp("l85a2"), wp("reaper_mk2"))).loadout.weapons[1];
     expect(reaper.recoil.stages.map((s) => s.fromShot)).toEqual([0, 3, 10, 25]);
   });
 
   it("marks suppressed weapons, including the integral suppressors", () => {
-    expect(brava({ barrel: "suppressor" }).suppressed).toBe(true);
-    expect(brava().suppressed).toBe(false);
+    expect(patch({ barrel: "suppressor" }).suppressed).toBe(true);
+    expect(patch().suppressed).toBe(false);
     expect(resolveWeapon(data, wp("six12_sd", { sight: "iron" })).suppressed).toBe(true);
   });
 

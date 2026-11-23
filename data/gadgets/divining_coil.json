@@ -1,0 +1,15 @@
+{
+  "_doc": "Dowser's Divining Coil (Project Redmond R3, gadgets/R3_OPERATORS.md §2): his ability, held up out of slot 2 (Z): a flat search coil on a short handle. While it's up he can't shoot or use another gadget and walks at his own speed, and it shows him alone the other side's electronic devices (gadgets/coil.ts coilMarks: their devices marked `electronic`, the level's cameras, drones, Twain's idle frame) within `coil.rangeM` of his eye through anything, within `coil.fanDeg` of his facing across the floor, as outlines. A ping while it's up marks the one nearest his crosshair within `coil.pingDeg` for his team. An EMP on him empties it until it wears off. Never used up (its `count` is unused). Our own design and numbers.",
+  "_ours": true,
+  "id": "divining_coil",
+  "name": "Divining Coil",
+  "side": "attacker",
+  "operator": "dowser",
+  "count": 1,
+  "electronic": true,
+  "use": {"kind": "hold"},
+  "remote": false,
+  "pickUp": false,
+  "sizeM": [0.16, 0.34, 0.05],
+  "coil": {"rangeM": 18, "fanDeg": 100, "pingDeg": 20}
+}

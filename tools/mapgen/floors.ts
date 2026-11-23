@@ -1,7 +1,7 @@
 // Floors (DESIGN §5.6): each storey's floor as slabs and panels. The ground (the floor of the first storey
 // above ground) covers the play area; any other storey's floor covers its footprint, cut back where boxes of
 // the storey below run up into it (exterior walls reach the next floor). Out of it come the hatches (a HATCH
-// panel: the largest rectangle of the research square inside the room on top), the wells (no floor), and the
+// panel: the largest rectangle of the hatch's square inside the room on top), the wells (no floor), and the
 // soft floors (SOFT_FLOOR tiles of at most tileMaxM, in whole joist spacings, the tiles of one area sharing a
 // region so a bullet counts them as one surface), and the stairwells (stairs.ts: no floor where a run needs the
 // headroom). What's left is hard slab, in as few rectangles as the greedy cover gives. A room in
@@ -12,7 +12,7 @@
 // shaft down to the room below, whose ceiling stays where it was.
 import type { Frames } from "./frames.js";
 import { distanceInside, greedyRects, maxIn, subtractRects, type Rect } from "./grid.js";
-import type { Floor } from "./research.js";
+import type { Floor } from "./schema.js";
 import { CELL_M, clearCells, fillBox, storeyOfBox, type RoomsResult } from "./rooms.js";
 import type { Layout } from "./schema.js";
 import type { Solid } from "./walls.js";
@@ -31,7 +31,7 @@ export interface HatchReport {
   storey: Floor;
   /** The panel, metres [x0, z0, x1, z1]. */
   rect: Rect;
-  /** How much of the research square was given up on each side to keep inside the top room, u [W, N, E, S]. */
+  /** How much of the hatch's authored square was given up on each side to keep inside the top room, u [W, N, E, S]. */
   clipU: [number, number, number, number];
 }
 
@@ -221,15 +221,9 @@ export function compileFloors(layout: Layout, fr: Frames, wallSolids: Solid[], r
       if (storey === groundStorey) groundHoles.push(r);
       count.hatches++;
     }
-    if (storey === groundStorey) {
-      // ---- The ground: the whole play area, less the hatches and the stairwells (and, with the outside, the
-      // bunker's trench).
-      const [px0, pz0, px1, pz1] = playable.map((u) => u * k);
-      subtractRects([px0, pz0, px1, pz1], [...groundHoles, ...(stairHoles.get(floor) ?? [])]).forEach((r, i) => solids.push(slab(`ground#${i}`, r, y0, y1, { surface: "HARD_FLOOR" })));
-      count.slabs = solids.filter((s) => s.id.startsWith("ground#")).length;
-      continue;
-    }
-    // ---- Soft floors: their rectangles' floor inside the walls, as tiles of one region per area.
+    // ---- Soft floors: their rectangles' floor inside the walls, as tiles of one region per area. On the ground
+    // storey too (Millrace's Bale Store over the Strongroom, R4): the ground below is cut round their tiles.
+    const softRects: Rect[] = [];
     const region = new Int16Array(n).fill(-1);
     const soft = layout.softFloors.filter((f) => f.floor === floor && !f.hard);
     soft.forEach((f, fi) => {
@@ -320,6 +314,7 @@ export function compileFloors(layout: Layout, fr: Frames, wallSolids: Solid[], r
           let x = r[0];
           xs.forEach((dx, col) => {
             mine.push(slab(`${id}.r${row}c${col}`, [x, z, x + dx, z + dz], y0 - sunk, y1 - sunk, { surface: "SOFT_FLOOR", panel: { region: f.id } }));
+            softRects.push([x, z, x + dx, z + dz].map(r4) as Rect);
             x += dx;
           });
           z += dz;
@@ -367,6 +362,16 @@ export function compileFloors(layout: Layout, fr: Frames, wallSolids: Solid[], r
       solids.push(...mine);
       count.tiles += mine.length;
     });
+    if (storey === groundStorey) {
+      // ---- The ground: the whole play area, less the hatches, the stairwells (and, with the outside, the
+      // bunker's trench), the ground's own wells (a sunken space open to the sky: Millrace's millrace, D-183) and
+      // its soft floors' tiles.
+      const [px0, pz0, px1, pz1] = playable.map((u) => u * k);
+      const groundWells = layout.wells.filter((w) => w.floor === floor).flatMap((w) => w.rects.map((r) => toM(w.frame, r)));
+      subtractRects([px0, pz0, px1, pz1], [...groundHoles, ...(stairHoles.get(floor) ?? []), ...groundWells, ...softRects]).forEach((r, i) => solids.push(slab(`ground#${i}`, r, y0, y1, { surface: "HARD_FLOOR" })));
+      count.slabs = solids.filter((s) => s.id.startsWith("ground#")).length;
+      continue;
+    }
     // ---- Hard slab: everything else the floor covers, level by level. A raised floor's is solid from the
     // storey's slab up (and from the top of what the storey below runs up into the slab), vaultable at its edge.
     for (const v of levels) {

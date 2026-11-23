@@ -241,7 +241,7 @@ describe("no repeated effects when a correction replays our inputs", () => {
       },
       onEvents: (_t: number, _e: GameEvent[]) => {},
     });
-    const id = room.join("p0", { send: (b) => toClient.push({ at: clock.tick + 3, b }), buffered: () => 0 }, "sledge")!;
+    const id = room.join("p0", { send: (b) => toClient.push({ at: clock.tick + 3, b }), buffered: () => 0 }, "cleave")!;
     const due = (q: { at: number; b: Uint8Array }[]) => {
       const n = q.findIndex((m) => m.at > clock.tick);
       return q.splice(0, n < 0 ? q.length : n).map((m) => m.b);
@@ -476,7 +476,7 @@ describe("level scene", () => {
     }
     expect(names).toContain("Reinforceable · 3 sections");
     expect(names).toContain("Reinforceable · 2 sections");
-    expect(names).toContain("Oregon: Dining | Kitchen · 1 section");
+    expect(names).toContain("1.7 m wall · 1 section");
     // Every other label is as the level gives it.
     for (const s of sim.level.def.solids) if (s.label && !walls.includes(s)) expect(names).toContain(s.label);
   });
@@ -518,7 +518,7 @@ describe("shadows", () => {
   it("nothing that moves casts one: bodies, the guns they hold, effects; in first person the body isn't drawn", async () => {
     const scene = new THREE.Scene();
     const view = new PawnView(scene, 0x3b82f6);
-    const { loadout } = resolveLoadout(data, defaultLoadoutPick(data, "sledge"));
+    const { loadout } = resolveLoadout(data, defaultLoadoutPick(data, "cleave"));
     const w = loadout.weapons[0];
     view.setWeapon({ class: w.class, pick: { sight: w.pick.sight, barrel: w.pick.barrel, grip: w.pick.grip, underbarrel: "laser" } });
     view.update(data, initialPawnState(0, 0, 0, 0, 100, loadout));

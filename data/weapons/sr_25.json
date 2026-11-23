@@ -1,5 +1,5 @@
 {
-  "_doc": "SR-25 (Striker). research/weapons.csv row sr_25; class rules research/weapons_notes.md §4. Added to Striker in Y10S3. No community ammo-refill point.",
+  "_doc": "SR-25 (Pointman). research/weapons.csv row sr_25; class rules research/weapons_notes.md §4. Added to Pointman in Y10S3. No community ammo-refill point.",
   "_season": "Y11S3.1",
   "_unverified": ["ammo.maxAmmo", "destruction"],
   "id": "sr_25",

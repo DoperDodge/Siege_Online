@@ -1,5 +1,5 @@
 {
-  "_doc": "M1014 (Thermite, Pulse). research/weapons.csv row m1014; class rules research/weapons_notes.md §4. Tube-fed: reload_tactical_s is per shell and reload_empty_s is empty-to-full (weapons_notes.md §1). Damage 30 since Y11S3.1.",
+  "_doc": "M1014 (Kiln, Murmur). research/weapons.csv row m1014; class rules research/weapons_notes.md §4. Tube-fed: reload_tactical_s is per shell and reload_empty_s is empty-to-full (weapons_notes.md §1). Damage 30 since Y11S3.1.",
   "_season": "Y11S3.1",
   "_unverified": ["damage.falloff", "destruction"],
   "id": "m1014",

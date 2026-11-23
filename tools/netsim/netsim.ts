@@ -26,6 +26,7 @@ import {
   Phase,
   poseHitboxes,
   rayCapsule,
+  raycastLevel,
   Room,
   ropeAt,
   siteArea,
@@ -71,7 +72,7 @@ export interface NetsimOptions {
   walls?: boolean;
   /** One client holds Fire the whole run, and its uplink stalls `ms` once, at `atS` seconds. */
   sprayStall?: { client: number; atS: number; ms: number };
-  /** The level the room plays (a key of VENUES): the Movement Lab, or Oregon (Phase 5 M6). */
+  /** The level the room plays (a key of VENUES): the Movement Lab, the Gadget Lab or Millrace (Phase 5 M6). */
   level?: string;
   /**
    * Rappel (Phase 5 M8, on a level with rappel faces): each bot has an outside wall of its own, hooks on at its
@@ -221,7 +222,7 @@ function bot(rng: Rng, crowd: boolean, home: { x: number; z: number } | null = n
   let cmd: Omit<InputCmd, "seq"> = { forward: 1, strafe: 0, yaw: 0, pitch: 0, buttons: 0, stance: Stance.Stand, lean: 0 };
   let turn = 0;
   /** One-tick presses at the start of a segment. */
-  let pulse = 0;
+  let murmur = 0;
   return (tick: number, pos: { x: number; z: number } | null): Omit<InputCmd, "seq"> => {
     if (tick >= until) {
       until = tick + 32 + Math.floor(rng.next() * 96);
@@ -235,7 +236,7 @@ function bot(rng: Rng, crowd: boolean, home: { x: number; z: number } | null = n
         stance: rng.next() < 0.12 ? Stance.Crouch : rng.next() < 0.05 ? Stance.Prone : Stance.Stand,
         lean: rng.next() < 0.15 ? (rng.next() < 0.5 ? -1 : 1) : 0,
       };
-      pulse = (rng.next() < 0.15 ? Btn.Reload : 0) | (rng.next() < 0.1 ? Btn.Swap : 0) | (rng.next() < 0.05 ? Btn.FireMode : 0);
+      murmur = (rng.next() < 0.15 ? Btn.Reload : 0) | (rng.next() < 0.1 ? Btn.Swap : 0) | (rng.next() < 0.05 ? Btn.FireMode : 0);
       turn = (rng.next() - 0.5) * 0.08;
     }
     let yaw = cmd.yaw + turn;
@@ -246,12 +247,12 @@ function bot(rng: Rng, crowd: boolean, home: { x: number; z: number } | null = n
       if (Math.hypot(pos.x - middle.x, pos.z - middle.z) > 4) yaw += Math.sign(d) * Math.min(Math.abs(d), 0.06);
     }
     cmd = { ...cmd, yaw: Math.atan2(Math.sin(yaw), Math.cos(yaw)) };
-    let out = pulse ? { ...cmd, buttons: cmd.buttons | pulse } : cmd;
+    let out = murmur ? { ...cmd, buttons: cmd.buttons | murmur } : cmd;
     // Spread out: never more than 1.5 m from its own spot, so no two bodies ever touch.
     if (home && pos && Math.hypot(pos.x - home.x, pos.z - home.z) > 1.5) {
       out = { ...out, forward: 1, strafe: 0, yaw: Math.atan2(-(home.x - pos.x), -(home.z - pos.z)) };
     }
-    pulse = 0;
+    murmur = 0;
     return out;
   };
 }
@@ -282,8 +283,8 @@ function gadgeteer(rng: Rng) {
 }
 
 /** The operators of a gadgets run: the attackers' line (even bots) and the defenders' (odd). */
-const GADGET_ATTACKERS = ["sledge", "thermite", "fuze", "dokkaebi", "brava"];
-const GADGET_DEFENDERS = ["mute", "pulse", "lesion", "mira", "skopos"];
+const GADGET_ATTACKERS = ["cleave", "kiln", "hail", "relay", "patch"];
+const GADGET_DEFENDERS = ["lull", "murmur", "thistle", "vista", "twain"];
 
 /** A bot's spot at the foot of its own rope: where it stands, facing the wall. */
 interface RopeSpot {
@@ -302,15 +303,24 @@ export function ropeSpots(room: Room, n: number, apart = 6): RopeSpot[] {
   const out = 0.6; // from the wall's face: inside findRappel's reach
   const hang = m.stance.collisionRadius + m.rappel.wallGap; // where the body hangs on the rope
   const all: (RopeSpot & { len: number })[] = [];
+  /** Ground under (x, z) at the rope's foot: not the edge of a drop (Millrace's west face stands over the dry race). */
+  const ground = (x: number, z: number) => {
+    const hit = raycastLevel(room.sim, [x, 0.5, z], [0, -1, 0], 0.7);
+    return hit !== null && Math.abs(hit.t - 0.5) < 0.1;
+  };
   faces.forEach((f, i) => {
-    const u = (f.u0 + f.u1) / 2;
     if (f.u1 - f.u0 < 2) return;
-    const at = (o: number) => [f.n[0] * (f.d + o) + f.t[0] * u, f.n[1] * (f.d + o) + f.t[1] * u];
-    const [x, z] = at(out);
-    const [hx, hz] = at(hang);
-    const rope = ropeAt(faces, i, x, z, 0.1);
-    if (!rope || rope[0] > 0.05 || rope[1] < 3 || !room.sim.standsFree(x, 0, z) || !room.sim.standsFree(hx, 0, hz)) return;
-    all.push({ x, z, yawDeg: (Math.atan2(f.n[0], f.n[1]) * 180) / Math.PI, len: rope[1] - rope[0] });
+    // A short face at its middle; along a long one, a spot every 7 m (2 m in from its ends).
+    const span = f.u1 - f.u0;
+    const us = span < 6 ? [(f.u0 + f.u1) / 2] : Array.from({ length: Math.floor((span - 4) / 7) + 1 }, (_, k) => f.u0 + 2 + k * 7);
+    for (const u of us) {
+      const at = (o: number) => [f.n[0] * (f.d + o) + f.t[0] * u, f.n[1] * (f.d + o) + f.t[1] * u];
+      const [x, z] = at(out);
+      const [hx, hz] = at(hang);
+      const rope = ropeAt(faces, i, x, z, 0.1);
+      if (!rope || rope[0] > 0.05 || rope[1] < 3 || !room.sim.standsFree(x, 0, z) || !room.sim.standsFree(hx, 0, hz) || !ground(x, z) || !ground(hx, hz)) continue;
+      all.push({ x, z, yawDeg: (Math.atan2(f.n[0], f.n[1]) * 180) / Math.PI, len: rope[1] - rope[0] });
+    }
   });
   const picked: RopeSpot[] = [];
   for (const s of all.sort((a, b) => b.len - a.len || a.x - b.x || a.z - b.z)) {
@@ -447,13 +457,13 @@ export const VENUES: Record<string, Venue> = {
     combat: (i) => ({ x: -12 + Math.floor(i / 2) * 6, z: i % 2 ? 25 : 15, yawDeg: i % 2 ? 0 : 180 }),
     walls: (i) => ({ x: -12 + Math.floor(i / 2) * 6, z: i % 2 ? 25 : 15, yawDeg: i % 2 ? 0 : 180 }),
   },
-  oregon: {
-    // The street south of the building, on the ground (1F's level).
-    middle: { x: 30, z: 54 },
-    spread: (i) => ({ x: 10 + (i % 10) * 6, z: 56 - Math.floor(i / 10) * 8 }),
-    combat: (i) => ({ x: 16 + Math.floor(i / 2) * 3, z: i % 2 ? 50 : 58, yawDeg: i % 2 ? 180 : 0 }),
-    // Inside, 2.5 m either side of SW-1F-06, the Kitchen's 4 m soft wall to the Security room (z 31.15, x 20.55…24.6).
-    walls: (i) => ({ x: [20.95, 21.75, 22.55, 23.35, 24.15][Math.floor(i / 2) % 5], z: i % 2 ? 33.65 : 28.65, yawDeg: i % 2 ? 0 : 180 }),
+  millrace: {
+    // The road east of the office wing, on the ground (1F's level).
+    middle: { x: 76, z: 16 },
+    spread: (i) => ({ x: 64 + (i % 10) * 2.5, z: 14 + Math.floor(i / 10) * 4 }),
+    combat: (i) => ({ x: 66 + Math.floor(i / 2) * 3, z: i % 2 ? 12 : 20, yawDeg: i % 2 ? 180 : 0 }),
+    // Inside, 2.5 m either side of SW-1F-03, Spinning's 4 m soft wall to Mending (z 11, x 33…37).
+    walls: (i) => ({ x: [34.0, 34.7, 35.4, 36.1, 36.8][Math.floor(i / 2) % 5], z: i % 2 ? 13.5 : 8.5, yawDeg: i % 2 ? 0 : 180 }),
   },
 };
 
@@ -517,7 +527,7 @@ export async function runNetsim(partial: Partial<NetsimOptions> = {}): Promise<N
       const deliverToServer = (b: Uint8Array) => serverReceive(memberId, b);
       const op =
         o.operators?.[i % o.operators.length] ??
-        (o.gadgets ? (i % 2 ? GADGET_DEFENDERS : GADGET_ATTACKERS)[Math.floor(i / 2) % 5] : o.combat ? (i % 2 ? "mute" : "sledge") : i === 3 ? "skopos" : "sledge");
+        (o.gadgets ? (i % 2 ? GADGET_DEFENDERS : GADGET_ATTACKERS)[Math.floor(i / 2) % 5] : o.combat ? (i % 2 ? "lull" : "cleave") : i === 3 ? "twain" : "cleave");
       memberId = room.join(name, { send: (b) => down.send(b), buffered: () => 0 }, op)!;
       const drift = 1 + ((rng.next() * 2 - 1) * o.driftPct) / 100;
       // In a fight the first two (one a side) charge; everyone else keeps to their spot in the line.
@@ -854,7 +864,7 @@ export async function runHitreg(partial: Partial<HitregOptions> = {}): Promise<H
         onEvents: i === 0 ? onEvents : undefined,
         onLocalEvents: i === 0 ? (evs) => (localShot = evs.find((e) => e.kind === "shot") ?? localShot) : undefined,
       });
-      memberId = room.join(i === 0 ? "shooter" : `target${i}`, { send: (b) => down.send(b), buffered: () => 0 }, i === 0 ? "sledge" : ["mute", "pulse", "sentry", "sledge"][i - 1])!;
+      memberId = room.join(i === 0 ? "shooter" : `target${i}`, { send: (b) => down.send(b), buffered: () => 0 }, i === 0 ? "cleave" : ["lull", "murmur", "picket", "cleave"][i - 1])!;
       return { session, memberId, nextTickAt: 0, ticks: 0, drift: 1 + ((rng.next() * 2 - 1) * 0.5) / 100 };
     }),
   );
@@ -1056,7 +1066,7 @@ export interface MatchNetsimReport {
 }
 
 /**
- * Ten clients through a whole Custom match on Oregon over the simulated network (PLAN §19): the lobby, ban votes,
+ * Ten clients through a whole Custom match on Millrace over the simulated network (PLAN §19): the lobby, ban votes,
  * picks, site votes and spawns, defenders in prep behind red walls (and Quick Match's pre-setups), every round's
  * action with the bots moving and firing, plants and disables held across the latency, the side swaps and the end.
  * The harness makes each round end the scripted way (killing defenders, or putting the carrier and the last defender
@@ -1068,7 +1078,7 @@ export async function runMatchNetsim(partial: Partial<MatchNetsimOptions> = {}):
   if (o.script.length % 2 || o.script.length < 2) throw new Error("netsim: a match has an even number of rounds");
   const rng = new Rng(o.seed);
   const clock = new Clock();
-  const room = await Room.create("SIM00", "oregon", { format: "custom", seed: o.seed });
+  const room = await Room.create("SIM00", "millrace", { format: "custom", seed: o.seed });
   const match = room.director!.match;
   const data = room.sim.data;
   const level = room.sim.level.def;

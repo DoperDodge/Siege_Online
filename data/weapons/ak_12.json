@@ -1,5 +1,5 @@
 {
-  "_doc": "AK-12 (Fuze). research/weapons.csv row ak_12; class rules research/weapons_notes.md §4. Ammo-refill 1.49 / 2.47 s community-measured.",
+  "_doc": "AK-12 (Hail). research/weapons.csv row ak_12; class rules research/weapons_notes.md §4. Ammo-refill 1.49 / 2.47 s community-measured.",
   "_season": "Y11S3.1",
   "_unverified": ["destruction", "fire.modes", "reload.refillEmptyS", "reload.refillTacticalS"],
   "id": "ak_12",

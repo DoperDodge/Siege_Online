@@ -55,10 +55,10 @@ async function shooter(operator: string, primary?: WeaponPick, secondary?: Weapo
 
 describe("aiming down sights", () => {
   for (const [label, op, pick] of [
-    ["iron sight", "sledge", wp("l85a2")],
-    ["laser", "sledge", wp("l85a2", { underbarrel: "laser" })],
-    ["magnified sight", "sledge", wp("l85a2", { sight: "magnified" })],
-    ["shotgun", "sledge", wp("m590a1")],
+    ["iron sight", "cleave", wp("l85a2")],
+    ["laser", "cleave", wp("l85a2", { underbarrel: "laser" })],
+    ["magnified sight", "cleave", wp("l85a2", { sight: "magnified" })],
+    ["shotgun", "cleave", wp("m590a1")],
   ] as const) {
     it(`${pick.weapon}, ${label}: full after the weapon's ADS ticks, ×1.1 out of a sprint, out again in 0.25 s`, async () => {
       const g = await shooter(op, pick);
@@ -76,7 +76,7 @@ describe("aiming down sights", () => {
   }
 
   it("the spread cone narrows along the class's ADS curve and widens with speed (buckshot)", async () => {
-    const g = await shooter("sledge", wp("m590a1"));
+    const g = await shooter("cleave", wp("m590a1"));
     const w = g.weapon();
     const s = g.s();
     expect(spreadCone(w, { ...s, adsQ: 0, vx: 0, vz: 0 })).toBeCloseTo(w.spread.hip, 9);
@@ -88,7 +88,7 @@ describe("aiming down sights", () => {
   });
 
   it("a long drop takes the sights down (Siege X); landing lets them come back up", async () => {
-    const g = await shooter("sledge");
+    const g = await shooter("cleave");
     g.sim.teleport(g.pawn().id, 0, 4, 12, 0, Stance.Stand); // open floor below
     const fall: [number, number][] = [];
     while (!g.s().grounded && fall.length < 200) {
@@ -108,8 +108,8 @@ describe("aiming down sights", () => {
 
 describe("recoil (stepped in the simulation, D-041)", () => {
   it("a spray climbs the view the same way in two sims, whatever their tick counters say", async () => {
-    const one = await shooter("sledge");
-    const two = await shooter("sledge");
+    const one = await shooter("cleave");
+    const two = await shooter("cleave");
     two.sim.tick += 777;
     const start = one.s().pitch;
     for (let i = 0; i < 160; i++) {
@@ -122,7 +122,7 @@ describe("recoil (stepped in the simulation, D-041)", () => {
   });
 
   it("each kick event is exactly the view change recoil made that tick", async () => {
-    const g = await shooter("sledge");
+    const g = await shooter("cleave");
     let total = 0;
     for (let i = 0; i < 120; i++) {
       const before = { yaw: g.s().yaw, pitch: g.s().pitch };
@@ -137,7 +137,7 @@ describe("recoil (stepped in the simulation, D-041)", () => {
   });
 
   it("the pitch limit drops the excess instead of saving it up", async () => {
-    const g = await shooter("sledge");
+    const g = await shooter("cleave");
     const max = data.movement.look.pitchMaxDeg * DEG;
     const start = max - 0.2 * DEG;
     let applied = 0;
@@ -154,7 +154,7 @@ describe("recoil (stepped in the simulation, D-041)", () => {
   });
 
   it("lying against a wall, a sideways kick that would swing the body into it is dropped", async () => {
-    const g = await shooter("sledge");
+    const g = await shooter("cleave");
     g.sim.teleport(g.pawn().id, -1, 0, -31, 0, Stance.Prone); // facing wall_n (face at z = -31.75)
     run(g.sim, g.ctrl, { forward: 1, stance: Stance.Prone }, 2);
     const yaw = g.s().yaw;
@@ -171,7 +171,7 @@ describe("recoil (stepped in the simulation, D-041)", () => {
   });
 
   it("Reaper MK2: the kick changes stage at bullets 3, 10 and 25 (official Y11S2.3)", async () => {
-    const g = await shooter("sledge", undefined, wp("reaper_mk2"));
+    const g = await shooter("cleave", undefined, wp("reaper_mk2"));
     g.tick({ buttons: Btn.Swap });
     g.until(() => g.s().wAct === 0);
     const w = g.weapon();

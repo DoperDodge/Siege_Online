@@ -6,6 +6,7 @@
 // would know: its own counts, what's in its hand, and the panel in front of it.
 import { TICK_HZ } from "../core/constants.js";
 import { DEG, type Vec3 } from "../core/math.js";
+import { empTargets } from "../gadgets/electronics.js";
 import { slotGadget } from "../gadgets/hands.js";
 import { eyePose } from "../player/hitboxes.js";
 import type { Pawn } from "../player/pawn.js";
@@ -64,10 +65,12 @@ export class GadgetUse {
   private usedAt = -1;
   private heldFrom = -1;
   private nudge = 0;
-  /** Fire pressed (a hold use's: Dokkaebi's tablet), when. */
+  /** Fire pressed (a hold use's: Relay's tablet), when. */
   firedAt = -1;
   /** The follower's failures to get there. */
   private walkFails = 0;
+  /** A shot use's marks (R3, Ohm's pistol), once it's on the spot: where each round goes. */
+  private shotSpots: Vec3[] | null = null;
 
   constructor(
     readonly task: GadgetTask,
@@ -118,7 +121,7 @@ export class GadgetUse {
     if (this.state === UseState.Going) {
       if (t.how === "detonate" ? out === 0 : left === 0) return this.end(t.how === "detonate");
       if (t.stand) {
-        const near = t.how === "throw" || t.how === "lob" ? 1.2 : 0.35;
+        const near = t.how === "throw" || t.how === "lob" || t.how === "shoot" || t.how === "launch" ? 1.2 : 0.35;
         if (Math.hypot(t.stand[0] - s.x, t.stand[2] - s.z) > near || Math.abs(t.stand[1] - s.y) > 0.8) {
           const w = ctx.walk(t.stand, near * 0.7, t.how !== "detonate");
           if (w) return { ...w, buttons: w.buttons & ~(Btn.Fire | Btn.Ads) };
@@ -136,6 +139,20 @@ export class GadgetUse {
         return still(every(6) ? Btn.Fire : 0);
       }
       const spent = this.startLeft - left;
+      if (t.how === "shoot") {
+        // A round at each mark (R3, Ohm's pistol): the devices its scope shows within 2.5 m of the spot (behind the
+        // wall), nearest the spot first, else the task's own spots; one a reload, each when the aim's on it.
+        if (!this.shotSpots) this.shotSpots = shotMarks(ctx, t, eye);
+        const spots = this.shotSpots;
+        if (spent >= spots.length || left === 0) {
+          this.usedAt = now;
+          return this.end(spent > 0);
+        }
+        const p = spots[spent];
+        if (handSlot(s.hand) !== t.slot || s.gAct === GadgetAct.Equip) return takeOut(DEVICE[t.slot], p);
+        if (s.gAct !== GadgetAct.Ready || !aimed(p, 0.02)) return aim(p, 0);
+        return aim(p, every(4) ? Btn.Fire : 0);
+      }
       if (t.how === "swing") {
         const spots = t.spots ?? [t.look];
         if ((t.panel !== undefined && panelOpen(ctx.sim, t.panel)) || spent >= spots.length || left === 0) {
@@ -151,7 +168,7 @@ export class GadgetUse {
         this.usedAt = now;
         this.state = UseState.After;
       } else {
-        const look = t.how === "place" ? nudged(t.look, this.nudge) : t.look;
+        const look = t.how === "place" || t.how === "launch" ? nudged(t.look, this.nudge) : t.look;
         if (s.hand !== DEVICE[t.slot] || s.gAct === GadgetAct.Equip) return takeOut(DEVICE[t.slot], look);
         switch (t.how) {
           case "hold":
@@ -170,6 +187,18 @@ export class GadgetUse {
             const on = viewGap({ yaw: s.yaw, pitch: s.pitch }, want) < 0.03;
             const b = on && every(10) && s.gAct === GadgetAct.Ready ? (t.how === "throw" ? Btn.Fire : Btn.Ads) : 0;
             return { forward: 0, strafe: 0, yaw: v.yaw, pitch: v.pitch, buttons: b, stance, lean: 0 };
+          }
+          case "launch": {
+            // A driver's salvo (R3, Rivet's): its pick first (the reload key), then a press of Fire with the aim on the
+            // spot (if it doesn't take, the aim moves a little: a few tries, then it gives up).
+            if (t.pattern !== undefined && s.pattern !== t.pattern) return aim(look, every(6) ? Btn.Reload : 0);
+            if (s.gAct !== GadgetAct.Ready || !aimed(look, 0.02)) return aim(look, 0);
+            if (this.heldFrom < 0) this.heldFrom = now;
+            if (now - this.heldFrom > NUDGE_S * TICK_HZ) {
+              this.heldFrom = -1;
+              if (++this.nudge >= NUDGES.length) return this.end(false);
+            }
+            return aim(look, every(4) ? Btn.Fire : 0);
           }
           case "place": {
             if (s.gAct === GadgetAct.Place) {
@@ -232,6 +261,16 @@ export function throwPitch(eye: Vec3, p: Vec3, speed: number, upDeg: number, gra
   if (disc < 0 || dx < 0.1 || g <= 0) return null;
   const theta = Math.atan((v2 - Math.sqrt(disc)) / (g * dx));
   return Math.max(-1.4, Math.min(1.4, theta - upDeg * DEG));
+}
+
+/** Where a shot use's rounds go (R3): up to three marks of the scope's near its spot, else its own spots (or its spot). */
+function shotMarks(ctx: UseCtx, t: GadgetTask, eye: Vec3): Vec3[] {
+  const g = slotGadget(ctx.sim.data, ctx.me.loadout, t.slot);
+  const range = g?.use.kind === "shoot" ? g.use.rangeM : 0;
+  const near = (p: Vec3) => Math.hypot(p[0] - t.look[0], p[1] - t.look[1], p[2] - t.look[2]);
+  const marks = g?.emp ? empTargets(ctx.sim, ctx.me.team, eye, range).filter((p) => near(p) <= 2.5) : [];
+  if (marks.length) return marks.sort((a, b) => near(a) - near(b)).slice(0, 3);
+  return t.spots?.length ? t.spots : [t.look];
 }
 
 /** The look point moved by the k-th nudge. */

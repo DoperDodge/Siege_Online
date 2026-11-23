@@ -1,8 +1,8 @@
 // Health and being down (Phase 3 M7, M9): the health bar (the 20 HP down pool while down), the down screen
 // (crawl, bleed, wait for a teammate) and, while you revive someone, the revive's progress (D-048, D-049);
 // the same gauge shows a reinforcement or barricade going up (Phase 4 M6), a rope being hooked on (Phase 5 M8), the
-// defuser being planted or disabled (Phase 6, match/DESIGN.md §8), a Bulletproof Camera being placed (Phase 7), and a
-// Gu needle being pulled (Phase 8 M10; a needle in you tints the view and says how to pull it).
+// defuser being planted or disabled (Phase 6, match/DESIGN.md §8), a Armoured Camera being placed (Phase 7), and a
+// Burr needle being pulled (Phase 8 M10; a needle in you tints the view and says how to pull it).
 import { DeployKind, deployTicks, GadgetAct, isDowned, PawnMode, ticks, TICK_HZ, type CombatData, type DestructionData, type MovementData, type PawnState } from "@redmond/shared";
 
 /** Seconds left on a revive `reviveTicks` in. */
@@ -29,7 +29,7 @@ export class DownedHud {
     destruction?: DestructionData,
     movement?: MovementData,
     holds?: { plantTicks: number; disableTicks: number } | null,
-    gadget: { name: string; placeTicks: number; takeBack: string; takeBackTicks: number; needleTicks?: number; phoneTicks?: number } | null = null,
+    gadget: { name: string; placeTicks: number; takeBack: string; takeBackTicks: number; needleTicks?: number; phoneTicks?: number; snareTicks?: number } | null = null,
   ) {
     const $ = this.$;
     const pool = combat.dbno.hp;
@@ -39,13 +39,18 @@ export class DownedHud {
     $(".hp").classList.toggle("down", down);
     this.root.classList.toggle("downed", down);
     $(".down-ui").classList.toggle("hidden", !down);
-    // A Gu needle in you (Phase 8 M10): the view sickly green at its edges, and how to pull it. (Nothing of a body's own
+    // A Burr needle in you (Phase 8 M10): the view sickly green at its edges, and how to pull it. (Nothing of a body's own
     // holds or needle once it's dead: a lethal fall left them on the death screen, the review found, M12.)
     const alive = s.mode !== PawnMode.Dead;
+    // Latch's snare on your leg (R3), or a jolt of Bailiff's prod (R3, for a moment): the same line, its own words.
     const needled = alive && s.needled;
-    this.root.classList.toggle("needled", needled);
-    $(".needle-ui").classList.toggle("hidden", !needled || s.deployKind === DeployKind.Needle);
-    if (needled) $(".needle-ui").textContent = `GU NEEDLE · no sprinting · stand and hold ${interactKey} to pull it`;
+    const snared = alive && s.snared;
+    const jolted = alive && s.slowed > 0;
+    this.root.classList.toggle("needled", needled || snared);
+    $(".needle-ui").classList.toggle("hidden", !(needled || snared || jolted) || s.deployKind === DeployKind.Needle || s.deployKind === DeployKind.Snare);
+    if (needled) $(".needle-ui").textContent = `BURR BARB · no sprinting · stand and hold ${interactKey} to pull it`;
+    else if (snared) $(".needle-ui").textContent = `SNARE LATCH · slowed, no sprinting · hold ${interactKey} to pull it off`;
+    else if (jolted) $(".needle-ui").textContent = "JOLTED · slowed, no sprinting or vaulting";
     if (down) {
       $(".down-title").textContent = s.revivedBy
         ? "BEING REVIVED — hold still"
@@ -70,6 +75,7 @@ export class DownedHud {
       const takeBack = s.deployKind === DeployKind.PickUp;
       const needle = s.deployKind === DeployKind.Needle;
       const phone = s.deployKind === DeployKind.Phone;
+      const snare = s.deployKind === DeployKind.Snare;
       const total = Math.max(
         1,
         defuser
@@ -78,12 +84,16 @@ export class DownedHud {
             ? (gadget?.takeBackTicks ?? 1)
             : needle
               ? (gadget?.needleTicks ?? 1)
+              : snare
+              ? (gadget?.snareTicks ?? 1)
               : phone
                 ? (gadget?.phoneTicks ?? 1)
                 : deployTicks(destruction, s.deployKind),
       );
       const what = needle
-        ? "PULLING THE NEEDLE"
+        ? "PULLING THE BARB"
+        : snare
+        ? "PULLING THE LATCH OFF"
         : phone
         ? "TURNING YOUR PHONE OFF"
         : takeBack

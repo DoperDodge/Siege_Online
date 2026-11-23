@@ -1,0 +1,16 @@
+{
+  "_doc": "Patch's Crossover Drone (research/operators/brava.md §3; Phase 8 M8): her ability. Her body carries `count` of them besides her drones (in a match from the action phase; in prep she has her drones), and Z throws one out and drives it as the drone key does a drone (a drone pawn: jammed, EMP'd and shot as one). Driving one, Fire held on an enemy electronic device in view within `crossover.rangeM` (within `crossover.coneDeg` of the view) hacks it in `crossover.hackS`: it must stay within range, but once started it needn't see it; letting go, going out of range, being jammed, EMP'd or destroyed stops it, and a charge is only spent when it's done (Y8S1.1). Of `crossover.charges` each. Cameras (default and Bulletproof), proximity alarms, feed blockers and Lull's jammers switch sides; a Remote Charge fizzles `crossover.destroyS` later; Twain's idle shell overheats `crossover.overheatS` after the hack starts unless she wakes it. Not her side's devices, not the Blind Pane, Burr mines, Murmur's sensor, shields, wire, or Twain's active shell. Its size (drawn bigger; it moves and collides as a drone), charges (3, dualshockers), range (10 m, dualshockers), hack time (3 s), fizzle delay and cone are placeholders; the overheat's 8 s is siege.gg's test-server value.",
+  "_season": "Y11S3",
+  "_unverified": ["sizeM", "crossover.charges", "crossover.rangeM", "crossover.hackS", "crossover.destroyS", "crossover.overheatS", "crossover.coneDeg"],
+  "id": "crossover_drone",
+  "name": "Crossover Drone",
+  "side": "attacker",
+  "operator": "patch",
+  "count": 2,
+  "electronic": true,
+  "use": {"kind": "drone"},
+  "remote": false,
+  "pickUp": false,
+  "sizeM": [0.32, 0.16, 0.26],
+  "crossover": {"charges": 3, "rangeM": 10, "hackS": 3, "destroyS": 2, "overheatS": 8, "coneDeg": 8}
+}

@@ -1,5 +1,5 @@
 {
-  "_doc": "Mk 14 EBR (Dokkaebi). research/weapons.csv row mk_14_ebr; class rules research/weapons_notes.md §4. Y11S3: damage 56, M&K first-shot multiplier 3.5 (official; how it maps onto our recoil model is open). Telescopic sight and Muzzle Brake are Dokkaebi-only (weapons_notes.md §6, Q6).",
+  "_doc": "Mk 14 EBR (Relay). research/weapons.csv row mk_14_ebr; class rules research/weapons_notes.md §4. Y11S3: damage 56, M&K first-shot multiplier 3.5 (official; how it maps onto our recoil model is open). Telescopic sight and Muzzle Brake are Relay-only (weapons_notes.md §6, Q6).",
   "_season": "Y11S3.1",
   "_unverified": ["ammo.maxAmmo", "attachments.barrels", "attachments.sights", "destruction", "recoil.firstShotMult"],
   "id": "mk_14_ebr",
@@ -30,8 +30,8 @@
   "adsS": 0.52,
   "destruction": "high",
   "attachments": {
-    "sights": ["iron", "nonmag", "magnified", { "id": "telescopic", "operators": ["dokkaebi"] }],
-    "barrels": [{ "id": "muzzle_brake", "operators": ["dokkaebi"] }, "suppressor"],
+    "sights": ["iron", "nonmag", "magnified", { "id": "telescopic", "operators": ["relay"] }],
+    "barrels": [{ "id": "muzzle_brake", "operators": ["relay"] }, "suppressor"],
     "grips": ["vertical", "angled", "horizontal"],
     "underbarrel": ["laser"]
   },

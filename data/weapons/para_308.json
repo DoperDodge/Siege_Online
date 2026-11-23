@@ -1,5 +1,5 @@
 {
-  "_doc": "PARA-308 (Brava). research/weapons.csv row para_308; class rules research/weapons_notes.md §4. Extended barrel 52 / min 42 and ammo-refill 1.52 / 2.50 s are community-measured (row notes).",
+  "_doc": "PARA-308 (Patch). research/weapons.csv row para_308; class rules research/weapons_notes.md §4. Extended barrel 52 / min 42 and ammo-refill 1.52 / 2.50 s are community-measured (row notes).",
   "_season": "Y11S3.1",
   "_unverified": ["damage.extendedBarrel", "destruction", "reload.refillEmptyS", "reload.refillTacticalS"],
   "id": "para_308",

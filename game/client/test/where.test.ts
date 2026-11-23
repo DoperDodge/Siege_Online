@@ -6,7 +6,7 @@ import { levelSchema } from "@redmond/shared";
 import { storeyOf } from "../src/render/labScene.js";
 import { goToMenu, nativeU, roomAt, whereText } from "../src/ui/where.js";
 
-/** Oregon's own 2F frame: its drawing is about 2.4% larger than 1F's and shifted (world = a · native + b). */
+/** A 2F frame of its own (as a traced plan's can be): its drawing about 2.4% larger than 1F's and shifted (world = a · native + b). */
 const FRAME_2F = { ax: 0.9772305, bx: -0.0195446, ay: 0.9745639, by: 2.7385245 };
 
 /**

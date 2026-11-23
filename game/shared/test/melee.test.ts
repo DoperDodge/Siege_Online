@@ -27,7 +27,7 @@ type Cmd = Partial<InputCmd> & { yawDeg?: number };
 
 async function people(spots: { at: [number, number, number]; yawDeg?: number; op?: string }[]) {
   const sim = await Sim.create("movement_lab");
-  const ctrls = spots.map((p, i) => sim.addPlayer(`p${i}`, p.op ?? "sledge", 0, undefined, undefined, i === 0 ? 0 : 1));
+  const ctrls = spots.map((p, i) => sim.addPlayer(`p${i}`, p.op ?? "cleave", 0, undefined, undefined, i === 0 ? 0 : 1));
   const pawn = (i: number) => sim.pawns.get(ctrls[i].possessedPawnId)!;
   const events: SimEvent[] = [];
   const step = (cmds: Cmd[] = [], n = 1) => {

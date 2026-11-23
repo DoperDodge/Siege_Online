@@ -34,7 +34,7 @@ export interface PelletPath {
   end: number;
   /** What it did to panels before it ended (holes, wear), in order along it. */
   ops: IndexedOp[];
-  /** Fuze's shield it stopped at (Phase 8 M11): the body holding it, and where along the ray; null if none. */
+  /** Hail's shield it stopped at (Phase 8 M11): the body holding it, and where along the ray; null if none. */
   shield: { pawnId: number; t: number } | null;
   /** Surfaces it went into before it ended: panels, and props it went through. */
   surfaces: number;
@@ -97,7 +97,7 @@ export function pelletPath(
   }
   const wall = passage.stop ?? plain;
   const found = bodiesAlong(wall ?? max);
-  // Fuze's shield (Phase 8 M11): the first plate on the way stops it; nobody past it is reached.
+  // Hail's shield (Phase 8 M11): the first plate on the way stops it; nobody past it is reached.
   let plate: { pawnId: number; t: number } | null = null;
   for (const b of found) for (const p of b.parts) if (p.part === "shield" && (!plate || p.t < plate.t)) plate = { pawnId: b.id, t: p.t };
   const bodies = plate ? found.map((b) => ({ id: b.id, parts: b.parts.filter((p) => p.part !== "shield" && p.t < plate!.t) })).filter((b) => b.parts.length > 0) : found;
@@ -150,7 +150,7 @@ const SEVERITY: readonly Zone[] = ["leg", "arm", "pelvis", "torso", "neck", "hea
 
 /**
  * The damage a shot's pellets do to each body they hit (combat/damage.ts per pellet, then summed per body:
- * research/OPEN_QUESTIONS.md). `opts` gives the friendly-fire scale and Skopós's idle-shell rule per body.
+ * research/OPEN_QUESTIONS.md). `opts` gives the friendly-fire scale and Twain's idle-shell rule per body.
  * Bodies come out in the order the shot first reached them.
  */
 export function shotOnBodies(combat: CombatData, damage: ResolvedDamage, paths: readonly PelletPath[], opts: (pawnId: number) => BulletOptions): ShotOnBody[] {

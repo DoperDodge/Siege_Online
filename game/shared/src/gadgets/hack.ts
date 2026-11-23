@@ -1,8 +1,8 @@
-// Brava's Kludge drone (Phase 8 M8; research/operators/brava.md §3–4; data/gadgets/kludge_drone.json `kludge`): what
-// a Kludge its owner drives can start hacking, and where a hack's target is while it runs. A target is the other
-// side's device nearest the Kludge's crosshair within `coneDeg` and `rangeM`, in sight (the level, solid gadgets and
-// what the room's `blocked` says: smoke, the other side's observation blockers): a gadget whose data says how a hack
-// takes it (`hack`), a default camera of theirs, or Skopós's idle shell. The room runs the hack (net/room.ts).
+// Patch's Crossover drone (Phase 8 M8; research/operators/brava.md §3–4; data/gadgets/crossover_drone.json `crossover`): what
+// a Crossover its owner drives can start hacking, and where a hack's target is while it runs. A target is the other
+// side's device nearest the Crossover's crosshair within `coneDeg` and `rangeM`, in sight (the level, solid gadgets and
+// what the room's `blocked` says: smoke, the other side's feed blockers): a gadget whose data says how a hack
+// takes it (`hack`), a default camera of theirs, or Twain's idle shell. The room runs the hack (net/room.ts).
 import { DEG, type Vec3 } from "../core/math.js";
 import { isIdleShell } from "../combat/apply.js";
 import type { GameData } from "../data/load.js";
@@ -16,16 +16,16 @@ import { sightPast } from "./mirror.js";
 import { heartOf } from "./sensor.js";
 import { GFlag } from "./table.js";
 
-export type KludgeData = NonNullable<GadgetData["kludge"]>;
+export type CrossoverData = NonNullable<GadgetData["crossover"]>;
 
-/** What a Kludge can hack: a gadget table entry, a default camera (by its place in the level's list), Skopós's idle shell. */
+/** What a Crossover can hack: a gadget table entry, a default camera (by its place in the level's list), Twain's idle shell. */
 export type HackTarget = { kind: "gadget"; id: number } | { kind: "camera"; index: number } | { kind: "shell"; pawnId: number };
 
-/** A Kludge drone's data (its operator's ability item), or null for any other pawn. */
-export function kludgeOf(data: GameData, pawn: Pawn): KludgeData | null {
-  if (pawn.kind !== PawnKind.Drone || !pawn.kludge) return null;
+/** A Crossover drone's data (its operator's ability item), or null for any other pawn. */
+export function crossoverOf(data: GameData, pawn: Pawn): CrossoverData | null {
+  if (pawn.kind !== PawnKind.Drone || !pawn.crossover) return null;
   const id = abilityItem(data, pawn.operatorId);
-  return (id && data.gadgets.get(id)?.kludge) || null;
+  return (id && data.gadgets.get(id)?.crossover) || null;
 }
 
 /** Where a hack's target is now, or null when it's gone or no longer the other side's (`team`: the hacker's). */
@@ -43,17 +43,17 @@ export function hackTargetPos(sim: Sim, t: HackTarget, team: number): Vec3 | nul
 }
 
 /**
- * The target a Kludge driven from `view` can start hacking now: the other side's device nearest its crosshair, or null.
- * `blocked`: whether something the room knows of hides a point from it (smoke, the other side's observation blocker).
+ * The target a Crossover driven from `view` can start hacking now: the other side's device nearest its crosshair, or null.
+ * `blocked`: whether something the room knows of hides a point from it (smoke, the other side's feed blocker).
  */
 export function hackTargetFor(
   sim: Sim,
-  kludge: Pawn,
-  k: KludgeData,
+  crossover: Pawn,
+  k: CrossoverData,
   view: { pos: Vec3; yaw: number; pitch: number },
   blocked: (from: Vec3, to: Vec3) => boolean,
 ): HackTarget | null {
-  const team = kludge.team;
+  const team = crossover.team;
   const candidates: HackTarget[] = [];
   for (const g of sim.gadgets.list) if (sim.data.gadgets.get(kindId(g.kind) ?? "")?.hack) candidates.push({ kind: "gadget", id: g.id });
   if (sim.matchRules.cameras) sim.level.def.cameras.forEach((_, index) => candidates.push({ kind: "camera", index }));

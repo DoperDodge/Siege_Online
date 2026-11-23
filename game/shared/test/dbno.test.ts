@@ -29,7 +29,7 @@ type Cmd = Partial<InputCmd> & { yawDeg?: number };
 /** Players in one sim, each with its own input each tick. */
 async function world(players: { op?: string; team?: number; at: [number, number, number]; yawDeg?: number }[]) {
   const sim = await Sim.create("movement_lab");
-  const ctrls = players.map((p, i) => sim.addPlayer(`p${i}`, p.op ?? "sledge", 0, undefined, undefined, p.team ?? 0));
+  const ctrls = players.map((p, i) => sim.addPlayer(`p${i}`, p.op ?? "cleave", 0, undefined, undefined, p.team ?? 0));
   const pawn = (c: PlayerController) => sim.pawns.get(c.possessedPawnId)!;
   const step = (cmds: Cmd[] = [], n = 1) => {
     for (let k = 0; k < n; k++) sim.step(new Map(ctrls.map((c, i) => [c.id, input({ yaw: pawn(c).state.yaw, stance: pawn(c).state.stance, ...cmds[i] })])));
@@ -66,13 +66,13 @@ describe("health at 0: down or dead (core_mechanics.md §10.1)", () => {
     expect(applyDamage(w.sim, p, { amount: 110, kill: false }).outcome).toBe("killed");
   });
 
-  it("Skopós has no DBNO; the last one up dies when the mode says so", async () => {
-    const w = await world([{ op: "skopos", at: [0, 0, 12] }, { at: [4, 0, 12] }, { at: [-4, 0, 12], team: 1 }]);
+  it("Twain has no DBNO; the last one up dies when the mode says so", async () => {
+    const w = await world([{ op: "twain", at: [0, 0, 12] }, { at: [4, 0, 12] }, { at: [-4, 0, 12], team: 1 }]);
     const sk = w.pawn(w.ctrls[0]);
     expect(applyDamage(w.sim, sk, { amount: sk.state.hp, kill: false }).outcome).toBe("killed");
     const a = w.pawn(w.ctrls[1]);
     const enemy = w.pawn(w.ctrls[2]);
-    // a's only teammate (Skopós) is dead: last one up.
+    // a's only teammate (Twain) is dead: last one up.
     expect(applyDamage(w.sim, a, { amount: 110, kill: false }, { lastAliveDies: true }).outcome).toBe("killed");
     // The enemy's side has nobody else either, but the rule is off: down.
     expect(applyDamage(w.sim, enemy, { amount: 110, kill: false }, { lastAliveDies: false }).outcome).toBe("downed");
@@ -263,7 +263,7 @@ describe("reviving (DECISIONS D-049)", () => {
     expect(c.state.reviveTarget).toBe(0);
   });
 
-  it("a reviver its player's buttons don't reach lets go: a tick without input, or Skopós opening her shell camera", async () => {
+  it("a reviver its player's buttons don't reach lets go: a tick without input, or Twain opening her shell camera", async () => {
     // No input (the server steps a stalled body without input once its hold budget is spent).
     const s = await scene();
     s.step([{ buttons: Btn.Interact }], 10);
@@ -274,8 +274,8 @@ describe("reviving (DECISIONS D-049)", () => {
     const pool = s.b.state.downHp;
     s.sim.step(onlyB());
     expect(s.b.state.downHp).toBeLessThan(pool); // bleeding again
-    // Skopós: on her other shell's camera her keys drive the camera, not the body that was reviving.
-    const k = await world([{ op: "skopos", at: [0.8, 0, 12], yawDeg: 90 }, { at: [0, 0, 12] }]);
+    // Twain: on her other shell's camera her keys drive the camera, not the body that was reviving.
+    const k = await world([{ op: "twain", at: [0.8, 0, 12], yawDeg: 90 }, { at: [0, 0, 12] }]);
     const [sa, sb] = [k.pawn(k.ctrls[0]), k.pawn(k.ctrls[1])];
     down(k.sim, sb);
     k.step([], 80);

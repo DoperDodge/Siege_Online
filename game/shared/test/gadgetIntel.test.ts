@@ -6,7 +6,7 @@ import { scene } from "./interactions/harness.js";
 
 describe("pinging gadgets (Phase 8 M3)", () => {
   it("a ping on an enemy gadget is that gadget's (its kind with it); one on your own side's goes past it", async () => {
-    const s = await scene(["sledge", "mute"], "gadget_lab");
+    const s = await scene(["cleave", "lull"], "gadget_lab");
     s.park();
     const pings = () => s.clients[0].events.filter((e): e is Extract<GameEvent, { kind: "ping" }> => e.kind === "ping");
     s.teleport(0, 2, 0, 19);

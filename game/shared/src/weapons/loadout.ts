@@ -121,16 +121,18 @@ export interface ResolvedLoadout {
   gadgets: string[];
   /**
    * The gadgets in the hands' two slots (Phase 8, gadgets/DESIGN.md §2): slot 1 the secondary gadget, slot 2 a kit's
-   * second gadget (Striker, Sentry) or the operator's own item (their ability: Sledge's hammer, M4); null where
+   * second gadget (Pointman, Picket) or the operator's own item (their ability: Cleave's hammer, M4); null where
    * there's none.
    */
   slots: [string | null, string | null];
   swapTicks: number;
   /**
-   * Fuze's Ballistic Shield (Phase 8 M11, player/shield.ts): its numbers when it's the primary pick, else null. Its
+   * Hail's Ballistic Shield (Phase 8 M11, player/shield.ts): its numbers when it's the primary pick, else null. Its
    * loadout holds the secondary pistol in the shield's hand (both slots, which never swap), aimed in the shield's time.
    */
   shield: ShieldData["shield"] | null;
+  /** Bailiff's (R3): her ability item sets her shield down, so while it's out (her slot 2 empty) it isn't on her arm. */
+  shieldDown: boolean;
 }
 
 const f32 = Math.fround;
@@ -236,13 +238,15 @@ export function resolveLoadout(data: GameData, pick: LoadoutPick): { loadout: Re
   const shield = first && !isGun(first) ? first.shield : null;
   const pistol = resolveWeapon(data, secondary);
   const held: ResolvedWeapon | null = shield ? { ...pistol, ads: { ...pistol.ads, ticks: ticks(shield.pistolAdsS.walk), fromSprintTicks: ticks(shield.pistolAdsS.sprint) } } : null;
+  const slots: [string | null, string | null] = [normalized.gadgets[0] ?? null, data.operators.get(p.operator)?.loadout.gadgetKit ? (normalized.gadgets[1] ?? null) : abilityItem(data, p.operator)];
   return {
     loadout: {
       pick: normalized,
       weapons: held ? [held, held] : [resolveWeapon(data, primary), pistol],
       shield,
+      shieldDown: shield !== null && !!data.gadgets.get(slots[1] ?? "")?.setsDownShield,
       gadgets: normalized.gadgets,
-      slots: [normalized.gadgets[0] ?? null, data.operators.get(p.operator)?.loadout.gadgetKit ? (normalized.gadgets[1] ?? null) : abilityItem(data, p.operator)],
+      slots,
       swapTicks: ticks(data.gunplay.rules.swapS),
     },
     problem,

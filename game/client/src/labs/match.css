@@ -53,7 +53,7 @@
 .match-info div { display: inline-block; margin: 0 4px 3px; padding: 2px 8px; border-radius: 4px; background: rgba(0, 0, 0, 0.5); }
 /* An attacker's way back to the planning screen in prep once it's put away (touch screens have no Esc). */
 .plan-btn { position: fixed; z-index: 3; top: 92px; right: 12px; height: 40px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); font: 600 13px system-ui, sans-serif; cursor: pointer; }
-/* On a drone, a camera or Skopós's shell in a match, its title and feed row sit under the match's lines. */
+/* On a drone, a camera or Twain's shell in a match, its title and feed row sit under the match's lines. */
 .match .dronecam-title { top: 132px; }
 .match .dronecam .feeds { top: 154px; }
 .match .shellcam-title { top: 132px; }

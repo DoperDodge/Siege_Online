@@ -1,26 +1,16 @@
-// npm run mapgen:compare (DESIGN §9.1, amendment 11): a plan of the compiled level per storey, cut 1.2 m above
-// the floor, with the storey's floor panels (soft floors, hatches), its stairs and ladders and its room callouts, drawn in that floor's
-// own image frame (u), so it lies exactly over the r6calls raster and,
-// through the registration below, over the official blueprint. The plans are our geometry only: they are
-// committed to research/oregon/compare/ for Ulo to open. The comparison page that puts them over the
-// downloaded images lives in builds/ (gitignored) and only links to the images; it never copies them.
+// The plans `npm run mapgen` draws (DESIGN §9.1, amendment 11): a plan of the compiled level per storey, cut 1.2 m
+// above the floor, with the storey's floor panels (soft floors, hatches), its stairs and ladders and its room
+// callouts, drawn in that floor's own frame (u), framed to what it draws. Our geometry only, written to
+// builds/mapgen/plans/<map>/ (gitignored) with a page that shows them a storey at a time, a layer at a time.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { frames, type FrameId } from "./frames.js";
 import { loadInputs } from "./compile.js";
-import { roomBoxes, type Floor } from "./research.js";
+import type { Floor } from "./schema.js";
 import { stepBoxes, type Flight } from "./stairs.js";
 
-/** One r6calls floor image is 361.244 u square (research/oregon/layout_notes.md §1). */
-const IMAGE_U = 361.244;
-/** Blueprint pixel = a * u + b per floor (geometry extraction, rms about 0.1 u; DESIGN §3.2); 3F is weak, so it borrows 2F's. */
-const BLUEPRINT: Record<Floor, { file: string; ax: number; bx: number; ay: number; by: number }> = {
-  B: { file: "r6-maps-oregon-blueprint-1.jpg", ax: 2.0226, bx: 359.8, ay: 2.0226, by: 114.74 },
-  "1F": { file: "r6-maps-oregon-blueprint-2.jpg", ax: 2.0237, bx: 359.33, ay: 2.0214, by: 114.96 },
-  "2F": { file: "r6-maps-oregon-blueprint-3.jpg", ax: 2.0248, bx: 359.22, ay: 2.0255, by: 114.34 },
-  "3F": { file: "r6-maps-oregon-blueprint-4.jpg", ax: 2.0248, bx: 359.22, ay: 2.0255, by: 114.34 },
-};
-const RASTER: Record<Floor, string> = { B: "0-pic.png", "1F": "1-pic.png", "2F": "2-pic.png", "3F": "3-pic.png" };
+/** Room round what a plan draws (u). */
+const MARGIN_U = 6;
 const COLOURS: Record<string, string> = {
   HARD_WALL: "#6b7178",
   REINFORCEABLE: "#2f7de1",
@@ -60,9 +50,9 @@ interface Room {
 const f2 = (x: number) => Math.round(x * 100) / 100;
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-/** The plan SVG of one storey (our geometry only), in the floor image's own u. */
-export function planSvg(root: string, level: Record<string, unknown>, floor: Floor): string {
-  const { layout, exterior } = loadInputs(root);
+/** The plan SVG of one storey (our geometry only), in the floor's own u. */
+export function planSvg(root: string, level: Record<string, unknown>, floor: Floor, mapId = "millrace"): string {
+  const { layout, exterior } = loadInputs(root, mapId);
   const fr = frames(layout);
   const k = layout.units.mPerU;
   const storey = layout.storeys.find((s) => s.id === floor)!;
@@ -145,10 +135,6 @@ export function planSvg(root: string, level: Record<string, unknown>, floor: Flo
     const [x, y] = native(r.anchor[0], r.anchor[2]);
     return `<text class="rooms" x="${f2(x)}" y="${f2(y)}"><title>${esc(r.id)}</title>${esc(r.callout)}</text>`;
   });
-  // The research's room boxes (layout_notes §4), hidden until the overlay page's "research" box shows them.
-  const research = roomBoxes(root)
-    .filter((r) => r.floor === floor)
-    .map((r) => `<rect class="research" x="${f2(r.x[0])}" y="${f2(r.y[0])}" width="${f2(r.x[1] - r.x[0])}" height="${f2(r.y[1] - r.y[0])}" fill="none" stroke="#c77dff" stroke-width="0.4" stroke-dasharray="1.5 1"><title>${esc(r.id)} (layout_notes §4)</title></rect>`);
   // A storey's own boxes: a roof's steps (roofs.ts) can reach a storey's cut, and the outside stands at the
   // ground's, but neither is a storey's walls.
   const others = new Set([...layout.roofs.map((r) => r.id), ...[...exterior.items, ...exterior.props].map((i) => i.id)]);
@@ -165,14 +151,28 @@ export function planSvg(root: string, level: Record<string, unknown>, floor: Flo
       labels.push(`<text class="labels" x="${f2(cx)}" y="${f2(cy)}"${vertical ? ` transform="rotate(90 ${f2(cx)} ${f2(cy)})"` : ""}>${esc(s.label ?? s.id)}</text>`);
     }
   }
+  // Framed to what it draws: every box's corners, every label's spot.
+  const xs: number[] = [];
+  const ys: number[] = [];
+  for (const m of [...floors, ...stairs, ...rects].join("\n").matchAll(/x="(-?[\d.]+)" y="(-?[\d.]+)" width="([\d.]+)" height="([\d.]+)"/g)) {
+    xs.push(+m[1], +m[1] + +m[3]);
+    ys.push(+m[2], +m[2] + +m[4]);
+  }
+  for (const m of [...labels, ...callouts].join("\n").matchAll(/x="(-?[\d.]+)" y="(-?[\d.]+)"/g)) {
+    xs.push(+m[1]);
+    ys.push(+m[2]);
+  }
+  const [x0, y0] = xs.length ? [Math.min(...xs) - MARGIN_U, Math.min(...ys) - MARGIN_U] : [0, 0];
+  const [w, h] = xs.length ? [Math.max(...xs) + MARGIN_U - x0, Math.max(...ys) + MARGIN_U - y0] : [100, 100];
+  const px = Math.round((1024 * w) / Math.max(w, h));
+  const py = Math.round((1024 * h) / Math.max(w, h));
   return [
-    `<svg xmlns="http://www.w3.org/2000/svg" data-generator="tools/mapgen" viewBox="0 0 ${IMAGE_U} ${IMAGE_U}" width="1024" height="1024">`,
-    `<!-- Oregon ${floor}, compiled level cut at ${f2(cut)} m, in the ${floor} image's own u. Generated by npm run mapgen:compare; our geometry only. -->`,
-    `<style>text{font:3px sans-serif;fill:#102040;text-anchor:middle;dominant-baseline:middle}text.rooms{font:bold 4px sans-serif;fill:#7a1f5c}text.stairs{fill:#7a1424;paint-order:stroke;stroke:#fff;stroke-width:0.6px}.research{display:none}</style>`,
+    `<svg xmlns="http://www.w3.org/2000/svg" data-generator="tools/mapgen" viewBox="${f2(x0)} ${f2(y0)} ${f2(w)} ${f2(h)}" width="${px}" height="${py}">`,
+    `<!-- ${esc(layout.name)} ${floor}, compiled level cut at ${f2(cut)} m, in the ${floor} frame's own u. Generated by npm run mapgen; our geometry only. -->`,
+    `<style>text{font:3px sans-serif;fill:#102040;text-anchor:middle;dominant-baseline:middle}text.rooms{font:bold 4px sans-serif;fill:#7a1f5c}text.stairs{fill:#7a1424;paint-order:stroke;stroke:#fff;stroke-width:0.6px}</style>`,
     ...floors,
     ...stairs,
     ...rects,
-    ...research,
     ...labels,
     ...callouts,
     "</svg>",
@@ -180,57 +180,36 @@ export function planSvg(root: string, level: Record<string, unknown>, floor: Flo
   ].join("\n");
 }
 
-function comparePage(floors: { floor: Floor; svg: string }[]): string {
-  const S = 2.6; // css px per u
-  const W = IMAGE_U * S;
-  const sections = floors.map(({ floor, svg }) => {
-    const bp = BLUEPRINT[floor];
-    // Blueprint pixel (0, 0) sits at u = (-b / a); the 1600 x 900 image spans 1600 / a by 900 / a u.
-    const style = `left:${f2((-bp.bx / bp.ax) * S)}px;top:${f2((-bp.by / bp.ay) * S)}px;width:${f2((1600 / bp.ax) * S)}px;height:${f2((900 / bp.ay) * S)}px`;
-    return `<section><h2>${floor}</h2><div class="stack" style="width:${f2(W)}px;height:${f2(W)}px">
-<img class="bg r6c" src="../../../research/oregon/refs/web/r6calls/${RASTER[floor]}" style="left:0;top:0;width:100%;height:100%" alt="">
-<img class="bg bp" src="../../../research/oregon/refs/web/blueprint/${bp.file}" style="${style}" alt="">
-<div class="plan">${svg.replace(/width="1024" height="1024"/, 'width="100%" height="100%"')}</div></div></section>`;
-  });
-  return `<!doctype html><meta charset="utf-8"><title>Oregon plans vs references</title>
-<style>body{font:14px sans-serif;margin:16px;background:#1d2126;color:#eee}.stack{position:relative;overflow:hidden;background:#000}
-.bg{position:absolute;max-width:none}.plan{position:absolute;inset:0}label{margin-right:14px}</style>
-<p>Our compiled plan (coloured) over the r6calls raster or Ubisoft's blueprint. The images are local downloads
-(npm run mapgen:refs) and are never committed. Blue: soft walls; brown: barricades; cyan: glass; grey: hard walls (dashed: rails);
-yellow: soft floor; green: hatches; red: stairs (darker as they climb, the arrow points up) and ladders; purple: room callouts.</p>
-<p><label>Background <select id="bg"><option value="r6c">r6calls raster</option><option value="bp">official blueprint</option><option value="none">none</option></select></label>
-<label>Plan opacity <input id="op" type="range" min="0" max="1" step="0.05" value="0.6"></label>
-${["walls", "panels", "openings", "floors", "stairs", "rooms", "labels"].map((l) => `<label><input type="checkbox" data-layer="${l}" checked> ${l}</label>`).join("")}
-<label><input type="checkbox" data-layer="research"> research rooms (layout_notes §4 boxes, dashed purple)</label></p>
+/** The plans' page: each storey's plan, its layers shown or hidden by a box each. */
+function plansPage(name: string, floors: { floor: Floor; svg: string }[]): string {
+  const sections = floors.map(({ floor, svg }) => `<section><h2>${floor}</h2><div class="plan">${svg.replace(/ width="\d+" height="\d+"/, ' width="100%"')}</div></section>`);
+  return `<!doctype html><meta charset="utf-8"><title>${esc(name)} plans</title>
+<style>body{font:14px sans-serif;margin:16px;background:#f4f2ee;color:#102040}.plan{max-width:1100px;background:#fff}label{margin-right:14px}</style>
+<p>${esc(name)}, compiled and cut 1.2 m above each storey's floor (npm run mapgen). Blue: soft walls; brown: barricades; cyan: glass;
+grey: hard walls (dashed: rails); yellow: soft floor; green: hatches; red: stairs (darker as they climb, the arrow points up) and
+ladders; purple: room callouts.</p>
+<p>${["walls", "panels", "openings", "floors", "stairs", "rooms", "labels"].map((l) => `<label><input type="checkbox" data-layer="${l}" checked> ${l}</label>`).join("")}</p>
 ${sections.join("\n")}
 <script>
-const bg = document.getElementById("bg"), op = document.getElementById("op");
-const apply = () => {
-  for (const i of document.querySelectorAll(".bg")) i.style.display = i.classList.contains(bg.value) ? "" : "none";
-  for (const p of document.querySelectorAll(".plan")) p.style.opacity = op.value;
-};
-bg.onchange = op.oninput = apply;
 for (const c of document.querySelectorAll("[data-layer]")) c.onchange = () => {
   for (const e of document.querySelectorAll("." + c.dataset.layer)) e.style.display = c.checked ? "inline" : "none";
 };
-apply();
 </script>
 `;
 }
 
-export function writePlans(root: string, level: Record<string, unknown>) {
-  const { layout } = loadInputs(root);
+/** Every storey's plan, and the page showing them, to builds/mapgen/plans/<map>/. */
+export function writePlans(root: string, level: Record<string, unknown>, mapId = "millrace") {
+  const { layout } = loadInputs(root, mapId);
+  const dir = join(root, "builds", "mapgen", "plans", mapId);
+  mkdirSync(dir, { recursive: true });
   const out: { floor: Floor; svg: string }[] = [];
   for (const floor of layout.emit) {
-    const svg = planSvg(root, level, floor);
+    const svg = planSvg(root, level, floor, mapId);
     out.push({ floor, svg });
-    for (const dir of [join(root, "research", "oregon", "compare"), join(root, "builds", "mapgen", "plans")]) {
-      mkdirSync(dir, { recursive: true });
-      writeFileSync(join(dir, `${floor}.svg`), svg);
-    }
+    writeFileSync(join(dir, `${floor}.svg`), svg);
   }
-  const page = join(root, "builds", "mapgen", "compare", "index.html");
-  mkdirSync(join(root, "builds", "mapgen", "compare"), { recursive: true });
-  writeFileSync(page, comparePage(out));
-  console.log(`plans: research/oregon/compare/{${layout.emit.join(",")}}.svg; overlay page (local images): ${page}`);
+  const page = join(dir, "index.html");
+  writeFileSync(page, plansPage(layout.name, out));
+  console.log(`plans: builds/mapgen/plans/${mapId}/{${layout.emit.join(",")}}.svg; page: ${page}`);
 }

@@ -19,6 +19,7 @@ import {
   loadGameData,
   ErrorCode,
   MAX_HOLD_TICKS,
+  MAX_QUEUE,
   Msg,
   Room,
   Stance,
@@ -76,7 +77,7 @@ const own = (c: { session: ClientSession }) => c.session.sim!.pawns.get(c.sessio
 
 describe("room and client session", () => {
   it("respawning gives the client its new body (no endless corrections) and tells everyone else", async () => {
-    const h = await harness(["sledge", "mute"]);
+    const h = await harness(["cleave", "lull"]);
     const [a, b] = h.clients;
     h.ticks(32, [{ forward: 1 }]);
     const oldPawns = [...a.session.ctrl!.pawnIds];
@@ -96,26 +97,26 @@ describe("room and client session", () => {
   });
 
   it("inputs in flight for the old body don't move the new one after an operator pick", async () => {
-    const h = await harness(["sledge"]);
+    const h = await harness(["cleave"]);
     const [a] = h.clients;
     // Sprinting, with ~6 ticks of inputs still on their way when the pick reaches the server.
     a.holdUp = true;
     h.ticks(6, [{ forward: 1, buttons: Btn.Sprint }]);
-    a.toServer.unshift(encodePickLoadout(defaultLoadoutPick(loadGameData(), "fuze")));
+    a.toServer.unshift(encodePickLoadout(defaultLoadoutPick(loadGameData(), "hail")));
     h.toServer(a);
     const fresh = h.room.sim.pawns.get(h.room.roster()[0].pawnIds[0])!.state;
     const spawn = { x: fresh.x, z: fresh.z };
     a.holdUp = false;
     h.ticks(20); // standing still on the new body
     const state = h.room.sim.pawns.get(a.session.ctrl!.possessedPawnId)!.state;
-    expect(a.session.ctrl!.operatorId).toBe("fuze");
+    expect(a.session.ctrl!.operatorId).toBe("hail");
     expect(Math.hypot(state.x - spawn.x, state.z - spawn.z)).toBeLessThan(0.01); // never sprinted off
     expect(own(a).x).toBe(state.x);
     expect(own(a).z).toBe(state.z);
   });
 
   it("a player who stops sending inputs is held still briefly, then falls like anyone else", async () => {
-    const h = await harness(["sledge"]);
+    const h = await harness(["cleave"]);
     const [a] = h.clients;
     a.toServer.push(encodeLabTool({ kind: "teleport", x: 0, y: 3, z: 12, yawDeg: 0 })); // in the air
     h.tick();
@@ -129,7 +130,7 @@ describe("room and client session", () => {
   });
 
   it("counts a stall once however long it lasts, and its correction as the server's doing", async () => {
-    const h = await harness(["sledge"]);
+    const h = await harness(["cleave"]);
     const [a] = h.clients;
     const stall = (n: number) => {
       a.holdUp = true;
@@ -146,8 +147,43 @@ describe("room and client session", () => {
     expect(h.room.stats.mismatchCorrections).toBe(0);
   });
 
+  it("inputs dropped from an overflowing queue: the correction after them is the room's doing, not a misprediction", async () => {
+    const h = await harness(["cleave"]);
+    const [a] = h.clients;
+    const before = { dropped: h.room.stats.droppedInputs, mismatch: h.room.stats.mismatchCorrections, corrections: h.room.stats.corrections };
+    // A client running ahead of the room (two inputs reach it every tick, none missing): its queue grows past the most
+    // the room keeps, and the oldest are dropped (inputs the client has already predicted).
+    for (let i = 0; i < MAX_QUEUE + 12; i++) {
+      a.session.tick({ forward: 1, strafe: 0, yaw: 0, pitch: 0, buttons: 0, stance: 0, lean: 0 });
+      h.toServer(a);
+      h.tick([{ forward: 1 }]);
+    }
+    h.ticks(2 * MAX_HOLD_TICKS, [{ forward: 1 }]);
+    expect(h.room.stats.droppedInputs).toBeGreaterThan(before.dropped);
+    expect(h.room.stats.corrections).toBeGreaterThan(before.corrections);
+    expect(h.room.stats.mismatchCorrections).toBe(before.mismatch);
+  });
+
+  it("a stall past the hold keeps the sights up and the lean as the player held them: the next shot isn't the hip's", async () => {
+    const h = await harness(["cleave"]);
+    const [a] = h.clients;
+    const pawn = () => h.room.sim.pawns.get(a.session.ctrl!.possessedPawnId)!.state;
+    const aimed = { buttons: Btn.Ads, lean: 1 as const };
+    h.ticks(64, [aimed]);
+    expect(pawn().adsQ).toBe(65535);
+    expect(pawn().lean).toBeCloseTo(1, 3);
+    a.holdUp = true;
+    h.ticks(MAX_HOLD_TICKS + 24, [aimed]); // stepped on without input for 24 ticks
+    expect(h.room.stats.stalls).toBe(1);
+    expect(pawn().adsQ).toBe(65535);
+    expect(pawn().lean).toBeCloseTo(1, 3);
+    a.holdUp = false;
+    h.ticks(2 * MAX_HOLD_TICKS, [aimed]); // the late inputs catch up
+    expect(pawn().adsQ).toBe(65535);
+  });
+
   it("a shot rides on the input that fired it: judged with that input's view, and claimed view times are bounded", async () => {
-    const h = await harness(["sledge", "mute"]);
+    const h = await harness(["cleave", "lull"]);
     const [a, b] = h.clients;
     a.toServer.push(encodeLabTool({ kind: "teleport", x: 0, y: 0, z: 4, yawDeg: 180 }));
     b.toServer.push(encodeLabTool({ kind: "teleport", x: 0, y: 0, z: 12, yawDeg: 0 }));
@@ -159,7 +195,7 @@ describe("room and client session", () => {
     expect(a.shots).toHaveLength(1);
     expect(a.shots[0].hit?.pawnId).toBe(b.session.ctrl!.possessedPawnId);
     expect(a.shots[0].dir[2]).toBeGreaterThan(0.99); // along the input's view (+Z), not some older one
-    // Sledge's L85A2 is automatic: once the last shot's cadence has passed, holding the trigger for N ticks
+    // Cleave's L85A2 is automatic: once the last shot's cadence has passed, holding the trigger for N ticks
     // fires ⌈N · 670 / 3840⌉ shots (one per 5.7 ticks), every one judged; then looking away and firing misses.
     h.ticks(8, [{ yaw: Math.PI, pitch: -0.05 }]);
     h.ticks(12, [{ yaw: Math.PI, pitch: -0.05, buttons: Btn.Fire }]);
@@ -188,7 +224,7 @@ describe("room and client session", () => {
   });
 
   it("trickling one input every 16 ticks doesn't slow a body down either", async () => {
-    const h = await harness(["sledge"]);
+    const h = await harness(["cleave"]);
     const [a] = h.clients;
     a.toServer.push(encodeLabTool({ kind: "teleport", x: 3, y: 4, z: 14, yawDeg: 0 }));
     h.tick();
@@ -208,7 +244,7 @@ describe("room and client session", () => {
   });
 
   it("a body that is only waiting for its client (joining, respawning) costs exactly one correction", async () => {
-    const h = await harness(["sledge"]);
+    const h = await harness(["cleave"]);
     const [a] = h.clients;
     const before = h.room.memberInfo(a.id)!.corrections;
     a.toServer.push(encodeLabTool({ kind: "respawn" }));
@@ -220,7 +256,7 @@ describe("room and client session", () => {
     h.ticks(64, [{ forward: 1 }]);
     expect(h.room.memberInfo(a.id)!.corrections - before).toBe(1);
     // And straight away, standing still (the spawn state must be exactly what the correction carries).
-    for (const op of ["fuze", "skopos", "mute"]) {
+    for (const op of ["hail", "twain", "lull"]) {
       const start = h.room.memberInfo(a.id)!.corrections;
       a.toServer.push(encodePickLoadout(defaultLoadoutPick(loadGameData(), op)));
       h.ticks(64);
@@ -229,7 +265,7 @@ describe("room and client session", () => {
   });
 
   it("test shots fired during a catch-up after a stall all count", async () => {
-    const h = await harness(["sledge", "mute"]);
+    const h = await harness(["cleave", "lull"]);
     const [a] = h.clients;
     h.ticks(16);
     a.holdUp = true;
@@ -241,7 +277,7 @@ describe("room and client session", () => {
   });
 
   it("claiming an older snapshot on the input that fires is held to the lag the connection has shown", async () => {
-    const h = await harness(["sledge", "mute"]);
+    const h = await harness(["cleave", "lull"]);
     const [a] = h.clients;
     h.ticks(64); // inputs establish this client's lag (zero here)
     a.holdUp = true;
@@ -257,7 +293,7 @@ describe("room and client session", () => {
   });
 
   it("spraying, reloading, swapping and switching fire modes are predicted exactly: no corrections", async () => {
-    const h = await harness(["sledge", "skopos"]);
+    const h = await harness(["cleave", "twain"]);
     const [a, b] = h.clients;
     const start = [a, b].map((c) => h.room.memberInfo(c.id)!.corrections);
     let seed = 3;
@@ -286,7 +322,7 @@ describe("room and client session", () => {
   });
 
   it("recoil the client carries into its view is predicted exactly; hip-fire pellets land inside the shot's cone", async () => {
-    const h = await harness(["sledge"]);
+    const h = await harness(["cleave"]);
     const [a] = h.clients;
     const start = h.room.memberInfo(a.id)!.corrections;
     const angle = (d: number[], v: number[]) => Math.acos(Math.min(1, d[0] * v[0] + d[1] * v[1] + d[2] * v[2]));
@@ -309,7 +345,7 @@ describe("room and client session", () => {
   });
 
   it("a forged input stream can't beat the fire rate or create ammo: the server's sim decides every shot", async () => {
-    const h = await harness(["lesion"]); // SIX12 SD: 218 rpm (one shot per 17.6 ticks), 6-round cylinder
+    const h = await harness(["thistle"]); // SIX12 SD: 218 rpm (one shot per 17.6 ticks), 6-round cylinder
     const [a] = h.clients;
     a.holdUp = true; // we write the inputs ourselves
     a.toServer.length = 0;
@@ -331,11 +367,11 @@ describe("room and client session", () => {
   });
 
   it("a loadout pick: the roster carries it, the client predicts with it (one correction), its timings hold", async () => {
-    const h = await harness(["sledge", "mute"]);
+    const h = await harness(["cleave", "lull"]);
     const [a, b] = h.clients;
     const start = h.room.memberInfo(a.id)!.corrections;
     const pick = {
-      operator: "brava",
+      operator: "patch",
       primary: { weapon: "para_308", sight: "magnified" as const, barrel: null, grip: "angled" as const, underbarrel: null },
       secondary: { weapon: "usp40", sight: null, barrel: "suppressor" as const, grip: null, underbarrel: null },
       gadgets: ["claymore"],
@@ -345,7 +381,7 @@ describe("room and client session", () => {
     const mine = b.session.roster.find((e) => e.controllerId === a.session.ctrl!.id)!;
     expect(mine.loadout.primary).toEqual(pick.primary);
     expect(mine.loadout.secondary).toEqual({ ...pick.secondary, sight: "iron" });
-    expect(mine.team).toBe(0); // Brava attacks
+    expect(mine.team).toBe(0); // Patch attacks
     expect(a.session.sim!.pawns.get(a.session.ctrl!.possessedPawnId)!.loadout!.weapons[0].reload).toMatchObject({ tacticalTicks: 133 });
     expect(h.room.memberInfo(a.id)!.corrections - start).toBe(1);
     // Fire a little, then a tactical reload with the angled grip: 2.6 s × 0.8 = 133 ticks, all predicted.
@@ -361,18 +397,18 @@ describe("room and client session", () => {
   });
 
   it("an invalid pick gets the operator's default, and the roster says so", async () => {
-    const h = await harness(["sledge"]);
+    const h = await harness(["cleave"]);
     const [a] = h.clients;
-    // Sledge doesn't carry the PARA-308.
-    a.toServer.push(encodePickLoadout({ ...defaultLoadoutPick(loadGameData(), "sledge"), primary: { weapon: "para_308", sight: null, barrel: null, grip: null, underbarrel: null } }));
+    // Cleave doesn't carry the PARA-308.
+    a.toServer.push(encodePickLoadout({ ...defaultLoadoutPick(loadGameData(), "cleave"), primary: { weapon: "para_308", sight: null, barrel: null, grip: null, underbarrel: null } }));
     h.ticks(16);
     const mine = a.session.roster.find((e) => e.controllerId === a.session.ctrl!.id)!;
-    expect(mine.loadout).toEqual(defaultLoadoutPick(loadGameData(), "sledge"));
+    expect(mine.loadout).toEqual(defaultLoadoutPick(loadGameData(), "cleave"));
     expect(a.session.ready).toBe(true);
   });
 
   it("the team tool respawns you on the other team", async () => {
-    const h = await harness(["sledge"]);
+    const h = await harness(["cleave"]);
     const [a] = h.clients;
     const old = a.session.ctrl!.possessedPawnId;
     a.toServer.push(encodeLabTool({ kind: "team", team: 1 }));
@@ -383,8 +419,8 @@ describe("room and client session", () => {
     expect(h.room.sim.pawns.get(a.session.ctrl!.possessedPawnId)!.team).toBe(1);
   });
 
-  it("Skopós can't shoot while looking through a shell's camera", async () => {
-    const h = await harness(["skopos"]);
+  it("Twain can't shoot while looking through a shell's camera", async () => {
+    const h = await harness(["twain"]);
     const [a] = h.clients;
     h.tick([{ buttons: Btn.Ability }]);
     h.ticks(4);
@@ -402,7 +438,7 @@ describe("room and client session", () => {
   });
 
   it("after a resync, players who left in the meantime are gone (no ghosts)", async () => {
-    const h = await harness(["sledge", "mute", "fuze"]);
+    const h = await harness(["cleave", "lull", "hail"]);
     const [a, , c] = h.clients;
     expect(a.session.remoteIds()).toHaveLength(2);
     // a's baselines are out (as after a checksum mismatch); while it waits, c leaves.
@@ -418,7 +454,7 @@ describe("room and client session", () => {
   });
 
   it("a lost resync request is sent again", async () => {
-    const h = await harness(["sledge", "mute"]);
+    const h = await harness(["cleave", "lull"]);
     const [a] = h.clients;
     (a.session as unknown as { awaitingReset: boolean }).awaitingReset = true;
     a.holdUp = true;

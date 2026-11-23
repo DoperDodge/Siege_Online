@@ -143,7 +143,7 @@ describe("panel view", () => {
     const scene = new THREE.Scene();
     const view = new PanelView(scene, sim.level.panels);
     // Only walls built reinforceable with two sections or more have seams (the Reinforced wall too; not the
-    // one-section Oregon wall, the hatch or the soft walls).
+    // one-section 1.7 m wall, the hatch or the soft walls).
     for (const entry of sim.level.panels.list) {
       const { construction: c, sections, id } = entry.panel.spec;
       const has = (scene.children[entry.panel.spec.index] as THREE.Group).children.some((m) => m.name === "seam");

@@ -1,5 +1,5 @@
 // Player/pawn separation (PLAN §11.2, Phase 1): a PlayerController is the human or bot; a Pawn is a
-// body in the world. Most operators own one pawn. Skopós owns two shells and possesses one at a time;
+// body in the world. Most operators own one pawn. Twain owns two shells and possesses one at a time;
 // the idle one stays in the world (it can be seen, shot, and later acts as a camera).
 import { PawnKind, PawnMode, ReloadKind, Stance, WeaponAct, type PawnState } from "./types.js";
 import type { Collider } from "../physics/rapier.js";
@@ -9,8 +9,8 @@ export interface Pawn {
   id: number;
   /** A body, or an attacker's drone (Phase 7); fixed for the pawn's life. */
   kind: PawnKind;
-  /** A drone that's one of Brava's Kludge drones (Phase 8 M8; the roster says which); fixed for its life. */
-  kludge?: boolean;
+  /** A drone that's one of Patch's Crossover drones (Phase 8 M8; the roster says which); fixed for its life. */
+  crossover?: boolean;
   operatorId: string;
   /** Controller that owns this pawn (null for dummies). */
   ownerId: number | null;
@@ -36,7 +36,7 @@ export interface CamView {
   pitch: number;
 }
 
-/** A controller's key for Skopós's own idle shell among its feeds (D-155); cameras' keys are 2 and up. */
+/** A controller's key for Twain's own idle shell among its feeds (D-155); cameras' keys are 2 and up. */
 export const SHELL_VIEW = 1;
 
 /** How many cameras' views a controller remembers (D-155): the oldest goes first. */
@@ -60,13 +60,13 @@ export interface PlayerController {
   camYaw: number;
   camPitch: number;
   /**
-   * The gadget table entry of the camera watched (a Bulletproof Camera's, an idle shell's barrier's), 0 for one of the
+   * The gadget table entry of the camera watched (a Armoured Camera's, an idle shell's barrier's), 0 for one of the
    * level's: the list's numbers shift as such cameras come and go, and the view stays on its camera (the review, M12).
    */
   camEntry: number;
   /**
    * The feed last watched on the cameras (Ulo, D-155), which Observe opens again: a camera's key (Sim.camKey), or
-   * SHELL_VIEW for Skopós's own idle shell; 0: none yet this life.
+   * SHELL_VIEW for Twain's own idle shell; 0: none yet this life.
    */
   lastCam: number;
   /**
@@ -74,15 +74,15 @@ export interface PlayerController {
    * it), by its key, the newest last (at most MAX_CAM_VIEWS). Each entry is replaced, never changed in place.
    */
   camViews: readonly CamView[];
-  /** Skopós: looking through the idle shell's camera (the step before a swap). */
+  /** Twain: looking through the idle shell's camera (the step before a swap). */
   shellCam: boolean;
-  /** Skopós swap in progress: 0 none, 1 transfer (active shell idles), 2 activation (target shell wakes). */
+  /** Twain swap in progress: 0 none, 1 transfer (active shell idles), 2 activation (target shell wakes). */
   swapPhase: 0 | 1 | 2;
   swapT: number;
   swapCooldown: number;
   prevButtons: number;
   /**
-   * Dokkaebi's Jegeo Payload blew up this player's phone (Phase 8 M9): no observation tools (cameras, Skopós's swap and
+   * Relay's Ringer blew up this player's phone (Phase 8 M9): no observation tools (cameras, Twain's swap and
    * shell camera) for the rest of the round (the next body is a new controller).
    */
   phoneLost?: boolean;
@@ -166,6 +166,14 @@ export function initialPawnState(x: number, y: number, z: number, yaw: number, m
     reviveTicks: 0,
     reviveTarget: 0,
     revivedBy: 0,
+    healLeft: 0,
+    healTicks: 0,
+    patchTicks: 0,
+    prodUsed: 0,
+    prodNext: 0,
+    prodIdle: 0,
+    slowed: 0,
+    shocked: 0,
     deployKind: 0,
     deployPanel: 0,
     deploySection: 0,
@@ -177,6 +185,7 @@ export function initialPawnState(x: number, y: number, z: number, yaw: number, m
     hand: 0,
     gAct: 0,
     gTicks: 0,
+    gCool: 0,
     g1: 0,
     g2: 0,
     w1: 0,
@@ -184,6 +193,11 @@ export function initialPawnState(x: number, y: number, z: number, yaw: number, m
     gTarget: 0,
     needled: false,
     ringing: false,
+    snared: false,
+    prodOn: false,
+    pattern: 0,
+    braced: false,
+    braceQ: 0,
     regenMade: 0,
     regenTicks: 0,
     guard: 0,

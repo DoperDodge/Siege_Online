@@ -1,5 +1,5 @@
 {
-  "_doc": "CAMRS (Brava). research/weapons.csv row camrs; class rules research/weapons_notes.md §4. Grips only on Brava's copy (weapons_notes.md §6; Q6 asks whether that still holds). Ammo-refill 1.36 / 2.58 s community-measured.",
+  "_doc": "CAMRS (Patch). research/weapons.csv row camrs; class rules research/weapons_notes.md §4. Grips only on Patch's copy (weapons_notes.md §6; Q6 asks whether that still holds). Ammo-refill 1.36 / 2.58 s community-measured.",
   "_season": "Y11S3.1",
   "_unverified": ["attachments.grips", "destruction", "reload.refillEmptyS", "reload.refillTacticalS"],
   "id": "camrs",
@@ -35,9 +35,9 @@
     "sights": ["iron", "nonmag", "magnified", "telescopic"],
     "barrels": ["muzzle_brake", "suppressor"],
     "grips": [
-      { "id": "vertical", "operators": ["brava"] },
-      { "id": "angled", "operators": ["brava"] },
-      { "id": "horizontal", "operators": ["brava"] }
+      { "id": "vertical", "operators": ["patch"] },
+      { "id": "angled", "operators": ["patch"] },
+      { "id": "horizontal", "operators": ["patch"] }
     ],
     "underbarrel": ["laser"]
   },

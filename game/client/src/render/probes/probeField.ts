@@ -383,7 +383,7 @@ export class ProbeField {
 
   /**
    * After a rebake, only the probes it changed (each grid's, by index): into the textures, and to every worker for the
-   * next rebake's bounce. (The whole fields, 6 MB on Oregon, copied for every worker on the page's thread, took longer
+   * next rebake's bounce. (The whole fields, 6 MB on a big map, copied for every worker on the page's thread, took longer
    * than a frame at every breach: the review, M10.)
    */
   private shareChanged(jobs: readonly Job[]): void {

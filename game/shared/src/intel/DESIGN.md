@@ -1,10 +1,14 @@
 # Intel (Phase 7) — design
 
-PLAN §10 and §17: drones, default cameras, the Bulletproof Camera, the feed list, pinging and the comm wheel,
+> **Project Redmond:** the map is Millrace now (`data/maps/millrace`), and the operators carry our names (R1) and
+> ids (R4). Oregon and its research (`research/oregon/`) were removed in R4: where this design names them, or the
+> operators' old names, it records how the phase was built.
+
+PLAN §10 and §17: drones, default cameras, the Armoured Camera, the feed list, pinging and the comm wheel,
 spectating when dead. **Done when** prep-phase droning and watching the cameras work online. The facts come from
 `research/intel.md` (I:line below), `research/round_flow.md` and `research/oregon/map_features.md`; every number the
 research couldn't confirm is a placeholder in `data/intel.json` (its `_unverified` list) and an open question
-(OPEN_QUESTIONS, "Intel"). Gadgets that counter intel (Mute's jammer, Mira, Dokkaebi, Brava's Kludge drone, Pulse)
+(OPEN_QUESTIONS, "Intel"). Gadgets that counter intel (Lull's jammer, Vista, Relay, Patch's Crossover drone, Murmur)
 come with their operators in Phase 8; this phase leaves room for them (a feed can be jammed or hacked).
 
 ## 1. Data (`data/intel.json`)
@@ -23,7 +27,7 @@ come with their operators in Phase 8; this phase leaves room for them (a feed ca
 | `camera.turnDegPerS`, `fovDeg` | 60, 70, no zoom | I:159-162, placeholders |
 | `scan` | hold 1 s, 10° from the crosshair | I:115-122, cone a placeholder |
 | `ping` | 5 s each kind, 1 yellow ping each, 0.5 s apart | I:109-110, placeholders |
-| `bulletproofCamera` | 1 per carrier, dart 0.75 m, outdoors 10 s | I:198-206, dart recharge and disable time placeholders |
+| `armouredCamera` | 1 per carrier, dart 0.75 m, outdoors 10 s | I:198-206, dart recharge and disable time placeholders |
 
 ## 2. Drones
 
@@ -86,15 +90,15 @@ shifting, 2(i + 1) for the level's camera i, 2·id + 1 for a gadget entry's; the
 a camera restores its view (clamped to its limits) instead of its facing. Observe opens the feed last watched
 (`lastCam`), or the next working one after it if it broke since, the first the first time. A camera just opened
 doesn't turn on that tick (the mouse still points where the last feed looked). Both fields are in the controller's
-state, so they're predicted and corrected like the rest (protocol 16). Skopós's own idle shell is one of her feeds
+state, so they're predicted and corrected like the rest (protocol 16). Twain's own idle shell is one of her feeds
 (§5).
 
-## 4. Bulletproof Camera
+## 4. Armoured Camera
 
-A defender gadget (data: `bulletproof_camera` in Mute's, Lesion's and Sentry's gadgets; count 1, I:198). Hold the
+A defender gadget (data: `armoured_camera` in Lull's, Thistle's and Picket's gadgets; count 1, I:198). Hold the
 gadget key at a wall or the floor within reach to place it (the research disagrees on thrown or placed: I:199 vs
 gadgets.md §4.6; we place it). Its front is bulletproof, its sides and back break to one bullet; explosions (and
-Sledge's hammer, Phase 8) destroy it, and a melee hit breaks only its glass: no view, still sound (I:200-201). Its
+Cleave's hammer, Phase 8) destroy it, and a melee hit breaks only its glass: no view, still sound (I:200-201). Its
 view is thermal (bodies stand out, through smoke). It turns like a default camera. Its EMP dart (any defender viewing
 it): a 0.75 m burst that disables drones
 (and later gadgets) for a while (placeholder), recharging (placeholder). Outdoors it loses its signal after 10 s.
@@ -103,9 +107,9 @@ Reinforcing the wall it sits on breaks it (CSV:337). It joins the defenders' fee
 **Built (M5, D-136):** a loadout with it gets `count` in the body's `gadgets` at each spawn; holding the gadget key (3,
 ours; `Btn.Gadget`) `placeS` while looking at a wall or the floor within `reachM` places it (a hold like reinforcing,
 predicted, the body still; held, it starts once the view is on a spot). On a wall it faces out of it; on the floor
-it faces the placer's way and turns all the way round. The room keeps the round's in the match rules (`bpCams`,
+it faces the placer's way and turns all the way round. The room keeps the round's in the match rules (`armouredCams`,
 float32 so a client turns its view exactly as the server does), sent with the match state (protocol 14); defenders
-watch them after the level's cameras, in `bulletproofCamera.view`'s limits. A bullet within `frontDeg` of straight at
+watch them after the level's cameras, in `armouredCamera.view`'s limits. A bullet within `frontDeg` of straight at
 its front meets the plate; from the side or the back it breaks it; a knife breaks it (Siege's only shatters the
 glass, but with no sound yet that is the same for us); steel going up on its panel breaks it. **Deviation
 (flagged):** like a default camera it doesn't stop the bullet. Outdoors (outside every room of the level) its feed
@@ -119,7 +123,7 @@ the world tinted green. Not built: picking it up again, sound, smoke (Phase 8).
 ## 5. The feed list
 
 Attackers: their own drones out (drivable), then teammates' drones (view only: turn the view, no driving, I:49).
-Defenders: the default cameras, then Bulletproof Cameras. Q / E go round the list; broken feeds are shown crossed out
+Defenders: the default cameras, then Armoured Cameras. Q / E go round the list; broken feeds are shown crossed out
 and skipped; a feed you can't drive is greyed (I:49 tint). Esc / Observe closes it. Each feed's icon sits in a row at
 the top of the view.
 
@@ -128,15 +132,15 @@ the top of the view.
 the viewer turns their own view (the controller's camera view fields, from the input alone, so a client predicts it
 whatever it last heard of that drone), and the client draws it from the snapshots like any other player's. In prep,
 where you are your first drone, a new lean goes round it and your teammates'. The row over the view lists every feed
-(camera numbers, `BP` for a Bulletproof Camera; `D1`, `D2` for your drones and a teammate's name for theirs), the one
+(camera numbers, `BP` for a Armoured Camera; `D1`, `D2` for your drones and a teammate's name for theirs), the one
 watched lit, broken ones struck out, teammates' drones in italics. A camera someone watches shows a light by its lens
 (the match state carries which, `camsWatched`): blue to the defenders, red to the attackers (Y6S4's colours).
 
-**Skopós's shell in the list (D-155):** her own idle shell is one of her feeds, after the cameras (`SH` in the row):
+**Twain's shell in the list (D-155):** her own idle shell is one of her feeds, after the cameras (`SH` in the row):
 the view from the shell itself (Phase 5's shell camera, from which Interact swaps), standing in for its barrier's
 camera (Phase 8 M10), which her list leaves out and her teammates' keep. Observe, the lean and a broken camera's
 hand-over go round the one list (`Sim.nextCamFeed`, `camFeedOk`); with no cameras (a lab) her shell is her only feed,
-and with her phone blown up by Dokkaebi (Phase 8 M9) she has none. Her ability key still opens her shell's view from her body or a
+and with her phone blown up by Relay (Phase 8 M9) she has none. Her ability key still opens her shell's view from her body or a
 camera, and closes it; on a touch screen her Ability button is hidden, Observe doing its work. Mid-swap, the feeds'
 keys do nothing.
 
@@ -165,7 +169,7 @@ keys do nothing.
   icon; gadgets are Phase 8); our pings are named, not numbered.
 - **Built later (Phase 8 M9, D-149):** a ping whose ray meets an enemy body (a capsule of its height, nothing nearer
   on the way) spots him as a scan does (I:99, the red ping): the team's red mark and his alert, not a yellow ping. A
-  spotted defender is one Dokkaebi can call. Pinging an enemy's gadget built in Phase 8 M3.
+  spotted defender is one Relay can call. Pinging an enemy's gadget built in Phase 8 M3.
 
 ## 7. Spectating when dead
 
@@ -176,7 +180,7 @@ drones or cameras (placeholder, I:234). The killcam stays out (research: 5 s, un
 ## 8. Wire (protocol 13)
 
 - Roster entries list each player's drones next to their bodies (a pawn's kind comes from the roster).
-- A correction carries up to four pawns (a body and two drones; Skopós's two shells).
+- A correction carries up to four pawns (a body and two drones; Twain's two shells).
 - Pawn state: mode Held; the drone's jump cooldown and boost ticks; the controller's driven drone and camera view.
 - Cameras: broken flags (a room message on change and on join); pings and callouts (a team message).
 
@@ -205,5 +209,5 @@ lens and their light. Keys in Settings. Drone and camera audio come with Phase 1
 | M2 | Drones in the browser: the drone view and HUD, drawing drones, keys; dead attackers drive their drones; browser test of prep droning | prep droning online |
 | M3 | Default cameras: viewing within limits, shooting them, broken state, dead defenders on cameras; browser test | cam watching online |
 | M4 | Pings, scans and the comm wheel | intel shared with the team |
-| M5 | Bulletproof Camera and its EMP dart | every Phase 7 tool |
+| M5 | Armoured Camera and its EMP dart | every Phase 7 tool |
 | M6 | The feed list across everything, spectating; checks (netsim, browser), docs, review, report | "Prep-phase droning + cam watching work online" |

@@ -1,0 +1,18 @@
+{
+  "_doc": "Tonic (Project Redmond R3, gadgets/R3_OPERATORS.md §1): a defender, the medic. Our own operator: name, look and device (Second Wind: the medic's updated version, Ulo's pick). Health and speed 3 / 1.",
+  "id": "tonic",
+  "name": "Tonic",
+  "side": "defender",
+  "healthRating": 3,
+  "speedRating": 1,
+  "loadout": {
+    "primaries": ["ump45", "m590a1"],
+    "secondaries": ["p229", "usp40"],
+    "gadgets": ["armoured_camera", "barbed_wire"]
+  },
+  "ability": {
+    "id": "second_wind",
+    "name": "Second Wind"
+  },
+  "pawns": 1
+}

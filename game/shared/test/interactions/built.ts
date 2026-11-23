@@ -1,5 +1,5 @@
 // Interaction rows that earlier phases and Phase 8 M1 already built (gadgets/DESIGN.md §10): the gadget kits, the
-// Bulletproof Camera's plate, glass, wall and signal, a drone under a door's barricade, the knife on a barricade and a
+// Armoured Camera's plate, glass, wall and signal, a drone under a door's barricade, the knife on a barricade and a
 // soft wall.
 import { expect } from "vitest";
 import {
@@ -21,8 +21,8 @@ import { input } from "../helpers.js";
 import { scene } from "./harness.js";
 import { row } from "./registry.js";
 
-/** A kit takes exactly two different gadgets of its side's pool, each with its generic count (research/operators/{striker,sentry}.md §3). */
-async function kit(op: "striker" | "sentry", a: string, b: string, other: string) {
+/** A kit takes exactly two different gadgets of its side's pool, each with its generic count (research/operators/{striker,picket}.md §3). */
+async function kit(op: "pointman" | "picket", a: string, b: string, other: string) {
   const sim = await Sim.create("range_lab");
   const data = sim.data;
   const pick = (gadgets: string[]) => ({ ...defaultLoadoutPick(data, op), gadgets });
@@ -40,20 +40,20 @@ async function kit(op: "striker" | "sentry", a: string, b: string, other: string
   expect([pool.length, pairs]).toEqual([7, 21]);
 }
 
-row("striker.gadget_kit", "loadout.attacker_generic_pool", () => kit("striker", "frag", "claymore", "nitro_cell"));
-row("sentry.gadget_kit", "loadout.defender_generic_pool", () => kit("sentry", "barbed_wire", "nitro_cell", "frag"));
+row("pointman.gadget_kit", "loadout.attacker_generic_pool", () => kit("pointman", "frag", "claymore", "remote_charge"));
+row("picket.gadget_kit", "loadout.defender_generic_pool", () => kit("picket", "barbed_wire", "remote_charge", "frag"));
 
-/** A Bulletproof Camera on the Destruction Lab's plain soft wall (its face at z −5.9), facing out of it, Mute's. */
+/** A Armoured Camera on the Destruction Lab's plain soft wall (its face at z −5.9), facing out of it, Lull's. */
 async function camOnWall() {
-  const s = await scene(["sledge", "mute"]);
+  const s = await scene(["cleave", "lull"]);
   const panel = s.sim.level.panels.byId.get("soft_plain")!.panel.spec.index;
-  const d = s.sim.data.gadgets.get("bulletproof_camera")!;
-  const cam = s.put("bulletproof_camera", 1, [-8, 1.5, -5.9 + d.sizeM[2] / 2], { yaw: Math.PI, flags: 0, panel });
+  const d = s.sim.data.gadgets.get("armoured_camera")!;
+  const cam = s.put("armoured_camera", 1, [-8, 1.5, -5.9 + d.sizeM[2] / 2], { yaw: Math.PI, flags: 0, panel });
   const now = () => s.sim.gadgets.get(cam.id)!;
   return { ...s, cam, now };
 }
 
-row("weapon.bullet", "generic.bulletproof_camera", async () => {
+row("weapon.bullet", "generic.armoured_camera", async () => {
   const s = await camOnWall();
   s.teleport(0, -8, 0, -3.5, 0); // in front of it: its plate
   s.shootAt(0, s.cam.pos);
@@ -63,19 +63,19 @@ row("weapon.bullet", "generic.bulletproof_camera", async () => {
   expect(s.now().flags & GFlag.Broken).toBe(GFlag.Broken);
 });
 
-row("player.melee", "generic.bulletproof_camera", async () => {
+row("player.melee", "generic.armoured_camera", async () => {
   const s = await camOnWall();
   s.teleport(0, -8, 0, -5.0, 0); // knife range, at its bulletproof front
   s.knife(0, s.cam.pos);
   expect(s.now().flags & GFlag.Broken).toBe(GFlag.Broken); // shattered: no feed for the rest of the round
 });
 
-row("action.reinforce", "generic.bulletproof_camera", async () => {
-  const s = await scene(["sledge", "mute"]);
+row("action.reinforce", "generic.armoured_camera", async () => {
+  const s = await scene(["cleave", "lull"]);
   const panel = s.sim.level.panels.byId.get("reinforce_2")!.panel.spec.index;
-  const d = s.sim.data.gadgets.get("bulletproof_camera")!;
-  // On the reinforceable wall's right section (centre 1, −6), its face toward +z; Mute reinforces that section.
-  const cam = s.put("bulletproof_camera", 1, [1.8, 1.5, -5.9 + d.sizeM[2] / 2], { yaw: Math.PI, flags: 0, panel });
+  const d = s.sim.data.gadgets.get("armoured_camera")!;
+  // On the reinforceable wall's right section (centre 1, −6), its face toward +z; Lull reinforces that section.
+  const cam = s.put("armoured_camera", 1, [1.8, 1.5, -5.9 + d.sizeM[2] / 2], { yaw: Math.PI, flags: 0, panel });
   s.teleport(1, 1.8, 0, -5.0, 0);
   s.clients[1].cmd = { buttons: Btn.Interact };
   for (let i = 0; i < 8 * 64 && !(s.sim.gadgets.get(cam.id)!.flags & GFlag.Broken); i++) s.tick();
@@ -84,17 +84,17 @@ row("action.reinforce", "generic.bulletproof_camera", async () => {
   expect(s.sim.gadgets.get(cam.id)!.flags & GFlag.Broken).toBe(GFlag.Broken);
 });
 
-row("environment.outdoors", "generic.bulletproof_camera", async () => {
-  // On Oregon, placed in the street (outdoors) it loses its signal 10 s later; in the Laundry (indoors) never.
-  const sim = await Sim.create("oregon");
+row("environment.outdoors", "generic.armoured_camera", async () => {
+  // On Millrace, placed by the rail siding (outdoors) it loses its signal 10 s later; in the Boiler Room (indoors) never.
+  const sim = await Sim.create("millrace");
   const server = new GadgetServer(sim);
-  const c = sim.addPlayer("def", "mute", 0, undefined, undefined, DEFENSE);
-  const street = sim.level.def.spawns.find((sp) => sp.group === "B_STREET")!.pos;
-  const place = (pos: Vec3) => server.onEvent({ kind: "place", pawnId: c.possessedPawnId, seq: 1, slot: 1, gadget: "bulletproof_camera", pos, yaw: 0, onFloor: true, flat: false, panel: -1 });
-  place([street[0], street[1] + 0.06, street[2]]);
-  place([39.345, -3.14, 31.805]);
+  const c = sim.addPlayer("def", "lull", 0, undefined, undefined, DEFENSE);
+  const siding = sim.level.def.spawns.find((sp) => sp.group === "B_RAIL_SIDING")!.pos;
+  const place = (pos: Vec3) => server.onEvent({ kind: "place", pawnId: c.possessedPawnId, seq: 1, slot: 1, gadget: "armoured_camera", pos, yaw: 0, onFloor: true, flat: false, panel: -1 });
+  place([siding[0], siding[1] + 0.06, siding[2]]);
+  place([15, -3.14, 30]);
   const [out, inside] = sim.gadgets.list;
-  expect([out.signalEnd - sim.tick, inside.signalEnd]).toEqual([ticks(sim.data.intel.bulletproofCamera.outdoorSignalS), 0]);
+  expect([out.signalEnd - sim.tick, inside.signalEnd]).toEqual([ticks(sim.data.intel.armouredCamera.outdoorSignalS), 0]);
   for (let i = 0; i < ticks(10) + 1; i++) {
     sim.step(new Map([[c.id, input()]]));
     server.step();
@@ -105,7 +105,7 @@ row("environment.outdoors", "generic.bulletproof_camera", async () => {
 row("drone.standard", "surface.barricade", async () => {
   // A drone driven at the Destruction Lab's barricaded door (x −10, z 6) goes under it (its 15 cm gap).
   const sim = await Sim.create("destruction_lab");
-  const c = sim.addPlayer("atk", "thermite", 0, undefined, undefined, ATTACK);
+  const c = sim.addPlayer("atk", "kiln", 0, undefined, undefined, ATTACK);
   sim.addDrone(c.id);
   const [d] = sim.dronesOf(c);
   sim.placeDrone(d.id, -10, 0.02, 7.5, 0);

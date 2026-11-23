@@ -1,5 +1,5 @@
 {
-  "_doc": "P229 (Skopós). research/weapons.csv row p229; class rules research/weapons_notes.md §4. Skopós: each shell keeps its own ammo; whether 97 is per shell is open.",
+  "_doc": "P229 (Twain). research/weapons.csv row p229; class rules research/weapons_notes.md §4. Twain: each shell keeps its own ammo; whether 97 is per shell is open.",
   "_season": "Y11S3.1",
   "_unverified": ["ammo.maxAmmo", "damage.falloff", "destruction"],
   "id": "p229",

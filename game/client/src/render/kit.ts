@@ -127,6 +127,33 @@ export class Kit {
     return this;
   }
 
+  /**
+   * A prism: a convex polygon in the plane across `axis` (its corners in order, as the other two coordinates: for x,
+   * (y, z); for y, (x, z); for z, (x, y)), from `from` to `to` along the axis, closed at both ends. For what boxes and
+   * cylinders can't draw: a wheel's segment over a floor, a slat turned in its plane, a sloping sheet.
+   */
+  prism(pts: readonly (readonly [number, number])[], axis: "x" | "y" | "z", from: number, to: number, style: number): this {
+    const at = (p: readonly [number, number], a: number) =>
+      axis === "x" ? new THREE.Vector3(a, p[0], p[1]) : axis === "y" ? new THREE.Vector3(p[0], a, p[1]) : new THREE.Vector3(p[0], p[1], a);
+    const ax = axis === "x" ? new THREE.Vector3(1, 0, 0) : axis === "y" ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1);
+    const lo = pts.map((p) => at(p, from));
+    const hi = pts.map((p) => at(p, to));
+    const mid = lo.reduce((s, v) => s.add(v), new THREE.Vector3()).divideScalar(lo.length);
+    const up = ax.clone().multiplyScalar(Math.sign(to - from) || 1);
+    for (let i = 1; i + 1 < pts.length; i++) {
+      this.tri(hi[0], hi[i], hi[i + 1], up, style);
+      this.tri(lo[0], lo[i], lo[i + 1], up.clone().negate(), style);
+    }
+    for (let i = 0; i < pts.length; i++) {
+      const j = (i + 1) % pts.length;
+      // Outward: from the polygon's middle toward the side's.
+      const out = lo[i].clone().add(lo[j]).multiplyScalar(0.5).sub(mid);
+      out.addScaledVector(ax, -out.dot(ax));
+      this.quad(lo[i], lo[j], hi[j], hi[i], out, style);
+    }
+    return this;
+  }
+
   /** A triangle facing up-ish (terrain): its corners in the model's frame. */
   facet(a: V3, b: V3, c: V3, style: number): this {
     this.tri(new THREE.Vector3(...a), new THREE.Vector3(...b), new THREE.Vector3(...c), new THREE.Vector3(0, 1, 0), style);

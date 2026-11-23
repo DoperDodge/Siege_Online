@@ -1,0 +1,28 @@
+{
+  "_doc": "Vista — loadout and ratings from the official Ubisoft operator page (research/operators/mira.md). Ability numbers arrive with Phase 8.",
+  "_season": "Y11S3",
+  "id": "vista",
+  "name": "Vista",
+  "side": "defender",
+  "healthRating": 3,
+  "speedRating": 1,
+  "loadout": {
+    "primaries": [
+      "vector_45_acp",
+      "ita12l"
+    ],
+    "secondaries": [
+      "usp40",
+      "ita12s"
+    ],
+    "gadgets": [
+      "proximity_alarm",
+      "remote_charge"
+    ]
+  },
+  "ability": {
+    "id": "blind_pane",
+    "name": "Blind Pane"
+  },
+  "pawns": 1
+}

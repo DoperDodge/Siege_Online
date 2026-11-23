@@ -24,7 +24,7 @@ const data = loadGameData();
 
 /** A drill (or Bot Training with `bots` changed) started with the person in it. */
 async function drill(format: string, seed = 3, bots?: Partial<NonNullable<FormatMode["match"]["bots"]>>) {
-  const room = await Room.create("DRL", "oregon", { format, seed });
+  const room = await Room.create("DRL", "millrace", { format, seed });
   const host = room.join("you", { send() {}, buffered: () => 0 })!;
   const send = (b: Uint8Array) => handleRoomMessage(room, host, b[0], new ByteReader(b.subarray(1)));
   const mode = data.modes.get(format)!;
@@ -51,10 +51,17 @@ describe("Bot Training drills (Phase 9 M8)", () => {
     const drills = [...data.modes.values()].filter(isFormat).filter((m) => m.match.drill);
     expect(drills.map((m) => m.id).sort()).toEqual(["drill_clear", "drill_custom", "drill_drone", "drill_duel", "drill_retake", "drill_site_hold"]);
     expect((data.modes.get("bot_training") as FormatMode).match.drill).toBeNull();
-    // The duel's doors and the storey to clear are Oregon's.
-    const level = data.levels.get("oregon")!;
+    // The duel's doors and the storey to clear are Millrace's (the match map): each door a doorway (a barricade at least
+    // 2 m tall, not a window), with room either side.
+    const level = data.levels.get("millrace")!;
     expect(level.storeys.some((s) => s.id === (data.modes.get("drill_clear") as FormatMode).match.drill!.storey)).toBe(true);
-    void level;
+    const doors = (data.modes.get("drill_duel") as FormatMode).match.drill!.doors;
+    expect(doors.length).toBeGreaterThanOrEqual(6);
+    for (const id of doors) {
+      const s = level.solids.find((x) => x.id === id);
+      expect(s?.surface, id).toBe("BARRICADE");
+      expect(s!.size[1], id).toBeGreaterThanOrEqual(2);
+    }
   });
 
   it("1v1 aim duel: straight into action either side of a doorway, no defuser; the round ends on a kill; the next is at the next door, sides swapped", async () => {
@@ -157,12 +164,12 @@ describe("Bot Training drills (Phase 9 M8)", () => {
     expect(room.sim.objective).not.toBeNull();
   }, 120000);
 
-  it("counter my pick: the defending bots answer your Thermite with Mute, Mira and Lesion", async () => {
+  it("counter my pick: the defending bots answer your Kiln with Shunt, Lull and Vista (data/bots/picks.json)", async () => {
     const { room, m, until, person } = await drill("bot_training", 9, { picks: "counter" });
     expect(until(() => m.phase === Phase.Planning, 10)).toBe(true);
-    room.pickOperator(person.id, "thermite");
+    room.pickOperator(person.id, "kiln");
     expect(until(() => m.sides[DEFENSE].every((id) => m.players.get(id)!.operator !== null), 40)).toBe(true);
     const ops = m.sides[DEFENSE].map((id) => m.players.get(id)!.operator);
-    for (const op of ["mute", "mira", "lesion"]) expect(ops).toContain(op);
+    for (const op of ["shunt", "lull", "vista"]) expect(ops).toContain(op);
   }, 120000);
 });

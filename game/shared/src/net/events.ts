@@ -11,6 +11,16 @@ import { MAX_NAME, Msg } from "./protocol.js";
 
 export const ZONES: readonly Zone[] = ["head", "neck", "torso", "pelvis", "arm", "leg"];
 
+/** One body on Tonic's monitor (R3): its pawn, its controller, health and its most, down, a patch working on it. */
+export interface Vital {
+  pawnId: number;
+  ctrl: number;
+  hp: number;
+  maxHp: number;
+  down: boolean;
+  patched: boolean;
+}
+
 export type GameEvent =
   /** A shot others should see and hear: the shooter's muzzle flash, and where each pellet ended (tracers, impacts). */
   | { kind: "shotFx"; pawnId: number; slot: number; suppressed: boolean; ends: Vec3[] }
@@ -31,7 +41,7 @@ export type GameEvent =
   /** To everyone: a revive started, and ended (picked up, or cancelled). */
   | { kind: "reviveStart"; reviverPawn: number; targetPawn: number }
   | { kind: "reviveEnd"; reviverPawn: number; targetPawn: number; completed: boolean }
-  /** To everyone: Skopós's idle shell was destroyed (not an elimination; she can't swap any more). */
+  /** To everyone: Twain's idle shell was destroyed (not an elimination; she can't swap any more). */
   | { kind: "shellDestroyed"; pawnId: number; ownerCtrl: number; killerCtrl: number; weapon: string; headshot: boolean }
   /** To everyone: an attacker's drone was destroyed (Phase 7; not a death: defenders count the drones they destroy). */
   | { kind: "droneDestroyed"; pawnId: number; ownerCtrl: number; killerCtrl: number }
@@ -39,12 +49,12 @@ export type GameEvent =
    * To the pinger's team (Phase 7, intel/DESIGN.md §6): a ping where they aimed, yellow or danger, for `ticks`;
    * `gadget`: the kind of the enemy gadget it marks (Phase 8 M3), or −1.
    */
-  | { kind: "ping"; ctrl: number; pos: Vec3; danger: boolean; ticks: number; gadget: number; /** A heartbeat on Pulse's sensor (Phase 8 M6). */ heart: boolean }
+  | { kind: "ping"; ctrl: number; pos: Vec3; danger: boolean; ticks: number; gadget: number; /** A heartbeat on Murmur's sensor (Phase 8 M6). */ heart: boolean }
   /** To the scanner's team and the one scanned: an enemy spotted by a drone or a camera, marked for `ticks`. */
   | { kind: "spotted"; pawnId: number; by: number; ticks: number }
   /** To the caller's team: a callout off the comm wheel (data/intel.json `callouts`). */
   | { kind: "callout"; name: string; id: number }
-  /** To everyone: a Bulletproof Camera's EMP dart burst there (Phase 7 M5). */
+  /** To everyone: a Armoured Camera's EMP dart burst there (Phase 7 M5). */
   | { kind: "emp"; pos: Vec3 }
   /** A gadget went off (Phase 8 M2, gadgets/blast.ts): its kind (GADGET_KINDS) and where; everyone sees and hears it. */
   | { kind: "blast"; gadget: number; pos: Vec3 }
@@ -56,26 +66,36 @@ export type GameEvent =
   /** To everyone (Phase 8 M3): an alarm or a metal detector started (`on`) or stopped sounding; `pawnId`: the body that set it off. */
   | { kind: "alarm"; gadget: number; pos: Vec3; on: boolean; pawnId: number }
   /**
-   * To Brava's client (Phase 8 M8): her Kludge drone `kludge` started a hack that takes `ticks` (`stage` 0), finished
+   * To Patch's client (Phase 8 M8): her Crossover drone `crossover` started a hack that takes `ticks` (`stage` 0), finished
    * it (1) or lost it (2: let go, out of range, jammed, destroyed); `left`: its hacks left.
    */
-  | { kind: "hack"; stage: 0 | 1 | 2; kludge: number; ticks: number; left: number }
-  /** To Skopós's client (Phase 8 M8): a Kludge's hack has her idle shell `pawnId` overheating for `ticks` unless she wakes it. */
+  | { kind: "hack"; stage: 0 | 1 | 2; crossover: number; ticks: number; left: number }
+  /** To Twain's client (Phase 8 M8): a Crossover's hack has her idle shell `pawnId` overheating for `ticks` unless she wakes it. */
   | { kind: "overheat"; pawnId: number; ticks: number }
   /**
-   * Dokkaebi's Jegeo Payload (Phase 8 M9). To her: an upload to `pawnId` started, taking `ticks` (stage 0), done (1) or
+   * Relay's Ringer (Phase 8 M9). To her: an upload to `pawnId` started, taking `ticks` (stage 0), done (1) or
    * cut (2); a dead defender's phone hacked (`pawnId`: its gadget entry's id), the cameras hers for `ticks` (4);
    * `charges`: hers left. To its target: his phone ringing for `ticks` (3: hold Interact to dismiss it), then done (1)
    * or cut (2).
    */
-  | { kind: "jegeo"; stage: 0 | 1 | 2 | 3 | 4; pawnId: number; ticks: number; charges: number }
+  | { kind: "ringer"; stage: 0 | 1 | 2 | 3 | 4; pawnId: number; ticks: number; charges: number }
+  /**
+   * To everyone (R3): a round from a gadget in body `pawnId`'s hands (Ohm's Brownout Pistol; `gadget` its kind) went to
+   * `end`, and burst there (`burst`: its EMP went off) or was spent.
+   */
+  | { kind: "gshot"; pawnId: number; gadget: number; end: Vec3; burst: boolean }
+  /**
+   * To Tonic's client (R3), twice a second: his team's bodies (his own too) as his monitor shows them: health and its
+   * most, down or not, a patch working on it or not; and whether his teammate's patch is busy (one at a time).
+   */
+  | { kind: "vitals"; bodies: Vital[]; busy: boolean }
   /**
    * To a joining player, and to everyone when it changes: who may reinforce and barricade, and the reinforcements
    * left (Phase 4 M6), and who may rappel (Phase 5 M8).
    */
   | { kind: "deployRules"; anyone: boolean; rappel: boolean; pools: [number, number] };
 
-const KIND = { shotFx: 1, hitConfirm: 2, damageTaken: 3, down: 4, kill: 5, shellDestroyed: 6, reviveStart: 7, reviveEnd: 8, deployRules: 10, droneDestroyed: 11, ping: 12, spotted: 13, callout: 14, emp: 15, blast: 16, stunned: 17, alarm: 18, hack: 19, overheat: 20, jegeo: 21 } as const;
+const KIND = { shotFx: 1, hitConfirm: 2, damageTaken: 3, down: 4, kill: 5, shellDestroyed: 6, reviveStart: 7, reviveEnd: 8, deployRules: 10, droneDestroyed: 11, ping: 12, spotted: 13, callout: 14, emp: 15, blast: 16, stunned: 17, alarm: 18, hack: 19, overheat: 20, ringer: 21, gshot: 22, vitals: 23 } as const;
 // 9 Threat (Phase 11) is reserved.
 
 /** Pellet end points travel at 1/32 m in i16: ±1024 m, more than any level. */
@@ -147,13 +167,21 @@ export function encodeEvents(tick: number, events: readonly GameEvent[]): Uint8A
         w.varu(e.gadget).f32(e.pos[0]).f32(e.pos[1]).f32(e.pos[2]).u8(e.on ? 1 : 0).varu(e.pawnId);
         break;
       case "hack":
-        w.u8(e.stage).varu(e.kludge).u16(Math.min(0xffff, e.ticks)).u8(Math.min(255, e.left));
+        w.u8(e.stage).varu(e.crossover).u16(Math.min(0xffff, e.ticks)).u8(Math.min(255, e.left));
         break;
       case "overheat":
         w.varu(e.pawnId).u16(Math.min(0xffff, e.ticks));
         break;
-      case "jegeo":
+      case "ringer":
         w.u8(e.stage).varu(e.pawnId).u16(Math.min(0xffff, e.ticks)).u8(Math.min(255, e.charges));
+        break;
+      case "gshot":
+        w.varu(e.pawnId).u8(e.gadget).u8(e.burst ? 1 : 0);
+        writePos(w, e.end);
+        break;
+      case "vitals":
+        w.u8((e.busy ? 1 : 0)).u8(Math.min(16, e.bodies.length));
+        for (const b of e.bodies.slice(0, 16)) w.varu(b.pawnId).varu(b.ctrl).u16(Math.min(0xffff, Math.max(0, Math.round(b.hp)))).u16(Math.min(0xffff, b.maxHp)).u8((b.down ? 1 : 0) | (b.patched ? 2 : 0));
         break;
       case "deployRules":
         w.u8((e.anyone ? 1 : 0) | (e.rappel ? 2 : 0)).varu(e.pools[0]).varu(e.pools[1]);
@@ -270,13 +298,34 @@ export function decodeEvents(r: ByteReader): { tick: number; events: GameEvent[]
     } else if (k === KIND.hack) {
       const stage = r.u8();
       if (stage > 2) throw new ProtocolError("bad hack");
-      events.push({ kind: "hack", stage: stage as 0 | 1 | 2, kludge: r.varu(), ticks: r.u16(), left: r.u8() });
+      events.push({ kind: "hack", stage: stage as 0 | 1 | 2, crossover: r.varu(), ticks: r.u16(), left: r.u8() });
     } else if (k === KIND.overheat) {
       events.push({ kind: "overheat", pawnId: r.varu(), ticks: r.u16() });
-    } else if (k === KIND.jegeo) {
+    } else if (k === KIND.ringer) {
       const stage = r.u8();
-      if (stage > 4) throw new ProtocolError("bad jegeo");
-      events.push({ kind: "jegeo", stage: stage as 0 | 1 | 2 | 3 | 4, pawnId: r.varu(), ticks: r.u16(), charges: r.u8() });
+      if (stage > 4) throw new ProtocolError("bad ringer");
+      events.push({ kind: "ringer", stage: stage as 0 | 1 | 2 | 3 | 4, pawnId: r.varu(), ticks: r.u16(), charges: r.u8() });
+    } else if (k === KIND.vitals) {
+      const busy = r.u8();
+      const n = r.u8();
+      if (busy > 1 || n > 16) throw new ProtocolError("bad vitals");
+      const bodies: Vital[] = [];
+      for (let i = 0; i < n; i++) {
+        const pawnId = r.varu();
+        const ctrl = r.varu();
+        const hp = r.u16();
+        const maxHp = r.u16();
+        const f = r.u8();
+        if (f > 3) throw new ProtocolError("bad vitals");
+        bodies.push({ pawnId, ctrl, hp, maxHp, down: (f & 1) !== 0, patched: (f & 2) !== 0 });
+      }
+      events.push({ kind: "vitals", bodies, busy: busy === 1 });
+    } else if (k === KIND.gshot) {
+      const pawnId = r.varu();
+      const gadget = r.u8();
+      const burst = r.u8();
+      if (gadget >= GADGET_KINDS.length || burst > 1) throw new ProtocolError("bad gadget shot");
+      events.push({ kind: "gshot", pawnId, gadget, end: readPos(r), burst: burst === 1 });
     } else if (k === KIND.droneDestroyed) {
       events.push({ kind: "droneDestroyed", pawnId: r.varu(), ownerCtrl: r.varu(), killerCtrl: r.varu() });
     } else if (k === KIND.deployRules) {

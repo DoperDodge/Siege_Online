@@ -50,7 +50,7 @@ describe("the Range Lab level", () => {
 describe("dummy scripts", () => {
   it("are pure: the same tick, body and definition give the same input", async () => {
     const sim = await Sim.create("range_lab");
-    const s = sim.addPlayer("d", "mute");
+    const s = sim.addPlayer("d", "lull");
     const state = sim.pawns.get(s.possessedPawnId)!.state;
     for (const d of level.dummies) for (const t of [0, 77, 1000]) expect(dummyInput(t, state, d)).toEqual(dummyInput(t, { ...state }, d));
   });
@@ -123,7 +123,7 @@ describe("a room with dummies", () => {
     // Two players, Room and ClientSessions in one process (zero latency).
     const room = await Room.create("SHOT1", "range_lab", { lab: true, seed: 5 });
     const clock = { t: 0 };
-    const clients = ["sledge", "thermite"].map((op, i) => {
+    const clients = ["cleave", "kiln"].map((op, i) => {
       const toServer: Uint8Array[] = [];
       const events: GameEvent[] = [];
       const session = new ClientSession({ send: (b) => toServer.push(b), now: () => clock.t, onEvents: (_t, evs) => events.push(...evs) });

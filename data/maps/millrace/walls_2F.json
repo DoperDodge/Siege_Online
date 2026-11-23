@@ -1,0 +1,677 @@
+{
+  "_doc": "Millrace's upper floor (ours, D-183): wall lines in world u.",
+  "floor": "2F",
+  "frame": "world",
+  "walls": [
+    {
+      "id": "2F.N",
+      "axis": "H",
+      "at": 0.0,
+      "span": [
+        0.0,
+        400.0
+      ],
+      "weight": "ext",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "WINDOW",
+          "id": "2F.o001",
+          "at": [
+            26.667,
+            40.0
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "WINDOW",
+          "id": "2F.o002",
+          "at": [
+            80.0,
+            93.333
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "WINDOW",
+          "id": "2F.o003",
+          "at": [
+            143.333,
+            153.333
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "WINDOW",
+          "id": "2F.o004",
+          "at": [
+            193.333,
+            206.667
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "WINDOW",
+          "id": "2F.o006",
+          "at": [
+            286.667,
+            300.0
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "WINDOW",
+          "id": "2F.o007",
+          "at": [
+            366.667,
+            376.667
+          ],
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "2F.E",
+      "axis": "V",
+      "at": 400.0,
+      "span": [
+        0.0,
+        186.667
+      ],
+      "weight": "ext",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "WINDOW",
+          "id": "2F.o008",
+          "at": [
+            20.0,
+            33.333
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "WINDOW",
+          "id": "2F.o009",
+          "at": [
+            53.333,
+            66.667
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "WINDOW",
+          "id": "2F.o010",
+          "at": [
+            100.0,
+            113.333
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "WINDOW",
+          "id": "2F.o011",
+          "at": [
+            153.333,
+            166.667
+          ],
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "2F.SO",
+      "axis": "H",
+      "at": 186.667,
+      "span": [
+        320.0,
+        400.0
+      ],
+      "weight": "ext",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "WINDOW",
+          "id": "2F.o012",
+          "at": [
+            353.333,
+            366.667
+          ],
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "2F.WO",
+      "axis": "V",
+      "at": 320.0,
+      "span": [
+        133.333,
+        186.667
+      ],
+      "weight": "ext",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "WINDOW",
+          "id": "2F.o013",
+          "at": [
+            153.333,
+            166.667
+          ],
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "2F.S",
+      "axis": "H",
+      "at": 133.333,
+      "span": [
+        0.0,
+        320.0
+      ],
+      "weight": "ext",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "WINDOW",
+          "id": "2F.o014",
+          "at": [
+            40.0,
+            53.333
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "WINDOW",
+          "id": "2F.o015",
+          "at": [
+            93.333,
+            106.667
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "WINDOW",
+          "id": "2F.o016",
+          "at": [
+            146.667,
+            156.667
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "WINDOW",
+          "id": "2F.o017",
+          "at": [
+            200.0,
+            213.333
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "WINDOW",
+          "id": "2F.o018",
+          "at": [
+            293.333,
+            303.333
+          ],
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "2F.W",
+      "axis": "V",
+      "at": 0.0,
+      "span": [
+        0.0,
+        133.333
+      ],
+      "weight": "ext",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "WINDOW",
+          "id": "2F.o019",
+          "at": [
+            60.0,
+            73.333
+          ],
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "2F.rail",
+      "axis": "H",
+      "at": 20.0,
+      "span": [
+        14.667,
+        120.0
+      ],
+      "weight": "int",
+      "kind": "rail",
+      "spans": [],
+      "src": "hand",
+      "note": "the Gallery's edge over the Loom Hall (open at its west end where the Gallery stairs arrive)",
+      "_unverified": []
+    },
+    {
+      "id": "2F.w018",
+      "axis": "V",
+      "at": 120.0,
+      "span": [
+        0.0,
+        133.333
+      ],
+      "weight": "int",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "DOOR",
+          "id": "2F.o030",
+          "at": [
+            4.0,
+            14.667
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "SOFT",
+          "id": "SW-2F-07",
+          "at": [
+            33.333,
+            60.0
+          ],
+          "sections": 2,
+          "_unverified": []
+        },
+        {
+          "kind": "SOFT",
+          "id": "SW-2F-08",
+          "at": [
+            80.0,
+            106.667
+          ],
+          "sections": 2,
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "the Gallery and the Loom Hall's void | Overlook, Pattern Room",
+      "_unverified": []
+    },
+    {
+      "id": "2F.w010a",
+      "axis": "H",
+      "at": 66.667,
+      "span": [
+        120.0,
+        173.333
+      ],
+      "weight": "int",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "DOOR",
+          "id": "2F.o031",
+          "at": [
+            146.667,
+            156.667
+          ],
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "Overlook | Pattern Room",
+      "_unverified": []
+    },
+    {
+      "id": "2F.w026",
+      "axis": "V",
+      "at": 173.333,
+      "span": [
+        0.0,
+        133.333
+      ],
+      "weight": "int",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "DOOR",
+          "id": "2F.o020",
+          "at": [
+            13.333,
+            23.333
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "SOFT",
+          "id": "SW-2F-01",
+          "at": [
+            33.333,
+            60.0
+          ],
+          "sections": 2,
+          "_unverified": []
+        },
+        {
+          "kind": "SOFT",
+          "id": "SW-2F-02",
+          "at": [
+            80.0,
+            106.667
+          ],
+          "sections": 2,
+          "_unverified": []
+        },
+        {
+          "kind": "DOOR",
+          "id": "2F.o032",
+          "at": [
+            113.333,
+            123.333
+          ],
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "Overlook, Pattern Room | Card Room, Carding Store",
+      "_unverified": []
+    },
+    {
+      "id": "2F.w010b",
+      "axis": "H",
+      "at": 66.667,
+      "span": [
+        173.333,
+        240.0
+      ],
+      "weight": "int",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "DOOR",
+          "id": "2F.o033",
+          "at": [
+            193.333,
+            203.333
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "SOFT",
+          "id": "SW-2F-09",
+          "at": [
+            213.333,
+            233.333
+          ],
+          "sections": 2,
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "Card Room | Carding Store",
+      "_unverified": []
+    },
+    {
+      "id": "2F.w036",
+      "axis": "V",
+      "at": 240.0,
+      "span": [
+        0.0,
+        133.333
+      ],
+      "weight": "int",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "DOOR",
+          "id": "2F.o034",
+          "at": [
+            20.0,
+            30.0
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "SOFT",
+          "id": "SW-2F-03",
+          "at": [
+            40.0,
+            60.0
+          ],
+          "sections": 2,
+          "_unverified": []
+        },
+        {
+          "kind": "DOOR",
+          "id": "2F.o035",
+          "at": [
+            100.0,
+            110.0
+          ],
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "Card Room, Carding Store | Upper Corridor",
+      "_unverified": []
+    },
+    {
+      "id": "2F.w040",
+      "axis": "V",
+      "at": 266.667,
+      "span": [
+        0.0,
+        133.333
+      ],
+      "weight": "int",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "OPEN",
+          "id": "2F.o036",
+          "at": [
+            53.333,
+            76.667
+          ]
+        }
+      ],
+      "src": "hand",
+      "note": "Upper Corridor | Upper Stairs",
+      "_unverified": []
+    },
+    {
+      "id": "2F.w048",
+      "axis": "V",
+      "at": 320.0,
+      "span": [
+        0.0,
+        133.333
+      ],
+      "weight": "int",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "DOOR",
+          "id": "2F.o023",
+          "at": [
+            20.0,
+            30.0
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "DOOR",
+          "id": "2F.o024",
+          "at": [
+            100.0,
+            110.0
+          ],
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "Upper Stairs | Office Hall",
+      "_unverified": []
+    },
+    {
+      "id": "2F.w051",
+      "axis": "V",
+      "at": 340.0,
+      "span": [
+        0.0,
+        186.667
+      ],
+      "weight": "int",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "SOFT",
+          "id": "SW-2F-10",
+          "at": [
+            20.0,
+            46.667
+          ],
+          "sections": 2,
+          "_unverified": []
+        },
+        {
+          "kind": "DOOR",
+          "id": "2F.o037",
+          "at": [
+            56.667,
+            66.667
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "DRONE_HOLE",
+          "id": "2F.dt1",
+          "at": [
+            73.333,
+            76.0
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "DOOR",
+          "id": "2F.o038",
+          "at": [
+            90.0,
+            100.0
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "SOFT",
+          "id": "SW-2F-11",
+          "at": [
+            110.0,
+            130.0
+          ],
+          "sections": 2,
+          "_unverified": []
+        },
+        {
+          "kind": "DOOR",
+          "id": "2F.o039",
+          "at": [
+            146.667,
+            156.667
+          ],
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "Office Hall | Drafting, Payroll, Archive",
+      "_unverified": []
+    },
+    {
+      "id": "2F.w012",
+      "axis": "H",
+      "at": 80.0,
+      "span": [
+        340.0,
+        400.0
+      ],
+      "weight": "int",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "SOFT",
+          "id": "SW-2F-04",
+          "at": [
+            346.667,
+            366.667
+          ],
+          "sections": 2,
+          "_unverified": []
+        },
+        {
+          "kind": "DOOR",
+          "id": "2F.o025",
+          "at": [
+            373.333,
+            383.333
+          ],
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "Drafting | Payroll",
+      "_unverified": []
+    },
+    {
+      "id": "2F.w020",
+      "axis": "H",
+      "at": 133.333,
+      "span": [
+        340.0,
+        400.0
+      ],
+      "weight": "int",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "DOOR",
+          "id": "2F.o026",
+          "at": [
+            346.667,
+            356.667
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "SOFT",
+          "id": "SW-2F-06",
+          "at": [
+            366.667,
+            393.333
+          ],
+          "sections": 2,
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "Payroll | Archive",
+      "_unverified": []
+    }
+  ]
+}

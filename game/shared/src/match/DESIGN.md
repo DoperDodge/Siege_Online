@@ -1,5 +1,9 @@
 # Phase 6 design: match flow and lobby
 
+> **Project Redmond:** the map is Millrace now (`data/maps/millrace`), and the operators carry our names (R1) and
+> ids (R4). Oregon and its research (`research/oregon/`) were removed in R4: where this design names them, or the
+> operators' old names, it records how the phase was built.
+
 Status: adopted 2026-10-29. Scope: PLAN.md §17 Phase 6, "All formats, any team size 1–5 uneven, operator select,
 prep/action, plant/defuse, rounds, side swap, bans, scoreboard"; done when "Full 1v1 and 2v3 matches playable start
 to finish".
@@ -138,7 +142,7 @@ ban.
 - The last body of a side still up that goes down dies at once (core_mechanics §10.1, `lastAliveDies`), except an
   attacker after the defuser is planted.
 - A side is **eliminated** when none of its players' active bodies is up (alive and not down); with the rule above
-  that happens the moment its last body goes down or dies. Skopós is eliminated when her active shell dies; her idle
+  that happens the moment its last body goes down or dies. Twain is eliminated when her active shell dies; her idle
   shell doesn't count (research/operators/skopos.md).
 
 ## 8. The defuser (D-120)

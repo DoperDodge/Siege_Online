@@ -14,7 +14,7 @@ export const LAB = {
   away: [[-25, 0, 25], [25, 0, 25], [-25, 0, -25], [25, 0, -25]] as Vec3[],
 };
 
-export async function scene(ops: string[] = ["sledge", "mute"], level = "destruction_lab") {
+export async function scene(ops: string[] = ["cleave", "lull"], level = "destruction_lab") {
   const h = await roomWith(level, ops);
   const sim = h.room.sim;
   const wait = (n: number) => {

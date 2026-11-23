@@ -2,7 +2,8 @@
 // simulation (roundState in movement.ts), so float32 on the wire restores the state bit-for-bit — what
 // reconciliation needs to replay a client's prediction from the server's state.
 import { MAX_CAM_VIEWS, type CamView, type PlayerController } from "../player/pawn.js";
-import { PawnMode, type PawnState } from "../player/types.js";
+import { DeployKind } from "../destruction/deploy.js";
+import { GadgetAct, Hand, PawnMode, type PawnState } from "../player/types.js";
 import { ByteReader, ByteWriter, fnv1a, ProtocolError } from "./bytes.js";
 
 /** Continuous fields, in wire order. */
@@ -15,17 +16,18 @@ export const PAWN_F32_FIELDS = [
 /** Integer fields by wire width (after the flags, enums, buttons and ladder written by hand below). */
 export const PAWN_U8_FIELDS = [
   "slot", "wAct", "reloadKind", "wflags", "loaded0", "loaded1", "modes", "burstLeft", "downs", "invulnTicks", "meleeTicks",
-  "deployKind", "deploySection", "rappelFlags", "hand", "gAct", "g1", "g2", "w1", "w2", "regenMade", "suppress", "shieldAt",
+  "deployKind", "deploySection", "rappelFlags", "hand", "gAct", "g1", "g2", "w1", "w2", "regenMade", "suppress", "shieldAt", "pattern",
 ] as const satisfies readonly (keyof PawnState)[];
 export const PAWN_U16_FIELDS = [
   "hp", "maxHp", "lastFallDamage", "actTicks", "reserve0", "reserve1", "cycle", "adsQ", "shotIdx", "sinceShot", "reviveTicks",
   "deployPanel", "deployTicks", "rappelTicks", "jumpCd", "boostTicks", "boostCd", "jammed", "gTicks", "regenTicks", "guard", "suppressT", "knockTicks",
+  "healLeft", "healTicks", "patchTicks", "prodUsed", "prodNext", "prodIdle", "slowed", "shocked", "braceQ", "gCool",
 ] as const satisfies readonly (keyof PawnState)[];
 export const PAWN_U32_FIELDS = ["rng", "reviveTarget", "revivedBy", "gTarget"] as const satisfies readonly (keyof PawnState)[];
 
 /** Every non-float field (the hash test changes each one). */
 export const PAWN_INT_FIELDS = [
-  "grounded", "sprinting", "needled", "ringing", "stance", "stanceFrom", "mode", "prevButtons", "ladder", "rappel", ...PAWN_U8_FIELDS, ...PAWN_U16_FIELDS, ...PAWN_U32_FIELDS,
+  "grounded", "sprinting", "needled", "ringing", "snared", "prodOn", "braced", "stance", "stanceFrom", "mode", "prevButtons", "ladder", "rappel", ...PAWN_U8_FIELDS, ...PAWN_U16_FIELDS, ...PAWN_U32_FIELDS,
 ] as const satisfies readonly (keyof PawnState)[];
 
 /** Bytes of one full state on the wire: the floats, flags, 3 enums, buttons (u16), ladder (i8), rappel (i16), then the u8/u16/u32 fields. */
@@ -34,7 +36,7 @@ export const PAWN_STATE_BYTES =
 
 export function writePawnState(w: ByteWriter, s: PawnState): void {
   for (const k of PAWN_F32_FIELDS) w.f32(s[k]);
-  w.u8((s.grounded ? 1 : 0) | (s.sprinting ? 2 : 0) | (s.needled ? 4 : 0) | (s.ringing ? 8 : 0));
+  w.u8((s.grounded ? 1 : 0) | (s.sprinting ? 2 : 0) | (s.needled ? 4 : 0) | (s.ringing ? 8 : 0) | (s.snared ? 16 : 0) | (s.prodOn ? 32 : 0) | (s.braced ? 64 : 0));
   w.u8(s.stance).u8(s.stanceFrom).u8(s.mode);
   w.u16(s.prevButtons);
   w.i8(s.ladder);
@@ -43,6 +45,12 @@ export function writePawnState(w: ByteWriter, s: PawnState): void {
   for (const k of PAWN_U16_FIELDS) w.u16(s[k]);
   for (const k of PAWN_U32_FIELDS) w.u32(s[k]);
 }
+
+/** An enum's highest value: anything past it on the wire is a bad message (and a new value is let through by itself). */
+const highest = (e: object) => Math.max(...Object.values(e).filter((v): v is number => typeof v === "number"));
+const DEPLOY_MAX = highest(DeployKind);
+const HAND_MAX = highest(Hand);
+const GACT_MAX = highest(GadgetAct);
 
 export function readPawnState(r: ByteReader): PawnState {
   const f: Record<string, number> = {};
@@ -59,8 +67,8 @@ export function readPawnState(r: ByteReader): PawnState {
   for (const k of PAWN_U16_FIELDS) f[k] = r.u16();
   for (const k of PAWN_U32_FIELDS) f[k] = r.u32();
   if (f.slot > 1 || f.wAct > 2 || f.reloadKind > 3) throw new ProtocolError("bad pawn weapon state");
-  if (f.deployKind > 8 || f.deploySection > 2) throw new ProtocolError("bad pawn deploy state");
-  if (f.hand > 4 || f.gAct > 5) throw new ProtocolError("bad pawn gadget state");
+  if (f.deployKind > DEPLOY_MAX || f.deploySection > 2) throw new ProtocolError("bad pawn deploy state");
+  if (f.hand > HAND_MAX || f.gAct > GACT_MAX || f.pattern > 3) throw new ProtocolError("bad pawn gadget state");
   if (rappel < -1 || f.rappelFlags > 31) throw new ProtocolError("bad pawn rappel state");
   return {
     ...(f as Record<(typeof PAWN_F32_FIELDS)[number] | (typeof PAWN_U8_FIELDS)[number] | (typeof PAWN_U16_FIELDS)[number] | (typeof PAWN_U32_FIELDS)[number], number>),
@@ -68,6 +76,9 @@ export function readPawnState(r: ByteReader): PawnState {
     sprinting: (flags & 2) !== 0,
     needled: (flags & 4) !== 0,
     ringing: (flags & 8) !== 0,
+    snared: (flags & 16) !== 0,
+    prodOn: (flags & 32) !== 0,
+    braced: (flags & 64) !== 0,
     stance,
     stanceFrom,
     mode,
@@ -84,7 +95,7 @@ export function hashPawnState(s: PawnState): number {
   return fnv1a(w.finish());
 }
 
-/** The predicted part of a controller (Skopós' camera and swap state, the drone driven): exact, like PawnState. */
+/** The predicted part of a controller (Twain' camera and swap state, the drone driven): exact, like PawnState. */
 export type ControllerState = Pick<
   PlayerController,
   "possessedPawnId" | "shellCam" | "swapPhase" | "swapT" | "swapCooldown" | "prevButtons" | "drone" | "prevLean" | "cam" | "camYaw" | "camPitch" | "camEntry" | "lastCam" | "camViews"
@@ -121,7 +132,7 @@ export function readControllerState(r: ByteReader): ControllerState {
   const camViews: CamView[] = [];
   for (let i = 0; i < n; i++) {
     const key = r.varu();
-    // (A camera's key: 2 and up; Skopós's shell view has none.)
+    // (A camera's key: 2 and up; Twain's shell view has none.)
     if (key < 2) throw new ProtocolError("bad camera view");
     camViews.push({ key, yaw: r.finite(), pitch: r.finite() });
   }

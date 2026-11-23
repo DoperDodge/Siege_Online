@@ -6,19 +6,28 @@ import movementLabJson from "../../../../data/maps/movement_lab/layout.json";
 import rangeLabJson from "../../../../data/maps/range_lab/layout.json";
 import destructionLabJson from "../../../../data/maps/destruction_lab/layout.json";
 import gadgetLabJson from "../../../../data/maps/gadget_lab/layout.json";
-import oregonJson from "../../../../data/maps/oregon/level.json";
-import brava from "../../../../data/operators/brava.json";
-import fuze from "../../../../data/operators/fuze.json";
-import thermite from "../../../../data/operators/thermite.json";
-import striker from "../../../../data/operators/striker.json";
-import dokkaebi from "../../../../data/operators/dokkaebi.json";
-import sledge from "../../../../data/operators/sledge.json";
-import sentry from "../../../../data/operators/sentry.json";
-import skopos from "../../../../data/operators/skopos.json";
-import mira from "../../../../data/operators/mira.json";
-import lesion from "../../../../data/operators/lesion.json";
-import pulse from "../../../../data/operators/pulse.json";
-import mute from "../../../../data/operators/mute.json";
+import rappelLabJson from "../../../../data/maps/rappel_lab/layout.json";
+import millraceJson from "../../../../data/maps/millrace/level.json";
+import patch from "../../../../data/operators/patch.json";
+import hail from "../../../../data/operators/hail.json";
+import kiln from "../../../../data/operators/kiln.json";
+import pointman from "../../../../data/operators/pointman.json";
+import relay from "../../../../data/operators/relay.json";
+import cleave from "../../../../data/operators/cleave.json";
+import picket from "../../../../data/operators/picket.json";
+import twain from "../../../../data/operators/twain.json";
+import vista from "../../../../data/operators/vista.json";
+import thistle from "../../../../data/operators/thistle.json";
+import murmur from "../../../../data/operators/murmur.json";
+import lull from "../../../../data/operators/lull.json";
+import ohm from "../../../../data/operators/ohm.json";
+import tonic from "../../../../data/operators/tonic.json";
+import shunt from "../../../../data/operators/shunt.json";
+import latch from "../../../../data/operators/latch.json";
+import bailiff from "../../../../data/operators/bailiff.json";
+import rivet from "../../../../data/operators/rivet.json";
+import dowser from "../../../../data/operators/dowser.json";
+import hull from "../../../../data/operators/hull.json";
 import gunplayJson from "../../../../data/gunplay.json";
 import combatJson from "../../../../data/combat.json";
 import labModeJson from "../../../../data/modes/lab.json";
@@ -38,7 +47,7 @@ import drillCustomJson from "../../../../data/modes/drill_custom.json";
 import botDifficultyJson from "../../../../data/bots/difficulty.json";
 import botNamesJson from "../../../../data/bots/names.json";
 import botPicksJson from "../../../../data/bots/picks.json";
-import oregonStratsJson from "../../../../data/maps/oregon/bot_strats.json";
+import millraceStratsJson from "../../../../data/maps/millrace/bot_strats.json";
 import objectiveJson from "../../../../data/objective.json";
 import intelJson from "../../../../data/intel.json";
 import destructionJson from "../../../../data/destruction.json";
@@ -117,8 +126,8 @@ export interface GameData {
 export const rawData = {
   movement: movementJson as Record<string, unknown>,
   hitboxes: hitboxJson as Record<string, unknown>,
-  operators: [brava, fuze, thermite, striker, dokkaebi, sledge, sentry, skopos, mira, lesion, pulse, mute] as Record<string, unknown>[],
-  levels: [movementLabJson, rangeLabJson, destructionLabJson, gadgetLabJson, oregonJson] as Record<string, unknown>[],
+  operators: [patch, hail, kiln, pointman, relay, cleave, picket, twain, vista, thistle, murmur, lull, ohm, tonic, shunt, latch, bailiff, rivet, dowser, hull] as Record<string, unknown>[],
+  levels: [movementLabJson, rangeLabJson, destructionLabJson, gadgetLabJson, rappelLabJson, millraceJson] as Record<string, unknown>[],
   weapons: weaponFiles,
   gunplay: gunplayJson as Record<string, unknown>,
   combat: combatJson as Record<string, unknown>,
@@ -131,11 +140,11 @@ export const rawData = {
   botDifficulty: botDifficultyJson as Record<string, unknown>,
   botNames: botNamesJson as Record<string, unknown>,
   botPicks: botPicksJson as Record<string, unknown>,
-  botStrats: { oregon: oregonStratsJson } as Record<string, Record<string, unknown>>,
+  botStrats: { millrace: millraceStratsJson } as Record<string, Record<string, unknown>>,
 };
 
 /** Maps that tools/mapgen compiles (DECISIONS D-070): their LevelDef is level.json, generated from the authoring layout.json. */
-const COMPILED_MAPS = new Set(["oregon"]);
+const COMPILED_MAPS = new Set(["millrace"]);
 /** The file a level comes from, for error messages. */
 export const levelFile = (id: string) => `data/maps/${id}/${COMPILED_MAPS.has(id) ? "level" : "layout"}.json`;
 
@@ -211,7 +220,7 @@ export function crossFileProblems(data: Pick<GameData, "operators" | "weapons" |
   const out: string[] = [];
   if (data.destruction) out.push(...destructionProblems(data.destruction, data.weapons, data.levels));
   if (data.gadgets) {
-    // A blast's cut (and a cluster charge's hole) is one of the explosives' shapes (data/destruction.json); a cluster
+    // A blast's cut (and a hailstone drill's hole) is one of the explosives' shapes (data/destruction.json); a cluster
     // charge's grenade is a thrown gadget with a fuse and a blast (Phase 8 M5).
     for (const g of data.gadgets.values()) {
       for (const [where, cut] of [["blast.cut", g.blast?.cut], ["cluster.cut", g.cluster?.cut]] as const)
@@ -219,6 +228,11 @@ export function crossFileProblems(data: Pick<GameData, "operators" | "weapons" |
       if (g.mirror) {
         const c = data.gadgets.get(g.mirror.canister);
         if (!c || !c.fragile || c.side !== g.side || c.operator !== g.operator) out.push(`data/gadgets/${g.id}.json: mirror.canister names "${g.mirror.canister}", which isn't a fragile gadget of its own on its side and its operator's`);
+      }
+      // Rivet's Stud Driver (R3): what it lays are salvos of their own, on its side and its operator's.
+      for (const id of g.driver?.lays ?? []) {
+        const k = data.gadgets.get(id);
+        if (!k?.salvo || k.side !== g.side || k.operator !== g.operator) out.push(`data/gadgets/${g.id}.json: driver.lays names "${id}", which isn't a salvo of its own on its side and its operator's`);
       }
       if (!g.cluster) continue;
       const k = data.gadgets.get(g.cluster.grenade);
@@ -238,12 +252,12 @@ export function crossFileProblems(data: Pick<GameData, "operators" | "weapons" |
         }
       }
     }
-    // An operator's own item (Phase 8 M4) is their ability, or what it lets out (Fuze's grenades, M5), on their side.
+    // An operator's own item (Phase 8 M4) is their ability, or what it lets out (Hail's grenades, M5), on their side.
     for (const g of data.gadgets.values()) {
       if (!g.operator) continue;
       const op = data.operators.get(g.operator);
       const ability = op && data.gadgets.get(op.ability.id);
-      const part = ability !== undefined && (ability.cluster?.grenade === g.id || ability.mirror?.canister === g.id);
+      const part = ability !== undefined && (ability.cluster?.grenade === g.id || ability.mirror?.canister === g.id || (ability.driver?.lays.includes(g.id) ?? false));
       if (!op) out.push(`data/gadgets/${g.id}.json: operator "${g.operator}" doesn't exist`);
       else if ((op.ability.id !== g.id && !part) || op.side !== g.side) out.push(`data/gadgets/${g.id}.json: it isn't ${op.id}'s ability (${op.ability.id}) or part of it, on their side`);
     }

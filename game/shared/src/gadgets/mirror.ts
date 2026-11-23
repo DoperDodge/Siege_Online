@@ -1,4 +1,4 @@
-// Mira's Black Mirror (Phase 8 M7; research/operators/mira.md §3; data/gadgets/black_mirror.json `mirror`): a
+// Vista's Blind Pane (Phase 8 M7; research/operators/mira.md §3; data/gadgets/blind_pane.json `mirror`): a
 // window cut through every layer of a reinforceable wall and filled with glass, its entry standing in the middle of
 // the wall's thickness, a solid box (sim.syncSolids) that stops bullets, blasts and bodies both ways. Seen through
 // from the side it was placed from (its facing) while it's whole; a knife's shatter (GFlag.Hit) makes it opaque both

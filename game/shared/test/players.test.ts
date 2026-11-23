@@ -8,7 +8,7 @@ const CONTACT = 2 * 0.3 + 0.02 - 1e-3; // two body radii plus the controller's g
 
 async function twoPlayers() {
   const lab = await labWith();
-  const other = lab.sim.addPlayer("other", "mute");
+  const other = lab.sim.addPlayer("other", "lull");
   const b = lab.sim.pawns.get(other.possessedPawnId)!;
   return { ...lab, other, b };
 }
@@ -39,7 +39,7 @@ describe("players block each other", () => {
 
   it("ten players joining on one spawn each get their own spot, and a forced pile-up separates", async () => {
     const sim = await Sim.create("movement_lab");
-    const ctrls = Array.from({ length: 10 }, (_, i) => sim.addPlayer(`p${i}`, i === 3 ? "skopos" : "sledge"));
+    const ctrls = Array.from({ length: 10 }, (_, i) => sim.addPlayer(`p${i}`, i === 3 ? "twain" : "cleave"));
     const pawns = [...sim.pawns.values()];
     const minPair = () => Math.min(...pawns.flatMap((p, i) => pawns.slice(i + 1).map((q) => dist(p, q))));
     expect(minPair()).toBeGreaterThan(CONTACT);
@@ -90,8 +90,8 @@ describe("players block each other", () => {
     expect(pawn.state.z).toBeLessThan(z - 0.5); // walked straight through where the body lies
   });
 
-  it("Skopós' two shells block each other and the swap still works", async () => {
-    const { sim, ctrl, pawn } = await labWith("skopos");
+  it("Twain' two shells block each other and the swap still works", async () => {
+    const { sim, ctrl, pawn } = await labWith("twain");
     const shell = sim.pawns.get(ctrl.pawnIds[1])!;
     const yaw = (Math.atan2(-(shell.state.x - pawn.state.x), -(shell.state.z - pawn.state.z)) * 180) / Math.PI;
     let closest = Infinity;
@@ -109,7 +109,7 @@ describe("players block each other", () => {
   it("two independent sims with ten colliding players stay bit-identical", async () => {
     const make = async () => {
       const sim = await Sim.create("movement_lab");
-      const ctrls = Array.from({ length: 10 }, (_, i) => sim.addPlayer(`p${i}`, i === 4 ? "skopos" : ["sledge", "fuze", "brava", "mute"][i % 4]));
+      const ctrls = Array.from({ length: 10 }, (_, i) => sim.addPlayer(`p${i}`, i === 4 ? "twain" : ["cleave", "hail", "patch", "lull"][i % 4]));
       return { sim, ctrls };
     };
     const [A, B] = [await make(), await make()];

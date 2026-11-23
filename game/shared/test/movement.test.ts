@@ -6,9 +6,9 @@ const FWD = { forward: 1 } as const;
 
 describe("speeds per rating (data/movement.json)", () => {
   const cases: [string, number, number][] = [
-    ["fuze", 2.85, 4.25], // speed 1
-    ["sledge", 3.0, 4.75], // speed 2
-    ["brava", 3.1, 5.0], // speed 3
+    ["hail", 2.85, 4.25], // speed 1
+    ["cleave", 3.0, 4.75], // speed 2
+    ["patch", 3.1, 5.0], // speed 3
   ];
   for (const [op, walk, sprint] of cases) {
     it(`${op}: walk ${walk} m/s, sprint ${sprint} m/s`, async () => {
@@ -23,7 +23,7 @@ describe("speeds per rating (data/movement.json)", () => {
   }
 
   it("crouch, prone, ADS and slow-walk speeds", async () => {
-    const { sim, ctrl, pawn } = await labWith("sledge");
+    const { sim, ctrl, pawn } = await labWith("cleave");
     const m = sim.data.movement;
     run(sim, ctrl, { ...FWD, stance: Stance.Crouch }, 1);
     expect(hspeed(pawn)).toBeCloseTo(3.0 * m.speed.crouchWalkFactor, 1);
@@ -44,7 +44,7 @@ describe("walls and the floor", () => {
   // Found by the netsim: sprinting diagonally into a wall from exact contact, Rapier's snap-to-ground
   // dropped the body 0.29 m into the floor in one tick.
   it("sprinting diagonally into a wall from exact contact doesn't sink into the floor", async () => {
-    const { sim, ctrl, pawn } = await labWith("sledge");
+    const { sim, ctrl, pawn } = await labWith("cleave");
     sim.setPawnState(pawn.id, {
       ...pawn.state,
       x: 31.429658889770508,
@@ -64,7 +64,7 @@ describe("walls and the floor", () => {
   });
 
   it("never dips below the floor sprinting or walking diagonally along any wall", async () => {
-    const { sim, ctrl, pawn } = await labWith("sledge");
+    const { sim, ctrl, pawn } = await labWith("cleave");
     // Facing each outer wall in turn, then running along it at a few angles.
     const walls: [number, number, number][] = [
       [31, 20, -90], // east wall at x = 32: face east (yaw −90°)
@@ -246,7 +246,7 @@ describe("vaulting", () => {
 
   it("vaults through a hole in a soft wall that is low and big enough, not over the wall or through a narrow hole (walk #1)", async () => {
     const sim = await Sim.create("destruction_lab");
-    const ctrl = sim.addPlayer("tester", "sledge");
+    const ctrl = sim.addPlayer("tester", "cleave");
     const pawn = sim.pawns.get(ctrl.possessedPawnId)!;
     settle(sim, ctrl);
     // The plain soft wall: 3 m wide and tall, its middle at x −8, z −6, 0.2 m thick; cells are 5 cm, v up from its foot.
@@ -322,9 +322,9 @@ describe("ladders, stairs, ramps and falls", () => {
   });
 });
 
-describe("player/pawn separation (Skopós)", () => {
+describe("player/pawn separation (Twain)", () => {
   it("swaps only from the other shell's camera: Z opens it, F transfers after 1.3 s + 1.3 s", async () => {
-    const { sim, ctrl } = await labWith("skopos");
+    const { sim, ctrl } = await labWith("twain");
     expect(ctrl.pawnIds).toHaveLength(2);
     const [a, b] = ctrl.pawnIds.map((id) => sim.pawns.get(id)!);
     expect(b.state.stance).toBe(Stance.Crouch); // the idle shell stays crouched
@@ -377,7 +377,7 @@ describe("player/pawn separation (Skopós)", () => {
   });
 
   it("an operator with one pawn has no shell camera", async () => {
-    const { sim, ctrl } = await labWith("mira");
+    const { sim, ctrl } = await labWith("vista");
     run(sim, ctrl, { buttons: Btn.Ability }, 1 / 64);
     expect(ctrl.shellCam).toBe(false);
   });
@@ -442,7 +442,7 @@ describe("determinism", () => {
     const states: string[] = [];
     for (let k = 0; k < 2; k++) {
       const sim = await Sim.create("movement_lab");
-      const ctrl = sim.addPlayer("det", "brava");
+      const ctrl = sim.addPlayer("det", "patch");
       teleport(sim, ctrl, -6, 0, 7.5);
       for (const cmd of script) sim.step(new Map([[ctrl.id, input(cmd)]]));
       const { prevButtons: _ignored, ...state } = sim.pawns.get(ctrl.possessedPawnId)!.state;
@@ -515,7 +515,7 @@ describe("review regressions (Phase 1 adversarial review)", () => {
   });
 
   it("a tick with no input doesn't turn a held key into a fresh press", async () => {
-    const { sim, ctrl, pawn } = await labWith("skopos");
+    const { sim, ctrl, pawn } = await labWith("twain");
     run(sim, ctrl, { buttons: Btn.Ability }, 1 / 64); // opens the shell camera
     expect(ctrl.shellCam).toBe(true);
     sim.step(new Map()); // dropped packet
@@ -548,7 +548,7 @@ describe("review regressions (Phase 1 adversarial review)", () => {
     const lab = data.levels.get("movement_lab")!;
     const level = levelSchema.parse({ ...lab, id, solids: [...lab.solids, ...(extra.solids ?? [])], ladders: [...lab.ladders, ...(extra.ladders ?? [])] });
     const sim = await Sim.create(id, { ...data, levels: new Map(data.levels).set(id, level) });
-    const ctrl = sim.addPlayer("p", "sledge");
+    const ctrl = sim.addPlayer("p", "cleave");
     return { sim, ctrl, pawn: sim.pawns.get(ctrl.possessedPawnId)! };
   };
 
@@ -652,7 +652,7 @@ describe("review regressions (Phase 1 adversarial review)", () => {
     const walkUnder = async (solid: boolean) => {
       const level = levelSchema.parse({ ...lab, id: `under_${solid}`, stairs: [{ ...flight, solid }] });
       const sim = await Sim.create(level.id, { ...data, levels: new Map(data.levels).set(level.id, level) });
-      const ctrl = sim.addPlayer("p", "sledge");
+      const ctrl = sim.addPlayer("p", "cleave");
       const pawn = sim.pawns.get(ctrl.possessedPawnId)!;
       const steps = sim.level.renderables.filter((r) => r.kind === "stair_step").map((r) => +r.size[1].toFixed(4));
       teleport(sim, ctrl, 20, 0, 22.85, -90); // facing +X, under steps 9 to 11

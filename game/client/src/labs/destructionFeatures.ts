@@ -8,7 +8,7 @@ export function destructionFeatures(lab: LabApi): void {
   const tools = Object.entries(lab.data.destruction.explosives) as [string, ExplosiveData][];
   let pick = 0;
   const describe = ([, ex]: [string, ExplosiveData]) =>
-    `${ex.name}: ${ex.shape === "rect" ? `${ex.wM} × ${ex.hM} m` : `${ex.diameterM} m across`}${ex.hard ? ", cuts steel" : ""}${ex.shape === "rect" ? " (a charge: within 2 m)" : ""}`;
+    `${ex.name}: ${ex.shape === "rect" ? `${ex.wM} × ${ex.hM} m` : ex.shape === "cross" ? `an X ${ex.spanM + ex.armM} m across` : `${ex.diameterM} m across`}${ex.hard ? ", cuts steel" : ""}${ex.shape === "rect" ? " (a charge: within 2 m)" : ""}`;
 
   const readout = document.createElement("div");
   readout.className = "hud destruction-readout";

@@ -1,9 +1,10 @@
 // What a ray meets in the gadget table (Phase 8, gadgets/DESIGN.md §3): each entry is its data's box (`sizeM`: width,
 // height, depth), turned to its facing, around its centre; one lying flat on a floor has its depth up. Bullets, the
-// knife and the pick-up hold ask this; the Bulletproof Camera's bulletproof front is the shot judge's (bpCamsShot).
+// knife and the pick-up hold ask this; the Armoured Camera's bulletproof front is the shot judge's (armouredCamsShot).
 import { DEG, forwardXZ, rightXZ, type Vec3 } from "../core/math.js";
 import type { GameData } from "../data/load.js";
 import { tubeBox } from "./cluster.js";
+import { studBoxes } from "./studs.js";
 import { isIngredient, kindId } from "./kinds.js";
 import { GFlag, type Gadget, type GadgetTable } from "./table.js";
 
@@ -53,17 +54,19 @@ export interface GadgetBox {
   yaw: number;
   pitch: number;
   half: Vec3;
-  /** Drawn see-through (Skopós's barrier's canopy): it stops what the rest does. */
+  /** Drawn see-through (Twain's barrier's canopy): it stops what the rest does. */
   glass: boolean;
 }
 
 /**
- * The boxes of an entry built of `parts` (Skopós's idle shell's barrier, the game's model: D-157), or null for a plain
- * one: each centred `at` (across, up from the entry's bottom, forward from its position), turned with the entry and by
- * its own `yawDeg`, leaning back `pitchDeg`.
+ * The boxes of an entry built of `parts` (Twain's idle shell's barrier, the game's model: D-157), or a salvo's studs
+ * (Rivet's, R3: gadgets/studs.ts), or null for a plain one: each part centred `at` (across, up from the entry's bottom,
+ * forward from its position), turned with the entry and by its own `yawDeg`, leaning back `pitchDeg`.
  */
-export function partBoxes(data: GameData, g: Pick<Gadget, "kind" | "pos" | "yaw">): GadgetBox[] | null {
+export function partBoxes(data: GameData, g: Pick<Gadget, "kind" | "pos" | "yaw" | "flags">): GadgetBox[] | null {
   const d = data.gadgets.get(kindId(g.kind) ?? "");
+  // A salvo of Rivet's studs (R3) is its studs: a bullet has to meet one.
+  if (d?.salvo) return studBoxes(data, g);
   if (!d?.parts) return null;
   const [fx, fz] = forwardXZ(g.yaw);
   const [rx, rz] = rightXZ(g.yaw);
@@ -87,7 +90,7 @@ function partLocal(b: GadgetBox, v: readonly number[], point: boolean): Vec3 {
 }
 
 /**
- * Metres along a ray from `origin` (unit `dir`) to where it meets an entry's box, or null. A set-off cluster charge's
+ * Metres along a ray from `origin` (unit `dir`) to where it meets an entry's box, or null. A set-off hailstone drill's
  * tube (Phase 8 M5, gadgets/cluster.ts) is part of it: it can be shot from the surface's far side. One built of parts
  * (partBoxes) is met where the ray meets its first part.
  */
@@ -126,12 +129,12 @@ export function gadgetOnRay(table: GadgetTable, data: GameData, origin: Vec3, di
 }
 
 /**
- * The Bulletproof Cameras a bullet (`anyFace` false) or a knife breaks along a ray before `maxT`: a bullet coming at
- * a camera's front within data/intel.json `bulletproofCamera.frontDeg` of straight on meets its plate and leaves it
+ * The Armoured Cameras a bullet (`anyFace` false) or a knife breaks along a ray before `maxT`: a bullet coming at
+ * a camera's front within data/intel.json `armouredCamera.frontDeg` of straight on meets its plate and leaves it
  * whole; from the side or the back, or the knife on any face, it breaks. Broken ones are left out.
  */
-export function bpCamsBroken(cams: readonly Gadget[], data: GameData, origin: Vec3, dir: Vec3, maxT: number, anyFace = false): Gadget[] {
-  const plate = Math.cos(data.intel.bulletproofCamera.frontDeg * DEG);
+export function armouredCamsBroken(cams: readonly Gadget[], data: GameData, origin: Vec3, dir: Vec3, maxT: number, anyFace = false): Gadget[] {
+  const plate = Math.cos(data.intel.armouredCamera.frontDeg * DEG);
   const out: Gadget[] = [];
   for (const c of cams) {
     if (c.flags & GFlag.Broken) continue;

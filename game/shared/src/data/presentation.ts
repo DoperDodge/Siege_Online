@@ -1,7 +1,7 @@
 // Presentation data (Phase 3 M9): how things look, never how they behave. Client-only in use, kept apart
 // from GameData so it is not part of the simulation data hash (a look change never makes a tab refresh).
 import { z } from "zod";
-import oregonArtJson from "../../../../data/maps/oregon/art.json";
+import millraceArtJson from "../../../../data/maps/millrace/art.json";
 import gunKitJson from "../../../../data/presentation/gun_kit.json";
 import materialsJson from "../../../../data/presentation/materials.json";
 import operatorLooksJson from "../../../../data/presentation/operator_looks.json";
@@ -88,14 +88,14 @@ export const operatorLookSchema = z.strictObject({
   skin: color,
   hair: color,
   accent: color,
-  head: z.enum(["helmet", "cap", "beanie", "hood", "bare", "visor"]),
+  head: z.enum(["helmet", "cap", "beanie", "hood", "bare", "visor", "hardhat", "brim"]),
   headColor: color,
   face: z.enum(["none", "goggles", "glasses", "gasmask", "shield"]),
   ears: z.boolean(),
   sleeves: z.enum(["long", "short"]),
   vestKind: z.enum(["plate", "heavy", "light"]),
   pads: z.boolean(),
-  back: z.enum(["none", "pack", "hammer", "roll", "radio", "jammer", "drone", "tube"]),
+  back: z.enum(["none", "pack", "hammer", "roll", "radio", "jammer", "drone", "tube", "battery", "medbag", "reel", "traps", "studs", "aerial"]),
 });
 export type OperatorLook = z.infer<typeof operatorLookSchema>;
 export const operatorLooksSchema = z.strictObject({
@@ -282,7 +282,7 @@ export function loadArtData(): ArtData {
   const data: ArtData = {
     textures: texturesSchema.parse(texturesJson),
     materials: materialsSchema.parse(materialsJson).materials,
-    maps: new Map([["oregon", mapArtSchema.parse(oregonArtJson)]]),
+    maps: new Map([["millrace", mapArtSchema.parse(millraceArtJson)]]),
   };
   const problems = artProblems(data);
   if (problems.length) throw new Error(`art data: ${problems.join("; ")}`);

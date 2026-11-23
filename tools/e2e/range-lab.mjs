@@ -95,7 +95,8 @@ try {
   const legN = panelNumbers(leg.panel);
   const torso15 = await shootAt({ x: -4, z: 20, yawDeg: -9, pawnId: dummy("Lane 15 m"), part: "torso" });
   const t15 = panelNumbers(torso15.panel);
-  result.limb = { leg: legN, zone: leg.hits[0]?.zone, torso15: t15 };
+  // (Where this page's own trace of the leg shot went, and from where: a miss says why.)
+  result.limb = { leg: legN, zone: leg.hits[0]?.zone, torso15: t15, aimed: leg.shot?.hit?.part ?? null, origin: leg.shot?.origin ?? null };
   result.checks.limbLessThanTorso = leg.hits[0]?.zone === "leg" && legN !== null && legN.dealt === legN.data && t15 !== null && legN.dealt < t15.dealt;
 
   // Down a dummy (the lab damage tool leaves it 40 HP, so a torso shot downs rather than kills), then finish it.
@@ -155,7 +156,7 @@ try {
   await page.evaluate(() => document.querySelector(".gear").click()); // the settings button: opens or closes the pause menu
   await page.evaluate(() =>
     window.__lab.pickLoadout({
-      operator: "sledge",
+      operator: "cleave",
       primary: { weapon: "l85a2", sight: "magnified", barrel: null, grip: null, underbarrel: null },
       secondary: { weapon: "p226_mk_25", sight: null, barrel: null, grip: null, underbarrel: null },
       gadgets: ["frag"],

@@ -3,7 +3,7 @@
 // F2 agreement overlay (every pellet as the server drew it, the target where the server had it rewound, and
 // where you saw it), and a Reset dummies tool.
 import * as THREE from "three";
-import { bulletDamage, encodeLabTool, poseHitboxes, TICK_HZ, zoneOf, type BodyPart, type GameEvent, type Hitbox, type ResolvedWeapon, type ShotResult } from "@redmond/shared";
+import { bulletDamage, encodeLabTool, poseHitboxes, TICK_HZ, zoneOf, type BodyPart, type GameEvent, type Hitbox, type ResolvedWeapon, type ShotResult, type Zone } from "@redmond/shared";
 import { CapsuleParts } from "../render/labScene.js";
 import { escapeHtml } from "../ui/dom.js";
 import type { LabApi } from "./common/lab.js";
@@ -14,9 +14,9 @@ const OVERLAY_MS = 6000;
 const NUMBER_MS = 1000;
 
 /** What the weapon data says one bullet does at `distM` to `part` (or that it kills). */
-export function expectedDamage(lab: Pick<LabApi, "data">, w: ResolvedWeapon, distM: number, part: BodyPart): string {
+export function expectedDamage(lab: Pick<LabApi, "data">, w: ResolvedWeapon, distM: number, zone: Zone): string {
   if (!w.damage) return "";
-  const r = bulletDamage(lab.data.combat, w.damage, distM, zoneOf(part));
+  const r = bulletDamage(lab.data.combat, w.damage, distM, zone);
   if (r.kill) return "a kill (headshot)";
   return w.fire.pellets > 1 ? `${r.amount} a pellet` : String(r.amount);
 }
@@ -37,14 +37,17 @@ export function rangeFeatures(lab: LabApi): void {
     const lines = [`<b>Last shot</b>${weapon ? ` · ${escapeHtml(weapon.name)}` : ""}`];
     if (shot.hit) {
       const part = shot.hit.part as BodyPart;
-      // (Fuze's shield's plate, Phase 8 M11: it takes nothing.)
+      // (Hail's shield's plate, Phase 8 M11: it takes nothing.)
+      // The zone the server confirmed, once it has (your own shot's guess can be a hair off where an arm crosses the
+      // body: the panel compares the damage dealt with the data for where it really landed).
+      const zone = hits[0]?.zone ?? (part === "shield" ? "torso" : zoneOf(part));
       if (part === "shield") lines.push(`${escapeHtml(nameOf(shot.hit.pawnId))} · the shield (no damage) · ${shot.hit.distance.toFixed(1)} m`);
-      else lines.push(`${escapeHtml(nameOf(shot.hit.pawnId))} · ${zoneOf(part)} · ${shot.hit.distance.toFixed(1)} m`);
+      else lines.push(`${escapeHtml(nameOf(shot.hit.pawnId))} · ${zone} · ${shot.hit.distance.toFixed(1)} m`);
       const dealt = hits.reduce((n, h) => n + h.damage, 0);
       // A kill or a down takes only what the body had left.
       const ended = hits.some((h) => h.killed) ? " · kill" : hits.some((h) => h.downed) ? " · down" : "";
       const what = `${dealt}${ended && hits.some((h) => h.hpAfter === 0) ? " (all it had left)" : ""}${ended}`;
-      if (weapon && part !== "shield") lines.push(`Dealt ${hits.length ? what : "…"} — the data says ${expectedDamage(lab, weapon, shot.hit.distance, part)} at this range`);
+      if (weapon && part !== "shield") lines.push(`Dealt ${hits.length ? what : "…"} — the data says ${expectedDamage(lab, weapon, shot.hit.distance, zone)} at this range`);
     } else lines.push(shot.wallDistance !== null ? `Miss · the level at ${shot.wallDistance.toFixed(1)} m` : "Miss");
     if (shot.dirs.length > 1) lines.push(`${shot.dirs.length} pellets${hits.length ? `, ${hits.reduce((n, h) => n + h.pellets, 0)} hit` : ""}`);
     const capped = shot.rewoundTick > shot.viewTick + 1e-6;

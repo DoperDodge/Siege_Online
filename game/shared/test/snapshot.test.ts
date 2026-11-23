@@ -26,7 +26,7 @@ import { input } from "./helpers.js";
 
 async function crowd(n = 10) {
   const sim = await Sim.create("movement_lab");
-  const ctrls = Array.from({ length: n }, (_, i) => sim.addPlayer(`p${i}`, i === 2 ? "skopos" : "sledge"));
+  const ctrls = Array.from({ length: n }, (_, i) => sim.addPlayer(`p${i}`, i === 2 ? "twain" : "cleave"));
   return { sim, ctrls };
 }
 
@@ -100,7 +100,7 @@ describe("snapshot codec", () => {
     const lying = remoteState(floored.have.get(5)!);
     expect([lying.mode, lying.ropeTurn]).toEqual([PawnMode.Knocked, 0]);
     expect(lying.knockLie).toBeCloseTo(0.7, 2);
-    // (Bits 9–10 are Fuze's shield's place, Phase 8 M11: 3 isn't one; 11–13 how far it's slid down; nothing past them.)
+    // (Bits 9–10 are Hail's shield's place, Phase 8 M11: 3 isn't one; 11–13 how far it's slid down; nothing past them.)
     // (Bit 14 is knifing since Phase 10 M10: bit 15 is the one never sent.)
     for (const flags of [quantizeRemote(s).flags | (3 << 9), quantizeRemote(s).flags | 32768]) {
       const bad = { ...quantizeRemote(s), flags };
@@ -136,7 +136,7 @@ describe("snapshot codec", () => {
     }
   });
 
-  it("carries an exact correction for the receiving player (both Skopós shells)", async () => {
+  it("carries an exact correction for the receiving player (both Twain shells)", async () => {
     const { sim, ctrls } = await crowd(3);
     for (let t = 0; t < 90; t++) play(sim, ctrls, t);
     const sk = ctrls[2];

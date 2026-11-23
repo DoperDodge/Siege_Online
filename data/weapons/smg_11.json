@@ -1,5 +1,5 @@
 {
-  "_doc": "SMG-11 (Mute). research/weapons.csv row smg_11; class rules research/weapons_notes.md §4. Extended barrel 35 / min 28 community-measured.",
+  "_doc": "SMG-11 (Lull). research/weapons.csv row smg_11; class rules research/weapons_notes.md §4. Extended barrel 35 / min 28 community-measured.",
   "_season": "Y11S3.1",
   "_unverified": ["damage.extendedBarrel", "damage.falloff", "destruction"],
   "id": "smg_11",

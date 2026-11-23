@@ -1,0 +1,783 @@
+{
+  "_doc": "Millrace's cellars, the tunnel, the boiler house's cellar and the millrace (ours, D-183): wall lines in world u.",
+  "floor": "B",
+  "frame": "world",
+  "walls": [
+    {
+      "id": "B.N",
+      "axis": "H",
+      "at": 0.0,
+      "span": [
+        0.0,
+        400.0
+      ],
+      "weight": "ext",
+      "kind": "wall",
+      "spans": [],
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "B.E",
+      "axis": "V",
+      "at": 400.0,
+      "span": [
+        0.0,
+        186.667
+      ],
+      "weight": "ext",
+      "kind": "wall",
+      "spans": [],
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "B.SO",
+      "axis": "H",
+      "at": 186.667,
+      "span": [
+        320.0,
+        400.0
+      ],
+      "weight": "ext",
+      "kind": "wall",
+      "spans": [],
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "B.WO",
+      "axis": "V",
+      "at": 320.0,
+      "span": [
+        133.333,
+        186.667
+      ],
+      "weight": "ext",
+      "kind": "wall",
+      "spans": [],
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "B.S",
+      "axis": "H",
+      "at": 133.333,
+      "span": [
+        0.0,
+        90.0
+      ],
+      "weight": "ext",
+      "kind": "wall",
+      "spans": [],
+      "src": "hand",
+      "note": "the mill's south cellar wall, west of the tunnel",
+      "_unverified": []
+    },
+    {
+      "id": "B.S2",
+      "axis": "H",
+      "at": 133.333,
+      "span": [
+        110.0,
+        320.0
+      ],
+      "weight": "ext",
+      "kind": "wall",
+      "spans": [],
+      "src": "hand",
+      "note": "the mill's south cellar wall, east of the tunnel",
+      "_unverified": []
+    },
+    {
+      "id": "B.W",
+      "axis": "V",
+      "at": 0.0,
+      "span": [
+        -40.0,
+        226.667
+      ],
+      "weight": "ext",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "OPEN",
+          "id": "B.o001",
+          "at": [
+            53.333,
+            76.667
+          ]
+        }
+      ],
+      "src": "hand",
+      "note": "the millrace's east side: the mill's west cellar wall and its banks; the Wheel Pit's arch",
+      "_unverified": []
+    },
+    {
+      "id": "B.RW",
+      "axis": "V",
+      "at": -33.333,
+      "span": [
+        -40.0,
+        226.667
+      ],
+      "weight": "ext",
+      "kind": "wall",
+      "spans": [],
+      "src": "hand",
+      "note": "the millrace's west side",
+      "_unverified": []
+    },
+    {
+      "id": "B.RN",
+      "axis": "H",
+      "at": -40.0,
+      "span": [
+        -33.333,
+        0.0
+      ],
+      "weight": "ext",
+      "kind": "wall",
+      "spans": [],
+      "src": "hand",
+      "note": "the millrace's north end",
+      "_unverified": []
+    },
+    {
+      "id": "B.RS",
+      "axis": "H",
+      "at": 226.667,
+      "span": [
+        -33.333,
+        0.0
+      ],
+      "weight": "ext",
+      "kind": "wall",
+      "spans": [],
+      "src": "hand",
+      "note": "the millrace's south end, where its steps come up",
+      "_unverified": []
+    },
+    {
+      "id": "B.Tw",
+      "axis": "V",
+      "at": 90.0,
+      "span": [
+        93.333,
+        173.333
+      ],
+      "weight": "ext",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "SOFT",
+          "id": "SW-B-10",
+          "at": [
+            100.0,
+            126.667
+          ],
+          "sections": 2,
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "the tunnel's west wall (Valve Room | Tunnel, then earth)",
+      "_unverified": []
+    },
+    {
+      "id": "B.Te",
+      "axis": "V",
+      "at": 110.0,
+      "span": [
+        93.333,
+        173.333
+      ],
+      "weight": "ext",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "DOOR",
+          "id": "B.o025",
+          "at": [
+            106.667,
+            116.667
+          ],
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "the tunnel's east wall (Lye Store | Tunnel, then earth)",
+      "_unverified": []
+    },
+    {
+      "id": "B.BN",
+      "axis": "H",
+      "at": 173.333,
+      "span": [
+        53.333,
+        146.667
+      ],
+      "weight": "ext",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "OPEN",
+          "id": "B.o003",
+          "at": [
+            90.0,
+            110.0
+          ]
+        }
+      ],
+      "src": "hand",
+      "note": "the boiler house's north cellar wall, open on the tunnel",
+      "_unverified": []
+    },
+    {
+      "id": "B.BW",
+      "axis": "V",
+      "at": 53.333,
+      "span": [
+        173.333,
+        253.333
+      ],
+      "weight": "ext",
+      "kind": "wall",
+      "spans": [],
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "B.BE",
+      "axis": "V",
+      "at": 146.667,
+      "span": [
+        173.333,
+        253.333
+      ],
+      "weight": "ext",
+      "kind": "wall",
+      "spans": [],
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "B.BS",
+      "axis": "H",
+      "at": 253.333,
+      "span": [
+        53.333,
+        146.667
+      ],
+      "weight": "ext",
+      "kind": "wall",
+      "spans": [],
+      "src": "hand",
+      "_unverified": []
+    },
+    {
+      "id": "B.w033",
+      "axis": "H",
+      "at": 220.0,
+      "span": [
+        53.333,
+        146.667
+      ],
+      "weight": "int",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "SOFT",
+          "id": "SW-B-01",
+          "at": [
+            60.0,
+            86.667
+          ],
+          "sections": 2,
+          "_unverified": []
+        },
+        {
+          "kind": "DOOR",
+          "id": "B.o004",
+          "at": [
+            93.333,
+            103.333
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "SOFT",
+          "id": "SW-B-02",
+          "at": [
+            113.333,
+            130.0
+          ],
+          "sections": 2,
+          "_unverified": []
+        },
+        {
+          "kind": "DRONE_HOLE",
+          "id": "B.dt1",
+          "at": [
+            136.667,
+            139.333
+          ],
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "Boiler Room | Coal Store",
+      "_unverified": []
+    },
+    {
+      "id": "B.w004",
+      "axis": "H",
+      "at": 26.667,
+      "span": [
+        0.0,
+        53.333
+      ],
+      "weight": "int",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "DRONE_HOLE",
+          "id": "B.dt2",
+          "at": [
+            13.333,
+            16.0
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "DOOR",
+          "id": "B.o013",
+          "at": [
+            33.333,
+            43.333
+          ],
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "Pit Stores | Wheel Pit",
+      "_unverified": []
+    },
+    {
+      "id": "B.w014w",
+      "axis": "H",
+      "at": 93.333,
+      "span": [
+        0.0,
+        53.333
+      ],
+      "weight": "int",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "DOOR",
+          "id": "B.o014",
+          "at": [
+            10.0,
+            20.0
+          ],
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "Wheel Pit | Sluice Room",
+      "_unverified": []
+    },
+    {
+      "id": "B.w008",
+      "axis": "V",
+      "at": 53.333,
+      "span": [
+        0.0,
+        133.333
+      ],
+      "weight": "int",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "DOOR",
+          "id": "B.o011",
+          "at": [
+            10.667,
+            20.667
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "SOFT",
+          "id": "SW-B-04",
+          "at": [
+            40.0,
+            66.667
+          ],
+          "sections": 2,
+          "_unverified": []
+        },
+        {
+          "kind": "DOOR",
+          "id": "B.o012",
+          "at": [
+            76.667,
+            86.667
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "SOFT",
+          "id": "SW-B-05",
+          "at": [
+            100.0,
+            126.667
+          ],
+          "sections": 2,
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "Pit Stores, Wheel Pit, Sluice Room | Dye Vats, the Cellar Corridor, Valve Room",
+      "_unverified": []
+    },
+    {
+      "id": "B.w011",
+      "axis": "H",
+      "at": 73.333,
+      "span": [
+        53.333,
+        266.667
+      ],
+      "weight": "int",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "DOOR",
+          "id": "B.o015",
+          "at": [
+            80.0,
+            90.0
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "DOOR",
+          "id": "B.o016",
+          "at": [
+            133.333,
+            143.333
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "SOFT",
+          "id": "SW-B-06",
+          "at": [
+            173.333,
+            200.0
+          ],
+          "sections": 2,
+          "_unverified": []
+        },
+        {
+          "kind": "DOOR",
+          "id": "B.o017",
+          "at": [
+            226.667,
+            236.667
+          ],
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "the rooms north | the Cellar Corridor",
+      "_unverified": []
+    },
+    {
+      "id": "B.w018",
+      "axis": "V",
+      "at": 120.0,
+      "span": [
+        0.0,
+        73.333
+      ],
+      "weight": "int",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "DOOR",
+          "id": "B.o018",
+          "at": [
+            23.333,
+            33.333
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "SOFT",
+          "id": "SW-B-07",
+          "at": [
+            43.333,
+            66.667
+          ],
+          "sections": 2,
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "Dye Vats | Rinse Room",
+      "_unverified": []
+    },
+    {
+      "id": "B.w024n",
+      "axis": "V",
+      "at": 160.0,
+      "span": [
+        0.0,
+        73.333
+      ],
+      "weight": "int",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "SOFT",
+          "id": "SW-B-08",
+          "at": [
+            10.0,
+            36.667
+          ],
+          "sections": 2,
+          "_unverified": []
+        },
+        {
+          "kind": "DOOR",
+          "id": "B.o019",
+          "at": [
+            50.0,
+            60.0
+          ],
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "Rinse Room | Bolt Store",
+      "_unverified": []
+    },
+    {
+      "id": "B.w033n",
+      "axis": "V",
+      "at": 220.0,
+      "span": [
+        0.0,
+        73.333
+      ],
+      "weight": "int",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "DOOR",
+          "id": "B.o020",
+          "at": [
+            20.0,
+            30.0
+          ],
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "Bolt Store | Workshop",
+      "_unverified": []
+    },
+    {
+      "id": "B.w014",
+      "axis": "H",
+      "at": 93.333,
+      "span": [
+        53.333,
+        266.667
+      ],
+      "weight": "int",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "DOOR",
+          "id": "B.o021",
+          "at": [
+            66.667,
+            76.667
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "OPEN",
+          "id": "B.o022",
+          "at": [
+            90.0,
+            110.0
+          ]
+        },
+        {
+          "kind": "DOOR",
+          "id": "B.o023",
+          "at": [
+            126.667,
+            136.667
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "SOFT",
+          "id": "SW-B-09",
+          "at": [
+            173.333,
+            200.0
+          ],
+          "sections": 2,
+          "_unverified": []
+        },
+        {
+          "kind": "DOOR",
+          "id": "B.o024",
+          "at": [
+            233.333,
+            243.333
+          ],
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "the Cellar Corridor | the rooms south",
+      "_unverified": []
+    },
+    {
+      "id": "B.w024s",
+      "axis": "V",
+      "at": 160.0,
+      "span": [
+        93.333,
+        133.333
+      ],
+      "weight": "int",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "DOOR",
+          "id": "B.o026",
+          "at": [
+            106.667,
+            116.667
+          ],
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "Lye Store | Sorting Room",
+      "_unverified": []
+    },
+    {
+      "id": "B.w040",
+      "axis": "V",
+      "at": 266.667,
+      "span": [
+        0.0,
+        133.333
+      ],
+      "weight": "int",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "DOOR",
+          "id": "B.o010",
+          "at": [
+            43.333,
+            53.333
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "OPEN",
+          "id": "B.o027",
+          "at": [
+            73.333,
+            93.333
+          ]
+        },
+        {
+          "kind": "SOFT",
+          "id": "SW-B-11",
+          "at": [
+            100.0,
+            126.667
+          ],
+          "sections": 2,
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "Workshop, the Cellar Corridor, Sorting Room | Cellar Stairs",
+      "_unverified": []
+    },
+    {
+      "id": "B.w048",
+      "axis": "V",
+      "at": 320.0,
+      "span": [
+        0.0,
+        133.333
+      ],
+      "weight": "int",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "DOOR",
+          "id": "B.o005",
+          "at": [
+            53.333,
+            63.333
+          ],
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "Cellar Stairs | Pump Room, Strongroom",
+      "_unverified": []
+    },
+    {
+      "id": "B.w014o",
+      "axis": "H",
+      "at": 93.333,
+      "span": [
+        320.0,
+        400.0
+      ],
+      "weight": "int",
+      "kind": "wall",
+      "spans": [
+        {
+          "kind": "DOOR",
+          "id": "B.o006",
+          "at": [
+            340.0,
+            350.0
+          ],
+          "_unverified": []
+        },
+        {
+          "kind": "SOFT",
+          "id": "SW-B-03",
+          "at": [
+            366.667,
+            393.333
+          ],
+          "sections": 2,
+          "_unverified": []
+        }
+      ],
+      "src": "hand",
+      "note": "Pump Room | Strongroom",
+      "_unverified": []
+    }
+  ]
+}

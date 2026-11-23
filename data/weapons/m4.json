@@ -1,5 +1,5 @@
 {
-  "_doc": "M4 (Striker). research/weapons.csv row m4; class rules research/weapons_notes.md §4. Extended barrel 49 / min 39 and ammo-refill 1.31 / 2.70 s community-measured.",
+  "_doc": "M4 (Pointman). research/weapons.csv row m4; class rules research/weapons_notes.md §4. Extended barrel 49 / min 39 and ammo-refill 1.31 / 2.70 s community-measured.",
   "_season": "Y11S3.1",
   "_unverified": [
     "damage.extendedBarrel",

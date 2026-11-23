@@ -1,10 +1,10 @@
-// The long bot soak by hand (Phase 9 M10; PLAN §19): every Oregon site, a few rounds each, one report.
-//   npm run soak [-- --rounds 3 --seed 5 --site SITE_DINING --dump]
+// The long bot soak by hand (Phase 9 M10; PLAN §19): every site of a map, a few rounds each, one report.
+//   npm run soak [-- --rounds 3 --seed 5 --site SITE_MILL --map millrace --dump]
 // prints each site's line and each stuck bot (with --dump, what's round it: panels, gadgets, bodies), writes
 // builds/soak/soak.json; exits 1 on a problem.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Room } from "@redmond/shared";
+import { loadGameData, type Room } from "@redmond/shared";
 import { soak, type SoakReport } from "./soak.js";
 
 const arg = (name: string, def: string) => {
@@ -28,8 +28,13 @@ const dump = (room: Room, id: number) => {
   console.log(`    near: ${[...panels, ...gadgets, ...bodies].join("; ") || "nothing"}`);
 };
 const reports: SoakReport[] = [];
-for (const site of only ? [only] : ["SITE_LAUNDRY", "SITE_DINING", "SITE_MEETING", "SITE_DORMS"]) {
-  const r = await soak(site, rounds, seed, process.argv.includes("--dump") ? dump : undefined);
+const map = arg("map", "millrace");
+const level = loadGameData().levels.get(map);
+if (!level) throw new Error(`soak: no map "${map}"`);
+const sites = level.sites.map((s) => s.id);
+if (!only && !sites.length) throw new Error(`soak: map "${map}" has no bomb sites (name one with --site)`);
+for (const site of only ? [only] : sites) {
+  const r = await soak(site, rounds, seed, process.argv.includes("--dump") ? dump : undefined, map);
   reports.push(r);
   console.log(`${site}: ${r.rounds} rounds, ${r.ticks} ticks in ${r.seconds} s; tick p50 ${r.tickMs.p50} / p99 ${r.tickMs.p99} / max ${r.tickMs.max} ms; desyncs ${r.desyncs.panel}/${r.desyncs.gadget}; stuck ${r.stuck.length}${r.crash ? `; CRASH ${r.crash.split("\n")[0]}` : ""}`);
   for (const s of r.stuck) console.log(`  stuck: ${s.bot} (${s.op}, ${s.doing}) at ${s.at.join(", ")} going to ${s.goal?.join(", ") ?? "-"} by ${JSON.stringify(s.path)}: ${s.task}`);

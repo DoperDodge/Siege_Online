@@ -85,7 +85,7 @@ const B_HEAD = { yaw: 0, pitch: 0, buttons: Btn.Ads };
 
 describe("damage and death through the room", () => {
   it("a body hit costs the victim its health and exactly one forced correction, never a misprediction", async () => {
-    const h = await harness(["sledge", "mute"]);
+    const h = await harness(["cleave", "lull"]);
     const [a, b] = h.clients;
     h.faceOff();
     h.ticks(40, [A_TORSO]);
@@ -112,7 +112,7 @@ describe("damage and death through the room", () => {
   });
 
   it("ten hits in a second: ten forced corrections at most, still no mispredictions", async () => {
-    const h = await harness(["sledge"]);
+    const h = await harness(["cleave"]);
     const [a] = h.clients;
     const before = { ...h.info(a) };
     for (let i = 0; i < 10; i++) {
@@ -128,7 +128,7 @@ describe("damage and death through the room", () => {
   });
 
   it("a headshot kills: everyone gets the kill, and the dead can't fire what they had queued", async () => {
-    const h = await harness(["sledge", "mute", "pulse"]);
+    const h = await harness(["cleave", "lull", "murmur"]);
     const [a, b, c] = h.clients;
     h.faceOff();
     h.ticks(40, [A_HEAD, B_HEAD]);
@@ -149,7 +149,7 @@ describe("damage and death through the room", () => {
   });
 
   it("two players who shoot each other in the same tick both die, whoever joined first", async () => {
-    for (const order of [["sledge", "mute"], ["mute", "sledge"]]) {
+    for (const order of [["cleave", "lull"], ["lull", "cleave"]]) {
       const h = await harness(order);
       const [a, b] = h.clients;
       h.faceOff();
@@ -165,7 +165,7 @@ describe("damage and death through the room", () => {
   });
 
   it("friendly fire is on in lab rooms (D-051): a teammate takes the hit, flagged friendly", async () => {
-    const h = await harness(["sledge", "thermite"]); // both attackers
+    const h = await harness(["cleave", "kiln"]); // both attackers
     const [a, b] = h.clients;
     h.faceOff();
     h.ticks(40, [A_TORSO]);
@@ -177,7 +177,7 @@ describe("damage and death through the room", () => {
   });
 
   it("reverse friendly fire, once past the threshold, reflects team damage onto the shooter", async () => {
-    const h = await harness(["sledge", "thermite"]);
+    const h = await harness(["cleave", "kiln"]);
     const [a, b] = h.clients;
     Object.assign(h.room.rules.reverseFriendlyFire, { enabled: true, thresholdHp: 30 });
     try {
@@ -196,8 +196,8 @@ describe("damage and death through the room", () => {
     }
   });
 
-  it("Skopós: losing the idle shell isn't an elimination (and ends swapping); losing the one she's in is", async () => {
-    const h = await harness(["sledge", "skopos"]);
+  it("Twain: losing the idle shell isn't an elimination (and ends swapping); losing the one she's in is", async () => {
+    const h = await harness(["cleave", "twain"]);
     const [a, b] = h.clients;
     const ctrl = h.room.sim.controllers.get(b.session.ctrl!.id)!;
     const [active, idle] = [ctrl.possessedPawnId, ctrl.pawnIds.find((id) => id !== ctrl.possessedPawnId)!];
@@ -224,7 +224,7 @@ describe("damage and death through the room", () => {
   });
 
   it("the lab damage tool only hurts your own bodies", async () => {
-    const h = await harness(["sledge", "mute"]);
+    const h = await harness(["cleave", "lull"]);
     const [a, b] = h.clients;
     a.lab({ kind: "damage", pawnId: h.pawnOf(b).id, amount: 50, kill: false });
     h.ticks(2);
@@ -237,7 +237,7 @@ describe("damage and death through the room", () => {
 
   it("the same inputs into two rooms with the same seed give the same events, spread and all", async () => {
     const run = async () => {
-      const h = await harness(["sledge", "mute"], { seed: 99 });
+      const h = await harness(["cleave", "lull"], { seed: 99 });
       h.faceOff();
       h.ticks(10);
       for (let i = 0; i < 120; i++) h.tick([{ yaw: Math.PI + Math.sin(i / 9) * 0.05, pitch: -0.03, buttons: i % 30 < 12 ? Btn.Fire : 0 }]);
@@ -266,7 +266,7 @@ describe("down but not out through the room (Phase 3 M7)", () => {
   };
 
   it("going down costs the victim one forced correction and then none while crawling; everyone hears of it", async () => {
-    const h = await harness(["sledge", "mute", "pulse"]);
+    const h = await harness(["cleave", "lull", "murmur"]);
     const [a, b, c] = h.clients;
     h.faceOff();
     h.ticks(40, [A_TORSO]);
@@ -285,8 +285,8 @@ describe("down but not out through the room (Phase 3 M7)", () => {
   });
 
   it("a revive: the downed player's client gets two corrections (start, end), the reviver's none", async () => {
-    // Sledge and Thermite are teammates; Pulse shoots Sledge down.
-    const h = await harness(["pulse", "sledge", "thermite"]);
+    // Cleave and Kiln are teammates; Murmur shoots Cleave down.
+    const h = await harness(["murmur", "cleave", "kiln"]);
     const [a, b, c] = h.clients;
     h.faceOff();
     h.ticks(40, [A_TORSO]);
@@ -309,7 +309,7 @@ describe("down but not out through the room (Phase 3 M7)", () => {
   });
 
   it("the player who downed someone gets the kill; whoever finishes them gets the assist", async () => {
-    const h = await harness(["sledge", "mute", "thermite"]);
+    const h = await harness(["cleave", "lull", "kiln"]);
     const [a, b, c] = h.clients;
     h.faceOff();
     c.lab({ kind: "teleport", x: 2, y: 0, z: 4, yawDeg: 180 });
@@ -335,7 +335,7 @@ describe("down but not out through the room (Phase 3 M7)", () => {
   });
 
   it("a downed body the kill plane brings back no longer credits whoever downed it", async () => {
-    const h = await harness(["sledge", "mute"]);
+    const h = await harness(["cleave", "lull"]);
     const [, b] = h.clients;
     h.faceOff();
     h.ticks(40, [A_TORSO]);
@@ -354,7 +354,7 @@ describe("down but not out through the room (Phase 3 M7)", () => {
   });
 
   it("bleeding out is credited to whoever downed you", async () => {
-    const h = await harness(["sledge", "mute"]);
+    const h = await harness(["cleave", "lull"]);
     const [a, b] = h.clients;
     h.faceOff();
     h.ticks(40, [A_TORSO]);
@@ -370,7 +370,7 @@ describe("down but not out through the room (Phase 3 M7)", () => {
 
 describe("the knife through the room (Phase 3 M8)", () => {
   it("kills a standing player and finishes a downed one; the hit marker and the kill feed say knife", async () => {
-    const h = await harness(["sledge", "mute", "pulse"]);
+    const h = await harness(["cleave", "lull", "murmur"]);
     const [a, b, c] = h.clients;
     a.lab({ kind: "teleport", x: 0, y: 0, z: 12, yawDeg: 0 });
     b.lab({ kind: "teleport", x: 0, y: 0, z: 10.9, yawDeg: 180 });
@@ -392,7 +392,7 @@ describe("the knife through the room (Phase 3 M8)", () => {
   });
 
   it("two knives in the same tick both land", async () => {
-    const h = await harness(["sledge", "mute"]);
+    const h = await harness(["cleave", "lull"]);
     const [a, b] = h.clients;
     a.lab({ kind: "teleport", x: 0, y: 0, z: 12, yawDeg: 0 });
     b.lab({ kind: "teleport", x: 0, y: 0, z: 10.9, yawDeg: 180 });
@@ -404,7 +404,7 @@ describe("the knife through the room (Phase 3 M8)", () => {
 
   it("at 100 ms round trip a sprinting target is knifed where the attacker saw it; without rewinding, missed", async () => {
     const outcome = async (maxRewindTicks: number) => {
-      const h = await harness(["sledge", "mute"], { oneWayTicks: 3, maxRewindTicks });
+      const h = await harness(["cleave", "lull"], { oneWayTicks: 3, maxRewindTicks });
       const [a, b] = h.clients;
       a.lab({ kind: "teleport", x: 0, y: 0, z: 12, yawDeg: 0 });
       b.lab({ kind: "teleport", x: -7, y: 0, z: 10.9, yawDeg: -90 }); // facing +X, across A's view

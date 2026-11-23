@@ -36,7 +36,7 @@ export function feedLine(e: GameEvent, n: FeedNames, me: FeedViewer): { text: st
   const how = weaponTag(e, n);
   const text =
     e.kind === "shellDestroyed"
-      ? `${killer ?? "?"}${how} destroyed ${victim}'s idle shell`
+      ? `${killer ?? "?"}${how} destroyed ${victim}'s idle frame`
       : killer
         ? `${killer}${how} ${e.friendly ? "team-killed" : "eliminated"} ${victim}${e.assistCtrl ? ` (finished by ${n.ctrl(e.assistCtrl)})` : ""}${e.cause === Cause.Bleed ? " (bled out)" : ""}`
         : e.cause === Cause.Left

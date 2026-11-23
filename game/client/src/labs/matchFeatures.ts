@@ -847,7 +847,7 @@ export function matchFeatures(lab: LabApi): void {
     banner.classList.toggle("hidden", !showBanner);
     if (showBanner) {
       const mine = me ? me.team === last.winner : null;
-      const report = lastReport && lastReport.round === last.round ? reportHtml(lastReport, lab.data) : "";
+      const report = lastReport && lastReport.round === last.round ? reportHtml(lastReport, lab.data, lab.sim.level.def) : "";
       const html = `<div class="title team-${last.winner}">${TEAM_NAMES[last.winner].toUpperCase()} WINS ROUND ${last.round}</div><div class="why">${reasonText(last)}</div>${
         mine === null ? "" : `<div class="you ${mine ? "won" : "lost"}">${mine ? "Round won" : "Round lost"}</div>`
       }${report}`;
@@ -882,12 +882,12 @@ export function matchFeatures(lab: LabApi): void {
   lab.addHelp(`<kbd>${keyLabel(keys.drop)}</kbd>`, "Drop the defuser (attackers)");
   lab.addHelp(
     `<kbd>${keyLabel(keys.observe)}</kbd>`,
-    `Drones (attackers): go to one of yours out (or a teammate's), and back; on one ${keyLabel(keys.leanLeft)} / ${keyLabel(keys.leanRight)} switch, ${keyLabel(keys.vault)} jumps, ${keyLabel(keys.sprint)} boosts. Cameras (defenders): open them on the one you were last on, and back; ${keyLabel(keys.leanLeft)} / ${keyLabel(keys.leanRight)} switch, and each stays looking where you left it (Skopós: your other shell is one of them)`,
+    `Drones (attackers): go to one of yours out (or a teammate's), and back; on one ${keyLabel(keys.leanLeft)} / ${keyLabel(keys.leanRight)} switch, ${keyLabel(keys.vault)} jumps, ${keyLabel(keys.sprint)} boosts. Cameras (defenders): open them on the one you were last on, and back; ${keyLabel(keys.leanLeft)} / ${keyLabel(keys.leanRight)} switch, and each stays looking where you left it (Twain: your other frame is one of them)`,
   );
   lab.addHelp(`<kbd>${keyLabel(keys.throwDrone)}</kbd>`, "Throw a drone you have in hand, and drive it (attackers)");
   lab.addHelp(
-    `<kbd>${keyLabel(keys.gadget)}</kbd> (Bulletproof Camera)`,
-    `Defenders who took it: take it out, then hold left mouse at a wall or the floor in front of you (${(lab.data.gadgets.get("bulletproof_camera")!.use as { placeS: number }).placeS} s); it joins the cameras (after the level's). Watching it, ${keyLabel(keys.gadget)} fires its EMP dart: drones in its burst are jammed for ${lab.data.intel.bulletproofCamera.disableS} s (ready again ${lab.data.intel.bulletproofCamera.dartRechargeS} s later). Its front is bulletproof; its sides and back aren't`,
+    `<kbd>${keyLabel(keys.gadget)}</kbd> (Armoured Camera)`,
+    `Defenders who took it: take it out, then hold left mouse at a wall or the floor in front of you (${(lab.data.gadgets.get("armoured_camera")!.use as { placeS: number }).placeS} s); it joins the cameras (after the level's). Watching it, ${keyLabel(keys.gadget)} fires its EMP dart: drones in its burst are jammed for ${lab.data.intel.armouredCamera.disableS} s (ready again ${lab.data.intel.armouredCamera.dartRechargeS} s later). Its front is bulletproof; its sides and back aren't`,
   );
   lab.addHelp(
     "Hold left mouse (on a drone or a camera)",

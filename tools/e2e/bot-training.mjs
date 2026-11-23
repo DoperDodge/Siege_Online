@@ -101,10 +101,12 @@ try {
     await sleep(8000);
     await page.screenshot({ path: shot(`bots-prep-${round}.png`) });
     await phase(P.Action, 30000);
-    // Action: the bots' bodies get about (a few metres in ten seconds), and they fight (the feed has shots, downs, kills).
+    // Action: the bots' bodies get about (a few metres in ten seconds of the game: a slow machine plays fewer ticks a
+    // second, so it's counted in the page's ticks, not the clock's), and they fight (the feed has shots, downs, kills).
     const where = () => page.evaluate(() => window.__lab.net.remotes.filter((x) => x.state).map((x) => ({ id: x.id, p: [x.state.x, x.state.y, x.state.z] })));
     const before = await where();
-    await sleep(10000);
+    const t0 = await page.evaluate(() => window.__lab.tick);
+    await until((t) => window.__lab.tick >= t, t0 + 10 * 64, 90000).catch(() => {});
     const after = await where();
     const moved = before.filter((b) => {
       const a = after.find((x) => x.id === b.id);

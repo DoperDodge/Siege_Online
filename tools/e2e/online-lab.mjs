@@ -156,7 +156,7 @@ try {
   const kill = (n) => n.events.find((e) => e.kind === "kill");
   result.kill = { a: kill(aDead), b: kill(bAfterKill), aMessage: await a.locator(".center-msg").textContent() };
   result.checks.headshotKills = aDead.dead && kill(bAfterKill)?.headshot === true && kill(aDead)?.victimPawn === aDead.pawnId;
-  // (Both players are Sledge here, so it's a team kill: friendly fire is on in lab rooms, D-051.)
+  // (Both players are Cleave here, so it's a team kill: friendly fire is on in lab rooms, D-051.)
   const fed = /eliminated|team-killed/;
   result.checks.killFeedOnBoth = fed.test(await a.locator(".killfeed").textContent()) && fed.test(await b.locator(".killfeed").textContent());
   result.checks.deathMessageNamesKiller = /Killed by/.test(result.kill.aMessage ?? "");
@@ -195,12 +195,12 @@ try {
   result.revive = { downMode: aDown.own?.mode, downHp: aDown.own?.downHp, upMode: aUp.own?.mode, upHp: aUp.own?.hp, events: aUp.events.filter((e) => e.kind.startsWith("revive") || e.kind === "down").map((e) => e.kind) };
   result.checks.downThenRevived = aDown.own?.mode === 4 && aUp.own?.mode === 0 && aUp.own?.hp === 20 && aUp.events.some((e) => e.kind === "reviveEnd" && e.completed);
 
-  // A loadout pick (Phase 3 M4): B takes Brava with the PARA-308, a magnified sight and an angled grip. A new
+  // A loadout pick (Phase 3 M4): B takes Patch with the PARA-308, a magnified sight and an angled grip. A new
   // body arrives carrying it, at the cost of exactly one correction, and A's roster shows it.
   const beforePick = await net(b);
   await b.evaluate(() =>
     window.__lab.pickLoadout({
-      operator: "brava",
+      operator: "patch",
       primary: { weapon: "para_308", sight: "magnified", barrel: null, grip: "angled", underbarrel: null },
       secondary: { weapon: "usp40", sight: null, barrel: "suppressor", grip: null, underbarrel: null },
       gadgets: ["claymore"],
@@ -211,7 +211,7 @@ try {
   const afterPick = await net(b);
   result.pick = { weapon: afterPick.weapon, corrections: afterPick.corrections - beforePick.corrections };
   result.checks.loadoutPicked = afterPick.weapon?.id === "para_308" && afterPick.weapon.loaded === 31 && afterPick.corrections - beforePick.corrections === 1;
-  result.checks.othersSeeLoadout = (await a.evaluate(() => window.__lab.net.roster?.find((e) => e.operatorId === "brava")?.loadout.primary.sight)) === "magnified";
+  result.checks.othersSeeLoadout = (await a.evaluate(() => window.__lab.net.roster?.find((e) => e.operatorId === "patch")?.loadout.primary.sight)) === "magnified";
 
   const stats = await (await fetch(`${BASE}/stats`)).json();
   result.stats = stats;

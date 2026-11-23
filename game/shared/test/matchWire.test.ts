@@ -36,7 +36,7 @@ describe("match messages", () => {
       { kind: "change", change: { kind: "reinforcementScaling", value: "full" } },
       { kind: "change", change: { kind: "rules", rules: { match: { rounds: 4 } } } },
       { kind: "change", change: { kind: "bots", bots: null } },
-      { kind: "change", change: { kind: "bots", bots: { fill: true, size: [1, 5], difficulty: ["elite", "recruit"], picks: "counter", site: "SITE_LAUNDRY" } } },
+      { kind: "change", change: { kind: "bots", bots: { fill: true, size: [1, 5], difficulty: ["elite", "recruit"], picks: "counter", site: "SITE_BOILER" } } },
       { kind: "change", change: { kind: "bots", bots: { fill: false, size: [5, 5], difficulty: ["normal", "hard"], picks: "fixed", site: null } } },
       { kind: "start" },
       { kind: "backToLobby" },
@@ -53,9 +53,9 @@ describe("match messages", () => {
 
   it("match actions round-trip; none is the empty id", () => {
     const all: MatchAction[] = [
-      { kind: "banVote", operator: "mute" },
+      { kind: "banVote", operator: "lull" },
       { kind: "banVote", operator: null },
-      { kind: "siteVote", site: "SITE_DORMS" },
+      { kind: "siteVote", site: "SITE_OFFICES" },
       { kind: "spawn", group: "A_JUNKYARD" },
       { kind: "defuser", take: false },
     ];
@@ -77,15 +77,15 @@ describe("match messages", () => {
       private: false,
       redWalls: true,
       players: [
-        { id: 1, name: "Ana", team: 0, ready: true, connected: true, side: 1, alive: true, safe: false, operator: "mute", spawn: null, banVote: "sledge", siteVote: "SITE_DORMS", locked: "pulse", kills: 4, deaths: 2, assists: 1, rating: 1100, newRating: 1116, bot: null },
-        { id: 2, name: "Bo", team: 1, ready: false, connected: false, side: null, alive: false, safe: true, operator: null, spawn: "B_STREET", banVote: null, siteVote: null, locked: null, kills: 0, deaths: 3, assists: 0, rating: null, newRating: null, bot: "hard" },
+        { id: 1, name: "Ana", team: 0, ready: true, connected: true, side: 1, alive: true, safe: false, operator: "lull", spawn: null, banVote: "cleave", siteVote: "SITE_OFFICES", locked: "murmur", kills: 4, deaths: 2, assists: 1, rating: 1100, newRating: 1116, bot: null },
+        { id: 2, name: "Bo", team: 1, ready: false, connected: false, side: null, alive: false, safe: true, operator: null, spawn: "B_RAIL_SIDING", banVote: null, siteVote: null, locked: null, kills: 0, deaths: 3, assists: 0, rating: null, newRating: null, bot: "hard" },
       ],
-      bans: [["thermite"], ["pulse"]],
-      site: "SITE_LAUNDRY",
+      bans: [["kiln"], ["murmur"]],
+      site: "SITE_BOILER",
       siteRevealed: true,
       carrier: 2,
       safeguardEnd: 70000, camsBroken: 0b101, camsOff: 0b10, camsHacked: 0b100, camsLent: true, camsWatched: 0b1000000010,
-      history: [{ round: 1, attackers: 0, winner: 1, reason: WinReason.Disabled, site: "SITE_DINING" }],
+      history: [{ round: 1, attackers: 0, winner: 1, reason: WinReason.Disabled, site: "SITE_MILL" }],
       winner: null,
       forfeit: false,
       mvp: 0,

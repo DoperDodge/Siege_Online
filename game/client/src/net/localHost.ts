@@ -23,7 +23,7 @@ import {
 
 export const LOCAL_ROOM_CODE = "LOCAL";
 /** The map match rooms are played on (the server's MATCH_LEVEL). */
-const MATCH_LEVEL = "oregon";
+const MATCH_LEVEL = "millrace";
 
 export class LocalHost {
   private state: "hello" | "lobby" | "joining" | "room" | "closed" = "hello";

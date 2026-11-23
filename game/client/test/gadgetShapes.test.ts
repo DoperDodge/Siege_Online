@@ -3,12 +3,17 @@
 // data's size) and fills it; what's held is no bigger than a hand holds; the drone keeps to its size where it's shot.
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { loadGameData } from "@redmond/shared";
+import { loadGameData, salvoCut, studPoints, type GadgetData } from "@redmond/shared";
 import { droneShape, gadgetShape, heldShape, knifeShape, shapeModel, type ShapeMat } from "../src/render/gadgetShapes.js";
 
 const data = loadGameData();
-/** Drawn their own way: the Black Mirror's frame and glass, the Bulletproof Camera, Skopós's shell (its parts), a dropped phone, Brava's drone (a pawn). */
-const OTHERWISE = new Set(["black_mirror", "bulletproof_camera", "shell_shield", "kludge_drone"]);
+/** A salvo's studs (Rivet's, R3: the page passes them from its data). */
+const studsOf = (g: GadgetData) => {
+  const ex = salvoCut(data, g);
+  return ex ? studPoints(ex) : [];
+};
+/** Drawn their own way: the Blind Pane's frame and glass, the Armoured Camera, Twain's shell (its parts), a dropped phone, Patch's drone (a pawn). */
+const OTHERWISE = new Set(["blind_pane", "armoured_camera", "frame_barrier", "crossover_drone"]);
 
 function bounds(parts: Map<ShapeMat, THREE.BufferGeometry>): THREE.Box3 {
   const box = new THREE.Box3();
@@ -30,7 +35,7 @@ describe("the gadgets' shapes (render/gadgetShapes.ts)", () => {
     const problems: string[] = [];
     let shaped = 0;
     for (const g of data.gadgets.values()) {
-      const parts = gadgetShape(g.id, g.sizeM);
+      const parts = gadgetShape(g.id, g.sizeM, studsOf(g));
       if (!parts) {
         if (!OTHERWISE.has(g.id)) problems.push(`${g.id}: no shape`);
         continue;
@@ -77,12 +82,12 @@ describe("the gadgets' shapes (render/gadgetShapes.ts)", () => {
   });
 
   it("the drones keep to their size where they're shot (the antenna stands over it)", () => {
-    for (const [size, kludge] of [
+    for (const [size, crossover] of [
       [data.intel.drone.sizeM, false],
-      [data.gadgets.get("kludge_drone")!.sizeM, true],
+      [data.gadgets.get("crossover_drone")!.sizeM, true],
     ] as const) {
       const [w, h, l] = size;
-      const shape = droneShape(size, kludge);
+      const shape = droneShape(size, crossover);
       const hull = bounds(shape.hull);
       const wheel = bounds(shape.wheel);
       // The hull within the width between the tyres and the length; under it nothing lower than the wheels.
@@ -91,7 +96,7 @@ describe("the gadgets' shapes (render/gadgetShapes.ts)", () => {
       expect(hull.min.z).toBeGreaterThanOrEqual(-l / 2 - 0.006);
       expect(hull.max.z).toBeLessThanOrEqual(l / 2 + 0.006);
       expect(hull.min.y).toBeGreaterThanOrEqual(-h / 2 - 1e-6);
-      // Its antenna (and Brava's spike) may stand over its box; the body itself doesn't.
+      // Its antenna (and Patch's spike) may stand over its box; the body itself doesn't.
       expect(hull.max.y).toBeLessThan(h * 1.6);
       // A wheel: the height of the box, a tyre's width.
       expect(wheel.max.y - wheel.min.y).toBeGreaterThan(h * 0.9);

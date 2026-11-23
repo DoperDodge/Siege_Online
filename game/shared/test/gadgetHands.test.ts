@@ -52,7 +52,7 @@ async function lab(op: string, at: [number, number, number] = [0, 0, 10], yawDeg
 
 describe("taking a gadget out and putting it away (Phase 8 M1)", () => {
   it("the gadget key takes slot 1's out over its equip time and puts it away; the weapon fires only once it's back up", async () => {
-    const { s, step, of, equip } = await lab("sledge");
+    const { s, step, of, equip } = await lab("cleave");
     expect([s.g1, s.g2, s.hand]).toEqual([2, 25, Hand.Weapon]); // two frags; his hammer's 25 charges in slot 2 (M4)
     step({ buttons: Btn.Gadget });
     expect([s.hand, s.gAct]).toEqual([Hand.Gadget, GadgetAct.Equip]);
@@ -73,8 +73,8 @@ describe("taking a gadget out and putting it away (Phase 8 M1)", () => {
   });
 
   it("the other weapon's key puts the gadget away and swaps to it; the ability key does nothing without a second slot", async () => {
-    // (Skopós: her ability key is her shell camera, never an item in the hands.)
-    const { s, step, press } = await lab("skopos");
+    // (Twain: her ability key is her shell camera, never an item in the hands.)
+    const { s, step, press } = await lab("twain");
     press(Btn.Gadget);
     step({ buttons: Btn.Swap });
     expect([s.hand, s.slot, s.wAct]).toEqual([Hand.Weapon, 1, WeaponAct.Equip]);
@@ -82,8 +82,8 @@ describe("taking a gadget out and putting it away (Phase 8 M1)", () => {
     expect(s.hand).toBe(Hand.Weapon);
   });
 
-  it("a kit's second gadget is on the ability key (Striker), the first on the gadget key", async () => {
-    const { s, step, press } = await lab("striker", [0, 0, 10], 0, ["frag", "claymore"]);
+  it("a kit's second gadget is on the ability key (Pointman), the first on the gadget key", async () => {
+    const { s, step, press } = await lab("pointman", [0, 0, 10], 0, ["frag", "claymore"]);
     expect([s.g1, s.g2]).toEqual([2, 2]);
     press(Btn.Ability);
     expect(s.hand).toBe(Hand.Ability);
@@ -94,7 +94,7 @@ describe("taking a gadget out and putting it away (Phase 8 M1)", () => {
   });
 
   it("going down drops the gadget from the hands", async () => {
-    const { sim, s, step, press, body } = await lab("sledge");
+    const { sim, s, step, press, body } = await lab("cleave");
     press(Btn.Gadget);
     s.hp = 1;
     s.mode = PawnMode.Downed;
@@ -108,7 +108,7 @@ describe("taking a gadget out and putting it away (Phase 8 M1)", () => {
 
 describe("throwing (Phase 8 M1)", () => {
   it("Fire winds up and throws overhand: one fewer, the next comes out; the last brings the weapon back", async () => {
-    const { sim, s, step, of, press } = await lab("sledge");
+    const { sim, s, step, of, press } = await lab("cleave");
     press(Btn.Gadget);
     const windup = Math.max(1, ticks(sim.data.gadgetRules.throw.windupS));
     step({ buttons: Btn.Fire }, windup - 1);
@@ -128,7 +128,7 @@ describe("throwing (Phase 8 M1)", () => {
   });
 
   it("the room's table has the throw flying, then resting on the floor; at its fuse it goes off and is gone", async () => {
-    const { sim, step, press } = await lab("sledge");
+    const { sim, step, press } = await lab("cleave");
     press(Btn.Gadget);
     step({ buttons: Btn.Ads, pitch: -0.3 }, ticks(sim.data.gadgetRules.throw.windupS));
     const [g] = sim.gadgets.list;
@@ -149,7 +149,7 @@ describe("throwing (Phase 8 M1)", () => {
 
 describe("placing and detonators (Phase 8 M1)", () => {
   it("a Breach Charge: Fire held at a soft wall places it on the wall; then the detonator is out, and sets it off", async () => {
-    const { sim, s, step, of, press } = await lab("fuze", SOFT, 0, ["breach_charge"]);
+    const { sim, s, step, of, press } = await lab("hail", SOFT, 0, ["breach_charge"]);
     press(Btn.Gadget);
     const place = ticks((sim.data.gadgets.get("breach_charge")!.use as { placeS: number }).placeS);
     step({ buttons: Btn.Fire }, place - 1);
@@ -177,7 +177,7 @@ describe("placing and detonators (Phase 8 M1)", () => {
   });
 
   it("the key of the weapon already out (sent as the slot's key and Swap together) puts the detonator away, not the next charge out (the review, M12)", async () => {
-    const { sim, s, step, of, press } = await lab("fuze", SOFT, 0, ["breach_charge"]);
+    const { sim, s, step, of, press } = await lab("hail", SOFT, 0, ["breach_charge"]);
     press(Btn.Gadget);
     step({ buttons: Btn.Fire }, ticks((sim.data.gadgets.get("breach_charge")!.use as { placeS: number }).placeS));
     expect(of("place").length).toBe(1);
@@ -195,14 +195,14 @@ describe("placing and detonators (Phase 8 M1)", () => {
     expect([s.hand, s.slot]).toEqual([Hand.Weapon, 1]);
   });
 
-  it("a Breach Charge can't go on reinforced steel, a hard wall or the floor in the open; a Hard Breach Charge goes on steel", async () => {
+  it("a Breach Charge can't go on reinforced steel, a hard wall or the floor in the open; a Heavy Breach Charge goes on steel", async () => {
     const reinforced: [number, number, number] = [11.5, 0, -4.5];
-    const a = await lab("fuze", reinforced, 0, ["breach_charge"]);
+    const a = await lab("hail", reinforced, 0, ["breach_charge"]);
     a.press(Btn.Gadget);
     a.step({ buttons: Btn.Fire }, 200);
     a.step({ buttons: Btn.Fire, pitch: -1.2 }, 200);
     expect(a.of("place")).toEqual([]);
-    const b = await lab("fuze", reinforced, 0, ["hard_breach_charge"]);
+    const b = await lab("hail", reinforced, 0, ["heavy_breach_charge"]);
     b.press(Btn.Gadget);
     b.step({ buttons: Btn.Fire }, 200);
     expect(b.of("place").length).toBe(1);
@@ -214,7 +214,7 @@ describe("placing and detonators (Phase 8 M1)", () => {
   });
 
   it("let go before it's placed, nothing is; the body stands still while placing", async () => {
-    const { sim, body, step, of, press } = await lab("fuze", SOFT, 0, ["breach_charge"]);
+    const { sim, body, step, of, press } = await lab("hail", SOFT, 0, ["breach_charge"]);
     press(Btn.Gadget);
     const at = { x: body.state.x, z: body.state.z };
     step({ buttons: Btn.Fire, forward: 1 }, 40);
@@ -224,10 +224,10 @@ describe("placing and detonators (Phase 8 M1)", () => {
     void sim;
   });
 
-  it("Thermite's charges go one at a time (Ulo): placed, his detonator's out, and Z gives no second until it's set off", async () => {
-    const { sim, s, step, of, press } = await lab("thermite", SOFT, 0);
+  it("Kiln's charges go one at a time (Ulo): placed, his detonator's out, and Z gives no second until it's set off", async () => {
+    const { sim, s, step, of, press } = await lab("kiln", SOFT, 0);
     press(Btn.Ability);
-    const place = ticks((sim.data.gadgets.get("exothermic_charge")!.use as { placeS: number }).placeS);
+    const place = ticks((sim.data.gadgets.get("burn_frame")!.use as { placeS: number }).placeS);
     step({ buttons: Btn.Fire }, place + 2);
     step({}, 2);
     expect([of("place").length, s.hand, s.w2, s.g2]).toEqual([1, Hand.AbilityDetonator, 1, 2]);
@@ -241,7 +241,7 @@ describe("placing and detonators (Phase 8 M1)", () => {
   });
 
   it("a stall mid-placing (ticks stepped without the player's input) holds the placing where it was; it then goes on", async () => {
-    const { sim, c, s, step, of, press } = await lab("fuze", SOFT, 0, ["breach_charge"]);
+    const { sim, c, s, step, of, press } = await lab("hail", SOFT, 0, ["breach_charge"]);
     press(Btn.Gadget);
     const place = ticks((sim.data.gadgets.get("breach_charge")!.use as { placeS: number }).placeS);
     step({ buttons: Btn.Fire }, place - 10);
@@ -255,8 +255,8 @@ describe("placing and detonators (Phase 8 M1)", () => {
     expect(of("place").length).toBe(1);
   });
 
-  it("a Nitro Cell is thrown and sticks to the wall it hits, facing out of it; its detonator sets it off", async () => {
-    const { sim, s, step, of, press } = await lab("pulse", SOFT, 0, ["nitro_cell"]);
+  it("a Remote Charge is thrown and sticks to the wall it hits, facing out of it; its detonator sets it off", async () => {
+    const { sim, s, step, of, press } = await lab("murmur", SOFT, 0, ["remote_charge"]);
     press(Btn.Gadget);
     step({ buttons: Btn.Fire }, ticks(sim.data.gadgetRules.throw.windupS));
     expect([s.w1, s.hand]).toEqual([1, Hand.Detonator]);
@@ -273,7 +273,7 @@ describe("placing and detonators (Phase 8 M1)", () => {
 
 describe("taking a gadget back (Phase 8 M1)", () => {
   it("Interact held on your own barbed wire takes it back into its slot; someone else's stays", async () => {
-    const { sim, c, s, step, of, press } = await lab("sentry", [0, 0, 10], 0, ["barbed_wire", "bulletproof_camera"]);
+    const { sim, c, s, step, of, press } = await lab("picket", [0, 0, 10], 0, ["barbed_wire", "armoured_camera"]);
     press(Btn.Gadget);
     step({ buttons: Btn.Fire, pitch: -0.9 }, 64);
     expect(of("place").length).toBe(1);
@@ -284,7 +284,7 @@ describe("taking a gadget back (Phase 8 M1)", () => {
     step({ pitch: -0.9, buttons: Btn.Interact }, ticks(sim.data.gadgetRules.pickUpS));
     expect([of("pickUpGadget").length, s.g1, sim.gadgets.list.length]).toEqual([1, 2, 0]);
     // Someone else's: nothing to take back.
-    const other = sim.addPlayer("q", "sentry", 1, undefined, { ...defaultLoadoutPick(sim.data, "sentry"), gadgets: ["barbed_wire", "bulletproof_camera"] });
+    const other = sim.addPlayer("q", "picket", 1, undefined, { ...defaultLoadoutPick(sim.data, "picket"), gadgets: ["barbed_wire", "armoured_camera"] });
     const { id: _, ...entry } = { ...of("place")[0], id: 0 };
     void entry;
     sim.gadgets.add({ kind: kindOf("barbed_wire"), owner: other.id, team: 1, pos: of("place")[0].pos, yaw: 0, vel: [0, 0, 0], flags: GFlag.OnFloor, panel: -1, launchTick: 0, fuseEnd: 0, signalEnd: 0, readyAt: 0, offEnd: 0, seq: 0 });
@@ -293,11 +293,11 @@ describe("taking a gadget back (Phase 8 M1)", () => {
   });
 });
 
-describe("a swung item: Sledge's hammer (Phase 8 M4)", () => {
+describe("a swung item: Cleave's hammer (Phase 8 M4)", () => {
   it("Z takes it out; Fire held swings it, one swing after another; a blow spends a charge only when it meets something", async () => {
     // 1.4 m from the soft wall, facing it: within the hammer's reach.
-    const { sim, s, step, of, press } = await lab("sledge", SOFT);
-    const u = sim.data.gadgets.get("breaching_hammer")!.use;
+    const { sim, s, step, of, press } = await lab("cleave", SOFT);
+    const u = sim.data.gadgets.get("breaching_maul")!.use;
     if (u.kind !== "swing") throw new Error("the hammer is swung");
     press(Btn.Ability);
     expect([s.hand, s.g2]).toEqual([Hand.Ability, 25]);
